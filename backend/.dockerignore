@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.log
+.env
+.env.local
+pip_install.log
+uvicorn.log
+uvicorn.pid
