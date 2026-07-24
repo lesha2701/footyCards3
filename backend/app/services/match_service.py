@@ -1,16 +1,17 @@
 import random
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
-from app.core.timeutil import local_today
+from app.core.timeutil import ensure_aware, local_today
 from app.models.enums import MatchDifficulty, MatchResult, TransactionType
 from app.models.match import Match, MatchEvent
 from app.models.user import User
 from app.schemas.match import ArenaLeaderboardEntry, ArenaStatsOut, MatchOut, StartMatchRequest
+from app.services import task_service
 from app.services.game_config_service import get_config
 from app.services.lineup_service import get_active_lineup
 from app.services.wallet_service import credit_coins, lock_user_for_update
@@ -19,6 +20,15 @@ BOT_NAMES = [
     "ФК Северный Ветер", "Стальные Орлы", "Городские Тигры", "Речные Волки", "Атлетико Резерв",
     "Юнайтед Роботс", "ФК Комета", "Гранит Юнайтед", "Южный Роверс", "Молния СК",
 ]
+
+
+async def _ensure_hourly_reset(db: AsyncSession, user: User) -> None:
+    now = datetime.now(timezone.utc)
+    started = user.match_hour_started_at
+    if started is None or now - ensure_aware(started) >= timedelta(hours=1):
+        user.match_hourly_attempts = 0
+        user.match_hour_started_at = now
+        db.add(user)
 
 
 async def _ensure_energy_reset(db: AsyncSession, user: User, max_energy: int) -> None:
@@ -103,6 +113,19 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
         raise ConflictError("Complete your starting XI (4-3-3) before playing a match")
 
     locked_user = await lock_user_for_update(db, user.id)
+    await _ensure_hourly_reset(db, locked_user)
+    if locked_user.match_hourly_attempts >= config.hourly_game_limit:
+        remaining = timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(locked_user.match_hour_started_at))
+        raise ConflictError(
+            "Hourly play limit reached for this game",
+            details={
+                "hourly_limit": config.hourly_game_limit,
+                "retry_after_seconds": max(0, int(remaining.total_seconds())),
+            },
+        )
+    locked_user.match_hourly_attempts += 1
+    db.add(locked_user)
+
     await _ensure_energy_reset(db, locked_user, config.match_daily_energy)
     if locked_user.match_energy < 1:
         raise ConflictError("No match energy left today")
@@ -175,6 +198,9 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
             db, locked_user, reward, TransactionType.match_reward,
             f"Награда за матч Card Arena ({result.value})", related_object_type="match", related_object_id=match.id,
         )
+
+    lineup_ratings = [slot.card.player.rating for slot in lineup.slots if slot.card]
+    await task_service.evaluate_match_min_rating(db, locked_user, lineup_ratings)
 
     await db.commit()
     await db.refresh(match, attribute_names=["events"])

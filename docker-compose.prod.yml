@@ -28,6 +28,12 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
     volumes:
       - ./backend/static:/app/static
+    # Without this, outbound calls to api.telegram.org (channel-membership
+    # checks for premium tasks) can fail with "Network is unreachable": the
+    # host resolves both an A and AAAA record for api.telegram.org, but the
+    # default Docker bridge network gives containers no working IPv6 route.
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,6 +53,10 @@ services:
       BOT_MODE: ${BOT_MODE:-polling}
     ports:
       - "${BOT_WEBHOOK_PORT:-8081}:8081"
+    # Same IPv6-unreachable issue as `backend` — the bot calls api.telegram.org
+    # directly (set_webhook, sendMessage, etc.), so it needs IPv4-only too.
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
     depends_on:
       postgres:
         condition: service_healthy

@@ -3,11 +3,13 @@ import type { Page, Pack, Player, TradeOffer, TradeStatus } from "@/types";
 import type {
   AdminActionLog,
   AdminUser,
+  CardCollection,
   Dashboard,
   GameConfig,
   PackPreview,
   SuspiciousMatch,
   SuspiciousMemorySession,
+  TaskDefinition,
 } from "@/admin/types";
 
 export async function fetchDashboard(): Promise<Dashboard> {
@@ -145,6 +147,48 @@ export async function togglePackActive(id: number): Promise<Pack> {
 
 export async function previewPack(id: number, simulations = 1000): Promise<PackPreview> {
   const { data } = await api.get<PackPreview>(`/admin/packs/${id}/preview`, { params: { simulations } });
+  return data;
+}
+
+// --- Card Collections ---
+export async function fetchAdminCardCollections(): Promise<CardCollection[]> {
+  const { data } = await api.get<CardCollection[]>("/admin/card-collections");
+  return data;
+}
+
+export async function createCardCollection(payload: Record<string, unknown>): Promise<CardCollection> {
+  const { data } = await api.post<CardCollection>("/admin/card-collections", payload);
+  return data;
+}
+
+export async function updateCardCollection(id: number, payload: Record<string, unknown>): Promise<CardCollection> {
+  const { data } = await api.put<CardCollection>(`/admin/card-collections/${id}`, payload);
+  return data;
+}
+
+export async function toggleCardCollectionActive(id: number): Promise<CardCollection> {
+  const { data } = await api.post<CardCollection>(`/admin/card-collections/${id}/toggle-active`);
+  return data;
+}
+
+// --- Tasks ---
+export async function fetchAdminTasks(): Promise<TaskDefinition[]> {
+  const { data } = await api.get<TaskDefinition[]>("/admin/tasks");
+  return data;
+}
+
+export async function createTask(payload: Record<string, unknown>): Promise<TaskDefinition> {
+  const { data } = await api.post<TaskDefinition>("/admin/tasks", payload);
+  return data;
+}
+
+export async function updateTask(id: number, payload: Record<string, unknown>): Promise<TaskDefinition> {
+  const { data } = await api.put<TaskDefinition>(`/admin/tasks/${id}`, payload);
+  return data;
+}
+
+export async function toggleTaskActive(id: number): Promise<TaskDefinition> {
+  const { data } = await api.post<TaskDefinition>(`/admin/tasks/${id}/toggle-active`);
   return data;
 }
 

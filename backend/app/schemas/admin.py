@@ -106,6 +106,21 @@ class GameConfigOut(BaseModel):
     difficulty_medium_multiplier: float
     difficulty_hard_multiplier: float
     suspicious_score_margin: int
+    saboteur_cell_reward: int
+    saboteur_daily_limit: int
+    saboteur_max_bomb_count: int
+    penalty_reward_win: int
+    penalty_reward_draw: int
+    penalty_reward_loss: int
+    penalty_bot_miss_chance: float
+    penalty_daily_limit: int
+    free_kick_period_min_ms: int
+    free_kick_period_max_ms: int
+    free_kick_base_stake: int
+    free_kick_daily_limit: int
+    hourly_game_limit: int
+    free_pack_interval_hours: int
+    free_pack_pack_slug: str
 
 
 class GameConfigUpdate(BaseModel):
@@ -120,6 +135,21 @@ class GameConfigUpdate(BaseModel):
     difficulty_medium_multiplier: Optional[float] = Field(default=None, ge=0)
     difficulty_hard_multiplier: Optional[float] = Field(default=None, ge=0)
     suspicious_score_margin: Optional[int] = Field(default=None, ge=0)
+    saboteur_cell_reward: Optional[int] = Field(default=None, ge=0)
+    saboteur_daily_limit: Optional[int] = Field(default=None, ge=0)
+    saboteur_max_bomb_count: Optional[int] = Field(default=None, ge=1)
+    penalty_reward_win: Optional[int] = Field(default=None, ge=0)
+    penalty_reward_draw: Optional[int] = Field(default=None, ge=0)
+    penalty_reward_loss: Optional[int] = Field(default=None, ge=0)
+    penalty_bot_miss_chance: Optional[float] = Field(default=None, ge=0, le=1)
+    penalty_daily_limit: Optional[int] = Field(default=None, ge=0)
+    free_kick_period_min_ms: Optional[int] = Field(default=None, ge=100)
+    free_kick_period_max_ms: Optional[int] = Field(default=None, ge=100)
+    free_kick_base_stake: Optional[int] = Field(default=None, ge=0)
+    free_kick_daily_limit: Optional[int] = Field(default=None, ge=0)
+    hourly_game_limit: Optional[int] = Field(default=None, ge=1)
+    free_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
+    free_pack_pack_slug: Optional[str] = None
 
 
 class SuspiciousMemorySessionOut(BaseModel):

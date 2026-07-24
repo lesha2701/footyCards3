@@ -1,0 +1,23 @@
+name: football-cards
+
+# Local override for exposing the Mini App through a single localhost.run
+# SSH tunnel (frontend only — Vite proxies /api and /static to the backend
+# container, so no separate backend tunnel/domain is needed). Does not
+# touch .env; safe to delete once done.
+#
+# Usage:
+#   1. ssh -R 80:localhost:5173 nokey@localhost.run
+#   2. Copy the https://xxxxx.lhr.life address it prints and paste it below
+#      (the domain changes every time you start a new SSH session).
+#   3. docker compose up -d
+services:
+  bot:
+    environment:
+      MINI_APP_URL: https://vest-hypnotize-mocha.ngrok-free.dev
+
+  backend:
+    environment:
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,https://vest-hypnotize-mocha.ngrok-free.dev
+
+  frontend:
+    command: sh -c "npm run build && npm run preview -- --host 0.0.0.0 --port 5173"

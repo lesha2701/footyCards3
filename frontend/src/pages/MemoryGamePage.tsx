@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { claimMemoryReward, fetchMemoryLeaderboard, startMemoryGame, submitMemoryRound } from "@/api/games";
-import { ApiRequestError } from "@/lib/api";
+import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { MemoryStart } from "@/types";
@@ -36,7 +36,7 @@ export default function MemoryGamePage() {
       setErrorMsg(null);
       setPhase("showing");
     },
-    onError: (err) => setErrorMsg(err instanceof ApiRequestError ? err.message : "Не удалось начать игру"),
+    onError: (err) => setErrorMsg(formatGameError(err, "Не удалось начать игру")),
   });
 
   const submitMutation = useMutation({

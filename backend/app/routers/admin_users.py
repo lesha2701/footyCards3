@@ -194,6 +194,9 @@ async def reset_limits(user_id: int, request: Request, db: AsyncSession = Depend
     config = await get_config(db)
     user.match_energy = config.match_daily_energy
     user.memory_rewarded_attempts_today = 0
+    for game in ("memory", "match", "saboteur", "penalty", "free_kick"):
+        setattr(user, f"{game}_hourly_attempts", 0)
+        setattr(user, f"{game}_hour_started_at", None)
     db.add(user)
     await log_action(db, admin.id, "reset_limits", "user", user_id, ip_address=request.client.host if request.client else None)
     await db.commit()

@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import Boolean, Enum, Integer, String
+from sqlalchemy import Boolean, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -26,6 +26,12 @@ class Player(TimestampMixin, Base):
     quick_sell_price: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    collection_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("card_collections.id", ondelete="SET NULL"), nullable=True
+    )
+    next_serial_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
     cards: Mapped[list["UserCard"]] = relationship(back_populates="player")
+    collection: Mapped[Optional["CardCollection"]] = relationship(back_populates="players", lazy="joined")
 
     __table_args__ = ()

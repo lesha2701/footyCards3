@@ -46,6 +46,9 @@ export default function PlayerCard({ player, size = "md", badge, footer, onClick
         <div className="border-t border-white/10 bg-black/30 px-2 py-1.5 text-center">
           <p className={`truncate font-display font-semibold text-slate-100 ${SIZE_CLASSES[size]}`}>{player.display_name}</p>
           <p className="truncate text-[9px] text-slate-400">{player.club} · {RARITY_LABELS[player.rarity]}</p>
+          {player.collection_name && (
+            <p className="mt-0.5 truncate text-[8px] font-semibold text-amber-400">🏷️ {player.collection_name}</p>
+          )}
         </div>
         {footer}
       </div>

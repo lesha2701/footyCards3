@@ -79,8 +79,14 @@ export default function PackOpenPage() {
 
     if (stageIndex < STAGES.length - 1) {
       setStageIndex((i) => i + 1);
-      return;
     }
+  };
+
+  const nextCard = () => {
+    if (!result) return;
+    haptic("light");
+    if (timerRef.current) clearTimeout(timerRef.current);
+
     if (cardIndex < result.cards.length - 1) {
       setCardIndex((i) => i + 1);
       setStageIndex(0);
@@ -91,7 +97,7 @@ export default function PackOpenPage() {
   };
 
   useEffect(() => {
-    if (phase !== "revealing") return;
+    if (phase !== "revealing" || stageIndex >= STAGES.length - 1) return;
     timerRef.current = setTimeout(advance, STAGE_DURATION_MS);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -127,14 +133,26 @@ export default function PackOpenPage() {
       )}
 
       {phase === "revealing" && (
-        <RevealStage
-          key={`${cardIndex}-${stageIndex}`}
-          opened={result.cards[cardIndex]}
-          stage={STAGES[stageIndex]}
-          index={cardIndex}
-          total={result.cards.length}
-          onTap={advance}
-        />
+        <div className="flex flex-1 flex-col">
+          <RevealStage
+            key={`${cardIndex}-${stageIndex}`}
+            opened={result.cards[cardIndex]}
+            stage={STAGES[stageIndex]}
+            index={cardIndex}
+            total={result.cards.length}
+            onTap={advance}
+          />
+          {stageIndex === STAGES.length - 1 && (
+            <div className="safe-bottom px-6 pb-6 pt-2">
+              <button
+                onClick={nextCard}
+                className="w-full rounded-2xl bg-accent py-3.5 font-display text-base font-bold text-bg-base active:scale-95"
+              >
+                {cardIndex < result.cards.length - 1 ? "Следующая карта" : "Готово"}
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {phase === "summary" && <Summary result={result} onDone={() => navigate("/collection")} />}
@@ -175,7 +193,12 @@ function RevealStage({
   const showFrom = (s: Stage) => STAGES.indexOf(stage) >= STAGES.indexOf(s);
 
   return (
-    <button onClick={onTap} className="flex flex-1 flex-col items-center justify-center gap-5 px-6 text-center">
+    <div
+      onClick={onTap}
+      role="button"
+      tabIndex={0}
+      className="flex flex-1 cursor-pointer flex-col items-center justify-center gap-5 px-6 text-center"
+    >
       <p className="text-xs text-slate-500">Карточка {index + 1} / {total}</p>
 
       <motion.div
@@ -220,6 +243,9 @@ function RevealStage({
           <>
             <p className="font-display text-xl font-bold text-slate-100">{player.display_name}</p>
             <p className="font-display text-lg font-bold text-amber-300">Рейтинг {player.rating}</p>
+            {player.collection_name && (
+              <p className="text-xs font-semibold text-amber-400">🏷️ {player.collection_name}</p>
+            )}
             {opened.is_new && <span className="inline-block rounded-full bg-emerald-500 px-2 py-0.5 text-[11px] font-bold text-white">Новая!</span>}
             {opened.duplicate_count > 1 && (
               <span className="ml-1 inline-block rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-slate-300">
@@ -230,8 +256,8 @@ function RevealStage({
         )}
       </div>
 
-      <p className="text-xs text-slate-500">Нажми, чтобы продолжить</p>
-    </button>
+      {stage !== "reveal" && <p className="text-xs text-slate-500">Нажми, чтобы продолжить</p>}
+    </div>
   );
 }
 
@@ -254,6 +280,9 @@ function Summary({ result, onDone }: { result: PackOpenResult; onDone: () => voi
               <div className="p-2 text-center">
                 <p className="truncate text-xs font-bold text-slate-100">{opened.card.player.display_name}</p>
                 <p className="text-[10px] text-slate-400">{RARITY_LABELS[opened.card.player.rarity]}</p>
+                {opened.card.player.collection_name && (
+                  <p className="truncate text-[9px] font-semibold text-amber-400">🏷️ {opened.card.player.collection_name}</p>
+                )}
               </div>
             </div>
             {opened.is_new && (

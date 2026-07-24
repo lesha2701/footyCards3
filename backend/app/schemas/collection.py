@@ -34,6 +34,7 @@ class CollectionFilterParams:
         position: Optional[Position] = None,
         min_rating: Optional[int] = None,
         max_rating: Optional[int] = None,
+        collection_id: Optional[int] = None,
         search: Optional[str] = None,
         sort_by: SortBy = "acquired_at",
         sort_dir: SortDir = "desc",
@@ -44,6 +45,7 @@ class CollectionFilterParams:
         self.position = position
         self.min_rating = min_rating
         self.max_rating = max_rating
+        self.collection_id = collection_id
         self.search = search
         self.sort_by = sort_by
         self.sort_dir = sort_dir

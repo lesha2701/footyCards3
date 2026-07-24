@@ -12,7 +12,7 @@ from app.models.enums import NotificationType, TradeCardSide, TradeStatus, Trans
 from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.user import User
 from app.schemas.trade import TradeCreateRequest, TradeOfferOut
-from app.services.achievement_service import evaluate_and_award
+from app.services import task_service
 from app.services.notification_service import notify
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
@@ -119,12 +119,27 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
     if payload.sender_coins > sender.balance:
         raise InsufficientBalanceError("You do not have enough coins for this offer")
 
+    offered_ids = payload.offered_card_ids or []
+    requested_ids = payload.requested_card_ids or []
+    all_card_ids = list(dict.fromkeys(offered_ids + requested_ids))
+    cards_by_id: dict[int, UserCard] = {}
+    if all_card_ids:
+        # Lock every involved card up front (ascending id order, so a
+        # concurrent create_offer touching an overlapping card set can't
+        # deadlock) — otherwise two racing offers could both read the same
+        # card as unlocked before either commits and both proceed.
+        result = await db.execute(
+            select(UserCard).where(UserCard.id.in_(all_card_ids)).order_by(UserCard.id)
+            .with_for_update().execution_options(populate_existing=True)
+        )
+        cards_by_id = {c.id: c for c in result.scalars().all()}
+
     offered_cards: list[UserCard] = []
-    if payload.offered_card_ids:
-        result = await db.execute(select(UserCard).where(UserCard.id.in_(payload.offered_card_ids)))
-        offered_cards = result.scalars().all()
-        if len(offered_cards) != len(set(payload.offered_card_ids)):
+    if offered_ids:
+        unique_offered = list(dict.fromkeys(offered_ids))
+        if any(i not in cards_by_id for i in unique_offered):
             raise NotFoundError("One or more offered cards not found")
+        offered_cards = [cards_by_id[i] for i in unique_offered]
         for card in offered_cards:
             if card.owner_id != sender.id:
                 raise ForbiddenError("You can only offer your own cards")
@@ -132,11 +147,11 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
                 raise ConflictError(f"Card #{card.serial_number} is not available for trade")
 
     requested_cards: list[UserCard] = []
-    if payload.requested_card_ids:
-        result = await db.execute(select(UserCard).where(UserCard.id.in_(payload.requested_card_ids)))
-        requested_cards = result.scalars().all()
-        if len(requested_cards) != len(set(payload.requested_card_ids)):
+    if requested_ids:
+        unique_requested = list(dict.fromkeys(requested_ids))
+        if any(i not in cards_by_id for i in unique_requested):
             raise NotFoundError("One or more requested cards not found")
+        requested_cards = [cards_by_id[i] for i in unique_requested]
         for card in requested_cards:
             if card.owner_id != receiver.id:
                 raise ConflictError("Requested cards must belong to the trade partner")
@@ -234,11 +249,30 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeOffe
 
     trade_cards_result = await db.execute(select(TradeOfferCard).where(TradeOfferCard.trade_offer_id == offer.id))
     trade_cards = trade_cards_result.scalars().all()
-    card_ids = [tc.user_card_id for tc in trade_cards]
-    cards_result = await db.execute(select(UserCard).where(UserCard.id.in_(card_ids)))
-    cards_by_id = {c.id: c for c in cards_result.scalars().all()}
+    card_ids = sorted({tc.user_card_id for tc in trade_cards})
 
-    if len(cards_by_id) != len(set(card_ids)):
+    first_id, second_id = sorted([offer.sender_id, offer.receiver_id])
+    first_user = await lock_user_for_update(db, first_id)
+    second_user = await lock_user_for_update(db, second_id)
+    sender = first_user if first_user.id == offer.sender_id else second_user
+    receiver = first_user if first_user.id == offer.receiver_id else second_user
+
+    # Re-lock the offer and every traded card now that the user locks are
+    # held, so a concurrent accept of this same offer (or a second offer
+    # racing on one of these cards) can't slip through on stale reads.
+    await db.refresh(offer, with_for_update=True)
+    if offer.status != TradeStatus.pending:
+        raise ConflictError("This offer is no longer pending")
+
+    cards_by_id: dict[int, UserCard] = {}
+    if card_ids:
+        cards_result = await db.execute(
+            select(UserCard).where(UserCard.id.in_(card_ids)).order_by(UserCard.id)
+            .with_for_update().execution_options(populate_existing=True)
+        )
+        cards_by_id = {c.id: c for c in cards_result.scalars().all()}
+
+    if len(cards_by_id) != len(card_ids):
         raise ConflictError("One or more traded cards no longer exist")
 
     for tc in trade_cards:
@@ -250,12 +284,6 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeOffe
             raise ConflictError(f"Card #{card.serial_number} was locked by an administrator")
         if card.is_in_lineup:
             raise ConflictError(f"Card #{card.serial_number} is currently used in a lineup")
-
-    first_id, second_id = sorted([offer.sender_id, offer.receiver_id])
-    first_user = await lock_user_for_update(db, first_id)
-    second_user = await lock_user_for_update(db, second_id)
-    sender = first_user if first_user.id == offer.sender_id else second_user
-    receiver = first_user if first_user.id == offer.receiver_id else second_user
 
     if offer.sender_coins > 0 and sender.balance < offer.sender_coins:
         raise InsufficientBalanceError("Sender no longer has enough coins for this trade")
@@ -294,7 +322,7 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeOffe
                 )
             )
         ).scalar_one() + 1  # +1: this offer is committed to `accepted` status below, not yet visible to the count query
-        await evaluate_and_award(db, participant, "trades_completed", completed_count)
+        await task_service.evaluate_metric_progress(db, participant, "trades_completed", completed_count)
 
     await db.commit()
     await db.refresh(offer)

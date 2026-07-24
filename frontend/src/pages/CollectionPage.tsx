@@ -6,6 +6,7 @@ import EmptyState from "@/components/common/EmptyState";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import PlayerCard from "@/components/cards/PlayerCard";
 import { bulkSellCards, fetchCollection, fetchCollectionStats, sellCard, type CollectionFilters } from "@/api/collection";
+import { fetchCollections } from "@/api/collections";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { POSITION_LABELS, RARITY_LABELS } from "@/lib/rarity";
 import { useAuthStore } from "@/store/authStore";
@@ -18,6 +19,7 @@ export default function CollectionPage() {
   const updateBalance = useAuthStore((s) => s.updateBalance);
 
   const [rarity, setRarity] = useState<Rarity | null>(null);
+  const [collectionId, setCollectionId] = useState<number | undefined>(undefined);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<CollectionFilters["sort_by"]>("acquired_at");
   const [selectMode, setSelectMode] = useState(false);
@@ -27,6 +29,7 @@ export default function CollectionPage() {
 
   const filters: CollectionFilters = {
     rarity: rarity ?? undefined,
+    collection_id: collectionId,
     search: search || undefined,
     sort_by: sortBy,
     sort_dir: "desc",
@@ -35,6 +38,7 @@ export default function CollectionPage() {
 
   const { data: page, isLoading } = useQuery({ queryKey: ["collection", filters], queryFn: () => fetchCollection(filters) });
   const { data: stats } = useQuery({ queryKey: ["collection-stats"], queryFn: fetchCollectionStats });
+  const { data: collections } = useQuery({ queryKey: ["collections"], queryFn: fetchCollections });
 
   const sellMutation = useMutation({
     mutationFn: ({ ids, confirmLastCopy }: { ids: number[]; confirmLastCopy: boolean }) =>
@@ -111,6 +115,19 @@ export default function CollectionPage() {
         <option value="rating">По рейтингу</option>
         <option value="rarity">По редкости</option>
       </select>
+
+      {!!collections?.length && (
+        <select
+          value={collectionId ?? ""}
+          onChange={(e) => setCollectionId(e.target.value ? Number(e.target.value) : undefined)}
+          className="rounded-xl bg-bg-surface px-3 py-2 text-sm text-slate-200 outline-none"
+        >
+          <option value="">Все коллекции</option>
+          {collections.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      )}
 
       {isLoading && <CardGridSkeleton count={9} />}
       {!isLoading && !page?.items.length && <EmptyState icon="🃏" title="Карточек не найдено" description="Открой паки, чтобы собрать коллекцию" />}
@@ -191,6 +208,9 @@ function CardDetailModal({ card, onClose, onSell }: { card: UserCard; onClose: (
         />
         <p className="mt-3 font-display text-lg font-bold text-slate-100">{player.display_name}</p>
         <p className="text-sm text-slate-400">{POSITION_LABELS[player.position]} · {player.club}</p>
+        {player.collection_name && (
+          <p className="mt-1 text-xs font-semibold text-amber-400">🏷️ Коллекция: {player.collection_name}</p>
+        )}
         <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
           <span className="text-slate-400">Рейтинг: <b className="text-amber-300">{player.rating}</b></span>
           <span className="text-slate-400">Редкость: <b>{RARITY_LABELS[player.rarity]}</b></span>

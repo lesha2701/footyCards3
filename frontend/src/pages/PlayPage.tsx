@@ -21,6 +21,7 @@ export default function PlayPage() {
         <p className="mt-2 font-display text-lg font-bold text-white">Memory Sequence</p>
         <p className="text-sm text-white/80">Запомни и повтори последовательность футбольных символов</p>
         <p className="mt-2 text-xs text-white/70">Рекорд: {user?.memory_best_score ?? 0}</p>
+        <p className="mt-1 text-[11px] text-white/50">До 3 попыток в час</p>
       </button>
 
       <button
@@ -33,6 +34,37 @@ export default function PlayPage() {
         <p className="mt-2 text-xs text-white/70">
           Рейтинг: {arenaStats?.arena_rating ?? user?.arena_rating ?? 1000} · Энергия: {arenaStats?.match_energy ?? "—"}/{arenaStats?.max_energy ?? "—"}
         </p>
+        <p className="mt-1 text-[11px] text-white/50">До 3 попыток в час</p>
+      </button>
+
+      <button
+        onClick={() => navigate("/play/saboteur")}
+        className="overflow-hidden rounded-3xl bg-gradient-to-br from-slate-600 to-slate-900 p-5 text-left active:scale-[0.98]"
+      >
+        <p className="text-3xl">💣</p>
+        <p className="mt-2 font-display text-lg font-bold text-white">Футбольный сапёр</p>
+        <p className="text-sm text-white/80">Открывай ячейки и копи монеты, но берегись бомбы</p>
+        <p className="mt-1 text-[11px] text-white/50">До 3 попыток в час</p>
+      </button>
+
+      <button
+        onClick={() => navigate("/play/penalty")}
+        className="overflow-hidden rounded-3xl bg-gradient-to-br from-orange-600 to-red-700 p-5 text-left active:scale-[0.98]"
+      >
+        <p className="text-3xl">🥅</p>
+        <p className="mt-2 font-display text-lg font-bold text-white">Пенальти</p>
+        <p className="text-sm text-white/80">Серия пенальти против бота на выбранном игроке</p>
+        <p className="mt-1 text-[11px] text-white/50">До 3 попыток в час</p>
+      </button>
+
+      <button
+        onClick={() => navigate("/play/free-kick")}
+        className="overflow-hidden rounded-3xl bg-gradient-to-br from-lime-600 to-green-700 p-5 text-left active:scale-[0.98]"
+      >
+        <p className="text-3xl">🎯</p>
+        <p className="mt-2 font-display text-lg font-bold text-white">Штрафной удар</p>
+        <p className="text-sm text-white/80">Останови шкалу силы в нужный момент</p>
+        <p className="mt-1 text-[11px] text-white/50">До 3 попыток в час</p>
       </button>
     </div>
   );

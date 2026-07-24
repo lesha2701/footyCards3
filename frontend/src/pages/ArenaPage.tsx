@@ -8,7 +8,7 @@ import { fetchCollection } from "@/api/collection";
 import { fetchActiveLineup, setActiveLineup } from "@/api/lineups";
 import { fetchArenaLeaderboard, fetchArenaStats, fetchMatchHistory, playMatch } from "@/api/matches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
-import { ApiRequestError } from "@/lib/api";
+import { formatGameError } from "@/lib/errors";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { Match, MatchDifficulty, UserCard } from "@/types";
@@ -55,7 +55,7 @@ export default function ArenaPage() {
       queryClient.invalidateQueries({ queryKey: ["match-history"] });
       queryClient.invalidateQueries({ queryKey: ["arena-leaderboard"] });
     },
-    onError: (err) => setMatchError(err instanceof ApiRequestError ? err.message : "Не удалось начать матч"),
+    onError: (err) => setMatchError(formatGameError(err, "Не удалось начать матч")),
   });
 
   if (lineupLoading) return <ListSkeleton />;

@@ -13,12 +13,10 @@ class UserCard(Base):
     __tablename__ = "user_cards"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    # Assigned in application code from the row's own id right after insert (see
-    # services/card_creation.py) — portable across databases, unlike a DB-level
-    # IDENTITY/sequence on a non-PK column. Nullable only for the instant between
-    # the initial INSERT (which needs the id) and that follow-up UPDATE, both of
-    # which happen inside the same transaction before it is ever committed.
-    serial_number: Mapped[Optional[int]] = mapped_column(BigInteger, unique=True, index=True, nullable=True)
+    # Per-player copy number (1, 2, 3... independently for each Player design),
+    # assigned atomically from Player.next_serial_number in services/card_creation.py
+    # under a row lock on the Player. Unique per player, not globally.
+    serial_number: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
 
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="RESTRICT"), nullable=False, index=True)
@@ -37,4 +35,6 @@ class UserCard(Base):
     def is_locked(self) -> bool:
         return self.is_locked_by_admin or self.is_locked_in_trade or self.is_in_lineup
 
-    __table_args__ = (UniqueConstraint("serial_number", name="uq_user_cards_serial"),)
+    __table_args__ = (
+        UniqueConstraint("player_id", "serial_number", name="uq_user_cards_player_serial"),
+    )

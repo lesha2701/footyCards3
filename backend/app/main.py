@@ -7,17 +7,20 @@ from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.routers import (
-    achievements,
+    admin_card_collections,
     admin_dashboard,
     admin_games,
     admin_log,
     admin_packs,
     admin_players,
+    admin_tasks,
     admin_trades,
     admin_users,
     auth,
+    card_collections,
     collection,
     daily_rewards,
+    free_pack,
     games,
     leaderboard,
     lineups,
@@ -26,11 +29,18 @@ from app.routers import (
     packs,
     players,
     profile,
+    tasks,
     trades,
     users,
 )
 
 settings = get_settings()
+
+if settings.environment == "production" and settings.dev_mode:
+    raise RuntimeError(
+        "DEV_MODE must be disabled (DEV_MODE=false) when ENVIRONMENT=production — "
+        "it lets any request authenticate via the X-Dev-Mode header, bypassing Telegram auth."
+    )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "static"
@@ -40,7 +50,7 @@ for rarity in ("common", "rare", "epic", "legendary", "placeholder", "packs"):
     )
 
 app = FastAPI(
-    title="Football Cards API",
+    title="FootyCards API",
     version="1.0.0",
     description="Telegram Mini App backend for collecting football cards.",
     docs_url="/api/docs",
@@ -62,10 +72,12 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 API_PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=API_PREFIX)
-app.include_router(achievements.router, prefix=API_PREFIX)
+app.include_router(tasks.router, prefix=API_PREFIX)
 app.include_router(players.router, prefix=API_PREFIX)
+app.include_router(card_collections.router, prefix=API_PREFIX)
 app.include_router(collection.router, prefix=API_PREFIX)
 app.include_router(packs.router, prefix=API_PREFIX)
+app.include_router(free_pack.router, prefix=API_PREFIX)
 app.include_router(games.router, prefix=API_PREFIX)
 app.include_router(lineups.router, prefix=API_PREFIX)
 app.include_router(matches.router, prefix=API_PREFIX)
@@ -79,6 +91,8 @@ app.include_router(admin_dashboard.router, prefix=API_PREFIX)
 app.include_router(admin_users.router, prefix=API_PREFIX)
 app.include_router(admin_players.router, prefix=API_PREFIX)
 app.include_router(admin_packs.router, prefix=API_PREFIX)
+app.include_router(admin_card_collections.router, prefix=API_PREFIX)
+app.include_router(admin_tasks.router, prefix=API_PREFIX)
 app.include_router(admin_trades.router, prefix=API_PREFIX)
 app.include_router(admin_games.router, prefix=API_PREFIX)
 app.include_router(admin_log.router, prefix=API_PREFIX)

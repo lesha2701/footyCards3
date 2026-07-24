@@ -76,12 +76,20 @@ async def give_card(telegram_id: int, player_id: int) -> Optional[asyncpg.Record
             user = await conn.fetchrow("SELECT * FROM users WHERE telegram_id = $1", telegram_id)
             if user is None:
                 return None
-            row = await conn.fetchrow(
-                """INSERT INTO user_cards (owner_id, player_id, acquired_at, source, is_locked_by_admin, is_locked_in_trade, is_in_lineup)
-                   VALUES ($1, $2, now(), 'admin_grant', false, false, false) RETURNING id""",
-                user["id"], player_id,
+            player = await conn.fetchrow(
+                "SELECT next_serial_number FROM players WHERE id = $1 FOR UPDATE", player_id
             )
-            await conn.execute("UPDATE user_cards SET serial_number = $1 WHERE id = $1", row["id"])
+            if player is None:
+                return None
+            serial_number = player["next_serial_number"]
+            await conn.execute(
+                "UPDATE players SET next_serial_number = $2 WHERE id = $1", player_id, serial_number + 1
+            )
+            row = await conn.fetchrow(
+                """INSERT INTO user_cards (owner_id, player_id, serial_number, acquired_at, source, is_locked_by_admin, is_locked_in_trade, is_in_lineup)
+                   VALUES ($1, $2, $3, now(), 'admin_grant', false, false, false) RETURNING id""",
+                user["id"], player_id, serial_number,
+            )
             return row
 
 
@@ -135,6 +143,20 @@ async def create_notification(user_id: int, type_: str, title: str, body: str) -
            VALUES ($1, $2, $3, $4, false, false, now())""",
         user_id, type_, title, body,
     )
+
+
+async def fetch_users_with_available_unnotified_free_pack() -> list[asyncpg.Record]:
+    pool = await get_pool()
+    return await pool.fetch(
+        """SELECT id, telegram_id FROM users
+           WHERE free_pack_available_at IS NOT NULL AND free_pack_available_at <= now()
+             AND free_pack_notified = false"""
+    )
+
+
+async def mark_free_pack_notified(user_id: int) -> None:
+    pool = await get_pool()
+    await pool.execute("UPDATE users SET free_pack_notified = true WHERE id = $1", user_id)
 
 
 async def get_active_packs() -> list[asyncpg.Record]:

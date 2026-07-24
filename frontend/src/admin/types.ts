@@ -73,6 +73,45 @@ export interface GameConfig {
   difficulty_medium_multiplier: number;
   difficulty_hard_multiplier: number;
   suspicious_score_margin: number;
+  saboteur_cell_reward: number;
+  saboteur_daily_limit: number;
+  penalty_reward_win: number;
+  penalty_reward_draw: number;
+  penalty_reward_loss: number;
+  penalty_bot_miss_chance: number;
+  penalty_daily_limit: number;
+  free_kick_period_min_ms: number;
+  free_kick_period_max_ms: number;
+  free_kick_base_stake: number;
+  free_kick_daily_limit: number;
+  hourly_game_limit: number;
+  free_pack_interval_hours: number;
+  free_pack_pack_slug: string;
+}
+
+export interface CardCollection {
+  id: number;
+  name: string;
+  description: string;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface TaskDefinition {
+  id: number;
+  code: string;
+  name: string;
+  description: string;
+  category: "regular" | "premium";
+  condition_type: "metric_counter" | "match_min_rating";
+  metric: string | null;
+  target_value: number;
+  condition_params: Record<string, unknown> | null;
+  reward_coins: number;
+  reward_pack_id: number | null;
+  channel_username: string | null;
+  is_active: boolean;
+  sort_order: number;
 }
 
 export interface SuspiciousMemorySession {

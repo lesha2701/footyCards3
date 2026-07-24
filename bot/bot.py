@@ -10,6 +10,7 @@ from config import get_bot_settings
 from handlers import admin as admin_handlers
 from handlers import user as user_handlers
 from services.daily_reminder import run_daily_reward_reminder
+from services.free_pack_notifier import run_free_pack_notifier
 from services.notifier import run_notification_dispatcher
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -33,6 +34,7 @@ async def run_polling() -> None:
     background_tasks = [
         asyncio.create_task(run_notification_dispatcher(bot)),
         asyncio.create_task(run_daily_reward_reminder(bot)),
+        asyncio.create_task(run_free_pack_notifier(bot)),
     ]
 
     try:
@@ -56,6 +58,7 @@ async def run_webhook() -> None:
     await db.get_pool()
     asyncio.create_task(run_notification_dispatcher(bot))
     asyncio.create_task(run_daily_reward_reminder(bot))
+    asyncio.create_task(run_free_pack_notifier(bot))
 
     await bot.set_webhook(settings.bot_webhook_url, secret_token=settings.bot_webhook_secret, drop_pending_updates=True)
 

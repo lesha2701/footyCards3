@@ -39,7 +39,7 @@ async def list_all_players(
 
     total = (await db.execute(count_query)).scalar_one()
     query = query.order_by(Player.id.desc()).offset(params.offset).limit(params.page_size)
-    players = (await db.execute(query)).scalars().all()
+    players = (await db.execute(query)).unique().scalars().all()
     return Page.build([PlayerOut.model_validate(p) for p in players], total, params)
 
 
@@ -70,7 +70,7 @@ async def create_player(payload: PlayerCreate, request: Request, db: AsyncSessio
     await log_action(db, admin.id, "create_player", "player", player.id, new_value=payload.model_dump(mode="json"), ip_address=request.client.host if request.client else None)
     await db.commit()
     await db.refresh(player)
-    return player
+    return PlayerOut.model_validate(player)
 
 
 async def _get_player_or_404(db: AsyncSession, player_id: int) -> Player:
@@ -91,7 +91,7 @@ async def update_player(player_id: int, payload: PlayerUpdate, request: Request,
     await log_action(db, admin.id, "update_player", "player", player_id, old_value=old_value, new_value=updates, ip_address=request.client.host if request.client else None)
     await db.commit()
     await db.refresh(player)
-    return player
+    return PlayerOut.model_validate(player)
 
 
 @router.post("/{player_id}/toggle-active", response_model=PlayerOut)
@@ -102,7 +102,7 @@ async def toggle_active(player_id: int, request: Request, db: AsyncSession = Dep
     await log_action(db, admin.id, "toggle_player_active", "player", player_id, new_value={"is_active": player.is_active}, ip_address=request.client.host if request.client else None)
     await db.commit()
     await db.refresh(player)
-    return player
+    return PlayerOut.model_validate(player)
 
 
 @router.delete("/{player_id}")

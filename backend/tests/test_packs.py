@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models.card import UserCard
-from app.models.enums import Rarity
+from app.models.enums import RARITY_ORDER, Rarity
 from tests.factories import create_pack, create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
 
@@ -91,3 +91,45 @@ async def test_open_pack_idempotency_key_prevents_double_charge(client, db_sessi
 
     user = await get_user_by_telegram_id(db_session, 700005)
     assert user.balance == 400
+
+
+async def test_open_pack_cards_sorted_by_rarity_ascending(client, db_session, bot_token):
+    for _ in range(10):
+        await create_player(db_session, rarity=Rarity.common)
+    for _ in range(10):
+        await create_player(db_session, rarity=Rarity.legendary, rating=95)
+    for _ in range(10):
+        await create_player(db_session, rarity=Rarity.rare, rating=78)
+    pack = await create_pack(
+        db_session, "sort_test", price=100, card_count=8,
+        probabilities={Rarity.common: 0.4, Rarity.rare: 0.3, Rarity.legendary: 0.3},
+    )
+
+    await _register(client, db_session, 700006, bot_token)
+    headers = telegram_headers(700006, bot_token)
+
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={})
+    assert resp.status_code == 200
+    orders = [RARITY_ORDER[c["card"]["player"]["rarity"]] for c in resp.json()["cards"]]
+    assert orders == sorted(orders)
+
+
+async def test_open_pack_idempotent_replay_preserves_rarity_order(client, db_session, bot_token):
+    for _ in range(10):
+        await create_player(db_session, rarity=Rarity.common)
+    for _ in range(10):
+        await create_player(db_session, rarity=Rarity.legendary, rating=95)
+    pack = await create_pack(
+        db_session, "replay_sort_test", price=100, card_count=6,
+        probabilities={Rarity.common: 0.5, Rarity.legendary: 0.5},
+    )
+
+    await _register(client, db_session, 700007, bot_token)
+    headers = telegram_headers(700007, bot_token)
+
+    first = await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={"idempotency_key": "sort-replay-1"})
+    second = await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={"idempotency_key": "sort-replay-1"})
+
+    first_ids = [c["card"]["id"] for c in first.json()["cards"]]
+    second_ids = [c["card"]["id"] for c in second.json()["cards"]]
+    assert first_ids == second_ids

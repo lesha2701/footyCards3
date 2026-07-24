@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # Backend
     jwt_secret: str = "dev_only_secret"
     jwt_expire_minutes: int = 720
-    dev_mode: bool = True
+    dev_mode: bool = False
     dev_user_telegram_id: int = 999000001
     environment: str = "development"
     cors_origins: str = "http://localhost:5173"

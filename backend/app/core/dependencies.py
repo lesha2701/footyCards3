@@ -16,7 +16,9 @@ from app.services.wallet_service import credit_coins
 settings = get_settings()
 
 
-async def _get_or_create_user(db: AsyncSession, tg_user: TelegramUser) -> User:
+async def _get_or_create_user(
+    db: AsyncSession, tg_user: TelegramUser, referral_code: Optional[str] = None
+) -> User:
     result = await db.execute(select(User).where(User.telegram_id == tg_user.id))
     user = result.scalar_one_or_none()
     is_admin_now = tg_user.id in settings.admin_ids
@@ -41,6 +43,24 @@ async def _get_or_create_user(db: AsyncSession, tg_user: TelegramUser) -> User:
             "Стартовый бонус при регистрации",
         )
         user.received_starting_bonus = True
+
+        if referral_code:
+            try:
+                ref_telegram_id = int(referral_code)
+            except ValueError:
+                ref_telegram_id = None
+            if ref_telegram_id is not None and ref_telegram_id != tg_user.id:
+                referrer_result = await db.execute(select(User).where(User.telegram_id == ref_telegram_id))
+                referrer = referrer_result.scalar_one_or_none()
+                if referrer is not None:
+                    # Only record the relationship here — referral_count is
+                    # credited later, on the referred user's first genuine
+                    # paid purchase (see pack_service.open_pack). Crediting
+                    # it immediately on registration would let anyone farm
+                    # referral rewards with disposable, never-used accounts
+                    # via this client-supplied header alone.
+                    user.referred_by_id = referrer.id
+
         await db.commit()
         await db.refresh(user)
         return user
@@ -77,6 +97,7 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
     x_telegram_init_data: Optional[str] = Header(default=None, alias="X-Telegram-Init-Data"),
     x_dev_mode: Optional[str] = Header(default=None, alias="X-Dev-Mode"),
+    x_referral_code: Optional[str] = Header(default=None, alias="X-Referral-Code"),
 ) -> User:
     if x_telegram_init_data:
         try:
@@ -94,7 +115,7 @@ async def get_current_user(
     else:
         raise UnauthorizedError("Missing Telegram init data")
 
-    user = await _get_or_create_user(db, tg_user)
+    user = await _get_or_create_user(db, tg_user, referral_code=x_referral_code)
     if user.is_banned:
         raise ForbiddenError("This account has been banned")
     return user

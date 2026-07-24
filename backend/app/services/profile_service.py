@@ -1,6 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.models.card import UserCard
 from app.models.enums import RARITY_ORDER
@@ -64,6 +65,7 @@ async def _build_public(db: AsyncSession, user: User) -> ProfilePublicOut:
         total_cards=total,
         rarest_card=PlayerOut.model_validate(rarest) if rarest else None,
         packs_opened=packs_opened,
+        referral_count=user.referral_count,
     )
 
 
@@ -82,6 +84,7 @@ async def get_private_profile(db: AsyncSession, user: User) -> ProfilePrivateOut
         balance=user.balance,
         experience=user.experience,
         is_admin=user.is_admin,
+        telegram_bot_username=get_settings().telegram_bot_username,
     )
 
 

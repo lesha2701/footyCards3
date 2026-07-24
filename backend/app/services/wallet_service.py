@@ -13,9 +13,17 @@ async def lock_user_for_update(db: AsyncSession, user_id: int) -> User:
     """Locks the user row so concurrent balance-mutating requests serialize.
 
     Requires an active DB transaction (started implicitly by AsyncSession);
-    the lock is released on commit/rollback.
+    the lock is released on commit/rollback. `populate_existing=True` is
+    required here: `get_current_user` already loaded this same User earlier
+    in the request, so without it SQLAlchemy's identity map would silently
+    return that stale (pre-lock) object instead of the freshly locked row —
+    the FOR UPDATE lock would still serialize correctly at the SQL level,
+    but every caller's check-then-write would read outdated values, making
+    the lock pointless.
     """
-    result = await db.execute(select(User).where(User.id == user_id).with_for_update())
+    result = await db.execute(
+        select(User).where(User.id == user_id).with_for_update().execution_options(populate_existing=True)
+    )
     user = result.scalar_one()
     return user
 

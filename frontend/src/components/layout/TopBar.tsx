@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import HelpModal from "@/components/common/HelpModal";
 import { useAuthStore } from "@/store/authStore";
 import { useUiStore } from "@/store/uiStore";
 
@@ -8,14 +10,22 @@ export default function TopBar() {
   const theme = useUiStore((s) => s.theme);
   const toggleTheme = useUiStore((s) => s.toggleTheme);
   const navigate = useNavigate();
+  const [helpOpen, setHelpOpen] = useState(false);
 
   return (
     <header className="safe-top sticky top-0 z-30 border-b border-white/5 bg-bg-surface/90 backdrop-blur">
       <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-3">
         <button onClick={() => navigate("/")} className="font-display text-lg font-bold tracking-wide text-slate-100">
-          ⚽ Football Cards
+          ⚽ FootyCards
         </button>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setHelpOpen(true)}
+            aria-label="Помощь"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-base"
+          >
+            ❓
+          </button>
           <button
             onClick={toggleTheme}
             aria-label="Переключить тему"
@@ -29,6 +39,7 @@ export default function TopBar() {
           </div>
         </div>
       </div>
+      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
     </header>
   );
 }

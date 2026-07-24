@@ -6,6 +6,7 @@ import {
   deletePlayer,
   deletePlayerImage,
   exportPlayersCsv,
+  fetchAdminCardCollections,
   fetchAdminPlayers,
   importPlayersCsv,
   togglePlayerActive,
@@ -22,6 +23,7 @@ const POSITIONS: Position[] = ["GK", "LB", "CB", "RB", "CDM", "CM", "CAM", "LM",
 const emptyForm = {
   first_name: "", last_name: "", display_name: "", rating: 70, rarity: "common" as Rarity,
   country: "", club: "", position: "ST" as Position, quick_sell_price: 10, is_active: true,
+  collection_id: "" as number | "",
 };
 
 export default function AdminPlayersPage() {
@@ -37,16 +39,19 @@ export default function AdminPlayersPage() {
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery({ queryKey: ["admin-players", search, page], queryFn: () => fetchAdminPlayers(search, page) });
+  const { data: collections } = useQuery({ queryKey: ["admin-card-collections"], queryFn: fetchAdminCardCollections });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-players"] });
 
+  const buildPayload = () => ({ ...form, collection_id: form.collection_id === "" ? null : form.collection_id });
+
   const createMutation = useMutation({
-    mutationFn: createPlayer,
+    mutationFn: () => createPlayer(buildPayload()),
     onSuccess: () => { invalidate(); setCreating(false); setForm(emptyForm); },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Ошибка"),
   });
   const updateMutation = useMutation({
-    mutationFn: () => updatePlayer(editing!.id, form),
+    mutationFn: () => updatePlayer(editing!.id, buildPayload()),
     onSuccess: () => { invalidate(); setEditing(null); },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Ошибка"),
   });
@@ -72,6 +77,7 @@ export default function AdminPlayersPage() {
       first_name: p.first_name, last_name: p.last_name, display_name: p.display_name, rating: p.rating,
       rarity: p.rarity, country: p.country, club: p.club, position: p.position,
       quick_sell_price: p.quick_sell_price, is_active: p.is_active,
+      collection_id: p.collection_id ?? "",
     });
   };
 
@@ -174,6 +180,19 @@ export default function AdminPlayersPage() {
                 <SelectField label="Редкость" value={form.rarity} options={RARITIES.map((r) => ({ value: r, label: RARITY_LABELS[r] }))} onChange={(v) => setForm({ ...form, rarity: v as Rarity })} />
                 <SelectField label="Позиция" value={form.position} options={POSITIONS.map((p) => ({ value: p, label: p }))} onChange={(v) => setForm({ ...form, position: v as Position })} />
               </div>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Коллекция</span>
+                <select
+                  value={form.collection_id}
+                  onChange={(e) => setForm({ ...form, collection_id: e.target.value ? Number(e.target.value) : "" })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                >
+                  <option value="">Без коллекции</option>
+                  {collections?.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
               <label className="flex items-center gap-2 text-xs text-slate-300">
                 <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
                 Активен
@@ -200,7 +219,7 @@ export default function AdminPlayersPage() {
             <div className="mt-4 flex gap-2">
               <button onClick={() => { setCreating(false); setEditing(null); setError(null); }} className="flex-1 rounded-xl bg-white/5 py-2.5 text-sm">Отмена</button>
               <button
-                onClick={() => (editing ? updateMutation.mutate() : createMutation.mutate(form))}
+                onClick={() => (editing ? updateMutation.mutate() : createMutation.mutate())}
                 className="flex-1 rounded-xl bg-accent py-2.5 text-sm font-bold text-bg-base"
               >
                 Сохранить

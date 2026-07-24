@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { fetchAchievements } from "@/api/achievements";
 import { claimDailyReward, fetchDailyRewardCalendar } from "@/api/dailyRewards";
 import { fetchMyProfile, fetchMyTransactions } from "@/api/profile";
 import { ApiRequestError, staticUrl } from "@/lib/api";
@@ -17,6 +16,7 @@ const TX_TYPE_LABELS: Record<string, string> = {
   game_reward: "Награда за игру",
   match_reward: "Награда за матч",
   achievement_reward: "Достижение",
+  task_reward: "Задание",
   trade_coins_sent: "Обмен: отправлено",
   trade_coins_received: "Обмен: получено",
   admin_adjustment: "Корректировка администратором",
@@ -32,7 +32,6 @@ export default function ProfilePage() {
 
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
   const { data: calendar } = useQuery({ queryKey: ["daily-reward-calendar"], queryFn: fetchDailyRewardCalendar });
-  const { data: achievements } = useQuery({ queryKey: ["achievements"], queryFn: fetchAchievements });
   const { data: transactions } = useQuery({
     queryKey: ["transactions"],
     queryFn: () => fetchMyTransactions(1),
@@ -120,24 +119,24 @@ export default function ProfilePage() {
         </button>
       </section>
 
-      {!!achievements?.length && (
-        <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-          <p className="mb-3 font-display text-base font-bold text-slate-100">🏅 Достижения</p>
-          <div className="flex flex-col gap-2">
-            {achievements.map((a) => (
-              <div key={a.id} className={`flex items-center justify-between rounded-xl px-3 py-2 ${a.completed ? "bg-emerald-500/10" : "bg-white/5"}`}>
-                <div>
-                  <p className="text-sm font-semibold text-slate-200">{a.name}</p>
-                  <p className="text-[11px] text-slate-500">{a.description}</p>
-                </div>
-                <span className={`text-xs font-bold ${a.completed ? "text-emerald-400" : "text-slate-500"}`}>
-                  {a.completed ? "✓" : `+${a.reward_coins}`}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="font-display text-base font-bold text-slate-100">👥 Пригласи друзей</p>
+        <p className="mt-1 text-xs text-slate-400">Приглашено: {profile.referral_count}</p>
+        <div className="mt-3 flex items-center gap-2 rounded-xl bg-black/20 px-3 py-2">
+          <span className="flex-1 truncate text-xs text-slate-300">
+            https://t.me/{profile.telegram_bot_username}?start=ref_{user.telegram_id}
+          </span>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(`https://t.me/${profile.telegram_bot_username}?start=ref_${user.telegram_id}`);
+              hapticNotify("success");
+            }}
+            className="shrink-0 rounded-lg bg-accent px-2 py-1 text-[11px] font-bold text-bg-base"
+          >
+            Копировать
+          </button>
+        </div>
+      </section>
 
       <section>
         <button onClick={() => setShowTx((v) => !v)} className="w-full rounded-2xl bg-white/5 py-3 text-sm font-semibold text-slate-300">

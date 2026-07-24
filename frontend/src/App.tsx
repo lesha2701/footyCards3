@@ -8,6 +8,8 @@ import AdminDashboardPage from "@/admin/pages/AdminDashboardPage";
 import AdminUsersPage from "@/admin/pages/AdminUsersPage";
 import AdminPlayersPage from "@/admin/pages/AdminPlayersPage";
 import AdminPacksPage from "@/admin/pages/AdminPacksPage";
+import AdminCardCollectionsPage from "@/admin/pages/AdminCardCollectionsPage";
+import AdminTasksPage from "@/admin/pages/AdminTasksPage";
 import AdminTradesPage from "@/admin/pages/AdminTradesPage";
 import AdminGamesPage from "@/admin/pages/AdminGamesPage";
 import AdminLogPage from "@/admin/pages/AdminLogPage";
@@ -17,9 +19,13 @@ import PackOpenPage from "@/pages/PackOpenPage";
 import PlayPage from "@/pages/PlayPage";
 import MemoryGamePage from "@/pages/MemoryGamePage";
 import ArenaPage from "@/pages/ArenaPage";
+import SaboteurGamePage from "@/pages/SaboteurGamePage";
+import PenaltyGamePage from "@/pages/PenaltyGamePage";
+import FreeKickGamePage from "@/pages/FreeKickGamePage";
 import CollectionPage from "@/pages/CollectionPage";
 import TradesPage from "@/pages/TradesPage";
 import NewTradePage from "@/pages/NewTradePage";
+import TasksPage from "@/pages/TasksPage";
 import ProfilePage from "@/pages/ProfilePage";
 import PublicProfilePage from "@/pages/PublicProfilePage";
 import LoadingScreen from "@/components/common/LoadingScreen";
@@ -48,7 +54,8 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    createSession()
+    const referralCode = new URLSearchParams(window.location.search).get("ref") ?? undefined;
+    createSession(referralCode)
       .then((res) => {
         if (cancelled) return;
         setUser(res.user);
@@ -75,6 +82,8 @@ export default function App() {
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="players" element={<AdminPlayersPage />} />
         <Route path="packs" element={<AdminPacksPage />} />
+        <Route path="card-collections" element={<AdminCardCollectionsPage />} />
+        <Route path="tasks" element={<AdminTasksPage />} />
         <Route path="trades" element={<AdminTradesPage />} />
         <Route path="games" element={<AdminGamesPage />} />
         <Route path="log" element={<AdminLogPage />} />
@@ -88,9 +97,13 @@ export default function App() {
         <Route path="/play" element={<PlayPage />} />
         <Route path="/play/memory" element={<MemoryGamePage />} />
         <Route path="/play/arena" element={<ArenaPage />} />
+        <Route path="/play/saboteur" element={<SaboteurGamePage />} />
+        <Route path="/play/penalty" element={<PenaltyGamePage />} />
+        <Route path="/play/free-kick" element={<FreeKickGamePage />} />
         <Route path="/collection" element={<CollectionPage />} />
         <Route path="/trades" element={<TradesPage />} />
         <Route path="/trades/new" element={<NewTradePage />} />
+        <Route path="/tasks" element={<TasksPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/users/:userId" element={<PublicProfilePage />} />
       </Route>

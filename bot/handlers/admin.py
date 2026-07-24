@@ -45,7 +45,7 @@ async def cmd_stats(message: Message) -> None:
         return
     stats = await db.get_stats()
     text = (
-        "📊 <b>Статистика Football Cards</b>\n\n"
+        "📊 <b>Статистика FootyCards</b>\n\n"
         f"👥 Пользователей: {stats['total_users']}\n"
         f"🃏 Выдано карточек: {stats['total_cards']}\n"
         f"📦 Открыто паков: {stats['total_packs']}\n"

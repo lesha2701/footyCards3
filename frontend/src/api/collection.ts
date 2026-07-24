@@ -8,6 +8,7 @@ export interface CollectionFilters {
   position?: string;
   min_rating?: number;
   max_rating?: number;
+  collection_id?: number;
   search?: string;
   sort_by?: "rating" | "rarity" | "acquired_at";
   sort_dir?: "asc" | "desc";

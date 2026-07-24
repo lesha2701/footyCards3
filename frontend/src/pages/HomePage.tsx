@@ -1,20 +1,45 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { fetchDailyRewardCalendar } from "@/api/dailyRewards";
+import { claimFreePack, fetchFreePackStatus } from "@/api/freePack";
 import { fetchPacks } from "@/api/packs";
 import { fetchMyProfile } from "@/api/profile";
+import { fetchTasks } from "@/api/tasks";
 import { Skeleton } from "@/components/common/Skeleton";
 import { staticUrl } from "@/lib/api";
+import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 
 export default function HomePage() {
   const user = useAuthStore((s) => s.user);
+  const updateBalance = useAuthStore((s) => s.updateBalance);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const { data: calendar } = useQuery({ queryKey: ["daily-reward-calendar"], queryFn: fetchDailyRewardCalendar });
   const { data: packs, isLoading: packsLoading } = useQuery({ queryKey: ["packs"], queryFn: fetchPacks });
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
+  const { data: taskList } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
+  const { data: freePackStatus } = useQuery({
+    queryKey: ["free-pack-status"],
+    queryFn: fetchFreePackStatus,
+    refetchInterval: 30000,
+  });
+
+  const claimFreePackMutation = useMutation({
+    mutationFn: claimFreePack,
+    onSuccess: (data) => {
+      updateBalance(data.new_balance);
+      hapticNotify("success");
+      queryClient.invalidateQueries({ queryKey: ["free-pack-status"] });
+      queryClient.invalidateQueries({ queryKey: ["collection"] });
+    },
+  });
+
+  const claimableTaskCount = [...(taskList?.regular ?? []), ...(taskList?.premium ?? [])].filter(
+    (t) => t.is_completed && !t.is_claimed
+  ).length;
 
   return (
     <div className="flex flex-col gap-5">
@@ -43,6 +68,39 @@ export default function HomePage() {
             <p className="text-xs text-white/80">День {calendar.current_streak} — забери в профиле</p>
           </div>
           <span className="text-2xl">→</span>
+        </button>
+      )}
+
+      <button
+        onClick={() => navigate("/tasks")}
+        className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-700 px-4 py-3 text-left active:scale-[0.98]"
+      >
+        <div>
+          <p className="font-display text-sm font-bold text-white">🎯 Задания</p>
+          <p className="text-xs text-white/80">
+            {claimableTaskCount > 0 ? `${claimableTaskCount} готово к получению!` : "Выполняй и получай награды"}
+          </p>
+        </div>
+        <span className="text-2xl">→</span>
+      </button>
+
+      {freePackStatus && (
+        <button
+          onClick={() => freePackStatus.available && claimFreePackMutation.mutate()}
+          disabled={!freePackStatus.available || claimFreePackMutation.isPending}
+          className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-3 text-left active:scale-[0.98] disabled:opacity-60"
+        >
+          <div>
+            <p className="font-display text-sm font-bold text-white">🎁 Бесплатный пак</p>
+            <p className="text-xs text-white/80">
+              {freePackStatus.available
+                ? claimFreePackMutation.isPending
+                  ? "Получаем..."
+                  : "Готов к получению!"
+                : `Появится в ${new Date(freePackStatus.available_at!).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`}
+            </p>
+          </div>
+          <span className="text-2xl">{freePackStatus.available ? "→" : "⏳"}</span>
         </button>
       )}
 

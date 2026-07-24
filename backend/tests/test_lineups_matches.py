@@ -72,3 +72,32 @@ async def test_play_match_with_complete_lineup(client, db_session, bot_token):
 
     await db_session.refresh(user)
     assert user.match_energy == 9
+
+
+async def test_match_hourly_limit_blocks_after_three_plays(client, db_session, bot_token):
+    headers = telegram_headers(750006, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750006)
+
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    for _ in range(3):
+        resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+        assert resp.status_code == 200
+
+    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    assert resp.status_code == 409
+    details = resp.json()["error"]["details"]
+    assert details["hourly_limit"] == 3
+    assert details["retry_after_seconds"] > 0
+
+    await db_session.refresh(user)
+    from datetime import timedelta
+
+    user.match_hour_started_at = user.match_hour_started_at - timedelta(hours=2)
+    db_session.add(user)
+    await db_session.commit()
+
+    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    assert resp.status_code == 200

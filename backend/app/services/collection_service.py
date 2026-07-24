@@ -51,6 +51,9 @@ async def list_user_cards(
     if filters.max_rating is not None:
         query = query.where(Player.rating <= filters.max_rating)
         count_query = count_query.where(Player.rating <= filters.max_rating)
+    if filters.collection_id is not None:
+        query = query.where(Player.collection_id == filters.collection_id)
+        count_query = count_query.where(Player.collection_id == filters.collection_id)
     if filters.search:
         pattern = f"%{filters.search.lower()}%"
         query = query.where(func.lower(Player.display_name).like(pattern))

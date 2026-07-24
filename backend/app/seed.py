@@ -17,13 +17,14 @@ from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
-from app.models.achievement import Achievement
 from app.models.card import UserCard
 from app.models.enums import (
     CardSource,
     NotificationType,
     Position,
     Rarity,
+    TaskCategory,
+    TaskConditionType,
     TradeCardSide,
     TradeStatus,
 )
@@ -31,6 +32,7 @@ from app.models.game_config import GameConfig
 from app.models.lineup import Lineup, LineupCard
 from app.models.pack import Pack, PackRarityProbability
 from app.models.player import Player
+from app.models.task import TaskDefinition
 from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.user import User
 from app.services.card_creation import create_user_card
@@ -263,21 +265,65 @@ async def seed_packs(db) -> dict[str, Pack]:
     return packs
 
 
-async def seed_achievements(db) -> None:
-    specs = [
+async def seed_tasks(db, packs: dict[str, Pack]) -> None:
+    metric_specs = [
         ("first_pack", "Первый пак", "Откройте свой первый пак", 20, "packs_opened", 1),
         ("pack_collector", "Коллекционер паков", "Откройте 10 паков", 100, "packs_opened", 10),
         ("squad_builder", "Собиратель состава", "Соберите 10 разных футболистов", 50, "unique_players", 10),
         ("big_collection", "Большая коллекция", "Соберите 25 разных футболистов", 150, "unique_players", 25),
         ("first_trade", "Первый обмен", "Завершите свой первый обмен", 30, "trades_completed", 1),
+        ("pack_veteran", "Ветеран паков", "Откройте 25 паков", 250, "packs_opened", 25),
+        ("pack_master", "Мастер паков", "Откройте 50 паков", 500, "packs_opened", 50),
+        ("collector_pro", "Профи коллекционер", "Соберите 40 разных футболистов", 300, "unique_players", 40),
+        ("collector_legend", "Легендарный коллекционер", "Соберите 60 разных футболистов", 600, "unique_players", 60),
+        ("trader", "Заядлый трейдер", "Завершите 5 обменов", 100, "trades_completed", 5),
+        ("trade_master", "Мастер обменов", "Завершите 15 обменов", 300, "trades_completed", 15),
+        ("invite_friend", "Пригласи друга", "Пригласи 1 друга по реферальной ссылке", 50, "referrals_count", 1),
+        ("invite_3_friends", "Пригласи 3 друзей", "Пригласи 3 друзей по реферальной ссылке", 150, "referrals_count", 3),
+        ("invite_10_friends", "Пригласи 10 друзей", "Пригласи 10 друзей по реферальной ссылке", 500, "referrals_count", 10),
+        ("invite_25_friends", "Пригласи 25 друзей", "Пригласи 25 друзей по реферальной ссылке", 1500, "referrals_count", 25),
     ]
-    for code, name, description, reward, metric, target in specs:
-        existing = (await db.execute(select(Achievement).where(Achievement.code == code))).scalar_one_or_none()
+
+    task_defs: list[dict] = [
+        {
+            "code": code, "name": name, "description": description, "reward_coins": reward,
+            "condition_type": TaskConditionType.metric_counter, "metric": metric, "target_value": target,
+        }
+        for code, name, description, reward, metric, target in metric_specs
+    ]
+    task_defs.append({
+        "code": "clean_squad", "name": "Чистый состав",
+        "description": "Сыграйте матч Card Arena составом, где у каждого игрока рейтинг не ниже 67",
+        "reward_coins": 120, "condition_type": TaskConditionType.match_min_rating,
+        "condition_params": {"min_rating": 67},
+    })
+    task_defs.append({
+        "code": "elite_squad", "name": "Элитный состав",
+        "description": "Сыграйте матч Card Arena составом, где у каждого игрока рейтинг не ниже 80",
+        "reward_coins": 250, "condition_type": TaskConditionType.match_min_rating,
+        "condition_params": {"min_rating": 80},
+    })
+
+    for i, spec in enumerate(task_defs):
+        existing = (await db.execute(select(TaskDefinition).where(TaskDefinition.code == spec["code"]))).scalar_one_or_none()
         if existing:
             continue
+        db.add(TaskDefinition(**spec, category=TaskCategory.regular, sort_order=i))
+
+    premium_specs = [
+        ("subscribe_news", "Подпишись на новости", "Подпишитесь на канал с новостями FootyCards", "@footycards_news", "basic"),
+        ("subscribe_community", "Вступи в сообщество", "Подпишитесь на канал сообщества FootyCards", "@footycards_community", "premium"),
+    ]
+    for i, (code, name, description, channel, pack_slug) in enumerate(premium_specs):
+        existing = (await db.execute(select(TaskDefinition).where(TaskDefinition.code == code))).scalar_one_or_none()
+        if existing:
+            continue
+        pack = packs.get(pack_slug)
         db.add(
-            Achievement(
-                code=code, name=name, description=description, reward_coins=reward, metric=metric, target_value=target
+            TaskDefinition(
+                code=code, name=name, description=description, category=TaskCategory.premium,
+                condition_type=TaskConditionType.metric_counter, target_value=0, reward_coins=0,
+                reward_pack_id=pack.id if pack else None, channel_username=channel, sort_order=i,
             )
         )
     await db.commit()
@@ -438,8 +484,8 @@ async def main() -> None:
         packs = await seed_packs(db)
         print(f"  {len(packs)} packs available")
 
-        print("Seeding achievements...")
-        await seed_achievements(db)
+        print("Seeding tasks...")
+        await seed_tasks(db, packs)
 
         print("Seeding dev admin user...")
         await seed_admin_user(db)

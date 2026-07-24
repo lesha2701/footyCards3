@@ -34,6 +34,8 @@ class CardSource(str, enum.Enum):
     achievement = "achievement"
     game_reward = "game_reward"
     seed = "seed"
+    task = "task"
+    free_pack = "free_pack"
 
 
 class TransactionType(str, enum.Enum):
@@ -47,6 +49,17 @@ class TransactionType(str, enum.Enum):
     trade_coins_sent = "trade_coins_sent"
     trade_coins_received = "trade_coins_received"
     admin_adjustment = "admin_adjustment"
+    task_reward = "task_reward"
+
+
+class TaskCategory(str, enum.Enum):
+    regular = "regular"
+    premium = "premium"
+
+
+class TaskConditionType(str, enum.Enum):
+    metric_counter = "metric_counter"
+    match_min_rating = "match_min_rating"
 
 
 class TradeStatus(str, enum.Enum):
@@ -60,6 +73,9 @@ class TradeStatus(str, enum.Enum):
 class GameType(str, enum.Enum):
     memory_sequence = "memory_sequence"
     card_arena = "card_arena"
+    saboteur = "saboteur"
+    penalty = "penalty"
+    free_kick = "free_kick"
 
 
 class GameSessionStatus(str, enum.Enum):
@@ -91,6 +107,7 @@ class NotificationType(str, enum.Enum):
     daily_reward_available = "daily_reward_available"
     special_pack = "special_pack"
     admin_message = "admin_message"
+    premium_task_available = "premium_task_available"
 
 
 class TradeCardSide(str, enum.Enum):

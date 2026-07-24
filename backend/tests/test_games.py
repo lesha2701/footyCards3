@@ -60,3 +60,30 @@ async def test_memory_claim_reward_credits_coins_once(client, bot_token):
 
     second_claim = await client.post(f"/api/v1/games/memory/{session_id}/claim", headers=headers)
     assert second_claim.status_code == 409
+
+
+async def test_memory_hourly_limit_blocks_after_three_starts(client, db_session, bot_token):
+    from datetime import timedelta
+
+    from tests.factories import get_user_by_telegram_id
+
+    headers = telegram_headers(740005, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+
+    for _ in range(3):
+        resp = await client.post("/api/v1/games/memory/start", headers=headers)
+        assert resp.status_code == 200
+
+    resp = await client.post("/api/v1/games/memory/start", headers=headers)
+    assert resp.status_code == 409
+    details = resp.json()["error"]["details"]
+    assert details["hourly_limit"] == 3
+    assert details["retry_after_seconds"] > 0
+
+    user = await get_user_by_telegram_id(db_session, 740005)
+    user.memory_hour_started_at = user.memory_hour_started_at - timedelta(hours=2)
+    db_session.add(user)
+    await db_session.commit()
+
+    resp = await client.post("/api/v1/games/memory/start", headers=headers)
+    assert resp.status_code == 200

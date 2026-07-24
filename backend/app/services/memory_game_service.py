@@ -1,11 +1,11 @@
 import random
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
-from app.core.timeutil import local_today
+from app.core.timeutil import ensure_aware, local_today
 from app.models.enums import GameSessionStatus, GameType, TransactionType
 from app.models.game import GameSession, MemoryGameRound
 from app.models.user import User
@@ -34,16 +34,39 @@ async def _ensure_daily_reset(db: AsyncSession, user: User) -> None:
         db.add(user)
 
 
+async def _ensure_hourly_reset(db: AsyncSession, user: User) -> None:
+    now = datetime.now(timezone.utc)
+    started = user.memory_hour_started_at
+    if started is None or now - ensure_aware(started) >= timedelta(hours=1):
+        user.memory_hourly_attempts = 0
+        user.memory_hour_started_at = now
+        db.add(user)
+
+
 async def start_session(db: AsyncSession, user: User) -> MemoryStartOut:
     config = await get_config(db)
-    await _ensure_daily_reset(db, user)
-    if user.memory_rewarded_attempts_today >= config.memory_daily_reward_limit:
+    locked_user = await lock_user_for_update(db, user.id)
+    await _ensure_hourly_reset(db, locked_user)
+    if locked_user.memory_hourly_attempts >= config.hourly_game_limit:
+        remaining = timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(locked_user.memory_hour_started_at))
+        raise ConflictError(
+            "Hourly play limit reached for this game",
+            details={
+                "hourly_limit": config.hourly_game_limit,
+                "retry_after_seconds": max(0, int(remaining.total_seconds())),
+            },
+        )
+    locked_user.memory_hourly_attempts += 1
+    db.add(locked_user)
+
+    await _ensure_daily_reset(db, locked_user)
+    if locked_user.memory_rewarded_attempts_today >= config.memory_daily_reward_limit:
         raise ConflictError(
             "Daily reward attempts for Memory Sequence exhausted; you can still play unrewarded",
             details={"daily_limit": config.memory_daily_reward_limit},
         )
 
-    session = GameSession(user_id=user.id, game_type=GameType.memory_sequence, status=GameSessionStatus.in_progress)
+    session = GameSession(user_id=locked_user.id, game_type=GameType.memory_sequence, status=GameSessionStatus.in_progress)
     db.add(session)
     await db.flush()
 
@@ -127,10 +150,13 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> MemoryC
     session = await _get_session(db, user.id, session_id)
     if session.status not in (GameSessionStatus.lost, GameSessionStatus.won):
         raise ConflictError("Session is still in progress")
-    if session.is_rewarded:
-        raise ConflictError("Reward for this session has already been claimed")
 
     locked_user = await lock_user_for_update(db, user.id)
+    # Re-read the session under a row lock so a concurrent claim on the same
+    # session can't race past this check before either commits.
+    await db.refresh(session, with_for_update=True)
+    if session.is_rewarded:
+        raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked_user)
     if locked_user.memory_rewarded_attempts_today >= config.memory_daily_reward_limit:
         raise ConflictError("Daily reward attempts for Memory Sequence exhausted")

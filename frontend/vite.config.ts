@@ -13,6 +13,32 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    allowedHosts: [".lhr.life", ".ngrok-free.app", ".ngrok-free.dev", ".ngrok.io"],
+    proxy: {
+      "/api": {
+        target: "http://backend:8000",
+        changeOrigin: true,
+      },
+      "/static": {
+        target: "http://backend:8000",
+        changeOrigin: true,
+      },
+    },
+  },
+  preview: {
+    host: true,
+    port: 5173,
+    allowedHosts: [".lhr.life", ".ngrok-free.app", ".ngrok-free.dev", ".ngrok.io"],
+    proxy: {
+      "/api": {
+        target: "http://backend:8000",
+        changeOrigin: true,
+      },
+      "/static": {
+        target: "http://backend:8000",
+        changeOrigin: true,
+      },
+    },
   },
   test: {
     globals: true,

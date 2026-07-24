@@ -24,6 +24,7 @@ class ProfilePublicOut(BaseModel):
     total_cards: int
     rarest_card: Optional[PlayerOut]
     packs_opened: int
+    referral_count: int
 
 
 class ProfilePrivateOut(ProfilePublicOut):
@@ -31,3 +32,4 @@ class ProfilePrivateOut(ProfilePublicOut):
     balance: int
     experience: int
     is_admin: bool
+    telegram_bot_username: str

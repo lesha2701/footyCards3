@@ -17,6 +17,8 @@ const player: Player = {
   image_path: null,
   quick_sell_price: 120,
   is_active: true,
+  collection_id: null,
+  collection_name: null,
 };
 
 describe("PlayerCard", () => {

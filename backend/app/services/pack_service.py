@@ -2,19 +2,20 @@ import random
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.card import UserCard
+from app.models.card_collection import CardCollection
 from app.models.enums import RARITY_ORDER, CardSource, Rarity, TransactionType
 from app.models.pack import Pack, PackOpening, PackOpeningCard, PackRarityProbability
 from app.models.player import Player
 from app.models.user import User
 from app.schemas.pack import OpenedCardOut, PackOpenResult, PackOut
-from app.services.achievement_service import evaluate_and_award
+from app.services import task_service
 from app.services.card_creation import create_user_card
 from app.services.wallet_service import debit_coins, lock_user_for_update
 
@@ -73,14 +74,28 @@ def roll_rarities(probabilities: list[PackRarityProbability], card_count: int, g
     return rolled
 
 
+def _collection_active_filter():
+    return or_(Player.collection_id.is_(None), CardCollection.is_active.is_(True))
+
+
 async def pick_random_player(db: AsyncSession, rarity: Rarity) -> Player:
     result = await db.execute(
-        select(Player).where(Player.rarity == rarity, Player.is_active.is_(True)).order_by(func.random()).limit(1)
+        select(Player)
+        .outerjoin(CardCollection, Player.collection_id == CardCollection.id)
+        .where(Player.rarity == rarity, Player.is_active.is_(True), _collection_active_filter())
+        .order_by(func.random())
+        .limit(1)
     )
     player = result.scalar_one_or_none()
     if player is None:
-        # Fall back to any active player if this rarity has no active players configured.
-        result = await db.execute(select(Player).where(Player.is_active.is_(True)).order_by(func.random()).limit(1))
+        # Fall back to any active player (in an active collection) if this rarity has none configured.
+        result = await db.execute(
+            select(Player)
+            .outerjoin(CardCollection, Player.collection_id == CardCollection.id)
+            .where(Player.is_active.is_(True), _collection_active_filter())
+            .order_by(func.random())
+            .limit(1)
+        )
         player = result.scalar_one_or_none()
     if player is None:
         raise ConflictError("No active players configured; cannot open packs")
@@ -93,6 +108,7 @@ async def _existing_opening_result(db: AsyncSession, user: User, opening: PackOp
         select(PackOpeningCard)
         .where(PackOpeningCard.opening_id == opening.id)
         .options(joinedload(PackOpeningCard.opening))
+        .order_by(PackOpeningCard.id)
     )
     opening_cards = result.unique().scalars().all()
     card_ids = [oc.user_card_id for oc in opening_cards]
@@ -112,6 +128,7 @@ async def _existing_opening_result(db: AsyncSession, user: User, opening: PackOp
                 duplicate_count=dup_counts.get(card.player_id, 1),
             )
         )
+    items.sort(key=lambda item: RARITY_ORDER[item.card.player.rarity])
     return PackOpenResult(opening_id=opening.id, pack=PackOut.model_validate(pack), cards=items, new_balance=user.balance)
 
 
@@ -179,11 +196,30 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
             OpenedCardOut(card=user_card, is_new=is_new, duplicate_count=dup_counts[player.id])
         )
 
+    opened_items.sort(key=lambda item: RARITY_ORDER[item.card.player.rarity])
+
     total_openings = (
         await db.execute(select(func.count(PackOpening.id)).where(PackOpening.user_id == locked_user.id))
     ).scalar_one()
-    await evaluate_and_award(db, locked_user, "packs_opened", total_openings)
-    await evaluate_and_award(db, locked_user, "unique_players", len(dup_counts))
+    await task_service.evaluate_metric_progress(db, locked_user, "packs_opened", total_openings)
+    await task_service.evaluate_metric_progress(db, locked_user, "unique_players", len(dup_counts))
+
+    if locked_user.referred_by_id is not None:
+        # Credit the referrer only once the referred user has made a real
+        # paid purchase, not merely on registration — otherwise disposable
+        # accounts could farm referral rewards for free.
+        paid_openings = (
+            await db.execute(
+                select(func.count(PackOpening.id)).where(
+                    PackOpening.user_id == locked_user.id, PackOpening.price_paid > 0
+                )
+            )
+        ).scalar_one()
+        if paid_openings == 1:
+            referrer = await lock_user_for_update(db, locked_user.referred_by_id)
+            referrer.referral_count += 1
+            db.add(referrer)
+            await task_service.evaluate_metric_progress(db, referrer, "referrals_count", referrer.referral_count)
 
     try:
         await db.commit()

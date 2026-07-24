@@ -50,6 +50,8 @@ export interface Player {
   image_path: string | null;
   quick_sell_price: number;
   is_active: boolean;
+  collection_id: number | null;
+  collection_name: string | null;
 }
 
 export interface UserCard {
@@ -256,6 +258,7 @@ export interface ProfilePublic {
   total_cards: number;
   rarest_card: Player | null;
   packs_opened: number;
+  referral_count: number;
 }
 
 export interface ProfilePrivate extends ProfilePublic {
@@ -263,6 +266,7 @@ export interface ProfilePrivate extends ProfilePublic {
   balance: number;
   experience: number;
   is_admin: boolean;
+  telegram_bot_username: string;
 }
 
 export interface CoinTransaction {
@@ -288,15 +292,120 @@ export interface Notification {
   created_at: string;
 }
 
-export interface Achievement {
-  id: number;
+export interface Task {
+  user_task_id: number;
   code: string;
   name: string;
   description: string;
+  category: "regular" | "premium";
   reward_coins: number;
-  target_value: number;
+  reward_pack_name: string | null;
+  channel_username: string | null;
   progress: number;
-  completed: boolean;
+  target_value: number;
+  is_completed: boolean;
+  is_claimed: boolean;
+}
+
+export interface TaskList {
+  regular: Task[];
+  premium: Task[];
+}
+
+export interface TaskClaimResult {
+  reward_coins: number;
+  new_balance: number;
+  granted_pack_name: string | null;
+  granted_card: UserCard | null;
+  refilled_task: Task | null;
+}
+
+export interface SaboteurStartResult {
+  session_id: number;
+  grid_size: number;
+  bomb_count: number;
+}
+
+export interface SaboteurRevealResult {
+  is_bomb: boolean;
+  session_id: number;
+  score: number;
+  status: string;
+  reward_coins: number | null;
+}
+
+export interface SaboteurClaimResult {
+  reward_coins: number;
+  new_balance: number;
+}
+
+export type PenaltyDirection = "left" | "center" | "right";
+
+export interface PenaltyStartResult {
+  session_id: number;
+  player_rating: number;
+  first_kicker: "player" | "bot";
+}
+
+export interface PenaltyKickResult {
+  session_id: number;
+  kicker: "player" | "bot";
+  outcome: "goal" | "saved" | "miss";
+  player_direction: PenaltyDirection | null;
+  bot_direction: PenaltyDirection;
+  player_score: number;
+  bot_score: number;
+  next_kicker: "player" | "bot" | null;
+  is_finished: boolean;
+  result: "win" | "draw" | "loss" | null;
+}
+
+export interface PenaltyClaimResult {
+  reward_coins: number;
+  new_balance: number;
+  result: string;
+}
+
+export interface FreeKickNextKick {
+  kick_index: number;
+  period_ms: number;
+  start_ts: string;
+  half_width: number;
+}
+
+export interface FreeKickStartResult {
+  session_id: number;
+  kick: FreeKickNextKick;
+}
+
+export interface FreeKickKickResult {
+  tier: "perfect" | "good" | "ok" | "miss";
+  coins_this_kick: number;
+  total_coins: number;
+  is_finished: boolean;
+  next_kick: FreeKickNextKick | null;
+}
+
+export interface FreeKickClaimResult {
+  reward_coins: number;
+  new_balance: number;
+}
+
+export interface FreePackStatus {
+  available: boolean;
+  available_at: string | null;
+}
+
+export interface FreePackClaimResult {
+  granted_pack_name: string | null;
+  granted_card: UserCard | null;
+  new_balance: number;
+  next_available_at: string;
+}
+
+export interface CardCollectionPublic {
+  id: number;
+  name: string;
 }
 
 export interface ApiError {

@@ -41,7 +41,7 @@ async def list_players(
 
     total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
     query = query.order_by(Player.rating.desc()).offset(params.offset).limit(params.page_size)
-    players: List[Player] = (await db.execute(query)).scalars().all()
+    players: List[Player] = (await db.execute(query)).unique().scalars().all()
     return Page.build([PlayerOut.model_validate(p) for p in players], total, params)
 
 
