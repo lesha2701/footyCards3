@@ -28,6 +28,24 @@ async def test_open_pack_success(client, db_session, bot_token):
     assert body["new_balance"] == 500 - 100
 
 
+async def test_open_pack_with_collection_player_does_not_crash(client, db_session, bot_token):
+    from app.models.card_collection import CardCollection
+
+    collection = CardCollection(name="Regression Collection", is_active=True)
+    db_session.add(collection)
+    await db_session.flush()
+    await create_player(db_session, rarity=Rarity.common, collection_id=collection.id)
+    pack = await create_pack(db_session, "basic-collection", price=100, card_count=1, probabilities={Rarity.common: 1.0})
+
+    await _register(client, db_session, 700010, bot_token)
+    headers = telegram_headers(700010, bot_token)
+
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["cards"][0]["card"]["player"]["collection_name"] == "Regression Collection"
+
+
 async def test_open_pack_insufficient_balance(client, db_session, bot_token):
     await create_player(db_session, rarity=Rarity.common)
     pack = await create_pack(db_session, "expensive", price=999999, card_count=3, probabilities={Rarity.common: 1.0})
