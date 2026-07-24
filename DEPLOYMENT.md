@@ -267,6 +267,59 @@ sudo journalctl -u caddy -f    # логи, Ctrl+C для выхода
 
 ## Шаг 8. Запустить стек
 
+### Перед первым запуском: настройка Docker-демона
+
+На некоторых серверах (особенно у российских хостеров) встречаются два
+известных препятствия — лучше поправить их сразу, не дожидаясь ошибок:
+
+```bash
+sudo nano /etc/docker/daemon.json
+```
+
+Содержимое (создаёт файл, если его не было):
+
+```json
+{
+  "registry-mirrors": ["https://mirror.gcr.io"],
+  "ip6tables": true
+}
+```
+
+- `registry-mirrors` — Docker Hub ограничивает анонимные скачивания образов
+  по IP (обычно 100 запросов/6ч); при нескольких пересборках подряд лимит
+  легко исчерпать, и `docker compose up --build` упадёт с `429 Too Many
+  Requests`. Публичное зеркало Google снимает эту проблему.
+- `ip6tables` — нужен для следующего шага (IPv6 наружу из контейнеров).
+
+Применить:
+
+```bash
+sudo systemctl restart docker
+```
+
+### Если у сервера сломан IPv4-маршрут до Telegram (частая ситуация у РФ-хостеров)
+
+У некоторых провайдеров исторически заблокирован/сломан **IPv4**-маршрut до
+`api.telegram.org`, при этом **IPv6** работает нормально. Проверить прямо
+сейчас:
+
+```bash
+curl -4 -s -o /dev/null -w "IPv4: %{http_code}, %{time_total}s\n" --max-time 8 https://api.telegram.org
+curl -6 -s -o /dev/null -w "IPv6: %{http_code}, %{time_total}s\n" --max-time 8 https://api.telegram.org
+```
+
+Если IPv4 таймаутит, а IPv6 отвечает быстро — бот и любые вызовы Telegram API
+из backend (проверка подписки на канал для премиум-заданий) будут падать по
+таймауту, если контейнерам не дать реальный выход в IPv6. Это уже заложено в
+`docker-compose.prod.yml` этого репозитория (секция `networks.default` с
+`enable_ipv6: true`) — просто убедитесь, что `ip6tables: true` стоит в
+`daemon.json` (см. выше) до первого `up`.
+
+Если оба запроса выше отвечают одинаково быстро — можете просто это игнорировать,
+у вас такой проблемы нет.
+
+### Запуск
+
 ```bash
 cd ~/footyCards3
 docker compose -f docker-compose.prod.yml up --build -d
@@ -388,3 +441,23 @@ docker compose -f docker-compose.prod.yml logs -f nginx
   домен без `www`).
 - **502 Bad Gateway от Caddy.** Значит docker-контейнеры ещё не поднялись
   или упали — смотрите `docker compose -f docker-compose.prod.yml ps` и логи.
+- **`docker compose up --build` падает с `429 Too Many Requests` при
+  скачивании базовых образов (`python:3.12-slim`, `node:20-alpine` и т.д.).**
+  Docker Hub ограничивает анонимные pull'ы по IP. Настройте зеркало — см.
+  «Перед первым запуском» в Шаге 8 (`registry-mirrors` в
+  `/etc/docker/daemon.json`), затем `sudo systemctl restart docker` и
+  повторите сборку.
+- **Бот и/или backend не могут достучаться до Telegram (`TelegramNetworkError:
+  Request timeout error`, или у backend не работает проверка подписки на
+  канал для премиум-заданий), при этом с самого сервера `curl
+  https://api.telegram.org` работает.** Скорее всего у хостера сломан именно
+  IPv4-маршрут до Telegram, а IPv6 — рабочий (проверить: `curl -4`/`curl -6`
+  на `https://api.telegram.org`, см. Шаг 8). Контейнерам по умолчанию IPv6
+  недоступен даже если у хоста он есть. Решение уже в
+  `docker-compose.prod.yml` этого репозитория (`networks.default.enable_ipv6:
+  true` + `ip6tables: true` в `daemon.json`) — если ловите эту ошибку на
+  чистом сервере, значит `daemon.json` ещё не поправлен или Docker не
+  перезапущен после правки; либо сеть нужно пересоздать (`docker compose -f
+  docker-compose.prod.yml down && docker compose -f docker-compose.prod.yml
+  up --build -d`, просто `up` без `down` не применит новые настройки сети к
+  уже существующей сети).
