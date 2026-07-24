@@ -2,6 +2,8 @@
 .env.local
 .env.*.local
 
+SERVER_HANDBOOK.md
+
 __pycache__/
 *.py[cod]
 *.egg-info/
