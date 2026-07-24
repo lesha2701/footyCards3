@@ -564,3 +564,145 @@ docker compose -f docker-compose.prod.yml logs --tail 30 bot
 Telegram — если он упадёт, бот перестанет отвечать. Для небольшого проекта
 это приемлемый компромисс; при росте нагрузки стоит рассмотреть резервный
 прокси или готовый прокси-сервис с SLA.
+
+---
+
+## Полный переезд на другой сервер (с сохранением данных)
+
+Радикальное решение той же проблемы — вместо прокси перенести весь проект
+на сервер за пределами страны. План ниже переносит **всё как есть**:
+пользователей, балансы, купленные карточки, историю транзакций, импортированных
+игроков. Домен `footycards.ru` не меняется — меняется только IP, на который
+он указывает, поэтому в BotFather ничего перенастраивать не придётся.
+
+Порядок важен: сначала полностью готовим новый сервер и проверяем его
+локально (пока DNS ещё указывает на старый), и только в конце — одним
+быстрым переключением DNS — переводим трафик. Так старый сервер продолжает
+отвечать пользователям всё время, пока новый готовится.
+
+### Этап 1. Арендовать новый сервер и подготовить его — как обычный деплой, но не трогая DNS
+
+Пройдите Шаги 1, 3, 4, 5 из начала этого файла **на новом сервере**:
+арендовать VPS за пределами страны, первичная настройка (файрвол, Docker),
+скачать код (`git clone`), настроить `.env` (те же значения, что были на
+старом сервере — тот же `TELEGRAM_BOT_TOKEN`, тот же `JWT_SECRET` можно
+оставить или сменить, `DB_PASSWORD` можно сгенерировать новый).
+
+**Пока не делайте:**
+- Шаг 2 (DNS) — домен пока должен указывать на старый сервер.
+- Шаг 6 (Caddy) — сертификат Let's Encrypt не выпустится, пока DNS не
+  указывает на этот сервер. Вернёмся к этому в Этапе 6.
+
+Раз новый сервер (предположительно) не в РФ — можно сразу убрать
+`TELEGRAM_PROXY_URL` из `.env`, если использовали прокси, и не переживать за
+IPv4/IPv6 до Telegram — но сначала проверьте:
+
+```bash
+curl -4 -s -o /dev/null -w "IPv4: %{http_code}, %{time_total}s\n" --max-time 8 https://api.telegram.org
+```
+
+### Этап 2. Снять дамп базы данных со старого сервера
+
+На **старом** сервере:
+
+```bash
+cd ~/footyCards3
+docker compose -f docker-compose.prod.yml exec postgres pg_dump -U postgres -Fc footycards > ~/footycards_backup.dump
+```
+
+(`-Fc` — сжатый «custom»-формат, восстанавливается через `pg_restore` и
+надёжнее обычного SQL-дампа).
+
+### Этап 3. Передать дамп на новый сервер
+
+Проще всего через свой Mac как промежуточное звено:
+
+```bash
+scp root@<IP-старого-сервера>:~/footycards_backup.dump ~/Downloads/footycards_backup.dump
+scp ~/Downloads/footycards_backup.dump root@<IP-нового-сервера>:~/footycards_backup.dump
+```
+
+### Этап 4. Восстановить базу на новом сервере
+
+Важно поднять **сначала только postgres**, не давая `backend` создать пустые
+таблицы через Alembic раньше, чем мы восстановим дамп:
+
+```bash
+cd ~/footyCards3
+docker compose -f docker-compose.prod.yml up -d postgres
+docker compose -f docker-compose.prod.yml exec postgres pg_isready -U postgres
+
+cat ~/footycards_backup.dump | docker compose -f docker-compose.prod.yml exec -T postgres pg_restore -U postgres -d footycards --no-owner
+
+# Теперь поднимаем всё остальное — Alembic увидит, что база уже на
+# актуальной ревизии, и ничего не станет пересоздавать
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+Проверить, что данные реально восстановились:
+
+```bash
+docker compose -f docker-compose.prod.yml exec backend python -c "
+import asyncio
+from app.database import AsyncSessionLocal
+from app.models.user import User
+from app.models.player import Player
+from sqlalchemy import func, select
+
+async def main():
+    async with AsyncSessionLocal() as db:
+        users = (await db.execute(select(func.count(User.id)))).scalar_one()
+        players = (await db.execute(select(func.count(Player.id)))).scalar_one()
+        print('users:', users, '| players:', players)
+
+asyncio.run(main())
+"
+```
+
+Числа должны совпадать с тем, что было на старом сервере.
+
+### Этап 5. Отключить старый сервер от трафика
+
+На **старом** сервере — остановить контейнеры, чтобы во время переключения
+DNS не было двух серверов, одновременно принимающих запросы:
+
+```bash
+cd ~/footyCards3
+docker compose -f docker-compose.prod.yml down
+```
+
+С этого момента `footycards.ru` временно недоступен — это ожидаемо, пока не
+переключим DNS и не поднимем Caddy на новом сервере (обычно несколько минут).
+
+### Этап 6. Переключить DNS
+
+В личном кабинете reg.ru (в панели хостинга — там же, где добавляли
+A-запись изначально) поменяйте значение A-записи `footycards.ru.` с IP
+старого сервера на IP нового. Подождите 10-15 минут.
+
+Проверить, что обновилось:
+
+```bash
+curl -s "https://dns.google/resolve?name=footycards.ru&type=A"
+```
+
+### Этап 7. HTTPS на новом сервере
+
+Теперь, когда DNS указывает на новый сервер, можно пройти Шаг 6 основного
+гайда (установка Caddy) — сертификат Let's Encrypt выпустится успешно, так
+как ACME-проверка увидит правильный IP.
+
+### Этап 8. Финальная проверка
+
+- `curl https://footycards.ru/api/health` — должен ответить `{"status":"ok",...}`.
+- Открыть бота в Telegram, `/start` — должен ответить.
+- Открыть мини-апп — старые пользователи должны увидеть свой прежний
+  баланс и карточки (те, кто уже играл на старом сервере).
+- `/admin` → раздел «Коллекции карт» → убедиться, что World Cup 2026 и 125
+  игроков на месте.
+
+### Этап 9. Освободить старый сервер
+
+Когда убедились, что новый сервер стабильно работает несколько дней —
+можно отменить/удалить старый VPS у провайдера (в его личном кабинете, вне
+Docker — зависит от провайдера).
