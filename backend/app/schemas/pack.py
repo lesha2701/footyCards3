@@ -47,6 +47,7 @@ class PackCreate(BaseModel):
     card_count: int = Field(ge=1, le=12)
     guaranteed_min_rarity: Optional[Rarity] = None
     is_active: bool = True
+    image_path: Optional[str] = None
     purchase_limit_per_user: Optional[int] = Field(default=None, ge=1)
     available_from: Optional[datetime] = None
     available_until: Optional[datetime] = None
@@ -60,6 +61,7 @@ class PackUpdate(BaseModel):
     card_count: Optional[int] = Field(default=None, ge=1, le=12)
     guaranteed_min_rarity: Optional[Rarity] = None
     is_active: Optional[bool] = None
+    image_path: Optional[str] = None
     purchase_limit_per_user: Optional[int] = Field(default=None, ge=1)
     available_from: Optional[datetime] = None
     available_until: Optional[datetime] = None

@@ -9,7 +9,7 @@ from app.models.pack import PackOpening
 from app.models.player import Player
 from app.models.user import User
 from app.schemas.player import PlayerOut
-from app.schemas.profile import ProfilePrivateOut, ProfilePublicOut
+from app.schemas.profile import ProfilePrivateOut, ProfilePublicOut, ProfileSettingsUpdate
 from app.schemas.user import UserPublicOut
 
 
@@ -85,11 +85,22 @@ async def get_private_profile(db: AsyncSession, user: User) -> ProfilePrivateOut
         experience=user.experience,
         is_admin=user.is_admin,
         telegram_bot_username=get_settings().telegram_bot_username,
+        accept_trades=user.accept_trades,
     )
 
 
+async def update_settings(db: AsyncSession, user: User, payload: ProfileSettingsUpdate) -> ProfilePrivateOut:
+    updates = payload.model_dump(exclude_unset=True)
+    for key, value in updates.items():
+        setattr(user, key, value)
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return await get_private_profile(db, user)
+
+
 async def search_users(db: AsyncSession, query: str, exclude_user_id: int, limit: int = 20) -> list[UserPublicOut]:
-    stmt = select(User).where(User.id != exclude_user_id)
+    stmt = select(User).where(User.id != exclude_user_id, User.accept_trades.is_(True))
     if query.isdigit():
         stmt = stmt.where((User.id == int(query)) | (User.username.ilike(f"%{query}%")))
     else:

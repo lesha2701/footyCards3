@@ -63,6 +63,7 @@ export interface UserCard {
   is_locked_by_admin: boolean;
   is_locked_in_trade: boolean;
   is_in_lineup: boolean;
+  hidden_from_trade: boolean;
   duplicate_count?: number;
 }
 
@@ -267,6 +268,11 @@ export interface ProfilePrivate extends ProfilePublic {
   experience: number;
   is_admin: boolean;
   telegram_bot_username: string;
+  accept_trades: boolean;
+}
+
+export interface ProfileSettingsUpdate {
+  accept_trades?: boolean;
 }
 
 export interface CoinTransaction {
@@ -394,13 +400,6 @@ export interface FreeKickClaimResult {
 export interface FreePackStatus {
   available: boolean;
   available_at: string | null;
-}
-
-export interface FreePackClaimResult {
-  granted_pack_name: string | null;
-  granted_card: UserCard | null;
-  new_balance: number;
-  next_available_at: string;
 }
 
 export interface CardCollectionPublic {

@@ -28,6 +28,7 @@ class UserCard(Base):
     is_locked_by_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_locked_in_trade: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_in_lineup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    hidden_from_trade: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     owner: Mapped["User"] = relationship(back_populates="cards")
     player: Mapped["Player"] = relationship(back_populates="cards")

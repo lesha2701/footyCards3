@@ -17,6 +17,7 @@ class UserCardOut(BaseModel):
     is_locked_by_admin: bool
     is_locked_in_trade: bool
     is_in_lineup: bool
+    hidden_from_trade: bool
 
     @property
     def is_locked(self) -> bool:

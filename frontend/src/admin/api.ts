@@ -140,6 +140,15 @@ export async function updatePack(id: number, payload: Record<string, unknown>): 
   return data;
 }
 
+export async function uploadPackImage(id: number, file: File): Promise<Pack> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<Pack>(`/admin/packs/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
 export async function togglePackActive(id: number): Promise<Pack> {
   const { data } = await api.post<Pack>(`/admin/packs/${id}/toggle-active`);
   return data;

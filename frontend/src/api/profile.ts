@@ -1,8 +1,13 @@
 import { api } from "@/lib/api";
-import type { CoinTransaction, Page, ProfilePrivate, ProfilePublic, UserPublic } from "@/types";
+import type { CoinTransaction, Page, ProfilePrivate, ProfilePublic, ProfileSettingsUpdate, UserPublic } from "@/types";
 
 export async function fetchMyProfile(): Promise<ProfilePrivate> {
   const { data } = await api.get<ProfilePrivate>("/profile/me");
+  return data;
+}
+
+export async function updateMySettings(payload: ProfileSettingsUpdate): Promise<ProfilePrivate> {
+  const { data } = await api.patch<ProfilePrivate>("/profile/settings", payload);
   return data;
 }
 

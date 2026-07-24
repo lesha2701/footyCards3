@@ -11,9 +11,10 @@ from app.schemas.collection import (
     CollectionFilterParams,
     SellCardRequest,
     SellResultOut,
+    SetCardHiddenRequest,
     UserCardListItem,
 )
-from app.services.collection_service import collection_stats, list_user_cards, sell_cards
+from app.services.collection_service import collection_stats, list_user_cards, sell_cards, set_card_hidden
 
 router = APIRouter(prefix="/collection", tags=["collection"])
 
@@ -26,6 +27,13 @@ async def get_my_cards(
     user: User = Depends(get_current_user),
 ):
     return await list_user_cards(db, user.id, filters, params)
+
+
+@router.patch("/cards/{card_id}/hidden", response_model=UserCardListItem)
+async def set_card_hidden_from_trade(
+    card_id: int, payload: SetCardHiddenRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await set_card_hidden(db, user.id, card_id, payload.hidden)
 
 
 @router.get("/stats", response_model=CollectionStatsOut)

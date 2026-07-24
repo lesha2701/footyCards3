@@ -7,9 +7,9 @@ from app.core.pagination import Page, PageParams
 from app.database import get_db
 from app.models.transaction import CoinTransaction
 from app.models.user import User
-from app.schemas.profile import ProfilePrivateOut
+from app.schemas.profile import ProfilePrivateOut, ProfileSettingsUpdate
 from app.schemas.transaction import CoinTransactionOut
-from app.services.profile_service import get_private_profile
+from app.services.profile_service import get_private_profile, update_settings
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -17,6 +17,13 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 @router.get("/me", response_model=ProfilePrivateOut)
 async def read_my_profile(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await get_private_profile(db, user)
+
+
+@router.patch("/settings", response_model=ProfilePrivateOut)
+async def update_my_settings(
+    payload: ProfileSettingsUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await update_settings(db, user, payload)
 
 
 @router.get("/transactions", response_model=Page[CoinTransactionOut])

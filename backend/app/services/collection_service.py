@@ -24,10 +24,14 @@ async def _duplicate_counts(db: AsyncSession, user_id: int) -> dict[int, int]:
 
 
 async def list_user_cards(
-    db: AsyncSession, user_id: int, filters: CollectionFilterParams, params: PageParams
+    db: AsyncSession, user_id: int, filters: CollectionFilterParams, params: PageParams, exclude_hidden: bool = False
 ) -> Page[UserCardListItem]:
     query = select(UserCard).where(UserCard.owner_id == user_id).options(joinedload(UserCard.player))
     count_query = select(func.count(UserCard.id)).where(UserCard.owner_id == user_id)
+
+    if exclude_hidden:
+        query = query.where(UserCard.hidden_from_trade.is_(False))
+        count_query = count_query.where(UserCard.hidden_from_trade.is_(False))
 
     if filters.rarity:
         query = query.join(Player).where(Player.rarity.in_(filters.rarity))
@@ -84,6 +88,24 @@ async def list_user_cards(
         items.append(item)
 
     return Page.build(items, total, params)
+
+
+async def set_card_hidden(db: AsyncSession, user_id: int, user_card_id: int, hidden: bool) -> UserCardListItem:
+    card = await db.get(UserCard, user_card_id, options=[joinedload(UserCard.player)])
+    if card is None:
+        raise NotFoundError("Card not found")
+    if card.owner_id != user_id:
+        raise ForbiddenError("This card does not belong to you")
+
+    card.hidden_from_trade = hidden
+    db.add(card)
+    await db.commit()
+    await db.refresh(card)
+
+    dup_counts = await _duplicate_counts(db, user_id)
+    item = UserCardListItem.model_validate(card)
+    item.duplicate_count = dup_counts.get(card.player_id, 1)
+    return item
 
 
 async def collection_stats(db: AsyncSession, user_id: int) -> dict:

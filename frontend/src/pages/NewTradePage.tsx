@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import EmptyState from "@/components/common/EmptyState";
+import NumberInput from "@/components/common/NumberInput";
 import PlayerCard from "@/components/cards/PlayerCard";
 import { fetchCollection, fetchUserCollection } from "@/api/collection";
 import { createTradeOffer } from "@/api/trades";
@@ -119,11 +120,10 @@ export default function NewTradePage() {
 
           <div>
             <label className="mb-1 block text-sm font-semibold text-slate-300">Добавить монет со своей стороны</label>
-            <input
-              type="number"
+            <NumberInput
               min={0}
               value={senderCoins}
-              onChange={(e) => setSenderCoins(Math.max(0, Number(e.target.value)))}
+              onChange={setSenderCoins}
               className="w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-slate-100 outline-none"
             />
           </div>

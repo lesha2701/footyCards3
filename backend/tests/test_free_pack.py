@@ -30,8 +30,8 @@ async def test_free_pack_claim_grants_card_and_sets_next_available_at(client, db
     resp = await client.post("/api/v1/free-pack/claim", headers=headers)
     assert resp.status_code == 200
     body = resp.json()
-    assert body["granted_pack_name"] == "Basic"
-    assert body["granted_card"] is not None
+    assert body["pack"]["name"] == "Basic"
+    assert len(body["cards"]) == 3
 
     status_resp = await client.get("/api/v1/free-pack/status", headers=headers)
     assert status_resp.json()["available"] is False

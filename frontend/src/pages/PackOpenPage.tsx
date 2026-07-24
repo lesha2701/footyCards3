@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
@@ -18,7 +18,10 @@ const STAGE_DURATION_MS = 900;
 export default function PackOpenPage() {
   const { packId } = useParams<{ packId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const updateBalance = useAuthStore((s) => s.updateBalance);
+  // Present when arriving with an already-claimed result (e.g. the free pack) so we skip re-opening it.
+  const prefetchedResult = (location.state as { result?: PackOpenResult } | null)?.result ?? null;
 
   const [phase, setPhase] = useState<"packshot" | "revealing" | "summary">("packshot");
   const [cardIndex, setCardIndex] = useState(0);
@@ -47,9 +50,10 @@ export default function PackOpenPage() {
   // state sidesteps that lifecycle entirely.
   const [requestState, setRequestState] = useState<
     { status: "pending" } | { status: "success"; data: PackOpenResult } | { status: "error"; message: string }
-  >({ status: "pending" });
+  >(prefetchedResult ? { status: "success", data: prefetchedResult } : { status: "pending" });
 
   useEffect(() => {
+    if (prefetchedResult) return;
     // Guards against React 18 StrictMode's dev-only double-invoke of effects
     // (mount → cleanup → mount) firing this purchase twice; the ref persists
     // across that replay since it isn't reset by the cleanup function.

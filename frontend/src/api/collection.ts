@@ -46,3 +46,8 @@ export async function bulkSellCards(userCardIds: number[], confirmLastCopy = fal
   });
   return data as { sold_count: number; coins_earned: number; new_balance: number };
 }
+
+export async function setCardHiddenFromTrade(userCardId: number, hidden: boolean): Promise<UserCard> {
+  const { data } = await api.patch<UserCard>(`/collection/cards/${userCardId}/hidden`, { hidden });
+  return data;
+}

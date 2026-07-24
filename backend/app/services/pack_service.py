@@ -139,6 +139,44 @@ async def _duplicate_counts_snapshot(db: AsyncSession, user_id: int) -> dict[int
     return {player_id: count for player_id, count in result.all()}
 
 
+async def roll_and_create_cards(
+    db: AsyncSession,
+    user: User,
+    pack: Pack,
+    opening: PackOpening,
+    dup_counts: dict[int, int],
+    source: CardSource,
+) -> list[OpenedCardOut]:
+    seen_this_opening: set[int] = set()
+    rolled_rarities = roll_rarities(pack.rarity_probabilities, pack.card_count, pack.guaranteed_min_rarity)
+
+    opened_items: list[OpenedCardOut] = []
+    for rarity in rolled_rarities:
+        player = await pick_random_player(db, rarity)
+        is_new = dup_counts.get(player.id, 0) == 0 and player.id not in seen_this_opening
+        seen_this_opening.add(player.id)
+        dup_counts[player.id] = dup_counts.get(player.id, 0) + 1
+
+        user_card = await create_user_card(db, user.id, player.id, source, opening.id)
+
+        db.add(PackOpeningCard(opening_id=opening.id, user_card_id=user_card.id, is_new_player=is_new))
+        user_card.player = player
+        opened_items.append(
+            OpenedCardOut(card=user_card, is_new=is_new, duplicate_count=dup_counts[player.id])
+        )
+
+    opened_items.sort(key=lambda item: RARITY_ORDER[item.card.player.rarity])
+    return opened_items
+
+
+async def track_pack_opened_tasks(db: AsyncSession, user: User, dup_counts: dict[int, int]) -> None:
+    total_openings = (
+        await db.execute(select(func.count(PackOpening.id)).where(PackOpening.user_id == user.id))
+    ).scalar_one()
+    await task_service.evaluate_metric_progress(db, user, "packs_opened", total_openings)
+    await task_service.evaluate_metric_progress(db, user, "unique_players", len(dup_counts))
+
+
 async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key: Optional[str]) -> PackOpenResult:
     if idempotency_key:
         existing = (
@@ -178,31 +216,8 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
     await db.flush()
 
     dup_counts = await _duplicate_counts_snapshot(db, locked_user.id)
-    seen_this_opening: set[int] = set()
-    rolled_rarities = roll_rarities(pack.rarity_probabilities, pack.card_count, pack.guaranteed_min_rarity)
-
-    opened_items: list[OpenedCardOut] = []
-    for rarity in rolled_rarities:
-        player = await pick_random_player(db, rarity)
-        is_new = dup_counts.get(player.id, 0) == 0 and player.id not in seen_this_opening
-        seen_this_opening.add(player.id)
-        dup_counts[player.id] = dup_counts.get(player.id, 0) + 1
-
-        user_card = await create_user_card(db, locked_user.id, player.id, CardSource.pack, opening.id)
-
-        db.add(PackOpeningCard(opening_id=opening.id, user_card_id=user_card.id, is_new_player=is_new))
-        user_card.player = player
-        opened_items.append(
-            OpenedCardOut(card=user_card, is_new=is_new, duplicate_count=dup_counts[player.id])
-        )
-
-    opened_items.sort(key=lambda item: RARITY_ORDER[item.card.player.rarity])
-
-    total_openings = (
-        await db.execute(select(func.count(PackOpening.id)).where(PackOpening.user_id == locked_user.id))
-    ).scalar_one()
-    await task_service.evaluate_metric_progress(db, locked_user, "packs_opened", total_openings)
-    await task_service.evaluate_metric_progress(db, locked_user, "unique_players", len(dup_counts))
+    opened_items = await roll_and_create_cards(db, locked_user, pack, opening, dup_counts, CardSource.pack)
+    await track_pack_opened_tasks(db, locked_user, dup_counts)
 
     if locked_user.referred_by_id is not None:
         # Credit the referrer only once the referred user has made a real

@@ -13,6 +13,7 @@ import {
   updatePlayer,
   uploadPlayerImage,
 } from "@/admin/api";
+import NumberInput from "@/components/common/NumberInput";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { RARITY_LABELS } from "@/lib/rarity";
 import type { Player, Position, Rarity } from "@/types";
@@ -255,7 +256,7 @@ function NumberField({ label, value, onChange, min, max }: { label: string; valu
   return (
     <label className="flex flex-col gap-1">
       <span className="text-xs text-slate-400">{label}</span>
-      <input type="number" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} className="rounded-lg bg-bg-surface px-3 py-2 outline-none" />
+      <NumberInput value={value} onChange={onChange} min={min} max={max} />
     </label>
   );
 }

@@ -5,7 +5,14 @@ import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import PlayerCard from "@/components/cards/PlayerCard";
-import { bulkSellCards, fetchCollection, fetchCollectionStats, sellCard, type CollectionFilters } from "@/api/collection";
+import {
+  bulkSellCards,
+  fetchCollection,
+  fetchCollectionStats,
+  sellCard,
+  setCardHiddenFromTrade,
+  type CollectionFilters,
+} from "@/api/collection";
 import { fetchCollections } from "@/api/collections";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { POSITION_LABELS, RARITY_LABELS } from "@/lib/rarity";
@@ -56,6 +63,14 @@ export default function CollectionPage() {
       if (err instanceof ApiRequestError && err.details?.requires_confirmation) {
         setConfirmSell((prev) => (prev ? { ...prev, lastCopy: true } : null));
       }
+    },
+  });
+
+  const hideMutation = useMutation({
+    mutationFn: ({ id, hidden }: { id: number; hidden: boolean }) => setCardHiddenFromTrade(id, hidden),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["collection"] });
+      setDetailCard((prev) => (prev && prev.id === updated.id ? updated : prev));
     },
   });
 
@@ -165,6 +180,8 @@ export default function CollectionPage() {
           card={detailCard}
           onClose={() => setDetailCard(null)}
           onSell={() => setConfirmSell({ ids: [detailCard.id], lastCopy: false })}
+          onToggleHidden={(hidden) => hideMutation.mutate({ id: detailCard.id, hidden })}
+          hiddenPending={hideMutation.isPending}
         />
       )}
 
@@ -196,7 +213,19 @@ function FilterChip({ active, label, onClick }: { active: boolean; label: string
   );
 }
 
-function CardDetailModal({ card, onClose, onSell }: { card: UserCard; onClose: () => void; onSell: () => void }) {
+function CardDetailModal({
+  card,
+  onClose,
+  onSell,
+  onToggleHidden,
+  hiddenPending,
+}: {
+  card: UserCard;
+  onClose: () => void;
+  onSell: () => void;
+  onToggleHidden: (hidden: boolean) => void;
+  hiddenPending: boolean;
+}) {
   const player = card.player;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm" onClick={onClose}>
@@ -222,6 +251,16 @@ function CardDetailModal({ card, onClose, onSell }: { card: UserCard; onClose: (
             🔒 Заблокирована {card.is_in_lineup ? "(в составе)" : card.is_locked_in_trade ? "(в обмене)" : "(администратором)"}
           </p>
         )}
+        <label className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2">
+          <span className="text-xs text-slate-300">Скрыть от предложений обмена</span>
+          <input
+            type="checkbox"
+            checked={card.hidden_from_trade}
+            disabled={hiddenPending}
+            onChange={(e) => onToggleHidden(e.target.checked)}
+            className="h-5 w-5 shrink-0 accent-accent"
+          />
+        </label>
         <div className="mt-4 flex gap-2">
           <button onClick={onClose} className="flex-1 rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-slate-300">Закрыть</button>
           <button

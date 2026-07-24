@@ -97,6 +97,65 @@ async def test_cannot_accept_trade_twice(client, db_session, bot_token):
     assert second.status_code == 409
 
 
+async def test_cannot_trade_with_user_who_opted_out(client, db_session, bot_token):
+    sender, sender_headers = await _register(client, db_session, 730010, bot_token)
+    receiver, _ = await _register(client, db_session, 730011, bot_token)
+    receiver.accept_trades = False
+    db_session.add(receiver)
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/v1/trades/offers", headers=sender_headers,
+        json={"receiver_id": receiver.id, "sender_coins": 10},
+    )
+    assert resp.status_code == 409
+
+
+async def test_opted_out_user_excluded_from_search(client, db_session, bot_token):
+    _, headers = await _register(client, db_session, 730012, bot_token)
+    hidden_user, _ = await _register(client, db_session, 730013, bot_token)
+    hidden_user.username = "findme_hidden"
+    hidden_user.accept_trades = False
+    db_session.add(hidden_user)
+    await db_session.commit()
+
+    resp = await client.get("/api/v1/users/search?q=findme_hidden", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+async def test_cannot_request_card_hidden_from_trade(client, db_session, bot_token):
+    _, sender_headers = await _register(client, db_session, 730014, bot_token)
+    receiver, _ = await _register(client, db_session, 730015, bot_token)
+
+    player = await create_player(db_session, rarity=Rarity.common)
+    receiver_card = await create_user_card(db_session, receiver.id, player.id, CardSource.seed)
+    receiver_card.hidden_from_trade = True
+    db_session.add(receiver_card)
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/v1/trades/offers", headers=sender_headers,
+        json={"receiver_id": receiver.id, "requested_card_ids": [receiver_card.id]},
+    )
+    assert resp.status_code == 409
+
+
+async def test_hidden_card_excluded_from_public_collection(client, db_session, bot_token):
+    owner, _owner_headers = await _register(client, db_session, 730016, bot_token)
+    _, viewer_headers = await _register(client, db_session, 730017, bot_token)
+
+    player = await create_player(db_session, rarity=Rarity.common)
+    card = await create_user_card(db_session, owner.id, player.id, CardSource.seed)
+    card.hidden_from_trade = True
+    db_session.add(card)
+    await db_session.commit()
+
+    resp = await client.get(f"/api/v1/users/{owner.id}/collection", headers=viewer_headers)
+    assert resp.status_code == 200
+    assert resp.json()["items"] == []
+
+
 async def test_cancel_trade_unlocks_cards(client, db_session, bot_token):
     sender, sender_headers = await _register(client, db_session, 730008, bot_token)
     receiver, _ = await _register(client, db_session, 730009, bot_token)

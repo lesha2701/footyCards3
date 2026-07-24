@@ -1,0 +1,33 @@
+<svg width="480" height="600" viewBox="0 0 480 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#0e7490"/>
+    </linearGradient>
+    <linearGradient id="pack" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#0891b2"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="38%" r="55%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="480" height="600" fill="url(#bg)"/>
+  <circle cx="240" cy="300" r="220" fill="url(#glow)"/>
+  <g fill="#ffffff" opacity="0.85">
+    <polygon points="94,140 100,154 114,156 103,166 106,180 94,172 82,180 85,166 74,156 88,154" />
+    <polygon points="382,180 386,190 396,191 388,198 390,208 382,203 374,208 376,198 368,191 378,190" />
+  </g>
+  <rect x="150" y="190" width="180" height="260" rx="16" fill="url(#pack)" stroke="rgba(255,255,255,0.7)" stroke-width="4"/>
+  <path d="M150 226 L240 176 L330 226 L330 250 L150 250 Z" fill="rgba(255,255,255,0.18)"/>
+  <line x1="150" y1="250" x2="330" y2="250" stroke="rgba(255,255,255,0.45)" stroke-width="2"/>
+  <circle cx="240" cy="345" r="44" fill="rgba(8,20,40,0.3)" stroke="#ffffff" stroke-width="3"/>
+  <g transform="translate(240 345)">
+    <circle r="27" fill="rgba(255,255,255,0.95)"/>
+    <polygon points="0,-13 12,-4 7,11 -7,11 -12,-4" fill="#0e7490"/>
+    <path d="M0,-27 L0,-13 M12,-4 L24,-9 M7,11 L14,23 M-7,11 L-14,23 M-12,-4 L-24,-9" stroke="#0e7490" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <polygon points="240,120 248,140 268,140 252,152 258,172 240,160 222,172 228,152 212,140 232,140" fill="#ffffff"/>
+  <text x="240" y="500" text-anchor="middle" font-family="sans-serif" font-size="22" font-weight="700" fill="rgba(255,255,255,0.9)" letter-spacing="2">РЕДКИЙ ПАК</text>
+</svg>

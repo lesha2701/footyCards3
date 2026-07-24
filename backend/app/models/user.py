@@ -76,6 +76,9 @@ class User(TimestampMixin, Base):
     )
     referral_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    # Trade privacy
+    accept_trades: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
     cards: Mapped[list["UserCard"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
 
     def full_display_name(self) -> str:

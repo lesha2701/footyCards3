@@ -33,3 +33,8 @@ class ProfilePrivateOut(ProfilePublicOut):
     experience: int
     is_admin: bool
     telegram_bot_username: str
+    accept_trades: bool
+
+
+class ProfileSettingsUpdate(BaseModel):
+    accept_trades: Optional[bool] = None

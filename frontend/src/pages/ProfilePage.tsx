@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { claimDailyReward, fetchDailyRewardCalendar } from "@/api/dailyRewards";
-import { fetchMyProfile, fetchMyTransactions } from "@/api/profile";
+import { fetchMyProfile, fetchMyTransactions, updateMySettings } from "@/api/profile";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -48,6 +48,11 @@ export default function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ["collection"] });
     },
     onError: (err) => setClaimError(err instanceof ApiRequestError ? err.message : "Не удалось получить награду"),
+  });
+
+  const settingsMutation = useMutation({
+    mutationFn: updateMySettings,
+    onSuccess: (data) => queryClient.setQueryData(["profile", "me"], data),
   });
 
   if (!user || !profile) return null;
@@ -136,6 +141,23 @@ export default function ProfilePage() {
             Копировать
           </button>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="font-display text-base font-bold text-slate-100">🔄 Настройки обменов</p>
+        <label className="mt-3 flex items-center justify-between gap-3">
+          <span className="text-sm text-slate-300">Принимать предложения обмена от других игроков</span>
+          <input
+            type="checkbox"
+            checked={profile.accept_trades}
+            disabled={settingsMutation.isPending}
+            onChange={(e) => settingsMutation.mutate({ accept_trades: e.target.checked })}
+            className="h-5 w-5 shrink-0 accent-accent"
+          />
+        </label>
+        <p className="mt-1 text-[11px] text-slate-500">
+          Если отключено, тебя не будет видно в поиске игроков и тебе не смогут предложить обмен. Сам ты по-прежнему сможешь предлагать обмены.
+        </p>
       </section>
 
       <section>

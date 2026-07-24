@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { createPortal } from "react-dom";
 
 interface Props {
   open: boolean;
@@ -44,7 +45,7 @@ const SECTIONS = [
 ];
 
 export default function HelpModal({ open, onClose }: Props) {
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -82,6 +83,7 @@ export default function HelpModal({ open, onClose }: Props) {
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

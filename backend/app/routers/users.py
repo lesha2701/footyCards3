@@ -37,4 +37,4 @@ async def public_collection(
     _user: User = Depends(get_current_user),
 ):
     """Public, read-only view of another player's cards — used when building a trade offer."""
-    return await list_user_cards(db, user_id, filters, params)
+    return await list_user_cards(db, user_id, filters, params, exclude_hidden=True)

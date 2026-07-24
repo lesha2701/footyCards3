@@ -34,6 +34,7 @@ export default function HomePage() {
       hapticNotify("success");
       queryClient.invalidateQueries({ queryKey: ["free-pack-status"] });
       queryClient.invalidateQueries({ queryKey: ["collection"] });
+      navigate(`/packs/${data.pack.id}/open`, { state: { result: data } });
     },
   });
 

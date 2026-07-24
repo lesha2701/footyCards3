@@ -115,6 +115,8 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
         raise ConflictError("You cannot trade with yourself")
     if receiver.is_banned:
         raise ConflictError("This user is banned and cannot trade")
+    if not receiver.accept_trades:
+        raise ConflictError("This user is not accepting trade offers")
 
     if payload.sender_coins > sender.balance:
         raise InsufficientBalanceError("You do not have enough coins for this offer")
@@ -155,7 +157,7 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
         for card in requested_cards:
             if card.owner_id != receiver.id:
                 raise ConflictError("Requested cards must belong to the trade partner")
-            if card.is_locked():
+            if card.is_locked() or card.hidden_from_trade:
                 raise ConflictError(f"Card #{card.serial_number} is not available for trade")
 
     offer = TradeOffer(

@@ -4,7 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.free_pack import FreePackClaimOut, FreePackStatusOut
+from app.schemas.free_pack import FreePackStatusOut
+from app.schemas.pack import PackOpenResult
 from app.services import free_pack_service
 
 router = APIRouter(prefix="/free-pack", tags=["free-pack"])
@@ -15,6 +16,6 @@ async def get_status(db: AsyncSession = Depends(get_db), user: User = Depends(ge
     return await free_pack_service.get_status(db, user)
 
 
-@router.post("/claim", response_model=FreePackClaimOut)
+@router.post("/claim", response_model=PackOpenResult)
 async def claim(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await free_pack_service.claim_free_pack(db, user)

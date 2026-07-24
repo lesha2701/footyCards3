@@ -1,0 +1,46 @@
+<svg width="480" height="600" viewBox="0 0 480 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="50%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#dc2626"/>
+    </linearGradient>
+    <linearGradient id="pack" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#f97316"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="36%" r="62%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="480" height="600" fill="url(#bg)"/>
+  <g stroke="#ffffff" stroke-opacity="0.25" stroke-width="6">
+    <line x1="240" y1="300" x2="240" y2="20"/>
+    <line x1="240" y1="300" x2="60" y2="140"/>
+    <line x1="240" y1="300" x2="420" y2="140"/>
+    <line x1="240" y1="300" x2="30" y2="320"/>
+    <line x1="240" y1="300" x2="450" y2="320"/>
+    <line x1="240" y1="300" x2="100" y2="500"/>
+    <line x1="240" y1="300" x2="380" y2="500"/>
+  </g>
+  <circle cx="240" cy="300" r="250" fill="url(#glow)"/>
+  <g fill="#ffffff" opacity="0.95">
+    <polygon points="76,120 84,138 103,140 88,152 93,171 76,161 59,171 64,152 49,140 68,138"/>
+    <polygon points="404,150 410,164 425,165 413,174 417,188 404,180 391,188 395,174 383,165 398,164"/>
+    <polygon points="60,440 66,452 79,453 69,461 72,474 60,467 48,474 51,461 41,453 54,452"/>
+    <polygon points="420,420 425,431 437,432 428,440 431,451 420,445 409,451 412,440 403,432 415,431"/>
+    <polygon points="240,60 246,74 261,75 249,84 253,98 240,90 227,98 231,84 219,75 234,74"/>
+  </g>
+  <rect x="146" y="184" width="188" height="270" rx="18" fill="url(#pack)" stroke="#ffffff" stroke-width="5"/>
+  <path d="M146 224 L240 168 L334 224 L334 252 L146 252 Z" fill="rgba(255,255,255,0.28)"/>
+  <line x1="146" y1="252" x2="334" y2="252" stroke="rgba(255,255,255,0.6)" stroke-width="2"/>
+  <circle cx="240" cy="352" r="50" fill="rgba(90,20,0,0.35)" stroke="#ffffff" stroke-width="3.5"/>
+  <g transform="translate(240 352)">
+    <circle r="30" fill="rgba(255,255,255,0.98)"/>
+    <polygon points="0,-14 13,-4 8,12 -8,12 -13,-4" fill="#dc2626"/>
+    <path d="M0,-30 L0,-14 M13,-4 L27,-10 M8,12 L16,26 M-8,12 L-16,26 M-13,-4 L-27,-10" stroke="#dc2626" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <path d="M195,140 L215,110 L240,128 L265,110 L285,140 L275,150 L205,150 Z" fill="#ffffff" stroke="#dc2626" stroke-width="2"/>
+  <text x="240" y="508" text-anchor="middle" font-family="sans-serif" font-size="22" font-weight="700" fill="#ffffff" letter-spacing="2">ЛЕГЕНДАРНЫЙ ПАК</text>
+</svg>

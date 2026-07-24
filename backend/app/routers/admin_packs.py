@@ -1,6 +1,6 @@
 from collections import Counter
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -13,6 +13,7 @@ from app.models.user import User
 from app.schemas.admin import PackPreviewOut, PackRarityStatOut
 from app.schemas.pack import PackCreate, PackOut, PackUpdate
 from app.services.admin_log_service import log_action
+from app.services.image_service import delete_pack_image, save_pack_image
 from app.services.pack_service import roll_rarities
 
 router = APIRouter(prefix="/admin/packs", tags=["admin"], dependencies=[Depends(get_current_admin)])
@@ -63,10 +64,14 @@ async def _get_pack_or_404(db: AsyncSession, pack_id: int) -> Pack:
 async def update_pack(pack_id: int, payload: PackUpdate, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
     pack = await _get_pack_or_404(db, pack_id)
     old_value = PackOut.model_validate(pack).model_dump(mode="json")
+    old_image_path = pack.image_path
 
     updates = payload.model_dump(exclude_unset=True, exclude={"rarity_probabilities"})
     for key, value in updates.items():
         setattr(pack, key, value)
+
+    if "image_path" in updates and old_image_path and old_image_path != pack.image_path:
+        delete_pack_image(old_image_path)
 
     if payload.rarity_probabilities is not None:
         _validate_probabilities(payload.rarity_probabilities)
@@ -82,6 +87,19 @@ async def update_pack(pack_id: int, payload: PackUpdate, request: Request, db: A
         new_value=payload.model_dump(mode="json", exclude_unset=True),
         ip_address=request.client.host if request.client else None,
     )
+    await db.commit()
+    return await _get_pack_out(db, pack_id)
+
+
+@router.post("/{pack_id}/image", response_model=PackOut)
+async def upload_pack_image(pack_id: int, request: Request, file: UploadFile = File(...), db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
+    pack = await _get_pack_or_404(db, pack_id)
+    old_path = pack.image_path
+    new_path = await save_pack_image(file, pack.slug)
+    pack.image_path = new_path
+    db.add(pack)
+    delete_pack_image(old_path)
+    await log_action(db, admin.id, "upload_pack_image", "pack", pack_id, old_value={"image_path": old_path}, new_value={"image_path": new_path}, ip_address=request.client.host if request.client else None)
     await db.commit()
     return await _get_pack_out(db, pack_id)
 

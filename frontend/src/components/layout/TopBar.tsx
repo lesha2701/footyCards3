@@ -3,12 +3,9 @@ import { useNavigate } from "react-router-dom";
 
 import HelpModal from "@/components/common/HelpModal";
 import { useAuthStore } from "@/store/authStore";
-import { useUiStore } from "@/store/uiStore";
 
 export default function TopBar() {
   const user = useAuthStore((s) => s.user);
-  const theme = useUiStore((s) => s.theme);
-  const toggleTheme = useUiStore((s) => s.toggleTheme);
   const navigate = useNavigate();
   const [helpOpen, setHelpOpen] = useState(false);
 
@@ -25,13 +22,6 @@ export default function TopBar() {
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-base"
           >
             ❓
-          </button>
-          <button
-            onClick={toggleTheme}
-            aria-label="Переключить тему"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-base"
-          >
-            {theme === "dark" ? "🌙" : "☀️"}
           </button>
           <div className="flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5">
             <span className="text-base leading-none">🪙</span>
