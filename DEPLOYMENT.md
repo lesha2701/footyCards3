@@ -461,3 +461,106 @@ docker compose -f docker-compose.prod.yml logs -f nginx
   docker-compose.prod.yml down && docker compose -f docker-compose.prod.yml
   up --build -d`, просто `up` без `down` не применит новые настройки сети к
   уже существующей сети).
+
+---
+
+## Если Telegram в целом ограничен в вашей стране: прокси для бота и backend
+
+IPv6-фикс из Шага 8 помогает только когда ломался конкретно IPv4-маршрут. Если
+Telegram у вас ограничен на уровне страны/провайдера более широко — бот и
+проверка подписки на канал (backend) будут работать нестабильно даже с
+рабочим IPv6. Решение — завернуть все запросы к `api.telegram.org` через
+прокси на сервере за пределами страны.
+
+Поддержка прокси уже встроена в код (`TELEGRAM_PROXY_URL` в `.env`,
+используется и ботом, и backend'ом). Не хватает только самого прокси-сервера.
+
+### 1. Арендовать небольшой сервер за рубежом
+
+Любой дешёвый VPS ($3-5/мес) вне зоны ограничений — Hetzner, DigitalOcean,
+Vultr, Contabo и т.п. Отдельная сущность от основного сервера с
+`footycards.ru` — этот VPS нужен только как точка выхода для трафика к
+Telegram, ресурсы ему нужны минимальные (1 vCPU / 512MB-1GB RAM хватает с
+запасом).
+
+### 2. Поднять на нём SOCKS5-прокси (microsocks — маленький, простой, без лишнего)
+
+```bash
+ssh root@<IP-зарубежного-сервера>
+apt update && apt install -y git build-essential
+git clone https://github.com/rofl0r/microsocks.git
+cd microsocks
+make
+sudo make install
+```
+
+Создать systemd-сервис, чтобы прокси работал постоянно и поднимался после
+перезагрузки:
+
+```bash
+sudo nano /etc/systemd/system/microsocks.service
+```
+
+Содержимое (замените `ваш_логин`/`ваш_пароль` на свои — прокси смотрит в
+интернет, обязательно с аутентификацией):
+
+```ini
+[Unit]
+Description=microsocks SOCKS5 proxy
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/microsocks -1 -u ваш_логин -P ваш_пароль -p 1080
+Restart=always
+User=nobody
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now microsocks
+sudo systemctl status microsocks
+```
+
+Откройте порт 1080 в файрволе этого (зарубежного) сервера:
+
+```bash
+ufw allow 1080/tcp
+```
+
+### 3. Подключить прокси на основном сервере (footycards.ru)
+
+В `.env` основного сервера:
+
+```
+TELEGRAM_PROXY_URL=socks5://ваш_логин:ваш_пароль@<IP-зарубежного-сервера>:1080
+```
+
+Пересоздать контейнеры:
+
+```bash
+cd ~/footyCards3
+git pull
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+### 4. Проверить
+
+```bash
+docker compose -f docker-compose.prod.yml exec bot python -c "
+from config import get_bot_settings
+print('proxy set to:', get_bot_settings().telegram_proxy_url)
+"
+docker compose -f docker-compose.prod.yml logs --tail 30 bot
+```
+
+Должно быть `"Starting bot in webhook mode on port 8081"` без таймаутов.
+Напишите боту `/start` в Telegram — теперь запросы идут через зарубежный
+сервер и не должны зависеть от ограничений в вашей стране.
+
+**Важно:** прокси-сервер становится единой точкой отказа для связи с
+Telegram — если он упадёт, бот перестанет отвечать. Для небольшого проекта
+это приемлемый компромисс; при росте нагрузки стоит рассмотреть резервный
+прокси или готовый прокси-сервис с SLA.
