@@ -15,7 +15,7 @@ async def check_channel_membership(telegram_user_id: int, channel_username: str)
     channel doesn't exist.
     """
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/getChatMember"
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=10, proxy=settings.telegram_proxy_url or None) as client:
         resp = await client.get(url, params={"chat_id": channel_username, "user_id": telegram_user_id})
     data = resp.json()
     if not data.get("ok"):

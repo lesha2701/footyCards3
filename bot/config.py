@@ -15,6 +15,9 @@ class BotSettings(BaseSettings):
     bot_webhook_url: str = ""
     bot_webhook_secret: str = "dev_webhook_secret"
     bot_webhook_port: int = 8081
+    # Forward proxy for reaching api.telegram.org, e.g. "socks5://user:pass@host:1080"
+    # or "http://host:8080". Leave empty to connect directly.
+    telegram_proxy_url: str = ""
 
     database_url: str = "postgresql://postgres:1234@localhost:5432/footycards"
     timezone: str = "Europe/Moscow"

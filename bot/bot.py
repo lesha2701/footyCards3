@@ -3,6 +3,7 @@ import logging
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 import db
@@ -26,8 +27,13 @@ def build_dispatcher() -> Dispatcher:
     return dp
 
 
+def _make_bot() -> Bot:
+    session = AiohttpSession(proxy=settings.telegram_proxy_url) if settings.telegram_proxy_url else None
+    return Bot(token=settings.telegram_bot_token, session=session, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+
+
 async def run_polling() -> None:
-    bot = Bot(token=settings.telegram_bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    bot = _make_bot()
     dp = build_dispatcher()
 
     await db.get_pool()
@@ -52,7 +58,7 @@ async def run_webhook() -> None:
     from aiohttp import web
     from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
-    bot = Bot(token=settings.telegram_bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    bot = _make_bot()
     dp = build_dispatcher()
 
     await db.get_pool()

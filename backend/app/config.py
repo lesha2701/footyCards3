@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     # Telegram
     telegram_bot_token: str = "0:DEV"
     telegram_bot_username: str = "footycards_bot"
+    # Forward proxy for reaching api.telegram.org, e.g. "socks5://user:pass@host:1080"
+    # or "http://host:8080". Leave empty to connect directly.
+    telegram_proxy_url: str = ""
     admin_telegram_ids: str = ""
     mini_app_url: str = "http://localhost:5173"
     bot_mode: str = "polling"
