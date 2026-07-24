@@ -75,11 +75,10 @@ async def update_pack(pack_id: int, payload: PackUpdate, request: Request, db: A
 
     if payload.rarity_probabilities is not None:
         _validate_probabilities(payload.rarity_probabilities)
-        for rp in list(pack.rarity_probabilities):
-            await db.delete(rp)
+        pack.rarity_probabilities.clear()
         await db.flush()
         for rp in payload.rarity_probabilities:
-            db.add(PackRarityProbability(pack_id=pack.id, rarity=rp.rarity, probability=rp.probability))
+            pack.rarity_probabilities.append(PackRarityProbability(rarity=rp.rarity, probability=rp.probability))
 
     db.add(pack)
     await log_action(
