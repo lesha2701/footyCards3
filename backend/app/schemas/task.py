@@ -21,6 +21,8 @@ class TaskDefinitionOut(BaseModel):
     reward_coins: int
     reward_pack_id: Optional[int]
     channel_username: Optional[str]
+    channel_chat_id: Optional[int]
+    invite_link: Optional[str]
     is_active: bool
     sort_order: int
 
@@ -37,6 +39,8 @@ class TaskDefinitionCreate(BaseModel):
     reward_coins: int = Field(default=0, ge=0)
     reward_pack_id: Optional[int] = None
     channel_username: Optional[str] = None
+    channel_chat_id: Optional[int] = None
+    invite_link: Optional[str] = None
     is_active: bool = True
     sort_order: int = 0
 
@@ -52,6 +56,8 @@ class TaskDefinitionUpdate(BaseModel):
     reward_coins: Optional[int] = Field(default=None, ge=0)
     reward_pack_id: Optional[int] = None
     channel_username: Optional[str] = None
+    channel_chat_id: Optional[int] = None
+    invite_link: Optional[str] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
 
@@ -65,6 +71,7 @@ class TaskOut(BaseModel):
     reward_coins: int
     reward_pack_name: Optional[str] = None
     channel_username: Optional[str] = None
+    invite_link: Optional[str] = None
     progress: int
     target_value: int
     is_completed: bool

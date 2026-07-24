@@ -165,6 +165,73 @@ async def test_premium_task_claim_succeeds_when_subscribed(client, db_session, b
     assert user.balance == 577
 
 
+async def test_premium_task_exposes_invite_link_and_checks_via_username(client, db_session, bot_token, monkeypatch):
+    seen_usernames = []
+
+    async def fake_check(telegram_user_id, channel_username):
+        seen_usernames.append(channel_username)
+        return True
+
+    monkeypatch.setattr("app.services.task_service.check_channel_membership", fake_check)
+
+    db_session.add(
+        TaskDefinition(
+            code="premium_invite_link", name="Premium invite link", description="test",
+            category=TaskCategory.premium, condition_type=TaskConditionType.metric_counter,
+            target_value=0, reward_coins=5,
+            channel_username="@real_channel_username", invite_link="https://t.me/+BgFhDFVxaF1jOTJi",
+        )
+    )
+    await db_session.commit()
+
+    await _register(client, db_session, 810008, bot_token)
+    headers = telegram_headers(810008, bot_token)
+
+    tasks = (await client.get("/api/v1/tasks", headers=headers)).json()
+    premium_task = tasks["premium"][0]
+    # Users are shown the invite link (works for private channels), while
+    # the subscription check always uses the real @username under the hood.
+    assert premium_task["invite_link"] == "https://t.me/+BgFhDFVxaF1jOTJi"
+
+    resp = await client.post(f"/api/v1/tasks/{premium_task['user_task_id']}/claim", headers=headers)
+    assert resp.status_code == 200
+    assert seen_usernames == ["@real_channel_username"]
+
+
+async def test_premium_task_without_username_checks_via_chat_id(client, db_session, bot_token, monkeypatch):
+    seen_chat_ids = []
+
+    async def fake_check(telegram_user_id, chat_id):
+        seen_chat_ids.append(chat_id)
+        return True
+
+    monkeypatch.setattr("app.services.task_service.check_channel_membership", fake_check)
+
+    db_session.add(
+        TaskDefinition(
+            code="premium_private_channel", name="Premium private", description="test",
+            category=TaskCategory.premium, condition_type=TaskConditionType.metric_counter,
+            target_value=0, reward_coins=5,
+            channel_username=None, channel_chat_id=-1001669902011,
+            invite_link="https://t.me/+BgFhDFVxaF1jOTJi",
+        )
+    )
+    await db_session.commit()
+
+    await _register(client, db_session, 810009, bot_token)
+    headers = telegram_headers(810009, bot_token)
+
+    tasks = (await client.get("/api/v1/tasks", headers=headers)).json()
+    premium_task = tasks["premium"][0]
+    assert premium_task["channel_username"] is None
+    assert premium_task["invite_link"] == "https://t.me/+BgFhDFVxaF1jOTJi"
+
+    resp = await client.post(f"/api/v1/tasks/{premium_task['user_task_id']}/claim", headers=headers)
+    assert resp.status_code == 200
+    # No @username to check against, so the numeric chat id must be used.
+    assert seen_chat_ids == [-1001669902011]
+
+
 async def test_creating_premium_task_notifies_all_users(client, db_session, bot_token):
     from sqlalchemy import select
 

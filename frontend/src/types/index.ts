@@ -307,6 +307,7 @@ export interface Task {
   reward_coins: number;
   reward_pack_name: string | null;
   channel_username: string | null;
+  invite_link: string | null;
   progress: number;
   target_value: number;
   is_completed: boolean;

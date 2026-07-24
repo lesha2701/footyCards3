@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, JSON, String, UniqueConstraint, text
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Index, Integer, JSON, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -30,6 +30,8 @@ class TaskDefinition(TimestampMixin, Base):
         ForeignKey("packs.id", ondelete="SET NULL"), nullable=True
     )
     channel_username: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    channel_chat_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    invite_link: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 

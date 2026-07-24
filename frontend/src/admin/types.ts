@@ -110,6 +110,8 @@ export interface TaskDefinition {
   reward_coins: number;
   reward_pack_id: number | null;
   channel_username: string | null;
+  channel_chat_id: number | null;
+  invite_link: string | null;
   is_active: boolean;
   sort_order: number;
 }

@@ -149,14 +149,14 @@ function TaskCard({
         </div>
       )}
 
-      {premium && task.channel_username && !task.is_claimed && (
+      {premium && (task.invite_link || task.channel_username) && !task.is_claimed && (
         <a
-          href={`https://t.me/${task.channel_username.replace("@", "")}`}
+          href={task.invite_link || `https://t.me/${task.channel_username!.replace("@", "")}`}
           target="_blank"
           rel="noreferrer"
           className="mt-3 block rounded-xl bg-white/5 py-2 text-center text-xs font-semibold text-slate-200"
         >
-          Подписаться на {task.channel_username}
+          Подписаться на {task.channel_username ?? "канал"}
         </a>
       )}
 

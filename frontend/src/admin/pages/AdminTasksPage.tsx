@@ -19,6 +19,8 @@ interface TaskForm {
   reward_coins: number;
   reward_pack_id: number | "";
   channel_username: string;
+  channel_chat_id: string;
+  invite_link: string;
   is_active: boolean;
 }
 
@@ -35,6 +37,8 @@ function taskToForm(t?: TaskDefinition): TaskForm {
     reward_coins: t?.reward_coins ?? 0,
     reward_pack_id: t?.reward_pack_id ?? "",
     channel_username: t?.channel_username ?? "",
+    channel_chat_id: t?.channel_chat_id ? String(t.channel_chat_id) : "",
+    invite_link: t?.invite_link ?? "",
     is_active: t?.is_active ?? true,
   };
 }
@@ -62,6 +66,8 @@ export default function AdminTasksPage() {
     reward_coins: form.reward_coins,
     reward_pack_id: form.reward_pack_id || null,
     channel_username: form.category === "premium" ? form.channel_username || null : null,
+    channel_chat_id: form.category === "premium" && form.channel_chat_id ? Number(form.channel_chat_id) : null,
+    invite_link: form.category === "premium" ? form.invite_link || null : null,
     is_active: form.is_active,
   });
 
@@ -163,7 +169,29 @@ export default function AdminTasksPage() {
               </div>
 
               {form.category === "premium" && (
-                <Field label="Канал (@username)" value={form.channel_username} onChange={(v) => setForm({ ...form, channel_username: v })} />
+                <>
+                  <Field
+                    label="Канал (@username, если есть)"
+                    value={form.channel_username}
+                    onChange={(v) => setForm({ ...form, channel_username: v })}
+                  />
+                  <Field
+                    label="ID канала (обязательно, если нет @username)"
+                    value={form.channel_chat_id}
+                    onChange={(v) => setForm({ ...form, channel_chat_id: v })}
+                  />
+                  <Field
+                    label="Ссылка-приглашение (показывается пользователю)"
+                    value={form.invite_link}
+                    onChange={(v) => setForm({ ...form, invite_link: v })}
+                  />
+                  <p className="text-[11px] text-slate-500">
+                    Заполни @username ИЛИ ID канала — бот проверяет подписку по ID, если он указан, иначе по
+                    @username (бот должен быть админом канала). Для приватных каналов без @username ID узнают у
+                    админа канала — обычно вида -100xxxxxxxxxx. Пользователю в приложении показывается кнопка со
+                    ссылкой-приглашением; если её не указать, используется прямая ссылка на @username.
+                  </p>
+                </>
               )}
 
               <label className="mt-1 flex items-center gap-2 text-xs">

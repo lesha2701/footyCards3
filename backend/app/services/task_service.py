@@ -85,6 +85,7 @@ async def _to_task_out(db: AsyncSession, user_task: UserTask, definition: TaskDe
         reward_coins=definition.reward_coins,
         reward_pack_name=await _pack_name(db, definition.reward_pack_id),
         channel_username=definition.channel_username,
+        invite_link=definition.invite_link,
         progress=user_task.progress,
         target_value=definition.target_value,
         is_completed=user_task.completed_at is not None,
@@ -200,8 +201,11 @@ async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> 
     if user_task.reward_claimed:
         raise ConflictError("Reward for this task has already been claimed")
 
-    if definition.category == TaskCategory.premium and definition.channel_username:
-        is_member = await check_channel_membership(user.telegram_id, definition.channel_username)
+    if definition.category == TaskCategory.premium and (definition.channel_chat_id or definition.channel_username):
+        # Private channels with no public @username can only be checked by
+        # numeric chat id — getChatMember has no way to resolve an invite link.
+        chat_id = definition.channel_chat_id or definition.channel_username
+        is_member = await check_channel_membership(user.telegram_id, chat_id)
         if not is_member:
             raise ConflictError("not_subscribed", details={"channel_username": definition.channel_username})
 
