@@ -3,6 +3,9 @@ import type {
   FreeKickClaimResult,
   FreeKickKickResult,
   FreeKickStartResult,
+  HangmanClaimResult,
+  HangmanGuessResult,
+  HangmanStartResult,
   MemoryClaimResult,
   MemoryLeaderboardEntry,
   MemoryStart,
@@ -94,5 +97,22 @@ export async function kickFreeKick(sessionId: number, elapsedMs: number): Promis
 
 export async function claimFreeKickReward(sessionId: number): Promise<FreeKickClaimResult> {
   const { data } = await api.post<FreeKickClaimResult>(`/games/free-kick/${sessionId}/claim`);
+  return data;
+}
+
+// --- Football Hangman ---
+
+export async function startHangman(): Promise<HangmanStartResult> {
+  const { data } = await api.post<HangmanStartResult>("/games/hangman/start");
+  return data;
+}
+
+export async function guessHangmanLetter(sessionId: number, letter: string): Promise<HangmanGuessResult> {
+  const { data } = await api.post<HangmanGuessResult>(`/games/hangman/${sessionId}/guess`, { letter });
+  return data;
+}
+
+export async function claimHangmanReward(sessionId: number): Promise<HangmanClaimResult> {
+  const { data } = await api.post<HangmanClaimResult>(`/games/hangman/${sessionId}/claim`);
   return data;
 }

@@ -35,7 +35,6 @@ class UserMeOut(BaseModel):
     matches_drawn: int
     matches_lost: int
     memory_best_score: int
-    match_energy: int
     created_at: datetime
 
 

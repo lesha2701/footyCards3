@@ -60,7 +60,7 @@ class PackOpening(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    pack_id: Mapped[int] = mapped_column(ForeignKey("packs.id", ondelete="RESTRICT"), nullable=False, index=True)
+    pack_id: Mapped[int] = mapped_column(ForeignKey("packs.id", ondelete="CASCADE"), nullable=False, index=True)
     price_paid: Mapped[int] = mapped_column(Integer, nullable=False)
     idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

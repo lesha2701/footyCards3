@@ -98,7 +98,6 @@ class GameConfigOut(BaseModel):
     memory_daily_reward_limit: int
     memory_reward_cap: int
     suspicious_memory_score_threshold: int
-    match_daily_energy: int
     match_reward_win: int
     match_reward_draw: int
     match_reward_loss: int
@@ -121,13 +120,15 @@ class GameConfigOut(BaseModel):
     hourly_game_limit: int
     free_pack_interval_hours: int
     free_pack_pack_slug: str
+    hangman_daily_limit: int
+    hangman_reward_correct: int
+    hangman_max_wrong: int
 
 
 class GameConfigUpdate(BaseModel):
     memory_daily_reward_limit: Optional[int] = Field(default=None, ge=0)
     memory_reward_cap: Optional[int] = Field(default=None, ge=0)
     suspicious_memory_score_threshold: Optional[int] = Field(default=None, ge=0)
-    match_daily_energy: Optional[int] = Field(default=None, ge=0)
     match_reward_win: Optional[int] = Field(default=None, ge=0)
     match_reward_draw: Optional[int] = Field(default=None, ge=0)
     match_reward_loss: Optional[int] = Field(default=None, ge=0)
@@ -150,6 +151,9 @@ class GameConfigUpdate(BaseModel):
     hourly_game_limit: Optional[int] = Field(default=None, ge=1)
     free_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     free_pack_pack_slug: Optional[str] = None
+    hangman_daily_limit: Optional[int] = Field(default=None, ge=0)
+    hangman_reward_correct: Optional[int] = Field(default=None, ge=0)
+    hangman_max_wrong: Optional[int] = Field(default=None, ge=1)
 
 
 class SuspiciousMemorySessionOut(BaseModel):

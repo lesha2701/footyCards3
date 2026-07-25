@@ -41,8 +41,6 @@ class ArenaStatsOut(BaseModel):
     matches_drawn: int
     matches_lost: int
     arena_rating: int
-    match_energy: int
-    max_energy: int
 
 
 class ArenaLeaderboardEntry(BaseModel):

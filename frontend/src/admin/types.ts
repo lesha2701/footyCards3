@@ -65,7 +65,6 @@ export interface GameConfig {
   memory_daily_reward_limit: number;
   memory_reward_cap: number;
   suspicious_memory_score_threshold: number;
-  match_daily_energy: number;
   match_reward_win: number;
   match_reward_draw: number;
   match_reward_loss: number;
@@ -87,6 +86,9 @@ export interface GameConfig {
   hourly_game_limit: number;
   free_pack_interval_hours: number;
   free_pack_pack_slug: string;
+  hangman_daily_limit: number;
+  hangman_reward_correct: number;
+  hangman_max_wrong: number;
 }
 
 export interface CardCollection {

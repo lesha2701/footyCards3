@@ -71,7 +71,26 @@ async def test_play_match_with_complete_lineup(client, db_session, bot_token):
     assert len(body["events"]) > 0
 
     await db_session.refresh(user)
-    assert user.match_energy == 9
+    assert user.match_hourly_attempts == 1
+
+
+async def test_set_lineup_tactic(client, db_session, bot_token):
+    headers = telegram_headers(750007, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750007)
+
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    resp = await client.get("/api/v1/lineups/active", headers=headers)
+    assert resp.json()["tactic"] == "balanced"
+
+    resp = await client.post("/api/v1/lineups/tactic", headers=headers, json={"tactic": "attacking"})
+    assert resp.status_code == 200
+    assert resp.json()["tactic"] == "attacking"
+
+    resp = await client.post("/api/v1/lineups/tactic", headers=headers, json={"tactic": "not-a-tactic"})
+    assert resp.status_code == 409
 
 
 async def test_arena_leaderboard_reports_table_stats(client, db_session, bot_token):

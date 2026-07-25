@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, Request, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_admin
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import NotFoundError
 from app.database import get_db
 from app.models.enums import NotificationType, TaskCategory
-from app.models.task import TaskDefinition, UserTask
+from app.models.task import TaskDefinition
 from app.models.user import User
 from app.schemas.task import TaskDefinitionCreate, TaskDefinitionOut, TaskDefinitionUpdate
 from app.services import notification_service
@@ -72,14 +72,6 @@ async def update_task(task_id: int, payload: TaskDefinitionUpdate, request: Requ
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task(task_id: int, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
     task = await _get_task_or_404(db, task_id)
-
-    claimed_count = (
-        await db.execute(
-            select(func.count(UserTask.id)).where(UserTask.task_definition_id == task_id, UserTask.reward_claimed.is_(True))
-        )
-    ).scalar_one()
-    if claimed_count > 0:
-        raise ConflictError("Players have already claimed rewards for this task; deactivate it instead of deleting")
 
     await log_action(db, admin.id, "delete_task", "task_definition", task_id, old_value=TaskDefinitionOut.model_validate(task).model_dump(mode="json"), ip_address=request.client.host if request.client else None)
     await db.delete(task)

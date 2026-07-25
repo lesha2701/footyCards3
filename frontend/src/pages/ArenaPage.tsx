@@ -5,15 +5,15 @@ import CardPickerModal from "@/components/cards/CardPickerModal";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
-import { fetchActiveLineup, setActiveLineup } from "@/api/lineups";
+import { fetchActiveLineup, setActiveLineup, setLineupTactic } from "@/api/lineups";
 import { fetchArenaLeaderboard, fetchArenaStats, fetchMatchHistory, playMatch } from "@/api/matches";
-import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
+import { CATEGORY_LABELS, CATEGORY_POSITIONS, TACTICS, type FormationSlot } from "@/lib/formation";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { Match, MatchDifficulty, UserCard } from "@/types";
 
-const EVENT_STEP_MS = 550;
+const EVENT_STEP_MS = 950;
 
 const DIFFICULTIES: { value: MatchDifficulty; label: string }[] = [
   { value: "easy", label: "Лёгкий" },
@@ -42,6 +42,11 @@ export default function ArenaPage() {
 
   const setLineupMutation = useMutation({
     mutationFn: setActiveLineup,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["lineup"] }),
+  });
+
+  const setTacticMutation = useMutation({
+    mutationFn: setLineupTactic,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["lineup"] }),
   });
 
@@ -86,11 +91,10 @@ export default function ArenaPage() {
       <h1 className="font-display text-2xl font-bold text-slate-100">⚽ Card Arena</h1>
 
       {stats && (
-        <div className="grid grid-cols-4 gap-2 text-center">
+        <div className="grid grid-cols-3 gap-2 text-center">
           <MiniStat label="П" value={stats.matches_won} />
           <MiniStat label="Н" value={stats.matches_drawn} />
           <MiniStat label="Пор" value={stats.matches_lost} />
-          <MiniStat label="Энергия" value={`${stats.match_energy}/${stats.max_energy}`} />
         </div>
       )}
 
@@ -126,6 +130,27 @@ export default function ArenaPage() {
         </div>
       </section>
 
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-sm font-bold text-slate-100">Тактическая схема</p>
+        <div className="grid grid-cols-3 gap-2">
+          {TACTICS.map((t) => (
+            <button
+              key={t.value}
+              onClick={() => setTacticMutation.mutate(t.value)}
+              disabled={setTacticMutation.isPending}
+              className={`rounded-xl px-2 py-2 text-center disabled:opacity-60 ${
+                lineup?.tactic === t.value ? "bg-accent text-bg-base" : "bg-white/5 text-slate-300"
+              }`}
+            >
+              <p className="text-xs font-bold">{t.label}</p>
+              <p className={`mt-0.5 text-[10px] ${lineup?.tactic === t.value ? "text-bg-base/70" : "text-slate-500"}`}>
+                {t.description}
+              </p>
+            </button>
+          ))}
+        </div>
+      </section>
+
       {matchError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{matchError}</p>}
 
       <section className="flex flex-col gap-3">
@@ -142,7 +167,7 @@ export default function ArenaPage() {
         </div>
         <button
           onClick={() => playMutation.mutate()}
-          disabled={!lineup?.is_complete || playMutation.isPending || simulating || (stats?.match_energy ?? 1) < 1}
+          disabled={!lineup?.is_complete || playMutation.isPending || simulating}
           className="rounded-2xl bg-emerald-500 py-3.5 font-display text-base font-bold text-white active:scale-95 disabled:opacity-40"
         >
           {playMutation.isPending || simulating ? "Идёт матч..." : "Играть матч"}

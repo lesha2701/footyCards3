@@ -35,6 +35,13 @@ FORMATION_SLOTS: list[FormationSlot] = [
 ]
 SLOTS_BY_CODE = {s.code: s for s in FORMATION_SLOTS}
 
+# tactic -> (attack_multiplier, defense_multiplier)
+TACTIC_MULTIPLIERS: dict[str, tuple[float, float]] = {
+    "attacking": (1.15, 0.85),
+    "balanced": (1.0, 1.0),
+    "defensive": (0.85, 1.15),
+}
+
 CATEGORY_POSITIONS = {
     "GK": {Position.GK},
     "DEF": {Position.LB, Position.CB, Position.RB},
@@ -81,6 +88,22 @@ def calculate_base_strength(cards_with_slots: list[tuple[UserCard, FormationSlot
     return round(total)
 
 
+def split_strength(strength: int, tactic: str) -> tuple[int, int]:
+    """Splits a single strength number into (attack, defense) per the tactic's multipliers."""
+    attack_mult, defense_mult = TACTIC_MULTIPLIERS.get(tactic, TACTIC_MULTIPLIERS["balanced"])
+    return max(1, round(strength * attack_mult)), max(1, round(strength * defense_mult))
+
+
+async def set_tactic(db: AsyncSession, user: User, tactic: str) -> LineupOut:
+    if tactic not in TACTIC_MULTIPLIERS:
+        raise ConflictError(f"Unknown tactic: {tactic}")
+    lineup = await _get_or_create_lineup(db, user.id)
+    lineup.tactic = tactic
+    db.add(lineup)
+    await db.commit()
+    return await get_active_lineup(db, user)
+
+
 async def get_active_lineup(db: AsyncSession, user: User) -> LineupOut:
     lineup = await _get_or_create_lineup(db, user.id)
     result = await db.execute(select(LineupCard).where(LineupCard.lineup_id == lineup.id))
@@ -114,7 +137,10 @@ async def get_active_lineup(db: AsyncSession, user: User) -> LineupOut:
     is_complete = len(cards_with_slots) == len(FORMATION_SLOTS)
     strength = calculate_base_strength(cards_with_slots) if is_complete else None
 
-    return LineupOut(id=lineup.id, formation=lineup.formation, is_complete=is_complete, team_strength=strength, slots=slots_out)
+    return LineupOut(
+        id=lineup.id, formation=lineup.formation, tactic=lineup.tactic, is_complete=is_complete,
+        team_strength=strength, slots=slots_out,
+    )
 
 
 async def set_lineup(db: AsyncSession, user: User, payload: LineupSetRequest) -> LineupOut:

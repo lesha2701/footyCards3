@@ -14,6 +14,7 @@ export default function TasksPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [claimError, setClaimError] = useState<string | null>(null);
+  const [claimedCoins, setClaimedCoins] = useState<number | null>(null);
   const [tab, setTab] = useState<"regular" | "premium">("regular");
   const [premiumFilter, setPremiumFilter] = useState<"active" | "done">("active");
 
@@ -32,6 +33,8 @@ export default function TasksPage() {
         // Reuses the same full packshot + per-card reveal animation as a
         // real pack purchase, instead of a bespoke "reward received" popup.
         navigate(`/packs/${data.granted_pack.pack.id}/open`, { state: { result: data.granted_pack } });
+      } else {
+        setClaimedCoins(data.reward_coins);
       }
     },
     onError: (err) => setClaimError(err instanceof ApiRequestError ? err.message : "Не удалось забрать награду"),
@@ -100,6 +103,29 @@ export default function TasksPage() {
           )}
         </section>
       )}
+
+      {claimedCoins !== null && (
+        <RewardClaimedModal coins={claimedCoins} onClose={() => setClaimedCoins(null)} />
+      )}
+    </div>
+  );
+}
+
+function RewardClaimedModal({ coins, onClose }: { coins: number; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6">
+      <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-bg-surface p-6 text-center">
+        <p className="text-4xl">🎉</p>
+        <p className="mt-3 font-display text-lg font-bold text-slate-100">Награда получена!</p>
+        <p className="mt-1 text-sm text-slate-400">Задание выполнено, монеты начислены на баланс.</p>
+        <p className="mt-3 font-display text-2xl font-bold text-amber-300">+{coins} 🪙</p>
+        <button
+          onClick={onClose}
+          className="mt-5 w-full rounded-xl bg-accent py-2.5 text-sm font-bold text-bg-base active:scale-95"
+        >
+          Ок
+        </button>
+      </div>
     </div>
   );
 }

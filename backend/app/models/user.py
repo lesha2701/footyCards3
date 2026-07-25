@@ -30,8 +30,6 @@ class User(TimestampMixin, Base):
     last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Card Arena stats
-    match_energy: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
-    match_energy_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     matches_won: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     matches_drawn: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     matches_lost: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -67,6 +65,12 @@ class User(TimestampMixin, Base):
     free_kick_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     free_kick_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     free_kick_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Football Hangman
+    hangman_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    hangman_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    hangman_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    hangman_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Free pack (every N hours)
     free_pack_available_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

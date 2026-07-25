@@ -134,3 +134,32 @@ class FreeKickKickOut(BaseModel):
 class FreeKickClaimOut(BaseModel):
     reward_coins: int
     new_balance: int
+
+
+# --- Football Hangman ---
+
+class HangmanStartOut(BaseModel):
+    session_id: int
+    category: str
+    masked_word: list[str]
+    max_wrong: int
+
+
+class HangmanGuessRequest(BaseModel):
+    letter: str
+
+
+class HangmanGuessOut(BaseModel):
+    session_id: int
+    masked_word: list[str]
+    guessed_letters: list[str]
+    wrong_letters: list[str]
+    max_wrong: int
+    status: str
+    is_correct: bool
+    word: Optional[str] = None
+
+
+class HangmanClaimOut(BaseModel):
+    reward_coins: int
+    new_balance: int

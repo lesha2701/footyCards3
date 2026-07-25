@@ -15,6 +15,7 @@ class LineupSlotOut(BaseModel):
 class LineupOut(BaseModel):
     id: Optional[int] = None
     formation: str
+    tactic: str
     is_complete: bool
     team_strength: Optional[int] = None
     slots: list[LineupSlotOut]
@@ -27,3 +28,7 @@ class LineupSlotIn(BaseModel):
 
 class LineupSetRequest(BaseModel):
     slots: list[LineupSlotIn]
+
+
+class LineupTacticRequest(BaseModel):
+    tactic: str

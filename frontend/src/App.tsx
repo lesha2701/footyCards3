@@ -22,6 +22,7 @@ import ArenaPage from "@/pages/ArenaPage";
 import SaboteurGamePage from "@/pages/SaboteurGamePage";
 import PenaltyGamePage from "@/pages/PenaltyGamePage";
 import FreeKickGamePage from "@/pages/FreeKickGamePage";
+import HangmanGamePage from "@/pages/HangmanGamePage";
 import CollectionPage from "@/pages/CollectionPage";
 import TradesPage from "@/pages/TradesPage";
 import NewTradePage from "@/pages/NewTradePage";
@@ -101,6 +102,7 @@ export default function App() {
         <Route path="/play/saboteur" element={<SaboteurGamePage />} />
         <Route path="/play/penalty" element={<PenaltyGamePage />} />
         <Route path="/play/free-kick" element={<FreeKickGamePage />} />
+        <Route path="/play/hangman" element={<HangmanGamePage />} />
         <Route path="/collection" element={<CollectionPage />} />
         <Route path="/trades" element={<TradesPage />} />
         <Route path="/trades/new" element={<NewTradePage />} />

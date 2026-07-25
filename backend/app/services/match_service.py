@@ -6,14 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
-from app.core.timeutil import ensure_aware, local_today
+from app.core.timeutil import ensure_aware
 from app.models.enums import MatchDifficulty, MatchResult, TransactionType
 from app.models.match import Match, MatchEvent
 from app.models.user import User
 from app.schemas.match import ArenaLeaderboardEntry, ArenaStatsOut, MatchOut, StartMatchRequest
 from app.services import task_service
 from app.services.game_config_service import get_config
-from app.services.lineup_service import get_active_lineup
+from app.services.lineup_service import TACTIC_MULTIPLIERS, get_active_lineup, split_strength
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
 BOT_NAMES = [
@@ -28,15 +28,6 @@ async def _ensure_hourly_reset(db: AsyncSession, user: User) -> None:
     if started is None or now - ensure_aware(started) >= timedelta(hours=1):
         user.match_hourly_attempts = 0
         user.match_hour_started_at = now
-        db.add(user)
-
-
-async def _ensure_energy_reset(db: AsyncSession, user: User, max_energy: int) -> None:
-    today = local_today()
-    reset_day = local_today(user.match_energy_reset_at) if user.match_energy_reset_at else None
-    if reset_day != today:
-        user.match_energy = max_energy
-        user.match_energy_reset_at = datetime.now(timezone.utc)
         db.add(user)
 
 
@@ -83,9 +74,11 @@ def _describe_event(event_type: str, team: str, opponent_name: str) -> str:
     }[event_type]
 
 
-def _simulate_events(user_strength: int, opponent_strength: int, opponent_name: str) -> tuple[list[dict], int, int]:
-    total = user_strength + opponent_strength
-    user_attack_prob = user_strength / total if total else 0.5
+def _simulate_events(
+    user_attack: int, user_defense: int, opponent_attack: int, opponent_defense: int, opponent_name: str
+) -> tuple[list[dict], int, int]:
+    total_attack = user_attack + opponent_attack
+    user_attack_prob = user_attack / total_attack if total_attack else 0.5
 
     num_chances = random.randint(14, 22)
     minutes = sorted(random.sample(range(1, 90), num_chances))
@@ -102,10 +95,21 @@ def _simulate_events(user_strength: int, opponent_strength: int, opponent_name: 
         event_type = random.choices(types, weights=weights, k=1)[0]
 
         if event_type == "goal":
-            if team == "user":
-                user_score += 1
+            # Winning the chance doesn't guarantee a goal — the attacker's
+            # attack strength has to beat the defender's defense strength.
+            # This is what lets an attacking tactic score more (higher
+            # attack) while conceding more too (its own defense is weaker).
+            attacker_attack = user_attack if team == "user" else opponent_attack
+            defender_defense = opponent_defense if team == "user" else user_defense
+            conversion_total = attacker_attack + defender_defense
+            convert_prob = attacker_attack / conversion_total if conversion_total else 0.5
+            if random.random() < convert_prob:
+                if team == "user":
+                    user_score += 1
+                else:
+                    opponent_score += 1
             else:
-                opponent_score += 1
+                event_type = "save"
 
         events.append(
             {
@@ -151,11 +155,8 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
     locked_user.match_hourly_attempts += 1
     db.add(locked_user)
 
-    await _ensure_energy_reset(db, locked_user, config.match_daily_energy)
-    if locked_user.match_energy < 1:
-        raise ConflictError("No match energy left today")
-
     user_strength = _with_jitter(lineup.team_strength)
+    user_attack, user_defense = split_strength(user_strength, lineup.tactic)
 
     opponent_result = await db.execute(
         select(User)
@@ -166,17 +167,22 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
     opponent_user = opponent_result.scalar_one_or_none()
 
     opponent_name = random.choice(BOT_NAMES)
+    opponent_tactic = random.choice(list(TACTIC_MULTIPLIERS))
     if opponent_user is not None:
         opponent_lineup = await get_active_lineup(db, opponent_user)
         if opponent_lineup.is_complete:
             opponent_strength = _with_jitter(opponent_lineup.team_strength)
+            opponent_tactic = opponent_lineup.tactic
             opponent_name = opponent_user.full_display_name()
         else:
             opponent_strength = _bot_strength(user_strength, payload.difficulty, difficulty_multiplier)
     else:
         opponent_strength = _bot_strength(user_strength, payload.difficulty, difficulty_multiplier)
+    opponent_attack, opponent_defense = split_strength(opponent_strength, opponent_tactic)
 
-    events, user_score, opponent_score = _simulate_events(user_strength, opponent_strength, opponent_name)
+    events, user_score, opponent_score = _simulate_events(
+        user_attack, user_defense, opponent_attack, opponent_defense, opponent_name
+    )
 
     locked_user.goals_for += user_score
     locked_user.goals_against += opponent_score
@@ -195,7 +201,6 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
         rating_delta = 2
 
     locked_user.arena_rating = max(0, locked_user.arena_rating + rating_delta)
-    locked_user.match_energy -= 1
 
     reward = 0 if locked_user.game_rewards_blocked else round(
         reward_base[result] * difficulty_multiplier[payload.difficulty] + user_score * 5
@@ -259,16 +264,11 @@ async def match_history(db: AsyncSession, user: User, limit: int = 20) -> list[M
 
 
 async def arena_stats(db: AsyncSession, user: User) -> ArenaStatsOut:
-    config = await get_config(db)
-    await _ensure_energy_reset(db, user, config.match_daily_energy)
-    await db.commit()
     return ArenaStatsOut(
         matches_won=user.matches_won,
         matches_drawn=user.matches_drawn,
         matches_lost=user.matches_lost,
         arena_rating=user.arena_rating,
-        match_energy=user.match_energy,
-        max_energy=config.match_daily_energy,
     )
 
 

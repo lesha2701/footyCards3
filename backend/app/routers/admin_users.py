@@ -189,12 +189,9 @@ async def delete_card(
 @router.post("/{user_id}/reset-limits", response_model=ResetLimitsResponse)
 async def reset_limits(user_id: int, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
     user = await _get_user_or_404(db, user_id)
-    from app.services.game_config_service import get_config
 
-    config = await get_config(db)
-    user.match_energy = config.match_daily_energy
     user.memory_rewarded_attempts_today = 0
-    for game in ("memory", "match", "saboteur", "penalty", "free_kick"):
+    for game in ("memory", "match", "saboteur", "penalty", "free_kick", "hangman"):
         setattr(user, f"{game}_hourly_attempts", 0)
         setattr(user, f"{game}_hour_started_at", None)
     db.add(user)

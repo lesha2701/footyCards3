@@ -16,7 +16,6 @@ class GameConfig(TimestampMixin, Base):
     memory_reward_cap: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
     suspicious_memory_score_threshold: Mapped[int] = mapped_column(Integer, default=400, nullable=False)
 
-    match_daily_energy: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     match_reward_win: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
     match_reward_draw: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
     match_reward_loss: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
@@ -41,6 +40,10 @@ class GameConfig(TimestampMixin, Base):
     free_kick_daily_limit: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
 
     hourly_game_limit: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+
+    hangman_daily_limit: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    hangman_reward_correct: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    hangman_max_wrong: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
 
     free_pack_interval_hours: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     free_pack_pack_slug: Mapped[str] = mapped_column(String, default="basic", nullable=False)

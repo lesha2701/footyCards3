@@ -19,7 +19,6 @@ const baseUser: UserMe = {
   matches_drawn: 0,
   matches_lost: 0,
   memory_best_score: 0,
-  match_energy: 10,
   created_at: new Date().toISOString(),
 };
 

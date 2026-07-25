@@ -11,6 +11,10 @@ from app.schemas.game import (
     FreeKickKickRequest,
     FreeKickStartOut,
     FreeKickStartRequest,
+    HangmanClaimOut,
+    HangmanGuessOut,
+    HangmanGuessRequest,
+    HangmanStartOut,
     MemoryClaimOut,
     MemoryLeaderboardEntry,
     MemoryStartOut,
@@ -27,7 +31,7 @@ from app.schemas.game import (
     SaboteurStartOut,
     SaboteurStartRequest,
 )
-from app.services import free_kick_service, memory_game_service, penalty_service, saboteur_service
+from app.services import free_kick_service, hangman_service, memory_game_service, penalty_service, saboteur_service
 
 router = APIRouter(prefix="/games", tags=["games"])
 
@@ -120,3 +124,21 @@ async def free_kick_kick(session_id: int, payload: FreeKickKickRequest, db: Asyn
 @router.post("/free-kick/{session_id}/claim", response_model=FreeKickClaimOut)
 async def free_kick_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await free_kick_service.claim_reward(db, user, session_id)
+
+
+# --- Football Hangman ---
+
+@router.post("/hangman/start", response_model=HangmanStartOut)
+async def hangman_start(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    check_rate_limit(f"hangman_start:{user.id}", max_calls=20, window_seconds=60)
+    return await hangman_service.start_session(db, user)
+
+
+@router.post("/hangman/{session_id}/guess", response_model=HangmanGuessOut)
+async def hangman_guess(session_id: int, payload: HangmanGuessRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await hangman_service.guess_letter(db, user, session_id, payload.letter)
+
+
+@router.post("/hangman/{session_id}/claim", response_model=HangmanClaimOut)
+async def hangman_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await hangman_service.claim_reward(db, user, session_id)

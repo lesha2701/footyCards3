@@ -14,6 +14,7 @@ class Lineup(TimestampMixin, Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(64), nullable=False, default="Основной состав")
     formation: Mapped[str] = mapped_column(String(16), nullable=False, default="4-3-3")
+    tactic: Mapped[str] = mapped_column(String(16), nullable=False, default="balanced")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     cards: Mapped[list["LineupCard"]] = relationship(back_populates="lineup", cascade="all, delete-orphan")

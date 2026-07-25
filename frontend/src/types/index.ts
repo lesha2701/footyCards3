@@ -3,6 +3,7 @@ export type Position = "GK" | "LB" | "CB" | "RB" | "CDM" | "CM" | "CAM" | "LM" |
 export type TradeStatus = "pending" | "accepted" | "rejected" | "cancelled" | "expired";
 export type MatchDifficulty = "easy" | "medium" | "hard";
 export type MatchResult = "win" | "draw" | "loss";
+export type LineupTactic = "attacking" | "balanced" | "defensive";
 
 export interface Page<T> {
   items: T[];
@@ -28,7 +29,6 @@ export interface UserMe {
   matches_drawn: number;
   matches_lost: number;
   memory_best_score: number;
-  match_energy: number;
   created_at: string;
 }
 
@@ -148,6 +148,7 @@ export interface LineupSlot {
 export interface Lineup {
   id: number | null;
   formation: string;
+  tactic: LineupTactic;
   is_complete: boolean;
   team_strength: number | null;
   slots: LineupSlot[];
@@ -180,8 +181,6 @@ export interface ArenaStats {
   matches_drawn: number;
   matches_lost: number;
   arena_rating: number;
-  match_energy: number;
-  max_energy: number;
 }
 
 export interface ArenaLeaderboardEntry {
@@ -413,6 +412,29 @@ export interface FreeKickKickResult {
 }
 
 export interface FreeKickClaimResult {
+  reward_coins: number;
+  new_balance: number;
+}
+
+export interface HangmanStartResult {
+  session_id: number;
+  category: "player" | "term";
+  masked_word: string[];
+  max_wrong: number;
+}
+
+export interface HangmanGuessResult {
+  session_id: number;
+  masked_word: string[];
+  guessed_letters: string[];
+  wrong_letters: string[];
+  max_wrong: number;
+  status: "in_progress" | "won" | "lost" | "rewarded" | "expired";
+  is_correct: boolean;
+  word: string | null;
+}
+
+export interface HangmanClaimResult {
   reward_coins: number;
   new_balance: number;
 }

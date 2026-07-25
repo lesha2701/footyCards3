@@ -70,7 +70,6 @@ export default function AdminGamesPage() {
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Card Arena</p>
         <div className="grid grid-cols-2 gap-3">
-          {field("match_daily_energy", "Энергия в день")}
           {field("match_reward_win", "Награда за победу")}
           {field("match_reward_draw", "Награда за ничью")}
           {field("match_reward_loss", "Награда за поражение")}
@@ -107,6 +106,15 @@ export default function AdminGamesPage() {
           {field("free_kick_period_max_ms", "Макс. период шкалы, мс")}
           {field("free_kick_base_stake", "Базовая ставка")}
           {field("free_kick_daily_limit", "Лимит наградных попыток/день")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Футбольная виселица</p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("hangman_daily_limit", "Лимит наградных попыток/день")}
+          {field("hangman_reward_correct", "Награда за угаданное слово")}
+          {field("hangman_max_wrong", "Число ошибок до поражения")}
         </div>
       </section>
 

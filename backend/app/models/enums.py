@@ -76,6 +76,7 @@ class GameType(str, enum.Enum):
     saboteur = "saboteur"
     penalty = "penalty"
     free_kick = "free_kick"
+    football_hangman = "football_hangman"
 
 
 class GameSessionStatus(str, enum.Enum):
