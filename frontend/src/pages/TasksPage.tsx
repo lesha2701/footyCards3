@@ -1,18 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { useState } from "react";
 
 import { claimTask, fetchTasks } from "@/api/tasks";
 import EmptyState from "@/components/common/EmptyState";
-import { ApiRequestError } from "@/lib/api";
+import { ApiRequestError, staticUrl } from "@/lib/api";
+import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { Task } from "@/types";
+import type { Task, UserCard } from "@/types";
 
 export default function TasksPage() {
   const updateBalance = useAuthStore((s) => s.updateBalance);
   const queryClient = useQueryClient();
   const [claimError, setClaimError] = useState<string | null>(null);
   const [tab, setTab] = useState<"regular" | "premium">("regular");
+  const [revealedCard, setRevealedCard] = useState<{ card: UserCard; packName: string | null } | null>(null);
 
   const { data: taskList, isLoading } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const premiumUnclaimed = (taskList?.premium ?? []).filter((t) => t.is_completed && !t.is_claimed).length;
@@ -23,6 +26,9 @@ export default function TasksPage() {
       updateBalance(data.new_balance);
       hapticNotify("success");
       setClaimError(null);
+      if (data.granted_card) {
+        setRevealedCard({ card: data.granted_card, packName: data.granted_pack_name });
+      }
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["collection"] });
     },
@@ -79,6 +85,46 @@ export default function TasksPage() {
           )}
         </section>
       )}
+
+      {revealedCard && <RewardRevealModal card={revealedCard.card} packName={revealedCard.packName} onClose={() => setRevealedCard(null)} />}
+    </div>
+  );
+}
+
+function RewardRevealModal({ card, packName, onClose }: { card: UserCard; packName: string | null; onClose: () => void }) {
+  const player = card.player;
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-black/80 px-6" onClick={onClose}>
+      <p className="font-display text-lg font-bold text-slate-100">{packName ?? "Награда получена!"}</p>
+
+      <motion.div
+        initial={{ scale: 0.85, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className={`relative flex h-72 w-52 flex-col items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-b ${RARITY_GRADIENTS[player.rarity]} p-[3px] ${RARITY_GLOW[player.rarity]}`}
+      >
+        <div className="flex h-full w-full flex-col items-center justify-center rounded-[22px] bg-bg-surface">
+          <img
+            src={staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+            alt={player.display_name}
+            className="h-full w-full object-cover"
+          />
+        </div>
+        <span className="absolute right-2 top-2 rounded-md bg-black/70 px-2 py-1 text-[11px] font-bold text-white">
+          {RARITY_LABELS[player.rarity]}
+        </span>
+      </motion.div>
+
+      <div className="text-center">
+        <p className="font-display text-xl font-bold text-slate-100">{player.display_name}</p>
+        <p className="font-display text-lg font-bold text-amber-300">Рейтинг {player.rating}</p>
+      </div>
+
+      <button
+        onClick={onClose}
+        className="mt-2 w-full max-w-xs rounded-2xl bg-accent py-3.5 font-display text-base font-bold text-bg-base active:scale-95"
+      >
+        Забрать
+      </button>
     </div>
   );
 }
