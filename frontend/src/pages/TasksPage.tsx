@@ -1,14 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { claimTask, fetchTasks } from "@/api/tasks";
+import { RevealStage, STAGES, STAGE_DURATION_MS } from "@/components/cards/CardRevealStage";
 import EmptyState from "@/components/common/EmptyState";
-import { ApiRequestError, staticUrl } from "@/lib/api";
-import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
-import { hapticNotify } from "@/lib/telegram";
+import { ApiRequestError } from "@/lib/api";
+import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { Task, UserCard } from "@/types";
+import type { OpenedCard, Task, UserCard } from "@/types";
 
 export default function TasksPage() {
   const updateBalance = useAuthStore((s) => s.updateBalance);
@@ -92,39 +91,63 @@ export default function TasksPage() {
 }
 
 function RewardRevealModal({ card, packName, onClose }: { card: UserCard; packName: string | null; onClose: () => void }) {
-  const player = card.player;
+  const [stageIndex, setStageIndex] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The claim response only ever carries the single granted card, with no
+  // is_new/duplicate_count info (unlike a real pack open) — default those
+  // off rather than guess, so the reveal doesn't show an inaccurate badge.
+  const opened: OpenedCard = { card, is_new: false, duplicate_count: 1 };
+
+  const advance = () => {
+    haptic("light");
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (stageIndex < STAGES.length - 1) {
+      setStageIndex((i) => i + 1);
+    }
+  };
+
+  useEffect(() => {
+    if (stageIndex >= STAGES.length - 1) return;
+    timerRef.current = setTimeout(advance, STAGE_DURATION_MS);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageIndex]);
+
+  const skip = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    hapticNotify("success");
+    setStageIndex(STAGES.length - 1);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-black/80 px-6" onClick={onClose}>
-      <p className="font-display text-lg font-bold text-slate-100">{packName ?? "Награда получена!"}</p>
+    <div className="fixed inset-0 z-50 flex flex-col bg-bg-base">
+      {stageIndex < STAGES.length - 1 && (
+        <button
+          onClick={skip}
+          className="safe-top absolute right-4 top-4 z-10 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-slate-200"
+        >
+          Пропустить
+        </button>
+      )}
 
-      <motion.div
-        initial={{ scale: 0.85, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className={`relative flex h-72 w-52 flex-col items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-b ${RARITY_GRADIENTS[player.rarity]} p-[3px] ${RARITY_GLOW[player.rarity]}`}
-      >
-        <div className="flex h-full w-full flex-col items-center justify-center rounded-[22px] bg-bg-surface">
-          <img
-            src={staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-            alt={player.display_name}
-            className="h-full w-full object-cover"
-          />
+      <p className="safe-top mt-6 text-center font-display text-lg font-bold text-slate-100">
+        {packName ?? "Награда получена!"}
+      </p>
+
+      <RevealStage key={stageIndex} opened={opened} stage={STAGES[stageIndex]} index={0} total={1} onTap={advance} />
+
+      {stageIndex === STAGES.length - 1 && (
+        <div className="safe-bottom px-6 pb-6 pt-2">
+          <button
+            onClick={onClose}
+            className="w-full rounded-2xl bg-accent py-3.5 font-display text-base font-bold text-bg-base active:scale-95"
+          >
+            Забрать
+          </button>
         </div>
-        <span className="absolute right-2 top-2 rounded-md bg-black/70 px-2 py-1 text-[11px] font-bold text-white">
-          {RARITY_LABELS[player.rarity]}
-        </span>
-      </motion.div>
-
-      <div className="text-center">
-        <p className="font-display text-xl font-bold text-slate-100">{player.display_name}</p>
-        <p className="font-display text-lg font-bold text-amber-300">Рейтинг {player.rating}</p>
-      </div>
-
-      <button
-        onClick={onClose}
-        className="mt-2 w-full max-w-xs rounded-2xl bg-accent py-3.5 font-display text-base font-bold text-bg-base active:scale-95"
-      >
-        Забрать
-      </button>
+      )}
     </div>
   );
 }
