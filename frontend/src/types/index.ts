@@ -190,6 +190,26 @@ export interface ArenaLeaderboardEntry {
   avatar_url: string | null;
   arena_rating: number;
   matches_won: number;
+  matches_drawn: number;
+  matches_lost: number;
+  goal_difference: number;
+  points: number;
+}
+
+export type RankingMetric = "arena_rating" | "matches_won" | "cards_count" | "unique_players" | "referral_count";
+
+export interface RankingEntry {
+  rank: number;
+  user_id: number;
+  display_name: string;
+  avatar_url: string | null;
+  value: number;
+}
+
+export interface RankingResult {
+  metric: RankingMetric;
+  top: RankingEntry[];
+  me: RankingEntry | null;
 }
 
 export interface UserPublic {
@@ -322,8 +342,7 @@ export interface TaskList {
 export interface TaskClaimResult {
   reward_coins: number;
   new_balance: number;
-  granted_pack_name: string | null;
-  granted_card: UserCard | null;
+  granted_pack: PackOpenResult | null;
   refilled_task: Task | null;
 }
 

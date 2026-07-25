@@ -3,7 +3,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import TaskCategory, TaskConditionType
-from app.schemas.card import UserCardOut
+from app.schemas.pack import PackOpenResult
 
 
 class TaskDefinitionOut(BaseModel):
@@ -86,6 +86,5 @@ class TaskListOut(BaseModel):
 class TaskClaimOut(BaseModel):
     reward_coins: int
     new_balance: int
-    granted_pack_name: Optional[str] = None
-    granted_card: Optional[UserCardOut] = None
+    granted_pack: Optional[PackOpenResult] = None
     refilled_task: Optional[TaskOut] = None

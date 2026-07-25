@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import EmptyState from "@/components/common/EmptyState";
@@ -9,9 +9,11 @@ import { fetchActiveLineup, setActiveLineup } from "@/api/lineups";
 import { fetchArenaLeaderboard, fetchArenaStats, fetchMatchHistory, playMatch } from "@/api/matches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
 import { formatGameError } from "@/lib/errors";
-import { hapticNotify } from "@/lib/telegram";
+import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { Match, MatchDifficulty, UserCard } from "@/types";
+
+const EVENT_STEP_MS = 550;
 
 const DIFFICULTIES: { value: MatchDifficulty; label: string }[] = [
   { value: "easy", label: "Лёгкий" },
@@ -36,6 +38,7 @@ export default function ArenaPage() {
   const [difficulty, setDifficulty] = useState<MatchDifficulty>("medium");
   const [lastMatch, setLastMatch] = useState<Match | null>(null);
   const [matchError, setMatchError] = useState<string | null>(null);
+  const [simulating, setSimulating] = useState(false);
 
   const setLineupMutation = useMutation({
     mutationFn: setActiveLineup,
@@ -47,10 +50,12 @@ export default function ArenaPage() {
     onSuccess: (match) => {
       setLastMatch(match);
       setMatchError(null);
+      setSimulating(true);
       if (match.reward_coins > 0) {
         updateBalance((useAuthStore.getState().user?.balance ?? 0) + match.reward_coins);
       }
-      hapticNotify(match.result === "win" ? "success" : match.result === "loss" ? "error" : "warning");
+      // Haptic result feedback fires once the simulation finishes playing out
+      // (MatchSimulation's onFinished), not the instant the API responds.
       queryClient.invalidateQueries({ queryKey: ["arena-stats"] });
       queryClient.invalidateQueries({ queryKey: ["match-history"] });
       queryClient.invalidateQueries({ queryKey: ["arena-leaderboard"] });
@@ -137,14 +142,23 @@ export default function ArenaPage() {
         </div>
         <button
           onClick={() => playMutation.mutate()}
-          disabled={!lineup?.is_complete || playMutation.isPending || (stats?.match_energy ?? 1) < 1}
+          disabled={!lineup?.is_complete || playMutation.isPending || simulating || (stats?.match_energy ?? 1) < 1}
           className="rounded-2xl bg-emerald-500 py-3.5 font-display text-base font-bold text-white active:scale-95 disabled:opacity-40"
         >
-          {playMutation.isPending ? "Идёт матч..." : "Играть матч"}
+          {playMutation.isPending || simulating ? "Идёт матч..." : "Играть матч"}
         </button>
       </section>
 
-      {lastMatch && <MatchResultCard match={lastMatch} />}
+      {lastMatch && (
+        <MatchSimulation
+          key={lastMatch.id}
+          match={lastMatch}
+          onFinished={() => {
+            setSimulating(false);
+            hapticNotify(lastMatch.result === "win" ? "success" : lastMatch.result === "loss" ? "error" : "warning");
+          }}
+        />
+      )}
 
       <section>
         <p className="mb-2 font-display text-base font-bold text-slate-100">История матчей</p>
@@ -166,14 +180,36 @@ export default function ArenaPage() {
 
       {!!leaderboard?.length && (
         <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-          <p className="mb-2 font-display text-sm font-bold text-slate-200">🏆 Рейтинг Arena</p>
-          <div className="flex flex-col gap-2">
-            {leaderboard.slice(0, 5).map((entry, i) => (
-              <div key={entry.user_id} className="flex items-center justify-between text-sm">
-                <span className="text-slate-300">{i + 1}. {entry.display_name}</span>
-                <span className="font-bold text-cyan-300">{entry.arena_rating}</span>
-              </div>
-            ))}
+          <p className="mb-2 font-display text-sm font-bold text-slate-200">🏆 Турнирная таблица Arena</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-slate-500">
+                  <th className="py-1 text-left font-normal">#</th>
+                  <th className="py-1 text-left font-normal">Игрок</th>
+                  <th className="py-1 text-center font-normal">В</th>
+                  <th className="py-1 text-center font-normal">Н</th>
+                  <th className="py-1 text-center font-normal">П</th>
+                  <th className="py-1 text-center font-normal">РМ</th>
+                  <th className="py-1 text-center font-normal">О</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leaderboard.slice(0, 10).map((entry, i) => (
+                  <tr key={entry.user_id} className="border-t border-white/5">
+                    <td className="py-1.5 text-slate-500">{i + 1}</td>
+                    <td className="max-w-[110px] truncate py-1.5 text-slate-200">{entry.display_name}</td>
+                    <td className="py-1.5 text-center text-emerald-400">{entry.matches_won}</td>
+                    <td className="py-1.5 text-center text-slate-400">{entry.matches_drawn}</td>
+                    <td className="py-1.5 text-center text-red-400">{entry.matches_lost}</td>
+                    <td className="py-1.5 text-center text-slate-300">
+                      {entry.goal_difference > 0 ? `+${entry.goal_difference}` : entry.goal_difference}
+                    </td>
+                    <td className="py-1.5 text-center font-bold text-cyan-300">{entry.points}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
       )}
@@ -201,23 +237,76 @@ function MiniStat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function MatchResultCard({ match }: { match: Match }) {
+function MatchSimulation({ match, onFinished }: { match: Match; onFinished: () => void }) {
+  const [revealedCount, setRevealedCount] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+  const finishedFiredRef = useRef(false);
+
+  const total = match.events.length;
+  const finished = revealedCount >= total;
+
+  useEffect(() => {
+    if (finished) {
+      if (!finishedFiredRef.current) {
+        finishedFiredRef.current = true;
+        onFinished();
+      }
+      return;
+    }
+    timerRef.current = setTimeout(() => {
+      if (match.events[revealedCount]?.event_type === "goal") haptic("medium");
+      setRevealedCount((c) => c + 1);
+    }, EVENT_STEP_MS);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealedCount, finished]);
+
+  useEffect(() => {
+    logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
+  }, [revealedCount]);
+
+  const skip = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setRevealedCount(total);
+  };
+
+  const revealed = match.events.slice(0, revealedCount);
+  const liveUserScore = revealed.filter((e) => e.event_type === "goal" && e.team === "user").length;
+  const liveOpponentScore = revealed.filter((e) => e.event_type === "goal" && e.team === "opponent").length;
+  const currentMinute = revealed.length ? revealed[revealed.length - 1].minute : 0;
+
   return (
     <section className="rounded-2xl border border-white/10 bg-bg-surface p-4">
-      <p className="text-center font-display text-lg font-bold text-slate-100">
-        {match.user_score} : {match.opponent_score}
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-slate-500">{finished ? "Матч завершён" : `${currentMinute}' · матч идёт...`}</span>
+        {!finished && (
+          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-slate-200">
+            Пропустить
+          </button>
+        )}
+      </div>
+
+      <p className="mt-1 text-center font-display text-lg font-bold text-slate-100">
+        {liveUserScore} : {liveOpponentScore}
       </p>
       <p className="text-center text-sm text-slate-400">vs {match.opponent_name}</p>
-      <p
-        className={`mt-1 text-center font-display text-sm font-bold ${
-          match.result === "win" ? "text-emerald-400" : match.result === "loss" ? "text-red-400" : "text-slate-400"
-        }`}
-      >
-        {match.result === "win" ? "Победа!" : match.result === "loss" ? "Поражение" : "Ничья"} · +{match.reward_coins} 🪙
-      </p>
-      <div className="mt-3 max-h-40 space-y-1 overflow-y-auto text-xs">
-        {match.events.map((e, i) => (
-          <p key={i} className="text-slate-400">
+
+      {finished && (
+        <p
+          className={`mt-1 text-center font-display text-sm font-bold ${
+            match.result === "win" ? "text-emerald-400" : match.result === "loss" ? "text-red-400" : "text-slate-400"
+          }`}
+        >
+          {match.result === "win" ? "Победа!" : match.result === "loss" ? "Поражение" : "Ничья"} · +{match.reward_coins} 🪙
+        </p>
+      )}
+
+      <div ref={logRef} className="mt-3 max-h-48 space-y-1 overflow-y-auto text-xs">
+        {revealed.map((e, i) => (
+          <p key={i} className={e.team === "user" ? "text-emerald-300" : "text-slate-400"}>
             <span className="text-slate-500">{e.minute}&apos;</span> {e.description}
           </p>
         ))}

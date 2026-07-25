@@ -108,6 +108,7 @@ class NotificationType(str, enum.Enum):
     special_pack = "special_pack"
     admin_message = "admin_message"
     premium_task_available = "premium_task_available"
+    referral_joined = "referral_joined"
 
 
 class TradeCardSide(str, enum.Enum):

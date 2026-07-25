@@ -14,6 +14,15 @@ export default function PlayPage() {
       <h1 className="font-display text-2xl font-bold text-slate-100">Играть</h1>
 
       <button
+        onClick={() => navigate("/ranking")}
+        className="overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-yellow-700 p-5 text-left active:scale-[0.98]"
+      >
+        <p className="text-3xl">🏆</p>
+        <p className="mt-2 font-display text-lg font-bold text-white">Рейтинг</p>
+        <p className="text-sm text-white/80">Топ-10 игроков по разным показателям и твоя позиция</p>
+      </button>
+
+      <button
         onClick={() => navigate("/play/memory")}
         className="overflow-hidden rounded-3xl bg-gradient-to-br from-cyan-600 to-blue-700 p-5 text-left active:scale-[0.98]"
       >

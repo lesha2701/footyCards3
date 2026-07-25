@@ -1,14 +1,14 @@
 from collections import Counter
 
-from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.core.dependencies import get_current_admin
 from app.core.exceptions import ConflictError, NotFoundError
 from app.database import get_db
-from app.models.pack import Pack, PackRarityProbability
+from app.models.pack import Pack, PackOpening, PackRarityProbability
 from app.models.user import User
 from app.schemas.admin import PackPreviewOut, PackRarityStatOut
 from app.schemas.pack import PackCreate, PackOut, PackUpdate
@@ -111,6 +111,29 @@ async def toggle_pack_active(pack_id: int, request: Request, db: AsyncSession = 
     await log_action(db, admin.id, "toggle_pack_active", "pack", pack_id, new_value={"is_active": pack.is_active}, ip_address=request.client.host if request.client else None)
     await db.commit()
     return await _get_pack_out(db, pack_id)
+
+
+@router.delete("/{pack_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_pack(pack_id: int, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
+    from app.models.task import TaskDefinition
+
+    pack = await _get_pack_or_404(db, pack_id)
+
+    opened_count = (await db.execute(select(func.count(PackOpening.id)).where(PackOpening.pack_id == pack_id))).scalar_one()
+    if opened_count > 0:
+        raise ConflictError("This pack has already been opened by players; deactivate it instead of deleting")
+
+    used_by_task = (
+        await db.execute(select(func.count(TaskDefinition.id)).where(TaskDefinition.reward_pack_id == pack_id))
+    ).scalar_one()
+    if used_by_task > 0:
+        raise ConflictError("This pack is set as a reward on a task; unlink it from the task before deleting")
+
+    old_image_path = pack.image_path
+    await log_action(db, admin.id, "delete_pack", "pack", pack_id, old_value=PackOut.model_validate(pack).model_dump(mode="json"), ip_address=request.client.host if request.client else None)
+    await db.delete(pack)
+    await db.commit()
+    delete_pack_image(old_image_path)
 
 
 @router.get("/{pack_id}/preview", response_model=PackPreviewOut)

@@ -1,20 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { claimTask, fetchTasks } from "@/api/tasks";
-import { RevealStage, STAGES, STAGE_DURATION_MS } from "@/components/cards/CardRevealStage";
 import EmptyState from "@/components/common/EmptyState";
 import { ApiRequestError } from "@/lib/api";
-import { haptic, hapticNotify } from "@/lib/telegram";
+import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { OpenedCard, Task, UserCard } from "@/types";
+import type { Task } from "@/types";
 
 export default function TasksPage() {
   const updateBalance = useAuthStore((s) => s.updateBalance);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [claimError, setClaimError] = useState<string | null>(null);
   const [tab, setTab] = useState<"regular" | "premium">("regular");
-  const [revealedCard, setRevealedCard] = useState<{ card: UserCard; packName: string | null } | null>(null);
+  const [premiumFilter, setPremiumFilter] = useState<"active" | "done">("active");
 
   const { data: taskList, isLoading } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const premiumUnclaimed = (taskList?.premium ?? []).filter((t) => t.is_completed && !t.is_claimed).length;
@@ -25,16 +26,22 @@ export default function TasksPage() {
       updateBalance(data.new_balance);
       hapticNotify("success");
       setClaimError(null);
-      if (data.granted_card) {
-        setRevealedCard({ card: data.granted_card, packName: data.granted_pack_name });
-      }
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["collection"] });
+      if (data.granted_pack) {
+        // Reuses the same full packshot + per-card reveal animation as a
+        // real pack purchase, instead of a bespoke "reward received" popup.
+        navigate(`/packs/${data.granted_pack.pack.id}/open`, { state: { result: data.granted_pack } });
+      }
     },
     onError: (err) => setClaimError(err instanceof ApiRequestError ? err.message : "Не удалось забрать награду"),
   });
 
   if (isLoading) return null;
+
+  const premiumTasks = (taskList?.premium ?? []).filter((t) =>
+    premiumFilter === "active" ? !t.is_claimed : t.is_claimed
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -69,10 +76,19 @@ export default function TasksPage() {
         </section>
       ) : (
         <section className="flex flex-col gap-3">
-          {!taskList?.premium.length ? (
-            <EmptyState icon="⭐" title="Премиум заданий пока нет" description="Загляните позже" />
+          <div className="flex gap-2">
+            <TabButton active={premiumFilter === "active"} label="Активные" onClick={() => setPremiumFilter("active")} />
+            <TabButton active={premiumFilter === "done"} label="Выполненные" onClick={() => setPremiumFilter("done")} />
+          </div>
+
+          {!premiumTasks.length ? (
+            <EmptyState
+              icon="⭐"
+              title={premiumFilter === "active" ? "Активных заданий пока нет" : "Выполненных заданий пока нет"}
+              description="Загляните позже"
+            />
           ) : (
-            taskList.premium.map((task) => (
+            premiumTasks.map((task) => (
               <TaskCard
                 key={task.user_task_id}
                 task={task}
@@ -83,70 +99,6 @@ export default function TasksPage() {
             ))
           )}
         </section>
-      )}
-
-      {revealedCard && <RewardRevealModal card={revealedCard.card} packName={revealedCard.packName} onClose={() => setRevealedCard(null)} />}
-    </div>
-  );
-}
-
-function RewardRevealModal({ card, packName, onClose }: { card: UserCard; packName: string | null; onClose: () => void }) {
-  const [stageIndex, setStageIndex] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // The claim response only ever carries the single granted card, with no
-  // is_new/duplicate_count info (unlike a real pack open) — default those
-  // off rather than guess, so the reveal doesn't show an inaccurate badge.
-  const opened: OpenedCard = { card, is_new: false, duplicate_count: 1 };
-
-  const advance = () => {
-    haptic("light");
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (stageIndex < STAGES.length - 1) {
-      setStageIndex((i) => i + 1);
-    }
-  };
-
-  useEffect(() => {
-    if (stageIndex >= STAGES.length - 1) return;
-    timerRef.current = setTimeout(advance, STAGE_DURATION_MS);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stageIndex]);
-
-  const skip = () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    hapticNotify("success");
-    setStageIndex(STAGES.length - 1);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-bg-base">
-      {stageIndex < STAGES.length - 1 && (
-        <button
-          onClick={skip}
-          className="safe-top absolute right-4 top-4 z-10 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-slate-200"
-        >
-          Пропустить
-        </button>
-      )}
-
-      <p className="safe-top mt-6 text-center font-display text-lg font-bold text-slate-100">
-        {packName ?? "Награда получена!"}
-      </p>
-
-      <RevealStage key={stageIndex} opened={opened} stage={STAGES[stageIndex]} index={0} total={1} onTap={advance} />
-
-      {stageIndex === STAGES.length - 1 && (
-        <div className="safe-bottom px-6 pb-6 pt-2">
-          <button
-            onClick={onClose}
-            className="w-full rounded-2xl bg-accent py-3.5 font-display text-base font-bold text-bg-base active:scale-95"
-          >
-            Забрать
-          </button>
-        </div>
       )}
     </div>
   );

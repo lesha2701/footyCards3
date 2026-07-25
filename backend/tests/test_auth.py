@@ -75,8 +75,11 @@ async def test_referral_code_links_new_user_without_crediting_referrer_yet(clien
 
 
 async def test_referral_count_credited_only_after_referred_users_first_paid_pack(client, db_session, bot_token):
+    from sqlalchemy import select
+
+    from app.models.enums import NotificationType, Rarity
+    from app.models.notification import Notification
     from tests.factories import create_pack, create_player, get_user_by_telegram_id
-    from app.models.enums import Rarity
 
     await create_player(db_session, rarity=Rarity.common)
     pack = await create_pack(db_session, "basic", price=100, card_count=1, probabilities={Rarity.common: 1.0})
@@ -97,6 +100,16 @@ async def test_referral_count_credited_only_after_referred_users_first_paid_pack
 
     await db_session.refresh(referrer)
     assert referrer.referral_count == 1
+
+    # The referrer must be told explicitly, not just have a silent counter bump.
+    notifications = (
+        await db_session.execute(
+            select(Notification).where(
+                Notification.user_id == referrer.id, Notification.type == NotificationType.referral_joined
+            )
+        )
+    ).scalars().all()
+    assert len(notifications) == 1
 
     # A second paid pack by the same referred user must not credit again.
     pack2 = await create_pack(db_session, "basic2", price=100, card_count=1, probabilities={Rarity.common: 1.0})

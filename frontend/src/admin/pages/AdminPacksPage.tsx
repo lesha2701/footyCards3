@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
-import { createPack, fetchAdminPacks, previewPack, togglePackActive, updatePack, uploadPackImage } from "@/admin/api";
+import { createPack, deletePack, fetchAdminPacks, previewPack, togglePackActive, updatePack, uploadPackImage } from "@/admin/api";
 import type { PackPreview } from "@/admin/types";
 import NumberInput from "@/components/common/NumberInput";
 import { ApiRequestError, staticUrl } from "@/lib/api";
@@ -55,6 +55,17 @@ export default function AdminPacksPage() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-packs"] });
   const toggleMutation = useMutation({ mutationFn: togglePackActive, onSuccess: invalidate });
+  const deleteMutation = useMutation({
+    mutationFn: deletePack,
+    onSuccess: invalidate,
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось удалить пак"),
+  });
+
+  const confirmDelete = (p: Pack) => {
+    if (window.confirm(`Удалить пак «${p.name}» навсегда? Это действие необратимо.`)) {
+      deleteMutation.mutate(p.id);
+    }
+  };
 
   const buildPayload = () => ({
     name: form.name,
@@ -97,6 +108,7 @@ export default function AdminPacksPage() {
       </div>
 
       {isLoading && <p className="text-sm text-slate-400">Загрузка...</p>}
+      {error && !creating && !editing && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {packs?.map((p) => (
@@ -116,6 +128,12 @@ export default function AdminPacksPage() {
                   className="rounded-lg bg-white/5 px-2 py-1 text-[11px]"
                 >
                   Предпросмотр
+                </button>
+                <button
+                  onClick={() => confirmDelete(p)}
+                  className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400"
+                >
+                  Удалить
                 </button>
               </div>
             </div>
@@ -148,22 +166,24 @@ export default function AdminPacksPage() {
                 </select>
               </label>
 
-              <p className="mt-2 text-xs font-semibold text-slate-400">Вероятности редкостей (сумма: {probabilitySum.toFixed(2)})</p>
+              <p className="mt-2 text-xs font-semibold text-slate-400">Шансы редкостей, % (сумма: {(probabilitySum * 100).toFixed(2)}%)</p>
               {RARITIES.map((r) => (
                 <div key={r} className="flex items-center gap-2">
                   <span className="w-24 text-xs">{RARITY_LABELS[r]}</span>
                   <NumberInput
                     step={0.01}
                     min={0}
-                    max={1}
-                    value={form.probabilities[r]}
-                    onChange={(v) => setForm({ ...form, probabilities: { ...form.probabilities, [r]: v } })}
+                    max={100}
+                    value={form.probabilities[r] * 100}
+                    onChange={(v) => setForm({ ...form, probabilities: { ...form.probabilities, [r]: v / 100 } })}
                     className="flex-1 rounded-lg bg-bg-surface px-3 py-1.5 outline-none"
                   />
+                  <span className="text-xs text-slate-500">%</span>
                 </div>
               ))}
+              <p className="text-[11px] text-slate-500">Можно указывать доли процента, например 0.05%</p>
               {Math.abs(probabilitySum - 1) > 0.02 && (
-                <p className="text-xs text-amber-400">Сумма вероятностей должна быть ≈ 1.0, иначе сохранить нельзя</p>
+                <p className="text-xs text-amber-400">Сумма шансов должна быть ≈ 100%, иначе сохранить нельзя</p>
               )}
               <label className="mt-1 flex items-center gap-2 text-xs">
                 <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />

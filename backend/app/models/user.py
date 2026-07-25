@@ -35,6 +35,8 @@ class User(TimestampMixin, Base):
     matches_won: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     matches_drawn: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     matches_lost: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    goals_for: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    goals_against: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     arena_rating: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
 
     # Memory sequence

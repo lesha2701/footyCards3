@@ -26,6 +26,7 @@ import CollectionPage from "@/pages/CollectionPage";
 import TradesPage from "@/pages/TradesPage";
 import NewTradePage from "@/pages/NewTradePage";
 import TasksPage from "@/pages/TasksPage";
+import RankingPage from "@/pages/RankingPage";
 import ProfilePage from "@/pages/ProfilePage";
 import PublicProfilePage from "@/pages/PublicProfilePage";
 import LoadingScreen from "@/components/common/LoadingScreen";
@@ -104,6 +105,7 @@ export default function App() {
         <Route path="/trades" element={<TradesPage />} />
         <Route path="/trades/new" element={<NewTradePage />} />
         <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/ranking" element={<RankingPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/users/:userId" element={<PublicProfilePage />} />
       </Route>

@@ -7,12 +7,11 @@ from sqlalchemy.orm import joinedload
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.models.enums import CardSource, TaskCategory, TaskConditionType, TransactionType
-from app.models.pack import Pack, PackOpening, PackOpeningCard
+from app.models.pack import Pack, PackOpening
 from app.models.task import TaskDefinition, UserTask
 from app.models.user import User
-from app.schemas.card import UserCardOut
+from app.schemas.pack import PackOpenResult, PackOut
 from app.schemas.task import TaskClaimOut, TaskListOut, TaskOut
-from app.services.card_creation import create_user_card
 from app.services.telegram_service import check_channel_membership
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
@@ -155,15 +154,16 @@ async def evaluate_match_min_rating(db: AsyncSession, user: User, lineup_ratings
             db.add(user_task)
 
 
-async def _grant_task_pack(db: AsyncSession, user: User, pack_id: int) -> tuple[Optional[str], Optional[UserCardOut]]:
-    from app.services.pack_service import pick_random_player, roll_rarities  # deferred: avoids a circular import with pack_service
+async def _grant_task_pack(db: AsyncSession, user: User, pack_id: int) -> Optional[PackOpenResult]:
+    # Deferred: avoids a circular import with pack_service.
+    from app.services.pack_service import _duplicate_counts_snapshot, roll_and_create_cards
 
     result = await db.execute(
         select(Pack).where(Pack.id == pack_id).options(joinedload(Pack.rarity_probabilities))
     )
     pack = result.unique().scalar_one_or_none()
     if not pack:
-        return None, None
+        return None
 
     opening = PackOpening(
         user_id=user.id, pack_id=pack.id, price_paid=0,
@@ -173,15 +173,10 @@ async def _grant_task_pack(db: AsyncSession, user: User, pack_id: int) -> tuple[
     db.add(opening)
     await db.flush()
 
-    rarities = roll_rarities(pack.rarity_probabilities, pack.card_count, pack.guaranteed_min_rarity)
-    last_card = None
-    for rarity in rarities:
-        player = await pick_random_player(db, rarity)
-        card = await create_user_card(db, user.id, player.id, CardSource.task, opening.id)
-        db.add(PackOpeningCard(opening_id=opening.id, user_card_id=card.id, is_new_player=False))
-        card.player = player
-        last_card = card
-    return pack.name, UserCardOut.model_validate(last_card) if last_card else None
+    dup_counts = await _duplicate_counts_snapshot(db, user.id)
+    opened_items = await roll_and_create_cards(db, user, pack, opening, dup_counts, CardSource.task)
+
+    return PackOpenResult(opening_id=opening.id, pack=PackOut.model_validate(pack), cards=opened_items, new_balance=user.balance)
 
 
 async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> TaskClaimOut:
@@ -223,10 +218,9 @@ async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> 
             f"Задание «{definition.name}»", "user_task", user_task.id,
         )
 
-    granted_pack_name = None
-    granted_card = None
+    granted_pack: Optional[PackOpenResult] = None
     if definition.reward_pack_id and not locked_user.game_rewards_blocked:
-        granted_pack_name, granted_card = await _grant_task_pack(db, locked_user, definition.reward_pack_id)
+        granted_pack = await _grant_task_pack(db, locked_user, definition.reward_pack_id)
 
     user_task.reward_claimed = True
     refilled_task_out: Optional[TaskOut] = None
@@ -251,10 +245,12 @@ async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> 
     await db.commit()
     await db.refresh(locked_user)
 
+    if granted_pack is not None:
+        granted_pack.new_balance = locked_user.balance
+
     return TaskClaimOut(
         reward_coins=reward_coins,
         new_balance=locked_user.balance,
-        granted_pack_name=granted_pack_name,
-        granted_card=granted_card,
+        granted_pack=granted_pack,
         refilled_task=refilled_task_out,
     )

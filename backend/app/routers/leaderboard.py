@@ -6,7 +6,8 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.game import MemoryLeaderboardEntry
 from app.schemas.match import ArenaLeaderboardEntry
-from app.services import match_service, memory_game_service
+from app.schemas.ranking import RankingMetric, RankingOut
+from app.services import match_service, memory_game_service, ranking_service
 
 router = APIRouter(prefix="/leaderboard", tags=["leaderboard"])
 
@@ -19,3 +20,10 @@ async def leaderboard_arena(db: AsyncSession = Depends(get_db), _user: User = De
 @router.get("/memory", response_model=list[MemoryLeaderboardEntry])
 async def leaderboard_memory(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
     return await memory_game_service.leaderboard(db)
+
+
+@router.get("/ranking", response_model=RankingOut)
+async def leaderboard_ranking(
+    metric: RankingMetric, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await ranking_service.get_ranking(db, metric, user)

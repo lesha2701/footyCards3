@@ -74,6 +74,28 @@ async def test_play_match_with_complete_lineup(client, db_session, bot_token):
     assert user.match_energy == 9
 
 
+async def test_arena_leaderboard_reports_table_stats(client, db_session, bot_token):
+    headers = telegram_headers(750006, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750006)
+
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    match_resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    assert match_resp.status_code == 200
+    match = match_resp.json()
+
+    board_resp = await client.get("/api/v1/leaderboard/arena", headers=headers)
+    assert board_resp.status_code == 200
+    entry = next(e for e in board_resp.json() if e["user_id"] == user.id)
+
+    expected_played = {"win": (1, 0, 0), "draw": (0, 1, 0), "loss": (0, 0, 1)}[match["result"]]
+    assert (entry["matches_won"], entry["matches_drawn"], entry["matches_lost"]) == expected_played
+    assert entry["goal_difference"] == match["user_score"] - match["opponent_score"]
+    assert entry["points"] == entry["matches_won"] * 3 + entry["matches_drawn"]
+
+
 async def test_match_hourly_limit_blocks_after_three_plays(client, db_session, bot_token):
     headers = telegram_headers(750006, bot_token)
     await client.post("/api/v1/auth/session", headers=headers)

@@ -159,6 +159,10 @@ export async function previewPack(id: number, simulations = 1000): Promise<PackP
   return data;
 }
 
+export async function deletePack(id: number): Promise<void> {
+  await api.delete(`/admin/packs/${id}`);
+}
+
 // --- Card Collections ---
 export async function fetchAdminCardCollections(): Promise<CardCollection[]> {
   const { data } = await api.get<CardCollection[]>("/admin/card-collections");
@@ -199,6 +203,10 @@ export async function updateTask(id: number, payload: Record<string, unknown>): 
 export async function toggleTaskActive(id: number): Promise<TaskDefinition> {
   const { data } = await api.post<TaskDefinition>(`/admin/tasks/${id}/toggle-active`);
   return data;
+}
+
+export async function deleteTask(id: number): Promise<void> {
+  await api.delete(`/admin/tasks/${id}`);
 }
 
 // --- Trades ---

@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { createTask, fetchAdminPacks, fetchAdminTasks, toggleTaskActive, updateTask } from "@/admin/api";
+import { createTask, deleteTask, fetchAdminPacks, fetchAdminTasks, toggleTaskActive, updateTask } from "@/admin/api";
 import type { TaskDefinition } from "@/admin/types";
+import { ApiRequestError } from "@/lib/api";
 
 type Category = TaskDefinition["category"];
 type ConditionType = TaskDefinition["condition_type"];
@@ -50,9 +51,21 @@ export default function AdminTasksPage() {
   const [editing, setEditing] = useState<TaskDefinition | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<TaskForm>(taskToForm());
+  const [error, setError] = useState<string | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-tasks"] });
   const toggleMutation = useMutation({ mutationFn: toggleTaskActive, onSuccess: invalidate });
+  const deleteMutation = useMutation({
+    mutationFn: deleteTask,
+    onSuccess: invalidate,
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось удалить задание"),
+  });
+
+  const confirmDelete = (t: TaskDefinition) => {
+    if (window.confirm(`Удалить задание «${t.name}» навсегда? Это действие необратимо.`)) {
+      deleteMutation.mutate(t.id);
+    }
+  };
 
   const buildPayload = () => ({
     code: form.code,
@@ -74,7 +87,7 @@ export default function AdminTasksPage() {
   const createMutation = useMutation({ mutationFn: () => createTask(buildPayload()), onSuccess: () => { invalidate(); setCreating(false); } });
   const updateMutation = useMutation({ mutationFn: () => updateTask(editing!.id, buildPayload()), onSuccess: () => { invalidate(); setEditing(null); } });
 
-  const openEdit = (t: TaskDefinition) => { setEditing(t); setForm(taskToForm(t)); };
+  const openEdit = (t: TaskDefinition) => { setEditing(t); setForm(taskToForm(t)); setError(null); };
 
   return (
     <div className="flex flex-col gap-4">
@@ -86,6 +99,7 @@ export default function AdminTasksPage() {
       </div>
 
       {isLoading && <p className="text-sm text-slate-400">Загрузка...</p>}
+      {error && !creating && !editing && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {tasks?.map((t) => (
@@ -105,6 +119,9 @@ export default function AdminTasksPage() {
               <button onClick={() => openEdit(t)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
               <button onClick={() => toggleMutation.mutate(t.id)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">
                 {t.is_active ? "Отключить" : "Включить"}
+              </button>
+              <button onClick={() => confirmDelete(t)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">
+                Удалить
               </button>
             </div>
           </div>

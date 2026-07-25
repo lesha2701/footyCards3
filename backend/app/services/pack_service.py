@@ -10,12 +10,12 @@ from sqlalchemy.orm import joinedload
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.card import UserCard
 from app.models.card_collection import CardCollection
-from app.models.enums import RARITY_ORDER, CardSource, Rarity, TransactionType
+from app.models.enums import RARITY_ORDER, CardSource, NotificationType, Rarity, TransactionType
 from app.models.pack import Pack, PackOpening, PackOpeningCard, PackRarityProbability
 from app.models.player import Player
 from app.models.user import User
 from app.schemas.pack import OpenedCardOut, PackOpenResult, PackOut
-from app.services import task_service
+from app.services import notification_service, task_service
 from app.services.card_creation import create_user_card
 from app.services.wallet_service import debit_coins, lock_user_for_update
 
@@ -235,6 +235,12 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
             referrer.referral_count += 1
             db.add(referrer)
             await task_service.evaluate_metric_progress(db, referrer, "referrals_count", referrer.referral_count)
+            await notification_service.notify(
+                db, referrer.id, NotificationType.referral_joined,
+                "🤝 Новый реферал!",
+                f"{locked_user.full_display_name()} присоединился по твоей ссылке и открыл первый пак. "
+                f"Загляни в задания — там могут быть награды за приглашения!",
+            )
 
     try:
         await db.commit()

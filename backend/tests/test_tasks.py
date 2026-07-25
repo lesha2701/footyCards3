@@ -99,6 +99,39 @@ async def test_claim_regular_task_twice_is_rejected(client, db_session, bot_toke
     assert second.status_code == 409
 
 
+async def test_task_reward_pack_grants_all_cards(client, db_session, bot_token):
+    from app.models.enums import Rarity
+    from tests.factories import create_pack, create_player
+
+    for _ in range(3):
+        await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(db_session, "task-reward-pack", price=0, card_count=3, probabilities={Rarity.common: 1.0})
+
+    db_session.add(
+        TaskDefinition(
+            code="task_pack_reward", name="Task pack reward", description="test",
+            category=TaskCategory.regular, condition_type=TaskConditionType.metric_counter,
+            target_value=0, reward_coins=0, reward_pack_id=pack.id,
+        )
+    )
+    await db_session.commit()
+
+    await _register(client, db_session, 810013, bot_token)
+    headers = telegram_headers(810013, bot_token)
+
+    tasks = (await client.get("/api/v1/tasks", headers=headers)).json()["regular"]
+    target = next(t for t in tasks if t["code"] == "task_pack_reward")
+
+    resp = await client.post(f"/api/v1/tasks/{target['user_task_id']}/claim", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    # Previously only the last rolled card was returned even though the pack
+    # grants card_count cards — all of them must come back, not just one.
+    assert body["granted_pack"] is not None
+    assert body["granted_pack"]["pack"]["name"] == "Task-Reward-Pack"
+    assert len(body["granted_pack"]["cards"]) == 3
+
+
 async def test_claim_incomplete_task_is_rejected(client, db_session, bot_token):
     await _create_regular_tasks(db_session, 6)
     await _register(client, db_session, 810005, bot_token)

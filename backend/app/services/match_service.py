@@ -50,12 +50,48 @@ def _with_jitter(strength: int) -> int:
     return max(1, round(strength * (1 + random.uniform(-0.05, 0.05))))
 
 
-def _simulate_events(user_strength: int, opponent_strength: int) -> tuple[list[dict], int, int]:
+# (event_type, weight) — weighted random pick per chance. Kept flat and
+# data-driven so adding a new kind of moment is a one-line change.
+_EVENT_WEIGHTS: list[tuple[str, int]] = [
+    ("goal", 7),
+    ("shot", 10),
+    ("save", 9),
+    ("chance", 15),
+    ("corner", 9),
+    ("yellow_card", 5),
+    ("red_card", 1),
+    ("offside", 6),
+    ("possession", 20),
+]
+
+
+def _describe_event(event_type: str, team: str, opponent_name: str) -> str:
+    mine = team == "user"
+    them = opponent_name
+    return {
+        "goal": f"⚽ Гол! Забивает {'твоя команда' if mine else them}!",
+        "shot": f"🎯 {'Твоя команда бьёт' if mine else f'{them} бьёт'} мимо ворот",
+        # A save happens at the goal of the team NOT in possession, so the
+        # keeper belongs to the *other* side from `team`.
+        "save": f"🧤 {'Вратарь ' + them if mine else 'Твой вратарь'} спасает!",
+        "chance": f"🔥 Опасный момент у ворот {them if mine else 'твоей команды'}",
+        "corner": f"🚩 Угловой у {'твоей команды' if mine else them}",
+        "yellow_card": f"🟨 Жёлтая карточка {'твоей команде' if mine else f'сопернику ({them})'}",
+        "red_card": f"🟥 Красная карточка {'твоей команде' if mine else f'сопернику ({them})'}!",
+        "offside": f"🚫 Офсайд у {'твоей команды' if mine else them}",
+        "possession": f"⚽ Мяч контролирует {'твоя команда' if mine else them}",
+    }[event_type]
+
+
+def _simulate_events(user_strength: int, opponent_strength: int, opponent_name: str) -> tuple[list[dict], int, int]:
     total = user_strength + opponent_strength
     user_attack_prob = user_strength / total if total else 0.5
 
-    num_chances = random.randint(9, 15)
+    num_chances = random.randint(14, 22)
     minutes = sorted(random.sample(range(1, 90), num_chances))
+
+    types = [t for t, _ in _EVENT_WEIGHTS]
+    weights = [w for _, w in _EVENT_WEIGHTS]
 
     events: list[dict] = []
     user_score = 0
@@ -63,33 +99,22 @@ def _simulate_events(user_strength: int, opponent_strength: int) -> tuple[list[d
 
     for minute in minutes:
         team = "user" if random.random() < user_attack_prob else "opponent"
-        roll = random.random()
-        if roll < 0.28:
-            is_goal = random.random() < 0.55
-            if is_goal:
-                if team == "user":
-                    user_score += 1
-                else:
-                    opponent_score += 1
-                events.append(
-                    {"minute": minute, "event_type": "goal", "team": team, "description": "⚽ Гол!"}
-                )
+        event_type = random.choices(types, weights=weights, k=1)[0]
+
+        if event_type == "goal":
+            if team == "user":
+                user_score += 1
             else:
-                events.append(
-                    {"minute": minute, "event_type": "shot", "team": team, "description": "🎯 Удар мимо ворот"}
-                )
-        elif roll < 0.5:
-            events.append(
-                {"minute": minute, "event_type": "chance", "team": team, "description": "🔥 Опасный момент у ворот"}
-            )
-        elif roll < 0.58:
-            events.append(
-                {"minute": minute, "event_type": "yellow_card", "team": team, "description": "🟨 Жёлтая карточка"}
-            )
-        else:
-            events.append(
-                {"minute": minute, "event_type": "possession", "team": team, "description": "⚽ Контроль мяча"}
-            )
+                opponent_score += 1
+
+        events.append(
+            {
+                "minute": minute,
+                "event_type": event_type,
+                "team": team,
+                "description": _describe_event(event_type, team, opponent_name),
+            }
+        )
 
     events.sort(key=lambda e: e["minute"])
     return events, user_score, opponent_score
@@ -151,7 +176,10 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
     else:
         opponent_strength = _bot_strength(user_strength, payload.difficulty, difficulty_multiplier)
 
-    events, user_score, opponent_score = _simulate_events(user_strength, opponent_strength)
+    events, user_score, opponent_score = _simulate_events(user_strength, opponent_strength, opponent_name)
+
+    locked_user.goals_for += user_score
+    locked_user.goals_against += opponent_score
 
     if user_score > opponent_score:
         result = MatchResult.win
@@ -250,7 +278,9 @@ async def arena_leaderboard(db: AsyncSession, limit: int = 20) -> list[ArenaLead
     return [
         ArenaLeaderboardEntry(
             user_id=u.id, display_name=u.full_display_name(), avatar_url=u.avatar_url,
-            arena_rating=u.arena_rating, matches_won=u.matches_won,
+            arena_rating=u.arena_rating, matches_won=u.matches_won, matches_drawn=u.matches_drawn,
+            matches_lost=u.matches_lost, goal_difference=u.goals_for - u.goals_against,
+            points=u.matches_won * 3 + u.matches_drawn,
         )
         for u in users
     ]

@@ -51,3 +51,7 @@ class ArenaLeaderboardEntry(BaseModel):
     avatar_url: Optional[str]
     arena_rating: int
     matches_won: int
+    matches_drawn: int
+    matches_lost: int
+    goal_difference: int
+    points: int
