@@ -137,7 +137,7 @@ async def get_current_admin(
     try:
         payload = decode_admin_token(token)
     except TelegramAuthError as exc:
-        raise UnauthorizedError(f"Invalid admin token: {exc}") from exc
+        raise UnauthorizedError("Invalid admin token") from exc
 
     result = await db.execute(select(User).where(User.id == int(payload["sub"])))
     user = result.scalar_one_or_none()

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import EmptyState from "@/components/common/EmptyState";
+import { IconCoin, IconPlus, IconSwap } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { acceptTradeOffer, cancelTradeOffer, fetchTradeOffers, rejectTradeOffer } from "@/api/trades";
 import { staticUrl } from "@/lib/api";
@@ -38,12 +39,13 @@ export default function TradesPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-bold text-slate-100">Обмены</h1>
+        <h1 className="font-display text-xl font-bold text-ink-chalk">Обмены</h1>
         <button
           onClick={() => navigate("/trades/new")}
-          className="rounded-full bg-accent px-4 py-2 text-xs font-bold text-bg-base active:scale-95"
+          className="flex items-center gap-1 rounded-full bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95"
         >
-          + Новый
+          <IconPlus size={13} />
+          Новый
         </button>
       </div>
 
@@ -54,7 +56,7 @@ export default function TradesPage() {
       </div>
 
       {isLoading && <ListSkeleton />}
-      {!isLoading && !offers?.length && <EmptyState icon="🔄" title="Обменов нет" description="Предложи обмен другому игроку" />}
+      {!isLoading && !offers?.length && <EmptyState icon={IconSwap} title="Обменов нет" description="Предложи обмен другому игроку" />}
 
       <div className="flex flex-col gap-3">
         {offers?.map((offer) => (
@@ -76,7 +78,7 @@ function TabButton({ active, label, onClick }: { active: boolean; label: string;
   return (
     <button
       onClick={onClick}
-      className={`flex-1 rounded-xl py-2 text-xs font-semibold ${active ? "bg-accent text-bg-base" : "bg-white/5 text-slate-300"}`}
+      className={`flex-1 rounded-xl py-2 text-xs font-semibold ${active ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"}`}
     >
       {label}
     </button>
@@ -100,27 +102,27 @@ function TradeCard({
   const isSender = offer.sender.id === myUserId;
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+    <div className="rounded-2xl bg-bg-surface p-4">
       <div className="flex items-center justify-between text-sm">
-        <span className="text-slate-300">
+        <span className="text-ink-mist">
           {isSender ? `Кому: ${offer.receiver.username ?? offer.receiver.first_name}` : `От: ${offer.sender.username ?? offer.sender.first_name}`}
         </span>
-        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-slate-400">{STATUS_LABELS[offer.status]}</span>
+        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-ink-mist-dim">{STATUS_LABELS[offer.status]}</span>
       </div>
 
       <div className="mt-3 flex items-center gap-2">
         <MiniCardRow cards={offer.offered_cards} label={isSender ? "Отдаёшь" : "Предлагает"} coins={offer.sender_coins} />
-        <span className="text-slate-500">⇄</span>
+        <IconSwap size={16} className="shrink-0 text-ink-mist-dim" />
         <MiniCardRow cards={offer.requested_cards} label={isSender ? "Получаешь" : "Просит"} coins={offer.receiver_coins} />
       </div>
 
-      {offer.message && <p className="mt-2 text-xs italic text-slate-400">«{offer.message}»</p>}
+      {offer.message && <p className="mt-2 text-xs italic text-ink-mist">«{offer.message}»</p>}
 
       {offer.status === "pending" && (
         <div className="mt-3 flex gap-2">
           {isReceiver && (
             <>
-              <button onClick={onAccept} className="flex-1 rounded-xl bg-emerald-500 py-2 text-xs font-bold text-white active:scale-95">
+              <button onClick={onAccept} className="flex-1 rounded-xl bg-accent-green py-2 text-xs font-bold text-bg-base active:scale-95">
                 Принять
               </button>
               <button onClick={onReject} className="flex-1 rounded-xl bg-red-500/80 py-2 text-xs font-bold text-white active:scale-95">
@@ -129,7 +131,7 @@ function TradeCard({
             </>
           )}
           {isSender && (
-            <button onClick={onCancel} className="flex-1 rounded-xl bg-white/5 py-2 text-xs font-bold text-slate-300 active:scale-95">
+            <button onClick={onCancel} className="flex-1 rounded-xl bg-white/5 py-2 text-xs font-bold text-ink-mist active:scale-95">
               Отменить предложение
             </button>
           )}
@@ -142,7 +144,7 @@ function TradeCard({
 function MiniCardRow({ cards, label, coins }: { cards: TradeOffer["offered_cards"]; label: string; coins: number }) {
   return (
     <div className="flex-1">
-      <p className="mb-1 text-[10px] text-slate-500">{label}</p>
+      <p className="mb-1 text-[10px] text-ink-mist-dim">{label}</p>
       <div className="flex -space-x-2">
         {cards.slice(0, 3).map((c) => (
           <img
@@ -152,9 +154,14 @@ function MiniCardRow({ cards, label, coins }: { cards: TradeOffer["offered_cards
             className="h-10 w-10 rounded-lg border-2 border-bg-surface object-cover"
           />
         ))}
-        {cards.length === 0 && coins === 0 && <span className="text-xs text-slate-600">—</span>}
+        {cards.length === 0 && coins === 0 && <span className="text-xs text-ink-mist-dim">—</span>}
       </div>
-      {coins > 0 && <p className="mt-1 text-[11px] font-semibold text-amber-300">+🪙{coins}</p>}
+      {coins > 0 && (
+        <p className="mt-1 flex items-center gap-0.5 font-mono text-[11px] font-semibold text-accent-lime">
+          +{coins}
+          <IconCoin size={10} />
+        </p>
+      )}
     </div>
   );
 }

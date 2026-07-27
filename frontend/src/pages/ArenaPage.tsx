@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import EmptyState from "@/components/common/EmptyState";
+import { IconBall, IconCoin, IconPlus, IconShirt, IconTrophy } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
 import { fetchActiveLineup, setActiveLineup, setLineupTactic } from "@/api/lineups";
@@ -88,7 +89,7 @@ export default function ArenaPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="font-display text-2xl font-bold text-slate-100">⚽ Card Arena</h1>
+      <h1 className="font-display text-xl font-bold text-ink-chalk">Card Arena</h1>
 
       {stats && (
         <div className="grid grid-cols-3 gap-2 text-center">
@@ -98,10 +99,12 @@ export default function ArenaPage() {
         </div>
       )}
 
-      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+      <section className="rounded-2xl bg-bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
-          <p className="font-display text-base font-bold text-slate-100">Состав 4-3-3</p>
-          {lineup?.is_complete && <span className="text-sm font-bold text-amber-300">Сила: {lineup.team_strength}</span>}
+          <p className="font-display text-base font-bold text-ink-chalk">Состав 4-3-3</p>
+          {lineup?.is_complete && (
+            <span className="font-mono text-sm font-bold text-accent-cyan">Сила: {lineup.team_strength}</span>
+          )}
         </div>
         <div className="grid grid-cols-3 gap-2">
           {lineup?.slots.map((slot) => {
@@ -114,14 +117,14 @@ export default function ArenaPage() {
               >
                 {slot.card ? (
                   <>
-                    <span className="text-lg">👕</span>
-                    <span className="truncate text-[10px] font-semibold text-slate-200">{slot.card.player.display_name}</span>
-                    <span className="text-[9px] text-amber-300">{slot.card.player.rating}</span>
+                    <IconShirt size={18} className="text-accent-cyan" />
+                    <span className="truncate text-[10px] font-semibold text-ink-chalk">{slot.card.player.display_name}</span>
+                    <span className="font-mono text-[9px] text-accent-lime">{slot.card.player.rating}</span>
                   </>
                 ) : (
                   <>
-                    <span className="text-lg text-slate-600">➕</span>
-                    <span className="text-[9px] text-slate-500">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
+                    <IconPlus size={18} className="text-ink-mist-dim" />
+                    <span className="text-[9px] text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
                   </>
                 )}
               </button>
@@ -130,8 +133,8 @@ export default function ArenaPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-3 font-display text-sm font-bold text-slate-100">Тактическая схема</p>
+      <section className="rounded-2xl bg-bg-surface p-4">
+        <p className="mb-3 font-display text-sm font-bold text-ink-chalk">Тактическая схема</p>
         <div className="grid grid-cols-3 gap-2">
           {TACTICS.map((t) => (
             <button
@@ -139,11 +142,11 @@ export default function ArenaPage() {
               onClick={() => setTacticMutation.mutate(t.value)}
               disabled={setTacticMutation.isPending}
               className={`rounded-xl px-2 py-2 text-center disabled:opacity-60 ${
-                lineup?.tactic === t.value ? "bg-accent text-bg-base" : "bg-white/5 text-slate-300"
+                lineup?.tactic === t.value ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
               }`}
             >
               <p className="text-xs font-bold">{t.label}</p>
-              <p className={`mt-0.5 text-[10px] ${lineup?.tactic === t.value ? "text-bg-base/70" : "text-slate-500"}`}>
+              <p className={`mt-0.5 text-[10px] ${lineup?.tactic === t.value ? "text-bg-base/70" : "text-ink-mist-dim"}`}>
                 {t.description}
               </p>
             </button>
@@ -159,7 +162,7 @@ export default function ArenaPage() {
             <button
               key={d.value}
               onClick={() => setDifficulty(d.value)}
-              className={`flex-1 rounded-xl py-2 text-xs font-semibold ${difficulty === d.value ? "bg-accent text-bg-base" : "bg-white/5 text-slate-300"}`}
+              className={`flex-1 rounded-xl py-2 text-xs font-semibold ${difficulty === d.value ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"}`}
             >
               {d.label}
             </button>
@@ -168,7 +171,7 @@ export default function ArenaPage() {
         <button
           onClick={() => playMutation.mutate()}
           disabled={!lineup?.is_complete || playMutation.isPending || simulating}
-          className="rounded-2xl bg-emerald-500 py-3.5 font-display text-base font-bold text-white active:scale-95 disabled:opacity-40"
+          className="rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-40"
         >
           {playMutation.isPending || simulating ? "Идёт матч..." : "Играть матч"}
         </button>
@@ -186,15 +189,15 @@ export default function ArenaPage() {
       )}
 
       <section>
-        <p className="mb-2 font-display text-base font-bold text-slate-100">История матчей</p>
+        <p className="mb-2 font-display text-base font-bold text-ink-chalk">История матчей</p>
         {!history?.length ? (
-          <EmptyState icon="⚽" title="Матчей ещё не было" />
+          <EmptyState icon={IconBall} title="Матчей ещё не было" />
         ) : (
           <div className="flex flex-col gap-2">
             {history.slice(0, 5).map((m) => (
               <div key={m.id} className="flex items-center justify-between rounded-xl bg-bg-surface px-3 py-2 text-sm">
-                <span className="text-slate-300">vs {m.opponent_name}</span>
-                <span className={`font-bold ${m.result === "win" ? "text-emerald-400" : m.result === "loss" ? "text-red-400" : "text-slate-400"}`}>
+                <span className="text-ink-mist">vs {m.opponent_name}</span>
+                <span className={`font-mono font-bold ${m.result === "win" ? "text-accent-green" : m.result === "loss" ? "text-red-400" : "text-ink-mist"}`}>
                   {m.user_score}:{m.opponent_score}
                 </span>
               </div>
@@ -204,12 +207,15 @@ export default function ArenaPage() {
       </section>
 
       {!!leaderboard?.length && (
-        <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-          <p className="mb-2 font-display text-sm font-bold text-slate-200">🏆 Турнирная таблица Arena</p>
+        <section className="rounded-2xl bg-bg-surface p-4">
+          <p className="mb-2 flex items-center gap-1.5 font-display text-sm font-bold text-ink-chalk">
+            <IconTrophy size={14} className="text-accent-lime" />
+            Турнирная таблица Arena
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="text-slate-500">
+                <tr className="text-ink-mist-dim">
                   <th className="py-1 text-left font-normal">#</th>
                   <th className="py-1 text-left font-normal">Игрок</th>
                   <th className="py-1 text-center font-normal">В</th>
@@ -222,15 +228,15 @@ export default function ArenaPage() {
               <tbody>
                 {leaderboard.slice(0, 10).map((entry, i) => (
                   <tr key={entry.user_id} className="border-t border-white/5">
-                    <td className="py-1.5 text-slate-500">{i + 1}</td>
-                    <td className="max-w-[110px] truncate py-1.5 text-slate-200">{entry.display_name}</td>
-                    <td className="py-1.5 text-center text-emerald-400">{entry.matches_won}</td>
-                    <td className="py-1.5 text-center text-slate-400">{entry.matches_drawn}</td>
-                    <td className="py-1.5 text-center text-red-400">{entry.matches_lost}</td>
-                    <td className="py-1.5 text-center text-slate-300">
+                    <td className="py-1.5 font-mono text-ink-mist-dim">{i + 1}</td>
+                    <td className="max-w-[110px] truncate py-1.5 text-ink-chalk">{entry.display_name}</td>
+                    <td className="py-1.5 text-center font-mono text-accent-green">{entry.matches_won}</td>
+                    <td className="py-1.5 text-center font-mono text-ink-mist">{entry.matches_drawn}</td>
+                    <td className="py-1.5 text-center font-mono text-red-400">{entry.matches_lost}</td>
+                    <td className="py-1.5 text-center font-mono text-ink-mist">
                       {entry.goal_difference > 0 ? `+${entry.goal_difference}` : entry.goal_difference}
                     </td>
-                    <td className="py-1.5 text-center font-bold text-cyan-300">{entry.points}</td>
+                    <td className="py-1.5 text-center font-mono font-bold text-accent-cyan">{entry.points}</td>
                   </tr>
                 ))}
               </tbody>
@@ -256,8 +262,8 @@ export default function ArenaPage() {
 function MiniStat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl bg-bg-surface py-2">
-      <p className="font-display text-sm font-bold text-slate-100">{value}</p>
-      <p className="text-[10px] text-slate-500">{label}</p>
+      <p className="font-mono text-sm font-bold text-ink-chalk">{value}</p>
+      <p className="text-[10px] text-ink-mist-dim">{label}</p>
     </div>
   );
 }
@@ -304,35 +310,36 @@ function MatchSimulation({ match, onFinished }: { match: Match; onFinished: () =
   const currentMinute = revealed.length ? revealed[revealed.length - 1].minute : 0;
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-bg-surface p-4">
+    <section className="rounded-2xl bg-bg-surface p-4">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-slate-500">{finished ? "Матч завершён" : `${currentMinute}' · матч идёт...`}</span>
+        <span className="font-mono text-xs text-ink-mist-dim">{finished ? "Матч завершён" : `${currentMinute}' · матч идёт...`}</span>
         {!finished && (
-          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-slate-200">
+          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-ink-chalk">
             Пропустить
           </button>
         )}
       </div>
 
-      <p className="mt-1 text-center font-display text-lg font-bold text-slate-100">
+      <p className="mt-1 text-center font-mono text-lg font-bold text-ink-chalk">
         {liveUserScore} : {liveOpponentScore}
       </p>
-      <p className="text-center text-sm text-slate-400">vs {match.opponent_name}</p>
+      <p className="text-center text-sm text-ink-mist">vs {match.opponent_name}</p>
 
       {finished && (
         <p
-          className={`mt-1 text-center font-display text-sm font-bold ${
-            match.result === "win" ? "text-emerald-400" : match.result === "loss" ? "text-red-400" : "text-slate-400"
+          className={`mt-1 flex items-center justify-center gap-1 text-center font-display text-sm font-bold ${
+            match.result === "win" ? "text-accent-green" : match.result === "loss" ? "text-red-400" : "text-ink-mist"
           }`}
         >
-          {match.result === "win" ? "Победа!" : match.result === "loss" ? "Поражение" : "Ничья"} · +{match.reward_coins} 🪙
+          {match.result === "win" ? "Победа!" : match.result === "loss" ? "Поражение" : "Ничья"} · +{match.reward_coins}
+          <IconCoin size={13} />
         </p>
       )}
 
       <div ref={logRef} className="mt-3 max-h-48 space-y-1 overflow-y-auto text-xs">
         {revealed.map((e, i) => (
-          <p key={i} className={e.team === "user" ? "text-emerald-300" : "text-slate-400"}>
-            <span className="text-slate-500">{e.minute}&apos;</span> {e.description}
+          <p key={i} className={e.team === "user" ? "text-accent-green" : "text-ink-mist"}>
+            <span className="font-mono text-ink-mist-dim">{e.minute}&apos;</span> {e.description}
           </p>
         ))}
       </div>

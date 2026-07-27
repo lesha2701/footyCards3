@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { claimTask, fetchTasks } from "@/api/tasks";
 import EmptyState from "@/components/common/EmptyState";
+import { IconTarget, IconTrophy } from "@/components/icons";
 import { ApiRequestError } from "@/lib/api";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -65,7 +66,7 @@ export default function TasksPage() {
       {tab === "regular" ? (
         <section className="flex flex-col gap-3">
           {!taskList?.regular.length ? (
-            <EmptyState icon="🎯" title="Заданий пока нет" description="Загляните позже" />
+            <EmptyState icon={IconTarget} title="Заданий пока нет" description="Загляните позже" />
           ) : (
             taskList.regular.map((task) => (
               <TaskCard
@@ -86,7 +87,7 @@ export default function TasksPage() {
 
           {!premiumTasks.length ? (
             <EmptyState
-              icon="⭐"
+              icon={IconTrophy}
               title={premiumFilter === "active" ? "Активных заданий пока нет" : "Выполненных заданий пока нет"}
               description="Загляните позже"
             />

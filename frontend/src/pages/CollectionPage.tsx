@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
+import { IconCoin, IconCollection, IconLock, IconTag } from "@/components/icons";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import PlayerCard from "@/components/cards/PlayerCard";
 import {
@@ -85,24 +86,24 @@ export default function CollectionPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-bold text-slate-100">Коллекция</h1>
+        <h1 className="font-display text-xl font-bold text-ink-chalk">Коллекция</h1>
         <button
           onClick={() => { setSelectMode((v) => !v); setSelected([]); }}
-          className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-300"
+          className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-ink-mist"
         >
           {selectMode ? "Отмена" : "Выбрать"}
         </button>
       </div>
 
       {stats && (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-bg-surface px-3 py-2">
-            <p className="text-[11px] text-slate-400">Уникальных</p>
-            <p className="font-display text-lg font-bold text-slate-100">{stats.unique_players}</p>
+        <div className="grid grid-cols-2 gap-x-3 rounded-2xl bg-bg-surface p-4">
+          <div>
+            <p className="font-display text-2xl font-bold text-ink-chalk">{stats.unique_players}</p>
+            <p className="mt-0.5 text-[11px] text-ink-mist">Уникальных</p>
           </div>
-          <div className="rounded-xl bg-bg-surface px-3 py-2">
-            <p className="text-[11px] text-slate-400">Всего карточек</p>
-            <p className="font-display text-lg font-bold text-slate-100">{stats.total_cards}</p>
+          <div>
+            <p className="font-display text-2xl font-bold text-ink-chalk">{stats.total_cards}</p>
+            <p className="mt-0.5 text-[11px] text-ink-mist">Всего карточек</p>
           </div>
         </div>
       )}
@@ -111,7 +112,7 @@ export default function CollectionPage() {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Поиск по имени..."
-        className="rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none"
+        className="rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk placeholder:text-ink-mist-dim outline-none"
       />
 
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -124,7 +125,7 @@ export default function CollectionPage() {
       <select
         value={sortBy}
         onChange={(e) => setSortBy(e.target.value as CollectionFilters["sort_by"])}
-        className="rounded-xl bg-bg-surface px-3 py-2 text-sm text-slate-200 outline-none"
+        className="rounded-xl bg-bg-surface px-3 py-2 text-sm text-ink-chalk outline-none"
       >
         <option value="acquired_at">По дате получения</option>
         <option value="rating">По рейтингу</option>
@@ -135,7 +136,7 @@ export default function CollectionPage() {
         <select
           value={collectionId ?? ""}
           onChange={(e) => setCollectionId(e.target.value ? Number(e.target.value) : undefined)}
-          className="rounded-xl bg-bg-surface px-3 py-2 text-sm text-slate-200 outline-none"
+          className="rounded-xl bg-bg-surface px-3 py-2 text-sm text-ink-chalk outline-none"
         >
           <option value="">Все коллекции</option>
           {collections.map((c) => (
@@ -145,7 +146,7 @@ export default function CollectionPage() {
       )}
 
       {isLoading && <CardGridSkeleton count={9} />}
-      {!isLoading && !page?.items.length && <EmptyState icon="🃏" title="Карточек не найдено" description="Открой паки, чтобы собрать коллекцию" />}
+      {!isLoading && !page?.items.length && <EmptyState icon={IconCollection} title="Карточек не найдено" description="Открой паки, чтобы собрать коллекцию" />}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {page?.items.map((card) => (
@@ -154,7 +155,7 @@ export default function CollectionPage() {
             player={card.player}
             badge={
               card.duplicate_count && card.duplicate_count > 1 ? (
-                <span className="rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] font-bold text-white">×{card.duplicate_count}</span>
+                <span className="rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">×{card.duplicate_count}</span>
               ) : undefined
             }
             selected={selectMode && selected.includes(card.id)}
@@ -165,7 +166,11 @@ export default function CollectionPage() {
 
       {selectMode && selected.length > 0 && (
         <div className="safe-bottom fixed inset-x-0 bottom-16 z-30 mx-auto flex max-w-lg items-center justify-between rounded-2xl border border-white/10 bg-bg-surface px-4 py-3 shadow-xl">
-          <span className="text-sm text-slate-300">Выбрано: {selected.length} · 🪙 {totalSellValue}</span>
+          <span className="flex items-center gap-1.5 text-sm text-ink-mist">
+            Выбрано: {selected.length} ·
+            <IconCoin size={13} className="text-accent-lime" />
+            <span className="font-mono text-accent-lime">{totalSellValue}</span>
+          </span>
           <button
             onClick={() => setConfirmSell({ ids: selected, lastCopy: false })}
             className="rounded-full bg-red-500 px-4 py-2 text-xs font-bold text-white active:scale-95"
@@ -206,7 +211,7 @@ function FilterChip({ active, label, onClick }: { active: boolean; label: string
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${active ? "bg-accent text-bg-base" : "bg-white/5 text-slate-300"}`}
+      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${active ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"}`}
     >
       {label}
     </button>
@@ -235,40 +240,46 @@ function CardDetailModal({
           alt={player.display_name}
           className="aspect-square w-full rounded-2xl object-cover"
         />
-        <p className="mt-3 font-display text-lg font-bold text-slate-100">{player.display_name}</p>
-        <p className="text-sm text-slate-400">{POSITION_LABELS[player.position]} · {player.club}</p>
+        <p className="mt-3 font-display text-lg font-bold text-ink-chalk">{player.display_name}</p>
+        <p className="text-sm text-ink-mist">{POSITION_LABELS[player.position]} · {player.club}</p>
         {player.collection_name && (
-          <p className="mt-1 text-xs font-semibold text-amber-400">🏷️ Коллекция: {player.collection_name}</p>
+          <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-accent-lime">
+            <IconTag size={12} />
+            Коллекция: {player.collection_name}
+          </p>
         )}
         <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <span className="text-slate-400">Рейтинг: <b className="text-amber-300">{player.rating}</b></span>
-          <span className="text-slate-400">Редкость: <b>{RARITY_LABELS[player.rarity]}</b></span>
-          <span className="text-slate-400">Страна: <b>{player.country}</b></span>
-          <span className="text-slate-400">№ {card.serial_number}</span>
+          <span className="text-ink-mist">Рейтинг: <b className="font-mono text-accent-cyan">{player.rating}</b></span>
+          <span className="text-ink-mist">Редкость: <b className="text-ink-chalk">{RARITY_LABELS[player.rarity]}</b></span>
+          <span className="text-ink-mist">Страна: <b className="text-ink-chalk">{player.country}</b></span>
+          <span className="text-ink-mist">№ {card.serial_number}</span>
         </div>
         {(card.is_locked_by_admin || card.is_locked_in_trade || card.is_in_lineup) && (
-          <p className="mt-2 text-xs text-amber-400">
-            🔒 Заблокирована {card.is_in_lineup ? "(в составе)" : card.is_locked_in_trade ? "(в обмене)" : "(администратором)"}
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-mist">
+            <IconLock size={13} />
+            Заблокирована {card.is_in_lineup ? "(в составе)" : card.is_locked_in_trade ? "(в обмене)" : "(администратором)"}
           </p>
         )}
         <label className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2">
-          <span className="text-xs text-slate-300">Скрыть от предложений обмена</span>
+          <span className="text-xs text-ink-mist">Скрыть от предложений обмена</span>
           <input
             type="checkbox"
             checked={card.hidden_from_trade}
             disabled={hiddenPending}
             onChange={(e) => onToggleHidden(e.target.checked)}
-            className="h-5 w-5 shrink-0 accent-accent"
+            className="h-5 w-5 shrink-0 accent-accent-lime"
           />
         </label>
         <div className="mt-4 flex gap-2">
-          <button onClick={onClose} className="flex-1 rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-slate-300">Закрыть</button>
+          <button onClick={onClose} className="flex-1 rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist">Закрыть</button>
           <button
             onClick={onSell}
             disabled={card.is_locked_by_admin || card.is_locked_in_trade || card.is_in_lineup}
-            className="flex-1 rounded-2xl bg-red-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-red-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
           >
-            Продать за 🪙{player.quick_sell_price}
+            Продать за
+            <IconCoin size={13} />
+            {player.quick_sell_price}
           </button>
         </div>
       </div>

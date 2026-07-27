@@ -64,7 +64,7 @@ export default function HelpModal({ open, onClose }: Props) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <p className="font-display text-lg font-bold text-slate-100">Как играть в FootyCards</p>
+              <p className="font-display text-lg font-bold text-slate-100">Как играть в VICTOR FC</p>
               <button onClick={onClose} className="rounded-full bg-white/5 px-3 py-1.5 text-sm text-slate-300">
                 Закрыть
               </button>

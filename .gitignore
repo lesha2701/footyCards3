@@ -24,4 +24,6 @@ Thumbs.db
 postgres_data/
 .idea/
 .vscode/
-.claude/settings.local.json
+.claude/
+.agents/
+skills-lock.json

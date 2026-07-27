@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { claimHangmanReward, guessHangmanLetter, startHangman } from "@/api/games";
+import { IconCoin, IconFlag, IconTrophy } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -89,8 +90,8 @@ export default function HangmanGamePage() {
   if (phase === "idle") {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="font-display text-2xl font-bold text-slate-100">🪢 Футбольная виселица</h1>
-        <p className="text-sm text-slate-400">
+        <h1 className="font-display text-xl font-bold text-ink-chalk">Футбольная виселица</h1>
+        <p className="text-sm text-ink-mist">
           Угадай загаданного футболиста или футбольное понятие по буквам. Ошибёшься 6 раз — судья покажет красную,
           и раунд проигран.
         </p>
@@ -99,7 +100,7 @@ export default function HangmanGamePage() {
         <button
           onClick={() => startMutation.mutate()}
           disabled={startMutation.isPending}
-          className="rounded-2xl bg-accent py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
+          className="rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
         >
           {startMutation.isPending ? "Загрузка..." : "Начать игру"}
         </button>
@@ -111,31 +112,34 @@ export default function HangmanGamePage() {
     const isWin = phase === "won";
     return (
       <div className="flex flex-col items-center gap-5 py-6 text-center">
-        <p className="text-5xl">{isWin ? "🏆" : "🟥"}</p>
-        <p className="font-display text-2xl font-bold text-slate-100">{isWin ? "Угадал!" : "Не угадал"}</p>
-        <p className="text-sm text-slate-400">
-          Загаданное слово: <span className="font-bold text-slate-200">{revealedWord}</span>
+        {isWin ? <IconTrophy size={40} className="text-accent-lime" /> : <IconFlag size={40} className="text-red-500" />}
+        <p className="font-display text-2xl font-bold text-ink-chalk">{isWin ? "Угадал!" : "Не угадал"}</p>
+        <p className="text-sm text-ink-mist">
+          Загаданное слово: <span className="font-bold text-ink-chalk">{revealedWord}</span>
         </p>
 
         {!claimResult ? (
           <button
             onClick={() => claimMutation.mutate()}
             disabled={claimMutation.isPending || !isWin}
-            className="rounded-2xl bg-accent px-6 py-3 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
+            className="rounded-2xl bg-floodlight px-6 py-3 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
           >
             {claimMutation.isPending ? "Начисление..." : isWin ? "Забрать награду" : "Награды нет"}
           </button>
         ) : (
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-3">
-            <p className="font-display text-lg font-bold text-emerald-400">+{claimResult.reward_coins} 🪙</p>
+          <div className="rounded-2xl bg-accent-green/10 px-5 py-3">
+            <p className="flex items-center justify-center gap-1.5 font-mono text-lg font-bold text-accent-green">
+              +{claimResult.reward_coins}
+              <IconCoin size={16} />
+            </p>
           </div>
         )}
 
         <div className="flex gap-3">
-          <button onClick={() => setPhase("idle")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-slate-300">
+          <button onClick={() => setPhase("idle")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
             Ещё раз
           </button>
-          <button onClick={() => navigate("/play")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-slate-300">
+          <button onClick={() => navigate("/play")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
             Назад
           </button>
         </div>
@@ -145,7 +149,7 @@ export default function HangmanGamePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-center text-xs font-semibold text-slate-400">{CATEGORY_LABEL[category] ?? "Загадано слово"}</p>
+      <p className="text-center text-xs font-semibold text-ink-mist">{CATEGORY_LABEL[category] ?? "Загадано слово"}</p>
 
       <Gallows wrongCount={wrongLetters.length} maxWrong={maxWrong} />
 
@@ -156,7 +160,7 @@ export default function HangmanGamePage() {
           ) : (
             <span
               key={i}
-              className="flex h-9 w-7 items-center justify-center rounded-md border-b-2 border-emerald-500 bg-white/5 font-display text-base font-bold text-slate-100"
+              className="flex h-9 w-7 items-center justify-center rounded-md border-b-2 border-accent-green bg-white/5 font-display text-base font-bold text-ink-chalk"
             >
               {ch === "_" ? "" : ch}
             </span>
@@ -164,7 +168,7 @@ export default function HangmanGamePage() {
         )}
       </div>
 
-      <p className="text-center text-xs text-slate-500">
+      <p className="text-center font-mono text-xs text-ink-mist-dim">
         Ошибки: {wrongLetters.length}/{maxWrong}
       </p>
 
@@ -183,8 +187,8 @@ export default function HangmanGamePage() {
                     isGuessed
                       ? isWrong
                         ? "bg-red-500/20 text-red-400"
-                        : "bg-emerald-500/20 text-emerald-400"
-                      : "bg-bg-surface text-slate-200"
+                        : "bg-accent-green/20 text-accent-green"
+                      : "bg-bg-surface text-ink-chalk"
                   }`}
                 >
                   {letter}
@@ -204,8 +208,8 @@ function Gallows({ wrongCount, maxWrong }: { wrongCount: number; maxWrong: numbe
   const partsToShow = Math.min(wrongCount, MAX_BODY_PARTS, maxWrong);
 
   return (
-    <div className="relative flex h-40 items-end justify-center overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-800 to-emerald-900">
-      <div className="absolute inset-x-0 bottom-0 h-6 bg-emerald-950/40" />
+    <div className="relative flex h-40 items-end justify-center overflow-hidden rounded-2xl bg-bg-surface">
+      <div className="absolute inset-x-0 bottom-0 h-6 bg-black/20" />
       <div className="absolute bottom-6 left-1/2 h-1 w-28 -translate-x-1/2 rounded-full border border-white/30" />
 
       <svg viewBox="0 0 120 100" className="relative h-36 w-32">
@@ -216,7 +220,7 @@ function Gallows({ wrongCount, maxWrong }: { wrongCount: number; maxWrong: numbe
         <line x1="75" y1="10" x2="75" y2="24" stroke="#d1d5db" strokeWidth="2" />
 
         {partsToShow >= 1 && <circle cx="75" cy="34" r="7" fill="white" stroke="#111827" strokeWidth="1" />}
-        {partsToShow >= 2 && <rect x="68" y="41" width="14" height="20" rx="3" fill="#10b981" />}
+        {partsToShow >= 2 && <rect x="68" y="41" width="14" height="20" rx="3" fill="#3ed17e" />}
         {partsToShow >= 3 && <line x1="68" y1="45" x2="58" y2="58" stroke="#facc15" strokeWidth="3" strokeLinecap="round" />}
         {partsToShow >= 4 && <line x1="82" y1="45" x2="92" y2="58" stroke="#facc15" strokeWidth="3" strokeLinecap="round" />}
         {partsToShow >= 5 && <rect x="69" y="61" width="12" height="10" fill="#1e293b" />}

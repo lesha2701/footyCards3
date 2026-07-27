@@ -10,7 +10,7 @@ router = Router(name="user")
 settings = get_bot_settings()
 
 HELP_TEXT = (
-    "⚽ <b>FootyCards</b> — коллекционируй футболистов, открывай паки и играй!\n\n"
+    "⚽ <b>VICTOR FC</b> — коллекционируй футболистов, открывай паки и играй!\n\n"
     "<b>Команды:</b>\n"
     "/start — открыть игру\n"
     "/profile — показать свой профиль\n"
@@ -25,7 +25,7 @@ async def cmd_start(message: Message) -> None:
 
     text = (
         f"Привет, {message.from_user.first_name}! 👋\n\n"
-        "Добро пожаловать в <b>FootyCards</b> — собирай карточки футболистов, "
+        "Добро пожаловать в <b>VICTOR FC</b> — собирай карточки футболистов, "
         "открывай паки, играй в мини-игры и обменивайся карточками с друзьями.\n\n"
         "Нажми кнопку ниже, чтобы начать 👇"
     )
@@ -70,5 +70,5 @@ async def cmd_profile(message: Message) -> None:
 async def cmd_invite(message: Message) -> None:
     deep_link = f"https://t.me/{settings.telegram_bot_username}?start=ref_{message.from_user.id}"
     await message.answer(
-        f"Пригласи друзей в FootyCards!\n\n🔗 {deep_link}", reply_markup=invite_keyboard(deep_link)
+        f"Пригласи друзей в VICTOR FC!\n\n🔗 {deep_link}", reply_markup=invite_keyboard(deep_link)
     )

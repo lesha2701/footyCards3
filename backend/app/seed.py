@@ -311,8 +311,8 @@ async def seed_tasks(db, packs: dict[str, Pack]) -> None:
         db.add(TaskDefinition(**spec, category=TaskCategory.regular, sort_order=i))
 
     premium_specs = [
-        ("subscribe_news", "Подпишись на новости", "Подпишитесь на канал с новостями FootyCards", "@footycards_news", "basic"),
-        ("subscribe_community", "Вступи в сообщество", "Подпишитесь на канал сообщества FootyCards", "@footycards_community", "premium"),
+        ("subscribe_news", "Подпишись на новости", "Подпишитесь на канал с новостями VICTOR FC", "@footycards_news", "basic"),
+        ("subscribe_community", "Вступи в сообщество", "Подпишитесь на канал сообщества VICTOR FC", "@footycards_community", "premium"),
     ]
     for i, (code, name, description, channel, pack_slug) in enumerate(premium_specs):
         existing = (await db.execute(select(TaskDefinition).where(TaskDefinition.code == code))).scalar_one_or_none()

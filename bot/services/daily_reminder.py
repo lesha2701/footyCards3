@@ -30,7 +30,7 @@ async def run_daily_reward_reminder(bot: Bot) -> None:
                     try:
                         await bot.send_message(
                             user["telegram_id"],
-                            "🎁 Твоя ежедневная награда уже ждёт тебя в приложении FootyCards!",
+                            "🎁 Твоя ежедневная награда уже ждёт тебя в приложении VICTOR FC!",
                         )
                     except TelegramAPIError as exc:
                         logger.warning("Failed to remind user %s: %s", user["telegram_id"], exc)

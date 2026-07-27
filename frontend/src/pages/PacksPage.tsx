@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import EmptyState from "@/components/common/EmptyState";
+import { IconCoin, IconPack } from "@/components/icons";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import { fetchPacks } from "@/api/packs";
 import { staticUrl } from "@/lib/api";
@@ -16,9 +17,9 @@ export default function PacksPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="font-display text-2xl font-bold text-slate-100">Паки</h1>
+      <h1 className="font-display text-xl font-bold text-ink-chalk">Паки</h1>
       {isLoading && <CardGridSkeleton count={3} />}
-      {!isLoading && !packs?.length && <EmptyState icon="📦" title="Паков пока нет" description="Загляни позже" />}
+      {!isLoading && !packs?.length && <EmptyState icon={IconPack} title="Паков пока нет" description="Загляни позже" />}
       <div className="grid grid-cols-1 gap-4">
         {packs?.map((pack) => (
           <PackCard key={pack.id} pack={pack} canAfford={balance >= pack.price} onOpen={() => navigate(`/packs/${pack.id}/open`)} />
@@ -32,27 +33,30 @@ function PackCard({ pack, canAfford, onOpen }: { pack: Pack; canAfford: boolean;
   const disabled = !pack.is_available_now || (pack.purchase_limit_per_user !== null && pack.user_purchase_count >= pack.purchase_limit_per_user);
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-white/10 bg-bg-surface">
+    <div className="overflow-hidden rounded-3xl bg-bg-surface">
       <div className="flex">
         <img src={staticUrl(pack.image_path ?? undefined)} alt={pack.name} className="h-36 w-32 object-cover" />
         <div className="flex flex-1 flex-col justify-between p-3">
           <div>
-            <p className="font-display text-base font-bold text-slate-100">{pack.name}</p>
-            <p className="mt-1 text-xs text-slate-400">{pack.description}</p>
+            <p className="font-display text-base font-bold text-ink-chalk">{pack.name}</p>
+            <p className="mt-1 text-xs text-ink-mist">{pack.description}</p>
             <div className="mt-2 flex flex-wrap gap-1">
               {pack.rarity_probabilities.map((rp) => (
-                <span key={rp.rarity} className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-slate-300">
+                <span key={rp.rarity} className="rounded-full bg-bg-raised px-2 py-0.5 font-mono text-[10px] text-ink-mist">
                   {RARITY_LABELS[rp.rarity]} {Math.round(rp.probability * 100)}%
                 </span>
               ))}
             </div>
           </div>
           <div className="mt-2 flex items-center justify-between">
-            <span className="font-display text-sm font-bold text-amber-300">🪙 {pack.price}</span>
+            <span className="flex items-center gap-1.5 font-mono text-sm font-semibold text-accent-lime">
+              <IconCoin size={15} />
+              {pack.price}
+            </span>
             <button
               onClick={onOpen}
               disabled={disabled || !canAfford}
-              className="rounded-full bg-accent px-4 py-2 text-xs font-bold text-bg-base disabled:opacity-40 active:scale-95"
+              className="rounded-full bg-floodlight px-4 py-2 text-xs font-bold text-bg-base disabled:opacity-40 disabled:grayscale active:scale-95"
             >
               {disabled ? "Недоступно" : canAfford ? "Открыть" : "Не хватает монет"}
             </button>

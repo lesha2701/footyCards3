@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 
 import EmptyState from "@/components/common/EmptyState";
+import { IconCollection } from "@/components/icons";
 import PlayerCard from "@/components/cards/PlayerCard";
 import type { UserCard } from "@/types";
 
@@ -37,7 +38,7 @@ export default function CardPickerModal({ open, title, cards, disabledCardIds = 
               <button onClick={onClose} className="rounded-full bg-white/5 px-3 py-1.5 text-sm text-slate-300">Закрыть</button>
             </div>
             {cards.length === 0 ? (
-              <EmptyState icon="🃏" title="Нет подходящих карточек" description="Открой паки, чтобы получить игроков этой позиции" />
+              <EmptyState icon={IconCollection} title="Нет подходящих карточек" description="Открой паки, чтобы получить игроков этой позиции" />
             ) : (
               <div className="grid grid-cols-3 gap-3">
                 {cards.map((card) => (

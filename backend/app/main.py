@@ -49,13 +49,15 @@ for rarity in ("common", "rare", "epic", "legendary", "placeholder", "packs"):
         parents=True, exist_ok=True
     )
 
+_docs_enabled = settings.environment != "production"
+
 app = FastAPI(
-    title="FootyCards API",
+    title="VICTOR FC API",
     version="1.0.0",
     description="Telegram Mini App backend for collecting football cards.",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    docs_url="/api/docs" if _docs_enabled else None,
+    redoc_url="/api/redoc" if _docs_enabled else None,
+    openapi_url="/api/openapi.json" if _docs_enabled else None,
 )
 
 register_exception_handlers(app)

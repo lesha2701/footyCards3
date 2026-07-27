@@ -7,9 +7,32 @@ import { fetchPacks } from "@/api/packs";
 import { fetchMyProfile } from "@/api/profile";
 import { fetchTasks } from "@/api/tasks";
 import { Skeleton } from "@/components/common/Skeleton";
-import { staticUrl } from "@/lib/api";
+import {
+  IconChevronRight,
+  IconClock,
+  IconCoin,
+  IconCollection,
+  IconGift,
+  IconPack,
+  IconPlay,
+  IconSwap,
+  IconTarget,
+  type IconProps,
+} from "@/components/icons";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
+import type { Pack, Rarity } from "@/types";
+
+const RARITY_SWATCH: Record<Rarity, string> = {
+  common: "bg-rarity-common",
+  rare: "bg-rarity-rare",
+  epic: "bg-rarity-epic",
+  legendary: "bg-rarity-legendary",
+};
+
+function featuredRarity(pack: Pack): Rarity {
+  return pack.guaranteed_min_rarity ?? "common";
+}
 
 export default function HomePage() {
   const user = useAuthStore((s) => s.user);
@@ -43,111 +66,110 @@ export default function HomePage() {
   ).length;
 
   return (
-    <div className="flex flex-col gap-5">
-      <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-cyan-600/30 via-bg-surface to-purple-700/20 p-5">
-        <p className="text-sm text-slate-300">С возвращением,</p>
-        <p className="font-display text-2xl font-bold text-white">{user?.first_name ?? user?.username ?? "игрок"}!</p>
-        <div className="mt-4 flex items-center gap-4">
-          <div className="rounded-2xl bg-black/30 px-4 py-2">
-            <p className="text-[11px] text-slate-400">Баланс</p>
-            <p className="font-display text-xl font-bold text-amber-300">🪙 {user?.balance ?? 0}</p>
+    <div className="flex flex-col gap-6">
+      <section className="relative overflow-hidden rounded-3xl bg-bg-surface p-5">
+        <ChalkTexture />
+        <div className="relative flex items-center gap-3">
+          <img src="/brand/victor-fc-crest.jpg" alt="" className="h-9 w-9 rounded-full ring-1 ring-white/10" />
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-wider text-ink-mist">С возвращением</p>
+            <p className="font-display text-lg font-bold text-ink-chalk">{user?.first_name ?? user?.username ?? "игрок"}</p>
           </div>
-          <div className="rounded-2xl bg-black/30 px-4 py-2">
-            <p className="text-[11px] text-slate-400">Уровень</p>
-            <p className="font-display text-xl font-bold text-cyan-300">⭐ {user?.level ?? 1}</p>
+        </div>
+        <div className="relative mt-4 flex items-center gap-3">
+          <div className="rounded-2xl bg-bg-raised px-4 py-2.5">
+            <p className="text-[11px] text-ink-mist">Баланс</p>
+            <p className="mt-0.5 flex items-center gap-1.5 font-mono text-lg font-semibold text-accent-lime">
+              <IconCoin size={16} />
+              {user?.balance ?? 0}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-bg-raised px-4 py-2.5">
+            <p className="text-[11px] text-ink-mist">Уровень</p>
+            <p className="mt-0.5 font-mono text-lg font-semibold text-accent-cyan">{user?.level ?? 1}</p>
           </div>
         </div>
       </section>
 
-      {calendar && !calendar.already_claimed_today && (
-        <button
-          onClick={() => navigate("/profile")}
-          className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-3 text-left active:scale-[0.98]"
-        >
-          <div>
-            <p className="font-display text-sm font-bold text-white">🎁 Ежедневная награда готова!</p>
-            <p className="text-xs text-white/80">День {calendar.current_streak} — забери в профиле</p>
-          </div>
-          <span className="text-2xl">→</span>
-        </button>
-      )}
+      <div className="flex flex-col gap-3">
+        {calendar && !calendar.already_claimed_today && (
+          <NoticeCard
+            Icon={IconGift}
+            title="Ежедневная награда готова"
+            subtitle={`День ${calendar.current_streak} — забери в профиле`}
+            onClick={() => navigate("/profile")}
+          />
+        )}
 
-      <button
-        onClick={() => navigate("/tasks")}
-        className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-700 px-4 py-3 text-left active:scale-[0.98]"
-      >
-        <div>
-          <p className="font-display text-sm font-bold text-white">🎯 Задания</p>
-          <p className="text-xs text-white/80">
-            {claimableTaskCount > 0 ? `${claimableTaskCount} готово к получению!` : "Выполняй и получай награды"}
-          </p>
-        </div>
-        <span className="text-2xl">→</span>
-      </button>
-
-      {freePackStatus && (
-        <button
-          onClick={() => freePackStatus.available && claimFreePackMutation.mutate()}
-          disabled={!freePackStatus.available || claimFreePackMutation.isPending}
-          className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-3 text-left active:scale-[0.98] disabled:opacity-60"
-        >
-          <div>
-            <p className="font-display text-sm font-bold text-white">🎁 Бесплатный пак</p>
-            <p className="text-xs text-white/80">
-              {freePackStatus.available
+        {freePackStatus && (
+          <NoticeCard
+            Icon={IconGift}
+            title="Бесплатный пак"
+            subtitle={
+              freePackStatus.available
                 ? claimFreePackMutation.isPending
                   ? "Получаем..."
                   : "Готов к получению!"
-                : `Появится в ${new Date(freePackStatus.available_at!).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`}
-            </p>
-          </div>
-          <span className="text-2xl">{freePackStatus.available ? "→" : "⏳"}</span>
-        </button>
-      )}
-
-      <section className="grid grid-cols-3 gap-3">
-        <QuickAction icon="📦" label="Паки" onClick={() => navigate("/packs")} />
-        <QuickAction icon="🎮" label="Играть" onClick={() => navigate("/play")} />
-        <QuickAction icon="🗂️" label="Карточки" onClick={() => navigate("/collection")} />
-      </section>
+                : `Появится в ${new Date(freePackStatus.available_at!).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`
+            }
+            onClick={() => freePackStatus.available && claimFreePackMutation.mutate()}
+            disabled={!freePackStatus.available || claimFreePackMutation.isPending}
+            trailingIcon={freePackStatus.available ? undefined : IconClock}
+          />
+        )}
+      </div>
 
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-lg font-bold text-slate-100">Доступные паки</h2>
-          <button onClick={() => navigate("/packs")} className="text-sm text-accent">Все паки →</button>
+          <h2 className="font-display text-base font-bold text-ink-chalk">Доступные паки</h2>
+          <button onClick={() => navigate("/packs")} className="font-mono text-xs text-accent-lime">Все паки →</button>
         </div>
         {packsLoading ? (
-          <div className="flex gap-3 overflow-hidden">
-            <Skeleton className="h-40 w-32 shrink-0 rounded-2xl" />
-            <Skeleton className="h-40 w-32 shrink-0 rounded-2xl" />
+          <div className="grid grid-cols-3 gap-3">
+            <Skeleton className="h-28 rounded-2xl" />
+            <Skeleton className="h-28 rounded-2xl" />
+            <Skeleton className="h-28 rounded-2xl" />
           </div>
         ) : (
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div className="grid grid-cols-3 gap-3">
             {packs?.map((pack) => (
               <button
                 key={pack.id}
                 onClick={() => navigate("/packs")}
-                className="flex w-32 shrink-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-bg-surface active:scale-95"
+                className="flex flex-col items-center gap-2 rounded-2xl bg-bg-surface py-4 active:scale-95"
               >
-                <img src={staticUrl(pack.image_path ?? undefined)} alt={pack.name} className="h-24 w-full object-cover" />
-                <div className="p-2 text-left">
-                  <p className="truncate font-display text-xs font-bold text-slate-100">{pack.name}</p>
-                  <p className="text-[11px] text-amber-300">🪙 {pack.price}</p>
+                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${RARITY_SWATCH[featuredRarity(pack)]}`}>
+                  <IconPack size={22} className="text-bg-base" />
                 </div>
+                <p className="truncate px-1 text-xs font-semibold text-ink-chalk">{pack.name}</p>
+                <p className="flex items-center gap-1 font-mono text-[11px] text-accent-lime">
+                  <IconCoin size={11} />
+                  {pack.price}
+                </p>
               </button>
             ))}
           </div>
         )}
       </section>
 
+      <section>
+        <h2 className="mb-3 font-display text-base font-bold text-ink-chalk">Быстрые действия</h2>
+        <div className="grid grid-cols-4 gap-2">
+          <QuickAction Icon={IconPlay} label="Играть" onClick={() => navigate("/play")} />
+          <QuickAction Icon={IconCollection} label="Карточки" onClick={() => navigate("/collection")} />
+          <QuickAction Icon={IconSwap} label="Обмены" onClick={() => navigate("/trades")} />
+          <QuickAction Icon={IconTarget} label="Задания" onClick={() => navigate("/tasks")} badge={claimableTaskCount || undefined} />
+        </div>
+      </section>
+
       {profile && (
-        <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-          <h2 className="mb-3 font-display text-base font-bold text-slate-100">Твоя статистика</h2>
-          <div className="grid grid-cols-2 gap-3 text-sm">
+        <section className="rounded-2xl bg-bg-surface p-4">
+          <h2 className="mb-4 font-mono text-[11px] font-medium uppercase tracking-wider text-ink-mist">Твоя статистика</h2>
+          <div className="grid grid-cols-2 gap-y-4">
             <Stat label="Уникальных карточек" value={profile.unique_cards} />
             <Stat label="Всего карточек" value={profile.total_cards} />
             <Stat label="Паков открыто" value={profile.packs_opened} />
-            <Stat label="Место в рейтинге" value={`#${profile.arena_rank}`} />
+            <Stat label="Место в рейтинге" value={`#${profile.arena_rank}`} accent />
           </div>
         </section>
       )}
@@ -155,23 +177,92 @@ export default function HomePage() {
   );
 }
 
-function QuickAction({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+function ChalkTexture() {
+  return (
+    <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.06]" viewBox="0 0 320 160" fill="none">
+      <line x1="20" y1="14" x2="60" y2="42" stroke="currentColor" strokeWidth="1" />
+      <polyline points="54,36 60,42 55,48" stroke="currentColor" strokeWidth="1" fill="none" />
+      <circle cx="270" cy="22" r="9" stroke="currentColor" strokeWidth="1" />
+      <path d="M160 8 Q195 32 170 72" stroke="currentColor" strokeWidth="1" fill="none" />
+      <circle cx="50" cy="100" r="5" stroke="currentColor" strokeWidth="1" />
+      <line x1="290" y1="96" x2="300" y2="106" stroke="currentColor" strokeWidth="1" />
+      <line x1="300" y1="96" x2="290" y2="106" stroke="currentColor" strokeWidth="1" />
+    </svg>
+  );
+}
+
+function NoticeCard({
+  Icon,
+  title,
+  subtitle,
+  onClick,
+  disabled,
+  trailingIcon: TrailingIcon,
+}: {
+  Icon: (props: IconProps) => JSX.Element;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+  disabled?: boolean;
+  trailingIcon?: (props: IconProps) => JSX.Element;
+}) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/5 bg-bg-surface py-4 active:scale-95"
+      disabled={disabled}
+      className="flex items-center gap-3 rounded-2xl bg-bg-surface px-4 py-3 text-left transition active:scale-[0.98] disabled:opacity-50"
     >
-      <span className="text-2xl">{icon}</span>
-      <span className="text-xs font-medium text-slate-300">{label}</span>
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg-raised text-accent-lime">
+        <Icon size={18} />
+      </div>
+      <div className="flex-1">
+        <p className="font-display text-sm font-bold text-ink-chalk">{title}</p>
+        <p className="text-xs text-ink-mist">{subtitle}</p>
+      </div>
+      <span className="text-ink-mist-dim">
+        {TrailingIcon ? <TrailingIcon size={16} /> : <IconChevronRight size={16} />}
+      </span>
     </button>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function QuickAction({
+  Icon,
+  label,
+  onClick,
+  badge,
+}: {
+  Icon: (props: IconProps) => JSX.Element;
+  label: string;
+  onClick: () => void;
+  badge?: number;
+}) {
   return (
-    <div className="rounded-xl bg-black/20 px-3 py-2">
-      <p className="text-[11px] text-slate-400">{label}</p>
-      <p className="font-display text-lg font-bold text-slate-100">{value}</p>
+    <button onClick={onClick} className="flex flex-col items-center gap-2 active:scale-95">
+      <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-bg-surface text-ink-chalk">
+        <Icon size={20} />
+        {!!badge && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-[9px] font-bold text-bg-base">
+            {badge}
+          </span>
+        )}
+      </span>
+      <span className="text-xs text-ink-mist">{label}</span>
+    </button>
+  );
+}
+
+function Stat({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
+  return (
+    <div>
+      <p
+        className={`font-display text-2xl font-bold ${
+          accent ? "bg-floodlight bg-clip-text text-transparent" : "text-ink-chalk"
+        }`}
+      >
+        {value}
+      </p>
+      <p className="mt-0.5 text-[11px] text-ink-mist">{label}</p>
     </div>
   );
 }

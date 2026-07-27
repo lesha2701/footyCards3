@@ -89,7 +89,7 @@ def decode_admin_token(token: str) -> dict:
     try:
         return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
     except jwt.PyJWTError as exc:
-        raise TelegramAuthError(f"invalid admin token: {exc}") from exc
+        raise TelegramAuthError("invalid admin token") from exc
 
 
 def create_session_token(user_id: int, telegram_id: int) -> str:
@@ -107,4 +107,4 @@ def decode_session_token(token: str) -> dict:
     try:
         return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
     except jwt.PyJWTError as exc:
-        raise TelegramAuthError(f"invalid session token: {exc}") from exc
+        raise TelegramAuthError("invalid session token") from exc

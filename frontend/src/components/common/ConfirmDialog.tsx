@@ -39,19 +39,19 @@ export default function ConfirmDialog({
             transition={{ type: "spring", damping: 24, stiffness: 300 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="font-display text-lg text-slate-100">{title}</p>
-            {description && <p className="mt-2 text-sm text-slate-400">{description}</p>}
+            <p className="font-display text-lg text-ink-chalk">{title}</p>
+            {description && <p className="mt-2 text-sm text-ink-mist">{description}</p>}
             <div className="mt-6 flex gap-3">
               <button
                 onClick={onCancel}
-                className="flex-1 rounded-2xl bg-white/5 py-3 text-sm font-semibold text-slate-300 active:scale-95"
+                className="flex-1 rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-mist active:scale-95"
               >
                 {cancelLabel}
               </button>
               <button
                 onClick={onConfirm}
                 className={`flex-1 rounded-2xl py-3 text-sm font-semibold active:scale-95 ${
-                  danger ? "bg-red-500 text-white" : "bg-accent text-bg-base"
+                  danger ? "bg-red-500 text-white" : "bg-floodlight text-bg-base"
                 }`}
               >
                 {confirmLabel}

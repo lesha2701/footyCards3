@@ -5,6 +5,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { RevealStage, STAGES, STAGE_DURATION_MS } from "@/components/cards/CardRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
+import { IconTag } from "@/components/icons";
 import { openPack } from "@/api/packs";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
@@ -123,7 +124,7 @@ export default function PackOpenPage() {
       {phase !== "summary" && (
         <button
           onClick={skipAll}
-          className="safe-top absolute right-4 top-4 z-10 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-slate-200"
+          className="safe-top absolute right-4 top-4 z-10 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-ink-chalk"
         >
           Пропустить всё
         </button>
@@ -147,7 +148,7 @@ export default function PackOpenPage() {
             <div className="safe-bottom px-6 pb-6 pt-2">
               <button
                 onClick={nextCard}
-                className="w-full rounded-2xl bg-accent py-3.5 font-display text-base font-bold text-bg-base active:scale-95"
+                className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95"
               >
                 {cardIndex < result.cards.length - 1 ? "Следующая карта" : "Готово"}
               </button>
@@ -171,8 +172,8 @@ function PackShot({ pack, onOpen }: { pack: PackOpenResult["pack"]; onOpen: () =
         animate={{ scale: [1, 1.04, 1], rotate: [0, -1.5, 1.5, 0] }}
         transition={{ repeat: Infinity, duration: 1.6 }}
       />
-      <p className="font-display text-xl font-bold text-slate-100">{pack.name}</p>
-      <p className="animate-pulse text-sm text-accent">Нажми, чтобы открыть</p>
+      <p className="font-display text-xl font-bold text-ink-chalk">{pack.name}</p>
+      <p className="animate-pulse text-sm text-accent-lime">Нажми, чтобы открыть</p>
     </button>
   );
 }
@@ -180,7 +181,7 @@ function PackShot({ pack, onOpen }: { pack: PackOpenResult["pack"]; onOpen: () =
 function Summary({ result, onDone }: { result: PackOpenResult; onDone: () => void }) {
   return (
     <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
-      <h2 className="text-center font-display text-2xl font-bold text-slate-100">Пак открыт!</h2>
+      <h2 className="text-center font-display text-2xl font-bold text-ink-chalk">Пак открыт!</h2>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {result.cards.map((opened) => (
           <div
@@ -194,25 +195,28 @@ function Summary({ result, onDone }: { result: PackOpenResult; onDone: () => voi
                 className="aspect-square w-full object-cover"
               />
               <div className="p-2 text-center">
-                <p className="truncate text-xs font-bold text-slate-100">{opened.card.player.display_name}</p>
-                <p className="text-[10px] text-slate-400">{RARITY_LABELS[opened.card.player.rarity]}</p>
+                <p className="truncate text-xs font-bold text-ink-chalk">{opened.card.player.display_name}</p>
+                <p className="text-[10px] text-ink-mist">{RARITY_LABELS[opened.card.player.rarity]}</p>
                 {opened.card.player.collection_name && (
-                  <p className="truncate text-[9px] font-semibold text-amber-400">🏷️ {opened.card.player.collection_name}</p>
+                  <p className="flex items-center justify-center gap-1 truncate text-[9px] font-semibold text-accent-lime">
+                    <IconTag size={9} />
+                    {opened.card.player.collection_name}
+                  </p>
                 )}
               </div>
             </div>
             {opened.is_new && (
-              <span className="absolute left-1 top-1 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">NEW</span>
+              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
             )}
             {opened.duplicate_count > 1 && (
-              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] font-bold text-white">
+              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
                 ×{opened.duplicate_count}
               </span>
             )}
           </div>
         ))}
       </div>
-      <button onClick={onDone} className="mt-2 rounded-2xl bg-accent py-3.5 font-display text-base font-bold text-bg-base active:scale-95">
+      <button onClick={onDone} className="mt-2 rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95">
         Готово
       </button>
     </div>
