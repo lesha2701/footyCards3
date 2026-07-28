@@ -7,6 +7,7 @@ import { fetchPacks } from "@/api/packs";
 import { fetchMyProfile } from "@/api/profile";
 import { fetchTasks } from "@/api/tasks";
 import { Skeleton } from "@/components/common/Skeleton";
+import { sortPacksByPrice } from "@/lib/packs";
 import {
   IconChevronRight,
   IconClock,
@@ -32,6 +33,12 @@ const RARITY_SWATCH: Record<Rarity, string> = {
 
 function featuredRarity(pack: Pack): Rarity {
   return pack.guaranteed_min_rarity ?? "common";
+}
+
+function chunkPairs<T>(items: T[]): T[][] {
+  const pairs: T[][] = [];
+  for (let i = 0; i < items.length; i += 2) pairs.push(items.slice(i, i + 2));
+  return pairs;
 }
 
 export default function HomePage() {
@@ -125,28 +132,31 @@ export default function HomePage() {
           <button onClick={() => navigate("/packs")} className="font-mono text-xs text-accent-lime">Все паки →</button>
         </div>
         {packsLoading ? (
-          <div className="grid grid-cols-3 gap-3">
-            <Skeleton className="h-28 rounded-2xl" />
+          <div className="grid grid-cols-2 gap-3">
             <Skeleton className="h-28 rounded-2xl" />
             <Skeleton className="h-28 rounded-2xl" />
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-3">
-            {packs?.map((pack) => (
-              <button
-                key={pack.id}
-                onClick={() => navigate("/packs")}
-                className="flex flex-col items-center gap-2 rounded-2xl bg-bg-surface py-4 active:scale-95"
-              >
-                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${RARITY_SWATCH[featuredRarity(pack)]}`}>
-                  <IconPack size={22} className="text-bg-base" />
-                </div>
-                <p className="truncate px-1 text-xs font-semibold text-ink-chalk">{pack.name}</p>
-                <p className="flex items-center gap-1 font-mono text-[11px] text-accent-lime">
-                  <IconCoin size={11} />
-                  {pack.price}
-                </p>
-              </button>
+          <div className="-mx-4 flex snap-x snap-mandatory gap-0 overflow-x-auto px-4 pb-1">
+            {chunkPairs(sortPacksByPrice(packs ?? [])).map((pair, i) => (
+              <div key={i} className="grid w-full shrink-0 snap-start grid-cols-2 gap-3 pr-3">
+                {pair.map((pack) => (
+                  <button
+                    key={pack.id}
+                    onClick={() => navigate("/packs")}
+                    className="flex flex-col items-center gap-2 rounded-2xl bg-bg-surface py-4 active:scale-95"
+                  >
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${RARITY_SWATCH[featuredRarity(pack)]}`}>
+                      <IconPack size={22} className="text-bg-base" />
+                    </div>
+                    <p className="truncate px-1 text-xs font-semibold text-ink-chalk">{pack.name}</p>
+                    <p className="flex items-center gap-1 font-mono text-[11px] text-accent-lime">
+                      <IconCoin size={11} />
+                      {pack.price}
+                    </p>
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         )}

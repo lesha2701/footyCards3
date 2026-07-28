@@ -163,6 +163,7 @@ async def set_lineup(db: AsyncSession, user: User, payload: LineupSetRequest) ->
     if len(cards_by_id) != len(card_ids_seen):
         raise NotFoundError("One or more cards not found")
 
+    player_ids_seen: set[int] = set()
     for slot_in in payload.slots:
         card = cards_by_id[slot_in.user_card_id]
         slot = SLOTS_BY_CODE[slot_in.slot_code]
@@ -174,6 +175,11 @@ async def set_lineup(db: AsyncSession, user: User, payload: LineupSetRequest) ->
             raise ConflictError(
                 f"Player {card.player.display_name} ({card.player.position.value}) cannot fill a {slot.category} slot"
             )
+        if card.player_id in player_ids_seen:
+            raise ConflictError(
+                f"Player {card.player.display_name} is already assigned to another slot; even duplicate copies can't fill two slots"
+            )
+        player_ids_seen.add(card.player_id)
 
     lineup = await _get_or_create_lineup(db, user.id)
 

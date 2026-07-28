@@ -157,7 +157,7 @@ export default function PackOpenPage() {
         </div>
       )}
 
-      {phase === "summary" && <Summary result={result} onDone={() => navigate("/collection")} />}
+      {phase === "summary" && <Summary result={result} onDone={() => navigate("/packs")} />}
     </div>
   );
 }

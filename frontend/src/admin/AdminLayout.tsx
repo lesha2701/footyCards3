@@ -18,7 +18,7 @@ export default function AdminLayout() {
   const navigate = useNavigate();
 
   return (
-    <div className="flex min-h-screen bg-bg-base text-slate-100">
+    <div className="flex min-h-screen w-full max-w-full overflow-x-hidden bg-bg-base text-slate-100">
       <aside className="hidden w-56 shrink-0 flex-col border-r border-white/5 bg-bg-surface p-4 md:flex">
         <p className="mb-6 font-display text-lg font-bold">🛠 Админка</p>
         <nav className="flex flex-col gap-1">
@@ -40,7 +40,7 @@ export default function AdminLayout() {
         </button>
       </aside>
 
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         <header className="safe-top flex items-center justify-between border-b border-white/5 bg-bg-surface px-4 py-3 md:hidden">
           <p className="font-display text-base font-bold">🛠 Админка</p>
           <button onClick={() => setMenuOpen((v) => !v)} className="rounded-lg bg-white/5 px-3 py-1.5 text-sm">☰</button>
@@ -65,7 +65,7 @@ export default function AdminLayout() {
             </button>
           </nav>
         )}
-        <main className="p-4 md:p-6">
+        <main className="min-w-0 max-w-full overflow-x-hidden p-4 md:p-6">
           <Outlet />
         </main>
       </div>

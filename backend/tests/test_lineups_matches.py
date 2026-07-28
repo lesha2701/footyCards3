@@ -48,6 +48,27 @@ async def test_cannot_use_other_users_card_in_lineup(client, db_session, bot_tok
     assert resp.status_code == 403
 
 
+async def test_cannot_use_duplicate_player_copies_in_two_slots(client, db_session, bot_token):
+    headers = telegram_headers(750008, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750008)
+
+    slot_a, slot_b = FORMATION_SLOTS[1], FORMATION_SLOTS[2]  # both DEF slots
+    player = await create_player(db_session, position=slot_a.ideal_position)
+    card1 = await create_user_card(db_session, user.id, player.id, CardSource.seed)
+    card2 = await create_user_card(db_session, user.id, player.id, CardSource.seed)
+    await db_session.commit()
+
+    resp = await client.put(
+        "/api/v1/lineups/active", headers=headers,
+        json={"slots": [
+            {"slot_code": slot_a.code, "user_card_id": card1.id},
+            {"slot_code": slot_b.code, "user_card_id": card2.id},
+        ]},
+    )
+    assert resp.status_code == 409
+
+
 async def test_play_match_requires_complete_lineup(client, bot_token):
     headers = telegram_headers(750004, bot_token)
     await client.post("/api/v1/auth/session", headers=headers)

@@ -71,7 +71,12 @@ export default function ArenaPage() {
 
   if (lineupLoading) return <ListSkeleton />;
 
-  const usedCardIds = lineup?.slots.filter((s) => s.card).map((s) => s.card!.id) ?? [];
+  // A player already fielded in another slot is blocked even via a duplicate
+  // card copy (same player, different card id) — one player can't start twice.
+  const usedPlayerIds = (pickerSlot
+    ? lineup?.slots.filter((s) => s.card && s.slot_code !== pickerSlot.code)
+    : lineup?.slots.filter((s) => s.card)
+  )?.map((s) => s.card!.player.id) ?? [];
 
   const cardsForSlot = (slot: FormationSlot): UserCard[] => {
     const positions = CATEGORY_POSITIONS[slot.category];
@@ -106,30 +111,38 @@ export default function ArenaPage() {
             <span className="font-mono text-sm font-bold text-accent-cyan">Сила: {lineup.team_strength}</span>
           )}
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          {lineup?.slots.map((slot) => {
-            const formationSlot = { code: slot.slot_code, category: slot.category as FormationSlot["category"], idealPosition: slot.ideal_position };
-            return (
-              <button
-                key={slot.slot_code}
-                onClick={() => setPickerSlot(formationSlot)}
-                className="flex flex-col items-center gap-1 rounded-xl bg-black/20 p-2 active:scale-95"
-              >
-                {slot.card ? (
-                  <>
-                    <IconShirt size={18} className="text-accent-cyan" />
-                    <span className="truncate text-[10px] font-semibold text-ink-chalk">{slot.card.player.display_name}</span>
-                    <span className="font-mono text-[9px] text-accent-lime">{slot.card.player.rating}</span>
-                  </>
-                ) : (
-                  <>
-                    <IconPlus size={18} className="text-ink-mist-dim" />
-                    <span className="text-[9px] text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
-                  </>
-                )}
-              </button>
-            );
-          })}
+        <div className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
+          <div className="pointer-events-none absolute inset-x-3 top-1/2 h-px -translate-y-1/2 bg-white/10" />
+          <div className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
+          {(["FWD", "MID", "DEF", "GK"] as const).map((category) => (
+            <div key={category} className="relative flex justify-evenly gap-2">
+              {lineup?.slots
+                .filter((slot) => slot.category === category)
+                .map((slot) => {
+                  const formationSlot = { code: slot.slot_code, category: slot.category as FormationSlot["category"], idealPosition: slot.ideal_position };
+                  return (
+                    <button
+                      key={slot.slot_code}
+                      onClick={() => setPickerSlot(formationSlot)}
+                      className="flex w-20 flex-col items-center gap-1 rounded-xl bg-black/30 p-2 backdrop-blur-sm active:scale-95"
+                    >
+                      {slot.card ? (
+                        <>
+                          <IconShirt size={18} className="text-accent-cyan" />
+                          <span className="max-w-full truncate text-[10px] font-semibold text-ink-chalk">{slot.card.player.display_name}</span>
+                          <span className="font-mono text-[9px] text-accent-lime">{slot.card.player.rating}</span>
+                        </>
+                      ) : (
+                        <>
+                          <IconPlus size={18} className="text-ink-mist-dim" />
+                          <span className="text-[9px] text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
+                        </>
+                      )}
+                    </button>
+                  );
+                })}
+            </div>
+          ))}
         </div>
       </section>
 
@@ -141,12 +154,12 @@ export default function ArenaPage() {
               key={t.value}
               onClick={() => setTacticMutation.mutate(t.value)}
               disabled={setTacticMutation.isPending}
-              className={`rounded-xl px-2 py-2 text-center disabled:opacity-60 ${
+              className={`rounded-xl px-1.5 py-2 text-center disabled:opacity-60 ${
                 lineup?.tactic === t.value ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
               }`}
             >
-              <p className="text-xs font-bold">{t.label}</p>
-              <p className={`mt-0.5 text-[10px] ${lineup?.tactic === t.value ? "text-bg-base/70" : "text-ink-mist-dim"}`}>
+              <p className="break-words text-[11px] font-bold leading-tight">{t.label}</p>
+              <p className={`mt-0.5 break-words text-[9px] leading-tight ${lineup?.tactic === t.value ? "text-bg-base/70" : "text-ink-mist-dim"}`}>
                 {t.description}
               </p>
             </button>
@@ -250,7 +263,7 @@ export default function ArenaPage() {
           open
           title={`Выбери на позицию ${CATEGORY_LABELS[pickerSlot.category]}`}
           cards={cardsForSlot(pickerSlot)}
-          disabledCardIds={usedCardIds}
+          disabledCardIds={cardsForSlot(pickerSlot).filter((c) => usedPlayerIds.includes(c.player.id)).map((c) => c.id)}
           onSelect={(card) => assignSlot(pickerSlot, card)}
           onClose={() => setPickerSlot(null)}
         />
