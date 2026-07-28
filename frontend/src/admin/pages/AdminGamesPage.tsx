@@ -81,7 +81,7 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-3 font-display text-base font-bold">Футбольный сапёр</p>
+        <p className="mb-3 font-display text-base font-bold">Футбольный фанат</p>
         <div className="grid grid-cols-2 gap-3">
           {field("saboteur_cell_reward", "Награда за ячейку")}
           {field("saboteur_daily_limit", "Лимит наградных попыток/день")}

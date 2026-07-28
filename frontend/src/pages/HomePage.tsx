@@ -14,26 +14,14 @@ import {
   IconCoin,
   IconCollection,
   IconGift,
-  IconPack,
   IconPlay,
   IconSwap,
   IconTarget,
   type IconProps,
 } from "@/components/icons";
+import { staticUrl } from "@/lib/api";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { Pack, Rarity } from "@/types";
-
-const RARITY_SWATCH: Record<Rarity, string> = {
-  common: "bg-rarity-common",
-  rare: "bg-rarity-rare",
-  epic: "bg-rarity-epic",
-  legendary: "bg-rarity-legendary",
-};
-
-function featuredRarity(pack: Pack): Rarity {
-  return pack.guaranteed_min_rarity ?? "common";
-}
 
 function chunkPairs<T>(items: T[]): T[][] {
   const pairs: T[][] = [];
@@ -76,25 +64,17 @@ export default function HomePage() {
     <div className="flex flex-col gap-6">
       <section className="relative overflow-hidden rounded-3xl bg-bg-surface p-5">
         <ChalkTexture />
-        <div className="relative flex items-center gap-3">
-          <img src="/brand/victor-fc-crest.jpg" alt="" className="h-9 w-9 rounded-full ring-1 ring-white/10" />
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-wider text-ink-mist">С возвращением</p>
-            <p className="font-display text-lg font-bold text-ink-chalk">{user?.first_name ?? user?.username ?? "игрок"}</p>
-          </div>
+        <div className="relative flex items-center gap-2">
+          <img src="/brand/victor-fc-crest.jpg" alt="" className="h-7 w-7 rounded-full ring-1 ring-white/10" />
+          <p className="font-mono text-[10px] uppercase tracking-wider text-ink-mist">
+            С возвращением, {user?.first_name ?? user?.username ?? "игрок"}
+          </p>
         </div>
-        <div className="relative mt-4 flex items-center gap-3">
-          <div className="rounded-2xl bg-bg-raised px-4 py-2.5">
-            <p className="text-[11px] text-ink-mist">Баланс</p>
-            <p className="mt-0.5 flex items-center gap-1.5 font-mono text-lg font-semibold text-accent-lime">
-              <IconCoin size={16} />
-              {user?.balance ?? 0}
-            </p>
-          </div>
-          <div className="rounded-2xl bg-bg-raised px-4 py-2.5">
-            <p className="text-[11px] text-ink-mist">Уровень</p>
-            <p className="mt-0.5 font-mono text-lg font-semibold text-accent-cyan">{user?.level ?? 1}</p>
-          </div>
+        <div className="relative mt-4 grid grid-cols-4 gap-2">
+          <QuickAction Icon={IconPlay} label="Играть" onClick={() => navigate("/play")} />
+          <QuickAction Icon={IconCollection} label="Карточки" onClick={() => navigate("/collection")} />
+          <QuickAction Icon={IconSwap} label="Обмены" onClick={() => navigate("/trades")} />
+          <QuickAction Icon={IconTarget} label="Задания" onClick={() => navigate("/tasks")} badge={claimableTaskCount || undefined} />
         </div>
       </section>
 
@@ -137,18 +117,20 @@ export default function HomePage() {
             <Skeleton className="h-28 rounded-2xl" />
           </div>
         ) : (
-          <div className="-mx-4 flex snap-x snap-mandatory gap-0 overflow-x-auto px-4 pb-1">
+          <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1">
             {chunkPairs(sortPacksByPrice(packs ?? [])).map((pair, i) => (
-              <div key={i} className="grid w-full shrink-0 snap-start grid-cols-2 gap-3 pr-3">
+              <div key={i} className="grid w-full shrink-0 snap-start grid-cols-2 gap-3">
                 {pair.map((pack) => (
                   <button
                     key={pack.id}
                     onClick={() => navigate("/packs")}
                     className="flex flex-col items-center gap-2 rounded-2xl bg-bg-surface py-4 active:scale-95"
                   >
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${RARITY_SWATCH[featuredRarity(pack)]}`}>
-                      <IconPack size={22} className="text-bg-base" />
-                    </div>
+                    <img
+                      src={staticUrl(pack.image_path ?? undefined)}
+                      alt={pack.name}
+                      className="h-16 w-16 rounded-2xl object-cover"
+                    />
                     <p className="truncate px-1 text-xs font-semibold text-ink-chalk">{pack.name}</p>
                     <p className="flex items-center gap-1 font-mono text-[11px] text-accent-lime">
                       <IconCoin size={11} />
@@ -160,16 +142,6 @@ export default function HomePage() {
             ))}
           </div>
         )}
-      </section>
-
-      <section>
-        <h2 className="mb-3 font-display text-base font-bold text-ink-chalk">Быстрые действия</h2>
-        <div className="grid grid-cols-4 gap-2">
-          <QuickAction Icon={IconPlay} label="Играть" onClick={() => navigate("/play")} />
-          <QuickAction Icon={IconCollection} label="Карточки" onClick={() => navigate("/collection")} />
-          <QuickAction Icon={IconSwap} label="Обмены" onClick={() => navigate("/trades")} />
-          <QuickAction Icon={IconTarget} label="Задания" onClick={() => navigate("/tasks")} badge={claimableTaskCount || undefined} />
-        </div>
       </section>
 
       {profile && (
@@ -249,7 +221,7 @@ function QuickAction({
 }) {
   return (
     <button onClick={onClick} className="flex flex-col items-center gap-2 active:scale-95">
-      <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-bg-surface text-ink-chalk">
+      <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-bg-raised text-ink-chalk">
         <Icon size={20} />
         {!!badge && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-[9px] font-bold text-bg-base">

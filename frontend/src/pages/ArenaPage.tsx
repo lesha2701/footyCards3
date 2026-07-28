@@ -3,11 +3,11 @@ import { useEffect, useRef, useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import EmptyState from "@/components/common/EmptyState";
-import { IconBall, IconCoin, IconPlus, IconShirt, IconTrophy } from "@/components/icons";
+import { IconBall, IconCoin, IconPlus, IconShirt } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
 import { fetchActiveLineup, setActiveLineup, setLineupTactic } from "@/api/lineups";
-import { fetchArenaLeaderboard, fetchArenaStats, fetchMatchHistory, playMatch } from "@/api/matches";
+import { fetchArenaStats, fetchMatchHistory, playMatch } from "@/api/matches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, TACTICS, type FormationSlot } from "@/lib/formation";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
@@ -33,7 +33,6 @@ export default function ArenaPage() {
   });
   const { data: stats } = useQuery({ queryKey: ["arena-stats"], queryFn: fetchArenaStats });
   const { data: history } = useQuery({ queryKey: ["match-history"], queryFn: fetchMatchHistory });
-  const { data: leaderboard } = useQuery({ queryKey: ["arena-leaderboard"], queryFn: fetchArenaLeaderboard });
 
   const [pickerSlot, setPickerSlot] = useState<FormationSlot | null>(null);
   const [difficulty, setDifficulty] = useState<MatchDifficulty>("medium");
@@ -64,7 +63,6 @@ export default function ArenaPage() {
       // (MatchSimulation's onFinished), not the instant the API responds.
       queryClient.invalidateQueries({ queryKey: ["arena-stats"] });
       queryClient.invalidateQueries({ queryKey: ["match-history"] });
-      queryClient.invalidateQueries({ queryKey: ["arena-leaderboard"] });
     },
     onError: (err) => setMatchError(formatGameError(err, "Не удалось начать матч")),
   });
@@ -124,7 +122,7 @@ export default function ArenaPage() {
                     <button
                       key={slot.slot_code}
                       onClick={() => setPickerSlot(formationSlot)}
-                      className="flex w-20 flex-col items-center gap-1 rounded-xl bg-black/30 p-2 backdrop-blur-sm active:scale-95"
+                      className="flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95"
                     >
                       {slot.card ? (
                         <>
@@ -154,12 +152,12 @@ export default function ArenaPage() {
               key={t.value}
               onClick={() => setTacticMutation.mutate(t.value)}
               disabled={setTacticMutation.isPending}
-              className={`rounded-xl px-1.5 py-2 text-center disabled:opacity-60 ${
+              className={`rounded-xl px-1 py-2 text-center disabled:opacity-60 ${
                 lineup?.tactic === t.value ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
               }`}
             >
-              <p className="break-words text-[11px] font-bold leading-tight">{t.label}</p>
-              <p className={`mt-0.5 break-words text-[9px] leading-tight ${lineup?.tactic === t.value ? "text-bg-base/70" : "text-ink-mist-dim"}`}>
+              <p className="whitespace-nowrap text-[9px] font-bold leading-tight">{t.label}</p>
+              <p className={`mt-0.5 whitespace-nowrap text-[8px] leading-tight ${lineup?.tactic === t.value ? "text-bg-base/70" : "text-ink-mist-dim"}`}>
                 {t.description}
               </p>
             </button>
@@ -218,45 +216,6 @@ export default function ArenaPage() {
           </div>
         )}
       </section>
-
-      {!!leaderboard?.length && (
-        <section className="rounded-2xl bg-bg-surface p-4">
-          <p className="mb-2 flex items-center gap-1.5 font-display text-sm font-bold text-ink-chalk">
-            <IconTrophy size={14} className="text-accent-lime" />
-            Турнирная таблица Arena
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-ink-mist-dim">
-                  <th className="py-1 text-left font-normal">#</th>
-                  <th className="py-1 text-left font-normal">Игрок</th>
-                  <th className="py-1 text-center font-normal">В</th>
-                  <th className="py-1 text-center font-normal">Н</th>
-                  <th className="py-1 text-center font-normal">П</th>
-                  <th className="py-1 text-center font-normal">РМ</th>
-                  <th className="py-1 text-center font-normal">О</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leaderboard.slice(0, 10).map((entry, i) => (
-                  <tr key={entry.user_id} className="border-t border-white/5">
-                    <td className="py-1.5 font-mono text-ink-mist-dim">{i + 1}</td>
-                    <td className="max-w-[110px] truncate py-1.5 text-ink-chalk">{entry.display_name}</td>
-                    <td className="py-1.5 text-center font-mono text-accent-green">{entry.matches_won}</td>
-                    <td className="py-1.5 text-center font-mono text-ink-mist">{entry.matches_drawn}</td>
-                    <td className="py-1.5 text-center font-mono text-red-400">{entry.matches_lost}</td>
-                    <td className="py-1.5 text-center font-mono text-ink-mist">
-                      {entry.goal_difference > 0 ? `+${entry.goal_difference}` : entry.goal_difference}
-                    </td>
-                    <td className="py-1.5 text-center font-mono font-bold text-accent-cyan">{entry.points}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
 
       {pickerSlot && (
         <CardPickerModal
@@ -318,14 +277,12 @@ function MatchSimulation({ match, onFinished }: { match: Match; onFinished: () =
   };
 
   const revealed = match.events.slice(0, revealedCount);
-  const liveUserScore = revealed.filter((e) => e.event_type === "goal" && e.team === "user").length;
-  const liveOpponentScore = revealed.filter((e) => e.event_type === "goal" && e.team === "opponent").length;
   const currentMinute = revealed.length ? revealed[revealed.length - 1].minute : 0;
 
   return (
     <section className="rounded-2xl bg-bg-surface p-4">
       <div className="flex items-center justify-between">
-        <span className="font-mono text-xs text-ink-mist-dim">{finished ? "Матч завершён" : `${currentMinute}' · матч идёт...`}</span>
+        <span className="font-mono text-xs text-ink-mist-dim">{finished ? "Матч завершён" : `${currentMinute}' · повтор матча...`}</span>
         {!finished && (
           <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-ink-chalk">
             Пропустить
@@ -333,21 +290,22 @@ function MatchSimulation({ match, onFinished }: { match: Match; onFinished: () =
         )}
       </div>
 
+      {/* The final score/result is already known from the API response, so it
+          is shown immediately — it doesn't wait on the event-by-event replay
+          below, which is purely a cosmetic recap the player can skip. */}
       <p className="mt-1 text-center font-mono text-lg font-bold text-ink-chalk">
-        {liveUserScore} : {liveOpponentScore}
+        {match.user_score} : {match.opponent_score}
       </p>
       <p className="text-center text-sm text-ink-mist">vs {match.opponent_name}</p>
 
-      {finished && (
-        <p
-          className={`mt-1 flex items-center justify-center gap-1 text-center font-display text-sm font-bold ${
-            match.result === "win" ? "text-accent-green" : match.result === "loss" ? "text-red-400" : "text-ink-mist"
-          }`}
-        >
-          {match.result === "win" ? "Победа!" : match.result === "loss" ? "Поражение" : "Ничья"} · +{match.reward_coins}
-          <IconCoin size={13} />
-        </p>
-      )}
+      <p
+        className={`mt-1 flex items-center justify-center gap-1 text-center font-display text-sm font-bold ${
+          match.result === "win" ? "text-accent-green" : match.result === "loss" ? "text-red-400" : "text-ink-mist"
+        }`}
+      >
+        {match.result === "win" ? "Победа!" : match.result === "loss" ? "Поражение" : "Ничья"} · +{match.reward_coins}
+        <IconCoin size={13} />
+      </p>
 
       <div ref={logRef} className="mt-3 max-h-48 space-y-1 overflow-y-auto text-xs">
         {revealed.map((e, i) => (

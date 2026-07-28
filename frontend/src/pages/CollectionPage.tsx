@@ -150,7 +150,7 @@ export default function CollectionPage() {
       {isLoading && <CardGridSkeleton count={9} />}
       {!isLoading && !page?.items.length && <EmptyState icon={IconCollection} title="Карточек не найдено" description="Открой паки, чтобы собрать коллекцию" />}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-2">
         {page?.items.map((card) => (
           <PlayerCard
             key={card.id}

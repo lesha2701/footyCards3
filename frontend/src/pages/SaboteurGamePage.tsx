@@ -91,7 +91,7 @@ export default function SaboteurGamePage() {
   if (phase === "idle") {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="font-display text-xl font-bold text-ink-chalk">Футбольный сапёр</h1>
+        <h1 className="font-display text-xl font-bold text-ink-chalk">Футбольный фанат</h1>
         <p className="text-sm text-ink-mist">
           Ты — фанат, который пробирается сквозь стюардов к любимому игроку. На каждой линии выбирай одну из{" "}
           {LINE_SIZE} ячеек. Прошёл мимо стюарда — линия открывается дальше и награда растёт. Заберёшь накопленное

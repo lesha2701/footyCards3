@@ -53,3 +53,38 @@ async def test_cannot_sell_card_locked_in_lineup(client, db_session, bot_token):
 
     resp = await client.post("/api/v1/collection/cards/sell", headers=headers, json={"user_card_id": card.id})
     assert resp.status_code == 409
+
+
+async def test_rarity_filter_only_returns_matching_rarity(client, db_session, bot_token):
+    headers = telegram_headers(720004, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 720004)
+
+    common_player = await create_player(db_session, rarity=Rarity.common)
+    rare_player = await create_player(db_session, rarity=Rarity.rare)
+    await create_user_card(db_session, user.id, common_player.id, CardSource.seed)
+    await create_user_card(db_session, user.id, rare_player.id, CardSource.seed)
+    await db_session.commit()
+
+    resp = await client.get("/api/v1/collection/cards", headers=headers, params={"rarity": "common"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert {item["player"]["rarity"] for item in body["items"]} == {"common"}
+
+
+async def test_duplicate_cards_collapse_into_one_list_row(client, db_session, bot_token):
+    headers = telegram_headers(720005, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 720005)
+
+    player = await create_player(db_session, rarity=Rarity.common)
+    for _ in range(3):
+        await create_user_card(db_session, user.id, player.id, CardSource.seed)
+    await db_session.commit()
+
+    resp = await client.get("/api/v1/collection/cards", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+    assert body["items"][0]["duplicate_count"] == 3

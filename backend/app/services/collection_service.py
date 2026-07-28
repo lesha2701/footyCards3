@@ -27,43 +27,30 @@ async def list_user_cards(
     db: AsyncSession, user_id: int, filters: CollectionFilterParams, params: PageParams, exclude_hidden: bool = False
 ) -> Page[UserCardListItem]:
     query = select(UserCard).where(UserCard.owner_id == user_id).options(joinedload(UserCard.player))
-    count_query = select(func.count(UserCard.id)).where(UserCard.owner_id == user_id)
 
     if exclude_hidden:
         query = query.where(UserCard.hidden_from_trade.is_(False))
-        count_query = count_query.where(UserCard.hidden_from_trade.is_(False))
 
     if filters.rarity:
         query = query.join(Player).where(Player.rarity.in_(filters.rarity))
-        count_query = count_query.join(Player).where(Player.rarity.in_(filters.rarity))
     else:
         query = query.join(Player)
-        count_query = count_query.join(Player)
 
     if filters.country:
         query = query.where(Player.country == filters.country)
-        count_query = count_query.where(Player.country == filters.country)
     if filters.club:
         query = query.where(Player.club == filters.club)
-        count_query = count_query.where(Player.club == filters.club)
     if filters.position:
         query = query.where(Player.position == filters.position)
-        count_query = count_query.where(Player.position == filters.position)
     if filters.min_rating is not None:
         query = query.where(Player.rating >= filters.min_rating)
-        count_query = count_query.where(Player.rating >= filters.min_rating)
     if filters.max_rating is not None:
         query = query.where(Player.rating <= filters.max_rating)
-        count_query = count_query.where(Player.rating <= filters.max_rating)
     if filters.collection_id is not None:
         query = query.where(Player.collection_id == filters.collection_id)
-        count_query = count_query.where(Player.collection_id == filters.collection_id)
     if filters.search:
         pattern = f"%{filters.search.lower()}%"
         query = query.where(func.lower(Player.display_name).like(pattern))
-        count_query = count_query.where(func.lower(Player.display_name).like(pattern))
-
-    total = (await db.execute(count_query)).scalar_one()
 
     if filters.sort_by == "rating":
         order_col = Player.rating
@@ -73,16 +60,29 @@ async def list_user_cards(
         order_col = UserCard.acquired_at
 
     query = query.order_by(order_col.desc() if filters.sort_dir == "desc" else order_col.asc())
-    query = query.offset(params.offset).limit(params.page_size)
 
-    cards: List[UserCard] = (await db.execute(query)).unique().scalars().all()
+    # Pagination and totals are computed after collapsing duplicate copies of
+    # the same player (below), not at the SQL level, so LIMIT/OFFSET can't be
+    # pushed into this query — the whole filtered set has to be fetched first.
+    all_cards: List[UserCard] = (await db.execute(query)).unique().scalars().all()
 
     if filters.sort_by == "rarity":
-        cards.sort(key=lambda c: RARITY_ORDER[c.player.rarity], reverse=(filters.sort_dir == "desc"))
+        all_cards.sort(key=lambda c: RARITY_ORDER[c.player.rarity], reverse=(filters.sort_dir == "desc"))
+
+    # A user can own several copies of the same player (duplicates); the
+    # collection list should show each player once, with duplicate_count
+    # conveying how many copies are owned — not one row per physical card.
+    representative_by_player: dict[int, UserCard] = {}
+    for card in all_cards:
+        representative_by_player.setdefault(card.player_id, card)
+    unique_cards = list(representative_by_player.values())
+
+    total = len(unique_cards)
+    page_cards = unique_cards[params.offset : params.offset + params.page_size]
 
     dup_counts = await _duplicate_counts(db, user_id)
     items = []
-    for card in cards:
+    for card in page_cards:
         item = UserCardListItem.model_validate(card)
         item.duplicate_count = dup_counts.get(card.player_id, 1)
         items.append(item)

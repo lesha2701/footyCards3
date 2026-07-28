@@ -46,7 +46,7 @@ export default function PlayPage() {
           onClick={() => navigate("/play/saboteur")}
           Icon={IconProfile}
           badgeClass="bg-rarity-common"
-          title="Футбольный сапёр"
+          title="Футбольный фанат"
           description="Проберись сквозь стюардов к любимому игроку"
         />
 

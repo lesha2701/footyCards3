@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import List, Literal, Optional
 
+from fastapi import Query
 from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import CardSource, Position, Rarity
@@ -29,7 +30,7 @@ SortDir = Literal["asc", "desc"]
 class CollectionFilterParams:
     def __init__(
         self,
-        rarity: Optional[List[Rarity]] = None,
+        rarity: Optional[List[Rarity]] = Query(None),
         country: Optional[str] = None,
         club: Optional[str] = None,
         position: Optional[Position] = None,

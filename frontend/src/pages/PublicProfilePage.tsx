@@ -37,7 +37,6 @@ export default function PublicProfilePage() {
 
       <section className="rounded-2xl bg-bg-surface p-4">
         <div className="grid grid-cols-2 gap-y-4">
-          <Stat label="Уровень" value={profile.level} accentClass="text-accent-cyan" />
           <Stat label="Рейтинг Arena" value={profile.arena_rating} />
           <Stat label="Уникальных карточек" value={profile.unique_cards} />
           <Stat label="Всего карточек" value={profile.total_cards} />
