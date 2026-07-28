@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { CollectionStats, Page, UserCard } from "@/types";
+import type { CardUpgradeResult, CardUpgradeRule, CollectionStats, Page, Rarity, UserCard } from "@/types";
 
 export interface CollectionFilters {
   rarity?: string;
@@ -49,5 +49,22 @@ export async function bulkSellCards(userCardIds: number[], confirmLastCopy = fal
 
 export async function setCardHiddenFromTrade(userCardId: number, hidden: boolean): Promise<UserCard> {
   const { data } = await api.patch<UserCard>(`/collection/cards/${userCardId}/hidden`, { hidden });
+  return data;
+}
+
+export async function fetchUpgradeRules(): Promise<CardUpgradeRule[]> {
+  const { data } = await api.get<CardUpgradeRule[]>("/collection/upgrade-rules");
+  return data;
+}
+
+export async function upgradeCard(
+  userCardId: number,
+  toRarity: Rarity,
+  idempotencyKey?: string
+): Promise<CardUpgradeResult> {
+  const { data } = await api.post<CardUpgradeResult>(`/collection/cards/${userCardId}/upgrade`, {
+    to_rarity: toRarity,
+    idempotency_key: idempotencyKey,
+  });
   return data;
 }

@@ -8,6 +8,7 @@ from app.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.routers import (
     admin_card_collections,
+    admin_card_upgrades,
     admin_dashboard,
     admin_games,
     admin_log,
@@ -94,6 +95,7 @@ app.include_router(admin_users.router, prefix=API_PREFIX)
 app.include_router(admin_players.router, prefix=API_PREFIX)
 app.include_router(admin_packs.router, prefix=API_PREFIX)
 app.include_router(admin_card_collections.router, prefix=API_PREFIX)
+app.include_router(admin_card_upgrades.router, prefix=API_PREFIX)
 app.include_router(admin_tasks.router, prefix=API_PREFIX)
 app.include_router(admin_trades.router, prefix=API_PREFIX)
 app.include_router(admin_games.router, prefix=API_PREFIX)

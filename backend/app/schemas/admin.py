@@ -105,9 +105,10 @@ class GameConfigOut(BaseModel):
     difficulty_medium_multiplier: float
     difficulty_hard_multiplier: float
     suspicious_score_margin: int
-    saboteur_cell_reward: int
+    saboteur_line_base_reward: int
+    saboteur_line_growth: float
     saboteur_daily_limit: int
-    saboteur_max_bomb_count: int
+    saboteur_max_steward_count: int
     penalty_reward_win: int
     penalty_reward_draw: int
     penalty_reward_loss: int
@@ -136,9 +137,10 @@ class GameConfigUpdate(BaseModel):
     difficulty_medium_multiplier: Optional[float] = Field(default=None, ge=0)
     difficulty_hard_multiplier: Optional[float] = Field(default=None, ge=0)
     suspicious_score_margin: Optional[int] = Field(default=None, ge=0)
-    saboteur_cell_reward: Optional[int] = Field(default=None, ge=0)
+    saboteur_line_base_reward: Optional[int] = Field(default=None, ge=0)
+    saboteur_line_growth: Optional[float] = Field(default=None, ge=1)
     saboteur_daily_limit: Optional[int] = Field(default=None, ge=0)
-    saboteur_max_bomb_count: Optional[int] = Field(default=None, ge=1)
+    saboteur_max_steward_count: Optional[int] = Field(default=None, ge=1)
     penalty_reward_win: Optional[int] = Field(default=None, ge=0)
     penalty_reward_draw: Optional[int] = Field(default=None, ge=0)
     penalty_reward_loss: Optional[int] = Field(default=None, ge=0)

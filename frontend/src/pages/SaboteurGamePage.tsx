@@ -3,20 +3,21 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { claimSaboteurReward, endSaboteur, revealSaboteurCell, startSaboteur } from "@/api/games";
-import { IconBomb, IconCoin, IconFlagCheckered, IconHelp } from "@/components/icons";
+import { IconCoin, IconFlagCheckered, IconHelp, IconProfile } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 
 type Phase = "idle" | "playing" | "lost" | "banked";
 
-const GRID_SIZE = 16;
+const LINE_SIZE = 5;
+const REVEAL_PAUSE_MS = 550;
 
-const DIFFICULTIES: { bombCount: number; label: string }[] = [
-  { bombCount: 1, label: "Лёгкий" },
-  { bombCount: 2, label: "Средний" },
-  { bombCount: 3, label: "Сложный" },
-  { bombCount: 4, label: "Экстрим" },
+const DIFFICULTIES: { stewardCount: number; label: string }[] = [
+  { stewardCount: 1, label: "Лёгкий" },
+  { stewardCount: 2, label: "Средний" },
+  { stewardCount: 3, label: "Сложный" },
+  { stewardCount: 4, label: "Экстрим" },
 ];
 
 export default function SaboteurGamePage() {
@@ -25,10 +26,11 @@ export default function SaboteurGamePage() {
 
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
-  const [bombCount, setBombCount] = useState(1);
-  const [revealed, setRevealed] = useState<Set<number>>(new Set());
-  const [bombIndex, setBombIndex] = useState<number | null>(null);
+  const [stewardCount, setStewardCount] = useState(1);
+  const [level, setLevel] = useState(1);
   const [score, setScore] = useState(0);
+  const [pickedIndex, setPickedIndex] = useState<number | null>(null);
+  const [pickedIsSteward, setPickedIsSteward] = useState(false);
   const [finalReward, setFinalReward] = useState(0);
   const [claimResult, setClaimResult] = useState<{ reward_coins: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -37,10 +39,10 @@ export default function SaboteurGamePage() {
     mutationFn: (count: number) => startSaboteur(count),
     onSuccess: (data) => {
       setSessionId(data.session_id);
-      setBombCount(data.bomb_count);
-      setRevealed(new Set());
-      setBombIndex(null);
+      setStewardCount(data.steward_count);
+      setLevel(data.level);
       setScore(0);
+      setPickedIndex(null);
       setFinalReward(0);
       setClaimResult(null);
       setErrorMsg(null);
@@ -52,15 +54,19 @@ export default function SaboteurGamePage() {
   const revealMutation = useMutation({
     mutationFn: (cellIndex: number) => revealSaboteurCell(sessionId!, cellIndex),
     onSuccess: (result, cellIndex) => {
-      setRevealed((prev) => new Set(prev).add(cellIndex));
-      if (result.is_bomb) {
+      setPickedIndex(cellIndex);
+      setPickedIsSteward(result.is_steward);
+      if (result.is_steward) {
         haptic("heavy");
-        setBombIndex(cellIndex);
         setFinalReward(result.reward_coins ?? 0);
-        setPhase("lost");
+        setTimeout(() => setPhase("lost"), REVEAL_PAUSE_MS);
       } else {
         haptic("light");
         setScore(result.score);
+        setTimeout(() => {
+          setLevel(result.level);
+          setPickedIndex(null);
+        }, REVEAL_PAUSE_MS);
       }
     },
   });
@@ -87,8 +93,9 @@ export default function SaboteurGamePage() {
       <div className="flex flex-col gap-5">
         <h1 className="font-display text-xl font-bold text-ink-chalk">Футбольный сапёр</h1>
         <p className="text-sm text-ink-mist">
-          Поле 4×4. Открывай ячейки — каждая безопасная приносит монеты. Забери накопленное в любой момент или
-          рискни продолжить. Попадёшь на бомбу — потеряешь половину заработанного за раунд.
+          Ты — фанат, который пробирается сквозь стюардов к любимому игроку. На каждой линии выбирай одну из{" "}
+          {LINE_SIZE} ячеек. Прошёл мимо стюарда — линия открывается дальше и награда растёт. Заберёшь накопленное
+          в любой момент или пойдёшь дальше на свой риск.
         </p>
 
         <div>
@@ -96,28 +103,28 @@ export default function SaboteurGamePage() {
           <div className="grid grid-cols-2 gap-2">
             {DIFFICULTIES.map((d) => (
               <button
-                key={d.bombCount}
-                onClick={() => setBombCount(d.bombCount)}
+                key={d.stewardCount}
+                onClick={() => setStewardCount(d.stewardCount)}
                 className={`rounded-2xl px-3 py-2.5 text-left ${
-                  bombCount === d.bombCount ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
+                  stewardCount === d.stewardCount ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
                 }`}
               >
                 <p className="text-sm font-bold">{d.label}</p>
-                <p className={`flex items-center gap-1 text-[11px] ${bombCount === d.bombCount ? "text-bg-base/70" : "text-ink-mist-dim"}`}>
-                  <IconBomb size={11} />
-                  {d.bombCount} · ×{d.bombCount} награда за ячейку
+                <p className={`flex items-center gap-1 text-[11px] ${stewardCount === d.stewardCount ? "text-bg-base/70" : "text-ink-mist-dim"}`}>
+                  <IconProfile size={11} />
+                  {d.stewardCount} из {LINE_SIZE} — стюардов в линии
                 </p>
               </button>
             ))}
           </div>
           <p className="mt-2 text-[11px] text-ink-mist-dim">
-            Чем больше бомб — тем больше монет за ячейку, но и риск выше.
+            Чем больше стюардов в линии — тем выше награда за проход, но и риск попасться больше.
           </p>
         </div>
 
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
         <button
-          onClick={() => startMutation.mutate(bombCount)}
+          onClick={() => startMutation.mutate(stewardCount)}
           disabled={startMutation.isPending}
           className="rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
         >
@@ -131,10 +138,10 @@ export default function SaboteurGamePage() {
     const isLoss = phase === "lost";
     return (
       <div className="flex flex-col items-center gap-5 py-10 text-center">
-        {isLoss ? <IconBomb size={40} className="text-red-500" /> : <IconFlagCheckered size={40} className="text-accent-lime" />}
-        <p className="font-display text-2xl font-bold text-ink-chalk">{isLoss ? "Бабах!" : "Забрано"}</p>
+        {isLoss ? <IconProfile size={40} className="text-red-500" /> : <IconFlagCheckered size={40} className="text-accent-lime" />}
+        <p className="font-display text-2xl font-bold text-ink-chalk">{isLoss ? "Поймали!" : "Прорвался!"}</p>
         <p className="text-sm text-ink-mist">
-          {isLoss ? "Ты попал на бомбу. Половина заработанного сгорела." : "Ты вовремя остановился."}
+          {isLoss ? "Стюард тебя заметил. Получишь утешительную награду за одну линию." : "Ты вовремя остановился и забрал всё до цента."}
         </p>
 
         {!claimResult ? (
@@ -166,34 +173,44 @@ export default function SaboteurGamePage() {
     );
   }
 
+  const isBusy = pickedIndex !== null || revealMutation.isPending;
+
   return (
     <div className="flex flex-col items-center gap-5 py-4">
-      <p className="text-sm text-ink-mist">
-        Накоплено: <span className="inline-flex items-center gap-1 font-mono font-bold text-accent-lime">{score}<IconCoin size={13} /></span>
-      </p>
+      <div className="flex items-center gap-4 font-mono text-sm text-ink-mist">
+        <span>
+          Линия <b className="text-ink-chalk">{level}</b>
+        </span>
+        <span>
+          Накоплено <span className="inline-flex items-center gap-1 font-bold text-accent-lime">{score}<IconCoin size={13} /></span>
+        </span>
+      </div>
 
-      <div className="grid grid-cols-4 gap-2">
-        {Array.from({ length: GRID_SIZE }, (_, i) => (
-          <button
-            key={i}
-            onClick={() => revealMutation.mutate(i)}
-            disabled={revealed.has(i) || revealMutation.isPending}
-            className={`flex h-16 w-16 items-center justify-center rounded-2xl active:scale-90 disabled:active:scale-100 ${
-              revealed.has(i)
-                ? bombIndex === i
-                  ? "bg-red-500/20 text-red-500"
-                  : "bg-accent-green/15 text-accent-green"
-                : "bg-bg-surface text-ink-mist-dim"
-            }`}
-          >
-            {revealed.has(i) ? bombIndex === i ? <IconBomb size={24} /> : <IconCoin size={24} /> : <IconHelp size={20} />}
-          </button>
-        ))}
+      <div className="flex gap-2">
+        {Array.from({ length: LINE_SIZE }, (_, i) => {
+          const isPicked = pickedIndex === i;
+          return (
+            <button
+              key={i}
+              onClick={() => revealMutation.mutate(i)}
+              disabled={isBusy}
+              className={`flex h-16 w-16 items-center justify-center rounded-2xl active:scale-90 disabled:active:scale-100 ${
+                isPicked
+                  ? pickedIsSteward
+                    ? "bg-red-500/20 text-red-500"
+                    : "bg-accent-green/15 text-accent-green"
+                  : "bg-bg-surface text-ink-mist-dim"
+              }`}
+            >
+              {isPicked ? pickedIsSteward ? <IconProfile size={24} /> : <IconCoin size={24} /> : <IconHelp size={20} />}
+            </button>
+          );
+        })}
       </div>
 
       <button
         onClick={() => bankMutation.mutate()}
-        disabled={score === 0 || bankMutation.isPending}
+        disabled={score === 0 || bankMutation.isPending || isBusy}
         className="flex items-center gap-1.5 rounded-2xl bg-floodlight px-8 py-3 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-40"
       >
         Забрать {score > 0 ? <span className="inline-flex items-center gap-1 font-mono">{score}<IconCoin size={15} /></span> : ""}

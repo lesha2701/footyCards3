@@ -1,10 +1,23 @@
-@import "@fontsource/unbounded/700.css";
-@import "@fontsource/unbounded/800.css";
 @import "@fontsource/manrope/400.css";
 @import "@fontsource/manrope/600.css";
 @import "@fontsource/manrope/700.css";
 @import "@fontsource/ibm-plex-mono/500.css";
 @import "@fontsource/ibm-plex-mono/600.css";
+
+@font-face {
+  font-family: "Benzin";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/benzin/benzin-bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Benzin";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("/fonts/benzin/benzin-extrabold.woff2") format("woff2");
+}
 
 @tailwind base;
 @tailwind components;

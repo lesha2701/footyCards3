@@ -3,8 +3,9 @@ import { useState } from "react";
 
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
-import { IconCoin, IconCollection, IconLock, IconTag } from "@/components/icons";
+import { IconCoin, IconCollection, IconLock, IconTag, IconUpgrade } from "@/components/icons";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
+import CardUpgradeModal from "@/components/cards/CardUpgradeModal";
 import PlayerCard from "@/components/cards/PlayerCard";
 import {
   bulkSellCards,
@@ -16,7 +17,7 @@ import {
 } from "@/api/collection";
 import { fetchCollections } from "@/api/collections";
 import { ApiRequestError, staticUrl } from "@/lib/api";
-import { POSITION_LABELS, RARITY_LABELS } from "@/lib/rarity";
+import { POSITION_LABELS, RARITY_LABELS, RARITY_ORDER } from "@/lib/rarity";
 import { useAuthStore } from "@/store/authStore";
 import type { Rarity, UserCard } from "@/types";
 
@@ -34,6 +35,7 @@ export default function CollectionPage() {
   const [selected, setSelected] = useState<number[]>([]);
   const [detailCard, setDetailCard] = useState<UserCard | null>(null);
   const [confirmSell, setConfirmSell] = useState<{ ids: number[]; lastCopy: boolean } | null>(null);
+  const [upgradeCard, setUpgradeCard] = useState<UserCard | null>(null);
 
   const filters: CollectionFilters = {
     rarity: rarity ?? undefined,
@@ -187,8 +189,15 @@ export default function CollectionPage() {
           onSell={() => setConfirmSell({ ids: [detailCard.id], lastCopy: false })}
           onToggleHidden={(hidden) => hideMutation.mutate({ id: detailCard.id, hidden })}
           hiddenPending={hideMutation.isPending}
+          onUpgrade={
+            RARITY_ORDER[detailCard.player.rarity] < RARITY_ORDER.legendary
+              ? () => { setUpgradeCard(detailCard); setDetailCard(null); }
+              : undefined
+          }
         />
       )}
+
+      {upgradeCard && <CardUpgradeModal card={upgradeCard} onClose={() => setUpgradeCard(null)} />}
 
       <ConfirmDialog
         open={!!confirmSell}
@@ -224,12 +233,14 @@ function CardDetailModal({
   onSell,
   onToggleHidden,
   hiddenPending,
+  onUpgrade,
 }: {
   card: UserCard;
   onClose: () => void;
   onSell: () => void;
   onToggleHidden: (hidden: boolean) => void;
   hiddenPending: boolean;
+  onUpgrade?: () => void;
 }) {
   const player = card.player;
   return (
@@ -270,7 +281,17 @@ function CardDetailModal({
             className="h-5 w-5 shrink-0 accent-accent-lime"
           />
         </label>
-        <div className="mt-4 flex gap-2">
+        {onUpgrade && (
+          <button
+            onClick={onUpgrade}
+            disabled={card.is_locked_by_admin || card.is_locked_in_trade || card.is_in_lineup}
+            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-2xl bg-bg-raised py-2.5 text-sm font-semibold text-accent-lime disabled:opacity-40"
+          >
+            <IconUpgrade size={15} />
+            Апгрейд редкости
+          </button>
+        )}
+        <div className="mt-2 flex gap-2">
           <button onClick={onClose} className="flex-1 rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist">Закрыть</button>
           <button
             onClick={onSell}

@@ -12,7 +12,14 @@ from app.schemas.game import SaboteurClaimOut, SaboteurRevealOut, SaboteurStartO
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
-GRID_SIZE = 16
+LINE_SIZE = 5
+
+
+def _line_reward(base_reward: int, steward_count: int, growth: float, level: int) -> int:
+    """Reward for clearing a given ladder level: scales with how many
+    stewards are on the line (harder pick) and compounds by `growth` per
+    level climbed, so pressing on gets progressively more lucrative."""
+    return round(base_reward * steward_count * (growth ** (level - 1)))
 
 
 async def _ensure_daily_reset(db: AsyncSession, user: User) -> None:
@@ -33,12 +40,12 @@ async def _ensure_hourly_reset(db: AsyncSession, user: User) -> None:
         db.add(user)
 
 
-async def start_session(db: AsyncSession, user: User, bomb_count: int = 1) -> SaboteurStartOut:
+async def start_session(db: AsyncSession, user: User, steward_count: int = 1) -> SaboteurStartOut:
     config = await get_config(db)
-    if not (1 <= bomb_count <= config.saboteur_max_bomb_count):
+    if not (1 <= steward_count <= config.saboteur_max_steward_count):
         raise ConflictError(
-            f"bomb_count must be between 1 and {config.saboteur_max_bomb_count}",
-            details={"max_bomb_count": config.saboteur_max_bomb_count},
+            f"steward_count must be between 1 and {config.saboteur_max_steward_count}",
+            details={"max_steward_count": config.saboteur_max_steward_count},
         )
 
     locked_user = await lock_user_for_update(db, user.id)
@@ -63,15 +70,15 @@ async def start_session(db: AsyncSession, user: User, bomb_count: int = 1) -> Sa
             details={"daily_limit": config.saboteur_daily_limit},
         )
 
-    bomb_indices = random.sample(range(GRID_SIZE), bomb_count)
+    line_stewards = random.sample(range(LINE_SIZE), steward_count)
     session = GameSession(
         user_id=locked_user.id, game_type=GameType.saboteur, status=GameSessionStatus.in_progress,
-        server_state={"bomb_indices": bomb_indices, "bomb_count": bomb_count, "revealed": []},
+        server_state={"steward_count": steward_count, "level": 1, "line_stewards": line_stewards},
     )
     db.add(session)
     await db.commit()
     await db.refresh(session)
-    return SaboteurStartOut(session_id=session.id, grid_size=GRID_SIZE, bomb_count=bomb_count)
+    return SaboteurStartOut(session_id=session.id, line_size=LINE_SIZE, steward_count=steward_count, level=1)
 
 
 async def _get_session(db: AsyncSession, user_id: int, session_id: int) -> GameSession:
@@ -88,35 +95,41 @@ async def reveal_cell(db: AsyncSession, user: User, session_id: int, cell_index:
     session = await _get_session(db, user.id, session_id)
     if session.status != GameSessionStatus.in_progress:
         raise ConflictError("This game session has already finished")
-    if not (0 <= cell_index < GRID_SIZE):
+    if not (0 <= cell_index < LINE_SIZE):
         raise ConflictError("Invalid cell index")
 
     state = dict(session.server_state)
-    revealed = list(state["revealed"])
-    if cell_index in revealed:
-        raise ConflictError("Cell already revealed")
+    steward_count = state["steward_count"]
+    level = state["level"]
+    line_stewards = state["line_stewards"]
+    growth = float(config.saboteur_line_growth)
 
-    if cell_index in state["bomb_indices"]:
-        revealed.append(cell_index)
-        state["revealed"] = revealed
-        session.server_state = state
+    if cell_index in line_stewards:
+        # Softer failure than an outright wipe: the fan still gets stopped,
+        # but always walks away with at least what clearing one line is
+        # worth, regardless of how far up the ladder they'd climbed.
         session.status = GameSessionStatus.lost
         session.finished_at = datetime.now(timezone.utc)
-        session.reward_coins = session.score // 2
+        session.reward_coins = _line_reward(config.saboteur_line_base_reward, steward_count, growth, 1)
         db.add(session)
         await db.commit()
         return SaboteurRevealOut(
-            is_bomb=True, session_id=session.id, score=session.score, status=session.status.value,
-            reward_coins=session.reward_coins,
+            is_steward=True, session_id=session.id, score=session.score, level=level,
+            status=session.status.value, reward_coins=session.reward_coins,
         )
 
-    revealed.append(cell_index)
-    state["revealed"] = revealed
+    reward = _line_reward(config.saboteur_line_base_reward, steward_count, growth, level)
+    session.score += reward
+    next_level = level + 1
+    state["level"] = next_level
+    state["line_stewards"] = random.sample(range(LINE_SIZE), steward_count)
     session.server_state = state
-    session.score += config.saboteur_cell_reward * state["bomb_count"]
     db.add(session)
     await db.commit()
-    return SaboteurRevealOut(is_bomb=False, session_id=session.id, score=session.score, status=session.status.value)
+    return SaboteurRevealOut(
+        is_steward=False, session_id=session.id, score=session.score, level=next_level,
+        status=session.status.value,
+    )
 
 
 async def end_session(db: AsyncSession, user: User, session_id: int) -> SaboteurRevealOut:
@@ -124,14 +137,15 @@ async def end_session(db: AsyncSession, user: User, session_id: int) -> Saboteur
     session = await _get_session(db, user.id, session_id)
     if session.status != GameSessionStatus.in_progress:
         raise ConflictError("This game session has already finished")
+    state = session.server_state
     session.status = GameSessionStatus.won
     session.finished_at = datetime.now(timezone.utc)
     session.reward_coins = session.score
     db.add(session)
     await db.commit()
     return SaboteurRevealOut(
-        is_bomb=False, session_id=session.id, score=session.score, status=session.status.value,
-        reward_coins=session.reward_coins,
+        is_steward=False, session_id=session.id, score=session.score, level=state["level"],
+        status=session.status.value, reward_coins=session.reward_coins,
     )
 
 

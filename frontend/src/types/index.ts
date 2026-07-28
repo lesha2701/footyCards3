@@ -67,6 +67,24 @@ export interface UserCard {
   duplicate_count?: number;
 }
 
+export interface CardUpgradeRule {
+  id: number;
+  from_rarity: Rarity;
+  to_rarity: Rarity;
+  success_chance: number;
+  coin_cost: number;
+  is_active: boolean;
+}
+
+export interface CardUpgradeResult {
+  success: boolean;
+  from_rarity: Rarity;
+  to_rarity: Rarity;
+  coin_cost: number;
+  new_card: UserCard | null;
+  new_balance: number;
+}
+
 export interface CollectionStats {
   unique_players: number;
   total_cards: number;
@@ -347,14 +365,16 @@ export interface TaskClaimResult {
 
 export interface SaboteurStartResult {
   session_id: number;
-  grid_size: number;
-  bomb_count: number;
+  line_size: number;
+  steward_count: number;
+  level: number;
 }
 
 export interface SaboteurRevealResult {
-  is_bomb: boolean;
+  is_steward: boolean;
   session_id: number;
   score: number;
+  level: number;
   status: string;
   reward_coins: number | null;
 }

@@ -72,7 +72,7 @@ async def memory_leaderboard(db: AsyncSession = Depends(get_db), _user: User = D
 @router.post("/saboteur/start", response_model=SaboteurStartOut)
 async def saboteur_start(payload: SaboteurStartRequest = SaboteurStartRequest(), db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     check_rate_limit(f"saboteur_start:{user.id}", max_calls=20, window_seconds=60)
-    return await saboteur_service.start_session(db, user, payload.bomb_count)
+    return await saboteur_service.start_session(db, user, payload.steward_count)
 
 
 @router.post("/saboteur/{session_id}/reveal", response_model=SaboteurRevealOut)

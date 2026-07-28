@@ -40,13 +40,14 @@ class MemoryLeaderboardEntry(BaseModel):
 # --- Saboteur ---
 
 class SaboteurStartRequest(BaseModel):
-    bomb_count: int = 1
+    steward_count: int = 1
 
 
 class SaboteurStartOut(BaseModel):
     session_id: int
-    grid_size: int
-    bomb_count: int
+    line_size: int
+    steward_count: int
+    level: int
 
 
 class SaboteurRevealRequest(BaseModel):
@@ -54,9 +55,10 @@ class SaboteurRevealRequest(BaseModel):
 
 
 class SaboteurRevealOut(BaseModel):
-    is_bomb: bool
+    is_steward: bool
     session_id: int
     score: int
+    level: int
     status: str
     reward_coins: Optional[int] = None
 

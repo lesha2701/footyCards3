@@ -46,8 +46,8 @@ export async function fetchMemoryLeaderboard(): Promise<MemoryLeaderboardEntry[]
 
 // --- Saboteur ---
 
-export async function startSaboteur(bombCount: number): Promise<SaboteurStartResult> {
-  const { data } = await api.post<SaboteurStartResult>("/games/saboteur/start", { bomb_count: bombCount });
+export async function startSaboteur(stewardCount: number): Promise<SaboteurStartResult> {
+  const { data } = await api.post<SaboteurStartResult>("/games/saboteur/start", { steward_count: stewardCount });
   return data;
 }
 

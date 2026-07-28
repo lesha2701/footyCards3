@@ -24,9 +24,10 @@ class GameConfig(TimestampMixin, Base):
     difficulty_hard_multiplier: Mapped[float] = mapped_column(Numeric(4, 2), default=1.2, nullable=False)
     suspicious_score_margin: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
 
-    saboteur_cell_reward: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    saboteur_line_base_reward: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    saboteur_line_growth: Mapped[float] = mapped_column(Numeric(4, 2), default=1.15, nullable=False)
     saboteur_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
-    saboteur_max_bomb_count: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    saboteur_max_steward_count: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
 
     penalty_reward_win: Mapped[int] = mapped_column(Integer, default=45, nullable=False)
     penalty_reward_draw: Mapped[int] = mapped_column(Integer, default=18, nullable=False)

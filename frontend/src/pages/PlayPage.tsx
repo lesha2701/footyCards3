@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { fetchArenaStats } from "@/api/matches";
-import { IconBall, IconBomb, IconBrain, IconGoal, IconHelp, IconTarget, IconTrophy, type IconProps } from "@/components/icons";
+import { IconBall, IconBrain, IconGoal, IconHelp, IconProfile, IconTarget, IconTrophy, type IconProps } from "@/components/icons";
 import { useAuthStore } from "@/store/authStore";
 
 export default function PlayPage() {
@@ -44,10 +44,10 @@ export default function PlayPage() {
 
         <GameCard
           onClick={() => navigate("/play/saboteur")}
-          Icon={IconBomb}
+          Icon={IconProfile}
           badgeClass="bg-rarity-common"
           title="Футбольный сапёр"
-          description="Открывай ячейки, копи монеты, берегись бомбы"
+          description="Проберись сквозь стюардов к любимому игроку"
         />
 
         <GameCard

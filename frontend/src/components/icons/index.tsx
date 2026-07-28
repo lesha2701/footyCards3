@@ -443,6 +443,16 @@ export function IconBoot(props: IconProps) {
   );
 }
 
+export function IconUpgrade(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="5" y="3" width="14" height="18" rx="3" />
+      <polyline points="9,13.5 12,9.5 15,13.5" />
+      <line x1="12" y1="9.5" x2="12" y2="17" />
+    </IconBase>
+  );
+}
+
 export function IconClock(props: IconProps) {
   return (
     <IconBase {...props}>

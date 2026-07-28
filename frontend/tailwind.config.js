@@ -30,7 +30,7 @@ export default {
         },
       },
       fontFamily: {
-        display: ["'Unbounded'", "system-ui", "sans-serif"],
+        display: ["'Benzin'", "system-ui", "sans-serif"],
         body: ["'Manrope'", "system-ui", "sans-serif"],
         mono: ["'IBM Plex Mono'", "ui-monospace", "monospace"],
       },

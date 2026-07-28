@@ -1,6 +1,7 @@
 from app.models.admin_action import AdminAction
 from app.models.card import UserCard
 from app.models.card_collection import CardCollection
+from app.models.card_upgrade import CardUpgradeAttempt, CardUpgradeRule
 from app.models.daily_reward import DailyReward
 from app.models.game import GameSession, MemoryGameRound
 from app.models.game_config import GameConfig
@@ -18,6 +19,8 @@ __all__ = [
     "AdminAction",
     "UserCard",
     "CardCollection",
+    "CardUpgradeAttempt",
+    "CardUpgradeRule",
     "DailyReward",
     "GameSession",
     "MemoryGameRound",

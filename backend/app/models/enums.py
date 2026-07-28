@@ -36,6 +36,7 @@ class CardSource(str, enum.Enum):
     seed = "seed"
     task = "task"
     free_pack = "free_pack"
+    card_upgrade = "card_upgrade"
 
 
 class TransactionType(str, enum.Enum):
@@ -50,6 +51,7 @@ class TransactionType(str, enum.Enum):
     trade_coins_received = "trade_coins_received"
     admin_adjustment = "admin_adjustment"
     task_reward = "task_reward"
+    card_upgrade = "card_upgrade"
 
 
 class TaskCategory(str, enum.Enum):
