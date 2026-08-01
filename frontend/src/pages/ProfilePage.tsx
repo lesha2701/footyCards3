@@ -33,6 +33,7 @@ const TX_TYPE_LABELS: Record<string, string> = {
   trade_coins_sent: "Обмен: отправлено",
   trade_coins_received: "Обмен: получено",
   admin_adjustment: "Корректировка администратором",
+  referral_reward: "Реферальная награда",
 };
 
 export default function ProfilePage() {

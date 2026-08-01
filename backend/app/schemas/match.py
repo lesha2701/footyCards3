@@ -16,10 +16,22 @@ class MatchEventOut(BaseModel):
     payload: Optional[dict] = None
 
 
-class MatchPendingShotOut(BaseModel):
-    team: str
-    shot_type: str
+class MatchActorOut(BaseModel):
+    user_card_id: int
+    player_id: int
+    name: str
+    rating: int
+    position: str
+
+
+class MatchPendingMomentOut(BaseModel):
     seq: int
+    team: str
+    kind: Literal["attack", "defense", "breakaway"]
+    shot_type: str
+    description: str
+    actions: list[Literal["shoot", "pass", "tackle", "block", "keeper", "strike"]]
+    actors: dict[str, MatchActorOut]
 
 
 class MatchOut(BaseModel):
@@ -38,15 +50,15 @@ class MatchOut(BaseModel):
     rating_delta: int
     created_at: datetime
     events: list[MatchEventOut] = []
-    pending_shot: Optional[MatchPendingShotOut] = None
+    pending_moment: Optional[MatchPendingMomentOut] = None
 
 
 class StartMatchRequest(BaseModel):
     difficulty: MatchDifficulty = MatchDifficulty.medium
 
 
-class ShootRequest(BaseModel):
-    direction: Optional[Literal["left", "center", "right"]] = None
+class MatchActionRequest(BaseModel):
+    action: Literal["shoot", "pass", "tackle", "block", "keeper", "strike"]
     expected_seq: Optional[int] = None
 
 

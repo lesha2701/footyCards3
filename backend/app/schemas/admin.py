@@ -112,6 +112,22 @@ class GameConfigOut(BaseModel):
     match_shot_type_in_box_weight: int
     match_shot_type_long_range_weight: int
     match_shot_type_empty_net_weight: int
+    match_attack_shoot_miss_chance_min: float
+    match_attack_shoot_miss_chance_max: float
+    match_pass_fail_chance_min: float
+    match_pass_fail_chance_max: float
+    match_receiver_shot_miss_chance_min: float
+    match_receiver_shot_miss_chance_max: float
+    match_tackle_foul_chance_min: float
+    match_tackle_foul_chance_max: float
+    match_tackle_red_chance_min: float
+    match_tackle_red_chance_max: float
+    match_block_fail_chance_min: float
+    match_block_fail_chance_max: float
+    match_keeper_save_chance_min: float
+    match_keeper_save_chance_max: float
+    match_red_card_strength_penalty_pct: float
+    match_penalty_gk_rating_penalty: int
     saboteur_line_base_reward: int
     saboteur_line_growth: float
     saboteur_daily_limit: int
@@ -128,6 +144,8 @@ class GameConfigOut(BaseModel):
     hourly_game_limit: int
     free_pack_interval_hours: int
     free_pack_pack_slug: str
+    referral_referred_reward: int
+    referral_referrer_reward: int
     hangman_daily_limit: int
     hangman_reward_correct: int
     hangman_max_wrong: int
@@ -151,6 +169,22 @@ class GameConfigUpdate(BaseModel):
     match_shot_type_in_box_weight: Optional[int] = Field(default=None, ge=0)
     match_shot_type_long_range_weight: Optional[int] = Field(default=None, ge=0)
     match_shot_type_empty_net_weight: Optional[int] = Field(default=None, ge=0)
+    match_attack_shoot_miss_chance_min: Optional[float] = Field(default=None, ge=0, le=1)
+    match_attack_shoot_miss_chance_max: Optional[float] = Field(default=None, ge=0, le=1)
+    match_pass_fail_chance_min: Optional[float] = Field(default=None, ge=0, le=1)
+    match_pass_fail_chance_max: Optional[float] = Field(default=None, ge=0, le=1)
+    match_receiver_shot_miss_chance_min: Optional[float] = Field(default=None, ge=0, le=1)
+    match_receiver_shot_miss_chance_max: Optional[float] = Field(default=None, ge=0, le=1)
+    match_tackle_foul_chance_min: Optional[float] = Field(default=None, ge=0, le=1)
+    match_tackle_foul_chance_max: Optional[float] = Field(default=None, ge=0, le=1)
+    match_tackle_red_chance_min: Optional[float] = Field(default=None, ge=0, le=1)
+    match_tackle_red_chance_max: Optional[float] = Field(default=None, ge=0, le=1)
+    match_block_fail_chance_min: Optional[float] = Field(default=None, ge=0, le=1)
+    match_block_fail_chance_max: Optional[float] = Field(default=None, ge=0, le=1)
+    match_keeper_save_chance_min: Optional[float] = Field(default=None, ge=0, le=1)
+    match_keeper_save_chance_max: Optional[float] = Field(default=None, ge=0, le=1)
+    match_red_card_strength_penalty_pct: Optional[float] = Field(default=None, ge=0, le=1)
+    match_penalty_gk_rating_penalty: Optional[int] = Field(default=None, ge=0)
     saboteur_line_base_reward: Optional[int] = Field(default=None, ge=0)
     saboteur_line_growth: Optional[float] = Field(default=None, ge=1)
     saboteur_daily_limit: Optional[int] = Field(default=None, ge=0)
@@ -167,6 +201,8 @@ class GameConfigUpdate(BaseModel):
     hourly_game_limit: Optional[int] = Field(default=None, ge=1)
     free_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     free_pack_pack_slug: Optional[str] = None
+    referral_referred_reward: Optional[int] = Field(default=None, ge=0)
+    referral_referrer_reward: Optional[int] = Field(default=None, ge=0)
     hangman_daily_limit: Optional[int] = Field(default=None, ge=0)
     hangman_reward_correct: Optional[int] = Field(default=None, ge=0)
     hangman_max_wrong: Optional[int] = Field(default=None, ge=1)

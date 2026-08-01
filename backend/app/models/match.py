@@ -35,10 +35,12 @@ class Match(Base):
     server_state: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
 
-    events: Mapped[list["MatchEvent"]] = relationship(back_populates="match", cascade="all, delete-orphan")
+    events: Mapped[list["MatchEvent"]] = relationship(
+        back_populates="match", cascade="all, delete-orphan", order_by="MatchEvent.id"
+    )
 
     @property
-    def pending_shot(self) -> Optional[dict]:
+    def pending_moment(self) -> Optional[dict]:
         if self.status != MatchStatus.in_progress or not self.server_state:
             return None
         moments = self.server_state.get("moments", [])
@@ -50,7 +52,17 @@ class Match(Base):
             return None
         if moment["team"] == "opponent" and moment["shot_type"] == "empty_net":
             return None
-        return {"team": moment["team"], "shot_type": moment["shot_type"], "seq": i}
+        situation_kind = moment.get("situation_kind", "")
+        kind = "breakaway" if situation_kind.startswith("breakaway") else situation_kind
+        return {
+            "seq": i,
+            "team": moment["team"],
+            "kind": kind,
+            "shot_type": moment["shot_type"],
+            "description": moment.get("description", ""),
+            "actions": moment.get("actions", []),
+            "actors": moment.get("actors", {}),
+        }
 
 
 class MatchEvent(Base):

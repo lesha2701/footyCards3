@@ -86,6 +86,7 @@ async def get_private_profile(db: AsyncSession, user: User) -> ProfilePrivateOut
         is_admin=user.is_admin,
         telegram_bot_username=get_settings().telegram_bot_username,
         accept_trades=user.accept_trades,
+        referral_reward_pending=user.referred_by_id is not None and not user.referral_reward_granted,
     )
 
 

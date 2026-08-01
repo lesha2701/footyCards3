@@ -14,6 +14,7 @@ import {
   IconCoin,
   IconCollection,
   IconGift,
+  IconHandshake,
   IconPlay,
   IconSwap,
   IconTarget,
@@ -79,6 +80,15 @@ export default function HomePage() {
       </section>
 
       <div className="flex flex-col gap-3">
+        {profile?.referral_reward_pending && (
+          <NoticeCard
+            Icon={IconHandshake}
+            title="Тебя пригласил друг!"
+            subtitle="Открой любой пак (можно бесплатный) и получи 200 монет"
+            onClick={() => navigate("/packs")}
+          />
+        )}
+
         {calendar && !calendar.already_claimed_today && (
           <NoticeCard
             Icon={IconGift}

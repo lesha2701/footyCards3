@@ -52,6 +52,7 @@ class TransactionType(str, enum.Enum):
     admin_adjustment = "admin_adjustment"
     task_reward = "task_reward"
     card_upgrade = "card_upgrade"
+    referral_reward = "referral_reward"
 
 
 class TaskCategory(str, enum.Enum):

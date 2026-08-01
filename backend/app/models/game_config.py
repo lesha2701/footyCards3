@@ -32,6 +32,23 @@ class GameConfig(TimestampMixin, Base):
     match_shot_type_long_range_weight: Mapped[int] = mapped_column(Integer, default=35, nullable=False)
     match_shot_type_empty_net_weight: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
 
+    match_attack_shoot_miss_chance_min: Mapped[float] = mapped_column(Numeric(4, 2), default=0.08, nullable=False)
+    match_attack_shoot_miss_chance_max: Mapped[float] = mapped_column(Numeric(4, 2), default=0.32, nullable=False)
+    match_pass_fail_chance_min: Mapped[float] = mapped_column(Numeric(4, 2), default=0.05, nullable=False)
+    match_pass_fail_chance_max: Mapped[float] = mapped_column(Numeric(4, 2), default=0.28, nullable=False)
+    match_receiver_shot_miss_chance_min: Mapped[float] = mapped_column(Numeric(4, 2), default=0.05, nullable=False)
+    match_receiver_shot_miss_chance_max: Mapped[float] = mapped_column(Numeric(4, 2), default=0.22, nullable=False)
+    match_tackle_foul_chance_min: Mapped[float] = mapped_column(Numeric(4, 2), default=0.06, nullable=False)
+    match_tackle_foul_chance_max: Mapped[float] = mapped_column(Numeric(4, 2), default=0.30, nullable=False)
+    match_tackle_red_chance_min: Mapped[float] = mapped_column(Numeric(4, 2), default=0.05, nullable=False)
+    match_tackle_red_chance_max: Mapped[float] = mapped_column(Numeric(4, 2), default=0.22, nullable=False)
+    match_block_fail_chance_min: Mapped[float] = mapped_column(Numeric(4, 2), default=0.10, nullable=False)
+    match_block_fail_chance_max: Mapped[float] = mapped_column(Numeric(4, 2), default=0.32, nullable=False)
+    match_keeper_save_chance_min: Mapped[float] = mapped_column(Numeric(4, 2), default=0.35, nullable=False)
+    match_keeper_save_chance_max: Mapped[float] = mapped_column(Numeric(4, 2), default=0.75, nullable=False)
+    match_red_card_strength_penalty_pct: Mapped[float] = mapped_column(Numeric(4, 2), default=0.12, nullable=False)
+    match_penalty_gk_rating_penalty: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+
     saboteur_line_base_reward: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     saboteur_line_growth: Mapped[float] = mapped_column(Numeric(4, 2), default=1.15, nullable=False)
     saboteur_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
@@ -56,3 +73,6 @@ class GameConfig(TimestampMixin, Base):
 
     free_pack_interval_hours: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     free_pack_pack_slug: Mapped[str] = mapped_column(String, default="basic", nullable=False)
+
+    referral_referred_reward: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    referral_referrer_reward: Mapped[int] = mapped_column(Integer, default=400, nullable=False)

@@ -16,8 +16,8 @@ from app.models.user import User
 from app.schemas.match import (
     ArenaLeaderboardEntry,
     ArenaStatsOut,
+    MatchActionRequest,
     MatchOut,
-    ShootRequest,
     StartMatchRequest,
 )
 from app.schemas.lineup import LineupOut
@@ -25,6 +25,12 @@ from app.schemas.ranking import RankingMetric
 from app.services import ranking_service, task_service
 from app.services.game_config_service import get_config
 from app.services.lineup_service import TACTIC_MULTIPLIERS, get_active_lineup, split_strength
+from app.services.match_situations import (
+    ATTACK_SITUATIONS_BY_ID,
+    ATTACK_SITUATIONS_BY_SHOT_TYPE,
+    DEFENSE_SITUATIONS_BY_ID,
+    DEFENSE_SITUATIONS_BY_SHOT_TYPE,
+)
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
 BOT_NAMES = [
@@ -32,7 +38,6 @@ BOT_NAMES = [
     "Юнайтед Роботс", "ФК Комета", "Гранит Юнайтед", "Южный Роверс", "Молния СК",
 ]
 
-DIRECTIONS = ("left", "center", "right")
 SHOT_TYPES = ("in_box", "long_range", "empty_net")
 
 # (flavor event_type, weight) — narrated automatically, never interactive.
@@ -74,7 +79,9 @@ def _category_avg(lineup: LineupOut, category: str) -> int:
     return round(sum(ratings) / len(ratings)) if ratings else 70
 
 
-def _synthesize_bot_ratings(user_fwd: int, user_def: int, opponent_strength: int, user_strength: int) -> tuple[int, int]:
+def _synthesize_bot_ratings(
+    user_fwd: int, user_def: int, user_gk: int, opponent_strength: int, user_strength: int
+) -> tuple[int, int, int]:
     """Bots have no real lineup to read positional ratings from — reuse the
     same strength ratio `_bot_strength()` already computed (which encodes the
     difficulty multiplier + jitter) and apply it to the user's own real
@@ -84,12 +91,44 @@ def _synthesize_bot_ratings(user_fwd: int, user_def: int, opponent_strength: int
     def clamp(rating: float) -> int:
         return max(58, min(99, round(rating * ratio)))
 
-    return clamp(user_fwd), clamp(user_def)
+    return clamp(user_fwd), clamp(user_def), clamp(user_gk)
 
 
 def _lerp_chance(rating: int, low: float, high: float) -> float:
     r = max(58, min(99, rating))
     return high - (r - 58) / (99 - 58) * (high - low)
+
+
+def _lerp_chance_positive(rating: int, low: float, high: float) -> float:
+    """Same clamp/interpolation as `_lerp_chance`, but for stats where a
+    HIGHER rating means a HIGHER chance — e.g. a keeper's save chance —
+    rather than a lower one (miss/foul/fail chances all use `_lerp_chance`)."""
+    r = max(58, min(99, rating))
+    return low + (r - 58) / (99 - 58) * (high - low)
+
+
+def _clamp_rating(rating: float) -> int:
+    return max(58, min(99, round(rating)))
+
+
+def _pick_actor(
+    lineup: LineupOut, category: str, preferred_positions: tuple, exclude_ids: tuple[int, ...] = ()
+) -> dict:
+    cards = [s.card for s in lineup.slots if s.category == category and s.card and s.card.id not in exclude_ids]
+    pool = [c for c in cards if c.player.position in preferred_positions] or cards
+    if not pool:
+        # Graceful fallback — squad has nobody in that exact category/position
+        # combo (e.g. a tactic with no natural CAM); any outfield player can
+        # still stand in rather than the moment failing to generate.
+        pool = [s.card for s in lineup.slots if s.category != "GK" and s.card and s.card.id not in exclude_ids]
+    card = random.choice(pool)
+    return {
+        "user_card_id": card.id,
+        "player_id": card.player.id,
+        "name": card.player.display_name,
+        "rating": card.player.rating,
+        "position": card.player.position.value,
+    }
 
 
 # Each event type has several (mine, opponent) phrasing pairs — a random one
@@ -142,6 +181,20 @@ _EVENT_DESCRIPTIONS: dict[str, list[tuple[str, str]]] = {
         ("⚽ Мяч контролирует твоя команда", "⚽ Мяч контролирует {them}"),
         ("⚽ Твоя команда уверенно держит мяч", "⚽ {them} уверенно держит мяч"),
     ],
+    "pass_failed": [
+        ("❌ Пас твоей команды не находит адресата — атака сорвана", "❌ Пас {them} не находит адресата — атака сорвана"),
+        ("❌ Неточная передача — твоя атака прерывается", "❌ Неточная передача {them} — атака прерывается"),
+    ],
+    # Always narrated from the "opponent" branch in practice — Tackle is only
+    # offered while the user is defending, i.e. `team == "opponent"`.
+    "tackle_won": [
+        ("🛡️ Защитник {them} чисто отбирает мяч в подкате!", "🛡️ Точный подкат — твой защитник чисто выигрывает мяч!"),
+        ("🛡️ {them} успевает выиграть мяч в подкате без фола!", "🛡️ Твой защитник вовремя подключается и забирает мяч без фола!"),
+    ],
+    "foul_stopped": [
+        ("🟨 Фол защитника {them} останавливает вашу атаку", "🟨 Фол в подкате останавливает атаку — но без реальной угрозы воротам"),
+        ("🟨 Судья фиксирует фол {them} — атака прервана", "🟨 Судья фиксирует фол твоего защитника — атака прервана вдали от штрафной"),
+    ],
 }
 
 
@@ -151,9 +204,50 @@ def _describe_event(event_type: str, team: str, opponent_name: str) -> str:
     return text.format(them=opponent_name)
 
 
-def _generate_moment_queue(user_attack: int, opponent_attack: int, config: GameConfig) -> list[dict]:
+def _build_shot_moment(minute: int, team: str, shot_type: str, lineup: LineupOut, opponent_name: str) -> dict:
+    moment = {"minute": minute, "kind": "shot", "team": team, "shot_type": shot_type}
+
+    if shot_type == "empty_net":
+        if team == "user":
+            moment.update(
+                situation_kind="breakaway_user", situation_id=None, actors={},
+                description="Пустые ворота! Не отправь мяч в трибуны.", actions=["strike"],
+            )
+        else:
+            moment.update(situation_kind="breakaway_opponent", situation_id=None, actors={}, description="", actions=[])
+        return moment
+
+    if team == "user":
+        situation = random.choice(ATTACK_SITUATIONS_BY_SHOT_TYPE[shot_type])
+        shooter = _pick_actor(lineup, situation.shooter_category, situation.shooter_positions)
+        pass_target = _pick_actor(
+            lineup, situation.pass_target_category, situation.pass_target_positions,
+            exclude_ids=(shooter["user_card_id"],),
+        )
+        description = situation.template.format(shooter=shooter["name"], pass_target=pass_target["name"])
+        moment.update(
+            situation_kind="attack", situation_id=situation.id,
+            actors={"shooter": shooter, "pass_target": pass_target},
+            description=description, actions=["shoot", "pass"],
+        )
+    else:
+        situation = random.choice(DEFENSE_SITUATIONS_BY_SHOT_TYPE[shot_type])
+        defender = _pick_actor(lineup, situation.defender_category, situation.defender_positions)
+        description = situation.template.format(defender=defender["name"], them=opponent_name)
+        moment.update(
+            situation_kind="defense", situation_id=situation.id, actors={"defender": defender},
+            description=description, actions=["tackle", "block", "keeper"],
+        )
+    return moment
+
+
+def _generate_moment_queue(
+    user_attack: int, opponent_attack: int, config: GameConfig, lineup: LineupOut, opponent_name: str
+) -> list[dict]:
     """Decides *what* happens and *when* — minute, kind (flavor/shot), team,
-    and (for shots) shot_type. Outcome rolls are deferred to resolution time."""
+    and (for shots) the full situation/actors/description. Outcome rolls are
+    deferred to resolution time; only identity + narration are baked in now,
+    so resolution never has to trust client-supplied actor identity."""
     total_attack = user_attack + opponent_attack
     user_attack_prob = user_attack / total_attack if total_attack else 0.5
 
@@ -175,7 +269,7 @@ def _generate_moment_queue(user_attack: int, opponent_attack: int, config: GameC
         kind = random.choices(kinds, weights=weights, k=1)[0]
         if kind == "shot_chance":
             shot_type = random.choices(list(SHOT_TYPES), weights=shot_weights, k=1)[0]
-            moments.append({"minute": minute, "kind": "shot", "team": team, "shot_type": shot_type})
+            moments.append(_build_shot_moment(minute, team, shot_type, lineup, opponent_name))
         else:
             moments.append({"minute": minute, "kind": "flavor", "event_type": kind, "team": team})
     return moments
@@ -188,68 +282,214 @@ def _is_interactive(moment: dict) -> bool:
     return moment["team"] == "user" or moment["shot_type"] != "empty_net"
 
 
-def _resolve_shot(
-    moment: dict, ratings: dict, config: GameConfig, opponent_name: str, direction: Optional[str]
-) -> tuple[dict, Optional[str]]:
-    attacker = moment["team"]
-    defender = "opponent" if attacker == "user" else "user"
-    shot_type = moment["shot_type"]
+def _apply_card(state: dict, user_card_id: int, is_red: bool) -> str:
+    key = str(user_card_id)
+    entry = state["cards"].setdefault(key, {"yellow_count": 0, "sent_off": False})
+    if is_red or entry["yellow_count"] >= 1:
+        entry["sent_off"] = True
+        return "red"
+    entry["yellow_count"] += 1
+    return "yellow"
 
-    fwd = ratings[f"{attacker}_fwd"]
+
+def _apply_red_card_debuff(state: dict, config: GameConfig) -> None:
+    # Applied once per match — models the team playing with ten men in open
+    # play as a flat aggregate effect, not a stat drop on one specific card.
+    if state.get("red_card_applied"):
+        return
+    state["ratings"]["user_def"] = max(58, round(
+        state["ratings"]["user_def"] * (1 - float(config.match_red_card_strength_penalty_pct))
+    ))
+    state["red_card_applied"] = True
+
+
+def _resolve_shot_continuation(
+    missed: bool, shot_type: str, config: GameConfig, blocker_rating: Optional[int], keeper_rating: int
+) -> tuple[str, dict]:
+    blocked = False
+    saved = False
+    if not missed and shot_type == "long_range" and blocker_rating is not None:
+        blocked = random.random() < _lerp_chance(
+            blocker_rating, float(config.match_defender_block_chance_min), float(config.match_defender_block_chance_max)
+        )
+    if not missed and not blocked:
+        saved = random.random() < _lerp_chance_positive(
+            keeper_rating, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)
+        )
+    outcome = "shot" if missed else "blocked" if blocked else "save" if saved else "goal"
+    return outcome, {"missed": missed, "blocked": blocked}
+
+
+def _resolve_breakaway(moment: dict, ratings: dict, config: GameConfig, opponent_name: str) -> tuple[dict, Optional[str]]:
+    team = moment["team"]
+    fwd = ratings[f"{team}_fwd"]
     missed = random.random() < _lerp_chance(
         fwd, float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
     )
-
-    blocked = False
-    gk_saved = False
-    resolved_shot_dir: Optional[str] = None
-    resolved_gk_dir: Optional[str] = None
-
-    if not missed and shot_type == "long_range":
-        deff = ratings[f"{defender}_def"]
-        blocked = random.random() < _lerp_chance(
-            deff, float(config.match_defender_block_chance_min), float(config.match_defender_block_chance_max)
-        )
-
-    if not missed and not blocked and shot_type in ("in_box", "long_range"):
-        if attacker == "user":
-            resolved_shot_dir, resolved_gk_dir = direction, random.choice(DIRECTIONS)
-        else:
-            resolved_shot_dir, resolved_gk_dir = random.choice(DIRECTIONS), direction
-        gk_saved = resolved_shot_dir == resolved_gk_dir
-
-    if missed:
-        outcome = "shot"
-    elif blocked:
-        outcome = "blocked"
-    elif shot_type in ("in_box", "long_range") and gk_saved:
-        outcome = "save"
-    else:
-        outcome = "goal"
-
-    scored_by = attacker if outcome == "goal" else None
-    payload = {
-        "shot_type": shot_type,
-        "direction": direction,
-        "resolved_shot_direction": resolved_shot_dir,
-        "resolved_gk_direction": resolved_gk_dir,
-        "missed": missed,
-        "blocked": blocked,
-    }
+    outcome = "shot" if missed else "goal"
+    scored_by = team if outcome == "goal" else None
     event = {
-        "minute": moment["minute"],
-        "event_type": outcome,
-        "team": attacker,
-        "description": _describe_event(outcome, attacker, opponent_name),
-        "payload": payload,
+        "minute": moment["minute"], "event_type": outcome, "team": team,
+        "description": _describe_event(outcome, team, opponent_name),
+        "payload": {"shot_type": "empty_net", "missed": missed},
     }
     return event, scored_by
+
+
+def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, opponent_name: str) -> tuple[dict, Optional[str]]:
+    ratings = state["ratings"]
+    situation = ATTACK_SITUATIONS_BY_ID[moment["situation_id"]]
+    shot_type = moment["shot_type"]
+    shooter = moment["actors"]["shooter"]
+    pass_target = moment["actors"]["pass_target"]
+
+    if action == "shoot":
+        eff_rating = _clamp_rating(shooter["rating"] + situation.bias)
+        missed = random.random() < _lerp_chance(
+            eff_rating, float(config.match_attack_shoot_miss_chance_min), float(config.match_attack_shoot_miss_chance_max)
+        )
+        outcome, extra = _resolve_shot_continuation(
+            missed, shot_type, config, blocker_rating=ratings["opponent_def"], keeper_rating=ratings["opponent_gk"]
+        )
+        payload = {"shot_type": shot_type, "action": action, "shooter": shooter["name"], **extra}
+        event = {
+            "minute": moment["minute"], "event_type": outcome, "team": "user",
+            "description": _describe_event(outcome, "user", opponent_name), "payload": payload,
+        }
+        return event, "user" if outcome == "goal" else None
+
+    # action == "pass"
+    eff_passer_rating = _clamp_rating(shooter["rating"] - situation.bias)
+    pass_failed = random.random() < _lerp_chance(
+        eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max)
+    )
+    if pass_failed:
+        event = {
+            "minute": moment["minute"], "event_type": "pass_failed", "team": "user",
+            "description": _describe_event("pass_failed", "user", opponent_name),
+            "payload": {"shot_type": shot_type, "action": action, "passer": shooter["name"]},
+        }
+        return event, None
+
+    missed = random.random() < _lerp_chance(
+        pass_target["rating"], float(config.match_receiver_shot_miss_chance_min), float(config.match_receiver_shot_miss_chance_max)
+    )
+    outcome, extra = _resolve_shot_continuation(
+        missed, shot_type, config, blocker_rating=ratings["opponent_def"], keeper_rating=ratings["opponent_gk"]
+    )
+    payload = {"shot_type": shot_type, "action": action, "shooter": pass_target["name"], "assisted_by": shooter["name"], **extra}
+    event = {
+        "minute": moment["minute"], "event_type": outcome, "team": "user",
+        "description": _describe_event(outcome, "user", opponent_name), "payload": payload,
+    }
+    return event, "user" if outcome == "goal" else None
+
+
+def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig, opponent_name: str) -> tuple[dict, Optional[str]]:
+    ratings = state["ratings"]
+    situation = DEFENSE_SITUATIONS_BY_ID[moment["situation_id"]]
+    shot_type = moment["shot_type"]
+    defender = moment["actors"]["defender"]
+
+    if action == "tackle":
+        foul = random.random() < _lerp_chance(
+            defender["rating"], float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max)
+        )
+        if not foul:
+            event = {
+                "minute": moment["minute"], "event_type": "tackle_won", "team": "opponent",
+                "description": _describe_event("tackle_won", "opponent", opponent_name),
+                "payload": {"shot_type": shot_type, "action": action, "defender": defender["name"]},
+            }
+            return event, None
+
+        is_red = random.random() < _lerp_chance(
+            defender["rating"], float(config.match_tackle_red_chance_min), float(config.match_tackle_red_chance_max)
+        )
+        card = _apply_card(state, defender["user_card_id"], is_red)
+        if card == "red":
+            _apply_red_card_debuff(state, config)
+
+        if "box" in situation.tags:
+            eff_gk = _clamp_rating(ratings["user_gk"] - config.match_penalty_gk_rating_penalty)
+            saved = random.random() < _lerp_chance_positive(
+                eff_gk, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)
+            )
+            outcome = "save" if saved else "goal"
+            prefix = "🟥 Красная карточка, пенальти! " if card == "red" else "🟨 Жёлтая карточка, пенальти! "
+            event = {
+                "minute": moment["minute"], "event_type": outcome, "team": "opponent",
+                "description": prefix + _describe_event(outcome, "opponent", opponent_name),
+                "payload": {
+                    "shot_type": shot_type, "action": action, "defender": defender["name"],
+                    "card": card, "is_penalty": True,
+                },
+            }
+            return event, "opponent" if outcome == "goal" else None
+
+        prefix = "🟥 Красная карточка! " if card == "red" else "🟨 Жёлтая карточка. "
+        event = {
+            "minute": moment["minute"], "event_type": "foul_stopped", "team": "opponent",
+            "description": prefix + _describe_event("foul_stopped", "opponent", opponent_name),
+            "payload": {
+                "shot_type": shot_type, "action": action, "defender": defender["name"],
+                "card": card, "is_penalty": False,
+            },
+        }
+        return event, None
+
+    if action == "block":
+        fail = random.random() < _lerp_chance(
+            defender["rating"], float(config.match_block_fail_chance_min), float(config.match_block_fail_chance_max)
+        )
+        if not fail:
+            event = {
+                "minute": moment["minute"], "event_type": "blocked", "team": "opponent",
+                "description": _describe_event("blocked", "opponent", opponent_name),
+                "payload": {"shot_type": shot_type, "action": action, "defender": defender["name"], "missed": False, "blocked": True},
+            }
+            return event, None
+        missed = random.random() < _lerp_chance(
+            ratings["opponent_fwd"], float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
+        )
+        outcome, extra = _resolve_shot_continuation(
+            missed, shot_type, config, blocker_rating=None, keeper_rating=ratings["user_gk"]
+        )
+        event = {
+            "minute": moment["minute"], "event_type": outcome, "team": "opponent",
+            "description": _describe_event(outcome, "opponent", opponent_name),
+            "payload": {"shot_type": shot_type, "action": action, "defender": defender["name"], **extra},
+        }
+        return event, "opponent" if outcome == "goal" else None
+
+    # action == "keeper"
+    missed = random.random() < _lerp_chance(
+        ratings["opponent_fwd"], float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
+    )
+    outcome, extra = _resolve_shot_continuation(
+        missed, shot_type, config, blocker_rating=None, keeper_rating=ratings["user_gk"]
+    )
+    event = {
+        "minute": moment["minute"], "event_type": outcome, "team": "opponent",
+        "description": _describe_event(outcome, "opponent", opponent_name),
+        "payload": {"shot_type": shot_type, "action": action, "defender": defender["name"], **extra},
+    }
+    return event, "opponent" if outcome == "goal" else None
+
+
+def _resolve_action(moment: dict, action: str, state: dict, config: GameConfig, opponent_name: str) -> tuple[dict, Optional[str]]:
+    situation_kind = moment["situation_kind"]
+    if situation_kind.startswith("breakaway"):
+        return _resolve_breakaway(moment, state["ratings"], config, opponent_name)
+    if situation_kind == "attack":
+        return _resolve_attack(moment, action, state, config, opponent_name)
+    return _resolve_defense(moment, action, state, config, opponent_name)
 
 
 def _advance(state: dict, config: GameConfig, opponent_name: str) -> list[dict]:
     """Auto-resolves flavor events (and the opponent's empty-net-vs-us case)
     from `next_index` onward, stopping as soon as an interactive shot is
-    reached — that shot becomes `Match.pending_shot`."""
+    reached — that shot becomes `Match.pending_moment`."""
     events: list[dict] = []
     moments = state["moments"]
     i = state["next_index"]
@@ -269,7 +509,7 @@ def _advance(state: dict, config: GameConfig, opponent_name: str) -> list[dict]:
             continue
         if _is_interactive(moment):
             break
-        event, scored_by = _resolve_shot(moment, state["ratings"], config, opponent_name, None)
+        event, scored_by = _resolve_breakaway(moment, state["ratings"], config, opponent_name)
         events.append(event)
         if scored_by:
             state[f"{scored_by}_score"] += 1
@@ -379,6 +619,7 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
     user_strength = _with_jitter(lineup.team_strength)
     user_attack, user_defense = split_strength(user_strength, lineup.tactic)
     user_fwd, user_def = _category_avg(lineup, "FWD"), _category_avg(lineup, "DEF")
+    user_gk = _category_avg(lineup, "GK")
 
     opponent_result = await db.execute(
         select(User)
@@ -406,18 +647,23 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
 
     if opponent_lineup is not None:
         opponent_fwd, opponent_def = _category_avg(opponent_lineup, "FWD"), _category_avg(opponent_lineup, "DEF")
+        opponent_gk = _category_avg(opponent_lineup, "GK")
     else:
-        opponent_fwd, opponent_def = _synthesize_bot_ratings(user_fwd, user_def, opponent_strength, user_strength)
+        opponent_fwd, opponent_def, opponent_gk = _synthesize_bot_ratings(
+            user_fwd, user_def, user_gk, opponent_strength, user_strength
+        )
 
     state = {
-        "moments": _generate_moment_queue(user_attack, opponent_attack, config),
+        "moments": _generate_moment_queue(user_attack, opponent_attack, config, lineup, opponent_name),
         "next_index": 0,
         "user_score": 0,
         "opponent_score": 0,
         "ratings": {
-            "user_fwd": user_fwd, "user_def": user_def,
-            "opponent_fwd": opponent_fwd, "opponent_def": opponent_def,
+            "user_fwd": user_fwd, "user_def": user_def, "user_gk": user_gk,
+            "opponent_fwd": opponent_fwd, "opponent_def": opponent_def, "opponent_gk": opponent_gk,
         },
+        "cards": {},
+        "red_card_applied": False,
     }
 
     match = Match(
@@ -464,7 +710,7 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
     return MatchOut.model_validate(match)
 
 
-async def resolve_shot(db: AsyncSession, user: User, match_id: int, payload: ShootRequest) -> MatchOut:
+async def resolve_action(db: AsyncSession, user: User, match_id: int, payload: MatchActionRequest) -> MatchOut:
     config = await get_config(db)
     match = await _lock_match(db, user.id, match_id)
 
@@ -472,19 +718,16 @@ async def resolve_shot(db: AsyncSession, user: User, match_id: int, payload: Sho
     moments = state["moments"]
     i = state["next_index"]
     if i >= len(moments) or moments[i]["kind"] != "shot" or not _is_interactive(moments[i]):
-        raise ConflictError("No pending shot for this match")
+        raise ConflictError("No pending action for this match")
     pending = moments[i]
 
     if payload.expected_seq is not None and payload.expected_seq != i:
-        raise ConflictError("Stale shot request; the pending shot has already moved on")
+        raise ConflictError("Stale action request; the pending moment has already moved on")
 
-    direction: Optional[str] = None
-    if pending["shot_type"] != "empty_net":
-        if payload.direction not in DIRECTIONS:
-            raise ConflictError("A direction is required for this shot")
-        direction = payload.direction
+    if payload.action not in pending["actions"]:
+        raise ConflictError(f"Action '{payload.action}' is not available for this moment")
 
-    event, scored_by = _resolve_shot(pending, state["ratings"], config, match.opponent_name, direction)
+    event, scored_by = _resolve_action(pending, payload.action, state, config, match.opponent_name)
     if scored_by:
         state[f"{scored_by}_score"] += 1
     state["next_index"] = i + 1

@@ -5,7 +5,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { RevealStage, STAGES, STAGE_DURATION_MS } from "@/components/cards/CardRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
-import { IconTag } from "@/components/icons";
+import { IconCoin, IconHandshake, IconTag } from "@/components/icons";
 import { openPack } from "@/api/packs";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
@@ -182,6 +182,15 @@ function Summary({ result, onDone }: { result: PackOpenResult; onDone: () => voi
   return (
     <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
       <h2 className="text-center font-display text-2xl font-bold text-ink-chalk">Пак открыт!</h2>
+      {!!result.referral_bonus_coins && (
+        <div className="flex items-center justify-center gap-2 rounded-2xl bg-accent-lime/10 px-4 py-3 text-center">
+          <IconHandshake size={18} className="text-accent-lime" />
+          <p className="text-sm font-semibold text-accent-lime">
+            Бонус за приглашение: +{result.referral_bonus_coins}
+          </p>
+          <IconCoin size={14} className="text-accent-lime" />
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {result.cards.map((opened) => (
           <div

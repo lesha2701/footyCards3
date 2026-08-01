@@ -1,13 +1,13 @@
 import { api } from "@/lib/api";
-import type { ArenaStats, Match, MatchDifficulty, ShotDirection } from "@/types";
+import type { ArenaStats, Match, MatchActionKind, MatchDifficulty } from "@/types";
 
 export async function playMatch(difficulty: MatchDifficulty): Promise<Match> {
   const { data } = await api.post<Match>("/matches/play", { difficulty });
   return data;
 }
 
-export async function shootMatch(matchId: number, direction?: ShotDirection): Promise<Match> {
-  const { data } = await api.post<Match>(`/matches/${matchId}/shoot`, direction ? { direction } : {});
+export async function actMatch(matchId: number, action: MatchActionKind): Promise<Match> {
+  const { data } = await api.post<Match>(`/matches/${matchId}/act`, { action });
   return data;
 }
 

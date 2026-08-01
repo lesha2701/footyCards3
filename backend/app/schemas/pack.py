@@ -79,6 +79,7 @@ class PackOpenResult(BaseModel):
     pack: PackOut
     cards: list[OpenedCardOut]
     new_balance: int
+    referral_bonus_coins: Optional[int] = None
 
 
 class OpenPackRequest(BaseModel):

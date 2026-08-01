@@ -5,45 +5,35 @@ import CardPickerModal from "@/components/cards/CardPickerModal";
 import EmptyState from "@/components/common/EmptyState";
 import {
   IconBall,
-  IconChevronLeft,
-  IconChevronRight,
-  IconChevronUp,
+  IconBoot,
   IconCoin,
+  IconGloves,
+  IconGoal,
   IconPlus,
   IconShirt,
+  IconSwap,
+  IconUsers,
   type IconProps,
 } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
 import { fetchActiveLineup, setActiveLineup, setLineupTactic } from "@/api/lineups";
-import { fetchArenaStats, fetchMatchHistory, playMatch, shootMatch } from "@/api/matches";
+import { actMatch, fetchArenaStats, fetchMatchHistory, playMatch } from "@/api/matches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, TACTICS, type FormationSlot } from "@/lib/formation";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { Match, MatchPendingShot, MatchResult, ShotDirection, ShotType, UserCard } from "@/types";
+import type { Match, MatchActionKind, MatchPendingMoment, MatchResult, UserCard } from "@/types";
 
 const EVENT_STEP_MS = 950;
 
-const DIRECTIONS: { value: ShotDirection; label: string; Icon: (props: IconProps) => JSX.Element }[] = [
-  { value: "left", label: "Лево", Icon: IconChevronLeft },
-  { value: "center", label: "Центр", Icon: IconChevronUp },
-  { value: "right", label: "Право", Icon: IconChevronRight },
-];
-
-const SHOT_PROMPTS: Record<ShotType, { user: string; opponent: string }> = {
-  in_box: {
-    user: "Удар из штрафной! Только вратарь может тебя остановить — выбери, куда пробить.",
-    opponent: "Соперник бьёт из штрафной! Выбери, куда прыгнет твой вратарь.",
-  },
-  long_range: {
-    user: "Дальний удар! Защитник соперника может заблокировать — выбери направление.",
-    opponent: "Соперник бьёт издали! Твой защитник может помочь — выбери, куда прыгнет вратарь.",
-  },
-  empty_net: {
-    user: "Пустые ворота! Не отправь мяч в трибуны.",
-    opponent: "",
-  },
+const ACTION_LABELS: Record<MatchActionKind, { label: string; Icon: (props: IconProps) => JSX.Element }> = {
+  shoot: { label: "Ударить", Icon: IconBoot },
+  pass: { label: "Отдать пас", Icon: IconSwap },
+  tackle: { label: "Сделать подкат", Icon: IconUsers },
+  block: { label: "Заблокировать удар", Icon: IconGoal },
+  keeper: { label: "Довериться вратарю", Icon: IconGloves },
+  strike: { label: "Ударить!", Icon: IconBoot },
 };
 
 export default function ArenaPage() {
@@ -85,8 +75,8 @@ export default function ArenaPage() {
     onError: (err) => setMatchError(formatGameError(err, "Не удалось начать матч")),
   });
 
-  const shootMutation = useMutation({
-    mutationFn: (direction?: ShotDirection) => shootMatch(match!.id, direction),
+  const actMutation = useMutation({
+    mutationFn: (action: MatchActionKind) => actMatch(match!.id, action),
     onSuccess: (data) => setMatch(data),
   });
 
@@ -215,8 +205,8 @@ export default function ArenaPage() {
         <MatchSimulation
           key={match.id}
           match={match}
-          shootPending={shootMutation.isPending}
-          onShoot={(direction) => shootMutation.mutate(direction)}
+          actPending={actMutation.isPending}
+          onAct={(action) => actMutation.mutate(action)}
           onFinished={() => {
             setSimulating(false);
             if (match.reward_coins > 0) {
@@ -287,23 +277,37 @@ function FormBadge({ result }: { result: MatchResult | null }) {
 
 function MatchSimulation({
   match,
-  shootPending,
-  onShoot,
+  actPending,
+  onAct,
   onFinished,
 }: {
   match: Match;
-  shootPending: boolean;
-  onShoot: (direction?: ShotDirection) => void;
+  actPending: boolean;
+  onAct: (action: MatchActionKind) => void;
   onFinished: () => void;
 }) {
   const [revealedCount, setRevealedCount] = useState(0);
+  const [autoSkip, setAutoSkip] = useState(false);
+  const [flashKey, setFlashKey] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const finishedFiredRef = useRef(false);
+  const prevRevealedRef = useRef(0);
+  const ackedBreakawayRef = useRef(-1);
 
   const total = match.events.length;
   const caughtUp = revealedCount >= total;
   const isFinished = match.status === "finished";
+
+  // A breakaway goal (opponent, empty net) has no meaningful save choice —
+  // it still gets a beat of its own instead of just appearing in the log,
+  // so it doesn't read as a sudden, unexplained goal.
+  const nextEvent = !caughtUp ? match.events[revealedCount] : null;
+  const isBreakawayNext =
+    !!nextEvent &&
+    nextEvent.team === "opponent" &&
+    nextEvent.payload?.shot_type === "empty_net" &&
+    ackedBreakawayRef.current !== revealedCount;
 
   useEffect(() => {
     if (caughtUp) {
@@ -313,6 +317,11 @@ function MatchSimulation({
       }
       return;
     }
+    if (autoSkip) {
+      setRevealedCount(total);
+      return;
+    }
+    if (isBreakawayNext) return; // wait for the player to acknowledge it
     timerRef.current = setTimeout(() => {
       if (["goal", "save", "blocked"].includes(match.events[revealedCount]?.event_type)) haptic("medium");
       setRevealedCount((c) => c + 1);
@@ -321,20 +330,44 @@ function MatchSimulation({
       if (timerRef.current) clearTimeout(timerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revealedCount, caughtUp, isFinished]);
+  }, [revealedCount, caughtUp, isFinished, autoSkip, isBreakawayNext, total]);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
   }, [revealedCount]);
 
+  // Auto-play any pending action while skipping, so the match resolves
+  // itself all the way to the final result without further input.
+  useEffect(() => {
+    if (!autoSkip || !caughtUp || isFinished || actPending) return;
+    const pending = match.pending_moment;
+    if (!pending) return;
+    const action = pending.actions[Math.floor(Math.random() * pending.actions.length)];
+    onAct(action);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSkip, caughtUp, isFinished, actPending, match]);
+
+  useEffect(() => {
+    if (revealedCount > prevRevealedRef.current) {
+      const newly = match.events.slice(prevRevealedRef.current, revealedCount);
+      if (newly.some((e) => e.event_type === "goal" && e.team === "user")) setFlashKey((k) => k + 1);
+    }
+    prevRevealedRef.current = revealedCount;
+  }, [revealedCount, match.events]);
+
   const skip = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    setRevealedCount(total);
+    setAutoSkip(true);
+  };
+
+  const ackBreakaway = () => {
+    ackedBreakawayRef.current = revealedCount;
+    setRevealedCount((c) => c + 1);
   };
 
   const revealed = match.events.slice(0, revealedCount);
   const currentMinute = revealed.length ? revealed[revealed.length - 1].minute : 0;
-  const pendingShot = caughtUp && !isFinished ? match.pending_shot : null;
+  const pendingMoment = caughtUp && !isFinished && !autoSkip ? match.pending_moment : null;
 
   // The live score only counts goals among the *revealed* events, so it
   // climbs to the final score in step with the commentary instead of
@@ -343,12 +376,19 @@ function MatchSimulation({
   const liveOpponentScore = revealed.filter((e) => e.event_type === "goal" && e.team === "opponent").length;
 
   return (
-    <section className="rounded-2xl bg-bg-surface p-4">
+    <section className="relative overflow-hidden rounded-2xl bg-bg-surface p-4">
+      {flashKey > 0 && (
+        <div
+          key={flashKey}
+          className="pointer-events-none absolute inset-0 z-10 rounded-2xl border-2 border-accent-green animate-goal-flash"
+        />
+      )}
+
       <div className="flex items-center justify-between">
         <span className="font-mono text-xs text-ink-mist-dim">
-          {caughtUp && isFinished ? "Матч завершён" : `${currentMinute}' · идёт матч...`}
+          {caughtUp && isFinished ? "Матч завершён" : autoSkip ? "Пропускаем матч..." : `${currentMinute}' · идёт матч...`}
         </span>
-        {!caughtUp && (
+        {!caughtUp && !autoSkip && (
           <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-ink-chalk">
             Пропустить
           </button>
@@ -382,48 +422,65 @@ function MatchSimulation({
         ))}
       </div>
 
-      {pendingShot && <ShotPrompt pending={pendingShot} disabled={shootPending} onShoot={onShoot} />}
+      {isBreakawayNext && !autoSkip && (
+        <div className="mt-4 flex flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
+          <p className="text-sm font-semibold text-ink-chalk">
+            😰 Соперник выходит один на один с твоим вратарём!
+          </p>
+          <button
+            onClick={ackBreakaway}
+            className="rounded-2xl bg-white/10 px-8 py-3 font-display text-base font-bold text-ink-chalk active:scale-95"
+          >
+            Смотреть
+          </button>
+        </div>
+      )}
+
+      {pendingMoment && <ActionPrompt pending={pendingMoment} disabled={actPending} onAct={onAct} />}
     </section>
   );
 }
 
-function ShotPrompt({
+function ActionPrompt({
   pending,
   disabled,
-  onShoot,
+  onAct,
 }: {
-  pending: MatchPendingShot;
+  pending: MatchPendingMoment;
   disabled: boolean;
-  onShoot: (direction?: ShotDirection) => void;
+  onAct: (action: MatchActionKind) => void;
 }) {
-  const prompt = SHOT_PROMPTS[pending.shot_type][pending.team === "user" ? "user" : "opponent"];
+  // Subtitle under a button shows the actor it concerns, if any — the
+  // shooter for "shoot", the teammate for "pass". Defense actions all
+  // concern the same named defender, already mentioned in the situation
+  // text above, so no per-button subtitle is needed there.
+  const subtitleFor = (action: MatchActionKind): string | null => {
+    if (action === "shoot") return pending.actors.shooter?.name ?? null;
+    if (action === "pass") return pending.actors.pass_target?.name ?? null;
+    return null;
+  };
 
   return (
     <div className="mt-4 flex flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
-      <p className="text-sm font-semibold text-ink-chalk">{prompt}</p>
-      {pending.shot_type === "empty_net" ? (
-        <button
-          onClick={() => onShoot()}
-          disabled={disabled}
-          className="rounded-2xl bg-floodlight px-8 py-3 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
-        >
-          Ударить!
-        </button>
-      ) : (
-        <div className="grid grid-cols-3 gap-2">
-          {DIRECTIONS.map((d) => (
+      <p className="text-sm font-semibold text-ink-chalk">{pending.description}</p>
+      <div className={`grid gap-2 ${pending.actions.length === 1 ? "grid-cols-1" : pending.actions.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+        {pending.actions.map((action) => {
+          const { label, Icon } = ACTION_LABELS[action];
+          const subtitle = subtitleFor(action);
+          return (
             <button
-              key={d.value}
-              onClick={() => onShoot(d.value)}
+              key={action}
+              onClick={() => onAct(action)}
               disabled={disabled}
               className="flex flex-col items-center gap-1.5 rounded-2xl bg-bg-surface px-4 py-3 text-sm font-semibold text-ink-chalk active:scale-90 disabled:opacity-40"
             >
-              <d.Icon size={16} />
-              {d.label}
+              <Icon size={16} />
+              {label}
+              {subtitle && <span className="text-[10px] font-normal text-ink-mist-dim">{subtitle}</span>}
             </button>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -81,6 +81,7 @@ class User(TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     referral_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    referral_reward_granted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Trade privacy
     accept_trades: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

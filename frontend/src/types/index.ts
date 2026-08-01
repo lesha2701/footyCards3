@@ -5,8 +5,8 @@ export type MatchDifficulty = "easy" | "medium" | "hard";
 export type MatchResult = "win" | "draw" | "loss";
 export type MatchStatus = "in_progress" | "finished";
 export type ShotType = "in_box" | "long_range" | "empty_net";
-export type ShotDirection = "left" | "center" | "right";
 export type LineupTactic = "attacking" | "balanced" | "defensive";
+export type MatchActionKind = "shoot" | "pass" | "tackle" | "block" | "keeper" | "strike";
 
 export interface Page<T> {
   items: T[];
@@ -128,6 +128,7 @@ export interface PackOpenResult {
   pack: Pack;
   cards: OpenedCard[];
   new_balance: number;
+  referral_bonus_coins: number | null;
 }
 
 export interface MemoryStart {
@@ -183,10 +184,22 @@ export interface MatchEvent {
   payload?: Record<string, unknown> | null;
 }
 
-export interface MatchPendingShot {
-  team: "user" | "opponent";
-  shot_type: ShotType;
+export interface MatchActor {
+  user_card_id: number;
+  player_id: number;
+  name: string;
+  rating: number;
+  position: string;
+}
+
+export interface MatchPendingMoment {
   seq: number;
+  team: "user" | "opponent";
+  kind: "attack" | "defense" | "breakaway";
+  shot_type: ShotType;
+  description: string;
+  actions: MatchActionKind[];
+  actors: Record<string, MatchActor>;
 }
 
 export interface Match {
@@ -203,7 +216,7 @@ export interface Match {
   rating_delta: number;
   created_at: string;
   events: MatchEvent[];
-  pending_shot: MatchPendingShot | null;
+  pending_moment: MatchPendingMoment | null;
 }
 
 export interface ArenaStats {
@@ -319,6 +332,7 @@ export interface ProfilePrivate extends ProfilePublic {
   is_admin: boolean;
   telegram_bot_username: string;
   accept_trades: boolean;
+  referral_reward_pending: boolean;
 }
 
 export interface ProfileSettingsUpdate {

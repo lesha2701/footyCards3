@@ -46,11 +46,17 @@ export default {
       animation: {
         shimmer: "shimmer 2.2s linear infinite",
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "goal-flash": "goalFlash 1.1s ease-out forwards",
       },
       keyframes: {
         shimmer: {
           "0%": { backgroundPosition: "-500px 0" },
           "100%": { backgroundPosition: "500px 0" },
+        },
+        goalFlash: {
+          "0%": { boxShadow: "0 0 0 0 rgba(62, 209, 126, 0.9)", opacity: "1" },
+          "60%": { boxShadow: "0 0 24px 6px rgba(62, 209, 126, 0.15)", opacity: "1" },
+          "100%": { boxShadow: "0 0 0 0 rgba(62, 209, 126, 0)", opacity: "0" },
         },
       },
     },

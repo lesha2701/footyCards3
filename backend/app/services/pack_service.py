@@ -17,7 +17,8 @@ from app.models.user import User
 from app.schemas.pack import OpenedCardOut, PackOpenResult, PackOut
 from app.services import notification_service, task_service
 from app.services.card_creation import create_user_card
-from app.services.wallet_service import debit_coins, lock_user_for_update
+from app.services.game_config_service import get_config
+from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 
 async def _get_pack_or_404(db: AsyncSession, pack_id: int) -> Pack:
@@ -219,28 +220,38 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
     opened_items = await roll_and_create_cards(db, locked_user, pack, opening, dup_counts, CardSource.pack)
     await track_pack_opened_tasks(db, locked_user, dup_counts)
 
-    if locked_user.referred_by_id is not None:
-        # Credit the referrer only once the referred user has made a real
-        # paid purchase, not merely on registration — otherwise disposable
-        # accounts could farm referral rewards for free.
-        paid_openings = (
-            await db.execute(
-                select(func.count(PackOpening.id)).where(
-                    PackOpening.user_id == locked_user.id, PackOpening.price_paid > 0
-                )
-            )
-        ).scalar_one()
-        if paid_openings == 1:
-            referrer = await lock_user_for_update(db, locked_user.referred_by_id)
-            referrer.referral_count += 1
-            db.add(referrer)
-            await task_service.evaluate_metric_progress(db, referrer, "referrals_count", referrer.referral_count)
-            await notification_service.notify(
-                db, referrer.id, NotificationType.referral_joined,
-                "🤝 Новый реферал!",
-                f"{locked_user.full_display_name()} присоединился по твоей ссылке и открыл первый пак. "
-                f"Загляни в задания — там могут быть награды за приглашения!",
-            )
+    referral_bonus_coins: Optional[int] = None
+    if locked_user.referred_by_id is not None and not locked_user.referral_reward_granted:
+        # Fires exactly once per referred user, on whichever pack (paid or
+        # free) they open first — `referral_reward_granted` is the gate, not
+        # a count of past openings, so it self-heals for anyone who was
+        # previously stuck behind the old paid-only/count==1 check.
+        config = await get_config(db)
+        locked_user.referral_reward_granted = True
+        db.add(locked_user)
+
+        referrer = await lock_user_for_update(db, locked_user.referred_by_id)
+        referrer.referral_count += 1
+        db.add(referrer)
+        await task_service.evaluate_metric_progress(db, referrer, "referrals_count", referrer.referral_count)
+
+        referral_bonus_coins = config.referral_referred_reward
+        await credit_coins(
+            db, locked_user, config.referral_referred_reward, TransactionType.referral_reward,
+            "Бонус за переход по реферальной ссылке",
+            related_object_type="user", related_object_id=referrer.id,
+        )
+        await credit_coins(
+            db, referrer, config.referral_referrer_reward, TransactionType.referral_reward,
+            f"Награда за приглашение друга: {locked_user.full_display_name()}",
+            related_object_type="user", related_object_id=locked_user.id,
+        )
+        await notification_service.notify(
+            db, referrer.id, NotificationType.referral_joined,
+            "🤝 Новый реферал!",
+            f"{locked_user.full_display_name()} присоединился по твоей ссылке и открыл первый пак — "
+            f"тебе начислено {config.referral_referrer_reward} монет!",
+        )
 
     try:
         await db.commit()
@@ -267,6 +278,7 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
         pack=PackOut.model_validate(pack),
         cards=opened_items,
         new_balance=locked_user.balance,
+        referral_bonus_coins=referral_bonus_coins,
     )
 
 

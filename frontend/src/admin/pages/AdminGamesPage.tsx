@@ -59,6 +59,14 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Рефералы</p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("referral_referred_reward", "Награда приглашённому")}
+          {field("referral_referrer_reward", "Награда пригласившему")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Memory Sequence</p>
         <div className="grid grid-cols-2 gap-3">
           {field("memory_daily_reward_limit", "Лимит наградных попыток/день")}
@@ -90,6 +98,28 @@ export default function AdminGamesPage() {
           {field("match_shot_type_in_box_weight", "Вес: удар в штрафной")}
           {field("match_shot_type_long_range_weight", "Вес: дальний удар")}
           {field("match_shot_type_empty_net_weight", "Вес: пустые ворота")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Card Arena — атака и защита</p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("match_attack_shoot_miss_chance_min", "Промах при ударе, мин (0-1)")}
+          {field("match_attack_shoot_miss_chance_max", "Промах при ударе, макс (0-1)")}
+          {field("match_pass_fail_chance_min", "Неточный пас, мин (0-1)")}
+          {field("match_pass_fail_chance_max", "Неточный пас, макс (0-1)")}
+          {field("match_receiver_shot_miss_chance_min", "Промах после паса, мин (0-1)")}
+          {field("match_receiver_shot_miss_chance_max", "Промах после паса, макс (0-1)")}
+          {field("match_tackle_foul_chance_min", "Грязный подкат, мин (0-1)")}
+          {field("match_tackle_foul_chance_max", "Грязный подкат, макс (0-1)")}
+          {field("match_tackle_red_chance_min", "Красная вместо жёлтой, мин (0-1)")}
+          {field("match_tackle_red_chance_max", "Красная вместо жёлтой, макс (0-1)")}
+          {field("match_block_fail_chance_min", "Неудачный блок, мин (0-1)")}
+          {field("match_block_fail_chance_max", "Неудачный блок, макс (0-1)")}
+          {field("match_keeper_save_chance_min", "Сейв вратаря, мин (0-1)")}
+          {field("match_keeper_save_chance_max", "Сейв вратаря, макс (0-1)")}
+          {field("match_red_card_strength_penalty_pct", "Штраф к обороне за красную (0-1)")}
+          {field("match_penalty_gk_rating_penalty", "Штраф к рейтингу вратаря на пенальти")}
         </div>
       </section>
 

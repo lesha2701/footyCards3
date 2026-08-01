@@ -74,7 +74,7 @@ async def test_referral_code_links_new_user_without_crediting_referrer_yet(clien
     assert referrer.referral_count == 0
 
 
-async def test_referral_count_credited_only_after_referred_users_first_paid_pack(client, db_session, bot_token):
+async def test_referral_reward_credited_on_referred_users_first_pack(client, db_session, bot_token):
     from sqlalchemy import select
 
     from app.models.enums import NotificationType, Rarity
@@ -87,19 +87,28 @@ async def test_referral_count_credited_only_after_referred_users_first_paid_pack
     referrer_headers = telegram_headers(555020, bot_token, username="referrer2")
     await client.post("/api/v1/auth/session", headers=referrer_headers)
     referrer = await get_user_by_telegram_id(db_session, 555020)
+    referrer_balance_before = referrer.balance
 
     new_user_headers = telegram_headers(555021, bot_token, username="newbie2")
     new_user_headers["X-Referral-Code"] = str(referrer.telegram_id)
     await client.post("/api/v1/auth/session", headers=new_user_headers)
+    new_user = await get_user_by_telegram_id(db_session, 555021)
+    new_user_balance_before = new_user.balance
 
     await db_session.refresh(referrer)
     assert referrer.referral_count == 0
 
     resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=new_user_headers, json={})
     assert resp.status_code == 200
+    body = resp.json()
+    assert body["referral_bonus_coins"] == 200
 
     await db_session.refresh(referrer)
+    await db_session.refresh(new_user)
     assert referrer.referral_count == 1
+    # Referred user: -100 (pack price) + 200 (referral bonus) = +100 net.
+    assert new_user.balance == new_user_balance_before - pack.price + 200
+    assert referrer.balance == referrer_balance_before + 400
 
     # The referrer must be told explicitly, not just have a silent counter bump.
     notifications = (
@@ -111,13 +120,43 @@ async def test_referral_count_credited_only_after_referred_users_first_paid_pack
     ).scalars().all()
     assert len(notifications) == 1
 
-    # A second paid pack by the same referred user must not credit again.
+    # A second pack by the same referred user must not credit again.
     pack2 = await create_pack(db_session, "basic2", price=100, card_count=1, probabilities={Rarity.common: 1.0})
     resp = await client.post(f"/api/v1/packs/{pack2.id}/open", headers=new_user_headers, json={})
     assert resp.status_code == 200
+    assert resp.json()["referral_bonus_coins"] is None
 
     await db_session.refresh(referrer)
     assert referrer.referral_count == 1
+    assert referrer.balance == referrer_balance_before + 400
+
+
+async def test_referral_reward_triggers_on_free_pack(client, db_session, bot_token):
+    from app.models.enums import Rarity
+    from tests.factories import create_pack, create_player, get_user_by_telegram_id
+
+    await create_player(db_session, rarity=Rarity.common)
+    free_pack = await create_pack(db_session, "free-basic", price=0, card_count=1, probabilities={Rarity.common: 1.0})
+
+    referrer_headers = telegram_headers(555022, bot_token, username="referrer3")
+    await client.post("/api/v1/auth/session", headers=referrer_headers)
+    referrer = await get_user_by_telegram_id(db_session, 555022)
+
+    new_user_headers = telegram_headers(555023, bot_token, username="newbie3")
+    new_user_headers["X-Referral-Code"] = str(referrer.telegram_id)
+    await client.post("/api/v1/auth/session", headers=new_user_headers)
+    new_user = await get_user_by_telegram_id(db_session, 555023)
+    balance_before = new_user.balance
+
+    resp = await client.post(f"/api/v1/packs/{free_pack.id}/open", headers=new_user_headers, json={})
+    assert resp.status_code == 200
+    assert resp.json()["referral_bonus_coins"] == 200
+
+    await db_session.refresh(referrer)
+    await db_session.refresh(new_user)
+    assert referrer.referral_count == 1
+    assert new_user.balance == balance_before + 200
+    assert new_user.referral_reward_granted is True
 
 
 async def test_self_referral_is_a_no_op(client, db_session, bot_token):

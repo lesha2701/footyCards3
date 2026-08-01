@@ -34,6 +34,7 @@ class ProfilePrivateOut(ProfilePublicOut):
     is_admin: bool
     telegram_bot_username: str
     accept_trades: bool
+    referral_reward_pending: bool
 
 
 class ProfileSettingsUpdate(BaseModel):
