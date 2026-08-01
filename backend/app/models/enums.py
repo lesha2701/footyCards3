@@ -101,6 +101,11 @@ class MatchResult(str, enum.Enum):
     loss = "loss"
 
 
+class MatchStatus(str, enum.Enum):
+    in_progress = "in_progress"
+    finished = "finished"
+
+
 class NotificationType(str, enum.Enum):
     trade_offer_received = "trade_offer_received"
     trade_offer_accepted = "trade_offer_accepted"

@@ -35,7 +35,7 @@ class User(TimestampMixin, Base):
     matches_lost: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     goals_for: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     goals_against: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    arena_rating: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    arena_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Memory sequence
     memory_best_score: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

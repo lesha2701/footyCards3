@@ -32,17 +32,20 @@ import ProfilePage from "@/pages/ProfilePage";
 import PublicProfilePage from "@/pages/PublicProfilePage";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import ErrorScreen from "@/components/common/ErrorScreen";
+import OnboardingScreen from "@/components/common/OnboardingScreen";
 import { createSession } from "@/api/auth";
 import { useAuthStore } from "@/store/authStore";
 import { useUiStore } from "@/store/uiStore";
 import { getTelegramColorScheme, initTelegramApp, isInsideTelegram } from "@/lib/telegram";
 import { ApiRequestError } from "@/lib/api";
+import { hasSeenOnboarding, markOnboardingSeen } from "@/lib/onboarding";
 
 export default function App() {
-  const { setUser, setAdminToken, setReady, isReady } = useAuthStore();
+  const { user, setUser, setAdminToken, setReady, isReady } = useAuthStore();
   const setTheme = useUiStore((s) => s.setTheme);
   const theme = useUiStore((s) => s.theme);
   const [error, setError] = useState<string | null>(null);
+  const [onboardingSeen, setOnboardingSeen] = useState(true);
 
   useEffect(() => {
     initTelegramApp();
@@ -62,6 +65,7 @@ export default function App() {
         if (cancelled) return;
         setUser(res.user);
         setAdminToken(res.admin_token);
+        setOnboardingSeen(hasSeenOnboarding(res.user.id));
         setReady(true);
       })
       .catch((err: unknown) => {
@@ -76,6 +80,17 @@ export default function App() {
 
   if (error) return <ErrorScreen message={error} />;
   if (!isReady) return <LoadingScreen />;
+
+  if (user && !onboardingSeen) {
+    return (
+      <OnboardingScreen
+        onFinish={() => {
+          markOnboardingSeen(user.id);
+          setOnboardingSeen(true);
+        }}
+      />
+    );
+  }
 
   return (
     <Routes>

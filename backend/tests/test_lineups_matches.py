@@ -1,8 +1,23 @@
+import pytest
+
+import app.core.rate_limit as rate_limit_module
 from app.models.enums import CardSource
+from app.models.game_config import GameConfig
 from app.services.card_creation import create_user_card
 from app.services.lineup_service import FORMATION_SLOTS
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    # The in-memory rate limiter (app/core/rate_limit.py) is keyed by numeric
+    # user id and lives for the whole pytest process, but every test gets a
+    # fresh DB (autoincrement ids restart at 1) — without this, unrelated
+    # tests would contend for the same "play_match:1" bucket and could trip
+    # each other's rate limit.
+    rate_limit_module._hits.clear()
+    yield
 
 
 async def _build_full_squad(db_session, user_id: int) -> list[dict]:
@@ -13,6 +28,35 @@ async def _build_full_squad(db_session, user_id: int) -> list[dict]:
         await db_session.commit()
         slots.append({"slot_code": slot.code, "user_card_id": card.id})
     return slots
+
+
+async def _force_shot_type(db_session, *, in_box=0, long_range=0, empty_net=0):
+    config = await db_session.get(GameConfig, 1)
+    if config is None:
+        config = GameConfig(id=1)
+        db_session.add(config)
+    config.match_shot_type_in_box_weight = in_box
+    config.match_shot_type_long_range_weight = long_range
+    config.match_shot_type_empty_net_weight = empty_net
+    await db_session.commit()
+
+
+async def _play_to_completion(client, headers) -> dict:
+    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    assert resp.status_code == 200
+    match = resp.json()
+    guard = 0
+    while match["status"] == "in_progress":
+        guard += 1
+        assert guard < 30  # sanity bound — the moment queue is at most 22 long
+        pending = match["pending_shot"]
+        assert pending is not None
+        direction = None if pending["shot_type"] == "empty_net" else "center"
+        body = {"direction": direction} if direction else {}
+        resp = await client.post(f"/api/v1/matches/{match['id']}/shoot", headers=headers, json=body)
+        assert resp.status_code == 200
+        match = resp.json()
+    return match
 
 
 async def test_set_lineup_success(client, db_session, bot_token):
@@ -69,32 +113,6 @@ async def test_cannot_use_duplicate_player_copies_in_two_slots(client, db_sessio
     assert resp.status_code == 409
 
 
-async def test_play_match_requires_complete_lineup(client, bot_token):
-    headers = telegram_headers(750004, bot_token)
-    await client.post("/api/v1/auth/session", headers=headers)
-
-    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
-    assert resp.status_code == 409
-
-
-async def test_play_match_with_complete_lineup(client, db_session, bot_token):
-    headers = telegram_headers(750005, bot_token)
-    await client.post("/api/v1/auth/session", headers=headers)
-    user = await get_user_by_telegram_id(db_session, 750005)
-
-    slots = await _build_full_squad(db_session, user.id)
-    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
-
-    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["result"] in ("win", "draw", "loss")
-    assert len(body["events"]) > 0
-
-    await db_session.refresh(user)
-    assert user.match_hourly_attempts == 1
-
-
 async def test_set_lineup_tactic(client, db_session, bot_token):
     headers = telegram_headers(750007, bot_token)
     await client.post("/api/v1/auth/session", headers=headers)
@@ -114,6 +132,162 @@ async def test_set_lineup_tactic(client, db_session, bot_token):
     assert resp.status_code == 409
 
 
+async def test_play_match_requires_complete_lineup(client, bot_token):
+    headers = telegram_headers(750004, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+
+    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    assert resp.status_code == 409
+
+
+async def test_play_match_starts_in_progress(client, db_session, bot_token):
+    headers = telegram_headers(750005, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750005)
+
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] in ("in_progress", "finished")
+    if body["status"] == "in_progress":
+        assert body["result"] is None
+        assert body["pending_shot"] is not None
+        assert body["pending_shot"]["shot_type"] in ("in_box", "long_range", "empty_net")
+        assert body["pending_shot"]["team"] in ("user", "opponent")
+
+    await db_session.refresh(user)
+    assert user.match_hourly_attempts == 1
+
+
+async def test_shoot_rejects_wrong_owner(client, db_session, bot_token):
+    headers_a = telegram_headers(750101, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers_a)
+    user_a = await get_user_by_telegram_id(db_session, 750101)
+    slots = await _build_full_squad(db_session, user_a.id)
+    await client.put("/api/v1/lineups/active", headers=headers_a, json={"slots": slots})
+
+    headers_b = telegram_headers(750102, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers_b)
+
+    await _force_shot_type(db_session, in_box=100)
+    resp = await client.post("/api/v1/matches/play", headers=headers_a, json={"difficulty": "medium"})
+    match = resp.json()
+    assert match["status"] == "in_progress"
+
+    resp = await client.post(f"/api/v1/matches/{match['id']}/shoot", headers=headers_b, json={"direction": "center"})
+    assert resp.status_code == 403
+
+
+async def test_shoot_rejects_missing_direction_for_directional_shot(client, db_session, bot_token):
+    headers = telegram_headers(750103, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750103)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    await _force_shot_type(db_session, in_box=100)
+    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    match = resp.json()
+    assert match["status"] == "in_progress"
+    assert match["pending_shot"]["shot_type"] == "in_box"
+
+    resp = await client.post(f"/api/v1/matches/{match['id']}/shoot", headers=headers, json={})
+    assert resp.status_code == 409
+
+
+async def test_shoot_ignores_direction_for_empty_net(client, db_session, bot_token):
+    headers = telegram_headers(750104, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750104)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    await _force_shot_type(db_session, empty_net=100)
+    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    match = resp.json()
+    # An empty-net chance for the user's own team is still interactive (a
+    # single confirm, no direction); the opponent's empty-net chances
+    # auto-resolve and never appear as pending_shot.
+    if match["status"] == "in_progress":
+        assert match["pending_shot"]["shot_type"] == "empty_net"
+        resp = await client.post(
+            f"/api/v1/matches/{match['id']}/shoot", headers=headers, json={"direction": "left"}
+        )
+        assert resp.status_code == 200
+
+
+async def test_shoot_forces_directional_shot_types(client, db_session, bot_token):
+    headers = telegram_headers(750105, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750105)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    await _force_shot_type(db_session, long_range=100)
+    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    match = resp.json()
+    if match["status"] == "in_progress":
+        assert match["pending_shot"]["shot_type"] == "long_range"
+
+
+async def test_shoot_rejects_when_already_finished(client, db_session, bot_token):
+    headers = telegram_headers(750106, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750106)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    match = await _play_to_completion(client, headers)
+    balance_before = (await client.get("/api/v1/profile/me", headers=headers)).json()["balance"]
+
+    resp = await client.post(f"/api/v1/matches/{match['id']}/shoot", headers=headers, json={"direction": "center"})
+    assert resp.status_code == 409
+
+    balance_after = (await client.get("/api/v1/profile/me", headers=headers)).json()["balance"]
+    assert balance_after == balance_before
+
+
+async def test_full_match_loop_finishes_and_credits_once(client, db_session, bot_token):
+    headers = telegram_headers(750109, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750109)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    match = await _play_to_completion(client, headers)
+    assert match["result"] in ("win", "draw", "loss")
+    assert match["rating_delta"] == {"win": 3, "draw": 1, "loss": -1}[match["result"]]
+    assert match["reward_coins"] >= 0
+
+    await db_session.refresh(user)
+    assert user.arena_rating == max(0, 0 + match["rating_delta"])
+
+
+async def test_default_arena_rating_is_zero_for_new_user(client, bot_token):
+    headers = telegram_headers(750110, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+
+    resp = await client.get("/api/v1/matches/stats", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["arena_rating"] == 0
+
+
+async def test_hourly_limit_not_consumed_by_shoot_calls(client, db_session, bot_token):
+    headers = telegram_headers(750111, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750111)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    await _play_to_completion(client, headers)
+
+    await db_session.refresh(user)
+    assert user.match_hourly_attempts == 1
+
+
 async def test_arena_leaderboard_reports_table_stats(client, db_session, bot_token):
     headers = telegram_headers(750006, bot_token)
     await client.post("/api/v1/auth/session", headers=headers)
@@ -122,9 +296,7 @@ async def test_arena_leaderboard_reports_table_stats(client, db_session, bot_tok
     slots = await _build_full_squad(db_session, user.id)
     await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
 
-    match_resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
-    assert match_resp.status_code == 200
-    match = match_resp.json()
+    match = await _play_to_completion(client, headers)
 
     board_resp = await client.get("/api/v1/leaderboard/arena", headers=headers)
     assert board_resp.status_code == 200
@@ -134,6 +306,40 @@ async def test_arena_leaderboard_reports_table_stats(client, db_session, bot_tok
     assert (entry["matches_won"], entry["matches_drawn"], entry["matches_lost"]) == expected_played
     assert entry["goal_difference"] == match["user_score"] - match["opponent_score"]
     assert entry["points"] == entry["matches_won"] * 3 + entry["matches_drawn"]
+
+
+async def test_match_history_excludes_in_progress_matches(client, db_session, bot_token):
+    headers = telegram_headers(750112, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750112)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    abandoned_match = resp.json()  # left in_progress on purpose
+
+    finished_match = await _play_to_completion(client, headers)
+
+    resp = await client.get("/api/v1/matches/history", headers=headers)
+    assert resp.status_code == 200
+    history_ids = [m["id"] for m in resp.json()]
+    assert finished_match["id"] in history_ids
+    if abandoned_match["status"] == "in_progress":
+        assert abandoned_match["id"] not in history_ids
+
+
+async def test_arena_stats_includes_rank(client, db_session, bot_token):
+    headers = telegram_headers(750113, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750113)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    await _play_to_completion(client, headers)
+
+    resp = await client.get("/api/v1/matches/stats", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["arena_rank"] >= 1
 
 
 async def test_match_hourly_limit_blocks_after_three_plays(client, db_session, bot_token):

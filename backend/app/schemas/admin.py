@@ -105,6 +105,13 @@ class GameConfigOut(BaseModel):
     difficulty_medium_multiplier: float
     difficulty_hard_multiplier: float
     suspicious_score_margin: int
+    match_shot_miss_chance_min: float
+    match_shot_miss_chance_max: float
+    match_defender_block_chance_min: float
+    match_defender_block_chance_max: float
+    match_shot_type_in_box_weight: int
+    match_shot_type_long_range_weight: int
+    match_shot_type_empty_net_weight: int
     saboteur_line_base_reward: int
     saboteur_line_growth: float
     saboteur_daily_limit: int
@@ -137,6 +144,13 @@ class GameConfigUpdate(BaseModel):
     difficulty_medium_multiplier: Optional[float] = Field(default=None, ge=0)
     difficulty_hard_multiplier: Optional[float] = Field(default=None, ge=0)
     suspicious_score_margin: Optional[int] = Field(default=None, ge=0)
+    match_shot_miss_chance_min: Optional[float] = Field(default=None, ge=0, le=1)
+    match_shot_miss_chance_max: Optional[float] = Field(default=None, ge=0, le=1)
+    match_defender_block_chance_min: Optional[float] = Field(default=None, ge=0, le=1)
+    match_defender_block_chance_max: Optional[float] = Field(default=None, ge=0, le=1)
+    match_shot_type_in_box_weight: Optional[int] = Field(default=None, ge=0)
+    match_shot_type_long_range_weight: Optional[int] = Field(default=None, ge=0)
+    match_shot_type_empty_net_weight: Optional[int] = Field(default=None, ge=0)
     saboteur_line_base_reward: Optional[int] = Field(default=None, ge=0)
     saboteur_line_growth: Optional[float] = Field(default=None, ge=1)
     saboteur_daily_limit: Optional[int] = Field(default=None, ge=0)

@@ -54,6 +54,15 @@ export default function HangmanGamePage() {
     onError: (err) => setErrorMsg(formatGameError(err, "Не удалось начать игру")),
   });
 
+  const claimMutation = useMutation({
+    mutationFn: () => claimHangmanReward(sessionId!),
+    onSuccess: (data) => {
+      updateBalance(data.new_balance);
+      hapticNotify("success");
+      setClaimResult(data);
+    },
+  });
+
   const applyGuessResult = (result: HangmanGuessResult) => {
     setMaskedWord(result.masked_word);
     setGuessedLetters(result.guessed_letters);
@@ -63,11 +72,13 @@ export default function HangmanGamePage() {
       hapticNotify("success");
       setRevealedWord(result.word);
       setPhase("won");
+      claimMutation.mutate();
     } else if (result.status === "lost") {
       haptic("heavy");
       hapticNotify("error");
       setRevealedWord(result.word);
       setPhase("lost");
+      claimMutation.mutate();
     } else {
       haptic(result.is_correct ? "light" : "medium");
     }
@@ -76,15 +87,6 @@ export default function HangmanGamePage() {
   const guessMutation = useMutation({
     mutationFn: (letter: string) => guessHangmanLetter(sessionId!, letter),
     onSuccess: applyGuessResult,
-  });
-
-  const claimMutation = useMutation({
-    mutationFn: () => claimHangmanReward(sessionId!),
-    onSuccess: (data) => {
-      updateBalance(data.new_balance);
-      hapticNotify("success");
-      setClaimResult(data);
-    },
   });
 
   if (phase === "idle") {
@@ -118,22 +120,24 @@ export default function HangmanGamePage() {
           Загаданное слово: <span className="font-bold text-ink-chalk">{revealedWord}</span>
         </p>
 
-        {!claimResult ? (
-          <button
-            onClick={() => claimMutation.mutate()}
-            disabled={claimMutation.isPending || !isWin}
-            className="rounded-2xl bg-floodlight px-6 py-3 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
-          >
-            {claimMutation.isPending ? "Начисление..." : isWin ? "Забрать награду" : "Награды нет"}
-          </button>
-        ) : (
-          <div className="rounded-2xl bg-accent-green/10 px-5 py-3">
-            <p className="flex items-center justify-center gap-1.5 font-mono text-lg font-bold text-accent-green">
-              +{claimResult.reward_coins}
-              <IconCoin size={16} />
-            </p>
-          </div>
-        )}
+        {claimMutation.isPending ? (
+          <p className="text-sm text-ink-mist">Начисление...</p>
+        ) : claimResult ? (
+          claimResult.reward_coins > 0 ? (
+            <div className="rounded-2xl bg-accent-green/10 px-5 py-3">
+              <p className="flex items-center justify-center gap-1.5 font-mono text-lg font-bold text-accent-green">
+                Ты получил +{claimResult.reward_coins}
+                <IconCoin size={16} />
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-ink-mist">Награды нет</p>
+          )
+        ) : claimMutation.isError ? (
+          <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            {formatGameError(claimMutation.error, "Не удалось начислить награду")}
+          </p>
+        ) : null}
 
         <div className="flex gap-3">
           <button onClick={() => setPhase("idle")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">

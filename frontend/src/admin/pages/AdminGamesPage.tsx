@@ -81,6 +81,19 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Card Arena — удары</p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("match_shot_miss_chance_min", "Шанс промаха, мин (0-1)")}
+          {field("match_shot_miss_chance_max", "Шанс промаха, макс (0-1)")}
+          {field("match_defender_block_chance_min", "Шанс блока защитником, мин (0-1)")}
+          {field("match_defender_block_chance_max", "Шанс блока защитником, макс (0-1)")}
+          {field("match_shot_type_in_box_weight", "Вес: удар в штрафной")}
+          {field("match_shot_type_long_range_weight", "Вес: дальний удар")}
+          {field("match_shot_type_empty_net_weight", "Вес: пустые ворота")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Футбольный фанат</p>
         <div className="grid grid-cols-2 gap-3">
           {field("saboteur_cell_reward", "Награда за ячейку")}

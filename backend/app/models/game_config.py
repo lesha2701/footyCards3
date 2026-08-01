@@ -24,6 +24,14 @@ class GameConfig(TimestampMixin, Base):
     difficulty_hard_multiplier: Mapped[float] = mapped_column(Numeric(4, 2), default=1.2, nullable=False)
     suspicious_score_margin: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
 
+    match_shot_miss_chance_min: Mapped[float] = mapped_column(Numeric(4, 2), default=0.08, nullable=False)
+    match_shot_miss_chance_max: Mapped[float] = mapped_column(Numeric(4, 2), default=0.30, nullable=False)
+    match_defender_block_chance_min: Mapped[float] = mapped_column(Numeric(4, 2), default=0.10, nullable=False)
+    match_defender_block_chance_max: Mapped[float] = mapped_column(Numeric(4, 2), default=0.35, nullable=False)
+    match_shot_type_in_box_weight: Mapped[int] = mapped_column(Integer, default=55, nullable=False)
+    match_shot_type_long_range_weight: Mapped[int] = mapped_column(Integer, default=35, nullable=False)
+    match_shot_type_empty_net_weight: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+
     saboteur_line_base_reward: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     saboteur_line_growth: Mapped[float] = mapped_column(Numeric(4, 2), default=1.15, nullable=False)
     saboteur_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)

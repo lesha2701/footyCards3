@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_admin
 from app.database import get_db
-from app.models.enums import GameSessionStatus, GameType
+from app.models.enums import GameSessionStatus, GameType, MatchStatus
 from app.models.game import GameSession
 from app.models.match import Match
 from app.models.user import User
@@ -60,7 +60,13 @@ async def suspicious_memory_sessions(db: AsyncSession = Depends(get_db)):
 @router.get("/suspicious-matches", response_model=list[SuspiciousMatchOut])
 async def suspicious_matches(db: AsyncSession = Depends(get_db)):
     config = await get_config(db)
-    result = await db.execute(select(Match, User).join(User, User.id == Match.user_id).order_by(Match.created_at.desc()).limit(500))
+    result = await db.execute(
+        select(Match, User)
+        .join(User, User.id == Match.user_id)
+        .where(Match.status == MatchStatus.finished)
+        .order_by(Match.created_at.desc())
+        .limit(500)
+    )
     rows = result.all()
     suspicious = [
         SuspiciousMatchOut(

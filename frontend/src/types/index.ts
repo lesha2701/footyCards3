@@ -3,6 +3,9 @@ export type Position = "GK" | "LB" | "CB" | "RB" | "CDM" | "CM" | "CAM" | "LM" |
 export type TradeStatus = "pending" | "accepted" | "rejected" | "cancelled" | "expired";
 export type MatchDifficulty = "easy" | "medium" | "hard";
 export type MatchResult = "win" | "draw" | "loss";
+export type MatchStatus = "in_progress" | "finished";
+export type ShotType = "in_box" | "long_range" | "empty_net";
+export type ShotDirection = "left" | "center" | "right";
 export type LineupTactic = "attacking" | "balanced" | "defensive";
 
 export interface Page<T> {
@@ -177,6 +180,13 @@ export interface MatchEvent {
   event_type: string;
   team: string;
   description: string;
+  payload?: Record<string, unknown> | null;
+}
+
+export interface MatchPendingShot {
+  team: "user" | "opponent";
+  shot_type: ShotType;
+  seq: number;
 }
 
 export interface Match {
@@ -187,11 +197,13 @@ export interface Match {
   opponent_team_strength: number;
   user_score: number;
   opponent_score: number;
-  result: MatchResult;
+  status: MatchStatus;
+  result: MatchResult | null;
   reward_coins: number;
   rating_delta: number;
   created_at: string;
   events: MatchEvent[];
+  pending_shot: MatchPendingShot | null;
 }
 
 export interface ArenaStats {
@@ -199,6 +211,7 @@ export interface ArenaStats {
   matches_drawn: number;
   matches_lost: number;
   arena_rating: number;
+  arena_rank: number | null;
 }
 
 export interface ArenaLeaderboardEntry {

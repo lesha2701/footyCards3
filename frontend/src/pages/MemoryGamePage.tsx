@@ -74,6 +74,15 @@ export default function MemoryGamePage() {
     onError: (err) => setErrorMsg(formatGameError(err, "Не удалось начать игру")),
   });
 
+  const claimMutation = useMutation({
+    mutationFn: (sessionId: number) => claimMemoryReward(sessionId),
+    onSuccess: (data) => {
+      updateBalance(data.new_balance);
+      setClaimResult(data);
+      queryClient.invalidateQueries({ queryKey: ["memory-leaderboard"] });
+    },
+  });
+
   const submitMutation = useMutation({
     mutationFn: (answer: string[]) => submitMemoryRound(session!.session_id, answer),
     onSuccess: (result) => {
@@ -86,16 +95,8 @@ export default function MemoryGamePage() {
       } else {
         hapticNotify("error");
         setPhase("gameover");
+        claimMutation.mutate(result.session_id);
       }
-    },
-  });
-
-  const claimMutation = useMutation({
-    mutationFn: () => claimMemoryReward(session!.session_id),
-    onSuccess: (data) => {
-      updateBalance(data.new_balance);
-      setClaimResult(data);
-      queryClient.invalidateQueries({ queryKey: ["memory-leaderboard"] });
     },
   });
 
@@ -158,23 +159,21 @@ export default function MemoryGamePage() {
         <p className="font-display text-2xl font-bold text-ink-chalk">Игра окончена</p>
         <p className="text-sm text-ink-mist">Твой результат: <span className="font-mono font-bold text-accent-cyan">{score}</span> очков</p>
 
-        {!claimResult ? (
-          <button
-            onClick={() => claimMutation.mutate()}
-            disabled={claimMutation.isPending}
-            className="rounded-2xl bg-floodlight px-6 py-3 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
-          >
-            {claimMutation.isPending ? "Начисление..." : "Забрать награду"}
-          </button>
-        ) : (
+        {claimMutation.isPending ? (
+          <p className="text-sm text-ink-mist">Начисление награды...</p>
+        ) : claimResult ? (
           <div className="rounded-2xl bg-accent-green/10 px-5 py-3">
             <p className="flex items-center justify-center gap-1.5 font-mono text-lg font-bold text-accent-green">
-              +{claimResult.reward_coins}
+              Ты получил +{claimResult.reward_coins}
               <IconCoin size={16} />
             </p>
             {claimResult.new_best_score && <p className="text-xs text-accent-green">Новый рекорд!</p>}
           </div>
-        )}
+        ) : claimMutation.isError ? (
+          <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            {formatGameError(claimMutation.error, "Не удалось начислить награду")}
+          </p>
+        ) : null}
 
         <div className="flex gap-3">
           <button onClick={() => setPhase("idle")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">

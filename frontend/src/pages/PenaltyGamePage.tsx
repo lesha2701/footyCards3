@@ -64,6 +64,15 @@ export default function PenaltyGamePage() {
     onError: (err) => setErrorMsg(formatGameError(err, "Не удалось начать игру")),
   });
 
+  const claimMutation = useMutation({
+    mutationFn: () => claimPenaltyReward(sessionId!),
+    onSuccess: (data) => {
+      updateBalance(data.new_balance);
+      hapticNotify("success");
+      setClaimResult(data);
+    },
+  });
+
   const kickMutation = useMutation({
     mutationFn: (direction: PenaltyDirection) => kickPenalty(sessionId!, direction),
     onSuccess: (result) => {
@@ -72,16 +81,8 @@ export default function PenaltyGamePage() {
       if (result.is_finished) {
         hapticNotify(result.result === "win" ? "success" : "error");
         setPhase("finished");
+        claimMutation.mutate();
       }
-    },
-  });
-
-  const claimMutation = useMutation({
-    mutationFn: () => claimPenaltyReward(sessionId!),
-    onSuccess: (data) => {
-      updateBalance(data.new_balance);
-      hapticNotify("success");
-      setClaimResult(data);
     },
   });
 
@@ -119,22 +120,20 @@ export default function PenaltyGamePage() {
           Счёт: <span className="font-mono font-bold text-accent-cyan">{lastKick?.player_score} : {lastKick?.bot_score}</span>
         </p>
 
-        {!claimResult ? (
-          <button
-            onClick={() => claimMutation.mutate()}
-            disabled={claimMutation.isPending}
-            className="rounded-2xl bg-floodlight px-6 py-3 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
-          >
-            {claimMutation.isPending ? "Начисление..." : "Забрать награду"}
-          </button>
-        ) : (
+        {claimMutation.isPending ? (
+          <p className="text-sm text-ink-mist">Начисление награды...</p>
+        ) : claimResult ? (
           <div className="rounded-2xl bg-accent-green/10 px-5 py-3">
             <p className="flex items-center justify-center gap-1.5 font-mono text-lg font-bold text-accent-green">
-              +{claimResult.reward_coins}
+              Ты получил +{claimResult.reward_coins}
               <IconCoin size={16} />
             </p>
           </div>
-        )}
+        ) : claimMutation.isError ? (
+          <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            {formatGameError(claimMutation.error, "Не удалось начислить награду")}
+          </p>
+        ) : null}
 
         <div className="flex gap-3">
           <button onClick={() => setPhase("pick_card")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">

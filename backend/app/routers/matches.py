@@ -5,7 +5,7 @@ from app.core.dependencies import get_current_user
 from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.user import User
-from app.schemas.match import ArenaLeaderboardEntry, ArenaStatsOut, MatchOut, StartMatchRequest
+from app.schemas.match import ArenaLeaderboardEntry, ArenaStatsOut, MatchOut, ShootRequest, StartMatchRequest
 from app.services import match_service
 
 router = APIRouter(prefix="/matches", tags=["matches"])
@@ -17,6 +17,13 @@ async def play_match(
 ):
     check_rate_limit(f"play_match:{user.id}", max_calls=15, window_seconds=60)
     return await match_service.start_match(db, user, payload)
+
+
+@router.post("/{match_id}/shoot", response_model=MatchOut)
+async def shoot(
+    match_id: int, payload: ShootRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await match_service.resolve_shot(db, user, match_id, payload)
 
 
 @router.get("/history", response_model=list[MatchOut])

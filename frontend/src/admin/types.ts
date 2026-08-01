@@ -72,6 +72,13 @@ export interface GameConfig {
   difficulty_medium_multiplier: number;
   difficulty_hard_multiplier: number;
   suspicious_score_margin: number;
+  match_shot_miss_chance_min: number;
+  match_shot_miss_chance_max: number;
+  match_defender_block_chance_min: number;
+  match_defender_block_chance_max: number;
+  match_shot_type_in_box_weight: number;
+  match_shot_type_long_range_weight: number;
+  match_shot_type_empty_net_weight: number;
   saboteur_cell_reward: number;
   saboteur_daily_limit: number;
   penalty_reward_win: number;

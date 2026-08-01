@@ -56,6 +56,15 @@ export default function FreeKickGamePage() {
     onError: (err) => setErrorMsg(formatGameError(err, "Не удалось начать игру")),
   });
 
+  const claimMutation = useMutation({
+    mutationFn: () => claimFreeKickReward(sessionId!),
+    onSuccess: (data) => {
+      updateBalance(data.new_balance);
+      hapticNotify("success");
+      setClaimResult(data);
+    },
+  });
+
   const kickMutation = useMutation({
     mutationFn: (elapsedMs: number) => kickFreeKick(sessionId!, elapsedMs),
     onSuccess: (result) => {
@@ -65,18 +74,10 @@ export default function FreeKickGamePage() {
       if (result.is_finished) {
         hapticNotify("success");
         setPhase("finished");
+        claimMutation.mutate();
       } else {
         setKick(result.next_kick);
       }
-    },
-  });
-
-  const claimMutation = useMutation({
-    mutationFn: () => claimFreeKickReward(sessionId!),
-    onSuccess: (data) => {
-      updateBalance(data.new_balance);
-      hapticNotify("success");
-      setClaimResult(data);
     },
   });
 
@@ -129,22 +130,20 @@ export default function FreeKickGamePage() {
           Итог: <span className="inline-flex items-center gap-1 font-mono font-bold text-accent-lime">{totalCoins}<IconCoin size={14} /></span>
         </p>
 
-        {!claimResult ? (
-          <button
-            onClick={() => claimMutation.mutate()}
-            disabled={claimMutation.isPending || totalCoins === 0}
-            className="rounded-2xl bg-floodlight px-6 py-3 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
-          >
-            {claimMutation.isPending ? "Начисление..." : totalCoins > 0 ? "Забрать награду" : "Нечего забирать"}
-          </button>
-        ) : (
+        {claimMutation.isPending ? (
+          <p className="text-sm text-ink-mist">Начисление награды...</p>
+        ) : claimResult ? (
           <div className="rounded-2xl bg-accent-green/10 px-5 py-3">
             <p className="flex items-center justify-center gap-1.5 font-mono text-lg font-bold text-accent-green">
-              +{claimResult.reward_coins}
+              Ты получил +{claimResult.reward_coins}
               <IconCoin size={16} />
             </p>
           </div>
-        )}
+        ) : claimMutation.isError ? (
+          <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            {formatGameError(claimMutation.error, "Не удалось начислить награду")}
+          </p>
+        ) : null}
 
         <div className="flex gap-3">
           <button onClick={() => setPhase("pick_card")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">

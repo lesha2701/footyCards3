@@ -31,7 +31,6 @@ export default function SaboteurGamePage() {
   const [score, setScore] = useState(0);
   const [pickedIndex, setPickedIndex] = useState<number | null>(null);
   const [pickedIsSteward, setPickedIsSteward] = useState(false);
-  const [finalReward, setFinalReward] = useState(0);
   const [claimResult, setClaimResult] = useState<{ reward_coins: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -43,12 +42,20 @@ export default function SaboteurGamePage() {
       setLevel(data.level);
       setScore(0);
       setPickedIndex(null);
-      setFinalReward(0);
       setClaimResult(null);
       setErrorMsg(null);
       setPhase("playing");
     },
     onError: (err) => setErrorMsg(formatGameError(err, "Не удалось начать игру")),
+  });
+
+  const claimMutation = useMutation({
+    mutationFn: () => claimSaboteurReward(sessionId!),
+    onSuccess: (data) => {
+      updateBalance(data.new_balance);
+      hapticNotify("success");
+      setClaimResult(data);
+    },
   });
 
   const revealMutation = useMutation({
@@ -58,8 +65,10 @@ export default function SaboteurGamePage() {
       setPickedIsSteward(result.is_steward);
       if (result.is_steward) {
         haptic("heavy");
-        setFinalReward(result.reward_coins ?? 0);
-        setTimeout(() => setPhase("lost"), REVEAL_PAUSE_MS);
+        setTimeout(() => {
+          setPhase("lost");
+          claimMutation.mutate();
+        }, REVEAL_PAUSE_MS);
       } else {
         haptic("light");
         setScore(result.score);
@@ -73,18 +82,9 @@ export default function SaboteurGamePage() {
 
   const bankMutation = useMutation({
     mutationFn: () => endSaboteur(sessionId!),
-    onSuccess: (result) => {
-      setFinalReward(result.reward_coins ?? result.score);
+    onSuccess: () => {
       setPhase("banked");
-    },
-  });
-
-  const claimMutation = useMutation({
-    mutationFn: () => claimSaboteurReward(sessionId!),
-    onSuccess: (data) => {
-      updateBalance(data.new_balance);
-      hapticNotify("success");
-      setClaimResult(data);
+      claimMutation.mutate();
     },
   });
 
@@ -144,22 +144,20 @@ export default function SaboteurGamePage() {
           {isLoss ? "Стюард тебя заметил. Получишь утешительную награду за одну линию." : "Ты вовремя остановился и забрал всё до цента."}
         </p>
 
-        {!claimResult ? (
-          <button
-            onClick={() => claimMutation.mutate()}
-            disabled={claimMutation.isPending || finalReward === 0}
-            className="rounded-2xl bg-floodlight px-6 py-3 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
-          >
-            {claimMutation.isPending ? "Начисление..." : finalReward > 0 ? "Забрать награду" : "Нечего забирать"}
-          </button>
-        ) : (
+        {claimMutation.isPending ? (
+          <p className="text-sm text-ink-mist">Начисление награды...</p>
+        ) : claimResult ? (
           <div className="rounded-2xl bg-accent-green/10 px-5 py-3">
             <p className="flex items-center justify-center gap-1.5 font-mono text-lg font-bold text-accent-green">
-              +{claimResult.reward_coins}
+              Ты получил +{claimResult.reward_coins}
               <IconCoin size={16} />
             </p>
           </div>
-        )}
+        ) : claimMutation.isError ? (
+          <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            {formatGameError(claimMutation.error, "Не удалось начислить награду")}
+          </p>
+        ) : null}
 
         <div className="flex gap-3">
           <button onClick={() => setPhase("idle")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
