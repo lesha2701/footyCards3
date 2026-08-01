@@ -10,7 +10,6 @@ import {
   IconGloves,
   IconGoal,
   IconPlus,
-  IconShirt,
   IconSwap,
   IconUsers,
   type IconProps,
@@ -19,6 +18,7 @@ import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
 import { fetchActiveLineup, setActiveLineup, setLineupTactic } from "@/api/lineups";
 import { actMatch, fetchArenaStats, fetchMatchHistory, playMatch } from "@/api/matches";
+import { staticUrl } from "@/lib/api";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, TACTICS, type FormationSlot } from "@/lib/formation";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
@@ -150,9 +150,21 @@ export default function ArenaPage() {
                     >
                       {slot.card ? (
                         <>
-                          <IconShirt size={18} className="text-accent-cyan" />
-                          <span className="max-w-full truncate text-[10px] font-semibold text-ink-chalk">{slot.card.player.display_name}</span>
-                          <span className="font-mono text-[9px] text-accent-lime">{slot.card.player.rating}</span>
+                          <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
+                            <img
+                              src={
+                                staticUrl(slot.card.player.image_path ?? undefined) ??
+                                staticUrl("players/placeholder/player_placeholder.webp")
+                              }
+                              alt=""
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          </div>
+                          <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[9px] font-bold leading-none text-accent-cyan">
+                            {slot.card.player.position}
+                          </span>
+                          <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.card.player.rating}</span>
                         </>
                       ) : (
                         <>
@@ -388,7 +400,11 @@ function MatchSimulation({
         <span className="font-mono text-xs text-ink-mist-dim">
           {caughtUp && isFinished ? "Матч завершён" : autoSkip ? "Пропускаем матч..." : `${currentMinute}' · идёт матч...`}
         </span>
-        {!caughtUp && !autoSkip && (
+        {/* Visible any time there's still something to skip through — including
+            while waiting on the player's own action choice (caughtUp && !isFinished),
+            not just during the event-by-event reveal — only hidden once the match
+            has actually finished or a skip is already in progress. */}
+        {!autoSkip && !(caughtUp && isFinished) && (
           <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-ink-chalk">
             Пропустить
           </button>
