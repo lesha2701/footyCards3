@@ -6,7 +6,7 @@ import { createTacticoBotMatch, createTacticoChallenge, fetchTacticoMatches } fr
 import { searchUsers } from "@/api/profile";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconFlagCheckered, IconHelp, IconShirt, IconUsers } from "@/components/icons";
+import { IconFlagCheckered, IconHelp, IconPlay, IconShirt, IconUsers } from "@/components/icons";
 import TacticoRulesModal from "@/components/tactico/TacticoRulesModal";
 import { formatGameError } from "@/lib/errors";
 import type { MatchDifficulty, TacticoMatch, UserPublic } from "@/types";
@@ -96,22 +96,25 @@ export default function TacticoMatchesPage() {
       {activeMatch ? (
         <button
           onClick={() => navigate(`/play/tactico/matches/${activeMatch.id}`)}
-          className="rounded-xl bg-accent-green py-2.5 text-xs font-bold text-bg-base active:scale-95"
+          className="flex items-center justify-center gap-2 rounded-2xl bg-accent-green py-4 text-base font-bold text-bg-base ring-2 ring-accent-green/40 active:scale-95"
         >
+          <IconPlay size={19} />
           Продолжить матч
         </button>
       ) : (
         <div className="flex gap-2">
           <button
             onClick={() => setBotSheetOpen(true)}
-            className="flex-1 rounded-xl bg-accent-green py-2.5 text-xs font-bold text-bg-base active:scale-95"
+            className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-accent-green py-4 text-sm font-bold text-bg-base ring-2 ring-accent-green/40 active:scale-95"
           >
+            <IconPlay size={17} />
             Играть с ботом
           </button>
           <button
             onClick={() => setChallengeSheetOpen(true)}
-            className="flex-1 rounded-xl bg-floodlight py-2.5 text-xs font-bold text-bg-base active:scale-95"
+            className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-floodlight py-4 text-sm font-bold text-bg-base ring-2 ring-accent-cyan/40 active:scale-95"
           >
+            <IconUsers size={17} />
             Вызвать друга
           </button>
         </div>

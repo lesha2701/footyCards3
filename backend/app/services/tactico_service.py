@@ -118,20 +118,23 @@ def _pick_phase() -> str:
     return random.choice(["attack", "defense"])
 
 
-def _effective_stat(position: str, attack_rating: int, defense_rating: int, phase: str, bonus_pct: float) -> float:
+def _effective_stat(position: str, attack_rating: int, defense_rating: int, rating: int, phase: str, bonus_pct: float) -> float:
+    """The number that actually decides a round: overall rating plus the
+    phase-relevant sub-stat, with the sub-stat (never the overall rating)
+    boosted by the position bonus."""
     base = attack_rating if phase == "attack" else defense_rating
     bonus_positions = _ATTACK_BONUS_POSITIONS if phase == "attack" else _DEFENSE_BONUS_POSITIONS
-    if position in {p.value for p in bonus_positions}:
-        return base * (1 + bonus_pct)
-    return float(base)
+    stat = base * (1 + bonus_pct) if position in {p.value for p in bonus_positions} else float(base)
+    return rating + stat
 
 
 def _resolve_round_winner(user_snap: dict, opponent_snap: dict, phase: str, bonus_pct: float) -> str:
     user_val = _effective_stat(
-        user_snap["position"], user_snap["attack_rating"], user_snap["defense_rating"], phase, bonus_pct
+        user_snap["position"], user_snap["attack_rating"], user_snap["defense_rating"], user_snap["rating"], phase, bonus_pct
     )
     opp_val = _effective_stat(
-        opponent_snap["position"], opponent_snap["attack_rating"], opponent_snap["defense_rating"], phase, bonus_pct
+        opponent_snap["position"], opponent_snap["attack_rating"], opponent_snap["defense_rating"],
+        opponent_snap["rating"], phase, bonus_pct,
     )
     if user_val > opp_val:
         return "user"
@@ -189,7 +192,7 @@ def _bot_pick(pool: list[dict], phase: str, difficulty: MatchDifficulty, config:
     if random.random() < chance:
         return max(
             pool,
-            key=lambda c: _effective_stat(c["position"], c["attack_rating"], c["defense_rating"], phase, bonus_pct),
+            key=lambda c: _effective_stat(c["position"], c["attack_rating"], c["defense_rating"], c["rating"], phase, bonus_pct),
         )
     return random.choice(pool)
 

@@ -102,21 +102,34 @@ async def test_set_squad_success(client, db_session, bot_token):
 # ---------------------------------------------------------------------------
 
 def test_phase_bonus_lets_lower_stat_forward_beat_higher_stat_midfielder():
-    forward = {"position": "ST", "attack_rating": 70, "defense_rating": 30}
-    midfielder = {"position": "CM", "attack_rating": 75, "defense_rating": 75}
+    forward = {"position": "ST", "attack_rating": 70, "defense_rating": 30, "rating": 0}
+    midfielder = {"position": "CM", "attack_rating": 75, "defense_rating": 75, "rating": 0}
     winner = _resolve_round_winner(forward, midfielder, "attack", 0.15)
     assert winner == "user"  # 70 * 1.15 = 80.5 > 75
 
 
 def test_phase_bonus_exact_tie_is_a_draw():
-    a = {"position": "CM", "attack_rating": 70, "defense_rating": 70}
-    b = {"position": "CM", "attack_rating": 70, "defense_rating": 70}
+    a = {"position": "CM", "attack_rating": 70, "defense_rating": 70, "rating": 0}
+    b = {"position": "CM", "attack_rating": 70, "defense_rating": 70, "rating": 0}
     assert _resolve_round_winner(a, b, "attack", 0.15) == "draw"
 
 
 def test_effective_stat_no_bonus_for_midfield_in_either_phase():
-    assert _effective_stat("CM", 70, 65, "attack", 0.15) == 70
-    assert _effective_stat("CM", 70, 65, "defense", 0.15) == 65
+    assert _effective_stat("CM", 70, 65, 0, "attack", 0.15) == 70
+    assert _effective_stat("CM", 70, 65, 0, "defense", 0.15) == 65
+
+
+def test_effective_stat_adds_overall_rating_on_top_of_the_phase_stat():
+    # Overall rating is always added in full; only the phase sub-stat gets the position bonus.
+    assert _effective_stat("CM", 70, 65, 20, "attack", 0.15) == 90
+    assert _effective_stat("ST", 70, 65, 20, "attack", 0.15) == 70 * 1.15 + 20
+
+
+def test_overall_rating_can_swing_a_round_the_stat_alone_would_lose():
+    weaker_forward_higher_rating = {"position": "ST", "attack_rating": 60, "defense_rating": 30, "rating": 90}
+    stronger_stat_lower_rating = {"position": "CM", "attack_rating": 80, "defense_rating": 80, "rating": 40}
+    # 60*1.15=69+90=159 vs 80+40=120 -> the higher-rated forward wins despite a lower base ATK.
+    assert _resolve_round_winner(weaker_forward_higher_rating, stronger_stat_lower_rating, "attack", 0.15) == "user"
 
 
 # ---------------------------------------------------------------------------

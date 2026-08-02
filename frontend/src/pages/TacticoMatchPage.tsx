@@ -206,7 +206,7 @@ export default function TacticoMatchPage() {
           <button
             onClick={() => rematchMutation.mutate()}
             disabled={rematchMutation.isPending}
-            className="mt-4 rounded-xl bg-accent-lime px-5 py-2.5 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-40"
+            className="mt-4 w-full rounded-2xl bg-accent-lime py-4 text-base font-bold text-bg-base ring-2 ring-accent-lime/40 active:scale-95 disabled:opacity-40"
           >
             Играть ещё раз
           </button>
@@ -248,7 +248,8 @@ function ScoreBadge({ match }: { match: TacticoMatch }) {
 
 function TacticoCardTile({ card, phase, onClick }: { card: TacticoCard; phase: string | null; onClick: () => void }) {
   const imageUrl = staticUrl(card.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp");
-  const stat = phase === "defense" ? card.defense_rating : card.attack_rating;
+  const attackActive = phase === "attack";
+  const defenseActive = phase === "defense";
   return (
     <button
       onClick={onClick}
@@ -257,11 +258,19 @@ function TacticoCardTile({ card, phase, onClick }: { card: TacticoCard; phase: s
       <div className="flex h-full w-full flex-col overflow-hidden rounded-[14px] bg-bg-surface/90">
         <div className="relative flex-1 overflow-hidden">
           <img src={imageUrl} alt={card.display_name} className="h-full w-full object-cover" loading="lazy" />
-          <div className="absolute left-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-display text-xs font-bold leading-none text-white">{stat}</div>
+          <div className="absolute left-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-display text-xs font-bold leading-none text-white">★{card.rating}</div>
           <div className="absolute right-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-display text-xs font-semibold leading-none text-white">{card.position}</div>
         </div>
         <div className="border-t border-white/10 bg-black/30 px-2 py-1.5 text-center">
           <p className="truncate font-display text-xs font-semibold text-ink-chalk">{card.display_name}</p>
+          <p className="mt-0.5 flex items-center justify-center gap-2 font-mono text-[9px]">
+            <span className={attackActive ? "font-bold text-accent-lime" : "text-ink-mist"}>
+              АТК <b>{card.attack_rating}</b>
+            </span>
+            <span className={defenseActive ? "font-bold text-accent-lime" : "text-ink-mist"}>
+              ЗЩТ <b>{card.defense_rating}</b>
+            </span>
+          </p>
         </div>
       </div>
     </button>
