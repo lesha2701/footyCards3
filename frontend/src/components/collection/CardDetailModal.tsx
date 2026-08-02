@@ -37,9 +37,11 @@ export default function CardDetailModal({
         )}
         <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
           <span className="text-ink-mist">Рейтинг: <b className="font-mono text-accent-cyan">{player.rating}</b></span>
+          <span className="text-ink-mist">№ {card.serial_number}</span>
+          <span className="text-ink-mist">Атака: <b className="font-mono text-accent-cyan">{player.attack_rating}</b></span>
+          <span className="text-ink-mist">Защита: <b className="font-mono text-accent-cyan">{player.defense_rating}</b></span>
           <span className="text-ink-mist">Редкость: <b className="text-ink-chalk">{RARITY_LABELS[player.rarity]}</b></span>
           <span className="text-ink-mist">Страна: <b className="text-ink-chalk">{player.country}</b></span>
-          <span className="text-ink-mist">№ {card.serial_number}</span>
         </div>
         {(card.is_locked_by_admin || card.is_locked_in_trade || card.is_in_lineup) && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-mist">

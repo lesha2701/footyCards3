@@ -3,6 +3,7 @@ import type {
   FreeKickClaimResult,
   FreeKickKickResult,
   FreeKickStartResult,
+  GameLimits,
   HangmanClaimResult,
   HangmanGuessResult,
   HangmanStartResult,
@@ -18,6 +19,11 @@ import type {
   SaboteurRevealResult,
   SaboteurStartResult,
 } from "@/types";
+
+export async function fetchGameLimits(): Promise<GameLimits> {
+  const { data } = await api.get<GameLimits>("/games/limits");
+  return data;
+}
 
 export async function startMemoryGame(): Promise<MemoryStart> {
   const { data } = await api.post<MemoryStart>("/games/memory/start");

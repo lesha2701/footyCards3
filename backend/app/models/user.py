@@ -37,6 +37,11 @@ class User(TimestampMixin, Base):
     goals_against: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     arena_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    # Tactico stats
+    tactics_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    tactico_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    tactico_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Memory sequence
     memory_best_score: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     memory_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

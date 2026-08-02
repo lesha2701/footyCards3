@@ -165,3 +165,14 @@ class HangmanGuessOut(BaseModel):
 class HangmanClaimOut(BaseModel):
     reward_coins: int
     new_balance: int
+
+
+class GameLimitsOut(BaseModel):
+    hourly_limit: int
+    memory: int
+    arena: int
+    saboteur: int
+    penalty: int
+    free_kick: int
+    hangman: int
+    tactico: int

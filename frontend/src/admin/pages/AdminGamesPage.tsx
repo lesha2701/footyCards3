@@ -153,6 +153,23 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Тактико</p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("tactico_challenge_expiry_hours", "Срок жизни вызова, часы")}
+          {field("tactico_round_timeout_hours", "Тайм-аут на раунд, часы")}
+          {field("tactico_phase_bonus_pct", "Бонус за фазу (0-1)")}
+          {field("tactico_reward_win", "Награда за победу (бот)")}
+          {field("tactico_reward_draw", "Награда за ничью (бот)")}
+          {field("tactico_reward_loss", "Награда за поражение (бот)")}
+          {field("tactico_bot_optimal_pick_chance_easy", "Точность бота: лёгкий (0-1)")}
+          {field("tactico_bot_optimal_pick_chance_medium", "Точность бота: средний (0-1)")}
+          {field("tactico_bot_optimal_pick_chance_hard", "Точность бота: сложный (0-1)")}
+          {field("tactico_max_legendary_cards", "Макс. легендарных карт в составе")}
+          {field("tactico_max_epic_cards", "Макс. эпических карт в составе")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Футбольная виселица</p>
         <div className="grid grid-cols-2 gap-3">
           {field("hangman_daily_limit", "Лимит наградных попыток/день")}

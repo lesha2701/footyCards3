@@ -19,6 +19,7 @@ const baseUser: UserMe = {
   matches_drawn: 0,
   matches_lost: 0,
   memory_best_score: 0,
+  tactics_rating: 0,
   created_at: new Date().toISOString(),
 };
 

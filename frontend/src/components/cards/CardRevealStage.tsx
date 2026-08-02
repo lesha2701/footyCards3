@@ -97,6 +97,7 @@ export function RevealStage({
           <>
             <p className="font-display text-lg font-bold text-ink-chalk">{player.display_name}</p>
             <p className="font-mono text-base font-semibold text-accent-cyan">Рейтинг {player.rating}</p>
+            <p className="font-mono text-xs text-ink-mist">АТК {player.attack_rating} · ЗЩТ {player.defense_rating}</p>
             {player.collection_name && (
               <p className="flex items-center justify-center gap-1 text-xs font-semibold text-accent-lime">
                 <IconTag size={12} />

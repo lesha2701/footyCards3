@@ -10,6 +10,7 @@ class RankingMetric(str, enum.Enum):
     cards_count = "cards_count"
     unique_players = "unique_players"
     referral_count = "referral_count"
+    tactics_rating = "tactics_rating"
 
 
 class RankingEntry(BaseModel):

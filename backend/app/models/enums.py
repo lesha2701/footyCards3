@@ -55,6 +55,7 @@ class TransactionType(str, enum.Enum):
     card_upgrade = "card_upgrade"
     referral_reward = "referral_reward"
     collection_reward = "collection_reward"
+    tactico_reward = "tactico_reward"
 
 
 class TaskCategory(str, enum.Enum):
@@ -109,6 +110,20 @@ class MatchStatus(str, enum.Enum):
     finished = "finished"
 
 
+class TacticoOpponentType(str, enum.Enum):
+    bot = "bot"
+    friend = "friend"
+
+
+class TacticoMatchStatus(str, enum.Enum):
+    pending_accept = "pending_accept"
+    in_progress = "in_progress"
+    finished = "finished"
+    declined = "declined"
+    cancelled = "cancelled"
+    expired = "expired"
+
+
 class NotificationType(str, enum.Enum):
     trade_offer_received = "trade_offer_received"
     trade_offer_accepted = "trade_offer_accepted"
@@ -121,6 +136,13 @@ class NotificationType(str, enum.Enum):
     premium_task_available = "premium_task_available"
     referral_joined = "referral_joined"
     collection_completed = "collection_completed"
+    tactico_challenge_received = "tactico_challenge_received"
+    tactico_challenge_accepted = "tactico_challenge_accepted"
+    tactico_challenge_declined = "tactico_challenge_declined"
+    tactico_challenge_cancelled = "tactico_challenge_cancelled"
+    tactico_challenge_expired = "tactico_challenge_expired"
+    tactico_your_turn = "tactico_your_turn"
+    tactico_match_finished = "tactico_match_finished"
 
 
 class TradeCardSide(str, enum.Enum):

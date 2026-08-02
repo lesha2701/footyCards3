@@ -9,6 +9,7 @@ _DIRECT_COLUMNS = {
     RankingMetric.arena_rating: User.arena_rating,
     RankingMetric.matches_won: User.matches_won,
     RankingMetric.referral_count: User.referral_count,
+    RankingMetric.tactics_rating: User.tactics_rating,
 }
 
 

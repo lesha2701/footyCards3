@@ -76,3 +76,15 @@ class GameConfig(TimestampMixin, Base):
 
     referral_referred_reward: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
     referral_referrer_reward: Mapped[int] = mapped_column(Integer, default=400, nullable=False)
+
+    tactico_challenge_expiry_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
+    tactico_round_timeout_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
+    tactico_phase_bonus_pct: Mapped[float] = mapped_column(Numeric(4, 2), default=0.15, nullable=False)
+    tactico_reward_win: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    tactico_reward_draw: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    tactico_reward_loss: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    tactico_bot_optimal_pick_chance_easy: Mapped[float] = mapped_column(Numeric(4, 2), default=0.40, nullable=False)
+    tactico_bot_optimal_pick_chance_medium: Mapped[float] = mapped_column(Numeric(4, 2), default=0.65, nullable=False)
+    tactico_bot_optimal_pick_chance_hard: Mapped[float] = mapped_column(Numeric(4, 2), default=0.90, nullable=False)
+    tactico_max_legendary_cards: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    tactico_max_epic_cards: Mapped[int] = mapped_column(Integer, default=3, nullable=False)

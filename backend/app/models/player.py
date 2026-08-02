@@ -17,6 +17,11 @@ class Player(TimestampMixin, Base):
     display_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
 
     rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Nullable: NULL means "not yet computed" for rows created before this
+    # column existed — backend/app/backfill_player_stats.py fills those in.
+    # New players always get a value at creation time (see admin_players.py).
+    attack_rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    defense_rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     rarity: Mapped[Rarity] = mapped_column(Enum(Rarity, name="rarity_enum"), nullable=False, index=True)
     country: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     club: Mapped[str] = mapped_column(String(64), nullable=False, index=True)

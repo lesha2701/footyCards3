@@ -11,6 +11,7 @@ from app.schemas.game import (
     FreeKickKickRequest,
     FreeKickStartOut,
     FreeKickStartRequest,
+    GameLimitsOut,
     HangmanClaimOut,
     HangmanGuessOut,
     HangmanGuessRequest,
@@ -31,9 +32,16 @@ from app.schemas.game import (
     SaboteurStartOut,
     SaboteurStartRequest,
 )
-from app.services import free_kick_service, hangman_service, memory_game_service, penalty_service, saboteur_service
+from app.services import free_kick_service, game_limits_service, hangman_service, memory_game_service, penalty_service, saboteur_service
+from app.services.game_config_service import get_config
 
 router = APIRouter(prefix="/games", tags=["games"])
+
+
+@router.get("/limits", response_model=GameLimitsOut)
+async def get_game_limits(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    config = await get_config(db)
+    return game_limits_service.get_remaining_plays(user, config)
 
 
 @router.post("/memory/start", response_model=MemoryStartOut)

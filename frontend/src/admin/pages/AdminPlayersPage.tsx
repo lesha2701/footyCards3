@@ -25,6 +25,7 @@ const emptyForm = {
   first_name: "", last_name: "", display_name: "", rating: 70, rarity: "common" as Rarity,
   country: "", club: "", position: "ST" as Position, quick_sell_price: 10, is_active: true,
   collection_id: "" as number | "",
+  attack_rating: "" as number | "", defense_rating: "" as number | "",
 };
 
 export default function AdminPlayersPage() {
@@ -44,7 +45,12 @@ export default function AdminPlayersPage() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-players"] });
 
-  const buildPayload = () => ({ ...form, collection_id: form.collection_id === "" ? null : form.collection_id });
+  const buildPayload = () => ({
+    ...form,
+    collection_id: form.collection_id === "" ? null : form.collection_id,
+    attack_rating: form.attack_rating === "" ? null : form.attack_rating,
+    defense_rating: form.defense_rating === "" ? null : form.defense_rating,
+  });
 
   const createMutation = useMutation({
     mutationFn: () => createPlayer(buildPayload()),
@@ -79,6 +85,7 @@ export default function AdminPlayersPage() {
       rarity: p.rarity, country: p.country, club: p.club, position: p.position,
       quick_sell_price: p.quick_sell_price, is_active: p.is_active,
       collection_id: p.collection_id ?? "",
+      attack_rating: p.attack_rating, defense_rating: p.defense_rating,
     });
   };
 
@@ -113,12 +120,14 @@ export default function AdminPlayersPage() {
       />
 
       <div className="overflow-x-auto rounded-2xl border border-white/5">
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[880px] text-sm">
           <thead className="bg-bg-surface text-left text-xs text-slate-400">
             <tr>
               <th className="px-3 py-2" />
               <th className="px-3 py-2">Имя</th>
               <th className="px-3 py-2">Рейтинг</th>
+              <th className="px-3 py-2">АТК</th>
+              <th className="px-3 py-2">ЗЩТ</th>
               <th className="px-3 py-2">Редкость</th>
               <th className="px-3 py-2">Позиция</th>
               <th className="px-3 py-2">Клуб</th>
@@ -134,6 +143,8 @@ export default function AdminPlayersPage() {
                 </td>
                 <td className="px-3 py-2">{p.display_name}</td>
                 <td className="px-3 py-2">{p.rating}</td>
+                <td className="px-3 py-2">{p.attack_rating}</td>
+                <td className="px-3 py-2">{p.defense_rating}</td>
                 <td className="px-3 py-2">{RARITY_LABELS[p.rarity]}</td>
                 <td className="px-3 py-2">{p.position}</td>
                 <td className="px-3 py-2">{p.club}</td>
@@ -176,6 +187,10 @@ export default function AdminPlayersPage() {
               <div className="grid grid-cols-2 gap-2">
                 <NumberField label="Рейтинг" value={form.rating} onChange={(v) => setForm({ ...form, rating: v })} min={1} max={99} />
                 <NumberField label="Цена продажи" value={form.quick_sell_price} onChange={(v) => setForm({ ...form, quick_sell_price: v })} min={0} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <OptionalNumberField label="Атака (авто, если пусто)" value={form.attack_rating} onChange={(v) => setForm({ ...form, attack_rating: v })} />
+                <OptionalNumberField label="Защита (авто, если пусто)" value={form.defense_rating} onChange={(v) => setForm({ ...form, defense_rating: v })} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <SelectField label="Редкость" value={form.rarity} options={RARITIES.map((r) => ({ value: r, label: RARITY_LABELS[r] }))} onChange={(v) => setForm({ ...form, rarity: v as Rarity })} />
@@ -257,6 +272,30 @@ function NumberField({ label, value, onChange, min, max }: { label: string; valu
     <label className="flex flex-col gap-1">
       <span className="text-xs text-slate-400">{label}</span>
       <NumberInput value={value} onChange={onChange} min={min} max={max} />
+    </label>
+  );
+}
+
+function OptionalNumberField({
+  label, value, onChange, min = 1, max = 99,
+}: { label: string; value: number | ""; onChange: (v: number | "") => void; min?: number; max?: number }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs text-slate-400">{label}</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="авто"
+        value={value === "" ? "" : String(value)}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === "") { onChange(""); return; }
+          if (!/^\d*$/.test(raw)) return;
+          const n = Number(raw);
+          onChange(Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : "");
+        }}
+        className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+      />
     </label>
   );
 }

@@ -19,6 +19,9 @@ import PackOpenPage from "@/pages/PackOpenPage";
 import PlayPage from "@/pages/PlayPage";
 import MemoryGamePage from "@/pages/MemoryGamePage";
 import ArenaPage from "@/pages/ArenaPage";
+import TacticoMatchesPage from "@/pages/TacticoMatchesPage";
+import TacticoMatchPage from "@/pages/TacticoMatchPage";
+import TacticoSquadPage from "@/pages/TacticoSquadPage";
 import SaboteurGamePage from "@/pages/SaboteurGamePage";
 import PenaltyGamePage from "@/pages/PenaltyGamePage";
 import FreeKickGamePage from "@/pages/FreeKickGamePage";
@@ -114,6 +117,9 @@ export default function App() {
         <Route path="/play" element={<PlayPage />} />
         <Route path="/play/memory" element={<MemoryGamePage />} />
         <Route path="/play/arena" element={<ArenaPage />} />
+        <Route path="/play/tactico" element={<TacticoMatchesPage />} />
+        <Route path="/play/tactico/squad" element={<TacticoSquadPage />} />
+        <Route path="/play/tactico/matches/:matchId" element={<TacticoMatchPage />} />
         <Route path="/play/saboteur" element={<SaboteurGamePage />} />
         <Route path="/play/penalty" element={<PenaltyGamePage />} />
         <Route path="/play/free-kick" element={<FreeKickGamePage />} />

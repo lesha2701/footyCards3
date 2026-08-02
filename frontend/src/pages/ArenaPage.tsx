@@ -23,6 +23,7 @@ import { CATEGORY_LABELS, CATEGORY_POSITIONS, TACTICS, type FormationSlot } from
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
+import { useMatchGuardStore } from "@/store/matchGuardStore";
 import type { Match, MatchActionKind, MatchPendingMoment, MatchResult, UserCard } from "@/types";
 
 const EVENT_STEP_MS = 950;
@@ -79,6 +80,17 @@ export default function ArenaPage() {
     mutationFn: (action: MatchActionKind) => actMatch(match!.id, action),
     onSuccess: (data) => setMatch(data),
   });
+
+  // Warns before leaving a live match, same as Тактико — no backend forfeit
+  // exists for Card Arena yet, so this is a UX nudge only, not enforced.
+  useEffect(() => {
+    if (simulating && match?.status === "in_progress") {
+      useMatchGuardStore.getState().activate("Матч ещё не завершён. Уверен, что хочешь выйти?");
+    } else {
+      useMatchGuardStore.getState().deactivate();
+    }
+    return () => useMatchGuardStore.getState().deactivate();
+  }, [simulating, match?.status]);
 
   if (lineupLoading) return <ListSkeleton />;
 

@@ -114,6 +114,17 @@ export interface GameConfig {
   hangman_daily_limit: number;
   hangman_reward_correct: number;
   hangman_max_wrong: number;
+  tactico_challenge_expiry_hours: number;
+  tactico_round_timeout_hours: number;
+  tactico_phase_bonus_pct: number;
+  tactico_reward_win: number;
+  tactico_reward_draw: number;
+  tactico_reward_loss: number;
+  tactico_bot_optimal_pick_chance_easy: number;
+  tactico_bot_optimal_pick_chance_medium: number;
+  tactico_bot_optimal_pick_chance_hard: number;
+  tactico_max_legendary_cards: number;
+  tactico_max_epic_cards: number;
 }
 
 export interface CardCollection {

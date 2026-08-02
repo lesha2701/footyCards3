@@ -32,6 +32,7 @@ export interface UserMe {
   matches_drawn: number;
   matches_lost: number;
   memory_best_score: number;
+  tactics_rating: number;
   created_at: string;
 }
 
@@ -46,6 +47,8 @@ export interface Player {
   last_name: string;
   display_name: string;
   rating: number;
+  attack_rating: number;
+  defense_rating: number;
   rarity: Rarity;
   country: string;
   club: string;
@@ -235,6 +238,17 @@ export interface ArenaStats {
   arena_rank: number | null;
 }
 
+export interface GameLimits {
+  hourly_limit: number;
+  memory: number;
+  arena: number;
+  saboteur: number;
+  penalty: number;
+  free_kick: number;
+  hangman: number;
+  tactico: number;
+}
+
 export interface ArenaLeaderboardEntry {
   user_id: number;
   display_name: string;
@@ -247,7 +261,13 @@ export interface ArenaLeaderboardEntry {
   points: number;
 }
 
-export type RankingMetric = "arena_rating" | "matches_won" | "cards_count" | "unique_players" | "referral_count";
+export type RankingMetric =
+  | "arena_rating"
+  | "matches_won"
+  | "cards_count"
+  | "unique_players"
+  | "referral_count"
+  | "tactics_rating";
 
 export interface RankingEntry {
   rank: number;
@@ -287,6 +307,64 @@ export interface TradeOffer {
   expires_at: string;
   resolved_at: string | null;
   created_at: string;
+}
+
+export interface TacticoSquad {
+  is_complete: boolean;
+  cards: UserCard[];
+  max_legendary: number;
+  max_epic: number;
+}
+
+export interface TacticoStats {
+  tactics_rating: number;
+  tactics_rank: number | null;
+}
+
+export type TacticoPhase = "attack" | "defense";
+export type TacticoOpponentType = "bot" | "friend";
+export type TacticoMatchStatus = "pending_accept" | "in_progress" | "finished" | "declined" | "cancelled" | "expired";
+
+export interface TacticoCard {
+  user_card_id: number | null;
+  player_id: number;
+  display_name: string;
+  position: Position;
+  image_path: string | null;
+  rarity: Rarity;
+  rating: number;
+  attack_rating: number;
+  defense_rating: number;
+}
+
+export interface TacticoRound {
+  index: number;
+  phase: TacticoPhase;
+  user_card: TacticoCard | null;
+  opponent_card: TacticoCard | null;
+  winner: "user" | "opponent" | "draw" | null;
+}
+
+export interface TacticoMatch {
+  id: number;
+  opponent_type: TacticoOpponentType;
+  opponent_name: string;
+  opponent_user_id: number | null;
+  difficulty: "easy" | "medium" | "hard" | null;
+  status: TacticoMatchStatus;
+  viewer_side: "user" | "opponent";
+  user_score: number;
+  opponent_score: number;
+  rounds: TacticoRound[];
+  current_phase: TacticoPhase | null;
+  pickable_cards: TacticoCard[] | null;
+  waiting_for_opponent: boolean;
+  result: "win" | "draw" | "loss" | null;
+  reward_coins: number;
+  rating_delta: number;
+  created_at: string;
+  expires_at: string | null;
+  resolved_at: string | null;
 }
 
 export interface DailyRewardDay {

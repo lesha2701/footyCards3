@@ -17,6 +17,7 @@ from app.schemas.player import PlayerCreate, PlayerOut, PlayerUpdate
 from app.services.admin_log_service import log_action
 from app.services.csv_service import export_players_csv, import_players_csv
 from app.services.image_service import delete_player_image, save_player_image
+from app.services.player_stats_service import compute_default_attack_defense
 
 router = APIRouter(prefix="/admin/players", tags=["admin"], dependencies=[Depends(get_current_admin)])
 
@@ -64,7 +65,14 @@ async def import_csv(
 
 @router.post("", response_model=PlayerOut)
 async def create_player(payload: PlayerCreate, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
-    player = Player(**payload.model_dump())
+    data = payload.model_dump()
+    if data["attack_rating"] is None or data["defense_rating"] is None:
+        default_attack, default_defense = compute_default_attack_defense(data["rating"], data["position"])
+        if data["attack_rating"] is None:
+            data["attack_rating"] = default_attack
+        if data["defense_rating"] is None:
+            data["defense_rating"] = default_defense
+    player = Player(**data)
     db.add(player)
     await db.flush()
     await log_action(db, admin.id, "create_player", "player", player.id, new_value=payload.model_dump(mode="json"), ip_address=request.client.host if request.client else None)

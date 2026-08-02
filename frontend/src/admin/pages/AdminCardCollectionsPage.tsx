@@ -256,7 +256,7 @@ function CollectionPlayersPanel({ collectionId }: { collectionId: number }) {
           <label key={p.id} className="flex items-center gap-2 border-b border-white/5 px-3 py-2 text-xs last:border-b-0">
             <input type="checkbox" checked={memberIds.has(p.id)} onChange={() => toggle(p)} disabled={saveMutation.isPending} />
             <span className="flex-1">{p.display_name}</span>
-            <span className="text-slate-500">{p.position} · {p.rating}</span>
+            <span className="text-slate-500">{p.position} · {p.rating} (А{p.attack_rating}/З{p.defense_rating})</span>
             {p.collection_id !== null && p.collection_id !== collectionId && (
               <span className="text-amber-400">др. коллекция</span>
             )}

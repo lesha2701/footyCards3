@@ -1,14 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
+import { fetchGameLimits } from "@/api/games";
 import { fetchArenaStats } from "@/api/matches";
-import { IconBall, IconBrain, IconGoal, IconHelp, IconProfile, IconTarget, IconTrophy, type IconProps } from "@/components/icons";
+import { fetchTacticoStats } from "@/api/tactico";
+import {
+  IconBall,
+  IconBrain,
+  IconFlagCheckered,
+  IconGoal,
+  IconHelp,
+  IconProfile,
+  IconTarget,
+  IconTrophy,
+  type IconProps,
+} from "@/components/icons";
 import { useAuthStore } from "@/store/authStore";
 
 export default function PlayPage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const { data: arenaStats } = useQuery({ queryKey: ["arena-stats"], queryFn: fetchArenaStats });
+  const { data: tacticoStats } = useQuery({ queryKey: ["tactico-stats"], queryFn: fetchTacticoStats });
+  const { data: limits } = useQuery({ queryKey: ["game-limits"], queryFn: fetchGameLimits });
 
   return (
     <div className="flex flex-col gap-4">
@@ -23,16 +37,7 @@ export default function PlayPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <GameCard
-          onClick={() => navigate("/play/memory")}
-          Icon={IconBrain}
-          badgeClass="bg-accent-cyan"
-          title="Memory Sequence"
-          description="Запомни и повтори последовательность символов"
-          stat={`Рекорд: ${user?.memory_best_score ?? 0}`}
-        />
-
+      <div className="flex flex-col gap-3">
         <GameCard
           onClick={() => navigate("/play/arena")}
           Icon={IconBall}
@@ -40,6 +45,30 @@ export default function PlayPage() {
           title="Card Arena"
           description="Собери состав 4-3-3 и сыграй матч"
           stat={`Рейтинг: ${arenaStats?.arena_rating ?? user?.arena_rating ?? 1000}`}
+          remaining={limits?.arena}
+          limit={limits?.hourly_limit}
+        />
+
+        <GameCard
+          onClick={() => navigate("/play/tactico")}
+          Icon={IconFlagCheckered}
+          badgeClass="bg-rarity-rare"
+          title="Тактико"
+          description="Собери состав из 11 карт и переиграй соперника раунд за раундом"
+          stat={`Рейтинг: ${tacticoStats?.tactics_rating ?? user?.tactics_rating ?? 0}`}
+          remaining={limits?.tactico}
+          limit={limits?.hourly_limit}
+        />
+
+        <GameCard
+          onClick={() => navigate("/play/memory")}
+          Icon={IconBrain}
+          badgeClass="bg-accent-cyan"
+          title="Memory Sequence"
+          description="Запомни и повтори последовательность символов"
+          stat={`Рекорд: ${user?.memory_best_score ?? 0}`}
+          remaining={limits?.memory}
+          limit={limits?.hourly_limit}
         />
 
         <GameCard
@@ -48,6 +77,8 @@ export default function PlayPage() {
           badgeClass="bg-rarity-common"
           title="Футбольный фанат"
           description="Проберись сквозь стюардов к любимому игроку"
+          remaining={limits?.saboteur}
+          limit={limits?.hourly_limit}
         />
 
         <GameCard
@@ -56,6 +87,8 @@ export default function PlayPage() {
           badgeClass="bg-rarity-legendary"
           title="Пенальти"
           description="Серия пенальти против бота"
+          remaining={limits?.penalty}
+          limit={limits?.hourly_limit}
         />
 
         <GameCard
@@ -64,6 +97,8 @@ export default function PlayPage() {
           badgeClass="bg-accent-lime"
           title="Штрафной удар"
           description="Останови шкалу силы в нужный момент"
+          remaining={limits?.free_kick}
+          limit={limits?.hourly_limit}
         />
 
         <GameCard
@@ -72,6 +107,8 @@ export default function PlayPage() {
           badgeClass="bg-rarity-epic"
           title="Футбольная виселица"
           description="Угадай футболиста или термин по буквам"
+          remaining={limits?.hangman}
+          limit={limits?.hourly_limit}
         />
       </div>
     </div>
@@ -85,6 +122,8 @@ function GameCard({
   title,
   description,
   stat,
+  remaining,
+  limit,
 }: {
   onClick: () => void;
   Icon: (props: IconProps) => JSX.Element;
@@ -92,17 +131,30 @@ function GameCard({
   title: string;
   description: string;
   stat?: string;
+  remaining?: number;
+  limit?: number;
 }) {
   return (
-    <button onClick={onClick} className="flex flex-col rounded-2xl bg-bg-surface p-4 text-left active:scale-[0.98]">
-      <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${badgeClass}`}>
-        <Icon size={20} className="text-bg-base" />
+    <button onClick={onClick} className="flex items-center gap-3 rounded-2xl bg-bg-surface p-4 text-left active:scale-[0.98]">
+      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${badgeClass}`}>
+        <Icon size={22} className="text-bg-base" />
       </span>
-      <p className="mt-2.5 font-display text-sm font-bold text-ink-chalk">{title}</p>
-      <p className="mt-1 text-[11px] leading-tight text-ink-mist">{description}</p>
-      <div className="mt-auto pt-2">
-        {stat && <p className="font-mono text-[10px] text-ink-mist">{stat}</p>}
-        <p className="mt-0.5 text-[10px] text-ink-mist-dim">До 3 попыток в час</p>
+      <div className="min-w-0 flex-1">
+        <p className="font-display text-sm font-bold text-ink-chalk">{title}</p>
+        <p className="mt-0.5 text-[11px] leading-tight text-ink-mist">{description}</p>
+        {stat && <p className="mt-1 font-mono text-[10px] text-ink-mist">{stat}</p>}
+      </div>
+      <div className="shrink-0 text-right">
+        {remaining !== undefined && limit !== undefined ? (
+          <>
+            <p className={`font-mono text-sm font-bold ${remaining > 0 ? "text-ink-chalk" : "text-red-400"}`}>
+              {remaining}/{limit}
+            </p>
+            <p className="text-[10px] text-ink-mist-dim">осталось в час</p>
+          </>
+        ) : (
+          <p className="text-[10px] text-ink-mist-dim">...</p>
+        )}
       </div>
     </button>
   );

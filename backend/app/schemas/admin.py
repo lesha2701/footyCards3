@@ -149,6 +149,17 @@ class GameConfigOut(BaseModel):
     hangman_daily_limit: int
     hangman_reward_correct: int
     hangman_max_wrong: int
+    tactico_challenge_expiry_hours: int
+    tactico_round_timeout_hours: int
+    tactico_phase_bonus_pct: float
+    tactico_reward_win: int
+    tactico_reward_draw: int
+    tactico_reward_loss: int
+    tactico_bot_optimal_pick_chance_easy: float
+    tactico_bot_optimal_pick_chance_medium: float
+    tactico_bot_optimal_pick_chance_hard: float
+    tactico_max_legendary_cards: int
+    tactico_max_epic_cards: int
 
 
 class GameConfigUpdate(BaseModel):
@@ -206,6 +217,17 @@ class GameConfigUpdate(BaseModel):
     hangman_daily_limit: Optional[int] = Field(default=None, ge=0)
     hangman_reward_correct: Optional[int] = Field(default=None, ge=0)
     hangman_max_wrong: Optional[int] = Field(default=None, ge=1)
+    tactico_challenge_expiry_hours: Optional[int] = Field(default=None, ge=1)
+    tactico_round_timeout_hours: Optional[int] = Field(default=None, ge=1)
+    tactico_phase_bonus_pct: Optional[float] = Field(default=None, ge=0, le=1)
+    tactico_reward_win: Optional[int] = Field(default=None, ge=0)
+    tactico_reward_draw: Optional[int] = Field(default=None, ge=0)
+    tactico_reward_loss: Optional[int] = Field(default=None, ge=0)
+    tactico_bot_optimal_pick_chance_easy: Optional[float] = Field(default=None, ge=0, le=1)
+    tactico_bot_optimal_pick_chance_medium: Optional[float] = Field(default=None, ge=0, le=1)
+    tactico_bot_optimal_pick_chance_hard: Optional[float] = Field(default=None, ge=0, le=1)
+    tactico_max_legendary_cards: Optional[int] = Field(default=None, ge=0, le=11)
+    tactico_max_epic_cards: Optional[int] = Field(default=None, ge=0, le=11)
 
 
 class SuspiciousMemorySessionOut(BaseModel):

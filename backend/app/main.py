@@ -30,6 +30,7 @@ from app.routers import (
     packs,
     players,
     profile,
+    tactico,
     tasks,
     trades,
     users,
@@ -84,6 +85,7 @@ app.include_router(free_pack.router, prefix=API_PREFIX)
 app.include_router(games.router, prefix=API_PREFIX)
 app.include_router(lineups.router, prefix=API_PREFIX)
 app.include_router(matches.router, prefix=API_PREFIX)
+app.include_router(tactico.router, prefix=API_PREFIX)
 app.include_router(trades.router, prefix=API_PREFIX)
 app.include_router(daily_rewards.router, prefix=API_PREFIX)
 app.include_router(profile.router, prefix=API_PREFIX)

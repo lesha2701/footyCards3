@@ -10,6 +10,8 @@ const player: Player = {
   last_name: "Silva",
   display_name: "Lucas Silva",
   rating: 88,
+  attack_rating: 96,
+  defense_rating: 76,
   rarity: "epic",
   country: "Brazil",
   club: "Nord United",

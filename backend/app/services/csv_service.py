@@ -8,9 +8,10 @@ from sqlalchemy.orm import joinedload
 from app.models.card_collection import CardCollection
 from app.models.enums import Position, Rarity
 from app.models.player import Player
+from app.services.player_stats_service import compute_default_attack_defense
 
 CSV_COLUMNS = [
-    "first_name", "last_name", "display_name", "rating", "rarity",
+    "first_name", "last_name", "display_name", "rating", "attack_rating", "defense_rating", "rarity",
     "country", "club", "position", "collection", "quick_sell_price", "is_active",
 ]
 
@@ -29,6 +30,8 @@ async def export_players_csv(db: AsyncSession) -> str:
                 "last_name": p.last_name,
                 "display_name": p.display_name,
                 "rating": p.rating,
+                "attack_rating": p.attack_rating if p.attack_rating is not None else "",
+                "defense_rating": p.defense_rating if p.defense_rating is not None else "",
                 "rarity": p.rarity.value,
                 "country": p.country,
                 "club": p.club,
@@ -39,6 +42,11 @@ async def export_players_csv(db: AsyncSession) -> str:
             }
         )
     return buffer.getvalue()
+
+
+def _parse_optional_stat(row: dict, key: str) -> int | None:
+    raw = (row.get(key) or "").strip()
+    return int(raw) if raw else None
 
 
 async def import_players_csv(db: AsyncSession, content: str) -> dict:
@@ -62,6 +70,9 @@ async def import_players_csv(db: AsyncSession, content: str) -> dict:
                     raise ValueError(f"Unknown collection: {collection_name}")
                 collection_id = collection.id
 
+            parsed_attack = _parse_optional_stat(row, "attack_rating")
+            parsed_defense = _parse_optional_stat(row, "defense_rating")
+
             values = dict(
                 first_name=row["first_name"].strip(),
                 last_name=row["last_name"].strip(),
@@ -79,10 +90,20 @@ async def import_players_csv(db: AsyncSession, content: str) -> dict:
             if existing:
                 for key, value in values.items():
                     setattr(existing, key, value)
+                # Blank attack/defense cells mean "leave unchanged" on update,
+                # not "reset to unset" — only overwrite when a value is given.
+                if parsed_attack is not None:
+                    existing.attack_rating = parsed_attack
+                if parsed_defense is not None:
+                    existing.defense_rating = parsed_defense
                 db.add(existing)
                 updated += 1
             else:
-                db.add(Player(**values))
+                if parsed_attack is None or parsed_defense is None:
+                    default_attack, default_defense = compute_default_attack_defense(values["rating"], values["position"])
+                    parsed_attack = parsed_attack if parsed_attack is not None else default_attack
+                    parsed_defense = parsed_defense if parsed_defense is not None else default_defense
+                db.add(Player(**values, attack_rating=parsed_attack, defense_rating=parsed_defense))
                 created += 1
         except Exception as exc:  # noqa: BLE001 - collect row-level errors for the admin report
             errors.append({"row": i, "error": str(exc)})
