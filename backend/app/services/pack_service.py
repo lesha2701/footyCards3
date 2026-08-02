@@ -15,7 +15,7 @@ from app.models.pack import Pack, PackOpening, PackOpeningCard, PackRarityProbab
 from app.models.player import Player
 from app.models.user import User
 from app.schemas.pack import OpenedCardOut, PackOpenResult, PackOut
-from app.services import notification_service, task_service
+from app.services import collection_service, notification_service, task_service
 from app.services.card_creation import create_user_card
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
@@ -178,6 +178,32 @@ async def track_pack_opened_tasks(db: AsyncSession, user: User, dup_counts: dict
     await task_service.evaluate_metric_progress(db, user, "unique_players", len(dup_counts))
 
 
+async def grant_bonus_pack_opening(
+    db: AsyncSession, user: User, pack_id: int, idempotency_prefix: str, source: CardSource = CardSource.task
+) -> Optional[PackOpenResult]:
+    """Server-initiated pack grant with no payment or purchase-limit checks —
+    shared by task rewards and collection-completion rewards."""
+    result = await db.execute(
+        select(Pack).where(Pack.id == pack_id).options(joinedload(Pack.rarity_probabilities))
+    )
+    pack = result.unique().scalar_one_or_none()
+    if not pack:
+        return None
+
+    opening = PackOpening(
+        user_id=user.id, pack_id=pack.id, price_paid=0,
+        idempotency_key=f"{idempotency_prefix}-{datetime.now(timezone.utc).timestamp()}",
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(opening)
+    await db.flush()
+
+    dup_counts = await _duplicate_counts_snapshot(db, user.id)
+    opened_items = await roll_and_create_cards(db, user, pack, opening, dup_counts, source)
+
+    return PackOpenResult(opening_id=opening.id, pack=PackOut.model_validate(pack), cards=opened_items, new_balance=user.balance)
+
+
 async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key: Optional[str]) -> PackOpenResult:
     if idempotency_key:
         existing = (
@@ -219,6 +245,9 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
     dup_counts = await _duplicate_counts_snapshot(db, locked_user.id)
     opened_items = await roll_and_create_cards(db, locked_user, pack, opening, dup_counts, CardSource.pack)
     await track_pack_opened_tasks(db, locked_user, dup_counts)
+    collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(
+        db, locked_user, [item.card.player.id for item in opened_items]
+    )
 
     referral_bonus_coins: Optional[int] = None
     if locked_user.referred_by_id is not None and not locked_user.referral_reward_granted:
@@ -279,6 +308,7 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
         cards=opened_items,
         new_balance=locked_user.balance,
         referral_bonus_coins=referral_bonus_coins,
+        collection_rewards=collection_rewards,
     )
 
 

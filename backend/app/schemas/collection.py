@@ -71,3 +71,43 @@ class SellResultOut(BaseModel):
     sold_count: int
     coins_earned: int
     new_balance: int
+
+
+class AlbumCollectionSummaryOut(BaseModel):
+    id: int  # -1 for the synthetic "Other players" bucket
+    name: str
+    description: str
+    image_path: Optional[str]
+    owned_count: int
+    total_count: int
+    is_complete: bool
+    reward_coins: int
+    reward_pack_name: Optional[str]
+    reward_claimed: bool
+
+
+class AlbumOverviewOut(BaseModel):
+    collections: List[AlbumCollectionSummaryOut]
+    overall_owned: int
+    overall_total: int
+
+
+class AlbumPlayerOut(BaseModel):
+    player: PlayerOut
+    owned: bool
+    duplicate_count: int
+    card: Optional[UserCardListItem] = None
+
+
+class AlbumCollectionDetailOut(BaseModel):
+    id: int
+    name: str
+    description: str
+    image_path: Optional[str]
+    reward_coins: int
+    reward_pack_name: Optional[str]
+    owned_count: int
+    total_count: int
+    is_complete: bool
+    reward_claimed: bool
+    players: List[AlbumPlayerOut]

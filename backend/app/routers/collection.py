@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +10,8 @@ from app.models.user import User
 from app.schemas.card import CollectionStatsOut
 from app.schemas.card_upgrade import CardUpgradeResultOut, CardUpgradeRuleOut, UpgradeCardRequest
 from app.schemas.collection import (
+    AlbumCollectionDetailOut,
+    AlbumOverviewOut,
     BulkSellRequest,
     CollectionFilterParams,
     SellCardRequest,
@@ -16,9 +20,31 @@ from app.schemas.collection import (
     UserCardListItem,
 )
 from app.services.card_upgrade_service import list_rules, upgrade_card
-from app.services.collection_service import collection_stats, list_user_cards, sell_cards, set_card_hidden
+from app.services.collection_service import (
+    collection_stats,
+    get_album_collection_detail,
+    get_album_overview,
+    list_user_cards,
+    sell_cards,
+    set_card_hidden,
+)
 
 router = APIRouter(prefix="/collection", tags=["collection"])
+
+
+@router.get("/album", response_model=AlbumOverviewOut)
+async def get_album_overview_route(
+    search: Optional[str] = None, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await get_album_overview(db, user.id, search)
+
+
+@router.get("/album/{collection_id}", response_model=AlbumCollectionDetailOut)
+async def get_album_collection_detail_route(
+    collection_id: int, search: Optional[str] = None, db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return await get_album_collection_detail(db, user.id, collection_id, search)
 
 
 @router.get("/cards", response_model=Page[UserCardListItem])

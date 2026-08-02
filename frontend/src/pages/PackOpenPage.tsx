@@ -191,6 +191,16 @@ function Summary({ result, onDone }: { result: PackOpenResult; onDone: () => voi
           <IconCoin size={14} className="text-accent-lime" />
         </div>
       )}
+      {result.collection_rewards.map((grant) => (
+        <div key={grant.collection_id} className="flex items-center justify-center gap-2 rounded-2xl bg-accent-lime/10 px-4 py-3 text-center">
+          <IconTag size={18} className="text-accent-lime" />
+          <p className="text-sm font-semibold text-accent-lime">
+            Коллекция «{grant.collection_name}» собрана! +{grant.reward_coins}
+            {grant.granted_pack ? ` + пак «${grant.granted_pack.pack.name}»` : ""}
+          </p>
+          <IconCoin size={14} className="text-accent-lime" />
+        </div>
+      ))}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {result.cards.map((opened) => (
           <div

@@ -122,6 +122,9 @@ export interface CardCollection {
   description: string;
   is_active: boolean;
   sort_order: number;
+  image_path: string | null;
+  reward_coins: number;
+  reward_pack_id: number | null;
 }
 
 export interface TaskDefinition {

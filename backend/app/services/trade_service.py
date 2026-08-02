@@ -13,6 +13,7 @@ from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.user import User
 from app.schemas.trade import TradeCreateRequest, TradeOfferOut
 from app.services import task_service
+from app.services.collection_service import grant_collection_rewards_for_new_cards
 from app.services.notification_service import notify
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
@@ -292,12 +293,23 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeOffe
     if offer.receiver_coins > 0 and receiver.balance < offer.receiver_coins:
         raise InsufficientBalanceError("Receiver no longer has enough coins for this trade")
 
+    receiver_new_player_ids: list[int] = []
+    sender_new_player_ids: list[int] = []
     for tc in trade_cards:
         card = cards_by_id[tc.user_card_id]
         new_owner_id = offer.receiver_id if tc.side == TradeCardSide.offered else offer.sender_id
         card.owner_id = new_owner_id
         card.is_locked_in_trade = False
         db.add(card)
+        if new_owner_id == offer.receiver_id:
+            receiver_new_player_ids.append(card.player_id)
+        else:
+            sender_new_player_ids.append(card.player_id)
+
+    if receiver_new_player_ids:
+        await grant_collection_rewards_for_new_cards(db, receiver, receiver_new_player_ids)
+    if sender_new_player_ids:
+        await grant_collection_rewards_for_new_cards(db, sender, sender_new_player_ids)
 
     if offer.sender_coins > 0:
         await debit_coins(db, sender, offer.sender_coins, TransactionType.trade_coins_sent, "Монеты отправлены при обмене", "trade_offer", offer.id)

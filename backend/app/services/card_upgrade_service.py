@@ -14,6 +14,7 @@ from app.models.enums import RARITY_ORDER, CardSource, Rarity, TransactionType
 from app.models.user import User
 from app.schemas.card_upgrade import CardUpgradeResultOut, UserCardOut
 from app.services.card_creation import create_user_card
+from app.services.collection_service import grant_collection_rewards_for_new_cards
 from app.services.pack_service import pick_random_player
 from app.services.wallet_service import debit_coins, lock_user_for_update
 
@@ -115,6 +116,7 @@ async def upgrade_card(
         new_player = await pick_random_player(db, target_rarity)
         new_card = await create_user_card(db, locked_user.id, new_player.id, CardSource.card_upgrade)
         result_card_id = new_card.id
+        await grant_collection_rewards_for_new_cards(db, locked_user, [new_player.id])
 
     attempt = CardUpgradeAttempt(
         user_id=locked_user.id,

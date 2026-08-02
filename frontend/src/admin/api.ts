@@ -184,6 +184,25 @@ export async function toggleCardCollectionActive(id: number): Promise<CardCollec
   return data;
 }
 
+export async function uploadCardCollectionImage(id: number, file: File): Promise<CardCollection> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<CardCollection>(`/admin/card-collections/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function fetchCardCollectionPlayers(id: number): Promise<Player[]> {
+  const { data } = await api.get<Player[]>(`/admin/card-collections/${id}/players`);
+  return data;
+}
+
+export async function setCardCollectionPlayers(id: number, playerIds: number[]): Promise<Player[]> {
+  const { data } = await api.put<Player[]>(`/admin/card-collections/${id}/players`, { player_ids: playerIds });
+  return data;
+}
+
 // --- Tasks ---
 export async function fetchAdminTasks(): Promise<TaskDefinition[]> {
   const { data } = await api.get<TaskDefinition[]>("/admin/tasks");

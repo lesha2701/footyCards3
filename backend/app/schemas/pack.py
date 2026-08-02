@@ -74,13 +74,24 @@ class OpenedCardOut(BaseModel):
     duplicate_count: int
 
 
+class CollectionRewardGrantOut(BaseModel):
+    collection_id: int
+    collection_name: str
+    reward_coins: int
+    granted_pack: Optional["PackOpenResult"] = None
+
+
 class PackOpenResult(BaseModel):
     opening_id: int
     pack: PackOut
     cards: list[OpenedCardOut]
     new_balance: int
     referral_bonus_coins: Optional[int] = None
+    collection_rewards: list[CollectionRewardGrantOut] = []
 
 
 class OpenPackRequest(BaseModel):
     idempotency_key: Optional[str] = None
+
+
+CollectionRewardGrantOut.model_rebuild()

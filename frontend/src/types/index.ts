@@ -123,12 +123,20 @@ export interface OpenedCard {
   duplicate_count: number;
 }
 
+export interface CollectionRewardGrant {
+  collection_id: number;
+  collection_name: string;
+  reward_coins: number;
+  granted_pack: PackOpenResult | null;
+}
+
 export interface PackOpenResult {
   opening_id: number;
   pack: Pack;
   cards: OpenedCard[];
   new_balance: number;
   referral_bonus_coins: number | null;
+  collection_rewards: CollectionRewardGrant[];
 }
 
 export interface MemoryStart {
@@ -494,6 +502,46 @@ export interface FreePackStatus {
 export interface CardCollectionPublic {
   id: number;
   name: string;
+}
+
+export interface AlbumCollectionSummary {
+  id: number; // -1 for the synthetic "Other players" bucket
+  name: string;
+  description: string;
+  image_path: string | null;
+  owned_count: number;
+  total_count: number;
+  is_complete: boolean;
+  reward_coins: number;
+  reward_pack_name: string | null;
+  reward_claimed: boolean;
+}
+
+export interface AlbumOverview {
+  collections: AlbumCollectionSummary[];
+  overall_owned: number;
+  overall_total: number;
+}
+
+export interface AlbumPlayer {
+  player: Player;
+  owned: boolean;
+  duplicate_count: number;
+  card: UserCard | null;
+}
+
+export interface AlbumCollectionDetail {
+  id: number;
+  name: string;
+  description: string;
+  image_path: string | null;
+  reward_coins: number;
+  reward_pack_name: string | null;
+  owned_count: number;
+  total_count: number;
+  is_complete: boolean;
+  reward_claimed: boolean;
+  players: AlbumPlayer[];
 }
 
 export interface ApiError {

@@ -37,6 +37,7 @@ class CardSource(str, enum.Enum):
     task = "task"
     free_pack = "free_pack"
     card_upgrade = "card_upgrade"
+    collection_reward = "collection_reward"
 
 
 class TransactionType(str, enum.Enum):
@@ -53,6 +54,7 @@ class TransactionType(str, enum.Enum):
     task_reward = "task_reward"
     card_upgrade = "card_upgrade"
     referral_reward = "referral_reward"
+    collection_reward = "collection_reward"
 
 
 class TaskCategory(str, enum.Enum):
@@ -118,6 +120,7 @@ class NotificationType(str, enum.Enum):
     admin_message = "admin_message"
     premium_task_available = "premium_task_available"
     referral_joined = "referral_joined"
+    collection_completed = "collection_completed"
 
 
 class TradeCardSide(str, enum.Enum):

@@ -17,6 +17,7 @@ from app.models.user import User
 from app.schemas.card import UserCardOut
 from app.schemas.daily_reward import DailyRewardCalendarOut, DailyRewardClaimOut, DailyRewardDayOut
 from app.services.card_creation import create_user_card
+from app.services.collection_service import grant_collection_rewards_for_new_cards
 from app.services.pack_service import pick_random_player, roll_rarities
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
@@ -78,13 +79,15 @@ async def get_calendar(db: AsyncSession, user: User) -> DailyRewardCalendarOut:
     return DailyRewardCalendarOut(current_streak=display_streak, already_claimed_today=already_claimed, days=days)
 
 
-async def _grant_free_pack(db: AsyncSession, user: User, slug: str) -> tuple[Optional[str], Optional[UserCard]]:
+async def _grant_free_pack(
+    db: AsyncSession, user: User, slug: str
+) -> tuple[Optional[str], Optional[UserCard], list[int]]:
     result = await db.execute(
         select(Pack).where(Pack.slug == slug).options(joinedload(Pack.rarity_probabilities))
     )
     pack = result.unique().scalar_one_or_none()
     if not pack:
-        return None, None
+        return None, None, []
 
     opening = PackOpening(
         user_id=user.id, pack_id=pack.id, price_paid=0,
@@ -96,13 +99,15 @@ async def _grant_free_pack(db: AsyncSession, user: User, slug: str) -> tuple[Opt
 
     rarities = roll_rarities(pack.rarity_probabilities, pack.card_count, pack.guaranteed_min_rarity)
     last_card = None
+    player_ids: list[int] = []
     for rarity in rarities:
         player = await pick_random_player(db, rarity)
         card = await create_user_card(db, user.id, player.id, CardSource.daily_reward, opening.id)
         db.add(PackOpeningCard(opening_id=opening.id, user_card_id=card.id, is_new_player=False))
         card.player = player
         last_card = card
-    return pack.name, last_card
+        player_ids.append(player.id)
+    return pack.name, last_card, player_ids
 
 
 async def _grant_random_card(db: AsyncSession, user: User) -> UserCard:
@@ -135,13 +140,20 @@ async def claim_daily_reward(db: AsyncSession, user: User) -> DailyRewardClaimOu
 
     granted_pack_name = None
     granted_card = None
+    touched_player_ids: list[int] = []
     if cfg.get("free_pack_slug"):
-        granted_pack_name, granted_card = await _grant_free_pack(db, locked_user, cfg["free_pack_slug"])
+        granted_pack_name, granted_card, touched_player_ids = await _grant_free_pack(
+            db, locked_user, cfg["free_pack_slug"]
+        )
         if granted_card:
             reward_row.random_card_id = granted_card.id
     elif cfg.get("grants_random_card"):
         granted_card = await _grant_random_card(db, locked_user)
         reward_row.random_card_id = granted_card.id
+        touched_player_ids = [granted_card.player_id]
+
+    if touched_player_ids:
+        await grant_collection_rewards_for_new_cards(db, locked_user, touched_player_ids)
 
     db.add(reward_row)
     await db.commit()

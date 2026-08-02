@@ -3,14 +3,13 @@ from typing import Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
-from app.models.enums import CardSource, TaskCategory, TaskConditionType, TransactionType
-from app.models.pack import Pack, PackOpening
+from app.models.enums import TaskCategory, TaskConditionType, TransactionType
+from app.models.pack import Pack
 from app.models.task import TaskDefinition, UserTask
 from app.models.user import User
-from app.schemas.pack import PackOpenResult, PackOut
+from app.schemas.pack import PackOpenResult
 from app.schemas.task import TaskClaimOut, TaskListOut, TaskOut
 from app.services.telegram_service import check_channel_membership
 from app.services.wallet_service import credit_coins, lock_user_for_update
@@ -154,31 +153,6 @@ async def evaluate_match_min_rating(db: AsyncSession, user: User, lineup_ratings
             db.add(user_task)
 
 
-async def _grant_task_pack(db: AsyncSession, user: User, pack_id: int) -> Optional[PackOpenResult]:
-    # Deferred: avoids a circular import with pack_service.
-    from app.services.pack_service import _duplicate_counts_snapshot, roll_and_create_cards
-
-    result = await db.execute(
-        select(Pack).where(Pack.id == pack_id).options(joinedload(Pack.rarity_probabilities))
-    )
-    pack = result.unique().scalar_one_or_none()
-    if not pack:
-        return None
-
-    opening = PackOpening(
-        user_id=user.id, pack_id=pack.id, price_paid=0,
-        idempotency_key=f"task-reward-{user.id}-{pack.id}-{datetime.now(timezone.utc).timestamp()}",
-        created_at=datetime.now(timezone.utc),
-    )
-    db.add(opening)
-    await db.flush()
-
-    dup_counts = await _duplicate_counts_snapshot(db, user.id)
-    opened_items = await roll_and_create_cards(db, user, pack, opening, dup_counts, CardSource.task)
-
-    return PackOpenResult(opening_id=opening.id, pack=PackOut.model_validate(pack), cards=opened_items, new_balance=user.balance)
-
-
 async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> TaskClaimOut:
     result = await db.execute(
         select(UserTask, TaskDefinition)
@@ -220,7 +194,19 @@ async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> 
 
     granted_pack: Optional[PackOpenResult] = None
     if definition.reward_pack_id and not locked_user.game_rewards_blocked:
-        granted_pack = await _grant_task_pack(db, locked_user, definition.reward_pack_id)
+        # Deferred: pack_service imports task_service at module level (for
+        # track_pack_opened_tasks), so a top-level import here would be circular.
+        from app.services.collection_service import grant_collection_rewards_for_new_cards
+        from app.services.pack_service import grant_bonus_pack_opening
+
+        granted_pack = await grant_bonus_pack_opening(
+            db, locked_user, definition.reward_pack_id,
+            idempotency_prefix=f"task-reward-{locked_user.id}-{definition.reward_pack_id}",
+        )
+        if granted_pack is not None:
+            granted_pack.collection_rewards = await grant_collection_rewards_for_new_cards(
+                db, locked_user, [item.card.player.id for item in granted_pack.cards]
+            )
 
     user_task.reward_claimed = True
     refilled_task_out: Optional[TaskOut] = None
