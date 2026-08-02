@@ -240,6 +240,53 @@ async def test_friend_challenge_accept_and_hidden_round_submission(client, db_se
     assert len(resp.json()["rounds"]) == 2
 
 
+async def test_friend_round_deadline_appears_and_auto_plays_tardy_side(client, db_session, bot_token, monkeypatch):
+    monkeypatch.setattr(tactico_service, "_pick_phase", lambda: "attack")
+
+    headers_a = await _register(client, bot_token, 950025)
+    user_a = await get_user_by_telegram_id(db_session, 950025)
+    cards_a = await _build_squad_cards(db_session, user_a.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": cards_a})
+
+    headers_b = await _register(client, bot_token, 950026)
+    user_b = await get_user_by_telegram_id(db_session, 950026)
+    cards_b = await _build_squad_cards(db_session, user_b.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_b, json={"user_card_ids": cards_b})
+
+    resp = await client.post("/api/v1/tactico/matches/challenge", headers=headers_a, json={"receiver_id": user_b.id})
+    match_id = resp.json()["id"]
+    await client.post(f"/api/v1/tactico/matches/{match_id}/accept", headers=headers_b)
+
+    # Before anyone has moved this round, no short deadline is exposed yet.
+    resp = await client.get(f"/api/v1/tactico/matches/{match_id}", headers=headers_a)
+    assert resp.json()["round_deadline"] is None
+
+    a_card = resp.json()["pickable_cards"][0]["user_card_id"]
+    resp = await client.post(f"/api/v1/tactico/matches/{match_id}/rounds", headers=headers_a, json={"user_card_id": a_card})
+    assert resp.json()["round_deadline"] is not None
+
+    # B (the tardy side) also sees the same deadline once they check the match.
+    resp = await client.get(f"/api/v1/tactico/matches/{match_id}", headers=headers_b)
+    assert resp.json()["round_deadline"] is not None
+    assert resp.json()["waiting_for_opponent"] is False
+
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from app.models.tactico import TacticoMatch
+
+    match = await db_session.get(TacticoMatch, match_id)
+    state = dict(match.server_state)
+    state["current_deadline"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    match.server_state = state
+    flag_modified(match, "server_state")
+    db_session.add(match)
+    await db_session.commit()
+
+    resp = await client.get(f"/api/v1/tactico/matches/{match_id}", headers=headers_a)
+    assert resp.status_code == 200
+    assert len(resp.json()["rounds"]) == 1  # B's missed turn was auto-played from their pool
+
+
 async def test_friend_match_gives_rating_only_no_coins(client, db_session, bot_token, monkeypatch):
     monkeypatch.setattr(tactico_service, "_pick_phase", lambda: "attack")
 

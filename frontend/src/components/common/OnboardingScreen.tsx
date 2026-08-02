@@ -36,7 +36,7 @@ const SLIDES: Slide[] = [
   {
     Icon: IconBrain,
     title: "Играй и зарабатывай",
-    text: "Memory Sequence, Пенальти, Штрафной, Виселица и Сапёр — проходи мини-игры и получай монеты.",
+    text: "Memory Sequence, Пенальти, Штрафной, Футбольные буквы и Сапёр — проходи мини-игры и получай монеты.",
   },
   {
     Icon: IconStadium,

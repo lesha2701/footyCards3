@@ -40,7 +40,12 @@ export default function TacticoMatchPage() {
     queryFn: () => fetchTacticoMatch(id),
     refetchInterval: (query) => {
       const data = query.state.data as TacticoMatch | undefined;
-      return data?.status === "in_progress" && data.waiting_for_opponent ? 20000 : false;
+      if (data?.status !== "in_progress") return false;
+      // Poll faster once one side has already committed a card for this
+      // round (a live 15s response window is running for the other side),
+      // so both players see the countdown resolve promptly.
+      if (data.round_deadline) return 3000;
+      return data.waiting_for_opponent ? 20000 : false;
     },
   });
 
@@ -81,9 +86,11 @@ export default function TacticoMatchPage() {
   // calls this same forfeit endpoint if the player chooses to leave anyway.
   useEffect(() => {
     if (match?.status === "in_progress") {
-      useMatchGuardStore.getState().activate(LEAVE_WARNING, () => {
-        forfeitTacticoMatch(id).catch(() => {});
-      });
+      useMatchGuardStore.getState().activate(
+        LEAVE_WARNING,
+        () => { forfeitTacticoMatch(id).catch(() => {}); },
+        `/tactico/matches/${id}/forfeit`,
+      );
     } else {
       useMatchGuardStore.getState().deactivate();
     }
@@ -160,9 +167,21 @@ export default function TacticoMatchPage() {
             {PHASE_LABELS[match.current_phase].emoji} {PHASE_LABELS[match.current_phase].label}
           </p>
           {match.waiting_for_opponent ? (
-            <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-ink-mist">
+            <>
+              <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-ink-mist">
+                <IconClock size={13} />
+                Ждём ход соперника...
+              </p>
+              {match.round_deadline && (
+                <p className="mt-1 text-[11px] text-ink-mist-dim">
+                  Если соперник не успеет за <RoundCountdown deadline={match.round_deadline} />, за него сыграет случайная карта
+                </p>
+              )}
+            </>
+          ) : match.round_deadline ? (
+            <p className="mt-2 flex items-center justify-center gap-1.5 text-xs font-semibold text-red-400">
               <IconClock size={13} />
-              Ждём ход соперника...
+              Соперник уже сделал ход — успей за <RoundCountdown deadline={match.round_deadline} />, иначе сыграет случайная карта
             </p>
           ) : (
             <p className="mt-1 text-xs text-ink-mist">Выбери карту для этого раунда</p>
@@ -233,6 +252,21 @@ export default function TacticoMatchPage() {
       {revealRound && <RoundResultOverlay round={revealRound} onDismiss={() => setRevealRound(null)} />}
     </div>
   );
+}
+
+function RoundCountdown({ deadline }: { deadline: string }) {
+  const target = new Date(deadline).getTime();
+  const [secondsLeft, setSecondsLeft] = useState(() => Math.max(0, Math.ceil((target - Date.now()) / 1000)));
+
+  useEffect(() => {
+    setSecondsLeft(Math.max(0, Math.ceil((target - Date.now()) / 1000)));
+    const timer = setInterval(() => {
+      setSecondsLeft(Math.max(0, Math.ceil((target - Date.now()) / 1000)));
+    }, 250);
+    return () => clearInterval(timer);
+  }, [target]);
+
+  return <span className="font-mono font-bold">{secondsLeft} сек</span>;
 }
 
 function ScoreBadge({ match }: { match: TacticoMatch }) {

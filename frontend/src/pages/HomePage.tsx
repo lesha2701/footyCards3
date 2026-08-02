@@ -84,7 +84,7 @@ export default function HomePage() {
           <NoticeCard
             Icon={IconHandshake}
             title="Тебя пригласил друг!"
-            subtitle="Открой любой пак (можно бесплатный) и получи 200 монет"
+            subtitle={`Открой любой пак (можно бесплатный) и получи ${profile.referral_referred_reward} монет`}
             onClick={() => navigate("/packs")}
           />
         )}

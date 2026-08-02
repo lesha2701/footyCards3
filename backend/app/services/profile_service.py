@@ -11,6 +11,7 @@ from app.models.user import User
 from app.schemas.player import PlayerOut
 from app.schemas.profile import ProfilePrivateOut, ProfilePublicOut, ProfileSettingsUpdate
 from app.schemas.user import UserPublicOut
+from app.services.game_config_service import get_config
 
 
 async def _collection_summary(db: AsyncSession, user_id: int) -> tuple[int, int, Player | None]:
@@ -78,6 +79,7 @@ async def get_public_profile(db: AsyncSession, user_id: int) -> ProfilePublicOut
 
 async def get_private_profile(db: AsyncSession, user: User) -> ProfilePrivateOut:
     public = await _build_public(db, user)
+    config = await get_config(db)
     return ProfilePrivateOut(
         **public.model_dump(),
         telegram_id=user.telegram_id,
@@ -87,6 +89,9 @@ async def get_private_profile(db: AsyncSession, user: User) -> ProfilePrivateOut
         telegram_bot_username=get_settings().telegram_bot_username,
         accept_trades=user.accept_trades,
         referral_reward_pending=user.referred_by_id is not None and not user.referral_reward_granted,
+        referral_referrer_reward=config.referral_referrer_reward,
+        referral_referred_reward=config.referral_referred_reward,
+        daily_login_streak=user.daily_login_streak,
     )
 
 

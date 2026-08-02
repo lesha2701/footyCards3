@@ -128,6 +128,13 @@ async def claim_daily_reward(db: AsyncSession, user: User) -> DailyRewardClaimOu
     cfg = REWARD_TABLE[next_streak]
     locked_user = await lock_user_for_update(db, user.id)
 
+    latest = await _latest_reward(db, locked_user.id)
+    if latest and latest.reward_date == local_today() - timedelta(days=1):
+        locked_user.daily_login_streak += 1
+    else:
+        locked_user.daily_login_streak = 1
+    db.add(locked_user)
+
     reward_row = DailyReward(user_id=locked_user.id, reward_date=local_today(), streak_day=next_streak, coins_awarded=cfg["coins"])
     db.add(reward_row)
     await db.flush()

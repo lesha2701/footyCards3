@@ -170,7 +170,7 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-3 font-display text-base font-bold">Футбольная виселица</p>
+        <p className="mb-3 font-display text-base font-bold">Футбольные буквы</p>
         <div className="grid grid-cols-2 gap-3">
           {field("hangman_daily_limit", "Лимит наградных попыток/день")}
           {field("hangman_reward_correct", "Награда за угаданное слово")}

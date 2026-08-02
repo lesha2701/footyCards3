@@ -4,18 +4,36 @@ import { Outlet } from "react-router-dom";
 import LeaveConfirmDialog from "@/components/common/LeaveConfirmDialog";
 import BottomNav from "@/components/layout/BottomNav";
 import TopBar from "@/components/layout/TopBar";
+import { apiUrl, buildAuthHeaders } from "@/lib/api";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
 
 export default function AppLayout() {
   useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
+    const beforeUnloadHandler = (e: BeforeUnloadEvent) => {
       if (useMatchGuardStore.getState().active) {
         e.preventDefault();
         e.returnValue = "";
       }
     };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
+    // `beforeunload` only shows the native "leave site?" prompt — it can't
+    // tell us whether the user actually confirmed leaving, and a regular
+    // axios call started there gets aborted before it reaches the network
+    // once the page starts unloading. `pagehide` only fires once the page is
+    // truly being torn down (i.e. after the user confirmed), so that's where
+    // the forfeit is actually sent, via a keepalive fetch that survives the
+    // unload.
+    const pageHideHandler = () => {
+      const { active, forfeitPath } = useMatchGuardStore.getState();
+      if (active && forfeitPath) {
+        fetch(apiUrl(forfeitPath), { method: "POST", headers: buildAuthHeaders(), keepalive: true }).catch(() => {});
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnloadHandler);
+    window.addEventListener("pagehide", pageHideHandler);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnloadHandler);
+      window.removeEventListener("pagehide", pageHideHandler);
+    };
   }, []);
 
   return (

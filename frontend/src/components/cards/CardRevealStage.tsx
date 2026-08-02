@@ -47,7 +47,7 @@ export function RevealStage({
         <motion.div
           initial={{ scale: 0.85, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className={`relative flex h-72 w-52 flex-col items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-b ${
+          className={`relative flex aspect-square w-64 flex-col items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-b ${
             showFrom("rarity") ? RARITY_GRADIENTS[player.rarity] : "from-bg-raised to-bg-surface"
           } p-[3px] ${showFrom("rarity") ? RARITY_GLOW[player.rarity] : ""}`}
         >

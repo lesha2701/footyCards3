@@ -8,6 +8,17 @@ const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
 
 export const api = axios.create({ baseURL: API_URL });
 
+/** Builds the same auth headers as the axios interceptor below, for the rare
+ * request that can't go through axios — e.g. a `fetch(..., { keepalive: true })`
+ * call fired from a `pagehide` handler while the page is actually unloading. */
+export function buildAuthHeaders(): Record<string, string> {
+  return isInsideTelegram() ? { "X-Telegram-Init-Data": getRawInitData() } : { "X-Dev-Mode": "true" };
+}
+
+export function apiUrl(path: string): string {
+  return `${API_URL}${path}`;
+}
+
 api.interceptors.request.use((config) => {
   if (isInsideTelegram()) {
     config.headers.set("X-Telegram-Init-Data", getRawInitData());

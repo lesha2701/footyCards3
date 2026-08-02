@@ -105,7 +105,7 @@ export default function PlayPage() {
           onClick={() => navigate("/play/hangman")}
           Icon={IconHelp}
           badgeClass="bg-rarity-epic"
-          title="Футбольная виселица"
+          title="Футбольные буквы"
           description="Угадай футболиста или термин по буквам"
           remaining={limits?.hangman}
           limit={limits?.hourly_limit}

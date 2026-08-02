@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.timeutil import ensure_aware, local_today
 from app.models.card_collection import CardCollection
-from app.models.enums import GameSessionStatus, GameType, TransactionType
+from app.models.enums import GameSessionStatus, GameType, Rarity, TransactionType
 from app.models.game import GameSession
 from app.models.player import Player
 from app.models.user import User
@@ -41,7 +41,11 @@ async def _pick_word(db: AsyncSession) -> tuple[str, str]:
         result = await db.execute(
             select(Player.display_name)
             .outerjoin(CardCollection, Player.collection_id == CardCollection.id)
-            .where(Player.is_active.is_(True), (CardCollection.is_active.is_(True)) | (Player.collection_id.is_(None)))
+            .where(
+                Player.is_active.is_(True),
+                (CardCollection.is_active.is_(True)) | (Player.collection_id.is_(None)),
+                Player.rarity.in_((Rarity.epic, Rarity.legendary)),
+            )
             .order_by(func.random())
             .limit(1)
         )
@@ -193,7 +197,7 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> Hangman
     if reward > 0:
         await credit_coins(
             db, locked_user, reward, TransactionType.game_reward,
-            "Награда за Футбольную виселицу", related_object_type="game_session", related_object_id=session.id,
+            "Награда за Футбольные буквы", related_object_type="game_session", related_object_id=session.id,
         )
     db.add(session)
     await db.commit()

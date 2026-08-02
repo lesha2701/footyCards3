@@ -56,6 +56,7 @@ class TacticoMatchOut(BaseModel):
     current_phase: Optional[Literal["attack", "defense"]] = None
     pickable_cards: Optional[list[TacticoCardOut]] = None
     waiting_for_opponent: bool = False
+    round_deadline: Optional[datetime] = None
     result: Optional[MatchResult] = None
     reward_coins: int
     rating_delta: int

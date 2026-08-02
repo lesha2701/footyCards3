@@ -35,6 +35,9 @@ class ProfilePrivateOut(ProfilePublicOut):
     telegram_bot_username: str
     accept_trades: bool
     referral_reward_pending: bool
+    referral_referrer_reward: int
+    referral_referred_reward: int
+    daily_login_streak: int
 
 
 class ProfileSettingsUpdate(BaseModel):

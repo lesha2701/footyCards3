@@ -81,6 +81,11 @@ class User(TimestampMixin, Base):
     free_pack_available_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     free_pack_notified: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    # Consecutive days played, tracked off daily-reward claims — unlike
+    # DailyReward.streak_day (which cycles 1-7 to pick a reward tier), this
+    # keeps counting up so the profile can show an uncapped "days in a row".
+    daily_login_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
     # Referrals
     referred_by_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True

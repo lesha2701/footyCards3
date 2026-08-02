@@ -92,7 +92,7 @@ export default function HangmanGamePage() {
   if (phase === "idle") {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="font-display text-xl font-bold text-ink-chalk">Футбольная виселица</h1>
+        <h1 className="font-display text-xl font-bold text-ink-chalk">Футбольные буквы</h1>
         <p className="text-sm text-ink-mist">
           Угадай загаданного футболиста или футбольное понятие по буквам. Ошибёшься 6 раз — судья покажет красную,
           и раунд проигран.
@@ -155,7 +155,7 @@ export default function HangmanGamePage() {
     <div className="flex flex-col gap-4">
       <p className="text-center text-xs font-semibold text-ink-mist">{CATEGORY_LABEL[category] ?? "Загадано слово"}</p>
 
-      <Gallows wrongCount={wrongLetters.length} maxWrong={maxWrong} />
+      <RefereeCards wrongCount={wrongLetters.length} maxWrong={maxWrong} />
 
       <div className="flex flex-wrap justify-center gap-1.5">
         {maskedWord.map((ch, i) =>
@@ -206,35 +206,32 @@ export default function HangmanGamePage() {
   );
 }
 
-const MAX_BODY_PARTS = 6;
-
-function Gallows({ wrongCount, maxWrong }: { wrongCount: number; maxWrong: number }) {
-  const partsToShow = Math.min(wrongCount, MAX_BODY_PARTS, maxWrong);
+function RefereeCards({ wrongCount, maxWrong }: { wrongCount: number; maxWrong: number }) {
+  const isSentOff = wrongCount >= maxWrong;
 
   return (
-    <div className="relative flex h-40 items-end justify-center overflow-hidden rounded-2xl bg-bg-surface">
-      <div className="absolute inset-x-0 bottom-0 h-6 bg-black/20" />
-      <div className="absolute bottom-6 left-1/2 h-1 w-28 -translate-x-1/2 rounded-full border border-white/30" />
-
-      <svg viewBox="0 0 120 100" className="relative h-36 w-32">
-        {/* goalpost-style gallows */}
-        <line x1="20" y1="90" x2="20" y2="10" stroke="white" strokeWidth="4" />
-        <line x1="20" y1="10" x2="75" y2="10" stroke="white" strokeWidth="4" />
-        <line x1="20" y1="20" x2="35" y2="10" stroke="white" strokeWidth="3" />
-        <line x1="75" y1="10" x2="75" y2="24" stroke="#d1d5db" strokeWidth="2" />
-
-        {partsToShow >= 1 && <circle cx="75" cy="34" r="7" fill="white" stroke="#111827" strokeWidth="1" />}
-        {partsToShow >= 2 && <rect x="68" y="41" width="14" height="20" rx="3" fill="#3ed17e" />}
-        {partsToShow >= 3 && <line x1="68" y1="45" x2="58" y2="58" stroke="#facc15" strokeWidth="3" strokeLinecap="round" />}
-        {partsToShow >= 4 && <line x1="82" y1="45" x2="92" y2="58" stroke="#facc15" strokeWidth="3" strokeLinecap="round" />}
-        {partsToShow >= 5 && <rect x="69" y="61" width="12" height="10" fill="#1e293b" />}
-        {partsToShow >= 6 && (
-          <>
-            <line x1="72" y1="71" x2="68" y2="86" stroke="#1e293b" strokeWidth="4" strokeLinecap="round" />
-            <line x1="78" y1="71" x2="82" y2="86" stroke="#1e293b" strokeWidth="4" strokeLinecap="round" />
-          </>
-        )}
-      </svg>
+    <div className="relative flex h-40 flex-col items-center justify-center gap-4 overflow-hidden rounded-2xl bg-bg-surface">
+      <div className="flex flex-wrap items-center justify-center gap-2 px-4">
+        {Array.from({ length: maxWrong }).map((_, i) => {
+          const filled = i < wrongCount;
+          const isRed = i === maxWrong - 1;
+          return (
+            <span
+              key={i}
+              className={`h-9 w-7 rounded-sm border-2 transition-all duration-300 ${
+                filled
+                  ? isRed
+                    ? "scale-110 border-red-500 bg-red-500 shadow-glow-legendary"
+                    : "border-yellow-400 bg-yellow-400"
+                  : "-rotate-6 border-dashed border-white/15 bg-transparent opacity-60"
+              }`}
+            />
+          );
+        })}
+      </div>
+      <p className="font-mono text-[11px] uppercase tracking-wide text-ink-mist-dim">
+        {isSentOff ? "Удаление с поля" : "Карточки от судьи"}
+      </p>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { fetchMyProfile, fetchMyTransactions, updateMySettings } from "@/api/pro
 import {
   IconCoin,
   IconCollection,
+  IconFire,
   IconGift,
   IconPack,
   IconSwap,
@@ -35,6 +36,14 @@ const TX_TYPE_LABELS: Record<string, string> = {
   admin_adjustment: "Корректировка администратором",
   referral_reward: "Реферальная награда",
 };
+
+function dayStreakLabel(days: number): string {
+  const mod10 = days % 10;
+  const mod100 = days % 100;
+  if (mod10 === 1 && mod100 !== 11) return "день";
+  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return "дня";
+  return "дней";
+}
 
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user);
@@ -84,6 +93,14 @@ export default function ProfilePage() {
         <p className="font-display text-xl font-bold text-ink-chalk">{user.first_name} {user.last_name}</p>
         {user.username && <p className="text-sm text-ink-mist">@{user.username}</p>}
         <p className="text-xs text-ink-mist-dim">С нами с {new Date(user.created_at).toLocaleDateString("ru-RU")}</p>
+        {profile.daily_login_streak > 0 && (
+          <div className="mt-1 flex items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1">
+            <IconFire size={14} className="text-orange-400" />
+            <span className="text-xs font-bold text-orange-400">
+              {profile.daily_login_streak} {dayStreakLabel(profile.daily_login_streak)} подряд
+            </span>
+          </div>
+        )}
       </section>
 
       <section className="rounded-2xl bg-bg-surface p-4">
@@ -157,6 +174,14 @@ export default function ProfilePage() {
           Пригласи друзей
         </p>
         <p className="mt-1 text-xs text-ink-mist">Приглашено: {profile.referral_count}</p>
+        {(profile.referral_referrer_reward > 0 || profile.referral_referred_reward > 0) && (
+          <div className="mt-2 flex items-center gap-1.5 rounded-xl bg-accent-lime/10 px-3 py-2 text-xs text-accent-lime">
+            <IconCoin size={13} />
+            <span>
+              Тебе +{profile.referral_referrer_reward}, другу +{profile.referral_referred_reward} за каждого приглашённого
+            </span>
+          </div>
+        )}
         <div className="mt-3 flex items-center gap-2 rounded-xl bg-black/20 px-3 py-2">
           <span className="flex-1 truncate font-mono text-xs text-ink-mist">
             https://t.me/{profile.telegram_bot_username}?start=ref_{user.telegram_id}

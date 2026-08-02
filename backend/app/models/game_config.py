@@ -79,7 +79,7 @@ class GameConfig(TimestampMixin, Base):
 
     tactico_challenge_expiry_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
     tactico_round_timeout_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
-    tactico_phase_bonus_pct: Mapped[float] = mapped_column(Numeric(4, 2), default=0.15, nullable=False)
+    tactico_phase_bonus_pct: Mapped[float] = mapped_column(Numeric(4, 2), default=0.20, nullable=False)
     tactico_reward_win: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
     tactico_reward_draw: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     tactico_reward_loss: Mapped[int] = mapped_column(Integer, default=5, nullable=False)

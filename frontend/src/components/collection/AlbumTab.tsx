@@ -155,12 +155,17 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
       </div>
 
       {data && !data.is_complete && data.reward_coins > 0 && (
-        <div className="flex items-center gap-2 rounded-xl bg-bg-surface px-3 py-2.5 text-xs text-ink-mist">
-          Не хватает <b className="text-ink-chalk">{data.total_count - data.owned_count}</b> футболистов · Награда:{" "}
-          <b className="flex items-center gap-1 text-accent-lime">
-            {data.reward_coins} <IconCoin size={10} />
-          </b>
-          {data.reward_pack_name && <span>+ пак «{data.reward_pack_name}»</span>}
+        <div className="flex flex-col gap-1 rounded-xl bg-bg-surface px-3 py-2.5 text-xs text-ink-mist">
+          <p>
+            Не хватает <b className="text-ink-chalk">{data.total_count - data.owned_count}</b> футболистов
+          </p>
+          <p className="flex flex-wrap items-center gap-1">
+            Награда:
+            <b className="flex items-center gap-1 text-accent-lime">
+              {data.reward_coins} <IconCoin size={10} />
+            </b>
+            {data.reward_pack_name && <span>+ пак «{data.reward_pack_name}»</span>}
+          </p>
         </div>
       )}
       {data?.is_complete && (

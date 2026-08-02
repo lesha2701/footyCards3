@@ -95,6 +95,13 @@ export default function PackOpenPage() {
       return;
     }
     hapticNotify("success");
+    // A single-card pack has already shown its one card in full during the
+    // reveal stage above — if there's no reward banner to add, a follow-up
+    // "Pack opened" screen re-displaying that same card is pure friction.
+    if (result.cards.length === 1 && !result.referral_bonus_coins && result.collection_rewards.length === 0) {
+      navigate("/packs");
+      return;
+    }
     setPhase("summary");
   };
 
@@ -110,6 +117,10 @@ export default function PackOpenPage() {
   const skipAll = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     hapticNotify("success");
+    if (result && result.cards.length === 1 && !result.referral_bonus_coins && result.collection_rewards.length === 0) {
+      navigate("/packs");
+      return;
+    }
     setPhase("summary");
   };
 
@@ -179,9 +190,14 @@ function PackShot({ pack, onOpen }: { pack: PackOpenResult["pack"]; onOpen: () =
 }
 
 function Summary({ result, onDone }: { result: PackOpenResult; onDone: () => void }) {
+  // A single-card pack's one card was already fully shown during the reveal
+  // stage — re-displaying it here (and the generic "Pack opened" heading)
+  // would be pure repetition, so this screen is only reached at all when
+  // there's an actual reward banner below worth showing.
+  const showRecap = result.cards.length > 1;
   return (
     <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
-      <h2 className="text-center font-display text-2xl font-bold text-ink-chalk">Пак открыт!</h2>
+      {showRecap && <h2 className="text-center font-display text-2xl font-bold text-ink-chalk">Пак открыт!</h2>}
       {!!result.referral_bonus_coins && (
         <div className="flex items-center justify-center gap-2 rounded-2xl bg-accent-lime/10 px-4 py-3 text-center">
           <IconHandshake size={18} className="text-accent-lime" />
@@ -201,40 +217,42 @@ function Summary({ result, onDone }: { result: PackOpenResult; onDone: () => voi
           <IconCoin size={14} className="text-accent-lime" />
         </div>
       ))}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {result.cards.map((opened) => (
-          <div
-            key={opened.card.id}
-            className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.player.rarity]} p-[2px] ${RARITY_GLOW[opened.card.player.rarity]}`}
-          >
-            <div className="flex flex-col rounded-[14px] bg-bg-surface">
-              <img
-                src={staticUrl(opened.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                alt={opened.card.player.display_name}
-                className="aspect-square w-full object-cover"
-              />
-              <div className="p-2 text-center">
-                <p className="truncate text-xs font-bold text-ink-chalk">{opened.card.player.display_name}</p>
-                <p className="text-[10px] text-ink-mist">{RARITY_LABELS[opened.card.player.rarity]}</p>
-                {opened.card.player.collection_name && (
-                  <p className="flex items-center justify-center gap-1 truncate text-[9px] font-semibold text-accent-lime">
-                    <IconTag size={9} />
-                    {opened.card.player.collection_name}
-                  </p>
-                )}
+      {showRecap && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {result.cards.map((opened) => (
+            <div
+              key={opened.card.id}
+              className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.player.rarity]} p-[2px] ${RARITY_GLOW[opened.card.player.rarity]}`}
+            >
+              <div className="flex flex-col rounded-[14px] bg-bg-surface">
+                <img
+                  src={staticUrl(opened.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                  alt={opened.card.player.display_name}
+                  className="aspect-square w-full object-cover"
+                />
+                <div className="p-2 text-center">
+                  <p className="truncate text-xs font-bold text-ink-chalk">{opened.card.player.display_name}</p>
+                  <p className="text-[10px] text-ink-mist">{RARITY_LABELS[opened.card.player.rarity]}</p>
+                  {opened.card.player.collection_name && (
+                    <p className="flex items-center justify-center gap-1 truncate text-[9px] font-semibold text-accent-lime">
+                      <IconTag size={9} />
+                      {opened.card.player.collection_name}
+                    </p>
+                  )}
+                </div>
               </div>
+              {opened.is_new && (
+                <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
+              )}
+              {opened.duplicate_count > 1 && (
+                <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
+                  ×{opened.duplicate_count}
+                </span>
+              )}
             </div>
-            {opened.is_new && (
-              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
-            )}
-            {opened.duplicate_count > 1 && (
-              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
-                ×{opened.duplicate_count}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
       <button onClick={onDone} className="mt-2 rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95">
         Готово
       </button>

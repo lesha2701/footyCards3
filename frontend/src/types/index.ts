@@ -359,6 +359,7 @@ export interface TacticoMatch {
   current_phase: TacticoPhase | null;
   pickable_cards: TacticoCard[] | null;
   waiting_for_opponent: boolean;
+  round_deadline: string | null;
   result: "win" | "draw" | "loss" | null;
   reward_coins: number;
   rating_delta: number;
@@ -419,6 +420,9 @@ export interface ProfilePrivate extends ProfilePublic {
   telegram_bot_username: string;
   accept_trades: boolean;
   referral_reward_pending: boolean;
+  referral_referrer_reward: number;
+  referral_referred_reward: number;
+  daily_login_streak: number;
 }
 
 export interface ProfileSettingsUpdate {

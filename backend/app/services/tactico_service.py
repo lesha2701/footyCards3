@@ -33,6 +33,7 @@ from app.services.notification_service import notify
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
 SQUAD_SIZE = 11
+FRIEND_TURN_TIMEOUT_SECONDS = 15
 
 _ATTACK_BONUS_POSITIONS = CATEGORY_POSITIONS["FWD"]
 _DEFENSE_BONUS_POSITIONS = CATEGORY_POSITIONS["GK"] | CATEGORY_POSITIONS["DEF"]
@@ -521,6 +522,14 @@ async def submit_round(db: AsyncSession, user: User, match_id: int, user_card_id
         if state.get(f"{other_side}_pending_card_id") is not None:
             _finalize_current_round(state, bonus_pct)
             resolved = True
+        else:
+            # One side has now committed for this round while the other
+            # hasn't — give the remaining side a short window to respond
+            # before a random card is auto-played on their behalf, instead of
+            # the long round-start grace period.
+            state["current_deadline"] = (
+                datetime.now(timezone.utc) + timedelta(seconds=FRIEND_TURN_TIMEOUT_SECONDS)
+            ).isoformat()
 
     match.server_state = state
     flag_modified(match, "server_state")
@@ -747,8 +756,12 @@ async def _hydrate_match(db: AsyncSession, match: TacticoMatch, viewer: User) ->
     current_phase = state.get("current_phase") if match.status == TacticoMatchStatus.in_progress else None
     waiting_for_opponent = False
     pickable_cards: Optional[list[TacticoCardOut]] = None
+    round_deadline: Optional[datetime] = None
 
     if match.status == TacticoMatchStatus.in_progress:
+        one_side_committed = state.get("user_pending_card_id") is not None or state.get("opponent_pending_card_id") is not None
+        if match.opponent_type == TacticoOpponentType.friend and one_side_committed and state.get("current_deadline"):
+            round_deadline = ensure_aware(datetime.fromisoformat(state["current_deadline"]))
         if state.get(f"{side}_pending_card_id") is not None:
             waiting_for_opponent = True
         else:
@@ -789,6 +802,7 @@ async def _hydrate_match(db: AsyncSession, match: TacticoMatch, viewer: User) ->
         current_phase=current_phase,
         pickable_cards=pickable_cards,
         waiting_for_opponent=waiting_for_opponent,
+        round_deadline=round_deadline,
         result=result_out,
         reward_coins=reward_coins,
         rating_delta=rating_delta,
