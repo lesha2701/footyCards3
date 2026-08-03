@@ -66,6 +66,8 @@ class TaskCategory(str, enum.Enum):
 class TaskConditionType(str, enum.Enum):
     metric_counter = "metric_counter"
     match_min_rating = "match_min_rating"
+    match_same_country = "match_same_country"
+    penalty_win_max_rating = "penalty_win_max_rating"
 
 
 class TradeStatus(str, enum.Enum):

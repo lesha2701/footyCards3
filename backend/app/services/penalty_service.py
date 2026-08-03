@@ -12,6 +12,7 @@ from app.models.enums import GameSessionStatus, GameType, TransactionType
 from app.models.game import GameSession
 from app.models.user import User
 from app.schemas.game import PenaltyClaimOut, PenaltyKickOut, PenaltyStartOut
+from app.services import task_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
@@ -154,6 +155,7 @@ async def resolve_kick(db: AsyncSession, user: User, session_id: int, direction:
         session.reward_coins = {
             "win": config.penalty_reward_win, "loss": config.penalty_reward_loss,
         }[result]
+        await task_service.evaluate_penalty_win_max_rating(db, user, state["player_rating"], result == "win")
 
     db.add(session)
     await db.commit()

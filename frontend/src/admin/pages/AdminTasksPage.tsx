@@ -17,6 +17,7 @@ interface TaskForm {
   metric: string;
   target_value: number;
   min_rating: number;
+  max_rating: number;
   reward_coins: number;
   reward_pack_id: number | "";
   channel_username: string;
@@ -35,6 +36,7 @@ function taskToForm(t?: TaskDefinition): TaskForm {
     metric: t?.metric ?? "",
     target_value: t?.target_value ?? 1,
     min_rating: (t?.condition_params?.min_rating as number | undefined) ?? 67,
+    max_rating: (t?.condition_params?.max_rating as number | undefined) ?? 70,
     reward_coins: t?.reward_coins ?? 0,
     reward_pack_id: t?.reward_pack_id ?? "",
     channel_username: t?.channel_username ?? "",
@@ -75,7 +77,12 @@ export default function AdminTasksPage() {
     condition_type: form.condition_type,
     metric: form.condition_type === "metric_counter" ? form.metric || null : null,
     target_value: form.condition_type === "metric_counter" ? form.target_value : 1,
-    condition_params: form.condition_type === "match_min_rating" ? { min_rating: form.min_rating } : null,
+    condition_params:
+      form.condition_type === "match_min_rating"
+        ? { min_rating: form.min_rating }
+        : form.condition_type === "penalty_win_max_rating"
+          ? { max_rating: form.max_rating }
+          : null,
     reward_coins: form.reward_coins,
     reward_pack_id: form.reward_pack_id || null,
     channel_username: form.category === "premium" ? form.channel_username || null : null,
@@ -110,7 +117,13 @@ export default function AdminTasksPage() {
             </div>
             <p className="text-xs text-slate-400">{t.description}</p>
             <p className="mt-1 text-xs text-slate-500">
-              {t.condition_type === "metric_counter" ? `${t.metric} ≥ ${t.target_value}` : `рейтинг ≥ ${t.condition_params?.min_rating}`}
+              {t.condition_type === "metric_counter"
+                ? `${t.metric} ≥ ${t.target_value}`
+                : t.condition_type === "match_min_rating"
+                  ? `рейтинг ≥ ${t.condition_params?.min_rating}`
+                  : t.condition_type === "penalty_win_max_rating"
+                    ? `победа, рейтинг < ${t.condition_params?.max_rating}`
+                    : "состав из одной страны"}
               {" · "}
               {t.reward_pack_id ? `пак #${t.reward_pack_id}` : `+${t.reward_coins} 🪙`}
             </p>
@@ -158,16 +171,32 @@ export default function AdminTasksPage() {
                 >
                   <option value="metric_counter">Счётчик метрики</option>
                   <option value="match_min_rating">Мин. рейтинг состава в матче</option>
+                  <option value="match_same_country">Состав Card Arena из одной страны</option>
+                  <option value="penalty_win_max_rating">Победа в Пенальти игроком с рейтингом ниже X</option>
                 </select>
               </label>
 
               {form.condition_type === "metric_counter" ? (
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label="Метрика (packs_opened, ...)" value={form.metric} onChange={(v) => setForm({ ...form, metric: v })} />
+                  <Field
+                    label="Метрика (packs_opened, unique_players, referrals_count, trades_completed, arena_clean_sheet_wins, memory_levels_completed, saboteur_levels_cleared, ...)"
+                    value={form.metric}
+                    onChange={(v) => setForm({ ...form, metric: v })}
+                  />
                   <NumField label="Целевое значение" value={form.target_value} onChange={(v) => setForm({ ...form, target_value: v })} />
                 </div>
-              ) : (
+              ) : form.condition_type === "match_min_rating" ? (
                 <NumField label="Мин. рейтинг игрока" value={form.min_rating} onChange={(v) => setForm({ ...form, min_rating: v })} />
+              ) : form.condition_type === "penalty_win_max_rating" ? (
+                <NumField
+                  label="Макс. рейтинг игрока (строго меньше)"
+                  value={form.max_rating}
+                  onChange={(v) => setForm({ ...form, max_rating: v })}
+                />
+              ) : (
+                <p className="text-[11px] text-slate-500">
+                  Выполняется автоматически, когда игрок сыграет матч Card Arena составом из 11 карточек одной страны.
+                </p>
               )}
 
               <div className="grid grid-cols-2 gap-2">

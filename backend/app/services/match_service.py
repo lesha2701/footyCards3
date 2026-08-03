@@ -554,6 +554,11 @@ async def _finalize_match(db: AsyncSession, user: User, match: Match, state: dic
     if user_score > opponent_score:
         result, rating_delta = MatchResult.win, 3
         locked_user.matches_won += 1
+        if opponent_score == 0:
+            locked_user.arena_clean_sheet_wins += 1
+            await task_service.evaluate_metric_progress(
+                db, locked_user, "arena_clean_sheet_wins", locked_user.arena_clean_sheet_wins
+            )
     elif user_score < opponent_score:
         result, rating_delta = MatchResult.loss, -1
         locked_user.matches_lost += 1
@@ -696,6 +701,8 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
 
     lineup_ratings = [slot.card.player.rating for slot in lineup.slots if slot.card]
     await task_service.evaluate_match_min_rating(db, locked_user, lineup_ratings)
+    lineup_countries = [slot.card.player.country for slot in lineup.slots if slot.card]
+    await task_service.evaluate_match_same_country(db, locked_user, lineup_countries)
 
     if state["next_index"] >= len(state["moments"]):
         # Rare edge case: the randomly-generated queue drew zero shot chances

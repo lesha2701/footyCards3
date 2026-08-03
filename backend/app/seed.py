@@ -282,6 +282,9 @@ async def seed_tasks(db, packs: dict[str, Pack]) -> None:
         ("invite_3_friends", "Пригласи 3 друзей", "Пригласи 3 друзей по реферальной ссылке", 150, "referrals_count", 3),
         ("invite_10_friends", "Пригласи 10 друзей", "Пригласи 10 друзей по реферальной ссылке", 500, "referrals_count", 10),
         ("invite_25_friends", "Пригласи 25 друзей", "Пригласи 25 друзей по реферальной ссылке", 1500, "referrals_count", 25),
+        ("clean_sheet_hattrick", "Сухими нельзя!", "Выиграйте матч Card Arena, не пропустив ни одного гола, 5 раз", 200, "arena_clean_sheet_wins", 5),
+        ("memory_marathon", "Марафонец памяти", "Пройдите 30 уровней в Memory Sequence", 150, "memory_levels_completed", 30),
+        ("steward_dodger", "Обходчик стюардов", "Успешно обойдите 15 стюардов в Футбольном сапёре", 120, "saboteur_levels_cleared", 15),
     ]
 
     task_defs: list[dict] = [
@@ -302,6 +305,17 @@ async def seed_tasks(db, packs: dict[str, Pack]) -> None:
         "description": "Сыграйте матч Card Arena составом, где у каждого игрока рейтинг не ниже 80",
         "reward_coins": 250, "condition_type": TaskConditionType.match_min_rating,
         "condition_params": {"min_rating": 80},
+    })
+    task_defs.append({
+        "code": "same_country_squad", "name": "Земляки",
+        "description": "Сыграйте матч Card Arena составом, где все футболисты — из одной страны",
+        "reward_coins": 150, "condition_type": TaskConditionType.match_same_country,
+    })
+    task_defs.append({
+        "code": "penalty_underdog", "name": "Победа андердога",
+        "description": "Выиграйте серию пенальти, используя футболиста с рейтингом ниже 70",
+        "reward_coins": 100, "condition_type": TaskConditionType.penalty_win_max_rating,
+        "condition_params": {"max_rating": 70},
     })
 
     for i, spec in enumerate(task_defs):

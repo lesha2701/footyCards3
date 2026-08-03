@@ -153,6 +153,45 @@ async def evaluate_match_min_rating(db: AsyncSession, user: User, lineup_ratings
             db.add(user_task)
 
 
+async def evaluate_match_same_country(db: AsyncSession, user: User, lineup_countries: list[str]) -> None:
+    result = await db.execute(
+        select(UserTask, TaskDefinition)
+        .join(TaskDefinition, TaskDefinition.id == UserTask.task_definition_id)
+        .where(
+            UserTask.user_id == user.id,
+            UserTask.slot_index.isnot(None),
+            UserTask.completed_at.is_(None),
+            TaskDefinition.condition_type == TaskConditionType.match_same_country,
+        )
+    )
+    for user_task, _definition in result.all():
+        if lineup_countries and len(set(lineup_countries)) == 1:
+            user_task.progress = 1
+            user_task.completed_at = datetime.now(timezone.utc)
+            db.add(user_task)
+
+
+async def evaluate_penalty_win_max_rating(db: AsyncSession, user: User, player_rating: int, won: bool) -> None:
+    if not won:
+        return
+    result = await db.execute(
+        select(UserTask, TaskDefinition)
+        .join(TaskDefinition, TaskDefinition.id == UserTask.task_definition_id)
+        .where(
+            UserTask.user_id == user.id,
+            UserTask.slot_index.isnot(None),
+            UserTask.completed_at.is_(None),
+            TaskDefinition.condition_type == TaskConditionType.penalty_win_max_rating,
+        )
+    )
+    for user_task, definition in result.all():
+        max_rating = (definition.condition_params or {}).get("max_rating", 0)
+        if player_rating < max_rating:
+            user_task.progress = 1
+            user_task.completed_at = datetime.now(timezone.utc)
+            db.add(user_task)
+
+
 async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> TaskClaimOut:
     result = await db.execute(
         select(UserTask, TaskDefinition)

@@ -36,6 +36,10 @@ class User(TimestampMixin, Base):
     goals_for: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     goals_against: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     arena_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Lifetime counters feeding `metric_counter` tasks (see task_service.py).
+    arena_clean_sheet_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    memory_levels_completed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    saboteur_levels_cleared: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Tactico stats
     tactics_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -144,7 +144,7 @@ export interface TaskDefinition {
   name: string;
   description: string;
   category: "regular" | "premium";
-  condition_type: "metric_counter" | "match_min_rating";
+  condition_type: "metric_counter" | "match_min_rating" | "match_same_country" | "penalty_win_max_rating";
   metric: string | null;
   target_value: number;
   condition_params: Record<string, unknown> | null;

@@ -22,7 +22,13 @@ export default function AppLayout() {
     // truly being torn down (i.e. after the user confirmed), so that's where
     // the forfeit is actually sent, via a keepalive fetch that survives the
     // unload.
-    const pageHideHandler = () => {
+    const pageHideHandler = (e: PageTransitionEvent) => {
+      // `persisted` means the page is going into the back-forward cache (a
+      // background/app-switch on mobile can trigger this), not actually
+      // closing — it can still come back via `pageshow`. Only forfeit on a
+      // real teardown, otherwise briefly switching away from the Telegram
+      // Mini App mid-match would wrongly cost the player the match.
+      if (e.persisted) return;
       const { active, forfeitPath } = useMatchGuardStore.getState();
       if (active && forfeitPath) {
         fetch(apiUrl(forfeitPath), { method: "POST", headers: buildAuthHeaders(), keepalive: true }).catch(() => {});

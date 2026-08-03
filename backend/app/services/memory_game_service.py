@@ -10,6 +10,7 @@ from app.models.enums import GameSessionStatus, GameType, TransactionType
 from app.models.game import GameSession, MemoryGameRound
 from app.models.user import User
 from app.schemas.game import MemoryClaimOut, MemoryLeaderboardEntry, MemoryStartOut, MemorySubmitOut
+from app.services import task_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
@@ -116,6 +117,14 @@ async def submit_round(db: AsyncSession, user: User, session_id: int, answer: li
     next_sequence = _generate_sequence(INITIAL_LENGTH + next_round_number - 1)
     next_round = MemoryGameRound(session_id=session.id, round_number=next_round_number, sequence=",".join(next_sequence))
     db.add(next_round)
+
+    locked_user = await lock_user_for_update(db, user.id)
+    locked_user.memory_levels_completed += 1
+    db.add(locked_user)
+    await task_service.evaluate_metric_progress(
+        db, locked_user, "memory_levels_completed", locked_user.memory_levels_completed
+    )
+
     await db.commit()
 
     return MemorySubmitOut(

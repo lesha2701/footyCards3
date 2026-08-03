@@ -9,6 +9,7 @@ from app.models.enums import GameSessionStatus, GameType, TransactionType
 from app.models.game import GameSession
 from app.models.user import User
 from app.schemas.game import SaboteurClaimOut, SaboteurRevealOut, SaboteurStartOut
+from app.services import task_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
@@ -123,6 +124,13 @@ async def reveal_cell(db: AsyncSession, user: User, session_id: int, cell_index:
     next_level = level + 1
     state["level"] = next_level
     state["line_stewards"] = random.sample(range(LINE_SIZE), steward_count)
+
+    locked_user = await lock_user_for_update(db, user.id)
+    locked_user.saboteur_levels_cleared += 1
+    db.add(locked_user)
+    await task_service.evaluate_metric_progress(
+        db, locked_user, "saboteur_levels_cleared", locked_user.saboteur_levels_cleared
+    )
     session.server_state = state
     db.add(session)
     await db.commit()
