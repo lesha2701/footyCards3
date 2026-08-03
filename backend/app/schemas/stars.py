@@ -11,9 +11,25 @@ class StarsInvoiceCreateOut(BaseModel):
     stars_amount: int
 
 
+class StarsCoinResultOut(BaseModel):
+    coins_credited: int
+    new_balance: int
+
+
 class StarsInvoiceStatusOut(BaseModel):
     status: Literal["pending", "completed"]
     result: Optional[PackOpenResult] = None
+    coin_result: Optional[StarsCoinResultOut] = None
+
+
+class StarsCoinInvoiceCreate(BaseModel):
+    stars_amount: int
+
+
+class StarsCoinRateOut(BaseModel):
+    stars_to_coins_rate: int
+    stars_bulk_threshold: int
+    stars_bulk_bonus_pct: float
 
 
 class StarsPreCheckoutValidateIn(BaseModel):

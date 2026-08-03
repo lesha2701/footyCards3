@@ -28,36 +28,77 @@ export default function PacksPage() {
   const balance = useAuthStore((s) => s.user?.balance ?? 0);
   const navigate = useNavigate();
   const [sortDirection, setSortDirection] = useState<PackSortDirection>("asc");
+  const [tab, setTab] = useState<"coins" | "stars">("coins");
 
-  const sortedPacks = packs ? sortPacksByPrice(packs, sortDirection) : undefined;
+  const coinPacks = packs?.filter((p) => p.stars_price == null);
+  const starsPacks = packs?.filter((p) => p.stars_price != null);
+  const sortedCoinPacks = coinPacks ? sortPacksByPrice(coinPacks, sortDirection) : undefined;
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-xl font-bold text-ink-chalk">Паки</h1>
+      <h1 className="font-display text-xl font-bold text-ink-chalk">Паки</h1>
+
+      <div className="grid grid-cols-2 gap-2 rounded-2xl bg-bg-surface p-1">
         <button
-          onClick={() => setSortDirection((d) => (d === "asc" ? "desc" : "asc"))}
-          className="flex items-center gap-1.5 rounded-full bg-bg-surface px-3 py-1.5 font-mono text-xs text-ink-mist active:scale-95"
+          onClick={() => setTab("coins")}
+          className={`rounded-xl py-2 text-sm font-semibold transition ${
+            tab === "coins" ? "bg-floodlight text-bg-base" : "text-ink-mist"
+          }`}
         >
-          <IconChevronUp size={12} className={`transition-transform ${sortDirection === "asc" ? "" : "rotate-180"}`} />
-          {sortDirection === "asc" ? "Дешевле → дороже" : "Дороже → дешевле"}
+          За монеты
+        </button>
+        <button
+          onClick={() => setTab("stars")}
+          className={`rounded-xl py-2 text-sm font-semibold transition ${
+            tab === "stars" ? "bg-amber-400 text-bg-base" : "text-ink-mist"
+          }`}
+        >
+          ⭐ За звёзды
         </button>
       </div>
+
       {isLoading && <CardGridSkeleton count={3} />}
-      {!isLoading && !packs?.length && <EmptyState icon={IconPack} title="Паков пока нет" description="Загляни позже" />}
-      <div className="grid grid-cols-1 gap-4">
-        {sortedPacks?.map((pack) =>
-          pack.stars_price != null ? (
-            <StarsPackCard
-              key={pack.id}
-              pack={pack}
-              onPurchased={(result) => navigate(`/packs/${pack.id}/open`, { state: { result } })}
-            />
-          ) : (
-            <PackCard key={pack.id} pack={pack} canAfford={balance >= pack.price} onOpen={() => navigate(`/packs/${pack.id}/open`)} />
-          )
-        )}
-      </div>
+
+      {tab === "coins" ? (
+        <>
+          {!isLoading && !coinPacks?.length && <EmptyState icon={IconPack} title="Паков пока нет" description="Загляни позже" />}
+          {!!coinPacks?.length && (
+            <div className="flex items-center justify-end">
+              <button
+                onClick={() => setSortDirection((d) => (d === "asc" ? "desc" : "asc"))}
+                className="flex items-center gap-1.5 rounded-full bg-bg-surface px-3 py-1.5 font-mono text-xs text-ink-mist active:scale-95"
+              >
+                <IconChevronUp size={12} className={`transition-transform ${sortDirection === "asc" ? "" : "rotate-180"}`} />
+                {sortDirection === "asc" ? "Дешевле → дороже" : "Дороже → дешевле"}
+              </button>
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-4">
+            {sortedCoinPacks?.map((pack) => (
+              <PackCard key={pack.id} pack={pack} canAfford={balance >= pack.price} onOpen={() => navigate(`/packs/${pack.id}/open`)} />
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="rounded-2xl bg-gradient-to-br from-amber-400/15 to-amber-600/5 p-4 text-center">
+            <p className="font-display text-sm font-bold text-amber-300">Поддержи разработчиков ⭐</p>
+            <p className="mt-1 text-xs text-ink-mist">
+              Покупки за Telegram Stars напрямую помогают нам делать VICTOR FC лучше — спасибо за поддержку!
+            </p>
+          </div>
+          {!isLoading && !starsPacks?.length && <EmptyState icon={IconPack} title="Паков пока нет" description="Загляни позже" />}
+          <div className="grid grid-cols-1 gap-4">
+            {starsPacks?.map((pack) => (
+              <StarsPackCard
+                key={pack.id}
+                pack={pack}
+                onPurchased={(result) => navigate(`/packs/${pack.id}/open`, { state: { result } })}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

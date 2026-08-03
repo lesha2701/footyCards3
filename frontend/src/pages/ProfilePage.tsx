@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 import { claimDailyReward, fetchDailyRewardCalendar } from "@/api/dailyRewards";
 import { fetchMyProfile, fetchMyTransactions, updateMySettings } from "@/api/profile";
+import { createCoinInvoice, fetchCoinInvoiceStatus, fetchStarsCoinRate } from "@/api/wallet";
 import {
   IconCoin,
   IconCollection,
@@ -18,7 +19,7 @@ import {
 } from "@/components/icons";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { RARITY_GLOW, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
-import { hapticNotify } from "@/lib/telegram";
+import { hapticNotify, openTelegramInvoice } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { DailyRewardClaimResult } from "@/types";
 
@@ -35,6 +36,7 @@ const TX_TYPE_LABELS: Record<string, string> = {
   trade_coins_received: "Обмен: получено",
   admin_adjustment: "Корректировка администратором",
   referral_reward: "Реферальная награда",
+  stars_coin_purchase: "Покупка монет за ⭐",
 };
 
 function dayStreakLabel(days: number): string {
@@ -53,6 +55,7 @@ export default function ProfilePage() {
   const [showTx, setShowTx] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claimResult, setClaimResult] = useState<DailyRewardClaimResult | null>(null);
+  const [showBuyCoins, setShowBuyCoins] = useState(false);
 
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
   const { data: calendar } = useQuery({ queryKey: ["daily-reward-calendar"], queryFn: fetchDailyRewardCalendar });
@@ -199,6 +202,16 @@ export default function ProfilePage() {
       </section>
 
       <section className="rounded-2xl bg-bg-surface p-4">
+        <button
+          onClick={() => setShowBuyCoins(true)}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 py-3 text-sm font-bold text-bg-base active:scale-95"
+        >
+          <IconCoin size={16} />
+          Купить монеты за ⭐
+        </button>
+      </section>
+
+      <section className="rounded-2xl bg-bg-surface p-4">
         <p className="flex items-center gap-1.5 font-display text-base font-bold text-ink-chalk">
           <IconSwap size={16} className="text-accent-cyan" />
           Настройки обменов
@@ -250,6 +263,15 @@ export default function ProfilePage() {
       )}
 
       {claimResult && <DailyRewardResultModal result={claimResult} onClose={() => setClaimResult(null)} />}
+      {showBuyCoins && (
+        <BuyCoinsModal
+          onClose={() => setShowBuyCoins(false)}
+          onPurchased={(newBalance) => {
+            updateBalance(newBalance);
+            queryClient.invalidateQueries({ queryKey: ["transactions"] });
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -311,6 +333,121 @@ function DailyRewardResultModal({ result, onClose }: { result: DailyRewardClaimR
           Отлично!
         </button>
       </motion.div>
+    </div>
+  );
+}
+
+function computeStarPresets(threshold: number): number[] {
+  const base = Math.max(1, Math.round(threshold / 5));
+  return Array.from(new Set([base, Math.round(threshold / 2), threshold, threshold * 2])).sort((a, b) => a - b);
+}
+
+function BuyCoinsModal({ onClose, onPurchased }: { onClose: () => void; onPurchased: (newBalance: number) => void }) {
+  const { data: rate } = useQuery({ queryKey: ["stars-coin-rate"], queryFn: fetchStarsCoinRate });
+  const [busyAmount, setBusyAmount] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<{ coins: number; stars: number } | null>(null);
+
+  const presets = rate ? computeStarPresets(rate.stars_bulk_threshold) : [];
+
+  const handleBuy = async (stars: number) => {
+    setError(null);
+    setBusyAmount(stars);
+    try {
+      const invoice = await createCoinInvoice(stars);
+      const paymentStatus = await openTelegramInvoice(invoice.invoice_link);
+      if (paymentStatus === "cancelled") {
+        setBusyAmount(null);
+        return;
+      }
+      if (paymentStatus === "failed") {
+        setError("Платёж не прошёл");
+        setBusyAmount(null);
+        return;
+      }
+
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const status = await fetchCoinInvoiceStatus(invoice.payload_token);
+        if (status.status === "completed" && status.coin_result) {
+          hapticNotify("success");
+          onPurchased(status.coin_result.new_balance);
+          setSuccess({ coins: status.coin_result.coins_credited, stars });
+          setBusyAmount(null);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      throw new Error("Монеты ещё не начислены — проверь баланс через минуту");
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : err instanceof Error ? err.message : "Не удалось купить монеты");
+      setBusyAmount(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={onClose}>
+      <div
+        className="w-full max-w-sm rounded-2xl bg-bg-surface p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="font-display text-base font-bold text-ink-chalk">Купить монеты за ⭐</p>
+
+        {success ? (
+          <>
+            <div className="mt-4 rounded-2xl bg-accent-green/10 px-4 py-4 text-center">
+              <p className="flex items-center justify-center gap-1.5 font-mono text-lg font-bold text-accent-green">
+                +{success.coins} <IconCoin size={16} />
+              </p>
+              <p className="mt-1 text-xs text-ink-mist">За {success.stars} ⭐</p>
+            </div>
+            <button onClick={onClose} className="mt-4 w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95">
+              Отлично!
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="mt-1 text-xs text-ink-mist">
+              Курс: 1 ⭐ = {rate?.stars_to_coins_rate ?? "…"} монет
+              {rate && rate.stars_bulk_threshold > 0 && (
+                <> · от {rate.stars_bulk_threshold} ⭐ бонус +{Math.round(rate.stars_bulk_bonus_pct * 100)}%</>
+              )}
+            </p>
+            {error && <p className="mt-2 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
+            <div className="mt-4 flex flex-col gap-2">
+              {presets.map((stars) => {
+                const isBulk = !!rate && stars >= rate.stars_bulk_threshold;
+                const coins = rate
+                  ? Math.round(stars * rate.stars_to_coins_rate * (isBulk ? 1 + rate.stars_bulk_bonus_pct : 1))
+                  : 0;
+                return (
+                  <button
+                    key={stars}
+                    onClick={() => handleBuy(stars)}
+                    disabled={busyAmount !== null}
+                    className="flex items-center justify-between rounded-2xl bg-black/20 px-4 py-3 text-left disabled:opacity-40"
+                  >
+                    <span className="font-mono text-sm font-semibold text-ink-chalk">{stars} ⭐</span>
+                    <span className="flex items-center gap-2">
+                      {isBulk && (
+                        <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                          +{Math.round(rate!.stars_bulk_bonus_pct * 100)}%
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1 font-mono text-sm font-bold text-accent-lime">
+                        {busyAmount === stars ? "..." : `+${coins}`}
+                        <IconCoin size={13} />
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <button onClick={onClose} className="mt-4 w-full rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist active:scale-95">
+              Отмена
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

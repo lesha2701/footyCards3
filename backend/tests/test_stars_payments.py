@@ -4,6 +4,7 @@ from sqlalchemy import select
 import app.core.rate_limit as rate_limit_module
 from app.config import get_settings
 from app.models.enums import Rarity
+from app.models.game_config import GameConfig
 from app.models.pack import PackOpening, StarsInvoice
 from app.services import stars_payment_service
 from tests.factories import create_pack, create_player, get_user_by_telegram_id
@@ -11,6 +12,16 @@ from tests.utils import telegram_headers
 
 settings = get_settings()
 INTERNAL_HEADERS = {"X-Internal-Secret": settings.internal_api_secret}
+
+
+async def _get_config(db_session) -> GameConfig:
+    config = await db_session.get(GameConfig, 1)
+    if config is None:
+        config = GameConfig(id=1)
+        db_session.add(config)
+        await db_session.commit()
+        config = await db_session.get(GameConfig, 1)
+    return config
 
 
 @pytest.fixture(autouse=True)
@@ -29,7 +40,7 @@ async def _register(client, db_session, telegram_id, bot_token):
     return await get_user_by_telegram_id(db_session, telegram_id)
 
 
-async def _fake_invoice_link(payload_token, pack):
+async def _fake_invoice_link(payload_token, title, description, stars_amount):
     return f"https://t.me/invoice/{payload_token}"
 
 
@@ -149,18 +160,20 @@ async def test_deliver_payment_grants_pack_and_is_idempotent(client, db_session,
     resp = await client.post("/api/v1/internal/stars-payments/deliver", json=deliver_payload, headers=INTERNAL_HEADERS)
     assert resp.status_code == 200
     body = resp.json()
-    assert len(body["cards"]) == 1
-    assert body["cards"][0]["card"]["player"]["rarity"] == "epic"
+    assert body["status"] == "completed"
+    result = body["result"]
+    assert len(result["cards"]) == 1
+    assert result["cards"][0]["card"]["player"]["rarity"] == "epic"
 
     status_resp = await client.get(f"/api/v1/packs/stars-invoices/{invoice['payload_token']}", headers=headers)
     assert status_resp.json()["status"] == "completed"
-    assert status_resp.json()["result"]["opening_id"] == body["opening_id"]
+    assert status_resp.json()["result"]["opening_id"] == result["opening_id"]
 
     # Redelivering the same charge (e.g. Telegram redelivers the update)
     # must not grant a second pack.
     second = await client.post("/api/v1/internal/stars-payments/deliver", json=deliver_payload, headers=INTERNAL_HEADERS)
     assert second.status_code == 200
-    assert second.json()["opening_id"] == body["opening_id"]
+    assert second.json()["result"]["opening_id"] == result["opening_id"]
 
     count = (
         await db_session.execute(
@@ -193,3 +206,103 @@ async def test_deliver_payment_rejects_amount_mismatch(client, db_session, bot_t
         await db_session.execute(select(StarsInvoice).where(StarsInvoice.payload_token == invoice["payload_token"]))
     ).scalar_one()
     assert invoice_row.completed_at is None
+
+
+# ---------------------------------------------------------------------------
+# Buy coins with Stars
+# ---------------------------------------------------------------------------
+
+async def test_stars_coin_rate_reflects_config(client, db_session, bot_token):
+    config = await _get_config(db_session)
+    config.stars_to_coins_rate = 3
+    config.stars_bulk_threshold = 20
+    config.stars_bulk_bonus_pct = 0.25
+    db_session.add(config)
+    await db_session.commit()
+
+    await _register(client, db_session, 850008, bot_token)
+    headers = telegram_headers(850008, bot_token)
+
+    resp = await client.get("/api/v1/wallet/stars-coin-rate", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["stars_to_coins_rate"] == 3
+    assert body["stars_bulk_threshold"] == 20
+    assert body["stars_bulk_bonus_pct"] == 0.25
+
+
+async def test_buy_coins_below_bulk_threshold_no_bonus(client, db_session, bot_token, monkeypatch):
+    monkeypatch.setattr(stars_payment_service, "_request_telegram_invoice_link", _fake_invoice_link)
+    config = await _get_config(db_session)
+    config.stars_to_coins_rate = 2
+    config.stars_bulk_threshold = 50
+    config.stars_bulk_bonus_pct = 0.10
+    db_session.add(config)
+    await db_session.commit()
+
+    user = await _register(client, db_session, 850009, bot_token)
+    headers = telegram_headers(850009, bot_token)
+
+    invoice = (await client.post("/api/v1/wallet/stars-invoice", headers=headers, json={"stars_amount": 10})).json()
+    assert invoice["stars_amount"] == 10
+
+    resp = await client.post(
+        "/api/v1/internal/stars-payments/deliver",
+        json={
+            "payload_token": invoice["payload_token"],
+            "telegram_user_id": 850009,
+            "telegram_payment_charge_id": "coin-charge-" + "b" * 120,
+            "total_amount": 10,
+        },
+        headers=INTERNAL_HEADERS,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "completed"
+    assert body["coin_result"]["coins_credited"] == 20  # 10 stars * rate 2, no bulk bonus
+
+    await db_session.refresh(user)
+    assert user.balance == 500 + 20
+
+    status_resp = await client.get(f"/api/v1/wallet/stars-invoices/{invoice['payload_token']}", headers=headers)
+    assert status_resp.json()["coin_result"]["coins_credited"] == 20
+
+
+async def test_buy_coins_at_bulk_threshold_applies_bonus(client, db_session, bot_token, monkeypatch):
+    monkeypatch.setattr(stars_payment_service, "_request_telegram_invoice_link", _fake_invoice_link)
+    config = await _get_config(db_session)
+    config.stars_to_coins_rate = 2
+    config.stars_bulk_threshold = 50
+    config.stars_bulk_bonus_pct = 0.10
+    db_session.add(config)
+    await db_session.commit()
+
+    user = await _register(client, db_session, 850010, bot_token)
+    headers = telegram_headers(850010, bot_token)
+
+    invoice = (await client.post("/api/v1/wallet/stars-invoice", headers=headers, json={"stars_amount": 50})).json()
+
+    resp = await client.post(
+        "/api/v1/internal/stars-payments/deliver",
+        json={
+            "payload_token": invoice["payload_token"],
+            "telegram_user_id": 850010,
+            "telegram_payment_charge_id": "coin-charge-bulk-" + "c" * 120,
+            "total_amount": 50,
+        },
+        headers=INTERNAL_HEADERS,
+    )
+    assert resp.status_code == 200
+    # 50 stars * rate 2 = 100, +10% bulk bonus = 110
+    assert resp.json()["coin_result"]["coins_credited"] == 110
+
+    await db_session.refresh(user)
+    assert user.balance == 500 + 110
+
+
+async def test_buy_coins_rejects_non_positive_amount(client, db_session, bot_token):
+    await _register(client, db_session, 850011, bot_token)
+    headers = telegram_headers(850011, bot_token)
+
+    resp = await client.post("/api/v1/wallet/stars-invoice", headers=headers, json={"stars_amount": 0})
+    assert resp.status_code == 409

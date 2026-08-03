@@ -88,3 +88,10 @@ class GameConfig(TimestampMixin, Base):
     tactico_bot_optimal_pick_chance_hard: Mapped[float] = mapped_column(Numeric(4, 2), default=0.90, nullable=False)
     tactico_max_legendary_cards: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     tactico_max_epic_cards: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+
+    # Buy coins with Telegram Stars: base rate is coins-per-star; buying at
+    # least `stars_bulk_threshold` stars in one purchase adds
+    # `stars_bulk_bonus_pct` more coins on top (e.g. 0.10 = 10% extra).
+    stars_to_coins_rate: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    stars_bulk_threshold: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    stars_bulk_bonus_pct: Mapped[float] = mapped_column(Numeric(4, 2), default=0.10, nullable=False)

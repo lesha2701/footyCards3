@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import Depends, Header, Request
@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.core.security import TelegramAuthError, TelegramUser, decode_admin_token, validate_init_data
+from app.core.timeutil import local_today
 from app.database import get_db
 from app.models.enums import TransactionType
 from app.models.user import User
@@ -82,6 +83,16 @@ async def _get_or_create_user(
     if user.is_admin != is_admin_now:
         user.is_admin = is_admin_now
         changed = True
+
+    # Daily login streak: driven by simply being active each calendar day
+    # (any authenticated request), not by any specific in-app action, so it
+    # only changes once per day regardless of how many requests come in.
+    today = local_today()
+    previous_day = local_today(user.last_seen_at) if user.last_seen_at else None
+    if previous_day != today:
+        user.daily_login_streak = user.daily_login_streak + 1 if previous_day == today - timedelta(days=1) else 1
+        changed = True
+
     user.last_seen_at = datetime.now(timezone.utc)
     if changed:
         await db.commit()

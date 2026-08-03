@@ -18,7 +18,7 @@ export const RARITY_GLOW: Record<Rarity, string> = {
   common: "",
   rare: "shadow-glow-rare",
   epic: "shadow-glow-epic",
-  legendary: "shadow-glow-legendary animate-pulse-slow",
+  legendary: "shadow-glow-legendary animate-legendary-pulse",
 };
 
 export const RARITY_TEXT: Record<Rarity, string> = {

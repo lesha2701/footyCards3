@@ -35,6 +35,7 @@ from app.routers import (
     tasks,
     trades,
     users,
+    wallet,
 )
 
 settings = get_settings()
@@ -104,6 +105,7 @@ app.include_router(admin_trades.router, prefix=API_PREFIX)
 app.include_router(admin_games.router, prefix=API_PREFIX)
 app.include_router(admin_log.router, prefix=API_PREFIX)
 app.include_router(internal.router, prefix=API_PREFIX)
+app.include_router(wallet.router, prefix=API_PREFIX)
 
 
 @app.get("/api/health")

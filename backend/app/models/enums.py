@@ -57,6 +57,7 @@ class TransactionType(str, enum.Enum):
     referral_reward = "referral_reward"
     collection_reward = "collection_reward"
     tactico_reward = "tactico_reward"
+    stars_coin_purchase = "stars_coin_purchase"
 
 
 class TaskCategory(str, enum.Enum):

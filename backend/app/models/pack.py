@@ -90,20 +90,26 @@ class PackOpeningCard(Base):
 
 
 class StarsInvoice(TimestampMixin, Base):
-    """One Telegram Stars purchase attempt for a pack. Created (pending) when
-    the Mini App asks for an invoice link, and completed once the bot relays
-    Telegram's `successful_payment` update — see stars_payment_service.py.
-    `payload_token` is what we hand Telegram as the invoice payload and get
-    back verbatim in pre_checkout_query/successful_payment, so it's what ties
-    an incoming payment back to this row; `telegram_payment_charge_id` is
-    Telegram's own globally-unique payment id, recorded for idempotency and
-    to support refunds later."""
+    """One Telegram Stars purchase attempt — for a pack (`pack_id` set) or a
+    direct coin top-up (`coins_amount` set), always exactly one of the two.
+    Created (pending) when the Mini App asks for an invoice link, and
+    completed once the bot relays Telegram's `successful_payment` update —
+    see stars_payment_service.py. `payload_token` is what we hand Telegram as
+    the invoice payload and get back verbatim in
+    pre_checkout_query/successful_payment, so it's what ties an incoming
+    payment back to this row; `telegram_payment_charge_id` is Telegram's own
+    globally-unique payment id, recorded for idempotency and to support
+    refunds later."""
 
     __tablename__ = "stars_invoices"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    pack_id: Mapped[int] = mapped_column(ForeignKey("packs.id", ondelete="CASCADE"), nullable=False)
+    pack_id: Mapped[Optional[int]] = mapped_column(ForeignKey("packs.id", ondelete="CASCADE"), nullable=True)
+    # Frozen at invoice-creation time (not recomputed from GameConfig at
+    # delivery), so an admin changing the rate mid-purchase can't affect a
+    # payment already in flight.
+    coins_amount: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     payload_token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     stars_amount: Mapped[int] = mapped_column(Integer, nullable=False)
     # Telegram doesn't publish a max length for this id; real ones observed

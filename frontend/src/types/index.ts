@@ -149,9 +149,21 @@ export interface StarsInvoiceCreate {
   stars_amount: number;
 }
 
+export interface StarsCoinResult {
+  coins_credited: number;
+  new_balance: number;
+}
+
 export interface StarsInvoiceStatus {
   status: "pending" | "completed";
   result: PackOpenResult | null;
+  coin_result: StarsCoinResult | null;
+}
+
+export interface StarsCoinRate {
+  stars_to_coins_rate: number;
+  stars_bulk_threshold: number;
+  stars_bulk_bonus_pct: number;
 }
 
 export interface MemoryStart {

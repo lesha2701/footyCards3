@@ -42,6 +42,45 @@ async def test_repeat_login_does_not_grant_bonus_twice(client, bot_token):
     assert first.json()["user"]["id"] == second.json()["user"]["id"]
 
 
+async def test_daily_login_streak_grows_and_resets(client, db_session, bot_token):
+    from datetime import datetime, timedelta, timezone
+
+    from tests.factories import get_user_by_telegram_id
+
+    headers = telegram_headers(555010, bot_token, username="streaker")
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 555010)
+    assert user.daily_login_streak == 0  # registration itself doesn't count as a day yet
+
+    # Any authenticated request on a new calendar day counts — not just this
+    # one specific endpoint — so a plain profile fetch is enough.
+    profile = await client.get("/api/v1/profile/me", headers=headers)
+    assert profile.json()["daily_login_streak"] == 1
+
+    # A second request the same day must not double-count.
+    profile_again = await client.get("/api/v1/profile/me", headers=headers)
+    assert profile_again.json()["daily_login_streak"] == 1
+
+    # Simulate having last been active yesterday — the next request should
+    # extend the streak.
+    await db_session.refresh(user)
+    user.last_seen_at = datetime.now(timezone.utc) - timedelta(days=1)
+    db_session.add(user)
+    await db_session.commit()
+
+    profile = await client.get("/api/v1/profile/me", headers=headers)
+    assert profile.json()["daily_login_streak"] == 2
+
+    # A multi-day gap resets the streak to 1 instead of continuing to grow.
+    await db_session.refresh(user)
+    user.last_seen_at = datetime.now(timezone.utc) - timedelta(days=5)
+    db_session.add(user)
+    await db_session.commit()
+
+    profile = await client.get("/api/v1/profile/me", headers=headers)
+    assert profile.json()["daily_login_streak"] == 1
+
+
 async def test_dev_mode_login_without_telegram(client):
     resp = await client.get("/api/v1/auth/me", headers={"X-Dev-Mode": "true"})
     assert resp.status_code == 200

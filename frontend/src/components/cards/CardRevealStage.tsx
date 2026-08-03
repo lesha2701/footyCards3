@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useMemo } from "react";
 
 import { IconGlobe, IconHelp, IconStadium, IconTag } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
@@ -44,6 +45,7 @@ export function RevealStage({
             className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-floodlight blur-3xl"
           />
         )}
+        {revealed && player.rarity === "legendary" && <LegendaryConfetti />}
         <motion.div
           initial={{ scale: 0.85, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -117,6 +119,42 @@ export function RevealStage({
       </div>
 
       {stage !== "reveal" && <p className="text-xs text-ink-mist-dim">Нажми, чтобы продолжить</p>}
+    </div>
+  );
+}
+
+const CONFETTI_COLORS = ["#facc15", "#f59e0b", "#fde68a", "#fbbf24", "#fcd34d"];
+
+function LegendaryConfetti() {
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 26 }, (_, i) => {
+        const angle = (Math.PI * 2 * i) / 26 + Math.random() * 0.4;
+        const distance = 90 + Math.random() * 100;
+        return {
+          id: i,
+          x: Math.cos(angle) * distance,
+          y: Math.sin(angle) * distance * 0.6 + 70, // biased downward for a "falling" feel
+          rotate: Math.random() * 360,
+          delay: Math.random() * 0.2,
+          color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+        };
+      }),
+    []
+  );
+
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-visible">
+      {pieces.map((piece) => (
+        <motion.span
+          key={piece.id}
+          initial={{ x: 0, y: 0, opacity: 1, rotate: 0, scale: 1 }}
+          animate={{ x: piece.x, y: piece.y, opacity: 0, rotate: piece.rotate, scale: 0.6 }}
+          transition={{ duration: 1.5, delay: piece.delay, ease: "easeOut" }}
+          className="absolute left-1/2 top-1/2 h-2.5 w-1.5 rounded-[1px]"
+          style={{ backgroundColor: piece.color }}
+        />
+      ))}
     </div>
   );
 }

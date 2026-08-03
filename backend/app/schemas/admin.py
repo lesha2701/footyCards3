@@ -160,6 +160,9 @@ class GameConfigOut(BaseModel):
     tactico_bot_optimal_pick_chance_hard: float
     tactico_max_legendary_cards: int
     tactico_max_epic_cards: int
+    stars_to_coins_rate: int
+    stars_bulk_threshold: int
+    stars_bulk_bonus_pct: float
 
 
 class GameConfigUpdate(BaseModel):
@@ -228,6 +231,9 @@ class GameConfigUpdate(BaseModel):
     tactico_bot_optimal_pick_chance_hard: Optional[float] = Field(default=None, ge=0, le=1)
     tactico_max_legendary_cards: Optional[int] = Field(default=None, ge=0, le=11)
     tactico_max_epic_cards: Optional[int] = Field(default=None, ge=0, le=11)
+    stars_to_coins_rate: Optional[int] = Field(default=None, ge=1)
+    stars_bulk_threshold: Optional[int] = Field(default=None, ge=1)
+    stars_bulk_bonus_pct: Optional[float] = Field(default=None, ge=0, le=2)
 
 
 class SuspiciousMemorySessionOut(BaseModel):

@@ -115,13 +115,17 @@ export default function PackOpenPage() {
   }, [phase, cardIndex, stageIndex, result]);
 
   const skipAll = () => {
+    if (!result) return;
+    // Fast-forwards through the staged reveal animation only — always lands
+    // on the last card fully revealed, same as advancing through it
+    // naturally, so the player still sees what they got. It must never jump
+    // straight past that to "summary"/navigate away, or a single-card pack
+    // (the common case) would skip showing the card entirely.
     if (timerRef.current) clearTimeout(timerRef.current);
-    hapticNotify("success");
-    if (result && result.cards.length === 1 && !result.referral_bonus_coins && result.collection_rewards.length === 0) {
-      navigate("/packs");
-      return;
-    }
-    setPhase("summary");
+    haptic("light");
+    setPhase("revealing"); // in case skip is tapped from the packshot screen, before opening
+    setCardIndex(result.cards.length - 1);
+    setStageIndex(STAGES.length - 1);
   };
 
   if (requestState.status === "pending") return <LoadingScreen />;
