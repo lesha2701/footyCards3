@@ -236,6 +236,18 @@ async def seed_packs(db) -> dict[str, Pack]:
             "colors": ((245, 158, 11), (239, 68, 68)),
             "probabilities": {Rarity.common: 0.20, Rarity.rare: 0.35, Rarity.epic: 0.35, Rarity.legendary: 0.10},
         },
+        {
+            "slug": "stars-test",
+            "name": "Star Pack",
+            "description": "Тестовый пак за Telegram Stars: 1 карточка с гарантированной эпической.",
+            "price": 0,
+            "stars_price": 1,
+            "card_count": 1,
+            "guaranteed_min_rarity": Rarity.epic,
+            "sort_order": 4,
+            "colors": ((251, 191, 36), (180, 83, 9)),
+            "probabilities": {Rarity.epic: 0.7, Rarity.legendary: 0.3},
+        },
     ]
 
     packs = {}
@@ -250,6 +262,7 @@ async def seed_packs(db) -> dict[str, Pack]:
 
         pack = Pack(
             slug=spec["slug"], name=spec["name"], description=spec["description"], price=spec["price"],
+            stars_price=spec.get("stars_price"),
             card_count=spec["card_count"], guaranteed_min_rarity=spec["guaranteed_min_rarity"],
             image_path=image_path, is_active=True, sort_order=spec["sort_order"],
         )

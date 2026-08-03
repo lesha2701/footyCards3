@@ -20,6 +20,7 @@ interface PackForm {
   name: string;
   description: string;
   price: number;
+  stars_price: number | "";
   card_count: number;
   guaranteed_min_rarity: Rarity | "";
   is_active: boolean;
@@ -35,6 +36,7 @@ function packToForm(p?: Pack): PackForm {
     name: p?.name ?? "",
     description: p?.description ?? "",
     price: p?.price ?? 100,
+    stars_price: p?.stars_price ?? "",
     card_count: p?.card_count ?? 3,
     guaranteed_min_rarity: p?.guaranteed_min_rarity ?? "",
     is_active: p?.is_active ?? true,
@@ -71,6 +73,7 @@ export default function AdminPacksPage() {
     name: form.name,
     description: form.description,
     price: form.price,
+    stars_price: form.stars_price === "" ? null : form.stars_price,
     card_count: form.card_count,
     guaranteed_min_rarity: form.guaranteed_min_rarity || null,
     is_active: form.is_active,
@@ -116,7 +119,9 @@ export default function AdminPacksPage() {
             <img src={staticUrl(p.image_path ?? undefined)} className="h-24 w-20 rounded-xl object-cover" />
             <div className="flex-1">
               <p className="font-display text-sm font-bold">{p.name}</p>
-              <p className="text-xs text-slate-400">🪙{p.price} · {p.card_count} карт</p>
+              <p className="text-xs text-slate-400">
+                {p.stars_price != null ? `⭐${p.stars_price} (только звёзды)` : `🪙${p.price}`} · {p.card_count} карт
+              </p>
               <p className="text-xs text-slate-500">{p.is_active ? "Активен" : "Отключён"}</p>
               <div className="mt-2 flex flex-wrap gap-1">
                 <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
@@ -151,9 +156,20 @@ export default function AdminPacksPage() {
               <Field label="Название" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
               <Field label="Описание" value={form.description} onChange={(v) => setForm({ ...form, description: v })} />
               <div className="grid grid-cols-2 gap-2">
-                <NumField label="Цена" value={form.price} min={0} onChange={(v) => setForm({ ...form, price: v })} />
+                <NumField label="Цена, монеты" value={form.price} min={0} onChange={(v) => setForm({ ...form, price: v })} />
                 <NumField label="Карт в паке" value={form.card_count} min={1} max={12} onChange={(v) => setForm({ ...form, card_count: v })} />
               </div>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Цена в звёздах ⭐ (если указано — пак покупается ТОЛЬКО за звёзды, цена в монетах игнорируется)</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.stars_price}
+                  onChange={(e) => setForm({ ...form, stars_price: e.target.value === "" ? "" : Number(e.target.value) })}
+                  placeholder="Нет — обычная покупка за монеты"
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                />
+              </label>
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Гарантированная минимальная редкость</span>
                 <select

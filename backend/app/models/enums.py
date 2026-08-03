@@ -38,6 +38,7 @@ class CardSource(str, enum.Enum):
     free_pack = "free_pack"
     card_upgrade = "card_upgrade"
     collection_reward = "collection_reward"
+    stars_purchase = "stars_purchase"
 
 
 class TransactionType(str, enum.Enum):

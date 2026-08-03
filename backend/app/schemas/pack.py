@@ -22,6 +22,7 @@ class PackOut(BaseModel):
     name: str
     description: str
     price: int
+    stars_price: Optional[int] = None
     image_path: Optional[str]
     card_count: int
     guaranteed_min_rarity: Optional[Rarity]
@@ -44,6 +45,7 @@ class PackCreate(BaseModel):
     name: str
     description: str = ""
     price: int = Field(ge=0)
+    stars_price: Optional[int] = Field(default=None, ge=1)
     card_count: int = Field(ge=1, le=12)
     guaranteed_min_rarity: Optional[Rarity] = None
     is_active: bool = True
@@ -58,6 +60,7 @@ class PackUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     price: Optional[int] = Field(default=None, ge=0)
+    stars_price: Optional[int] = Field(default=None, ge=1)
     card_count: Optional[int] = Field(default=None, ge=1, le=12)
     guaranteed_min_rarity: Optional[Rarity] = None
     is_active: Optional[bool] = None

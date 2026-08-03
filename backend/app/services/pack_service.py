@@ -34,6 +34,8 @@ async def _get_pack_or_404(db: AsyncSession, pack_id: int) -> Pack:
 def _assert_pack_available(pack: Pack) -> None:
     if not pack.is_active:
         raise ConflictError("This pack is not currently available")
+    if pack.stars_price is not None:
+        raise ConflictError("This pack can only be purchased with Telegram Stars")
     now = datetime.now(timezone.utc)
     if pack.available_from and now < pack.available_from:
         raise ConflictError("This pack is not on sale yet")
@@ -103,7 +105,7 @@ async def pick_random_player(db: AsyncSession, rarity: Rarity) -> Player:
     return player
 
 
-async def _existing_opening_result(db: AsyncSession, user: User, opening: PackOpening) -> PackOpenResult:
+async def get_opening_result(db: AsyncSession, user: User, opening: PackOpening) -> PackOpenResult:
     pack = await _get_pack_or_404(db, opening.pack_id)
     result = await db.execute(
         select(PackOpeningCard)
@@ -214,7 +216,7 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
             )
         ).scalar_one_or_none()
         if existing is not None:
-            return await _existing_opening_result(db, user, existing)
+            return await get_opening_result(db, user, existing)
 
     pack = await _get_pack_or_404(db, pack_id)
     _assert_pack_available(pack)
@@ -298,7 +300,7 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
                 )
             ).scalar_one_or_none()
             if existing is not None:
-                return await _existing_opening_result(db, user, existing)
+                return await get_opening_result(db, user, existing)
         raise
     await db.refresh(locked_user)
 

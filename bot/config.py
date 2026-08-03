@@ -22,6 +22,12 @@ class BotSettings(BaseSettings):
     database_url: str = "postgresql://postgres:1234@localhost:5432/footycards"
     timezone: str = "Europe/Moscow"
 
+    # Server-to-server call into the backend to relay Telegram Stars payment
+    # updates (pre_checkout_query / successful_payment) — must match the
+    # backend's INTERNAL_API_SECRET.
+    internal_api_secret: str = "dev_only_internal_secret"
+    internal_backend_url: str = "http://backend:8000/api/v1"
+
     @property
     def admin_ids(self) -> List[int]:
         return [int(x) for x in self.admin_telegram_ids.split(",") if x.strip()]

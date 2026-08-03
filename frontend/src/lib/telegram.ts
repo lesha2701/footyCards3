@@ -24,6 +24,7 @@ interface TelegramWebApp {
     onClick: (cb: () => void) => void;
     offClick: (cb: () => void) => void;
   };
+  openInvoice?: (url: string, callback?: (status: "paid" | "cancelled" | "failed" | "pending") => void) => void;
 }
 
 declare global {
@@ -63,4 +64,21 @@ export function haptic(style: "light" | "medium" | "heavy" = "light"): void {
 
 export function hapticNotify(type: "error" | "success" | "warning"): void {
   getTelegramWebApp()?.HapticFeedback?.notificationOccurred(type);
+}
+
+/** Opens a Telegram Stars (or other Bot Payments) invoice link natively
+ * inside the Mini App. Resolves with the invoice status once the payment
+ * sheet closes — `"paid"` only means Telegram accepted the payment, not that
+ * the pack has been granted yet (that happens async once our bot relays the
+ * `successful_payment` update to the backend), so callers should poll for
+ * the actual result rather than trusting this status alone. */
+export function openTelegramInvoice(url: string): Promise<"paid" | "cancelled" | "failed" | "pending"> {
+  return new Promise((resolve) => {
+    const webApp = getTelegramWebApp();
+    if (!webApp?.openInvoice) {
+      resolve("failed");
+      return;
+    }
+    webApp.openInvoice(url, (status) => resolve(status));
+  });
 }

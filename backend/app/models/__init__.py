@@ -8,7 +8,7 @@ from app.models.game_config import GameConfig
 from app.models.lineup import Lineup, LineupCard
 from app.models.match import Match, MatchEvent
 from app.models.notification import Notification
-from app.models.pack import Pack, PackOpening, PackOpeningCard, PackRarityProbability
+from app.models.pack import Pack, PackOpening, PackOpeningCard, PackRarityProbability, StarsInvoice
 from app.models.player import Player
 from app.models.task import TaskDefinition, UserTask
 from app.models.trade import TradeOffer, TradeOfferCard
@@ -35,6 +35,7 @@ __all__ = [
     "PackOpening",
     "PackOpeningCard",
     "PackRarityProbability",
+    "StarsInvoice",
     "Player",
     "TaskDefinition",
     "UserTask",

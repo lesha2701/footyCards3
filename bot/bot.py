@@ -9,6 +9,7 @@ from aiogram.enums import ParseMode
 import db
 from config import get_bot_settings
 from handlers import admin as admin_handlers
+from handlers import payments as payments_handlers
 from handlers import user as user_handlers
 from services.daily_reminder import run_daily_reward_reminder
 from services.free_pack_notifier import run_free_pack_notifier
@@ -23,6 +24,7 @@ settings = get_bot_settings()
 def build_dispatcher() -> Dispatcher:
     dp = Dispatcher()
     dp.include_router(admin_handlers.router)
+    dp.include_router(payments_handlers.router)
     dp.include_router(user_handlers.router)
     return dp
 

@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -148,3 +149,11 @@ async def get_current_admin(
     if user.is_banned:
         raise ForbiddenError("This account has been banned")
     return user
+
+
+async def verify_internal_secret(x_internal_secret: Optional[str] = Header(default=None)) -> None:
+    """Authenticates server-to-server calls from the bot (not a Telegram user
+    or an admin) — e.g. relaying a Stars successful_payment update. Never
+    reachable from the frontend, which has no way to know this secret."""
+    if not x_internal_secret or not secrets.compare_digest(x_internal_secret, settings.internal_api_secret):
+        raise UnauthorizedError("Invalid internal secret")

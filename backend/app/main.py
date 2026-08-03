@@ -23,6 +23,7 @@ from app.routers import (
     daily_rewards,
     free_pack,
     games,
+    internal,
     leaderboard,
     lineups,
     matches,
@@ -102,6 +103,7 @@ app.include_router(admin_tasks.router, prefix=API_PREFIX)
 app.include_router(admin_trades.router, prefix=API_PREFIX)
 app.include_router(admin_games.router, prefix=API_PREFIX)
 app.include_router(admin_log.router, prefix=API_PREFIX)
+app.include_router(internal.router, prefix=API_PREFIX)
 
 
 @app.get("/api/health")

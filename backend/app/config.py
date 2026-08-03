@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # Backend
     jwt_secret: str = "dev_only_secret"
     jwt_expire_minutes: int = 720
+    # Shared secret authenticating server-to-server calls from the bot (e.g.
+    # relaying a Telegram Stars successful_payment) — not a user credential,
+    # never sent from the frontend. Must match INTERNAL_API_SECRET in the
+    # bot's own settings.
+    internal_api_secret: str = "dev_only_internal_secret"
     dev_mode: bool = False
     dev_user_telegram_id: int = 999000001
     environment: str = "development"

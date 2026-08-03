@@ -108,6 +108,7 @@ export interface Pack {
   name: string;
   description: string;
   price: number;
+  stars_price: number | null;
   image_path: string | null;
   card_count: number;
   guaranteed_min_rarity: Rarity | null;
@@ -140,6 +141,17 @@ export interface PackOpenResult {
   new_balance: number;
   referral_bonus_coins: number | null;
   collection_rewards: CollectionRewardGrant[];
+}
+
+export interface StarsInvoiceCreate {
+  invoice_link: string;
+  payload_token: string;
+  stars_amount: number;
+}
+
+export interface StarsInvoiceStatus {
+  status: "pending" | "completed";
+  result: PackOpenResult | null;
 }
 
 export interface MemoryStart {
