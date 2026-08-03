@@ -319,3 +319,94 @@ async def test_saboteur_levels_cleared_progresses_task(client, db_session, bot_t
     task_after = await _fetch_task(client, headers, "saboteur_levels")
     assert task_after["is_completed"] is True
     assert task_after["progress"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Repeatable task pool: a claimed task goes back into rotation and its
+# progress is tracked relative to when it was (re-)assigned, not the
+# player's lifetime total.
+# ---------------------------------------------------------------------------
+
+async def test_metric_counter_task_resets_progress_when_reassigned(client, db_session, bot_token):
+    from app.models.enums import Rarity
+    from tests.factories import create_pack
+
+    db_session.add(
+        TaskDefinition(
+            code="pack_opener_repeat", name="Pack opener", description="test", category=TaskCategory.regular,
+            condition_type=TaskConditionType.metric_counter, metric="packs_opened", target_value=1, reward_coins=10,
+        )
+    )
+    await db_session.commit()
+
+    await _register(client, db_session, 840008, bot_token)
+    headers = telegram_headers(840008, bot_token)
+    await _fetch_task(client, headers, "pack_opener_repeat")
+
+    await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(db_session, "repeat-pack-1", price=0, card_count=1, probabilities={Rarity.common: 1.0})
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={})
+    assert resp.status_code == 200
+
+    task_done = await _fetch_task(client, headers, "pack_opener_repeat")
+    assert task_done["is_completed"] is True
+    assert task_done["progress"] == 1
+
+    claim = await client.post(f"/api/v1/tasks/{task_done['user_task_id']}/claim", headers=headers)
+    assert claim.status_code == 200
+
+    # It's the only definition in the pool, so a plain refetch (no longer
+    # excluded, since that exclusion only applied to the claim's own refill)
+    # deterministically brings it right back — reset, not still "done".
+    task_reassigned = await _fetch_task(client, headers, "pack_opener_repeat")
+    assert task_reassigned["is_completed"] is False
+    assert task_reassigned["progress"] == 0
+
+    # Lifetime packs_opened is already 1 at this point — if progress were
+    # compared to the lifetime total instead of a fresh baseline, this
+    # reassigned instance would already read as complete with no further
+    # action. It must actually require a second pack.
+    pack2 = await create_pack(db_session, "repeat-pack-2", price=0, card_count=1, probabilities={Rarity.common: 1.0})
+    resp = await client.post(f"/api/v1/packs/{pack2.id}/open", headers=headers, json={})
+    assert resp.status_code == 200
+
+    task_after_second = await _fetch_task(client, headers, "pack_opener_repeat")
+    assert task_after_second["is_completed"] is True
+    assert task_after_second["progress"] == 1
+
+
+async def test_match_min_rating_task_is_repeatable_after_claim(client, db_session, bot_token):
+    db_session.add(
+        TaskDefinition(
+            code="repeat_squad_check", name="Squad check", description="test", category=TaskCategory.regular,
+            condition_type=TaskConditionType.match_min_rating, condition_params={"min_rating": 67},
+            target_value=1, reward_coins=10,
+        )
+    )
+    await db_session.commit()
+
+    user = await _register(client, db_session, 840009, bot_token)
+    headers = telegram_headers(840009, bot_token)
+    await _fetch_task(client, headers, "repeat_squad_check")
+
+    slots = await _build_full_squad(db_session, user.id)
+    resp = await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+    assert resp.status_code == 200
+
+    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    assert resp.status_code == 200
+
+    task_done = await _fetch_task(client, headers, "repeat_squad_check")
+    assert task_done["is_completed"] is True
+
+    claim = await client.post(f"/api/v1/tasks/{task_done['user_task_id']}/claim", headers=headers)
+    assert claim.status_code == 200
+
+    task_reassigned = await _fetch_task(client, headers, "repeat_squad_check")
+    assert task_reassigned["is_completed"] is False
+
+    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    assert resp.status_code == 200
+
+    task_done_again = await _fetch_task(client, headers, "repeat_squad_check")
+    assert task_done_again["is_completed"] is True

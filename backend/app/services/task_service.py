@@ -1,13 +1,15 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
-from app.models.enums import TaskCategory, TaskConditionType, TransactionType
-from app.models.pack import Pack
+from app.models.card import UserCard
+from app.models.enums import TaskCategory, TaskConditionType, TradeStatus, TransactionType
+from app.models.pack import Pack, PackOpening
 from app.models.task import TaskDefinition, UserTask
+from app.models.trade import TradeOffer
 from app.models.user import User
 from app.schemas.pack import PackOpenResult
 from app.schemas.task import TaskClaimOut, TaskListOut, TaskOut
@@ -22,16 +24,65 @@ async def _assigned_definition_ids(db: AsyncSession, user_id: int) -> set[int]:
     return set(result.scalars().all())
 
 
-async def _ensure_slots_filled(db: AsyncSession, user: User) -> None:
-    occupied_result = await db.execute(
-        select(UserTask.slot_index).where(UserTask.user_id == user.id, UserTask.slot_index.isnot(None))
-    )
-    occupied = set(occupied_result.scalars().all())
-    empty_slots = [i for i in range(REGULAR_SLOT_COUNT) if i not in occupied]
+async def _current_metric_value(db: AsyncSession, user: User, metric: Optional[str]) -> int:
+    """Current value of a metric_counter metric, used to snapshot a task's
+    `metric_baseline` at (re-)assignment time. Every metric a task can use
+    (see AdminTasksPage.tsx's hint text) must be handled here — add new ones
+    alongside their `evaluate_metric_progress` call site."""
+    if metric == "referrals_count":
+        return user.referral_count
+    if metric == "arena_clean_sheet_wins":
+        return user.arena_clean_sheet_wins
+    if metric == "memory_levels_completed":
+        return user.memory_levels_completed
+    if metric == "saboteur_levels_cleared":
+        return user.saboteur_levels_cleared
+    if metric == "packs_opened":
+        return (
+            await db.execute(select(func.count(PackOpening.id)).where(PackOpening.user_id == user.id))
+        ).scalar_one()
+    if metric == "unique_players":
+        return (
+            await db.execute(
+                select(func.count(func.distinct(UserCard.player_id))).where(UserCard.owner_id == user.id)
+            )
+        ).scalar_one()
+    if metric == "trades_completed":
+        return (
+            await db.execute(
+                select(func.count(TradeOffer.id)).where(
+                    TradeOffer.status == TradeStatus.accepted,
+                    or_(TradeOffer.sender_id == user.id, TradeOffer.receiver_id == user.id),
+                )
+            )
+        ).scalar_one()
+    return 0
+
+
+async def _ensure_slots_filled(
+    db: AsyncSession, user: User, just_freed_definition_id: Optional[int] = None
+) -> None:
+    """Fills empty regular slots. Tasks are a repeatable pool, not one-shot:
+    a definition the player already completed and claimed (its row's
+    `slot_index` was cleared back to None) is just as eligible to be picked
+    again as one they've never seen — its row is reset and reused rather than
+    inserted anew, since (user_id, task_definition_id) is unique. The one
+    exception is `just_freed_definition_id`, passed by `claim_task_reward`
+    for the specific slot it just vacated, so completing a task doesn't
+    immediately hand the player that same task back in the same breath —
+    it's simply excluded from *this* refill pass, not from future ones."""
+    result = await db.execute(select(UserTask).where(UserTask.user_id == user.id))
+    rows_by_definition = {ut.task_definition_id: ut for ut in result.scalars().all()}
+
+    occupied_slots = {ut.slot_index for ut in rows_by_definition.values() if ut.slot_index is not None}
+    empty_slots = [i for i in range(REGULAR_SLOT_COUNT) if i not in occupied_slots]
     if not empty_slots:
         return
 
-    excluded = await _assigned_definition_ids(db, user.id)
+    excluded = {did for did, ut in rows_by_definition.items() if ut.slot_index is not None}
+    if just_freed_definition_id is not None:
+        excluded.add(just_freed_definition_id)
+
     for slot_index in empty_slots:
         conditions = [TaskDefinition.is_active.is_(True), TaskDefinition.category == TaskCategory.regular]
         if excluded:
@@ -40,7 +91,26 @@ async def _ensure_slots_filled(db: AsyncSession, user: User) -> None:
         definition = result.scalar_one_or_none()
         if definition is None:
             continue
-        db.add(UserTask(user_id=user.id, task_definition_id=definition.id, slot_index=slot_index))
+
+        baseline = (
+            await _current_metric_value(db, user, definition.metric)
+            if definition.condition_type == TaskConditionType.metric_counter
+            else None
+        )
+        existing_row = rows_by_definition.get(definition.id)
+        if existing_row is not None:
+            existing_row.slot_index = slot_index
+            existing_row.progress = 0
+            existing_row.completed_at = None
+            existing_row.reward_claimed = False
+            existing_row.metric_baseline = baseline
+            db.add(existing_row)
+        else:
+            new_row = UserTask(
+                user_id=user.id, task_definition_id=definition.id, slot_index=slot_index, metric_baseline=baseline,
+            )
+            db.add(new_row)
+            rows_by_definition[definition.id] = new_row
         await db.flush()
         excluded.add(definition.id)
 
@@ -128,8 +198,12 @@ async def evaluate_metric_progress(db: AsyncSession, user: User, metric: str, va
         )
     )
     for user_task, definition in result.all():
-        user_task.progress = value
-        if value >= definition.target_value:
+        # Relative to the value snapshotted when this task instance was
+        # (re-)assigned, so a repeated task always needs `target_value` more
+        # from that point on, not the player's lifetime total.
+        progress = max(0, value - (user_task.metric_baseline or 0))
+        user_task.progress = progress
+        if progress >= definition.target_value:
             user_task.completed_at = datetime.now(timezone.utc)
         db.add(user_task)
 
@@ -254,7 +328,7 @@ async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> 
         user_task.slot_index = None
         db.add(user_task)
         await db.flush()
-        await _ensure_slots_filled(db, locked_user)
+        await _ensure_slots_filled(db, locked_user, just_freed_definition_id=definition.id)
         await db.flush()
         new_slot_result = await db.execute(
             select(UserTask, TaskDefinition)

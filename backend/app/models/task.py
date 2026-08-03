@@ -46,6 +46,12 @@ class UserTask(Base):
     )
     slot_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Snapshot of the metric's value at the moment this task instance was
+    # (re-)assigned, for metric_counter tasks — progress is tracked relative
+    # to this so a repeated task always needs `target_value` *more* from the
+    # point it was (re-)assigned, not the player's all-time total. Unused for
+    # non-metric_counter condition types.
+    metric_baseline: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     reward_claimed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
