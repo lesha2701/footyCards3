@@ -34,6 +34,7 @@ export interface UserMe {
   memory_best_score: number;
   tactics_rating: number;
   created_at: string;
+  active_badge: Badge | null;
 }
 
 export interface AuthResponse {
@@ -102,6 +103,15 @@ export interface PackRarityProbability {
   probability: number;
 }
 
+export interface Badge {
+  id: number;
+  name: string;
+  icon: string;
+  image_path: string | null;
+  is_active: boolean;
+  sort_order: number;
+}
+
 export interface Pack {
   id: number;
   slug: string;
@@ -109,6 +119,9 @@ export interface Pack {
   description: string;
   price: number;
   stars_price: number | null;
+  bonus_coins: number | null;
+  badge_id: number | null;
+  badge: Badge | null;
   image_path: string | null;
   card_count: number;
   guaranteed_min_rarity: Rarity | null;
@@ -160,10 +173,12 @@ export interface StarsInvoiceStatus {
   coin_result: StarsCoinResult | null;
 }
 
-export interface StarsCoinRate {
-  stars_to_coins_rate: number;
-  stars_bulk_threshold: number;
-  stars_bulk_bonus_pct: number;
+export interface CoinPackage {
+  id: number;
+  stars_price: number;
+  coins_amount: number;
+  is_active: boolean;
+  sort_order: number;
 }
 
 export interface MemoryStart {
@@ -299,6 +314,7 @@ export interface RankingEntry {
   display_name: string;
   avatar_url: string | null;
   value: number;
+  active_badge: Badge | null;
 }
 
 export interface RankingResult {
@@ -316,6 +332,7 @@ export interface UserPublic {
   level: number;
   arena_rating: number;
   created_at: string;
+  active_badge: Badge | null;
 }
 
 export interface TradeOffer {
@@ -434,6 +451,7 @@ export interface ProfilePublic {
   rarest_card: Player | null;
   packs_opened: number;
   referral_count: number;
+  active_badge: Badge | null;
 }
 
 export interface ProfilePrivate extends ProfilePublic {

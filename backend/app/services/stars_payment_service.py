@@ -8,37 +8,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.exceptions import ConflictError, NotFoundError
+from app.models.badge import UserBadge
+from app.models.coin_package import CoinPackage
 from app.models.enums import CardSource, TransactionType
 from app.models.pack import Pack, PackOpening, StarsInvoice
 from app.models.user import User
 from app.schemas.stars import (
-    StarsCoinRateOut,
+    CoinPackageOut,
     StarsCoinResultOut,
     StarsInvoiceCreateOut,
     StarsInvoiceStatusOut,
 )
 from app.services import collection_service
-from app.services.game_config_service import get_config
 from app.services.pack_service import get_opening_result, grant_bonus_pack_opening
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
 settings = get_settings()
 
 
-def coins_for_stars(stars_amount: int, rate: int, bulk_threshold: int, bulk_bonus_pct: float) -> int:
-    coins = stars_amount * rate
-    if stars_amount >= bulk_threshold:
-        coins = round(coins * (1 + bulk_bonus_pct))
-    return coins
-
-
-async def get_coin_rate(db: AsyncSession) -> StarsCoinRateOut:
-    config = await get_config(db)
-    return StarsCoinRateOut(
-        stars_to_coins_rate=config.stars_to_coins_rate,
-        stars_bulk_threshold=config.stars_bulk_threshold,
-        stars_bulk_bonus_pct=float(config.stars_bulk_bonus_pct),
+async def list_active_coin_packages(db: AsyncSession) -> list[CoinPackageOut]:
+    result = await db.execute(
+        select(CoinPackage).where(CoinPackage.is_active.is_(True)).order_by(CoinPackage.sort_order)
     )
+    return [CoinPackageOut.model_validate(p) for p in result.scalars().all()]
 
 
 async def _get_invoice_or_404(db: AsyncSession, payload_token: str) -> StarsInvoice:
@@ -110,14 +102,16 @@ async def create_invoice(db: AsyncSession, user: User, pack_id: int) -> StarsInv
     return StarsInvoiceCreateOut(invoice_link=invoice_link, payload_token=payload_token, stars_amount=pack.stars_price)
 
 
-async def create_coin_invoice(db: AsyncSession, user: User, stars_amount: int) -> StarsInvoiceCreateOut:
-    if stars_amount <= 0:
-        raise ConflictError("stars_amount must be positive")
+async def create_coin_invoice(db: AsyncSession, user: User, coin_package_id: int) -> StarsInvoiceCreateOut:
+    package = await db.get(CoinPackage, coin_package_id)
+    if package is None or not package.is_active:
+        raise NotFoundError("Coin package not found")
 
-    config = await get_config(db)
-    coins = coins_for_stars(
-        stars_amount, config.stars_to_coins_rate, config.stars_bulk_threshold, float(config.stars_bulk_bonus_pct)
-    )
+    # Frozen from the package at invoice-creation time (not re-read at
+    # delivery), so an admin editing/deactivating the package mid-purchase
+    # can't affect a payment already in flight.
+    stars_amount = package.stars_price
+    coins = package.coins_amount
 
     payload_token = secrets.token_urlsafe(16)
     invoice = StarsInvoice(
@@ -163,6 +157,19 @@ async def validate_pre_checkout(db: AsyncSession, payload_token: str, total_amou
         if pack is None or not pack.is_active or pack.stars_price != total_amount:
             return False, "This pack is no longer available"
     return True, ""
+
+
+async def _grant_pack_badge(db: AsyncSession, user: User, badge_id: int) -> None:
+    """Grants ownership of `badge_id` to `user` (idempotent — a repeat
+    delivery or a user who already owns it from an earlier purchase is a
+    no-op) and auto-equips it as their active badge."""
+    existing = await db.execute(
+        select(UserBadge).where(UserBadge.user_id == user.id, UserBadge.badge_id == badge_id)
+    )
+    if existing.scalar_one_or_none() is None:
+        db.add(UserBadge(user_id=user.id, badge_id=badge_id))
+    user.active_badge_id = badge_id
+    db.add(user)
 
 
 async def deliver_payment(
@@ -217,6 +224,16 @@ async def deliver_payment(
             db, user, [item.card.player.id for item in granted.cards]
         )
         invoice.pack_opening_id = granted.opening_id
+
+        if pack.bonus_coins:
+            user = await lock_user_for_update(db, user.id)
+            await credit_coins(
+                db, user, pack.bonus_coins, TransactionType.stars_pack_bonus_coins,
+                f"Бонус монет за пак «{pack.name}»",
+                related_object_type="stars_invoice", related_object_id=invoice.id,
+            )
+        if pack.badge_id:
+            await _grant_pack_badge(db, user, pack.badge_id)
     else:
         if invoice.stars_amount != total_amount:
             raise ConflictError("Stars amount does not match the invoice")

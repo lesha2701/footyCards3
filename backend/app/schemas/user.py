@@ -3,6 +3,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.badge import BadgeOut
+
 
 class UserPublicOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -15,6 +17,7 @@ class UserPublicOut(BaseModel):
     level: int
     arena_rating: int
     created_at: datetime
+    active_badge: Optional[BadgeOut] = None
 
 
 class UserMeOut(BaseModel):
@@ -37,6 +40,7 @@ class UserMeOut(BaseModel):
     memory_best_score: int
     tactics_rating: int
     created_at: datetime
+    active_badge: Optional[BadgeOut] = None
 
 
 class AuthResponse(BaseModel):

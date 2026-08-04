@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { fetchRanking } from "@/api/leaderboard";
 import EmptyState from "@/components/common/EmptyState";
+import { UserBadge } from "@/components/common/UserBadge";
 import { IconBall, IconCollection, IconFlagCheckered, IconHandshake, IconTrophy, IconUsers, type IconProps } from "@/components/icons";
 import { useAuthStore } from "@/store/authStore";
 import type { RankingEntry, RankingMetric } from "@/types";
@@ -77,6 +78,7 @@ function RankingRow({ entry, highlight = false }: { entry: RankingEntry; highlig
       <div className="flex items-center gap-2">
         <span className="w-6 text-center font-mono text-sm font-bold text-ink-mist-dim">{entry.rank}</span>
         <span className={highlight ? "font-semibold text-accent-lime" : "text-ink-chalk"}>{entry.display_name}</span>
+        <UserBadge badge={entry.active_badge} />
       </div>
       <span className="font-mono font-bold text-accent-cyan">{entry.value}</span>
     </div>

@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { Page, Pack, Player, TradeOffer, TradeStatus } from "@/types";
+import type { Badge, CoinPackage, Page, Pack, Player, TradeOffer, TradeStatus } from "@/types";
 import type {
   AdminActionLog,
   AdminUser,
@@ -258,6 +258,60 @@ export async function fetchSuspiciousMemorySessions(): Promise<SuspiciousMemoryS
 export async function fetchSuspiciousMatches(): Promise<SuspiciousMatch[]> {
   const { data } = await api.get<SuspiciousMatch[]>("/admin/games/suspicious-matches");
   return data;
+}
+
+// --- Badges ---
+export async function fetchAdminBadges(): Promise<Badge[]> {
+  const { data } = await api.get<Badge[]>("/admin/badges");
+  return data;
+}
+
+export async function createBadge(payload: Record<string, unknown>): Promise<Badge> {
+  const { data } = await api.post<Badge>("/admin/badges", payload);
+  return data;
+}
+
+export async function updateBadge(id: number, payload: Record<string, unknown>): Promise<Badge> {
+  const { data } = await api.put<Badge>(`/admin/badges/${id}`, payload);
+  return data;
+}
+
+export async function deleteBadge(id: number): Promise<void> {
+  await api.delete(`/admin/badges/${id}`);
+}
+
+export async function uploadBadgeImage(id: number, file: File): Promise<Badge> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<Badge>(`/admin/badges/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function deleteBadgeImage(id: number): Promise<Badge> {
+  const { data } = await api.delete<Badge>(`/admin/badges/${id}/image`);
+  return data;
+}
+
+// --- Coin packages ---
+export async function fetchAdminCoinPackages(): Promise<CoinPackage[]> {
+  const { data } = await api.get<CoinPackage[]>("/admin/coin-packages");
+  return data;
+}
+
+export async function createCoinPackage(payload: Record<string, unknown>): Promise<CoinPackage> {
+  const { data } = await api.post<CoinPackage>("/admin/coin-packages", payload);
+  return data;
+}
+
+export async function updateCoinPackage(id: number, payload: Record<string, unknown>): Promise<CoinPackage> {
+  const { data } = await api.put<CoinPackage>(`/admin/coin-packages/${id}`, payload);
+  return data;
+}
+
+export async function deleteCoinPackage(id: number): Promise<void> {
+  await api.delete(`/admin/coin-packages/${id}`);
 }
 
 // --- Log ---

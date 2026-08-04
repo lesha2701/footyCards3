@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import UserCard
 from app.models.user import User
+from app.schemas.badge import BadgeOut
 from app.schemas.ranking import RankingEntry, RankingMetric, RankingOut
 
 _DIRECT_COLUMNS = {
@@ -39,7 +40,14 @@ async def get_ranking(db: AsyncSession, metric: RankingMetric, current_user: Use
     rows = (await db.execute(stmt)).all()
 
     def to_entry(rank: int, user: User, value) -> RankingEntry:
-        return RankingEntry(rank=rank, user_id=user.id, display_name=user.full_display_name(), avatar_url=user.avatar_url, value=int(value or 0))
+        return RankingEntry(
+            rank=rank,
+            user_id=user.id,
+            display_name=user.full_display_name(),
+            avatar_url=user.avatar_url,
+            value=int(value or 0),
+            active_badge=BadgeOut.model_validate(user.active_badge) if user.active_badge else None,
+        )
 
     top = [to_entry(i + 1, user, value) for i, (user, value) in enumerate(rows[:limit])]
 

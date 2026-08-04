@@ -5,6 +5,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { RevealStage, STAGES, STAGE_DURATION_MS } from "@/components/cards/CardRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
+import { UserBadge } from "@/components/common/UserBadge";
 import { IconCoin, IconHandshake, IconTag } from "@/components/icons";
 import { openPack } from "@/api/packs";
 import { ApiRequestError, staticUrl } from "@/lib/api";
@@ -98,7 +99,13 @@ export default function PackOpenPage() {
     // A single-card pack has already shown its one card in full during the
     // reveal stage above — if there's no reward banner to add, a follow-up
     // "Pack opened" screen re-displaying that same card is pure friction.
-    if (result.cards.length === 1 && !result.referral_bonus_coins && result.collection_rewards.length === 0) {
+    if (
+      result.cards.length === 1 &&
+      !result.referral_bonus_coins &&
+      result.collection_rewards.length === 0 &&
+      !result.pack.bonus_coins &&
+      !result.pack.badge
+    ) {
       navigate("/packs");
       return;
     }
@@ -202,6 +209,22 @@ function Summary({ result, onDone }: { result: PackOpenResult; onDone: () => voi
   return (
     <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
       {showRecap && <h2 className="text-center font-display text-2xl font-bold text-ink-chalk">Пак открыт!</h2>}
+      {!!result.pack.bonus_coins && (
+        <div className="flex items-center justify-center gap-2 rounded-2xl bg-amber-400/10 px-4 py-3 text-center">
+          <IconCoin size={18} className="text-amber-300" />
+          <p className="text-sm font-semibold text-amber-300">
+            Бонус пака: +{result.pack.bonus_coins}
+          </p>
+        </div>
+      )}
+      {result.pack.badge && (
+        <div className="flex items-center justify-center gap-2 rounded-2xl bg-amber-400/10 px-4 py-3 text-center">
+          <UserBadge badge={result.pack.badge} className="h-5 w-5 text-lg" />
+          <p className="text-sm font-semibold text-amber-300">
+            Новый значок: {result.pack.badge.name}
+          </p>
+        </div>
+      )}
       {!!result.referral_bonus_coins && (
         <div className="flex items-center justify-center gap-2 rounded-2xl bg-accent-lime/10 px-4 py-3 text-center">
           <IconHandshake size={18} className="text-accent-lime" />

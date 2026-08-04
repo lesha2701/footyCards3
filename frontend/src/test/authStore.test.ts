@@ -21,6 +21,7 @@ const baseUser: UserMe = {
   memory_best_score: 0,
   tactics_rating: 0,
   created_at: new Date().toISOString(),
+  active_badge: null,
 };
 
 describe("authStore", () => {

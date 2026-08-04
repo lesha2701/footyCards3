@@ -12,6 +12,7 @@ import AdminCardCollectionsPage from "@/admin/pages/AdminCardCollectionsPage";
 import AdminTasksPage from "@/admin/pages/AdminTasksPage";
 import AdminTradesPage from "@/admin/pages/AdminTradesPage";
 import AdminGamesPage from "@/admin/pages/AdminGamesPage";
+import AdminShopPage from "@/admin/pages/AdminShopPage";
 import AdminLogPage from "@/admin/pages/AdminLogPage";
 import HomePage from "@/pages/HomePage";
 import PacksPage from "@/pages/PacksPage";
@@ -106,6 +107,7 @@ export default function App() {
         <Route path="tasks" element={<AdminTasksPage />} />
         <Route path="trades" element={<AdminTradesPage />} />
         <Route path="games" element={<AdminGamesPage />} />
+        <Route path="shop" element={<AdminShopPage />} />
         <Route path="log" element={<AdminLogPage />} />
       </Route>
 

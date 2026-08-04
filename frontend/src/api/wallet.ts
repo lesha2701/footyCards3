@@ -1,13 +1,13 @@
 import { api } from "@/lib/api";
-import type { StarsCoinRate, StarsInvoiceCreate, StarsInvoiceStatus } from "@/types";
+import type { CoinPackage, StarsInvoiceCreate, StarsInvoiceStatus } from "@/types";
 
-export async function fetchStarsCoinRate(): Promise<StarsCoinRate> {
-  const { data } = await api.get<StarsCoinRate>("/wallet/stars-coin-rate");
+export async function fetchCoinPackages(): Promise<CoinPackage[]> {
+  const { data } = await api.get<CoinPackage[]>("/wallet/coin-packages");
   return data;
 }
 
-export async function createCoinInvoice(starsAmount: number): Promise<StarsInvoiceCreate> {
-  const { data } = await api.post<StarsInvoiceCreate>("/wallet/stars-invoice", { stars_amount: starsAmount });
+export async function createCoinInvoice(coinPackageId: number): Promise<StarsInvoiceCreate> {
+  const { data } = await api.post<StarsInvoiceCreate>("/wallet/stars-invoice", { coin_package_id: coinPackageId });
   return data;
 }
 

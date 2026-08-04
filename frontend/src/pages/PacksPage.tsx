@@ -200,6 +200,21 @@ function StarsPackCard({ pack, onPurchased }: { pack: Pack; onPurchased: (result
                   {RARITY_LABELS[rp.rarity]} {Math.round(rp.probability * 100)}%
                 </span>
               ))}
+              {!!pack.bonus_coins && (
+                <span className="flex items-center gap-1 rounded-full bg-accent-lime/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-accent-lime">
+                  <IconCoin size={10} />+{pack.bonus_coins}
+                </span>
+              )}
+              {pack.badge && (
+                <span className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-amber-300">
+                  {pack.badge.image_path ? (
+                    <img src={staticUrl(pack.badge.image_path) ?? undefined} className="h-3 w-3 rounded-full object-cover" />
+                  ) : (
+                    <span>{pack.badge.icon}</span>
+                  )}
+                  {pack.badge.name}
+                </span>
+              )}
             </div>
             {error && <p className="mt-2 text-[11px] text-red-400">{error}</p>}
           </div>

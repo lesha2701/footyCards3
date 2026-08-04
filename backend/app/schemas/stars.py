@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.schemas.pack import PackOpenResult
 
@@ -23,13 +23,17 @@ class StarsInvoiceStatusOut(BaseModel):
 
 
 class StarsCoinInvoiceCreate(BaseModel):
-    stars_amount: int
+    coin_package_id: int
 
 
-class StarsCoinRateOut(BaseModel):
-    stars_to_coins_rate: int
-    stars_bulk_threshold: int
-    stars_bulk_bonus_pct: float
+class CoinPackageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    stars_price: int
+    coins_amount: int
+    is_active: bool
+    sort_order: int
 
 
 class StarsPreCheckoutValidateIn(BaseModel):

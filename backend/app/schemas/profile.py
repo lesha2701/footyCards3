@@ -3,6 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.schemas.badge import BadgeOut
 from app.schemas.player import PlayerOut
 
 
@@ -16,6 +17,7 @@ class ProfilePublicOut(BaseModel):
     level: int
     arena_rating: int
     arena_rank: int
+    active_badge: Optional[BadgeOut] = None
     matches_won: int
     matches_drawn: int
     matches_lost: int

@@ -10,6 +10,7 @@ const SECTIONS = [
   { to: "/admin/tasks", label: "Задания", icon: "🎯" },
   { to: "/admin/trades", label: "Обмены", icon: "🔄" },
   { to: "/admin/games", label: "Игры", icon: "🎮" },
+  { to: "/admin/shop", label: "Магазин", icon: "🛒" },
   { to: "/admin/log", label: "Журнал", icon: "📜" },
 ];
 

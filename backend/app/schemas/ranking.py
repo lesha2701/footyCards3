@@ -3,6 +3,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.schemas.badge import BadgeOut
+
 
 class RankingMetric(str, enum.Enum):
     arena_rating = "arena_rating"
@@ -19,6 +21,7 @@ class RankingEntry(BaseModel):
     display_name: str
     avatar_url: Optional[str]
     value: int
+    active_badge: Optional[BadgeOut] = None
 
 
 class RankingOut(BaseModel):

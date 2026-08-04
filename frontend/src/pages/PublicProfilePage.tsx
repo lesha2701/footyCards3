@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 
 import LoadingScreen from "@/components/common/LoadingScreen";
+import { UserBadge } from "@/components/common/UserBadge";
 import { IconChevronLeft } from "@/components/icons";
 import { fetchPublicProfile } from "@/api/profile";
 import { staticUrl } from "@/lib/api";
@@ -30,7 +31,10 @@ export default function PublicProfilePage() {
           alt="avatar"
           className="h-20 w-20 rounded-full ring-2 ring-accent-lime object-cover"
         />
-        <p className="font-display text-xl font-bold text-ink-chalk">{profile.first_name} {profile.last_name}</p>
+        <p className="flex items-center gap-1.5 font-display text-xl font-bold text-ink-chalk">
+          {profile.first_name} {profile.last_name}
+          <UserBadge badge={profile.active_badge} />
+        </p>
         {profile.username && <p className="text-sm text-ink-mist">@{profile.username}</p>}
         <p className="text-xs text-ink-mist-dim">С нами с {new Date(profile.created_at).toLocaleDateString("ru-RU")}</p>
       </section>

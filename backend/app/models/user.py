@@ -100,6 +100,15 @@ class User(TimestampMixin, Base):
     # Trade privacy
     accept_trades: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    # Currently-equipped Badge (if any), shown next to this user's name
+    # everywhere a public identity is rendered. `lazy="joined"` so every
+    # query touching User eager-loads it — this is read almost everywhere
+    # User is serialized, and async SQLAlchemy can't lazy-load on demand.
+    active_badge_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("badges.id", ondelete="SET NULL"), nullable=True
+    )
+    active_badge: Mapped[Optional["Badge"]] = relationship(lazy="joined")
+
     cards: Mapped[list["UserCard"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
 
     def full_display_name(self) -> str:

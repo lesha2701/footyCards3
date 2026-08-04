@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import EmptyState from "@/components/common/EmptyState";
+import { UserBadge } from "@/components/common/UserBadge";
 import { IconCoin, IconPlus, IconSwap } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { acceptTradeOffer, cancelTradeOffer, fetchTradeOffers, rejectTradeOffer } from "@/api/trades";
@@ -104,8 +105,9 @@ function TradeCard({
   return (
     <div className="rounded-2xl bg-bg-surface p-4">
       <div className="flex items-center justify-between text-sm">
-        <span className="text-ink-mist">
+        <span className="flex items-center gap-1 text-ink-mist">
           {isSender ? `Кому: ${offer.receiver.username ?? offer.receiver.first_name}` : `От: ${offer.sender.username ?? offer.sender.first_name}`}
+          <UserBadge badge={isSender ? offer.receiver.active_badge : offer.sender.active_badge} />
         </span>
         <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-ink-mist-dim">{STATUS_LABELS[offer.status]}</span>
       </div>

@@ -30,6 +30,11 @@ class Pack(TimestampMixin, Base):
     # coins — such a pack's `price` is irrelevant/0 and the normal coin
     # purchase endpoint refuses it (see pack_service.open_pack).
     stars_price: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Extra rewards on top of the cards themselves — only meaningful for
+    # Stars packs, granted once at delivery time (see
+    # stars_payment_service.deliver_payment).
+    bonus_coins: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    badge_id: Mapped[Optional[int]] = mapped_column(ForeignKey("badges.id", ondelete="SET NULL"), nullable=True)
     image_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     card_count: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     guaranteed_min_rarity: Mapped[Optional[Rarity]] = mapped_column(
@@ -44,6 +49,7 @@ class Pack(TimestampMixin, Base):
     rarity_probabilities: Mapped[list["PackRarityProbability"]] = relationship(
         back_populates="pack", cascade="all, delete-orphan"
     )
+    badge: Mapped[Optional["Badge"]] = relationship(lazy="joined")
 
 
 class PackRarityProbability(Base):

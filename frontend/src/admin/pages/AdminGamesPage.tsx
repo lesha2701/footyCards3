@@ -67,15 +67,6 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-3 font-display text-base font-bold">Покупка монет за Telegram Stars</p>
-        <div className="grid grid-cols-2 gap-3">
-          {field("stars_to_coins_rate", "Курс: монет за 1 ⭐")}
-          {field("stars_bulk_threshold", "Порог для бонуса, ⭐")}
-          {field("stars_bulk_bonus_pct", "Бонус за опт (0-1, напр. 0.10 = 10%)")}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Memory Sequence</p>
         <div className="grid grid-cols-2 gap-3">
           {field("memory_daily_reward_limit", "Лимит наградных попыток/день")}

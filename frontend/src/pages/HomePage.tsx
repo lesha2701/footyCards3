@@ -38,6 +38,7 @@ export default function HomePage() {
 
   const { data: calendar } = useQuery({ queryKey: ["daily-reward-calendar"], queryFn: fetchDailyRewardCalendar });
   const { data: packs, isLoading: packsLoading } = useQuery({ queryKey: ["packs"], queryFn: fetchPacks });
+  const coinPacks = packs?.filter((p) => p.stars_price == null);
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
   const { data: taskList } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const { data: freePackStatus } = useQuery({
@@ -116,43 +117,45 @@ export default function HomePage() {
         )}
       </div>
 
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-base font-bold text-ink-chalk">Доступные паки</h2>
-          <button onClick={() => navigate("/packs")} className="font-mono text-xs text-accent-lime">Все паки →</button>
-        </div>
-        {packsLoading ? (
-          <div className="grid grid-cols-2 gap-3">
-            <Skeleton className="h-28 rounded-2xl" />
-            <Skeleton className="h-28 rounded-2xl" />
+      {(packsLoading || !!coinPacks?.length) && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-base font-bold text-ink-chalk">Доступные паки</h2>
+            <button onClick={() => navigate("/packs")} className="font-mono text-xs text-accent-lime">Все паки →</button>
           </div>
-        ) : (
-          <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1">
-            {chunkPairs(sortPacksByPrice(packs ?? [])).map((pair, i) => (
-              <div key={i} className="grid w-full shrink-0 snap-start grid-cols-2 gap-3">
-                {pair.map((pack) => (
-                  <button
-                    key={pack.id}
-                    onClick={() => navigate("/packs")}
-                    className="flex flex-col items-center gap-2 rounded-2xl bg-bg-surface py-4 active:scale-95"
-                  >
-                    <img
-                      src={staticUrl(pack.image_path ?? undefined)}
-                      alt={pack.name}
-                      className="h-16 w-16 rounded-2xl object-cover"
-                    />
-                    <p className="truncate px-1 text-xs font-semibold text-ink-chalk">{pack.name}</p>
-                    <p className="flex items-center gap-1 font-mono text-[11px] text-accent-lime">
-                      <IconCoin size={11} />
-                      {pack.price}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+          {packsLoading ? (
+            <div className="grid grid-cols-2 gap-3">
+              <Skeleton className="h-28 rounded-2xl" />
+              <Skeleton className="h-28 rounded-2xl" />
+            </div>
+          ) : (
+            <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1">
+              {chunkPairs(sortPacksByPrice(coinPacks ?? [])).map((pair, i) => (
+                <div key={i} className="grid w-full shrink-0 snap-start grid-cols-2 gap-3">
+                  {pair.map((pack) => (
+                    <button
+                      key={pack.id}
+                      onClick={() => navigate("/packs")}
+                      className="flex flex-col items-center gap-2 rounded-2xl bg-bg-surface py-4 active:scale-95"
+                    >
+                      <img
+                        src={staticUrl(pack.image_path ?? undefined)}
+                        alt={pack.name}
+                        className="h-16 w-16 rounded-2xl object-cover"
+                      />
+                      <p className="truncate px-1 text-xs font-semibold text-ink-chalk">{pack.name}</p>
+                      <p className="flex items-center gap-1 font-mono text-[11px] text-accent-lime">
+                        <IconCoin size={12} />
+                        {pack.price}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {profile && (
         <section className="rounded-2xl bg-bg-surface p-4">

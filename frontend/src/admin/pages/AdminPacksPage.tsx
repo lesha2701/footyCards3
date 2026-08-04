@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
-import { createPack, deletePack, fetchAdminPacks, previewPack, togglePackActive, updatePack, uploadPackImage } from "@/admin/api";
+import { createPack, deletePack, fetchAdminBadges, fetchAdminPacks, previewPack, togglePackActive, updatePack, uploadPackImage } from "@/admin/api";
 import type { PackPreview } from "@/admin/types";
 import NumberInput from "@/components/common/NumberInput";
 import { ApiRequestError, staticUrl } from "@/lib/api";
@@ -21,6 +21,8 @@ interface PackForm {
   description: string;
   price: number;
   stars_price: number | "";
+  bonus_coins: number | "";
+  badge_id: number | "";
   card_count: number;
   guaranteed_min_rarity: Rarity | "";
   is_active: boolean;
@@ -37,6 +39,8 @@ function packToForm(p?: Pack): PackForm {
     description: p?.description ?? "",
     price: p?.price ?? 100,
     stars_price: p?.stars_price ?? "",
+    bonus_coins: p?.bonus_coins ?? "",
+    badge_id: p?.badge_id ?? "",
     card_count: p?.card_count ?? 3,
     guaranteed_min_rarity: p?.guaranteed_min_rarity ?? "",
     is_active: p?.is_active ?? true,
@@ -48,6 +52,7 @@ function packToForm(p?: Pack): PackForm {
 export default function AdminPacksPage() {
   const queryClient = useQueryClient();
   const { data: packs, isLoading } = useQuery({ queryKey: ["admin-packs"], queryFn: fetchAdminPacks });
+  const { data: badges } = useQuery({ queryKey: ["admin-badges"], queryFn: fetchAdminBadges });
   const [editing, setEditing] = useState<Pack | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<PackForm>(packToForm());
@@ -74,6 +79,8 @@ export default function AdminPacksPage() {
     description: form.description,
     price: form.price,
     stars_price: form.stars_price === "" ? null : form.stars_price,
+    bonus_coins: form.bonus_coins === "" ? null : form.bonus_coins,
+    badge_id: form.badge_id === "" ? null : form.badge_id,
     card_count: form.card_count,
     guaranteed_min_rarity: form.guaranteed_min_rarity || null,
     is_active: form.is_active,
@@ -122,6 +129,13 @@ export default function AdminPacksPage() {
               <p className="text-xs text-slate-400">
                 {p.stars_price != null ? `⭐${p.stars_price} (только звёзды)` : `🪙${p.price}`} · {p.card_count} карт
               </p>
+              {(p.bonus_coins || p.badge) && (
+                <p className="text-xs text-amber-400">
+                  {p.bonus_coins ? `+${p.bonus_coins} монет` : ""}
+                  {p.bonus_coins && p.badge ? " · " : ""}
+                  {p.badge ? `${p.badge.icon} ${p.badge.name}` : ""}
+                </p>
+              )}
               <p className="text-xs text-slate-500">{p.is_active ? "Активен" : "Отключён"}</p>
               <div className="mt-2 flex flex-wrap gap-1">
                 <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
@@ -169,6 +183,30 @@ export default function AdminPacksPage() {
                   placeholder="Нет — обычная покупка за монеты"
                   className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
                 />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Бонусные монеты (доп. награда сверх карточек)</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.bonus_coins}
+                  onChange={(e) => setForm({ ...form, bonus_coins: e.target.value === "" ? "" : Number(e.target.value) })}
+                  placeholder="Нет"
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Значок в награду (выдаётся и надевается автоматически)</span>
+                <select
+                  value={form.badge_id}
+                  onChange={(e) => setForm({ ...form, badge_id: e.target.value ? Number(e.target.value) : "" })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                >
+                  <option value="">Нет</option>
+                  {badges?.map((b) => (
+                    <option key={b.id} value={b.id}>{b.icon} {b.name}</option>
+                  ))}
+                </select>
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Гарантированная минимальная редкость</span>

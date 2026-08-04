@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import Rarity
+from app.schemas.badge import BadgeOut
 from app.schemas.card import UserCardOut
 
 
@@ -23,6 +24,9 @@ class PackOut(BaseModel):
     description: str
     price: int
     stars_price: Optional[int] = None
+    bonus_coins: Optional[int] = None
+    badge_id: Optional[int] = None
+    badge: Optional[BadgeOut] = None
     image_path: Optional[str]
     card_count: int
     guaranteed_min_rarity: Optional[Rarity]
@@ -46,6 +50,8 @@ class PackCreate(BaseModel):
     description: str = ""
     price: int = Field(ge=0)
     stars_price: Optional[int] = Field(default=None, ge=1)
+    bonus_coins: Optional[int] = Field(default=None, ge=1)
+    badge_id: Optional[int] = None
     card_count: int = Field(ge=1, le=12)
     guaranteed_min_rarity: Optional[Rarity] = None
     is_active: bool = True
@@ -61,6 +67,8 @@ class PackUpdate(BaseModel):
     description: Optional[str] = None
     price: Optional[int] = Field(default=None, ge=0)
     stars_price: Optional[int] = Field(default=None, ge=1)
+    bonus_coins: Optional[int] = Field(default=None, ge=1)
+    badge_id: Optional[int] = None
     card_count: Optional[int] = Field(default=None, ge=1, le=12)
     guaranteed_min_rarity: Optional[Rarity] = None
     is_active: Optional[bool] = None

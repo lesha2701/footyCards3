@@ -125,9 +125,6 @@ export interface GameConfig {
   tactico_bot_optimal_pick_chance_hard: number;
   tactico_max_legendary_cards: number;
   tactico_max_epic_cards: number;
-  stars_to_coins_rate: number;
-  stars_bulk_threshold: number;
-  stars_bulk_bonus_pct: number;
 }
 
 export interface CardCollection {

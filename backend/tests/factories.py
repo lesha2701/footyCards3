@@ -1,5 +1,7 @@
 from sqlalchemy import select
 
+from app.models.badge import Badge
+from app.models.coin_package import CoinPackage
 from app.models.enums import Position, Rarity
 from app.models.pack import Pack, PackRarityProbability
 from app.models.player import Player
@@ -43,6 +45,26 @@ async def create_pack(session, slug: str, price: int, card_count: int, probabili
     await session.commit()
     await session.refresh(pack)
     return pack
+
+
+async def create_badge(session, name: str = "Test Badge", icon: str = "🏆", **overrides) -> Badge:
+    defaults = dict(is_active=True, sort_order=0)
+    defaults.update(overrides)
+    badge = Badge(name=name, icon=icon, **defaults)
+    session.add(badge)
+    await session.commit()
+    await session.refresh(badge)
+    return badge
+
+
+async def create_coin_package(session, stars_price: int, coins_amount: int, **overrides) -> CoinPackage:
+    defaults = dict(is_active=True, sort_order=0)
+    defaults.update(overrides)
+    package = CoinPackage(stars_price=stars_price, coins_amount=coins_amount, **defaults)
+    session.add(package)
+    await session.commit()
+    await session.refresh(package)
+    return package
 
 
 async def get_user_by_telegram_id(session, telegram_id: int) -> User:

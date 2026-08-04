@@ -5,7 +5,8 @@ import { useNavigate } from "react-router-dom";
 
 import { claimDailyReward, fetchDailyRewardCalendar } from "@/api/dailyRewards";
 import { fetchMyProfile, fetchMyTransactions, updateMySettings } from "@/api/profile";
-import { createCoinInvoice, fetchCoinInvoiceStatus, fetchStarsCoinRate } from "@/api/wallet";
+import { createCoinInvoice, fetchCoinInvoiceStatus, fetchCoinPackages } from "@/api/wallet";
+import { UserBadge } from "@/components/common/UserBadge";
 import {
   IconCoin,
   IconCollection,
@@ -21,7 +22,7 @@ import { ApiRequestError, staticUrl } from "@/lib/api";
 import { RARITY_GLOW, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import { hapticNotify, openTelegramInvoice } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { DailyRewardClaimResult } from "@/types";
+import type { CoinPackage, DailyRewardClaimResult } from "@/types";
 
 const TX_TYPE_LABELS: Record<string, string> = {
   starting_balance: "Стартовый бонус",
@@ -37,6 +38,7 @@ const TX_TYPE_LABELS: Record<string, string> = {
   admin_adjustment: "Корректировка администратором",
   referral_reward: "Реферальная награда",
   stars_coin_purchase: "Покупка монет за ⭐",
+  stars_pack_bonus_coins: "Бонус монет за пак",
 };
 
 function dayStreakLabel(days: number): string {
@@ -93,7 +95,10 @@ export default function ProfilePage() {
           alt="avatar"
           className="h-20 w-20 rounded-full ring-2 ring-accent-lime object-cover"
         />
-        <p className="font-display text-xl font-bold text-ink-chalk">{user.first_name} {user.last_name}</p>
+        <p className="flex items-center gap-1.5 font-display text-xl font-bold text-ink-chalk">
+          {user.first_name} {user.last_name}
+          <UserBadge badge={user.active_badge} />
+        </p>
         {user.username && <p className="text-sm text-ink-mist">@{user.username}</p>}
         <p className="text-xs text-ink-mist-dim">С нами с {new Date(user.created_at).toLocaleDateString("ru-RU")}</p>
         {profile.daily_login_streak > 0 && (
@@ -337,32 +342,25 @@ function DailyRewardResultModal({ result, onClose }: { result: DailyRewardClaimR
   );
 }
 
-function computeStarPresets(threshold: number): number[] {
-  const base = Math.max(1, Math.round(threshold / 5));
-  return Array.from(new Set([base, Math.round(threshold / 2), threshold, threshold * 2])).sort((a, b) => a - b);
-}
-
 function BuyCoinsModal({ onClose, onPurchased }: { onClose: () => void; onPurchased: (newBalance: number) => void }) {
-  const { data: rate } = useQuery({ queryKey: ["stars-coin-rate"], queryFn: fetchStarsCoinRate });
-  const [busyAmount, setBusyAmount] = useState<number | null>(null);
+  const { data: packages } = useQuery({ queryKey: ["coin-packages"], queryFn: fetchCoinPackages });
+  const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ coins: number; stars: number } | null>(null);
 
-  const presets = rate ? computeStarPresets(rate.stars_bulk_threshold) : [];
-
-  const handleBuy = async (stars: number) => {
+  const handleBuy = async (pkg: CoinPackage) => {
     setError(null);
-    setBusyAmount(stars);
+    setBusyId(pkg.id);
     try {
-      const invoice = await createCoinInvoice(stars);
+      const invoice = await createCoinInvoice(pkg.id);
       const paymentStatus = await openTelegramInvoice(invoice.invoice_link);
       if (paymentStatus === "cancelled") {
-        setBusyAmount(null);
+        setBusyId(null);
         return;
       }
       if (paymentStatus === "failed") {
         setError("Платёж не прошёл");
-        setBusyAmount(null);
+        setBusyId(null);
         return;
       }
 
@@ -371,8 +369,8 @@ function BuyCoinsModal({ onClose, onPurchased }: { onClose: () => void; onPurcha
         if (status.status === "completed" && status.coin_result) {
           hapticNotify("success");
           onPurchased(status.coin_result.new_balance);
-          setSuccess({ coins: status.coin_result.coins_credited, stars });
-          setBusyAmount(null);
+          setSuccess({ coins: status.coin_result.coins_credited, stars: pkg.stars_price });
+          setBusyId(null);
           return;
         }
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -380,7 +378,7 @@ function BuyCoinsModal({ onClose, onPurchased }: { onClose: () => void; onPurcha
       throw new Error("Монеты ещё не начислены — проверь баланс через минуту");
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : err instanceof Error ? err.message : "Не удалось купить монеты");
-      setBusyAmount(null);
+      setBusyId(null);
     }
   };
 
@@ -406,41 +404,22 @@ function BuyCoinsModal({ onClose, onPurchased }: { onClose: () => void; onPurcha
           </>
         ) : (
           <>
-            <p className="mt-1 text-xs text-ink-mist">
-              Курс: 1 ⭐ = {rate?.stars_to_coins_rate ?? "…"} монет
-              {rate && rate.stars_bulk_threshold > 0 && (
-                <> · от {rate.stars_bulk_threshold} ⭐ бонус +{Math.round(rate.stars_bulk_bonus_pct * 100)}%</>
-              )}
-            </p>
             {error && <p className="mt-2 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
             <div className="mt-4 flex flex-col gap-2">
-              {presets.map((stars) => {
-                const isBulk = !!rate && stars >= rate.stars_bulk_threshold;
-                const coins = rate
-                  ? Math.round(stars * rate.stars_to_coins_rate * (isBulk ? 1 + rate.stars_bulk_bonus_pct : 1))
-                  : 0;
-                return (
-                  <button
-                    key={stars}
-                    onClick={() => handleBuy(stars)}
-                    disabled={busyAmount !== null}
-                    className="flex items-center justify-between rounded-2xl bg-black/20 px-4 py-3 text-left disabled:opacity-40"
-                  >
-                    <span className="font-mono text-sm font-semibold text-ink-chalk">{stars} ⭐</span>
-                    <span className="flex items-center gap-2">
-                      {isBulk && (
-                        <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">
-                          +{Math.round(rate!.stars_bulk_bonus_pct * 100)}%
-                        </span>
-                      )}
-                      <span className="flex items-center gap-1 font-mono text-sm font-bold text-accent-lime">
-                        {busyAmount === stars ? "..." : `+${coins}`}
-                        <IconCoin size={13} />
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
+              {(packages ?? []).map((pkg) => (
+                <button
+                  key={pkg.id}
+                  onClick={() => handleBuy(pkg)}
+                  disabled={busyId !== null}
+                  className="flex items-center justify-between rounded-2xl bg-black/20 px-4 py-3 text-left disabled:opacity-40"
+                >
+                  <span className="font-mono text-sm font-semibold text-ink-chalk">{pkg.stars_price} ⭐</span>
+                  <span className="flex items-center gap-1 font-mono text-sm font-bold text-accent-lime">
+                    {busyId === pkg.id ? "..." : `+${pkg.coins_amount}`}
+                    <IconCoin size={13} />
+                  </span>
+                </button>
+              ))}
             </div>
             <button onClick={onClose} className="mt-4 w-full rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist active:scale-95">
               Отмена

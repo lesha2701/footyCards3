@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import EmptyState from "@/components/common/EmptyState";
+import { UserBadge } from "@/components/common/UserBadge";
 import { IconSearch } from "@/components/icons";
 import NumberInput from "@/components/common/NumberInput";
 import PlayerCard from "@/components/cards/PlayerCard";
@@ -80,7 +81,10 @@ export default function NewTradePage() {
                 onClick={() => setTarget(u)}
                 className="flex items-center justify-between rounded-xl bg-bg-surface px-4 py-3 text-left active:scale-[0.98]"
               >
-                <span className="text-sm text-ink-chalk">{u.username ?? u.first_name ?? `Игрок #${u.id}`}</span>
+                <span className="flex items-center gap-1 text-sm text-ink-chalk">
+                  {u.username ?? u.first_name ?? `Игрок #${u.id}`}
+                  <UserBadge badge={u.active_badge} />
+                </span>
                 <span className="text-xs text-ink-mist-dim">Ур. {u.level}</span>
               </button>
             ))}
@@ -92,7 +96,10 @@ export default function NewTradePage() {
       ) : (
         <>
           <div className="flex items-center justify-between rounded-xl bg-bg-surface px-4 py-3">
-            <span className="text-sm text-ink-chalk">Обмен с: <b>{target.username ?? target.first_name}</b></span>
+            <span className="flex items-center gap-1 text-sm text-ink-chalk">
+              Обмен с: <b>{target.username ?? target.first_name}</b>
+              <UserBadge badge={target.active_badge} />
+            </span>
             <button onClick={() => setTarget(null)} className="text-xs text-accent-lime">Сменить</button>
           </div>
 

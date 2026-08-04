@@ -8,6 +8,7 @@ from app.models.enums import RARITY_ORDER
 from app.models.pack import PackOpening
 from app.models.player import Player
 from app.models.user import User
+from app.schemas.badge import BadgeOut
 from app.schemas.player import PlayerOut
 from app.schemas.profile import ProfilePrivateOut, ProfilePublicOut, ProfileSettingsUpdate
 from app.schemas.user import UserPublicOut
@@ -67,6 +68,7 @@ async def _build_public(db: AsyncSession, user: User) -> ProfilePublicOut:
         rarest_card=PlayerOut.model_validate(rarest) if rarest else None,
         packs_opened=packs_opened,
         referral_count=user.referral_count,
+        active_badge=BadgeOut.model_validate(user.active_badge) if user.active_badge else None,
     )
 
 
