@@ -20,9 +20,16 @@ async def lock_user_for_update(db: AsyncSession, user_id: int) -> User:
     the FOR UPDATE lock would still serialize correctly at the SQL level,
     but every caller's check-then-write would read outdated values, making
     the lock pointless.
+
+    `with_for_update(of=User)` scopes the row lock to just the `users` table:
+    `User.active_badge` is `lazy="joined"` (a LEFT OUTER JOIN to badges), and
+    a plain `FOR UPDATE` tries to lock every joined table including the
+    nullable side of that outer join, which Postgres rejects outright
+    (`FeatureNotSupportedError`). Restricting the lock to `users` keeps the
+    eager-loaded badge while avoiding that restriction.
     """
     result = await db.execute(
-        select(User).where(User.id == user_id).with_for_update().execution_options(populate_existing=True)
+        select(User).where(User.id == user_id).with_for_update(of=User).execution_options(populate_existing=True)
     )
     user = result.scalar_one()
     return user
