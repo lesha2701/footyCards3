@@ -47,6 +47,19 @@ export interface PackPreview {
   rarity_distribution: { rarity: Rarity; count: number; percentage: number }[];
 }
 
+export interface StarsPackPurchase {
+  id: number;
+  user_id: number;
+  user_telegram_id: number;
+  user_username: string | null;
+  user_display_name: string;
+  pack_id: number;
+  pack_name: string;
+  stars_amount: number;
+  telegram_payment_charge_id: string | null;
+  completed_at: string;
+}
+
 export interface AdminActionLog {
   id: number;
   admin_id: number;
@@ -109,6 +122,7 @@ export interface GameConfig {
   hourly_game_limit: number;
   free_pack_interval_hours: number;
   free_pack_pack_slug: string;
+  chat_pack_interval_hours: number;
   referral_referred_reward: number;
   referral_referrer_reward: number;
   hangman_daily_limit: number;

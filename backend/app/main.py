@@ -16,6 +16,7 @@ from app.routers import (
     admin_log,
     admin_packs,
     admin_players,
+    admin_stars_purchases,
     admin_tasks,
     admin_trades,
     admin_users,
@@ -108,6 +109,7 @@ app.include_router(admin_tasks.router, prefix=API_PREFIX)
 app.include_router(admin_trades.router, prefix=API_PREFIX)
 app.include_router(admin_games.router, prefix=API_PREFIX)
 app.include_router(admin_log.router, prefix=API_PREFIX)
+app.include_router(admin_stars_purchases.router, prefix=API_PREFIX)
 app.include_router(internal.router, prefix=API_PREFIX)
 app.include_router(wallet.router, prefix=API_PREFIX)
 

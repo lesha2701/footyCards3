@@ -59,6 +59,16 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Пак в чате (команда «вкарта»)</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Использует тот же пак, что и бесплатный (Slug пака выше), но на собственном кулдауне.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("chat_pack_interval_hours", "Интервал, часы")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Рефералы</p>
         <div className="grid grid-cols-2 gap-3">
           {field("referral_referred_reward", "Награда приглашённому")}

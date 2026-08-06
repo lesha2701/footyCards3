@@ -9,6 +9,7 @@ import {
   deleteCoinPackage,
   fetchAdminBadges,
   fetchAdminCoinPackages,
+  fetchStarsPackPurchases,
   updateBadge,
   updateCoinPackage,
   uploadBadgeImage,
@@ -23,7 +24,69 @@ export default function AdminShopPage() {
       <h1 className="font-display text-2xl font-bold">Магазин</h1>
       <CoinPackagesSection />
       <BadgesSection />
+      <StarsPackPurchasesSection />
     </div>
+  );
+}
+
+function StarsPackPurchasesSection() {
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-stars-pack-purchases", page],
+    queryFn: () => fetchStarsPackPurchases(page),
+  });
+
+  return (
+    <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+      <div className="mb-3">
+        <p className="font-display text-base font-bold">Открытия паков за Stars</p>
+        <p className="text-xs text-slate-500">Кто, какой пак и когда купил за Telegram Stars.</p>
+      </div>
+
+      {isLoading && <p className="text-sm text-slate-400">Загрузка...</p>}
+
+      <div className="overflow-x-auto rounded-xl border border-white/5">
+        <table className="w-full min-w-[640px] text-sm">
+          <thead className="bg-bg-base text-left text-xs text-slate-400">
+            <tr>
+              <th className="px-3 py-2">Дата</th>
+              <th className="px-3 py-2">Игрок</th>
+              <th className="px-3 py-2">Пак</th>
+              <th className="px-3 py-2">Цена, ⭐</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data?.items.map((purchase) => (
+              <tr key={purchase.id} className="border-t border-white/5 align-top">
+                <td className="px-3 py-2 text-xs text-slate-400">
+                  {new Date(purchase.completed_at).toLocaleString("ru-RU")}
+                </td>
+                <td className="px-3 py-2 text-xs">
+                  {purchase.user_display_name}
+                  {purchase.user_username && <span className="text-slate-500"> @{purchase.user_username}</span>}
+                  <div className="text-[11px] text-slate-500">id {purchase.user_telegram_id}</div>
+                </td>
+                <td className="px-3 py-2 text-xs">{purchase.pack_name}</td>
+                <td className="px-3 py-2 text-xs">{purchase.stars_amount}</td>
+              </tr>
+            ))}
+            {data?.items.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-3 py-4 text-center text-xs text-slate-500">Покупок пока нет.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {data && data.pages > 1 && (
+        <div className="mt-3 flex gap-2">
+          <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-lg bg-white/5 px-3 py-1.5 text-sm disabled:opacity-30">←</button>
+          <span className="text-sm text-slate-400">{page} / {data.pages}</span>
+          <button disabled={page >= data.pages} onClick={() => setPage((p) => p + 1)} className="rounded-lg bg-white/5 px-3 py-1.5 text-sm disabled:opacity-30">→</button>
+        </div>
+      )}
+    </section>
   );
 }
 

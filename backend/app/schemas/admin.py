@@ -92,6 +92,19 @@ class AdminActionLogOut(BaseModel):
     created_at: datetime
 
 
+class StarsPackPurchaseOut(BaseModel):
+    id: int
+    user_id: int
+    user_telegram_id: int
+    user_username: Optional[str] = None
+    user_display_name: str
+    pack_id: int
+    pack_name: str
+    stars_amount: int
+    telegram_payment_charge_id: Optional[str] = None
+    completed_at: datetime
+
+
 class GameConfigOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -144,6 +157,7 @@ class GameConfigOut(BaseModel):
     hourly_game_limit: int
     free_pack_interval_hours: int
     free_pack_pack_slug: str
+    chat_pack_interval_hours: int
     referral_referred_reward: int
     referral_referrer_reward: int
     hangman_daily_limit: int
@@ -212,6 +226,7 @@ class GameConfigUpdate(BaseModel):
     hourly_game_limit: Optional[int] = Field(default=None, ge=1)
     free_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     free_pack_pack_slug: Optional[str] = None
+    chat_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     referral_referred_reward: Optional[int] = Field(default=None, ge=0)
     referral_referrer_reward: Optional[int] = Field(default=None, ge=0)
     hangman_daily_limit: Optional[int] = Field(default=None, ge=0)

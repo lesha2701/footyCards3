@@ -74,6 +74,10 @@ class GameConfig(TimestampMixin, Base):
     free_pack_interval_hours: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     free_pack_pack_slug: Mapped[str] = mapped_column(String, default="basic", nullable=False)
 
+    # "вкарта" command in group chats — reuses free_pack_pack_slug's pack but
+    # on its own cooldown.
+    chat_pack_interval_hours: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+
     referral_referred_reward: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
     referral_referrer_reward: Mapped[int] = mapped_column(Integer, default=400, nullable=False)
 

@@ -7,6 +7,7 @@ import type {
   Dashboard,
   GameConfig,
   PackPreview,
+  StarsPackPurchase,
   SuspiciousMatch,
   SuspiciousMemorySession,
   TaskDefinition,
@@ -317,5 +318,10 @@ export async function deleteCoinPackage(id: number): Promise<void> {
 // --- Log ---
 export async function fetchAdminLog(page: number): Promise<Page<AdminActionLog>> {
   const { data } = await api.get<Page<AdminActionLog>>("/admin/log", { params: { page } });
+  return data;
+}
+
+export async function fetchStarsPackPurchases(page: number): Promise<Page<StarsPackPurchase>> {
+  const { data } = await api.get<Page<StarsPackPurchase>>("/admin/stars-purchases", { params: { page } });
   return data;
 }

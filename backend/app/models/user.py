@@ -85,6 +85,11 @@ class User(TimestampMixin, Base):
     free_pack_available_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     free_pack_notified: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    # Chat mode promo pack ("вкарта" command in group chats, every N hours) —
+    # a separate cooldown from free_pack_available_at so the two mechanics
+    # don't compete with each other.
+    chat_pack_available_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Consecutive days played, tracked off daily-reward claims — unlike
     # DailyReward.streak_day (which cycles 1-7 to pick a reward tier), this
     # keeps counting up so the profile can show an uncapped "days in a row".

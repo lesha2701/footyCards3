@@ -7,6 +7,10 @@ from config import get_bot_settings
 from keyboards import invite_keyboard, open_app_keyboard
 
 router = Router(name="user")
+# Group/supergroup chats run in "chat mode" (see handlers/chat_pack.py) —
+# only the "вкарта" promo command works there; the regular commands below
+# are private-chat only.
+router.message.filter(F.chat.type == "private")
 settings = get_bot_settings()
 
 HELP_TEXT = (
@@ -36,6 +40,14 @@ async def cmd_start(message: Message) -> None:
         referrer_id = payload[len("ref_"):]
         if referrer_id.isdigit():
             keyboard = open_app_keyboard(query=f"?ref={referrer_id}")
+    elif payload == "chatpack":
+        # Deep link from the "вкарта" group-chat button — the card is
+        # already granted, this is just getting them into the Mini App to see it.
+        text = (
+            f"Привет, {message.from_user.first_name}! 👋\n\n"
+            "🃏 Твоя карта из чата уже у тебя в коллекции!\n\n"
+            "Нажми кнопку ниже, чтобы открыть VICTOR FC и посмотреть её 👇"
+        )
 
     await message.answer(text, reply_markup=keyboard)
 
