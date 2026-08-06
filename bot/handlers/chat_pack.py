@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import aiohttp
 from aiogram import F, Router
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Message
 
 from config import get_bot_settings
 
@@ -30,6 +30,12 @@ POSITION_LABELS = {
     "LM": "Левый полузащитник", "RM": "Правый полузащитник", "LW": "Левый нападающий",
     "RW": "Правый нападающий", "ST": "Нападающий",
 }
+
+
+def _static_url(image_path: str) -> str:
+    # /static/ is proxied on the same public host as mini_app_url (see
+    # nginx/nginx.conf), so Telegram's servers can fetch it from there.
+    return f"{settings.mini_app_url.rstrip('/')}/static/{image_path}"
 
 
 def _open_bot_keyboard() -> InlineKeyboardMarkup:
@@ -66,6 +72,37 @@ def _format_cooldown_left(available_at_iso: str) -> str:
     return f"{minutes} мин"
 
 
+async def _send_result(message: Message, first_name: str, cards: list[dict]) -> None:
+    intro = f"🎉 {first_name} открыл карту в VICTOR FC!"
+    outro = "Заходи попозже за новой картой!"
+    cards_text = "\n\n".join(_format_card(item) for item in cards)
+    image_paths = [item["card"]["player"].get("image_path") for item in cards]
+
+    try:
+        if len(cards) == 1 and image_paths[0]:
+            await message.reply_photo(
+                photo=_static_url(image_paths[0]),
+                caption=f"{intro}\n\n{cards_text}\n\n{outro}",
+                reply_markup=_open_bot_keyboard(),
+            )
+            return
+        if all(image_paths):
+            media = [
+                InputMediaPhoto(media=_static_url(path), caption=_format_card(item), parse_mode="HTML")
+                for item, path in zip(cards, image_paths)
+            ]
+            await message.reply_media_group(media=media)
+            await message.answer(f"{intro}\n\n{outro}", reply_markup=_open_bot_keyboard())
+            return
+    except Exception:
+        # e.g. mini_app_url isn't publicly reachable from Telegram's servers
+        # (local/dev setups) — fall back to a text-only card instead of
+        # leaving the player without a response.
+        logger.warning("chat-pack photo send failed, falling back to text", exc_info=True)
+
+    await message.reply(f"{intro}\n\n{cards_text}\n\n{outro}", reply_markup=_open_bot_keyboard())
+
+
 @router.message(F.text.func(lambda text: bool(text) and text.strip().casefold() == TRIGGER))
 async def cmd_chat_pack(message: Message) -> None:
     user = message.from_user
@@ -84,12 +121,7 @@ async def cmd_chat_pack(message: Message) -> None:
         return
 
     if status == 200:
-        cards_text = "\n\n".join(_format_card(item) for item in data["cards"])
-        await message.reply(
-            f"🎉 {user.first_name} открыл карту в VICTOR FC!\n\n{cards_text}\n\n"
-            "Заходи попозже за новой картой!",
-            reply_markup=_open_bot_keyboard(),
-        )
+        await _send_result(message, user.first_name, data["cards"])
         return
 
     error = data.get("error", {})
