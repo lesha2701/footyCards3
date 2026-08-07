@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_admin
 from app.core.exceptions import NotFoundError
 from app.database import get_db
 from app.models.enums import NotificationType, TaskCategory
-from app.models.task import TaskDefinition
+from app.models.task import TaskDefinition, UserTask
 from app.models.user import User
-from app.schemas.task import TaskDefinitionCreate, TaskDefinitionOut, TaskDefinitionUpdate
+from app.schemas.task import TaskDefinitionCreate, TaskDefinitionOut, TaskDefinitionStatsOut, TaskDefinitionUpdate
 from app.services import notification_service
 from app.services.admin_log_service import log_action
 
@@ -22,10 +22,28 @@ async def _get_task_or_404(db: AsyncSession, task_id: int) -> TaskDefinition:
     return task
 
 
-@router.get("", response_model=list[TaskDefinitionOut])
+@router.get("", response_model=list[TaskDefinitionStatsOut])
 async def list_all_tasks(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(TaskDefinition).order_by(TaskDefinition.sort_order))
-    return [TaskDefinitionOut.model_validate(t) for t in result.scalars().all()]
+    tasks = result.scalars().all()
+
+    stats_result = await db.execute(
+        select(
+            UserTask.task_definition_id,
+            func.count(UserTask.id).filter(UserTask.completed_at.is_not(None)),
+            func.count(UserTask.id).filter(UserTask.reward_claimed.is_(True)),
+        ).group_by(UserTask.task_definition_id)
+    )
+    stats = {task_definition_id: (completed, claimed) for task_definition_id, completed, claimed in stats_result.all()}
+
+    return [
+        TaskDefinitionStatsOut(
+            **TaskDefinitionOut.model_validate(t).model_dump(),
+            completed_count=stats.get(t.id, (0, 0))[0],
+            claimed_count=stats.get(t.id, (0, 0))[1],
+        )
+        for t in tasks
+    ]
 
 
 @router.post("", response_model=TaskDefinitionOut)

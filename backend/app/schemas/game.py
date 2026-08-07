@@ -11,6 +11,7 @@ class MemoryStartOut(BaseModel):
     round_number: int
     sequence: list[str]
     reveal_ms: int
+    answer_timeout_ms: int
 
 
 class MemorySubmitRequest(BaseModel):

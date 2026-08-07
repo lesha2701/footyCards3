@@ -301,6 +301,40 @@ async def test_creating_premium_task_notifies_all_users(client, db_session, bot_
     assert len(notifications) >= 1
 
 
+async def test_admin_task_list_reports_completed_and_claimed_counts(client, db_session, bot_token):
+    task = TaskDefinition(
+        code="premium_stats_test", name="Premium Stats", description="test",
+        category=TaskCategory.premium, condition_type=TaskConditionType.metric_counter,
+        target_value=0, reward_coins=5,
+    )
+    db_session.add(task)
+    await db_session.commit()
+    await db_session.refresh(task)
+
+    # Two users get the task auto-completed on assignment (target_value=0);
+    # only one of them claims the reward.
+    headers_a = telegram_headers(810020, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers_a)
+    tasks_a = (await client.get("/api/v1/tasks", headers=headers_a)).json()
+    premium_a = next(t for t in tasks_a["premium"] if t["code"] == "premium_stats_test")
+    resp = await client.post(f"/api/v1/tasks/{premium_a['user_task_id']}/claim", headers=headers_a)
+    assert resp.status_code == 200
+
+    headers_b = telegram_headers(810021, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers_b)
+    await client.get("/api/v1/tasks", headers=headers_b)
+
+    admin_headers = telegram_headers(999000001, bot_token)
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    admin_token = session_resp.json()["admin_token"]
+
+    resp = await client.get("/api/v1/admin/tasks", headers={"Authorization": f"Bearer {admin_token}"})
+    assert resp.status_code == 200
+    stats = next(t for t in resp.json() if t["id"] == task.id)
+    assert stats["completed_count"] == 2
+    assert stats["claimed_count"] == 1
+
+
 async def test_referral_completion_progresses_referral_task(client, db_session, bot_token):
     db_session.add(
         TaskDefinition(

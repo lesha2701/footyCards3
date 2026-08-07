@@ -174,6 +174,8 @@ export interface TaskDefinition {
   invite_link: string | null;
   is_active: boolean;
   sort_order: number;
+  completed_count: number;
+  claimed_count: number;
 }
 
 export interface SuspiciousMemorySession {

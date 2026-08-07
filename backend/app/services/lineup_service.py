@@ -183,6 +183,14 @@ async def set_lineup(db: AsyncSession, user: User, payload: LineupSetRequest) ->
 
     lineup = await _get_or_create_lineup(db, user.id)
 
+    # Locks the lineup row so two overlapping PUTs for the same squad (e.g.
+    # tapping a second slot before the first pick's request has returned)
+    # serialize instead of racing: both would otherwise read the same
+    # "old" lineup_cards, each delete only what it saw, and then collide on
+    # uq_lineup_card_once when the second one's insert hits a row the first
+    # one already committed.
+    await db.execute(select(Lineup).where(Lineup.id == lineup.id).with_for_update())
+
     old_result = await db.execute(select(LineupCard).where(LineupCard.lineup_id == lineup.id))
     old_lineup_cards = old_result.scalars().all()
     old_card_ids = [lc.user_card_id for lc in old_lineup_cards]

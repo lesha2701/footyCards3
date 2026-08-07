@@ -158,7 +158,8 @@ export default function ArenaPage() {
                     <button
                       key={slot.slot_code}
                       onClick={() => setPickerSlot(formationSlot)}
-                      className="flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95"
+                      disabled={setLineupMutation.isPending}
+                      className="flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 disabled:opacity-60"
                     >
                       {slot.card ? (
                         <>

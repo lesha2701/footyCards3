@@ -16,6 +16,8 @@ from app.services.wallet_service import credit_coins, lock_user_for_update
 
 SYMBOLS = ["⚽", "🥅", "🟨", "🟥", "👟", "🧤", "🏆", "🚩", "🎯", "🔥"]
 INITIAL_LENGTH = 3
+# Per-round time limit for reproducing the sequence, once it's done flashing.
+ANSWER_TIMEOUT_MS = 15000
 
 
 def _generate_sequence(length: int) -> list[str]:
@@ -76,7 +78,10 @@ async def start_session(db: AsyncSession, user: User) -> MemoryStartOut:
     db.add(round_)
     await db.commit()
 
-    return MemoryStartOut(session_id=session.id, round_number=1, sequence=sequence, reveal_ms=_reveal_ms(1))
+    return MemoryStartOut(
+        session_id=session.id, round_number=1, sequence=sequence, reveal_ms=_reveal_ms(1),
+        answer_timeout_ms=ANSWER_TIMEOUT_MS,
+    )
 
 
 async def _get_session(db: AsyncSession, user_id: int, session_id: int) -> GameSession:
@@ -137,6 +142,7 @@ async def submit_round(db: AsyncSession, user: User, session_id: int, answer: li
             round_number=next_round_number,
             sequence=next_sequence,
             reveal_ms=_reveal_ms(next_round_number),
+            answer_timeout_ms=ANSWER_TIMEOUT_MS,
         ),
     )
 

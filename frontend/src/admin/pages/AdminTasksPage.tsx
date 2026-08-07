@@ -128,6 +128,11 @@ export default function AdminTasksPage() {
               {t.reward_pack_id ? `пак #${t.reward_pack_id}` : `+${t.reward_coins} 🪙`}
             </p>
             <p className="text-xs text-slate-500">{t.is_active ? "Активно" : "Отключено"}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Выполнили: <span className="font-semibold text-slate-300">{t.completed_count}</span>
+              {" · "}
+              Забрали награду: <span className="font-semibold text-slate-300">{t.claimed_count}</span>
+            </p>
             <div className="mt-2 flex flex-wrap gap-1">
               <button onClick={() => openEdit(t)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
               <button onClick={() => toggleMutation.mutate(t.id)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">

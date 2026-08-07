@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { claimMemoryReward, fetchMemoryLeaderboard, startMemoryGame, submitMemoryRound } from "@/api/games";
@@ -58,6 +58,9 @@ export default function MemoryGamePage() {
   const [score, setScore] = useState(0);
   const [claimResult, setClaimResult] = useState<{ reward_coins: number; new_best_score: boolean } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [timeLeftMs, setTimeLeftMs] = useState(0);
+  const inputRef = useRef<string[]>([]);
+  const submittedRef = useRef(false);
 
   const { data: leaderboard } = useQuery({ queryKey: ["memory-leaderboard"], queryFn: fetchMemoryLeaderboard });
 
@@ -106,13 +109,44 @@ export default function MemoryGamePage() {
     return () => clearTimeout(timer);
   }, [phase, session]);
 
+  const submitAnswer = (answer: string[]) => {
+    if (submittedRef.current) return;
+    submittedRef.current = true;
+    submitMutation.mutate(answer);
+  };
+
+  // 15s (server-configured via session.answer_timeout_ms) to reproduce the
+  // sequence once it's done flashing — auto-submits whatever's been tapped
+  // so far when time runs out, which the backend naturally scores as wrong
+  // (a short/partial answer never equals the full expected sequence).
+  useEffect(() => {
+    if (phase !== "input" || !session) return;
+    submittedRef.current = false;
+    inputRef.current = [];
+    const total = session.answer_timeout_ms;
+    const deadline = Date.now() + total;
+    setTimeLeftMs(total);
+
+    const interval = setInterval(() => {
+      setTimeLeftMs(Math.max(0, deadline - Date.now()));
+    }, 100);
+    const timeout = setTimeout(() => submitAnswer(inputRef.current), total);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, session]);
+
   const tapSymbol = (symbol: string) => {
-    if (!session || phase !== "input") return;
+    if (!session || phase !== "input" || timeLeftMs <= 0) return;
     haptic("light");
     const next = [...input, symbol];
+    inputRef.current = next;
     setInput(next);
     if (next.length === session.sequence.length) {
-      submitMutation.mutate(next);
+      submitAnswer(next);
     }
   };
 
@@ -209,12 +243,28 @@ export default function MemoryGamePage() {
         {phase === "showing" ? "Запоминай..." : "Повтори последовательность"}
       </p>
 
+      {phase === "input" && session && (
+        <div className="flex w-full max-w-xs flex-col items-center gap-1.5">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+            <div
+              className={`h-full rounded-full ${timeLeftMs <= 0 ? "" : "transition-[width] duration-100 ease-linear"} ${
+                timeLeftMs < 5000 ? "bg-red-500" : "bg-accent-lime"
+              }`}
+              style={{ width: `${Math.max(0, (timeLeftMs / session.answer_timeout_ms) * 100)}%` }}
+            />
+          </div>
+          <span className={`font-mono text-xs ${timeLeftMs < 5000 ? "text-red-400" : "text-ink-mist-dim"}`}>
+            {Math.ceil(timeLeftMs / 1000)}с
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-5 gap-3">
         {SYMBOLS.map((symbol) => (
           <button
             key={symbol}
             onClick={() => tapSymbol(symbol)}
-            disabled={phase !== "input" || submitMutation.isPending}
+            disabled={phase !== "input" || submitMutation.isPending || timeLeftMs <= 0}
             className="flex h-14 w-14 items-center justify-center rounded-2xl bg-bg-surface active:scale-90 disabled:opacity-40"
           >
             <SymbolIcon symbol={symbol} size={24} />

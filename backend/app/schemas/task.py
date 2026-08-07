@@ -27,6 +27,16 @@ class TaskDefinitionOut(BaseModel):
     sort_order: int
 
 
+class TaskDefinitionStatsOut(TaskDefinitionOut):
+    # Distinct users who have completed / claimed this task right now. For
+    # one-shot "premium" tasks this is a stable lifetime count. For
+    # repeatable "regular" tasks it's a live snapshot only — task_service
+    # resets completed_at/reward_claimed to null on each slot refill, so a
+    # regular task's count can drop back down once users' slots rotate.
+    completed_count: int
+    claimed_count: int
+
+
 class TaskDefinitionCreate(BaseModel):
     code: str
     name: str

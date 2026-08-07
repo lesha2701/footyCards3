@@ -186,6 +186,7 @@ export interface MemoryStart {
   round_number: number;
   sequence: string[];
   reveal_ms: number;
+  answer_timeout_ms: number;
 }
 
 export interface MemorySubmitResult {
