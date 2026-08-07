@@ -5,7 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.core.exceptions import ConflictError, NotFoundError, RateLimitedError
+from app.core.dependencies import _get_or_create_user
+from app.core.exceptions import ConflictError, RateLimitedError
+from app.core.security import TelegramUser
 from app.core.timeutil import ensure_aware
 from app.models.enums import CardSource
 from app.models.pack import Pack, PackOpening
@@ -48,15 +50,29 @@ async def _grant_chat_pack(db: AsyncSession, user: User, slug: str) -> Optional[
     return PackOpenResult(opening_id=opening.id, pack=PackOut.model_validate(pack), cards=opened_items, new_balance=user.balance)
 
 
-async def claim_chat_pack_for_telegram_user(db: AsyncSession, telegram_user_id: int) -> PackOpenResult:
+async def claim_chat_pack_for_telegram_user(
+    db: AsyncSession,
+    telegram_user_id: int,
+    username: Optional[str] = None,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+) -> PackOpenResult:
     """Grants the "вкарта" group-chat promo pack for a Telegram user, on its
     own cooldown (`User.chat_pack_available_at` / `config.chat_pack_interval_hours`)
     independent of the in-app free pack. Called by the bot via the internal
-    API — see routers/internal.py."""
+    API — see routers/internal.py.
+
+    Anyone can trigger this from a group chat, registered or not — an
+    unregistered user is signed up on the spot (same `_get_or_create_user`
+    path as opening the Mini App for the first time, including the starting
+    coin bonus) instead of being turned away, since the whole point of chat
+    mode is picking up new players who haven't opened the app yet."""
     result = await db.execute(select(User).where(User.telegram_id == telegram_user_id))
     user = result.scalar_one_or_none()
     if user is None:
-        raise NotFoundError("User not found")
+        tg_user = TelegramUser(id=telegram_user_id, username=username, first_name=first_name, last_name=last_name)
+        user = await _get_or_create_user(db, tg_user)
+
     if user.is_banned:
         raise ConflictError("User is banned")
 

@@ -110,7 +110,12 @@ async def cmd_chat_pack(message: Message) -> None:
         async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
             async with session.post(
                 f"{settings.internal_backend_url}/internal/chat-pack/open",
-                json={"telegram_user_id": user.id},
+                json={
+                    "telegram_user_id": user.id,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                },
                 headers=_HEADERS,
             ) as resp:
                 status = resp.status
@@ -125,14 +130,6 @@ async def cmd_chat_pack(message: Message) -> None:
         return
 
     error = data.get("error", {})
-
-    if status == 404:
-        await message.reply(
-            f"{user.first_name}, ты ещё не зарегистрирован в VICTOR FC. Жми на кнопку, открой приложение "
-            "и возвращайся за картой 👇",
-            reply_markup=_open_bot_keyboard(),
-        )
-        return
 
     if status == 429:
         available_at = (error.get("details") or {}).get("available_at")

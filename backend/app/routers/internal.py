@@ -37,4 +37,6 @@ async def open_chat_pack(payload: ChatPackOpenIn, db: AsyncSession = Depends(get
     handlers/chat_pack.py. Errors (not registered / banned / cooldown) go
     through the normal AppError -> JSON error handler; the bot distinguishes
     them by HTTP status (404 / 409 / 429)."""
-    return await chat_pack_service.claim_chat_pack_for_telegram_user(db, payload.telegram_user_id)
+    return await chat_pack_service.claim_chat_pack_for_telegram_user(
+        db, payload.telegram_user_id, payload.username, payload.first_name, payload.last_name
+    )
