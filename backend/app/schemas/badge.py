@@ -24,3 +24,8 @@ class BadgeUpdate(BaseModel):
     icon: str | None = Field(default=None, min_length=1, max_length=16)
     is_active: bool | None = None
     sort_order: int | None = None
+
+
+class OwnedBadgeOut(BaseModel):
+    badge: BadgeOut
+    equipped: bool

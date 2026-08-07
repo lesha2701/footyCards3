@@ -7,9 +7,10 @@ from app.core.pagination import Page, PageParams
 from app.database import get_db
 from app.models.transaction import CoinTransaction
 from app.models.user import User
+from app.schemas.badge import OwnedBadgeOut
 from app.schemas.profile import ProfilePrivateOut, ProfileSettingsUpdate
 from app.schemas.transaction import CoinTransactionOut
-from app.services.profile_service import get_private_profile, update_settings
+from app.services.profile_service import get_private_profile, list_owned_badges, update_settings
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -24,6 +25,11 @@ async def update_my_settings(
     payload: ProfileSettingsUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     return await update_settings(db, user, payload)
+
+
+@router.get("/badges", response_model=list[OwnedBadgeOut])
+async def read_my_badges(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await list_owned_badges(db, user)
 
 
 @router.get("/transactions", response_model=Page[CoinTransactionOut])

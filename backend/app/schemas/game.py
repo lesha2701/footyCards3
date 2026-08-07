@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.schemas.player import PlayerOut
 
 
 class MemoryStartOut(BaseModel):
@@ -176,3 +178,39 @@ class GameLimitsOut(BaseModel):
     free_kick: int
     hangman: int
     tactico: int
+    pairs: int
+
+
+# --- Найди пару (card pairs memory match) ---
+
+class PairsStartOut(BaseModel):
+    session_id: int
+    board_size: int
+    total_pairs: int
+
+
+class PairsFlipRequest(BaseModel):
+    position: int = Field(ge=0)
+
+
+class PairsCardOut(BaseModel):
+    position: int
+    is_bonus: bool
+    player: Optional[PlayerOut] = None
+
+
+class PairsFlipOut(BaseModel):
+    session_id: int
+    revealed: list[PairsCardOut]
+    # None while waiting for the second flip of an attempt; True/False once
+    # a pair attempt resolves (also True for the instant-resolving bonus tile).
+    matched: Optional[bool] = None
+    matched_pairs: int
+    wrong_attempts: int
+    total_pairs: int
+    status: str
+
+
+class PairsClaimOut(BaseModel):
+    reward_coins: int
+    new_balance: int

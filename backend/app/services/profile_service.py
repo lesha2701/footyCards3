@@ -3,12 +3,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.exceptions import NotFoundError
+from app.models.badge import Badge, UserBadge
 from app.models.card import UserCard
 from app.models.enums import RARITY_ORDER
 from app.models.pack import PackOpening
 from app.models.player import Player
 from app.models.user import User
-from app.schemas.badge import BadgeOut
+from app.schemas.badge import BadgeOut, OwnedBadgeOut
 from app.schemas.player import PlayerOut
 from app.schemas.profile import ProfilePrivateOut, ProfilePublicOut, ProfileSettingsUpdate
 from app.schemas.user import UserPublicOut
@@ -99,12 +100,39 @@ async def get_private_profile(db: AsyncSession, user: User) -> ProfilePrivateOut
 
 async def update_settings(db: AsyncSession, user: User, payload: ProfileSettingsUpdate) -> ProfilePrivateOut:
     updates = payload.model_dump(exclude_unset=True)
+
+    if "active_badge_id" in updates:
+        badge_id = updates.pop("active_badge_id")
+        if badge_id is not None:
+            owned = (
+                await db.execute(
+                    select(UserBadge).where(UserBadge.user_id == user.id, UserBadge.badge_id == badge_id)
+                )
+            ).scalar_one_or_none()
+            if owned is None:
+                raise NotFoundError("Badge not found")
+        user.active_badge_id = badge_id
+
     for key, value in updates.items():
         setattr(user, key, value)
     db.add(user)
     await db.commit()
     await db.refresh(user)
     return await get_private_profile(db, user)
+
+
+async def list_owned_badges(db: AsyncSession, user: User) -> list[OwnedBadgeOut]:
+    result = await db.execute(
+        select(UserBadge)
+        .join(Badge, Badge.id == UserBadge.badge_id)
+        .where(UserBadge.user_id == user.id)
+        .order_by(Badge.sort_order)
+    )
+    owned = result.scalars().all()
+    return [
+        OwnedBadgeOut(badge=BadgeOut.model_validate(ub.badge), equipped=ub.badge_id == user.active_badge_id)
+        for ub in owned
+    ]
 
 
 async def search_users(db: AsyncSession, query: str, exclude_user_id: int, limit: int = 20) -> list[UserPublicOut]:

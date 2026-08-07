@@ -163,6 +163,11 @@ class GameConfigOut(BaseModel):
     hangman_daily_limit: int
     hangman_reward_correct: int
     hangman_max_wrong: int
+    pairs_daily_limit: int
+    pairs_reward_perfect: int
+    pairs_reward_min: int
+    pairs_penalty_per_wrong: int
+    pairs_bonus_coins: int
     tactico_challenge_expiry_hours: int
     tactico_round_timeout_hours: int
     tactico_phase_bonus_pct: float
@@ -232,6 +237,11 @@ class GameConfigUpdate(BaseModel):
     hangman_daily_limit: Optional[int] = Field(default=None, ge=0)
     hangman_reward_correct: Optional[int] = Field(default=None, ge=0)
     hangman_max_wrong: Optional[int] = Field(default=None, ge=1)
+    pairs_daily_limit: Optional[int] = Field(default=None, ge=0)
+    pairs_reward_perfect: Optional[int] = Field(default=None, ge=0)
+    pairs_reward_min: Optional[int] = Field(default=None, ge=0)
+    pairs_penalty_per_wrong: Optional[int] = Field(default=None, ge=0)
+    pairs_bonus_coins: Optional[int] = Field(default=None, ge=0)
     tactico_challenge_expiry_hours: Optional[int] = Field(default=None, ge=1)
     tactico_round_timeout_hours: Optional[int] = Field(default=None, ge=1)
     tactico_phase_bonus_pct: Optional[float] = Field(default=None, ge=0, le=1)

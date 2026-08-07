@@ -1,5 +1,6 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.card import UserCard
 from app.models.user import User
@@ -19,6 +20,12 @@ async def get_ranking(db: AsyncSession, metric: RankingMetric, current_user: Use
         value_expr = func.count(UserCard.id)
         stmt = (
             select(User, value_expr)
+            # User.active_badge is lazy="joined" by default, which would pull
+            # badges columns into this aggregate SELECT and make Postgres
+            # reject the GROUP BY (badges_1.id isn't functionally dependent
+            # on users.id) — selectinload replaces that with a second query
+            # instead, keeping the grouped query itself to just users+count.
+            .options(selectinload(User.active_badge))
             .outerjoin(UserCard, UserCard.owner_id == User.id)
             .where(User.is_banned.is_(False))
             .group_by(User.id)
@@ -28,6 +35,7 @@ async def get_ranking(db: AsyncSession, metric: RankingMetric, current_user: Use
         value_expr = func.count(func.distinct(UserCard.player_id))
         stmt = (
             select(User, value_expr)
+            .options(selectinload(User.active_badge))
             .outerjoin(UserCard, UserCard.owner_id == User.id)
             .where(User.is_banned.is_(False))
             .group_by(User.id)

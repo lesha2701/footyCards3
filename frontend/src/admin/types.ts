@@ -128,6 +128,11 @@ export interface GameConfig {
   hangman_daily_limit: number;
   hangman_reward_correct: number;
   hangman_max_wrong: number;
+  pairs_daily_limit: number;
+  pairs_reward_perfect: number;
+  pairs_reward_min: number;
+  pairs_penalty_per_wrong: number;
+  pairs_bonus_coins: number;
   tactico_challenge_expiry_hours: number;
   tactico_round_timeout_hours: number;
   tactico_phase_bonus_pct: number;

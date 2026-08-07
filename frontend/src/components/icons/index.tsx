@@ -471,3 +471,13 @@ export function IconInboxEmpty(props: IconProps) {
     </IconBase>
   );
 }
+
+export function IconChat(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8A2.5 2.5 0 0 1 17.5 16H10l-4.5 4v-4H6.5A2.5 2.5 0 0 1 4 13.5Z" strokeLinejoin="round" />
+      <line x1="8" y1="7.8" x2="16" y2="7.8" />
+      <line x1="8" y1="11" x2="13" y2="11" />
+    </IconBase>
+  );
+}

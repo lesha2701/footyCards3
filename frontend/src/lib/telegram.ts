@@ -25,6 +25,7 @@ interface TelegramWebApp {
     offClick: (cb: () => void) => void;
   };
   openInvoice?: (url: string, callback?: (status: "paid" | "cancelled" | "failed" | "pending") => void) => void;
+  openTelegramLink?: (url: string) => void;
 }
 
 declare global {
@@ -81,4 +82,18 @@ export function openTelegramInvoice(url: string): Promise<"paid" | "cancelled" |
     }
     webApp.openInvoice(url, (status) => resolve(status));
   });
+}
+
+/** Opens a t.me link (chat/channel invite, etc.) through Telegram's own
+ * handler when running inside the Mini App — `openTelegramLink` is what lets
+ * Telegram switch straight to the chat instead of bouncing through an
+ * in-app browser tab. Falls back to a plain new-tab open outside Telegram
+ * (e.g. testing in a desktop browser via dev mode). */
+export function openTelegramLink(url: string): void {
+  const webApp = getTelegramWebApp();
+  if (webApp?.openTelegramLink) {
+    webApp.openTelegramLink(url);
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
 }

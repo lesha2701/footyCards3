@@ -11,6 +11,9 @@ import type {
   MemoryLeaderboardEntry,
   MemoryStart,
   MemorySubmitResult,
+  PairsClaimResult,
+  PairsFlipResult,
+  PairsStartResult,
   PenaltyClaimResult,
   PenaltyDirection,
   PenaltyKickResult,
@@ -120,5 +123,22 @@ export async function guessHangmanLetter(sessionId: number, letter: string): Pro
 
 export async function claimHangmanReward(sessionId: number): Promise<HangmanClaimResult> {
   const { data } = await api.post<HangmanClaimResult>(`/games/hangman/${sessionId}/claim`);
+  return data;
+}
+
+// --- Найди пару ---
+
+export async function startPairs(): Promise<PairsStartResult> {
+  const { data } = await api.post<PairsStartResult>("/games/pairs/start");
+  return data;
+}
+
+export async function flipPairsCard(sessionId: number, position: number): Promise<PairsFlipResult> {
+  const { data } = await api.post<PairsFlipResult>(`/games/pairs/${sessionId}/flip`, { position });
+  return data;
+}
+
+export async function claimPairsReward(sessionId: number): Promise<PairsClaimResult> {
+  const { data } = await api.post<PairsClaimResult>(`/games/pairs/${sessionId}/claim`);
   return data;
 }

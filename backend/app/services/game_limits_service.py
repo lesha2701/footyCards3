@@ -24,4 +24,5 @@ def get_remaining_plays(user: User, config: GameConfig) -> GameLimitsOut:
         free_kick=_remaining(user.free_kick_hourly_attempts, user.free_kick_hour_started_at, limit),
         hangman=_remaining(user.hangman_hourly_attempts, user.hangman_hour_started_at, limit),
         tactico=_remaining(user.tactico_hourly_attempts, user.tactico_hour_started_at, limit),
+        pairs=_remaining(user.pairs_hourly_attempts, user.pairs_hour_started_at, limit),
     )

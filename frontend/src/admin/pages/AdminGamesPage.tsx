@@ -188,6 +188,17 @@ export default function AdminGamesPage() {
         </div>
       </section>
 
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Найди пару</p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("pairs_daily_limit", "Лимит наградных попыток/день")}
+          {field("pairs_reward_perfect", "Награда за безошибочную игру")}
+          {field("pairs_reward_min", "Минимальная награда")}
+          {field("pairs_penalty_per_wrong", "Штраф за ошибку")}
+          {field("pairs_bonus_coins", "Бонус за особую карту")}
+        </div>
+      </section>
+
       <button onClick={() => updateMutation.mutate()} className="self-start rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-bg-base">
         Сохранить настройки
       </button>

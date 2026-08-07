@@ -9,6 +9,7 @@ import { fetchTasks } from "@/api/tasks";
 import { Skeleton } from "@/components/common/Skeleton";
 import { sortPacksByPrice } from "@/lib/packs";
 import {
+  IconChat,
   IconChevronRight,
   IconClock,
   IconCoin,
@@ -16,13 +17,15 @@ import {
   IconGift,
   IconHandshake,
   IconPlay,
-  IconSwap,
   IconTarget,
+  IconUpgrade,
   type IconProps,
 } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
-import { hapticNotify } from "@/lib/telegram";
+import { haptic, hapticNotify, openTelegramLink } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
+
+const CHAT_INVITE_LINK = "https://t.me/+42EZisiOi8w1ZmMy";
 
 function chunkPairs<T>(items: T[]): T[][] {
   const pairs: T[][] = [];
@@ -75,10 +78,12 @@ export default function HomePage() {
         <div className="relative mt-4 grid grid-cols-4 gap-2">
           <QuickAction Icon={IconPlay} label="Играть" onClick={() => navigate("/play")} />
           <QuickAction Icon={IconCollection} label="Карточки" onClick={() => navigate("/collection")} />
-          <QuickAction Icon={IconSwap} label="Обмены" onClick={() => navigate("/trades")} />
+          <QuickAction Icon={IconUpgrade} label="Апгрейд" onClick={() => navigate("/upgrade")} />
           <QuickAction Icon={IconTarget} label="Задания" onClick={() => navigate("/tasks")} badge={claimableTaskCount || undefined} />
         </div>
       </section>
+
+      <ChatInviteCard />
 
       <div className="flex flex-col gap-3">
         {profile?.referral_reward_pending && (
@@ -169,6 +174,30 @@ export default function HomePage() {
         </section>
       )}
     </div>
+  );
+}
+
+function ChatInviteCard() {
+  return (
+    <button
+      onClick={() => {
+        haptic("light");
+        openTelegramLink(CHAT_INVITE_LINK);
+      }}
+      className="relative flex items-center gap-4 overflow-hidden rounded-3xl bg-gradient-to-br from-sky-500/25 via-cyan-500/10 to-bg-surface p-5 text-left active:scale-[0.98]"
+    >
+      <div className="pointer-events-none absolute -right-6 -top-8 h-28 w-28 rounded-full bg-sky-400/20 blur-2xl" />
+      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-400/20 text-sky-300">
+        <IconChat size={22} />
+      </div>
+      <div className="relative min-w-0 flex-1">
+        <p className="font-display text-base font-bold text-ink-chalk">Чат VICTOR FC</p>
+        <p className="mt-0.5 text-xs leading-snug text-ink-mist">
+          Хвастайся дропом, договаривайся об обменах и открывай паки по слову «вкарта» — раз в 4 часа прямо в чате
+        </p>
+      </div>
+      <IconChevronRight size={18} className="relative shrink-0 text-ink-mist-dim" />
+    </button>
   );
 }
 

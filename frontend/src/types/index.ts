@@ -286,6 +286,7 @@ export interface GameLimits {
   free_kick: number;
   hangman: number;
   tactico: number;
+  pairs: number;
 }
 
 export interface ArenaLeaderboardEntry {
@@ -469,6 +470,12 @@ export interface ProfilePrivate extends ProfilePublic {
 
 export interface ProfileSettingsUpdate {
   accept_trades?: boolean;
+  active_badge_id?: number | null;
+}
+
+export interface OwnedBadge {
+  badge: Badge;
+  equipped: boolean;
 }
 
 export interface CoinTransaction {
@@ -614,6 +621,33 @@ export interface HangmanGuessResult {
 }
 
 export interface HangmanClaimResult {
+  reward_coins: number;
+  new_balance: number;
+}
+
+export interface PairsStartResult {
+  session_id: number;
+  board_size: number;
+  total_pairs: number;
+}
+
+export interface PairsCard {
+  position: number;
+  is_bonus: boolean;
+  player: Player | null;
+}
+
+export interface PairsFlipResult {
+  session_id: number;
+  revealed: PairsCard[];
+  matched: boolean | null;
+  matched_pairs: number;
+  wrong_attempts: number;
+  total_pairs: number;
+  status: "in_progress" | "won" | "lost" | "rewarded" | "expired";
+}
+
+export interface PairsClaimResult {
   reward_coins: number;
   new_balance: number;
 }

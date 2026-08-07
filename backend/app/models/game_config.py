@@ -71,6 +71,12 @@ class GameConfig(TimestampMixin, Base):
     hangman_reward_correct: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     hangman_max_wrong: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
 
+    pairs_daily_limit: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    pairs_reward_perfect: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    pairs_reward_min: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    pairs_penalty_per_wrong: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    pairs_bonus_coins: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+
     free_pack_interval_hours: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     free_pack_pack_slug: Mapped[str] = mapped_column(String, default="basic", nullable=False)
 

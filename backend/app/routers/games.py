@@ -21,6 +21,10 @@ from app.schemas.game import (
     MemoryStartOut,
     MemorySubmitOut,
     MemorySubmitRequest,
+    PairsClaimOut,
+    PairsFlipOut,
+    PairsFlipRequest,
+    PairsStartOut,
     PenaltyClaimOut,
     PenaltyKickOut,
     PenaltyKickRequest,
@@ -32,7 +36,7 @@ from app.schemas.game import (
     SaboteurStartOut,
     SaboteurStartRequest,
 )
-from app.services import free_kick_service, game_limits_service, hangman_service, memory_game_service, penalty_service, saboteur_service
+from app.services import free_kick_service, game_limits_service, hangman_service, memory_game_service, pairs_service, penalty_service, saboteur_service
 from app.services.game_config_service import get_config
 
 router = APIRouter(prefix="/games", tags=["games"])
@@ -150,3 +154,21 @@ async def hangman_guess(session_id: int, payload: HangmanGuessRequest, db: Async
 @router.post("/hangman/{session_id}/claim", response_model=HangmanClaimOut)
 async def hangman_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await hangman_service.claim_reward(db, user, session_id)
+
+
+# --- Найди пару (card pairs memory match) ---
+
+@router.post("/pairs/start", response_model=PairsStartOut)
+async def pairs_start(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    check_rate_limit(f"pairs_start:{user.id}", max_calls=20, window_seconds=60)
+    return await pairs_service.start_session(db, user)
+
+
+@router.post("/pairs/{session_id}/flip", response_model=PairsFlipOut)
+async def pairs_flip(session_id: int, payload: PairsFlipRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await pairs_service.flip_card(db, user, session_id, payload.position)
+
+
+@router.post("/pairs/{session_id}/claim", response_model=PairsClaimOut)
+async def pairs_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await pairs_service.claim_reward(db, user, session_id)

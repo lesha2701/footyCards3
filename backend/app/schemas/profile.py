@@ -44,3 +44,5 @@ class ProfilePrivateOut(ProfilePublicOut):
 
 class ProfileSettingsUpdate(BaseModel):
     accept_trades: Optional[bool] = None
+    # Which owned badge to display next to the player's name; null unequips.
+    active_badge_id: Optional[int] = None

@@ -7,6 +7,7 @@ import { fetchTacticoStats } from "@/api/tactico";
 import {
   IconBall,
   IconBrain,
+  IconCard,
   IconFlagCheckered,
   IconGoal,
   IconHelp,
@@ -108,6 +109,16 @@ export default function PlayPage() {
           title="Футбольные буквы"
           description="Угадай футболиста или термин по буквам"
           remaining={limits?.hangman}
+          limit={limits?.hourly_limit}
+        />
+
+        <GameCard
+          onClick={() => navigate("/play/pairs")}
+          Icon={IconCard}
+          badgeClass="bg-rarity-rare"
+          title="Найди пару"
+          description="Переворачивай карточки и находи одинаковых футболистов"
+          remaining={limits?.pairs}
           limit={limits?.hourly_limit}
         />
       </div>

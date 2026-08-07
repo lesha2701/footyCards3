@@ -8,7 +8,7 @@ import { CardGridSkeleton } from "@/components/common/Skeleton";
 import { createStarsInvoice, fetchPacks, fetchStarsInvoiceStatus } from "@/api/packs";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { openTelegramInvoice } from "@/lib/telegram";
-import { sortPacksByPrice, type PackSortDirection } from "@/lib/packs";
+import { sortPacksByPrice, sortPacksByStarsPrice, type PackSortDirection } from "@/lib/packs";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { useAuthStore } from "@/store/authStore";
 import type { Pack, PackOpenResult } from "@/types";
@@ -28,11 +28,13 @@ export default function PacksPage() {
   const balance = useAuthStore((s) => s.user?.balance ?? 0);
   const navigate = useNavigate();
   const [sortDirection, setSortDirection] = useState<PackSortDirection>("asc");
+  const [starsSortDirection, setStarsSortDirection] = useState<PackSortDirection>("asc");
   const [tab, setTab] = useState<"coins" | "stars">("coins");
 
   const coinPacks = packs?.filter((p) => p.stars_price == null);
   const starsPacks = packs?.filter((p) => p.stars_price != null);
   const sortedCoinPacks = coinPacks ? sortPacksByPrice(coinPacks, sortDirection) : undefined;
+  const sortedStarsPacks = starsPacks ? sortPacksByStarsPrice(starsPacks, starsSortDirection) : undefined;
 
   return (
     <div className="flex flex-col gap-4">
@@ -88,8 +90,19 @@ export default function PacksPage() {
             </p>
           </div>
           {!isLoading && !starsPacks?.length && <EmptyState icon={IconPack} title="Паков пока нет" description="Загляни позже" />}
+          {!!starsPacks?.length && (
+            <div className="flex items-center justify-end">
+              <button
+                onClick={() => setStarsSortDirection((d) => (d === "asc" ? "desc" : "asc"))}
+                className="flex items-center gap-1.5 rounded-full bg-bg-surface px-3 py-1.5 font-mono text-xs text-ink-mist active:scale-95"
+              >
+                <IconChevronUp size={12} className={`transition-transform ${starsSortDirection === "asc" ? "" : "rotate-180"}`} />
+                {starsSortDirection === "asc" ? "Дешевле → дороже" : "Дороже → дешевле"}
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-4">
-            {starsPacks?.map((pack) => (
+            {sortedStarsPacks?.map((pack) => (
               <StarsPackCard
                 key={pack.id}
                 pack={pack}

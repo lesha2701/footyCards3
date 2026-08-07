@@ -81,6 +81,12 @@ class User(TimestampMixin, Base):
     hangman_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     hangman_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Найди пару (card pairs memory match)
+    pairs_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    pairs_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    pairs_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    pairs_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Free pack (every N hours)
     free_pack_available_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     free_pack_notified: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

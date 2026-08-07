@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { claimDailyReward, fetchDailyRewardCalendar } from "@/api/dailyRewards";
-import { fetchMyProfile, fetchMyTransactions, updateMySettings } from "@/api/profile";
+import { fetchMyBadges, fetchMyProfile, fetchMyTransactions, updateMySettings } from "@/api/profile";
 import { createCoinInvoice, fetchCoinInvoiceStatus, fetchCoinPackages } from "@/api/wallet";
 import { UserBadge } from "@/components/common/UserBadge";
 import {
@@ -14,6 +14,7 @@ import {
   IconGift,
   IconPack,
   IconSwap,
+  IconTag,
   IconTools,
   IconUsers,
   type IconProps,
@@ -52,6 +53,7 @@ function dayStreakLabel(days: number): string {
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user);
   const updateBalance = useAuthStore((s) => s.updateBalance);
+  const setUser = useAuthStore((s) => s.setUser);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showTx, setShowTx] = useState(false);
@@ -60,6 +62,7 @@ export default function ProfilePage() {
   const [showBuyCoins, setShowBuyCoins] = useState(false);
 
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
+  const { data: badges } = useQuery({ queryKey: ["profile", "badges"], queryFn: fetchMyBadges });
   const { data: calendar } = useQuery({ queryKey: ["daily-reward-calendar"], queryFn: fetchDailyRewardCalendar });
   const { data: transactions } = useQuery({
     queryKey: ["transactions"],
@@ -82,7 +85,12 @@ export default function ProfilePage() {
 
   const settingsMutation = useMutation({
     mutationFn: updateMySettings,
-    onSuccess: (data) => queryClient.setQueryData(["profile", "me"], data),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["profile", "me"], data);
+      queryClient.invalidateQueries({ queryKey: ["profile", "badges"] });
+      const current = useAuthStore.getState().user;
+      if (current) setUser({ ...current, active_badge: data.active_badge });
+    },
   });
 
   if (!user || !profile) return null;
@@ -110,6 +118,33 @@ export default function ProfilePage() {
           </div>
         )}
       </section>
+
+      {badges && badges.length > 1 && (
+        <section className="rounded-2xl bg-bg-surface p-4">
+          <p className="mb-3 flex items-center gap-1.5 font-display text-base font-bold text-ink-chalk">
+            <IconTag size={16} className="text-amber-400" />
+            Значок у имени
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {badges.map((ob) => (
+              <button
+                key={ob.badge.id}
+                onClick={() => settingsMutation.mutate({ active_badge_id: ob.equipped ? null : ob.badge.id })}
+                disabled={settingsMutation.isPending}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition disabled:opacity-40 ${
+                  ob.equipped ? "bg-amber-400 text-bg-base" : "bg-white/5 text-ink-mist"
+                }`}
+              >
+                <UserBadge badge={ob.badge} className="h-4 w-4" />
+                {ob.badge.name}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-ink-mist-dim">
+            Нажми на значок, чтобы показать его рядом со своим именем. Нажми ещё раз, чтобы снять.
+          </p>
+        </section>
+      )}
 
       <section className="rounded-2xl bg-bg-surface p-4">
         <div className="grid grid-cols-2 gap-y-4">
