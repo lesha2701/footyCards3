@@ -13,12 +13,14 @@ from app.routers import (
     admin_coin_packages,
     admin_dashboard,
     admin_games,
+    admin_gifts,
     admin_log,
     admin_packs,
     admin_players,
     admin_stars_purchases,
     admin_tasks,
     admin_trades,
+    admin_trophies,
     admin_users,
     auth,
     card_collections,
@@ -26,9 +28,11 @@ from app.routers import (
     daily_rewards,
     free_pack,
     games,
+    gifts,
     internal,
     leaderboard,
     lineups,
+    maintenance,
     matches,
     notifications,
     packs,
@@ -88,7 +92,9 @@ app.include_router(collection.router, prefix=API_PREFIX)
 app.include_router(packs.router, prefix=API_PREFIX)
 app.include_router(free_pack.router, prefix=API_PREFIX)
 app.include_router(games.router, prefix=API_PREFIX)
+app.include_router(gifts.router, prefix=API_PREFIX)
 app.include_router(lineups.router, prefix=API_PREFIX)
+app.include_router(maintenance.router, prefix=API_PREFIX)
 app.include_router(matches.router, prefix=API_PREFIX)
 app.include_router(tactico.router, prefix=API_PREFIX)
 app.include_router(trades.router, prefix=API_PREFIX)
@@ -107,6 +113,8 @@ app.include_router(admin_card_collections.router, prefix=API_PREFIX)
 app.include_router(admin_card_upgrades.router, prefix=API_PREFIX)
 app.include_router(admin_tasks.router, prefix=API_PREFIX)
 app.include_router(admin_trades.router, prefix=API_PREFIX)
+app.include_router(admin_trophies.router, prefix=API_PREFIX)
+app.include_router(admin_gifts.router, prefix=API_PREFIX)
 app.include_router(admin_games.router, prefix=API_PREFIX)
 app.include_router(admin_log.router, prefix=API_PREFIX)
 app.include_router(admin_stars_purchases.router, prefix=API_PREFIX)

@@ -1,4 +1,7 @@
-from sqlalchemy import Integer, Numeric, String
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import DateTime, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -72,9 +75,13 @@ class GameConfig(TimestampMixin, Base):
     hangman_max_wrong: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
 
     pairs_daily_limit: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
-    pairs_reward_perfect: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    pairs_reward_perfect: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
     pairs_reward_min: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
-    pairs_penalty_per_wrong: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Reward drops by pairs_bracket_penalty for every pairs_error_bracket_size
+    # wrong attempts, e.g. (40, 10, 10) -> 0-10 wrong = 40 coins, 11-20 = 30,
+    # 21-30 = 20, ... floored at pairs_reward_min. See pairs_service._tiered_reward.
+    pairs_error_bracket_size: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    pairs_bracket_penalty: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     pairs_bonus_coins: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
 
     free_pack_interval_hours: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
@@ -98,3 +105,7 @@ class GameConfig(TimestampMixin, Base):
     tactico_bot_optimal_pick_chance_hard: Mapped[float] = mapped_column(Numeric(4, 2), default=0.90, nullable=False)
     tactico_max_legendary_cards: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     tactico_max_epic_cards: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+
+    # Set by an admin right before deploying an update (see routers/maintenance.py);
+    # the Mini App shows a "may be flaky for a few minutes" banner while now() < this.
+    maintenance_banner_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

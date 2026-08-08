@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -18,6 +18,19 @@ class Lineup(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     cards: Mapped[list["LineupCard"]] = relationship(back_populates="lineup", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        # Enforces "at most one active lineup per user" at the DB level —
+        # lineup_service._get_or_create_lineup does a check-then-insert with
+        # no row to lock (there's nothing to select FOR UPDATE when no
+        # lineup exists yet), so without this, two concurrent first-time
+        # calls (e.g. picking a tactic and picking a card slot in quick
+        # succession) can both see "no active lineup" and both insert one.
+        Index(
+            "uq_lineup_one_active_per_user", "user_id", unique=True,
+            postgresql_where=text("is_active"), sqlite_where=text("is_active"),
+        ),
+    )
 
 
 class LineupCard(Base):

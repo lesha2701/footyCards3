@@ -11,8 +11,10 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.models.badge import UserBadge
 from app.models.coin_package import CoinPackage
 from app.models.enums import CardSource, TransactionType
+from app.models.gift import Gift, GiftSet
 from app.models.pack import Pack, PackOpening, StarsInvoice
 from app.models.user import User
+from app.schemas.gift import GiftOut
 from app.schemas.stars import (
     CoinPackageOut,
     StarsCoinResultOut,
@@ -48,6 +50,10 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
         user = await db.get(User, invoice.user_id)
         opening = await db.get(PackOpening, invoice.pack_opening_id)
         return StarsInvoiceStatusOut(status="completed", result=await get_opening_result(db, user, opening))
+
+    if invoice.gift_set_id is not None:
+        gift = await db.get(Gift, invoice.gift_id)
+        return StarsInvoiceStatusOut(status="completed", gift_result=GiftOut.model_validate(gift))
 
     user = await db.get(User, invoice.user_id)
     return StarsInvoiceStatusOut(
@@ -128,6 +134,41 @@ async def create_coin_invoice(db: AsyncSession, user: User, coin_package_id: int
     return StarsInvoiceCreateOut(invoice_link=invoice_link, payload_token=payload_token, stars_amount=stars_amount)
 
 
+async def create_gift_invoice(
+    db: AsyncSession, user: User, gift_set_id: int, recipient_id: int, message: str | None
+) -> StarsInvoiceCreateOut:
+    gift_set = await db.get(GiftSet, gift_set_id)
+    if gift_set is None:
+        raise NotFoundError("Gift set not found")
+    if not gift_set.is_active:
+        raise ConflictError("This gift set is not currently available")
+    if gift_set.stars_price <= 0:
+        raise ConflictError("This gift set cannot be purchased")
+
+    recipient = await db.get(User, recipient_id)
+    if recipient is None:
+        raise NotFoundError("Recipient not found")
+    if recipient.id == user.id:
+        raise ConflictError("You can't send a gift to yourself")
+
+    payload_token = secrets.token_urlsafe(16)
+    invoice = StarsInvoice(
+        user_id=user.id, gift_set_id=gift_set.id, gift_recipient_id=recipient.id, gift_message=message,
+        payload_token=payload_token, stars_amount=gift_set.stars_price,
+    )
+    db.add(invoice)
+    await db.flush()
+
+    recipient_label = recipient.username or recipient.first_name or f"игрока #{recipient.id}"
+    invoice_link = await _request_telegram_invoice_link(
+        payload_token, gift_set.name, f"Подарок для {recipient_label}: {gift_set.description or gift_set.name}",
+        gift_set.stars_price,
+    )
+
+    await db.commit()
+    return StarsInvoiceCreateOut(invoice_link=invoice_link, payload_token=payload_token, stars_amount=gift_set.stars_price)
+
+
 async def get_invoice_status(db: AsyncSession, user: User, payload_token: str) -> StarsInvoiceStatusOut:
     invoice = await _get_invoice_or_404(db, payload_token)
     if invoice.user_id != user.id:
@@ -156,6 +197,10 @@ async def validate_pre_checkout(db: AsyncSession, payload_token: str, total_amou
         pack = await db.get(Pack, invoice.pack_id)
         if pack is None or not pack.is_active or pack.stars_price != total_amount:
             return False, "This pack is no longer available"
+    elif invoice.gift_set_id is not None:
+        gift_set = await db.get(GiftSet, invoice.gift_set_id)
+        if gift_set is None or not gift_set.is_active or gift_set.stars_price != total_amount:
+            return False, "This gift set is no longer available"
     return True, ""
 
 
@@ -234,6 +279,18 @@ async def deliver_payment(
             )
         if pack.badge_id:
             await _grant_pack_badge(db, user, pack.badge_id)
+    elif invoice.gift_set_id is not None:
+        gift_set = await db.get(GiftSet, invoice.gift_set_id)
+        if gift_set is None or not gift_set.is_active or gift_set.stars_price != total_amount:
+            raise ConflictError("This gift set is no longer available")
+
+        gift = Gift(
+            gift_set_id=gift_set.id, sender_id=invoice.user_id, recipient_id=invoice.gift_recipient_id,
+            message=invoice.gift_message, is_admin_gift=False,
+        )
+        db.add(gift)
+        await db.flush()
+        invoice.gift_id = gift.id
     else:
         if invoice.stars_amount != total_amount:
             raise ConflictError("Stars amount does not match the invoice")
@@ -263,6 +320,9 @@ async def deliver_payment(
     if invoice.pack_id is not None:
         granted.new_balance = user.balance
         return StarsInvoiceStatusOut(status="completed", result=granted)
+    if invoice.gift_set_id is not None:
+        await db.refresh(gift)
+        return StarsInvoiceStatusOut(status="completed", gift_result=GiftOut.model_validate(gift))
     return StarsInvoiceStatusOut(
         status="completed",
         coin_result=StarsCoinResultOut(coins_credited=invoice.coins_amount, new_balance=user.balance),

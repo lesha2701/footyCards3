@@ -112,6 +112,17 @@ async def _get_session(db: AsyncSession, user_id: int, session_id: int) -> GameS
     return session
 
 
+def _tiered_reward(wrong_attempts: int, config) -> int:
+    """Reward drops a bracket for every `pairs_error_bracket_size` wrong
+    attempts, e.g. with the defaults (perfect=40, bracket_size=10,
+    bracket_penalty=10): 0-10 wrong -> 40 coins, 11-20 -> 30, 21-30 -> 20,
+    ... floored at pairs_reward_min. A step function (not a per-mistake
+    linear penalty) so a couple of extra slip-ups near a bracket boundary
+    don't shave the reward down one coin at a time."""
+    tier = 0 if wrong_attempts == 0 else (wrong_attempts - 1) // config.pairs_error_bracket_size
+    return max(config.pairs_reward_min, config.pairs_reward_perfect - tier * config.pairs_bracket_penalty)
+
+
 def _maybe_finish(session: GameSession, state: dict, config) -> None:
     """Ends the session once every one of the 25 tiles is revealed — all 12
     pairs matched *and* the bonus tile found, wherever in the run it turned
@@ -122,7 +133,7 @@ def _maybe_finish(session: GameSession, state: dict, config) -> None:
         return
     session.status = GameSessionStatus.won
     session.finished_at = datetime.now(timezone.utc)
-    reward = max(config.pairs_reward_min, config.pairs_reward_perfect - state["wrong_attempts"] * config.pairs_penalty_per_wrong)
+    reward = _tiered_reward(state["wrong_attempts"], config)
     if state["bonus_found"]:
         reward += config.pairs_bonus_coins
     session.reward_coins = reward

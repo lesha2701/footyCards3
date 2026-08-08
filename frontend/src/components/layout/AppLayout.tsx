@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 
 import LeaveConfirmDialog from "@/components/common/LeaveConfirmDialog";
 import BottomNav from "@/components/layout/BottomNav";
+import MaintenanceBanner from "@/components/layout/MaintenanceBanner";
 import TopBar from "@/components/layout/TopBar";
 import { apiUrl, buildAuthHeaders } from "@/lib/api";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
@@ -45,6 +46,7 @@ export default function AppLayout() {
   return (
     <div className="mx-auto flex min-h-screen max-w-lg flex-col bg-bg-base">
       <TopBar />
+      <MaintenanceBanner />
       <main className="flex-1 px-4 pb-24 pt-3">
         <Outlet />
       </main>

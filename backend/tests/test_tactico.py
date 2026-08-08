@@ -176,6 +176,56 @@ async def test_bot_match_full_playthrough_rewards_and_rating(client, db_session,
     assert user.balance >= match["reward_coins"]
 
 
+async def test_bot_match_rejects_hard_difficulty(client, db_session, bot_token):
+    headers = await _register(client, bot_token, 950014)
+    user = await get_user_by_telegram_id(db_session, 950014)
+    card_ids = await _build_squad_cards(db_session, user.id, count=11)
+    resp = await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids})
+    assert resp.status_code == 200
+
+    resp = await client.post("/api/v1/tactico/matches/bot", headers=headers, json={"difficulty": "hard"})
+    assert resp.status_code == 409
+
+
+async def test_bot_match_easy_pays_less_than_advanced(client, db_session, bot_token, monkeypatch):
+    """"Продвинутый" (MatchDifficulty.medium) should pay more than "Лёгкий",
+    via the same difficulty_*_multiplier config Card Arena already uses."""
+    monkeypatch.setattr(tactico_service, "_pick_phase", lambda: "attack")
+    monkeypatch.setattr(tactico_service, "_synthesize_bot_squad", _fake_weak_bot_squad)
+
+    async def play_and_get_reward(telegram_id: int, difficulty: str) -> int:
+        headers = await _register(client, bot_token, telegram_id)
+        user = await get_user_by_telegram_id(db_session, telegram_id)
+        card_ids = await _build_squad_cards(
+            db_session, user.id, count=11, position=Position.ST, rating=90, attack_rating=99, defense_rating=1
+        )
+        resp = await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids})
+        assert resp.status_code == 200
+
+        resp = await client.post("/api/v1/tactico/matches/bot", headers=headers, json={"difficulty": difficulty})
+        assert resp.status_code == 200
+        match = resp.json()
+
+        guard = 0
+        while match["status"] == "in_progress":
+            guard += 1
+            assert guard < 15
+            card_id = match["pickable_cards"][0]["user_card_id"]
+            resp = await client.post(
+                f"/api/v1/tactico/matches/{match['id']}/rounds", headers=headers, json={"user_card_id": card_id}
+            )
+            assert resp.status_code == 200
+            match = resp.json()
+
+        assert match["result"] == "win"
+        return match["reward_coins"]
+
+    easy_reward = await play_and_get_reward(950015, "easy")
+    advanced_reward = await play_and_get_reward(950016, "medium")
+
+    assert easy_reward < advanced_reward
+
+
 # ---------------------------------------------------------------------------
 # Friend match
 # ---------------------------------------------------------------------------

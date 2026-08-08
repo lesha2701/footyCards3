@@ -3,6 +3,7 @@ from sqlalchemy import select
 from app.models.badge import Badge
 from app.models.coin_package import CoinPackage
 from app.models.enums import Position, Rarity
+from app.models.gift import GiftSet
 from app.models.pack import Pack, PackRarityProbability
 from app.models.player import Player
 from app.models.user import User
@@ -65,6 +66,16 @@ async def create_coin_package(session, stars_price: int, coins_amount: int, **ov
     await session.commit()
     await session.refresh(package)
     return package
+
+
+async def create_gift_set(session, name: str = "Test Gift", **overrides) -> GiftSet:
+    defaults = dict(description="test gift set", coins_amount=0, stars_price=10, is_active=True, sort_order=0)
+    defaults.update(overrides)
+    gift_set = GiftSet(name=name, **defaults)
+    session.add(gift_set)
+    await session.commit()
+    await session.refresh(gift_set)
+    return gift_set
 
 
 async def get_user_by_telegram_id(session, telegram_id: int) -> User:

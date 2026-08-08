@@ -24,8 +24,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const DIFFICULTY_LABELS: { value: MatchDifficulty; label: string }[] = [
   { value: "easy", label: "Лёгкий" },
-  { value: "medium", label: "Средний" },
-  { value: "hard", label: "Сложный" },
+  { value: "medium", label: "Продвинутый" },
 ];
 
 export default function TacticoMatchesPage() {

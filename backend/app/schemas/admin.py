@@ -60,6 +60,11 @@ class GrantCardRequest(BaseModel):
     player_id: int
 
 
+class GrantTrophyRequest(BaseModel):
+    trophy_definition_id: int
+    message: Optional[str] = Field(default=None, max_length=500)
+
+
 class ResetLimitsResponse(BaseModel):
     status: str = "ok"
 
@@ -90,6 +95,20 @@ class AdminActionLogOut(BaseModel):
     ip_address: Optional[str]
     extra: Optional[str]
     created_at: datetime
+
+
+class StarsDonationSummaryOut(BaseModel):
+    total_stars: int
+    total_purchases: int
+
+
+class TopSupporterOut(BaseModel):
+    user_id: int
+    user_telegram_id: int
+    user_username: Optional[str] = None
+    user_display_name: str
+    total_stars: int
+    purchase_count: int
 
 
 class StarsPackPurchaseOut(BaseModel):
@@ -166,7 +185,8 @@ class GameConfigOut(BaseModel):
     pairs_daily_limit: int
     pairs_reward_perfect: int
     pairs_reward_min: int
-    pairs_penalty_per_wrong: int
+    pairs_error_bracket_size: int
+    pairs_bracket_penalty: int
     pairs_bonus_coins: int
     tactico_challenge_expiry_hours: int
     tactico_round_timeout_hours: int
@@ -240,7 +260,8 @@ class GameConfigUpdate(BaseModel):
     pairs_daily_limit: Optional[int] = Field(default=None, ge=0)
     pairs_reward_perfect: Optional[int] = Field(default=None, ge=0)
     pairs_reward_min: Optional[int] = Field(default=None, ge=0)
-    pairs_penalty_per_wrong: Optional[int] = Field(default=None, ge=0)
+    pairs_error_bracket_size: Optional[int] = Field(default=None, ge=1)
+    pairs_bracket_penalty: Optional[int] = Field(default=None, ge=0)
     pairs_bonus_coins: Optional[int] = Field(default=None, ge=0)
     tactico_challenge_expiry_hours: Optional[int] = Field(default=None, ge=1)
     tactico_round_timeout_hours: Optional[int] = Field(default=None, ge=1)

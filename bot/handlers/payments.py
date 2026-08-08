@@ -43,6 +43,8 @@ async def handle_pre_checkout_query(pre_checkout_query: PreCheckoutQuery) -> Non
 @router.message(F.successful_payment)
 async def handle_successful_payment(message: Message) -> None:
     payment = message.successful_payment
+    ok = False
+    body: dict = {}
     try:
         async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
             async with session.post(
@@ -56,21 +58,30 @@ async def handle_successful_payment(message: Message) -> None:
                 headers=_HEADERS,
             ) as resp:
                 ok = resp.status == 200
-                if not ok:
+                if ok:
+                    body = await resp.json()
+                else:
                     logger.error("stars payment delivery failed: status=%s body=%s", resp.status, await resp.text())
     except Exception:
         logger.exception("stars payment delivery call failed")
         ok = False
 
     if ok:
-        await message.answer("🎉 Пак куплен и уже в твоей коллекции! Открой приложение, чтобы посмотреть карточку.")
+        # Which of these is set tells us what was actually purchased — see
+        # StarsInvoiceStatusOut (result=pack, gift_result=gift, coin_result=coins).
+        if body.get("gift_result"):
+            await message.answer("🎁 Подарок отправлен! Получатель сможет открыть его в приложении.")
+        elif body.get("coin_result"):
+            await message.answer("⭐ Монеты зачислены! Открой приложение, чтобы увидеть баланс.")
+        else:
+            await message.answer("🎉 Пак куплен и уже в твоей коллекции! Открой приложение, чтобы посмотреть карточку.")
     else:
         # The payment went through on Telegram's side regardless of whether
         # our delivery call succeeded — never leave the player without their
-        # pack. Loud enough to notice and retry by hand if this ever fires.
+        # purchase. Loud enough to notice and retry by hand if this ever fires.
         await message.answer(
-            "⭐ Оплата прошла, но при начислении пака произошла ошибка. Мы разберёмся и начислим его вручную — "
-            "напиши в поддержку, если пак не появится в течение нескольких минут."
+            "⭐ Оплата прошла, но при начислении покупки произошла ошибка. Мы разберёмся и начислим её вручную — "
+            "напиши в поддержку, если покупка не появится в течение нескольких минут."
         )
         logger.critical(
             "UNDELIVERED stars payment: charge_id=%s user=%s payload=%s",

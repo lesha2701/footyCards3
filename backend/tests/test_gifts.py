@@ -1,0 +1,204 @@
+import pytest
+from sqlalchemy import select
+
+import app.core.rate_limit as rate_limit_module
+from app.config import get_settings
+from app.models.enums import Rarity
+from app.models.gift import Gift
+from app.services import stars_payment_service
+from tests.factories import create_gift_set, create_pack, create_player, get_user_by_telegram_id
+from tests.utils import telegram_headers
+
+settings = get_settings()
+INTERNAL_HEADERS = {"X-Internal-Secret": settings.internal_api_secret}
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    rate_limit_module._hits.clear()
+    yield
+
+
+async def _register(client, db_session, telegram_id, bot_token):
+    resp = await client.post("/api/v1/auth/session", headers=telegram_headers(telegram_id, bot_token))
+    assert resp.status_code == 200
+    return await get_user_by_telegram_id(db_session, telegram_id)
+
+
+async def _admin_auth(client, bot_token):
+    admin_headers = telegram_headers(999000001, bot_token)  # matches ADMIN_TELEGRAM_IDS in conftest
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    token = session_resp.json()["admin_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+async def _fake_invoice_link(payload_token, title, description, stars_amount):
+    return f"https://t.me/invoice/{payload_token}"
+
+
+async def _deliver(client, payload_token, telegram_user_id, charge_id, total_amount):
+    return await client.post(
+        "/api/v1/internal/stars-payments/deliver",
+        json={
+            "payload_token": payload_token, "telegram_user_id": telegram_user_id,
+            "telegram_payment_charge_id": charge_id, "total_amount": total_amount,
+        },
+        headers=INTERNAL_HEADERS,
+    )
+
+
+async def test_admin_can_create_gift_set_and_send_free_gift(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+
+    recipient_headers = telegram_headers(860001, bot_token)
+    await client.post("/api/v1/auth/session", headers=recipient_headers)
+    recipient = await get_user_by_telegram_id(db_session, 860001)
+
+    create_resp = await client.post(
+        "/api/v1/admin/gifts/sets", headers=auth,
+        json={"name": "Праздничный набор", "description": "test", "coins_amount": 100, "stars_price": 50},
+    )
+    assert create_resp.status_code == 200
+    gift_set_id = create_resp.json()["id"]
+
+    send_resp = await client.post(
+        "/api/v1/admin/gifts/send", headers=auth,
+        json={"gift_set_id": gift_set_id, "user_id": recipient.id, "message": "С праздником!"},
+    )
+    assert send_resp.status_code == 200
+    assert send_resp.json()["is_admin_gift"] is True
+    assert send_resp.json()["message"] == "С праздником!"
+
+    mine_resp = await client.get("/api/v1/gifts/mine", headers=recipient_headers)
+    assert mine_resp.status_code == 200
+    assert len(mine_resp.json()) == 1
+    gift_id = mine_resp.json()[0]["id"]
+    assert mine_resp.json()[0]["claimed_at"] is None
+
+    claim_resp = await client.post(f"/api/v1/gifts/{gift_id}/claim", headers=recipient_headers)
+    assert claim_resp.status_code == 200
+    body = claim_resp.json()
+    assert body["coins_credited"] == 100
+    assert body["new_balance"] == 500 + 100
+
+    # Claiming twice is rejected.
+    second = await client.post(f"/api/v1/gifts/{gift_id}/claim", headers=recipient_headers)
+    assert second.status_code == 409
+
+
+async def test_admin_broadcast_reaches_all_users(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+
+    await _register(client, db_session, 860002, bot_token)
+    await _register(client, db_session, 860003, bot_token)
+    headers_a = telegram_headers(860002, bot_token)
+    headers_b = telegram_headers(860003, bot_token)
+
+    gift_set = await create_gift_set(db_session, name="Всем игрокам", coins_amount=25, stars_price=0)
+
+    broadcast_resp = await client.post(
+        "/api/v1/admin/gifts/broadcast", headers=auth,
+        json={"gift_set_id": gift_set.id, "message": "Всем игрокам с праздником!"},
+    )
+    assert broadcast_resp.status_code == 200
+    # includes the admin account itself plus both registered players
+    assert broadcast_resp.json()["recipients"] >= 3
+
+    for headers in (headers_a, headers_b):
+        mine = await client.get("/api/v1/gifts/mine", headers=headers)
+        assert len(mine.json()) == 1
+        assert mine.json()[0]["message"] == "Всем игрокам с праздником!"
+
+
+async def test_player_can_buy_gift_for_another_player_with_stars(client, db_session, bot_token, monkeypatch):
+    monkeypatch.setattr(stars_payment_service, "_request_telegram_invoice_link", _fake_invoice_link)
+    await create_player(db_session, rarity=Rarity.epic)
+    pack = await create_pack(db_session, "gift-pack", price=0, card_count=1, probabilities={Rarity.epic: 1.0})
+    gift_set = await create_gift_set(db_session, name="Дружеский подарок", pack_id=pack.id, coins_amount=30, stars_price=20)
+
+    sender = await _register(client, db_session, 860004, bot_token)
+    recipient = await _register(client, db_session, 860005, bot_token)
+    sender_headers = telegram_headers(860004, bot_token)
+    recipient_headers = telegram_headers(860005, bot_token)
+
+    invoice_resp = await client.post(
+        "/api/v1/gifts/invoice", headers=sender_headers,
+        json={"gift_set_id": gift_set.id, "recipient_id": recipient.id, "message": "Держи!"},
+    )
+    assert invoice_resp.status_code == 200
+    invoice = invoice_resp.json()
+    assert invoice["stars_amount"] == 20
+
+    deliver_resp = await _deliver(client, invoice["payload_token"], 860004, "gift-charge-" + "f" * 120, 20)
+    assert deliver_resp.status_code == 200
+    assert deliver_resp.json()["gift_result"]["message"] == "Держи!"
+
+    # The sender's own balance/collection are untouched — only the recipient
+    # gets anything, and only once they claim it.
+    await db_session.refresh(sender)
+    assert sender.balance == 500
+
+    mine_resp = await client.get("/api/v1/gifts/mine", headers=recipient_headers)
+    assert len(mine_resp.json()) == 1
+    gift = mine_resp.json()[0]
+    assert gift["sender"]["id"] == sender.id
+    assert gift["claimed_at"] is None
+
+    claim_resp = await client.post(f"/api/v1/gifts/{gift['id']}/claim", headers=recipient_headers)
+    assert claim_resp.status_code == 200
+    body = claim_resp.json()
+    assert body["coins_credited"] == 30
+    assert len(body["pack_result"]["cards"]) == 1
+    assert body["new_balance"] == 500 + 30
+
+
+async def test_cannot_gift_yourself(client, db_session, bot_token, monkeypatch):
+    monkeypatch.setattr(stars_payment_service, "_request_telegram_invoice_link", _fake_invoice_link)
+    gift_set = await create_gift_set(db_session, stars_price=10)
+    user = await _register(client, db_session, 860006, bot_token)
+    headers = telegram_headers(860006, bot_token)
+
+    resp = await client.post(
+        "/api/v1/gifts/invoice", headers=headers,
+        json={"gift_set_id": gift_set.id, "recipient_id": user.id},
+    )
+    assert resp.status_code == 409
+
+
+async def test_claiming_someone_elses_gift_404s(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    recipient_headers = telegram_headers(860007, bot_token)
+    await client.post("/api/v1/auth/session", headers=recipient_headers)
+    recipient = await get_user_by_telegram_id(db_session, 860007)
+
+    other_headers = telegram_headers(860008, bot_token)
+    await client.post("/api/v1/auth/session", headers=other_headers)
+
+    gift_set = await create_gift_set(db_session, coins_amount=10, stars_price=0)
+    send_resp = await client.post(
+        "/api/v1/admin/gifts/send", headers=auth,
+        json={"gift_set_id": gift_set.id, "user_id": recipient.id},
+    )
+    gift_id = send_resp.json()["id"]
+
+    resp = await client.post(f"/api/v1/gifts/{gift_id}/claim", headers=other_headers)
+    assert resp.status_code == 404
+
+
+async def test_deleting_gift_set_removes_pending_gifts(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    recipient_headers = telegram_headers(860009, bot_token)
+    await client.post("/api/v1/auth/session", headers=recipient_headers)
+    recipient = await get_user_by_telegram_id(db_session, 860009)
+
+    gift_set = await create_gift_set(db_session, name="Temp Set")
+    await client.post(
+        "/api/v1/admin/gifts/send", headers=auth,
+        json={"gift_set_id": gift_set.id, "user_id": recipient.id},
+    )
+
+    delete_resp = await client.delete(f"/api/v1/admin/gifts/sets/{gift_set.id}", headers=auth)
+    assert delete_resp.status_code == 204
+
+    remaining = (await db_session.execute(select(Gift).where(Gift.gift_set_id == gift_set.id))).scalars().all()
+    assert remaining == []

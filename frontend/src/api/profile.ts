@@ -1,5 +1,14 @@
 import { api } from "@/lib/api";
-import type { CoinTransaction, OwnedBadge, Page, ProfilePrivate, ProfilePublic, ProfileSettingsUpdate, UserPublic } from "@/types";
+import type {
+  CoinTransaction,
+  OwnedBadge,
+  Page,
+  ProfilePrivate,
+  ProfilePublic,
+  ProfileSettingsUpdate,
+  UserPublic,
+  UserTrophy,
+} from "@/types";
 
 export async function fetchMyProfile(): Promise<ProfilePrivate> {
   const { data } = await api.get<ProfilePrivate>("/profile/me");
@@ -13,6 +22,11 @@ export async function updateMySettings(payload: ProfileSettingsUpdate): Promise<
 
 export async function fetchMyBadges(): Promise<OwnedBadge[]> {
   const { data } = await api.get<OwnedBadge[]>("/profile/badges");
+  return data;
+}
+
+export async function fetchMyTrophies(): Promise<UserTrophy[]> {
+  const { data } = await api.get<UserTrophy[]>("/profile/trophies");
   return data;
 }
 

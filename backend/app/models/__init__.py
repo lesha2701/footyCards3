@@ -7,6 +7,7 @@ from app.models.coin_package import CoinPackage
 from app.models.daily_reward import DailyReward
 from app.models.game import GameSession, MemoryGameRound
 from app.models.game_config import GameConfig
+from app.models.gift import Gift, GiftSet
 from app.models.lineup import Lineup, LineupCard
 from app.models.match import Match, MatchEvent
 from app.models.notification import Notification
@@ -15,6 +16,7 @@ from app.models.player import Player
 from app.models.task import TaskDefinition, UserTask
 from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.transaction import CoinTransaction
+from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.user import User
 
 __all__ = [
@@ -31,6 +33,8 @@ __all__ = [
     "GameSession",
     "MemoryGameRound",
     "GameConfig",
+    "Gift",
+    "GiftSet",
     "Lineup",
     "LineupCard",
     "Match",
@@ -47,5 +51,7 @@ __all__ = [
     "TradeOffer",
     "TradeOfferCard",
     "CoinTransaction",
+    "TrophyDefinition",
+    "UserTrophy",
     "User",
 ]

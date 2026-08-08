@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 
-import { fetchDashboard } from "@/admin/api";
+import { clearMaintenanceBanner, fetchDashboard, startMaintenanceBanner } from "@/admin/api";
+import { fetchMaintenanceStatus } from "@/api/maintenance";
 
 export default function AdminDashboardPage() {
   const { data, isLoading } = useQuery({ queryKey: ["admin-dashboard"], queryFn: fetchDashboard });
@@ -13,6 +14,8 @@ export default function AdminDashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-display text-2xl font-bold">Дашборд</h1>
+
+      <MaintenanceBannerSection />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Пользователей" value={data.total_users} />
@@ -43,6 +46,51 @@ export default function AdminDashboardPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function MaintenanceBannerSection() {
+  const queryClient = useQueryClient();
+  const { data: status } = useQuery({
+    queryKey: ["maintenance-status"],
+    queryFn: fetchMaintenanceStatus,
+    refetchInterval: 15000,
+  });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["maintenance-status"] });
+  const startMutation = useMutation({ mutationFn: startMaintenanceBanner, onSuccess: invalidate });
+  const clearMutation = useMutation({ mutationFn: clearMaintenanceBanner, onSuccess: invalidate });
+
+  const minutesLeft = status?.until ? Math.max(1, Math.ceil((new Date(status.until).getTime() - Date.now()) / 60000)) : null;
+
+  return (
+    <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+      <p className="mb-1 font-display text-base font-bold">🔧 Баннер техработ</p>
+      <p className="mb-3 text-xs text-slate-500">
+        Показывает игрокам в мини-аппе предупреждение на 5 минут — нажимай перед выкладкой обновления.
+      </p>
+
+      {status?.active ? (
+        <div className="flex items-center justify-between rounded-xl bg-amber-500/10 px-3 py-2">
+          <span className="text-sm text-amber-300">Баннер активен ещё ~{minutesLeft} мин</span>
+          <button
+            onClick={() => clearMutation.mutate()}
+            disabled={clearMutation.isPending}
+            className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold disabled:opacity-50"
+          >
+            Убрать сейчас
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => startMutation.mutate()}
+          disabled={startMutation.isPending}
+          className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-bg-base disabled:opacity-50"
+        >
+          {startMutation.isPending ? "Включаю..." : "Готовлю обновление (баннер на 5 мин)"}
+        </button>
+      )}
+    </section>
   );
 }
 

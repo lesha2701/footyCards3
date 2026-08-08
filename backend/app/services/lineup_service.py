@@ -2,6 +2,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -50,15 +51,31 @@ CATEGORY_POSITIONS = {
 }
 
 
+def _active_lineup_query(user_id: int):
+    return select(Lineup).where(Lineup.user_id == user_id, Lineup.is_active.is_(True)).options(joinedload(Lineup.cards))
+
+
 async def _get_or_create_lineup(db: AsyncSession, user_id: int) -> Lineup:
-    result = await db.execute(
-        select(Lineup).where(Lineup.user_id == user_id, Lineup.is_active.is_(True)).options(joinedload(Lineup.cards))
-    )
+    result = await db.execute(_active_lineup_query(user_id))
     lineup = result.unique().scalar_one_or_none()
     if lineup is None:
-        lineup = Lineup(user_id=user_id, formation="4-3-3", is_active=True)
-        db.add(lineup)
-        await db.flush()
+        try:
+            # A SAVEPOINT (not a full db.rollback()) so a lost race only
+            # undoes this one failed insert — a plain rollback expires every
+            # object in the session, including the caller's already-loaded
+            # `user`, which then blows up with a greenlet error the next
+            # time something touches it.
+            async with db.begin_nested():
+                lineup = Lineup(user_id=user_id, formation="4-3-3", is_active=True)
+                db.add(lineup)
+                await db.flush()
+        except IntegrityError:
+            # Lost a race with a concurrent first-time request for this same
+            # user (uq_lineup_one_active_per_user) — e.g. picking a tactic
+            # and picking a card slot within the same moment. The winner's
+            # row is what we want, not a second one.
+            result = await db.execute(_active_lineup_query(user_id))
+            lineup = result.unique().scalar_one()
     return lineup
 
 

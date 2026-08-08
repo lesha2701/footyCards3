@@ -189,12 +189,17 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-3 font-display text-base font-bold">Найди пару</p>
+        <p className="mb-1 font-display text-base font-bold">Найди пару</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Награда падает по группам ошибок: с настройками по умолчанию 0-10 ошибок = 40 монет, 11-20 = 30, 21-30 = 20
+          и т.д., но не ниже минимальной награды.
+        </p>
         <div className="grid grid-cols-2 gap-3">
           {field("pairs_daily_limit", "Лимит наградных попыток/день")}
-          {field("pairs_reward_perfect", "Награда за безошибочную игру")}
+          {field("pairs_reward_perfect", "Награда в топ-группе (0 ошибок)")}
           {field("pairs_reward_min", "Минимальная награда")}
-          {field("pairs_penalty_per_wrong", "Штраф за ошибку")}
+          {field("pairs_error_bracket_size", "Ошибок в одной группе")}
+          {field("pairs_bracket_penalty", "Штраф за группу ошибок")}
           {field("pairs_bonus_coins", "Бонус за особую карту")}
         </div>
       </section>

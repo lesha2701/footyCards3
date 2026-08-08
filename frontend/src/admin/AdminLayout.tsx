@@ -9,6 +9,8 @@ const SECTIONS = [
   { to: "/admin/card-collections", label: "Коллекции", icon: "🗃️" },
   { to: "/admin/tasks", label: "Задания", icon: "🎯" },
   { to: "/admin/trades", label: "Обмены", icon: "🔄" },
+  { to: "/admin/trophies", label: "Трофеи", icon: "🏆" },
+  { to: "/admin/gifts", label: "Подарки", icon: "🎁" },
   { to: "/admin/games", label: "Игры", icon: "🎮" },
   { to: "/admin/shop", label: "Магазин", icon: "🛒" },
   { to: "/admin/log", label: "Журнал", icon: "📜" },

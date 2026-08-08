@@ -171,6 +171,7 @@ export interface StarsInvoiceStatus {
   status: "pending" | "completed";
   result: PackOpenResult | null;
   coin_result: StarsCoinResult | null;
+  gift_result: Gift | null;
 }
 
 export interface CoinPackage {
@@ -276,6 +277,11 @@ export interface ArenaStats {
   matches_lost: number;
   arena_rating: number;
   arena_rank: number | null;
+}
+
+export interface MaintenanceStatus {
+  active: boolean;
+  until: string | null;
 }
 
 export interface GameLimits {
@@ -477,6 +483,54 @@ export interface ProfileSettingsUpdate {
 export interface OwnedBadge {
   badge: Badge;
   equipped: boolean;
+}
+
+export interface TrophyDefinition {
+  id: number;
+  code: string;
+  name: string;
+  description: string;
+  icon: string;
+  image_path: string | null;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface UserTrophy {
+  id: number;
+  trophy: TrophyDefinition;
+  message: string | null;
+  granted_at: string;
+  granted_by_admin_id: number | null;
+}
+
+export interface GiftSet {
+  id: number;
+  name: string;
+  description: string;
+  image_path: string | null;
+  pack_id: number | null;
+  coins_amount: number;
+  stars_price: number;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface Gift {
+  id: number;
+  gift_set: GiftSet;
+  sender: UserPublic | null;
+  message: string | null;
+  is_admin_gift: boolean;
+  claimed_at: string | null;
+  created_at: string;
+}
+
+export interface GiftClaimResult {
+  gift: Gift;
+  pack_result: PackOpenResult | null;
+  coins_credited: number;
+  new_balance: number;
 }
 
 export interface CoinTransaction {

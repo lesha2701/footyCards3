@@ -1,8 +1,11 @@
+import logging
+
 import httpx
 
 from app.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 _MEMBER_STATUSES = {"member", "administrator", "creator"}
 
@@ -15,12 +18,18 @@ async def check_channel_membership(telegram_user_id: int, chat_id: int | str) ->
 
     Requires the bot to be an admin of the channel. Fails closed (returns
     False) on any non-ok response, e.g. the bot isn't an admin there or the
-    channel doesn't exist.
+    channel doesn't exist — including a network-level failure reaching
+    api.telegram.org, which would otherwise bubble up as an unhandled 500 on
+    the task-claim endpoint. The player can just retry the claim.
     """
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/getChatMember"
-    async with httpx.AsyncClient(timeout=10, proxy=settings.telegram_proxy_url or None) as client:
-        resp = await client.get(url, params={"chat_id": chat_id, "user_id": telegram_user_id})
-    data = resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=10, proxy=settings.telegram_proxy_url or None) as client:
+            resp = await client.get(url, params={"chat_id": chat_id, "user_id": telegram_user_id})
+        data = resp.json()
+    except httpx.HTTPError:
+        logger.warning("check_channel_membership: request to Telegram failed (chat_id=%s)", chat_id, exc_info=True)
+        return False
     if not data.get("ok"):
         return False
     return data["result"]["status"] in _MEMBER_STATUSES

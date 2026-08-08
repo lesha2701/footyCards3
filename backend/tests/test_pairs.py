@@ -1,3 +1,6 @@
+from types import SimpleNamespace
+
+from app.services.pairs_service import _tiered_reward
 from tests.factories import create_player
 from tests.utils import telegram_headers
 
@@ -5,6 +8,21 @@ from tests.utils import telegram_headers
 async def _seed_players(db_session, count=12):
     for _ in range(count):
         await create_player(db_session)
+
+
+def test_tiered_reward_drops_by_bracket():
+    config = SimpleNamespace(
+        pairs_reward_perfect=40, pairs_reward_min=10, pairs_error_bracket_size=10, pairs_bracket_penalty=10,
+    )
+    assert _tiered_reward(0, config) == 40
+    assert _tiered_reward(10, config) == 40
+    assert _tiered_reward(11, config) == 30
+    assert _tiered_reward(20, config) == 30
+    assert _tiered_reward(21, config) == 20
+    assert _tiered_reward(30, config) == 20
+    assert _tiered_reward(31, config) == 10
+    # Floored at pairs_reward_min no matter how many further brackets deep.
+    assert _tiered_reward(1000, config) == 10
 
 
 async def test_pairs_start_deals_a_25_cell_board(client, db_session, bot_token):
@@ -82,8 +100,8 @@ async def test_pairs_wins_only_after_bonus_tile_is_found(client, db_session, bot
 
     claim = await client.post(f"/api/v1/games/pairs/{session_id}/claim", headers=headers)
     assert claim.status_code == 200
-    # Perfect run (0 wrong attempts) + bonus tile found.
-    assert claim.json()["reward_coins"] == 60 + 25
+    # Perfect run (0 wrong attempts, top reward bracket) + bonus tile found.
+    assert claim.json()["reward_coins"] == 40 + 25
 
     second_claim = await client.post(f"/api/v1/games/pairs/{session_id}/claim", headers=headers)
     assert second_claim.status_code == 409

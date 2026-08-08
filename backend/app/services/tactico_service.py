@@ -291,6 +291,12 @@ async def _consume_hourly_slot(db: AsyncSession, user_id: int, config: GameConfi
 
 
 async def create_bot_match(db: AsyncSession, user: User, difficulty: MatchDifficulty) -> TacticoMatchOut:
+    # Тактико only offers "Лёгкий" (easy) and "Продвинутый" (medium,
+    # relabeled) — "hard" is still a valid MatchDifficulty for Card Arena
+    # (shared enum/config), just not exposed here.
+    if difficulty == MatchDifficulty.hard:
+        raise ConflictError("This difficulty is not available in Тактико")
+
     config = await get_config(db)
     if await _has_active_match(db, user.id):
         raise ConflictError("У тебя уже есть матч в Тактико в процессе — заверши его или сдайся, прежде чем начать новый")
@@ -607,7 +613,18 @@ async def _finish_match(
             MatchResult.draw: config.tactico_reward_draw,
             MatchResult.loss: config.tactico_reward_loss,
         }
-        reward = 0 if locked_user.game_rewards_blocked else reward_base[result]
+        # Same difficulty_*_multiplier config Card Arena uses — "Продвинутый"
+        # (MatchDifficulty.medium, multiplier 1.0) pays out more than
+        # "Лёгкий" (0.85) this way, with no new config needed.
+        difficulty_multiplier = {
+            MatchDifficulty.easy: float(config.difficulty_easy_multiplier),
+            MatchDifficulty.medium: float(config.difficulty_medium_multiplier),
+            MatchDifficulty.hard: float(config.difficulty_hard_multiplier),
+        }
+        reward = (
+            0 if locked_user.game_rewards_blocked
+            else round(reward_base[result] * difficulty_multiplier[match.difficulty])
+        )
         if reward > 0:
             await credit_coins(
                 db, locked_user, reward, TransactionType.tactico_reward,

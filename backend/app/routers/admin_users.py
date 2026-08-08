@@ -13,10 +13,12 @@ from app.models.card import UserCard
 from app.models.enums import TransactionType
 from app.models.player import Player
 from app.models.transaction import CoinTransaction
+from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.user import User
-from app.schemas.admin import AdminUserOut, BalanceAdjustRequest, GrantCardRequest, ResetLimitsResponse
+from app.schemas.admin import AdminUserOut, BalanceAdjustRequest, GrantCardRequest, GrantTrophyRequest, ResetLimitsResponse
 from app.schemas.card import UserCardOut
 from app.schemas.transaction import CoinTransactionOut
+from app.schemas.trophy import UserTrophyOut
 from app.services.admin_log_service import log_action
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
@@ -213,3 +215,38 @@ async def toggle_reward_block(user_id: int, request: Request, db: AsyncSession =
     await db.commit()
     await db.refresh(user)
     return user
+
+
+@router.get("/{user_id}/trophies", response_model=list[UserTrophyOut])
+async def list_user_trophies(user_id: int, db: AsyncSession = Depends(get_db)):
+    await _get_user_or_404(db, user_id)
+    result = await db.execute(
+        select(UserTrophy).where(UserTrophy.user_id == user_id).order_by(UserTrophy.granted_at.desc())
+    )
+    return result.scalars().all()
+
+
+@router.post("/{user_id}/trophies/grant", response_model=UserTrophyOut)
+async def grant_trophy(
+    user_id: int, payload: GrantTrophyRequest, request: Request,
+    db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin),
+):
+    await _get_user_or_404(db, user_id)
+    trophy_def = await db.get(TrophyDefinition, payload.trophy_definition_id)
+    if trophy_def is None:
+        raise NotFoundError("Trophy not found")
+
+    grant = UserTrophy(
+        user_id=user_id, trophy_definition_id=trophy_def.id,
+        granted_by_admin_id=admin.id, message=payload.message,
+    )
+    db.add(grant)
+    await db.flush()
+    await log_action(
+        db, admin.id, "grant_trophy", "user_trophy", grant.id,
+        new_value={"user_id": user_id, "trophy_definition_id": trophy_def.id, "message": payload.message},
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    await db.refresh(grant)
+    return grant

@@ -125,4 +125,12 @@ class StarsInvoice(TimestampMixin, Base):
     pack_opening_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("pack_openings.id", ondelete="SET NULL"), nullable=True
     )
+    # Set together (never with pack_id or coins_amount) for a gift purchase —
+    # the target gift set, chosen recipient and optional note, all frozen at
+    # invoice-creation time. gift_id is filled in at delivery, once the Gift
+    # row itself has been created (mirrors pack_opening_id above).
+    gift_set_id: Mapped[Optional[int]] = mapped_column(ForeignKey("gift_sets.id", ondelete="CASCADE"), nullable=True)
+    gift_recipient_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    gift_message: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    gift_id: Mapped[Optional[int]] = mapped_column(ForeignKey("gifts.id", ondelete="SET NULL"), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

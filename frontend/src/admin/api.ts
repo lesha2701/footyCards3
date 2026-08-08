@@ -1,5 +1,18 @@
 import { api } from "@/lib/api";
-import type { Badge, CoinPackage, Page, Pack, Player, TradeOffer, TradeStatus } from "@/types";
+import type {
+  Badge,
+  CoinPackage,
+  Gift,
+  GiftSet,
+  MaintenanceStatus,
+  Page,
+  Pack,
+  Player,
+  TradeOffer,
+  TradeStatus,
+  TrophyDefinition,
+  UserTrophy,
+} from "@/types";
 import type {
   AdminActionLog,
   AdminUser,
@@ -7,7 +20,9 @@ import type {
   Dashboard,
   GameConfig,
   PackPreview,
+  StarsDonationSummary,
   StarsPackPurchase,
+  TopSupporter,
   SuspiciousMatch,
   SuspiciousMemorySession,
   TaskDefinition,
@@ -15,6 +30,17 @@ import type {
 
 export async function fetchDashboard(): Promise<Dashboard> {
   const { data } = await api.get<Dashboard>("/admin/dashboard");
+  return data;
+}
+
+// --- Maintenance banner ---
+export async function startMaintenanceBanner(): Promise<MaintenanceStatus> {
+  const { data } = await api.post<MaintenanceStatus>("/admin/maintenance/start");
+  return data;
+}
+
+export async function clearMaintenanceBanner(): Promise<MaintenanceStatus> {
+  const { data } = await api.post<MaintenanceStatus>("/admin/maintenance/clear");
   return data;
 }
 
@@ -295,6 +321,101 @@ export async function deleteBadgeImage(id: number): Promise<Badge> {
   return data;
 }
 
+// --- Trophies ---
+export async function fetchAdminTrophies(): Promise<TrophyDefinition[]> {
+  const { data } = await api.get<TrophyDefinition[]>("/admin/trophies");
+  return data;
+}
+
+export async function createTrophy(payload: Record<string, unknown>): Promise<TrophyDefinition> {
+  const { data } = await api.post<TrophyDefinition>("/admin/trophies", payload);
+  return data;
+}
+
+export async function updateTrophy(id: number, payload: Record<string, unknown>): Promise<TrophyDefinition> {
+  const { data } = await api.put<TrophyDefinition>(`/admin/trophies/${id}`, payload);
+  return data;
+}
+
+export async function deleteTrophy(id: number): Promise<void> {
+  await api.delete(`/admin/trophies/${id}`);
+}
+
+export async function uploadTrophyImage(id: number, file: File): Promise<TrophyDefinition> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<TrophyDefinition>(`/admin/trophies/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function deleteTrophyImage(id: number): Promise<TrophyDefinition> {
+  const { data } = await api.delete<TrophyDefinition>(`/admin/trophies/${id}/image`);
+  return data;
+}
+
+export async function fetchUserTrophies(userId: number): Promise<UserTrophy[]> {
+  const { data } = await api.get<UserTrophy[]>(`/admin/users/${userId}/trophies`);
+  return data;
+}
+
+export async function grantTrophy(userId: number, trophyDefinitionId: number, message?: string): Promise<UserTrophy> {
+  const { data } = await api.post<UserTrophy>(`/admin/users/${userId}/trophies/grant`, {
+    trophy_definition_id: trophyDefinitionId,
+    message: message || undefined,
+  });
+  return data;
+}
+
+// --- Gifts ---
+export async function fetchAdminGiftSets(): Promise<GiftSet[]> {
+  const { data } = await api.get<GiftSet[]>("/admin/gifts/sets");
+  return data;
+}
+
+export async function createGiftSet(payload: Record<string, unknown>): Promise<GiftSet> {
+  const { data } = await api.post<GiftSet>("/admin/gifts/sets", payload);
+  return data;
+}
+
+export async function updateGiftSet(id: number, payload: Record<string, unknown>): Promise<GiftSet> {
+  const { data } = await api.put<GiftSet>(`/admin/gifts/sets/${id}`, payload);
+  return data;
+}
+
+export async function deleteGiftSet(id: number): Promise<void> {
+  await api.delete(`/admin/gifts/sets/${id}`);
+}
+
+export async function uploadGiftSetImage(id: number, file: File): Promise<GiftSet> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<GiftSet>(`/admin/gifts/sets/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function deleteGiftSetImage(id: number): Promise<GiftSet> {
+  const { data } = await api.delete<GiftSet>(`/admin/gifts/sets/${id}/image`);
+  return data;
+}
+
+export async function adminSendGift(giftSetId: number, userId: number, message?: string): Promise<Gift> {
+  const { data } = await api.post<Gift>("/admin/gifts/send", {
+    gift_set_id: giftSetId, user_id: userId, message: message || undefined,
+  });
+  return data;
+}
+
+export async function adminBroadcastGift(giftSetId: number, message?: string): Promise<{ recipients: number }> {
+  const { data } = await api.post<{ recipients: number }>("/admin/gifts/broadcast", {
+    gift_set_id: giftSetId, message: message || undefined,
+  });
+  return data;
+}
+
 // --- Coin packages ---
 export async function fetchAdminCoinPackages(): Promise<CoinPackage[]> {
   const { data } = await api.get<CoinPackage[]>("/admin/coin-packages");
@@ -323,5 +444,15 @@ export async function fetchAdminLog(page: number): Promise<Page<AdminActionLog>>
 
 export async function fetchStarsPackPurchases(page: number): Promise<Page<StarsPackPurchase>> {
   const { data } = await api.get<Page<StarsPackPurchase>>("/admin/stars-purchases", { params: { page } });
+  return data;
+}
+
+export async function fetchStarsDonationSummary(): Promise<StarsDonationSummary> {
+  const { data } = await api.get<StarsDonationSummary>("/admin/stars-purchases/summary");
+  return data;
+}
+
+export async function fetchTopSupporters(): Promise<TopSupporter[]> {
+  const { data } = await api.get<TopSupporter[]>("/admin/stars-purchases/top-supporters");
   return data;
 }

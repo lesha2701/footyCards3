@@ -2,6 +2,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.gift import GiftOut
 from app.schemas.pack import PackOpenResult
 
 
@@ -20,6 +21,7 @@ class StarsInvoiceStatusOut(BaseModel):
     status: Literal["pending", "completed"]
     result: Optional[PackOpenResult] = None
     coin_result: Optional[StarsCoinResultOut] = None
+    gift_result: Optional[GiftOut] = None
 
 
 class StarsCoinInvoiceCreate(BaseModel):

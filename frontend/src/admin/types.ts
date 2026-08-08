@@ -47,6 +47,20 @@ export interface PackPreview {
   rarity_distribution: { rarity: Rarity; count: number; percentage: number }[];
 }
 
+export interface StarsDonationSummary {
+  total_stars: number;
+  total_purchases: number;
+}
+
+export interface TopSupporter {
+  user_id: number;
+  user_telegram_id: number;
+  user_username: string | null;
+  user_display_name: string;
+  total_stars: number;
+  purchase_count: number;
+}
+
 export interface StarsPackPurchase {
   id: number;
   user_id: number;
@@ -131,7 +145,8 @@ export interface GameConfig {
   pairs_daily_limit: number;
   pairs_reward_perfect: number;
   pairs_reward_min: number;
-  pairs_penalty_per_wrong: number;
+  pairs_error_bracket_size: number;
+  pairs_bracket_penalty: number;
   pairs_bonus_coins: number;
   tactico_challenge_expiry_hours: number;
   tactico_round_timeout_hours: number;

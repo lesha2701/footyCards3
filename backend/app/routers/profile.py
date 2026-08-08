@@ -10,7 +10,8 @@ from app.models.user import User
 from app.schemas.badge import OwnedBadgeOut
 from app.schemas.profile import ProfilePrivateOut, ProfileSettingsUpdate
 from app.schemas.transaction import CoinTransactionOut
-from app.services.profile_service import get_private_profile, list_owned_badges, update_settings
+from app.schemas.trophy import UserTrophyOut
+from app.services.profile_service import get_private_profile, list_owned_badges, list_owned_trophies, update_settings
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -30,6 +31,11 @@ async def update_my_settings(
 @router.get("/badges", response_model=list[OwnedBadgeOut])
 async def read_my_badges(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await list_owned_badges(db, user)
+
+
+@router.get("/trophies", response_model=list[UserTrophyOut])
+async def read_my_trophies(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await list_owned_trophies(db, user)
 
 
 @router.get("/transactions", response_model=Page[CoinTransactionOut])

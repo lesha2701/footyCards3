@@ -9,7 +9,9 @@ import {
   deleteCoinPackage,
   fetchAdminBadges,
   fetchAdminCoinPackages,
+  fetchStarsDonationSummary,
   fetchStarsPackPurchases,
+  fetchTopSupporters,
   updateBadge,
   updateCoinPackage,
   uploadBadgeImage,
@@ -24,8 +26,48 @@ export default function AdminShopPage() {
       <h1 className="font-display text-2xl font-bold">Магазин</h1>
       <CoinPackagesSection />
       <BadgesSection />
+      <TopSupportersSection />
       <StarsPackPurchasesSection />
     </div>
+  );
+}
+
+const MEDALS = ["🥇", "🥈", "🥉"];
+
+function TopSupportersSection() {
+  const { data: supporters, isLoading } = useQuery({
+    queryKey: ["admin-top-supporters"],
+    queryFn: fetchTopSupporters,
+  });
+
+  return (
+    <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+      <div className="mb-3">
+        <p className="font-display text-base font-bold">🏆 Top Supporters</p>
+        <p className="text-xs text-slate-500">Топ-10 игроков по сумме задоначенных Stars за всё время.</p>
+      </div>
+
+      {isLoading && <p className="text-sm text-slate-400">Загрузка...</p>}
+
+      <div className="flex flex-col gap-1.5">
+        {supporters?.map((s, i) => (
+          <div key={s.user_id} className="flex items-center justify-between rounded-xl bg-bg-base px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="w-6 text-center text-sm">{MEDALS[i] ?? `#${i + 1}`}</span>
+              <div>
+                <p className="text-sm font-semibold">
+                  {s.user_display_name}
+                  {s.user_username && <span className="text-slate-500"> @{s.user_username}</span>}
+                </p>
+                <p className="text-[11px] text-slate-500">{s.purchase_count} покупок · id {s.user_telegram_id}</p>
+              </div>
+            </div>
+            <span className="font-mono text-sm font-bold text-amber-300">{s.total_stars} ⭐</span>
+          </div>
+        ))}
+        {supporters?.length === 0 && <p className="text-xs text-slate-500">Пока никто не задонатил.</p>}
+      </div>
+    </section>
   );
 }
 
@@ -35,12 +77,26 @@ function StarsPackPurchasesSection() {
     queryKey: ["admin-stars-pack-purchases", page],
     queryFn: () => fetchStarsPackPurchases(page),
   });
+  const { data: summary } = useQuery({
+    queryKey: ["admin-stars-donation-summary"],
+    queryFn: fetchStarsDonationSummary,
+  });
 
   return (
     <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-      <div className="mb-3">
-        <p className="font-display text-base font-bold">Открытия паков за Stars</p>
-        <p className="text-xs text-slate-500">Кто, какой пак и когда купил за Telegram Stars.</p>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <p className="font-display text-base font-bold">Открытия паков за Stars</p>
+          <p className="text-xs text-slate-500">Кто, какой пак и когда купил за Telegram Stars.</p>
+        </div>
+        {summary && (
+          <div className="shrink-0 rounded-xl bg-amber-400/10 px-3 py-2 text-right">
+            <p className="font-display text-lg font-bold text-amber-300">{summary.total_stars} ⭐</p>
+            <p className="text-[11px] text-slate-500">
+              задонатили всего ({summary.total_purchases} покупок: паки + монеты)
+            </p>
+          </div>
+        )}
       </div>
 
       {isLoading && <p className="text-sm text-slate-400">Загрузка...</p>}

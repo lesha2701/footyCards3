@@ -8,10 +8,12 @@ from app.models.card import UserCard
 from app.models.enums import RARITY_ORDER
 from app.models.pack import PackOpening
 from app.models.player import Player
+from app.models.trophy import UserTrophy
 from app.models.user import User
 from app.schemas.badge import BadgeOut, OwnedBadgeOut
 from app.schemas.player import PlayerOut
 from app.schemas.profile import ProfilePrivateOut, ProfilePublicOut, ProfileSettingsUpdate
+from app.schemas.trophy import UserTrophyOut
 from app.schemas.user import UserPublicOut
 from app.services.game_config_service import get_config
 
@@ -133,6 +135,13 @@ async def list_owned_badges(db: AsyncSession, user: User) -> list[OwnedBadgeOut]
         OwnedBadgeOut(badge=BadgeOut.model_validate(ub.badge), equipped=ub.badge_id == user.active_badge_id)
         for ub in owned
     ]
+
+
+async def list_owned_trophies(db: AsyncSession, user: User) -> list[UserTrophyOut]:
+    result = await db.execute(
+        select(UserTrophy).where(UserTrophy.user_id == user.id).order_by(UserTrophy.granted_at.desc())
+    )
+    return [UserTrophyOut.model_validate(t) for t in result.scalars().all()]
 
 
 async def search_users(db: AsyncSession, query: str, exclude_user_id: int, limit: int = 20) -> list[UserPublicOut]:

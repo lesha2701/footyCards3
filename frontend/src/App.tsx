@@ -11,6 +11,8 @@ import AdminPacksPage from "@/admin/pages/AdminPacksPage";
 import AdminCardCollectionsPage from "@/admin/pages/AdminCardCollectionsPage";
 import AdminTasksPage from "@/admin/pages/AdminTasksPage";
 import AdminTradesPage from "@/admin/pages/AdminTradesPage";
+import AdminTrophiesPage from "@/admin/pages/AdminTrophiesPage";
+import AdminGiftsPage from "@/admin/pages/AdminGiftsPage";
 import AdminGamesPage from "@/admin/pages/AdminGamesPage";
 import AdminShopPage from "@/admin/pages/AdminShopPage";
 import AdminLogPage from "@/admin/pages/AdminLogPage";
@@ -35,6 +37,7 @@ import TasksPage from "@/pages/TasksPage";
 import UpgradePage from "@/pages/UpgradePage";
 import RankingPage from "@/pages/RankingPage";
 import ProfilePage from "@/pages/ProfilePage";
+import GiftsPage from "@/pages/GiftsPage";
 import PublicProfilePage from "@/pages/PublicProfilePage";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import ErrorScreen from "@/components/common/ErrorScreen";
@@ -108,6 +111,8 @@ export default function App() {
         <Route path="card-collections" element={<AdminCardCollectionsPage />} />
         <Route path="tasks" element={<AdminTasksPage />} />
         <Route path="trades" element={<AdminTradesPage />} />
+        <Route path="trophies" element={<AdminTrophiesPage />} />
+        <Route path="gifts" element={<AdminGiftsPage />} />
         <Route path="games" element={<AdminGamesPage />} />
         <Route path="shop" element={<AdminShopPage />} />
         <Route path="log" element={<AdminLogPage />} />
@@ -136,6 +141,7 @@ export default function App() {
         <Route path="/upgrade" element={<UpgradePage />} />
         <Route path="/ranking" element={<RankingPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/gifts" element={<GiftsPage />} />
         <Route path="/users/:userId" element={<PublicProfilePage />} />
       </Route>
 

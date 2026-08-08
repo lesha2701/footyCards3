@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { claimDailyReward, fetchDailyRewardCalendar } from "@/api/dailyRewards";
-import { fetchMyBadges, fetchMyProfile, fetchMyTransactions, updateMySettings } from "@/api/profile";
+import { fetchMyBadges, fetchMyProfile, fetchMyTransactions, fetchMyTrophies, updateMySettings } from "@/api/profile";
 import { createCoinInvoice, fetchCoinInvoiceStatus, fetchCoinPackages } from "@/api/wallet";
 import { UserBadge } from "@/components/common/UserBadge";
 import {
@@ -16,6 +16,7 @@ import {
   IconSwap,
   IconTag,
   IconTools,
+  IconTrophy,
   IconUsers,
   type IconProps,
 } from "@/components/icons";
@@ -23,7 +24,7 @@ import { ApiRequestError, staticUrl } from "@/lib/api";
 import { RARITY_GLOW, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import { hapticNotify, openTelegramInvoice } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { CoinPackage, DailyRewardClaimResult } from "@/types";
+import type { CoinPackage, DailyRewardClaimResult, UserTrophy } from "@/types";
 
 const TX_TYPE_LABELS: Record<string, string> = {
   starting_balance: "Стартовый бонус",
@@ -63,6 +64,8 @@ export default function ProfilePage() {
 
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
   const { data: badges } = useQuery({ queryKey: ["profile", "badges"], queryFn: fetchMyBadges });
+  const { data: trophies } = useQuery({ queryKey: ["profile", "trophies"], queryFn: fetchMyTrophies });
+  const [selectedTrophy, setSelectedTrophy] = useState<UserTrophy | null>(null);
   const { data: calendar } = useQuery({ queryKey: ["daily-reward-calendar"], queryFn: fetchDailyRewardCalendar });
   const { data: transactions } = useQuery({
     queryKey: ["transactions"],
@@ -143,6 +146,33 @@ export default function ProfilePage() {
           <p className="mt-2 text-[11px] text-ink-mist-dim">
             Нажми на значок, чтобы показать его рядом со своим именем. Нажми ещё раз, чтобы снять.
           </p>
+        </section>
+      )}
+
+      {!!trophies?.length && (
+        <section className="rounded-2xl bg-bg-surface p-4">
+          <p className="mb-3 flex items-center gap-1.5 font-display text-base font-bold text-ink-chalk">
+            <IconTrophy size={16} className="text-amber-400" />
+            Трофеи
+          </p>
+          <div className="grid grid-cols-4 gap-2">
+            {trophies.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setSelectedTrophy(t)}
+                className="flex flex-col items-center gap-1 rounded-xl bg-bg-raised p-2 active:scale-95"
+              >
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-b from-amber-400/20 to-amber-600/5">
+                  {t.trophy.image_path ? (
+                    <img src={staticUrl(t.trophy.image_path) ?? undefined} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-2xl">{t.trophy.icon}</span>
+                  )}
+                </div>
+                <span className="w-full truncate text-center text-[10px] text-ink-mist">{t.trophy.name}</span>
+              </button>
+            ))}
+          </div>
         </section>
       )}
 
@@ -252,6 +282,16 @@ export default function ProfilePage() {
       </section>
 
       <section className="rounded-2xl bg-bg-surface p-4">
+        <button
+          onClick={() => navigate("/gifts")}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-rarity-epic/80 py-3 text-sm font-bold text-white active:scale-95"
+        >
+          <IconGift size={16} />
+          Подарки
+        </button>
+      </section>
+
+      <section className="rounded-2xl bg-bg-surface p-4">
         <p className="flex items-center gap-1.5 font-display text-base font-bold text-ink-chalk">
           <IconSwap size={16} className="text-accent-cyan" />
           Настройки обменов
@@ -303,6 +343,7 @@ export default function ProfilePage() {
       )}
 
       {claimResult && <DailyRewardResultModal result={claimResult} onClose={() => setClaimResult(null)} />}
+      {selectedTrophy && <TrophyDetailModal trophy={selectedTrophy} onClose={() => setSelectedTrophy(null)} />}
       {showBuyCoins && (
         <BuyCoinsModal
           onClose={() => setShowBuyCoins(false)}
@@ -312,6 +353,39 @@ export default function ProfilePage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function TrophyDetailModal({ trophy, onClose }: { trophy: UserTrophy; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm" onClick={onClose}>
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: "spring", damping: 20, stiffness: 300 }}
+        className="w-full max-w-xs rounded-3xl bg-bg-surface p-5 text-center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b from-amber-400/25 to-amber-600/5">
+          {trophy.trophy.image_path ? (
+            <img src={staticUrl(trophy.trophy.image_path) ?? undefined} className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-4xl">{trophy.trophy.icon}</span>
+          )}
+        </div>
+        <p className="mt-3 font-display text-lg font-bold text-ink-chalk">{trophy.trophy.name}</p>
+        {trophy.trophy.description && <p className="mt-1 text-xs text-ink-mist">{trophy.trophy.description}</p>}
+        {trophy.message && (
+          <p className="mt-3 rounded-xl bg-amber-400/10 px-3 py-2 text-xs italic text-amber-300">«{trophy.message}»</p>
+        )}
+        <p className="mt-2 text-[11px] text-ink-mist-dim">
+          Вручено {new Date(trophy.granted_at).toLocaleDateString("ru-RU")}
+        </p>
+        <button onClick={onClose} className="mt-4 w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95">
+          Закрыть
+        </button>
+      </motion.div>
     </div>
   );
 }

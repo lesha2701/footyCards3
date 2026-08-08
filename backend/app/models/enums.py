@@ -40,6 +40,7 @@ class CardSource(str, enum.Enum):
     collection_reward = "collection_reward"
     stars_purchase = "stars_purchase"
     chat_pack = "chat_pack"
+    gift = "gift"
 
 
 class TransactionType(str, enum.Enum):
@@ -60,6 +61,7 @@ class TransactionType(str, enum.Enum):
     tactico_reward = "tactico_reward"
     stars_coin_purchase = "stars_coin_purchase"
     stars_pack_bonus_coins = "stars_pack_bonus_coins"
+    gift_coins = "gift_coins"
 
 
 class TaskCategory(str, enum.Enum):
