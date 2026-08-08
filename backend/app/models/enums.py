@@ -152,6 +152,7 @@ class NotificationType(str, enum.Enum):
     tactico_challenge_expired = "tactico_challenge_expired"
     tactico_your_turn = "tactico_your_turn"
     tactico_match_finished = "tactico_match_finished"
+    trophy_granted = "trophy_granted"
 
 
 class TradeCardSide(str, enum.Enum):

@@ -36,6 +36,11 @@ async def test_admin_can_create_and_grant_trophy(client, db_session, bot_token):
     assert len(my_resp.json()) == 1
     assert my_resp.json()[0]["trophy"]["name"] == "Легенда"
 
+    notifications_resp = await client.get("/api/v1/notifications", headers=player_headers)
+    assert notifications_resp.status_code == 200
+    notification_types = [n["type"] for n in notifications_resp.json()]
+    assert "trophy_granted" in notification_types
+
 
 async def test_non_admin_cannot_grant_trophy(client, db_session, bot_token):
     headers = telegram_headers(770002, bot_token)

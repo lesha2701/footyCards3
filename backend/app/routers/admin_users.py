@@ -10,7 +10,7 @@ from app.core.exceptions import NotFoundError
 from app.core.pagination import Page, PageParams
 from app.database import get_db
 from app.models.card import UserCard
-from app.models.enums import TransactionType
+from app.models.enums import NotificationType, TransactionType
 from app.models.player import Player
 from app.models.transaction import CoinTransaction
 from app.models.trophy import TrophyDefinition, UserTrophy
@@ -20,6 +20,7 @@ from app.schemas.card import UserCardOut
 from app.schemas.transaction import CoinTransactionOut
 from app.schemas.trophy import UserTrophyOut
 from app.services.admin_log_service import log_action
+from app.services.notification_service import notify
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 router = APIRouter(prefix="/admin/users", tags=["admin"], dependencies=[Depends(get_current_admin)])
@@ -246,6 +247,11 @@ async def grant_trophy(
         db, admin.id, "grant_trophy", "user_trophy", grant.id,
         new_value={"user_id": user_id, "trophy_definition_id": trophy_def.id, "message": payload.message},
         ip_address=request.client.host if request.client else None,
+    )
+    await notify(
+        db, user_id, NotificationType.trophy_granted,
+        "Новый трофей!", f"Вам вручили трофей «{trophy_def.name}» {trophy_def.icon}. Загляните в профиль, чтобы посмотреть.",
+        "user_trophy", grant.id,
     )
     await db.commit()
     await db.refresh(grant)
