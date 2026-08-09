@@ -27,7 +27,7 @@ async def get_ranking(db: AsyncSession, metric: RankingMetric, current_user: Use
             # instead, keeping the grouped query itself to just users+count.
             .options(selectinload(User.active_badge))
             .outerjoin(UserCard, UserCard.owner_id == User.id)
-            .where(User.is_banned.is_(False))
+            .where(User.is_banned.is_(False), User.is_admin.is_(False))
             .group_by(User.id)
             .order_by(value_expr.desc())
         )
@@ -37,13 +37,17 @@ async def get_ranking(db: AsyncSession, metric: RankingMetric, current_user: Use
             select(User, value_expr)
             .options(selectinload(User.active_badge))
             .outerjoin(UserCard, UserCard.owner_id == User.id)
-            .where(User.is_banned.is_(False))
+            .where(User.is_banned.is_(False), User.is_admin.is_(False))
             .group_by(User.id)
             .order_by(value_expr.desc())
         )
     else:
         column = _DIRECT_COLUMNS[metric]
-        stmt = select(User, column).where(User.is_banned.is_(False)).order_by(column.desc())
+        stmt = (
+            select(User, column)
+            .where(User.is_banned.is_(False), User.is_admin.is_(False))
+            .order_by(column.desc())
+        )
 
     rows = (await db.execute(stmt)).all()
 

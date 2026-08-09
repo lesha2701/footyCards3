@@ -122,7 +122,9 @@ export interface GameConfig {
   match_keeper_save_chance_max: number;
   match_red_card_strength_penalty_pct: number;
   match_penalty_gk_rating_penalty: number;
-  saboteur_cell_reward: number;
+  saboteur_line_base_reward: number;
+  saboteur_line_growth: number;
+  saboteur_max_steward_count: number;
   saboteur_daily_limit: number;
   penalty_reward_win: number;
   penalty_reward_draw: number;

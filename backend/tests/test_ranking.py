@@ -54,3 +54,25 @@ async def test_ranking_reports_rank_when_outside_top_list(client, db_session, bo
     assert result.me is not None
     assert result.me.user_id == last_place.id
     assert result.me.rank == 3
+
+
+async def test_ranking_excludes_admins(client, db_session, bot_token):
+    admin_headers = telegram_headers(999000001, bot_token)  # matches ADMIN_TELEGRAM_IDS in conftest
+    await client.post("/api/v1/auth/session", headers=admin_headers)
+    admin = await get_user_by_telegram_id(db_session, 999000001)
+    admin.referral_count = 999
+    db_session.add(admin)
+    await db_session.commit()
+
+    headers = telegram_headers(760020, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 760020)
+    user.referral_count = 1
+    db_session.add(user)
+    await db_session.commit()
+
+    resp = await client.get("/api/v1/leaderboard/ranking", headers=headers, params={"metric": "referral_count"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert all(entry["user_id"] != admin.id for entry in body["top"])
+    assert body["top"][0]["user_id"] == user.id

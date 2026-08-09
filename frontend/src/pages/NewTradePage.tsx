@@ -107,22 +107,26 @@ export default function NewTradePage() {
 
           <section>
             <p className="mb-2 text-sm font-semibold text-ink-mist">Твои карточки ({offeredIds.length})</p>
-            <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
-              {myCollection?.items.filter((c) => !c.is_locked_by_admin && !c.is_locked_in_trade && !c.is_in_lineup).map((c) => (
-                <PlayerCard key={c.id} player={c.player} size="sm" selected={offeredIds.includes(c.id)} onClick={() => toggle(offeredIds, setOfferedIds, c.id)} />
-              ))}
+            <div className="max-h-64 overflow-y-auto">
+              <div className="grid grid-cols-3 gap-2">
+                {myCollection?.items.filter((c) => !c.is_locked_by_admin && !c.is_locked_in_trade && !c.is_in_lineup).map((c) => (
+                  <PlayerCard key={c.id} player={c.player} size="sm" selected={offeredIds.includes(c.id)} onClick={() => toggle(offeredIds, setOfferedIds, c.id)} />
+                ))}
+              </div>
             </div>
           </section>
 
           <section>
             <p className="mb-2 text-sm font-semibold text-ink-mist">Карточки {target.username ?? "игрока"} ({requestedIds.length})</p>
-            <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
-              {theirCollection?.items.map((c) => (
-                <PlayerCard key={c.id} player={c.player} size="sm" selected={requestedIds.includes(c.id)} onClick={() => toggle(requestedIds, setRequestedIds, c.id)} />
-              ))}
-              {theirCollection && theirCollection.items.length === 0 && (
-                <p className="col-span-3 text-xs text-ink-mist-dim">У игрока пока нет карточек</p>
-              )}
+            <div className="max-h-64 overflow-y-auto">
+              <div className="grid grid-cols-3 gap-2">
+                {theirCollection?.items.map((c) => (
+                  <PlayerCard key={c.id} player={c.player} size="sm" selected={requestedIds.includes(c.id)} onClick={() => toggle(requestedIds, setRequestedIds, c.id)} />
+                ))}
+                {theirCollection && theirCollection.items.length === 0 && (
+                  <p className="col-span-3 text-xs text-ink-mist-dim">У игрока пока нет карточек</p>
+                )}
+              </div>
             </div>
           </section>
 

@@ -87,13 +87,19 @@ export default function AdminGamesPage() {
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Card Arena</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Итоговая награда = (награда ниже × множитель сложности) + 5 монет за каждый забитый гол — этот бонус за голы
+          не настраивается отдельно. Игрок всегда играет на среднем множителе (выбора сложности в интерфейсе нет).
+          Множители сложности общие с ботом Тактико (раздел ниже) — «сложный» там сейчас недостижим, так как в Тактико
+          оставлены только лёгкий и продвинутый уровни.
+        </p>
         <div className="grid grid-cols-2 gap-3">
-          {field("match_reward_win", "Награда за победу")}
-          {field("match_reward_draw", "Награда за ничью")}
-          {field("match_reward_loss", "Награда за поражение")}
+          {field("match_reward_win", "Награда за победу (без бонуса за голы)")}
+          {field("match_reward_draw", "Награда за ничью (без бонуса за голы)")}
+          {field("match_reward_loss", "Награда за поражение (без бонуса за голы)")}
           {field("difficulty_easy_multiplier", "Множитель: лёгкий")}
-          {field("difficulty_medium_multiplier", "Множитель: средний")}
-          {field("difficulty_hard_multiplier", "Множитель: сложный")}
+          {field("difficulty_medium_multiplier", "Множитель: средний (всегда применяется в Card Arena)")}
+          {field("difficulty_hard_multiplier", "Множитель: сложный (только бот Тактико — недостижим)")}
           {field("suspicious_score_margin", "Порог подозрительной разницы счёта")}
         </div>
       </section>
@@ -134,18 +140,28 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-3 font-display text-base font-bold">Футбольный фанат</p>
+        <p className="mb-1 font-display text-base font-bold">Футбольный фанат</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Награда за уровень = базовая награда × число стюардов на линии × (рост ^ (уровень − 1)), т.е. растёт с каждым
+          пройденным уровнем.
+        </p>
         <div className="grid grid-cols-2 gap-3">
-          {field("saboteur_cell_reward", "Награда за ячейку")}
+          {field("saboteur_line_base_reward", "Базовая награда за уровень")}
+          {field("saboteur_line_growth", "Рост награды за уровень (напр. 1.15)")}
+          {field("saboteur_max_steward_count", "Макс. число стюардов на линии")}
           {field("saboteur_daily_limit", "Лимит наградных попыток/день")}
         </div>
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-3 font-display text-base font-bold">Пенальти</p>
+        <p className="mb-1 font-display text-base font-bold">Пенальти</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Серия пенальти продолжается до победителя (доп. удары при ничьей), поэтому «Награда за ничью» никогда не
+          выплачивается — оставлена про запас на случай, если формат матча изменится.
+        </p>
         <div className="grid grid-cols-2 gap-3">
           {field("penalty_reward_win", "Награда за победу")}
-          {field("penalty_reward_draw", "Награда за ничью")}
+          {field("penalty_reward_draw", "Награда за ничью (сейчас недостижима)")}
           {field("penalty_reward_loss", "Награда за поражение")}
           {field("penalty_bot_miss_chance", "Шанс промаха бота (0-1)")}
           {field("penalty_daily_limit", "Лимит наградных попыток/день")}
@@ -163,7 +179,12 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-3 font-display text-base font-bold">Тактико</p>
+        <p className="mb-1 font-display text-base font-bold">Тактико</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Награда за бот-матч = награда ниже × множитель сложности из раздела «Card Arena» выше (свои множители тут не
+          настраиваются). В Тактико сейчас доступны только лёгкий и продвинутый (средний множитель) уровни — «сложный»
+          отключён.
+        </p>
         <div className="grid grid-cols-2 gap-3">
           {field("tactico_challenge_expiry_hours", "Срок жизни вызова, часы")}
           {field("tactico_round_timeout_hours", "Тайм-аут на раунд, часы")}
@@ -172,8 +193,8 @@ export default function AdminGamesPage() {
           {field("tactico_reward_draw", "Награда за ничью (бот)")}
           {field("tactico_reward_loss", "Награда за поражение (бот)")}
           {field("tactico_bot_optimal_pick_chance_easy", "Точность бота: лёгкий (0-1)")}
-          {field("tactico_bot_optimal_pick_chance_medium", "Точность бота: средний (0-1)")}
-          {field("tactico_bot_optimal_pick_chance_hard", "Точность бота: сложный (0-1)")}
+          {field("tactico_bot_optimal_pick_chance_medium", "Точность бота: продвинутый (0-1)")}
+          {field("tactico_bot_optimal_pick_chance_hard", "Точность бота: сложный (0-1, недостижим)")}
           {field("tactico_max_legendary_cards", "Макс. легендарных карт в составе")}
           {field("tactico_max_epic_cards", "Макс. эпических карт в составе")}
         </div>

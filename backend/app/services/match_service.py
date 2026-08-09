@@ -790,7 +790,9 @@ async def arena_stats(db: AsyncSession, user: User) -> ArenaStatsOut:
 
 
 async def arena_leaderboard(db: AsyncSession, limit: int = 20) -> list[ArenaLeaderboardEntry]:
-    result = await db.execute(select(User).order_by(User.arena_rating.desc()).limit(limit))
+    result = await db.execute(
+        select(User).where(User.is_admin.is_(False)).order_by(User.arena_rating.desc()).limit(limit)
+    )
     users = result.scalars().all()
     return [
         ArenaLeaderboardEntry(

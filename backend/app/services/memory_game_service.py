@@ -202,7 +202,10 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> MemoryC
 
 async def leaderboard(db: AsyncSession, limit: int = 20) -> list[MemoryLeaderboardEntry]:
     result = await db.execute(
-        select(User).where(User.memory_best_score > 0).order_by(User.memory_best_score.desc()).limit(limit)
+        select(User)
+        .where(User.memory_best_score > 0, User.is_admin.is_(False))
+        .order_by(User.memory_best_score.desc())
+        .limit(limit)
     )
     users = result.scalars().all()
     return [
