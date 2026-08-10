@@ -609,7 +609,9 @@ export interface SaboteurClaimResult {
   new_balance: number;
 }
 
-export type PenaltyDirection = "left" | "center" | "right";
+export type PenaltyDirection =
+  | "top_left" | "top_center" | "top_right"
+  | "bottom_left" | "bottom_center" | "bottom_right";
 
 export interface PenaltyStartResult {
   session_id: number;
