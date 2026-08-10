@@ -157,8 +157,9 @@ async def test_penalty_pvp_full_match_resolves_with_score_and_rating(client, db_
     # on the sender's kicks and match (saved) on the receiver's — this
     # guarantees the sender finishes strictly ahead without ever needing a
     # tied score, so the match ends at regulation without sudden death, and
-    # exercises the win/+3/-1 rating-delta path (draw/+1 is covered by the
-    # match-timeout test instead, which forces a tie via the match clock).
+    # exercises the win/+3/-1 rating-delta path (the draw/+1 path is covered
+    # separately by test_penalty_pvp_match_timeout_draw_when_tied, which
+    # forces a genuine tie via the match clock).
     for i in range(10):
         kicker_headers = sender_headers if i % 2 == 0 else receiver_headers
         other_headers = receiver_headers if i % 2 == 0 else sender_headers
@@ -259,3 +260,49 @@ async def test_penalty_pvp_match_timeout_ends_in_current_score(client, db_sessio
     assert body["status"] == "finished"
     assert body["result"] == "win"
     assert body["user_score"] == 1 and body["opponent_score"] == 0
+
+
+async def test_penalty_pvp_match_timeout_draw_when_tied(client, db_session, bot_token):
+    """The match clock is the only way a PvP match ends in a draw (regulation
+    ties continue into sudden death instead) — force a still-tied score at
+    timeout and confirm _finish_match's MatchResult.draw branch (+1/+1).
+    Like the other two timeout tests above, this reaches the sweep logic
+    through GET /games/penalty/matches/{id}, so it 404s (expected) until
+    Task 5's get_match (which calls _auto_resolve_overdue) exists."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.penalty import PenaltyMatch
+    from sqlalchemy.orm.attributes import flag_modified
+
+    match_id, sender, receiver, sender_headers, receiver_headers = await _create_and_accept(
+        client, db_session, bot_token, 860209, 860210
+    )
+    sender.penalty_rating = 5
+    receiver.penalty_rating = 5
+    db_session.add_all([sender, receiver])
+    await db_session.commit()
+
+    # Both sides always dive the same zone they shoot — every kick is
+    # saved, score stays 0:0 — then the match clock (not regulation) is
+    # what ends it.
+    await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=sender_headers, json={"zone": "top_left"})
+    await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=receiver_headers, json={"zone": "top_left"})
+
+    match = await db_session.get(PenaltyMatch, match_id)
+    state = dict(match.server_state)
+    state["match_deadline"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    match.server_state = state
+    flag_modified(match, "server_state")
+    db_session.add(match)
+    await db_session.commit()
+
+    resp = await client.get(f"/api/v1/games/penalty/matches/{match_id}", headers=sender_headers)
+    body = resp.json()
+    assert body["status"] == "finished"
+    assert body["result"] == "draw"
+    assert body["user_score"] == 0 and body["opponent_score"] == 0
+
+    await db_session.refresh(sender)
+    await db_session.refresh(receiver)
+    assert sender.penalty_rating == 6  # 5 + 1 (draw)
+    assert receiver.penalty_rating == 6  # 5 + 1 (draw)
