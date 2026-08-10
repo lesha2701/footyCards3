@@ -1,23 +1,12 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchCollection } from "@/api/collection";
 import { claimPenaltyReward, kickPenalty, startPenalty } from "@/api/games";
 import CardPickerModal from "@/components/cards/CardPickerModal";
-import {
-  IconBall,
-  IconChevronLeft,
-  IconChevronRight,
-  IconChevronUp,
-  IconClose,
-  IconCoin,
-  IconFlagCheckered,
-  IconGloves,
-  IconTrophy,
-  type IconProps,
-} from "@/components/icons";
+import { IconCoin, IconFlagCheckered, IconTrophy } from "@/components/icons";
+import PenaltyGoalScene, { type PenaltyGoalKick } from "@/components/penalty/PenaltyGoalScene";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -25,17 +14,32 @@ import type { PenaltyDirection, PenaltyKickResult } from "@/types";
 
 type Phase = "pick_card" | "playing" | "finished";
 
-const DIRECTIONS: { value: PenaltyDirection; label: string; Icon: (props: IconProps) => JSX.Element }[] = [
-  { value: "left", label: "Лево", Icon: IconChevronLeft },
-  { value: "center", label: "Центр", Icon: IconChevronUp },
-  { value: "right", label: "Право", Icon: IconChevronRight },
+const ZONES: { value: PenaltyDirection; label: string; arrow: string }[] = [
+  { value: "top_left", label: "Верх-лево", arrow: "↖" },
+  { value: "top_center", label: "Верх-центр", arrow: "↑" },
+  { value: "top_right", label: "Верх-право", arrow: "↗" },
+  { value: "bottom_left", label: "Низ-лево", arrow: "↙" },
+  { value: "bottom_center", label: "Низ-центр", arrow: "↓" },
+  { value: "bottom_right", label: "Низ-право", arrow: "↘" },
 ];
 
-const OUTCOME: Record<string, { label: string; Icon: (props: IconProps) => JSX.Element; className: string }> = {
-  goal: { label: "Гол!", Icon: IconBall, className: "text-accent-green" },
-  saved: { label: "Отбито", Icon: IconGloves, className: "text-accent-cyan" },
-  miss: { label: "Мимо", Icon: IconClose, className: "text-ink-mist" },
-};
+function goalKickFrom(result: PenaltyKickResult): PenaltyGoalKick | null {
+  if (!result.player_direction) return null;
+  return result.kicker === "player"
+    ? { shotZone: result.player_direction, diveZone: result.bot_direction, outcome: result.outcome }
+    : { shotZone: result.bot_direction, diveZone: result.player_direction, outcome: result.outcome };
+}
+
+function outcomeLabelFor(result: PenaltyKickResult): { label: string; good: boolean } {
+  if (result.kicker === "player") {
+    if (result.outcome === "goal") return { label: "Гол!", good: true };
+    if (result.outcome === "saved") return { label: "Отбито", good: false };
+    return { label: "Мимо", good: false };
+  }
+  if (result.outcome === "saved") return { label: "Отбил!", good: true };
+  if (result.outcome === "goal") return { label: "Пропустил", good: false };
+  return { label: "Соперник промазал", good: true };
+}
 
 export default function PenaltyGamePage() {
   const navigate = useNavigate();
@@ -147,53 +151,40 @@ export default function PenaltyGamePage() {
     );
   }
 
+  const isPlayerKicking = !lastKick || lastKick.next_kicker === "player";
   const roleLabel = kickMutation.isPending
     ? "..."
-    : lastKick?.next_kicker === "bot"
-      ? "Бот бьёт — угадай направление"
-      : "Твой удар — выбери направление";
+    : isPlayerKicking
+      ? "Твой удар — выбери зону"
+      : "Бот бьёт — угадай, куда прыгнуть";
+
+  const outcome = lastKick ? outcomeLabelFor(lastKick) : null;
 
   return (
-    <div className="flex flex-col items-center gap-6 py-6">
+    <div className="flex flex-col items-center gap-5 py-6">
       <p className="text-sm text-ink-mist">
         Счёт: <span className="font-mono font-bold text-accent-cyan">{lastKick?.player_score ?? 0} : {lastKick?.bot_score ?? 0}</span>
       </p>
 
-      <AnimatePresence mode="wait">
-        {lastKick && (
-          <motion.div
-            key={lastKick.player_score + lastKick.bot_score + lastKick.outcome}
-            initial={{ scale: 0.85, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex flex-col items-center gap-2 rounded-2xl bg-bg-surface px-6 py-4 text-center"
-          >
-            {(() => {
-              const outcome = OUTCOME[lastKick.outcome];
-              const OutcomeIcon = outcome.Icon;
-              return (
-                <>
-                  <OutcomeIcon size={28} className={outcome.className} />
-                  <p className="font-display text-xl font-bold text-ink-chalk">{outcome.label}</p>
-                </>
-              );
-            })()}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <PenaltyGoalScene
+        keeperSide={lastKick?.kicker === "bot" ? "own" : "opponent"}
+        kick={lastKick ? goalKickFrom(lastKick) : null}
+        outcomeLabel={outcome?.label ?? null}
+        outcomeGood={outcome?.good ?? false}
+      />
 
       <p className="text-sm font-semibold text-ink-mist">{roleLabel}</p>
 
-      <div className="grid grid-cols-3 gap-3">
-        {DIRECTIONS.map((d) => (
+      <div className="grid grid-cols-3 gap-2.5">
+        {ZONES.map((z) => (
           <button
-            key={d.value}
-            onClick={() => kickMutation.mutate(d.value)}
+            key={z.value}
+            onClick={() => kickMutation.mutate(z.value)}
             disabled={kickMutation.isPending}
-            className="flex flex-col items-center gap-1.5 rounded-2xl bg-bg-surface px-4 py-4 text-sm font-semibold text-ink-chalk active:scale-90 disabled:opacity-40"
+            className="flex flex-col items-center gap-1 rounded-2xl bg-bg-surface px-3 py-3.5 text-[11px] font-semibold text-ink-chalk active:scale-90 disabled:opacity-40"
           >
-            <d.Icon size={18} />
-            {d.label}
+            <span className="text-base leading-none">{z.arrow}</span>
+            {z.label}
           </button>
         ))}
       </div>
