@@ -638,6 +638,35 @@ export interface PenaltyClaimResult {
   result: string;
 }
 
+export type PenaltyMatchStatus = "pending_accept" | "in_progress" | "finished" | "declined" | "cancelled" | "expired";
+
+export interface PenaltyRound {
+  kicker: "user" | "opponent";
+  shot_zone: PenaltyDirection;
+  dive_zone: PenaltyDirection;
+  outcome: "goal" | "saved" | "miss";
+}
+
+export interface PenaltyMatch {
+  id: number;
+  opponent_name: string;
+  opponent_user_id: number | null;
+  status: PenaltyMatchStatus;
+  viewer_side: "user" | "opponent";
+  user_score: number;
+  opponent_score: number;
+  rounds: PenaltyRound[];
+  kicker: "user" | "opponent" | null;
+  is_viewer_turn: boolean;
+  kick_deadline: string | null;
+  match_deadline: string | null;
+  result: MatchResult | null;
+  rating_delta: number;
+  created_at: string;
+  expires_at: string | null;
+  resolved_at: string | null;
+}
+
 export interface FreeKickNextKick {
   kick_index: number;
   period_ms: number;
