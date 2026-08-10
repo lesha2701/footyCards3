@@ -1,6 +1,7 @@
 import { api } from "@/lib/api";
 import type {
   Badge,
+  CardUpgradeRule,
   CoinPackage,
   Gift,
   GiftSet,
@@ -284,6 +285,26 @@ export async function fetchSuspiciousMemorySessions(): Promise<SuspiciousMemoryS
 
 export async function fetchSuspiciousMatches(): Promise<SuspiciousMatch[]> {
   const { data } = await api.get<SuspiciousMatch[]>("/admin/games/suspicious-matches");
+  return data;
+}
+
+// --- Card upgrades ---
+export async function fetchUpgradeRules(): Promise<CardUpgradeRule[]> {
+  const { data } = await api.get<CardUpgradeRule[]>("/admin/card-upgrades");
+  return data;
+}
+
+export async function updateUpgradeRule(
+  id: number,
+  payload: Partial<Pick<CardUpgradeRule, "success_chance" | "coin_cost" | "is_active">>,
+): Promise<CardUpgradeRule> {
+  const { data } = await api.put<CardUpgradeRule>(`/admin/card-upgrades/${id}`, payload);
+  return data;
+}
+
+// --- Broadcasts ---
+export async function sendUpdateBroadcast(message: string): Promise<{ recipients: number; broadcast_at: string }> {
+  const { data } = await api.post<{ recipients: number; broadcast_at: string }>("/admin/broadcasts", { message });
   return data;
 }
 

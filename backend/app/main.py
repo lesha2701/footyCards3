@@ -23,6 +23,7 @@ from app.routers import (
     admin_trophies,
     admin_users,
     auth,
+    broadcasts,
     card_collections,
     collection,
     daily_rewards,
@@ -95,6 +96,7 @@ app.include_router(games.router, prefix=API_PREFIX)
 app.include_router(gifts.router, prefix=API_PREFIX)
 app.include_router(lineups.router, prefix=API_PREFIX)
 app.include_router(maintenance.router, prefix=API_PREFIX)
+app.include_router(broadcasts.router, prefix=API_PREFIX)
 app.include_router(matches.router, prefix=API_PREFIX)
 app.include_router(tactico.router, prefix=API_PREFIX)
 app.include_router(trades.router, prefix=API_PREFIX)

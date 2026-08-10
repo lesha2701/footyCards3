@@ -284,6 +284,10 @@ export interface MaintenanceStatus {
   until: string | null;
 }
 
+export interface UpdateBroadcastStatus {
+  broadcast_at: string | null;
+}
+
 export interface GameLimits {
   hourly_limit: number;
   memory: number;

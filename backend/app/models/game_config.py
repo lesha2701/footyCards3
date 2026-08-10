@@ -109,3 +109,8 @@ class GameConfig(TimestampMixin, Base):
     # Set by an admin right before deploying an update (see routers/maintenance.py);
     # the Mini App shows a "may be flaky for a few minutes" banner while now() < this.
     maintenance_banner_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Timestamp of the last admin update broadcast (see routers/broadcasts.py). The
+    # Mini App shows a dismissible "update available" banner whenever this is newer
+    # than what the client last dismissed (tracked client-side, not here).
+    last_update_broadcast_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
