@@ -62,6 +62,7 @@ class GameConfig(TimestampMixin, Base):
     penalty_reward_loss: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     penalty_bot_miss_chance: Mapped[float] = mapped_column(Numeric(4, 2), default=0.12, nullable=False)
     penalty_daily_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    penalty_challenge_expiry_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
 
     free_kick_period_min_ms: Mapped[int] = mapped_column(Integer, default=1100, nullable=False)
     free_kick_period_max_ms: Mapped[int] = mapped_column(Integer, default=1700, nullable=False)

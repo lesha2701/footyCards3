@@ -133,6 +133,15 @@ class TacticoMatchStatus(str, enum.Enum):
     expired = "expired"
 
 
+class PenaltyMatchStatus(str, enum.Enum):
+    pending_accept = "pending_accept"
+    in_progress = "in_progress"
+    finished = "finished"
+    declined = "declined"
+    cancelled = "cancelled"
+    expired = "expired"
+
+
 class NotificationType(str, enum.Enum):
     trade_offer_received = "trade_offer_received"
     trade_offer_accepted = "trade_offer_accepted"
@@ -152,6 +161,11 @@ class NotificationType(str, enum.Enum):
     tactico_challenge_expired = "tactico_challenge_expired"
     tactico_your_turn = "tactico_your_turn"
     tactico_match_finished = "tactico_match_finished"
+    penalty_challenge_received = "penalty_challenge_received"
+    penalty_challenge_accepted = "penalty_challenge_accepted"
+    penalty_challenge_declined = "penalty_challenge_declined"
+    penalty_challenge_cancelled = "penalty_challenge_cancelled"
+    penalty_challenge_expired = "penalty_challenge_expired"
     trophy_granted = "trophy_granted"
 
 

@@ -12,6 +12,7 @@ from app.models.lineup import Lineup, LineupCard
 from app.models.match import Match, MatchEvent
 from app.models.notification import Notification
 from app.models.pack import Pack, PackOpening, PackOpeningCard, PackRarityProbability, StarsInvoice
+from app.models.penalty import PenaltyMatch
 from app.models.player import Player
 from app.models.task import TaskDefinition, UserTask
 from app.models.trade import TradeOffer, TradeOfferCard
@@ -45,6 +46,7 @@ __all__ = [
     "PackOpeningCard",
     "PackRarityProbability",
     "StarsInvoice",
+    "PenaltyMatch",
     "Player",
     "TaskDefinition",
     "UserTask",
