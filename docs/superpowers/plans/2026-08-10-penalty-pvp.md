@@ -823,31 +823,40 @@ async def test_penalty_pvp_full_match_resolves_with_score_and_rating(client, db_
     match_id, sender, receiver, sender_headers, receiver_headers = await _create_and_accept(
         client, db_session, bot_token, 860201, 860202
     )
+    sender.penalty_rating = 5
+    receiver.penalty_rating = 5
+    db_session.add_all([sender, receiver])
+    await db_session.commit()
 
-    # Regulation is 10 kicks; both sides always pick the same zone so every
-    # kick is "saved" — deterministic, so the match always reaches a 0:0 draw
-    # after 10 kicks without needing sudden death in this test.
+    # Regulation is 10 kicks (5 as each side's kicker). Both shooters always
+    # aim "top_left"; the defender's dive zone is chosen to mismatch (goal)
+    # on the sender's kicks and match (saved) on the receiver's — this
+    # guarantees the sender finishes strictly ahead without ever needing a
+    # tied score, so the match ends at regulation without sudden death, and
+    # exercises the win/+3/-1 rating-delta path (draw/+1 is covered by the
+    # match-timeout test instead, which forces a tie via the match clock).
     for i in range(10):
         kicker_headers = sender_headers if i % 2 == 0 else receiver_headers
         other_headers = receiver_headers if i % 2 == 0 else sender_headers
+        dive_zone = "top_right" if i % 2 == 0 else "top_left"  # mismatch for sender's kicks, match for receiver's
         r1 = await client.post(
             f"/api/v1/games/penalty/matches/{match_id}/pick", headers=kicker_headers, json={"zone": "top_left"}
         )
         assert r1.status_code == 200
         r2 = await client.post(
-            f"/api/v1/games/penalty/matches/{match_id}/pick", headers=other_headers, json={"zone": "top_left"}
+            f"/api/v1/games/penalty/matches/{match_id}/pick", headers=other_headers, json={"zone": dive_zone}
         )
         assert r2.status_code == 200
 
     final = r2.json()
     assert final["status"] == "finished"
-    assert final["result"] == "draw"
-    assert final["user_score"] == 0 and final["opponent_score"] == 0
+    assert final["result"] == "win"
+    assert final["user_score"] > 0 and final["opponent_score"] == 0
 
     await db_session.refresh(sender)
     await db_session.refresh(receiver)
-    assert sender.penalty_rating == 1  # draw = +1
-    assert receiver.penalty_rating == 1
+    assert sender.penalty_rating == 8  # 5 + 3 (win)
+    assert receiver.penalty_rating == 4  # 5 - 1 (loss)
 
 
 async def test_penalty_pvp_gives_no_coins(client, db_session, bot_token):
@@ -856,11 +865,14 @@ async def test_penalty_pvp_gives_no_coins(client, db_session, bot_token):
     )
     balance_before = sender.balance
 
+    # Same mismatch-vs-match pattern as the full-match test above, so the
+    # sender finishes ahead and the match ends at regulation.
     for i in range(10):
         kicker_headers = sender_headers if i % 2 == 0 else receiver_headers
         other_headers = receiver_headers if i % 2 == 0 else sender_headers
+        dive_zone = "top_right" if i % 2 == 0 else "top_left"
         await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=kicker_headers, json={"zone": "top_left"})
-        await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=other_headers, json={"zone": "top_left"})
+        await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=other_headers, json={"zone": dive_zone})
 
     await db_session.refresh(sender)
     await db_session.refresh(receiver)
