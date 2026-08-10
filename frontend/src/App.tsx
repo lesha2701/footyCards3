@@ -30,6 +30,7 @@ import TacticoSquadPage from "@/pages/TacticoSquadPage";
 import SaboteurGamePage from "@/pages/SaboteurGamePage";
 import PenaltyGamePage from "@/pages/PenaltyGamePage";
 import PenaltyMatchesPage from "@/pages/PenaltyMatchesPage";
+import PenaltyMatchPage from "@/pages/PenaltyMatchPage";
 import FreeKickGamePage from "@/pages/FreeKickGamePage";
 import HangmanGamePage from "@/pages/HangmanGamePage";
 import PairsGamePage from "@/pages/PairsGamePage";
@@ -137,6 +138,7 @@ export default function App() {
         <Route path="/play/saboteur" element={<SaboteurGamePage />} />
         <Route path="/play/penalty" element={<PenaltyGamePage />} />
         <Route path="/play/penalty/matches" element={<PenaltyMatchesPage />} />
+        <Route path="/play/penalty/matches/:matchId" element={<PenaltyMatchPage />} />
         <Route path="/play/free-kick" element={<FreeKickGamePage />} />
         <Route path="/play/hangman" element={<HangmanGamePage />} />
         <Route path="/play/pairs" element={<PairsGamePage />} />
