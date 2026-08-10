@@ -97,6 +97,12 @@ export default function PenaltyGamePage() {
         <p className="text-sm text-ink-mist">
           Выбери игрока для серии пенальти. Чем выше его рейтинг, тем меньше шанс промазать по воротам.
         </p>
+        <button
+          onClick={() => navigate("/play/penalty/matches")}
+          className="self-start rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-accent-lime active:scale-95"
+        >
+          Играть с другом →
+        </button>
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
         <CardPickerModal
           open
