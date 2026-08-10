@@ -16,13 +16,26 @@ from app.services import task_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
-DIRECTIONS = ("left", "center", "right")
+# 3x2 grid: which third of the goal (left/center/right) and which half
+# (top/bottom) the shot/dive targets. Shared with PvP (see penalty_match_service.py).
+PENALTY_ZONES = ("top_left", "top_center", "top_right", "bottom_left", "bottom_center", "bottom_right")
 REGULATION_KICKS = 10  # 5 rounds x 2 kicks
 
 
 def player_miss_chance(rating: int) -> float:
     r = max(58, min(99, rating))
     return 0.30 - (r - 58) / (99 - 58) * (0.30 - 0.05)
+
+
+def _resolve_shot(miss_chance: float, shot_zone: str, dive_zone: str) -> str:
+    """A single blind shot vs. a single blind dive: 'goal', 'saved', or
+    'miss'. The shooter's own miss chance is rolled first (independent of
+    zones) — only if they don't miss do the zones get compared. Shared by
+    the bot mode below and by PvP (which reuses this exact rule, just with
+    a real dive instead of a random one)."""
+    if random.random() < miss_chance:
+        return "miss"
+    return "saved" if shot_zone == dive_zone else "goal"
 
 
 async def _ensure_daily_reset(db: AsyncSession, user: User) -> None:
@@ -97,7 +110,7 @@ def _current_kicker(state: dict) -> str:
 
 
 async def resolve_kick(db: AsyncSession, user: User, session_id: int, direction: str) -> PenaltyKickOut:
-    if direction not in DIRECTIONS:
+    if direction not in PENALTY_ZONES:
         raise ConflictError("Invalid direction")
 
     config = await get_config(db)
@@ -109,22 +122,18 @@ async def resolve_kick(db: AsyncSession, user: User, session_id: int, direction:
     kicker = _current_kicker(state)
 
     if kicker == "player":
-        missed = random.random() < player_miss_chance(state["player_rating"])
-        bot_dir = random.choice(DIRECTIONS)
-        goal = (not missed) and (direction != bot_dir)
-        if goal:
+        bot_dir = random.choice(PENALTY_ZONES)
+        outcome = _resolve_shot(player_miss_chance(state["player_rating"]), direction, bot_dir)
+        if outcome == "goal":
             state["player_score"] += 1
-        outcome = "goal" if goal else ("miss" if missed else "saved")
         round_entry = {
             "kicker": "player", "player_direction": direction, "bot_direction": bot_dir, "outcome": outcome,
         }
     else:
-        bot_missed = random.random() < float(config.penalty_bot_miss_chance)
-        bot_shot_dir = random.choice(DIRECTIONS)
-        saved = (not bot_missed) and (direction == bot_shot_dir)
-        if not bot_missed and not saved:
+        bot_shot_dir = random.choice(PENALTY_ZONES)
+        outcome = _resolve_shot(float(config.penalty_bot_miss_chance), bot_shot_dir, direction)
+        if outcome == "goal":
             state["bot_score"] += 1
-        outcome = "saved" if saved else ("miss" if bot_missed else "goal")
         round_entry = {
             "kicker": "bot", "player_direction": direction, "bot_direction": bot_shot_dir, "outcome": outcome,
         }
@@ -150,6 +159,11 @@ async def resolve_kick(db: AsyncSession, user: User, session_id: int, direction:
         session.reward_coins = {
             "win": config.penalty_reward_win, "loss": config.penalty_reward_loss,
         }[result]
+        # Same +3/-1 deltas Tactico uses for its rating; a solo shootout has
+        # no draw outcome, so there's no +1 case to handle here.
+        locked_user = await lock_user_for_update(db, user.id)
+        locked_user.penalty_rating = max(0, locked_user.penalty_rating + (3 if result == "win" else -1))
+        db.add(locked_user)
         await task_service.evaluate_penalty_win_max_rating(db, user, state["player_rating"], result == "win")
 
     db.add(session)

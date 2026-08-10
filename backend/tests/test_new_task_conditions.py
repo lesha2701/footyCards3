@@ -165,9 +165,9 @@ async def _play_penalty_to_forced_win(client, headers, session_id: str, monkeypa
     # forcing the bot to always miss on defense guarantees a clean win
     # instead of leaving the outcome to chance.
     monkeypatch.setattr(penalty_service, "player_miss_chance", lambda rating: 0.0)
-    monkeypatch.setattr(penalty_service.random, "choice", lambda seq: "right")
+    monkeypatch.setattr(penalty_service.random, "choice", lambda seq: "top_right")
     for _ in range(10):
-        resp = await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "left"})
+        resp = await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "top_left"})
         assert resp.status_code == 200
         if resp.json()["is_finished"]:
             assert resp.json()["result"] == "win"

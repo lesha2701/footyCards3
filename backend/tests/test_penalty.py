@@ -52,7 +52,7 @@ async def test_penalty_full_shootout_resolves_and_pays_reward(client, db_session
     is_finished = False
     result = None
     for _ in range(30):  # regulation (10 kicks) + a safety margin for sudden death
-        resp = await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "left"})
+        resp = await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "top_left"})
         assert resp.status_code == 200
         body = resp.json()
         is_finished = body["is_finished"]
@@ -83,6 +83,62 @@ async def test_penalty_invalid_direction_rejected(client, db_session, bot_token)
     assert resp.status_code == 409
 
 
+async def test_penalty_accepts_all_six_zones(client, db_session, bot_token):
+    user = await _register(client, db_session, 830006, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(830006, bot_token)
+
+    from app.services.game_config_service import get_config
+    config = await get_config(db_session)
+    config.hourly_game_limit = 10
+    db_session.add(config)
+    await db_session.commit()
+
+    zones = ["top_left", "top_center", "top_right", "bottom_left", "bottom_center", "bottom_right"]
+    for i, zone in enumerate(zones):
+        start = await client.post("/api/v1/games/penalty/start", headers=headers, json={"user_card_id": card.id})
+        session_id = start.json()["session_id"]
+        resp = await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": zone})
+        assert resp.status_code == 200, f"zone {zone} rejected"
+        if i < len(zones) - 1:
+            await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "top_left"})
+
+
+async def test_penalty_rejects_stale_three_direction_values(client, db_session, bot_token):
+    user = await _register(client, db_session, 830007, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(830007, bot_token)
+
+    start = await client.post("/api/v1/games/penalty/start", headers=headers, json={"user_card_id": card.id})
+    session_id = start.json()["session_id"]
+    resp = await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "left"})
+    assert resp.status_code == 409
+
+
+async def test_penalty_bot_match_updates_penalty_rating(client, db_session, bot_token):
+    """The spec requires penalty_rating to move for bot matches too (win
+    +3 / loss -1, same deltas Tactico uses), not just PvP — this is the
+    only place in the codebase that finishes a solo Penalty match, so the
+    rating update has to live in resolve_kick's is_finished branch."""
+    user = await _register(client, db_session, 830008, bot_token)
+    card = await _grant_card(db_session, user.id, rating=99)  # near-zero miss chance, deterministic
+    headers = telegram_headers(830008, bot_token)
+
+    start = await client.post("/api/v1/games/penalty/start", headers=headers, json={"user_card_id": card.id})
+    session_id = start.json()["session_id"]
+
+    result = None
+    for _ in range(30):
+        resp = await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "top_left"})
+        body = resp.json()
+        if body["is_finished"]:
+            result = body["result"]
+            break
+
+    await db_session.refresh(user)
+    assert user.penalty_rating == (3 if result == "win" else -1)
+
+
 async def test_penalty_daily_reward_cap_still_allows_play_with_zero_reward(client, db_session, bot_token):
     """Regression: hitting the daily *reward* cap must not block starting a
     new session — only zero out the reward at claim time (players can keep
@@ -107,7 +163,7 @@ async def test_penalty_daily_reward_cap_still_allows_play_with_zero_reward(clien
 
     is_finished = False
     for _ in range(30):
-        resp = await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "left"})
+        resp = await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "bottom_right"})
         is_finished = resp.json()["is_finished"]
         if is_finished:
             break
