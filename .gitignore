@@ -27,3 +27,4 @@ postgres_data/
 .claude/
 .agents/
 skills-lock.json
+.superpowers/
