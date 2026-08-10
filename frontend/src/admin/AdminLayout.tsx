@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
+import AdminToastContainer from "@/admin/AdminToastContainer";
+
 const SECTIONS = [
   { to: "/admin", label: "Дашборд", icon: "📊", end: true },
   { to: "/admin/users", label: "Пользователи", icon: "👥" },
@@ -74,6 +76,7 @@ export default function AdminLayout() {
           <Outlet />
         </main>
       </div>
+      <AdminToastContainer />
     </div>
   );
 }

@@ -122,6 +122,23 @@ async def test_upgrade_locked_card_is_rejected(client, db_session, bot_token):
     assert resp.status_code == 409
 
 
+async def test_upgrade_card_locked_in_tactico_squad_is_rejected(client, db_session, bot_token):
+    user = await _register(client, db_session, 900008, bot_token)
+    common_player = await create_player(db_session, rarity=Rarity.common)
+    card = await _give_card(db_session, user.id, common_player.id)
+    card_id = card.id
+    card.is_in_tactico_squad = True
+    db_session.add(card)
+    await db_session.commit()
+    await _seed_rule(db_session, Rarity.common, Rarity.rare, chance=1.0, cost=50)
+
+    headers = telegram_headers(900008, bot_token)
+    resp = await client.post(
+        f"/api/v1/collection/cards/{card_id}/upgrade", headers=headers, json={"to_rarity": "rare"}
+    )
+    assert resp.status_code == 409
+
+
 async def test_upgrade_to_lower_or_equal_rarity_is_rejected(client, db_session, bot_token):
     user = await _register(client, db_session, 900005, bot_token)
     rare_player = await create_player(db_session, rarity=Rarity.rare, rating=80)

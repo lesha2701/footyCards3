@@ -102,7 +102,8 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-users"] });
 
   const balanceMutation = useMutation({
-    mutationFn: () => adjustUserBalance(user.id, balanceAmount, balanceReason || "Корректировка администратором"),
+    mutationFn: (sign: 1 | -1) =>
+      adjustUserBalance(user.id, sign * Math.abs(balanceAmount), balanceReason || "Корректировка администратором"),
     onSuccess: invalidate,
   });
   const banMutation = useMutation({ mutationFn: () => (user.is_banned ? unbanUser(user.id) : banUser(user.id)), onSuccess: invalidate });
@@ -149,9 +150,22 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
             <div className="rounded-xl bg-bg-surface p-3">
               <p className="mb-2 text-xs font-semibold text-slate-400">Изменить баланс</p>
               <div className="flex gap-2">
-                <input type="number" value={balanceAmount} onChange={(e) => setBalanceAmount(Number(e.target.value))} className="w-24 rounded-lg bg-black/30 px-2 py-1.5 text-sm outline-none" />
+                <input type="number" min={0} value={balanceAmount} onChange={(e) => setBalanceAmount(Number(e.target.value))} className="w-24 rounded-lg bg-black/30 px-2 py-1.5 text-sm outline-none" />
                 <input value={balanceReason} onChange={(e) => setBalanceReason(e.target.value)} placeholder="Причина" className="flex-1 rounded-lg bg-black/30 px-2 py-1.5 text-sm outline-none" />
-                <button onClick={() => balanceMutation.mutate()} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-bg-base">Применить</button>
+                <button
+                  onClick={() => balanceMutation.mutate(1)}
+                  disabled={!balanceAmount}
+                  className="rounded-lg bg-emerald-500/80 px-3 py-1.5 text-xs font-bold text-bg-base disabled:opacity-40"
+                >
+                  Начислить
+                </button>
+                <button
+                  onClick={() => balanceMutation.mutate(-1)}
+                  disabled={!balanceAmount}
+                  className="rounded-lg bg-red-500/80 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40"
+                >
+                  Списать
+                </button>
               </div>
             </div>
 

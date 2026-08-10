@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import select
 
 import app.core.rate_limit as rate_limit_module
+from app.models.card import UserCard
 from app.models.enums import CardSource, NotificationType, Position, Rarity
 from app.models.game_config import GameConfig
 from app.models.notification import Notification
@@ -95,6 +96,53 @@ async def test_set_squad_success(client, db_session, bot_token):
     resp = await client.get("/api/v1/tactico/squad", headers=headers)
     assert resp.status_code == 200
     assert resp.json()["is_complete"] is True
+
+
+async def test_squad_card_locked_against_trade_offer(client, db_session, bot_token):
+    headers_a = await _register(client, bot_token, 950005)
+    await _register(client, bot_token, 950006)
+    user_a = await get_user_by_telegram_id(db_session, 950005)
+    card_ids = await _build_squad_cards(db_session, user_a.id, count=11)
+
+    resp = await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": card_ids})
+    assert resp.status_code == 200
+
+    user_b = await get_user_by_telegram_id(db_session, 950006)
+    resp = await client.post(
+        "/api/v1/trades/offers", headers=headers_a,
+        json={"receiver_id": user_b.id, "offered_card_ids": [card_ids[0]], "requested_card_ids": []},
+    )
+    assert resp.status_code == 409
+
+
+async def test_traded_away_squad_card_self_heals_instead_of_403_loop(client, db_session, bot_token):
+    """Regression for a production bug: a card squadded before
+    is_in_tactico_squad locking existed (or squadded, then somehow traded
+    away) must not leave the squad permanently stuck — GET should just drop
+    it and report is_complete=False so the player can pick a replacement,
+    instead of the frontend silently re-submitting a phantom card ID and
+    the backend rejecting the save with a raw 403 every time."""
+    headers_a, headers_b = await _register(client, bot_token, 950007), await _register(client, bot_token, 950008)
+    user_a = await get_user_by_telegram_id(db_session, 950007)
+    card_ids = await _build_squad_cards(db_session, user_a.id, count=11)
+
+    resp = await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": card_ids})
+    assert resp.status_code == 200
+
+    # simulate a card leaving the user's ownership despite the squad lock
+    # (e.g. data from before this protection existed, or an admin transfer)
+    card = await db_session.get(UserCard, card_ids[0])
+    card.owner_id = (await get_user_by_telegram_id(db_session, 950008)).id
+    card.is_in_tactico_squad = False
+    db_session.add(card)
+    await db_session.commit()
+
+    resp = await client.get("/api/v1/tactico/squad", headers=headers_a)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_complete"] is False
+    assert len(body["cards"]) == 10
+    assert card_ids[0] not in [c["id"] for c in body["cards"]]
 
 
 # ---------------------------------------------------------------------------

@@ -65,11 +65,6 @@ async def start_session(db: AsyncSession, user: User, steward_count: int = 1) ->
     db.add(locked_user)
 
     await _ensure_daily_reset(db, locked_user)
-    if locked_user.saboteur_rewarded_attempts_today >= config.saboteur_daily_limit:
-        raise ConflictError(
-            "Daily reward attempts for Saboteur exhausted; you can still play unrewarded",
-            details={"daily_limit": config.saboteur_daily_limit},
-        )
 
     line_stewards = random.sample(range(LINE_SIZE), steward_count)
     session = GameSession(
@@ -168,12 +163,12 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> Saboteu
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked_user)
-    if locked_user.saboteur_rewarded_attempts_today >= config.saboteur_daily_limit:
-        raise ConflictError("Daily reward attempts for Saboteur exhausted")
+    daily_cap_reached = locked_user.saboteur_rewarded_attempts_today >= config.saboteur_daily_limit
 
-    reward = 0 if locked_user.game_rewards_blocked else session.reward_coins
+    reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else session.reward_coins
     session.is_rewarded = True
-    locked_user.saboteur_rewarded_attempts_today += 1
+    if not daily_cap_reached:
+        locked_user.saboteur_rewarded_attempts_today += 1
 
     if reward > 0:
         await credit_coins(

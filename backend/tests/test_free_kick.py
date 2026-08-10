@@ -103,6 +103,37 @@ async def test_free_kick_start_rejects_card_not_owned(client, db_session, bot_to
     assert resp.status_code == 403
 
 
+async def test_free_kick_daily_reward_cap_still_allows_play_with_zero_reward(client, db_session, bot_token):
+    from datetime import datetime, timezone
+
+    from app.services.game_config_service import get_config
+
+    user = await _register(client, db_session, 840007, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(840007, bot_token)
+
+    config = await get_config(db_session)
+    user.free_kick_rewarded_attempts_today = config.free_kick_daily_limit
+    user.free_kick_attempts_reset_at = datetime.now(timezone.utc)
+    db_session.add(user)
+    await db_session.commit()
+
+    start = await client.post("/api/v1/games/free-kick/start", headers=headers, json={"user_card_id": card.id})
+    assert start.status_code == 200
+    session_id = start.json()["session_id"]
+
+    for _ in range(3):
+        resp = await client.post(f"/api/v1/games/free-kick/{session_id}/kick", headers=headers, json={"elapsed_ms": 0})
+        assert resp.status_code == 200
+
+    claim = await client.post(f"/api/v1/games/free-kick/{session_id}/claim", headers=headers)
+    assert claim.status_code == 200
+    assert claim.json()["reward_coins"] == 0
+
+    await db_session.refresh(user)
+    assert user.free_kick_rewarded_attempts_today == config.free_kick_daily_limit
+
+
 async def test_free_kick_hourly_limit_blocks_after_three_starts(client, db_session, bot_token):
     from datetime import timedelta
 

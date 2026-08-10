@@ -63,11 +63,6 @@ async def start_session(db: AsyncSession, user: User) -> MemoryStartOut:
     db.add(locked_user)
 
     await _ensure_daily_reset(db, locked_user)
-    if locked_user.memory_rewarded_attempts_today >= config.memory_daily_reward_limit:
-        raise ConflictError(
-            "Daily reward attempts for Memory Sequence exhausted; you can still play unrewarded",
-            details={"daily_limit": config.memory_daily_reward_limit},
-        )
 
     session = GameSession(user_id=locked_user.id, game_type=GameType.memory_sequence, status=GameSessionStatus.in_progress)
     db.add(session)
@@ -173,13 +168,13 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> MemoryC
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked_user)
-    if locked_user.memory_rewarded_attempts_today >= config.memory_daily_reward_limit:
-        raise ConflictError("Daily reward attempts for Memory Sequence exhausted")
+    daily_cap_reached = locked_user.memory_rewarded_attempts_today >= config.memory_daily_reward_limit
 
-    reward = 0 if locked_user.game_rewards_blocked else min(session.score, config.memory_reward_cap)
+    reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else min(session.score, config.memory_reward_cap)
     session.is_rewarded = True
     session.status = GameSessionStatus.rewarded
-    locked_user.memory_rewarded_attempts_today += 1
+    if not daily_cap_reached:
+        locked_user.memory_rewarded_attempts_today += 1
 
     new_best = False
     if session.score > locked_user.memory_best_score:

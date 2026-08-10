@@ -67,7 +67,13 @@ async def get_squad(db: AsyncSession, user: User) -> TacticoSquadOut:
         cards_result = await db.execute(
             select(UserCard).where(UserCard.id.in_(card_ids)).options(joinedload(UserCard.player))
         )
-        cards = list(cards_result.unique().scalars().all())
+        # Filters out cards that left the user's ownership since being
+        # squadded (e.g. an older squad set before is_in_tactico_squad
+        # locking existed, since traded away) instead of surfacing a
+        # phantom card the frontend can neither render nor deselect —
+        # is_complete correctly drops to False so the player can just pick
+        # a replacement, rather than getting a raw 403 loop on every save.
+        cards = [c for c in cards_result.unique().scalars().all() if c.owner_id == user.id]
     return TacticoSquadOut(
         is_complete=len(cards) == SQUAD_SIZE, cards=cards,
         max_legendary=config.tactico_max_legendary_cards, max_epic=config.tactico_max_epic_cards,
@@ -91,6 +97,8 @@ async def set_squad(db: AsyncSession, user: User, user_card_ids: list[int]) -> T
             raise ForbiddenError("You can only use your own cards in your Tactico squad")
         if card.is_locked_by_admin:
             raise ConflictError(f"Card #{card.serial_number} is locked and cannot be used")
+        if card.is_locked_in_trade:
+            raise ConflictError(f"Card #{card.serial_number} is locked in an active trade and cannot be used")
 
     legendary_count = sum(1 for c in cards_by_id.values() if c.player.rarity == Rarity.legendary)
     epic_count = sum(1 for c in cards_by_id.values() if c.player.rarity == Rarity.epic)
@@ -101,10 +109,19 @@ async def set_squad(db: AsyncSession, user: User, user_card_ids: list[int]) -> T
 
     squad = await _get_or_create_squad(db, user.id)
     old_result = await db.execute(select(TacticoSquadCard).where(TacticoSquadCard.squad_id == squad.id))
-    for sc in old_result.scalars().all():
+    old_squad_cards = old_result.scalars().all()
+    old_card_ids = [sc.user_card_id for sc in old_squad_cards]
+    if old_card_ids:
+        old_cards_result = await db.execute(select(UserCard).where(UserCard.id.in_(old_card_ids)))
+        for c in old_cards_result.scalars().all():
+            c.is_in_tactico_squad = False
+            db.add(c)
+    for sc in old_squad_cards:
         await db.delete(sc)
     await db.flush()
     for card_id in unique_ids:
+        cards_by_id[card_id].is_in_tactico_squad = True
+        db.add(cards_by_id[card_id])
         db.add(TacticoSquadCard(squad_id=squad.id, user_card_id=card_id))
 
     await db.commit()

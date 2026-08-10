@@ -63,6 +63,8 @@ async def test_accept_trade_transfers_cards_and_coins(client, db_session, bot_to
     accept_resp = await client.post(f"/api/v1/trades/offers/{offer_id}/accept", headers=receiver_headers)
     assert accept_resp.status_code == 200
     assert accept_resp.json()["status"] == "accepted"
+    # so the frontend can update the displayed balance without a full reload
+    assert accept_resp.json()["new_balance"] == 500 + 20
 
     await db_session.refresh(sender_card)
     await db_session.refresh(receiver_card)

@@ -62,6 +62,74 @@ async def test_memory_claim_reward_credits_coins_once(client, bot_token):
     assert second_claim.status_code == 409
 
 
+async def test_memory_daily_reward_cap_still_allows_play_with_zero_reward(client, db_session, bot_token):
+    from datetime import datetime, timezone
+
+    from app.services.game_config_service import get_config
+    from tests.factories import get_user_by_telegram_id
+
+    headers = telegram_headers(740006, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 740006)
+
+    config = await get_config(db_session)
+    daily_limit = config.memory_daily_reward_limit
+    user.memory_rewarded_attempts_today = daily_limit
+    user.memory_attempts_reset_at = datetime.now(timezone.utc)
+    db_session.add(user)
+    await db_session.commit()
+
+    start = await client.post("/api/v1/games/memory/start", headers=headers)
+    assert start.status_code == 200
+    session_id = start.json()["session_id"]
+    await client.post(f"/api/v1/games/memory/{session_id}/submit", headers=headers, json={"answer": ["🚫"]})
+
+    claim = await client.post(f"/api/v1/games/memory/{session_id}/claim", headers=headers)
+    assert claim.status_code == 200
+    assert claim.json()["reward_coins"] == 0
+
+    await db_session.refresh(user)
+    assert user.memory_rewarded_attempts_today == daily_limit
+
+
+async def test_hangman_daily_reward_cap_still_allows_play_with_zero_reward(client, db_session, bot_token):
+    from datetime import datetime, timezone
+
+    from app.models.game import GameSession
+    from app.services.game_config_service import get_config
+    from tests.factories import get_user_by_telegram_id
+
+    headers = telegram_headers(740007, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 740007)
+
+    config = await get_config(db_session)
+    daily_limit = config.hangman_daily_limit
+    user.hangman_rewarded_attempts_today = daily_limit
+    user.hangman_attempts_reset_at = datetime.now(timezone.utc)
+    db_session.add(user)
+    await db_session.commit()
+
+    start = await client.post("/api/v1/games/hangman/start", headers=headers)
+    assert start.status_code == 200
+    session_id = start.json()["session_id"]
+
+    session = await db_session.get(GameSession, session_id)
+    word = session.server_state["word"]
+    for letter in dict.fromkeys(word):
+        resp = await client.post(f"/api/v1/games/hangman/{session_id}/guess", headers=headers, json={"letter": letter})
+        status = resp.json()["status"]
+        if status != "in_progress":
+            break
+
+    claim = await client.post(f"/api/v1/games/hangman/{session_id}/claim", headers=headers)
+    assert claim.status_code == 200
+    assert claim.json()["reward_coins"] == 0
+
+    await db_session.refresh(user)
+    assert user.hangman_rewarded_attempts_today == daily_limit
+
+
 async def test_memory_hourly_limit_blocks_after_three_starts(client, db_session, bot_token):
     from datetime import timedelta
 

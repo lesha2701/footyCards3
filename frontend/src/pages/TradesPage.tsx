@@ -27,13 +27,17 @@ export default function TradesPage() {
   const [tab, setTab] = useState<Tab>("incoming");
   const queryClient = useQueryClient();
   const userId = useAuthStore((s) => s.user?.id);
+  const updateBalance = useAuthStore((s) => s.updateBalance);
 
   const params = tab === "history" ? {} : { direction: tab, status: "pending" };
   const { data: offers, isLoading } = useQuery({ queryKey: ["trades", tab], queryFn: () => fetchTradeOffers(params) });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["trades"] });
 
-  const acceptMutation = useMutation({ mutationFn: acceptTradeOffer, onSuccess: () => { hapticNotify("success"); invalidate(); } });
+  const acceptMutation = useMutation({
+    mutationFn: acceptTradeOffer,
+    onSuccess: (data) => { hapticNotify("success"); updateBalance(data.new_balance); invalidate(); },
+  });
   const rejectMutation = useMutation({ mutationFn: rejectTradeOffer, onSuccess: invalidate });
   const cancelMutation = useMutation({ mutationFn: cancelTradeOffer, onSuccess: invalidate });
 

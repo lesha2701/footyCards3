@@ -8,7 +8,7 @@ from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.enums import TradeStatus
 from app.models.user import User
-from app.schemas.trade import TradeCreateRequest, TradeOfferOut
+from app.schemas.trade import TradeAcceptOut, TradeCreateRequest, TradeOfferOut
 from app.services import trade_service
 
 router = APIRouter(prefix="/trades", tags=["trades"])
@@ -42,7 +42,7 @@ async def cancel_trade_offer(offer_id: int, db: AsyncSession = Depends(get_db), 
     return await trade_service.cancel_offer(db, user, offer_id)
 
 
-@router.post("/offers/{offer_id}/accept", response_model=TradeOfferOut)
+@router.post("/offers/{offer_id}/accept", response_model=TradeAcceptOut)
 async def accept_trade_offer(offer_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     check_rate_limit(f"accept_trade:{user.id}", max_calls=20, window_seconds=60)
     return await trade_service.accept_offer(db, user, offer_id)

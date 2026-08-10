@@ -18,6 +18,7 @@ import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
 import { hapticNotify } from "@/lib/telegram";
 import { RARITY_GLOW, RARITY_GRADIENTS } from "@/lib/rarity";
+import { useAuthStore } from "@/store/authStore";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
 import type { TacticoCard, TacticoMatch, TacticoRound } from "@/types";
 
@@ -117,6 +118,24 @@ export default function TacticoMatchPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match?.rounds.length, id]);
+
+  // Credits the reward to the visible wallet balance the moment the match
+  // actually finishes while this page is open — whether that's from our own
+  // submission, a background poll noticing the opponent moved, or the
+  // timeout sweep. Only fires on a live transition into "finished" (not on
+  // mount, e.g. revisiting an already-finished match from history), so a
+  // reward already reflected in the session's balance never gets counted
+  // twice — same guard idea as roundsSeenRef above.
+  const prevStatusRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!match) return;
+    const prevStatus = prevStatusRef.current;
+    prevStatusRef.current = match.status;
+    if (prevStatus && prevStatus !== "finished" && match.status === "finished" && match.reward_coins > 0) {
+      const updateBalance = useAuthStore.getState().updateBalance;
+      updateBalance((useAuthStore.getState().user?.balance ?? 0) + match.reward_coins);
+    }
+  }, [match?.status, match?.reward_coins]);
 
   if (isLoading || !match) {
     return <p className="text-sm text-ink-mist">Загрузка...</p>;

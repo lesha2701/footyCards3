@@ -91,7 +91,7 @@ async def upgrade_card(
     card = result.scalar_one_or_none()
     if card is None or card.owner_id != locked_user.id:
         raise NotFoundError("Card not found")
-    if card.is_locked_by_admin or card.is_locked_in_trade or card.is_in_lineup:
+    if card.is_locked_by_admin or card.is_locked_in_trade or card.is_in_lineup or card.is_in_tactico_squad:
         raise ConflictError("This card is locked and cannot be upgraded")
 
     from_rarity = card.player.rarity

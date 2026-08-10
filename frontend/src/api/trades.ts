@@ -26,8 +26,8 @@ export async function createTradeOffer(payload: CreateTradePayload): Promise<Tra
   return data;
 }
 
-export async function acceptTradeOffer(id: number): Promise<TradeOffer> {
-  const { data } = await api.post<TradeOffer>(`/trades/offers/${id}/accept`);
+export async function acceptTradeOffer(id: number): Promise<TradeOffer & { new_balance: number }> {
+  const { data } = await api.post<TradeOffer & { new_balance: number }>(`/trades/offers/${id}/accept`);
   return data;
 }
 

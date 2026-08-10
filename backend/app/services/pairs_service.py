@@ -78,11 +78,6 @@ async def start_session(db: AsyncSession, user: User) -> PairsStartOut:
     db.add(locked_user)
 
     await _ensure_daily_reset(db, locked_user)
-    if locked_user.pairs_rewarded_attempts_today >= config.pairs_daily_limit:
-        raise ConflictError(
-            "Daily reward attempts for Найди пару exhausted; you can still play unrewarded",
-            details={"daily_limit": config.pairs_daily_limit},
-        )
 
     board = await _deal_board(db)
     session = GameSession(
@@ -233,12 +228,12 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> PairsCl
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked_user)
-    if locked_user.pairs_rewarded_attempts_today >= config.pairs_daily_limit:
-        raise ConflictError("Daily reward attempts for Найди пару exhausted")
+    daily_cap_reached = locked_user.pairs_rewarded_attempts_today >= config.pairs_daily_limit
 
-    reward = 0 if locked_user.game_rewards_blocked else session.reward_coins
+    reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else session.reward_coins
     session.is_rewarded = True
-    locked_user.pairs_rewarded_attempts_today += 1
+    if not daily_cap_reached:
+        locked_user.pairs_rewarded_attempts_today += 1
 
     if reward > 0:
         await credit_coins(

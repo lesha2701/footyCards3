@@ -55,6 +55,21 @@ async def test_cannot_sell_card_locked_in_lineup(client, db_session, bot_token):
     assert resp.status_code == 409
 
 
+async def test_cannot_sell_card_locked_in_tactico_squad(client, db_session, bot_token):
+    headers = telegram_headers(720005, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 720005)
+
+    player = await create_player(db_session, rarity=Rarity.common)
+    card = await create_user_card(db_session, user.id, player.id, CardSource.seed)
+    card.is_in_tactico_squad = True
+    db_session.add(card)
+    await db_session.commit()
+
+    resp = await client.post("/api/v1/collection/cards/sell", headers=headers, json={"user_card_id": card.id})
+    assert resp.status_code == 409
+
+
 async def test_rarity_filter_only_returns_matching_rarity(client, db_session, bot_token):
     headers = telegram_headers(720004, bot_token)
     await client.post("/api/v1/auth/session", headers=headers)

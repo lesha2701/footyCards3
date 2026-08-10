@@ -32,6 +32,12 @@ class TradeOfferOut(BaseModel):
     created_at: datetime
 
 
+class TradeAcceptOut(TradeOfferOut):
+    # The accepting user's (receiver's) balance after coins changed hands —
+    # lets the frontend update the displayed balance without a full reload.
+    new_balance: int
+
+
 class TradeCreateRequest(BaseModel):
     receiver_id: Optional[int] = None
     receiver_username: Optional[str] = None

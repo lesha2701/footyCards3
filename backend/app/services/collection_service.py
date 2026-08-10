@@ -148,6 +148,8 @@ async def _assert_sellable(db: AsyncSession, user_id: int, card: UserCard, confi
         raise ConflictError("Card is locked in an active trade")
     if card.is_in_lineup:
         raise ConflictError("Card is used in an active lineup")
+    if card.is_in_tactico_squad:
+        raise ConflictError("Card is used in your Tactico squad")
 
     remaining = (
         await db.execute(

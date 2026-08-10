@@ -60,11 +60,6 @@ async def start_session(db: AsyncSession, user: User, user_card_id: int) -> Pena
     db.add(locked_user)
 
     await _ensure_daily_reset(db, locked_user)
-    if locked_user.penalty_rewarded_attempts_today >= config.penalty_daily_limit:
-        raise ConflictError(
-            "Daily reward attempts for Penalty exhausted; you can still play unrewarded",
-            details={"daily_limit": config.penalty_daily_limit},
-        )
 
     result = await db.execute(
         select(UserCard).where(UserCard.id == user_card_id).options(joinedload(UserCard.player))
@@ -180,12 +175,12 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> Penalty
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked_user)
-    if locked_user.penalty_rewarded_attempts_today >= config.penalty_daily_limit:
-        raise ConflictError("Daily reward attempts for Penalty exhausted")
+    daily_cap_reached = locked_user.penalty_rewarded_attempts_today >= config.penalty_daily_limit
 
-    reward = 0 if locked_user.game_rewards_blocked else session.reward_coins
+    reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else session.reward_coins
     session.is_rewarded = True
-    locked_user.penalty_rewarded_attempts_today += 1
+    if not daily_cap_reached:
+        locked_user.penalty_rewarded_attempts_today += 1
 
     if reward > 0:
         await credit_coins(

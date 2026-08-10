@@ -83,6 +83,44 @@ async def test_penalty_invalid_direction_rejected(client, db_session, bot_token)
     assert resp.status_code == 409
 
 
+async def test_penalty_daily_reward_cap_still_allows_play_with_zero_reward(client, db_session, bot_token):
+    """Regression: hitting the daily *reward* cap must not block starting a
+    new session — only zero out the reward at claim time (players can keep
+    playing for fun/practice once they've earned their daily coins)."""
+    from datetime import datetime, timezone
+
+    from app.services.game_config_service import get_config
+
+    user = await _register(client, db_session, 830005, bot_token)
+    card = await _grant_card(db_session, user.id, rating=99)
+    headers = telegram_headers(830005, bot_token)
+
+    config = await get_config(db_session)
+    user.penalty_rewarded_attempts_today = config.penalty_daily_limit
+    user.penalty_attempts_reset_at = datetime.now(timezone.utc)  # keep _ensure_daily_reset from wiping the cap back to 0
+    db_session.add(user)
+    await db_session.commit()
+
+    start = await client.post("/api/v1/games/penalty/start", headers=headers, json={"user_card_id": card.id})
+    assert start.status_code == 200
+    session_id = start.json()["session_id"]
+
+    is_finished = False
+    for _ in range(30):
+        resp = await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "left"})
+        is_finished = resp.json()["is_finished"]
+        if is_finished:
+            break
+    assert is_finished
+
+    claim = await client.post(f"/api/v1/games/penalty/{session_id}/claim", headers=headers)
+    assert claim.status_code == 200
+    assert claim.json()["reward_coins"] == 0
+
+    await db_session.refresh(user)
+    assert user.penalty_rewarded_attempts_today == config.penalty_daily_limit  # not incremented past the cap
+
+
 async def test_penalty_hourly_limit_blocks_after_three_starts(client, db_session, bot_token):
     from datetime import timedelta
 

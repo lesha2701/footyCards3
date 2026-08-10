@@ -148,6 +148,41 @@ async def test_saboteur_reward_escalates_with_ladder_level(client, db_session, b
     assert level2_gain > level1_gain  # each cleared line is worth more than the last
 
 
+async def test_saboteur_daily_reward_cap_still_allows_play_with_zero_reward(client, db_session, bot_token):
+    from datetime import datetime, timezone
+
+    from app.services.game_config_service import get_config
+
+    user = await _register(client, db_session, 820007, bot_token)
+    headers = telegram_headers(820007, bot_token)
+
+    config = await get_config(db_session)
+    daily_limit = config.saboteur_daily_limit
+    user.saboteur_rewarded_attempts_today = daily_limit
+    user.saboteur_attempts_reset_at = datetime.now(timezone.utc)
+    db_session.add(user)
+    await db_session.commit()
+
+    start_resp = await client.post("/api/v1/games/saboteur/start", headers=headers)
+    assert start_resp.status_code == 200
+    start = start_resp.json()
+    session_id = start["session_id"]
+    db_session.expire_all()
+    session = await db_session.get(GameSession, session_id)
+    line_stewards = session.server_state["line_stewards"]
+    safe_cell = next(i for i in range(5) if i not in line_stewards)
+
+    await client.post(f"/api/v1/games/saboteur/{session_id}/reveal", headers=headers, json={"cell_index": safe_cell})
+    await client.post(f"/api/v1/games/saboteur/{session_id}/end", headers=headers)
+
+    claim = await client.post(f"/api/v1/games/saboteur/{session_id}/claim", headers=headers)
+    assert claim.status_code == 200
+    assert claim.json()["reward_coins"] == 0
+
+    await db_session.refresh(user)
+    assert user.saboteur_rewarded_attempts_today == daily_limit
+
+
 async def test_saboteur_steward_count_out_of_range_is_rejected(client, db_session, bot_token):
     await _register(client, db_session, 820007, bot_token)
     headers = telegram_headers(820007, bot_token)

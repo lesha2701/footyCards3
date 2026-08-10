@@ -45,7 +45,17 @@ export default function TacticoSquadPage() {
     onError: (err) => setError(formatGameError(err, "Не удалось сохранить состав")),
   });
 
-  const cards = collectionPage?.items ?? [];
+  // The collection fetch is capped at 100 cards (the API's page_size max),
+  // so a previously-squadded card can fall outside that window on a big
+  // collection — invisible in the grid and uncounted toward the rarity
+  // caps below, while still occupying a slot in selectedIds. That let a
+  // player unknowingly select a 4th legendary (only 3 visible, one hidden)
+  // and get a "Максимум 3 легендарных" rejection with no obvious cause.
+  // Merging the squad's own (already-hydrated) cards in fixes both the
+  // count and lets the player see/deselect that card.
+  const collectionCards = collectionPage?.items ?? [];
+  const seenIds = new Set(collectionCards.map((c) => c.id));
+  const cards = [...collectionCards, ...(squad?.cards.filter((c) => !seenIds.has(c.id)) ?? [])];
   const maxLegendary = squad?.max_legendary ?? 3;
   const maxEpic = squad?.max_epic ?? 3;
 

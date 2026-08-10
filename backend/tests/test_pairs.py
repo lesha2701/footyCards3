@@ -107,6 +107,51 @@ async def test_pairs_wins_only_after_bonus_tile_is_found(client, db_session, bot
     assert second_claim.status_code == 409
 
 
+async def test_pairs_daily_reward_cap_still_allows_play_with_zero_reward(client, db_session, bot_token):
+    from datetime import datetime, timezone
+
+    from app.models.game import GameSession
+    from app.services.game_config_service import get_config
+    from tests.factories import get_user_by_telegram_id
+
+    await _seed_players(db_session)
+    headers = telegram_headers(750006, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750006)
+
+    config = await get_config(db_session)
+    user.pairs_rewarded_attempts_today = config.pairs_daily_limit
+    user.pairs_attempts_reset_at = datetime.now(timezone.utc)
+    db_session.add(user)
+    await db_session.commit()
+
+    start = await client.post("/api/v1/games/pairs/start", headers=headers)
+    assert start.status_code == 200
+    session_id = start.json()["session_id"]
+
+    session = await db_session.get(GameSession, session_id)
+    board = session.server_state["board"]
+    positions_by_value: dict[int, list[int]] = {}
+    bonus_pos = None
+    for i, v in enumerate(board):
+        if v is None:
+            bonus_pos = i
+        else:
+            positions_by_value.setdefault(v, []).append(i)
+
+    for a, b in positions_by_value.values():
+        await client.post(f"/api/v1/games/pairs/{session_id}/flip", headers=headers, json={"position": a})
+        await client.post(f"/api/v1/games/pairs/{session_id}/flip", headers=headers, json={"position": b})
+    await client.post(f"/api/v1/games/pairs/{session_id}/flip", headers=headers, json={"position": bonus_pos})
+
+    claim = await client.post(f"/api/v1/games/pairs/{session_id}/claim", headers=headers)
+    assert claim.status_code == 200
+    assert claim.json()["reward_coins"] == 0
+
+    await db_session.refresh(user)
+    assert user.pairs_rewarded_attempts_today == config.pairs_daily_limit
+
+
 async def test_pairs_rejects_flipping_the_same_position_twice(client, db_session, bot_token):
     await _seed_players(db_session)
     headers = telegram_headers(750004, bot_token)

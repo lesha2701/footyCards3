@@ -11,7 +11,7 @@ from app.models.card import UserCard
 from app.models.enums import NotificationType, TradeCardSide, TradeStatus, TransactionType
 from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.user import User
-from app.schemas.trade import TradeCreateRequest, TradeOfferOut
+from app.schemas.trade import TradeAcceptOut, TradeCreateRequest, TradeOfferOut
 from app.services import task_service
 from app.services.collection_service import grant_collection_rewards_for_new_cards
 from app.services.notification_service import notify
@@ -242,7 +242,7 @@ async def reject_offer(db: AsyncSession, user: User, offer_id: int) -> TradeOffe
     return await hydrate_offer(db, offer)
 
 
-async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeOfferOut:
+async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcceptOut:
     offer = await _get_offer_or_404(db, offer_id)
     offer = await _expire_if_needed(db, offer)
     if offer.receiver_id != user.id:
@@ -287,6 +287,8 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeOffe
             raise ConflictError(f"Card #{card.serial_number} was locked by an administrator")
         if card.is_in_lineup:
             raise ConflictError(f"Card #{card.serial_number} is currently used in a lineup")
+        if card.is_in_tactico_squad:
+            raise ConflictError(f"Card #{card.serial_number} is currently used in a Tactico squad")
 
     if offer.sender_coins > 0 and sender.balance < offer.sender_coins:
         raise InsufficientBalanceError("Sender no longer has enough coins for this trade")
@@ -340,7 +342,8 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeOffe
 
     await db.commit()
     await db.refresh(offer)
-    return await hydrate_offer(db, offer)
+    hydrated = await hydrate_offer(db, offer)
+    return TradeAcceptOut(**hydrated.model_dump(), new_balance=receiver.balance)
 
 
 async def list_offers(db: AsyncSession, user: User, status: Optional[TradeStatus], direction: Optional[str]) -> list[TradeOfferOut]:
