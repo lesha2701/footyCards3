@@ -121,3 +121,129 @@ async def test_penalty_only_challenged_user_can_accept(client, db_session, bot_t
         json={"user_card_id": stranger_card.id},
     )
     assert resp.status_code == 403
+
+
+async def _create_and_accept(client, db_session, bot_token, sender_tid, receiver_tid):
+    sender = await _register(client, db_session, sender_tid, bot_token)
+    receiver = await _register(client, db_session, receiver_tid, bot_token)
+    sender_card = await _grant_card(db_session, sender.id, rating=99)
+    receiver_card = await _grant_card(db_session, receiver.id, rating=99)
+    sender_headers = telegram_headers(sender_tid, bot_token)
+    receiver_headers = telegram_headers(receiver_tid, bot_token)
+
+    create = await client.post(
+        "/api/v1/games/penalty/challenges", headers=sender_headers,
+        json={"opponent_user_id": receiver.id, "user_card_id": sender_card.id},
+    )
+    match_id = create.json()["id"]
+    await client.post(
+        f"/api/v1/games/penalty/challenges/{match_id}/accept", headers=receiver_headers,
+        json={"user_card_id": receiver_card.id},
+    )
+    return match_id, sender, receiver, sender_headers, receiver_headers
+
+
+async def test_penalty_pvp_full_match_resolves_with_score_and_rating(client, db_session, bot_token):
+    match_id, sender, receiver, sender_headers, receiver_headers = await _create_and_accept(
+        client, db_session, bot_token, 860201, 860202
+    )
+
+    # Regulation is 10 kicks; both sides always pick the same zone so every
+    # kick is "saved" — deterministic, so the match always reaches a 0:0 draw
+    # after 10 kicks without needing sudden death in this test.
+    for i in range(10):
+        kicker_headers = sender_headers if i % 2 == 0 else receiver_headers
+        other_headers = receiver_headers if i % 2 == 0 else sender_headers
+        r1 = await client.post(
+            f"/api/v1/games/penalty/matches/{match_id}/pick", headers=kicker_headers, json={"zone": "top_left"}
+        )
+        assert r1.status_code == 200
+        r2 = await client.post(
+            f"/api/v1/games/penalty/matches/{match_id}/pick", headers=other_headers, json={"zone": "top_left"}
+        )
+        assert r2.status_code == 200
+
+    final = r2.json()
+    assert final["status"] == "finished"
+    assert final["result"] == "draw"
+    assert final["user_score"] == 0 and final["opponent_score"] == 0
+
+    await db_session.refresh(sender)
+    await db_session.refresh(receiver)
+    assert sender.penalty_rating == 1  # draw = +1
+    assert receiver.penalty_rating == 1
+
+
+async def test_penalty_pvp_gives_no_coins(client, db_session, bot_token):
+    match_id, sender, receiver, sender_headers, receiver_headers = await _create_and_accept(
+        client, db_session, bot_token, 860203, 860204
+    )
+    balance_before = sender.balance
+
+    for i in range(10):
+        kicker_headers = sender_headers if i % 2 == 0 else receiver_headers
+        other_headers = receiver_headers if i % 2 == 0 else sender_headers
+        await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=kicker_headers, json={"zone": "top_left"})
+        await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=other_headers, json={"zone": "top_left"})
+
+    await db_session.refresh(sender)
+    await db_session.refresh(receiver)
+    assert sender.balance == balance_before
+    assert receiver.balance == 500
+
+
+async def test_penalty_pvp_kick_timeout_auto_resolves(client, db_session, bot_token):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.penalty import PenaltyMatch
+
+    match_id, sender, receiver, sender_headers, receiver_headers = await _create_and_accept(
+        client, db_session, bot_token, 860205, 860206
+    )
+
+    # sender (kicker) picks; receiver never does — force the kick_deadline
+    # into the past to simulate the 10s window elapsing.
+    await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=sender_headers, json={"zone": "top_left"})
+    match = await db_session.get(PenaltyMatch, match_id)
+    state = dict(match.server_state)
+    state["kick_deadline"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    match.server_state = state
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(match, "server_state")
+    db_session.add(match)
+    await db_session.commit()
+
+    resp = await client.get(f"/api/v1/games/penalty/matches/{match_id}", headers=sender_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["rounds"]) == 1  # the round resolved despite receiver never picking
+
+
+async def test_penalty_pvp_match_timeout_ends_in_current_score(client, db_session, bot_token):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.penalty import PenaltyMatch
+
+    match_id, sender, receiver, sender_headers, receiver_headers = await _create_and_accept(
+        client, db_session, bot_token, 860207, 860208
+    )
+
+    # One kick resolved in the sender's favor, then force match_deadline
+    # into the past — the match must end right there, sender ahead 1:0.
+    await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=sender_headers, json={"zone": "top_left"})
+    await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=receiver_headers, json={"zone": "bottom_right"})
+
+    match = await db_session.get(PenaltyMatch, match_id)
+    state = dict(match.server_state)
+    state["match_deadline"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    match.server_state = state
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(match, "server_state")
+    db_session.add(match)
+    await db_session.commit()
+
+    resp = await client.get(f"/api/v1/games/penalty/matches/{match_id}", headers=sender_headers)
+    body = resp.json()
+    assert body["status"] == "finished"
+    assert body["result"] == "win"
+    assert body["user_score"] == 1 and body["opponent_score"] == 0

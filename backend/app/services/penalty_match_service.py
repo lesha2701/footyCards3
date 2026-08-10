@@ -1,3 +1,4 @@
+import random
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -15,6 +16,8 @@ from app.models.user import User
 from app.schemas.penalty_match import PenaltyMatchOut, PenaltyRoundOut
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
+from app.services.penalty_service import PENALTY_ZONES, _resolve_shot
+from app.services.wallet_service import lock_user_for_update
 
 KICK_TIMEOUT_SECONDS = 10
 MATCH_TIMEOUT_SECONDS = 180
@@ -216,3 +219,168 @@ async def _hydrate_match(db: AsyncSession, match: PenaltyMatch, viewer: User) ->
         expires_at=match.expires_at,
         resolved_at=match.resolved_at,
     )
+
+
+def _current_kicker(state: dict) -> str:
+    return state["kicker"]
+
+
+async def submit_pick(db: AsyncSession, user: User, match_id: int, zone: str) -> PenaltyMatchOut:
+    if zone not in PENALTY_ZONES:
+        raise ConflictError("Invalid zone")
+    match = await _lock_match(db, match_id)
+    if user.id not in (match.user_id, match.opponent_user_id):
+        raise ForbiddenError("You are not part of this match")
+    if match.status != PenaltyMatchStatus.in_progress:
+        raise ConflictError("This match is not in progress")
+
+    side = "user" if user.id == match.user_id else "opponent"
+    state = dict(match.server_state)
+    if state.get(f"{side}_pending_zone") is not None:
+        raise ConflictError("You already picked for this kick")
+    state[f"{side}_pending_zone"] = zone
+
+    other_side = "opponent" if side == "user" else "user"
+    if state.get(f"{other_side}_pending_zone") is not None:
+        await _resolve_current_kick(db, match, state)
+    else:
+        state["kick_deadline"] = (
+            datetime.now(timezone.utc) + timedelta(seconds=KICK_TIMEOUT_SECONDS)
+        ).isoformat()
+
+    match.server_state = state
+    flag_modified(match, "server_state")
+    db.add(match)
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, user)
+
+
+async def _resolve_current_kick(db: AsyncSession, match: PenaltyMatch, state: dict) -> None:
+    """Both sides have a pending zone for the current kick — resolve it,
+    record the round, advance to the next kicker, and finish the match if
+    regulation is complete. Mutates `state` in place; caller still has to
+    persist `match.server_state`/commit."""
+    kicker = state["kicker"]
+    defender = "opponent" if kicker == "user" else "user"
+    shot_zone = state[f"{kicker}_pending_zone"]
+    dive_zone = state[f"{defender}_pending_zone"]
+
+    card_id = match.user_card_id if kicker == "user" else match.opponent_card_id
+    card_result = await db.execute(select(UserCard).where(UserCard.id == card_id).options(joinedload(UserCard.player)))
+    card = card_result.unique().scalar_one_or_none()
+    miss_chance = 0.12 if card is None else _shooter_miss_chance(card.player.rating)
+
+    outcome = _resolve_shot(miss_chance, shot_zone, dive_zone)
+    if outcome == "goal":
+        state[f"{kicker}_score"] += 1
+
+    state["rounds"] = list(state["rounds"]) + [
+        {"kicker": kicker, "shot_zone": shot_zone, "dive_zone": dive_zone, "outcome": outcome}
+    ]
+    state["kicks_taken"] += 1
+    state["kicker"] = defender
+    state["user_pending_zone"] = None
+    state["opponent_pending_zone"] = None
+    match.user_score, match.opponent_score = state["user_score"], state["opponent_score"]
+
+    # Unlike the solo bot mode (penalty_service.resolve_kick), a PvP match
+    # accepts a draw as a valid outcome (see _finish_match's MatchResult.draw
+    # branch) — so regulation always ends the match, tied or not, with no
+    # sudden-death continuation.
+    if state["kicks_taken"] >= REGULATION_KICKS and state["kicks_taken"] % 2 == 0:
+        await _finish_match(db, match, state)
+    else:
+        state["kick_deadline"] = (
+            datetime.now(timezone.utc) + timedelta(seconds=KICK_TIMEOUT_SECONDS)
+        ).isoformat()
+
+
+def _shooter_miss_chance(rating: int) -> float:
+    from app.services.penalty_service import player_miss_chance
+    return player_miss_chance(rating)
+
+
+async def _finish_match(db: AsyncSession, match: PenaltyMatch, state: dict) -> None:
+    if match.user_score > match.opponent_score:
+        result, user_delta = MatchResult.win, 3
+    elif match.user_score < match.opponent_score:
+        result, user_delta = MatchResult.loss, -1
+    else:
+        result, user_delta = MatchResult.draw, 1
+    opponent_delta = _OPPONENT_RATING_DELTA[user_delta]
+    state["opponent_rating_delta"] = opponent_delta
+
+    match.result = result
+    match.rating_delta = user_delta
+    match.status = PenaltyMatchStatus.finished
+    match.resolved_at = datetime.now(timezone.utc)
+    match.server_state = state
+    flag_modified(match, "server_state")
+
+    first_id, second_id = sorted([match.user_id, match.opponent_user_id])
+    first_locked = await lock_user_for_update(db, first_id)
+    second_locked = await lock_user_for_update(db, second_id)
+    locked_user = first_locked if first_locked.id == match.user_id else second_locked
+    locked_opponent = first_locked if first_locked.id == match.opponent_user_id else second_locked
+
+    locked_user.penalty_rating = max(0, locked_user.penalty_rating + user_delta)
+    locked_opponent.penalty_rating = max(0, locked_opponent.penalty_rating + opponent_delta)
+    db.add(locked_user)
+    db.add(locked_opponent)
+
+    await notify(
+        db, match.opponent_user_id, NotificationType.penalty_challenge_accepted,
+        "Пенальти завершены",
+        f"Серия с {locked_user.full_display_name()} завершена — результат: {_FLIP_RESULT[result].value}.",
+        "penalty_match", match.id,
+    )
+    await notify(
+        db, match.user_id, NotificationType.penalty_challenge_accepted,
+        "Пенальти завершены",
+        f"Серия с {locked_opponent.full_display_name()} завершена — результат: {result.value}.",
+        "penalty_match", match.id,
+    )
+    db.add(match)
+
+
+async def _auto_resolve_overdue(db: AsyncSession) -> int:
+    """Lazy sweep, mirroring tactico_service._auto_play_overdue_rounds: runs
+    opportunistically on every list_matches/get_match call rather than a
+    background scheduler (see CLAUDE.md's turn-based-game-state note)."""
+    now = datetime.now(timezone.utc)
+    result = await db.execute(select(PenaltyMatch).where(PenaltyMatch.status == PenaltyMatchStatus.in_progress))
+    matches = result.scalars().all()
+    swept = 0
+    for match in matches:
+        state = dict(match.server_state or {})
+
+        match_deadline = state.get("match_deadline")
+        if match_deadline and ensure_aware(datetime.fromisoformat(match_deadline)) <= now:
+            if state.get("user_pending_zone") is not None and state.get("opponent_pending_zone") is not None:
+                await _resolve_current_kick(db, match, state)
+            if match.status == PenaltyMatchStatus.in_progress:  # still in progress: end it on the current score
+                await _finish_match(db, match, state)
+            else:
+                match.server_state = state
+                flag_modified(match, "server_state")
+                db.add(match)
+            await db.commit()
+            swept += 1
+            continue
+
+        kick_deadline = state.get("kick_deadline")
+        if not kick_deadline or ensure_aware(datetime.fromisoformat(kick_deadline)) > now:
+            continue
+
+        for side in ("user", "opponent"):
+            if state.get(f"{side}_pending_zone") is None:
+                state[f"{side}_pending_zone"] = random.choice(PENALTY_ZONES)
+
+        await _resolve_current_kick(db, match, state)
+        match.server_state = state
+        flag_modified(match, "server_state")
+        db.add(match)
+        await db.commit()
+        swept += 1
+    return swept

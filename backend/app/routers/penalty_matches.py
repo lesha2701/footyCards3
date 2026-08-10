@@ -40,3 +40,11 @@ async def decline_challenge(match_id: int, db: AsyncSession = Depends(get_db), u
 @router.post("/challenges/{match_id}/cancel", response_model=PenaltyMatchOut)
 async def cancel_challenge(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await penalty_match_service.cancel_challenge(db, user, match_id)
+
+
+@router.post("/matches/{match_id}/pick", response_model=PenaltyMatchOut)
+async def submit_pick(
+    match_id: int, payload: PenaltyPickRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await penalty_match_service.submit_pick(db, user, match_id, payload.zone)
