@@ -46,6 +46,9 @@ class User(TimestampMixin, Base):
     tactico_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     tactico_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Penalty stats
+    penalty_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
     # Memory sequence
     memory_best_score: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     memory_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

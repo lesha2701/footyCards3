@@ -6,7 +6,7 @@
 
 **Architecture:** Backend: widen the existing `penalty_service.py`'s direction constant from 3 values to 6 and extract the shared miss/zone-compare logic into one pure helper (reused later by PvP). Frontend: extract a new `PenaltyGoalScene` component (SVG goal + recolorable gloves + real football artwork, CSS-transition-driven) that `PenaltyGamePage` drives from kick results; the component is deliberately built to be reused unchanged by the PvP match page in the next plan.
 
-**Tech Stack:** FastAPI/SQLAlchemy (backend, unchanged shape — no migration in this plan), React + TypeScript + Tailwind + inline SVG (frontend, no new npm dependencies).
+**Tech Stack:** FastAPI/SQLAlchemy (backend — one migration in this plan, adding the `users.penalty_rating` column Task 1 needs), React + TypeScript + Tailwind + inline SVG (frontend, no new npm dependencies).
 
 ## Global Constraints
 
@@ -21,6 +21,8 @@
 ## File Structure
 
 - Modify: `backend/app/services/penalty_service.py` — rename `DIRECTIONS` → `PENALTY_ZONES` (6 values), extract `_resolve_shot()`.
+- Modify: `backend/app/models/user.py` — add `penalty_rating: Mapped[int]` (default 0), mirroring `tactics_rating`. **[Resolved during Task 1 execution — done by the controller, not the implementer; see note below.]**
+- Create: `backend/alembic/versions/0039_penalty_rating.py` — adds `users.penalty_rating` (Integer, not null, server_default 0). **[Same resolution.]**
 - Modify: `backend/tests/test_penalty.py` — update the 2 hardcoded `"left"` literals to a valid new zone; add zone-coverage tests.
 - Modify: `frontend/src/types/index.ts` — `PenaltyDirection` becomes a 6-value union.
 - Create: `frontend/public/penalty/gk-gloves.png` — the goalkeeper-gloves silhouette asset (copied from `/Users/alex/Downloads/goalkeeper.png`), served as a static file and recolored client-side via an SVG alpha mask.
@@ -34,6 +36,7 @@
 **Files:**
 - Modify: `backend/app/services/penalty_service.py`
 - Test: `backend/tests/test_penalty.py`
+- (Already done by the controller, not part of this task's dispatch: `backend/app/models/user.py` gained `penalty_rating`, and migration `0039_penalty_rating.py` was added and applied — the plan originally omitted this column, and the implementer correctly escalated rather than guessing.)
 
 **Interfaces:**
 - Produces: `PENALTY_ZONES: tuple[str, ...]` (6 values: `"top_left"`, `"top_center"`, `"top_right"`, `"bottom_left"`, `"bottom_center"`, `"bottom_right"`) and `_resolve_shot(miss_chance: float, shot_zone: str, dive_zone: str) -> str` (returns `"goal"` | `"saved"` | `"miss"`) — both importable from `app.services.penalty_service`, both needed by the PvP plan.
