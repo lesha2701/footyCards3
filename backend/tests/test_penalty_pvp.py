@@ -1,5 +1,6 @@
 from app.models.card import UserCard
 from app.models.enums import CardSource, Rarity
+from app.services import penalty_service
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
 
@@ -232,7 +233,7 @@ async def test_penalty_pvp_kick_timeout_auto_resolves(client, db_session, bot_to
     assert len(body["rounds"]) == 1  # the round resolved despite receiver never picking
 
 
-async def test_penalty_pvp_match_timeout_ends_in_current_score(client, db_session, bot_token):
+async def test_penalty_pvp_match_timeout_ends_in_current_score(client, db_session, bot_token, monkeypatch):
     from datetime import datetime, timedelta, timezone
 
     from app.models.penalty import PenaltyMatch
@@ -240,6 +241,10 @@ async def test_penalty_pvp_match_timeout_ends_in_current_score(client, db_sessio
     match_id, sender, receiver, sender_headers, receiver_headers = await _create_and_accept(
         client, db_session, bot_token, 860207, 860208
     )
+    # A single kick, so the shooter's own ~5% miss-chance floor (at rating
+    # 99) isn't negligible here the way it is in the 5-kick tests above —
+    # force it to zero so this test isn't flaky.
+    monkeypatch.setattr(penalty_service, "player_miss_chance", lambda rating: 0.0)
 
     # One kick resolved in the sender's favor, then force match_deadline
     # into the past — the match must end right there, sender ahead 1:0.

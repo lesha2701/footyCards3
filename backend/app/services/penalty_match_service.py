@@ -57,8 +57,40 @@ async def _load_owned_card(db: AsyncSession, user: User, user_card_id: int) -> U
     return card
 
 
+async def _has_active_match(db: AsyncSession, user_id: int, exclude_match_id: Optional[int] = None) -> bool:
+    conditions = [
+        or_(PenaltyMatch.user_id == user_id, PenaltyMatch.opponent_user_id == user_id),
+        PenaltyMatch.status == PenaltyMatchStatus.in_progress,
+    ]
+    if exclude_match_id is not None:
+        conditions.append(PenaltyMatch.id != exclude_match_id)
+    result = await db.execute(select(PenaltyMatch.id).where(*conditions).limit(1))
+    return result.scalar_one_or_none() is not None
+
+
+async def _consume_hourly_slot(db: AsyncSession, user_id: int, config) -> User:
+    from app.services.penalty_service import _ensure_hourly_reset
+
+    locked_user = await lock_user_for_update(db, user_id)
+    await _ensure_hourly_reset(db, locked_user)
+    if locked_user.penalty_hourly_attempts >= config.hourly_game_limit:
+        remaining = timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(locked_user.penalty_hour_started_at))
+        raise ConflictError(
+            "Hourly play limit reached for this game",
+            details={
+                "hourly_limit": config.hourly_game_limit,
+                "retry_after_seconds": max(0, int(remaining.total_seconds())),
+            },
+        )
+    locked_user.penalty_hourly_attempts += 1
+    db.add(locked_user)
+    return locked_user
+
+
 async def create_challenge(db: AsyncSession, sender: User, receiver_id: int, user_card_id: int) -> PenaltyMatchOut:
     config = await get_config(db)
+    if await _has_active_match(db, sender.id):
+        raise ConflictError("У тебя уже есть матч в Пенальти в процессе — заверши его, прежде чем начать новый")
     if receiver_id == sender.id:
         raise ConflictError("You cannot challenge yourself")
     receiver = await db.get(User, receiver_id)
@@ -67,6 +99,8 @@ async def create_challenge(db: AsyncSession, sender: User, receiver_id: int, use
     if receiver.is_banned:
         raise ConflictError("This user is banned and cannot be challenged")
     await _load_owned_card(db, sender, user_card_id)
+
+    sender = await _consume_hourly_slot(db, sender.id, config)
 
     match = PenaltyMatch(
         user_id=sender.id,
@@ -107,6 +141,9 @@ async def accept_challenge(db: AsyncSession, user: User, match_id: int, user_car
         db.add(match)
         await db.commit()
         raise ConflictError("This challenge has expired")
+
+    if await _has_active_match(db, user.id, exclude_match_id=match.id):
+        raise ConflictError("У тебя уже есть матч в Пенальти в процессе — заверши его, прежде чем принять вызов")
 
     await _load_owned_card(db, user, user_card_id)
 
@@ -352,12 +389,24 @@ async def _finish_match(db: AsyncSession, match: PenaltyMatch, state: dict) -> N
 async def _auto_resolve_overdue(db: AsyncSession) -> int:
     """Lazy sweep, mirroring tactico_service._auto_play_overdue_rounds: runs
     opportunistically on every list_matches/get_match call rather than a
-    background scheduler (see CLAUDE.md's turn-based-game-state note)."""
+    background scheduler (see CLAUDE.md's turn-based-game-state note).
+
+    Every match is re-locked via _lock_match (not just read) and its status
+    re-checked before touching it — both players' clients poll every 2.5s,
+    so multiple sweeps can and do run concurrently for the same overdue
+    match; without the lock + re-check, two sweeps that both see
+    in_progress would both reach _finish_match and double-award the rating
+    delta (this is exactly the row-locking the plan's Global Constraints
+    require for the timeout sweep, caught by the final whole-branch
+    review)."""
     now = datetime.now(timezone.utc)
-    result = await db.execute(select(PenaltyMatch).where(PenaltyMatch.status == PenaltyMatchStatus.in_progress))
-    matches = result.scalars().all()
+    result = await db.execute(select(PenaltyMatch.id).where(PenaltyMatch.status == PenaltyMatchStatus.in_progress))
+    match_ids = result.scalars().all()
     swept = 0
-    for match in matches:
+    for match_id in match_ids:
+        match = await _lock_match(db, match_id)
+        if match.status != PenaltyMatchStatus.in_progress:
+            continue  # resolved by a concurrent sweep (or a pick) while we waited for the lock
         state = dict(match.server_state or {})
 
         match_deadline = state.get("match_deadline")
