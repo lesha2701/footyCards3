@@ -2,7 +2,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
@@ -389,3 +389,23 @@ async def _auto_resolve_overdue(db: AsyncSession) -> int:
         await db.commit()
         swept += 1
     return swept
+
+
+async def list_matches(db: AsyncSession, user: User) -> list[PenaltyMatchOut]:
+    await _auto_resolve_overdue(db)
+    result = await db.execute(
+        select(PenaltyMatch)
+        .where(or_(PenaltyMatch.user_id == user.id, PenaltyMatch.opponent_user_id == user.id))
+        .order_by(PenaltyMatch.created_at.desc())
+    )
+    matches = result.scalars().all()
+    return [await _hydrate_match(db, m, user) for m in matches]
+
+
+async def get_match(db: AsyncSession, user: User, match_id: int) -> PenaltyMatchOut:
+    await _auto_resolve_overdue(db)
+    match = await _get_match_or_404(db, match_id)
+    if user.id not in (match.user_id, match.opponent_user_id):
+        raise ForbiddenError("You are not part of this match")
+    await db.refresh(match)
+    return await _hydrate_match(db, match, user)

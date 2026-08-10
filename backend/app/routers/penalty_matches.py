@@ -48,3 +48,13 @@ async def submit_pick(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await penalty_match_service.submit_pick(db, user, match_id, payload.zone)
+
+
+@router.get("/matches", response_model=list[PenaltyMatchOut])
+async def list_matches(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await penalty_match_service.list_matches(db, user)
+
+
+@router.get("/matches/{match_id}", response_model=PenaltyMatchOut)
+async def get_match(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await penalty_match_service.get_match(db, user, match_id)
