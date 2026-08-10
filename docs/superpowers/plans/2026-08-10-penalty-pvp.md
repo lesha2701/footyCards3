@@ -576,7 +576,7 @@ async def create_challenge(db: AsyncSession, sender: User, receiver_id: int, use
 
 
 async def accept_challenge(db: AsyncSession, user: User, match_id: int, user_card_id: int) -> PenaltyMatchOut:
-    match = await _get_match_or_404(db, match_id)
+    match = await _lock_match(db, match_id)
     if match.opponent_user_id != user.id:
         raise ForbiddenError("Only the challenged user can accept this challenge")
     if match.status != PenaltyMatchStatus.pending_accept:
@@ -612,7 +612,7 @@ async def accept_challenge(db: AsyncSession, user: User, match_id: int, user_car
 
 
 async def decline_challenge(db: AsyncSession, user: User, match_id: int) -> PenaltyMatchOut:
-    match = await _get_match_or_404(db, match_id)
+    match = await _lock_match(db, match_id)
     if match.opponent_user_id != user.id:
         raise ForbiddenError("Only the challenged user can decline this challenge")
     if match.status != PenaltyMatchStatus.pending_accept:
@@ -632,7 +632,7 @@ async def decline_challenge(db: AsyncSession, user: User, match_id: int) -> Pena
 
 
 async def cancel_challenge(db: AsyncSession, user: User, match_id: int) -> PenaltyMatchOut:
-    match = await _get_match_or_404(db, match_id)
+    match = await _lock_match(db, match_id)
     if match.user_id != user.id:
         raise ForbiddenError("Only the challenger can cancel this challenge")
     if match.status != PenaltyMatchStatus.pending_accept:
@@ -700,6 +700,8 @@ async def _hydrate_match(db: AsyncSession, match: PenaltyMatch, viewer: User) ->
         resolved_at=match.resolved_at,
     )
 ```
+
+Note on locking: `accept_challenge`/`decline_challenge`/`cancel_challenge` use `_lock_match` (not the unlocked `_get_match_or_404`) — this is a deliberate divergence from `tactico_service.py`'s equivalent functions, which leave those three unlocked. Caught during this plan's pre-flight review: the Global Constraints above require `_lock_match` for every mutation that can race, including accept, per CLAUDE.md's mandatory row-locking rule; Tactico's own code predates that constraint being written down this explicitly and has a narrow (if rare) double-accept race as a result. Not fixing Tactico's version here — out of scope for this plan.
 
 Note on `rounds_out`'s `kicker` relabeling: each stored round records `kicker` as literally `"user"` or `"opponent"` from the **challenger's** perspective (matching how `state["kicker"]` is tracked). When hydrating for the *opponent's* view, both the per-round `kicker` and the live `state["kicker"]` need flipping so "who kicked this round" reads correctly from whoever is looking at it — exactly the same relabeling `tactico_service._relabel_round` does for its rounds.
 
