@@ -284,11 +284,16 @@ async def _resolve_current_kick(db: AsyncSession, match: PenaltyMatch, state: di
     state["opponent_pending_zone"] = None
     match.user_score, match.opponent_score = state["user_score"], state["opponent_score"]
 
-    # Unlike the solo bot mode (penalty_service.resolve_kick), a PvP match
-    # accepts a draw as a valid outcome (see _finish_match's MatchResult.draw
-    # branch) — so regulation always ends the match, tied or not, with no
-    # sudden-death continuation.
-    if state["kicks_taken"] >= REGULATION_KICKS and state["kicks_taken"] % 2 == 0:
+    # Same as the solo bot mode (penalty_service.resolve_kick): a tie at
+    # regulation continues into sudden death rather than finishing — per
+    # the plan's Global Constraints, the only way a PvP match ends in a
+    # draw is the 3-minute match clock cutting it short while still tied
+    # (see _auto_resolve_overdue's match_deadline branch, which calls
+    # _finish_match unconditionally). Sudden death here has no separate
+    # "sudden_death" flag (unlike the solo mode) because it doesn't need
+    # one: kicks just keep alternating past REGULATION_KICKS until the
+    # score differs at an even kicks_taken, or the match clock ends it.
+    if state["kicks_taken"] >= REGULATION_KICKS and state["kicks_taken"] % 2 == 0 and state["user_score"] != state["opponent_score"]:
         await _finish_match(db, match, state)
     else:
         state["kick_deadline"] = (
