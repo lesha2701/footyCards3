@@ -28,11 +28,10 @@ The spec's "Архитектура" section sketches `PenaltyMatchResult` as a n
 ## File Structure
 
 - Modify: `backend/app/models/enums.py` — add `PenaltyMatchStatus`; add 5 `penalty_challenge_*` values to `NotificationType`.
-- Modify: `backend/app/models/user.py` — add `penalty_rating` column.
 - Modify: `backend/app/models/game_config.py` — add `penalty_challenge_expiry_hours` column.
 - Create: `backend/app/models/penalty.py` — `PenaltyMatch` model.
 - Modify: `backend/app/models/__init__.py` — export `PenaltyMatch`.
-- Create: `backend/alembic/versions/0039_penalty_pvp.py` — everything above, in one migration (mirrors `0017_tactico_mode.py`'s shape).
+- Create: `backend/alembic/versions/0040_penalty_pvp.py` — everything above, in one migration (mirrors `0017_tactico_mode.py`'s shape). **Renumbered from 0039 to 0040** — `users.penalty_rating` and its `0039_penalty_rating.py` migration already shipped as part of the visuals plan's Task 1 fix (an unplanned gap caught mid-execution there), so this migration no longer creates that column, only chains after it.
 - Create: `backend/app/schemas/penalty_match.py` — `PenaltyMatchOut`, request schemas.
 - Create: `backend/app/services/penalty_match_service.py` — the whole PvP lifecycle.
 - Create: `backend/app/routers/penalty_matches.py`.
@@ -53,14 +52,13 @@ The spec's "Архитектура" section sketches `PenaltyMatchResult` as a n
 
 **Files:**
 - Modify: `backend/app/models/enums.py`
-- Modify: `backend/app/models/user.py`
 - Modify: `backend/app/models/game_config.py`
 - Create: `backend/app/models/penalty.py`
 - Modify: `backend/app/models/__init__.py`
-- Create: `backend/alembic/versions/0039_penalty_pvp.py`
+- Create: `backend/alembic/versions/0040_penalty_pvp.py`
 
 **Interfaces:**
-- Produces: `PenaltyMatchStatus` enum, `PenaltyMatch` model (fields: `id, user_id, opponent_user_id, opponent_name, user_card_id, opponent_card_id, status, result, rating_delta, server_state, expires_at, created_at, resolved_at`), `User.penalty_rating: int`, `GameConfig.penalty_challenge_expiry_hours: int`. All consumed by Task 2+.
+- Produces: `PenaltyMatchStatus` enum, `PenaltyMatch` model (fields: `id, user_id, opponent_user_id, opponent_name, user_card_id, opponent_card_id, status, result, rating_delta, server_state, expires_at, created_at, resolved_at`), `GameConfig.penalty_challenge_expiry_hours: int`. All consumed by Task 2+. `User.penalty_rating: int` already exists (added by the visuals plan) — nothing to produce here, just consume it in Task 4's rating-delta logic.
 
 - [ ] **Step 1: Add the enum values**
 
@@ -84,21 +82,14 @@ class PenaltyMatchStatus(str, enum.Enum):
     expired = "expired"
 ```
 
-- [ ] **Step 2: Add `User.penalty_rating`**
-
-In `backend/app/models/user.py`, right after the existing `tactics_rating` column, add:
-```python
-    penalty_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-```
-
-- [ ] **Step 3: Add `GameConfig.penalty_challenge_expiry_hours`**
+- [ ] **Step 2: Add `GameConfig.penalty_challenge_expiry_hours`**
 
 In `backend/app/models/game_config.py`, right after the existing `penalty_daily_limit` column, add:
 ```python
     penalty_challenge_expiry_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
 ```
 
-- [ ] **Step 4: Create the `PenaltyMatch` model**
+- [ ] **Step 3: Create the `PenaltyMatch` model**
 
 Create `backend/app/models/penalty.py`:
 ```python
@@ -149,26 +140,28 @@ class PenaltyMatch(Base):
 
 Note: `result`/`rating_delta` are always from the **challenger's** (`user_id`'s) point of view, exactly like `TacticoMatch` — the service layer flips them for the opponent's view when hydrating (Task 3).
 
-- [ ] **Step 5: Register the model**
+- [ ] **Step 4: Register the model**
 
 In `backend/app/models/__init__.py`, add (alphabetically, after `notification`):
 ```python
 from app.models.penalty import PenaltyMatch
 ```
 
-- [ ] **Step 6: Write the migration**
+- [ ] **Step 5: Write the migration**
 
-Create `backend/alembic/versions/0039_penalty_pvp.py`:
+Create `backend/alembic/versions/0040_penalty_pvp.py`:
 ```python
 """Penalty PvP: friend-challenge shootout mode
 
-Adds the penalty_matches table, a penalty_rating column on users for its
-leaderboard, a penalty_challenge_expiry_hours GameConfig tunable, and the
-new NotificationType values used by its challenge lifecycle. Reuses the
-existing match_result_enum (win/draw/loss) rather than adding a duplicate.
+Adds the penalty_matches table, a penalty_challenge_expiry_hours GameConfig
+tunable, and the new NotificationType values used by its challenge
+lifecycle. Reuses the existing match_result_enum (win/draw/loss) rather
+than adding a duplicate. Does NOT add users.penalty_rating — that column
+already exists as of 0039_penalty_rating.py (added by the visuals plan's
+Task 1 fix, before this migration was written).
 
-Revision ID: 0039
-Revises: 0038
+Revision ID: 0040
+Revises: 0039
 Create Date: 2026-08-10
 
 """
@@ -178,8 +171,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0039"
-down_revision: Union[str, None] = "0038"
+revision: str = "0040"
+down_revision: Union[str, None] = "0039"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -199,7 +192,6 @@ def upgrade() -> None:
     op.execute("ALTER TYPE notification_type_enum ADD VALUE IF NOT EXISTS 'penalty_challenge_cancelled'")
     op.execute("ALTER TYPE notification_type_enum ADD VALUE IF NOT EXISTS 'penalty_challenge_expired'")
 
-    op.add_column("users", sa.Column("penalty_rating", sa.Integer(), nullable=False, server_default="0"))
     op.add_column(
         "game_config", sa.Column("penalty_challenge_expiry_hours", sa.Integer(), nullable=False, server_default="24")
     )
@@ -234,27 +226,26 @@ def downgrade() -> None:
     op.drop_table("penalty_matches")
 
     op.drop_column("game_config", "penalty_challenge_expiry_hours")
-    op.drop_column("users", "penalty_rating")
 
     penalty_match_status_enum.drop(op.get_bind(), checkfirst=True)
     # notification_type_enum ADD VALUEs above are not reversible (mirrors 0017/0036's note).
 ```
 
-- [ ] **Step 7: Sanity-check imports and apply the migration**
+- [ ] **Step 6: Sanity-check imports and apply the migration**
 
 Run: `docker compose exec -T backend python -c "from app.main import app"`
 Expected: no output (clean import).
 
 Run: `docker compose exec -T backend alembic upgrade head`
-Expected: `Running upgrade 0038 -> 0039, Penalty PvP: friend-challenge shootout mode`.
+Expected: `Running upgrade 0039 -> 0040, Penalty PvP: friend-challenge shootout mode`.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add backend/app/models/enums.py backend/app/models/user.py backend/app/models/game_config.py \
+git add backend/app/models/enums.py backend/app/models/game_config.py \
         backend/app/models/penalty.py backend/app/models/__init__.py \
-        backend/alembic/versions/0039_penalty_pvp.py
-git commit -m "Add PenaltyMatch model, penalty_rating, and PvP notification types"
+        backend/alembic/versions/0040_penalty_pvp.py
+git commit -m "Add PenaltyMatch model and PvP notification types"
 ```
 
 ---
@@ -1975,7 +1966,7 @@ Expected: same pass counts as after Task 9, pre-existing unrelated failure only.
 
 ## Self-Review Notes
 
-- **Spec coverage:** Challenge/accept/decline/cancel (Task 3) ✅. Blind simultaneous pick + kick timeout (Task 4) ✅. Match timeout ending in current score, including draw (Task 4) ✅. No coins for PvP, ever (Task 4's `_finish_match` never calls `credit_coins`; verified explicitly by `test_penalty_pvp_gives_no_coins`) ✅. `penalty_rating` for both bot and PvP — PvP side done here (Task 1/4); the bot-mode side is covered by the visuals plan's Task 1 (`docs/superpowers/plans/2026-08-10-penalty-visuals-6-zones.md`), which locks the user and applies the same +3/-1 deltas in `resolve_kick`'s `is_finished` branch, with `test_penalty_bot_match_updates_penalty_rating` covering it — this was originally missed here and caught during this plan's own self-review, then folded back into the visuals plan since that's where `resolve_kick` lives. Both plans now agree; no outstanding gap.
+- **Spec coverage:** Challenge/accept/decline/cancel (Task 3) ✅. Blind simultaneous pick + kick timeout (Task 4) ✅. Match timeout ending in current score, including draw (Task 4) ✅. No coins for PvP, ever (Task 4's `_finish_match` never calls `credit_coins`; verified explicitly by `test_penalty_pvp_gives_no_coins`) ✅. `penalty_rating` for both bot and PvP: the column itself already exists (added out-of-band during the visuals plan's Task 1, see its plan file and File Structure note above — this plan's Task 1 no longer creates it, only consumes it) — PvP-side deltas are done here (Task 1/4); the bot-mode side lives in the visuals plan's `resolve_kick` `is_finished` branch, covered by its `test_penalty_bot_match_win_increases_penalty_rating`/`test_penalty_bot_match_loss_decreases_penalty_rating_with_floor`/`test_penalty_rating_never_drops_below_zero` (the original single test of that name was replaced with these three after a task review found it flaky). Both plans agree on schema ownership and behavior; no outstanding gap.
 - **Live transport into the match** (the extra requirement from this session) ✅ — Task 8's `refetchInterval`, verified in Task 10 Step 3 the same way the Tactico fix was verified.
 - **Placeholder scan:** none found — every step has complete code; Task 10 uses a documented "write a Playwright script following the established pattern" instruction rather than inlining the script itself, which is acceptable for a verification-only task with a concrete prior example to follow (the Tactico polling-fix verification earlier in this session), not a build step.
 - **Type consistency:** `PenaltyMatchOut`/`PenaltyMatch` field names match end-to-end (`kick_deadline`, `match_deadline`, `is_viewer_turn`, `kicker`) across Task 2 → Task 6 → Task 7/8. `PenaltyGoalKick.outcome` values (`"goal"|"saved"|"miss"`) match `_resolve_shot`'s return values and `PenaltyRoundOut.outcome` exactly.
