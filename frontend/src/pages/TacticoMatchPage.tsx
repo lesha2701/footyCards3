@@ -41,6 +41,12 @@ export default function TacticoMatchPage() {
     queryFn: () => fetchTacticoMatch(id),
     refetchInterval: (query) => {
       const data = query.state.data as TacticoMatch | undefined;
+      // The challenger lands on this exact page right after sending the
+      // challenge (see TacticoMatchesPage's navigate on success) and would
+      // otherwise be stuck on "ждём ответа" until they manually leave and
+      // come back — poll while waiting so accepting the challenge is
+      // reflected here live, without the challenger having to do anything.
+      if (data?.status === "pending_accept" && data.viewer_side === "user") return 5000;
       if (data?.status !== "in_progress") return false;
       // Poll faster once one side has already committed a card for this
       // round (a live 15s response window is running for the other side),
