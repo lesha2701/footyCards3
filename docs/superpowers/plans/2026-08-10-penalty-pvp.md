@@ -935,12 +935,58 @@ async def test_penalty_pvp_match_timeout_ends_in_current_score(client, db_sessio
     assert body["status"] == "finished"
     assert body["result"] == "win"
     assert body["user_score"] == 1 and body["opponent_score"] == 0
+
+
+async def test_penalty_pvp_match_timeout_draw_when_tied(client, db_session, bot_token):
+    """The match clock is the only way a PvP match ends in a draw (regulation
+    ties continue into sudden death instead) — force a still-tied score at
+    timeout and confirm _finish_match's MatchResult.draw branch (+1/+1).
+    Like the other two timeout tests above, this reaches the sweep logic
+    through GET /games/penalty/matches/{id}, so it 404s (expected) until
+    Task 5's get_match (which calls _auto_resolve_overdue) exists."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.penalty import PenaltyMatch
+    from sqlalchemy.orm.attributes import flag_modified
+
+    match_id, sender, receiver, sender_headers, receiver_headers = await _create_and_accept(
+        client, db_session, bot_token, 860209, 860210
+    )
+    sender.penalty_rating = 5
+    receiver.penalty_rating = 5
+    db_session.add_all([sender, receiver])
+    await db_session.commit()
+
+    # Both sides always dive the same zone they shoot — every kick is
+    # saved, score stays 0:0 — then the match clock (not regulation) is
+    # what ends it.
+    await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=sender_headers, json={"zone": "top_left"})
+    await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=receiver_headers, json={"zone": "top_left"})
+
+    match = await db_session.get(PenaltyMatch, match_id)
+    state = dict(match.server_state)
+    state["match_deadline"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    match.server_state = state
+    flag_modified(match, "server_state")
+    db_session.add(match)
+    await db_session.commit()
+
+    resp = await client.get(f"/api/v1/games/penalty/matches/{match_id}", headers=sender_headers)
+    body = resp.json()
+    assert body["status"] == "finished"
+    assert body["result"] == "draw"
+    assert body["user_score"] == 0 and body["opponent_score"] == 0
+
+    await db_session.refresh(sender)
+    await db_session.refresh(receiver)
+    assert sender.penalty_rating == 6  # 5 + 1 (draw)
+    assert receiver.penalty_rating == 6  # 5 + 1 (draw)
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `docker compose exec -T backend pytest tests/test_penalty_pvp.py -v`
-Expected: the 4 new tests FAIL — `/games/penalty/matches/{id}/pick` and `GET /games/penalty/matches/{id}` don't exist yet (404).
+Expected: the 5 new tests FAIL — `/games/penalty/matches/{id}/pick` and `GET /games/penalty/matches/{id}` don't exist yet (404).
 
 - [ ] **Step 3: Implement pick, sweep, and finish**
 
@@ -1125,12 +1171,12 @@ async def submit_pick(
     return await penalty_match_service.submit_pick(db, user, match_id, payload.zone)
 ```
 
-Note: `list_matches`/`get_match` (which call `_auto_resolve_overdue` before reading, same as Tactico's `list_matches`/`get_match`) are added in Task 5 — until then, the timeout tests above reach the sweep logic through the `GET /games/penalty/matches/{id}` call, so this task's own test for it (`test_penalty_pvp_kick_timeout_auto_resolves`, `test_penalty_pvp_match_timeout_ends_in_current_score`) will only go green once Task 5's `get_match` (which calls `_auto_resolve_overdue`) exists. **Run Task 5 before checking this task's Step 4** — or, if executing task-by-task with review gates, treat Step 4 of this task as covering only `test_penalty_pvp_full_match_resolves_with_score_and_rating` and `test_penalty_pvp_gives_no_coins`, and defer the two timeout tests' green check to Task 5's Step 2.
+Note: `list_matches`/`get_match` (which call `_auto_resolve_overdue` before reading, same as Tactico's `list_matches`/`get_match`) are added in Task 5 — until then, the timeout tests above reach the sweep logic through the `GET /games/penalty/matches/{id}` call, so this task's own tests for it (`test_penalty_pvp_kick_timeout_auto_resolves`, `test_penalty_pvp_match_timeout_ends_in_current_score`, `test_penalty_pvp_match_timeout_draw_when_tied`) will only go green once Task 5's `get_match` (which calls `_auto_resolve_overdue`) exists. **Run Task 5 before checking this task's Step 4** — or, if executing task-by-task with review gates, treat Step 4 of this task as covering only `test_penalty_pvp_full_match_resolves_with_score_and_rating` and `test_penalty_pvp_gives_no_coins`, and defer the three timeout tests' green check to Task 5's Step 2.
 
 - [ ] **Step 4: Run tests (full pass expected only after Task 5 — see note above)**
 
 Run: `docker compose exec -T backend pytest tests/test_penalty_pvp.py -v`
-Expected now: `test_penalty_pvp_full_match_resolves_with_score_and_rating` and `test_penalty_pvp_gives_no_coins` PASS; the two timeout tests still 404 on the `GET` call (expected, `get_match` lands in Task 5).
+Expected now: `test_penalty_pvp_full_match_resolves_with_score_and_rating` and `test_penalty_pvp_gives_no_coins` PASS; the three timeout tests still 404 on the `GET` call (expected, `get_match` lands in Task 5).
 
 - [ ] **Step 5: Commit**
 
@@ -1197,7 +1243,7 @@ async def get_match(match_id: int, db: AsyncSession = Depends(get_db), user: Use
 - [ ] **Step 2: Run the full PvP test file**
 
 Run: `docker compose exec -T backend pytest tests/test_penalty_pvp.py -v`
-Expected: all 9 tests PASS, including the 2 timeout tests deferred from Task 4.
+Expected: all 10 tests PASS, including the 3 timeout tests deferred from Task 4.
 
 - [ ] **Step 3: Add the ranking metric**
 
