@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchCollection } from "@/api/collection";
@@ -47,9 +47,11 @@ export default function PenaltyGamePage() {
 
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("pick_card");
+  const [choosingBot, setChoosingBot] = useState(false);
   const [lastKick, setLastKick] = useState<PenaltyKickResult | null>(null);
   const [claimResult, setClaimResult] = useState<{ reward_coins: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [settled, setSettled] = useState(true);
 
   const { data: collection } = useQuery({
     queryKey: ["collection", "penalty"],
@@ -90,6 +92,45 @@ export default function PenaltyGamePage() {
     },
   });
 
+  // The scene shows the just-resolved kick's animation/outcome briefly, then
+  // resets to an idle pose with the keeper already recolored for whoever
+  // kicks *next* — without this, the keeper stayed on the previous kick's
+  // color/position until the player had already submitted their next pick,
+  // which read as "nothing happened" right when the turn actually changed.
+  // Declared unconditionally (before any early `return`) — hooks can't
+  // follow a conditional return without violating the Rules of Hooks.
+  useEffect(() => {
+    if (!lastKick) {
+      setSettled(true);
+      return;
+    }
+    setSettled(false);
+    const timer = setTimeout(() => setSettled(true), 900);
+    return () => clearTimeout(timer);
+  }, [lastKick]);
+
+  if (phase === "pick_card" && !choosingBot) {
+    return (
+      <div className="flex flex-col gap-5">
+        <h1 className="font-display text-xl font-bold text-ink-chalk">Пенальти</h1>
+        <p className="text-sm text-ink-mist">Выбери, с кем играть.</p>
+        {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
+        <button
+          onClick={() => setChoosingBot(true)}
+          className="flex items-center justify-center gap-2 rounded-2xl bg-floodlight py-4 text-base font-bold text-bg-base ring-2 ring-accent-cyan/40 active:scale-95"
+        >
+          Играть с ботом
+        </button>
+        <button
+          onClick={() => navigate("/play/penalty/matches")}
+          className="flex items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 text-base font-bold text-accent-lime active:scale-95"
+        >
+          Играть с другом
+        </button>
+      </div>
+    );
+  }
+
   if (phase === "pick_card") {
     return (
       <div className="flex flex-col gap-5">
@@ -97,19 +138,13 @@ export default function PenaltyGamePage() {
         <p className="text-sm text-ink-mist">
           Выбери игрока для серии пенальти. Чем выше его рейтинг, тем меньше шанс промазать по воротам.
         </p>
-        <button
-          onClick={() => navigate("/play/penalty/matches")}
-          className="self-start rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-accent-lime active:scale-95"
-        >
-          Играть с другом →
-        </button>
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
         <CardPickerModal
           open
           title="Выбери игрока"
           cards={collection?.items ?? []}
           onSelect={(card) => startMutation.mutate(card.id)}
-          onClose={() => navigate("/play")}
+          onClose={() => setChoosingBot(false)}
         />
       </div>
     );
@@ -146,7 +181,10 @@ export default function PenaltyGamePage() {
         ) : null}
 
         <div className="flex gap-3">
-          <button onClick={() => setPhase("pick_card")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
+          <button
+            onClick={() => { setChoosingBot(false); setPhase("pick_card"); }}
+            className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist"
+          >
             Ещё раз
           </button>
           <button onClick={() => navigate("/play")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
@@ -166,6 +204,13 @@ export default function PenaltyGamePage() {
 
   const outcome = lastKick ? outcomeLabelFor(lastKick) : null;
 
+  const upcomingKicker = lastKick?.next_kicker ?? "player";
+  const sceneKeeperSide = settled
+    ? upcomingKicker === "bot" ? "own" : "opponent"
+    : lastKick?.kicker === "bot" ? "own" : "opponent";
+  const sceneKick = settled || !lastKick ? null : goalKickFrom(lastKick);
+  const sceneOutcome = settled ? null : outcome;
+
   return (
     <div className="flex flex-col items-center gap-5 py-6">
       <p className="text-sm text-ink-mist">
@@ -173,10 +218,10 @@ export default function PenaltyGamePage() {
       </p>
 
       <PenaltyGoalScene
-        keeperSide={lastKick?.kicker === "bot" ? "own" : "opponent"}
-        kick={lastKick ? goalKickFrom(lastKick) : null}
-        outcomeLabel={outcome?.label ?? null}
-        outcomeGood={outcome?.good ?? false}
+        keeperSide={sceneKeeperSide}
+        kick={sceneKick}
+        outcomeLabel={sceneOutcome?.label ?? null}
+        outcomeGood={sceneOutcome?.good ?? false}
       />
 
       <p className="text-sm font-semibold text-ink-mist">{roleLabel}</p>
