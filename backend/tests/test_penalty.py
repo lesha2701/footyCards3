@@ -1,9 +1,18 @@
+import pytest
+
+import app.core.rate_limit as rate_limit_module
 from app.models.card import UserCard
 from app.models.enums import CardSource, Rarity
 from app.services import penalty_service
 from app.services.penalty_service import REGULATION_KICKS, player_miss_chance
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    rate_limit_module._hits.clear()
+    yield
 
 
 async def _register(client, db_session, telegram_id, bot_token):
@@ -281,3 +290,69 @@ async def test_penalty_hourly_limit_blocks_after_three_starts(client, db_session
 
     resp = await client.post("/api/v1/games/penalty/start", headers=headers, json={"user_card_id": card.id})
     assert resp.status_code == 200
+
+
+async def test_penalty_forfeit_counts_as_a_loss(client, db_session, bot_token):
+    """Leaving mid-match (confirmed via the frontend's leave dialog) must
+    cost the same -1 rating a real loss would — otherwise switching tabs
+    and confirming "leave" is a free way to dodge a losing match."""
+    user = await _register(client, db_session, 830011, bot_token)
+    user.penalty_rating = 5
+    db_session.add(user)
+    await db_session.commit()
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(830011, bot_token)
+
+    start = await client.post("/api/v1/games/penalty/start", headers=headers, json={"user_card_id": card.id})
+    session_id = start.json()["session_id"]
+
+    # Take one kick first so the forfeit is a genuine mid-match abandonment,
+    # not just forfeiting an untouched session.
+    await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "top_left"})
+
+    resp = await client.post(f"/api/v1/games/penalty/{session_id}/forfeit", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["result"] == "loss"
+    assert body["rating_delta"] == -1
+
+    await db_session.refresh(user)
+    assert user.penalty_rating == 4  # 5 - 1
+
+    # The session is now claimable exactly like a natural finish, paying
+    # the loss-tier reward.
+    claim = await client.post(f"/api/v1/games/penalty/{session_id}/claim", headers=headers)
+    assert claim.status_code == 200
+    assert claim.json()["result"] == "loss"
+
+
+async def test_penalty_forfeit_rating_floors_at_zero(client, db_session, bot_token):
+    user = await _register(client, db_session, 830012, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(830012, bot_token)
+    assert user.penalty_rating == 0
+
+    start = await client.post("/api/v1/games/penalty/start", headers=headers, json={"user_card_id": card.id})
+    session_id = start.json()["session_id"]
+
+    resp = await client.post(f"/api/v1/games/penalty/{session_id}/forfeit", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["rating_delta"] == -1
+
+    await db_session.refresh(user)
+    assert user.penalty_rating == 0  # clamped, not -1
+
+
+async def test_penalty_forfeit_rejects_already_finished_session(client, db_session, bot_token):
+    user = await _register(client, db_session, 830013, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(830013, bot_token)
+
+    start = await client.post("/api/v1/games/penalty/start", headers=headers, json={"user_card_id": card.id})
+    session_id = start.json()["session_id"]
+
+    first = await client.post(f"/api/v1/games/penalty/{session_id}/forfeit", headers=headers)
+    assert first.status_code == 200
+
+    second = await client.post(f"/api/v1/games/penalty/{session_id}/forfeit", headers=headers)
+    assert second.status_code == 409

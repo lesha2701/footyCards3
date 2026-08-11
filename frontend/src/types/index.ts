@@ -646,6 +646,14 @@ export interface PenaltyClaimResult {
   result: string;
 }
 
+export interface PenaltyForfeitResult {
+  session_id: number;
+  player_score: number;
+  bot_score: number;
+  result: string;
+  rating_delta: number;
+}
+
 export type PenaltyMatchStatus = "pending_accept" | "in_progress" | "finished" | "declined" | "cancelled" | "expired";
 
 export interface PenaltyRound {

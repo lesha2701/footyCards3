@@ -26,6 +26,7 @@ from app.schemas.game import (
     PairsFlipRequest,
     PairsStartOut,
     PenaltyClaimOut,
+    PenaltyForfeitOut,
     PenaltyKickOut,
     PenaltyKickRequest,
     PenaltyStartOut,
@@ -124,6 +125,11 @@ async def penalty_kick(session_id: int, payload: PenaltyKickRequest, db: AsyncSe
 @router.post("/penalty/{session_id}/claim", response_model=PenaltyClaimOut)
 async def penalty_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await penalty_service.claim_reward(db, user, session_id)
+
+
+@router.post("/penalty/{session_id}/forfeit", response_model=PenaltyForfeitOut)
+async def penalty_forfeit(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await penalty_service.forfeit_session(db, user, session_id)
 
 
 # --- Free Kick ---

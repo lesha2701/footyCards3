@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchCollection } from "@/api/collection";
-import { claimPenaltyReward, kickPenalty, startPenalty } from "@/api/games";
+import { claimPenaltyReward, forfeitPenalty, kickPenalty, startPenalty } from "@/api/games";
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import { IconCoin, IconFlagCheckered, IconTrophy } from "@/components/icons";
 import PenaltyGoalScene, { type PenaltyGoalKick } from "@/components/penalty/PenaltyGoalScene";
@@ -122,18 +122,29 @@ export default function PenaltyGamePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastKick]);
 
-  // Warns before leaving a live game, same as Card Arena — no backend
-  // forfeit exists for solo Penalty either, so this is a UX nudge (keeps
-  // BottomNav/TopBar's confirm dialog consistent across every tab,
-  // including "Играть") rather than an enforced loss.
+  // Guards in-app navigation while a shootout is live, same as Тактико —
+  // leaving mid-match costs the same -1 rating as playing it out and
+  // losing, so quitting to dodge a loss isn't a viable strategy. The
+  // confirm dialog (rendered globally) calls this same forfeit endpoint if
+  // the player chooses to leave anyway; claiming right after keeps the
+  // (small, loss-tier) reward from going unclaimed forever, since there's
+  // no page to come back and claim it from later.
   useEffect(() => {
-    if (phase === "playing") {
-      useMatchGuardStore.getState().activate("Серия пенальти не завершена. Уверен, что хочешь выйти?");
+    if (phase === "playing" && sessionId != null) {
+      useMatchGuardStore.getState().activate(
+        "Серия пенальти не завершена. Если выйдешь сейчас, она будет засчитана как поражение.",
+        () => {
+          forfeitPenalty(sessionId)
+            .then(() => claimPenaltyReward(sessionId))
+            .catch(() => {});
+        },
+        `/games/penalty/${sessionId}/forfeit`,
+      );
     } else {
       useMatchGuardStore.getState().deactivate();
     }
     return () => useMatchGuardStore.getState().deactivate();
-  }, [phase]);
+  }, [phase, sessionId]);
 
   if (phase === "pick_card" && !choosingBot) {
     return (

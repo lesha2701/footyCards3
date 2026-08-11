@@ -16,6 +16,7 @@ import type {
   PairsStartResult,
   PenaltyClaimResult,
   PenaltyDirection,
+  PenaltyForfeitResult,
   PenaltyKickResult,
   PenaltyStartResult,
   PenaltyStats,
@@ -90,6 +91,11 @@ export async function kickPenalty(sessionId: number, direction: PenaltyDirection
 
 export async function claimPenaltyReward(sessionId: number): Promise<PenaltyClaimResult> {
   const { data } = await api.post<PenaltyClaimResult>(`/games/penalty/${sessionId}/claim`);
+  return data;
+}
+
+export async function forfeitPenalty(sessionId: number): Promise<PenaltyForfeitResult> {
+  const { data } = await api.post<PenaltyForfeitResult>(`/games/penalty/${sessionId}/forfeit`);
   return data;
 }
 

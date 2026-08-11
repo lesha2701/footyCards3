@@ -11,7 +11,7 @@ from app.models.card import UserCard
 from app.models.enums import GameSessionStatus, GameType, TransactionType
 from app.models.game import GameSession
 from app.models.user import User
-from app.schemas.game import PenaltyClaimOut, PenaltyKickOut, PenaltyStartOut, PenaltyStatsOut
+from app.schemas.game import PenaltyClaimOut, PenaltyForfeitOut, PenaltyKickOut, PenaltyStartOut, PenaltyStatsOut
 from app.schemas.ranking import RankingMetric
 from app.services import ranking_service, task_service
 from app.services.game_config_service import get_config
@@ -110,6 +110,26 @@ def _current_kicker(state: dict) -> str:
     return "player" if state["kicks_taken"] % 2 == 0 else "bot"
 
 
+async def _apply_finish(db: AsyncSession, user: User, session: GameSession, state: dict, result: str, config) -> int:
+    """Shared by a natural finish (resolve_kick) and an explicit forfeit:
+    marks the session finished with the given result, applies the same
+    +3/-1 penalty_rating delta Tactico uses (clamped at 0), and returns the
+    raw delta so the caller can report it."""
+    state["result"] = result
+    session.server_state = state
+    session.status = GameSessionStatus.won
+    session.finished_at = datetime.now(timezone.utc)
+    session.reward_coins = {
+        "win": config.penalty_reward_win, "loss": config.penalty_reward_loss,
+    }[result]
+    rating_delta = 3 if result == "win" else -1
+    locked_user = await lock_user_for_update(db, user.id)
+    locked_user.penalty_rating = max(0, locked_user.penalty_rating + rating_delta)
+    db.add(locked_user)
+    await task_service.evaluate_penalty_win_max_rating(db, user, state["player_rating"], result == "win")
+    return rating_delta
+
+
 async def resolve_kick(db: AsyncSession, user: User, session_id: int, direction: str) -> PenaltyKickOut:
     if direction not in PENALTY_ZONES:
         raise ConflictError("Invalid direction")
@@ -154,24 +174,11 @@ async def resolve_kick(db: AsyncSession, user: User, session_id: int, direction:
     session.server_state = state
     if is_finished:
         result = "win" if state["player_score"] > state["bot_score"] else "loss"
-        state["result"] = result
-        session.server_state = state
-        session.status = GameSessionStatus.won
-        session.finished_at = datetime.now(timezone.utc)
-        session.reward_coins = {
-            "win": config.penalty_reward_win, "loss": config.penalty_reward_loss,
-        }[result]
-        # Same +3/-1 deltas Tactico uses for its rating; a solo shootout has
-        # no draw outcome, so there's no +1 case to handle here. rating_delta
-        # is the raw, unclamped delta actually applied to penalty_rating (the
-        # clamp only matters when a fresh user is already at 0 and loses) —
-        # returned as-is so the frontend can show "+3"/"-1" after the match,
-        # same as the PvP match page already does.
-        rating_delta = 3 if result == "win" else -1
-        locked_user = await lock_user_for_update(db, user.id)
-        locked_user.penalty_rating = max(0, locked_user.penalty_rating + rating_delta)
-        db.add(locked_user)
-        await task_service.evaluate_penalty_win_max_rating(db, user, state["player_rating"], result == "win")
+        # rating_delta is the raw, unclamped delta actually applied to
+        # penalty_rating (the clamp only matters when a fresh user is
+        # already at 0 and loses) — returned as-is so the frontend can show
+        # "+3"/"-1" after the match, same as the PvP match page already does.
+        rating_delta = await _apply_finish(db, user, session, state, result, config)
 
     db.add(session)
     await db.commit()
@@ -213,6 +220,27 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> Penalty
     await db.refresh(locked_user)
 
     return PenaltyClaimOut(reward_coins=reward, new_balance=locked_user.balance, result=session.server_state["result"])
+
+
+async def forfeit_session(db: AsyncSession, user: User, session_id: int) -> PenaltyForfeitOut:
+    """Immediately ends an in-progress session as a loss for the player,
+    regardless of the partial score — leaving mid-match is never a safer
+    bet than finishing it out, same rule Tactico's forfeit enforces. Called
+    from the frontend's leave-confirmation dialog (matchGuardStore)."""
+    config = await get_config(db)
+    session = await _get_session(db, user.id, session_id)
+    if session.status != GameSessionStatus.in_progress:
+        raise ConflictError("This game session is not in progress")
+
+    state = dict(session.server_state)
+    rating_delta = await _apply_finish(db, user, session, state, "loss", config)
+    db.add(session)
+    await db.commit()
+
+    return PenaltyForfeitOut(
+        session_id=session.id, player_score=state["player_score"], bot_score=state["bot_score"],
+        result="loss", rating_delta=rating_delta,
+    )
 
 
 async def get_stats(db: AsyncSession, user: User) -> PenaltyStatsOut:

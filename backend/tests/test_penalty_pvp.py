@@ -1,8 +1,17 @@
+import pytest
+
+import app.core.rate_limit as rate_limit_module
 from app.models.card import UserCard
 from app.models.enums import CardSource, Rarity
 from app.services import penalty_service
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    rate_limit_module._hits.clear()
+    yield
 
 
 async def _register(client, db_session, telegram_id, bot_token):
@@ -311,3 +320,78 @@ async def test_penalty_pvp_match_timeout_draw_when_tied(client, db_session, bot_
     await db_session.refresh(receiver)
     assert sender.penalty_rating == 6  # 5 + 1 (draw)
     assert receiver.penalty_rating == 6  # 5 + 1 (draw)
+
+
+async def test_penalty_pvp_forfeit_counts_as_a_loss_for_the_forfeiter(client, db_session, bot_token):
+    """Leaving mid-match (confirmed via the frontend's leave dialog) must
+    cost the forfeiter -1 and the opponent +3, regardless of the partial
+    score — same rule Tactico's forfeit_match enforces."""
+    match_id, sender, receiver, sender_headers, receiver_headers = await _create_and_accept(
+        client, db_session, bot_token, 860211, 860212
+    )
+    sender.penalty_rating = 5
+    receiver.penalty_rating = 5
+    db_session.add_all([sender, receiver])
+    await db_session.commit()
+
+    # Sender is ahead 1:0 when they forfeit — must still count as a loss
+    # for them, not a win just because they were winning on the scoreboard.
+    await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=sender_headers, json={"zone": "top_left"})
+    await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=receiver_headers, json={"zone": "bottom_right"})
+
+    resp = await client.post(f"/api/v1/games/penalty/matches/{match_id}/forfeit", headers=sender_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "finished"
+    assert body["result"] == "loss"
+    assert body["rating_delta"] == -1
+
+    await db_session.refresh(sender)
+    await db_session.refresh(receiver)
+    assert sender.penalty_rating == 4  # 5 - 1
+    assert receiver.penalty_rating == 8  # 5 + 3
+
+    # No coins for PvP, ever — not even via forfeit.
+    assert receiver.balance == 500
+
+
+async def test_penalty_pvp_forfeit_by_opponent_counts_as_win_for_challenger(client, db_session, bot_token):
+    match_id, sender, receiver, sender_headers, receiver_headers = await _create_and_accept(
+        client, db_session, bot_token, 860213, 860214
+    )
+
+    resp = await client.post(f"/api/v1/games/penalty/matches/{match_id}/forfeit", headers=receiver_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    # Hydrated for the forfeiting receiver's own view ("opponent" storage
+    # side) — they see their own loss, not the challenger's win.
+    assert body["result"] == "loss"
+    assert body["rating_delta"] == -1
+
+    await db_session.refresh(sender)
+    await db_session.refresh(receiver)
+    assert sender.penalty_rating == 3  # 0 + 3 (win, as the non-forfeiting challenger)
+    assert receiver.penalty_rating == 0  # 0 - 1 clamped at the floor
+
+
+async def test_penalty_pvp_forfeit_rejects_non_participant(client, db_session, bot_token):
+    match_id, sender, receiver, sender_headers, receiver_headers = await _create_and_accept(
+        client, db_session, bot_token, 860215, 860216
+    )
+    stranger = await _register(client, db_session, 860217, bot_token)
+    stranger_headers = telegram_headers(860217, bot_token)
+
+    resp = await client.post(f"/api/v1/games/penalty/matches/{match_id}/forfeit", headers=stranger_headers)
+    assert resp.status_code == 403
+
+
+async def test_penalty_pvp_forfeit_rejects_already_finished_match(client, db_session, bot_token):
+    match_id, sender, receiver, sender_headers, receiver_headers = await _create_and_accept(
+        client, db_session, bot_token, 860218, 860219
+    )
+
+    first = await client.post(f"/api/v1/games/penalty/matches/{match_id}/forfeit", headers=sender_headers)
+    assert first.status_code == 200
+
+    second = await client.post(f"/api/v1/games/penalty/matches/{match_id}/forfeit", headers=sender_headers)
+    assert second.status_code == 409

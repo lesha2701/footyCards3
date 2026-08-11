@@ -50,6 +50,11 @@ async def submit_pick(
     return await penalty_match_service.submit_pick(db, user, match_id, payload.zone)
 
 
+@router.post("/matches/{match_id}/forfeit", response_model=PenaltyMatchOut)
+async def forfeit_match(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await penalty_match_service.forfeit_match(db, user, match_id)
+
+
 @router.get("/matches", response_model=list[PenaltyMatchOut])
 async def list_matches(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await penalty_match_service.list_matches(db, user)

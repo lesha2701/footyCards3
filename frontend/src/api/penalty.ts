@@ -28,6 +28,11 @@ export async function submitPenaltyPick(id: number, zone: PenaltyDirection): Pro
   return data;
 }
 
+export async function forfeitPenaltyMatch(id: number): Promise<PenaltyMatch> {
+  const { data } = await api.post<PenaltyMatch>(`/games/penalty/matches/${id}/forfeit`);
+  return data;
+}
+
 export async function fetchPenaltyMatches(): Promise<PenaltyMatch[]> {
   const { data } = await api.get<PenaltyMatch[]>("/games/penalty/matches");
   return data;

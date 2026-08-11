@@ -107,6 +107,14 @@ class PenaltyClaimOut(BaseModel):
     result: str
 
 
+class PenaltyForfeitOut(BaseModel):
+    session_id: int
+    player_score: int
+    bot_score: int
+    result: str
+    rating_delta: int
+
+
 class PenaltyStatsOut(BaseModel):
     penalty_rating: int
     penalty_rank: Optional[int] = None

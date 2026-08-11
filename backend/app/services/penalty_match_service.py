@@ -343,8 +343,15 @@ def _shooter_miss_chance(rating: int) -> float:
     return player_miss_chance(rating)
 
 
-async def _finish_match(db: AsyncSession, match: PenaltyMatch, state: dict) -> None:
-    if match.user_score > match.opponent_score:
+async def _finish_match(db: AsyncSession, match: PenaltyMatch, state: dict, forced_loser: Optional[str] = None) -> None:
+    if forced_loser == "user":
+        # Forfeit — always counts as a loss for the forfeiting side
+        # regardless of the score so far, same rule Tactico's forfeit
+        # enforces: leaving mid-match is never a safer bet than finishing.
+        result, user_delta = MatchResult.loss, -1
+    elif forced_loser == "opponent":
+        result, user_delta = MatchResult.win, 3
+    elif match.user_score > match.opponent_score:
         result, user_delta = MatchResult.win, 3
     elif match.user_score < match.opponent_score:
         result, user_delta = MatchResult.loss, -1
@@ -384,6 +391,25 @@ async def _finish_match(db: AsyncSession, match: PenaltyMatch, state: dict) -> N
         "penalty_match", match.id,
     )
     db.add(match)
+
+
+async def forfeit_match(db: AsyncSession, user: User, match_id: int) -> PenaltyMatchOut:
+    """Immediately ends an in-progress match as a loss for the forfeiting
+    side, mirroring tactico_service.forfeit_match. Called from the
+    frontend's leave-confirmation dialog (matchGuardStore) — without this,
+    switching tabs mid-match and confirming "leave" would cost nothing."""
+    match = await _lock_match(db, match_id)
+    if user.id not in (match.user_id, match.opponent_user_id):
+        raise ForbiddenError("You are not part of this match")
+    if match.status != PenaltyMatchStatus.in_progress:
+        raise ConflictError("This match is not in progress")
+
+    state = dict(match.server_state or {})
+    forfeiting_side = "user" if user.id == match.user_id else "opponent"
+    await _finish_match(db, match, state, forced_loser=forfeiting_side)
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, user)
 
 
 async def _auto_resolve_overdue(db: AsyncSession) -> int:

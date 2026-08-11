@@ -8,13 +8,17 @@ import {
   cancelPenaltyChallenge,
   declinePenaltyChallenge,
   fetchPenaltyMatch,
+  forfeitPenaltyMatch,
   submitPenaltyPick,
 } from "@/api/penalty";
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import PenaltyGoalScene, { type PenaltyGoalKick } from "@/components/penalty/PenaltyGoalScene";
 import { formatGameError } from "@/lib/errors";
 import { hapticNotify } from "@/lib/telegram";
+import { useMatchGuardStore } from "@/store/matchGuardStore";
 import type { PenaltyDirection, PenaltyMatch, PenaltyRound } from "@/types";
+
+const LEAVE_WARNING = "Матч ещё не завершён. Если выйдешь сейчас, он будет засчитан как поражение.";
 
 const ZONES: { value: PenaltyDirection; label: string; arrow: string }[] = [
   { value: "top_left", label: "Верх-лево", arrow: "↖" },
@@ -98,6 +102,28 @@ export default function PenaltyMatchPage() {
     onSuccess: () => invalidate(),
     onError: (err) => setError(formatGameError(err, "Не удалось сделать удар")),
   });
+  const forfeitMutation = useMutation({
+    mutationFn: () => forfeitPenaltyMatch(id),
+    onSuccess: () => { invalidate(); useMatchGuardStore.getState().deactivate(); },
+  });
+
+  // Guards in-app navigation while the match is live — leaving mid-match
+  // costs the same loss as staying and losing, same as Тактико. The confirm
+  // dialog (rendered globally) calls this same forfeit endpoint if the
+  // player chooses to leave anyway.
+  useEffect(() => {
+    if (match?.status === "in_progress") {
+      useMatchGuardStore.getState().activate(
+        LEAVE_WARNING,
+        () => { forfeitPenaltyMatch(id).catch(() => {}); },
+        `/games/penalty/matches/${id}/forfeit`,
+      );
+    } else {
+      useMatchGuardStore.getState().deactivate();
+    }
+    return () => useMatchGuardStore.getState().deactivate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [match?.status, id]);
 
   if (isLoading || !match) {
     return <p className="text-sm text-ink-mist">Загрузка...</p>;
@@ -210,6 +236,13 @@ export default function PenaltyMatchPage() {
               </button>
             ))}
           </div>
+          <button
+            onClick={() => forfeitMutation.mutate()}
+            disabled={forfeitMutation.isPending}
+            className="text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2 active:scale-95"
+          >
+            Сдаться (засчитается поражение)
+          </button>
         </>
       )}
 
