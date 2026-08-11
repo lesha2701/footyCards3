@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import type { PenaltyDirection } from "@/types";
 
 export interface PenaltyGoalKick {
@@ -60,33 +62,18 @@ const ZONE_BALL_TARGET: Record<PenaltyDirection, { x: number; y: number }> = {
 
 const KEEPER_COLOR = { own: "#e6483b", opponent: "#3b82f6" };
 const LINE = "#eef2ee";
-
-/** A single stylized goalkeeper glove: a rounded "mitten" body plus a thumb,
- * drawn so it can be filled with the team color and given a thin dark
- * outline independently — the previous version recolored a raster line-art
- * icon via an alpha mask, which could only ever produce a colored outline,
- * never an actual fill. */
-function Glove({ mirror, color }: { mirror: boolean; color: string }) {
-  const s = mirror ? -1 : 1;
-  const fillStyle: React.CSSProperties = { transition: "fill 200ms linear" };
-  return (
-    <g>
-      <rect
-        x={s * 6} y={-40} width={22} height={54} rx={11}
-        transform={`translate(${s * 22} 6) rotate(${s * 16})`}
-        fill={color} style={fillStyle} stroke="#0b1310" strokeWidth={1.75} strokeLinejoin="round"
-      />
-      <ellipse
-        cx={s * 27} cy={2} rx={7} ry={11}
-        transform={`rotate(${s * 55} ${s * 27} 2)`}
-        fill={color} style={fillStyle} stroke="#0b1310" strokeWidth={1.75}
-      />
-      <rect x={s * 14} y={2} width={18} height={9} rx={3} transform={`translate(${s * 14} 6)`} fill="#0b1310" opacity={0.55} />
-    </g>
-  );
-}
+const GRASS = ["#1e4a2a", "#234f2e"];
 
 export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outcomeGood }: PenaltyGoalSceneProps) {
+  const maskRef = useRef<SVGMaskElement>(null);
+  useEffect(() => {
+    // mask-type isn't a recognized React/JSX style key, so it's set
+    // imperatively — "alpha" (not the SVG default "luminance") is required
+    // because the source PNG is a solid black shape on a transparent
+    // background: luminance masking would treat pure-black as invisible.
+    maskRef.current?.setAttribute("mask-type", "alpha");
+  }, []);
+
   const keeperOffset = kick ? ZONE_KEEPER_OFFSET[kick.diveZone] : { x: 0, y: 0 };
   const keeperTilt = kick ? ZONE_KEEPER_TILT[kick.diveZone] : 0;
   const ballTarget = kick ? ZONE_BALL_TARGET[kick.shotZone] : BALL_REST;
@@ -104,24 +91,25 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
       } bg-[#0d1a10]`}
     >
       <div className="pointer-events-none absolute -inset-x-[20%] -top-[40%] h-[140px] bg-gradient-to-r from-accent-cyan via-accent-green to-accent-lime opacity-[0.16] blur-[30px]" />
-      <StadiumBackdrop />
 
       <div className="relative mx-auto my-1.5 max-w-[340px]">
         <svg className="block w-full overflow-visible" viewBox="0 0 320 260">
+          {/* Turf — real mowed-stripe pattern instead of a flat void, so the
+              ground reads as an actual pitch. */}
+          <clipPath id="penaltyGrassClip">
+            <rect x={0} y={GOAL.bottom} width={320} height={260 - GOAL.bottom} />
+          </clipPath>
+          <g clipPath="url(#penaltyGrassClip)">
+            {Array.from({ length: 7 }, (_, i) => GOAL.bottom + i * 17).map((y, i) => (
+              <rect key={`stripe${y}`} x={0} y={y} width={320} height={17} fill={GRASS[i % 2]} />
+            ))}
+          </g>
+
           {/* Goal line — drawn wider than the posts so it reads as the pitch
               marking the posts sit on, not just the base of the frame. */}
           <line x1={0} y1={GOAL.bottom} x2={320} y2={GOAL.bottom} stroke={LINE} strokeWidth={2.5} opacity={0.9} />
-
-          {/* 6-yard box */}
-          <path
-            d={`M ${GOAL_CENTER_X - 55} ${GOAL.bottom} L ${GOAL_CENTER_X - 55} ${GOAL.bottom + 34} L ${GOAL_CENTER_X + 55} ${GOAL.bottom + 34} L ${GOAL_CENTER_X + 55} ${GOAL.bottom}`}
-            fill="none" stroke={LINE} strokeWidth={1.5} opacity={0.55}
-          />
-          {/* Penalty arc (the "D"), suggested with just the visible cap since
-              the full penalty-area box is outside the viewBox at this scale. */}
-          <path d={`M ${GOAL_CENTER_X - 34} 238 Q ${GOAL_CENTER_X} 214 ${GOAL_CENTER_X + 34} 238`} fill="none" stroke={LINE} strokeWidth={1.5} opacity={0.55} />
           {/* Penalty spot */}
-          <circle cx={BALL_REST.x} cy={BALL_REST.y} r={2.6} fill={LINE} opacity={0.8} />
+          <circle cx={BALL_REST.x} cy={BALL_REST.y} r={2.6} fill={LINE} opacity={0.85} />
 
           {/* Goal frame + net */}
           <path
@@ -137,6 +125,11 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
             ))}
           </g>
 
+          <defs>
+            <mask ref={maskRef} id="penaltyGloveMask" maskUnits="userSpaceOnUse" x={-40} y={-40} width={80} height={80}>
+              <image href="/penalty/gk-gloves.png" x={-40} y={-40} width={80} height={80} />
+            </mask>
+          </defs>
           <g
             style={{
               transformOrigin: `${KEEPER_BASE.x}px ${KEEPER_BASE.y}px`,
@@ -145,8 +138,12 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
             }}
           >
             <ellipse cx={0} cy={38} rx={38} ry={6} fill="rgba(0,0,0,0.35)" />
-            <Glove mirror={false} color={KEEPER_COLOR[keeperSide]} />
-            <Glove mirror color={KEEPER_COLOR[keeperSide]} />
+            <rect
+              x={-40} y={-40} width={80} height={80}
+              mask="url(#penaltyGloveMask)"
+              fill={KEEPER_COLOR[keeperSide]}
+              style={{ transition: "fill 200ms linear" }}
+            />
           </g>
 
           <ellipse cx={BALL_REST.x} cy={BALL_REST.y} rx={16} ry={5} fill="rgba(238,242,238,0.5)" />
@@ -181,21 +178,5 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
         )}
       </div>
     </div>
-  );
-}
-
-/** Faint tactics-board arrows behind the goal, echoing HomePage's
- * ChalkTexture — converging runs toward the box instead of random doodles. */
-function StadiumBackdrop() {
-  return (
-    <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.09]" viewBox="0 0 320 220" fill="none">
-      <path d="M -10 190 Q 90 150 150 100" stroke={LINE} strokeWidth={1.5} fill="none" />
-      <polyline points="141,92 150,100 144,110" stroke={LINE} strokeWidth={1.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M 330 190 Q 230 150 172 102" stroke={LINE} strokeWidth={1.5} fill="none" />
-      <polyline points="181,94 172,102 178,112" stroke={LINE} strokeWidth={1.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={40} cy={40} r={7} stroke={LINE} strokeWidth={1.2} />
-      <circle cx={284} cy={36} r={5} stroke={LINE} strokeWidth={1.2} />
-      <line x1={20} y1={200} x2={300} y2={200} stroke={LINE} strokeWidth={1} strokeDasharray="2 6" />
-    </svg>
   );
 }
