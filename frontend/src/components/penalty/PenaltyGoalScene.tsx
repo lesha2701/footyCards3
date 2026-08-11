@@ -29,14 +29,24 @@ const KEEPER_BASE = { x: GOAL_CENTER_X, y: 118 };
 // The ball rests on the penalty spot, which is also drawn as a pitch marking.
 const BALL_REST = { x: GOAL_CENTER_X, y: 234 };
 
-const ZONE_KEEPER_OFFSET: Record<PenaltyDirection, { x: number; y: number }> = {
-  top_left: { x: -78, y: -58 },
-  top_center: { x: 0, y: -68 },
-  top_right: { x: 78, y: -58 },
-  bottom_left: { x: -78, y: 34 },
-  bottom_center: { x: 0, y: 40 },
-  bottom_right: { x: 78, y: 34 },
+// One shared aim point per zone — both the keeper's glove center and the
+// ball's flight target land here, so a correct guess (diveZone === shotZone)
+// always puts the ball exactly in the middle of the gloves. Offsets are
+// small enough that the glove art (~80x80, centered) stays fully inside the
+// goal frame (30/270 x, 30/200 y) at every zone, instead of poking out past
+// the posts or crossbar.
+const ZONE_TARGET: Record<PenaltyDirection, { x: number; y: number }> = {
+  top_left: { x: GOAL_CENTER_X - 62, y: KEEPER_BASE.y - 30 },
+  top_center: { x: GOAL_CENTER_X, y: KEEPER_BASE.y - 30 },
+  top_right: { x: GOAL_CENTER_X + 62, y: KEEPER_BASE.y - 30 },
+  bottom_left: { x: GOAL_CENTER_X - 62, y: KEEPER_BASE.y + 30 },
+  bottom_center: { x: GOAL_CENTER_X, y: KEEPER_BASE.y + 30 },
+  bottom_right: { x: GOAL_CENTER_X + 62, y: KEEPER_BASE.y + 30 },
 };
+
+const ZONE_KEEPER_OFFSET: Record<PenaltyDirection, { x: number; y: number }> = Object.fromEntries(
+  Object.entries(ZONE_TARGET).map(([zone, p]) => [zone, { x: p.x - KEEPER_BASE.x, y: p.y - KEEPER_BASE.y }]),
+) as Record<PenaltyDirection, { x: number; y: number }>;
 
 // Keeper tilts toward whichever side it's diving, on top of the translate —
 // a straight-armed dive reads as more athletic than a purely upright slide.
@@ -44,19 +54,12 @@ const ZONE_KEEPER_TILT: Record<PenaltyDirection, number> = {
   top_left: -14,
   top_center: 0,
   top_right: 14,
-  bottom_left: -18,
+  bottom_left: -14,
   bottom_center: 0,
-  bottom_right: 18,
+  bottom_right: 14,
 };
 
-const ZONE_BALL_TARGET: Record<PenaltyDirection, { x: number; y: number }> = {
-  top_left: { x: 80, y: 55 },
-  top_center: { x: GOAL_CENTER_X, y: 45 },
-  top_right: { x: 220, y: 55 },
-  bottom_left: { x: 80, y: 168 },
-  bottom_center: { x: GOAL_CENTER_X, y: 176 },
-  bottom_right: { x: 220, y: 168 },
-};
+const ZONE_BALL_TARGET = ZONE_TARGET;
 
 const KEEPER_COLOR = { own: "#e6483b", opponent: "#3b82f6" };
 const LINE = "#eef2ee";
@@ -130,7 +133,11 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
           </defs>
           <g
             style={{
-              transformOrigin: `${KEEPER_BASE.x}px ${KEEPER_BASE.y}px`,
+              // The glove art is drawn centered on local (0,0) (the -40..40
+              // rect/mask), not on KEEPER_BASE — transform-origin must match
+              // that local center, or rotate() pivots around a point far
+              // from the glove itself and swings it way off target.
+              transformOrigin: "0px 0px",
               transform: `translate(${KEEPER_BASE.x + keeperOffset.x}px, ${KEEPER_BASE.y + keeperOffset.y}px) rotate(${keeperTilt}deg) scale(${kick ? 1.08 : 1})`,
               transition: "transform 420ms cubic-bezier(0.2,0.9,0.3,1.3)",
             }}
