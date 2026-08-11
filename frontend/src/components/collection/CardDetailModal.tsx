@@ -43,10 +43,18 @@ export default function CardDetailModal({
           <span className="text-ink-mist">Редкость: <b className="text-ink-chalk">{RARITY_LABELS[player.rarity]}</b></span>
           <span className="text-ink-mist">Страна: <b className="text-ink-chalk">{player.country}</b></span>
         </div>
-        {(card.is_locked_by_admin || card.is_locked_in_trade || card.is_in_lineup) && (
+        {(card.is_locked_by_admin || card.is_locked_in_trade || card.is_in_lineup || card.is_in_tactico_squad) && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-mist">
             <IconLock size={13} />
-            Заблокирована {card.is_in_lineup ? "(в составе)" : card.is_locked_in_trade ? "(в обмене)" : "(администратором)"}
+            Заблокирована {
+              card.is_in_lineup
+                ? "(в составе Card Arena)"
+                : card.is_in_tactico_squad
+                  ? "(в составе Тактико)"
+                  : card.is_locked_in_trade
+                    ? "(в обмене)"
+                    : "(администратором)"
+            }
           </p>
         )}
         <label className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2">
@@ -62,7 +70,7 @@ export default function CardDetailModal({
         {onUpgrade && (
           <button
             onClick={onUpgrade}
-            disabled={card.is_locked_by_admin || card.is_locked_in_trade || card.is_in_lineup}
+            disabled={card.is_locked_by_admin || card.is_locked_in_trade || card.is_in_lineup || card.is_in_tactico_squad}
             className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-2xl bg-bg-raised py-2.5 text-sm font-semibold text-accent-lime disabled:opacity-40"
           >
             <IconUpgrade size={15} />
@@ -73,7 +81,7 @@ export default function CardDetailModal({
           <button onClick={onClose} className="flex-1 rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist">Закрыть</button>
           <button
             onClick={onSell}
-            disabled={card.is_locked_by_admin || card.is_locked_in_trade || card.is_in_lineup}
+            disabled={card.is_locked_by_admin || card.is_locked_in_trade || card.is_in_lineup || card.is_in_tactico_squad}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-red-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
           >
             Продать за

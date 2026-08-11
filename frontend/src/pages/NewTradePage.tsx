@@ -23,6 +23,8 @@ export default function NewTradePage() {
   const [senderCoins, setSenderCoins] = useState(0);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [myCardSearch, setMyCardSearch] = useState("");
+  const [theirCardSearch, setTheirCardSearch] = useState("");
 
   const { data: searchResults } = useQuery({
     queryKey: ["user-search", query],
@@ -31,15 +33,22 @@ export default function NewTradePage() {
   });
 
   const { data: myCollection } = useQuery({
-    queryKey: ["collection-for-trade"],
-    queryFn: () => fetchCollection({ page_size: 60 }),
+    queryKey: ["collection-for-trade", myCardSearch],
+    queryFn: () => fetchCollection({ page_size: 100, search: myCardSearch || undefined }),
   });
 
   const { data: theirCollection } = useQuery({
-    queryKey: ["their-collection", target?.id],
-    queryFn: () => fetchUserCollection(target!.id, { page_size: 60 }),
+    queryKey: ["their-collection", target?.id, theirCardSearch],
+    queryFn: () => fetchUserCollection(target!.id, { page_size: 100, search: theirCardSearch || undefined }),
     enabled: !!target,
   });
+
+  // Neither side's collection ever offers/requests a card locked elsewhere
+  // (admin lock, in a trade, in a Card Arena lineup, or in a Tactico
+  // squad) — the backend rejects all four at accept time anyway, so
+  // showing them as pickable here just sets the offer up to fail later.
+  const isTradeable = (c: { is_locked_by_admin: boolean; is_locked_in_trade: boolean; is_in_lineup: boolean; is_in_tactico_squad: boolean }) =>
+    !c.is_locked_by_admin && !c.is_locked_in_trade && !c.is_in_lineup && !c.is_in_tactico_squad;
 
   const createMutation = useMutation({
     mutationFn: createTradeOffer,
@@ -107,27 +116,56 @@ export default function NewTradePage() {
 
           <section>
             <p className="mb-2 text-sm font-semibold text-ink-mist">Твои карточки ({offeredIds.length})</p>
+            <input
+              value={myCardSearch}
+              onChange={(e) => setMyCardSearch(e.target.value)}
+              placeholder="Поиск по имени..."
+              className="mb-2 w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk placeholder:text-ink-mist-dim outline-none"
+            />
             <div className="max-h-64 overflow-y-auto">
               <div className="grid grid-cols-3 gap-2">
-                {myCollection?.items.filter((c) => !c.is_locked_by_admin && !c.is_locked_in_trade && !c.is_in_lineup).map((c) => (
+                {myCollection?.items.filter(isTradeable).map((c) => (
                   <PlayerCard key={c.id} player={c.player} size="sm" selected={offeredIds.includes(c.id)} onClick={() => toggle(offeredIds, setOfferedIds, c.id)} />
                 ))}
+                {myCollection && !myCollection.items.filter(isTradeable).length && (
+                  <p className="col-span-3 text-xs text-ink-mist-dim">
+                    {myCardSearch ? "Ничего не найдено" : "Нет доступных для обмена карточек"}
+                  </p>
+                )}
               </div>
             </div>
+            {myCollection && myCollection.total > myCollection.items.length && !myCardSearch && (
+              <p className="mt-1 text-[11px] text-ink-mist-dim">
+                Показано {myCollection.items.length} из {myCollection.total} — используй поиск, чтобы найти конкретную карточку
+              </p>
+            )}
           </section>
 
           <section>
             <p className="mb-2 text-sm font-semibold text-ink-mist">Карточки {target.username ?? "игрока"} ({requestedIds.length})</p>
+            <input
+              value={theirCardSearch}
+              onChange={(e) => setTheirCardSearch(e.target.value)}
+              placeholder="Поиск по имени..."
+              className="mb-2 w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk placeholder:text-ink-mist-dim outline-none"
+            />
             <div className="max-h-64 overflow-y-auto">
               <div className="grid grid-cols-3 gap-2">
-                {theirCollection?.items.map((c) => (
+                {theirCollection?.items.filter(isTradeable).map((c) => (
                   <PlayerCard key={c.id} player={c.player} size="sm" selected={requestedIds.includes(c.id)} onClick={() => toggle(requestedIds, setRequestedIds, c.id)} />
                 ))}
-                {theirCollection && theirCollection.items.length === 0 && (
-                  <p className="col-span-3 text-xs text-ink-mist-dim">У игрока пока нет карточек</p>
+                {theirCollection && theirCollection.items.filter(isTradeable).length === 0 && (
+                  <p className="col-span-3 text-xs text-ink-mist-dim">
+                    {theirCardSearch ? "Ничего не найдено" : "У игрока пока нет доступных для обмена карточек"}
+                  </p>
                 )}
               </div>
             </div>
+            {theirCollection && theirCollection.total > theirCollection.items.length && !theirCardSearch && (
+              <p className="mt-1 text-[11px] text-ink-mist-dim">
+                Показано {theirCollection.items.length} из {theirCollection.total} — используй поиск, чтобы найти конкретную карточку
+              </p>
+            )}
           </section>
 
           <div>

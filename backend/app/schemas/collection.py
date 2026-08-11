@@ -19,6 +19,7 @@ class UserCardListItem(BaseModel):
     is_locked_by_admin: bool
     is_locked_in_trade: bool
     is_in_lineup: bool
+    is_in_tactico_squad: bool
     hidden_from_trade: bool
     duplicate_count: int = 1
 

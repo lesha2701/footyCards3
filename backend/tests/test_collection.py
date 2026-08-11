@@ -103,3 +103,23 @@ async def test_duplicate_cards_collapse_into_one_list_row(client, db_session, bo
     assert body["total"] == 1
     assert len(body["items"]) == 1
     assert body["items"][0]["duplicate_count"] == 3
+
+
+async def test_collection_list_exposes_tactico_squad_lock(client, db_session, bot_token):
+    """The frontend can't filter Tactico-squad cards out of trade offers
+    (or show a lock badge for them) if the collection listing never tells
+    it which cards are squadded in the first place."""
+    headers = telegram_headers(720006, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 720006)
+
+    player = await create_player(db_session, rarity=Rarity.common)
+    card = await create_user_card(db_session, user.id, player.id, CardSource.seed)
+    card.is_in_tactico_squad = True
+    db_session.add(card)
+    await db_session.commit()
+
+    resp = await client.get("/api/v1/collection/cards", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["items"][0]["is_in_tactico_squad"] is True

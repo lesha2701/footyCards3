@@ -17,11 +17,12 @@ class UserCardOut(BaseModel):
     is_locked_by_admin: bool
     is_locked_in_trade: bool
     is_in_lineup: bool
+    is_in_tactico_squad: bool
     hidden_from_trade: bool
 
     @property
     def is_locked(self) -> bool:
-        return self.is_locked_by_admin or self.is_locked_in_trade or self.is_in_lineup
+        return self.is_locked_by_admin or self.is_locked_in_trade or self.is_in_lineup or self.is_in_tactico_squad
 
 
 class CollectionStatsOut(BaseModel):

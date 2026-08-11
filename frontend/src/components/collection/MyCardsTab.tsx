@@ -16,11 +16,14 @@ import type { Rarity } from "@/types";
 
 const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary"];
 
+const PAGE_SIZE = 60;
+
 export default function MyCardsTab() {
   const [rarity, setRarity] = useState<Rarity | null>(null);
   const [collectionId, setCollectionId] = useState<number | undefined>(undefined);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<CollectionFilters["sort_by"]>("acquired_at");
+  const [pageNum, setPageNum] = useState(1);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
 
@@ -29,13 +32,21 @@ export default function MyCardsTab() {
     upgradeCard, setUpgradeCard, sellMutation, hideMutation,
   } = useCardActions([["collection"], ["collection-stats"]]);
 
+  // Resetting to page 1 whenever a filter changes (rather than on every
+  // render) keeps a stale page number from silently returning an empty
+  // "Карточек не найдено" result after narrowing the filters.
+  useEffect(() => {
+    setPageNum(1);
+  }, [rarity, collectionId, search, sortBy]);
+
   const filters: CollectionFilters = {
     rarity: rarity ?? undefined,
     collection_id: collectionId,
     search: search || undefined,
     sort_by: sortBy,
     sort_dir: "desc",
-    page_size: 60,
+    page: pageNum,
+    page_size: PAGE_SIZE,
   };
 
   const { data: page, isLoading } = useQuery({ queryKey: ["collection", filters], queryFn: () => fetchCollection(filters) });
@@ -137,6 +148,28 @@ export default function MyCardsTab() {
           />
         ))}
       </div>
+
+      {page && page.pages > 1 && (
+        <div className="flex items-center justify-center gap-3">
+          <button
+            onClick={() => setPageNum((p) => Math.max(1, p - 1))}
+            disabled={pageNum <= 1}
+            className="rounded-full bg-white/5 px-4 py-2 text-xs font-semibold text-ink-chalk disabled:opacity-30"
+          >
+            Назад
+          </button>
+          <span className="font-mono text-xs text-ink-mist">
+            {pageNum} / {page.pages} · {page.total} карт
+          </span>
+          <button
+            onClick={() => setPageNum((p) => Math.min(page.pages, p + 1))}
+            disabled={pageNum >= page.pages}
+            className="rounded-full bg-white/5 px-4 py-2 text-xs font-semibold text-ink-chalk disabled:opacity-30"
+          >
+            Вперёд
+          </button>
+        </div>
+      )}
 
       {selectMode && selected.length > 0 && (
         <div className="safe-bottom fixed inset-x-0 bottom-16 z-30 mx-auto flex max-w-lg items-center justify-between rounded-2xl border border-white/10 bg-bg-surface px-4 py-3 shadow-xl">

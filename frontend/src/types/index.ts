@@ -71,6 +71,7 @@ export interface UserCard {
   is_locked_by_admin: boolean;
   is_locked_in_trade: boolean;
   is_in_lineup: boolean;
+  is_in_tactico_squad: boolean;
   hidden_from_trade: boolean;
   duplicate_count?: number;
 }
