@@ -54,6 +54,7 @@ export default function PenaltyGamePage() {
   const [claimResult, setClaimResult] = useState<{ reward_coins: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [settled, setSettled] = useState(true);
+  const [pickedZone, setPickedZone] = useState<PenaltyDirection | null>(null);
 
   const { data: collection } = useQuery({
     queryKey: ["collection", "penalty"],
@@ -110,6 +111,7 @@ export default function PenaltyGamePage() {
     setSettled(false);
     const timer = setTimeout(() => {
       setSettled(true);
+      setPickedZone(null);
       if (lastKick.is_finished) {
         hapticNotify(lastKick.result === "win" ? "success" : "error");
         setPhase("finished");
@@ -274,9 +276,11 @@ export default function PenaltyGamePage() {
             {ZONES.map((z) => (
               <button
                 key={z.value}
-                onClick={() => kickMutation.mutate(z.value)}
+                onClick={() => { setPickedZone(z.value); kickMutation.mutate(z.value); }}
                 disabled={kickMutation.isPending}
-                className="flex flex-col items-center gap-1 rounded-2xl bg-bg-surface px-3 py-3.5 text-[11px] font-semibold text-ink-chalk active:scale-90 disabled:opacity-40"
+                className={`flex flex-col items-center gap-1 rounded-2xl px-3 py-3.5 text-[11px] font-semibold text-ink-chalk transition-colors active:scale-90 disabled:opacity-40 ${
+                  pickedZone === z.value ? "bg-accent-cyan/20 ring-2 ring-accent-cyan" : "bg-bg-surface"
+                }`}
               >
                 <span className="text-base leading-none">{z.arrow}</span>
                 {z.label}

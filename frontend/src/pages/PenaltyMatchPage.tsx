@@ -58,6 +58,7 @@ export default function PenaltyMatchPage() {
   const [error, setError] = useState<string | null>(null);
   const [acceptingCard, setAcceptingCard] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [pickedZone, setPickedZone] = useState<PenaltyDirection | null>(null);
 
   const { data: match, isLoading } = useQuery({
     queryKey: ["penalty-match", id],
@@ -82,6 +83,14 @@ export default function PenaltyMatchPage() {
     const t = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(t);
   }, []);
+
+  // Clears the "just picked" button highlight once a round actually
+  // resolves (a new round appears), rather than as soon as the pick
+  // request completes — the highlight should persist through the wait for
+  // the opponent's pick too, not just the round-trip to the server.
+  useEffect(() => {
+    setPickedZone(null);
+  }, [match?.rounds.length]);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["penalty-match", id] });
@@ -227,9 +236,11 @@ export default function PenaltyMatchPage() {
             {ZONES.map((z) => (
               <button
                 key={z.value}
-                onClick={() => pickMutation.mutate(z.value)}
+                onClick={() => { setPickedZone(z.value); pickMutation.mutate(z.value); }}
                 disabled={!isViewerTurn || pickMutation.isPending}
-                className="flex flex-col items-center gap-1 rounded-2xl bg-bg-surface px-3 py-3.5 text-[11px] font-semibold text-ink-chalk active:scale-90 disabled:opacity-40"
+                className={`flex flex-col items-center gap-1 rounded-2xl px-3 py-3.5 text-[11px] font-semibold text-ink-chalk transition-colors active:scale-90 disabled:opacity-40 ${
+                  pickedZone === z.value ? "bg-accent-cyan/20 ring-2 ring-accent-cyan" : "bg-bg-surface"
+                }`}
               >
                 <span className="text-base leading-none">{z.arrow}</span>
                 {z.label}
