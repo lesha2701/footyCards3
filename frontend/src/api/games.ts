@@ -18,6 +18,7 @@ import type {
   PenaltyDirection,
   PenaltyKickResult,
   PenaltyStartResult,
+  PenaltyStats,
   SaboteurClaimResult,
   SaboteurRevealResult,
   SaboteurStartResult,
@@ -89,6 +90,11 @@ export async function kickPenalty(sessionId: number, direction: PenaltyDirection
 
 export async function claimPenaltyReward(sessionId: number): Promise<PenaltyClaimResult> {
   const { data } = await api.post<PenaltyClaimResult>(`/games/penalty/${sessionId}/claim`);
+  return data;
+}
+
+export async function fetchPenaltyStats(): Promise<PenaltyStats> {
+  const { data } = await api.get<PenaltyStats>("/games/penalty/stats");
   return data;
 }
 

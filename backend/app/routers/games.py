@@ -30,6 +30,7 @@ from app.schemas.game import (
     PenaltyKickRequest,
     PenaltyStartOut,
     PenaltyStartRequest,
+    PenaltyStatsOut,
     SaboteurClaimOut,
     SaboteurRevealOut,
     SaboteurRevealRequest,
@@ -103,6 +104,11 @@ async def saboteur_claim(session_id: int, db: AsyncSession = Depends(get_db), us
 
 
 # --- Penalty ---
+
+@router.get("/penalty/stats", response_model=PenaltyStatsOut)
+async def penalty_stats(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await penalty_service.get_stats(db, user)
+
 
 @router.post("/penalty/start", response_model=PenaltyStartOut)
 async def penalty_start(payload: PenaltyStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):

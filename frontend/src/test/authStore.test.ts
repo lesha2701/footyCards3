@@ -20,6 +20,7 @@ const baseUser: UserMe = {
   matches_lost: 0,
   memory_best_score: 0,
   tactics_rating: 0,
+  penalty_rating: 0,
   created_at: new Date().toISOString(),
   active_badge: null,
 };

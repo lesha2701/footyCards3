@@ -106,6 +106,11 @@ class PenaltyClaimOut(BaseModel):
     result: str
 
 
+class PenaltyStatsOut(BaseModel):
+    penalty_rating: int
+    penalty_rank: Optional[int] = None
+
+
 # --- Free Kick ---
 
 class FreeKickStartRequest(BaseModel):

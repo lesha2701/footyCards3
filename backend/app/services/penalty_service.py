@@ -11,8 +11,9 @@ from app.models.card import UserCard
 from app.models.enums import GameSessionStatus, GameType, TransactionType
 from app.models.game import GameSession
 from app.models.user import User
-from app.schemas.game import PenaltyClaimOut, PenaltyKickOut, PenaltyStartOut
-from app.services import task_service
+from app.schemas.game import PenaltyClaimOut, PenaltyKickOut, PenaltyStartOut, PenaltyStatsOut
+from app.schemas.ranking import RankingMetric
+from app.services import ranking_service, task_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
@@ -206,3 +207,11 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> Penalty
     await db.refresh(locked_user)
 
     return PenaltyClaimOut(reward_coins=reward, new_balance=locked_user.balance, result=session.server_state["result"])
+
+
+async def get_stats(db: AsyncSession, user: User) -> PenaltyStatsOut:
+    ranking = await ranking_service.get_ranking(db, RankingMetric.penalty_rating, user)
+    return PenaltyStatsOut(
+        penalty_rating=user.penalty_rating,
+        penalty_rank=ranking.me.rank if ranking.me else None,
+    )

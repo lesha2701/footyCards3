@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -10,6 +10,7 @@ import PenaltyGoalScene, { type PenaltyGoalKick } from "@/components/penalty/Pen
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
+import { useMatchGuardStore } from "@/store/matchGuardStore";
 import type { PenaltyDirection, PenaltyKickResult } from "@/types";
 
 type Phase = "pick_card" | "playing" | "finished";
@@ -43,6 +44,7 @@ function outcomeLabelFor(result: PenaltyKickResult): { label: string; good: bool
 
 export default function PenaltyGamePage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const updateBalance = useAuthStore((s) => s.updateBalance);
 
   const [sessionId, setSessionId] = useState<number | null>(null);
@@ -84,11 +86,10 @@ export default function PenaltyGamePage() {
     onSuccess: (result) => {
       haptic(result.outcome === "goal" || result.outcome === "saved" ? "medium" : "light");
       setLastKick(result);
-      if (result.is_finished) {
-        hapticNotify(result.result === "win" ? "success" : "error");
-        setPhase("finished");
-        claimMutation.mutate();
-      }
+      // Do NOT switch to the "finished" phase here even if result.is_finished
+      // — that swaps out this whole screen (and the goal scene with it)
+      // before the deciding kick's own animation has had a chance to play.
+      // The settle effect below holds it on screen first, then transitions.
     },
   });
 
@@ -97,6 +98,8 @@ export default function PenaltyGamePage() {
   // kicks *next* — without this, the keeper stayed on the previous kick's
   // color/position until the player had already submitted their next pick,
   // which read as "nothing happened" right when the turn actually changed.
+  // On the deciding kick (is_finished), the same hold is what lets that
+  // final animation actually play before the win/loss screen replaces it.
   // Declared unconditionally (before any early `return`) — hooks can't
   // follow a conditional return without violating the Rules of Hooks.
   useEffect(() => {
@@ -105,9 +108,32 @@ export default function PenaltyGamePage() {
       return;
     }
     setSettled(false);
-    const timer = setTimeout(() => setSettled(true), 900);
+    const timer = setTimeout(() => {
+      setSettled(true);
+      if (lastKick.is_finished) {
+        hapticNotify(lastKick.result === "win" ? "success" : "error");
+        setPhase("finished");
+        claimMutation.mutate();
+        queryClient.invalidateQueries({ queryKey: ["penalty-stats"] });
+        queryClient.invalidateQueries({ queryKey: ["game-limits"] });
+      }
+    }, 900);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastKick]);
+
+  // Warns before leaving a live game, same as Card Arena — no backend
+  // forfeit exists for solo Penalty either, so this is a UX nudge (keeps
+  // BottomNav/TopBar's confirm dialog consistent across every tab,
+  // including "Играть") rather than an enforced loss.
+  useEffect(() => {
+    if (phase === "playing") {
+      useMatchGuardStore.getState().activate("Серия пенальти не завершена. Уверен, что хочешь выйти?");
+    } else {
+      useMatchGuardStore.getState().deactivate();
+    }
+    return () => useMatchGuardStore.getState().deactivate();
+  }, [phase]);
 
   if (phase === "pick_card" && !choosingBot) {
     return (
@@ -224,21 +250,25 @@ export default function PenaltyGamePage() {
         outcomeGood={sceneOutcome?.good ?? false}
       />
 
-      <p className="text-sm font-semibold text-ink-mist">{roleLabel}</p>
+      {!lastKick?.is_finished && (
+        <>
+          <p className="text-sm font-semibold text-ink-mist">{roleLabel}</p>
 
-      <div className="grid grid-cols-3 gap-2.5">
-        {ZONES.map((z) => (
-          <button
-            key={z.value}
-            onClick={() => kickMutation.mutate(z.value)}
-            disabled={kickMutation.isPending}
-            className="flex flex-col items-center gap-1 rounded-2xl bg-bg-surface px-3 py-3.5 text-[11px] font-semibold text-ink-chalk active:scale-90 disabled:opacity-40"
-          >
-            <span className="text-base leading-none">{z.arrow}</span>
-            {z.label}
-          </button>
-        ))}
-      </div>
+          <div className="grid grid-cols-3 gap-2.5">
+            {ZONES.map((z) => (
+              <button
+                key={z.value}
+                onClick={() => kickMutation.mutate(z.value)}
+                disabled={kickMutation.isPending}
+                className="flex flex-col items-center gap-1 rounded-2xl bg-bg-surface px-3 py-3.5 text-[11px] font-semibold text-ink-chalk active:scale-90 disabled:opacity-40"
+              >
+                <span className="text-base leading-none">{z.arrow}</span>
+                {z.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

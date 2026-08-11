@@ -82,6 +82,8 @@ export default function PenaltyMatchPage() {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["penalty-match", id] });
     queryClient.invalidateQueries({ queryKey: ["penalty-matches"] });
+    queryClient.invalidateQueries({ queryKey: ["penalty-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["game-limits"] });
   };
 
   const acceptMutation = useMutation({

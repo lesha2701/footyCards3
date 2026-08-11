@@ -39,6 +39,7 @@ class UserMeOut(BaseModel):
     matches_lost: int
     memory_best_score: int
     tactics_rating: int
+    penalty_rating: int
     created_at: datetime
     active_badge: Optional[BadgeOut] = None
 

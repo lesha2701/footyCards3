@@ -33,6 +33,7 @@ export interface UserMe {
   matches_lost: number;
   memory_best_score: number;
   tactics_rating: number;
+  penalty_rating: number;
   created_at: string;
   active_badge: Badge | null;
 }
@@ -318,7 +319,8 @@ export type RankingMetric =
   | "cards_count"
   | "unique_players"
   | "referral_count"
-  | "tactics_rating";
+  | "tactics_rating"
+  | "penalty_rating";
 
 export interface RankingEntry {
   rank: number;
@@ -372,6 +374,11 @@ export interface TacticoSquad {
 export interface TacticoStats {
   tactics_rating: number;
   tactics_rank: number | null;
+}
+
+export interface PenaltyStats {
+  penalty_rating: number;
+  penalty_rank: number | null;
 }
 
 export type TacticoPhase = "attack" | "defense";

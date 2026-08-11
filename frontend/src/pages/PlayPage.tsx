@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
-import { fetchGameLimits } from "@/api/games";
+import { fetchGameLimits, fetchPenaltyStats } from "@/api/games";
 import { fetchArenaStats } from "@/api/matches";
 import { fetchTacticoStats } from "@/api/tactico";
 import {
@@ -23,6 +23,7 @@ export default function PlayPage() {
   const user = useAuthStore((s) => s.user);
   const { data: arenaStats } = useQuery({ queryKey: ["arena-stats"], queryFn: fetchArenaStats });
   const { data: tacticoStats } = useQuery({ queryKey: ["tactico-stats"], queryFn: fetchTacticoStats });
+  const { data: penaltyStats } = useQuery({ queryKey: ["penalty-stats"], queryFn: fetchPenaltyStats });
   const { data: limits } = useQuery({ queryKey: ["game-limits"], queryFn: fetchGameLimits });
 
   return (
@@ -87,7 +88,8 @@ export default function PlayPage() {
           Icon={IconGoal}
           badgeClass="bg-rarity-legendary"
           title="Пенальти"
-          description="Серия пенальти против бота"
+          description="Серия пенальти против бота или друга"
+          stat={`Рейтинг: ${penaltyStats?.penalty_rating ?? user?.penalty_rating ?? 0}`}
           remaining={limits?.penalty}
           limit={limits?.hourly_limit}
         />
