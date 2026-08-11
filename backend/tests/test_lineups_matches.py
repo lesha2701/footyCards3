@@ -561,3 +561,73 @@ def test_synthesize_bot_ratings_includes_clamped_gk():
     # opponent_strength is double user_strength, so the ratio (2.0) pushes
     # every synthesized rating up against the clamp ceiling.
     assert fwd == 99 and defence == 99 and gk == 99
+
+
+async def test_forfeit_counts_as_a_loss(client, db_session, bot_token):
+    """Leaving mid-match (confirmed via the frontend's leave dialog) must
+    cost the same -1 rating a real loss would — otherwise switching tabs
+    and confirming "leave" is a free way to dodge a losing match."""
+    headers = telegram_headers(750116, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750116)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    await _force_shot_type(db_session, in_box=100)
+    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    match = resp.json()
+    assert match["status"] == "in_progress"
+
+    # Take one action first so the forfeit is a genuine mid-match
+    # abandonment, not just forfeiting an untouched match.
+    pending = match["pending_moment"]
+    action = _ACTION_BY_KIND[pending["kind"]]
+    resp = await client.post(f"/api/v1/matches/{match['id']}/act", headers=headers, json={"action": action})
+    match = resp.json()
+
+    if match["status"] == "finished":
+        return  # the single action happened to finish the match already; nothing left to forfeit
+
+    forfeit = await client.post(f"/api/v1/matches/{match['id']}/forfeit", headers=headers)
+    assert forfeit.status_code == 200
+    body = forfeit.json()
+    assert body["status"] == "finished"
+    assert body["result"] == "loss"
+    assert body["rating_delta"] == -1
+
+    await db_session.refresh(user)
+    assert user.arena_rating == 0  # 0 - 1, clamped at the floor
+    assert user.matches_lost == 1
+
+
+async def test_forfeit_rejects_non_owner(client, db_session, bot_token):
+    headers_a = telegram_headers(750117, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers_a)
+    user_a = await get_user_by_telegram_id(db_session, 750117)
+    slots = await _build_full_squad(db_session, user_a.id)
+    await client.put("/api/v1/lineups/active", headers=headers_a, json={"slots": slots})
+
+    headers_b = telegram_headers(750118, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers_b)
+
+    await _force_shot_type(db_session, in_box=100)
+    resp = await client.post("/api/v1/matches/play", headers=headers_a, json={"difficulty": "medium"})
+    match = resp.json()
+    assert match["status"] == "in_progress"
+
+    resp = await client.post(f"/api/v1/matches/{match['id']}/forfeit", headers=headers_b)
+    assert resp.status_code == 403
+
+
+async def test_forfeit_rejects_already_finished_match(client, db_session, bot_token):
+    headers = telegram_headers(750119, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750119)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    match = await _play_to_completion(client, headers)
+    assert match["status"] == "finished"
+
+    resp = await client.post(f"/api/v1/matches/{match['id']}/forfeit", headers=headers)
+    assert resp.status_code == 409

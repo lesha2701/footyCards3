@@ -26,6 +26,11 @@ async def act(
     return await match_service.resolve_action(db, user, match_id, payload)
 
 
+@router.post("/{match_id}/forfeit", response_model=MatchOut)
+async def forfeit(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await match_service.forfeit_match(db, user, match_id)
+
+
 @router.get("/history", response_model=list[MatchOut])
 async def get_match_history(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await match_service.match_history(db, user)

@@ -545,25 +545,39 @@ async def _lock_match(db: AsyncSession, user_id: int, match_id: int) -> Match:
     return match
 
 
-async def _finalize_match(db: AsyncSession, user: User, match: Match, state: dict, config: GameConfig) -> None:
+async def _finalize_match(
+    db: AsyncSession, user: User, match: Match, state: dict, config: GameConfig,
+    forced_result: Optional[MatchResult] = None,
+) -> None:
     locked_user = await lock_user_for_update(db, user.id)
     user_score, opponent_score = state["user_score"], state["opponent_score"]
     locked_user.goals_for += user_score
     locked_user.goals_against += opponent_score
 
-    if user_score > opponent_score:
-        result, rating_delta = MatchResult.win, 3
+    if forced_result is not None:
+        # Forfeit — always counts as a loss for the forfeiting side
+        # regardless of the score so far, same rule Tactico/Penalty's
+        # forfeit enforces: leaving mid-match is never a safer bet than
+        # finishing it out.
+        result = forced_result
+    elif user_score > opponent_score:
+        result = MatchResult.win
+    elif user_score < opponent_score:
+        result = MatchResult.loss
+    else:
+        result = MatchResult.draw
+
+    rating_delta = {MatchResult.win: 3, MatchResult.loss: -1, MatchResult.draw: 1}[result]
+    if result == MatchResult.win:
         locked_user.matches_won += 1
         if opponent_score == 0:
             locked_user.arena_clean_sheet_wins += 1
             await task_service.evaluate_metric_progress(
                 db, locked_user, "arena_clean_sheet_wins", locked_user.arena_clean_sheet_wins
             )
-    elif user_score < opponent_score:
-        result, rating_delta = MatchResult.loss, -1
+    elif result == MatchResult.loss:
         locked_user.matches_lost += 1
     else:
-        result, rating_delta = MatchResult.draw, 1
         locked_user.matches_drawn += 1
     locked_user.arena_rating = max(0, locked_user.arena_rating + rating_delta)
 
@@ -752,6 +766,19 @@ async def resolve_action(db: AsyncSession, user: User, match_id: int, payload: M
     else:
         await _finalize_match(db, user, match, state, config)
 
+    await db.refresh(match, attribute_names=["events"])
+    return MatchOut.model_validate(match)
+
+
+async def forfeit_match(db: AsyncSession, user: User, match_id: int) -> MatchOut:
+    """Immediately ends an in-progress match as a loss for the player,
+    regardless of the partial score — mirrors tactico_service.forfeit_match
+    and penalty_service.forfeit_session. Called from the frontend's
+    leave-confirmation dialog (matchGuardStore)."""
+    config = await get_config(db)
+    match = await _lock_match(db, user.id, match_id)
+    state = dict(match.server_state or {})
+    await _finalize_match(db, user, match, state, config, forced_result=MatchResult.loss)
     await db.refresh(match, attribute_names=["events"])
     return MatchOut.model_validate(match)
 

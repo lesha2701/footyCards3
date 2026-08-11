@@ -17,7 +17,7 @@ import {
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
 import { fetchActiveLineup, setActiveLineup, setLineupTactic } from "@/api/lineups";
-import { actMatch, fetchArenaStats, fetchMatchHistory, playMatch } from "@/api/matches";
+import { actMatch, fetchArenaStats, fetchMatchHistory, forfeitMatch, playMatch } from "@/api/matches";
 import { staticUrl } from "@/lib/api";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, TACTICS, type FormationSlot } from "@/lib/formation";
 import { formatGameError } from "@/lib/errors";
@@ -81,16 +81,36 @@ export default function ArenaPage() {
     onSuccess: (data) => setMatch(data),
   });
 
-  // Warns before leaving a live match, same as Тактико — no backend forfeit
-  // exists for Card Arena yet, so this is a UX nudge only, not enforced.
+  const forfeitMutation = useMutation({
+    mutationFn: () => forfeitMatch(match!.id),
+    onSuccess: (data) => {
+      setMatch(data);
+      setSimulating(false);
+      queryClient.invalidateQueries({ queryKey: ["arena-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["match-history"] });
+      hapticNotify("error");
+      useMatchGuardStore.getState().deactivate();
+    },
+  });
+
+  // Guards in-app navigation while a match is live, same as Тактико —
+  // leaving mid-match costs the same -1 rating as playing it out and
+  // losing, so quitting to dodge a loss isn't a viable strategy. The
+  // confirm dialog (rendered globally) calls this same forfeit endpoint if
+  // the player chooses to leave anyway.
   useEffect(() => {
     if (simulating && match?.status === "in_progress") {
-      useMatchGuardStore.getState().activate("Матч ещё не завершён. Уверен, что хочешь выйти?");
+      useMatchGuardStore.getState().activate(
+        "Матч ещё не завершён. Если выйдешь сейчас, он будет засчитан как поражение.",
+        () => { forfeitMatch(match.id).catch(() => {}); },
+        `/matches/${match.id}/forfeit`,
+      );
     } else {
       useMatchGuardStore.getState().deactivate();
     }
     return () => useMatchGuardStore.getState().deactivate();
-  }, [simulating, match?.status]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simulating, match?.status, match?.id]);
 
   if (lineupLoading) return <ListSkeleton />;
 
@@ -242,6 +262,16 @@ export default function ArenaPage() {
             hapticNotify(match.result === "win" ? "success" : match.result === "loss" ? "error" : "warning");
           }}
         />
+      )}
+
+      {simulating && match?.status === "in_progress" && (
+        <button
+          onClick={() => forfeitMutation.mutate()}
+          disabled={forfeitMutation.isPending}
+          className="self-center text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2 active:scale-95"
+        >
+          Сдаться (засчитается поражение)
+        </button>
       )}
 
       <section>

@@ -11,6 +11,11 @@ export async function actMatch(matchId: number, action: MatchActionKind): Promis
   return data;
 }
 
+export async function forfeitMatch(matchId: number): Promise<Match> {
+  const { data } = await api.post<Match>(`/matches/${matchId}/forfeit`);
+  return data;
+}
+
 export async function fetchMatchHistory(): Promise<Match[]> {
   const { data } = await api.get<Match[]>("/matches/history");
   return data;
