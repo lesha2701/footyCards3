@@ -144,6 +144,7 @@ async def resolve_kick(db: AsyncSession, user: User, session_id: int, direction:
 
     is_finished = False
     result: str | None = None
+    rating_delta: int | None = None
     if state["kicks_taken"] >= REGULATION_KICKS and state["kicks_taken"] % 2 == 0:
         if state["player_score"] != state["bot_score"]:
             is_finished = True
@@ -161,9 +162,14 @@ async def resolve_kick(db: AsyncSession, user: User, session_id: int, direction:
             "win": config.penalty_reward_win, "loss": config.penalty_reward_loss,
         }[result]
         # Same +3/-1 deltas Tactico uses for its rating; a solo shootout has
-        # no draw outcome, so there's no +1 case to handle here.
+        # no draw outcome, so there's no +1 case to handle here. rating_delta
+        # is the raw, unclamped delta actually applied to penalty_rating (the
+        # clamp only matters when a fresh user is already at 0 and loses) —
+        # returned as-is so the frontend can show "+3"/"-1" after the match,
+        # same as the PvP match page already does.
+        rating_delta = 3 if result == "win" else -1
         locked_user = await lock_user_for_update(db, user.id)
-        locked_user.penalty_rating = max(0, locked_user.penalty_rating + (3 if result == "win" else -1))
+        locked_user.penalty_rating = max(0, locked_user.penalty_rating + rating_delta)
         db.add(locked_user)
         await task_service.evaluate_penalty_win_max_rating(db, user, state["player_rating"], result == "win")
 
@@ -175,7 +181,7 @@ async def resolve_kick(db: AsyncSession, user: User, session_id: int, direction:
         session_id=session.id, kicker=kicker, outcome=outcome,
         player_direction=direction, bot_direction=round_entry["bot_direction"],
         player_score=state["player_score"], bot_score=state["bot_score"],
-        next_kicker=next_kicker, is_finished=is_finished, result=result,
+        next_kicker=next_kicker, is_finished=is_finished, result=result, rating_delta=rating_delta,
     )
 
 

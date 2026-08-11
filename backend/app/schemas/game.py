@@ -98,6 +98,7 @@ class PenaltyKickOut(BaseModel):
     next_kicker: Optional[str] = None
     is_finished: bool
     result: Optional[str] = None
+    rating_delta: Optional[int] = None
 
 
 class PenaltyClaimOut(BaseModel):

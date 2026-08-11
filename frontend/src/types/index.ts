@@ -637,6 +637,7 @@ export interface PenaltyKickResult {
   next_kicker: "player" | "bot" | null;
   is_finished: boolean;
   result: "win" | "draw" | "loss" | null;
+  rating_delta: number | null;
 }
 
 export interface PenaltyClaimResult {

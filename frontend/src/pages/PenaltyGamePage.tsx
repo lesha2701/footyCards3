@@ -190,6 +190,11 @@ export default function PenaltyGamePage() {
         <p className="text-sm text-ink-mist">
           Счёт: <span className="font-mono font-bold text-accent-cyan">{lastKick?.player_score} : {lastKick?.bot_score}</span>
         </p>
+        {lastKick?.rating_delta != null && (
+          <p className={`text-xs ${lastKick.rating_delta >= 0 ? "text-accent-green" : "text-red-400"}`}>
+            Рейтинг Пенальти {lastKick.rating_delta >= 0 ? "+" : ""}{lastKick.rating_delta}
+          </p>
+        )}
 
         {claimMutation.isPending ? (
           <p className="text-sm text-ink-mist">Начисление награды...</p>
