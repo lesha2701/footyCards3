@@ -22,22 +22,20 @@ export interface PenaltyGoalSceneProps {
   outcomeGood: boolean;
 }
 
-// Goal posts at real-world proportions (7.32m x 2.44m ≈ 3:1) rather than the
-// old ~1.4:1 box, so it actually reads as a football goal.
-const GOAL = { left: 20, right: 300, top: 55, bottom: 150 };
+const GOAL = { left: 30, right: 270, top: 30, bottom: 200 };
 const GOAL_CENTER_X = (GOAL.left + GOAL.right) / 2;
 
-const KEEPER_BASE = { x: GOAL_CENTER_X, y: (GOAL.top + GOAL.bottom) / 2 + 3 };
+const KEEPER_BASE = { x: GOAL_CENTER_X, y: 118 };
 // The ball rests on the penalty spot, which is also drawn as a pitch marking.
-const BALL_REST = { x: GOAL_CENTER_X, y: 210 };
+const BALL_REST = { x: GOAL_CENTER_X, y: 234 };
 
 const ZONE_KEEPER_OFFSET: Record<PenaltyDirection, { x: number; y: number }> = {
-  top_left: { x: -84, y: -26 },
-  top_center: { x: 0, y: -34 },
-  top_right: { x: 84, y: -26 },
-  bottom_left: { x: -84, y: 28 },
-  bottom_center: { x: 0, y: 33 },
-  bottom_right: { x: 84, y: 28 },
+  top_left: { x: -78, y: -58 },
+  top_center: { x: 0, y: -68 },
+  top_right: { x: 78, y: -58 },
+  bottom_left: { x: -78, y: 34 },
+  bottom_center: { x: 0, y: 40 },
+  bottom_right: { x: 78, y: 34 },
 };
 
 // Keeper tilts toward whichever side it's diving, on top of the translate —
@@ -52,12 +50,12 @@ const ZONE_KEEPER_TILT: Record<PenaltyDirection, number> = {
 };
 
 const ZONE_BALL_TARGET: Record<PenaltyDirection, { x: number; y: number }> = {
-  top_left: { x: 92, y: 76 },
-  top_center: { x: GOAL_CENTER_X, y: 66 },
-  top_right: { x: 228, y: 76 },
-  bottom_left: { x: 92, y: 134 },
-  bottom_center: { x: GOAL_CENTER_X, y: 141 },
-  bottom_right: { x: 228, y: 134 },
+  top_left: { x: 80, y: 55 },
+  top_center: { x: GOAL_CENTER_X, y: 45 },
+  top_right: { x: 220, y: 55 },
+  bottom_left: { x: 80, y: 168 },
+  bottom_center: { x: GOAL_CENTER_X, y: 176 },
+  bottom_right: { x: 220, y: 168 },
 };
 
 const KEEPER_COLOR = { own: "#e6483b", opponent: "#3b82f6" };
@@ -93,21 +91,21 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
       <div className="pointer-events-none absolute -inset-x-[20%] -top-[40%] h-[140px] bg-gradient-to-r from-accent-cyan via-accent-green to-accent-lime opacity-[0.16] blur-[30px]" />
 
       <div className="relative mx-auto my-1.5 max-w-[340px]">
-        <svg className="block w-full overflow-visible" viewBox="0 0 320 260">
+        <svg className="block w-full overflow-visible" viewBox="0 0 300 258">
           {/* Turf — real mowed-stripe pattern instead of a flat void, so the
               ground reads as an actual pitch. */}
           <clipPath id="penaltyGrassClip">
-            <rect x={0} y={GOAL.bottom} width={320} height={260 - GOAL.bottom} />
+            <rect x={0} y={GOAL.bottom} width={300} height={258 - GOAL.bottom} />
           </clipPath>
           <g clipPath="url(#penaltyGrassClip)">
-            {Array.from({ length: 7 }, (_, i) => GOAL.bottom + i * 17).map((y, i) => (
-              <rect key={`stripe${y}`} x={0} y={y} width={320} height={17} fill={GRASS[i % 2]} />
+            {Array.from({ length: 4 }, (_, i) => GOAL.bottom + i * 17).map((y, i) => (
+              <rect key={`stripe${y}`} x={0} y={y} width={300} height={17} fill={GRASS[i % 2]} />
             ))}
           </g>
 
           {/* Goal line — drawn wider than the posts so it reads as the pitch
               marking the posts sit on, not just the base of the frame. */}
-          <line x1={0} y1={GOAL.bottom} x2={320} y2={GOAL.bottom} stroke={LINE} strokeWidth={2.5} opacity={0.9} />
+          <line x1={0} y1={GOAL.bottom} x2={300} y2={GOAL.bottom} stroke={LINE} strokeWidth={2.5} opacity={0.9} />
           {/* Penalty spot */}
           <circle cx={BALL_REST.x} cy={BALL_REST.y} r={2.6} fill={LINE} opacity={0.85} />
 
@@ -116,11 +114,11 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
             d={`M ${GOAL.left} ${GOAL.bottom} L ${GOAL.left} ${GOAL.top} L ${GOAL.right} ${GOAL.top} L ${GOAL.right} ${GOAL.bottom}`}
             fill="none" stroke={LINE} strokeWidth={4} strokeLinecap="round"
           />
-          <g stroke="rgba(238,242,238,0.24)" strokeWidth={1}>
-            {Array.from({ length: 15 }, (_, i) => GOAL.left + i * 20).map((x) => (
+          <g stroke="rgba(238,242,238,0.28)" strokeWidth={1}>
+            {Array.from({ length: 13 }, (_, i) => GOAL.left + i * 20).map((x) => (
               <line key={`v${x}`} x1={x} y1={GOAL.top} x2={x} y2={GOAL.bottom} />
             ))}
-            {Array.from({ length: 6 }, (_, i) => GOAL.top + i * 19).map((y) => (
+            {Array.from({ length: 9 }, (_, i) => GOAL.top + i * 21).map((y) => (
               <line key={`h${y}`} x1={GOAL.left} y1={y} x2={GOAL.right} y2={y} />
             ))}
           </g>
