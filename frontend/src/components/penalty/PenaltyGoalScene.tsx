@@ -30,7 +30,7 @@ const GOAL_CENTER_X = (GOAL.left + GOAL.right) / 2;
 const KEEPER_BASE = { x: GOAL_CENTER_X, y: (GOAL.top + GOAL.bottom) / 2 };
 // The ball rests on the penalty spot, which is also drawn as a pitch marking
 // — same coordinates, so the two always line up exactly.
-const BALL_REST = { x: GOAL_CENTER_X, y: GOAL.bottom + 34 };
+const BALL_REST = { x: GOAL_CENTER_X, y: GOAL.bottom + 44 };
 
 // Half-width/height of the glove art's bounding box — used both to draw the
 // mask and to size zone offsets so the glove never crosses the posts/crossbar.
