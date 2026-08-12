@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { fetchCollection } from "@/api/collection";
@@ -59,6 +59,8 @@ export default function PenaltyMatchPage() {
   const [acceptingCard, setAcceptingCard] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [pickedZone, setPickedZone] = useState<PenaltyDirection | null>(null);
+  const [settled, setSettled] = useState(true);
+  const knownRoundsLengthRef = useRef<number | null>(null);
 
   const { data: match, isLoading } = useQuery({
     queryKey: ["penalty-match", id],
@@ -84,12 +86,32 @@ export default function PenaltyMatchPage() {
     return () => clearInterval(t);
   }, []);
 
-  // Clears the "just picked" button highlight once a round actually
-  // resolves (a new round appears), rather than as soon as the pick
-  // request completes — the highlight should persist through the wait for
-  // the opponent's pick too, not just the round-trip to the server.
+  // Holds each round's kick/dive animation on screen for a beat before
+  // resetting to the idle pose (matches PenaltyGamePage's solo fix) —
+  // without this, the scene jumped straight from one round's finished
+  // position to the next round's the moment new data arrived, and the
+  // keeper's color/position for the *next* round only updated once the
+  // player had already submitted their next pick, reading as "nothing
+  // happened" right when the turn actually changed. Also what makes the
+  // deciding round's animation play instead of getting skipped straight
+  // to the results screen (that screen is gated on `settled` below).
+  // Skips the very first run (page mount / refetch of an already-live
+  // match) so opening the page doesn't replay an old round's animation.
   useEffect(() => {
-    setPickedZone(null);
+    if (!match) return; // still loading — don't consume the "skip first run" guard below
+    const length = match.rounds.length;
+    const previous = knownRoundsLengthRef.current;
+    knownRoundsLengthRef.current = length;
+    if (previous === null || length <= previous) {
+      setSettled(true);
+      return;
+    }
+    setSettled(false);
+    const timer = setTimeout(() => {
+      setSettled(true);
+      setPickedZone(null);
+    }, 900);
+    return () => clearTimeout(timer);
   }, [match?.rounds.length]);
 
   const invalidate = () => {
@@ -191,6 +213,16 @@ export default function PenaltyMatchPage() {
   const viewerWasLastKicker = lastRound ? lastRound.kicker === "user" : false;
   const isViewerTurn = match.status === "in_progress" && match.is_viewer_turn;
 
+  const outcome = lastRound ? outcomeFor(lastRound, viewerWasLastKicker) : null;
+  // Settled: pose the keeper for whoever kicks *next* (match.kicker).
+  // Mid-animation: pose it for whoever just dove in the round that's
+  // currently playing out (the last round's kicker's opponent).
+  const sceneKeeperSide = settled
+    ? (match.kicker === "user" ? "opponent" : "own")
+    : (viewerWasLastKicker ? "opponent" : "own");
+  const sceneKick = settled || !lastRound ? null : goalKickFrom(lastRound, viewerWasLastKicker);
+  const sceneOutcome = settled ? null : outcome;
+
   const kickSecondsLeft = match.kick_deadline
     ? Math.max(0, Math.ceil((new Date(match.kick_deadline).getTime() - now) / 1000))
     : null;
@@ -217,10 +249,10 @@ export default function PenaltyMatchPage() {
       )}
 
       <PenaltyGoalScene
-        keeperSide={lastRound && !viewerWasLastKicker ? "own" : "opponent"}
-        kick={lastRound ? goalKickFrom(lastRound, viewerWasLastKicker) : null}
-        outcomeLabel={lastRound ? outcomeFor(lastRound, viewerWasLastKicker).label : null}
-        outcomeGood={lastRound ? outcomeFor(lastRound, viewerWasLastKicker).good : false}
+        keeperSide={sceneKeeperSide}
+        kick={sceneKick}
+        outcomeLabel={sceneOutcome?.label ?? null}
+        outcomeGood={sceneOutcome?.good ?? false}
       />
 
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
@@ -257,7 +289,7 @@ export default function PenaltyMatchPage() {
         </>
       )}
 
-      {match.status === "finished" && (
+      {match.status === "finished" && settled && (
         <div className="flex flex-col items-center gap-3">
           <p className="font-display text-lg font-bold text-accent-lime">
             {match.result ? RESULT_LABELS[match.result] : ""}
