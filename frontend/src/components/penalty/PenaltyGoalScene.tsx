@@ -119,8 +119,6 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
           {/* Goal line — drawn wider than the posts so it reads as the pitch
               marking the posts sit on, not just the base of the frame. */}
           <line x1={0} y1={GOAL.bottom} x2={300} y2={GOAL.bottom} stroke={LINE} strokeWidth={2.5} opacity={0.9} />
-          {/* Penalty spot */}
-          <circle cx={BALL_REST.x} cy={BALL_REST.y} r={2.6} fill={LINE} opacity={0.85} />
 
           {/* Goal frame + net */}
           <path
@@ -162,6 +160,12 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
             />
           </g>
 
+          {/* Penalty spot — a single fixed marking painted on the grass. It
+              never moves: real penalty spots don't follow the ball around,
+              so this stays put whether the ball is resting on it or has
+              already flown off toward a corner. */}
+          <circle cx={BALL_REST.x} cy={BALL_REST.y} r={7} fill="rgba(238,242,238,0.8)" />
+
           <g
             style={{
               transformOrigin: `${BALL_REST.x}px ${BALL_REST.y}px`,
@@ -169,11 +173,6 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
               transition: "transform 550ms cubic-bezier(0.16,0.85,0.35,1)",
             }}
           >
-            {/* Shadow lives inside the same moving/scaling group as the ball
-                so it travels with it — kept as a separate fixed sibling, it
-                stayed pinned at the penalty spot after every kick, reading
-                as a stray mark no longer under the ball. */}
-            <ellipse cx={BALL_REST.x} cy={BALL_REST.y} rx={11} ry={3.5} fill="rgba(238,242,238,0.5)" />
             <g transform={`translate(${BALL_REST.x},${BALL_REST.y}) translate(-10.377,-10.047) translate(-1.623,-1.913)`}>
               <circle fill="#f3f6f2" cx={12} cy={12} r={9} />
               <path fill="#2ca9bc" d="M14.33,3.31,12,5,9.67,3.31a8.91,8.91,0,0,1,4.66,0ZM4.46,7.1A9,9,0,0,0,3,11.53L5.34,9.84ZM8,17.89l-.07-.23H5A8.92,8.92,0,0,0,8.78,20.4ZM12,8,8.5,10.67,9.84,15h4.32l1.34-4.33Zm4.11,9.66-.07.23-.82,2.51A8.92,8.92,0,0,0,19,17.66ZM19.54,7.11l-.88,2.73L21,11.53a8.93,8.93,0,0,0-1.46-4.42Z" />
