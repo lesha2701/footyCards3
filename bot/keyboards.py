@@ -5,10 +5,10 @@ from config import get_bot_settings
 settings = get_bot_settings()
 
 
-def open_app_keyboard(path: str = "", query: str = "") -> InlineKeyboardMarkup:
+def open_app_keyboard(path: str = "", query: str = "", text: str = "⚽ Открыть VICTOR FC") -> InlineKeyboardMarkup:
     url = settings.mini_app_url.rstrip("/") + path + query
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="⚽ Открыть VICTOR FC", web_app=WebAppInfo(url=url))]]
+        inline_keyboard=[[InlineKeyboardButton(text=text, web_app=WebAppInfo(url=url))]]
     )
 
 

@@ -70,7 +70,14 @@ export default function PenaltyGamePage() {
       setErrorMsg(null);
       setPhase("playing");
     },
-    onError: (err) => setErrorMsg(formatGameError(err, "Не удалось начать игру")),
+    onError: (err) => {
+      // Close the card picker so the error is actually visible — it's a
+      // full-screen overlay, so leaving it open (e.g. after the hourly
+      // limit is hit) hid the message behind it, reading as the tap on a
+      // card just doing nothing.
+      setChoosingBot(false);
+      setErrorMsg(formatGameError(err, "Не удалось начать игру"));
+    },
   });
 
   const claimMutation = useMutation({

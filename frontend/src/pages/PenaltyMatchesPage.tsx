@@ -45,7 +45,14 @@ export default function PenaltyMatchesPage() {
       queryClient.invalidateQueries({ queryKey: ["game-limits"] });
       navigate(`/play/penalty/matches/${match.id}`);
     },
-    onError: (err) => setError(formatGameError(err, "Не удалось отправить вызов")),
+    onError: (err) => {
+      // Close the card picker so the error is actually visible — it's a
+      // full-screen overlay, so leaving it open (e.g. after the hourly
+      // limit is hit) hid the message behind it, reading as the tap on a
+      // card just doing nothing.
+      setPickingOpponent(null);
+      setError(formatGameError(err, "Не удалось отправить вызов"));
+    },
   });
 
   const filtered = (matches ?? []).filter((m) => {
