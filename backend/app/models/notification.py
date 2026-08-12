@@ -16,7 +16,7 @@ class Notification(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     type: Mapped[NotificationType] = mapped_column(Enum(NotificationType, name="notification_type_enum"), nullable=False)
     title: Mapped[str] = mapped_column(String(128), nullable=False)
-    body: Mapped[str] = mapped_column(String(512), nullable=False)
+    body: Mapped[str] = mapped_column(String(1024), nullable=False)
     related_object_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     related_object_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
