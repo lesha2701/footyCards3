@@ -7,7 +7,8 @@ import { IconChevronUp, IconCoin, IconPack } from "@/components/icons";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import { createStarsInvoice, fetchPacks, fetchStarsInvoiceStatus } from "@/api/packs";
 import { ApiRequestError, staticUrl } from "@/lib/api";
-import { openTelegramInvoice } from "@/lib/telegram";
+import { PACK_PURCHASE_TERMS_URL } from "@/lib/legalLinks";
+import { openLink, openTelegramInvoice } from "@/lib/telegram";
 import { sortPacksByPrice, sortPacksByStarsPrice, type PackSortDirection } from "@/lib/packs";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { useAuthStore } from "@/store/authStore";
@@ -110,6 +111,12 @@ export default function PacksPage() {
               />
             ))}
           </div>
+          <button
+            onClick={() => openLink(PACK_PURCHASE_TERMS_URL)}
+            className="text-center text-[11px] text-ink-mist-dim underline underline-offset-2"
+          >
+            Условия покупки цифровых паков
+          </button>
         </>
       )}
     </div>

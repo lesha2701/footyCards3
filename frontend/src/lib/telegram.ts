@@ -26,6 +26,7 @@ interface TelegramWebApp {
   };
   openInvoice?: (url: string, callback?: (status: "paid" | "cancelled" | "failed" | "pending") => void) => void;
   openTelegramLink?: (url: string) => void;
+  openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
 }
 
 declare global {
@@ -93,6 +94,19 @@ export function openTelegramLink(url: string): void {
   const webApp = getTelegramWebApp();
   if (webApp?.openTelegramLink) {
     webApp.openTelegramLink(url);
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
+/** Opens an arbitrary external URL (not a t.me link — use openTelegramLink
+ * for those) in Telegram's in-app browser, with Instant View for pages that
+ * support it (e.g. telegra.ph docs render natively instead of as a web
+ * page). Falls back to a plain new-tab open outside Telegram. */
+export function openLink(url: string): void {
+  const webApp = getTelegramWebApp();
+  if (webApp?.openLink) {
+    webApp.openLink(url, { try_instant_view: true });
   } else {
     window.open(url, "_blank", "noopener,noreferrer");
   }

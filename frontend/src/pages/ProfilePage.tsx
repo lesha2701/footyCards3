@@ -13,6 +13,7 @@ import {
   IconFire,
   IconGift,
   IconPack,
+  IconScroll,
   IconSwap,
   IconTag,
   IconTools,
@@ -21,8 +22,9 @@ import {
   type IconProps,
 } from "@/components/icons";
 import { ApiRequestError, staticUrl } from "@/lib/api";
+import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from "@/lib/legalLinks";
 import { RARITY_GLOW, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
-import { hapticNotify, openTelegramInvoice } from "@/lib/telegram";
+import { hapticNotify, openLink, openTelegramInvoice } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { CoinPackage, DailyRewardClaimResult, UserTrophy } from "@/types";
 
@@ -61,6 +63,7 @@ export default function ProfilePage() {
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claimResult, setClaimResult] = useState<DailyRewardClaimResult | null>(null);
   const [showBuyCoins, setShowBuyCoins] = useState(false);
+  const [showDocuments, setShowDocuments] = useState(false);
 
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
   const { data: badges } = useQuery({ queryKey: ["profile", "badges"], queryFn: fetchMyBadges });
@@ -342,6 +345,14 @@ export default function ProfilePage() {
         </button>
       )}
 
+      <button
+        onClick={() => setShowDocuments(true)}
+        className="flex items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-mist active:scale-95"
+      >
+        <IconScroll size={16} />
+        Документы
+      </button>
+
       {claimResult && <DailyRewardResultModal result={claimResult} onClose={() => setClaimResult(null)} />}
       {selectedTrophy && <TrophyDetailModal trophy={selectedTrophy} onClose={() => setSelectedTrophy(null)} />}
       {showBuyCoins && (
@@ -353,6 +364,43 @@ export default function ProfilePage() {
           }}
         />
       )}
+      {showDocuments && <DocumentsModal onClose={() => setShowDocuments(false)} />}
+    </div>
+  );
+}
+
+function DocumentsModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm" onClick={onClose}>
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: "spring", damping: 20, stiffness: 300 }}
+        className="w-full max-w-xs rounded-3xl bg-bg-surface p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="flex items-center gap-1.5 font-display text-base font-bold text-ink-chalk">
+          <IconScroll size={16} className="text-ink-mist" />
+          Документы
+        </p>
+        <div className="mt-4 flex flex-col gap-2">
+          <button
+            onClick={() => openLink(PRIVACY_POLICY_URL)}
+            className="rounded-xl bg-white/5 px-4 py-3 text-left text-sm text-ink-chalk active:scale-[0.98]"
+          >
+            Политика обработки персональных данных
+          </button>
+          <button
+            onClick={() => openLink(USER_AGREEMENT_URL)}
+            className="rounded-xl bg-white/5 px-4 py-3 text-left text-sm text-ink-chalk active:scale-[0.98]"
+          >
+            Пользовательское соглашение
+          </button>
+        </div>
+        <button onClick={onClose} className="mt-4 w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95">
+          Закрыть
+        </button>
+      </motion.div>
     </div>
   );
 }
