@@ -222,7 +222,31 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
     _assert_pack_available(pack)
     await _assert_purchase_limit(db, pack, user.id)
 
-    locked_user = await lock_user_for_update(db, user.id)
+    # Lock the buyer and (if a referral bonus might still be owed) their
+    # referrer together, in ascending-id order — the same canonical
+    # ordering trade_service.accept_offer / tactico_service / penalty_match
+    # _service use whenever two user rows need locking. Always locking the
+    # buyer first (regardless of id) previously caused real deadlocks: e.g.
+    # buyer A (referred by R) opening a pack locks A then R, while R
+    # concurrently doing anything that locks R then A (a trade with A,
+    # A opening a pack that also references R, etc.) locks in the opposite
+    # order. `referred_by_id` is immutable once set and `referral_reward_
+    # granted` only ever flips False->True, so this pre-check on the
+    # possibly-stale `user` argument can only under-predict (harmless —
+    # falls back to locking the referrer separately below, exactly like
+    # before) never over-predict skipping a still-owed bonus.
+    pending_referrer_id = (
+        user.referred_by_id if user.referred_by_id is not None and not user.referral_reward_granted else None
+    )
+    if pending_referrer_id is not None:
+        first_id, second_id = sorted([user.id, pending_referrer_id])
+        first_locked = await lock_user_for_update(db, first_id)
+        second_locked = await lock_user_for_update(db, second_id)
+        locked_user = first_locked if first_locked.id == user.id else second_locked
+        pre_locked_referrer: Optional[User] = first_locked if first_locked.id == pending_referrer_id else second_locked
+    else:
+        locked_user = await lock_user_for_update(db, user.id)
+        pre_locked_referrer = None
 
     await debit_coins(
         db,
@@ -261,7 +285,10 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
         locked_user.referral_reward_granted = True
         db.add(locked_user)
 
-        referrer = await lock_user_for_update(db, locked_user.referred_by_id)
+        # Should always be pre-locked via the sorted (buyer, referrer) pass
+        # above — the fallback only matters if the pre-check's possibly-
+        # stale `user` argument somehow under-predicted (see comment above).
+        referrer = pre_locked_referrer or await lock_user_for_update(db, locked_user.referred_by_id)
         referrer.referral_count += 1
         db.add(referrer)
         await task_service.evaluate_metric_progress(db, referrer, "referrals_count", referrer.referral_count)
