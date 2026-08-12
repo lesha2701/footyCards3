@@ -34,20 +34,22 @@ const BALL_REST = { x: GOAL_CENTER_X, y: GOAL.bottom + 34 };
 
 // Half-width/height of the glove art's bounding box — used both to draw the
 // mask and to size zone offsets so the glove never crosses the posts/crossbar.
-const GLOVE_HALF = 35;
+const GLOVE_HALF = 30;
 
 // One shared aim point per zone — both the keeper's glove center and the
 // ball's flight target land here, so a correct guess (diveZone === shotZone)
-// always puts the ball exactly in the middle of the gloves. Offsets keep
-// the glove's rotated+scaled bounding box safely inside the goal frame at
-// every zone, instead of poking out past the posts or crossbar.
+// always puts the ball exactly in the middle of the gloves. Bottom shots go
+// noticeably lower than top ones (down near the goal line, not just past
+// the midpoint) — bottom dives skip the tilt (see ZONE_KEEPER_TILT) so the
+// glove's un-rotated bounding box leaves enough headroom to go that low
+// and still stay fully inside the goal frame.
 const ZONE_TARGET: Record<PenaltyDirection, { x: number; y: number }> = {
   top_left: { x: GOAL_CENTER_X - 64, y: KEEPER_BASE.y - 20 },
   top_center: { x: GOAL_CENTER_X, y: KEEPER_BASE.y - 20 },
   top_right: { x: GOAL_CENTER_X + 64, y: KEEPER_BASE.y - 20 },
-  bottom_left: { x: GOAL_CENTER_X - 64, y: KEEPER_BASE.y + 20 },
-  bottom_center: { x: GOAL_CENTER_X, y: KEEPER_BASE.y + 20 },
-  bottom_right: { x: GOAL_CENTER_X + 64, y: KEEPER_BASE.y + 20 },
+  bottom_left: { x: GOAL_CENTER_X - 64, y: KEEPER_BASE.y + 32 },
+  bottom_center: { x: GOAL_CENTER_X, y: KEEPER_BASE.y + 32 },
+  bottom_right: { x: GOAL_CENTER_X + 64, y: KEEPER_BASE.y + 32 },
 };
 
 const ZONE_KEEPER_OFFSET: Record<PenaltyDirection, { x: number; y: number }> = Object.fromEntries(
@@ -56,13 +58,15 @@ const ZONE_KEEPER_OFFSET: Record<PenaltyDirection, { x: number; y: number }> = O
 
 // Keeper tilts toward whichever side it's diving, on top of the translate —
 // a straight-armed dive reads as more athletic than a purely upright slide.
+// Bottom dives stay untilted: they already sit close to the goal line, and
+// a rotated bounding box would need more clearance than is available there.
 const ZONE_KEEPER_TILT: Record<PenaltyDirection, number> = {
   top_left: -10,
   top_center: 0,
   top_right: 10,
-  bottom_left: -10,
+  bottom_left: 0,
   bottom_center: 0,
-  bottom_right: 10,
+  bottom_right: 0,
 };
 
 const ZONE_BALL_TARGET = ZONE_TARGET;
@@ -169,7 +173,7 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
                 so it travels with it — kept as a separate fixed sibling, it
                 stayed pinned at the penalty spot after every kick, reading
                 as a stray mark no longer under the ball. */}
-            <ellipse cx={BALL_REST.x} cy={BALL_REST.y} rx={16} ry={5} fill="rgba(238,242,238,0.5)" />
+            <ellipse cx={BALL_REST.x} cy={BALL_REST.y} rx={11} ry={3.5} fill="rgba(238,242,238,0.5)" />
             <g transform={`translate(${BALL_REST.x},${BALL_REST.y}) translate(-10.377,-10.047) translate(-1.623,-1.913)`}>
               <circle fill="#f3f6f2" cx={12} cy={12} r={9} />
               <path fill="#2ca9bc" d="M14.33,3.31,12,5,9.67,3.31a8.91,8.91,0,0,1,4.66,0ZM4.46,7.1A9,9,0,0,0,3,11.53L5.34,9.84ZM8,17.89l-.07-.23H5A8.92,8.92,0,0,0,8.78,20.4ZM12,8,8.5,10.67,9.84,15h4.32l1.34-4.33Zm4.11,9.66-.07.23-.82,2.51A8.92,8.92,0,0,0,19,17.66ZM19.54,7.11l-.88,2.73L21,11.53a8.93,8.93,0,0,0-1.46-4.42Z" />
