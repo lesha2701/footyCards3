@@ -22,26 +22,32 @@ export interface PenaltyGoalSceneProps {
   outcomeGood: boolean;
 }
 
-const GOAL = { left: 30, right: 270, top: 30, bottom: 200 };
+// A little wider and a little shorter than a plain box, nudging toward real
+// goal proportions (7.32m x 2.44m ≈ 3:1) without going all the way there.
+const GOAL = { left: 20, right: 280, top: 42, bottom: 182 };
 const GOAL_CENTER_X = (GOAL.left + GOAL.right) / 2;
 
-const KEEPER_BASE = { x: GOAL_CENTER_X, y: 118 };
-// The ball rests on the penalty spot, which is also drawn as a pitch marking.
-const BALL_REST = { x: GOAL_CENTER_X, y: 234 };
+const KEEPER_BASE = { x: GOAL_CENTER_X, y: (GOAL.top + GOAL.bottom) / 2 };
+// The ball rests on the penalty spot, which is also drawn as a pitch marking
+// — same coordinates, so the two always line up exactly.
+const BALL_REST = { x: GOAL_CENTER_X, y: GOAL.bottom + 34 };
+
+// Half-width/height of the glove art's bounding box — used both to draw the
+// mask and to size zone offsets so the glove never crosses the posts/crossbar.
+const GLOVE_HALF = 35;
 
 // One shared aim point per zone — both the keeper's glove center and the
 // ball's flight target land here, so a correct guess (diveZone === shotZone)
-// always puts the ball exactly in the middle of the gloves. Offsets are
-// small enough that the glove art (~80x80, centered) stays fully inside the
-// goal frame (30/270 x, 30/200 y) at every zone, instead of poking out past
-// the posts or crossbar.
+// always puts the ball exactly in the middle of the gloves. Offsets keep
+// the glove's rotated+scaled bounding box safely inside the goal frame at
+// every zone, instead of poking out past the posts or crossbar.
 const ZONE_TARGET: Record<PenaltyDirection, { x: number; y: number }> = {
-  top_left: { x: GOAL_CENTER_X - 62, y: KEEPER_BASE.y - 30 },
-  top_center: { x: GOAL_CENTER_X, y: KEEPER_BASE.y - 30 },
-  top_right: { x: GOAL_CENTER_X + 62, y: KEEPER_BASE.y - 30 },
-  bottom_left: { x: GOAL_CENTER_X - 62, y: KEEPER_BASE.y + 30 },
-  bottom_center: { x: GOAL_CENTER_X, y: KEEPER_BASE.y + 30 },
-  bottom_right: { x: GOAL_CENTER_X + 62, y: KEEPER_BASE.y + 30 },
+  top_left: { x: GOAL_CENTER_X - 64, y: KEEPER_BASE.y - 20 },
+  top_center: { x: GOAL_CENTER_X, y: KEEPER_BASE.y - 20 },
+  top_right: { x: GOAL_CENTER_X + 64, y: KEEPER_BASE.y - 20 },
+  bottom_left: { x: GOAL_CENTER_X - 64, y: KEEPER_BASE.y + 20 },
+  bottom_center: { x: GOAL_CENTER_X, y: KEEPER_BASE.y + 20 },
+  bottom_right: { x: GOAL_CENTER_X + 64, y: KEEPER_BASE.y + 20 },
 };
 
 const ZONE_KEEPER_OFFSET: Record<PenaltyDirection, { x: number; y: number }> = Object.fromEntries(
@@ -51,12 +57,12 @@ const ZONE_KEEPER_OFFSET: Record<PenaltyDirection, { x: number; y: number }> = O
 // Keeper tilts toward whichever side it's diving, on top of the translate —
 // a straight-armed dive reads as more athletic than a purely upright slide.
 const ZONE_KEEPER_TILT: Record<PenaltyDirection, number> = {
-  top_left: -14,
+  top_left: -10,
   top_center: 0,
-  top_right: 14,
-  bottom_left: -14,
+  top_right: 10,
+  bottom_left: -10,
   bottom_center: 0,
-  bottom_right: 14,
+  bottom_right: 10,
 };
 
 const ZONE_BALL_TARGET = ZONE_TARGET;
@@ -101,7 +107,7 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
             <rect x={0} y={GOAL.bottom} width={300} height={258 - GOAL.bottom} />
           </clipPath>
           <g clipPath="url(#penaltyGrassClip)">
-            {Array.from({ length: 4 }, (_, i) => GOAL.bottom + i * 17).map((y, i) => (
+            {Array.from({ length: 5 }, (_, i) => GOAL.bottom + i * 17).map((y, i) => (
               <rect key={`stripe${y}`} x={0} y={y} width={300} height={17} fill={GRASS[i % 2]} />
             ))}
           </g>
@@ -118,40 +124,40 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
             fill="none" stroke={LINE} strokeWidth={4} strokeLinecap="round"
           />
           <g stroke="rgba(238,242,238,0.28)" strokeWidth={1}>
-            {Array.from({ length: 13 }, (_, i) => GOAL.left + i * 20).map((x) => (
+            {Array.from({ length: 14 }, (_, i) => GOAL.left + i * 20).map((x) => (
               <line key={`v${x}`} x1={x} y1={GOAL.top} x2={x} y2={GOAL.bottom} />
             ))}
-            {Array.from({ length: 9 }, (_, i) => GOAL.top + i * 21).map((y) => (
+            {Array.from({ length: 8 }, (_, i) => GOAL.top + i * 20).map((y) => (
               <line key={`h${y}`} x1={GOAL.left} y1={y} x2={GOAL.right} y2={y} />
             ))}
           </g>
 
           <defs>
-            <mask ref={maskRef} id="penaltyGloveMask" maskUnits="userSpaceOnUse" x={-40} y={-40} width={80} height={80}>
-              <image href="/penalty/gk-gloves.png" x={-40} y={-40} width={80} height={80} />
+            <mask ref={maskRef} id="penaltyGloveMask" maskUnits="userSpaceOnUse" x={-GLOVE_HALF} y={-GLOVE_HALF} width={GLOVE_HALF * 2} height={GLOVE_HALF * 2}>
+              <image href="/penalty/gk-gloves.png" x={-GLOVE_HALF} y={-GLOVE_HALF} width={GLOVE_HALF * 2} height={GLOVE_HALF * 2} />
             </mask>
           </defs>
           <g
             style={{
-              // The glove art is drawn centered on local (0,0) (the -40..40
-              // rect/mask), not on KEEPER_BASE — transform-origin must match
-              // that local center, or rotate() pivots around a point far
-              // from the glove itself and swings it way off target.
+              // The glove art is drawn centered on local (0,0) (the
+              // -GLOVE_HALF..GLOVE_HALF rect/mask), not on KEEPER_BASE —
+              // transform-origin must match that local center, or rotate()
+              // pivots around a point far from the glove itself and swings
+              // it way off target.
               transformOrigin: "0px 0px",
               transform: `translate(${KEEPER_BASE.x + keeperOffset.x}px, ${KEEPER_BASE.y + keeperOffset.y}px) rotate(${keeperTilt}deg) scale(${kick ? 1.08 : 1})`,
               transition: "transform 420ms cubic-bezier(0.2,0.9,0.3,1.3)",
             }}
           >
-            <ellipse cx={0} cy={38} rx={38} ry={6} fill="rgba(0,0,0,0.35)" />
+            <ellipse cx={0} cy={GLOVE_HALF - 2} rx={GLOVE_HALF - 2} ry={5} fill="rgba(0,0,0,0.35)" />
             <rect
-              x={-40} y={-40} width={80} height={80}
+              x={-GLOVE_HALF} y={-GLOVE_HALF} width={GLOVE_HALF * 2} height={GLOVE_HALF * 2}
               mask="url(#penaltyGloveMask)"
               fill={KEEPER_COLOR[keeperSide]}
               style={{ transition: "fill 200ms linear" }}
             />
           </g>
 
-          <ellipse cx={BALL_REST.x} cy={BALL_REST.y} rx={16} ry={5} fill="rgba(238,242,238,0.5)" />
           <g
             style={{
               transformOrigin: `${BALL_REST.x}px ${BALL_REST.y}px`,
@@ -159,6 +165,11 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
               transition: "transform 550ms cubic-bezier(0.16,0.85,0.35,1)",
             }}
           >
+            {/* Shadow lives inside the same moving/scaling group as the ball
+                so it travels with it — kept as a separate fixed sibling, it
+                stayed pinned at the penalty spot after every kick, reading
+                as a stray mark no longer under the ball. */}
+            <ellipse cx={BALL_REST.x} cy={BALL_REST.y} rx={16} ry={5} fill="rgba(238,242,238,0.5)" />
             <g transform={`translate(${BALL_REST.x},${BALL_REST.y}) translate(-10.377,-10.047) translate(-1.623,-1.913)`}>
               <circle fill="#f3f6f2" cx={12} cy={12} r={9} />
               <path fill="#2ca9bc" d="M14.33,3.31,12,5,9.67,3.31a8.91,8.91,0,0,1,4.66,0ZM4.46,7.1A9,9,0,0,0,3,11.53L5.34,9.84ZM8,17.89l-.07-.23H5A8.92,8.92,0,0,0,8.78,20.4ZM12,8,8.5,10.67,9.84,15h4.32l1.34-4.33Zm4.11,9.66-.07.23-.82,2.51A8.92,8.92,0,0,0,19,17.66ZM19.54,7.11l-.88,2.73L21,11.53a8.93,8.93,0,0,0-1.46-4.42Z" />
