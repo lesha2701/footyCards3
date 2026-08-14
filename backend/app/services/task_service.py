@@ -289,7 +289,7 @@ async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> 
         chat_id = definition.channel_chat_id or definition.channel_username
         is_member = await check_channel_membership(user.telegram_id, chat_id)
         if not is_member:
-            raise ConflictError("not_subscribed", details={"channel_username": definition.channel_username})
+            raise ConflictError("Похоже, ты ещё не подписан на канал", details={"channel_username": definition.channel_username})
 
     locked_user = await lock_user_for_update(db, user.id)
     # Re-read the task under a row lock so a concurrent claim on the same

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { claimTask, fetchTasks } from "@/api/tasks";
 import EmptyState from "@/components/common/EmptyState";
-import { IconTarget, IconTrophy } from "@/components/icons";
+import { IconChat, IconTarget, IconTrophy } from "@/components/icons";
 import { ApiRequestError } from "@/lib/api";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -170,6 +170,8 @@ function TaskCard({
   onClaim: () => void;
   premium?: boolean;
 }) {
+  const isChannelTask = !!(task.invite_link || task.channel_username);
+
   return (
     <div
       className={`rounded-2xl border p-4 ${
@@ -197,14 +199,15 @@ function TaskCard({
         </div>
       )}
 
-      {premium && (task.invite_link || task.channel_username) && !task.is_claimed && (
+      {premium && isChannelTask && !task.is_claimed && (
         <a
           href={task.invite_link || `https://t.me/${task.channel_username!.replace("@", "")}`}
           target="_blank"
           rel="noreferrer"
-          className="mt-3 block rounded-xl bg-white/5 py-2 text-center text-xs font-semibold text-slate-200"
+          className="mt-3 flex items-center justify-center gap-1.5 rounded-xl border-2 border-accent bg-accent/15 py-2.5 text-center text-sm font-bold text-accent active:scale-95"
         >
-          Подписаться на {task.channel_username ?? "канал"}
+          <IconChat className="h-4 w-4" />
+          Подписаться на канал
         </a>
       )}
 
@@ -216,7 +219,13 @@ function TaskCard({
           disabled={!task.is_completed || isPending}
           className="mt-3 w-full rounded-xl bg-accent py-2.5 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-40"
         >
-          {isPending ? "Начисление..." : task.is_completed ? "Забрать награду" : "В процессе"}
+          {isPending
+            ? "Начисление..."
+            : !task.is_completed
+              ? "В процессе"
+              : premium && isChannelTask
+                ? "Проверить подписку"
+                : "Забрать награду"}
         </button>
       )}
     </div>

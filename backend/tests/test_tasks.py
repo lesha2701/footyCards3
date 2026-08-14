@@ -166,7 +166,9 @@ async def test_premium_task_claim_blocked_without_subscription(client, db_sessio
 
     resp = await client.post(f"/api/v1/tasks/{premium_task['user_task_id']}/claim", headers=headers)
     assert resp.status_code == 409
-    assert resp.json()["error"]["message"] == "not_subscribed"
+    assert resp.json()["error"]["code"] == "conflict"
+    assert "details" in resp.json()["error"]
+    assert resp.json()["error"]["details"]["channel_username"] == "@test_channel"
 
 
 async def test_premium_task_claim_succeeds_when_subscribed(client, db_session, bot_token, monkeypatch):
