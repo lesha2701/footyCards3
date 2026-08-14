@@ -1,12 +1,12 @@
 import asyncio
 import logging
-import time
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError, TelegramRetryAfter
 
 import db
 from keyboards import open_app_keyboard
+from services.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -21,27 +21,6 @@ BATCH_SIZE = 200
 # in-flight at once so a burst of slow responses doesn't pile up tasks.
 TARGET_SENDS_PER_SECOND = 25.0
 MAX_CONCURRENT_SENDS = 30
-
-
-class RateLimiter:
-    """Token bucket: at most `rate` acquisitions per second, sustained."""
-
-    def __init__(self, rate: float) -> None:
-        self._rate = rate
-        self._tokens = rate
-        self._updated = time.monotonic()
-        self._lock = asyncio.Lock()
-
-    async def acquire(self) -> None:
-        async with self._lock:
-            while True:
-                now = time.monotonic()
-                self._tokens = min(self._rate, self._tokens + (now - self._updated) * self._rate)
-                self._updated = now
-                if self._tokens >= 1:
-                    self._tokens -= 1
-                    return
-                await asyncio.sleep((1 - self._tokens) / self._rate)
 
 
 # related_object_type -> Mini App path prefix, for notifications about a
