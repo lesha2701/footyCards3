@@ -21,6 +21,24 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "postgresql+asyncpg://postgres:1234@localhost:5432/footycards"
+    # SQLAlchemy's own defaults (pool_size=5, max_overflow=10) proved too
+    # small in production: prod runs 2 uvicorn workers, each with its own
+    # independent pool, so the old defaults capped the whole backend at
+    # 2*(5+10)=30 concurrent DB connections. A burst of concurrent users
+    # (e.g. right after a push notification to thousands of users) blew
+    # through that and every further request queued for a connection until
+    # it hit pool_timeout and 500'd with "QueuePool limit ... reached".
+    # These new defaults give 2*(15+25)=80 from the backend, leaving
+    # headroom under Postgres's default max_connections=100 alongside the
+    # bot's own small asyncpg pool (max_size=5, see bot/db.py) and any
+    # direct/admin connections.
+    db_pool_size: int = 15
+    db_max_overflow: int = 25
+    db_pool_timeout: int = 30
+    # Recycle connections periodically so a connection that's sat idle
+    # longer than typical firewall/proxy/Postgres idle-timeout windows
+    # doesn't get handed back out already-dropped by the network.
+    db_pool_recycle: int = 1800
 
     # Backend
     jwt_secret: str = "dev_only_secret"
