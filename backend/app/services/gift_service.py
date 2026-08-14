@@ -5,8 +5,9 @@ from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.models.enums import CardSource, TransactionType
+from app.models.enums import CardSource, NotificationType, TransactionType
 from app.models.gift import Gift, GiftSet
+from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.gift import GiftClaimResult, GiftOut, GiftSetOut
 from app.services import collection_service
@@ -95,7 +96,13 @@ async def admin_send_gift_to_user(db: AsyncSession, gift_set_id: int, user_id: i
 
 async def admin_broadcast_gift(db: AsyncSession, gift_set_id: int, message: Optional[str]) -> int:
     """Grants gift_set_id free to every registered user (a holiday-style
-    giveaway) via a single bulk INSERT rather than one ORM object per user."""
+    giveaway) via a single bulk INSERT rather than one ORM object per user.
+
+    Also queues a real Telegram notification per recipient (same
+    Notification table + notifier.py delivery path as
+    broadcast_service.send_update_broadcast), so the bulk grant doesn't sit
+    silently in-app — recipients are paced at notifier.py's rate limit
+    rather than pinged all at once."""
     gift_set = await db.get(GiftSet, gift_set_id)
     if gift_set is None:
         raise NotFoundError("Gift set not found")
@@ -112,6 +119,17 @@ async def admin_broadcast_gift(db: AsyncSession, gift_set_id: int, message: Opti
                 "gift_set_id": gift_set.id, "sender_id": None, "recipient_id": uid,
                 "message": message, "is_admin_gift": True, "claimed_at": None,
                 "created_at": now, "updated_at": now,
+            }
+            for uid in user_ids
+        ],
+    )
+    await db.execute(
+        insert(Notification),
+        [
+            {
+                "user_id": uid, "type": NotificationType.admin_message,
+                "title": "🎁 Подарок!", "body": message or "Тебе подарок в приложении — открой и забери!",
+                "is_read": False, "telegram_sent": False, "created_at": now,
             }
             for uid in user_ids
         ],
