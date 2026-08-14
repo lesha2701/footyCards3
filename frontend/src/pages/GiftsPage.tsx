@@ -399,12 +399,13 @@ function AdminGiftControls() {
 
           {action !== "broadcast" && <RecipientPicker target={target} onSelect={setTarget} />}
 
-          <input
+          <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             maxLength={500}
-            placeholder="Подпись (необязательно)"
-            className="rounded-xl bg-black/20 px-3 py-2.5 text-sm text-ink-chalk placeholder:text-ink-mist-dim outline-none"
+            rows={4}
+            placeholder="Подпись (необязательно) — переносы строк и HTML-теги (например <blockquote>) сохраняются как есть"
+            className="resize-y rounded-xl bg-black/20 px-3 py-2.5 text-sm text-ink-chalk placeholder:text-ink-mist-dim outline-none"
           />
 
           {action === "send" && (
