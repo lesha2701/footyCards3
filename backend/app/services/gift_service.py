@@ -89,6 +89,12 @@ async def admin_send_gift_to_user(db: AsyncSession, gift_set_id: int, user_id: i
 
     gift = Gift(gift_set_id=gift_set.id, sender_id=None, recipient_id=recipient.id, message=message, is_admin_gift=True)
     db.add(gift)
+    db.add(
+        Notification(
+            user_id=recipient.id, type=NotificationType.admin_message,
+            title="🎁 Подарок!", body=message or "Тебе подарок в приложении — открой и забери!",
+        )
+    )
     await db.commit()
     await db.refresh(gift)
     return GiftOut.model_validate(gift)
