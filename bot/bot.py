@@ -12,7 +12,6 @@ from handlers import admin as admin_handlers
 from handlers import chat_pack as chat_pack_handlers
 from handlers import payments as payments_handlers
 from handlers import user as user_handlers
-from services.daily_reminder import run_daily_reward_reminder
 from services.free_pack_notifier import run_free_pack_notifier
 from services.notifier import run_notification_dispatcher
 
@@ -43,7 +42,7 @@ async def run_polling() -> None:
     await db.get_pool()
     background_tasks = [
         asyncio.create_task(run_notification_dispatcher(bot)),
-        asyncio.create_task(run_daily_reward_reminder(bot)),
+        # Daily reward reminder disabled — see run_webhook() below.
         asyncio.create_task(run_free_pack_notifier(bot)),
     ]
 
@@ -67,7 +66,7 @@ async def run_webhook() -> None:
 
     await db.get_pool()
     asyncio.create_task(run_notification_dispatcher(bot))
-    asyncio.create_task(run_daily_reward_reminder(bot))
+    # Daily reward reminder disabled by request.
     asyncio.create_task(run_free_pack_notifier(bot))
 
     await bot.set_webhook(settings.bot_webhook_url, secret_token=settings.bot_webhook_secret, drop_pending_updates=True)
