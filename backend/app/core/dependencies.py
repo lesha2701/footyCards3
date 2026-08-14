@@ -4,6 +4,7 @@ from typing import Optional
 
 from fastapi import Depends, Header, Request
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -26,46 +27,67 @@ async def _get_or_create_user(
     is_admin_now = tg_user.id in settings.admin_ids
 
     if user is None:
-        user = User(
-            telegram_id=tg_user.id,
-            username=tg_user.username,
-            first_name=tg_user.first_name,
-            last_name=tg_user.last_name,
-            avatar_url=tg_user.photo_url,
-            balance=0,
-            is_admin=is_admin_now,
-        )
-        db.add(user)
-        await db.flush()
-        await credit_coins(
-            db,
-            user,
-            settings.starting_balance,
-            TransactionType.starting_balance,
-            "Стартовый бонус при регистрации",
-        )
-        user.received_starting_bonus = True
+        try:
+            # SAVEPOINT (not a plain db.rollback()) so a lost race only
+            # undoes this one failed insert — same pattern as
+            # lineup_service._get_or_create_lineup. A brand-new user's
+            # first Mini App load fires many parallel requests (every
+            # endpoint depends on get_current_user), so several can
+            # genuinely race to create the same telegram_id row at once;
+            # before this fix the losers crashed with an unhandled
+            # IntegrityError (uq_users_telegram_id) — a very plausible
+            # cause of the app hanging or 502'ing specifically on first
+            # open, and one that got much easier to hit once the backend
+            # started running enough real concurrency for that race window.
+            async with db.begin_nested():
+                user = User(
+                    telegram_id=tg_user.id,
+                    username=tg_user.username,
+                    first_name=tg_user.first_name,
+                    last_name=tg_user.last_name,
+                    avatar_url=tg_user.photo_url,
+                    balance=0,
+                    is_admin=is_admin_now,
+                )
+                db.add(user)
+                await db.flush()
+        except IntegrityError:
+            # Lost the race — the winner's row (and its starting balance /
+            # referral link, already committed by that request) is what we
+            # want, not a second attempt at either. Falls through to the
+            # existing-user path below.
+            result = await db.execute(select(User).where(User.telegram_id == tg_user.id))
+            user = result.scalar_one()
+        else:
+            await credit_coins(
+                db,
+                user,
+                settings.starting_balance,
+                TransactionType.starting_balance,
+                "Стартовый бонус при регистрации",
+            )
+            user.received_starting_bonus = True
 
-        if referral_code:
-            try:
-                ref_telegram_id = int(referral_code)
-            except ValueError:
-                ref_telegram_id = None
-            if ref_telegram_id is not None and ref_telegram_id != tg_user.id:
-                referrer_result = await db.execute(select(User).where(User.telegram_id == ref_telegram_id))
-                referrer = referrer_result.scalar_one_or_none()
-                if referrer is not None:
-                    # Only record the relationship here — referral_count is
-                    # credited later, on the referred user's first genuine
-                    # paid purchase (see pack_service.open_pack). Crediting
-                    # it immediately on registration would let anyone farm
-                    # referral rewards with disposable, never-used accounts
-                    # via this client-supplied header alone.
-                    user.referred_by_id = referrer.id
+            if referral_code:
+                try:
+                    ref_telegram_id = int(referral_code)
+                except ValueError:
+                    ref_telegram_id = None
+                if ref_telegram_id is not None and ref_telegram_id != tg_user.id:
+                    referrer_result = await db.execute(select(User).where(User.telegram_id == ref_telegram_id))
+                    referrer = referrer_result.scalar_one_or_none()
+                    if referrer is not None:
+                        # Only record the relationship here — referral_count is
+                        # credited later, on the referred user's first genuine
+                        # paid purchase (see pack_service.open_pack). Crediting
+                        # it immediately on registration would let anyone farm
+                        # referral rewards with disposable, never-used accounts
+                        # via this client-supplied header alone.
+                        user.referred_by_id = referrer.id
 
-        await db.commit()
-        await db.refresh(user)
-        return user
+            await db.commit()
+            await db.refresh(user)
+            return user
 
     changed = False
     if user.username != tg_user.username:

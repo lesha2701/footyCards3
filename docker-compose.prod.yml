@@ -16,6 +16,11 @@ services:
     # host; sized here for an 8GB+ server — lower it if Postgres shares the
     # host with much else.
     command: ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-400}", "-c", "shared_buffers=${POSTGRES_SHARED_BUFFERS:-2GB}"]
+    # Docker's default /dev/shm is only 64MB, which is small enough to bite
+    # a Postgres instance running parallel workers or bigger sorts under
+    # real concurrency — bump it so raising shared_buffers above doesn't
+    # leave Postgres shared-memory-starved.
+    shm_size: '1gb'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
