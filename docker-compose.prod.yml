@@ -8,6 +8,14 @@ services:
       POSTGRES_DB: ${DB_NAME:-footycards}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-1234}
+    # max_connections/shared_buffers: raised alongside the backend's DB pool
+    # sizing (see backend/app/config.py) to handle a bigger concurrent user
+    # base. Both require a Postgres restart to take effect (not reloadable),
+    # which redeploying this compose file already does. shared_buffers at
+    # ~25% of RAM is the standard starting-point tuning for a dedicated DB
+    # host; sized here for an 8GB+ server — lower it if Postgres shares the
+    # host with much else.
+    command: ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-400}", "-c", "shared_buffers=${POSTGRES_SHARED_BUFFERS:-2GB}"]
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -25,7 +33,7 @@ services:
       ENVIRONMENT: production
       DEV_MODE: "false"
       DATABASE_URL: postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-1234}@postgres:5432/${DB_NAME:-footycards}
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "${UVICORN_WORKERS:-4}"]
     volumes:
       - ./backend/static:/app/static
     depends_on:

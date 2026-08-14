@@ -13,7 +13,12 @@ _pool: Optional[asyncpg.Pool] = None
 async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
-        _pool = await asyncpg.create_pool(settings.asyncpg_dsn, min_size=1, max_size=5)
+        # max_size bumped alongside the backend's DB pool sizing (see
+        # backend/app/config.py) — the notification dispatcher now sends
+        # concurrently (up to MAX_CONCURRENT_SENDS in services/notifier.py),
+        # each delivery followed by its own mark_notification_sent() write,
+        # so a bigger user base means more of these can be in flight at once.
+        _pool = await asyncpg.create_pool(settings.asyncpg_dsn, min_size=1, max_size=10)
     return _pool
 
 
