@@ -11,13 +11,15 @@ from services.rate_limiter import RateLimiter
 logger = logging.getLogger(__name__)
 
 CHECK_INTERVAL_SECONDS = 60
-# Same pacing as services.notifier — everyone whose free pack becomes
-# available in the same poll window used to get pinged near-simultaneously,
-# which (with enough users) caused a synchronized wave of app opens a few
-# minutes later and a matching spike of nginx 502s. Sends are now paced the
-# same way, spreading both the notifications and the resulting app opens.
-TARGET_SENDS_PER_SECOND = 25.0
-MAX_CONCURRENT_SENDS = 30
+# Everyone whose free pack becomes available in the same poll window used to
+# get pinged near-simultaneously, which (with enough users) caused a
+# synchronized wave of app opens a few minutes later and a matching spike of
+# nginx 502s. Paced deliberately slower than notifier.py's 25/sec (which
+# exists to drain real backlogs fast) — this is a routine recurring ping, not
+# a backlog, so ~8/sec (~500 users/minute) is fine and spreads the resulting
+# app-open wave more.
+TARGET_SENDS_PER_SECOND = 8.0
+MAX_CONCURRENT_SENDS = 10
 
 
 async def _remind_one(bot: Bot, user, semaphore: asyncio.Semaphore, rate_limiter: RateLimiter) -> None:
