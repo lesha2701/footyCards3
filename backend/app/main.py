@@ -45,6 +45,7 @@ from app.routers import (
     trades,
     users,
     wallet,
+    wheel,
 )
 
 settings = get_settings()
@@ -103,6 +104,7 @@ app.include_router(penalty_matches.router, prefix=API_PREFIX)
 app.include_router(tactico.router, prefix=API_PREFIX)
 app.include_router(trades.router, prefix=API_PREFIX)
 app.include_router(daily_rewards.router, prefix=API_PREFIX)
+app.include_router(wheel.router, prefix=API_PREFIX)
 app.include_router(profile.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(leaderboard.router, prefix=API_PREFIX)

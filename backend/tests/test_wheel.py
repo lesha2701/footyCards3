@@ -204,3 +204,44 @@ async def test_get_status_reports_remaining_free_spins_and_active_prizes(client,
     assert status.free_spins_remaining == 2
     assert status.free_spins_total == 2
     assert len(status.prizes) == 1
+
+
+async def test_status_and_free_spin_endpoints(client, db_session, bot_token):
+    await create_wheel_prize(db_session, prize_type=WheelPrizeType.coins, weight=1, coins_amount=5)
+    await _register(client, db_session, 860020, bot_token)
+    headers = telegram_headers(860020, bot_token)
+
+    status_resp = await client.get("/api/v1/wheel/status", headers=headers)
+    assert status_resp.status_code == 200
+    body = status_resp.json()
+    assert body["free_spins_remaining"] == 2
+    assert len(body["prizes"]) == 1
+
+    spin_resp = await client.post("/api/v1/wheel/spin/free", headers=headers)
+    assert spin_resp.status_code == 200
+    assert spin_resp.json()["prize"]["prize_type"] == "coins"
+
+    status_resp2 = await client.get("/api/v1/wheel/status", headers=headers)
+    assert status_resp2.json()["free_spins_remaining"] == 1
+
+
+async def test_free_spin_exhausted_returns_409(client, db_session, bot_token):
+    await create_wheel_prize(db_session, prize_type=WheelPrizeType.coins, weight=1, coins_amount=5)
+    await _register(client, db_session, 860021, bot_token)
+    headers = telegram_headers(860021, bot_token)
+
+    for _ in range(2):
+        assert (await client.post("/api/v1/wheel/spin/free", headers=headers)).status_code == 200
+
+    resp = await client.post("/api/v1/wheel/spin/free", headers=headers)
+    assert resp.status_code == 409
+
+
+async def test_paid_coin_spin_endpoint(client, db_session, bot_token):
+    await create_wheel_prize(db_session, prize_type=WheelPrizeType.coins, weight=1, coins_amount=1)
+    await _register(client, db_session, 860022, bot_token)
+    headers = telegram_headers(860022, bot_token)
+
+    resp = await client.post("/api/v1/wheel/spin/coins", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["new_balance"] == 500 - 1000 + 1
