@@ -10,10 +10,11 @@ from app.config import get_settings
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.badge import UserBadge
 from app.models.coin_package import CoinPackage
-from app.models.enums import CardSource, TransactionType
+from app.models.enums import CardSource, TransactionType, WheelSpinSource
 from app.models.gift import Gift, GiftSet
 from app.models.pack import Pack, PackOpening, StarsInvoice
 from app.models.user import User
+from app.models.wheel import WheelSpin
 from app.schemas.gift import GiftOut
 from app.schemas.stars import (
     CoinPackageOut,
@@ -21,6 +22,7 @@ from app.schemas.stars import (
     StarsInvoiceCreateOut,
     StarsInvoiceStatusOut,
 )
+from app.schemas.wheel import WheelPrizeOut, WheelSpinResultOut
 from app.services import collection_service
 from app.services.pack_service import get_opening_result, grant_bonus_pack_opening
 from app.services.wallet_service import credit_coins, lock_user_for_update
@@ -50,6 +52,17 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
         user = await db.get(User, invoice.user_id)
         opening = await db.get(PackOpening, invoice.pack_opening_id)
         return StarsInvoiceStatusOut(status="completed", result=await get_opening_result(db, user, opening))
+
+    if invoice.is_wheel_spin:
+        spin = await db.get(WheelSpin, invoice.wheel_spin_id)
+        user = await db.get(User, invoice.user_id)
+        return StarsInvoiceStatusOut(
+            status="completed",
+            wheel_result=WheelSpinResultOut(
+                prize=WheelPrizeOut.model_validate(spin.prize), new_balance=user.balance,
+                duplicate_badge_coins=spin.duplicate_badge_coins,
+            ),
+        )
 
     if invoice.gift_set_id is not None:
         gift = await db.get(Gift, invoice.gift_id)
@@ -291,6 +304,34 @@ async def deliver_payment(
         db.add(gift)
         await db.flush()
         invoice.gift_id = gift.id
+    elif invoice.is_wheel_spin:
+        # Imported here rather than at module level: wheel_service itself
+        # imports _request_telegram_invoice_link from this module at import
+        # time, so a top-level `from app.services import wheel_service`
+        # here would deadlock the two modules' circular load order
+        # depending on which router imports which service first.
+        from app.services import wheel_service
+
+        if invoice.stars_amount != total_amount:
+            raise ConflictError("Stars amount does not match the invoice")
+        # _grant_prize mutates user.balance (coin prizes, duplicate-badge
+        # compensation) via credit_coins, which itself does not lock — every
+        # other balance-mutating branch in this function locks the user row
+        # first (see the pack-bonus-coins and plain-coin-purchase branches
+        # above), so this branch does too, to avoid a lost update if two
+        # deliveries for the same user race on different invoices.
+        user = await lock_user_for_update(db, user.id)
+        prize = await wheel_service._roll_prize(db)
+        spin_result = await wheel_service._grant_prize(db, user, prize, WheelSpinSource.stars)
+        # _grant_prize already flushed a WheelSpin row (it has an id after
+        # its own db.flush()) — fetch it back to link the invoice, mirroring
+        # how invoice.pack_opening_id/invoice.gift_id are set above.
+        spin_row = (
+            await db.execute(
+                select(WheelSpin).where(WheelSpin.user_id == user.id).order_by(WheelSpin.id.desc()).limit(1)
+            )
+        ).scalar_one()
+        invoice.wheel_spin_id = spin_row.id
     else:
         if invoice.stars_amount != total_amount:
             raise ConflictError("Stars amount does not match the invoice")
@@ -320,6 +361,8 @@ async def deliver_payment(
     if invoice.pack_id is not None:
         granted.new_balance = user.balance
         return StarsInvoiceStatusOut(status="completed", result=granted)
+    if invoice.is_wheel_spin:
+        return StarsInvoiceStatusOut(status="completed", wheel_result=spin_result)
     if invoice.gift_set_id is not None:
         await db.refresh(gift)
         return StarsInvoiceStatusOut(status="completed", gift_result=GiftOut.model_validate(gift))

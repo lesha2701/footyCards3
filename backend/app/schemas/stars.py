@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.schemas.gift import GiftOut
 from app.schemas.pack import PackOpenResult
+from app.schemas.wheel import WheelSpinResultOut
 
 
 class StarsInvoiceCreateOut(BaseModel):
@@ -22,6 +23,7 @@ class StarsInvoiceStatusOut(BaseModel):
     result: Optional[PackOpenResult] = None
     coin_result: Optional[StarsCoinResultOut] = None
     gift_result: Optional[GiftOut] = None
+    wheel_result: Optional[WheelSpinResultOut] = None
 
 
 class StarsCoinInvoiceCreate(BaseModel):

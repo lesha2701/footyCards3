@@ -71,6 +71,8 @@ async def handle_successful_payment(message: Message) -> None:
         # StarsInvoiceStatusOut (result=pack, gift_result=gift, coin_result=coins).
         if body.get("gift_result"):
             await message.answer("🎁 Подарок отправлен! Получатель сможет открыть его в приложении.")
+        elif body.get("wheel_result"):
+            await message.answer("🎡 Колесо фортуны крутится — открой приложение, чтобы увидеть свой приз!")
         elif body.get("coin_result"):
             await message.answer("⭐ Монеты зачислены! Открой приложение, чтобы увидеть баланс.")
         else:

@@ -251,3 +251,74 @@ async def test_paid_coin_spin_endpoint(client, db_session, bot_token):
     resp = await client.post("/api/v1/wheel/spin/coins", headers=headers)
     assert resp.status_code == 200
     assert resp.json()["new_balance"] == 500 - 300 + 1
+
+
+from app.config import get_settings
+
+settings = get_settings()
+INTERNAL_HEADERS = {"X-Internal-Secret": settings.internal_api_secret}
+
+
+async def _fake_invoice_link(payload_token, title, description, stars_amount):
+    return f"https://t.me/invoice/{payload_token}"
+
+
+async def test_stars_spin_full_flow(client, db_session, bot_token, monkeypatch):
+    # wheel_service.create_spin_invoice calls a name it imported from
+    # stars_payment_service at module load time
+    # (`from app.services.stars_payment_service import _request_telegram_invoice_link`),
+    # which is its own separate binding — patching
+    # stars_payment_service._request_telegram_invoice_link afterwards would
+    # not affect wheel_service's copy, so the mock must target
+    # wheel_service's own name.
+    monkeypatch.setattr(wheel_service, "_request_telegram_invoice_link", _fake_invoice_link)
+    await create_wheel_prize(db_session, prize_type=WheelPrizeType.coins, weight=1, coins_amount=7)
+    await _register(client, db_session, 860030, bot_token)
+    headers = telegram_headers(860030, bot_token)
+
+    invoice_resp = await client.post("/api/v1/wheel/spin/stars-invoice", headers=headers)
+    assert invoice_resp.status_code == 200
+    invoice = invoice_resp.json()
+    assert invoice["stars_amount"] == 10  # default GameConfig.wheel_spin_cost_stars
+
+    status_resp = await client.get(f"/api/v1/wheel/stars-invoices/{invoice['payload_token']}", headers=headers)
+    assert status_resp.json()["status"] == "pending"
+
+    pre_checkout = await client.post(
+        "/api/v1/internal/stars-payments/pre-checkout",
+        json={"payload_token": invoice["payload_token"], "total_amount": 10},
+        headers=INTERNAL_HEADERS,
+    )
+    assert pre_checkout.json()["ok"] is True
+
+    deliver = await client.post(
+        "/api/v1/internal/stars-payments/deliver",
+        json={
+            "payload_token": invoice["payload_token"],
+            "telegram_user_id": 860030,
+            "telegram_payment_charge_id": "wheel-charge-" + "f" * 120,
+            "total_amount": 10,
+        },
+        headers=INTERNAL_HEADERS,
+    )
+    assert deliver.status_code == 200
+    body = deliver.json()
+    assert body["status"] == "completed"
+    assert body["wheel_result"]["new_balance"] == 500 + 7
+
+    status_resp2 = await client.get(f"/api/v1/wheel/stars-invoices/{invoice['payload_token']}", headers=headers)
+    assert status_resp2.json()["status"] == "completed"
+    assert status_resp2.json()["wheel_result"]["new_balance"] == 500 + 7
+
+    # Redelivering the same charge must not spin (and thus not credit) twice.
+    second = await client.post(
+        "/api/v1/internal/stars-payments/deliver",
+        json={
+            "payload_token": invoice["payload_token"],
+            "telegram_user_id": 860030,
+            "telegram_payment_charge_id": "wheel-charge-" + "f" * 120,
+            "total_amount": 10,
+        },
+        headers=INTERNAL_HEADERS,
+    )
+    assert second.json()["wheel_result"]["new_balance"] == 500 + 7

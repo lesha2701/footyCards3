@@ -1,4 +1,5 @@
 import random
+import secrets
 from datetime import datetime, time, timedelta, timezone
 
 from sqlalchemy import select
@@ -8,15 +9,17 @@ from app.core.exceptions import ConflictError
 from app.core.timeutil import app_timezone, local_today
 from app.models.badge import UserBadge
 from app.models.enums import CardSource, TransactionType, WheelPrizeType, WheelSpinSource
-from app.models.pack import PackOpening
+from app.models.pack import PackOpening, StarsInvoice
 from app.models.user import User
 from app.models.wheel import WheelPrize, WheelSpin
 from app.schemas.badge import BadgeOut
 from app.schemas.pack import OpenedCardOut, PackOpenResult, PackOut
+from app.schemas.stars import StarsInvoiceCreateOut
 from app.schemas.wheel import WheelPrizeOut, WheelSpinResultOut, WheelStatusOut
 from app.services.card_creation import create_user_card
 from app.services.game_config_service import get_config
 from app.services.pack_service import _get_pack_or_404, _duplicate_counts_snapshot, pick_random_player, roll_and_create_cards
+from app.services.stars_payment_service import _request_telegram_invoice_link
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 
@@ -160,3 +163,20 @@ async def spin_paid_coins(db: AsyncSession, user: User) -> WheelSpinResultOut:
     result = await _grant_prize(db, locked_user, prize, WheelSpinSource.coins)
     await db.commit()
     return result
+
+
+async def create_spin_invoice(db: AsyncSession, user: User) -> StarsInvoiceCreateOut:
+    config = await get_config(db)
+    payload_token = secrets.token_urlsafe(16)
+    invoice = StarsInvoice(
+        user_id=user.id, is_wheel_spin=True, payload_token=payload_token, stars_amount=config.wheel_spin_cost_stars,
+    )
+    db.add(invoice)
+    await db.flush()
+
+    invoice_link = await _request_telegram_invoice_link(
+        payload_token, "Прокрутка колеса фортуны", "Одна платная прокрутка колеса фортуны", config.wheel_spin_cost_stars,
+    )
+
+    await db.commit()
+    return StarsInvoiceCreateOut(invoice_link=invoice_link, payload_token=payload_token, stars_amount=config.wheel_spin_cost_stars)
