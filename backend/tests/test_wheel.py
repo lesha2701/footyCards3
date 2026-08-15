@@ -240,8 +240,14 @@ async def test_free_spin_exhausted_returns_409(client, db_session, bot_token):
 async def test_paid_coin_spin_endpoint(client, db_session, bot_token):
     await create_wheel_prize(db_session, prize_type=WheelPrizeType.coins, weight=1, coins_amount=1)
     await _register(client, db_session, 860022, bot_token)
+    config = await db_session.get(GameConfig, 1)
+    if config is None:
+        config = GameConfig(id=1)
+    config.wheel_spin_cost_coins = 300
+    db_session.add(config)
+    await db_session.commit()
     headers = telegram_headers(860022, bot_token)
 
     resp = await client.post("/api/v1/wheel/spin/coins", headers=headers)
     assert resp.status_code == 200
-    assert resp.json()["new_balance"] == 500 - 1000 + 1
+    assert resp.json()["new_balance"] == 500 - 300 + 1
