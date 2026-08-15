@@ -5,17 +5,21 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.config import get_settings
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.badge import UserBadge
+from app.models.card import UserCard
 from app.models.coin_package import CoinPackage
 from app.models.enums import CardSource, TransactionType, WheelSpinSource
 from app.models.gift import Gift, GiftSet
 from app.models.pack import Pack, PackOpening, StarsInvoice
 from app.models.user import User
 from app.models.wheel import WheelSpin
+from app.schemas.badge import BadgeOut
 from app.schemas.gift import GiftOut
+from app.schemas.pack import OpenedCardOut
 from app.schemas.stars import (
     CoinPackageOut,
     StarsCoinResultOut,
@@ -24,7 +28,7 @@ from app.schemas.stars import (
 )
 from app.schemas.wheel import WheelPrizeOut, WheelSpinResultOut
 from app.services import collection_service
-from app.services.pack_service import get_opening_result, grant_bonus_pack_opening
+from app.services.pack_service import _duplicate_counts_snapshot, get_opening_result, grant_bonus_pack_opening
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
 settings = get_settings()
@@ -56,10 +60,39 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
     if invoice.is_wheel_spin:
         spin = await db.get(WheelSpin, invoice.wheel_spin_id)
         user = await db.get(User, invoice.user_id)
+
+        pack_result = None
+        if spin.pack_opening_id is not None:
+            opening = await db.get(PackOpening, spin.pack_opening_id)
+            pack_result = await get_opening_result(db, user, opening)
+
+        card_result = None
+        if spin.user_card_id is not None:
+            card_query = await db.execute(
+                select(UserCard).where(UserCard.id == spin.user_card_id).options(joinedload(UserCard.player))
+            )
+            card = card_query.unique().scalar_one()
+            # dup_counts is taken now (well after the card was granted), so it
+            # already includes this very card — unlike the pack branch above,
+            # which reads a persisted is_new_player flag captured at grant
+            # time, a wheel card_rarity prize has no such flag, so "is this
+            # still the player's only copy" is recomputed from a fresh
+            # snapshot here. This is a reasonable approximation (matches "new"
+            # in the overwhelming common case) that can only go stale if the
+            # player traded the card away between grant and this poll — not
+            # worth a schema migration to fix exactly.
+            dup_counts = await _duplicate_counts_snapshot(db, user.id)
+            card_result = OpenedCardOut(
+                card=card, is_new=dup_counts.get(card.player_id, 1) == 1, duplicate_count=dup_counts.get(card.player_id, 1),
+            )
+
+        badge_result = BadgeOut.model_validate(spin.prize.badge) if spin.badge_granted else None
+
         return StarsInvoiceStatusOut(
             status="completed",
             wheel_result=WheelSpinResultOut(
                 prize=WheelPrizeOut.model_validate(spin.prize), new_balance=user.balance,
+                pack_result=pack_result, card_result=card_result, badge_result=badge_result,
                 duplicate_badge_coins=spin.duplicate_badge_coins,
             ),
         )

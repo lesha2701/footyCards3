@@ -322,3 +322,39 @@ async def test_stars_spin_full_flow(client, db_session, bot_token, monkeypatch):
         headers=INTERNAL_HEADERS,
     )
     assert second.json()["wheel_result"]["new_balance"] == 500 + 7
+
+
+async def test_stars_spin_pack_prize_reconstructs_cards_on_poll(client, db_session, bot_token, monkeypatch):
+    # _delivered_result (not deliver_payment's direct return) is what the
+    # frontend actually reads, via polling GET stars-invoices/{token} — so
+    # this exercises that reconstruction path specifically, for a prize type
+    # (pack) that the coins-only test above doesn't cover.
+    monkeypatch.setattr(wheel_service, "_request_telegram_invoice_link", _fake_invoice_link)
+    await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(db_session, "wheel-stars-pack", price=0, card_count=2, probabilities={Rarity.common: 1.0})
+    await create_wheel_prize(db_session, prize_type=WheelPrizeType.pack, weight=1, pack_id=pack.id)
+    await _register(client, db_session, 860031, bot_token)
+    headers = telegram_headers(860031, bot_token)
+
+    invoice_resp = await client.post("/api/v1/wheel/spin/stars-invoice", headers=headers)
+    invoice = invoice_resp.json()
+
+    deliver = await client.post(
+        "/api/v1/internal/stars-payments/deliver",
+        json={
+            "payload_token": invoice["payload_token"],
+            "telegram_user_id": 860031,
+            "telegram_payment_charge_id": "wheel-pack-charge-" + "f" * 116,
+            "total_amount": 10,
+        },
+        headers=INTERNAL_HEADERS,
+    )
+    assert deliver.status_code == 200
+    assert len(deliver.json()["wheel_result"]["pack_result"]["cards"]) == 2
+
+    status_resp = await client.get(f"/api/v1/wheel/stars-invoices/{invoice['payload_token']}", headers=headers)
+    polled = status_resp.json()["wheel_result"]
+    assert polled["pack_result"] is not None
+    assert len(polled["pack_result"]["cards"]) == 2
+    assert polled["card_result"] is None
+    assert polled["badge_result"] is None
