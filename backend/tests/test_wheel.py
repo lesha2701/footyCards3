@@ -358,3 +358,56 @@ async def test_stars_spin_pack_prize_reconstructs_cards_on_poll(client, db_sessi
     assert len(polled["pack_result"]["cards"]) == 2
     assert polled["card_result"] is None
     assert polled["badge_result"] is None
+
+
+async def _admin_headers(client, db_session, bot_token):
+    # settings.admin_ids includes DEV_USER_TELEGRAM_ID (999000001) per
+    # conftest.py's test env — reuse it as the admin identity, matching
+    # every other admin-router test file's pattern in this suite: the
+    # admin_wheel/admin_games routers are gated by get_current_admin, which
+    # requires an "Authorization: Bearer <admin_token>" header (not plain
+    # Telegram init-data headers) obtained via POST /auth/session — see
+    # test_tasks.py::test_admin_task_list_reports_completed_and_claimed_counts
+    # for the exact same pattern.
+    admin_headers = telegram_headers(999000001, bot_token)
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    admin_token = session_resp.json()["admin_token"]
+    return {"Authorization": f"Bearer {admin_token}"}
+
+
+async def test_admin_wheel_prize_crud(client, db_session, bot_token):
+    headers = await _admin_headers(client, db_session, bot_token)
+
+    create_resp = await client.post(
+        "/api/v1/admin/wheel/prizes", headers=headers,
+        json={"prize_type": "coins", "weight": 50, "coins_amount": 100},
+    )
+    assert create_resp.status_code == 200
+    prize_id = create_resp.json()["id"]
+
+    list_resp = await client.get("/api/v1/admin/wheel/prizes", headers=headers)
+    assert len(list_resp.json()) == 1
+
+    update_resp = await client.put(
+        f"/api/v1/admin/wheel/prizes/{prize_id}", headers=headers, json={"weight": 5}
+    )
+    assert update_resp.json()["weight"] == 5
+
+    toggle_resp = await client.post(f"/api/v1/admin/wheel/prizes/{prize_id}/toggle-active", headers=headers)
+    assert toggle_resp.json()["is_active"] is False
+
+    delete_resp = await client.delete(f"/api/v1/admin/wheel/prizes/{prize_id}", headers=headers)
+    assert delete_resp.status_code == 204
+    assert (await client.get("/api/v1/admin/wheel/prizes", headers=headers)).json() == []
+
+
+async def test_admin_game_config_exposes_wheel_fields(client, db_session, bot_token):
+    headers = await _admin_headers(client, db_session, bot_token)
+
+    resp = await client.put(
+        "/api/v1/admin/games/config", headers=headers,
+        json={"wheel_free_spins_per_day": 3, "wheel_spin_cost_coins": 1500},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["wheel_free_spins_per_day"] == 3
+    assert resp.json()["wheel_spin_cost_coins"] == 1500
