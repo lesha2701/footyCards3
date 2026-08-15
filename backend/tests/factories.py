@@ -7,6 +7,7 @@ from app.models.gift import GiftSet
 from app.models.pack import Pack, PackRarityProbability
 from app.models.player import Player
 from app.models.user import User
+from app.models.wheel import WheelPrize
 
 _counter = {"n": 0}
 
@@ -56,6 +57,16 @@ async def create_badge(session, name: str = "Test Badge", icon: str = "🏆", **
     await session.commit()
     await session.refresh(badge)
     return badge
+
+
+async def create_wheel_prize(session, prize_type, weight: int = 1, **overrides) -> WheelPrize:
+    defaults = dict(is_active=True, sort_order=0, coins_amount=None, pack_id=None, card_rarity=None, badge_id=None)
+    defaults.update(overrides)
+    prize = WheelPrize(prize_type=prize_type, weight=weight, **defaults)
+    session.add(prize)
+    await session.commit()
+    await session.refresh(prize)
+    return prize
 
 
 async def create_coin_package(session, stars_price: int, coins_amount: int, **overrides) -> CoinPackage:

@@ -18,6 +18,7 @@ from app.models.task import TaskDefinition, UserTask
 from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.transaction import CoinTransaction
 from app.models.trophy import TrophyDefinition, UserTrophy
+from app.models.wheel import WheelPrize, WheelSpin
 from app.models.user import User
 
 __all__ = [
@@ -55,5 +56,7 @@ __all__ = [
     "CoinTransaction",
     "TrophyDefinition",
     "UserTrophy",
+    "WheelPrize",
+    "WheelSpin",
     "User",
 ]

@@ -104,6 +104,9 @@ class User(TimestampMixin, Base):
     # keeps counting up so the profile can show an uncapped "days in a row".
     daily_login_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    wheel_free_spins_used_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    wheel_spins_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Referrals
     referred_by_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True

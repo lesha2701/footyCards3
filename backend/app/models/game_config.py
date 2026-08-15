@@ -115,3 +115,8 @@ class GameConfig(TimestampMixin, Base):
     # Mini App shows a dismissible "update available" banner whenever this is newer
     # than what the client last dismissed (tracked client-side, not here).
     last_update_broadcast_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    wheel_free_spins_per_day: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    wheel_spin_cost_coins: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    wheel_spin_cost_stars: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    wheel_duplicate_badge_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)

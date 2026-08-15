@@ -41,6 +41,7 @@ class CardSource(str, enum.Enum):
     stars_purchase = "stars_purchase"
     chat_pack = "chat_pack"
     gift = "gift"
+    wheel = "wheel"
 
 
 class TransactionType(str, enum.Enum):
@@ -62,6 +63,8 @@ class TransactionType(str, enum.Enum):
     stars_coin_purchase = "stars_coin_purchase"
     stars_pack_bonus_coins = "stars_pack_bonus_coins"
     gift_coins = "gift_coins"
+    wheel_spin_cost = "wheel_spin_cost"
+    wheel_spin_reward = "wheel_spin_reward"
 
 
 class TaskCategory(str, enum.Enum):
@@ -172,3 +175,16 @@ class NotificationType(str, enum.Enum):
 class TradeCardSide(str, enum.Enum):
     offered = "offered"
     requested = "requested"
+
+
+class WheelPrizeType(str, enum.Enum):
+    coins = "coins"
+    pack = "pack"
+    card_rarity = "card_rarity"
+    badge = "badge"
+
+
+class WheelSpinSource(str, enum.Enum):
+    free = "free"
+    coins = "coins"
+    stars = "stars"

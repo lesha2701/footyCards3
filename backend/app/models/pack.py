@@ -133,4 +133,9 @@ class StarsInvoice(TimestampMixin, Base):
     gift_recipient_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     gift_message: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     gift_id: Mapped[Optional[int]] = mapped_column(ForeignKey("gifts.id", ondelete="SET NULL"), nullable=True)
+    # Set together for a wheel-spin Stars purchase (never with pack_id/
+    # gift_set_id/coins_amount). wheel_spin_id is filled in at delivery,
+    # once the WheelSpin row exists — mirrors pack_opening_id/gift_id above.
+    is_wheel_spin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    wheel_spin_id: Mapped[Optional[int]] = mapped_column(ForeignKey("wheel_spins.id", ondelete="SET NULL"), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
