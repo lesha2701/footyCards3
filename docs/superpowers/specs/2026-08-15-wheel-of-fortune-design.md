@@ -119,6 +119,7 @@ class WheelPrize(TimestampMixin, Base):
   reference from `WheelPrize`, exactly like packs above.
 
 New enum members needed:
+
 - `CardSource.wheel = "wheel"`
 - `TransactionType.wheel_spin_cost = "wheel_spin_cost"` (coin-path debit)
 - `TransactionType.wheel_spin_reward = "wheel_spin_reward"` (coin prize credit)
