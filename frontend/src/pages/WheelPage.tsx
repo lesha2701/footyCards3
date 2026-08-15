@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { createWheelStarsInvoice, fetchWheelStarsInvoiceStatus, fetchWheelStatus, spinFree, spinPaidCoins } from "@/api/wheel";
 import EmptyState from "@/components/common/EmptyState";
-import { IconCard, IconCoin, IconInboxEmpty, IconPack } from "@/components/icons";
+import { IconCard, IconCoin, IconInboxEmpty, IconPack, IconTarget } from "@/components/icons";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { openTelegramInvoice } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -75,6 +75,13 @@ export default function WheelPage() {
       setError(err instanceof ApiRequestError ? err.message : "Не удалось прокрутить колесо");
     } finally {
       setSpinning(false);
+      // Snap centerIndex back down modulo prizes.length now that the
+      // transition duration is 0 (spinning === false): prizeStrip repeats
+      // every prizes.length chips, so this shows the identical glyph at the
+      // identical screen position while keeping the next spin's "land a few
+      // loops further" math starting from a small base instead of growing
+      // unboundedly past the end of the (fixed-length) prizeStrip array.
+      setCenterIndex((prev) => prev % status.prizes.length);
     }
   };
 
@@ -97,7 +104,10 @@ export default function WheelPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="font-display text-xl font-bold text-ink-chalk">🎡 Колесо фортуны</h1>
+      <h1 className="flex items-center gap-2 font-display text-xl font-bold text-ink-chalk">
+        <IconTarget size={20} className="text-accent-lime" />
+        Колесо фортуны
+      </h1>
 
       {!status.prizes.length ? (
         <EmptyState icon={IconInboxEmpty} title="Колесо пока не настроено" description="Загляни позже" />
