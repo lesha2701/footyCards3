@@ -17,6 +17,7 @@ import type {
 import type {
   AdminActionLog,
   AdminUser,
+  AdminWheelPrize,
   CardCollection,
   Dashboard,
   GameConfig,
@@ -254,6 +255,27 @@ export async function toggleTaskActive(id: number): Promise<TaskDefinition> {
 
 export async function deleteTask(id: number): Promise<void> {
   await api.delete(`/admin/tasks/${id}`);
+}
+
+// --- Wheel of Fortune ---
+export async function fetchAdminWheelPrizes(): Promise<AdminWheelPrize[]> {
+  const { data } = await api.get<AdminWheelPrize[]>("/admin/wheel/prizes");
+  return data;
+}
+export async function createWheelPrize(payload: Record<string, unknown>): Promise<AdminWheelPrize> {
+  const { data } = await api.post<AdminWheelPrize>("/admin/wheel/prizes", payload);
+  return data;
+}
+export async function updateWheelPrize(id: number, payload: Record<string, unknown>): Promise<AdminWheelPrize> {
+  const { data } = await api.put<AdminWheelPrize>(`/admin/wheel/prizes/${id}`, payload);
+  return data;
+}
+export async function deleteWheelPrize(id: number): Promise<void> {
+  await api.delete(`/admin/wheel/prizes/${id}`);
+}
+export async function toggleWheelPrizeActive(id: number): Promise<AdminWheelPrize> {
+  const { data } = await api.post<AdminWheelPrize>(`/admin/wheel/prizes/${id}/toggle-active`);
+  return data;
 }
 
 // --- Trades ---

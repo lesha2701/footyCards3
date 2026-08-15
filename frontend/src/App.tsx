@@ -13,6 +13,7 @@ import AdminTasksPage from "@/admin/pages/AdminTasksPage";
 import AdminTradesPage from "@/admin/pages/AdminTradesPage";
 import AdminTrophiesPage from "@/admin/pages/AdminTrophiesPage";
 import AdminGiftsPage from "@/admin/pages/AdminGiftsPage";
+import AdminWheelPage from "@/admin/pages/AdminWheelPage";
 import AdminGamesPage from "@/admin/pages/AdminGamesPage";
 import AdminUpgradesPage from "@/admin/pages/AdminUpgradesPage";
 import AdminShopPage from "@/admin/pages/AdminShopPage";
@@ -118,6 +119,7 @@ export default function App() {
         <Route path="trades" element={<AdminTradesPage />} />
         <Route path="trophies" element={<AdminTrophiesPage />} />
         <Route path="gifts" element={<AdminGiftsPage />} />
+        <Route path="wheel" element={<AdminWheelPage />} />
         <Route path="games" element={<AdminGamesPage />} />
         <Route path="upgrades" element={<AdminUpgradesPage />} />
         <Route path="shop" element={<AdminShopPage />} />

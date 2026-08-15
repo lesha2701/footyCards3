@@ -161,6 +161,10 @@ export interface GameConfig {
   tactico_bot_optimal_pick_chance_hard: number;
   tactico_max_legendary_cards: number;
   tactico_max_epic_cards: number;
+  wheel_free_spins_per_day: number;
+  wheel_spin_cost_coins: number;
+  wheel_spin_cost_stars: number;
+  wheel_duplicate_badge_coins: number;
 }
 
 export interface CardCollection {
@@ -172,6 +176,18 @@ export interface CardCollection {
   image_path: string | null;
   reward_coins: number;
   reward_pack_id: number | null;
+}
+
+export interface AdminWheelPrize {
+  id: number;
+  prize_type: "coins" | "pack" | "card_rarity" | "badge";
+  weight: number;
+  is_active: boolean;
+  sort_order: number;
+  coins_amount: number | null;
+  pack_id: number | null;
+  card_rarity: "common" | "rare" | "epic" | "legendary" | null;
+  badge_id: number | null;
 }
 
 export interface TaskDefinition {

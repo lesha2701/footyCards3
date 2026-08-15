@@ -16,7 +16,7 @@ from app.models.enums import CardSource, TransactionType, WheelSpinSource
 from app.models.gift import Gift, GiftSet
 from app.models.pack import Pack, PackOpening, StarsInvoice
 from app.models.user import User
-from app.models.wheel import WheelSpin
+from app.models.wheel import WheelPrize, WheelSpin
 from app.schemas.badge import BadgeOut
 from app.schemas.gift import GiftOut
 from app.schemas.pack import OpenedCardOut
@@ -58,7 +58,15 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
         return StarsInvoiceStatusOut(status="completed", result=await get_opening_result(db, user, opening))
 
     if invoice.is_wheel_spin:
-        spin = await db.get(WheelSpin, invoice.wheel_spin_id)
+        # WheelSpin.prize and WheelPrize.pack are lazy="joined", but
+        # Pack.rarity_probabilities (needed by PackOut, nested in
+        # WheelPrizeOut.pack below) isn't — without this explicit option,
+        # serializing a pack-type prize triggers an async lazy-load outside
+        # any awaited context (MissingGreenlet).
+        spin = await db.get(
+            WheelSpin, invoice.wheel_spin_id,
+            options=[joinedload(WheelSpin.prize).joinedload(WheelPrize.pack).joinedload(Pack.rarity_probabilities)],
+        )
         user = await db.get(User, invoice.user_id)
 
         pack_result = None

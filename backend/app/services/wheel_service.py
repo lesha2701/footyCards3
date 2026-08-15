@@ -4,12 +4,13 @@ from datetime import datetime, time, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.core.exceptions import ConflictError
 from app.core.timeutil import app_timezone, local_today
 from app.models.badge import UserBadge
 from app.models.enums import CardSource, TransactionType, WheelPrizeType, WheelSpinSource
-from app.models.pack import PackOpening, StarsInvoice
+from app.models.pack import Pack, PackOpening, StarsInvoice
 from app.models.user import User
 from app.models.wheel import WheelPrize, WheelSpin
 from app.schemas.badge import BadgeOut
@@ -39,8 +40,17 @@ async def _ensure_daily_reset(db: AsyncSession, user: User) -> None:
 
 
 async def _active_prizes(db: AsyncSession) -> list[WheelPrize]:
-    result = await db.execute(select(WheelPrize).where(WheelPrize.is_active.is_(True)).order_by(WheelPrize.sort_order))
-    return list(result.scalars().all())
+    # WheelPrize.pack is lazy="joined", but Pack.rarity_probabilities (needed
+    # by PackOut, nested in WheelPrizeOut.pack) isn't — without this explicit
+    # option, serializing a pack-type prize triggers an async lazy-load
+    # outside any awaited context (MissingGreenlet).
+    result = await db.execute(
+        select(WheelPrize)
+        .where(WheelPrize.is_active.is_(True))
+        .order_by(WheelPrize.sort_order)
+        .options(joinedload(WheelPrize.pack).joinedload(Pack.rarity_probabilities))
+    )
+    return list(result.unique().scalars().all())
 
 
 async def get_status(db: AsyncSession, user: User) -> WheelStatusOut:

@@ -59,6 +59,16 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Колесо фортуны</p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("wheel_free_spins_per_day", "Бесплатных прокруток в день")}
+          {field("wheel_spin_cost_coins", "Платная прокрутка, монеты")}
+          {field("wheel_spin_cost_stars", "Платная прокрутка, ⭐")}
+          {field("wheel_duplicate_badge_coins", "Компенсация за повтор значка")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Пак в чате (команда «вкарта»)</p>
         <p className="mb-3 text-xs text-slate-500">
           Использует тот же пак, что и бесплатный (Slug пака выше), но на собственном кулдауне.
