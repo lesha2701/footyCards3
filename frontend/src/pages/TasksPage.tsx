@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { claimTask, fetchTasks } from "@/api/tasks";
 import EmptyState from "@/components/common/EmptyState";
-import { IconChat, IconTarget, IconTrophy } from "@/components/icons";
+import { IconChat, IconCheck, IconCoin, IconPack, IconTarget, IconTrophy } from "@/components/icons";
 import { ApiRequestError } from "@/lib/api";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -49,7 +49,10 @@ export default function TasksPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="font-display text-2xl font-bold text-slate-100">🎯 Задания</h1>
+      <h1 className="flex items-center gap-2 font-display text-xl font-bold text-ink-chalk">
+        <IconTarget size={20} className="text-accent-lime" />
+        Задания
+      </h1>
 
       {claimError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{claimError}</p>}
 
@@ -117,8 +120,8 @@ function RewardClaimedModal({ coins, onClose }: { coins: number; onClose: () => 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6">
       <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-bg-surface p-6 text-center">
         <p className="text-4xl">🎉</p>
-        <p className="mt-3 font-display text-lg font-bold text-slate-100">Награда получена!</p>
-        <p className="mt-1 text-sm text-slate-400">Задание выполнено, монеты начислены на баланс.</p>
+        <p className="mt-3 font-display text-lg font-bold text-ink-chalk">Награда получена!</p>
+        <p className="mt-1 text-sm text-ink-mist">Задание выполнено, монеты начислены на баланс.</p>
         <p className="mt-3 font-display text-2xl font-bold text-amber-300">+{coins} 🪙</p>
         <button
           onClick={onClose}
@@ -146,7 +149,7 @@ function TabButton({
     <button
       onClick={onClick}
       className={`relative rounded-full px-4 py-1.5 text-xs font-semibold ${
-        active ? "bg-accent text-bg-base" : "bg-white/5 text-slate-300"
+        active ? "bg-accent text-bg-base" : "bg-white/5 text-ink-mist"
       }`}
     >
       {label}
@@ -180,12 +183,21 @@ function TaskCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-display text-sm font-bold text-slate-100">{task.name}</p>
-          <p className="mt-0.5 text-xs text-slate-400">{task.description}</p>
+          <p className="font-display text-sm font-bold text-ink-chalk">{task.name}</p>
+          <p className="mt-0.5 text-xs text-ink-mist">{task.description}</p>
         </div>
         <div className="shrink-0 text-right">
-          <p className="font-display text-sm font-bold text-amber-300">
-            {task.reward_pack_name ? `📦 ${task.reward_pack_name}` : `+${task.reward_coins} 🪙`}
+          <p className="flex items-center justify-end gap-1 font-display text-sm font-bold text-amber-300">
+            {task.reward_pack_name ? (
+              <>
+                <IconPack size={14} />
+                {task.reward_pack_name}
+              </>
+            ) : (
+              <>
+                <IconCoin size={14} />+{task.reward_coins}
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -212,7 +224,10 @@ function TaskCard({
       )}
 
       {task.is_claimed ? (
-        <p className="mt-3 text-center text-xs font-bold text-emerald-400">✓ Награда получена</p>
+        <p className="mt-3 flex items-center justify-center gap-1 text-xs font-bold text-emerald-400">
+          <IconCheck size={14} />
+          Награда получена
+        </p>
       ) : (
         <button
           onClick={onClaim}
