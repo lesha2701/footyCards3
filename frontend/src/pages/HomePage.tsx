@@ -6,6 +6,7 @@ import { claimFreePack, fetchFreePackStatus } from "@/api/freePack";
 import { fetchPacks } from "@/api/packs";
 import { fetchMyProfile } from "@/api/profile";
 import { fetchTasks } from "@/api/tasks";
+import { fetchWheelStatus } from "@/api/wheel";
 import { Skeleton } from "@/components/common/Skeleton";
 import { sortPacksByPrice } from "@/lib/packs";
 import {
@@ -49,6 +50,7 @@ export default function HomePage() {
     queryFn: fetchFreePackStatus,
     refetchInterval: 30000,
   });
+  const { data: wheelStatus } = useQuery({ queryKey: ["wheel-status"], queryFn: fetchWheelStatus });
 
   const claimFreePackMutation = useMutation({
     mutationFn: claimFreePack,
@@ -118,6 +120,19 @@ export default function HomePage() {
             onClick={() => freePackStatus.available && claimFreePackMutation.mutate()}
             disabled={!freePackStatus.available || claimFreePackMutation.isPending}
             trailingIcon={freePackStatus.available ? undefined : IconClock}
+          />
+        )}
+
+        {wheelStatus && (
+          <NoticeCard
+            Icon={IconGift}
+            title="Колесо фортуны"
+            subtitle={
+              wheelStatus.free_spins_remaining > 0
+                ? `Осталось ${wheelStatus.free_spins_remaining} бесплатных прокруток сегодня`
+                : "Бесплатные прокрутки закончились — крути за монеты или ⭐"
+            }
+            onClick={() => navigate("/wheel")}
           />
         )}
       </div>

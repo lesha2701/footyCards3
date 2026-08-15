@@ -19,6 +19,7 @@ import AdminShopPage from "@/admin/pages/AdminShopPage";
 import AdminBroadcastsPage from "@/admin/pages/AdminBroadcastsPage";
 import AdminLogPage from "@/admin/pages/AdminLogPage";
 import HomePage from "@/pages/HomePage";
+import WheelPage from "@/pages/WheelPage";
 import PacksPage from "@/pages/PacksPage";
 import PackOpenPage from "@/pages/PackOpenPage";
 import PlayPage from "@/pages/PlayPage";
@@ -146,6 +147,7 @@ export default function App() {
         <Route path="/trades" element={<TradesPage />} />
         <Route path="/trades/new" element={<NewTradePage />} />
         <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/wheel" element={<WheelPage />} />
         <Route path="/upgrade" element={<UpgradePage />} />
         <Route path="/ranking" element={<RankingPage />} />
         <Route path="/profile" element={<ProfilePage />} />
