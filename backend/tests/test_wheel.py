@@ -411,3 +411,49 @@ async def test_admin_game_config_exposes_wheel_fields(client, db_session, bot_to
     assert resp.status_code == 200
     assert resp.json()["wheel_free_spins_per_day"] == 3
     assert resp.json()["wheel_spin_cost_coins"] == 1500
+
+
+async def test_admin_list_prizes_includes_pack_details_via_fresh_query(client, db_session, bot_token):
+    # Regression test for a MissingGreenlet bug: WheelPrize.pack is
+    # lazy="joined", but Pack.rarity_probabilities (needed by PackOut,
+    # nested in WheelPrizeOut.pack) is not eagerly loaded. Serializing a
+    # pack-type prize crashed on this — but only through a *fresh* query,
+    # i.e. a real HTTP round-trip that doesn't reuse the same in-session
+    # ORM object test_grant_pack_prize_opens_cards does (which is why that
+    # existing test never caught it: the pack/rarity_probabilities objects
+    # were already populated in that shared session's identity map). Here,
+    # `create_wheel_prize`/`create_pack` run against `db_session`, while the
+    # actual assertion hits `GET /admin/wheel/prizes` through `client`,
+    # which gets its own fresh session per request (see conftest.py's
+    # `_override_get_db`) — forcing a genuine query that must eager-load
+    # `pack.rarity_probabilities` itself to serialize successfully.
+    await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(db_session, "wheel-admin-list-pack", price=0, card_count=1, probabilities={Rarity.common: 1.0})
+    await create_wheel_prize(db_session, prize_type=WheelPrizeType.pack, weight=1, pack_id=pack.id)
+    headers = await _admin_headers(client, db_session, bot_token)
+
+    resp = await client.get("/api/v1/admin/wheel/prizes", headers=headers)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    assert body[0]["pack"]["name"] == pack.name
+
+
+async def test_wheel_status_includes_pack_details_via_fresh_query(client, db_session, bot_token):
+    # Same regression as test_admin_list_prizes_includes_pack_details_via_fresh_query,
+    # but for the player-facing path (wheel_service._active_prizes/get_status)
+    # instead of the admin CRUD path.
+    await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(db_session, "wheel-status-pack", price=0, card_count=1, probabilities={Rarity.common: 1.0})
+    await create_wheel_prize(db_session, prize_type=WheelPrizeType.pack, weight=1, pack_id=pack.id)
+    await _register(client, db_session, 860040, bot_token)
+    headers = telegram_headers(860040, bot_token)
+
+    resp = await client.get("/api/v1/wheel/status", headers=headers)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["prizes"]) == 1
+    assert body["prizes"][0]["pack"] is not None
+    assert body["prizes"][0]["pack"]["name"] == pack.name
