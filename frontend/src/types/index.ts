@@ -174,6 +174,39 @@ export interface StarsInvoiceStatus {
   result: PackOpenResult | null;
   coin_result: StarsCoinResult | null;
   gift_result: Gift | null;
+  wheel_result: WheelSpinResult | null;
+}
+
+export interface WheelPrize {
+  id: number;
+  prize_type: "coins" | "pack" | "card_rarity" | "badge";
+  weight: number;
+  is_active: boolean;
+  sort_order: number;
+  coins_amount: number | null;
+  pack_id: number | null;
+  pack: Pack | null;
+  card_rarity: "common" | "rare" | "epic" | "legendary" | null;
+  badge_id: number | null;
+  badge: Badge | null;
+}
+
+export interface WheelStatus {
+  free_spins_remaining: number;
+  free_spins_total: number;
+  next_free_spin_reset_at: string;
+  spin_cost_coins: number;
+  spin_cost_stars: number;
+  prizes: WheelPrize[];
+}
+
+export interface WheelSpinResult {
+  prize: WheelPrize;
+  new_balance: number;
+  pack_result: PackOpenResult | null;
+  card_result: OpenedCard | null;
+  badge_result: Badge | null;
+  duplicate_badge_coins: number | null;
 }
 
 export interface CoinPackage {
