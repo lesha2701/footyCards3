@@ -76,6 +76,14 @@ export default function AdminWheelPage() {
 
   const openEdit = (p: AdminWheelPrize) => { setEditing(p); setForm(prizeToForm(p)); setError(null); };
 
+  // Mirrors the backend's admin_wheel._validate_prize_fields invariant
+  // (exactly one of coins_amount/pack_id/card_rarity/badge_id must match
+  // prize_type) so a malformed submission is caught before it round-trips
+  // to a 409 — card_rarity always has a value here (its <select> has no
+  // empty option), so only pack/badge need the check.
+  const missingRequiredField =
+    (form.prize_type === "pack" && form.pack_id === "") || (form.prize_type === "badge" && form.badge_id === "");
+
   const prizeSummary = (p: AdminWheelPrize) => {
     if (p.prize_type === "coins") return `+${p.coins_amount} монет`;
     if (p.prize_type === "pack") return `Пак #${p.pack_id}`;
@@ -195,7 +203,8 @@ export default function AdminWheelPage() {
               <button onClick={() => { setCreating(false); setEditing(null); }} className="flex-1 rounded-xl bg-white/5 py-2.5 text-sm">Отмена</button>
               <button
                 onClick={() => (editing ? updateMutation.mutate() : createMutation.mutate())}
-                className="flex-1 rounded-xl bg-accent py-2.5 text-sm font-bold text-bg-base"
+                disabled={missingRequiredField}
+                className="flex-1 rounded-xl bg-accent py-2.5 text-sm font-bold text-bg-base disabled:opacity-40"
               >
                 Сохранить
               </button>

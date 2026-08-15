@@ -207,6 +207,7 @@ export interface WheelSpinResult {
   card_result: OpenedCard | null;
   badge_result: Badge | null;
   duplicate_badge_coins: number | null;
+  collection_rewards: CollectionRewardGrant[];
 }
 
 export interface CoinPackage {

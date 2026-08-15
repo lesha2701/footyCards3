@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import Rarity, WheelPrizeType
 from app.schemas.badge import BadgeOut
-from app.schemas.pack import OpenedCardOut, PackOpenResult, PackOut
+from app.schemas.pack import CollectionRewardGrantOut, OpenedCardOut, PackOpenResult, PackOut
 
 
 class WheelPrizeOut(BaseModel):
@@ -62,3 +62,4 @@ class WheelSpinResultOut(BaseModel):
     card_result: Optional[OpenedCardOut] = None
     badge_result: Optional[BadgeOut] = None
     duplicate_badge_coins: Optional[int] = None
+    collection_rewards: list[CollectionRewardGrantOut] = []

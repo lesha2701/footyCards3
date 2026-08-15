@@ -457,3 +457,115 @@ async def test_wheel_status_includes_pack_details_via_fresh_query(client, db_ses
     assert len(body["prizes"]) == 1
     assert body["prizes"][0]["pack"] is not None
     assert body["prizes"][0]["pack"]["name"] == pack.name
+
+
+# --- Fix-wave regression tests -------------------------------------------
+# Finding 1: wheel-granted cards must trigger card-collection rewards, same
+# as every other card-granting path (pack_service.open_pack,
+# stars_payment_service.deliver_payment, etc.) — see test_collection_album.py
+# ::test_pack_open_completes_collection_grants_reward_once for the pattern
+# this mirrors.
+
+
+async def test_grant_card_rarity_prize_completes_collection_grants_reward(client, db_session, bot_token):
+    from app.models.card_collection import CardCollection, UserCollectionReward
+
+    user = await _register(client, db_session, 860050, bot_token)
+    collection = CardCollection(name="Wheel Card Set", is_active=True, reward_coins=120)
+    db_session.add(collection)
+    await db_session.flush()
+    await create_player(db_session, rarity=Rarity.legendary, collection_id=collection.id)
+    await db_session.commit()
+
+    prize = await create_wheel_prize(db_session, prize_type=WheelPrizeType.card_rarity, weight=1, card_rarity=Rarity.legendary)
+
+    result = await wheel_service._grant_prize(db_session, user, prize, wheel_service.WheelSpinSource.free)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    assert len(result.collection_rewards) == 1
+    assert result.collection_rewards[0].collection_id == collection.id
+    assert result.collection_rewards[0].reward_coins == 120
+    assert user.balance == 500 + 120
+
+    rows = (
+        await db_session.execute(select(UserCollectionReward).where(UserCollectionReward.user_id == user.id))
+    ).scalars().all()
+    assert len(rows) == 1
+
+
+async def test_grant_pack_prize_completes_collection_grants_reward(client, db_session, bot_token):
+    from app.models.card_collection import CardCollection
+
+    user = await _register(client, db_session, 860051, bot_token)
+    collection = CardCollection(name="Wheel Pack Set", is_active=True, reward_coins=80)
+    db_session.add(collection)
+    await db_session.flush()
+    await create_player(db_session, rarity=Rarity.common, collection_id=collection.id)
+    pack = await create_pack(db_session, "wheel-collection-pack", price=0, card_count=1, probabilities={Rarity.common: 1.0})
+    prize = await create_wheel_prize(db_session, prize_type=WheelPrizeType.pack, weight=1, pack_id=pack.id)
+
+    result = await wheel_service._grant_prize(db_session, user, prize, wheel_service.WheelSpinSource.free)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    assert len(result.collection_rewards) == 1
+    assert result.collection_rewards[0].collection_id == collection.id
+    assert result.collection_rewards[0].reward_coins == 80
+    # Threaded onto pack_result too, mirroring pack_service.open_pack's PackOpenResult shape.
+    assert result.pack_result is not None
+    assert len(result.pack_result.collection_rewards) == 1
+    assert user.balance == 500 + 80
+
+
+# Finding 2: a malformed WheelPrize row (prize_type not matching the one
+# populated field) must be rejected at the admin router, not silently
+# accepted and left to crash or misbehave when rolled.
+
+
+async def test_admin_create_card_rarity_prize_without_rarity_rejected(client, db_session, bot_token):
+    headers = await _admin_headers(client, db_session, bot_token)
+
+    resp = await client.post(
+        "/api/v1/admin/wheel/prizes", headers=headers,
+        json={"prize_type": "card_rarity", "weight": 10},
+    )
+    assert resp.status_code == 409
+
+    # Nothing should have been persisted.
+    assert (await client.get("/api/v1/admin/wheel/prizes", headers=headers)).json() == []
+
+
+async def test_admin_update_prize_type_without_matching_field_rejected(client, db_session, bot_token):
+    headers = await _admin_headers(client, db_session, bot_token)
+    create_resp = await client.post(
+        "/api/v1/admin/wheel/prizes", headers=headers,
+        json={"prize_type": "coins", "weight": 10, "coins_amount": 50},
+    )
+    prize_id = create_resp.json()["id"]
+
+    resp = await client.put(
+        f"/api/v1/admin/wheel/prizes/{prize_id}", headers=headers,
+        json={"prize_type": "card_rarity"},
+    )
+    assert resp.status_code == 409
+
+    # The rejected update must not have partially applied.
+    unchanged = await client.get("/api/v1/admin/wheel/prizes", headers=headers)
+    prize = next(p for p in unchanged.json() if p["id"] == prize_id)
+    assert prize["prize_type"] == "coins"
+    assert prize["coins_amount"] == 50
+
+
+async def test_admin_update_only_weight_on_valid_prize_still_succeeds(client, db_session, bot_token):
+    headers = await _admin_headers(client, db_session, bot_token)
+    create_resp = await client.post(
+        "/api/v1/admin/wheel/prizes", headers=headers,
+        json={"prize_type": "card_rarity", "weight": 10, "card_rarity": "epic"},
+    )
+    prize_id = create_resp.json()["id"]
+
+    resp = await client.put(f"/api/v1/admin/wheel/prizes/{prize_id}", headers=headers, json={"weight": 33})
+    assert resp.status_code == 200
+    assert resp.json()["weight"] == 33
+    assert resp.json()["card_rarity"] == "epic"

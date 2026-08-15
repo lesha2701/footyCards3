@@ -17,9 +17,11 @@ class WheelPrize(TimestampMixin, Base):
     remove entries without rebalancing everything else to sum to 1.
 
     Exactly one of coins_amount/pack_id/card_rarity/badge_id is set,
-    matching prize_type — enforced at the application layer (schemas +
-    service), not a DB constraint, mirroring how Pack/GiftSet handle their
-    own similarly-shaped "one of several optional fields" data.
+    matching prize_type — enforced at the application layer
+    (admin_wheel._validate_prize_fields, run against the fully-resolved
+    object in both create_prize and update_prize), not a DB constraint,
+    mirroring how Pack/GiftSet handle their own similarly-shaped "one of
+    several optional fields" data.
     """
 
     __tablename__ = "wheel_prizes"

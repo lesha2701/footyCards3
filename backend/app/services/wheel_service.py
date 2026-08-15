@@ -14,9 +14,10 @@ from app.models.pack import Pack, PackOpening, StarsInvoice
 from app.models.user import User
 from app.models.wheel import WheelPrize, WheelSpin
 from app.schemas.badge import BadgeOut
-from app.schemas.pack import OpenedCardOut, PackOpenResult, PackOut
+from app.schemas.pack import CollectionRewardGrantOut, OpenedCardOut, PackOpenResult, PackOut
 from app.schemas.stars import StarsInvoiceCreateOut
 from app.schemas.wheel import WheelPrizeOut, WheelSpinResultOut, WheelStatusOut
+from app.services import collection_service
 from app.services.card_creation import create_user_card
 from app.services.game_config_service import get_config
 from app.services.pack_service import _get_pack_or_404, _duplicate_counts_snapshot, pick_random_player, roll_and_create_cards
@@ -81,6 +82,7 @@ async def _grant_prize(db: AsyncSession, user: User, prize: WheelPrize, source: 
     card_result = None
     badge_result: BadgeOut | None = None
     duplicate_badge_coins: int | None = None
+    collection_rewards: list[CollectionRewardGrantOut] = []
 
     if prize.prize_type == WheelPrizeType.coins:
         await credit_coins(
@@ -100,7 +102,13 @@ async def _grant_prize(db: AsyncSession, user: User, prize: WheelPrize, source: 
         await db.flush()
         dup_counts = await _duplicate_counts_snapshot(db, user.id)
         opened_items = await roll_and_create_cards(db, user, pack, opening, dup_counts, CardSource.wheel)
-        pack_result = PackOpenResult(opening_id=opening.id, pack=PackOut.model_validate(pack), cards=opened_items, new_balance=user.balance)
+        collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(
+            db, user, [item.card.player.id for item in opened_items]
+        )
+        pack_result = PackOpenResult(
+            opening_id=opening.id, pack=PackOut.model_validate(pack), cards=opened_items, new_balance=user.balance,
+            collection_rewards=collection_rewards,
+        )
         spin.pack_opening_id = opening.id
 
     elif prize.prize_type == WheelPrizeType.card_rarity:
@@ -111,6 +119,7 @@ async def _grant_prize(db: AsyncSession, user: User, prize: WheelPrize, source: 
         is_new = dup_counts.get(player.id, 0) == 0
         card_result = OpenedCardOut(card=user_card, is_new=is_new, duplicate_count=dup_counts.get(player.id, 0) + 1)
         spin.user_card_id = user_card.id
+        collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(db, user, [player.id])
 
     elif prize.prize_type == WheelPrizeType.badge:
         config = await get_config(db)
@@ -141,6 +150,7 @@ async def _grant_prize(db: AsyncSession, user: User, prize: WheelPrize, source: 
         card_result=card_result,
         badge_result=badge_result,
         duplicate_badge_coins=duplicate_badge_coins,
+        collection_rewards=collection_rewards,
     )
 
 

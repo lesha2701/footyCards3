@@ -4,8 +4,10 @@ import { useState } from "react";
 
 import { createWheelStarsInvoice, fetchWheelStarsInvoiceStatus, fetchWheelStatus, spinFree, spinPaidCoins } from "@/api/wheel";
 import EmptyState from "@/components/common/EmptyState";
-import { IconCard, IconCoin, IconInboxEmpty, IconPack, IconTarget } from "@/components/icons";
+import { UserBadge } from "@/components/common/UserBadge";
+import { IconCard, IconCoin, IconInboxEmpty, IconPack, IconTag, IconTarget } from "@/components/icons";
 import { ApiRequestError, staticUrl } from "@/lib/api";
+import { RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import { openTelegramInvoice } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { WheelPrize, WheelSpinResult } from "@/types";
@@ -72,7 +74,11 @@ export default function WheelPage() {
       updateBalance(spinResult.new_balance);
       queryClient.invalidateQueries({ queryKey: ["wheel-status"] });
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Не удалось прокрутить колесо");
+      // A player who simply closed the Telegram payment sheet deliberately
+      // backed out — mirrors PacksPage.tsx's Stars-purchase flow, which
+      // treats "cancelled" as a silent return to idle with no error banner.
+      if (err instanceof Error && err.message === "__cancelled__") return;
+      setError(err instanceof ApiRequestError ? err.message : err instanceof Error ? err.message : "Не удалось прокрутить колесо");
     } finally {
       setSpinning(false);
       // Snap centerIndex back down modulo prizes.length now that the
@@ -181,11 +187,71 @@ export default function WheelPage() {
 
       {result && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={() => setResult(null)}>
-          <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-bg-surface p-6 text-center" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="max-h-[85vh] w-full max-w-xs overflow-y-auto rounded-2xl border border-white/10 bg-bg-surface p-6 text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
             <p className="font-display text-lg font-bold text-ink-chalk">
               {result.duplicate_badge_coins ? `+${result.duplicate_badge_coins} монет (значок уже был)` : `Приз получен!`}
             </p>
-            <p className="mt-2 text-sm text-ink-mist">{prizeLabel(result.prize)}</p>
+
+            {result.pack_result ? (
+              <div className="mt-3 flex flex-col gap-3">
+                <p className="text-sm text-ink-mist">{result.pack_result.pack.name}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {result.pack_result.cards.map((opened) => (
+                    <div
+                      key={opened.card.id}
+                      className={`overflow-hidden rounded-xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.player.rarity]} p-[2px]`}
+                    >
+                      <div className="flex flex-col rounded-[10px] bg-bg-surface">
+                        <img
+                          src={staticUrl(opened.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                          alt={opened.card.player.display_name}
+                          className="aspect-square w-full object-cover"
+                        />
+                        <div className="p-1.5">
+                          <p className="truncate text-[11px] font-bold text-ink-chalk">{opened.card.player.display_name}</p>
+                          <p className="text-[9px] text-ink-mist">{RARITY_LABELS[opened.card.player.rarity]}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : result.card_result ? (
+              <div className="mt-3 flex flex-col items-center gap-2">
+                <div className={`w-24 overflow-hidden rounded-xl bg-gradient-to-b ${RARITY_GRADIENTS[result.card_result.card.player.rarity]} p-[2px]`}>
+                  <img
+                    src={staticUrl(result.card_result.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                    alt={result.card_result.card.player.display_name}
+                    className="aspect-square w-full rounded-[10px] object-cover"
+                  />
+                </div>
+                <p className="text-sm font-semibold text-ink-chalk">{result.card_result.card.player.display_name}</p>
+                <p className="text-xs text-ink-mist">{RARITY_LABELS[result.card_result.card.player.rarity]}</p>
+              </div>
+            ) : result.badge_result ? (
+              <div className="mt-3 flex flex-col items-center gap-2">
+                <UserBadge badge={result.badge_result} className="h-10 w-10 text-3xl" />
+                <p className="text-sm font-semibold text-ink-chalk">{result.badge_result.name}</p>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-ink-mist">{prizeLabel(result.prize)}</p>
+            )}
+
+            {result.collection_rewards.length > 0 && (
+              <div className="mt-3 flex flex-col gap-1.5">
+                {result.collection_rewards.map((grant) => (
+                  <p key={grant.collection_id} className="flex items-center justify-center gap-1 text-xs font-semibold text-accent-lime">
+                    <IconTag size={12} />
+                    Коллекция «{grant.collection_name}» собрана! +{grant.reward_coins}
+                    {grant.granted_pack ? ` + пак «${grant.granted_pack.pack.name}»` : ""}
+                  </p>
+                ))}
+              </div>
+            )}
+
             <button onClick={() => setResult(null)} className="mt-5 w-full rounded-xl bg-accent py-2.5 text-sm font-bold text-bg-base active:scale-95">
               Ок
             </button>
