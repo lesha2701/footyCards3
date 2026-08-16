@@ -45,3 +45,13 @@ class PenaltyAcceptRequest(BaseModel):
 
 class PenaltyPickRequest(BaseModel):
     zone: str
+
+
+class PenaltySearchRequest(BaseModel):
+    user_card_id: int
+
+
+class PenaltySearchStatusOut(BaseModel):
+    status: Literal["not_searching", "searching", "matched", "timeout"]
+    match_id: Optional[int] = None
+    created_at: Optional[datetime] = None

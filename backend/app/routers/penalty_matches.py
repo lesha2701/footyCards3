@@ -10,6 +10,8 @@ from app.schemas.penalty_match import (
     PenaltyChallengeRequest,
     PenaltyMatchOut,
     PenaltyPickRequest,
+    PenaltySearchRequest,
+    PenaltySearchStatusOut,
 )
 from app.services import penalty_match_service
 
@@ -63,3 +65,23 @@ async def list_matches(db: AsyncSession = Depends(get_db), user: User = Depends(
 @router.get("/matches/{match_id}", response_model=PenaltyMatchOut)
 async def get_match(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await penalty_match_service.get_match(db, user, match_id)
+
+
+@router.post("/matchmaking/search", response_model=PenaltySearchStatusOut)
+async def start_search(
+    payload: PenaltySearchRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    check_rate_limit(f"penalty_search:{user.id}", max_calls=10, window_seconds=60)
+    entry = await penalty_match_service.start_search(db, user, payload.user_card_id)
+    return PenaltySearchStatusOut(status="searching", match_id=None, created_at=entry.created_at)
+
+
+@router.get("/matchmaking/status", response_model=PenaltySearchStatusOut)
+async def get_search_status(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    status, match_id = await penalty_match_service.get_search_status(db, user)
+    return PenaltySearchStatusOut(status=status, match_id=match_id, created_at=None)
+
+
+@router.post("/matchmaking/cancel", status_code=204)
+async def cancel_search(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await penalty_match_service.cancel_search(db, user)

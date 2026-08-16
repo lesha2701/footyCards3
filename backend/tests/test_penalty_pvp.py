@@ -1,4 +1,5 @@
 import pytest
+from sqlalchemy import select
 
 import app.core.rate_limit as rate_limit_module
 from app.models.card import UserCard
@@ -430,3 +431,108 @@ async def test_penalty_queue_entry_roundtrip(client, db_session, bot_token):
 
     assert entry.id is not None
     assert entry.matched_match_id is None
+
+
+async def test_penalty_start_search_requires_owned_card(client, db_session, bot_token):
+    sender = await _register(client, db_session, 862001, bot_token)
+    other_owner = await _register(client, db_session, 862002, bot_token)
+    someone_elses_card = await _grant_card(db_session, other_owner.id)
+
+    resp = await client.post(
+        "/api/v1/games/penalty/matchmaking/search", headers=telegram_headers(862001, bot_token),
+        json={"user_card_id": someone_elses_card.id},
+    )
+    assert resp.status_code == 403
+
+
+async def test_penalty_start_search_rejects_second_entry(client, db_session, bot_token):
+    user = await _register(client, db_session, 862003, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(862003, bot_token)
+
+    first = await client.post(
+        "/api/v1/games/penalty/matchmaking/search", headers=headers, json={"user_card_id": card.id}
+    )
+    assert first.status_code == 200
+    second = await client.post(
+        "/api/v1/games/penalty/matchmaking/search", headers=headers, json={"user_card_id": card.id}
+    )
+    assert second.status_code == 409
+    assert "уже ищешь" in second.json()["error"]["message"]
+
+
+async def test_penalty_two_waiting_players_get_paired(client, db_session, bot_token):
+    user_a = await _register(client, db_session, 862004, bot_token)
+    card_a = await _grant_card(db_session, user_a.id)
+    user_b = await _register(client, db_session, 862005, bot_token)
+    card_b = await _grant_card(db_session, user_b.id)
+    headers_a = telegram_headers(862004, bot_token)
+    headers_b = telegram_headers(862005, bot_token)
+
+    await client.post("/api/v1/games/penalty/matchmaking/search", headers=headers_a, json={"user_card_id": card_a.id})
+    await client.post("/api/v1/games/penalty/matchmaking/search", headers=headers_b, json={"user_card_id": card_b.id})
+
+    status_a = await client.get("/api/v1/games/penalty/matchmaking/status", headers=headers_a)
+    assert status_a.json()["status"] == "matched"
+    match_id = status_a.json()["match_id"]
+
+    status_b = await client.get("/api/v1/games/penalty/matchmaking/status", headers=headers_b)
+    assert status_b.json()["match_id"] == match_id
+
+    match_resp = await client.get(f"/api/v1/games/penalty/matches/{match_id}", headers=headers_a)
+    body = match_resp.json()
+    assert body["opponent_type"] == "online"
+    assert body["status"] == "in_progress"
+    assert body["kick_deadline"] is not None
+    assert body["match_deadline"] is not None
+
+
+async def test_penalty_search_timeout(client, db_session, bot_token):
+    from datetime import datetime, timedelta, timezone
+
+    user = await _register(client, db_session, 862006, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(862006, bot_token)
+    await client.post("/api/v1/games/penalty/matchmaking/search", headers=headers, json={"user_card_id": card.id})
+
+    entry = (
+        await db_session.execute(select(PenaltyQueueEntry).where(PenaltyQueueEntry.user_id == user.id))
+    ).scalar_one()
+    entry.created_at = datetime.now(timezone.utc) - timedelta(seconds=61)
+    db_session.add(entry)
+    await db_session.commit()
+
+    resp = await client.get("/api/v1/games/penalty/matchmaking/status", headers=headers)
+    assert resp.json()["status"] == "timeout"
+
+
+async def test_penalty_pairing_skips_entry_whose_card_was_traded_away(client, db_session, bot_token):
+    user_a = await _register(client, db_session, 862007, bot_token)
+    card_a = await _grant_card(db_session, user_a.id)
+    user_b = await _register(client, db_session, 862008, bot_token)
+    card_b = await _grant_card(db_session, user_b.id)
+    headers_a = telegram_headers(862007, bot_token)
+    headers_b = telegram_headers(862008, bot_token)
+
+    await client.post("/api/v1/games/penalty/matchmaking/search", headers=headers_a, json={"user_card_id": card_a.id})
+    await client.post("/api/v1/games/penalty/matchmaking/search", headers=headers_b, json={"user_card_id": card_b.id})
+
+    # Simulate card_b changing hands (e.g. via a trade) while both wait in the queue.
+    card_b.owner_id = user_a.id
+    db_session.add(card_b)
+    await db_session.commit()
+
+    status_a = await client.get("/api/v1/games/penalty/matchmaking/status", headers=headers_a)
+    assert status_a.json()["status"] == "searching"  # B's stale entry dropped, not a broken match
+
+
+async def test_penalty_cancel_search(client, db_session, bot_token):
+    user = await _register(client, db_session, 862009, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(862009, bot_token)
+    await client.post("/api/v1/games/penalty/matchmaking/search", headers=headers, json={"user_card_id": card.id})
+
+    resp = await client.post("/api/v1/games/penalty/matchmaking/cancel", headers=headers)
+    assert resp.status_code == 204
+    status = await client.get("/api/v1/games/penalty/matchmaking/status", headers=headers)
+    assert status.json()["status"] == "not_searching"

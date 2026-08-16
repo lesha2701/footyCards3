@@ -10,8 +10,8 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.timeutil import ensure_aware
 from app.models.card import UserCard
-from app.models.enums import MatchResult, NotificationType, PenaltyMatchStatus
-from app.models.penalty import PenaltyMatch
+from app.models.enums import MatchResult, NotificationType, PenaltyMatchStatus, PenaltyOpponentType
+from app.models.penalty import PenaltyMatch, PenaltyQueueEntry
 from app.models.user import User
 from app.schemas.penalty_match import PenaltyMatchOut, PenaltyRoundOut
 from app.services.game_config_service import get_config
@@ -485,3 +485,156 @@ async def get_match(db: AsyncSession, user: User, match_id: int) -> PenaltyMatch
         raise ForbiddenError("You are not part of this match")
     await db.refresh(match)
     return await _hydrate_match(db, match, user)
+
+
+# ---------------------------------------------------------------------------
+# Matchmaking
+# ---------------------------------------------------------------------------
+
+MATCHMAKING_TIMEOUT_SECONDS = 60
+
+
+async def start_search(db: AsyncSession, user: User, user_card_id: int) -> PenaltyQueueEntry:
+    if await _has_active_match(db, user.id):
+        raise ConflictError("У тебя уже есть матч в процессе — заверши его, прежде чем искать нового соперника")
+    existing = await db.execute(select(PenaltyQueueEntry).where(PenaltyQueueEntry.user_id == user.id))
+    if existing.scalar_one_or_none() is not None:
+        raise ConflictError("Ты уже ищешь соперника")
+    await _load_owned_card(db, user, user_card_id)
+
+    entry = PenaltyQueueEntry(user_id=user.id, user_card_id=user_card_id)
+    db.add(entry)
+    await db.commit()
+    await db.refresh(entry)
+    return entry
+
+
+async def get_search_status(db: AsyncSession, user: User) -> tuple[str, Optional[int]]:
+    """Also *is* the pairing attempt — every poller tries to pair itself
+    with the oldest other waiting entry. Mirrors tactico_service's
+    equivalent function, including its sorted-by-id lock ordering for the
+    two User rows (see the comment below) so this stays consistent with
+    _finish_match's `sorted([match.user_id, match.opponent_user_id])`
+    pattern rather than locking "self, then candidate"."""
+    result = await db.execute(
+        select(PenaltyQueueEntry).where(PenaltyQueueEntry.user_id == user.id)
+        .with_for_update().execution_options(populate_existing=True)
+    )
+    my_entry = result.scalar_one_or_none()
+    if my_entry is None:
+        return "not_searching", None
+
+    if my_entry.matched_match_id is not None:
+        await db.commit()
+        return "matched", my_entry.matched_match_id
+
+    if datetime.now(timezone.utc) - ensure_aware(my_entry.created_at) > timedelta(seconds=MATCHMAKING_TIMEOUT_SECONDS):
+        await db.delete(my_entry)
+        await db.commit()
+        return "timeout", None
+
+    candidate_result = await db.execute(
+        select(PenaltyQueueEntry)
+        .where(PenaltyQueueEntry.user_id != user.id, PenaltyQueueEntry.matched_match_id.is_(None))
+        .order_by(PenaltyQueueEntry.created_at)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+    if candidate is None:
+        await db.commit()
+        return "searching", None
+
+    config = await get_config(db)
+
+    async def _card_still_owned(card_id: int, owner_id: int) -> bool:
+        card_result = await db.execute(select(UserCard).where(UserCard.id == card_id))
+        card = card_result.scalar_one_or_none()
+        return card is not None and card.owner_id == owner_id
+
+    # Lock both user rows up front in sorted-by-id order — mirroring
+    # _finish_match's exact `sorted([match.user_id, match.opponent_user_id])`
+    # pattern — rather than "self, then candidate". Two concurrent pollers
+    # pairing the same two users would otherwise lock them in opposite order
+    # depending on which side is "self" for that particular request, which
+    # is a textbook lock-order deadlock risk.
+    first_id, second_id = sorted([user.id, candidate.user_id])
+    first_locked = await lock_user_for_update(db, first_id)
+    second_locked = await lock_user_for_update(db, second_id)
+    locked_user = first_locked if first_locked.id == user.id else second_locked
+    locked_candidate = first_locked if first_locked.id == candidate.user_id else second_locked
+
+    from app.services.penalty_service import _ensure_hourly_reset
+
+    await _ensure_hourly_reset(db, locked_user)
+    await _ensure_hourly_reset(db, locked_candidate)
+    db.add(locked_user)
+    db.add(locked_candidate)
+
+    # Re-validate everything right before creating the match — state may
+    # have drifted while both entries sat in the queue. Each side is
+    # checked independently; either, both, or neither may have gone stale.
+    stale: list[PenaltyQueueEntry] = []
+    if (
+        await _has_active_match(db, user.id)
+        or not await _card_still_owned(my_entry.user_card_id, user.id)
+        or locked_user.penalty_hourly_attempts >= config.hourly_game_limit
+    ):
+        stale.append(my_entry)
+    if (
+        await _has_active_match(db, candidate.user_id)
+        or not await _card_still_owned(candidate.user_card_id, candidate.user_id)
+        or locked_candidate.penalty_hourly_attempts >= config.hourly_game_limit
+    ):
+        stale.append(candidate)
+    if stale:
+        for entry in stale:
+            await db.delete(entry)
+        await db.commit()
+        return ("not_searching" if my_entry in stale else "searching"), None
+
+    locked_user.penalty_hourly_attempts += 1
+    locked_candidate.penalty_hourly_attempts += 1
+    db.add(locked_user)
+    db.add(locked_candidate)
+
+    now = datetime.now(timezone.utc)
+    match = PenaltyMatch(
+        user_id=locked_user.id,
+        opponent_user_id=locked_candidate.id,
+        opponent_name=locked_candidate.full_display_name(),
+        user_card_id=my_entry.user_card_id,
+        opponent_card_id=candidate.user_card_id,
+        opponent_type=PenaltyOpponentType.online,
+        status=PenaltyMatchStatus.in_progress,
+        server_state={
+            "kicks_taken": 0, "kicker": "user", "rounds": [],
+            "user_score": 0, "opponent_score": 0,
+            "user_pending_zone": None, "opponent_pending_zone": None,
+            "kick_deadline": (now + timedelta(seconds=KICK_TIMEOUT_SECONDS)).isoformat(),
+            "match_deadline": (now + timedelta(seconds=MATCH_TIMEOUT_SECONDS)).isoformat(),
+        },
+    )
+    db.add(match)
+    await db.flush()
+
+    my_entry.matched_match_id = match.id
+    candidate.matched_match_id = match.id
+    db.add(my_entry)
+    db.add(candidate)
+    await db.commit()
+    return "matched", match.id
+
+
+async def cancel_search(db: AsyncSession, user: User) -> None:
+    result = await db.execute(
+        select(PenaltyQueueEntry).where(PenaltyQueueEntry.user_id == user.id)
+        .with_for_update().execution_options(populate_existing=True)
+    )
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        raise NotFoundError("Ты не ищешь соперника")
+    if entry.matched_match_id is not None:
+        raise ConflictError("Соперник уже найден — матч начинается")
+    await db.delete(entry)
+    await db.commit()
