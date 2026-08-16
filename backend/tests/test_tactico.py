@@ -1045,3 +1045,22 @@ async def test_pairing_skips_candidate_with_stale_hourly_limit(client, db_sessio
     status_a = await client.get("/api/v1/tactico/matchmaking/status", headers=headers_a)
     # B is over its hourly limit — pairing must skip B rather than crash or pair anyway
     assert status_a.json()["status"] == "searching"
+
+
+# ---------------------------------------------------------------------------
+# Matchmaking endpoints — response shape (Task 4 scope, pinned here since the
+# router/schema were added in this task — see task-3-report.md)
+# ---------------------------------------------------------------------------
+
+async def test_search_endpoint_response_shape(client, db_session, bot_token):
+    headers = await _register(client, bot_token, 952015)
+    user = await get_user_by_telegram_id(db_session, 952015)
+    card_ids = await _build_squad_cards(db_session, user.id)
+    await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids})
+
+    resp = await client.post("/api/v1/tactico/matchmaking/search", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "searching"
+    assert body["match_id"] is None
+    assert body["created_at"] is not None

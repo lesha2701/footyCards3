@@ -874,17 +874,6 @@ async def get_match(db: AsyncSession, user: User, match_id: int) -> TacticoMatch
 MATCHMAKING_TIMEOUT_SECONDS = 60
 
 
-async def _hourly_slot_available(db: AsyncSession, user_id: int, config: GameConfig) -> bool:
-    """Non-raising check mirroring the first half of `_consume_hourly_slot` —
-    used to decide whether a queue entry is still eligible for pairing
-    without crashing the *other* player's poll if it turns out someone's
-    limit was hit while they sat in the queue."""
-    locked_user = await lock_user_for_update(db, user_id)
-    await _ensure_hourly_reset(locked_user)
-    db.add(locked_user)
-    return locked_user.tactico_hourly_attempts < config.hourly_game_limit
-
-
 async def start_search(db: AsyncSession, user: User) -> TacticoQueueEntry:
     if await _has_active_match(db, user.id):
         raise ConflictError("У тебя уже есть матч в процессе — заверши его, прежде чем искать нового соперника")
@@ -938,18 +927,38 @@ async def get_search_status(db: AsyncSession, user: User) -> tuple[str, Optional
     candidate_user = await db.get(User, candidate.user_id)
     config = await get_config(db)
 
+    # Lock both user rows up front in sorted-by-id order — mirroring
+    # _finish_match's exact `sorted([match.user_id, match.opponent_user_id])`
+    # pattern — rather than "self, then candidate". Two concurrent pollers
+    # pairing the same two users would otherwise lock them in opposite order
+    # depending on which side is "self" for that particular request, which
+    # is a textbook lock-order deadlock risk.
+    first_id, second_id = sorted([user.id, candidate.user_id])
+    first_locked = await lock_user_for_update(db, first_id)
+    second_locked = await lock_user_for_update(db, second_id)
+    locked_user = first_locked if first_locked.id == user.id else second_locked
+    locked_candidate = first_locked if first_locked.id == candidate.user_id else second_locked
+    await _ensure_hourly_reset(locked_user)
+    await _ensure_hourly_reset(locked_candidate)
+    db.add(locked_user)
+    db.add(locked_candidate)
+
     # Re-validate everything right before creating the match — state may
     # have drifted while both entries sat in the queue. Each side is
     # checked independently; either, both, or neither may have gone stale.
     squad_a = await get_squad(db, user)
     squad_b = await get_squad(db, candidate_user)
     stale: list[TacticoQueueEntry] = []
-    if await _has_active_match(db, user.id) or not squad_a.is_complete or not await _hourly_slot_available(db, user.id, config):
+    if (
+        await _has_active_match(db, user.id)
+        or not squad_a.is_complete
+        or locked_user.tactico_hourly_attempts >= config.hourly_game_limit
+    ):
         stale.append(my_entry)
     if (
         await _has_active_match(db, candidate.user_id)
         or not squad_b.is_complete
-        or not await _hourly_slot_available(db, candidate.user_id, config)
+        or locked_candidate.tactico_hourly_attempts >= config.hourly_game_limit
     ):
         stale.append(candidate)
     if stale:
@@ -958,8 +967,10 @@ async def get_search_status(db: AsyncSession, user: User) -> tuple[str, Optional
         await db.commit()
         return ("not_searching" if my_entry in stale else "searching"), None
 
-    locked_user = await _consume_hourly_slot(db, user.id, config)
-    locked_candidate = await _consume_hourly_slot(db, candidate.user_id, config)
+    locked_user.tactico_hourly_attempts += 1
+    locked_candidate.tactico_hourly_attempts += 1
+    db.add(locked_user)
+    db.add(locked_candidate)
 
     state = {
         "rounds": [],
