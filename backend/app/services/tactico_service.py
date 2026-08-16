@@ -904,8 +904,18 @@ async def get_search_status(db: AsyncSession, user: User) -> tuple[str, Optional
         return "not_searching", None
 
     if my_entry.matched_match_id is not None:
+        # This row has done its job — the caller now has the match id in
+        # hand — and start_search's "already searching" check doesn't
+        # distinguish matched from unmatched rows, so leaving it around
+        # would permanently block this player from ever searching again.
+        # Delete it now that it's been observed (mirrors the pairing branch
+        # below deleting the pairing caller's own row immediately, and
+        # relies on this same branch to clean up the candidate's row the
+        # first time *their* poll observes it).
+        match_id = my_entry.matched_match_id
+        await db.delete(my_entry)
         await db.commit()
-        return "matched", my_entry.matched_match_id
+        return "matched", match_id
 
     if datetime.now(timezone.utc) - ensure_aware(my_entry.created_at) > timedelta(seconds=MATCHMAKING_TIMEOUT_SECONDS):
         await db.delete(my_entry)
@@ -998,10 +1008,15 @@ async def get_search_status(db: AsyncSession, user: User) -> tuple[str, Optional
     db.add(match)
     await db.flush()
 
-    my_entry.matched_match_id = match.id
+    # The pairing caller (this request's `user`) already has match.id in
+    # hand and is about to return it directly — their row can be deleted
+    # right now. The candidate hasn't observed the match yet (they'll learn
+    # about it on their own next poll, via the `matched_match_id is not
+    # None` branch above), so their row must stay — with matched_match_id
+    # set — until then.
     candidate.matched_match_id = match.id
-    db.add(my_entry)
     db.add(candidate)
+    await db.delete(my_entry)
     await db.commit()
     return "matched", match.id
 

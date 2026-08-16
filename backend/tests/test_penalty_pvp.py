@@ -536,3 +536,60 @@ async def test_penalty_cancel_search(client, db_session, bot_token):
     assert resp.status_code == 204
     status = await client.get("/api/v1/games/penalty/matchmaking/status", headers=headers)
     assert status.json()["status"] == "not_searching"
+
+
+async def test_penalty_matched_player_can_search_again_after_row_cleanup(client, db_session, bot_token):
+    """Regression test for a queue-entry leak: get_search_status used to set
+    matched_match_id on both sides' PenaltyQueueEntry rows without ever
+    deleting either one. start_search's "already searching" check doesn't
+    distinguish matched from unmatched rows, so before the fix, *any* player
+    who had ever been matched once would hit a permanent 409 "уже ищешь" on
+    every future search attempt — matchmaking was effectively a one-time
+    feature per player. Covers both cleanup paths: the pairing caller (A),
+    whose row is deleted immediately when their own poll creates the match,
+    and the candidate (B), whose row is deleted the first time *their* own
+    poll observes the already-set matched_match_id."""
+    user_a = await _register(client, db_session, 862010, bot_token)
+    card_a = await _grant_card(db_session, user_a.id)
+    user_b = await _register(client, db_session, 862011, bot_token)
+    card_b = await _grant_card(db_session, user_b.id)
+    headers_a = telegram_headers(862010, bot_token)
+    headers_b = telegram_headers(862011, bot_token)
+
+    await client.post("/api/v1/games/penalty/matchmaking/search", headers=headers_a, json={"user_card_id": card_a.id})
+    await client.post("/api/v1/games/penalty/matchmaking/search", headers=headers_b, json={"user_card_id": card_b.id})
+
+    # A is the pairing caller: their poll both discovers and (per the fix)
+    # deletes their own queue row.
+    status_a = await client.get("/api/v1/games/penalty/matchmaking/status", headers=headers_a)
+    assert status_a.json()["status"] == "matched"
+    match_id = status_a.json()["match_id"]
+
+    # B is the candidate: this is B's own first poll, so it still correctly
+    # reports the match (both sides still learn about it, matching
+    # pre-fix behavior) — and, per the fix, cleans up B's row now too.
+    status_b = await client.get("/api/v1/games/penalty/matchmaking/status", headers=headers_b)
+    assert status_b.json()["status"] == "matched"
+    assert status_b.json()["match_id"] == match_id
+
+    no_queue_rows_left = (
+        await db_session.execute(select(PenaltyQueueEntry).where(PenaltyQueueEntry.user_id.in_([user_a.id, user_b.id])))
+    ).scalars().all()
+    assert no_queue_rows_left == []
+
+    # Resolve the match so the *separate*, correct "you have an active
+    # match" guard in start_search doesn't mask the bug this test targets.
+    forfeit = await client.post(f"/api/v1/games/penalty/matches/{match_id}/forfeit", headers=headers_a)
+    assert forfeit.status_code == 200
+
+    new_card_a = await _grant_card(db_session, user_a.id)
+    resp_a = await client.post(
+        "/api/v1/games/penalty/matchmaking/search", headers=headers_a, json={"user_card_id": new_card_a.id}
+    )
+    assert resp_a.status_code == 200  # would incorrectly 409 "уже ищешь" before the fix
+
+    new_card_b = await _grant_card(db_session, user_b.id)
+    resp_b = await client.post(
+        "/api/v1/games/penalty/matchmaking/search", headers=headers_b, json={"user_card_id": new_card_b.id}
+    )
+    assert resp_b.status_code == 200  # same fix, exercised via the candidate's cleanup path

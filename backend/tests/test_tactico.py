@@ -1004,6 +1004,14 @@ async def test_cancel_search_removes_entry(client, db_session, bot_token):
 
 
 async def test_cancel_search_rejected_once_matched(client, db_session, bot_token):
+    """Covers both sides of pairing, whose queue rows are now cleaned up at
+    different times (see the queue-entry-leak fix): the pairing caller's own
+    row is deleted the instant their poll discovers the match, so a cancel
+    afterward finds nothing to cancel (404). The candidate's row isn't
+    deleted until *their own* next poll observes matched_match_id, so a
+    cancel in that window still finds the row and correctly rejects it as
+    already matched (409) — the original bug-report scenario this test
+    guarded against."""
     headers_a = await _register(client, bot_token, 952011)
     user_a = await get_user_by_telegram_id(db_session, 952011)
     card_ids_a = await _build_squad_cards(db_session, user_a.id)
@@ -1017,9 +1025,70 @@ async def test_cancel_search_rejected_once_matched(client, db_session, bot_token
     await client.post("/api/v1/tactico/matchmaking/search", headers=headers_b)
     await client.get("/api/v1/tactico/matchmaking/status", headers=headers_a)  # triggers pairing
 
-    resp = await client.post("/api/v1/tactico/matchmaking/cancel", headers=headers_a)
-    assert resp.status_code == 409
-    assert "уже найден" in resp.json()["error"]["message"]
+    # B (the candidate) hasn't polled status yet, so their queue row still
+    # exists with matched_match_id set — cancelling still correctly rejects.
+    resp_b = await client.post("/api/v1/tactico/matchmaking/cancel", headers=headers_b)
+    assert resp_b.status_code == 409
+    assert "уже найден" in resp_b.json()["error"]["message"]
+
+    # A (the pairing caller) already had their own row deleted the moment
+    # their poll returned "matched" above — nothing left to cancel.
+    resp_a = await client.post("/api/v1/tactico/matchmaking/cancel", headers=headers_a)
+    assert resp_a.status_code == 404
+    assert "не ищешь" in resp_a.json()["error"]["message"]
+
+
+async def test_matched_player_can_search_again_after_row_cleanup(client, db_session, bot_token):
+    """Regression test for a queue-entry leak: get_search_status used to set
+    matched_match_id on both sides' TacticoQueueEntry rows without ever
+    deleting either one. start_search's "already searching" check doesn't
+    distinguish matched from unmatched rows, so before the fix, *any* player
+    who had ever been matched once would hit a permanent 409 "уже ищешь" on
+    every future search attempt — matchmaking was effectively a one-time
+    feature per player. Covers both cleanup paths: the pairing caller (A),
+    whose row is deleted immediately when their own poll creates the match,
+    and the candidate (B), whose row is deleted the first time *their* own
+    poll observes the already-set matched_match_id."""
+    headers_a = await _register(client, bot_token, 952020)
+    user_a = await get_user_by_telegram_id(db_session, 952020)
+    card_ids_a = await _build_squad_cards(db_session, user_a.id)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": card_ids_a})
+    headers_b = await _register(client, bot_token, 952021)
+    user_b = await get_user_by_telegram_id(db_session, 952021)
+    card_ids_b = await _build_squad_cards(db_session, user_b.id)
+    await client.put("/api/v1/tactico/squad", headers=headers_b, json={"user_card_ids": card_ids_b})
+
+    await client.post("/api/v1/tactico/matchmaking/search", headers=headers_a)
+    await client.post("/api/v1/tactico/matchmaking/search", headers=headers_b)
+
+    # A is the pairing caller: their poll both discovers and (per the fix)
+    # deletes their own queue row.
+    status_a = await client.get("/api/v1/tactico/matchmaking/status", headers=headers_a)
+    assert status_a.json()["status"] == "matched"
+    match_id = status_a.json()["match_id"]
+
+    # B is the candidate: this is B's own first poll, so it still correctly
+    # reports the match (both sides still learn about it, matching pre-fix
+    # behavior) — and, per the fix, cleans up B's row now too.
+    status_b = await client.get("/api/v1/tactico/matchmaking/status", headers=headers_b)
+    assert status_b.json()["status"] == "matched"
+    assert status_b.json()["match_id"] == match_id
+
+    no_queue_rows_left = (
+        await db_session.execute(select(TacticoQueueEntry).where(TacticoQueueEntry.user_id.in_([user_a.id, user_b.id])))
+    ).scalars().all()
+    assert no_queue_rows_left == []
+
+    # Resolve the match so the *separate*, correct "you have an active
+    # match" guard in start_search doesn't mask the bug this test targets.
+    forfeit = await client.post(f"/api/v1/tactico/matches/{match_id}/forfeit", headers=headers_a)
+    assert forfeit.status_code == 200
+
+    resp_a = await client.post("/api/v1/tactico/matchmaking/search", headers=headers_a)
+    assert resp_a.status_code == 200  # would incorrectly 409 "уже ищешь" before the fix
+
+    resp_b = await client.post("/api/v1/tactico/matchmaking/search", headers=headers_b)
+    assert resp_b.status_code == 200  # same fix, exercised via the candidate's cleanup path
 
 
 async def test_pairing_skips_candidate_with_stale_hourly_limit(client, db_session, bot_token):
