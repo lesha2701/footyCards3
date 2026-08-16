@@ -1117,6 +1117,138 @@ async def test_pairing_skips_candidate_with_stale_hourly_limit(client, db_sessio
 
 
 # ---------------------------------------------------------------------------
+# Matchmaking — final whole-branch review fix wave (Critical Fixes 1 & 2, and
+# the hourly-limit-at-search-time part of Important Fix 4)
+# ---------------------------------------------------------------------------
+
+async def test_stale_queue_entry_is_never_selected_as_pairing_candidate(client, db_session, bot_token):
+    """Regression for Critical Fix 2: the candidate query used to have no
+    created_at cutoff, and ORDER BY created_at picked the OLDEST entry —
+    exactly the one most likely to be an abandoned ghost. A live searcher
+    must not get paired with a queue entry older than
+    MATCHMAKING_TIMEOUT_SECONDS, and that ghost entry must be left alone
+    (only the caller's own row is ever touched by get_search_status)."""
+    headers_a = await _register(client, bot_token, 952030)
+    user_a = await get_user_by_telegram_id(db_session, 952030)
+    card_ids_a = await _build_squad_cards(db_session, user_a.id)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": card_ids_a})
+
+    await _register(client, bot_token, 952031)
+    ghost_user = await get_user_by_telegram_id(db_session, 952031)
+    ghost_entry = TacticoQueueEntry(
+        user_id=ghost_user.id, created_at=datetime.now(timezone.utc) - timedelta(hours=3)
+    )
+    db_session.add(ghost_entry)
+    await db_session.commit()
+
+    resp = await client.post("/api/v1/tactico/matchmaking/search", headers=headers_a)
+    assert resp.status_code == 200
+
+    status_a = await client.get("/api/v1/tactico/matchmaking/status", headers=headers_a)
+    assert status_a.json()["status"] == "searching"  # not paired with the 3h-old ghost
+
+    remaining = (
+        await db_session.execute(select(TacticoQueueEntry).where(TacticoQueueEntry.user_id == ghost_user.id))
+    ).scalar_one_or_none()
+    assert remaining is not None and remaining.id == ghost_entry.id  # untouched
+
+
+async def test_search_reclaims_own_entry_stale_past_timeout(client, db_session, bot_token):
+    """Regression for Critical Fix 1: start_search used to raise 409 on ANY
+    pre-existing queue row unconditionally, permanently locking out a player
+    whose client stopped polling (page refresh, backgrounded WebView,
+    dropped connection) while a row existed. A row aged past
+    MATCHMAKING_TIMEOUT_SECONDS must now be reclaimed instead."""
+    headers = await _register(client, bot_token, 952032)
+    user = await get_user_by_telegram_id(db_session, 952032)
+    card_ids = await _build_squad_cards(db_session, user.id)
+    await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids})
+
+    stale_created_at = datetime.now(timezone.utc) - timedelta(seconds=61)
+    stale_entry = TacticoQueueEntry(user_id=user.id, created_at=stale_created_at)
+    db_session.add(stale_entry)
+    await db_session.commit()
+
+    resp = await client.post("/api/v1/tactico/matchmaking/search", headers=headers)
+    assert resp.status_code == 200  # would incorrectly 409 "уже ищешь" before the fix
+
+    # The search API call ran in its own DB session (see conftest's
+    # _override_get_db); this session's identity map may still hold the
+    # pre-reclaim in-memory object under the same primary key (SQLite
+    # readily reuses rowids on a near-empty table), which would otherwise
+    # mask the fresh row's data. Expire so the next query re-reads from DB.
+    entries = (
+        await db_session.execute(
+            select(TacticoQueueEntry).where(TacticoQueueEntry.user_id == user.id)
+            .execution_options(populate_existing=True)
+        )
+    ).scalars().all()
+    assert len(entries) == 1
+    from app.core.timeutil import ensure_aware
+
+    assert ensure_aware(entries[0].created_at) > stale_created_at  # a genuinely fresh row, not the stale one
+
+
+async def test_search_reclaims_own_entry_already_matched(client, db_session, bot_token):
+    """Regression for Critical Fix 1's second reclaim branch: a queue row
+    with matched_match_id already set (the player got matched via someone
+    else's poll but never checked back) must also be reclaimable — not just
+    time-expired rows."""
+    headers = await _register(client, bot_token, 952033)
+    user = await get_user_by_telegram_id(db_session, 952033)
+    card_ids = await _build_squad_cards(db_session, user.id)
+    await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids})
+
+    other_headers = await _register(client, bot_token, 952034)
+    other_user = await get_user_by_telegram_id(db_session, 952034)
+    other_cards = await _build_squad_cards(db_session, other_user.id)
+    await client.put("/api/v1/tactico/squad", headers=other_headers, json={"user_card_ids": other_cards})
+    bot_match = await client.post("/api/v1/tactico/matches/bot", headers=other_headers, json={"difficulty": "easy"})
+    match_id = bot_match.json()["id"]
+
+    matched_entry = TacticoQueueEntry(user_id=user.id, matched_match_id=match_id)
+    db_session.add(matched_entry)
+    await db_session.commit()
+
+    resp = await client.post("/api/v1/tactico/matchmaking/search", headers=headers)
+    assert resp.status_code == 200  # would incorrectly 409 "уже ищешь" before the fix
+
+    entries = (
+        await db_session.execute(
+            select(TacticoQueueEntry).where(TacticoQueueEntry.user_id == user.id)
+            .execution_options(populate_existing=True)
+        )
+    ).scalars().all()
+    assert len(entries) == 1
+    assert entries[0].matched_match_id is None
+
+
+async def test_search_rejects_when_hourly_limit_already_reached(client, db_session, bot_token):
+    """Regression for Important Fix 4: the hourly limit must be checked as a
+    precondition at start_search time (non-consuming), not only at pairing
+    time — a player already over the limit must not be allowed to join the
+    queue and burn the full 60s wait for nothing."""
+    headers = await _register(client, bot_token, 952035)
+    user = await get_user_by_telegram_id(db_session, 952035)
+    card_ids = await _build_squad_cards(db_session, user.id)
+    await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids})
+    await _set_config(db_session, hourly_game_limit=1)
+    user.tactico_hourly_attempts = 1
+    user.tactico_hour_started_at = datetime.now(timezone.utc)
+    db_session.add(user)
+    await db_session.commit()
+
+    resp = await client.post("/api/v1/tactico/matchmaking/search", headers=headers)
+    assert resp.status_code == 409
+    assert resp.json()["error"]["details"]["hourly_limit"] == 1
+
+    entries = (
+        await db_session.execute(select(TacticoQueueEntry).where(TacticoQueueEntry.user_id == user.id))
+    ).scalars().all()
+    assert entries == []  # the check must not have created a queue row before rejecting
+
+
+# ---------------------------------------------------------------------------
 # Matchmaking endpoints — response shape (Task 4 scope, pinned here since the
 # router/schema were added in this task — see task-3-report.md)
 # ---------------------------------------------------------------------------

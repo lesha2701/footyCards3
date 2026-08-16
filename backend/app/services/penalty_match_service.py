@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
@@ -497,14 +498,68 @@ MATCHMAKING_TIMEOUT_SECONDS = 60
 async def start_search(db: AsyncSession, user: User, user_card_id: int) -> PenaltyQueueEntry:
     if await _has_active_match(db, user.id):
         raise ConflictError("У тебя уже есть матч в процессе — заверши его, прежде чем искать нового соперника")
-    existing = await db.execute(select(PenaltyQueueEntry).where(PenaltyQueueEntry.user_id == user.id))
-    if existing.scalar_one_or_none() is not None:
-        raise ConflictError("Ты уже ищешь соперника")
+
+    result = await db.execute(
+        select(PenaltyQueueEntry).where(PenaltyQueueEntry.user_id == user.id)
+        .with_for_update().execution_options(populate_existing=True)
+    )
+    existing = result.scalar_one_or_none()
+    if existing is not None:
+        # A queue row only ever gets cleaned up by its owner's own poll (see
+        # get_search_status's two delete branches) or an explicit
+        # cancel_search — a client that stops polling mid-search (page
+        # refresh re-POSTing search, a backgrounded Telegram WebView, a
+        # dropped connection) would otherwise leave an orphaned row behind
+        # that unconditionally 409s every future search attempt forever.
+        # Reclaim it instead: a row already matched (the owner never came
+        # back to observe it) or one that's aged past the matchmaking
+        # window is safe to replace with a fresh search.
+        reclaimable = (
+            existing.matched_match_id is not None
+            or datetime.now(timezone.utc) - ensure_aware(existing.created_at) > timedelta(seconds=MATCHMAKING_TIMEOUT_SECONDS)
+        )
+        if not reclaimable:
+            raise ConflictError("Ты уже ищешь соперника")
+        await db.delete(existing)
+        await db.flush()
+
     await _load_owned_card(db, user, user_card_id)
+
+    # Non-consuming precondition check, mirroring _consume_hourly_slot's own
+    # check exactly (same error shape, so the frontend's existing
+    # formatGameError special-case for details.hourly_limit already renders
+    # the right message) — but this does NOT increment the counter. A
+    # player over their hourly limit shouldn't be allowed to join the queue
+    # at all and burn the full 60s (or get silently dropped as stale the
+    # moment a candidate appears); actual slot consumption still only
+    # happens in get_search_status, at real pairing time.
+    config = await get_config(db)
+    from app.services.penalty_service import _ensure_hourly_reset
+
+    locked_user = await lock_user_for_update(db, user.id)
+    await _ensure_hourly_reset(db, locked_user)
+    if locked_user.penalty_hourly_attempts >= config.hourly_game_limit:
+        remaining = timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(locked_user.penalty_hour_started_at))
+        raise ConflictError(
+            "Hourly play limit reached for this game",
+            details={
+                "hourly_limit": config.hourly_game_limit,
+                "retry_after_seconds": max(0, int(remaining.total_seconds())),
+            },
+        )
+    db.add(locked_user)
 
     entry = PenaltyQueueEntry(user_id=user.id, user_card_id=user_card_id)
     db.add(entry)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # A genuinely concurrent duplicate search request from the same user
+        # (e.g. a retried network call) lost the race for the unique
+        # constraint on user_id — surface it as the same clean 409 rather
+        # than a raw 500.
+        await db.rollback()
+        raise ConflictError("Ты уже ищешь соперника")
     await db.refresh(entry)
     return entry
 
@@ -543,9 +598,27 @@ async def get_search_status(db: AsyncSession, user: User) -> tuple[str, Optional
         await db.commit()
         return "timeout", None
 
+    # Exclude entries older than the matchmaking window: without this cutoff
+    # an abandoned/ghost row (owner stopped polling) is still a valid — and,
+    # being the oldest, *preferred* — pairing candidate, so a live searcher
+    # would get paired with a ghost that never resolves instead of another
+    # live searcher.
+    #
+    # Note on SKIP LOCKED: two pollers whose requests overlap in the same
+    # instant cannot pair with each other on that exact tick — each holds
+    # FOR UPDATE on its own row (acquired above) for the duration of its own
+    # transaction, making it invisible to the other's SKIP LOCKED scan here.
+    # This self-resolves on the next ~2s poll and is what makes the
+    # algorithm safe under concurrency, but it's non-obvious enough that a
+    # future reader could otherwise expect symmetric same-tick pairing.
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=MATCHMAKING_TIMEOUT_SECONDS)
     candidate_result = await db.execute(
         select(PenaltyQueueEntry)
-        .where(PenaltyQueueEntry.user_id != user.id, PenaltyQueueEntry.matched_match_id.is_(None))
+        .where(
+            PenaltyQueueEntry.user_id != user.id,
+            PenaltyQueueEntry.matched_match_id.is_(None),
+            PenaltyQueueEntry.created_at > cutoff,
+        )
         .order_by(PenaltyQueueEntry.created_at)
         .limit(1)
         .with_for_update(skip_locked=True)
@@ -609,6 +682,12 @@ async def get_search_status(db: AsyncSession, user: User) -> tuple[str, Optional
     db.add(locked_candidate)
 
     now = datetime.now(timezone.utc)
+    # Both players sit through a ~3s mandatory reveal screen before reaching
+    # the match page, and the candidate specifically only discovers the
+    # match via their own next status poll (up to ~2s later) — without this
+    # margin the 10s first-kick clock could be half gone, or expired
+    # entirely, before the candidate even arrives.
+    FIRST_KICK_MARGIN_SECONDS = 8
     match = PenaltyMatch(
         user_id=locked_user.id,
         opponent_user_id=locked_candidate.id,
@@ -621,7 +700,7 @@ async def get_search_status(db: AsyncSession, user: User) -> tuple[str, Optional
             "kicks_taken": 0, "kicker": "user", "rounds": [],
             "user_score": 0, "opponent_score": 0,
             "user_pending_zone": None, "opponent_pending_zone": None,
-            "kick_deadline": (now + timedelta(seconds=KICK_TIMEOUT_SECONDS)).isoformat(),
+            "kick_deadline": (now + timedelta(seconds=FIRST_KICK_MARGIN_SECONDS + KICK_TIMEOUT_SECONDS)).isoformat(),
             "match_deadline": (now + timedelta(seconds=MATCH_TIMEOUT_SECONDS)).isoformat(),
         },
     )
@@ -637,6 +716,22 @@ async def get_search_status(db: AsyncSession, user: User) -> tuple[str, Optional
     candidate.matched_match_id = match.id
     db.add(candidate)
     await db.delete(my_entry)
+
+    # Unlike the friend-challenge flows, the candidate side of a matchmaking
+    # pairing has no other signal that a match now exists — if they've left
+    # the search screen they'd otherwise have no way to learn about it
+    # (it would silently resolve as a loss via the timeout sweep instead).
+    # No dedicated "match started" notification type exists for Penalty;
+    # reuse penalty_challenge_accepted (already reused elsewhere in this
+    # file for more than its literal name suggests, e.g. _finish_match's
+    # "Пенальти завершены" notifications) rather than adding a new enum
+    # member for this fix wave.
+    await notify(
+        db, candidate.user_id, NotificationType.penalty_challenge_accepted,
+        "Соперник найден!", "Начинается серия пенальти — не пропусти первый удар.",
+        "penalty_match", match.id,
+    )
+
     await db.commit()
     return "matched", match.id
 

@@ -61,7 +61,14 @@ export default function PenaltySearchPage({ userCardId }: { userCardId: number }
 
   useEffect(() => {
     if (!status) return;
-    if (status.status === "timeout") {
+    if (status.status === "timeout" || status.status === "not_searching") {
+      // "not_searching" happens when the pairing algorithm drops our own
+      // entry as stale during a pairing attempt (active match / card
+      // traded away / hourly limit — see get_search_status's
+      // re-validation). Without this branch the player would poll a
+      // nonexistent search forever, with only "Отменить" as an escape —
+      // and that call would itself 404 since the row is already gone.
+      // Treat it the same as a plain timeout.
       setPhase("timeout");
     } else if (status.status === "matched" && status.match_id) {
       const matchId = status.match_id;

@@ -593,3 +593,161 @@ async def test_penalty_matched_player_can_search_again_after_row_cleanup(client,
         "/api/v1/games/penalty/matchmaking/search", headers=headers_b, json={"user_card_id": new_card_b.id}
     )
     assert resp_b.status_code == 200  # same fix, exercised via the candidate's cleanup path
+
+
+# ---------------------------------------------------------------------------
+# Matchmaking — final whole-branch review fix wave (Critical Fixes 1 & 2, and
+# the hourly-limit-at-search-time part of Important Fix 4). Mirrors
+# test_tactico.py's equivalent tests identically in shape.
+# ---------------------------------------------------------------------------
+
+async def _set_config(db_session, **overrides) -> None:
+    from app.models.game_config import GameConfig
+
+    config = await db_session.get(GameConfig, 1)
+    if config is None:
+        config = GameConfig(id=1)
+        db_session.add(config)
+    for key, value in overrides.items():
+        setattr(config, key, value)
+    await db_session.commit()
+
+
+async def test_penalty_stale_queue_entry_is_never_selected_as_pairing_candidate(client, db_session, bot_token):
+    """Regression for Critical Fix 2: the candidate query used to have no
+    created_at cutoff, and ORDER BY created_at picked the OLDEST entry —
+    exactly the one most likely to be an abandoned ghost. A live searcher
+    must not get paired with a queue entry older than
+    MATCHMAKING_TIMEOUT_SECONDS, and that ghost entry must be left alone
+    (only the caller's own row is ever touched by get_search_status)."""
+    from datetime import datetime, timedelta, timezone
+
+    user_a = await _register(client, db_session, 862020, bot_token)
+    card_a = await _grant_card(db_session, user_a.id)
+    headers_a = telegram_headers(862020, bot_token)
+
+    ghost_user = await _register(client, db_session, 862021, bot_token)
+    ghost_card = await _grant_card(db_session, ghost_user.id)
+    ghost_entry = PenaltyQueueEntry(
+        user_id=ghost_user.id, user_card_id=ghost_card.id,
+        created_at=datetime.now(timezone.utc) - timedelta(hours=3),
+    )
+    db_session.add(ghost_entry)
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/v1/games/penalty/matchmaking/search", headers=headers_a, json={"user_card_id": card_a.id}
+    )
+    assert resp.status_code == 200
+
+    status_a = await client.get("/api/v1/games/penalty/matchmaking/status", headers=headers_a)
+    assert status_a.json()["status"] == "searching"  # not paired with the 3h-old ghost
+
+    remaining = (
+        await db_session.execute(select(PenaltyQueueEntry).where(PenaltyQueueEntry.user_id == ghost_user.id))
+    ).scalar_one_or_none()
+    assert remaining is not None and remaining.id == ghost_entry.id  # untouched
+
+
+async def test_penalty_search_reclaims_own_entry_stale_past_timeout(client, db_session, bot_token):
+    """Regression for Critical Fix 1: start_search used to raise 409 on ANY
+    pre-existing queue row unconditionally, permanently locking out a player
+    whose client stopped polling while a row existed. A row aged past
+    MATCHMAKING_TIMEOUT_SECONDS must now be reclaimed instead."""
+    from datetime import datetime, timedelta, timezone
+
+    user = await _register(client, db_session, 862022, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(862022, bot_token)
+
+    stale_created_at = datetime.now(timezone.utc) - timedelta(seconds=61)
+    stale_entry = PenaltyQueueEntry(user_id=user.id, user_card_id=card.id, created_at=stale_created_at)
+    db_session.add(stale_entry)
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/v1/games/penalty/matchmaking/search", headers=headers, json={"user_card_id": card.id}
+    )
+    assert resp.status_code == 200  # would incorrectly 409 "уже ищешь" before the fix
+
+    # The search API call ran in its own DB session (see conftest's
+    # _override_get_db); this session's identity map may still hold the
+    # pre-reclaim in-memory object under the same primary key (SQLite
+    # readily reuses rowids on a near-empty table), which would otherwise
+    # mask the fresh row's data. Expire so the next query re-reads from DB.
+    entries = (
+        await db_session.execute(
+            select(PenaltyQueueEntry).where(PenaltyQueueEntry.user_id == user.id)
+            .execution_options(populate_existing=True)
+        )
+    ).scalars().all()
+    assert len(entries) == 1
+    from app.core.timeutil import ensure_aware
+
+    assert ensure_aware(entries[0].created_at) > stale_created_at  # a genuinely fresh row, not the stale one
+
+
+async def test_penalty_search_reclaims_own_entry_already_matched(client, db_session, bot_token):
+    """Regression for Critical Fix 1's second reclaim branch: a queue row
+    with matched_match_id already set (the player got matched via someone
+    else's poll but never checked back) must also be reclaimable — not just
+    time-expired rows."""
+    user = await _register(client, db_session, 862023, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(862023, bot_token)
+
+    other_user = await _register(client, db_session, 862024, bot_token)
+    other_card = await _grant_card(db_session, other_user.id)
+    other_receiver = await _register(client, db_session, 862025, bot_token)
+    other_receiver_card = await _grant_card(db_session, other_receiver.id)
+    challenge = await client.post(
+        "/api/v1/games/penalty/challenges", headers=telegram_headers(862024, bot_token),
+        json={"opponent_user_id": other_receiver.id, "user_card_id": other_card.id},
+    )
+    match_id = challenge.json()["id"]
+
+    matched_entry = PenaltyQueueEntry(user_id=user.id, user_card_id=card.id, matched_match_id=match_id)
+    db_session.add(matched_entry)
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/v1/games/penalty/matchmaking/search", headers=headers, json={"user_card_id": card.id}
+    )
+    assert resp.status_code == 200  # would incorrectly 409 "уже ищешь" before the fix
+
+    entries = (
+        await db_session.execute(
+            select(PenaltyQueueEntry).where(PenaltyQueueEntry.user_id == user.id)
+            .execution_options(populate_existing=True)
+        )
+    ).scalars().all()
+    assert len(entries) == 1
+    assert entries[0].matched_match_id is None
+
+
+async def test_penalty_search_rejects_when_hourly_limit_already_reached(client, db_session, bot_token):
+    """Regression for Important Fix 4: the hourly limit must be checked as a
+    precondition at start_search time (non-consuming), not only at pairing
+    time — a player already over the limit must not be allowed to join the
+    queue and burn the full 60s wait for nothing."""
+    from datetime import datetime, timezone
+
+    user = await _register(client, db_session, 862026, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(862026, bot_token)
+    await _set_config(db_session, hourly_game_limit=1)
+    user.penalty_hourly_attempts = 1
+    user.penalty_hour_started_at = datetime.now(timezone.utc)
+    db_session.add(user)
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/v1/games/penalty/matchmaking/search", headers=headers, json={"user_card_id": card.id}
+    )
+    assert resp.status_code == 409
+    assert resp.json()["error"]["details"]["hourly_limit"] == 1
+
+    entries = (
+        await db_session.execute(select(PenaltyQueueEntry).where(PenaltyQueueEntry.user_id == user.id))
+    ).scalars().all()
+    assert entries == []  # the check must not have created a queue row before rejecting
