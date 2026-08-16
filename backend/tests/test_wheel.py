@@ -116,6 +116,8 @@ async def test_grant_badge_prize_grants_new_badge(client, db_session, bot_token)
         await db_session.execute(select(UserBadge).where(UserBadge.user_id == user.id, UserBadge.badge_id == badge.id))
     ).scalar_one_or_none()
     assert owned is not None
+    await db_session.refresh(user)
+    assert user.active_badge_id == badge.id
 
 
 async def test_grant_duplicate_badge_prize_credits_coins_instead(client, db_session, bot_token):

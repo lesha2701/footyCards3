@@ -128,6 +128,10 @@ async def _grant_prize(db: AsyncSession, user: User, prize: WheelPrize, source: 
         )
         if existing.scalar_one_or_none() is None:
             db.add(UserBadge(user_id=user.id, badge_id=prize.badge_id))
+            # Auto-equip, matching stars_payment_service._grant_pack_badge —
+            # otherwise a newly-won badge never shows next to the player's
+            # nickname unless they separately go pick it as active.
+            user.active_badge_id = prize.badge_id
             badge_result = BadgeOut.model_validate(prize.badge)
             spin.badge_granted = True
         else:
