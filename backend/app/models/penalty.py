@@ -5,7 +5,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
-from app.models.enums import MatchResult, PenaltyMatchStatus
+from app.models.enums import MatchResult, PenaltyMatchStatus, PenaltyOpponentType
 from app.models.mixins import utcnow
 
 
@@ -23,6 +23,10 @@ class PenaltyMatch(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     opponent_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    opponent_type: Mapped[PenaltyOpponentType] = mapped_column(
+        Enum(PenaltyOpponentType, name="penalty_opponent_type_enum"),
+        default=PenaltyOpponentType.friend, nullable=False,
+    )
     user_card_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True
     )
@@ -41,3 +45,22 @@ class PenaltyMatch(Base):
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class PenaltyQueueEntry(Base):
+    """One player currently searching for a Penalty opponent via
+    matchmaking. Mirrors TacticoQueueEntry — see that model's docstring for
+    how `matched_match_id` gets set (tactico_service.get_search_status's
+    pairing algorithm, reused identically in penalty_match_service)."""
+
+    __tablename__ = "penalty_queue_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    )
+    user_card_id: Mapped[int] = mapped_column(ForeignKey("user_cards.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    matched_match_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("penalty_matches.id", ondelete="SET NULL"), nullable=True
+    )

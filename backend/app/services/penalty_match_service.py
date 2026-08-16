@@ -240,6 +240,7 @@ async def _hydrate_match(db: AsyncSession, match: PenaltyMatch, viewer: User) ->
     return PenaltyMatchOut(
         id=match.id,
         opponent_name=opponent_name,
+        opponent_type=match.opponent_type,
         opponent_user_id=opponent_user_id,
         status=match.status,
         viewer_side=side,

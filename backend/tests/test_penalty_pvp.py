@@ -395,3 +395,38 @@ async def test_penalty_pvp_forfeit_rejects_already_finished_match(client, db_ses
 
     second = await client.post(f"/api/v1/games/penalty/matches/{match_id}/forfeit", headers=sender_headers)
     assert second.status_code == 409
+
+
+from app.models.enums import PenaltyOpponentType
+from app.models.penalty import PenaltyQueueEntry
+
+
+async def test_penalty_opponent_type_has_friend_and_online():
+    assert PenaltyOpponentType.friend == "friend"
+    assert PenaltyOpponentType.online == "online"
+
+
+async def test_existing_penalty_match_defaults_opponent_type_to_friend(client, db_session, bot_token):
+    sender = await _register(client, db_session, 861001, bot_token)
+    receiver = await _register(client, db_session, 861002, bot_token)
+    sender_card = await _grant_card(db_session, sender.id)
+
+    resp = await client.post(
+        "/api/v1/games/penalty/challenges", headers=telegram_headers(861001, bot_token),
+        json={"opponent_user_id": receiver.id, "user_card_id": sender_card.id},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["opponent_type"] == "friend"
+
+
+async def test_penalty_queue_entry_roundtrip(client, db_session, bot_token):
+    user = await _register(client, db_session, 861003, bot_token)
+    card = await _grant_card(db_session, user.id)
+
+    entry = PenaltyQueueEntry(user_id=user.id, user_card_id=card.id)
+    db_session.add(entry)
+    await db_session.commit()
+    await db_session.refresh(entry)
+
+    assert entry.id is not None
+    assert entry.matched_match_id is None

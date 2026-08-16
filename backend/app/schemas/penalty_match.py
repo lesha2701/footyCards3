@@ -3,7 +3,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel
 
-from app.models.enums import MatchResult, PenaltyMatchStatus
+from app.models.enums import MatchResult, PenaltyMatchStatus, PenaltyOpponentType
 
 
 class PenaltyRoundOut(BaseModel):
@@ -16,6 +16,7 @@ class PenaltyRoundOut(BaseModel):
 class PenaltyMatchOut(BaseModel):
     id: int
     opponent_name: str
+    opponent_type: PenaltyOpponentType
     opponent_user_id: Optional[int] = None
     status: PenaltyMatchStatus
     viewer_side: Literal["user", "opponent"]

@@ -128,6 +128,11 @@ class TacticoOpponentType(str, enum.Enum):
     online = "online"
 
 
+class PenaltyOpponentType(str, enum.Enum):
+    friend = "friend"
+    online = "online"
+
+
 class TacticoMatchStatus(str, enum.Enum):
     pending_accept = "pending_accept"
     in_progress = "in_progress"
