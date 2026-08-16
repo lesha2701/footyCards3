@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { PenaltyDirection, PenaltyMatch } from "@/types";
+import type { PenaltyDirection, PenaltyMatch, PenaltySearchStatus } from "@/types";
 
 export async function createPenaltyChallenge(opponentUserId: number, userCardId: number): Promise<PenaltyMatch> {
   const { data } = await api.post<PenaltyMatch>("/games/penalty/challenges", {
@@ -41,4 +41,20 @@ export async function fetchPenaltyMatches(): Promise<PenaltyMatch[]> {
 export async function fetchPenaltyMatch(id: number): Promise<PenaltyMatch> {
   const { data } = await api.get<PenaltyMatch>(`/games/penalty/matches/${id}`);
   return data;
+}
+
+export async function startPenaltySearch(userCardId: number): Promise<PenaltySearchStatus> {
+  const { data } = await api.post<PenaltySearchStatus>("/games/penalty/matchmaking/search", {
+    user_card_id: userCardId,
+  });
+  return data;
+}
+
+export async function fetchPenaltySearchStatus(): Promise<PenaltySearchStatus> {
+  const { data } = await api.get<PenaltySearchStatus>("/games/penalty/matchmaking/status");
+  return data;
+}
+
+export async function cancelPenaltySearch(): Promise<void> {
+  await api.post("/games/penalty/matchmaking/cancel");
 }

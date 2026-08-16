@@ -698,6 +698,7 @@ export interface PenaltyForfeitResult {
 }
 
 export type PenaltyMatchStatus = "pending_accept" | "in_progress" | "finished" | "declined" | "cancelled" | "expired";
+export type PenaltyOpponentType = "friend" | "online";
 
 export interface PenaltyRound {
   kicker: "user" | "opponent";
@@ -709,6 +710,7 @@ export interface PenaltyRound {
 export interface PenaltyMatch {
   id: number;
   opponent_name: string;
+  opponent_type: PenaltyOpponentType;
   opponent_user_id: number | null;
   status: PenaltyMatchStatus;
   viewer_side: "user" | "opponent";
@@ -724,6 +726,12 @@ export interface PenaltyMatch {
   created_at: string;
   expires_at: string | null;
   resolved_at: string | null;
+}
+
+export interface PenaltySearchStatus {
+  status: "not_searching" | "searching" | "matched" | "timeout";
+  match_id: number | null;
+  created_at: string | null;
 }
 
 export interface FreeKickNextKick {
