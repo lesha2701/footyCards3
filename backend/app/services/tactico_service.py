@@ -21,7 +21,7 @@ from app.models.enums import (
 )
 from app.models.game_config import GameConfig
 from app.models.player import Player
-from app.models.tactico import TacticoMatch, TacticoSquad, TacticoSquadCard
+from app.models.tactico import TacticoMatch, TacticoQueueEntry, TacticoSquad, TacticoSquadCard
 from app.models.user import User
 from app.schemas.ranking import RankingMetric
 from app.schemas.tactico import TacticoCardOut, TacticoMatchOut, TacticoRoundOut, TacticoSquadOut, TacticoStatsOut
@@ -562,7 +562,7 @@ async def submit_round(db: AsyncSession, user: User, match_id: int, user_card_id
     if len(state["rounds"]) >= SQUAD_SIZE:
         await _finish_match(db, match, state, config)
     else:
-        if resolved and match.opponent_type == TacticoOpponentType.friend:
+        if resolved and match.opponent_type != TacticoOpponentType.bot:
             state["current_deadline"] = (
                 datetime.now(timezone.utc) + timedelta(hours=config.tactico_round_timeout_hours)
             ).isoformat()
@@ -609,7 +609,9 @@ async def _finish_match(
     match.status = TacticoMatchStatus.finished
     match.resolved_at = datetime.now(timezone.utc)
 
-    is_friend = match.opponent_type == TacticoOpponentType.friend and match.opponent_user_id is not None
+    # Both `friend` and `online` matches have a real second player whose
+    # rating/notification need updating — only `bot` doesn't.
+    is_friend = match.opponent_type != TacticoOpponentType.bot and match.opponent_user_id is not None
     locked_opponent: Optional[User] = None
     if is_friend:
         first_id, second_id = sorted([match.user_id, match.opponent_user_id])
@@ -794,7 +796,7 @@ async def _hydrate_match(db: AsyncSession, match: TacticoMatch, viewer: User) ->
 
     if match.status == TacticoMatchStatus.in_progress:
         one_side_committed = state.get("user_pending_card_id") is not None or state.get("opponent_pending_card_id") is not None
-        if match.opponent_type == TacticoOpponentType.friend and one_side_committed and state.get("current_deadline"):
+        if match.opponent_type != TacticoOpponentType.bot and one_side_committed and state.get("current_deadline"):
             round_deadline = ensure_aware(datetime.fromisoformat(state["current_deadline"]))
         if state.get(f"{side}_pending_card_id") is not None:
             waiting_for_opponent = True
@@ -863,3 +865,145 @@ async def get_match(db: AsyncSession, user: User, match_id: int) -> TacticoMatch
     if user.id not in (match.user_id, match.opponent_user_id):
         raise ForbiddenError("You are not part of this match")
     return await _hydrate_match(db, match, user)
+
+
+# ---------------------------------------------------------------------------
+# Matchmaking
+# ---------------------------------------------------------------------------
+
+MATCHMAKING_TIMEOUT_SECONDS = 60
+
+
+async def _hourly_slot_available(db: AsyncSession, user_id: int, config: GameConfig) -> bool:
+    """Non-raising check mirroring the first half of `_consume_hourly_slot` —
+    used to decide whether a queue entry is still eligible for pairing
+    without crashing the *other* player's poll if it turns out someone's
+    limit was hit while they sat in the queue."""
+    locked_user = await lock_user_for_update(db, user_id)
+    await _ensure_hourly_reset(locked_user)
+    db.add(locked_user)
+    return locked_user.tactico_hourly_attempts < config.hourly_game_limit
+
+
+async def start_search(db: AsyncSession, user: User) -> TacticoQueueEntry:
+    if await _has_active_match(db, user.id):
+        raise ConflictError("У тебя уже есть матч в процессе — заверши его, прежде чем искать нового соперника")
+    existing = await db.execute(select(TacticoQueueEntry).where(TacticoQueueEntry.user_id == user.id))
+    if existing.scalar_one_or_none() is not None:
+        raise ConflictError("Ты уже ищешь соперника")
+    squad = await get_squad(db, user)
+    if not squad.is_complete:
+        raise ConflictError(f"Собери полный состав из {SQUAD_SIZE} карточек, прежде чем искать соперника")
+
+    entry = TacticoQueueEntry(user_id=user.id)
+    db.add(entry)
+    await db.commit()
+    await db.refresh(entry)
+    return entry
+
+
+async def get_search_status(db: AsyncSession, user: User) -> tuple[str, Optional[int]]:
+    """Also *is* the pairing attempt — every poller tries to pair itself
+    with the oldest other waiting entry. See the design spec's pairing
+    algorithm; there is no separate sweep."""
+    result = await db.execute(
+        select(TacticoQueueEntry).where(TacticoQueueEntry.user_id == user.id)
+        .with_for_update().execution_options(populate_existing=True)
+    )
+    my_entry = result.scalar_one_or_none()
+    if my_entry is None:
+        return "not_searching", None
+
+    if my_entry.matched_match_id is not None:
+        await db.commit()
+        return "matched", my_entry.matched_match_id
+
+    if datetime.now(timezone.utc) - ensure_aware(my_entry.created_at) > timedelta(seconds=MATCHMAKING_TIMEOUT_SECONDS):
+        await db.delete(my_entry)
+        await db.commit()
+        return "timeout", None
+
+    candidate_result = await db.execute(
+        select(TacticoQueueEntry)
+        .where(TacticoQueueEntry.user_id != user.id, TacticoQueueEntry.matched_match_id.is_(None))
+        .order_by(TacticoQueueEntry.created_at)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+    if candidate is None:
+        await db.commit()
+        return "searching", None
+
+    candidate_user = await db.get(User, candidate.user_id)
+    config = await get_config(db)
+
+    # Re-validate everything right before creating the match — state may
+    # have drifted while both entries sat in the queue. Each side is
+    # checked independently; either, both, or neither may have gone stale.
+    squad_a = await get_squad(db, user)
+    squad_b = await get_squad(db, candidate_user)
+    stale: list[TacticoQueueEntry] = []
+    if await _has_active_match(db, user.id) or not squad_a.is_complete or not await _hourly_slot_available(db, user.id, config):
+        stale.append(my_entry)
+    if (
+        await _has_active_match(db, candidate.user_id)
+        or not squad_b.is_complete
+        or not await _hourly_slot_available(db, candidate.user_id, config)
+    ):
+        stale.append(candidate)
+    if stale:
+        for entry in stale:
+            await db.delete(entry)
+        await db.commit()
+        return ("not_searching" if my_entry in stale else "searching"), None
+
+    locked_user = await _consume_hourly_slot(db, user.id, config)
+    locked_candidate = await _consume_hourly_slot(db, candidate.user_id, config)
+
+    state = {
+        "rounds": [],
+        "current_index": 0,
+        "current_phase": _pick_phase(),
+        "current_deadline": (
+            datetime.now(timezone.utc) + timedelta(hours=config.tactico_round_timeout_hours)
+        ).isoformat(),
+        "user_pool": [c.id for c in squad_a.cards],
+        "opponent_pool": [c.id for c in squad_b.cards],
+        "user_pending_card_id": None,
+        "user_pending_snapshot": None,
+        "opponent_pending_card_id": None,
+        "opponent_pending_snapshot": None,
+    }
+    match = TacticoMatch(
+        user_id=locked_user.id,
+        opponent_user_id=locked_candidate.id,
+        opponent_name=locked_candidate.full_display_name(),
+        opponent_type=TacticoOpponentType.online,
+        difficulty=None,
+        status=TacticoMatchStatus.in_progress,
+        server_state=state,
+    )
+    db.add(match)
+    await db.flush()
+
+    my_entry.matched_match_id = match.id
+    candidate.matched_match_id = match.id
+    db.add(my_entry)
+    db.add(candidate)
+    await db.commit()
+    return "matched", match.id
+
+
+async def cancel_search(db: AsyncSession, user: User) -> None:
+    result = await db.execute(
+        select(TacticoQueueEntry).where(TacticoQueueEntry.user_id == user.id)
+        .with_for_update().execution_options(populate_existing=True)
+    )
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        raise NotFoundError("Ты не ищешь соперника")
+    if entry.matched_match_id is not None:
+        raise ConflictError("Соперник уже найден — матч начинается")
+    await db.delete(entry)
+    await db.commit()

@@ -10,6 +10,7 @@ from app.schemas.tactico import (
     TacticoChallengeRequest,
     TacticoMatchOut,
     TacticoRoundSubmitRequest,
+    TacticoSearchStatusOut,
     TacticoSquadOut,
     TacticoSquadSetRequest,
     TacticoStatsOut,
@@ -90,3 +91,21 @@ async def list_matches(db: AsyncSession = Depends(get_db), user: User = Depends(
 @router.get("/matches/{match_id}", response_model=TacticoMatchOut)
 async def get_match(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await tactico_service.get_match(db, user, match_id)
+
+
+@router.post("/matchmaking/search", response_model=TacticoSearchStatusOut)
+async def start_search(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    check_rate_limit(f"tactico_search:{user.id}", max_calls=10, window_seconds=60)
+    entry = await tactico_service.start_search(db, user)
+    return TacticoSearchStatusOut(status="searching", match_id=None, created_at=entry.created_at)
+
+
+@router.get("/matchmaking/status", response_model=TacticoSearchStatusOut)
+async def get_search_status(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    status, match_id = await tactico_service.get_search_status(db, user)
+    return TacticoSearchStatusOut(status=status, match_id=match_id, created_at=None)
+
+
+@router.post("/matchmaking/cancel", status_code=204)
+async def cancel_search(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await tactico_service.cancel_search(db, user)

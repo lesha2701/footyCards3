@@ -80,3 +80,9 @@ class TacticoRoundSubmitRequest(BaseModel):
 class TacticoStatsOut(BaseModel):
     tactics_rating: int
     tactics_rank: Optional[int] = None
+
+
+class TacticoSearchStatusOut(BaseModel):
+    status: Literal["not_searching", "searching", "matched", "timeout"]
+    match_id: Optional[int] = None
+    created_at: Optional[datetime] = None

@@ -834,3 +834,214 @@ async def test_tactico_queue_entry_user_id_is_unique(client, db_session, bot_tok
     with pytest.raises(Exception):
         await db_session.commit()
     await db_session.rollback()
+
+
+# ---------------------------------------------------------------------------
+# Matchmaking — search, pairing, cancel
+# ---------------------------------------------------------------------------
+
+async def test_start_search_requires_complete_squad(client, bot_token):
+    headers = await _register(client, bot_token, 952001)
+    resp = await client.post("/api/v1/tactico/matchmaking/search", headers=headers)
+    assert resp.status_code == 409
+    assert "состав" in resp.json()["error"]["message"]
+
+
+async def test_start_search_rejects_second_entry(client, db_session, bot_token):
+    headers = await _register(client, bot_token, 952002)
+    user = await get_user_by_telegram_id(db_session, 952002)
+    card_ids = await _build_squad_cards(db_session, user.id)
+    await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids})
+
+    first = await client.post("/api/v1/tactico/matchmaking/search", headers=headers)
+    assert first.status_code == 200
+    second = await client.post("/api/v1/tactico/matchmaking/search", headers=headers)
+    assert second.status_code == 409
+    assert "уже ищешь" in second.json()["error"]["message"]
+
+
+async def test_start_search_rejects_when_active_match_exists(client, db_session, bot_token):
+    headers = await _register(client, bot_token, 952003)
+    user = await get_user_by_telegram_id(db_session, 952003)
+    card_ids = await _build_squad_cards(db_session, user.id)
+    await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids})
+    bot_match = await client.post("/api/v1/tactico/matches/bot", headers=headers, json={"difficulty": "easy"})
+    assert bot_match.status_code == 200
+
+    resp = await client.post("/api/v1/tactico/matchmaking/search", headers=headers)
+    assert resp.status_code == 409
+    assert "в процессе" in resp.json()["error"]["message"]
+
+
+async def test_status_before_searching_is_not_searching(client, bot_token):
+    headers = await _register(client, bot_token, 952004)
+    resp = await client.get("/api/v1/tactico/matchmaking/status", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "not_searching"
+
+
+async def test_two_waiting_players_get_paired_on_poll(client, db_session, bot_token):
+    headers_a = await _register(client, bot_token, 952005)
+    user_a = await get_user_by_telegram_id(db_session, 952005)
+    card_ids_a = await _build_squad_cards(db_session, user_a.id)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": card_ids_a})
+    headers_b = await _register(client, bot_token, 952006)
+    user_b = await get_user_by_telegram_id(db_session, 952006)
+    card_ids_b = await _build_squad_cards(db_session, user_b.id)
+    await client.put("/api/v1/tactico/squad", headers=headers_b, json={"user_card_ids": card_ids_b})
+
+    assert (await client.post("/api/v1/tactico/matchmaking/search", headers=headers_a)).status_code == 200
+    assert (await client.post("/api/v1/tactico/matchmaking/search", headers=headers_b)).status_code == 200
+
+    status_a = await client.get("/api/v1/tactico/matchmaking/status", headers=headers_a)
+    assert status_a.status_code == 200
+    body_a = status_a.json()
+    assert body_a["status"] == "matched"
+    match_id = body_a["match_id"]
+    assert match_id is not None
+
+    status_b = await client.get("/api/v1/tactico/matchmaking/status", headers=headers_b)
+    assert status_b.json() == {"status": "matched", "match_id": match_id, "created_at": None}
+
+    match_resp = await client.get(f"/api/v1/tactico/matches/{match_id}", headers=headers_a)
+    match_body = match_resp.json()
+    assert match_body["opponent_type"] == "online"
+    assert match_body["status"] == "in_progress"
+    # No one has moved this round yet — same as a friend match, the short
+    # deadline isn't exposed until one side commits (see
+    # test_friend_round_deadline_appears_and_auto_plays_tardy_side).
+    assert match_body["round_deadline"] is None
+
+    card_id = match_body["pickable_cards"][0]["user_card_id"]
+    submit_resp = await client.post(
+        f"/api/v1/tactico/matches/{match_id}/rounds", headers=headers_a, json={"user_card_id": card_id}
+    )
+    assert submit_resp.json()["round_deadline"] is not None  # fix #2 above, verified end-to-end
+
+
+async def test_matchmaking_grants_zero_coins_and_updates_both_ratings(client, db_session, bot_token):
+    headers_a = await _register(client, bot_token, 952007)
+    user_a = await get_user_by_telegram_id(db_session, 952007)
+    card_ids_a = await _build_squad_cards(db_session, user_a.id, rating=90)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": card_ids_a})
+    headers_b = await _register(client, bot_token, 952008)
+    user_b = await get_user_by_telegram_id(db_session, 952008)
+    card_ids_b = await _build_squad_cards(db_session, user_b.id, rating=10)
+    await client.put("/api/v1/tactico/squad", headers=headers_b, json={"user_card_ids": card_ids_b})
+    # Both start from a non-zero rating so a -1 loss delta doesn't get
+    # clamped at the rating floor of 0 (_finish_match's max(0, ...)),
+    # which would otherwise break the delta-sum invariant asserted below.
+    user_a.tactics_rating = 5
+    user_b.tactics_rating = 5
+    db_session.add(user_a)
+    db_session.add(user_b)
+    await db_session.commit()
+
+    await client.post("/api/v1/tactico/matchmaking/search", headers=headers_a)
+    await client.post("/api/v1/tactico/matchmaking/search", headers=headers_b)
+    status_a = await client.get("/api/v1/tactico/matchmaking/status", headers=headers_a)
+    match_id = status_a.json()["match_id"]
+
+    for card_a, card_b in zip(card_ids_a, card_ids_b):
+        resp_a = await client.post(
+            f"/api/v1/tactico/matches/{match_id}/rounds", headers=headers_a, json={"user_card_id": card_a}
+        )
+        if resp_a.json()["status"] != "in_progress":
+            break
+        await client.post(
+            f"/api/v1/tactico/matches/{match_id}/rounds", headers=headers_b, json={"user_card_id": card_b}
+        )
+
+    final = await client.get(f"/api/v1/tactico/matches/{match_id}", headers=headers_a)
+    body = final.json()
+    assert body["status"] == "finished"
+    assert body["reward_coins"] == 0  # no coins for matchmaking, per the spec
+
+    await db_session.refresh(user_a)
+    await db_session.refresh(user_b)
+    assert user_a.tactics_rating != 5 or user_b.tactics_rating != 5  # someone's rating moved
+    # started at 5+5=10; win/loss (+3/-1) or draw (+1/+1) both add 2 to the total
+    assert user_a.tactics_rating + user_b.tactics_rating == 12
+
+
+async def test_search_timeout_after_60_seconds(client, db_session, bot_token, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    headers = await _register(client, bot_token, 952009)
+    user = await get_user_by_telegram_id(db_session, 952009)
+    card_ids = await _build_squad_cards(db_session, user.id)
+    await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids})
+    await client.post("/api/v1/tactico/matchmaking/search", headers=headers)
+
+    entry = (
+        await db_session.execute(select(TacticoQueueEntry).where(TacticoQueueEntry.user_id == user.id))
+    ).scalar_one()
+    entry.created_at = datetime.now(timezone.utc) - timedelta(seconds=61)
+    db_session.add(entry)
+    await db_session.commit()
+
+    resp = await client.get("/api/v1/tactico/matchmaking/status", headers=headers)
+    assert resp.json()["status"] == "timeout"
+
+    remaining = (
+        await db_session.execute(select(TacticoQueueEntry).where(TacticoQueueEntry.user_id == user.id))
+    ).scalar_one_or_none()
+    assert remaining is None
+
+
+async def test_cancel_search_removes_entry(client, db_session, bot_token):
+    headers = await _register(client, bot_token, 952010)
+    user = await get_user_by_telegram_id(db_session, 952010)
+    card_ids = await _build_squad_cards(db_session, user.id)
+    await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids})
+    await client.post("/api/v1/tactico/matchmaking/search", headers=headers)
+
+    resp = await client.post("/api/v1/tactico/matchmaking/cancel", headers=headers)
+    assert resp.status_code == 204
+
+    status = await client.get("/api/v1/tactico/matchmaking/status", headers=headers)
+    assert status.json()["status"] == "not_searching"
+
+
+async def test_cancel_search_rejected_once_matched(client, db_session, bot_token):
+    headers_a = await _register(client, bot_token, 952011)
+    user_a = await get_user_by_telegram_id(db_session, 952011)
+    card_ids_a = await _build_squad_cards(db_session, user_a.id)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": card_ids_a})
+    headers_b = await _register(client, bot_token, 952012)
+    user_b = await get_user_by_telegram_id(db_session, 952012)
+    card_ids_b = await _build_squad_cards(db_session, user_b.id)
+    await client.put("/api/v1/tactico/squad", headers=headers_b, json={"user_card_ids": card_ids_b})
+
+    await client.post("/api/v1/tactico/matchmaking/search", headers=headers_a)
+    await client.post("/api/v1/tactico/matchmaking/search", headers=headers_b)
+    await client.get("/api/v1/tactico/matchmaking/status", headers=headers_a)  # triggers pairing
+
+    resp = await client.post("/api/v1/tactico/matchmaking/cancel", headers=headers_a)
+    assert resp.status_code == 409
+    assert "уже найден" in resp.json()["error"]["message"]
+
+
+async def test_pairing_skips_candidate_with_stale_hourly_limit(client, db_session, bot_token):
+    headers_a = await _register(client, bot_token, 952013)
+    user_a = await get_user_by_telegram_id(db_session, 952013)
+    card_ids_a = await _build_squad_cards(db_session, user_a.id)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": card_ids_a})
+    headers_b = await _register(client, bot_token, 952014)
+    user_b = await get_user_by_telegram_id(db_session, 952014)
+    card_ids_b = await _build_squad_cards(db_session, user_b.id)
+    await client.put("/api/v1/tactico/squad", headers=headers_b, json={"user_card_ids": card_ids_b})
+    await _set_config(db_session, hourly_game_limit=1)
+    user_b.tactico_hourly_attempts = 1
+    # Also set tactico_hour_started_at (to "now") — otherwise
+    # _ensure_hourly_reset sees a null window start and silently resets
+    # attempts back to 0 before the limit check ever runs.
+    user_b.tactico_hour_started_at = datetime.now(timezone.utc)
+    db_session.add(user_b)
+    await db_session.commit()
+
+    await client.post("/api/v1/tactico/matchmaking/search", headers=headers_a)
+    await client.post("/api/v1/tactico/matchmaking/search", headers=headers_b)
+    status_a = await client.get("/api/v1/tactico/matchmaking/status", headers=headers_a)
+    # B is over its hourly limit — pairing must skip B rather than crash or pair anyway
+    assert status_a.json()["status"] == "searching"
