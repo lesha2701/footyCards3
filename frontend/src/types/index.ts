@@ -417,8 +417,14 @@ export interface PenaltyStats {
 }
 
 export type TacticoPhase = "attack" | "defense";
-export type TacticoOpponentType = "bot" | "friend";
+export type TacticoOpponentType = "bot" | "friend" | "online";
 export type TacticoMatchStatus = "pending_accept" | "in_progress" | "finished" | "declined" | "cancelled" | "expired";
+
+export interface TacticoSearchStatus {
+  status: "not_searching" | "searching" | "matched" | "timeout";
+  match_id: number | null;
+  created_at: string | null;
+}
 
 export interface TacticoCard {
   user_card_id: number | null;

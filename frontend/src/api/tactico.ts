@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { TacticoMatch, TacticoSquad, TacticoStats } from "@/types";
+import type { TacticoMatch, TacticoSearchStatus, TacticoSquad, TacticoStats } from "@/types";
 
 export async function fetchTacticoStats(): Promise<TacticoStats> {
   const { data } = await api.get<TacticoStats>("/tactico/stats");
@@ -59,4 +59,18 @@ export async function fetchTacticoMatches(): Promise<TacticoMatch[]> {
 export async function fetchTacticoMatch(id: number): Promise<TacticoMatch> {
   const { data } = await api.get<TacticoMatch>(`/tactico/matches/${id}`);
   return data;
+}
+
+export async function startTacticoSearch(): Promise<TacticoSearchStatus> {
+  const { data } = await api.post<TacticoSearchStatus>("/tactico/matchmaking/search");
+  return data;
+}
+
+export async function fetchTacticoSearchStatus(): Promise<TacticoSearchStatus> {
+  const { data } = await api.get<TacticoSearchStatus>("/tactico/matchmaking/status");
+  return data;
+}
+
+export async function cancelTacticoSearch(): Promise<void> {
+  await api.post("/tactico/matchmaking/cancel");
 }
