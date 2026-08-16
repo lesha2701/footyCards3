@@ -8,7 +8,7 @@ import { fetchCollection } from "@/api/collection";
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconFlagCheckered, IconUsers } from "@/components/icons";
+import { IconFlagCheckered, IconPlay, IconUsers } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
 import type { PenaltyMatch, UserPublic } from "@/types";
 
@@ -29,13 +29,14 @@ export default function PenaltyMatchesPage() {
   const [tab, setTab] = useState<Tab>("active");
   const [challengeSheetOpen, setChallengeSheetOpen] = useState(false);
   const [pickingOpponent, setPickingOpponent] = useState<UserPublic | null>(null);
+  const [pickingForSearch, setPickingForSearch] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data: matches, isLoading } = useQuery({ queryKey: ["penalty-matches"], queryFn: fetchPenaltyMatches });
   const { data: collection } = useQuery({
     queryKey: ["collection", "penalty-pvp"],
     queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc" }),
-    enabled: pickingOpponent !== null,
+    enabled: pickingOpponent !== null || pickingForSearch,
   });
   const activeMatch = matches?.find((m) => m.status === "in_progress");
 
@@ -81,13 +82,22 @@ export default function PenaltyMatchesPage() {
           Продолжить матч
         </button>
       ) : (
-        <button
-          onClick={() => setChallengeSheetOpen(true)}
-          className="flex items-center justify-center gap-2 rounded-2xl bg-floodlight py-4 text-sm font-bold text-bg-base ring-2 ring-accent-cyan/40 active:scale-95"
-        >
-          <IconUsers size={17} />
-          Вызвать друга
-        </button>
+        <>
+          <button
+            onClick={() => setPickingForSearch(true)}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-accent py-5 text-base font-bold text-bg-base ring-2 ring-accent/40 active:scale-95"
+          >
+            <IconPlay size={20} />
+            Играть
+          </button>
+          <button
+            onClick={() => setChallengeSheetOpen(true)}
+            className="flex items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95"
+          >
+            <IconUsers size={14} />
+            Вызвать друга
+          </button>
+        </>
       )}
 
       <div className="flex gap-2">
@@ -123,6 +133,16 @@ export default function PenaltyMatchesPage() {
           onClose={() => { setPickingOpponent(null); setChallengeSheetOpen(false); }}
         />
       )}
+
+      {pickingForSearch && (
+        <CardPickerModal
+          open
+          title="Выбери карточку для матча"
+          cards={collection?.items ?? []}
+          onSelect={(card) => navigate("/play/penalty/matches/search", { state: { userCardId: card.id } })}
+          onClose={() => setPickingForSearch(false)}
+        />
+      )}
     </div>
   );
 }
@@ -143,7 +163,9 @@ function MatchRow({ match, onClick }: { match: PenaltyMatch; onClick: () => void
     <button onClick={onClick} className="flex items-center justify-between rounded-2xl bg-bg-surface p-4 text-left active:scale-[0.98]">
       <div>
         <p className="font-display text-sm font-bold text-ink-chalk">{match.opponent_name}</p>
-        <p className="mt-0.5 text-[11px] text-ink-mist">{STATUS_LABELS[match.status]}</p>
+        <p className="mt-0.5 text-[11px] text-ink-mist">
+          {match.opponent_type === "online" ? "Против соперника" : "Против друга"} · {STATUS_LABELS[match.status]}
+        </p>
       </div>
       {match.status !== "pending_accept" && (
         <span className="font-mono text-sm font-bold text-ink-chalk">

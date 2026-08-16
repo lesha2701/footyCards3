@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import AppLayout from "@/components/layout/AppLayout";
 import AdminGuard from "@/admin/AdminGuard";
@@ -34,6 +34,7 @@ import SaboteurGamePage from "@/pages/SaboteurGamePage";
 import PenaltyGamePage from "@/pages/PenaltyGamePage";
 import PenaltyMatchesPage from "@/pages/PenaltyMatchesPage";
 import PenaltyMatchPage from "@/pages/PenaltyMatchPage";
+import PenaltySearchPage from "@/pages/PenaltySearchPage";
 import FreeKickGamePage from "@/pages/FreeKickGamePage";
 import HangmanGamePage from "@/pages/HangmanGamePage";
 import PairsGamePage from "@/pages/PairsGamePage";
@@ -55,6 +56,13 @@ import { useUiStore } from "@/store/uiStore";
 import { getTelegramColorScheme, initTelegramApp, isInsideTelegram } from "@/lib/telegram";
 import { ApiRequestError } from "@/lib/api";
 import { hasSeenOnboarding, markOnboardingSeen } from "@/lib/onboarding";
+
+function PenaltySearchRoute() {
+  const location = useLocation();
+  const userCardId = (location.state as { userCardId?: number } | null)?.userCardId;
+  if (!userCardId) return <Navigate to="/play/penalty/matches" replace />;
+  return <PenaltySearchPage userCardId={userCardId} />;
+}
 
 export default function App() {
   const { user, setUser, setAdminToken, setReady, isReady } = useAuthStore();
@@ -143,6 +151,7 @@ export default function App() {
         <Route path="/play/saboteur" element={<SaboteurGamePage />} />
         <Route path="/play/penalty" element={<PenaltyGamePage />} />
         <Route path="/play/penalty/matches" element={<PenaltyMatchesPage />} />
+        <Route path="/play/penalty/matches/search" element={<PenaltySearchRoute />} />
         <Route path="/play/penalty/matches/:matchId" element={<PenaltyMatchPage />} />
         <Route path="/play/free-kick" element={<FreeKickGamePage />} />
         <Route path="/play/hangman" element={<HangmanGamePage />} />
