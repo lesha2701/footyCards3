@@ -17,17 +17,39 @@ export default function TacticoSearchPage() {
   const [phase, setPhase] = useState<"starting" | "searching" | "timeout" | "reveal" | "error">("starting");
   const [error, setError] = useState<string | null>(null);
   const [opponent, setOpponent] = useState<ProfilePublic | null>(null);
-  const hasStartedRef = useRef(false);
+  // Bumping this re-runs the search-start effect below for a genuine retry
+  // (e.g. after a timeout) — a plain empty-deps effect would only ever fire
+  // once per mount.
+  const [searchAttempt, setSearchAttempt] = useState(0);
+  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guards against React 18 StrictMode's dev-only double-invoke of effects
+  // (mount → cleanup → mount) firing startTacticoSearch() twice for the same
+  // attempt — the second call would 409 ("Ты уже ищешь соперника") and knock
+  // phase back to "error" right after the first call's "searching" landed.
+  // Keyed by attempt number (rather than a plain boolean, as PackOpenPage's
+  // one-shot hasStartedRef uses) so a later, genuine retry isn't blocked.
+  const startedAttemptRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (hasStartedRef.current) return;
-    hasStartedRef.current = true;
+    if (startedAttemptRef.current === searchAttempt) return;
+    startedAttemptRef.current = searchAttempt;
+    setPhase("starting");
     startTacticoSearch()
       .then(() => setPhase("searching"))
       .catch((err) => {
         setPhase("error");
         setError(formatGameError(err, "Не удалось начать поиск соперника"));
       });
+  }, [searchAttempt]);
+
+  // Clears any pending reveal→match-navigation timer if the player leaves
+  // this page during the 3s reveal window, so it can't fire later and force
+  // a navigation regardless of where they've gone (mirrors PackOpenPage's
+  // timerRef cleanup pattern).
+  useEffect(() => {
+    return () => {
+      if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+    };
   }, []);
 
   const { data: status } = useQuery({
@@ -56,7 +78,7 @@ export default function TacticoSearchPage() {
         setOpponent(profile);
       }
       setPhase("reveal");
-      setTimeout(() => navigate(`/play/tactico/matches/${matchId}`), REVEAL_PAUSE_MS);
+      revealTimerRef.current = setTimeout(() => navigate(`/play/tactico/matches/${matchId}`), REVEAL_PAUSE_MS);
     } catch {
       // The match exists even if the reveal fetch failed for some reason —
       // don't strand the player on a dead search screen over a cosmetic step.
@@ -102,7 +124,7 @@ export default function TacticoSearchPage() {
             Назад
           </button>
           <button
-            onClick={() => { hasStartedRef.current = false; setPhase("starting"); }}
+            onClick={() => setSearchAttempt((n) => n + 1)}
             className="flex-1 rounded-2xl bg-accent py-3 text-sm font-bold text-bg-base active:scale-95"
           >
             Попробовать снова
