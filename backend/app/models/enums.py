@@ -125,6 +125,7 @@ class MatchStatus(str, enum.Enum):
 class TacticoOpponentType(str, enum.Enum):
     bot = "bot"
     friend = "friend"
+    online = "online"
 
 
 class TacticoMatchStatus(str, enum.Enum):

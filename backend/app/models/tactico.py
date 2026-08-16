@@ -62,3 +62,22 @@ class TacticoMatch(Base):
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TacticoQueueEntry(Base):
+    """One player currently searching for an opponent via matchmaking.
+    `matched_match_id` is set by whichever poll (theirs or the paired
+    player's) performs the pairing — see wheel_service.py-style "the reader
+    does the lazy work" pattern, applied here to matchmaking instead of
+    round timeouts (see tactico_service.get_search_status)."""
+
+    __tablename__ = "tactico_queue_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    matched_match_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tactico_matches.id", ondelete="SET NULL"), nullable=True
+    )

@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 import app.core.rate_limit as rate_limit_module
 from app.models.card import UserCard
-from app.models.enums import CardSource, NotificationType, Position, Rarity
+from app.models.enums import CardSource, NotificationType, Position, Rarity, TacticoOpponentType
 from app.models.game_config import GameConfig
 from app.models.notification import Notification
 from app.models.user import User
@@ -796,3 +796,41 @@ async def test_tactico_stats_endpoint_reflects_rating_changes(client, db_session
 
     resp = await client.get("/api/v1/tactico/stats", headers=headers)
     assert resp.json()["tactics_rating"] == 3
+
+
+# ---------------------------------------------------------------------------
+# Matchmaking queue
+# ---------------------------------------------------------------------------
+
+from app.models.tactico import TacticoQueueEntry
+
+
+async def test_tactico_opponent_type_has_online_member():
+    assert TacticoOpponentType.online == "online"
+
+
+async def test_tactico_queue_entry_roundtrip(client, db_session, bot_token):
+    headers = await _register(client, bot_token, 951001)
+    user = await get_user_by_telegram_id(db_session, 951001)
+
+    entry = TacticoQueueEntry(user_id=user.id)
+    db_session.add(entry)
+    await db_session.commit()
+    await db_session.refresh(entry)
+
+    assert entry.id is not None
+    assert entry.matched_match_id is None
+    assert entry.created_at is not None
+
+
+async def test_tactico_queue_entry_user_id_is_unique(client, db_session, bot_token):
+    headers = await _register(client, bot_token, 951002)
+    user = await get_user_by_telegram_id(db_session, 951002)
+
+    db_session.add(TacticoQueueEntry(user_id=user.id))
+    await db_session.commit()
+
+    db_session.add(TacticoQueueEntry(user_id=user.id))
+    with pytest.raises(Exception):
+        await db_session.commit()
+    await db_session.rollback()
