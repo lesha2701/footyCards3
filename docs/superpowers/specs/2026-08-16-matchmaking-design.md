@@ -60,6 +60,7 @@ class PenaltyQueueEntry(Base):
 enforced at the DB level, not just in application logic.
 
 **Enum additions:**
+
 - `TacticoOpponentType` gains a third member, `online`, alongside the
   existing `bot`/`friend`.
 - `PenaltyMatch` currently has no "how was this matched" concept at all —
@@ -80,7 +81,7 @@ sweeps already use, applied to matchmaking instead of match timeouts.
 Pseudocode (identical shape for Tactico and Penalty, differing only in
 which queue/match table is touched):
 
-```
+```text
 BEGIN TRANSACTION
   my_entry = SELECT * FROM <Game>QueueEntry WHERE user_id = me FOR UPDATE
   if my_entry is None:
@@ -199,6 +200,7 @@ the friend-challenge card pick already in that page) before calling
 
 **Searching screen** (new full-screen view, same visual weight as the
 match page it precedes):
+
 - Spinner + "Ищем соперника..." + a "Отменить" button (calls `cancel`,
   then navigates back — no confirmation needed, no penalty, since nothing
   has been risked yet).
@@ -210,6 +212,7 @@ match page it precedes):
 
 **Opponent-reveal screen** (new, sits between "matched" and the actual
 match page):
+
 - Fetches the opponent's public profile (`GET /users/{opponent_id}`, using
   `opponent_user_id` from the newly created match) and displays avatar,
   nickname, active badge, and the relevant game's rating
@@ -229,6 +232,44 @@ the frontend observes `matched`, ordinary existing match-page behavior
 takes over unchanged: `matchGuardStore.activate(...)` (already wired into
 the match page for bot/friend matches) applies identically, including the
 existing forfeit-on-leave and `pagehide` keepalive-forfeit behavior.
+
+### Player-facing text must be Russian and unambiguous
+
+Every string a player can actually see during matchmaking must be plain,
+friendly Russian — never a raw backend exception string, an HTTP status
+phrase, or English. This needs to be called out explicitly because the
+existing codebase is inconsistent here: `tactico_service.create_bot_match`
+currently raises `ConflictError(f"Build a full {SQUAD_SIZE}-card Tactico
+squad before playing")` in English, right alongside sibling checks like
+`_has_active_match`'s `"У тебя уже есть матч в Тактико в процессе..."`
+which are already Russian — and the frontend's `formatGameError` (see
+`frontend/src/lib/errors.ts`) only special-cases the hourly-limit error;
+everything else falls through to the raw backend message verbatim. New
+matchmaking code must not repeat the English-message half of that split.
+
+Concretely: every new `ConflictError`/`ForbiddenError`/`NotFoundError`
+raised by matchmaking-specific backend code must be written in Russian
+from the start (not translated later), matching the tone of the existing
+Russian examples already in `tactico_service.py`/`penalty_match_service.py`.
+The full set of matchmaking-specific messages the plan must define
+verbatim:
+
+- Squad incomplete (Tactico `search`): `"Собери полный состав из 11 карточек, прежде чем искать соперника"`.
+- Already searching (`search` called while a queue entry already exists): `"Ты уже ищешь соперника"`.
+- Already have an active match (`search`): `"У тебя уже есть матч в процессе — заверши его, прежде чем искать нового соперника"`.
+- Cancel rejected because pairing already happened (`cancel`): `"Соперник уже найден — матч начинается"` (the frontend should treat this response the same as a `matched` status rather than displaying it as a scary error, since the practical outcome — a match is starting — is good news, not a failure).
+- Search timeout (frontend-rendered from the `timeout` status, no backend message needed): `"Соперник не найден. Попробуй ещё раз"`.
+- Generic/unexpected failure on the searching or reveal screen (network error, unhandled exception): a Russian fallback, e.g. `"Не удалось начать поиск соперника"` — never let `formatGameError`'s raw-message fallback surface an unhandled English or technical string on these two screens; wrap every mutation's `onError` with an explicit Russian fallback the way existing bot/friend-challenge mutations in `TacticoMatchesPage.tsx`/`PenaltyMatchesPage.tsx` already do (`formatGameError(err, "Не удалось начать матч")`).
+- Penalty card became invalid mid-queue (server silently drops the entry and returns `searching` again, per Error handling below): not an error at all from the player's point of view — the searching screen just keeps showing `"Ищем соперника..."` with no interruption. If it happens repeatedly (three timeouts in a row, say), that's still just a normal timeout, not a special message.
+
+The implementation plan must copy these strings verbatim, not paraphrase
+them, and must audit the two pre-existing English messages named above
+(`create_bot_match`/`create_challenge`'s squad-incomplete checks) — while
+out of scope to fix as part of this feature, flag them to the user as a
+found pre-existing inconsistency rather than silently leaving them since
+matchmaking's own squad-incomplete check sits right next to them and would
+otherwise be the one Russian message next to two English ones in the same
+file.
 
 ## Error handling and safety
 
