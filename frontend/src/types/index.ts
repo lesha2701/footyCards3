@@ -506,6 +506,8 @@ export interface ProfilePublic {
   packs_opened: number;
   referral_count: number;
   active_badge: Badge | null;
+  tactics_rating: number;
+  penalty_rating: number;
 }
 
 export interface ProfilePrivate extends ProfilePublic {

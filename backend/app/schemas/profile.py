@@ -27,6 +27,8 @@ class ProfilePublicOut(BaseModel):
     rarest_card: Optional[PlayerOut]
     packs_opened: int
     referral_count: int
+    tactics_rating: int
+    penalty_rating: int
 
 
 class ProfilePrivateOut(ProfilePublicOut):

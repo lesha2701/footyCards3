@@ -72,6 +72,8 @@ async def _build_public(db: AsyncSession, user: User) -> ProfilePublicOut:
         packs_opened=packs_opened,
         referral_count=user.referral_count,
         active_badge=BadgeOut.model_validate(user.active_badge) if user.active_badge else None,
+        tactics_rating=user.tactics_rating,
+        penalty_rating=user.penalty_rating,
     )
 
 
