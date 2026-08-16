@@ -22,6 +22,12 @@ const STATUS_LABELS: Record<string, string> = {
   expired: "Истёк",
 };
 
+const OPPONENT_TYPE_LABELS: Record<string, string> = {
+  bot: "Против бота",
+  friend: "Против друга",
+  online: "Против соперника",
+};
+
 const DIFFICULTY_LABELS: { value: MatchDifficulty; label: string }[] = [
   { value: "easy", label: "Лёгкий" },
   { value: "medium", label: "Продвинутый" },
@@ -101,22 +107,31 @@ export default function TacticoMatchesPage() {
           Продолжить матч
         </button>
       ) : (
-        <div className="flex gap-2">
+        <>
           <button
-            onClick={() => setBotSheetOpen(true)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-accent-green py-4 text-sm font-bold text-bg-base ring-2 ring-accent-green/40 active:scale-95"
+            onClick={() => navigate("/play/tactico/search")}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-accent py-5 text-base font-bold text-bg-base ring-2 ring-accent/40 active:scale-95"
           >
-            <IconPlay size={17} />
-            Играть с ботом
+            <IconPlay size={20} />
+            Играть
           </button>
-          <button
-            onClick={() => setChallengeSheetOpen(true)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-floodlight py-4 text-sm font-bold text-bg-base ring-2 ring-accent-cyan/40 active:scale-95"
-          >
-            <IconUsers size={17} />
-            Вызвать друга
-          </button>
-        </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setBotSheetOpen(true)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95"
+            >
+              <IconPlay size={14} />
+              С ботом
+            </button>
+            <button
+              onClick={() => setChallengeSheetOpen(true)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95"
+            >
+              <IconUsers size={14} />
+              Вызвать друга
+            </button>
+          </div>
+        </>
       )}
 
       <div className="flex gap-2">
@@ -181,7 +196,7 @@ function MatchRow({ match, onClick }: { match: TacticoMatch; onClick: () => void
       <div>
         <p className="font-display text-sm font-bold text-ink-chalk">{match.opponent_name}</p>
         <p className="mt-0.5 text-[11px] text-ink-mist">
-          {match.opponent_type === "bot" ? "Против бота" : "Против друга"} · {STATUS_LABELS[match.status]}
+          {OPPONENT_TYPE_LABELS[match.opponent_type]} · {STATUS_LABELS[match.status]}
         </p>
       </div>
       {match.status !== "pending_accept" && (

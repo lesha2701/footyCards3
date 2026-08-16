@@ -25,6 +25,11 @@ import type { TacticoCard, TacticoMatch, TacticoRound } from "@/types";
 const LEAVE_WARNING = "Матч ещё не завершён. Если выйдешь сейчас, он будет засчитан как поражение.";
 
 const RESULT_LABELS: Record<string, string> = { win: "Победа", draw: "Ничья", loss: "Поражение" };
+const OPPONENT_TYPE_LABELS: Record<string, string> = {
+  bot: "Против бота",
+  friend: "Против друга",
+  online: "Против соперника",
+};
 const PHASE_LABELS: Record<string, { label: string; emoji: string }> = {
   attack: { label: "Атакующий эпизод", emoji: "⚔️" },
   defense: { label: "Оборонительный эпизод", emoji: "🛡" },
@@ -153,7 +158,7 @@ export default function TacticoMatchPage() {
         <div>
           <h1 className="font-display text-lg font-bold text-ink-chalk">Тактико</h1>
           <p className="text-xs text-ink-mist">
-            {match.opponent_type === "bot" ? "Против бота" : "Против друга"} · {match.opponent_name}
+            {OPPONENT_TYPE_LABELS[match.opponent_type]} · {match.opponent_name}
           </p>
         </div>
         <ScoreBadge match={match} />
