@@ -100,6 +100,11 @@ export async function toggleRewardBlock(userId: number): Promise<AdminUser> {
   return data;
 }
 
+export async function toggleTradeBan(userId: number): Promise<AdminUser> {
+  const { data } = await api.post<AdminUser>(`/admin/users/${userId}/toggle-trade-ban`);
+  return data;
+}
+
 // --- Players ---
 export async function fetchAdminPlayers(search: string, page: number): Promise<Page<Player>> {
   const { data } = await api.get<Page<Player>>("/admin/players", { params: { search: search || undefined, page, include_inactive: true } });
@@ -255,6 +260,14 @@ export async function toggleTaskActive(id: number): Promise<TaskDefinition> {
 
 export async function deleteTask(id: number): Promise<void> {
   await api.delete(`/admin/tasks/${id}`);
+}
+
+export async function sendPremiumTaskBroadcast(taskCount: number, message: string): Promise<{ recipients: number }> {
+  const { data } = await api.post<{ recipients: number }>("/admin/tasks/broadcast-premium", {
+    task_count: taskCount,
+    message: message.trim() || undefined,
+  });
+  return data;
 }
 
 // --- Wheel of Fortune ---

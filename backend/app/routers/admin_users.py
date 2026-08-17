@@ -218,6 +218,21 @@ async def toggle_reward_block(user_id: int, request: Request, db: AsyncSession =
     return user
 
 
+@router.post("/{user_id}/toggle-trade-ban", response_model=AdminUserOut)
+async def toggle_trade_ban(user_id: int, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
+    user = await _get_user_or_404(db, user_id)
+    user.is_trade_banned = not user.is_trade_banned
+    db.add(user)
+    await log_action(
+        db, admin.id, "toggle_trade_ban", "user", user_id,
+        new_value={"is_trade_banned": user.is_trade_banned},
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
 @router.get("/{user_id}/trophies", response_model=list[UserTrophyOut])
 async def list_user_trophies(user_id: int, db: AsyncSession = Depends(get_db)):
     await _get_user_or_404(db, user_id)

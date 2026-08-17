@@ -25,16 +25,39 @@ export default function AdminGamesPage() {
       <span className="text-xs text-slate-400">{label}</span>
       <input
         type="number"
-        value={form[key]}
+        value={form[key] as number}
         onChange={(e) => setForm({ ...form, [key]: Number(e.target.value) })}
         className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
       />
     </label>
   );
 
+  const toggle = (key: "matchmaking_enabled" | "wheel_enabled", label: string) => (
+    <label className="flex items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        checked={form[key]}
+        onChange={(e) => setForm({ ...form, [key]: e.target.checked })}
+      />
+      {label}
+    </label>
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-display text-2xl font-bold">Игры</h1>
+
+      <section className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
+        <p className="mb-1 font-display text-base font-bold">Аварийное отключение</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Быстро скрыть эти функции от игроков без деплоя, например если после запуска нашлись баги. Не жми
+          «Сохранить» внизу отдельно — эта форма сохраняется той же кнопкой, что и остальные настройки на странице.
+        </p>
+        <div className="flex flex-col gap-2">
+          {toggle("matchmaking_enabled", "Показывать кнопку «Играть» (подбор соперника) в Тактико и Пенальти")}
+          {toggle("wheel_enabled", "Показывать раздел «Колесо фортуны» на главном экране")}
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Общие лимиты</p>

@@ -15,3 +15,12 @@ class AdminBroadcastCreate(BaseModel):
 class AdminBroadcastOut(BaseModel):
     recipients: int
     broadcast_at: datetime
+
+
+class PremiumTaskBroadcastCreate(BaseModel):
+    task_count: int = Field(ge=1, le=50)
+    message: Optional[str] = Field(default=None, max_length=500)
+
+
+class PremiumTaskBroadcastOut(BaseModel):
+    recipients: int

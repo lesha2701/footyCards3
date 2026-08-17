@@ -116,6 +116,10 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
         raise ConflictError("You cannot trade with yourself")
     if receiver.is_banned:
         raise ConflictError("This user is banned and cannot trade")
+    if sender.is_trade_banned:
+        raise ForbiddenError("Тебе временно запрещено участвовать в обменах")
+    if receiver.is_trade_banned:
+        raise ConflictError("Этот пользователь не может участвовать в обменах")
     if not receiver.accept_trades:
         raise ConflictError("This user is not accepting trade offers")
 
@@ -249,6 +253,8 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
         raise ForbiddenError("Only the receiver can accept this offer")
     if offer.status != TradeStatus.pending:
         raise ConflictError("This offer is no longer pending")
+    if user.is_trade_banned:
+        raise ForbiddenError("Тебе временно запрещено участвовать в обменах")
 
     trade_cards_result = await db.execute(select(TradeOfferCard).where(TradeOfferCard.trade_offer_id == offer.id))
     trade_cards = trade_cards_result.scalars().all()
@@ -266,6 +272,8 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
     await db.refresh(offer, with_for_update=True)
     if offer.status != TradeStatus.pending:
         raise ConflictError("This offer is no longer pending")
+    if sender.is_trade_banned:
+        raise ConflictError("Отправитель обмена больше не может в нём участвовать")
 
     cards_by_id: dict[int, UserCard] = {}
     if card_ids:

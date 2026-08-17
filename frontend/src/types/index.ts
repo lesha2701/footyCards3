@@ -324,6 +324,11 @@ export interface UpdateBroadcastStatus {
   broadcast_at: string | null;
 }
 
+export interface FeatureFlags {
+  matchmaking_enabled: boolean;
+  wheel_enabled: boolean;
+}
+
 export interface GameLimits {
   hourly_limit: number;
   memory: number;

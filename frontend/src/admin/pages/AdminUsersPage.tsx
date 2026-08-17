@@ -11,6 +11,7 @@ import {
   grantCard,
   resetUserLimits,
   toggleRewardBlock,
+  toggleTradeBan,
   unbanUser,
 } from "@/admin/api";
 import type { AdminUser } from "@/admin/types";
@@ -108,6 +109,7 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
   });
   const banMutation = useMutation({ mutationFn: () => (user.is_banned ? unbanUser(user.id) : banUser(user.id)), onSuccess: invalidate });
   const rewardBlockMutation = useMutation({ mutationFn: () => toggleRewardBlock(user.id), onSuccess: invalidate });
+  const tradeBanMutation = useMutation({ mutationFn: () => toggleTradeBan(user.id), onSuccess: invalidate });
   const resetMutation = useMutation({ mutationFn: () => resetUserLimits(user.id) });
   const grantMutation = useMutation({
     mutationFn: () => grantCard(user.id, Number(playerId)),
@@ -145,6 +147,7 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
               <Info label="Баланс" value={`🪙${user.balance}`} />
               <Info label="Рейтинг Arena" value={user.arena_rating} />
               <Info label="Статус" value={user.is_banned ? "Забанен" : "Активен"} />
+              <Info label="Обмены" value={user.is_trade_banned ? "Запрещены" : "Разрешены"} />
             </div>
 
             <div className="rounded-xl bg-bg-surface p-3">
@@ -183,6 +186,9 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
               </button>
               <button onClick={() => rewardBlockMutation.mutate()} className="rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold">
                 {user.game_rewards_blocked ? "Разрешить награды за игры" : "Заблокировать награды за игры"}
+              </button>
+              <button onClick={() => tradeBanMutation.mutate()} className="rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold">
+                {user.is_trade_banned ? "Разрешить обмены" : "Запретить обмены"}
               </button>
               <button onClick={() => resetMutation.mutate()} className="rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold">
                 Сбросить дневные лимиты

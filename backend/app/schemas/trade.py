@@ -38,11 +38,14 @@ class TradeAcceptOut(TradeOfferOut):
     new_balance: int
 
 
+MAX_TRADE_CARDS_PER_SIDE = 3
+
+
 class TradeCreateRequest(BaseModel):
     receiver_id: Optional[int] = None
     receiver_username: Optional[str] = None
-    offered_card_ids: list[int] = Field(default_factory=list)
-    requested_card_ids: list[int] = Field(default_factory=list)
+    offered_card_ids: list[int] = Field(default_factory=list, max_length=MAX_TRADE_CARDS_PER_SIDE)
+    requested_card_ids: list[int] = Field(default_factory=list, max_length=MAX_TRADE_CARDS_PER_SIDE)
     sender_coins: int = Field(default=0, ge=0)
     receiver_coins: int = Field(default=0, ge=0)
     message: Optional[str] = Field(default=None, max_length=255)

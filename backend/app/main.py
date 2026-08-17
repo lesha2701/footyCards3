@@ -28,6 +28,7 @@ from app.routers import (
     card_collections,
     collection,
     daily_rewards,
+    feature_flags,
     free_pack,
     games,
     gifts,
@@ -96,6 +97,7 @@ app.include_router(collection.router, prefix=API_PREFIX)
 app.include_router(packs.router, prefix=API_PREFIX)
 app.include_router(free_pack.router, prefix=API_PREFIX)
 app.include_router(games.router, prefix=API_PREFIX)
+app.include_router(feature_flags.router, prefix=API_PREFIX)
 app.include_router(gifts.router, prefix=API_PREFIX)
 app.include_router(lineups.router, prefix=API_PREFIX)
 app.include_router(maintenance.router, prefix=API_PREFIX)

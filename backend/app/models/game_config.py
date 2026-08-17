@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Integer, Numeric, String
+from sqlalchemy import Boolean, DateTime, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -70,6 +70,14 @@ class GameConfig(TimestampMixin, Base):
     free_kick_daily_limit: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
 
     hourly_game_limit: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+
+    # Emergency kill switches — hide these app-wide without a deploy if a
+    # bug turns up right after launch (see routers/feature_flags.py).
+    # matchmaking_enabled hides only the "Играть" (opponent search) button
+    # on the Tactico/Penalty matches screens — bot and friend-challenge play
+    # stay available either way.
+    matchmaking_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    wheel_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     hangman_daily_limit: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     hangman_reward_correct: Mapped[int] = mapped_column(Integer, default=30, nullable=False)

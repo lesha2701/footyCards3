@@ -36,6 +36,7 @@ export interface AdminUser {
   is_admin: boolean;
   is_banned: boolean;
   game_rewards_blocked: boolean;
+  is_trade_banned: boolean;
   arena_rating: number;
   created_at: string;
   last_seen_at: string | null;
@@ -136,6 +137,8 @@ export interface GameConfig {
   free_kick_base_stake: number;
   free_kick_daily_limit: number;
   hourly_game_limit: number;
+  matchmaking_enabled: boolean;
+  wheel_enabled: boolean;
   free_pack_interval_hours: number;
   free_pack_pack_slug: string;
   chat_pack_interval_hours: number;

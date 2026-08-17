@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { createPenaltyChallenge, fetchPenaltyMatches } from "@/api/penalty";
+import { fetchFeatureFlags } from "@/api/featureFlags";
 import { searchUsers } from "@/api/profile";
 import { fetchCollection } from "@/api/collection";
 import CardPickerModal from "@/components/cards/CardPickerModal";
@@ -39,6 +40,9 @@ export default function PenaltyMatchesPage() {
     enabled: pickingOpponent !== null || pickingForSearch,
   });
   const activeMatch = matches?.find((m) => m.status === "in_progress");
+  // Refetches periodically so an admin's "kill switch" toggle takes effect
+  // for already-open sessions without requiring a reload.
+  const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags, refetchInterval: 30000 });
 
   const challengeMutation = useMutation({
     mutationFn: (cardId: number) => createPenaltyChallenge(pickingOpponent!.id, cardId),
@@ -83,13 +87,15 @@ export default function PenaltyMatchesPage() {
         </button>
       ) : (
         <>
-          <button
-            onClick={() => setPickingForSearch(true)}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-accent py-5 text-base font-bold text-bg-base ring-2 ring-accent/40 active:scale-95"
-          >
-            <IconPlay size={20} />
-            Играть
-          </button>
+          {flags?.matchmaking_enabled !== false && (
+            <button
+              onClick={() => setPickingForSearch(true)}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-accent py-5 text-base font-bold text-bg-base ring-2 ring-accent/40 active:scale-95"
+            >
+              <IconPlay size={20} />
+              Играть
+            </button>
+          )}
           <button
             onClick={() => setChallengeSheetOpen(true)}
             className="flex items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95"

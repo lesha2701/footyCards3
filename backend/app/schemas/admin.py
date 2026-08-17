@@ -46,6 +46,7 @@ class AdminUserOut(BaseModel):
     is_admin: bool
     is_banned: bool
     game_rewards_blocked: bool
+    is_trade_banned: bool
     arena_rating: int
     created_at: datetime
     last_seen_at: Optional[datetime]
@@ -174,6 +175,8 @@ class GameConfigOut(BaseModel):
     free_kick_base_stake: int
     free_kick_daily_limit: int
     hourly_game_limit: int
+    matchmaking_enabled: bool
+    wheel_enabled: bool
     free_pack_interval_hours: int
     free_pack_pack_slug: str
     chat_pack_interval_hours: int
@@ -253,6 +256,8 @@ class GameConfigUpdate(BaseModel):
     free_kick_base_stake: Optional[int] = Field(default=None, ge=0)
     free_kick_daily_limit: Optional[int] = Field(default=None, ge=0)
     hourly_game_limit: Optional[int] = Field(default=None, ge=1)
+    matchmaking_enabled: Optional[bool] = None
+    wheel_enabled: Optional[bool] = None
     free_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     free_pack_pack_slug: Optional[str] = None
     chat_pack_interval_hours: Optional[int] = Field(default=None, ge=1)

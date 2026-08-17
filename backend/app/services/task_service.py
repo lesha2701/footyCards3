@@ -177,7 +177,11 @@ async def list_my_tasks(db: AsyncSession, user: User) -> TaskListOut:
         [(ut, d) for ut, d in rows if ut.slot_index is not None],
         key=lambda pair: pair[0].slot_index,
     )
-    premium = [(ut, d) for ut, d in rows if d.category == TaskCategory.premium]
+    # Premium tasks aren't slot-rotated like regular ones — once assigned,
+    # the UserTask row is permanent, so an admin disabling the definition
+    # later must be reflected here too, or the task keeps showing to
+    # everyone it was already assigned to.
+    premium = [(ut, d) for ut, d in rows if d.category == TaskCategory.premium and d.is_active]
 
     return TaskListOut(
         regular=[await _to_task_out(db, ut, d) for ut, d in regular],

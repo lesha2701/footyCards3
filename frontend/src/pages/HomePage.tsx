@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { fetchDailyRewardCalendar } from "@/api/dailyRewards";
+import { fetchFeatureFlags } from "@/api/featureFlags";
 import { claimFreePack, fetchFreePackStatus } from "@/api/freePack";
 import { fetchPacks } from "@/api/packs";
 import { fetchMyProfile } from "@/api/profile";
@@ -51,6 +52,7 @@ export default function HomePage() {
     refetchInterval: 30000,
   });
   const { data: wheelStatus } = useQuery({ queryKey: ["wheel-status"], queryFn: fetchWheelStatus });
+  const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags, refetchInterval: 30000 });
 
   const claimFreePackMutation = useMutation({
     mutationFn: claimFreePack,
@@ -123,7 +125,7 @@ export default function HomePage() {
           />
         )}
 
-        {wheelStatus && (
+        {wheelStatus && flags?.wheel_enabled !== false && (
           <NoticeCard
             Icon={IconGift}
             title="Колесо фортуны"

@@ -5,12 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_admin
 from app.core.exceptions import NotFoundError
 from app.database import get_db
-from app.models.enums import NotificationType, TaskCategory
 from app.models.task import TaskDefinition, UserTask
 from app.models.user import User
+from app.schemas.broadcast import PremiumTaskBroadcastCreate, PremiumTaskBroadcastOut
 from app.schemas.task import TaskDefinitionCreate, TaskDefinitionOut, TaskDefinitionStatsOut, TaskDefinitionUpdate
-from app.services import notification_service
 from app.services.admin_log_service import log_action
+from app.services.broadcast_service import send_premium_task_broadcast
 
 router = APIRouter(prefix="/admin/tasks", tags=["admin"], dependencies=[Depends(get_current_admin)])
 
@@ -53,16 +53,6 @@ async def create_task(payload: TaskDefinitionCreate, request: Request, db: Async
     await db.flush()
     await log_action(db, admin.id, "create_task", "task_definition", task.id, new_value=payload.model_dump(mode="json"), ip_address=request.client.host if request.client else None)
 
-    if task.category == TaskCategory.premium:
-        result = await db.execute(select(User.id).where(User.is_banned.is_(False)))
-        for (user_id,) in result.all():
-            await notification_service.notify(
-                db, user_id, NotificationType.premium_task_available,
-                "⭐ Новое премиум-задание!",
-                f"Доступно новое задание: «{task.name}». Загляни в приложение!",
-                "task_definition", task.id,
-            )
-
     await db.commit()
     return TaskDefinitionOut.model_validate(task)
 
@@ -94,6 +84,23 @@ async def delete_task(task_id: int, request: Request, db: AsyncSession = Depends
     await log_action(db, admin.id, "delete_task", "task_definition", task_id, old_value=TaskDefinitionOut.model_validate(task).model_dump(mode="json"), ip_address=request.client.host if request.client else None)
     await db.delete(task)
     await db.commit()
+
+
+@router.post("/broadcast-premium", response_model=PremiumTaskBroadcastOut)
+async def broadcast_premium_tasks(
+    payload: PremiumTaskBroadcastCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    recipients = await send_premium_task_broadcast(db, payload.task_count, payload.message)
+    await log_action(
+        db, admin.id, "broadcast_premium_tasks", "task_definition", 0,
+        new_value={"task_count": payload.task_count, "message": payload.message, "recipients": recipients},
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    return PremiumTaskBroadcastOut(recipients=recipients)
 
 
 @router.post("/{task_id}/toggle-active", response_model=TaskDefinitionOut)

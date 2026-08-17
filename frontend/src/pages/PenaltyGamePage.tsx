@@ -3,9 +3,10 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchCollection } from "@/api/collection";
+import { fetchFeatureFlags } from "@/api/featureFlags";
 import { claimPenaltyReward, forfeitPenalty, kickPenalty, startPenalty } from "@/api/games";
 import CardPickerModal from "@/components/cards/CardPickerModal";
-import { IconCoin, IconFlagCheckered, IconTrophy } from "@/components/icons";
+import { IconCoin, IconFlagCheckered, IconPlay, IconTrophy, IconUsers } from "@/components/icons";
 import PenaltyGoalScene, { type PenaltyGoalKick } from "@/components/penalty/PenaltyGoalScene";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
@@ -50,6 +51,7 @@ export default function PenaltyGamePage() {
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("pick_card");
   const [choosingBot, setChoosingBot] = useState(false);
+  const [pickingForSearch, setPickingForSearch] = useState(false);
   const [lastKick, setLastKick] = useState<PenaltyKickResult | null>(null);
   const [claimResult, setClaimResult] = useState<{ reward_coins: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -60,6 +62,9 @@ export default function PenaltyGamePage() {
     queryKey: ["collection", "penalty"],
     queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc" }),
   });
+  // Refetches periodically so an admin's "kill switch" toggle takes effect
+  // for already-open sessions without requiring a reload.
+  const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags, refetchInterval: 30000 });
 
   const startMutation = useMutation({
     mutationFn: startPenalty,
@@ -161,18 +166,40 @@ export default function PenaltyGamePage() {
         <h1 className="font-display text-xl font-bold text-ink-chalk">Пенальти</h1>
         <p className="text-sm text-ink-mist">Выбери, с кем играть.</p>
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
-        <button
-          onClick={() => setChoosingBot(true)}
-          className="flex items-center justify-center gap-2 rounded-2xl bg-floodlight py-4 text-base font-bold text-bg-base ring-2 ring-accent-cyan/40 active:scale-95"
-        >
-          Играть с ботом
-        </button>
-        <button
-          onClick={() => navigate("/play/penalty/matches")}
-          className="flex items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 text-base font-bold text-accent-lime active:scale-95"
-        >
-          Играть с другом
-        </button>
+        {flags?.matchmaking_enabled !== false && (
+          <button
+            onClick={() => setPickingForSearch(true)}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-accent py-5 text-base font-bold text-bg-base ring-2 ring-accent/40 active:scale-95"
+          >
+            <IconPlay size={20} />
+            Играть
+          </button>
+        )}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setChoosingBot(true)}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95"
+          >
+            <IconPlay size={14} />
+            С ботом
+          </button>
+          <button
+            onClick={() => navigate("/play/penalty/matches")}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95"
+          >
+            <IconUsers size={14} />
+            Вызвать друга
+          </button>
+        </div>
+        {pickingForSearch && (
+          <CardPickerModal
+            open
+            title="Выбери карточку для матча"
+            cards={collection?.items ?? []}
+            onSelect={(card) => navigate("/play/penalty/matches/search", { state: { userCardId: card.id } })}
+            onClose={() => setPickingForSearch(false)}
+          />
+        )}
       </div>
     );
   }

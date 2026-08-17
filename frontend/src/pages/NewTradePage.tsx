@@ -13,6 +13,8 @@ import { searchUsers } from "@/api/profile";
 import { ApiRequestError } from "@/lib/api";
 import type { UserPublic } from "@/types";
 
+const MAX_TRADE_CARDS_PER_SIDE = 3;
+
 export default function NewTradePage() {
   const navigate = useNavigate();
 
@@ -57,7 +59,17 @@ export default function NewTradePage() {
   });
 
   const toggle = (list: number[], setList: (v: number[]) => void, id: number) => {
-    setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+    if (list.includes(id)) {
+      setList(list.filter((x) => x !== id));
+      setError(null);
+      return;
+    }
+    if (list.length >= MAX_TRADE_CARDS_PER_SIDE) {
+      setError(`Максимум ${MAX_TRADE_CARDS_PER_SIDE} карточки с одной стороны обмена`);
+      return;
+    }
+    setList([...list, id]);
+    setError(null);
   };
 
   const submit = () => {
@@ -115,7 +127,7 @@ export default function NewTradePage() {
           {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
 
           <section>
-            <p className="mb-2 text-sm font-semibold text-ink-mist">Твои карточки ({offeredIds.length})</p>
+            <p className="mb-2 text-sm font-semibold text-ink-mist">Твои карточки ({offeredIds.length}/{MAX_TRADE_CARDS_PER_SIDE})</p>
             <input
               value={myCardSearch}
               onChange={(e) => setMyCardSearch(e.target.value)}
@@ -142,7 +154,7 @@ export default function NewTradePage() {
           </section>
 
           <section>
-            <p className="mb-2 text-sm font-semibold text-ink-mist">Карточки {target.username ?? "игрока"} ({requestedIds.length})</p>
+            <p className="mb-2 text-sm font-semibold text-ink-mist">Карточки {target.username ?? "игрока"} ({requestedIds.length}/{MAX_TRADE_CARDS_PER_SIDE})</p>
             <input
               value={theirCardSearch}
               onChange={(e) => setTheirCardSearch(e.target.value)}

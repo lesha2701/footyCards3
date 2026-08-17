@@ -22,6 +22,10 @@ class User(TimestampMixin, Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     game_rewards_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Admin-imposed trade ban (moderation tool) — distinct from accept_trades
+    # below, which is the user's own opt-out preference. Blocks both sending
+    # and accepting trade offers.
+    is_trade_banned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     level: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     experience: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -11,6 +11,9 @@ import { formatGameError } from "@/lib/errors";
 import type { ProfilePublic } from "@/types";
 
 const REVEAL_PAUSE_MS = 3000;
+// Mirrors the backend's MATCHMAKING_TIMEOUT_SECONDS (tactico_service.py) —
+// purely cosmetic, the server is the actual source of truth for the timeout.
+const SEARCH_TIMEOUT_SECONDS = 60;
 
 export default function TacticoSearchPage() {
   const navigate = useNavigate();
@@ -29,11 +32,13 @@ export default function TacticoSearchPage() {
   // Keyed by attempt number (rather than a plain boolean, as PackOpenPage's
   // one-shot hasStartedRef uses) so a later, genuine retry isn't blocked.
   const startedAttemptRef = useRef<number | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(SEARCH_TIMEOUT_SECONDS);
 
   useEffect(() => {
     if (startedAttemptRef.current === searchAttempt) return;
     startedAttemptRef.current = searchAttempt;
     setPhase("starting");
+    setSecondsLeft(SEARCH_TIMEOUT_SECONDS);
     startTacticoSearch()
       .then(() => setPhase("searching"))
       .catch((err) => {
@@ -41,6 +46,12 @@ export default function TacticoSearchPage() {
         setError(formatGameError(err, "Не удалось начать поиск соперника"));
       });
   }, [searchAttempt]);
+
+  useEffect(() => {
+    if (phase !== "searching") return;
+    const interval = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(interval);
+  }, [phase]);
 
   // Clears any pending reveal→match-navigation timer if the player leaves
   // this page during the 3s reveal window, so it can't fire later and force
@@ -170,6 +181,9 @@ export default function TacticoSearchPage() {
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
       <IconTarget size={40} className="animate-pulse text-accent-lime" />
       <p className="font-display text-lg font-bold text-ink-chalk">Ищем соперника...</p>
+      <p className={`font-mono text-2xl font-bold tabular-nums ${secondsLeft <= 10 ? "text-red-400" : "text-ink-mist"}`}>
+        0:{String(secondsLeft).padStart(2, "0")}
+      </p>
       <button
         onClick={handleCancel}
         className="rounded-2xl bg-white/5 px-6 py-3 text-sm font-bold text-ink-chalk active:scale-95"

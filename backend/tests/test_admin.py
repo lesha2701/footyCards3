@@ -45,3 +45,50 @@ async def test_admin_can_adjust_user_balance(client, db_session, bot_token):
     )
     assert resp.status_code == 200
     assert resp.json()["balance"] == 600
+
+
+async def test_feature_flags_default_enabled_and_toggle_hides_them(client, db_session, bot_token):
+    user_headers = telegram_headers(760003, bot_token)
+    await client.post("/api/v1/auth/session", headers=user_headers)
+
+    resp = await client.get("/api/v1/feature-flags", headers=user_headers)
+    assert resp.status_code == 200
+    assert resp.json() == {"matchmaking_enabled": True, "wheel_enabled": True}
+
+    admin_headers = telegram_headers(999000001, bot_token)
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    admin_token = session_resp.json()["admin_token"]
+
+    update_resp = await client.put(
+        "/api/v1/admin/games/config",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"matchmaking_enabled": False, "wheel_enabled": False},
+    )
+    assert update_resp.status_code == 200
+
+    resp2 = await client.get("/api/v1/feature-flags", headers=user_headers)
+    assert resp2.json() == {"matchmaking_enabled": False, "wheel_enabled": False}
+
+
+async def test_admin_toggle_trade_ban(client, db_session, bot_token):
+    admin_headers = telegram_headers(999000001, bot_token)
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    admin_token = session_resp.json()["admin_token"]
+
+    target_headers = telegram_headers(760004, bot_token)
+    await client.post("/api/v1/auth/session", headers=target_headers)
+    target = await get_user_by_telegram_id(db_session, 760004)
+    assert target.is_trade_banned is False
+
+    resp = await client.post(
+        f"/api/v1/admin/users/{target.id}/toggle-trade-ban",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["is_trade_banned"] is True
+
+    resp2 = await client.post(
+        f"/api/v1/admin/users/{target.id}/toggle-trade-ban",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp2.json()["is_trade_banned"] is False

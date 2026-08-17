@@ -267,10 +267,12 @@ async def test_premium_task_without_username_checks_via_chat_id(client, db_sessi
     assert seen_chat_ids == [-1001669902011]
 
 
-async def test_creating_premium_task_notifies_all_users(client, db_session, bot_token):
+async def test_creating_premium_task_does_not_auto_notify(client, db_session, bot_token):
+    """Creating a premium task must NOT spam every user — the admin sends a
+    single broadcast afterwards via POST /admin/tasks/broadcast-premium
+    instead (see test_premium_task_broadcast_* below)."""
     from sqlalchemy import select
 
-    from app.core.security import create_admin_token
     from app.models.enums import NotificationType
     from app.models.notification import Notification
 
@@ -300,7 +302,80 @@ async def test_creating_premium_task_notifies_all_users(client, db_session, bot_
             )
         )
     ).scalars().all()
-    assert len(notifications) >= 1
+    assert notifications == []
+
+
+async def test_premium_task_broadcast_notifies_all_users_with_pluralized_text(client, db_session, bot_token):
+    from sqlalchemy import select
+
+    from app.models.enums import NotificationType
+    from app.models.notification import Notification
+
+    await _register(client, db_session, 810011, bot_token)
+    await _register(client, db_session, 810012, bot_token)
+
+    admin_headers = telegram_headers(999000001, bot_token)
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    admin_token = session_resp.json()["admin_token"]
+
+    resp = await client.post(
+        "/api/v1/admin/tasks/broadcast-premium",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"task_count": 3, "message": "Успей до конца недели!"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["recipients"] >= 2
+
+    notifications = (
+        await db_session.execute(
+            select(Notification).where(Notification.type == NotificationType.premium_task_available)
+        )
+    ).scalars().all()
+    assert len(notifications) >= 2
+    assert all("Появилось 3 новых премиум задания! Успей получить награду" in n.body for n in notifications)
+    assert all("Успей до конца недели!" in n.body for n in notifications)
+
+
+async def test_premium_task_broadcast_rejects_zero_count(client, db_session, bot_token):
+    admin_headers = telegram_headers(999000001, bot_token)
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    admin_token = session_resp.json()["admin_token"]
+
+    resp = await client.post(
+        "/api/v1/admin/tasks/broadcast-premium",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"task_count": 0},
+    )
+    assert resp.status_code == 422
+
+
+async def test_disabling_premium_task_hides_it_from_players(client, db_session, bot_token):
+    task = TaskDefinition(
+        code="premium_disable_test", name="Premium Disable", description="test",
+        category=TaskCategory.premium, condition_type=TaskConditionType.metric_counter,
+        target_value=0, reward_coins=0,
+    )
+    db_session.add(task)
+    await db_session.commit()
+
+    await _register(client, db_session, 810014, bot_token)
+    headers = telegram_headers(810014, bot_token)
+
+    tasks = (await client.get("/api/v1/tasks", headers=headers)).json()
+    assert any(t["code"] == "premium_disable_test" for t in tasks["premium"])
+
+    admin_headers = telegram_headers(999000001, bot_token)
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    admin_token = session_resp.json()["admin_token"]
+    toggle_resp = await client.post(
+        f"/api/v1/admin/tasks/{task.id}/toggle-active",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert toggle_resp.status_code == 200
+    assert toggle_resp.json()["is_active"] is False
+
+    tasks_after = (await client.get("/api/v1/tasks", headers=headers)).json()
+    assert not any(t["code"] == "premium_disable_test" for t in tasks_after["premium"])
 
 
 async def test_admin_task_list_reports_completed_and_claimed_counts(client, db_session, bot_token):

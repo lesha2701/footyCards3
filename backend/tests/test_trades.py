@@ -99,6 +99,67 @@ async def test_cannot_accept_trade_twice(client, db_session, bot_token):
     assert second.status_code == 409
 
 
+async def test_trade_banned_sender_cannot_create_offer(client, db_session, bot_token):
+    sender, sender_headers = await _register(client, db_session, 730016, bot_token)
+    receiver, _ = await _register(client, db_session, 730017, bot_token)
+    sender.is_trade_banned = True
+    db_session.add(sender)
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/v1/trades/offers", headers=sender_headers,
+        json={"receiver_id": receiver.id, "sender_coins": 10},
+    )
+    assert resp.status_code == 403
+
+
+async def test_cannot_create_offer_to_trade_banned_receiver(client, db_session, bot_token):
+    _sender, sender_headers = await _register(client, db_session, 730018, bot_token)
+    receiver, _ = await _register(client, db_session, 730019, bot_token)
+    receiver.is_trade_banned = True
+    db_session.add(receiver)
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/v1/trades/offers", headers=sender_headers,
+        json={"receiver_id": receiver.id, "sender_coins": 10},
+    )
+    assert resp.status_code == 409
+
+
+async def test_trade_banned_receiver_cannot_accept_offer(client, db_session, bot_token):
+    _sender, sender_headers = await _register(client, db_session, 730020, bot_token)
+    receiver, receiver_headers = await _register(client, db_session, 730021, bot_token)
+
+    create_resp = await client.post(
+        "/api/v1/trades/offers", headers=sender_headers,
+        json={"receiver_id": receiver.id, "sender_coins": 10},
+    )
+    offer_id = create_resp.json()["id"]
+
+    receiver.is_trade_banned = True
+    db_session.add(receiver)
+    await db_session.commit()
+
+    resp = await client.post(f"/api/v1/trades/offers/{offer_id}/accept", headers=receiver_headers)
+    assert resp.status_code == 403
+
+
+async def test_trade_offer_rejects_more_than_max_cards_per_side(client, db_session, bot_token):
+    sender, sender_headers = await _register(client, db_session, 730008, bot_token)
+    receiver, _ = await _register(client, db_session, 730009, bot_token)
+
+    player = await create_player(db_session, rarity=Rarity.common)
+    cards = [await create_user_card(db_session, sender.id, player.id, CardSource.seed) for _ in range(4)]
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/v1/trades/offers", headers=sender_headers,
+        json={"receiver_id": receiver.id, "offered_card_ids": [c.id for c in cards], "requested_card_ids": []},
+    )
+    assert resp.status_code == 422
+
+
 async def test_cannot_trade_with_user_who_opted_out(client, db_session, bot_token):
     sender, sender_headers = await _register(client, db_session, 730010, bot_token)
     receiver, _ = await _register(client, db_session, 730011, bot_token)

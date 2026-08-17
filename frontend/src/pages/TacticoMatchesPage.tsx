@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { createTacticoBotMatch, createTacticoChallenge, fetchTacticoMatches } from "@/api/tactico";
+import { fetchFeatureFlags } from "@/api/featureFlags";
 import { searchUsers } from "@/api/profile";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
@@ -44,6 +45,9 @@ export default function TacticoMatchesPage() {
 
   const { data: matches, isLoading } = useQuery({ queryKey: ["tactico-matches"], queryFn: fetchTacticoMatches });
   const activeMatch = matches?.find((m) => m.status === "in_progress");
+  // Refetches periodically so an admin's "kill switch" toggle takes effect
+  // for already-open sessions without requiring a reload.
+  const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags, refetchInterval: 30000 });
 
   const botMutation = useMutation({
     mutationFn: (difficulty: MatchDifficulty) => createTacticoBotMatch(difficulty),
@@ -108,13 +112,15 @@ export default function TacticoMatchesPage() {
         </button>
       ) : (
         <>
-          <button
-            onClick={() => navigate("/play/tactico/search")}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-accent py-5 text-base font-bold text-bg-base ring-2 ring-accent/40 active:scale-95"
-          >
-            <IconPlay size={20} />
-            Играть
-          </button>
+          {flags?.matchmaking_enabled !== false && (
+            <button
+              onClick={() => navigate("/play/tactico/search")}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-accent py-5 text-base font-bold text-bg-base ring-2 ring-accent/40 active:scale-95"
+            >
+              <IconPlay size={20} />
+              Играть
+            </button>
+          )}
           <div className="flex gap-2">
             <button
               onClick={() => setBotSheetOpen(true)}

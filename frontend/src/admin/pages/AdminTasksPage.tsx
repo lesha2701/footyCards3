@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { createTask, deleteTask, fetchAdminPacks, fetchAdminTasks, toggleTaskActive, updateTask } from "@/admin/api";
+import { createTask, deleteTask, fetchAdminPacks, fetchAdminTasks, sendPremiumTaskBroadcast, toggleTaskActive, updateTask } from "@/admin/api";
 import type { TaskDefinition } from "@/admin/types";
 import { ApiRequestError } from "@/lib/api";
 
@@ -55,6 +55,11 @@ export default function AdminTasksPage() {
   const [form, setForm] = useState<TaskForm>(taskToForm());
   const [error, setError] = useState<string | null>(null);
 
+  const [broadcastCount, setBroadcastCount] = useState(1);
+  const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [broadcastResult, setBroadcastResult] = useState<number | null>(null);
+  const [broadcastError, setBroadcastError] = useState<string | null>(null);
+
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-tasks"] });
   const toggleMutation = useMutation({ mutationFn: toggleTaskActive, onSuccess: invalidate });
   const deleteMutation = useMutation({
@@ -67,6 +72,22 @@ export default function AdminTasksPage() {
     if (window.confirm(`Удалить задание «${t.name}» навсегда? Это действие необратимо.`)) {
       deleteMutation.mutate(t.id);
     }
+  };
+
+  const broadcastMutation = useMutation({
+    mutationFn: () => sendPremiumTaskBroadcast(broadcastCount, broadcastMessage),
+    onSuccess: (res) => { setBroadcastResult(res.recipients); setBroadcastError(null); setBroadcastMessage(""); },
+    onError: (err) => {
+      setBroadcastError(err instanceof ApiRequestError ? err.message : "Не удалось отправить рассылку");
+      setBroadcastResult(null);
+    },
+  });
+
+  const sendBroadcast = () => {
+    if (broadcastCount < 1) return;
+    if (!window.confirm(`Отправить одно уведомление о новых премиум-заданиях (${broadcastCount} шт.) всем пользователям? Отменить рассылку будет нельзя.`)) return;
+    setBroadcastResult(null);
+    broadcastMutation.mutate();
   };
 
   const buildPayload = () => ({
@@ -103,6 +124,52 @@ export default function AdminTasksPage() {
         <button onClick={() => { setCreating(true); setForm(taskToForm()); }} className="rounded-lg bg-accent px-3 py-2 text-xs font-bold text-bg-base">
           + Новое задание
         </button>
+      </div>
+
+      <div className="rounded-2xl border border-white/5 bg-bg-surface p-3">
+        <p className="mb-1 font-display text-sm font-bold">Оповестить о новых премиум-заданиях</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Создание задания больше не рассылает уведомление автоматически — добавь все нужные задания, затем пришли
+          одно оповещение здесь, чтобы игроки не получали по уведомлению на каждое задание.
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-400">Сколько заданий добавлено</span>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={broadcastCount}
+              onChange={(e) => setBroadcastCount(Math.max(1, Number(e.target.value)))}
+              className="w-28 rounded-lg bg-bg-base px-3 py-2 text-sm outline-none"
+            />
+          </label>
+          <label className="flex flex-1 flex-col gap-1">
+            <span className="text-xs text-slate-400">Дополнительный текст (необязательно)</span>
+            <input
+              value={broadcastMessage}
+              onChange={(e) => setBroadcastMessage(e.target.value)}
+              maxLength={500}
+              placeholder="Например: успей до конца недели"
+              className="rounded-lg bg-bg-base px-3 py-2 text-sm outline-none"
+            />
+          </label>
+          <button
+            onClick={sendBroadcast}
+            disabled={broadcastMutation.isPending}
+            className="rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-bg-base disabled:opacity-40"
+          >
+            {broadcastMutation.isPending ? "Отправка..." : "Отправить"}
+          </button>
+        </div>
+        <p className="mt-2 text-[11px] text-slate-500">
+          Предпросмотр: «Появилось {broadcastCount} {pluralizeTasks(broadcastCount)}! Успей получить награду»
+          {broadcastMessage.trim() && <> + «{broadcastMessage.trim()}»</>}
+        </p>
+        {broadcastError && <p className="mt-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{broadcastError}</p>}
+        {broadcastResult !== null && (
+          <p className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-400">Отправлено {broadcastResult} пользователям.</p>
+        )}
       </div>
 
       {isLoading && <p className="text-sm text-slate-400">Загрузка...</p>}
@@ -265,6 +332,14 @@ export default function AdminTasksPage() {
       )}
     </div>
   );
+}
+
+function pluralizeTasks(n: number): string {
+  const lastTwo = n % 100;
+  const lastOne = n % 10;
+  if (lastOne === 1 && lastTwo !== 11) return "новое премиум задание";
+  if ([2, 3, 4].includes(lastOne) && ![12, 13, 14].includes(lastTwo)) return "новых премиум задания";
+  return "новых премиум заданий";
 }
 
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
