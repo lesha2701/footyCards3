@@ -57,7 +57,13 @@ export default function TacticoMatchPage() {
       // round (a live 15s response window is running for the other side),
       // so both players see the countdown resolve promptly.
       if (data.round_deadline) return 3000;
-      return data.waiting_for_opponent ? 20000 : false;
+      // Keep polling at a slow cadence even when neither side has acted
+      // yet for the current round (waiting_for_opponent false, no
+      // round_deadline armed) — otherwise a viewer whose own turn it is
+      // never notices the opponent forfeiting mid-round, and is stuck
+      // looking at a live match that already finished server-side until
+      // they manually reload.
+      return 20000;
     },
   });
 

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -17,6 +17,7 @@ const SEARCH_TIMEOUT_SECONDS = 60;
 
 export default function TacticoSearchPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [phase, setPhase] = useState<"starting" | "searching" | "timeout" | "reveal" | "error">("starting");
   const [error, setError] = useState<string | null>(null);
   const [opponent, setOpponent] = useState<ProfilePublic | null>(null);
@@ -39,13 +40,22 @@ export default function TacticoSearchPage() {
     startedAttemptRef.current = searchAttempt;
     setPhase("starting");
     setSecondsLeft(SEARCH_TIMEOUT_SECONDS);
+    setOpponent(null);
+    // The status query below is keyed on a fixed, page-wide queryKey (not
+    // scoped to this mount or attempt) — react-query still serves whatever
+    // it last cached under that key instantly, even before this page's own
+    // fetch runs. Without this, playing a match, then searching again,
+    // would briefly (or not-so-briefly, if a race lets it win) surface the
+    // *previous* search's "matched" result — the previous opponent, for a
+    // match that's already finished — right as this fresh search starts.
+    queryClient.removeQueries({ queryKey: ["tactico-search-status"] });
     startTacticoSearch()
       .then(() => setPhase("searching"))
       .catch((err) => {
         setPhase("error");
         setError(formatGameError(err, "Не удалось начать поиск соперника"));
       });
-  }, [searchAttempt]);
+  }, [searchAttempt, queryClient]);
 
   useEffect(() => {
     if (phase !== "searching") return;
@@ -71,7 +81,10 @@ export default function TacticoSearchPage() {
   });
 
   useEffect(() => {
-    if (!status) return;
+    // Guards against acting on a stray cached/in-flight result from a
+    // previous search attempt landing after this effect's own attempt has
+    // already moved on (e.g. past "searching" into "reveal"/"timeout").
+    if (!status || phase !== "searching") return;
     if (status.status === "timeout" || status.status === "not_searching") {
       // "not_searching" happens when the pairing algorithm drops our own
       // entry as stale during a pairing attempt (active match / incomplete
@@ -86,7 +99,7 @@ export default function TacticoSearchPage() {
       fetchTacticoMatchOpponentAndReveal(matchId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status?.status, status?.match_id]);
+  }, [status?.status, status?.match_id, phase]);
 
   const fetchTacticoMatchOpponentAndReveal = async (matchId: number) => {
     try {
