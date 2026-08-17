@@ -6,6 +6,7 @@ import type { PackPreview } from "@/admin/types";
 import NumberInput from "@/components/common/NumberInput";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { RARITY_LABELS } from "@/lib/rarity";
+import { showConfirm } from "@/lib/telegram";
 import type { Pack, Rarity } from "@/types";
 
 const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary"];
@@ -68,8 +69,8 @@ export default function AdminPacksPage() {
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось удалить пак"),
   });
 
-  const confirmDelete = (p: Pack) => {
-    if (window.confirm(`Удалить пак «${p.name}» навсегда? Это действие необратимо.`)) {
+  const confirmDelete = async (p: Pack) => {
+    if (await showConfirm(`Удалить пак «${p.name}» навсегда? Это действие необратимо.`)) {
       deleteMutation.mutate(p.id);
     }
   };

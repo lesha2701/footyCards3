@@ -7,6 +7,7 @@ import {
 } from "@/admin/api";
 import type { AdminWheelPrize } from "@/admin/types";
 import { ApiRequestError } from "@/lib/api";
+import { showConfirm } from "@/lib/telegram";
 
 type PrizeType = AdminWheelPrize["prize_type"];
 type CardRarity = NonNullable<AdminWheelPrize["card_rarity"]>;
@@ -56,8 +57,8 @@ export default function AdminWheelPage() {
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось удалить приз"),
   });
 
-  const confirmDelete = (p: AdminWheelPrize) => {
-    if (window.confirm("Удалить этот приз из колеса навсегда?")) deleteMutation.mutate(p.id);
+  const confirmDelete = async (p: AdminWheelPrize) => {
+    if (await showConfirm("Удалить этот приз из колеса навсегда?")) deleteMutation.mutate(p.id);
   };
 
   const buildPayload = () => ({

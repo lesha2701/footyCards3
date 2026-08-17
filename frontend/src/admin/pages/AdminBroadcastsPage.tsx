@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { sendUpdateBroadcast } from "@/admin/api";
 import { ApiRequestError } from "@/lib/api";
+import { showConfirm } from "@/lib/telegram";
 
 export default function AdminBroadcastsPage() {
   const [message, setMessage] = useState("");
@@ -15,9 +16,9 @@ export default function AdminBroadcastsPage() {
     onError: (err) => { setError(err instanceof ApiRequestError ? err.message : "Не удалось отправить рассылку"); setResult(null); },
   });
 
-  const send = () => {
+  const send = async () => {
     if (!message.trim()) return;
-    if (!window.confirm("Отправить это сообщение всем пользователям бота? Отменить рассылку будет нельзя.")) return;
+    if (!(await showConfirm("Отправить это сообщение всем пользователям бота? Отменить рассылку будет нельзя."))) return;
     setResult(null);
     sendMutation.mutate();
   };

@@ -9,7 +9,7 @@ import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconCoin, IconGift, IconInboxEmpty, IconSearch, IconTrophy } from "@/components/icons";
 import { ApiRequestError, staticUrl } from "@/lib/api";
-import { hapticNotify, openTelegramInvoice } from "@/lib/telegram";
+import { hapticNotify, openTelegramInvoice, showConfirm } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { GiftClaimResult, GiftSet, TrophyDefinition, UserPublic } from "@/types";
 
@@ -419,8 +419,8 @@ function AdminGiftControls() {
           )}
           {action === "broadcast" && (
             <button
-              onClick={() => {
-                if (window.confirm("Разослать этот набор бесплатно всем зарегистрированным игрокам?")) broadcastMutation.mutate();
+              onClick={async () => {
+                if (await showConfirm("Разослать этот набор бесплатно всем зарегистрированным игрокам?")) broadcastMutation.mutate();
               }}
               disabled={!giftSetId || broadcastMutation.isPending}
               className="rounded-xl bg-floodlight py-2.5 text-sm font-bold text-bg-base disabled:opacity-40"

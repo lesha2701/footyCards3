@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createTask, deleteTask, fetchAdminPacks, fetchAdminTasks, sendPremiumTaskBroadcast, toggleTaskActive, updateTask } from "@/admin/api";
 import type { TaskDefinition } from "@/admin/types";
 import { ApiRequestError } from "@/lib/api";
+import { showConfirm } from "@/lib/telegram";
 
 type Category = TaskDefinition["category"];
 type ConditionType = TaskDefinition["condition_type"];
@@ -68,8 +69,8 @@ export default function AdminTasksPage() {
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось удалить задание"),
   });
 
-  const confirmDelete = (t: TaskDefinition) => {
-    if (window.confirm(`Удалить задание «${t.name}» навсегда? Это действие необратимо.`)) {
+  const confirmDelete = async (t: TaskDefinition) => {
+    if (await showConfirm(`Удалить задание «${t.name}» навсегда? Это действие необратимо.`)) {
       deleteMutation.mutate(t.id);
     }
   };
@@ -83,9 +84,9 @@ export default function AdminTasksPage() {
     },
   });
 
-  const sendBroadcast = () => {
+  const sendBroadcast = async () => {
     if (broadcastCount < 1) return;
-    if (!window.confirm(`Отправить одно уведомление о новых премиум-заданиях (${broadcastCount} шт.) всем пользователям? Отменить рассылку будет нельзя.`)) return;
+    if (!(await showConfirm(`Отправить одно уведомление о новых премиум-заданиях (${broadcastCount} шт.) всем пользователям? Отменить рассылку будет нельзя.`))) return;
     setBroadcastResult(null);
     broadcastMutation.mutate();
   };

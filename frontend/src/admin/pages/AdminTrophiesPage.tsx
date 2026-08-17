@@ -11,6 +11,7 @@ import {
 } from "@/admin/api";
 import NumberInput from "@/components/common/NumberInput";
 import { ApiRequestError, staticUrl } from "@/lib/api";
+import { showConfirm } from "@/lib/telegram";
 import type { TrophyDefinition } from "@/types";
 
 interface TrophyForm {
@@ -63,8 +64,8 @@ export default function AdminTrophiesPage() {
   const openEdit = (t: TrophyDefinition) => { setEditing(t); setForm(trophyToForm(t)); setError(null); };
   const openCreate = () => { setEditing("new"); setForm(trophyToForm()); setError(null); };
 
-  const confirmDelete = (t: TrophyDefinition) => {
-    if (window.confirm(`Удалить трофей «${t.name}» навсегда? У всех игроков, кому он был вручён, он тоже пропадёт.`)) {
+  const confirmDelete = async (t: TrophyDefinition) => {
+    if (await showConfirm(`Удалить трофей «${t.name}» навсегда? У всех игроков, кому он был вручён, он тоже пропадёт.`)) {
       deleteMutation.mutate(t.id);
     }
   };

@@ -12,6 +12,7 @@ import {
 } from "@/admin/api";
 import NumberInput from "@/components/common/NumberInput";
 import { ApiRequestError, staticUrl } from "@/lib/api";
+import { showConfirm } from "@/lib/telegram";
 import type { GiftSet } from "@/types";
 
 interface GiftSetForm {
@@ -67,8 +68,8 @@ export default function AdminGiftsPage() {
   const openEdit = (g: GiftSet) => { setEditing(g); setForm(giftSetToForm(g)); setError(null); };
   const openCreate = () => { setEditing("new"); setForm(giftSetToForm()); setError(null); };
 
-  const confirmDelete = (g: GiftSet) => {
-    if (window.confirm(`Удалить набор «${g.name}» навсегда?`)) {
+  const confirmDelete = async (g: GiftSet) => {
+    if (await showConfirm(`Удалить набор «${g.name}» навсегда?`)) {
       deleteMutation.mutate(g.id);
     }
   };
