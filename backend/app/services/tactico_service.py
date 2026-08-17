@@ -569,13 +569,6 @@ async def submit_round(db: AsyncSession, user: User, match_id: int, user_card_id
             ).isoformat()
             match.server_state = state
             flag_modified(match, "server_state")
-            other_side = "opponent" if side == "user" else "user"
-            notify_user_id = match.opponent_user_id if other_side == "opponent" else match.user_id
-            await notify(
-                db, notify_user_id, NotificationType.tactico_your_turn,
-                "Твой ход в Тактико", "Соперник сделал ход — твоя очередь выбрать карту.",
-                "tactico_match", match.id,
-            )
         db.add(match)
         await db.commit()
 

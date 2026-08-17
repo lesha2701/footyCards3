@@ -131,7 +131,14 @@ export default function PenaltyMatchPage() {
   const pickMutation = useMutation({
     mutationFn: (zone: PenaltyDirection) => submitPenaltyPick(id, zone),
     onSuccess: () => invalidate(),
-    onError: (err) => setError(formatGameError(err, "Не удалось сделать удар")),
+    onError: (err) => {
+      // The opponent may have forfeited (or the match otherwise resolved)
+      // between our last poll and this tap — refetch so the real,
+      // already-finished result replaces this stale "in progress" view
+      // right away instead of requiring a manual reload.
+      invalidate();
+      setError(formatGameError(err, "Не удалось сделать удар"));
+    },
   });
   const forfeitMutation = useMutation({
     mutationFn: () => forfeitPenaltyMatch(id),

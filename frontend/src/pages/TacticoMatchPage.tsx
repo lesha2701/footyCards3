@@ -79,7 +79,14 @@ export default function TacticoMatchPage() {
   const submitMutation = useMutation({
     mutationFn: (cardId: number) => submitTacticoRound(id, cardId),
     onSuccess: () => { hapticNotify("success"); invalidate(); },
-    onError: (err) => setError(formatGameError(err, "Не удалось сыграть карту")),
+    onError: (err) => {
+      // The opponent may have forfeited (or the match otherwise resolved)
+      // between our last poll and this tap — refetch so the real,
+      // already-finished result replaces this stale "in progress" view
+      // right away instead of requiring a manual reload.
+      invalidate();
+      setError(formatGameError(err, "Не удалось сыграть карту"));
+    },
   });
   const acceptMutation = useMutation({ mutationFn: () => acceptTacticoChallenge(id), onSuccess: () => { hapticNotify("success"); invalidate(); } });
   const declineMutation = useMutation({ mutationFn: () => declineTacticoChallenge(id), onSuccess: () => navigate("/play/tactico") });
