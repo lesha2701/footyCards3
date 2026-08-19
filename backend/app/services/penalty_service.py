@@ -13,7 +13,7 @@ from app.models.game import GameSession
 from app.models.user import User
 from app.schemas.game import PenaltyClaimOut, PenaltyForfeitOut, PenaltyKickOut, PenaltyStartOut, PenaltyStatsOut
 from app.schemas.ranking import RankingMetric
-from app.services import ranking_service, task_service
+from app.services import league_service, ranking_service, task_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
@@ -126,6 +126,7 @@ async def _apply_finish(db: AsyncSession, user: User, session: GameSession, stat
     locked_user = await lock_user_for_update(db, user.id)
     locked_user.penalty_rating = max(0, locked_user.penalty_rating + rating_delta)
     db.add(locked_user)
+    await league_service.sync_league_rewards_for_user(db, locked_user)
     await task_service.evaluate_penalty_win_max_rating(db, user, state["player_rating"], result == "win")
     return rating_delta
 

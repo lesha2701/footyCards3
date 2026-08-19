@@ -15,6 +15,7 @@ from app.models.enums import MatchResult, NotificationType, PenaltyMatchStatus, 
 from app.models.penalty import PenaltyMatch, PenaltyQueueEntry
 from app.models.user import User
 from app.schemas.penalty_match import PenaltyMatchOut, PenaltyRoundOut
+from app.services import league_service
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 from app.services.penalty_service import PENALTY_ZONES, _resolve_shot
@@ -25,7 +26,7 @@ MATCH_TIMEOUT_SECONDS = 180
 REGULATION_KICKS = 10  # 5 rounds x 2 kicks, same as the bot mode
 
 _FLIP_RESULT = {MatchResult.win: MatchResult.loss, MatchResult.loss: MatchResult.win, MatchResult.draw: MatchResult.draw}
-_OPPONENT_RATING_DELTA = {3: -1, -1: 3, 1: 1}
+_BASE_RATING_DELTA = {MatchResult.win: 3, MatchResult.loss: -1, MatchResult.draw: 1}
 
 
 async def _get_match_or_404(db: AsyncSession, match_id: int) -> PenaltyMatch:
@@ -350,16 +351,25 @@ async def _finish_match(db: AsyncSession, match: PenaltyMatch, state: dict, forc
         # Forfeit — always counts as a loss for the forfeiting side
         # regardless of the score so far, same rule Tactico's forfeit
         # enforces: leaving mid-match is never a safer bet than finishing.
-        result, user_delta = MatchResult.loss, -1
+        result = MatchResult.loss
     elif forced_loser == "opponent":
-        result, user_delta = MatchResult.win, 3
+        result = MatchResult.win
     elif match.user_score > match.opponent_score:
-        result, user_delta = MatchResult.win, 3
+        result = MatchResult.win
     elif match.user_score < match.opponent_score:
-        result, user_delta = MatchResult.loss, -1
+        result = MatchResult.loss
     else:
-        result, user_delta = MatchResult.draw, 1
-    opponent_delta = _OPPONENT_RATING_DELTA[user_delta]
+        result = MatchResult.draw
+
+    user_base = _BASE_RATING_DELTA[result]
+    opponent_base = _BASE_RATING_DELTA[_FLIP_RESULT[result]]
+    # friend matches no longer touch rating at all (see Tactico's identical
+    # rule for the reasoning); online (matchmaking) matches double every
+    # outcome both sides.
+    if match.opponent_type == PenaltyOpponentType.friend:
+        user_delta, opponent_delta = 0, 0
+    else:
+        user_delta, opponent_delta = user_base * 2, opponent_base * 2
     state["opponent_rating_delta"] = opponent_delta
 
     match.result = result
@@ -379,6 +389,10 @@ async def _finish_match(db: AsyncSession, match: PenaltyMatch, state: dict, forc
     locked_opponent.penalty_rating = max(0, locked_opponent.penalty_rating + opponent_delta)
     db.add(locked_user)
     db.add(locked_opponent)
+
+    if match.opponent_type != PenaltyOpponentType.friend:
+        await league_service.sync_league_rewards_for_user(db, locked_user)
+        await league_service.sync_league_rewards_for_user(db, locked_opponent)
 
     await notify(
         db, match.opponent_user_id, NotificationType.penalty_challenge_accepted,

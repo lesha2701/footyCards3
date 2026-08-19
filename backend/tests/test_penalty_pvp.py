@@ -154,7 +154,7 @@ async def _create_and_accept(client, db_session, bot_token, sender_tid, receiver
     return match_id, sender, receiver, sender_headers, receiver_headers
 
 
-async def test_penalty_pvp_full_match_resolves_with_score_and_rating(client, db_session, bot_token):
+async def test_penalty_pvp_friend_match_resolves_with_score_but_no_rating(client, db_session, bot_token):
     match_id, sender, receiver, sender_headers, receiver_headers = await _create_and_accept(
         client, db_session, bot_token, 860201, 860202
     )
@@ -191,8 +191,8 @@ async def test_penalty_pvp_full_match_resolves_with_score_and_rating(client, db_
 
     await db_session.refresh(sender)
     await db_session.refresh(receiver)
-    assert sender.penalty_rating == 8  # 5 + 3 (win)
-    assert receiver.penalty_rating == 4  # 5 - 1 (loss)
+    assert sender.penalty_rating == 5  # unchanged — friend matches no longer touch rating
+    assert receiver.penalty_rating == 5  # unchanged — friend matches no longer touch rating
 
 
 async def test_penalty_pvp_gives_no_coins(client, db_session, bot_token):
@@ -319,8 +319,8 @@ async def test_penalty_pvp_match_timeout_draw_when_tied(client, db_session, bot_
 
     await db_session.refresh(sender)
     await db_session.refresh(receiver)
-    assert sender.penalty_rating == 6  # 5 + 1 (draw)
-    assert receiver.penalty_rating == 6  # 5 + 1 (draw)
+    assert sender.penalty_rating == 5  # unchanged — friend matches no longer touch rating
+    assert receiver.penalty_rating == 5  # unchanged — friend matches no longer touch rating
 
 
 async def test_penalty_pvp_forfeit_counts_as_a_loss_for_the_forfeiter(client, db_session, bot_token):
@@ -345,12 +345,12 @@ async def test_penalty_pvp_forfeit_counts_as_a_loss_for_the_forfeiter(client, db
     body = resp.json()
     assert body["status"] == "finished"
     assert body["result"] == "loss"
-    assert body["rating_delta"] == -1
+    assert body["rating_delta"] == 0
 
     await db_session.refresh(sender)
     await db_session.refresh(receiver)
-    assert sender.penalty_rating == 4  # 5 - 1
-    assert receiver.penalty_rating == 8  # 5 + 3
+    assert sender.penalty_rating == 5  # unchanged — friend matches no longer touch rating
+    assert receiver.penalty_rating == 5  # unchanged — friend matches no longer touch rating
 
     # No coins for PvP, ever — not even via forfeit.
     assert receiver.balance == 500
@@ -367,12 +367,12 @@ async def test_penalty_pvp_forfeit_by_opponent_counts_as_win_for_challenger(clie
     # Hydrated for the forfeiting receiver's own view ("opponent" storage
     # side) — they see their own loss, not the challenger's win.
     assert body["result"] == "loss"
-    assert body["rating_delta"] == -1
+    assert body["rating_delta"] == 0
 
     await db_session.refresh(sender)
     await db_session.refresh(receiver)
-    assert sender.penalty_rating == 3  # 0 + 3 (win, as the non-forfeiting challenger)
-    assert receiver.penalty_rating == 0  # 0 - 1 clamped at the floor
+    assert sender.penalty_rating == 0  # unchanged — friend matches no longer touch rating
+    assert receiver.penalty_rating == 0  # unchanged — friend matches no longer touch rating
 
 
 async def test_penalty_pvp_forfeit_rejects_non_participant(client, db_session, bot_token):
@@ -751,3 +751,70 @@ async def test_penalty_search_rejects_when_hourly_limit_already_reached(client, 
         await db_session.execute(select(PenaltyQueueEntry).where(PenaltyQueueEntry.user_id == user.id))
     ).scalars().all()
     assert entries == []  # the check must not have created a queue row before rejecting
+
+
+async def test_penalty_online_win_doubles_rating(client, db_session, bot_token):
+    user_a = await _register(client, db_session, 862010, bot_token)
+    card_a = await _grant_card(db_session, user_a.id, rating=99)
+    user_b = await _register(client, db_session, 862011, bot_token)
+    card_b = await _grant_card(db_session, user_b.id, rating=1)
+    headers_a = telegram_headers(862010, bot_token)
+    headers_b = telegram_headers(862011, bot_token)
+
+    user_a.penalty_rating = 5
+    user_b.penalty_rating = 5
+    db_session.add_all([user_a, user_b])
+    await db_session.commit()
+
+    await client.post("/api/v1/games/penalty/matchmaking/search", headers=headers_a, json={"user_card_id": card_a.id})
+    await client.post("/api/v1/games/penalty/matchmaking/search", headers=headers_b, json={"user_card_id": card_b.id})
+    status_a = await client.get("/api/v1/games/penalty/matchmaking/status", headers=headers_a)
+    match_id = status_a.json()["match_id"]
+
+    for i in range(10):
+        kicker_headers = headers_a if i % 2 == 0 else headers_b
+        other_headers = headers_b if i % 2 == 0 else headers_a
+        dive_zone = "top_right" if i % 2 == 0 else "top_left"
+        await client.post(
+            f"/api/v1/games/penalty/matches/{match_id}/pick", headers=kicker_headers, json={"zone": "top_left"}
+        )
+        resp = await client.post(
+            f"/api/v1/games/penalty/matches/{match_id}/pick", headers=other_headers, json={"zone": dive_zone}
+        )
+
+    final = resp.json()
+    assert final["status"] == "finished"
+
+    await db_session.refresh(user_a)
+    await db_session.refresh(user_b)
+    # win/loss doubled: +6/-2 instead of +3/-1 (or +2/+2 instead of +1/+1 on
+    # a draw) — either way the combined total moves by 4, not 2
+    assert (user_a.penalty_rating + user_b.penalty_rating) - 10 == 4
+
+
+async def test_penalty_bot_win_triggers_league_reward(client, db_session, bot_token):
+    from app.models.league import LeagueTier
+
+    tier = LeagueTier(name="Дворовая лига", min_rating=0, reward_coins=10, sort_order=0)
+    db_session.add(tier)
+    await db_session.commit()
+
+    headers = telegram_headers(862012, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 862012)
+    card = await _grant_card(db_session, user.id, rating=99)
+
+    resp = await client.post("/api/v1/games/penalty/start", headers=headers, json={"user_card_id": card.id})
+    session_id = resp.json()["session_id"]
+
+    body = resp.json()
+    while not body.get("is_finished"):
+        body = (
+            await client.post(
+                f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "top_left"}
+            )
+        ).json()
+
+    if body["result"] == "win":
+        notifications = (await client.get("/api/v1/notifications", headers=headers)).json()
+        assert any(n["type"] == "league_promoted" for n in notifications)
