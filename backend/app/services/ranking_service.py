@@ -7,12 +7,15 @@ from app.models.user import User
 from app.schemas.badge import BadgeOut
 from app.schemas.ranking import RankingEntry, RankingMetric, RankingOut
 
+_LEAGUE_RATING_EXPR = (User.arena_rating + User.tactics_rating + User.penalty_rating).label("league_rating")
+
 _DIRECT_COLUMNS = {
     RankingMetric.arena_rating: User.arena_rating,
     RankingMetric.matches_won: User.matches_won,
     RankingMetric.referral_count: User.referral_count,
     RankingMetric.tactics_rating: User.tactics_rating,
     RankingMetric.penalty_rating: User.penalty_rating,
+    RankingMetric.league_rating: _LEAGUE_RATING_EXPR,
 }
 
 

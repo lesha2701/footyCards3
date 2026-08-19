@@ -14,6 +14,7 @@ class RankingMetric(str, enum.Enum):
     referral_count = "referral_count"
     tactics_rating = "tactics_rating"
     penalty_rating = "penalty_rating"
+    league_rating = "league_rating"
 
 
 class RankingEntry(BaseModel):

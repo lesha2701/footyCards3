@@ -34,6 +34,7 @@ from app.routers import (
     gifts,
     internal,
     leaderboard,
+    leagues,
     lineups,
     maintenance,
     matches,
@@ -111,6 +112,7 @@ app.include_router(wheel.router, prefix=API_PREFIX)
 app.include_router(profile.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(leaderboard.router, prefix=API_PREFIX)
+app.include_router(leagues.router, prefix=API_PREFIX)
 app.include_router(notifications.router, prefix=API_PREFIX)
 app.include_router(admin_dashboard.router, prefix=API_PREFIX)
 app.include_router(admin_users.router, prefix=API_PREFIX)

@@ -204,3 +204,48 @@ async def test_arena_match_triggers_league_reward_via_api(client, db_session, bo
 
     notifications = (await client.get("/api/v1/notifications", headers=headers)).json()
     assert any(n["type"] == "league_promoted" for n in notifications)
+
+
+async def test_get_leagues_endpoint_lists_tiers_in_order(client, db_session, bot_token):
+    tier_hi = LeagueTier(name="Высшая лига", min_rating=500, sort_order=1)
+    tier_lo = LeagueTier(name="Дворовая лига", min_rating=0, sort_order=0)
+    db_session.add_all([tier_hi, tier_lo])
+    await db_session.commit()
+
+    headers = telegram_headers(990020, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+
+    resp = await client.get("/api/v1/leagues", headers=headers)
+    assert resp.status_code == 200
+    names = [t["name"] for t in resp.json()]
+    assert names == ["Дворовая лига", "Высшая лига"]
+
+
+async def test_get_league_status_endpoint(client, db_session, bot_token):
+    tier = LeagueTier(name="Дворовая лига", min_rating=0, sort_order=0)
+    db_session.add(tier)
+    await db_session.commit()
+
+    headers = telegram_headers(990021, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+
+    resp = await client.get("/api/v1/leagues/status", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total_rating"] == 0
+    assert body["current_league"]["name"] == "Дворовая лига"
+
+
+async def test_league_rating_ranking_metric(client, db_session, bot_token):
+    headers_a = telegram_headers(990022, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers_a)
+    user_a = await get_user_by_telegram_id(db_session, 990022)
+    user_a.arena_rating = 10
+    user_a.tactics_rating = 5
+    db_session.add(user_a)
+    await db_session.commit()
+
+    resp = await client.get("/api/v1/leaderboard/ranking?metric=league_rating", headers=headers_a)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["me"]["value"] == 15
