@@ -22,7 +22,7 @@ from app.schemas.match import (
 )
 from app.schemas.lineup import LineupOut
 from app.schemas.ranking import RankingMetric
-from app.services import ranking_service, task_service
+from app.services import league_service, ranking_service, task_service
 from app.services.game_config_service import get_config
 from app.services.lineup_service import TACTIC_MULTIPLIERS, get_active_lineup, split_strength
 from app.services.match_situations import (
@@ -606,6 +606,8 @@ async def _finalize_match(
             db, locked_user, reward, TransactionType.match_reward,
             f"Награда за матч Card Arena ({result.value})", related_object_type="match", related_object_id=match.id,
         )
+
+    await league_service.sync_league_rewards_for_user(db, locked_user)
     await db.commit()
 
 
