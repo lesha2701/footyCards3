@@ -385,7 +385,7 @@ async def test_friend_round_deadline_appears_and_auto_plays_tardy_side(client, d
     assert len(resp.json()["rounds"]) == 1  # B's missed turn was auto-played from their pool
 
 
-async def test_friend_match_gives_rating_only_no_coins(client, db_session, bot_token, monkeypatch):
+async def test_friend_match_gives_no_rating_and_no_coins(client, db_session, bot_token, monkeypatch):
     monkeypatch.setattr(tactico_service, "_pick_phase", lambda: "attack")
 
     headers_a = await _register(client, bot_token, 950030)
@@ -423,17 +423,17 @@ async def test_friend_match_gives_rating_only_no_coins(client, db_session, bot_t
     assert a_view["status"] == "finished"
     assert a_view["result"] == "win"
     assert a_view["reward_coins"] == 0
-    assert a_view["rating_delta"] == 3
+    assert a_view["rating_delta"] == 0
 
     b_view = (await client.get(f"/api/v1/tactico/matches/{match_id}", headers=headers_b)).json()
     assert b_view["result"] == "loss"
     assert b_view["reward_coins"] == 0
-    assert b_view["rating_delta"] == -1
+    assert b_view["rating_delta"] == 0
 
     await db_session.refresh(user_a)
     await db_session.refresh(user_b)
-    assert user_a.tactics_rating == 3
-    assert user_b.tactics_rating == 0  # clamped at 0, started at 0 with a -1 delta
+    assert user_a.tactics_rating == 0
+    assert user_b.tactics_rating == 0
 
 
 async def test_decline_challenge_notifies_sender(client, db_session, bot_token):
@@ -960,8 +960,9 @@ async def test_matchmaking_grants_zero_coins_and_updates_both_ratings(client, db
     await db_session.refresh(user_a)
     await db_session.refresh(user_b)
     assert user_a.tactics_rating != 5 or user_b.tactics_rating != 5  # someone's rating moved
-    # started at 5+5=10; win/loss (+3/-1) or draw (+1/+1) both add 2 to the total
-    assert user_a.tactics_rating + user_b.tactics_rating == 12
+    # started at 5+5=10; win/loss (+6/-2) or draw (+2/+2) both add 4 to the
+    # total now that online matches double every outcome
+    assert user_a.tactics_rating + user_b.tactics_rating == 14
 
 
 async def test_search_timeout_after_60_seconds(client, db_session, bot_token, monkeypatch):
@@ -1265,3 +1266,67 @@ async def test_search_endpoint_response_shape(client, db_session, bot_token):
     assert body["status"] == "searching"
     assert body["match_id"] is None
     assert body["created_at"] is not None
+
+
+async def test_easy_bot_win_gives_only_one_rating_point(client, db_session, bot_token, monkeypatch):
+    monkeypatch.setattr(tactico_service, "_pick_phase", lambda: "attack")
+    monkeypatch.setattr(tactico_service, "_synthesize_bot_squad", _fake_weak_bot_squad)
+
+    headers = await _register(client, bot_token, 950090)
+    user = await get_user_by_telegram_id(db_session, 950090)
+    card_ids = await _build_squad_cards(
+        db_session, user.id, count=11, position=Position.ST, rating=90, attack_rating=99, defense_rating=1
+    )
+    await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids})
+
+    resp = await client.post("/api/v1/tactico/matches/bot", headers=headers, json={"difficulty": "easy"})
+    match = resp.json()
+    guard = 0
+    while match["status"] == "in_progress":
+        guard += 1
+        assert guard < 15
+        card_id = match["pickable_cards"][0]["user_card_id"]
+        resp = await client.post(
+            f"/api/v1/tactico/matches/{match['id']}/rounds", headers=headers, json={"user_card_id": card_id}
+        )
+        match = resp.json()
+
+    assert match["result"] == "win"
+    assert match["rating_delta"] == 1
+    await db_session.refresh(user)
+    assert user.tactics_rating == 1
+
+
+async def test_tactico_online_win_triggers_league_reward(client, db_session, bot_token):
+    from app.models.league import LeagueTier
+
+    tier = LeagueTier(name="Дворовая лига", min_rating=0, reward_coins=10, sort_order=0)
+    db_session.add(tier)
+    await db_session.commit()
+
+    headers_a = await _register(client, bot_token, 950091)
+    user_a = await get_user_by_telegram_id(db_session, 950091)
+    card_ids_a = await _build_squad_cards(db_session, user_a.id, rating=90)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": card_ids_a})
+    headers_b = await _register(client, bot_token, 950092)
+    user_b = await get_user_by_telegram_id(db_session, 950092)
+    card_ids_b = await _build_squad_cards(db_session, user_b.id, rating=10)
+    await client.put("/api/v1/tactico/squad", headers=headers_b, json={"user_card_ids": card_ids_b})
+
+    await client.post("/api/v1/tactico/matchmaking/search", headers=headers_a)
+    await client.post("/api/v1/tactico/matchmaking/search", headers=headers_b)
+    status_a = await client.get("/api/v1/tactico/matchmaking/status", headers=headers_a)
+    match_id = status_a.json()["match_id"]
+
+    for card_a, card_b in zip(card_ids_a, card_ids_b):
+        resp_a = await client.post(
+            f"/api/v1/tactico/matches/{match_id}/rounds", headers=headers_a, json={"user_card_id": card_a}
+        )
+        if resp_a.json()["status"] != "in_progress":
+            break
+        await client.post(
+            f"/api/v1/tactico/matches/{match_id}/rounds", headers=headers_b, json={"user_card_id": card_b}
+        )
+
+    notifications_a = (await client.get("/api/v1/notifications", headers=headers_a)).json()
+    assert any(n["type"] == "league_promoted" for n in notifications_a)

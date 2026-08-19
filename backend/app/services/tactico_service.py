@@ -26,7 +26,7 @@ from app.models.tactico import TacticoMatch, TacticoQueueEntry, TacticoSquad, Ta
 from app.models.user import User
 from app.schemas.ranking import RankingMetric
 from app.schemas.tactico import TacticoCardOut, TacticoMatchOut, TacticoRoundOut, TacticoSquadOut, TacticoStatsOut
-from app.services import ranking_service
+from app.services import league_service, ranking_service
 from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS
 from app.services.match_service import BOT_NAMES
@@ -40,7 +40,7 @@ _ATTACK_BONUS_POSITIONS = CATEGORY_POSITIONS["FWD"]
 _DEFENSE_BONUS_POSITIONS = CATEGORY_POSITIONS["GK"] | CATEGORY_POSITIONS["DEF"]
 
 _FLIP_RESULT = {MatchResult.win: MatchResult.loss, MatchResult.loss: MatchResult.win, MatchResult.draw: MatchResult.draw}
-_OPPONENT_RATING_DELTA = {3: -1, -1: 3, 1: 1}
+_BASE_RATING_DELTA = {MatchResult.win: 3, MatchResult.loss: -1, MatchResult.draw: 1}
 
 
 # ---------------------------------------------------------------------------
@@ -585,16 +585,32 @@ async def _finish_match(
         # Forfeit (explicit or via abandonment) — always counts as a loss for
         # the forfeiting side regardless of the round tally, so leaving
         # mid-match is never a safer bet than finishing it out.
-        result, user_delta = MatchResult.loss, -1
+        result = MatchResult.loss
     elif forced_loser == "opponent":
-        result, user_delta = MatchResult.win, 3
+        result = MatchResult.win
     elif user_wins > opponent_wins:
-        result, user_delta = MatchResult.win, 3
+        result = MatchResult.win
     elif user_wins < opponent_wins:
-        result, user_delta = MatchResult.loss, -1
+        result = MatchResult.loss
     else:
-        result, user_delta = MatchResult.draw, 1
-    opponent_delta = _OPPONENT_RATING_DELTA[user_delta]
+        result = MatchResult.draw
+
+    user_base = _BASE_RATING_DELTA[result]
+    opponent_base = _BASE_RATING_DELTA[_FLIP_RESULT[result]]
+    # Rating-earning rules by opponent type:
+    # - friend: zero change either side — an alt account farming rating for
+    #   a main account is otherwise trivial to pull off.
+    # - online (matchmaking): every outcome doubled both sides.
+    # - bot on Лёгкий difficulty: a win is capped to +1 — this difficulty is
+    #   trivially beatable and would otherwise be the obvious rating farm.
+    if match.opponent_type == TacticoOpponentType.friend:
+        user_delta, opponent_delta = 0, 0
+    elif match.opponent_type == TacticoOpponentType.online:
+        user_delta, opponent_delta = user_base * 2, opponent_base * 2
+    elif match.opponent_type == TacticoOpponentType.bot and match.difficulty == MatchDifficulty.easy and result == MatchResult.win:
+        user_delta, opponent_delta = 1, 0
+    else:
+        user_delta, opponent_delta = user_base, opponent_base
     state["opponent_rating_delta"] = opponent_delta
 
     match.user_score, match.opponent_score = user_wins, opponent_wins
@@ -660,6 +676,11 @@ async def _finish_match(
             f"Матч с {locked_opponent.full_display_name()} завершён — результат: {result.value}.",
             "tactico_match", match.id,
         )
+
+    if match.opponent_type != TacticoOpponentType.friend:
+        await league_service.sync_league_rewards_for_user(db, locked_user)
+        if locked_opponent is not None:
+            await league_service.sync_league_rewards_for_user(db, locked_opponent)
 
     match.server_state = state
     flag_modified(match, "server_state")
