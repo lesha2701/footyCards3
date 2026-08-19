@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchDailyRewardCalendar } from "@/api/dailyRewards";
 import { fetchFeatureFlags } from "@/api/featureFlags";
 import { claimFreePack, fetchFreePackStatus } from "@/api/freePack";
+import { fetchLeagueStatus } from "@/api/leagues";
 import { fetchPacks } from "@/api/packs";
 import { fetchMyProfile } from "@/api/profile";
 import { fetchTasks } from "@/api/tasks";
@@ -53,6 +54,7 @@ export default function HomePage() {
   });
   const { data: wheelStatus } = useQuery({ queryKey: ["wheel-status"], queryFn: fetchWheelStatus });
   const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags, refetchInterval: 30000 });
+  const { data: leagueStatus } = useQuery({ queryKey: ["league-status"], queryFn: fetchLeagueStatus });
 
   const claimFreePackMutation = useMutation({
     mutationFn: claimFreePack,
@@ -86,6 +88,45 @@ export default function HomePage() {
           <QuickAction Icon={IconTarget} label="Задания" onClick={() => navigate("/tasks")} badge={claimableTaskCount || undefined} />
         </div>
       </section>
+
+      {leagueStatus?.current_league && (
+        <button
+          onClick={() => navigate("/league")}
+          className="flex items-center gap-3 rounded-2xl bg-bg-surface px-4 py-3 text-left active:scale-[0.98]"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-bg-raised text-2xl">
+            {leagueStatus.current_league.icon}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-sm font-bold text-ink-chalk">{leagueStatus.current_league.name}</p>
+            {leagueStatus.next_league ? (
+              <>
+                <p className="mt-0.5 text-[11px] text-ink-mist">
+                  Ещё {leagueStatus.points_to_next} очков до «{leagueStatus.next_league.name}»
+                </p>
+                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+                  <div
+                    className="h-full rounded-full bg-accent-lime"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.round(
+                          ((leagueStatus.total_rating - leagueStatus.current_league.min_rating) /
+                            (leagueStatus.next_league.min_rating - leagueStatus.current_league.min_rating)) *
+                            100
+                        )
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </>
+            ) : (
+              <p className="mt-0.5 text-[11px] text-accent-lime">Высшая лига!</p>
+            )}
+          </div>
+          <IconChevronRight size={16} className="shrink-0 text-ink-mist-dim" />
+        </button>
+      )}
 
       <ChatInviteCard />
 
