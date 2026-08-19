@@ -5,6 +5,7 @@ import type {
   CoinPackage,
   Gift,
   GiftSet,
+  LeagueTier,
   MaintenanceStatus,
   Page,
   Pack,
@@ -515,5 +516,30 @@ export async function fetchStarsDonationSummary(): Promise<StarsDonationSummary>
 
 export async function fetchTopSupporters(): Promise<TopSupporter[]> {
   const { data } = await api.get<TopSupporter[]>("/admin/stars-purchases/top-supporters");
+  return data;
+}
+
+// --- Leagues ---
+export async function fetchAdminLeagues(): Promise<LeagueTier[]> {
+  const { data } = await api.get<LeagueTier[]>("/admin/leagues");
+  return data;
+}
+
+export async function createLeagueTier(payload: Record<string, unknown>): Promise<LeagueTier> {
+  const { data } = await api.post<LeagueTier>("/admin/leagues", payload);
+  return data;
+}
+
+export async function updateLeagueTier(id: number, payload: Record<string, unknown>): Promise<LeagueTier> {
+  const { data } = await api.put<LeagueTier>(`/admin/leagues/${id}`, payload);
+  return data;
+}
+
+export async function deleteLeagueTier(id: number): Promise<void> {
+  await api.delete(`/admin/leagues/${id}`);
+}
+
+export async function backfillLeagueRewards(): Promise<{ rewarded_count: number }> {
+  const { data } = await api.post<{ rewarded_count: number }>("/admin/leagues/backfill-rewards");
   return data;
 }

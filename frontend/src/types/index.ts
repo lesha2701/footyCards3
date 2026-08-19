@@ -361,7 +361,8 @@ export type RankingMetric =
   | "unique_players"
   | "referral_count"
   | "tactics_rating"
-  | "penalty_rating";
+  | "penalty_rating"
+  | "league_rating";
 
 export interface RankingEntry {
   rank: number;
@@ -554,6 +555,36 @@ export interface TrophyDefinition {
   image_path: string | null;
   is_active: boolean;
   sort_order: number;
+}
+
+export interface LeagueTier {
+  id: number;
+  name: string;
+  min_rating: number;
+  icon: string;
+  reward_coins: number;
+  reward_pack_id: number | null;
+  sort_order: number;
+}
+
+export interface LeagueTierPublic {
+  id: number;
+  name: string;
+  min_rating: number;
+  icon: string;
+  reward_coins: number;
+  reward_pack_name: string | null;
+  sort_order: number;
+}
+
+export interface LeagueStatus {
+  total_rating: number;
+  arena_rating: number;
+  tactics_rating: number;
+  penalty_rating: number;
+  current_league: LeagueTierPublic | null;
+  next_league: LeagueTierPublic | null;
+  points_to_next: number | null;
 }
 
 export interface UserTrophy {
