@@ -42,6 +42,7 @@ export default function AdminLeaguesPage() {
   const [form, setForm] = useState<TierForm>(tierToForm());
   const [error, setError] = useState<string | null>(null);
   const [backfillResult, setBackfillResult] = useState<number | null>(null);
+  const [backfillError, setBackfillError] = useState<string | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-leagues"] });
 
@@ -59,7 +60,8 @@ export default function AdminLeaguesPage() {
   const deleteMutation = useMutation({ mutationFn: deleteLeagueTier, onSuccess: invalidate });
   const backfillMutation = useMutation({
     mutationFn: backfillLeagueRewards,
-    onSuccess: (res) => setBackfillResult(res.rewarded_count),
+    onSuccess: (res) => { setBackfillResult(res.rewarded_count); setBackfillError(null); },
+    onError: (err) => setBackfillError(err instanceof ApiRequestError ? err.message : "Не удалось начислить награды"),
   });
 
   const openEdit = (t: LeagueTier) => { setEditing(t); setForm(tierToForm(t)); setError(null); };
@@ -74,6 +76,7 @@ export default function AdminLeaguesPage() {
   const runBackfill = async () => {
     if (await showConfirm("Начислить награды за лиги всем игрокам, кто уже набрал нужный рейтинг, но ещё не получил награду? Можно нажимать повторно — уже выданное не выдастся снова.")) {
       setBackfillResult(null);
+      setBackfillError(null);
       backfillMutation.mutate();
     }
   };
@@ -91,17 +94,20 @@ export default function AdminLeaguesPage() {
         <button onClick={openCreate} className="rounded-lg bg-accent px-3 py-2 text-xs font-bold text-bg-base">+ Лига</button>
       </div>
 
-      <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
-        <button
-          onClick={runBackfill}
-          disabled={backfillMutation.isPending}
-          className="rounded-lg bg-accent px-3 py-2 text-xs font-bold text-bg-base disabled:opacity-40"
-        >
-          {backfillMutation.isPending ? "Начисление..." : "Начислить награды за прошлые лиги"}
-        </button>
-        {backfillResult !== null && (
-          <span className="text-xs text-slate-300">Награждено игроков: {backfillResult}</span>
-        )}
+      <div className="flex flex-col gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={runBackfill}
+            disabled={backfillMutation.isPending}
+            className="rounded-lg bg-accent px-3 py-2 text-xs font-bold text-bg-base disabled:opacity-40"
+          >
+            {backfillMutation.isPending ? "Начисление..." : "Начислить награды за прошлые лиги"}
+          </button>
+          {backfillResult !== null && (
+            <span className="text-xs text-slate-300">Награждено игроков: {backfillResult}</span>
+          )}
+        </div>
+        {backfillError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{backfillError}</p>}
       </div>
 
       {isLoading && <p className="text-sm text-slate-400">Загрузка...</p>}
