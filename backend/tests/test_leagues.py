@@ -249,3 +249,64 @@ async def test_league_rating_ranking_metric(client, db_session, bot_token):
     assert resp.status_code == 200
     body = resp.json()
     assert body["me"]["value"] == 15
+
+
+async def _admin_auth(client, bot_token):
+    admin_headers = telegram_headers(999000001, bot_token)  # matches ADMIN_TELEGRAM_IDS in conftest
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    return {"Authorization": f"Bearer {session_resp.json()['admin_token']}"}
+
+
+async def test_admin_league_tier_crud(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+
+    create_resp = await client.post(
+        "/api/v1/admin/leagues", headers=auth,
+        json={"name": "Дворовая лига", "min_rating": 0, "icon": "🥉", "reward_coins": 50},
+    )
+    assert create_resp.status_code == 200
+    tier_id = create_resp.json()["id"]
+
+    list_resp = await client.get("/api/v1/admin/leagues", headers=auth)
+    assert list_resp.status_code == 200
+    assert any(t["id"] == tier_id for t in list_resp.json())
+
+    update_resp = await client.put(f"/api/v1/admin/leagues/{tier_id}", headers=auth, json={"reward_coins": 75})
+    assert update_resp.status_code == 200
+    assert update_resp.json()["reward_coins"] == 75
+
+    delete_resp = await client.delete(f"/api/v1/admin/leagues/{tier_id}", headers=auth)
+    assert delete_resp.status_code == 204
+
+    list_after = await client.get("/api/v1/admin/leagues", headers=auth)
+    assert not any(t["id"] == tier_id for t in list_after.json())
+
+
+async def test_non_admin_cannot_manage_leagues(client, db_session, bot_token):
+    headers = telegram_headers(990030, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+
+    resp = await client.post(
+        "/api/v1/admin/leagues", headers=headers, json={"name": "X", "min_rating": 0},
+    )
+    assert resp.status_code in (401, 403)
+
+
+async def test_backfill_rewards_reaches_multiple_users_and_is_idempotent(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+
+    tier = LeagueTier(name="Дворовая лига", min_rating=0, reward_coins=20, sort_order=0)
+    db_session.add(tier)
+    await db_session.commit()
+
+    headers_a = telegram_headers(990031, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers_a)
+    headers_b = telegram_headers(990032, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers_b)
+
+    first = await client.post("/api/v1/admin/leagues/backfill-rewards", headers=auth)
+    assert first.status_code == 200
+    assert first.json()["rewarded_count"] >= 2
+
+    second = await client.post("/api/v1/admin/leagues/backfill-rewards", headers=auth)
+    assert second.json()["rewarded_count"] == 0
