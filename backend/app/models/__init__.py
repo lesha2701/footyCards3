@@ -8,6 +8,7 @@ from app.models.daily_reward import DailyReward
 from app.models.game import GameSession, MemoryGameRound
 from app.models.game_config import GameConfig
 from app.models.gift import Gift, GiftSet
+from app.models.league import LeagueTier, UserLeagueRewardClaim
 from app.models.lineup import Lineup, LineupCard
 from app.models.match import Match, MatchEvent
 from app.models.notification import Notification
@@ -37,6 +38,8 @@ __all__ = [
     "GameConfig",
     "Gift",
     "GiftSet",
+    "LeagueTier",
+    "UserLeagueRewardClaim",
     "Lineup",
     "LineupCard",
     "Match",

@@ -42,6 +42,7 @@ class CardSource(str, enum.Enum):
     chat_pack = "chat_pack"
     gift = "gift"
     wheel = "wheel"
+    league_reward = "league_reward"
 
 
 class TransactionType(str, enum.Enum):
@@ -65,6 +66,7 @@ class TransactionType(str, enum.Enum):
     gift_coins = "gift_coins"
     wheel_spin_cost = "wheel_spin_cost"
     wheel_spin_reward = "wheel_spin_reward"
+    league_reward = "league_reward"
 
 
 class TaskCategory(str, enum.Enum):
@@ -176,6 +178,7 @@ class NotificationType(str, enum.Enum):
     penalty_challenge_cancelled = "penalty_challenge_cancelled"
     penalty_challenge_expired = "penalty_challenge_expired"
     trophy_granted = "trophy_granted"
+    league_promoted = "league_promoted"
 
 
 class TradeCardSide(str, enum.Enum):
