@@ -30,6 +30,12 @@ class Player(TimestampMixin, Base):
     image_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     quick_sell_price: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Separate from is_active: a card can stay active (visible, tradeable,
+    # usable in mini-games/collections) while being excluded from new pack
+    # drops and the Wheel of Fortune's card_rarity prize (see
+    # pack_service.pick_random_player) — e.g. a retired/limited card that
+    # existing owners keep using.
+    is_pack_droppable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     collection_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("card_collections.id", ondelete="SET NULL"), nullable=True

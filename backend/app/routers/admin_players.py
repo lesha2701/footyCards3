@@ -113,6 +113,20 @@ async def toggle_active(player_id: int, request: Request, db: AsyncSession = Dep
     return PlayerOut.model_validate(player)
 
 
+@router.post("/{player_id}/toggle-pack-droppable", response_model=PlayerOut)
+async def toggle_pack_droppable(player_id: int, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
+    player = await _get_player_or_404(db, player_id)
+    player.is_pack_droppable = not player.is_pack_droppable
+    db.add(player)
+    await log_action(
+        db, admin.id, "toggle_player_pack_droppable", "player", player_id,
+        new_value={"is_pack_droppable": player.is_pack_droppable}, ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    await db.refresh(player)
+    return PlayerOut.model_validate(player)
+
+
 @router.delete("/{player_id}")
 async def delete_player(player_id: int, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
     player = await _get_player_or_404(db, player_id)

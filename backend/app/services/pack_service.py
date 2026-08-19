@@ -85,17 +85,20 @@ async def pick_random_player(db: AsyncSession, rarity: Rarity) -> Player:
     result = await db.execute(
         select(Player)
         .outerjoin(CardCollection, Player.collection_id == CardCollection.id)
-        .where(Player.rarity == rarity, Player.is_active.is_(True), _collection_active_filter())
+        .where(
+            Player.rarity == rarity, Player.is_active.is_(True), Player.is_pack_droppable.is_(True),
+            _collection_active_filter(),
+        )
         .order_by(func.random())
         .limit(1)
     )
     player = result.scalar_one_or_none()
     if player is None:
-        # Fall back to any active player (in an active collection) if this rarity has none configured.
+        # Fall back to any active, pack-droppable player (in an active collection) if this rarity has none configured.
         result = await db.execute(
             select(Player)
             .outerjoin(CardCollection, Player.collection_id == CardCollection.id)
-            .where(Player.is_active.is_(True), _collection_active_filter())
+            .where(Player.is_active.is_(True), Player.is_pack_droppable.is_(True), _collection_active_filter())
             .order_by(func.random())
             .limit(1)
         )

@@ -63,6 +63,19 @@ async def test_create_player_with_explicit_stats_keeps_them(client, db_session, 
     assert body["defense_rating"] == 90
 
 
+async def test_toggle_pack_droppable(client, db_session, bot_token):
+    headers = await _admin_headers(client, bot_token)
+    player = await create_player(db_session)
+    assert player.is_pack_droppable is True
+
+    resp = await client.post(f"/api/v1/admin/players/{player.id}/toggle-pack-droppable", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["is_pack_droppable"] is False
+
+    resp2 = await client.post(f"/api/v1/admin/players/{player.id}/toggle-pack-droppable", headers=headers)
+    assert resp2.json()["is_pack_droppable"] is True
+
+
 async def test_player_out_falls_back_to_rating_when_stats_null(db_session):
     player = await create_player(db_session, rating=77, position=Position.CM)
     assert player.attack_rating is None

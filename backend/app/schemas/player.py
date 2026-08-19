@@ -7,7 +7,7 @@ from app.models.enums import Position, Rarity
 _PLAYER_COLUMN_FIELDS = (
     "id", "first_name", "last_name", "display_name", "rating", "rarity",
     "country", "club", "position", "image_path", "quick_sell_price", "is_active",
-    "collection_id",
+    "is_pack_droppable", "collection_id",
 )
 
 
@@ -28,6 +28,7 @@ class PlayerOut(BaseModel):
     image_path: Optional[str]
     quick_sell_price: int
     is_active: bool
+    is_pack_droppable: bool
     collection_id: Optional[int] = None
     collection_name: Optional[str] = None
 
@@ -65,6 +66,7 @@ class PlayerCreate(BaseModel):
     position: Position
     quick_sell_price: int = Field(ge=0, default=10)
     is_active: bool = True
+    is_pack_droppable: bool = True
     collection_id: Optional[int] = None
 
 
@@ -81,4 +83,5 @@ class PlayerUpdate(BaseModel):
     position: Optional[Position] = None
     quick_sell_price: Optional[int] = Field(default=None, ge=0)
     is_active: Optional[bool] = None
+    is_pack_droppable: Optional[bool] = None
     collection_id: Optional[int] = None

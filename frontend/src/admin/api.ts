@@ -126,6 +126,11 @@ export async function togglePlayerActive(id: number): Promise<Player> {
   return data;
 }
 
+export async function togglePlayerPackDroppable(id: number): Promise<Player> {
+  const { data } = await api.post<Player>(`/admin/players/${id}/toggle-pack-droppable`);
+  return data;
+}
+
 export async function deletePlayer(id: number) {
   await api.delete(`/admin/players/${id}`);
 }

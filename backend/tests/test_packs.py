@@ -1,10 +1,24 @@
 import pytest
 from sqlalchemy import select
 
+import app.core.rate_limit as rate_limit_module
 from app.models.card import UserCard
 from app.models.enums import RARITY_ORDER, Rarity
 from tests.factories import create_pack, create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    # open_pack is rate-limited per user.id (core/rate_limit.py's in-memory
+    # window is process-global, not reset per test), and SQLite's per-test
+    # fresh DB restarts auto-increment ids at 1 — so nearly every test here
+    # registers "user #1" and shares one bucket across the whole file
+    # without this, tipping later tests into a spurious 429 once enough
+    # earlier tests' open_pack calls accumulate (see test_penalty_pvp.py's
+    # identical fixture for the same underlying issue).
+    rate_limit_module._hits.clear()
+    yield
 
 
 async def _register(client, db_session, telegram_id, bot_token):
@@ -56,6 +70,31 @@ async def test_open_pack_insufficient_balance(client, db_session, bot_token):
     resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={})
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "insufficient_balance"
+
+
+async def test_open_pack_excludes_non_droppable_players(client, db_session, bot_token):
+    droppable = await create_player(db_session, rarity=Rarity.common)
+    await create_player(db_session, rarity=Rarity.common, is_pack_droppable=False)
+    pack = await create_pack(db_session, "droppable_test", price=100, card_count=10, probabilities={Rarity.common: 1.0})
+
+    await _register(client, db_session, 700010, bot_token)
+    headers = telegram_headers(700010, bot_token)
+
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={})
+    assert resp.status_code == 200
+    player_ids = {c["card"]["player"]["id"] for c in resp.json()["cards"]}
+    assert player_ids == {droppable.id}
+
+
+async def test_open_pack_fails_when_only_non_droppable_players_exist(client, db_session, bot_token):
+    await create_player(db_session, rarity=Rarity.common, is_pack_droppable=False)
+    pack = await create_pack(db_session, "no_droppable_test", price=100, card_count=1, probabilities={Rarity.common: 1.0})
+
+    await _register(client, db_session, 700011, bot_token)
+    headers = telegram_headers(700011, bot_token)
+
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={})
+    assert resp.status_code == 409
 
 
 async def test_open_pack_guaranteed_min_rarity(client, db_session, bot_token):

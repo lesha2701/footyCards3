@@ -58,6 +58,7 @@ export interface Player {
   image_path: string | null;
   quick_sell_price: number;
   is_active: boolean;
+  is_pack_droppable: boolean;
   collection_id: number | null;
   collection_name: string | null;
 }

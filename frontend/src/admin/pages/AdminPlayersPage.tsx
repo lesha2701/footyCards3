@@ -10,6 +10,7 @@ import {
   fetchAdminPlayers,
   importPlayersCsv,
   togglePlayerActive,
+  togglePlayerPackDroppable,
   updatePlayer,
   uploadPlayerImage,
 } from "@/admin/api";
@@ -24,6 +25,7 @@ const POSITIONS: Position[] = ["GK", "LB", "CB", "RB", "CDM", "CM", "CAM", "LM",
 const emptyForm = {
   first_name: "", last_name: "", display_name: "", rating: 70, rarity: "common" as Rarity,
   country: "", club: "", position: "ST" as Position, quick_sell_price: 10, is_active: true,
+  is_pack_droppable: true,
   collection_id: "" as number | "",
   attack_rating: "" as number | "", defense_rating: "" as number | "",
 };
@@ -63,6 +65,7 @@ export default function AdminPlayersPage() {
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Ошибка"),
   });
   const toggleMutation = useMutation({ mutationFn: togglePlayerActive, onSuccess: invalidate });
+  const toggleDroppableMutation = useMutation({ mutationFn: togglePlayerPackDroppable, onSuccess: invalidate });
   const deleteMutation = useMutation({
     mutationFn: deletePlayer,
     onSuccess: invalidate,
@@ -84,6 +87,7 @@ export default function AdminPlayersPage() {
       first_name: p.first_name, last_name: p.last_name, display_name: p.display_name, rating: p.rating,
       rarity: p.rarity, country: p.country, club: p.club, position: p.position,
       quick_sell_price: p.quick_sell_price, is_active: p.is_active,
+      is_pack_droppable: p.is_pack_droppable,
       collection_id: p.collection_id ?? "",
       attack_rating: p.attack_rating, defense_rating: p.defense_rating,
     });
@@ -132,6 +136,7 @@ export default function AdminPlayersPage() {
               <th className="px-3 py-2">Позиция</th>
               <th className="px-3 py-2">Клуб</th>
               <th className="px-3 py-2">Активен</th>
+              <th className="px-3 py-2">В паках</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
@@ -149,11 +154,23 @@ export default function AdminPlayersPage() {
                 <td className="px-3 py-2">{p.position}</td>
                 <td className="px-3 py-2">{p.club}</td>
                 <td className="px-3 py-2">{p.is_active ? "✅" : "🚫"}</td>
+                <td className="px-3 py-2">{p.is_pack_droppable ? "✅" : "🚫"}</td>
                 <td className="px-3 py-2">
                   <div className="flex gap-1">
                     <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-xs">✏️</button>
-                    <button onClick={() => toggleMutation.mutate(p.id)} className="rounded-lg bg-white/5 px-2 py-1 text-xs">
+                    <button
+                      onClick={() => toggleMutation.mutate(p.id)}
+                      title={p.is_active ? "Отключить" : "Включить"}
+                      className="rounded-lg bg-white/5 px-2 py-1 text-xs"
+                    >
                       {p.is_active ? "🚫" : "✅"}
+                    </button>
+                    <button
+                      onClick={() => toggleDroppableMutation.mutate(p.id)}
+                      title={p.is_pack_droppable ? "Убрать из паков" : "Вернуть в паки"}
+                      className="rounded-lg bg-white/5 px-2 py-1 text-xs"
+                    >
+                      {p.is_pack_droppable ? "📦🚫" : "📦"}
                     </button>
                     <button onClick={() => deleteMutation.mutate(p.id)} className="rounded-lg bg-red-500/70 px-2 py-1 text-xs">🗑️</button>
                   </div>
@@ -213,6 +230,18 @@ export default function AdminPlayersPage() {
                 <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
                 Активен
               </label>
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={form.is_pack_droppable}
+                  onChange={(e) => setForm({ ...form, is_pack_droppable: e.target.checked })}
+                />
+                Может выпасть из пака
+              </label>
+              <p className="text-[11px] text-slate-500">
+                Если выключить, карта останется активной (видна в коллекции, участвует в мини-играх), но новые паки
+                и колесо фортуны больше не будут её выдавать.
+              </p>
 
               {editing && (
                 <div className="mt-2 flex items-center gap-2">

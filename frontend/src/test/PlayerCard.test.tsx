@@ -19,6 +19,7 @@ const player: Player = {
   image_path: null,
   quick_sell_price: 120,
   is_active: true,
+  is_pack_droppable: true,
   collection_id: null,
   collection_name: null,
 };

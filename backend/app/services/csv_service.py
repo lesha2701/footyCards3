@@ -12,7 +12,7 @@ from app.services.player_stats_service import compute_default_attack_defense
 
 CSV_COLUMNS = [
     "first_name", "last_name", "display_name", "rating", "attack_rating", "defense_rating", "rarity",
-    "country", "club", "position", "collection", "quick_sell_price", "is_active",
+    "country", "club", "position", "collection", "quick_sell_price", "is_active", "is_pack_droppable",
 ]
 
 
@@ -39,6 +39,7 @@ async def export_players_csv(db: AsyncSession) -> str:
                 "collection": p.collection.name if p.collection else "",
                 "quick_sell_price": p.quick_sell_price,
                 "is_active": p.is_active,
+                "is_pack_droppable": p.is_pack_droppable,
             }
         )
     return buffer.getvalue()
@@ -85,6 +86,7 @@ async def import_players_csv(db: AsyncSession, content: str) -> dict:
                 collection_id=collection_id,
                 quick_sell_price=int(row.get("quick_sell_price") or 10),
                 is_active=str(row.get("is_active", "true")).strip().lower() in ("true", "1", "yes"),
+                is_pack_droppable=str(row.get("is_pack_droppable", "true")).strip().lower() in ("true", "1", "yes"),
             )
 
             if existing:
