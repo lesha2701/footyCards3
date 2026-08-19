@@ -17,6 +17,11 @@ export default function LeaguePage() {
   const { data: ranking } = useQuery({ queryKey: ["ranking", "league_rating"], queryFn: () => fetchRanking("league_rating") });
 
   const meInTop = !!ranking?.me && ranking.top.some((e) => e.user_id === ranking.me!.user_id);
+  // current_league is null for players below the lowest tier's min_rating —
+  // the own-stats card still has to render (rating breakdown + "points to
+  // next"), falling back to the next tier's icon, dimmed. Only the
+  // no-tiers-at-all case (both null) hides the card entirely, as before.
+  const ownTier = status?.current_league ?? status?.next_league ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -34,14 +39,20 @@ export default function LeaguePage() {
         </button>
       </div>
 
-      {status?.current_league && (
+      {status && ownTier && (
         <section className="rounded-2xl bg-bg-surface p-4">
           <div className="flex items-center gap-3">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-bg-raised text-3xl">
-              {status.current_league.icon}
+            <span
+              className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-bg-raised text-3xl ${
+                status.current_league ? "" : "opacity-40"
+              }`}
+            >
+              {ownTier.icon}
             </span>
             <div>
-              <p className="font-display text-lg font-bold text-ink-chalk">{status.current_league.name}</p>
+              <p className="font-display text-lg font-bold text-ink-chalk">
+                {status.current_league ? status.current_league.name : "Пока вне лиги"}
+              </p>
               <p className="text-xs text-ink-mist">Суммарный рейтинг: {status.total_rating}</p>
             </div>
           </div>

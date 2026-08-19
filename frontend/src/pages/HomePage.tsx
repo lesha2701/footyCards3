@@ -71,6 +71,13 @@ export default function HomePage() {
     (t) => t.is_completed && !t.is_claimed
   ).length;
 
+  // The banner is the only entry point to /league, so it must also render for
+  // players below the lowest tier's min_rating (current_league === null) —
+  // otherwise a brand-new player can never reach the screen. Falls back to the
+  // next tier's icon (dimmed) until the first tier is actually reached.
+  const leagueIconTier = leagueStatus?.current_league ?? leagueStatus?.next_league ?? null;
+  const leagueProgressFloor = leagueStatus?.current_league?.min_rating ?? 0;
+
   return (
     <div className="flex flex-col gap-6">
       <section className="relative overflow-hidden rounded-3xl bg-bg-surface p-5">
@@ -89,16 +96,22 @@ export default function HomePage() {
         </div>
       </section>
 
-      {leagueStatus?.current_league && (
+      {leagueStatus && leagueIconTier && (
         <button
           onClick={() => navigate("/league")}
           className="flex items-center gap-3 rounded-2xl bg-bg-surface px-4 py-3 text-left active:scale-[0.98]"
         >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-bg-raised text-2xl">
-            {leagueStatus.current_league.icon}
+          <span
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-bg-raised text-2xl ${
+              leagueStatus.current_league ? "" : "opacity-40"
+            }`}
+          >
+            {leagueIconTier.icon}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="font-display text-sm font-bold text-ink-chalk">{leagueStatus.current_league.name}</p>
+            <p className="font-display text-sm font-bold text-ink-chalk">
+              {leagueStatus.current_league ? leagueStatus.current_league.name : "Пока вне лиги"}
+            </p>
             {leagueStatus.next_league ? (
               <>
                 <p className="mt-0.5 text-[11px] text-ink-mist">
@@ -110,10 +123,13 @@ export default function HomePage() {
                     style={{
                       width: `${Math.min(
                         100,
-                        Math.round(
-                          ((leagueStatus.total_rating - leagueStatus.current_league.min_rating) /
-                            (leagueStatus.next_league.min_rating - leagueStatus.current_league.min_rating)) *
-                            100
+                        Math.max(
+                          0,
+                          Math.round(
+                            ((leagueStatus.total_rating - leagueProgressFloor) /
+                              (leagueStatus.next_league.min_rating - leagueProgressFloor)) *
+                              100
+                          )
                         )
                       )}%`,
                     }}

@@ -67,11 +67,22 @@ async def sync_league_rewards_for_user(
     caller's own transaction (already open for the rating-mutating action
     that triggered this) covers it.
 
+    Precondition: `user` must already be a row-locked User (via
+    `wallet_service.lock_user_for_update`) — this function credits coins and
+    grants packs but never locks the row itself, exactly like
+    `collection_service.grant_collection_rewards_for_new_cards`.
+
     Serves both live play (notify_mode="per_tier": one notification per
     newly-crossed tier, since in practice it's almost always 0 or 1 per
     call) and the admin retroactive backfill (notify_mode="summary": one
     notification total, regardless of how many tiers were granted, so a
     player who jumps several tiers at once doesn't get spammed).
+
+    Users flagged `game_rewards_blocked` still get the claim row (so the
+    tier is consumed and can't be re-farmed for a double payout if the flag
+    is later lifted) and the promotion notification, but no coins/pack —
+    the same "record the event, zero the reward" shape every other reward
+    path uses (match_service, tactico_service, task_service, mini-games).
     """
     total = total_rating(user)
     qualifying = (
@@ -94,23 +105,26 @@ async def sync_league_rewards_for_user(
     if not pending:
         return []
 
+    rewards_blocked = user.game_rewards_blocked
     for tier in pending:
+        granted_coins = 0 if rewards_blocked else tier.reward_coins
+        granted_pack_id = None if rewards_blocked else tier.reward_pack_id
         db.add(
             UserLeagueRewardClaim(
                 user_id=user.id, league_tier_id=tier.id,
-                reward_coins=tier.reward_coins, reward_pack_id=tier.reward_pack_id,
+                reward_coins=granted_coins, reward_pack_id=granted_pack_id,
             )
         )
-        if tier.reward_coins > 0:
+        if granted_coins > 0:
             await credit_coins(
-                db, user, tier.reward_coins, TransactionType.league_reward,
+                db, user, granted_coins, TransactionType.league_reward,
                 f"Награда за лигу «{tier.name}»", related_object_type="league_tier", related_object_id=tier.id,
             )
-        if tier.reward_pack_id:
+        if granted_pack_id:
             from app.services.pack_service import grant_bonus_pack_opening
 
             await grant_bonus_pack_opening(
-                db, user, tier.reward_pack_id,
+                db, user, granted_pack_id,
                 idempotency_prefix=f"league-reward-{user.id}-{tier.id}",
                 source=CardSource.league_reward,
             )
@@ -118,7 +132,8 @@ async def sync_league_rewards_for_user(
             await notification_service.notify(
                 db, user.id, NotificationType.league_promoted,
                 "🏆 Новая лига!",
-                f"Ты поднялся в лигу «{tier.name}»! Получено {tier.reward_coins} монет.",
+                f"Ты поднялся в лигу «{tier.name}»!"
+                + ("" if rewards_blocked else f" Получено {granted_coins} монет."),
                 "league_tier", tier.id,
             )
 
@@ -127,7 +142,8 @@ async def sync_league_rewards_for_user(
         await notification_service.notify(
             db, user.id, NotificationType.league_promoted,
             "🏆 Твоя лига обновлена!",
-            f"Ты сейчас в лиге «{final_tier.name}»! Начислены награды за пройденные лиги.",
+            f"Ты сейчас в лиге «{final_tier.name}»!"
+            + ("" if rewards_blocked else " Начислены награды за пройденные лиги."),
             "league_tier", final_tier.id,
         )
 

@@ -34,8 +34,10 @@ async def test_league_tier_and_claim_round_trip(db_session):
 
 from sqlalchemy import select
 
+from app.core.exceptions import ConflictError
 from app.models.card import UserCard
-from app.models.enums import CardSource, Rarity
+from app.models.enums import CardSource, NotificationType, Rarity
+from app.models.notification import Notification
 from app.models.player import Player
 from app.models.user import User
 from app.services import league_service
@@ -310,3 +312,149 @@ async def test_backfill_rewards_reaches_multiple_users_and_is_idempotent(client,
 
     second = await client.post("/api/v1/admin/leagues/backfill-rewards", headers=auth)
     assert second.json()["rewarded_count"] == 0
+
+
+async def test_blocked_user_gets_claim_row_but_no_coins_or_pack(db_session):
+    """`game_rewards_blocked` is an admin anti-abuse flag that stops a user
+    earning game rewards. League rating is derived 100% from those same game
+    modes, so league rewards have to honor it too — but the tier is still
+    marked as claimed, otherwise lifting the flag later would pay it out a
+    second time."""
+    pack = await create_pack(db_session, "league-blocked-pack", price=0, card_count=1, probabilities={Rarity.common: 1.0})
+    await create_player(db_session)
+    tier = LeagueTier(name="Дворовая лига", min_rating=0, reward_coins=50, reward_pack_id=pack.id, sort_order=0)
+    db_session.add(tier)
+    await db_session.commit()
+
+    user = await _make_user(db_session, 990040)
+    user.game_rewards_blocked = True
+    db_session.add(user)
+    await db_session.commit()
+
+    granted = await league_service.sync_league_rewards_for_user(db_session, user)
+    await db_session.commit()
+
+    assert [t.id for t in granted] == [tier.id]
+    await db_session.refresh(user)
+    assert user.balance == 500  # unchanged — no coins credited
+
+    cards = (await db_session.execute(select(UserCard).where(UserCard.owner_id == user.id))).scalars().all()
+    assert cards == []
+
+    claims = (
+        await db_session.execute(select(UserLeagueRewardClaim).where(UserLeagueRewardClaim.user_id == user.id))
+    ).scalars().all()
+    assert len(claims) == 1
+    assert claims[0].league_tier_id == tier.id
+    assert claims[0].reward_coins == 0  # snapshot of what was actually granted
+    assert claims[0].reward_pack_id is None
+
+    # The promotion itself is still announced (same shape as tactico/match
+    # finishes, which notify a blocked user about the result with reward 0),
+    # just without the reward mention.
+    notifications = (
+        await db_session.execute(select(Notification).where(Notification.user_id == user.id))
+    ).scalars().all()
+    assert len(notifications) == 1
+    assert notifications[0].type == NotificationType.league_promoted
+    assert "монет" not in notifications[0].body
+
+
+async def test_blocked_user_reclaim_after_unblock_does_not_double_pay(db_session):
+    tier = LeagueTier(name="Дворовая лига", min_rating=0, reward_coins=50, sort_order=0)
+    db_session.add(tier)
+    await db_session.commit()
+
+    user = await _make_user(db_session, 990041)
+    user.game_rewards_blocked = True
+    db_session.add(user)
+    await db_session.commit()
+
+    await league_service.sync_league_rewards_for_user(db_session, user)
+    await db_session.commit()
+
+    user.game_rewards_blocked = False
+    db_session.add(user)
+    await db_session.commit()
+
+    assert await league_service.sync_league_rewards_for_user(db_session, user) == []
+    await db_session.refresh(user)
+    assert user.balance == 500
+
+
+async def test_backfill_locks_every_user_row_before_granting(client, db_session, bot_token, monkeypatch):
+    import app.routers.admin_leagues as admin_leagues
+
+    auth = await _admin_auth(client, bot_token)
+    tier = LeagueTier(name="Дворовая лига", min_rating=0, reward_coins=20, sort_order=0)
+    db_session.add(tier)
+    await db_session.commit()
+
+    for telegram_id in (990042, 990043):
+        await client.post("/api/v1/auth/session", headers=telegram_headers(telegram_id, bot_token))
+
+    locked_ids: list[int] = []
+    real_lock = admin_leagues.lock_user_for_update
+
+    async def spy_lock(db, user_id):
+        locked_ids.append(user_id)
+        return await real_lock(db, user_id)
+
+    monkeypatch.setattr(admin_leagues, "lock_user_for_update", spy_lock)
+
+    resp = await client.post("/api/v1/admin/leagues/backfill-rewards", headers=auth)
+    assert resp.status_code == 200
+
+    granted_user_ids = (
+        await db_session.execute(select(UserLeagueRewardClaim.user_id).where(UserLeagueRewardClaim.league_tier_id == tier.id))
+    ).scalars().all()
+    assert set(granted_user_ids)
+    # Every user whose coins were touched was locked first.
+    assert set(granted_user_ids) <= set(locked_ids)
+
+
+async def test_backfill_commits_per_batch_and_is_resumable(client, db_session, bot_token, monkeypatch):
+    """A mid-run failure must not roll back the users already processed —
+    that's the point of committing per batch. The remaining users are picked
+    up by simply re-running the (idempotent) endpoint."""
+    import app.routers.admin_leagues as admin_leagues
+
+    auth = await _admin_auth(client, bot_token)
+    tier = LeagueTier(name="Дворовая лига", min_rating=0, reward_coins=20, sort_order=0)
+    db_session.add(tier)
+    await db_session.commit()
+
+    for telegram_id in (990044, 990045, 990046):
+        await client.post("/api/v1/auth/session", headers=telegram_headers(telegram_id, bot_token))
+
+    monkeypatch.setattr(admin_leagues, "_BACKFILL_BATCH_SIZE", 2)
+
+    calls = {"n": 0}
+    real_sync = league_service.sync_league_rewards_for_user
+
+    async def failing_sync(db, user, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 3:
+            raise ConflictError("simulated concurrent grant conflict")
+        return await real_sync(db, user, **kwargs)
+
+    monkeypatch.setattr(admin_leagues.league_service, "sync_league_rewards_for_user", failing_sync)
+
+    resp = await client.post("/api/v1/admin/leagues/backfill-rewards", headers=auth)
+    assert resp.status_code == 409
+
+    # First batch of 2 was committed before the failure in the second batch.
+    claims_after_failure = (
+        await db_session.execute(select(UserLeagueRewardClaim.user_id))
+    ).scalars().all()
+    assert len(claims_after_failure) == 2
+
+    monkeypatch.setattr(admin_leagues.league_service, "sync_league_rewards_for_user", real_sync)
+    resume = await client.post("/api/v1/admin/leagues/backfill-rewards", headers=auth)
+    assert resume.status_code == 200
+    assert resume.json()["rewarded_count"] == 2  # only the two users left unprocessed
+
+    claims_after_resume = (
+        await db_session.execute(select(UserLeagueRewardClaim.user_id))
+    ).scalars().all()
+    assert len(claims_after_resume) == 4  # admin + 3 players, each exactly once
