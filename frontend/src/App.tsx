@@ -44,6 +44,7 @@ import NewTradePage from "@/pages/NewTradePage";
 import TasksPage from "@/pages/TasksPage";
 import UpgradePage from "@/pages/UpgradePage";
 import RankingPage from "@/pages/RankingPage";
+import LeaguePage from "@/pages/LeaguePage";
 import ProfilePage from "@/pages/ProfilePage";
 import GiftsPage from "@/pages/GiftsPage";
 import PublicProfilePage from "@/pages/PublicProfilePage";
@@ -163,6 +164,7 @@ export default function App() {
         <Route path="/wheel" element={<WheelPage />} />
         <Route path="/upgrade" element={<UpgradePage />} />
         <Route path="/ranking" element={<RankingPage />} />
+        <Route path="/league" element={<LeaguePage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/gifts" element={<GiftsPage />} />
         <Route path="/users/:userId" element={<PublicProfilePage />} />
