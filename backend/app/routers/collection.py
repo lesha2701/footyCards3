@@ -6,8 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_user
 from app.core.pagination import Page, PageParams
 from app.database import get_db
+from app.models.enums import Rarity
 from app.models.user import User
-from app.schemas.card import CollectionStatsOut
+from app.schemas.card import CollectionStatsOut, UserCardOut
 from app.schemas.card_upgrade import CardUpgradeResultOut, CardUpgradeRuleOut, UpgradeCardRequest
 from app.schemas.collection import (
     AlbumCollectionDetailOut,
@@ -19,7 +20,7 @@ from app.schemas.collection import (
     SetCardHiddenRequest,
     UserCardListItem,
 )
-from app.services.card_upgrade_service import list_rules, upgrade_card
+from app.services.card_upgrade_service import list_rules, list_upgradeable_cards, upgrade_card
 from app.services.collection_service import (
     collection_stats,
     get_album_collection_detail,
@@ -86,6 +87,13 @@ async def sell_many_cards(
 @router.get("/upgrade-rules", response_model=list[CardUpgradeRuleOut])
 async def get_upgrade_rules(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
     return await list_rules(db)
+
+
+@router.get("/upgrade-cards", response_model=list[UserCardOut])
+async def get_upgradeable_cards(
+    rarity: Rarity, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await list_upgradeable_cards(db, user.id, rarity)
 
 
 @router.post("/upgrade", response_model=CardUpgradeResultOut)

@@ -57,6 +57,13 @@ export async function fetchUpgradeRules(): Promise<CardUpgradeRule[]> {
   return data;
 }
 
+// Every individual unlocked card of `rarity` — NOT deduplicated by player,
+// unlike fetchCollection, since each owned copy is its own stakeable unit.
+export async function fetchUpgradeableCards(rarity: Rarity): Promise<UserCard[]> {
+  const { data } = await api.get<UserCard[]>("/collection/upgrade-cards", { params: { rarity } });
+  return data;
+}
+
 export async function upgradeCards(
   userCardIds: number[],
   toRarity: Rarity,

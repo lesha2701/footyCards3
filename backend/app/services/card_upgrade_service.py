@@ -11,6 +11,7 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.models.card import UserCard
 from app.models.card_upgrade import CardUpgradeAttempt, CardUpgradeRule
 from app.models.enums import RARITY_ORDER, CardSource, Rarity, TransactionType
+from app.models.player import Player
 from app.models.user import User
 from app.schemas.card_upgrade import CardUpgradeResultOut, UserCardOut
 from app.services.card_creation import create_user_card
@@ -22,6 +23,32 @@ from app.services.wallet_service import debit_coins, lock_user_for_update
 async def list_rules(db: AsyncSession) -> list[CardUpgradeRule]:
     result = await db.execute(select(CardUpgradeRule).order_by(CardUpgradeRule.from_rarity, CardUpgradeRule.to_rarity))
     return list(result.scalars().all())
+
+
+async def list_upgradeable_cards(db: AsyncSession, user_id: int, rarity: Rarity) -> list[UserCard]:
+    """Every individual card of `rarity` the user can actually stake right
+    now — unlike the general collection browse endpoint, this is NOT
+    deduplicated by player: each owned copy is its own stakeable unit
+    (staking several duplicates of the same player is the most natural
+    upgrade-fodder case), and locked cards (in a lineup, a Tactico squad,
+    a pending trade, or frozen by an admin) are excluded outright rather
+    than left for the player to pick and then get rejected at request time.
+    """
+    result = await db.execute(
+        select(UserCard)
+        .join(Player)
+        .where(
+            UserCard.owner_id == user_id,
+            Player.rarity == rarity,
+            UserCard.is_locked_by_admin.is_(False),
+            UserCard.is_locked_in_trade.is_(False),
+            UserCard.is_in_lineup.is_(False),
+            UserCard.is_in_tactico_squad.is_(False),
+        )
+        .options(joinedload(UserCard.player))
+        .order_by(Player.rating.desc())
+    )
+    return list(result.unique().scalars().all())
 
 
 async def _get_active_rule(db: AsyncSession, from_rarity: Rarity, to_rarity: Rarity) -> CardUpgradeRule:

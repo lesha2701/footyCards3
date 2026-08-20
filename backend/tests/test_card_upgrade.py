@@ -269,3 +269,43 @@ async def test_upgrade_rejects_duplicate_card_ids(client, db_session, bot_token)
         json={"user_card_ids": [card.id, card.id], "to_rarity": "rare"},
     )
     assert resp.status_code == 409
+
+
+async def test_upgradeable_cards_excludes_locked_and_wrong_rarity(client, db_session, bot_token):
+    user = await _register(client, db_session, 900013, bot_token)
+    common_player = await create_player(db_session, rarity=Rarity.common)
+    rare_player = await create_player(db_session, rarity=Rarity.rare, rating=80)
+
+    free_card = await _give_card(db_session, user.id, common_player.id, serial_number=1)
+    locked_card = await _give_card(db_session, user.id, common_player.id, serial_number=2)
+    locked_card.is_in_lineup = True
+    db_session.add(locked_card)
+    await db_session.commit()
+    # A rare card must never show up when asking for common.
+    await _give_card(db_session, user.id, rare_player.id, serial_number=1)
+
+    headers = telegram_headers(900013, bot_token)
+    resp = await client.get("/api/v1/collection/upgrade-cards", headers=headers, params={"rarity": "common"})
+    assert resp.status_code == 200
+    ids = [c["id"] for c in resp.json()]
+    assert ids == [free_card.id]
+
+
+async def test_upgradeable_cards_lists_each_duplicate_separately(client, db_session, bot_token):
+    """Regression test: the upgrade card picker used to reuse the general
+    collection browse endpoint, which collapses duplicate copies of the
+    same player into a single tile (picking an arbitrary, lock-status-
+    blind representative) — so a player with one locked and one free copy
+    of the same card could vanish entirely, and staking several duplicates
+    of the same player together was impossible. Each owned copy must be
+    its own entry."""
+    user = await _register(client, db_session, 900014, bot_token)
+    common_player = await create_player(db_session, rarity=Rarity.common)
+    card_ids = [
+        (await _give_card(db_session, user.id, common_player.id, serial_number=i)).id for i in range(1, 4)
+    ]
+
+    headers = telegram_headers(900014, bot_token)
+    resp = await client.get("/api/v1/collection/upgrade-cards", headers=headers, params={"rarity": "common"})
+    assert resp.status_code == 200
+    assert sorted(c["id"] for c in resp.json()) == sorted(card_ids)

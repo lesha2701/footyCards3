@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { fetchCollection, fetchUpgradeRules, type CollectionFilters } from "@/api/collection";
+import { fetchUpgradeableCards, fetchUpgradeRules } from "@/api/collection";
 import CardUpgradeModal from "@/components/cards/CardUpgradeModal";
 import PlayerCard from "@/components/cards/PlayerCard";
 import EmptyState from "@/components/common/EmptyState";
@@ -40,15 +40,14 @@ export default function UpgradePage() {
     });
   };
 
-  const filters: CollectionFilters = {
-    rarity: effectiveRarity ?? undefined,
-    sort_by: "rating",
-    sort_dir: "desc",
-    page_size: 60,
-  };
-  const { data: page, isLoading } = useQuery({
-    queryKey: ["collection", "upgrade", effectiveRarity],
-    queryFn: () => fetchCollection(filters),
+  // Every individual unlocked card of this rarity — not deduplicated by
+  // player (unlike the general collection browse endpoint), so duplicates
+  // of the same player each show as their own selectable tile, and locked
+  // cards (in a lineup, a Tactico squad, a pending trade, or frozen by an
+  // admin) never appear as an option in the first place.
+  const { data: cards, isLoading } = useQuery({
+    queryKey: ["upgrade-cards", effectiveRarity],
+    queryFn: () => fetchUpgradeableCards(effectiveRarity!),
     enabled: !!effectiveRarity,
   });
 
@@ -129,16 +128,16 @@ export default function UpgradePage() {
           </div>
 
           {isLoading && <CardGridSkeleton count={9} />}
-          {!isLoading && !page?.items.length && (
+          {!isLoading && !cards?.length && (
             <EmptyState
               icon={IconUpgrade}
               title="Нечего улучшать"
-              description={`Нет карточек редкости «${RARITY_LABELS[effectiveRarity!]}» — открой паки, чтобы получить их`}
+              description={`Нет доступных карточек редкости «${RARITY_LABELS[effectiveRarity!]}» — открой паки, или освободи карточки из состава/обмена`}
             />
           )}
 
           <div className="grid grid-cols-3 gap-2 pb-20">
-            {page?.items.map((card) => (
+            {cards?.map((card) => (
               <PlayerCard
                 key={card.id}
                 player={card.player}
