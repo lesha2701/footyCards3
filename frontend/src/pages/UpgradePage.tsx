@@ -7,19 +7,38 @@ import PlayerCard from "@/components/cards/PlayerCard";
 import EmptyState from "@/components/common/EmptyState";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import { IconChevronRight, IconCoin, IconUpgrade } from "@/components/icons";
+import { effectiveUpgradeChance } from "@/lib/cardUpgrade";
 import { RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import type { Rarity, UserCard } from "@/types";
 
 const RARITY_SEQUENCE: Rarity[] = ["common", "rare", "epic", "legendary"];
+
+// Mirrors the backend's MAX_STAKED_CARDS (schemas/card_upgrade.py) — purely
+// a client-side UX cap, the server is the actual source of truth.
+const MAX_STAKED_CARDS = 10;
 
 export default function UpgradePage() {
   const { data: rules, isLoading: rulesLoading } = useQuery({ queryKey: ["upgrade-rules"], queryFn: fetchUpgradeRules });
   const upgradeableRarities = RARITY_SEQUENCE.filter((r) => rules?.some((rule) => rule.from_rarity === r && rule.is_active));
 
   const [rarity, setRarity] = useState<Rarity | null>(null);
-  const [upgradeCard, setUpgradeCard] = useState<UserCard | null>(null);
+  const [selected, setSelected] = useState<UserCard[]>([]);
+  const [upgrading, setUpgrading] = useState(false);
   const effectiveRarity = rarity ?? upgradeableRarities[0] ?? null;
   const currentRule = rules?.find((r) => r.from_rarity === effectiveRarity && r.is_active);
+
+  const selectRarity = (r: Rarity) => {
+    setRarity(r);
+    setSelected([]);
+  };
+
+  const toggleCard = (card: UserCard) => {
+    setSelected((prev) => {
+      if (prev.some((c) => c.id === card.id)) return prev.filter((c) => c.id !== card.id);
+      if (prev.length >= MAX_STAKED_CARDS) return prev;
+      return [...prev, card];
+    });
+  };
 
   const filters: CollectionFilters = {
     rarity: effectiveRarity ?? undefined,
@@ -32,6 +51,9 @@ export default function UpgradePage() {
     queryFn: () => fetchCollection(filters),
     enabled: !!effectiveRarity,
   });
+
+  const previewChance = currentRule && selected.length > 0 ? effectiveUpgradeChance(currentRule, selected.length) : null;
+  const previewCost = currentRule ? currentRule.coin_cost * Math.max(1, selected.length) : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -65,15 +87,23 @@ export default function UpgradePage() {
         )}
 
         {currentRule && (
-          <div className="relative mt-4 flex items-center gap-3 rounded-2xl bg-black/20 px-3 py-2.5">
+          <div className="relative mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-black/20 px-3 py-2.5">
             <span className="font-mono text-xs text-ink-mist">
-              Шанс успеха <span className="font-bold text-accent-cyan">{Math.round(currentRule.success_chance * 100)}%</span>
+              Шанс успеха{" "}
+              <span className="font-bold text-accent-cyan">
+                {Math.round((previewChance ?? currentRule.success_chance) * 100)}%
+              </span>
             </span>
             <span className="h-3 w-px bg-white/10" />
             <span className="flex items-center gap-1 font-mono text-xs text-amber-300">
               <IconCoin size={12} />
-              {currentRule.coin_cost}
+              {previewCost ?? currentRule.coin_cost}
             </span>
+            {currentRule.extra_card_bonus > 0 && (
+              <span className="w-full text-[10px] text-ink-mist-dim">
+                Ставь несколько карт этой редкости разом — шанс растёт (максимум {Math.round(currentRule.max_success_chance * 100)}%)
+              </span>
+            )}
           </div>
         )}
       </section>
@@ -88,7 +118,7 @@ export default function UpgradePage() {
             {upgradeableRarities.map((r) => (
               <button
                 key={r}
-                onClick={() => setRarity(r)}
+                onClick={() => selectRarity(r)}
                 className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
                   effectiveRarity === r ? "bg-amber-400 text-bg-base" : "bg-white/5 text-ink-mist"
                 }`}
@@ -107,15 +137,56 @@ export default function UpgradePage() {
             />
           )}
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2 pb-20">
             {page?.items.map((card) => (
-              <PlayerCard key={card.id} player={card.player} onClick={() => setUpgradeCard(card)} />
+              <PlayerCard
+                key={card.id}
+                player={card.player}
+                selected={selected.some((c) => c.id === card.id)}
+                onClick={() => toggleCard(card)}
+              />
             ))}
           </div>
         </>
       )}
 
-      {upgradeCard && <CardUpgradeModal card={upgradeCard} onClose={() => setUpgradeCard(null)} />}
+      {selected.length > 0 && (
+        <div className="safe-bottom fixed inset-x-0 bottom-16 z-20 flex justify-center px-4">
+          <div className="flex w-full max-w-md items-center gap-3 rounded-2xl border border-amber-400/20 bg-bg-surface p-3 shadow-lg">
+            <button
+              onClick={() => setSelected([])}
+              className="rounded-xl bg-white/5 px-3 py-2 text-xs font-semibold text-ink-mist active:scale-95"
+            >
+              Сбросить
+            </button>
+            <div className="flex-1 text-xs text-ink-mist">
+              Выбрано: <b className="text-ink-chalk">{selected.length}</b>
+              {previewChance !== null && (
+                <>
+                  {" "}
+                  · шанс <b className="text-accent-cyan">{Math.round(previewChance * 100)}%</b>
+                </>
+              )}
+            </div>
+            <button
+              onClick={() => setUpgrading(true)}
+              className="rounded-xl bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95"
+            >
+              Апгрейд
+            </button>
+          </div>
+        </div>
+      )}
+
+      {upgrading && selected.length > 0 && (
+        <CardUpgradeModal
+          cards={selected}
+          onClose={() => {
+            setUpgrading(false);
+            setSelected([]);
+          }}
+        />
+      )}
     </div>
   );
 }

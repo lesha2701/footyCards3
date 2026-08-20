@@ -57,12 +57,13 @@ export async function fetchUpgradeRules(): Promise<CardUpgradeRule[]> {
   return data;
 }
 
-export async function upgradeCard(
-  userCardId: number,
+export async function upgradeCards(
+  userCardIds: number[],
   toRarity: Rarity,
   idempotencyKey?: string
 ): Promise<CardUpgradeResult> {
-  const { data } = await api.post<CardUpgradeResult>(`/collection/cards/${userCardId}/upgrade`, {
+  const { data } = await api.post<CardUpgradeResult>("/collection/upgrade", {
+    user_card_ids: userCardIds,
     to_rarity: toRarity,
     idempotency_key: idempotencyKey,
   });

@@ -13,8 +13,13 @@ async def _register(client, db_session, telegram_id, bot_token):
     return await get_user_by_telegram_id(db_session, telegram_id)
 
 
-async def _seed_rule(db_session, from_rarity, to_rarity, chance, cost) -> CardUpgradeRule:
-    rule = CardUpgradeRule(from_rarity=from_rarity, to_rarity=to_rarity, success_chance=chance, coin_cost=cost, is_active=True)
+async def _seed_rule(
+    db_session, from_rarity, to_rarity, chance, cost, extra_card_bonus=0.0, max_success_chance=None,
+) -> CardUpgradeRule:
+    rule = CardUpgradeRule(
+        from_rarity=from_rarity, to_rarity=to_rarity, success_chance=chance, coin_cost=cost, is_active=True,
+        extra_card_bonus=extra_card_bonus, max_success_chance=max_success_chance if max_success_chance is not None else chance,
+    )
     db_session.add(rule)
     await db_session.commit()
     await db_session.refresh(rule)
@@ -45,13 +50,15 @@ async def test_upgrade_success_replaces_card_and_debits_coins(client, db_session
 
     headers = telegram_headers(900001, bot_token)
     resp = await client.post(
-        f"/api/v1/collection/cards/{card_id}/upgrade", headers=headers, json={"to_rarity": "rare"}
+        "/api/v1/collection/upgrade", headers=headers, json={"user_card_ids": [card_id], "to_rarity": "rare"}
     )
     assert resp.status_code == 200
     body = resp.json()
     assert body["success"] is True
     assert body["new_card"]["player"]["rarity"] == "rare"
     assert body["new_balance"] == 500 - 50
+    assert body["card_count"] == 1
+    assert body["success_chance"] == 1.0
 
     # the staked card must be gone, replaced by exactly one new (rare) card —
     # not checked by card_id, since SQLite may recycle a deleted rowid for
@@ -72,7 +79,7 @@ async def test_upgrade_failure_loses_card_and_coins(client, db_session, bot_toke
 
     headers = telegram_headers(900002, bot_token)
     resp = await client.post(
-        f"/api/v1/collection/cards/{card_id}/upgrade", headers=headers, json={"to_rarity": "rare"}
+        "/api/v1/collection/upgrade", headers=headers, json={"user_card_ids": [card_id], "to_rarity": "rare"}
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -94,7 +101,7 @@ async def test_upgrade_insufficient_balance_leaves_card_untouched(client, db_ses
 
     headers = telegram_headers(900003, bot_token)
     resp = await client.post(
-        f"/api/v1/collection/cards/{card_id}/upgrade", headers=headers, json={"to_rarity": "legendary"}
+        "/api/v1/collection/upgrade", headers=headers, json={"user_card_ids": [card_id], "to_rarity": "legendary"}
     )
     assert resp.status_code == 400
 
@@ -117,7 +124,7 @@ async def test_upgrade_locked_card_is_rejected(client, db_session, bot_token):
 
     headers = telegram_headers(900004, bot_token)
     resp = await client.post(
-        f"/api/v1/collection/cards/{card_id}/upgrade", headers=headers, json={"to_rarity": "rare"}
+        "/api/v1/collection/upgrade", headers=headers, json={"user_card_ids": [card_id], "to_rarity": "rare"}
     )
     assert resp.status_code == 409
 
@@ -134,7 +141,7 @@ async def test_upgrade_card_locked_in_tactico_squad_is_rejected(client, db_sessi
 
     headers = telegram_headers(900008, bot_token)
     resp = await client.post(
-        f"/api/v1/collection/cards/{card_id}/upgrade", headers=headers, json={"to_rarity": "rare"}
+        "/api/v1/collection/upgrade", headers=headers, json={"user_card_ids": [card_id], "to_rarity": "rare"}
     )
     assert resp.status_code == 409
 
@@ -147,7 +154,7 @@ async def test_upgrade_to_lower_or_equal_rarity_is_rejected(client, db_session, 
 
     headers = telegram_headers(900005, bot_token)
     resp = await client.post(
-        f"/api/v1/collection/cards/{card_id}/upgrade", headers=headers, json={"to_rarity": "common"}
+        "/api/v1/collection/upgrade", headers=headers, json={"user_card_ids": [card_id], "to_rarity": "common"}
     )
     assert resp.status_code == 409
 
@@ -161,7 +168,7 @@ async def test_upgrade_without_configured_rule_is_rejected(client, db_session, b
 
     headers = telegram_headers(900006, bot_token)
     resp = await client.post(
-        f"/api/v1/collection/cards/{card_id}/upgrade", headers=headers, json={"to_rarity": "epic"}
+        "/api/v1/collection/upgrade", headers=headers, json={"user_card_ids": [card_id], "to_rarity": "epic"}
     )
     assert resp.status_code == 409
 
@@ -175,9 +182,9 @@ async def test_upgrade_idempotency_key_prevents_double_charge(client, db_session
     await _seed_rule(db_session, Rarity.common, Rarity.rare, chance=1.0, cost=50)
 
     headers = telegram_headers(900007, bot_token)
-    payload = {"to_rarity": "rare", "idempotency_key": "upg-abc"}
-    first = await client.post(f"/api/v1/collection/cards/{card_id}/upgrade", headers=headers, json=payload)
-    second = await client.post(f"/api/v1/collection/cards/{card_id}/upgrade", headers=headers, json=payload)
+    payload = {"user_card_ids": [card_id], "to_rarity": "rare", "idempotency_key": "upg-abc"}
+    first = await client.post("/api/v1/collection/upgrade", headers=headers, json=payload)
+    second = await client.post("/api/v1/collection/upgrade", headers=headers, json=payload)
 
     assert first.status_code == 200 and second.status_code == 200
     assert first.json()["new_card"]["id"] == second.json()["new_card"]["id"]
@@ -185,3 +192,80 @@ async def test_upgrade_idempotency_key_prevents_double_charge(client, db_session
 
     await db_session.refresh(user)
     assert user.balance == 450
+
+
+async def test_upgrade_multi_stake_boosts_chance_and_scales_cost(client, db_session, bot_token):
+    user = await _register(client, db_session, 900009, bot_token)
+    user_id = user.id
+    common_player = await create_player(db_session, rarity=Rarity.common)
+    await create_player(db_session, rarity=Rarity.rare, rating=80)
+    card_ids = [
+        (await _give_card(db_session, user_id, common_player.id, serial_number=i)).id for i in range(1, 4)
+    ]
+    # base 0.10 + 2 extra cards * 0.20 = 0.50 effective chance, capped at 0.90.
+    await _seed_rule(db_session, Rarity.common, Rarity.rare, chance=0.10, cost=50, extra_card_bonus=0.20, max_success_chance=0.90)
+
+    headers = telegram_headers(900009, bot_token)
+    resp = await client.post(
+        "/api/v1/collection/upgrade", headers=headers, json={"user_card_ids": card_ids, "to_rarity": "rare"}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["card_count"] == 3
+    assert body["success_chance"] == 0.50
+    assert body["coin_cost"] == 150  # 50 * 3 staked cards
+    assert body["new_balance"] == 500 - 150
+
+    # All 3 staked cards must be gone regardless of outcome.
+    db_session.expire_all()
+    remaining = (await db_session.execute(select(UserCard).where(UserCard.owner_id == user_id))).scalars().all()
+    assert len(remaining) == (1 if body["success"] else 0)
+
+
+async def test_upgrade_multi_stake_chance_is_capped_below_100_percent(client, db_session, bot_token):
+    user = await _register(client, db_session, 900010, bot_token)
+    common_player = await create_player(db_session, rarity=Rarity.common)
+    await create_player(db_session, rarity=Rarity.rare, rating=80)
+    card_ids = [
+        (await _give_card(db_session, user.id, common_player.id, serial_number=i)).id for i in range(1, 11)
+    ]
+    # base 0.50 + 9 extra cards * 0.50 = 5.0 uncapped — must clamp to the 0.80 cap, never 1.0.
+    await _seed_rule(db_session, Rarity.common, Rarity.rare, chance=0.50, cost=10, extra_card_bonus=0.50, max_success_chance=0.80)
+
+    headers = telegram_headers(900010, bot_token)
+    resp = await client.post(
+        "/api/v1/collection/upgrade", headers=headers, json={"user_card_ids": card_ids, "to_rarity": "rare"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["success_chance"] == 0.80
+
+
+async def test_upgrade_rejects_mixed_rarity_stake(client, db_session, bot_token):
+    user = await _register(client, db_session, 900011, bot_token)
+    common_player = await create_player(db_session, rarity=Rarity.common)
+    rare_player = await create_player(db_session, rarity=Rarity.rare, rating=80)
+    common_card = await _give_card(db_session, user.id, common_player.id, serial_number=1)
+    rare_card = await _give_card(db_session, user.id, rare_player.id, serial_number=2)
+    await _seed_rule(db_session, Rarity.common, Rarity.epic, chance=0.5, cost=10)
+
+    headers = telegram_headers(900011, bot_token)
+    resp = await client.post(
+        "/api/v1/collection/upgrade", headers=headers,
+        json={"user_card_ids": [common_card.id, rare_card.id], "to_rarity": "epic"},
+    )
+    assert resp.status_code == 409
+
+
+async def test_upgrade_rejects_duplicate_card_ids(client, db_session, bot_token):
+    user = await _register(client, db_session, 900012, bot_token)
+    common_player = await create_player(db_session, rarity=Rarity.common)
+    await create_player(db_session, rarity=Rarity.rare, rating=80)
+    card = await _give_card(db_session, user.id, common_player.id)
+    await _seed_rule(db_session, Rarity.common, Rarity.rare, chance=1.0, cost=50)
+
+    headers = telegram_headers(900012, bot_token)
+    resp = await client.post(
+        "/api/v1/collection/upgrade", headers=headers,
+        json={"user_card_ids": [card.id, card.id], "to_rarity": "rare"},
+    )
+    assert resp.status_code == 409

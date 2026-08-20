@@ -7,7 +7,18 @@ import { ApiRequestError } from "@/lib/api";
 import { RARITY_LABELS } from "@/lib/rarity";
 import type { CardUpgradeRule } from "@/types";
 
-type RuleForm = Pick<CardUpgradeRule, "success_chance" | "coin_cost" | "is_active">;
+type RuleForm = Pick<CardUpgradeRule, "success_chance" | "coin_cost" | "is_active" | "extra_card_bonus" | "max_success_chance">;
+
+function isDirtyRule(r: CardUpgradeRule, f?: RuleForm): boolean {
+  return (
+    !!f &&
+    (f.success_chance !== r.success_chance ||
+      f.coin_cost !== r.coin_cost ||
+      f.is_active !== r.is_active ||
+      f.extra_card_bonus !== r.extra_card_bonus ||
+      f.max_success_chance !== r.max_success_chance)
+  );
+}
 
 export default function AdminUpgradesPage() {
   const queryClient = useQueryClient();
@@ -16,27 +27,34 @@ export default function AdminUpgradesPage() {
   const [forms, setForms] = useState<Record<number, RuleForm>>({});
   useEffect(() => {
     if (!rules) return;
-    setForms(Object.fromEntries(rules.map((r) => [r.id, { success_chance: r.success_chance, coin_cost: r.coin_cost, is_active: r.is_active }])));
+    setForms(
+      Object.fromEntries(
+        rules.map((r) => [
+          r.id,
+          {
+            success_chance: r.success_chance,
+            coin_cost: r.coin_cost,
+            is_active: r.is_active,
+            extra_card_bonus: r.extra_card_bonus,
+            max_success_chance: r.max_success_chance,
+          },
+        ])
+      )
+    );
   }, [rules]);
 
   const [error, setError] = useState<string | null>(null);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const changed = (rules ?? []).filter((r) => {
-        const f = forms[r.id];
-        return f && (f.success_chance !== r.success_chance || f.coin_cost !== r.coin_cost || f.is_active !== r.is_active);
-      });
+      const changed = (rules ?? []).filter((r) => isDirtyRule(r, forms[r.id]));
       await Promise.all(changed.map((r) => updateUpgradeRule(r.id, forms[r.id])));
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["admin-upgrade-rules"] }); setError(null); },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось сохранить изменения"),
   });
 
-  const isDirty = (rules ?? []).some((r) => {
-    const f = forms[r.id];
-    return f && (f.success_chance !== r.success_chance || f.coin_cost !== r.coin_cost || f.is_active !== r.is_active);
-  });
+  const isDirty = (rules ?? []).some((r) => isDirtyRule(r, forms[r.id]));
 
   const patch = (id: number, patch: Partial<RuleForm>) => setForms((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
 
@@ -82,6 +100,28 @@ export default function AdminUpgradesPage() {
                   min={0}
                   value={form.coin_cost}
                   onChange={(v) => patch(r.id, { coin_cost: v })}
+                  className="w-24 rounded-lg bg-bg-base px-3 py-1.5 text-sm outline-none"
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">Бонус за карту, %</span>
+                <NumberInput
+                  step={0.01}
+                  min={0}
+                  max={100}
+                  value={Math.round(form.extra_card_bonus * 10000) / 100}
+                  onChange={(v) => patch(r.id, { extra_card_bonus: Math.round(v * 100) / 10000 })}
+                  className="w-24 rounded-lg bg-bg-base px-3 py-1.5 text-sm outline-none"
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">Максимум шанса, %</span>
+                <NumberInput
+                  step={0.01}
+                  min={0}
+                  max={100}
+                  value={Math.round(form.max_success_chance * 10000) / 100}
+                  onChange={(v) => patch(r.id, { max_success_chance: Math.round(v * 100) / 10000 })}
                   className="w-24 rounded-lg bg-bg-base px-3 py-1.5 text-sm outline-none"
                 />
               </label>

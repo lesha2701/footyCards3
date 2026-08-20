@@ -66,16 +66,26 @@ async def _attempt_to_out(db: AsyncSession, attempt: CardUpgradeAttempt, new_bal
         success=attempt.success,
         from_rarity=attempt.from_rarity,
         to_rarity=attempt.to_rarity,
+        card_count=attempt.card_count,
+        success_chance=float(attempt.success_chance),
         coin_cost=attempt.coin_cost,
         new_card=new_card_out,
         new_balance=new_balance,
     )
 
 
+def _effective_success_chance(rule: CardUpgradeRule, card_count: int) -> float:
+    """Staking more than one same-rarity card boosts the odds by
+    extra_card_bonus per extra card, capped at max_success_chance (both
+    admin-tunable per rule; extra_card_bonus defaults to 0, a no-op)."""
+    base = float(rule.success_chance) + max(0, card_count - 1) * float(rule.extra_card_bonus)
+    return min(float(rule.max_success_chance), base)
+
+
 async def upgrade_card(
     db: AsyncSession,
     user: User,
-    user_card_id: int,
+    user_card_ids: list[int],
     target_rarity: Rarity,
     idempotency_key: Optional[str],
 ) -> CardUpgradeResultOut:
@@ -83,34 +93,51 @@ async def upgrade_card(
     if existing is not None:
         return await _attempt_to_out(db, existing)
 
+    if len(set(user_card_ids)) != len(user_card_ids):
+        raise ConflictError("Duplicate cards in the same upgrade attempt")
+
     locked_user = await lock_user_for_update(db, user.id)
 
     result = await db.execute(
-        select(UserCard).where(UserCard.id == user_card_id).options(joinedload(UserCard.player))
+        select(UserCard).where(UserCard.id.in_(user_card_ids)).options(joinedload(UserCard.player))
     )
-    card = result.scalar_one_or_none()
-    if card is None or card.owner_id != locked_user.id:
+    cards = {c.id: c for c in result.scalars().all()}
+    if len(cards) != len(user_card_ids):
         raise NotFoundError("Card not found")
-    if card.is_locked_by_admin or card.is_locked_in_trade or card.is_in_lineup or card.is_in_tactico_squad:
-        raise ConflictError("This card is locked and cannot be upgraded")
+    # Preserve the caller's own ordering (dict lookup above loses it) so
+    # "the first staked card" below is deterministic, not row-order-dependent.
+    ordered_cards = [cards[cid] for cid in user_card_ids]
 
-    from_rarity = card.player.rarity
+    for card in ordered_cards:
+        if card.owner_id != locked_user.id:
+            raise NotFoundError("Card not found")
+        if card.is_locked_by_admin or card.is_locked_in_trade or card.is_in_lineup or card.is_in_tactico_squad:
+            raise ConflictError("This card is locked and cannot be upgraded")
+
+    from_rarity = ordered_cards[0].player.rarity
+    if any(c.player.rarity != from_rarity for c in ordered_cards):
+        raise ConflictError("All staked cards must be the same rarity")
     if RARITY_ORDER[target_rarity] <= RARITY_ORDER[from_rarity]:
         raise ConflictError("Target rarity must be higher than the card's current rarity")
 
     rule = await _get_active_rule(db, from_rarity, target_rarity)
+    card_count = len(ordered_cards)
+    effective_chance = _effective_success_chance(rule, card_count)
+    total_cost = rule.coin_cost * card_count
 
     await debit_coins(
-        db, locked_user, rule.coin_cost, TransactionType.card_upgrade,
-        f"Апгрейд карточки: {from_rarity.value} → {target_rarity.value}",
-        related_object_type="user_card", related_object_id=card.id,
+        db, locked_user, total_cost, TransactionType.card_upgrade,
+        f"Апгрейд карточки: {from_rarity.value} → {target_rarity.value}"
+        + (f" (карт: {card_count})" if card_count > 1 else ""),
+        related_object_type="user_card", related_object_id=ordered_cards[0].id,
     )
 
-    source_player_id = card.player_id
-    await db.delete(card)
+    source_player_id = ordered_cards[0].player_id
+    for card in ordered_cards:
+        await db.delete(card)
     await db.flush()
 
-    success = random.random() < float(rule.success_chance)
+    success = random.random() < effective_chance
     result_card_id = None
     if success:
         new_player = await pick_random_player(db, target_rarity)
@@ -123,7 +150,9 @@ async def upgrade_card(
         source_player_id=source_player_id,
         from_rarity=from_rarity,
         to_rarity=target_rarity,
-        coin_cost=rule.coin_cost,
+        card_count=card_count,
+        success_chance=effective_chance,
+        coin_cost=total_cost,
         success=success,
         result_card_id=result_card_id,
         idempotency_key=idempotency_key,

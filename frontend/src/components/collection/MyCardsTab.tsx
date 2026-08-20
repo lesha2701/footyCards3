@@ -202,7 +202,7 @@ export default function MyCardsTab() {
         />
       )}
 
-      {upgradeCard && <CardUpgradeModal card={upgradeCard} onClose={() => setUpgradeCard(null)} />}
+      {upgradeCard && <CardUpgradeModal cards={[upgradeCard]} onClose={() => setUpgradeCard(null)} />}
 
       <ConfirmDialog
         open={!!confirmSell}

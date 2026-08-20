@@ -88,11 +88,10 @@ async def get_upgrade_rules(db: AsyncSession = Depends(get_db), _user: User = De
     return await list_rules(db)
 
 
-@router.post("/cards/{card_id}/upgrade", response_model=CardUpgradeResultOut)
-async def upgrade_my_card(
-    card_id: int,
+@router.post("/upgrade", response_model=CardUpgradeResultOut)
+async def upgrade_my_cards(
     payload: UpgradeCardRequest,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return await upgrade_card(db, user, card_id, payload.to_rarity, payload.idempotency_key)
+    return await upgrade_card(db, user, payload.user_card_ids, payload.to_rarity, payload.idempotency_key)

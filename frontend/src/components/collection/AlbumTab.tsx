@@ -210,7 +210,7 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
         />
       )}
 
-      {upgradeCard && <CardUpgradeModal card={upgradeCard} onClose={() => setUpgradeCard(null)} />}
+      {upgradeCard && <CardUpgradeModal cards={[upgradeCard]} onClose={() => setUpgradeCard(null)} />}
 
       <ConfirmDialog
         open={!!confirmSell}

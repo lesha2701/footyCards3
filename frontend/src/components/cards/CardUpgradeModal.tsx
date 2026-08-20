@@ -2,9 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
-import { fetchUpgradeRules, upgradeCard } from "@/api/collection";
+import { fetchUpgradeRules, upgradeCards } from "@/api/collection";
 import { IconBomb, IconChevronRight, IconCoin, IconTrophy, IconUpgrade } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
+import { effectiveUpgradeChance } from "@/lib/cardUpgrade";
 import { formatGameError } from "@/lib/errors";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
@@ -17,7 +18,7 @@ type Phase = "pick" | "confirm" | "rolling" | "result";
 // lands on a full pulse cycle instead of cutting the animation off mid-beat.
 const ROLL_DURATION_MS = 2200;
 
-export default function CardUpgradeModal({ card, onClose }: { card: UserCard; onClose: () => void }) {
+export default function CardUpgradeModal({ cards, onClose }: { cards: UserCard[]; onClose: () => void }) {
   const queryClient = useQueryClient();
   const balance = useAuthStore((s) => s.user?.balance ?? 0);
   const updateBalance = useAuthStore((s) => s.updateBalance);
@@ -27,13 +28,18 @@ export default function CardUpgradeModal({ card, onClose }: { card: UserCard; on
   const [result, setResult] = useState<CardUpgradeResult | null>(null);
   const [craftError, setCraftError] = useState<string | null>(null);
 
+  const fromRarity = cards[0].player.rarity;
+  const cardCount = cards.length;
+
   const { data: rules } = useQuery({ queryKey: ["upgrade-rules"], queryFn: fetchUpgradeRules });
-  const options = rules?.filter((r) => r.from_rarity === card.player.rarity && r.is_active) ?? [];
+  const options = rules?.filter((r) => r.from_rarity === fromRarity && r.is_active) ?? [];
   const selectedRule = options.find((r) => r.to_rarity === target);
-  const canAfford = !selectedRule || balance >= selectedRule.coin_cost;
+  const effectiveChance = selectedRule ? effectiveUpgradeChance(selectedRule, cardCount) : 0;
+  const totalCost = selectedRule ? selectedRule.coin_cost * cardCount : 0;
+  const canAfford = !selectedRule || balance >= totalCost;
 
   const upgradeMutation = useMutation({
-    mutationFn: () => upgradeCard(card.id, target!),
+    mutationFn: () => upgradeCards(cards.map((c) => c.id), target!),
     onSuccess: (data) => {
       updateBalance(data.new_balance);
       setResult(data);
@@ -84,18 +90,30 @@ export default function CardUpgradeModal({ card, onClose }: { card: UserCard; on
           <>
             <div className="flex items-center gap-2">
               <IconUpgrade size={18} className="text-accent-lime" />
-              <p className="font-display text-base font-bold text-ink-chalk">Апгрейд карточки</p>
+              <p className="font-display text-base font-bold text-ink-chalk">Апгрейд карточек</p>
             </div>
             <p className="mt-1 text-xs text-ink-mist">
-              {card.player.display_name} · {RARITY_LABELS[card.player.rarity]}
+              {cardCount > 1 ? `${cardCount} карточки` : "1 карточка"} · {RARITY_LABELS[fromRarity]}
             </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {cards.map((c) => (
+                <img
+                  key={c.id}
+                  src={staticUrl(c.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                  alt={c.player.display_name}
+                  className="h-9 w-9 rounded-lg object-cover"
+                />
+              ))}
+            </div>
 
             {options.length === 0 ? (
               <p className="mt-4 text-sm text-ink-mist">Для этой редкости апгрейд недоступен.</p>
             ) : (
               <div className="mt-4 flex flex-col gap-2">
                 {options.map((rule) => {
-                  const affordable = balance >= rule.coin_cost;
+                  const chance = effectiveUpgradeChance(rule, cardCount);
+                  const cost = rule.coin_cost * cardCount;
+                  const affordable = balance >= cost;
                   return (
                     <button
                       key={rule.id}
@@ -105,13 +123,13 @@ export default function CardUpgradeModal({ card, onClose }: { card: UserCard; on
                       <div>
                         <p className="font-display text-sm font-bold text-ink-chalk">{RARITY_LABELS[rule.to_rarity]}</p>
                         <p className="mt-0.5 font-mono text-[11px] text-ink-mist">
-                          Шанс {Math.round(rule.success_chance * 100)}%
+                          Шанс {Math.round(chance * 100)}%
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`flex items-center gap-1 font-mono text-xs ${affordable ? "text-accent-lime" : "text-red-400"}`}>
                           <IconCoin size={12} />
-                          {rule.coin_cost}
+                          {cost}
                         </span>
                         <IconChevronRight size={16} className="text-ink-mist-dim" />
                       </div>
@@ -131,19 +149,23 @@ export default function CardUpgradeModal({ card, onClose }: { card: UserCard; on
           <>
             <p className="font-display text-base font-bold text-ink-chalk">Точно рискнуть?</p>
             <p className="mt-2 text-sm text-ink-mist">
-              Ты ставишь <b className="text-ink-chalk">{card.player.display_name}</b> ({RARITY_LABELS[card.player.rarity]}) и{" "}
+              Ты ставишь{" "}
+              <b className="text-ink-chalk">
+                {cardCount > 1 ? `${cardCount} карточки (${RARITY_LABELS[fromRarity]})` : cards[0].player.display_name}
+              </b>{" "}
+              и{" "}
               <span className="inline-flex items-center gap-0.5 font-mono text-accent-lime">
-                {selectedRule.coin_cost}<IconCoin size={11} />
+                {totalCost}<IconCoin size={11} />
               </span>
-              . При неудаче (шанс {Math.round((1 - selectedRule.success_chance) * 100)}%) карта и монеты сгорают безвозвратно.
+              . При неудаче (шанс {Math.round((1 - effectiveChance) * 100)}%) карты и монеты сгорают безвозвратно.
             </p>
             <p className="mt-2 font-mono text-xs text-ink-mist">
-              Шанс успеха: <span className="text-accent-cyan">{Math.round(selectedRule.success_chance * 100)}%</span> → {RARITY_LABELS[selectedRule.to_rarity]}
+              Шанс успеха: <span className="text-accent-cyan">{Math.round(effectiveChance * 100)}%</span> → {RARITY_LABELS[selectedRule.to_rarity]}
             </p>
 
             {!canAfford && (
               <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">
-                Не хватает монет: нужно {selectedRule.coin_cost}, на балансе {balance}.
+                Не хватает монет: нужно {totalCost}, на балансе {balance}.
               </p>
             )}
             {craftError && (
@@ -193,7 +215,7 @@ export default function CardUpgradeModal({ card, onClose }: { card: UserCard; on
             </div>
             <p className="font-display text-base font-bold text-ink-chalk">Куём судьбу...</p>
             <p className="font-mono text-xs text-ink-mist">
-              Шанс успеха: <span className="text-accent-cyan">{Math.round(selectedRule.success_chance * 100)}%</span>
+              Шанс успеха: <span className="text-accent-cyan">{Math.round(effectiveChance * 100)}%</span>
             </p>
           </div>
         )}
@@ -223,7 +245,9 @@ export default function CardUpgradeModal({ card, onClose }: { card: UserCard; on
               <>
                 <IconBomb size={36} className="text-red-500" />
                 <p className="font-display text-lg font-bold text-ink-chalk">Не повезло</p>
-                <p className="text-sm text-ink-mist">Карта и монеты потеряны.</p>
+                <p className="text-sm text-ink-mist">
+                  {cardCount > 1 ? "Карты и монеты потеряны." : "Карта и монеты потеряны."}
+                </p>
               </>
             )}
             <button onClick={onClose} className="mt-2 w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95">

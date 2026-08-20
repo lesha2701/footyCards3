@@ -22,6 +22,11 @@ class CardUpgradeRule(TimestampMixin, Base):
     success_chance: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
     coin_cost: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Staking N same-rarity cards in one attempt (instead of just 1) adds
+    # this much success chance per extra card, capped at max_success_chance
+    # — 0 by default, a no-op until an admin opts a rule into the mechanic.
+    extra_card_bonus: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False, default=0)
+    max_success_chance: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
 
     __table_args__ = (UniqueConstraint("from_rarity", "to_rarity", name="uq_card_upgrade_rule"),)
 
@@ -35,9 +40,18 @@ class CardUpgradeAttempt(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    # One of the staked cards' player (the first selected, if several were
+    # staked together) — same "acceptable fidelity" as the rest of this
+    # audit row: it records what rarity/cost/outcome happened, not a full
+    # per-card breakdown of a multi-card attempt.
     source_player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="RESTRICT"), nullable=False)
     from_rarity: Mapped[Rarity] = mapped_column(Enum(Rarity, name="rarity_enum"), nullable=False)
     to_rarity: Mapped[Rarity] = mapped_column(Enum(Rarity, name="rarity_enum"), nullable=False)
+    card_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Effective chance actually used for this attempt (base + per-extra-card
+    # bonus, capped) — snapshotted, since the rule's own fields can be
+    # retuned by an admin later and shouldn't rewrite past attempts' history.
+    success_chance: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
     coin_cost: Mapped[int] = mapped_column(Integer, nullable=False)
     success: Mapped[bool] = mapped_column(Boolean, nullable=False)
     result_card_id: Mapped[Optional[int]] = mapped_column(
