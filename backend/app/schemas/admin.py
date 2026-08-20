@@ -177,6 +177,7 @@ class GameConfigOut(BaseModel):
     hourly_game_limit: int
     matchmaking_enabled: bool
     wheel_enabled: bool
+    leagues_enabled: bool
     free_pack_interval_hours: int
     free_pack_pack_slug: str
     chat_pack_interval_hours: int
@@ -258,6 +259,7 @@ class GameConfigUpdate(BaseModel):
     hourly_game_limit: Optional[int] = Field(default=None, ge=1)
     matchmaking_enabled: Optional[bool] = None
     wheel_enabled: Optional[bool] = None
+    leagues_enabled: Optional[bool] = None
     free_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     free_pack_pack_slug: Optional[str] = None
     chat_pack_interval_hours: Optional[int] = Field(default=None, ge=1)

@@ -13,4 +13,8 @@ router = APIRouter(tags=["feature-flags"])
 @router.get("/feature-flags", response_model=FeatureFlagsOut)
 async def read_feature_flags(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
     config = await get_config(db)
-    return FeatureFlagsOut(matchmaking_enabled=config.matchmaking_enabled, wheel_enabled=config.wheel_enabled)
+    return FeatureFlagsOut(
+        matchmaking_enabled=config.matchmaking_enabled,
+        wheel_enabled=config.wheel_enabled,
+        leagues_enabled=config.leagues_enabled,
+    )

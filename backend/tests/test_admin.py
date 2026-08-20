@@ -53,7 +53,7 @@ async def test_feature_flags_default_enabled_and_toggle_hides_them(client, db_se
 
     resp = await client.get("/api/v1/feature-flags", headers=user_headers)
     assert resp.status_code == 200
-    assert resp.json() == {"matchmaking_enabled": True, "wheel_enabled": True}
+    assert resp.json() == {"matchmaking_enabled": True, "wheel_enabled": True, "leagues_enabled": True}
 
     admin_headers = telegram_headers(999000001, bot_token)
     session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
@@ -62,12 +62,12 @@ async def test_feature_flags_default_enabled_and_toggle_hides_them(client, db_se
     update_resp = await client.put(
         "/api/v1/admin/games/config",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json={"matchmaking_enabled": False, "wheel_enabled": False},
+        json={"matchmaking_enabled": False, "wheel_enabled": False, "leagues_enabled": False},
     )
     assert update_resp.status_code == 200
 
     resp2 = await client.get("/api/v1/feature-flags", headers=user_headers)
-    assert resp2.json() == {"matchmaking_enabled": False, "wheel_enabled": False}
+    assert resp2.json() == {"matchmaking_enabled": False, "wheel_enabled": False, "leagues_enabled": False}
 
 
 async def test_admin_toggle_trade_ban(client, db_session, bot_token):

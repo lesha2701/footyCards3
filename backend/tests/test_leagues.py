@@ -18,7 +18,7 @@ def _reset_rate_limits():
 
 
 async def test_league_tier_and_claim_round_trip(db_session):
-    tier = LeagueTier(name="Дворовая лига", min_rating=0, icon="🥉", reward_coins=100, sort_order=0)
+    tier = LeagueTier(name="Дворовая лига", min_rating=0, color="#cd7f32", reward_coins=100, sort_order=0)
     db_session.add(tier)
     await db_session.commit()
     await db_session.refresh(tier)
@@ -165,6 +165,130 @@ async def test_get_league_status_null_current_when_no_tiers(db_session):
     assert status.points_to_next is None
 
 
+async def test_league_is_sticky_and_never_demotes_on_rating_dip(db_session):
+    """Once a player's claimed a tier's reward, a later rating drop below
+    that tier's threshold must not demote them — league_service.get_league_status
+    computes current/next against max(live rating, claimed-tier floor)."""
+    tier0 = LeagueTier(name="Дворовая лига", min_rating=0, sort_order=0)
+    tier1 = LeagueTier(name="Городская лига", min_rating=50, sort_order=1)
+    tier2 = LeagueTier(name="Столичная лига", min_rating=100, sort_order=2)
+    db_session.add_all([tier0, tier1, tier2])
+    await db_session.commit()
+
+    user = await _make_user(db_session, 990012)
+    user.tactics_rating = 60  # crosses tier0 and tier1
+    db_session.add(user)
+    await db_session.commit()
+
+    await league_service.sync_league_rewards_for_user(db_session, user)
+    await db_session.commit()
+
+    status_before = await league_service.get_league_status(db_session, user)
+    assert status_before.current_league.id == tier1.id
+
+    # Rating regresses below tier1's threshold (e.g. a losing streak).
+    user.tactics_rating = 30
+    db_session.add(user)
+    await db_session.commit()
+
+    status_after = await league_service.get_league_status(db_session, user)
+    assert status_after.total_rating == 30
+    assert status_after.current_league.id == tier1.id  # still Городская, not demoted to Дворовая
+    assert status_after.next_league.id == tier2.id
+    assert status_after.points_to_next == 70  # 100 - 30, against the live (lower) rating
+
+
+async def test_current_league_percent_reports_share_of_eligible_players(db_session):
+    tier0 = LeagueTier(name="Дворовая лига", min_rating=0, sort_order=0)
+    tier1 = LeagueTier(name="Городская лига", min_rating=50, sort_order=1)
+    db_session.add_all([tier0, tier1])
+    await db_session.commit()
+
+    # 3 players in tier0, 1 in tier1.
+    for i, telegram_id in enumerate([990013, 990014, 990015]):
+        u = await _make_user(db_session, telegram_id)
+        u.tactics_rating = 10
+        db_session.add(u)
+    high_user = await _make_user(db_session, 990016)
+    high_user.tactics_rating = 60
+    db_session.add(high_user)
+    await db_session.commit()
+
+    status = await league_service.get_league_status(db_session, high_user)
+    assert status.current_league.id == tier1.id
+    assert status.current_league_percent == 25.0  # 1 of 4 eligible players
+
+
+async def test_current_league_percent_none_when_no_current_league(db_session):
+    tier = LeagueTier(name="Городская лига", min_rating=100, sort_order=0)
+    db_session.add(tier)
+    await db_session.commit()
+
+    user = await _make_user(db_session, 990017)
+    status = await league_service.get_league_status(db_session, user)
+    assert status.current_league is None
+    assert status.current_league_percent is None
+
+
+async def test_status_reports_unseen_reward_after_sync(db_session):
+    tier = LeagueTier(name="Дворовая лига", min_rating=0, reward_coins=50, sort_order=0)
+    db_session.add(tier)
+    await db_session.commit()
+
+    user = await _make_user(db_session, 990008)
+    await league_service.sync_league_rewards_for_user(db_session, user)
+    await db_session.commit()
+
+    status = await league_service.get_league_status(db_session, user)
+    assert len(status.unseen_rewards) == 1
+    assert status.unseen_rewards[0].tier_name == "Дворовая лига"
+    assert status.unseen_rewards[0].reward_coins == 50
+
+
+async def test_mark_rewards_seen_clears_unseen_list_and_is_idempotent(db_session):
+    tier = LeagueTier(name="Дворовая лига", min_rating=0, reward_coins=50, sort_order=0)
+    db_session.add(tier)
+    await db_session.commit()
+
+    user = await _make_user(db_session, 990009)
+    await league_service.sync_league_rewards_for_user(db_session, user)
+    await db_session.commit()
+
+    count = await league_service.mark_rewards_seen(db_session, user)
+    await db_session.commit()
+    assert count == 1
+
+    status = await league_service.get_league_status(db_session, user)
+    assert status.unseen_rewards == []
+
+    # Calling again with nothing new pending finds nothing to mark.
+    second_count = await league_service.mark_rewards_seen(db_session, user)
+    await db_session.commit()
+    assert second_count == 0
+
+
+async def test_ack_league_rewards_endpoint(client, db_session, bot_token):
+    tier = LeagueTier(name="Дворовая лига", min_rating=0, reward_coins=25, sort_order=0)
+    db_session.add(tier)
+    await db_session.commit()
+
+    headers = telegram_headers(990011, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 990011)
+    await league_service.sync_league_rewards_for_user(db_session, user)
+    await db_session.commit()
+
+    status_resp = await client.get("/api/v1/leagues/status", headers=headers)
+    assert len(status_resp.json()["unseen_rewards"]) == 1
+
+    ack_resp = await client.post("/api/v1/leagues/claims/ack", headers=headers)
+    assert ack_resp.status_code == 200
+    assert ack_resp.json()["unseen_rewards"] == []
+
+    status_resp_after = await client.get("/api/v1/leagues/status", headers=headers)
+    assert status_resp_after.json()["unseen_rewards"] == []
+
+
 async def test_arena_match_triggers_league_reward_via_api(client, db_session, bot_token):
     """Uses the same lineup-setup + play-to-completion pattern as
     test_lineups_matches.py's test_full_match_loop_finishes_and_credits_once
@@ -264,7 +388,7 @@ async def test_admin_league_tier_crud(client, db_session, bot_token):
 
     create_resp = await client.post(
         "/api/v1/admin/leagues", headers=auth,
-        json={"name": "Дворовая лига", "min_rating": 0, "icon": "🥉", "reward_coins": 50},
+        json={"name": "Дворовая лига", "min_rating": 0, "color": "#cd7f32", "reward_coins": 50},
     )
     assert create_resp.status_code == 200
     tier_id = create_resp.json()["id"]
@@ -282,6 +406,30 @@ async def test_admin_league_tier_crud(client, db_session, bot_token):
 
     list_after = await client.get("/api/v1/admin/leagues", headers=auth)
     assert not any(t["id"] == tier_id for t in list_after.json())
+
+
+async def test_upload_and_remove_league_tier_image(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    create_resp = await client.post(
+        "/api/v1/admin/leagues", headers=auth, json={"name": "Дворовая лига", "min_rating": 0},
+    )
+    tier_id = create_resp.json()["id"]
+
+    upload_resp = await client.post(
+        f"/api/v1/admin/leagues/{tier_id}/image", headers=auth,
+        files={"file": ("badge.png", b"\x89PNG\r\n\x1a\nfake-bytes", "image/png")},
+    )
+    assert upload_resp.status_code == 200
+    image_path = upload_resp.json()["image_path"]
+    assert image_path is not None
+    assert image_path.startswith("leagues/uploads/")
+
+    list_resp = await client.get("/api/v1/admin/leagues", headers=auth)
+    assert next(t for t in list_resp.json() if t["id"] == tier_id)["image_path"] == image_path
+
+    remove_resp = await client.delete(f"/api/v1/admin/leagues/{tier_id}/image", headers=auth)
+    assert remove_resp.status_code == 200
+    assert remove_resp.json()["image_path"] is None
 
 
 async def test_non_admin_cannot_manage_leagues(client, db_session, bot_token):

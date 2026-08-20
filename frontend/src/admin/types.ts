@@ -139,6 +139,7 @@ export interface GameConfig {
   hourly_game_limit: number;
   matchmaking_enabled: boolean;
   wheel_enabled: boolean;
+  leagues_enabled: boolean;
   free_pack_interval_hours: number;
   free_pack_pack_slug: string;
   chat_pack_interval_hours: number;

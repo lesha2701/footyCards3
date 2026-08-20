@@ -21,6 +21,7 @@ import {
   IconHandshake,
   IconPlay,
   IconTarget,
+  IconTrophy,
   IconUpgrade,
   type IconProps,
 } from "@/components/icons";
@@ -96,22 +97,36 @@ export default function HomePage() {
         </div>
       </section>
 
-      {leagueStatus && leagueIconTier && (
+      {leagueStatus && leagueIconTier && flags?.leagues_enabled !== false && (
         <button
           onClick={() => navigate("/league")}
           className="flex items-center gap-3 rounded-2xl bg-bg-surface px-4 py-3 text-left active:scale-[0.98]"
         >
           <span
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-bg-raised text-2xl ${
+            className={`relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-bg-raised ${
               leagueStatus.current_league ? "" : "opacity-40"
             }`}
           >
-            {leagueIconTier.icon}
+            {leagueIconTier.image_path ? (
+              <img src={staticUrl(leagueIconTier.image_path) ?? undefined} className="h-full w-full object-cover" />
+            ) : (
+              <IconTrophy size={22} style={{ color: leagueIconTier.color }} />
+            )}
+            {leagueStatus.unseen_rewards.length > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent-lime text-[10px] font-bold text-bg-base">
+                {leagueStatus.unseen_rewards.length}
+              </span>
+            )}
           </span>
           <div className="min-w-0 flex-1">
             <p className="font-display text-sm font-bold text-ink-chalk">
               {leagueStatus.current_league ? leagueStatus.current_league.name : "Пока вне лиги"}
             </p>
+            {leagueStatus.current_league_percent !== null && (
+              <p className="mt-0.5 text-[11px] text-ink-mist-dim">
+                {leagueStatus.current_league_percent}% игроков в этой лиге
+              </p>
+            )}
             {leagueStatus.next_league ? (
               <>
                 <p className="mt-0.5 text-[11px] text-ink-mist">

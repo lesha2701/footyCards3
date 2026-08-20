@@ -18,3 +18,10 @@ async def list_leagues(db: AsyncSession = Depends(get_db), _user: User = Depends
 @router.get("/status", response_model=LeagueStatusOut)
 async def league_status(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await league_service.get_league_status(db, user)
+
+
+@router.post("/claims/ack", response_model=LeagueStatusOut)
+async def ack_league_rewards(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await league_service.mark_rewards_seen(db, user)
+    await db.commit()
+    return await league_service.get_league_status(db, user)

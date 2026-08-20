@@ -8,37 +8,30 @@ interface Props {
 
 const SECTIONS = [
   {
-    icon: "📦",
     title: "Паки",
     text: "Покупай паки за монеты — внутри случайные карточки футболистов разной редкости. Чем дороже пак, тем выше шанс на редкие карты.",
   },
   {
-    icon: "🗂️",
     title: "Карточки",
     text: "Твоя коллекция. Можно фильтровать по редкости и тематическим коллекциям (например «Чемпионат мира»), продавать ненужные дубликаты за монеты.",
   },
   {
-    icon: "🎮",
     title: "Играть",
     text: "5 мини-игр для заработка монет: Memory Sequence, Card Arena, Футбольный фанат, Пенальти, Штрафной удар. Каждую можно играть до 3 раз в час.",
   },
   {
-    icon: "🎯",
     title: "Задания",
     text: "5 активных заданий из большого пула — выполнил одно, на его место встаёт случайное новое. Есть отдельные премиум-задания за подписку на каналы.",
   },
   {
-    icon: "🔄",
     title: "Обмены",
     text: "Предлагай свои карточки другим игрокам в обмен на их карточки.",
   },
   {
-    icon: "🎁",
     title: "Бесплатный пак",
     text: "Раз в несколько часов на главной появляется бесплатный пак — не забывай забирать.",
   },
   {
-    icon: "👥",
     title: "Пригласи друзей",
     text: "Делись реферальной ссылкой из профиля — за приглашённых друзей начисляются награды в заданиях.",
   },
@@ -71,12 +64,9 @@ export default function HelpModal({ open, onClose }: Props) {
             </div>
             <div className="flex flex-col gap-4">
               {SECTIONS.map((s) => (
-                <div key={s.title} className="flex gap-3">
-                  <span className="text-2xl leading-none">{s.icon}</span>
-                  <div>
-                    <p className="font-display text-sm font-bold text-slate-100">{s.title}</p>
-                    <p className="mt-0.5 text-xs text-slate-400">{s.text}</p>
-                  </div>
+                <div key={s.title}>
+                  <p className="font-display text-sm font-bold text-slate-100">{s.title}</p>
+                  <p className="mt-0.5 text-xs text-slate-400">{s.text}</p>
                 </div>
               ))}
             </div>

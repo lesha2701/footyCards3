@@ -1,23 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   backfillLeagueRewards,
   createLeagueTier,
   deleteLeagueTier,
+  deleteLeagueTierImage,
   fetchAdminLeagues,
   fetchAdminPacks,
   updateLeagueTier,
+  uploadLeagueTierImage,
 } from "@/admin/api";
 import NumberInput from "@/components/common/NumberInput";
-import { ApiRequestError } from "@/lib/api";
+import { IconTrophy } from "@/components/icons";
+import { ApiRequestError, staticUrl } from "@/lib/api";
 import { showConfirm } from "@/lib/telegram";
 import type { LeagueTier } from "@/types";
 
 interface TierForm {
   name: string;
   min_rating: number;
-  icon: string;
+  color: string;
   reward_coins: number;
   reward_pack_id: number | "";
   sort_order: number;
@@ -27,7 +30,7 @@ function tierToForm(t?: LeagueTier): TierForm {
   return {
     name: t?.name ?? "",
     min_rating: t?.min_rating ?? 0,
-    icon: t?.icon ?? "🏅",
+    color: t?.color ?? "#94a3b8",
     reward_coins: t?.reward_coins ?? 0,
     reward_pack_id: t?.reward_pack_id ?? "",
     sort_order: t?.sort_order ?? 0,
@@ -43,6 +46,7 @@ export default function AdminLeaguesPage() {
   const [error, setError] = useState<string | null>(null);
   const [backfillResult, setBackfillResult] = useState<number | null>(null);
   const [backfillError, setBackfillError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-leagues"] });
 
@@ -58,6 +62,15 @@ export default function AdminLeaguesPage() {
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось сохранить лигу"),
   });
   const deleteMutation = useMutation({ mutationFn: deleteLeagueTier, onSuccess: invalidate });
+  const uploadImageMutation = useMutation({
+    mutationFn: (file: File) => uploadLeagueTierImage((editing as LeagueTier).id, file),
+    onSuccess: (t) => { invalidate(); setEditing(t); },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось загрузить картинку"),
+  });
+  const removeImageMutation = useMutation({
+    mutationFn: () => deleteLeagueTierImage((editing as LeagueTier).id),
+    onSuccess: (t) => { invalidate(); setEditing(t); },
+  });
   const backfillMutation = useMutation({
     mutationFn: backfillLeagueRewards,
     onSuccess: (res) => { setBackfillResult(res.rewarded_count); setBackfillError(null); },
@@ -116,10 +129,14 @@ export default function AdminLeaguesPage() {
         {tiers?.map((t) => (
           <div key={t.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-bg-surface px-3 py-2">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">{t.icon}</span>
+              {t.image_path ? (
+                <img src={staticUrl(t.image_path) ?? undefined} className="h-10 w-10 rounded-lg object-cover" />
+              ) : (
+                <IconTrophy size={20} style={{ color: t.color }} />
+              )}
               <div>
                 <p className="text-sm font-semibold">{t.name}</p>
-                <p className="text-[11px] text-slate-500">от {t.min_rating} рейтинга · +{t.reward_coins} 🪙</p>
+                <p className="text-[11px] text-slate-500">от {t.min_rating} рейтинга · +{t.reward_coins} монет</p>
               </div>
             </div>
             <div className="flex gap-1">
@@ -150,12 +167,16 @@ export default function AdminLeaguesPage() {
                 <NumberInput value={form.min_rating} onChange={(v) => setForm({ ...form, min_rating: v })} min={0} />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-slate-400">Иконка (эмодзи)</span>
-                <input
-                  value={form.icon}
-                  onChange={(e) => setForm({ ...form, icon: e.target.value })}
-                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
-                />
+                <span className="text-xs text-slate-400">Цвет кубка</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={form.color}
+                    onChange={(e) => setForm({ ...form, color: e.target.value })}
+                    className="h-9 w-14 cursor-pointer rounded-lg border border-white/10 bg-bg-surface p-1"
+                  />
+                  <IconTrophy size={20} style={{ color: form.color }} />
+                </div>
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Награда, монеты</span>
@@ -176,6 +197,45 @@ export default function AdminLeaguesPage() {
                 <span className="text-xs text-slate-400">Порядок сортировки</span>
                 <NumberInput value={form.sort_order} onChange={(v) => setForm({ ...form, sort_order: v })} />
               </label>
+
+              {editing !== "new" && (
+                <div className="mt-2 flex flex-col gap-2">
+                  <span className="text-xs font-semibold text-slate-400">Картинка лиги — используется вместо кубка, пока не загружена</span>
+                  <div className="flex items-center gap-3">
+                    {(editing as LeagueTier).image_path ? (
+                      <img
+                        src={staticUrl((editing as LeagueTier).image_path!) ?? undefined}
+                        className="h-14 w-14 rounded-lg border border-white/10 object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-14 w-14 items-center justify-center rounded-lg bg-black/30">
+                        <IconTrophy size={24} style={{ color: form.color }} />
+                      </span>
+                    )}
+                    <div className="flex flex-col gap-1">
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadImageMutation.isPending}
+                        className="rounded-lg bg-white/5 px-2 py-1 text-[11px]"
+                      >
+                        {uploadImageMutation.isPending ? "Загрузка..." : "Загрузить"}
+                      </button>
+                      {(editing as LeagueTier).image_path && (
+                        <button onClick={() => removeImageMutation.mutate()} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">
+                          Удалить картинку
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImageMutation.mutate(f); }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
             <div className="mt-4 flex gap-2">
               <button onClick={() => setEditing(null)} className="flex-1 rounded-xl bg-white/5 py-2.5 text-sm">Отмена</button>

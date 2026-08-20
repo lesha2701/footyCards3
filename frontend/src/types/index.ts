@@ -84,12 +84,16 @@ export interface CardUpgradeRule {
   success_chance: number;
   coin_cost: number;
   is_active: boolean;
+  extra_card_bonus: number;
+  max_success_chance: number;
 }
 
 export interface CardUpgradeResult {
   success: boolean;
   from_rarity: Rarity;
   to_rarity: Rarity;
+  card_count: number;
+  success_chance: number;
   coin_cost: number;
   new_card: UserCard | null;
   new_balance: number;
@@ -328,6 +332,7 @@ export interface UpdateBroadcastStatus {
 export interface FeatureFlags {
   matchmaking_enabled: boolean;
   wheel_enabled: boolean;
+  leagues_enabled: boolean;
 }
 
 export interface GameLimits {
@@ -509,6 +514,7 @@ export interface ProfilePublic {
   level: number;
   arena_rating: number;
   arena_rank: number;
+  league_rank: number;
   matches_won: number;
   matches_drawn: number;
   matches_lost: number;
@@ -520,7 +526,13 @@ export interface ProfilePublic {
   referral_count: number;
   active_badge: Badge | null;
   tactics_rating: number;
+  tactics_matches_won: number;
+  tactics_matches_drawn: number;
+  tactics_matches_lost: number;
   penalty_rating: number;
+  penalty_matches_won: number;
+  penalty_matches_drawn: number;
+  penalty_matches_lost: number;
 }
 
 export interface ProfilePrivate extends ProfilePublic {
@@ -561,7 +573,8 @@ export interface LeagueTier {
   id: number;
   name: string;
   min_rating: number;
-  icon: string;
+  color: string;
+  image_path: string | null;
   reward_coins: number;
   reward_pack_id: number | null;
   sort_order: number;
@@ -571,10 +584,21 @@ export interface LeagueTierPublic {
   id: number;
   name: string;
   min_rating: number;
-  icon: string;
+  color: string;
+  image_path: string | null;
   reward_coins: number;
   reward_pack_name: string | null;
   sort_order: number;
+}
+
+export interface LeagueRewardClaim {
+  id: number;
+  tier_name: string;
+  color: string;
+  image_path: string | null;
+  reward_coins: number;
+  reward_pack_name: string | null;
+  granted_at: string;
 }
 
 export interface LeagueStatus {
@@ -585,6 +609,8 @@ export interface LeagueStatus {
   current_league: LeagueTierPublic | null;
   next_league: LeagueTierPublic | null;
   points_to_next: number | null;
+  current_league_percent: number | null;
+  unseen_rewards: LeagueRewardClaim[];
 }
 
 export interface UserTrophy {

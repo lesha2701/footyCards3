@@ -32,7 +32,7 @@ export default function AdminGamesPage() {
     </label>
   );
 
-  const toggle = (key: "matchmaking_enabled" | "wheel_enabled", label: string) => (
+  const toggle = (key: "matchmaking_enabled" | "wheel_enabled" | "leagues_enabled", label: string) => (
     <label className="flex items-center gap-2 text-sm">
       <input
         type="checkbox"
@@ -56,6 +56,7 @@ export default function AdminGamesPage() {
         <div className="flex flex-col gap-2">
           {toggle("matchmaking_enabled", "Показывать кнопку «Играть» (подбор соперника) в Тактико и Пенальти")}
           {toggle("wheel_enabled", "Показывать раздел «Колесо фортуны» на главном экране")}
+          {toggle("leagues_enabled", "Показывать баннер лиг на главном экране и в профиле")}
         </div>
       </section>
 

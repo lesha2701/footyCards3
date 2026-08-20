@@ -78,6 +78,11 @@ class GameConfig(TimestampMixin, Base):
     # stay available either way.
     matchmaking_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     wheel_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Hides the league banner on the home screen and profile — the rest of
+    # the leagues feature (backend rating tracking, reward granting, admin
+    # tier management) keeps running either way, same "hide the entry
+    # point, not the underlying feature" shape as the two flags above.
+    leagues_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     hangman_daily_limit: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     hangman_reward_correct: Mapped[int] = mapped_column(Integer, default=30, nullable=False)

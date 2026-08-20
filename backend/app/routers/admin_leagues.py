@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +10,7 @@ from app.models.user import User
 from app.schemas.league import LeagueBackfillResultOut, LeagueTierCreate, LeagueTierOut, LeagueTierUpdate
 from app.services import league_service
 from app.services.admin_log_service import log_action
+from app.services.image_service import delete_league_tier_image, save_league_tier_image
 from app.services.wallet_service import lock_user_for_update
 
 router = APIRouter(prefix="/admin/leagues", tags=["admin"], dependencies=[Depends(get_current_admin)])
@@ -56,6 +57,40 @@ async def update_tier(tier_id: int, payload: LeagueTierUpdate, request: Request,
     await log_action(
         db, admin.id, "update_league_tier", "league_tier", tier_id, old_value=old_value, new_value=updates,
         ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    await db.refresh(tier)
+    return tier
+
+
+@router.post("/{tier_id}/image", response_model=LeagueTierOut)
+async def upload_tier_image(tier_id: int, request: Request, file: UploadFile = File(...), db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
+    tier = await _get_tier_or_404(db, tier_id)
+    old_path = tier.image_path
+    new_path = await save_league_tier_image(file, tier.name)
+    tier.image_path = new_path
+    db.add(tier)
+    delete_league_tier_image(old_path)
+    await log_action(
+        db, admin.id, "upload_league_tier_image", "league_tier", tier_id,
+        old_value={"image_path": old_path}, new_value={"image_path": new_path},
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    await db.refresh(tier)
+    return tier
+
+
+@router.delete("/{tier_id}/image", response_model=LeagueTierOut)
+async def remove_tier_image(tier_id: int, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
+    tier = await _get_tier_or_404(db, tier_id)
+    old_path = tier.image_path
+    delete_league_tier_image(old_path)
+    tier.image_path = None
+    db.add(tier)
+    await log_action(
+        db, admin.id, "delete_league_tier_image", "league_tier", tier_id,
+        old_value={"image_path": old_path}, ip_address=request.client.host if request.client else None,
     )
     await db.commit()
     await db.refresh(tier)

@@ -23,7 +23,8 @@ class LeagueTier(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     min_rating: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
-    icon: Mapped[str] = mapped_column(String(16), nullable=False, default="🏅")
+    color: Mapped[str] = mapped_column(String(16), nullable=False, default="#94a3b8")
+    image_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     reward_coins: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     reward_pack_id: Mapped[Optional[int]] = mapped_column(ForeignKey("packs.id", ondelete="SET NULL"), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -54,6 +55,10 @@ class UserLeagueRewardClaim(Base):
     reward_coins: Mapped[int] = mapped_column(Integer, nullable=False)
     reward_pack_id: Mapped[Optional[int]] = mapped_column(ForeignKey("packs.id", ondelete="SET NULL"), nullable=True)
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    # Purely a UI-acknowledgment flag (see league_service.mark_rewards_seen)
+    # — does not gate or affect the reward itself, which is already granted
+    # at tier-cross time. NULL means "granted but not yet visually shown".
+    seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     tier: Mapped["LeagueTier"] = relationship(back_populates="claims", lazy="joined")
 

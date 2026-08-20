@@ -539,6 +539,20 @@ export async function deleteLeagueTier(id: number): Promise<void> {
   await api.delete(`/admin/leagues/${id}`);
 }
 
+export async function uploadLeagueTierImage(id: number, file: File): Promise<LeagueTier> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<LeagueTier>(`/admin/leagues/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function deleteLeagueTierImage(id: number): Promise<LeagueTier> {
+  const { data } = await api.delete<LeagueTier>(`/admin/leagues/${id}/image`);
+  return data;
+}
+
 export async function backfillLeagueRewards(): Promise<{ rewarded_count: number }> {
   const { data } = await api.post<{ rewarded_count: number }>("/admin/leagues/backfill-rewards");
   return data;
