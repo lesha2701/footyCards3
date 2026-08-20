@@ -4,10 +4,13 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { claimDailyReward, fetchDailyRewardCalendar } from "@/api/dailyRewards";
+import { fetchFeatureFlags } from "@/api/featureFlags";
+import { fetchLeagueStatus } from "@/api/leagues";
 import { fetchMyBadges, fetchMyProfile, fetchMyTransactions, fetchMyTrophies, updateMySettings } from "@/api/profile";
 import { createCoinInvoice, fetchCoinInvoiceStatus, fetchCoinPackages } from "@/api/wallet";
 import { UserBadge } from "@/components/common/UserBadge";
 import {
+  IconChevronRight,
   IconCoin,
   IconCollection,
   IconFire,
@@ -66,6 +69,8 @@ export default function ProfilePage() {
   const [showDocuments, setShowDocuments] = useState(false);
 
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
+  const { data: leagueStatus } = useQuery({ queryKey: ["league-status"], queryFn: fetchLeagueStatus });
+  const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags });
   const { data: badges } = useQuery({ queryKey: ["profile", "badges"], queryFn: fetchMyBadges });
   const { data: trophies } = useQuery({ queryKey: ["profile", "trophies"], queryFn: fetchMyTrophies });
   const [selectedTrophy, setSelectedTrophy] = useState<UserTrophy | null>(null);
@@ -124,6 +129,39 @@ export default function ProfilePage() {
           </div>
         )}
       </section>
+
+      {leagueStatus && (leagueStatus.current_league ?? leagueStatus.next_league) && flags?.leagues_enabled !== false && (
+        <button
+          onClick={() => navigate("/league")}
+          className="flex items-center gap-3 rounded-2xl bg-bg-surface px-4 py-3 text-left active:scale-[0.98]"
+        >
+          <span
+            className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-bg-raised ${
+              leagueStatus.current_league ? "" : "opacity-40"
+            }`}
+          >
+            {(() => {
+              const tier = leagueStatus.current_league ?? leagueStatus.next_league!;
+              return tier.image_path ? (
+                <img src={staticUrl(tier.image_path) ?? undefined} className="h-full w-full object-cover" />
+              ) : (
+                <IconTrophy size={22} style={{ color: tier.color }} />
+              );
+            })()}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-sm font-bold text-ink-chalk">
+              {leagueStatus.current_league ? leagueStatus.current_league.name : "Пока вне лиги"}
+            </p>
+            {leagueStatus.current_league_percent !== null && (
+              <p className="mt-0.5 text-[11px] text-ink-mist-dim">
+                {leagueStatus.current_league_percent}% игроков в этой лиге
+              </p>
+            )}
+          </div>
+          <IconChevronRight size={16} className="shrink-0 text-ink-mist-dim" />
+        </button>
+      )}
 
       {badges && badges.length > 1 && (
         <section className="rounded-2xl bg-bg-surface p-4">
@@ -185,9 +223,10 @@ export default function ProfilePage() {
           <Stat label="Уникальных карточек" value={profile.unique_cards} />
           <Stat label="Всего карточек" value={profile.total_cards} />
           <Stat label="Паков открыто" value={profile.packs_opened} />
-          <Stat label="Место в рейтинге" value={`#${profile.arena_rank}`} accentClass="bg-floodlight bg-clip-text text-transparent" />
-          <Stat label="Матчи П/Н/П" value={`${profile.matches_won}/${profile.matches_drawn}/${profile.matches_lost}`} />
-          <Stat label="Рекорд Memory" value={profile.memory_best_score} />
+          <Stat label="Место в рейтинге" value={`#${profile.league_rank}`} accentClass="bg-floodlight bg-clip-text text-transparent" />
+          <Stat label="Матчи Arena П/Н/П" value={`${profile.matches_won}/${profile.matches_drawn}/${profile.matches_lost}`} />
+          <Stat label="Матчи Тактико П/Н/П" value={`${profile.tactics_matches_won}/${profile.tactics_matches_drawn}/${profile.tactics_matches_lost}`} />
+          <Stat label="Матчи Пенальти П/Н/П" value={`${profile.penalty_matches_won}/${profile.penalty_matches_drawn}/${profile.penalty_matches_lost}`} />
         </div>
       </section>
 

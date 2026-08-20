@@ -1,13 +1,16 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.models.badge import Badge, UserBadge
 from app.models.card import UserCard
-from app.models.enums import RARITY_ORDER
+from app.models.enums import RARITY_ORDER, GameSessionStatus, GameType, MatchResult, PenaltyMatchStatus, TacticoMatchStatus
+from app.models.game import GameSession
 from app.models.pack import PackOpening
+from app.models.penalty import PenaltyMatch
 from app.models.player import Player
+from app.models.tactico import TacticoMatch
 from app.models.trophy import UserTrophy
 from app.models.user import User
 from app.schemas.badge import BadgeOut, OwnedBadgeOut
@@ -16,6 +19,11 @@ from app.schemas.profile import ProfilePrivateOut, ProfilePublicOut, ProfileSett
 from app.schemas.trophy import UserTrophyOut
 from app.schemas.user import UserPublicOut
 from app.services.game_config_service import get_config
+
+# result is always stored from the match's own user_id's perspective — for
+# the opponent side of a PvP row, their own outcome is the flip of it. Same
+# constant tactico_service.py/penalty_match_service.py each define locally.
+_FLIP_RESULT = {MatchResult.win: MatchResult.loss, MatchResult.loss: MatchResult.win, MatchResult.draw: MatchResult.draw}
 
 
 async def _collection_summary(db: AsyncSession, user_id: int) -> tuple[int, int, Player | None]:
@@ -44,6 +52,87 @@ async def _arena_rank(db: AsyncSession, user: User) -> int:
     return higher + 1
 
 
+async def _league_rank(db: AsyncSession, user: User) -> int:
+    league_total = user.arena_rating + user.tactics_rating + user.penalty_rating
+    higher = (
+        await db.execute(
+            select(func.count(User.id)).where(
+                (User.arena_rating + User.tactics_rating + User.penalty_rating) > league_total
+            )
+        )
+    ).scalar_one()
+    return higher + 1
+
+
+async def _tactico_record(db: AsyncSession, user_id: int) -> tuple[int, int, int]:
+    """Won/drawn/lost across every finished Тактико match (bot, friend, and
+    online alike — all live in the one TacticoMatch table). result is
+    stored from the row's own user_id's perspective, so a match where this
+    player was the opponent side needs its result flipped."""
+    rows = (
+        await db.execute(
+            select(TacticoMatch.user_id, TacticoMatch.result).where(
+                TacticoMatch.status == TacticoMatchStatus.finished,
+                TacticoMatch.result.is_not(None),
+                or_(TacticoMatch.user_id == user_id, TacticoMatch.opponent_user_id == user_id),
+            )
+        )
+    ).all()
+    won = drawn = lost = 0
+    for row_user_id, result in rows:
+        mine = result if row_user_id == user_id else _FLIP_RESULT[result]
+        if mine == MatchResult.win:
+            won += 1
+        elif mine == MatchResult.draw:
+            drawn += 1
+        else:
+            lost += 1
+    return won, drawn, lost
+
+
+async def _penalty_record(db: AsyncSession, user_id: int) -> tuple[int, int, int]:
+    """Won/drawn/lost across Пенальти's two independent systems: PvP
+    (PenaltyMatch — friend/online, same flip logic as Тактико) and the
+    standalone bot mode (GameSession, game_type=penalty — win/lose only,
+    no draw concept in a shootout; "rewarded" is a won session whose reward
+    was already claimed, still a win)."""
+    pvp_rows = (
+        await db.execute(
+            select(PenaltyMatch.user_id, PenaltyMatch.result).where(
+                PenaltyMatch.status == PenaltyMatchStatus.finished,
+                PenaltyMatch.result.is_not(None),
+                or_(PenaltyMatch.user_id == user_id, PenaltyMatch.opponent_user_id == user_id),
+            )
+        )
+    ).all()
+    won = drawn = lost = 0
+    for row_user_id, result in pvp_rows:
+        mine = result if row_user_id == user_id else _FLIP_RESULT[result]
+        if mine == MatchResult.win:
+            won += 1
+        elif mine == MatchResult.draw:
+            drawn += 1
+        else:
+            lost += 1
+
+    bot_statuses = (
+        await db.execute(
+            select(GameSession.status).where(
+                GameSession.user_id == user_id,
+                GameSession.game_type == GameType.penalty,
+                GameSession.status.in_([GameSessionStatus.won, GameSessionStatus.lost, GameSessionStatus.rewarded]),
+            )
+        )
+    ).scalars().all()
+    for status in bot_statuses:
+        if status == GameSessionStatus.lost:
+            lost += 1
+        else:
+            won += 1
+
+    return won, drawn, lost
+
+
 async def _packs_opened(db: AsyncSession, user_id: int) -> int:
     return (await db.execute(select(func.count(PackOpening.id)).where(PackOpening.user_id == user_id))).scalar_one()
 
@@ -51,7 +140,10 @@ async def _packs_opened(db: AsyncSession, user_id: int) -> int:
 async def _build_public(db: AsyncSession, user: User) -> ProfilePublicOut:
     total, unique, rarest = await _collection_summary(db, user.id)
     rank = await _arena_rank(db, user)
+    league_rank = await _league_rank(db, user)
     packs_opened = await _packs_opened(db, user.id)
+    tactics_won, tactics_drawn, tactics_lost = await _tactico_record(db, user.id)
+    penalty_won, penalty_drawn, penalty_lost = await _penalty_record(db, user.id)
     return ProfilePublicOut(
         id=user.id,
         username=user.username,
@@ -62,6 +154,7 @@ async def _build_public(db: AsyncSession, user: User) -> ProfilePublicOut:
         level=user.level,
         arena_rating=user.arena_rating,
         arena_rank=rank,
+        league_rank=league_rank,
         matches_won=user.matches_won,
         matches_drawn=user.matches_drawn,
         matches_lost=user.matches_lost,
@@ -73,7 +166,13 @@ async def _build_public(db: AsyncSession, user: User) -> ProfilePublicOut:
         referral_count=user.referral_count,
         active_badge=BadgeOut.model_validate(user.active_badge) if user.active_badge else None,
         tactics_rating=user.tactics_rating,
+        tactics_matches_won=tactics_won,
+        tactics_matches_drawn=tactics_drawn,
+        tactics_matches_lost=tactics_lost,
         penalty_rating=user.penalty_rating,
+        penalty_matches_won=penalty_won,
+        penalty_matches_drawn=penalty_drawn,
+        penalty_matches_lost=penalty_lost,
     )
 
 

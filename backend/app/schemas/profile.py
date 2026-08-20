@@ -17,6 +17,7 @@ class ProfilePublicOut(BaseModel):
     level: int
     arena_rating: int
     arena_rank: int
+    league_rank: int
     active_badge: Optional[BadgeOut] = None
     matches_won: int
     matches_drawn: int
@@ -28,7 +29,13 @@ class ProfilePublicOut(BaseModel):
     packs_opened: int
     referral_count: int
     tactics_rating: int
+    tactics_matches_won: int
+    tactics_matches_drawn: int
+    tactics_matches_lost: int
     penalty_rating: int
+    penalty_matches_won: int
+    penalty_matches_drawn: int
+    penalty_matches_lost: int
 
 
 class ProfilePrivateOut(ProfilePublicOut):
