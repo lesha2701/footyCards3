@@ -650,7 +650,13 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
     )
     opponent_user = opponent_result.scalar_one_or_none()
 
-    opponent_name = random.choice(BOT_NAMES)
+    # opponent_name always borrows a real, non-banned player's display name
+    # when one exists — purely cosmetic, that player's own rating/coins/
+    # lineup ownership are untouched — rather than falling back to the
+    # scripted BOT_NAMES list just because their own lineup isn't complete
+    # enough to also borrow for strength. Falls back to BOT_NAMES only when
+    # no other user exists at all yet (e.g. a fresh install).
+    opponent_name = opponent_user.full_display_name() if opponent_user is not None else random.choice(BOT_NAMES)
     opponent_tactic = random.choice(list(TACTIC_MULTIPLIERS))
     opponent_lineup: Optional[LineupOut] = None
     if opponent_user is not None:
@@ -659,7 +665,6 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
             opponent_lineup = candidate_lineup
             opponent_strength = _with_jitter(candidate_lineup.team_strength)
             opponent_tactic = candidate_lineup.tactic
-            opponent_name = opponent_user.full_display_name()
         else:
             opponent_strength = _bot_strength(user_strength, payload.difficulty, difficulty_multiplier)
     else:

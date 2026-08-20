@@ -332,6 +332,39 @@ async def test_full_match_loop_finishes_and_credits_once(client, db_session, bot
     assert user.arena_rating == max(0, 0 + match["rating_delta"])
 
 
+async def test_bot_match_opponent_name_borrows_real_user_even_with_incomplete_lineup(client, db_session, bot_token):
+    """opponent_name should borrow a real, non-banned player's display name
+    whenever one exists — purely cosmetic — not just when that player's
+    lineup happens to also be complete enough to borrow for strength."""
+    # Another real user with no lineup at all — ineligible for the
+    # strength-borrowing path, but still eligible for the name.
+    other_headers = telegram_headers(750150, bot_token)
+    await client.post("/api/v1/auth/session", headers=other_headers)
+    other = await get_user_by_telegram_id(db_session, 750150)
+
+    headers = telegram_headers(750151, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750151)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    assert resp.status_code == 200
+    assert resp.json()["opponent_name"] == other.full_display_name()
+
+
+async def test_bot_match_opponent_name_falls_back_when_no_other_users_exist(client, db_session, bot_token):
+    headers = telegram_headers(750152, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750152)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
+    assert resp.status_code == 200
+    assert resp.json()["opponent_name"] in match_service.BOT_NAMES
+
+
 async def test_default_arena_rating_is_zero_for_new_user(client, bot_token):
     headers = telegram_headers(750110, bot_token)
     await client.post("/api/v1/auth/session", headers=headers)

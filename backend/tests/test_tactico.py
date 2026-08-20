@@ -965,7 +965,11 @@ async def test_matchmaking_grants_zero_coins_and_updates_both_ratings(client, db
     assert user_a.tactics_rating + user_b.tactics_rating == 14
 
 
-async def test_search_timeout_after_60_seconds(client, db_session, bot_token, monkeypatch):
+async def test_search_timeout_falls_back_to_bot_match(client, db_session, bot_token, monkeypatch):
+    """A search that finds no live opponent within MATCHMAKING_TIMEOUT_SECONDS
+    now drops the player straight into a bot match (medium difficulty)
+    instead of a dead-end "timeout" status — see get_search_status."""
+    monkeypatch.setattr(tactico_service, "_synthesize_bot_squad", _fake_weak_bot_squad)
     from datetime import datetime, timedelta, timezone
 
     headers = await _register(client, bot_token, 952009)
@@ -982,12 +986,100 @@ async def test_search_timeout_after_60_seconds(client, db_session, bot_token, mo
     await db_session.commit()
 
     resp = await client.get("/api/v1/tactico/matchmaking/status", headers=headers)
+    body = resp.json()
+    assert body["status"] == "matched"
+    assert body["match_id"] is not None
+
+    remaining = (
+        await db_session.execute(select(TacticoQueueEntry).where(TacticoQueueEntry.user_id == user.id))
+    ).scalar_one_or_none()
+    assert remaining is None
+
+    match_resp = await client.get(f"/api/v1/tactico/matches/{body['match_id']}", headers=headers)
+    match = match_resp.json()
+    assert match["opponent_type"] == "bot"
+    assert match["difficulty"] == "medium"
+    assert match["opponent_user_id"] is None
+    # No other real user exists in this test's DB, so the name falls back
+    # to the scripted BOT_NAMES list — just assert it's non-empty.
+    assert match["opponent_name"]
+
+
+async def test_search_timeout_degrades_to_plain_timeout_if_bot_match_fails(client, db_session, bot_token):
+    """If the bot-match fallback itself can't be created (e.g. the hourly
+    Tactico limit was hit by other play while this player was waiting),
+    get_search_status must degrade to a plain "timeout" rather than 500."""
+    from datetime import datetime, timedelta, timezone
+
+    headers = await _register(client, bot_token, 952023)
+    user = await get_user_by_telegram_id(db_session, 952023)
+    card_ids = await _build_squad_cards(db_session, user.id)
+    await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids})
+    await client.post("/api/v1/tactico/matchmaking/search", headers=headers)
+
+    entry = (
+        await db_session.execute(select(TacticoQueueEntry).where(TacticoQueueEntry.user_id == user.id))
+    ).scalar_one()
+    entry.created_at = datetime.now(timezone.utc) - timedelta(seconds=61)
+    db_session.add(entry)
+
+    config = await db_session.get(GameConfig, 1)
+    await db_session.refresh(user)
+    user.tactico_hourly_attempts = config.hourly_game_limit
+    db_session.add(user)
+    await db_session.commit()
+
+    resp = await client.get("/api/v1/tactico/matchmaking/status", headers=headers)
     assert resp.json()["status"] == "timeout"
 
     remaining = (
         await db_session.execute(select(TacticoQueueEntry).where(TacticoQueueEntry.user_id == user.id))
     ).scalar_one_or_none()
     assert remaining is None
+
+
+async def test_bot_match_opponent_name_borrows_a_real_player(client, db_session, bot_token, monkeypatch):
+    """The bot's "team name" is a real, non-admin, non-banned player's
+    display name (cosmetic only — that player's own rating/coins are
+    untouched), rather than always one of a handful of scripted names."""
+    monkeypatch.setattr(tactico_service, "_synthesize_bot_squad", _fake_weak_bot_squad)
+
+    await _register(client, bot_token, 952024)
+    other = await get_user_by_telegram_id(db_session, 952024)
+    other.username = "borrowed_name"
+    db_session.add(other)
+    await db_session.commit()
+    await db_session.refresh(other)
+    other_balance_before = other.balance
+    other_rating_before = other.tactics_rating
+
+    headers = await _register(client, bot_token, 952025)
+    user = await get_user_by_telegram_id(db_session, 952025)
+    card_ids = await _build_squad_cards(db_session, user.id)
+    await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids})
+
+    resp = await client.post("/api/v1/tactico/matches/bot", headers=headers, json={"difficulty": "medium"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["opponent_user_id"] is None
+    assert body["opponent_name"] == other.full_display_name()
+
+    await db_session.refresh(other)
+    assert other.balance == other_balance_before
+    assert other.tactics_rating == other_rating_before
+
+
+async def test_bot_match_opponent_name_falls_back_when_no_real_users_exist(client, db_session, bot_token, monkeypatch):
+    monkeypatch.setattr(tactico_service, "_synthesize_bot_squad", _fake_weak_bot_squad)
+
+    headers = await _register(client, bot_token, 952026)
+    user = await get_user_by_telegram_id(db_session, 952026)
+    card_ids = await _build_squad_cards(db_session, user.id)
+    await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids})
+
+    resp = await client.post("/api/v1/tactico/matches/bot", headers=headers, json={"difficulty": "medium"})
+    assert resp.status_code == 200
+    assert resp.json()["opponent_name"] in tactico_service.BOT_NAMES
 
 
 async def test_cancel_search_removes_entry(client, db_session, bot_token):

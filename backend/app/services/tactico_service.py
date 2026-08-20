@@ -308,6 +308,21 @@ async def _consume_hourly_slot(db: AsyncSession, user_id: int, config: GameConfi
     return locked_user
 
 
+async def _random_bot_opponent_name(db: AsyncSession, exclude_user_id: int) -> str:
+    """Borrows a real player's display name for the bot's "team" so bot
+    matches don't all show the same handful of scripted names — purely
+    cosmetic, the borrowed player's own rating/coins are untouched. Falls
+    back to BOT_NAMES if no eligible user exists yet (e.g. a fresh install)."""
+    result = await db.execute(
+        select(User)
+        .where(User.is_banned.is_(False), User.is_admin.is_(False), User.id != exclude_user_id)
+        .order_by(func.random())
+        .limit(1)
+    )
+    candidate = result.scalar_one_or_none()
+    return candidate.full_display_name() if candidate else random.choice(BOT_NAMES)
+
+
 async def create_bot_match(db: AsyncSession, user: User, difficulty: MatchDifficulty) -> TacticoMatchOut:
     # Тактико only offers "Лёгкий" (easy) and "Продвинутый" (medium,
     # relabeled) — "hard" is still a valid MatchDifficulty for Card Arena
@@ -343,7 +358,7 @@ async def create_bot_match(db: AsyncSession, user: User, difficulty: MatchDiffic
     match = TacticoMatch(
         user_id=locked_user.id,
         opponent_user_id=None,
-        opponent_name=random.choice(BOT_NAMES),
+        opponent_name=await _random_bot_opponent_name(db, user.id),
         opponent_type=TacticoOpponentType.bot,
         difficulty=difficulty,
         status=TacticoMatchStatus.in_progress,
@@ -987,7 +1002,18 @@ async def get_search_status(db: AsyncSession, user: User) -> tuple[str, Optional
     if datetime.now(timezone.utc) - ensure_aware(my_entry.created_at) > timedelta(seconds=MATCHMAKING_TIMEOUT_SECONDS):
         await db.delete(my_entry)
         await db.commit()
-        return "timeout", None
+        # No live opponent showed up within the window — rather than strand
+        # the player on a dead-end "not found" screen, drop them straight
+        # into a bot match (medium difficulty, ordinary bot rating rules —
+        # no online x2, no easy-mode +1 cap) so searching never wastes a
+        # full minute for nothing. Falls back to a plain timeout if bot
+        # creation itself fails (e.g. squad became incomplete or the hourly
+        # limit was hit by other play while this player was waiting).
+        try:
+            bot_match = await create_bot_match(db, user, MatchDifficulty.medium)
+        except ConflictError:
+            return "timeout", None
+        return "matched", bot_match.id
 
     # Exclude entries older than the matchmaking window: without this cutoff
     # an abandoned/ghost row (owner stopped polling) is still a valid — and,

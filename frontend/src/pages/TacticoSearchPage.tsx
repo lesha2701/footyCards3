@@ -21,6 +21,10 @@ export default function TacticoSearchPage() {
   const [phase, setPhase] = useState<"starting" | "searching" | "timeout" | "reveal" | "error">("starting");
   const [error, setError] = useState<string | null>(null);
   const [opponent, setOpponent] = useState<ProfilePublic | null>(null);
+  // Set when the search times out and the server falls back to a bot match
+  // (see tactico_service.get_search_status) — the bot's "team" borrows a
+  // real player's display name, but there's no real ProfilePublic to fetch.
+  const [botOpponentName, setBotOpponentName] = useState<string | null>(null);
   // Bumping this re-runs the search-start effect below for a genuine retry
   // (e.g. after a timeout) — a plain empty-deps effect would only ever fire
   // once per mount.
@@ -41,6 +45,7 @@ export default function TacticoSearchPage() {
     setPhase("starting");
     setSecondsLeft(SEARCH_TIMEOUT_SECONDS);
     setOpponent(null);
+    setBotOpponentName(null);
     // The status query below is keyed on a fixed, page-wide queryKey (not
     // scoped to this mount or attempt) — react-query still serves whatever
     // it last cached under that key instantly, even before this page's own
@@ -107,6 +112,10 @@ export default function TacticoSearchPage() {
       if (match.opponent_user_id) {
         const profile = await fetchPublicProfile(match.opponent_user_id);
         setOpponent(profile);
+      } else {
+        // No opponent found within the search window — the server started
+        // a bot match instead (see get_search_status's timeout fallback).
+        setBotOpponentName(match.opponent_name);
       }
       setPhase("reveal");
       revealTimerRef.current = setTimeout(() => navigate(`/play/tactico/matches/${matchId}`), REVEAL_PAUSE_MS);
@@ -181,6 +190,15 @@ export default function TacticoSearchPage() {
               <UserBadge badge={opponent.active_badge} />
             </p>
             <p className="text-sm text-ink-mist">Рейтинг Тактико: {opponent.tactics_rating}</p>
+          </>
+        ) : botOpponentName ? (
+          <>
+            <img
+              src={staticUrl("players/placeholder/player_placeholder.webp")}
+              alt="avatar"
+              className="h-20 w-20 rounded-full ring-2 ring-accent-lime object-cover"
+            />
+            <p className="font-display text-xl font-bold text-ink-chalk">{botOpponentName}</p>
           </>
         ) : (
           <p className="text-sm text-ink-mist">Загрузка...</p>
