@@ -198,6 +198,47 @@ async def test_referral_reward_triggers_on_free_pack(client, db_session, bot_tok
     assert new_user.referral_reward_granted is True
 
 
+async def test_referral_reward_triggers_on_bonus_pack_grant(client, db_session, bot_token):
+    """Regression test: pack_service.grant_bonus_pack_opening (shared by
+    task rewards, collection-completion rewards, league-tier rewards, and
+    wheel-of-fortune bonus packs) used to bypass the referral-credit check
+    entirely (only open_pack had it) — a referred user whose first-ever
+    pack was one of these server-initiated grants left their referrer
+    stuck at referral_count=0 forever."""
+    from app.models.enums import Rarity
+    from app.services import pack_service
+    from app.services.wallet_service import lock_user_for_update
+    from tests.factories import create_pack, create_player, get_user_by_telegram_id
+
+    await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(db_session, "bonus-pack", price=0, card_count=1, probabilities={Rarity.common: 1.0})
+
+    referrer_headers = telegram_headers(555024, bot_token, username="referrer4")
+    await client.post("/api/v1/auth/session", headers=referrer_headers)
+    referrer = await get_user_by_telegram_id(db_session, 555024)
+
+    new_user_headers = telegram_headers(555025, bot_token, username="newbie4")
+    new_user_headers["X-Referral-Code"] = str(referrer.telegram_id)
+    await client.post("/api/v1/auth/session", headers=new_user_headers)
+    new_user = await get_user_by_telegram_id(db_session, 555025)
+    balance_before = new_user.balance
+
+    locked_user = await lock_user_for_update(db_session, new_user.id)
+    result = await pack_service.grant_bonus_pack_opening(
+        db_session, locked_user, pack.id, idempotency_prefix="test-bonus-grant",
+    )
+    await db_session.commit()
+
+    assert result is not None
+    assert result.referral_bonus_coins == 200
+
+    await db_session.refresh(referrer)
+    await db_session.refresh(new_user)
+    assert referrer.referral_count == 1
+    assert new_user.balance == balance_before + 200
+    assert new_user.referral_reward_granted is True
+
+
 async def test_self_referral_is_a_no_op(client, db_session, bot_token):
     from tests.factories import get_user_by_telegram_id
 

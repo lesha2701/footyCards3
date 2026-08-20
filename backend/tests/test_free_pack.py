@@ -19,6 +19,33 @@ async def test_free_pack_available_for_new_user(client, db_session, bot_token):
     assert resp.json()["available_at"] is None
 
 
+async def test_referral_reward_triggers_on_periodic_free_pack_claim(client, db_session, bot_token):
+    """Regression test: the periodic free-pack claim used to bypass the
+    referral-credit check entirely (only open_pack had it) — a referred
+    user whose first-ever pack was this free grant left their referrer
+    stuck at referral_count=0 forever."""
+    await create_player(db_session, rarity=Rarity.common)
+    await create_pack(db_session, "basic", price=100, card_count=1, probabilities={Rarity.common: 1.0})
+
+    referrer = await _register(client, db_session, 850010, bot_token)
+
+    new_user_headers = telegram_headers(850011, bot_token)
+    new_user_headers["X-Referral-Code"] = str(referrer.telegram_id)
+    await client.post("/api/v1/auth/session", headers=new_user_headers)
+    new_user = await get_user_by_telegram_id(db_session, 850011)
+    balance_before = new_user.balance
+
+    resp = await client.post("/api/v1/free-pack/claim", headers=new_user_headers)
+    assert resp.status_code == 200
+    assert resp.json()["referral_bonus_coins"] == 200
+
+    await db_session.refresh(referrer)
+    await db_session.refresh(new_user)
+    assert referrer.referral_count == 1
+    assert new_user.balance == balance_before + 200
+    assert new_user.referral_reward_granted is True
+
+
 async def test_free_pack_claim_grants_card_and_sets_next_available_at(client, db_session, bot_token):
     for _ in range(3):
         await create_player(db_session, rarity=Rarity.common)

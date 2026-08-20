@@ -55,6 +55,9 @@ async def _grant_free_pack(db: AsyncSession, user: User, slug: str) -> Optional[
 
 
 async def claim_free_pack(db: AsyncSession, user: User) -> PackOpenResult:
+    # Deferred: avoids a circular import with pack_service.
+    from app.services.pack_service import _credit_referral_bonus
+
     if not _is_available(user):
         raise ConflictError(
             "Free pack not available yet",
@@ -62,7 +65,27 @@ async def claim_free_pack(db: AsyncSession, user: User) -> PackOpenResult:
         )
 
     config = await get_config(db)
-    locked_user = await lock_user_for_update(db, user.id)
+
+    # Same sorted (claimant, referrer) pre-lock dance as pack_service.open_
+    # pack, and for the same reason: locking the referrer *after* the
+    # claimant would risk a deadlock against a concurrent transaction that
+    # locks the same two rows in the opposite order. The pre-check reads
+    # the possibly-stale `user` argument, which can only under-predict
+    # (harmless — falls back to locking the referrer separately below)
+    # never over-predict skipping a still-owed bonus.
+    pending_referrer_id = (
+        user.referred_by_id if user.referred_by_id is not None and not user.referral_reward_granted else None
+    )
+    if pending_referrer_id is not None:
+        first_id, second_id = sorted([user.id, pending_referrer_id])
+        first_locked = await lock_user_for_update(db, first_id)
+        second_locked = await lock_user_for_update(db, second_id)
+        locked_user = first_locked if first_locked.id == user.id else second_locked
+        pre_locked_referrer: Optional[User] = first_locked if first_locked.id == pending_referrer_id else second_locked
+    else:
+        locked_user = await lock_user_for_update(db, user.id)
+        pre_locked_referrer = None
+
     if not _is_available(locked_user):
         raise ConflictError(
             "Free pack not available yet",
@@ -72,6 +95,10 @@ async def claim_free_pack(db: AsyncSession, user: User) -> PackOpenResult:
     grant_result = await _grant_free_pack(db, locked_user, config.free_pack_pack_slug)
     if grant_result is None:
         raise ConflictError("Free pack is not configured correctly; contact support")
+
+    if locked_user.referred_by_id is not None and not locked_user.referral_reward_granted:
+        referrer = pre_locked_referrer or await lock_user_for_update(db, locked_user.referred_by_id)
+        grant_result.referral_bonus_coins = await _credit_referral_bonus(db, locked_user, referrer)
 
     next_available_at = datetime.now(timezone.utc) + timedelta(hours=config.free_pack_interval_hours)
     locked_user.free_pack_available_at = next_available_at
