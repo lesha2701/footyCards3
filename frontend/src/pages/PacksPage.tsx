@@ -5,31 +5,25 @@ import { useNavigate } from "react-router-dom";
 import EmptyState from "@/components/common/EmptyState";
 import { IconChevronUp, IconCoin, IconPack } from "@/components/icons";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
-import { createStarsInvoice, fetchPacks, fetchStarsInvoiceStatus } from "@/api/packs";
-import { ApiRequestError, staticUrl } from "@/lib/api";
+import { fetchPacks } from "@/api/packs";
+import { useStarsPackPurchase } from "@/hooks/useStarsPackPurchase";
+import { staticUrl } from "@/lib/api";
 import { PACK_PURCHASE_TERMS_URL } from "@/lib/legalLinks";
-import { openLink, openTelegramInvoice } from "@/lib/telegram";
-import { sortPacksByPrice, sortPacksByStarsPrice, type PackSortDirection } from "@/lib/packs";
+import { openLink } from "@/lib/telegram";
+import { sortPacksByPrice, sortPacksByStarsPrice } from "@/lib/packs";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { useAuthStore } from "@/store/authStore";
+import { usePacksUiStore } from "@/store/packsUiStore";
 import type { Pack, PackOpenResult } from "@/types";
-
-async function pollStarsInvoice(payloadToken: string): Promise<PackOpenResult> {
-  const maxAttempts = 20;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const status = await fetchStarsInvoiceStatus(payloadToken);
-    if (status.status === "completed" && status.result) return status.result;
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-  throw new Error("Пак ещё не пришёл — проверь вкладку «Мои карточки» через минуту");
-}
 
 export default function PacksPage() {
   const { data: packs, isLoading } = useQuery({ queryKey: ["packs"], queryFn: fetchPacks });
   const balance = useAuthStore((s) => s.user?.balance ?? 0);
   const navigate = useNavigate();
-  const [sortDirection, setSortDirection] = useState<PackSortDirection>("asc");
-  const [starsSortDirection, setStarsSortDirection] = useState<PackSortDirection>("asc");
+  const sortDirection = usePacksUiStore((s) => s.coinSortDirection);
+  const setSortDirection = usePacksUiStore((s) => s.setCoinSortDirection);
+  const starsSortDirection = usePacksUiStore((s) => s.starsSortDirection);
+  const setStarsSortDirection = usePacksUiStore((s) => s.setStarsSortDirection);
   const [tab, setTab] = useState<"coins" | "stars">("coins");
 
   const coinPacks = packs?.filter((p) => p.stars_price == null);
@@ -68,7 +62,7 @@ export default function PacksPage() {
           {!!coinPacks?.length && (
             <div className="flex items-center justify-end">
               <button
-                onClick={() => setSortDirection((d) => (d === "asc" ? "desc" : "asc"))}
+                onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
                 className="flex items-center gap-1.5 rounded-full bg-bg-surface px-3 py-1.5 font-mono text-xs text-ink-mist active:scale-95"
               >
                 <IconChevronUp size={12} className={`transition-transform ${sortDirection === "asc" ? "" : "rotate-180"}`} />
@@ -94,7 +88,7 @@ export default function PacksPage() {
           {!!starsPacks?.length && (
             <div className="flex items-center justify-end">
               <button
-                onClick={() => setStarsSortDirection((d) => (d === "asc" ? "desc" : "asc"))}
+                onClick={() => setStarsSortDirection(starsSortDirection === "asc" ? "desc" : "asc")}
                 className="flex items-center gap-1.5 rounded-full bg-bg-surface px-3 py-1.5 font-mono text-xs text-ink-mist active:scale-95"
               >
                 <IconChevronUp size={12} className={`transition-transform ${starsSortDirection === "asc" ? "" : "rotate-180"}`} />
@@ -162,39 +156,8 @@ function PackCard({ pack, canAfford, onOpen }: { pack: Pack; canAfford: boolean;
 }
 
 function StarsPackCard({ pack, onPurchased }: { pack: Pack; onPurchased: (result: PackOpenResult) => void }) {
-  const [phase, setPhase] = useState<"idle" | "invoicing" | "waiting" | "delivering" | "error">("idle");
-  const [error, setError] = useState<string | null>(null);
+  const { phase, error, buy, busy } = useStarsPackPurchase(pack.id, onPurchased);
   const disabled = !pack.is_available_now || (pack.purchase_limit_per_user !== null && pack.user_purchase_count >= pack.purchase_limit_per_user);
-  const busy = phase === "invoicing" || phase === "waiting" || phase === "delivering";
-
-  const handleBuy = async () => {
-    setError(null);
-    try {
-      setPhase("invoicing");
-      const invoice = await createStarsInvoice(pack.id);
-
-      setPhase("waiting");
-      const paymentStatus = await openTelegramInvoice(invoice.invoice_link);
-      if (paymentStatus === "cancelled") {
-        setPhase("idle");
-        return;
-      }
-      if (paymentStatus === "failed") {
-        setPhase("error");
-        setError("Платёж не прошёл");
-        return;
-      }
-
-      // "paid" or "pending" — the pack itself is granted asynchronously once
-      // our bot relays Telegram's successful_payment update to the backend.
-      setPhase("delivering");
-      const result = await pollStarsInvoice(invoice.payload_token);
-      onPurchased(result);
-    } catch (err) {
-      setPhase("error");
-      setError(err instanceof ApiRequestError ? err.message : err instanceof Error ? err.message : "Не удалось купить пак");
-    }
-  };
 
   const buttonLabel = disabled
     ? "Недоступно"
@@ -241,7 +204,7 @@ function StarsPackCard({ pack, onPurchased }: { pack: Pack; onPurchased: (result
           <div className="mt-2 flex items-center justify-between">
             <span className="flex items-center gap-1 font-mono text-sm font-semibold text-amber-400">⭐ {pack.stars_price}</span>
             <button
-              onClick={handleBuy}
+              onClick={buy}
               disabled={disabled || busy}
               className="rounded-full bg-amber-400 px-4 py-2 text-xs font-bold text-bg-base disabled:opacity-40 disabled:grayscale active:scale-95"
             >

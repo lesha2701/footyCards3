@@ -8,6 +8,7 @@ import LoadingScreen from "@/components/common/LoadingScreen";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconCoin, IconHandshake, IconTag } from "@/components/icons";
 import { openPack } from "@/api/packs";
+import { useStarsPackPurchase } from "@/hooks/useStarsPackPurchase";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
@@ -19,12 +20,18 @@ export default function PackOpenPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const updateBalance = useAuthStore((s) => s.updateBalance);
+  const balance = useAuthStore((s) => s.user?.balance ?? 0);
   // Present when arriving with an already-claimed result (e.g. the free pack) so we skip re-opening it.
   const prefetchedResult = (location.state as { result?: PackOpenResult } | null)?.result ?? null;
 
   const [phase, setPhase] = useState<"packshot" | "revealing" | "summary">("packshot");
   const [cardIndex, setCardIndex] = useState(0);
   const [stageIndex, setStageIndex] = useState(0);
+  // Set when a single-card, no-bonus pack finishes its reveal — that path
+  // normally skips straight to "/packs" (see the comment in nextCard below),
+  // so this flag stands in for the summary screen just to surface the
+  // "open another" action without re-showing the card that was just revealed.
+  const [singleCardDone, setSingleCardDone] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasStartedRef = useRef(false);
   // Lazily initialized once via the ref-during-render pattern, which (unlike
@@ -99,6 +106,8 @@ export default function PackOpenPage() {
     // A single-card pack has already shown its one card in full during the
     // reveal stage above — if there's no reward banner to add, a follow-up
     // "Pack opened" screen re-displaying that same card is pure friction.
+    // Instead of navigating straight away, just surface the done/open-another
+    // actions in place so this path still offers "open another".
     if (
       result.cards.length === 1 &&
       !result.referral_bonus_coins &&
@@ -106,10 +115,54 @@ export default function PackOpenPage() {
       !result.pack.bonus_coins &&
       !result.pack.badge
     ) {
-      navigate("/packs");
+      setSingleCardDone(true);
       return;
     }
     setPhase("summary");
+  };
+
+  const isStarsPack = result ? result.pack.stars_price != null : false;
+  const canAffordAgain = result ? (isStarsPack ? true : balance >= result.pack.price) : false;
+
+  const resetForReopen = () => {
+    setPhase("packshot");
+    setCardIndex(0);
+    setStageIndex(0);
+    setSingleCardDone(false);
+  };
+
+  const reopenCoinPack = () => {
+    if (!packId) return;
+    idempotencyKeyRef.current = `pack-${packId}-${crypto.randomUUID()}`;
+    resetForReopen();
+    setRequestState({ status: "pending" });
+    openPack(Number(packId), idempotencyKeyRef.current)
+      .then((data) => {
+        updateBalance(data.new_balance);
+        setRequestState({ status: "success", data });
+      })
+      .catch((err: unknown) => {
+        setRequestState({
+          status: "error",
+          message: err instanceof ApiRequestError ? err.message : "Не удалось открыть пак",
+        });
+      });
+  };
+
+  const {
+    buy: buyStarsPackAgain,
+    busy: buyingStarsPackAgain,
+    error: buyStarsPackAgainError,
+  } = useStarsPackPurchase(Number(packId), (data) => {
+    updateBalance(data.new_balance);
+    resetForReopen();
+    setRequestState({ status: "success", data });
+  });
+
+  const handleOpenAnother = () => {
+    haptic("light");
+    if (isStarsPack) buyStarsPackAgain();
+    else reopenCoinPack();
   };
 
   useEffect(() => {
@@ -143,7 +196,7 @@ export default function PackOpenPage() {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg-base">
-      {phase !== "summary" && (
+      {phase !== "summary" && !singleCardDone && (
         <button
           onClick={skipAll}
           className="safe-top absolute right-4 top-4 z-10 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-ink-chalk"
@@ -168,18 +221,72 @@ export default function PackOpenPage() {
           />
           {stageIndex === STAGES.length - 1 && (
             <div className="safe-bottom px-6 pb-6 pt-2">
-              <button
-                onClick={nextCard}
-                className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95"
-              >
-                {cardIndex < result.cards.length - 1 ? "Следующая карта" : "Готово"}
-              </button>
+              {singleCardDone ? (
+                <ReopenActions
+                  onDone={() => navigate("/packs")}
+                  onOpenAnother={handleOpenAnother}
+                  canOpenAnother={canAffordAgain}
+                  busy={isStarsPack && buyingStarsPackAgain}
+                  error={isStarsPack ? buyStarsPackAgainError : null}
+                />
+              ) : (
+                <button
+                  onClick={nextCard}
+                  className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95"
+                >
+                  {cardIndex < result.cards.length - 1 ? "Следующая карта" : "Готово"}
+                </button>
+              )}
             </div>
           )}
         </div>
       )}
 
-      {phase === "summary" && <Summary result={result} onDone={() => navigate("/packs")} />}
+      {phase === "summary" && (
+        <Summary
+          result={result}
+          onDone={() => navigate("/packs")}
+          onOpenAnother={handleOpenAnother}
+          canOpenAnother={canAffordAgain}
+          busy={isStarsPack && buyingStarsPackAgain}
+          error={isStarsPack ? buyStarsPackAgainError : null}
+        />
+      )}
+    </div>
+  );
+}
+
+function ReopenActions({
+  onDone,
+  onOpenAnother,
+  canOpenAnother,
+  busy,
+  error,
+}: {
+  onDone: () => void;
+  onOpenAnother: () => void;
+  canOpenAnother: boolean;
+  busy: boolean;
+  error: string | null;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      {error && <p className="text-center text-xs text-red-400">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          onClick={onDone}
+          className="flex-1 rounded-2xl bg-white/10 py-3.5 font-display text-base font-bold text-ink-chalk active:scale-95"
+        >
+          Готово
+        </button>
+        <button
+          onClick={onOpenAnother}
+          disabled={!canOpenAnother || busy}
+          className="flex-1 rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-40"
+        >
+          {busy ? "Открываем..." : "Открыть ещё"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -200,7 +307,21 @@ function PackShot({ pack, onOpen }: { pack: PackOpenResult["pack"]; onOpen: () =
   );
 }
 
-function Summary({ result, onDone }: { result: PackOpenResult; onDone: () => void }) {
+function Summary({
+  result,
+  onDone,
+  onOpenAnother,
+  canOpenAnother,
+  busy,
+  error,
+}: {
+  result: PackOpenResult;
+  onDone: () => void;
+  onOpenAnother: () => void;
+  canOpenAnother: boolean;
+  busy: boolean;
+  error: string | null;
+}) {
   // A single-card pack's one card was already fully shown during the reveal
   // stage — re-displaying it here (and the generic "Pack opened" heading)
   // would be pure repetition, so this screen is only reached at all when
@@ -280,9 +401,15 @@ function Summary({ result, onDone }: { result: PackOpenResult; onDone: () => voi
           ))}
         </div>
       )}
-      <button onClick={onDone} className="mt-2 rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95">
-        Готово
-      </button>
+      <div className="mt-2">
+        <ReopenActions
+          onDone={onDone}
+          onOpenAnother={onOpenAnother}
+          canOpenAnother={canOpenAnother}
+          busy={busy}
+          error={error}
+        />
+      </div>
     </div>
   );
 }
