@@ -113,13 +113,18 @@ export default function TacticoMatchesPage() {
       ) : (
         <>
           {flags?.matchmaking_enabled !== false && (
-            <button
-              onClick={() => navigate("/play/tactico/search")}
-              className="flex items-center justify-center gap-2 rounded-2xl bg-accent py-5 text-base font-bold text-bg-base ring-2 ring-accent/40 active:scale-95"
-            >
-              <IconPlay size={20} />
-              Играть
-            </button>
+            <>
+              <button
+                onClick={() => navigate("/play/tactico/search")}
+                className="flex items-center justify-center gap-2 rounded-2xl bg-accent py-5 text-base font-bold text-bg-base ring-2 ring-accent/40 active:scale-95"
+              >
+                <IconPlay size={20} />
+                Играть
+              </button>
+              <p className="-mt-2 text-center text-[11px] text-ink-mist-dim">
+                За онлайн-матч рейтинг в <span className="font-semibold text-accent-lime">2 раза больше</span>, чем с ботом или другом
+              </p>
+            </>
           )}
           <div className="flex gap-2">
             <button
