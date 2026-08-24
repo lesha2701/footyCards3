@@ -39,7 +39,6 @@ class GiftSetCreate(BaseModel):
 class GiftSetUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=128)
     description: Optional[str] = None
-    kind: Optional[GiftKind] = None
     pack_id: Optional[int] = None
     coins_amount: Optional[int] = Field(default=None, ge=0)
     stars_price: Optional[int] = Field(default=None, ge=0)

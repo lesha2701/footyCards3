@@ -5,7 +5,7 @@ import app.core.rate_limit as rate_limit_module
 from app.config import get_settings
 from app.models.enums import GiftKind, Rarity
 from app.models.gift import Gift
-from app.services import stars_payment_service
+from app.services import image_service, stars_payment_service
 from tests.factories import create_gift_set, create_pack, create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
 
@@ -336,7 +336,8 @@ async def test_pin_bundle_gift_is_rejected(client, db_session, bot_token):
     assert resp.status_code == 409
 
 
-async def test_admin_can_upload_gif_image_for_gift_set(client, bot_token):
+async def test_admin_can_upload_gif_image_for_gift_set(client, bot_token, monkeypatch, tmp_path):
+    monkeypatch.setattr(image_service, "GIFT_SETS_DIR", tmp_path)
     auth = await _admin_auth(client, bot_token)
     create_resp = await client.post(
         "/api/v1/admin/gifts/sets", headers=auth,
@@ -351,3 +352,42 @@ async def test_admin_can_upload_gif_image_for_gift_set(client, bot_token):
     )
     assert upload_resp.status_code == 200
     assert upload_resp.json()["image_path"].endswith(".gif")
+
+
+async def test_update_gift_set_cannot_change_kind(client, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    create_resp = await client.post(
+        "/api/v1/admin/gifts/sets", headers=auth,
+        json={"name": "Бандл подарков", "kind": "bundle", "coins_amount": 10, "stars_price": 5},
+    )
+    assert create_resp.status_code == 200
+    gift_set_id = create_resp.json()["id"]
+    assert create_resp.json()["kind"] == "bundle"
+
+    update_resp = await client.put(
+        f"/api/v1/admin/gifts/sets/{gift_set_id}", headers=auth,
+        json={"kind": "collectible", "stars_price": 99},
+    )
+    assert update_resp.status_code == 200
+    body = update_resp.json()
+    assert body["kind"] == "bundle"
+    assert body["stars_price"] == 99
+
+
+async def test_create_collectible_gift_set_requires_a_price(client, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    create_resp = await client.post(
+        "/api/v1/admin/gifts/sets", headers=auth,
+        json={"name": "Бесплатный кубок", "kind": "collectible", "stars_price": 0, "coins_price": 0},
+    )
+    assert create_resp.status_code == 409
+
+
+async def test_create_collectible_gift_set_with_only_coins_price_succeeds(client, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    create_resp = await client.post(
+        "/api/v1/admin/gifts/sets", headers=auth,
+        json={"name": "Кубок за монеты", "kind": "collectible", "coins_price": 50},
+    )
+    assert create_resp.status_code == 200
+    assert create_resp.json()["coins_price"] == 50

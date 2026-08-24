@@ -146,25 +146,27 @@ export default function AdminGiftsPage() {
                   className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
                 />
               </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-slate-400">Тип подарка</span>
-                <div className="flex gap-2 rounded-lg bg-bg-surface p-1">
-                  <button
-                    type="button"
-                    onClick={() => setForm({ ...form, kind: "bundle" })}
-                    className={`flex-1 rounded-md py-1.5 text-xs font-semibold ${form.kind === "bundle" ? "bg-accent text-bg-base" : "text-slate-400"}`}
-                  >
-                    Набор
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setForm({ ...form, kind: "collectible" })}
-                    className={`flex-1 rounded-md py-1.5 text-xs font-semibold ${form.kind === "collectible" ? "bg-accent text-bg-base" : "text-slate-400"}`}
-                  >
-                    Коллекционный
-                  </button>
-                </div>
-              </label>
+              {editing === "new" && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-400">Тип подарка</span>
+                  <div className="flex gap-2 rounded-lg bg-bg-surface p-1">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, kind: "bundle" })}
+                      className={`flex-1 rounded-md py-1.5 text-xs font-semibold ${form.kind === "bundle" ? "bg-accent text-bg-base" : "text-slate-400"}`}
+                    >
+                      Набор
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, kind: "collectible" })}
+                      className={`flex-1 rounded-md py-1.5 text-xs font-semibold ${form.kind === "collectible" ? "bg-accent text-bg-base" : "text-slate-400"}`}
+                    >
+                      Коллекционный
+                    </button>
+                  </div>
+                </label>
+              )}
               {form.kind === "bundle" && (
                 <>
                   <label className="flex flex-col gap-1">

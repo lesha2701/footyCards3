@@ -3,8 +3,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_admin
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.database import get_db
+from app.models.enums import GiftKind
 from app.models.gift import GiftSet
 from app.models.user import User
 from app.schemas.gift import (
@@ -30,6 +31,11 @@ async def _get_gift_set_or_404(db: AsyncSession, gift_set_id: int) -> GiftSet:
     return gift_set
 
 
+def _validate_collectible_pricing(gift_set: GiftSet) -> None:
+    if gift_set.kind == GiftKind.collectible and gift_set.stars_price <= 0 and gift_set.coins_price <= 0:
+        raise ConflictError("Коллекционный подарок должен иметь цену в ⭐ или в монетах")
+
+
 @router.get("/sets", response_model=list[GiftSetOut])
 async def list_all_gift_sets(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(GiftSet).order_by(GiftSet.sort_order))
@@ -41,6 +47,7 @@ async def create_gift_set(
     payload: GiftSetCreate, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)
 ):
     gift_set = GiftSet(**payload.model_dump())
+    _validate_collectible_pricing(gift_set)
     db.add(gift_set)
     await db.flush()
     await log_action(
@@ -63,6 +70,7 @@ async def update_gift_set(
     updates = payload.model_dump(exclude_unset=True)
     for key, value in updates.items():
         setattr(gift_set, key, value)
+    _validate_collectible_pricing(gift_set)
     db.add(gift_set)
 
     await log_action(
