@@ -435,7 +435,12 @@ function CollectiblePurchasePanel({ giftSet, onDone }: { giftSet: GiftSet; onDon
       updateBalance(result.new_balance);
       queryClient.invalidateQueries({ queryKey: ["gifts", "mine"] });
       if (recipientMode === "self") {
-        await revealIfSelf(result.gift.id);
+        try {
+          await revealIfSelf(result.gift.id);
+        } catch {
+          hapticNotify("success");
+          setSuccess(true);
+        }
       } else {
         hapticNotify("success");
         setSuccess(true);
@@ -469,7 +474,12 @@ function CollectiblePurchasePanel({ giftSet, onDone }: { giftSet: GiftSet; onDon
         if (status.status === "completed") {
           queryClient.invalidateQueries({ queryKey: ["gifts", "mine"] });
           if (recipientMode === "self" && status.gift_result) {
-            await revealIfSelf(status.gift_result.id);
+            try {
+              await revealIfSelf(status.gift_result.id);
+            } catch {
+              hapticNotify("success");
+              setSuccess(true);
+            }
           } else {
             hapticNotify("success");
             setSuccess(true);
