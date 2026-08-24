@@ -39,7 +39,10 @@ async def reserve_gift_serial_numbers(db: AsyncSession, gift_set: GiftSet, count
     if gift_set.kind != GiftKind.collectible:
         return None
     result = await db.execute(
-        select(GiftSet).where(GiftSet.id == gift_set.id).with_for_update().execution_options(populate_existing=True)
+        select(GiftSet)
+        .where(GiftSet.id == gift_set.id)
+        .with_for_update(of=GiftSet)
+        .execution_options(populate_existing=True)
     )
     locked = result.scalar_one()
     start = locked.next_serial_number

@@ -493,3 +493,13 @@ async def test_admin_cannot_shrink_max_supply_below_issued_count(client, db_sess
         f"/api/v1/admin/gifts/sets/{gift_set.id}", headers=auth, json={"max_supply": 1},
     )
     assert resp.status_code == 409
+
+
+async def test_admin_can_create_collectible_gift_set_with_max_supply(client, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    create_resp = await client.post(
+        "/api/v1/admin/gifts/sets", headers=auth,
+        json={"name": "Лимитированный кубок", "kind": "collectible", "coins_price": 50, "max_supply": 100},
+    )
+    assert create_resp.status_code == 200
+    assert create_resp.json()["max_supply"] == 100

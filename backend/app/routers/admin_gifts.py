@@ -37,7 +37,7 @@ def _validate_collectible_pricing(gift_set: GiftSet) -> None:
 
 
 def _validate_max_supply(gift_set: GiftSet) -> None:
-    if gift_set.max_supply is not None and gift_set.max_supply < gift_set.next_serial_number - 1:
+    if gift_set.max_supply is not None and gift_set.max_supply < (gift_set.next_serial_number or 1) - 1:
         raise ConflictError("Нельзя уменьшить тираж ниже уже выпущенного количества")
 
 
