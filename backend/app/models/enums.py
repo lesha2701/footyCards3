@@ -67,6 +67,12 @@ class TransactionType(str, enum.Enum):
     wheel_spin_cost = "wheel_spin_cost"
     wheel_spin_reward = "wheel_spin_reward"
     league_reward = "league_reward"
+    gift_purchase_coins = "gift_purchase_coins"
+
+
+class GiftKind(str, enum.Enum):
+    bundle = "bundle"
+    collectible = "collectible"
 
 
 class TaskCategory(str, enum.Enum):

@@ -1,17 +1,21 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.enums import GiftKind
 from app.models.mixins import TimestampMixin
 
 
 class GiftSet(TimestampMixin, Base):
-    """An admin-curated bundle (pack + coins) with a Stars price, offered in
-    the in-app "Подарки" section. Players buy one for someone else; admins
-    can also hand one out for free (see Gift.is_admin_gift)."""
+    """An admin-curated gift definition offered in the in-app "Подарки"
+    section — either a `bundle` (pack + coins, Stars-only, today's original
+    gift type) or a `collectible` (a cosmetic image/gif, priced in Stars
+    and/or coins — a Telegram-style gift). Players buy one for themselves or
+    someone else (bundles disallow buying for yourself; collectibles allow
+    it); admins can also hand one out for free (see Gift.is_admin_gift)."""
 
     __tablename__ = "gift_sets"
 
@@ -22,6 +26,8 @@ class GiftSet(TimestampMixin, Base):
     pack_id: Mapped[Optional[int]] = mapped_column(ForeignKey("packs.id", ondelete="SET NULL"), nullable=True)
     coins_amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     stars_price: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    kind: Mapped[GiftKind] = mapped_column(Enum(GiftKind, name="gift_kind_enum"), nullable=False, default=GiftKind.bundle)
+    coins_price: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
@@ -46,6 +52,8 @@ class Gift(TimestampMixin, Base):
     recipient_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     message: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     is_admin_gift: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    pinned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     pack_opening_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("pack_openings.id", ondelete="SET NULL"), nullable=True
