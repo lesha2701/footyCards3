@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { claimDailyReward, fetchDailyRewardCalendar } from "@/api/dailyRewards";
 import { fetchFeatureFlags } from "@/api/featureFlags";
 import { fetchLeagueStatus } from "@/api/leagues";
+import { fetchMyGifts } from "@/api/gifts";
 import { fetchMyBadges, fetchMyProfile, fetchMyTransactions, fetchMyTrophies, updateMySettings } from "@/api/profile";
 import { createCoinInvoice, fetchCoinInvoiceStatus, fetchCoinPackages } from "@/api/wallet";
 import { UserBadge } from "@/components/common/UserBadge";
@@ -73,6 +74,8 @@ export default function ProfilePage() {
   const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags });
   const { data: badges } = useQuery({ queryKey: ["profile", "badges"], queryFn: fetchMyBadges });
   const { data: trophies } = useQuery({ queryKey: ["profile", "trophies"], queryFn: fetchMyTrophies });
+  const { data: myGifts } = useQuery({ queryKey: ["gifts", "mine"], queryFn: fetchMyGifts });
+  const pinnedGifts = myGifts?.filter((g) => g.is_pinned) ?? [];
   const [selectedTrophy, setSelectedTrophy] = useState<UserTrophy | null>(null);
   const { data: calendar } = useQuery({ queryKey: ["daily-reward-calendar"], queryFn: fetchDailyRewardCalendar });
   const { data: transactions } = useQuery({
@@ -217,6 +220,37 @@ export default function ProfilePage() {
         </section>
       )}
 
+      <button
+        onClick={() => navigate("/gifts")}
+        className="flex items-center justify-between rounded-2xl bg-bg-surface p-4 text-left active:scale-[0.99]"
+      >
+        <span className="flex items-center gap-1.5 font-display text-base font-bold text-ink-chalk">
+          <IconGift size={16} className="text-rarity-epic" />
+          Подарки
+        </span>
+        <span className="flex items-center gap-2">
+          {pinnedGifts.length > 0 ? (
+            <span className="flex -space-x-2">
+              {pinnedGifts.slice(0, 3).map((g) => (
+                <span
+                  key={g.id}
+                  className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border-2 border-bg-surface bg-rarity-epic/10"
+                >
+                  {g.gift_set.image_path ? (
+                    <img src={staticUrl(g.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
+                  ) : (
+                    <IconGift size={14} className="text-rarity-epic" />
+                  )}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span className="text-xs text-ink-mist-dim">Закрепи любимые подарки</span>
+          )}
+          <IconChevronRight size={16} className="text-ink-mist-dim" />
+        </span>
+      </button>
+
       <section className="rounded-2xl bg-bg-surface p-4">
         <div className="grid grid-cols-2 gap-y-4">
           <Stat label="Баланс" value={user.balance} Icon={IconCoin} iconClass="text-accent-lime" />
@@ -320,16 +354,6 @@ export default function ProfilePage() {
         >
           <IconCoin size={16} />
           Купить монеты за ⭐
-        </button>
-      </section>
-
-      <section className="rounded-2xl bg-bg-surface p-4">
-        <button
-          onClick={() => navigate("/gifts")}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-rarity-epic/80 py-3 text-sm font-bold text-white active:scale-95"
-        >
-          <IconGift size={16} />
-          Подарки
         </button>
       </section>
 
