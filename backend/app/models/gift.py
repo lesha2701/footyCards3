@@ -28,6 +28,11 @@ class GiftSet(TimestampMixin, Base):
     stars_price: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     kind: Mapped[GiftKind] = mapped_column(Enum(GiftKind, name="gift_kind_enum"), nullable=False, default=GiftKind.bundle)
     coins_price: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_supply: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    next_serial_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    collection_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("card_collections.id", ondelete="SET NULL"), nullable=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
@@ -54,6 +59,7 @@ class Gift(TimestampMixin, Base):
     is_admin_gift: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     pinned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    serial_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     pack_opening_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("pack_openings.id", ondelete="SET NULL"), nullable=True

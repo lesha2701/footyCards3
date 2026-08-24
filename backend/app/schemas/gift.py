@@ -20,6 +20,9 @@ class GiftSetOut(BaseModel):
     coins_amount: int
     stars_price: int
     coins_price: int
+    max_supply: Optional[int] = None
+    next_serial_number: int
+    collection_id: Optional[int] = None
     is_active: bool
     sort_order: int
 
@@ -32,6 +35,8 @@ class GiftSetCreate(BaseModel):
     coins_amount: int = Field(default=0, ge=0)
     stars_price: int = Field(default=0, ge=0)
     coins_price: int = Field(default=0, ge=0)
+    max_supply: Optional[int] = Field(default=None, ge=1)
+    collection_id: Optional[int] = None
     is_active: bool = True
     sort_order: int = 0
 
@@ -43,6 +48,8 @@ class GiftSetUpdate(BaseModel):
     coins_amount: Optional[int] = Field(default=None, ge=0)
     stars_price: Optional[int] = Field(default=None, ge=0)
     coins_price: Optional[int] = Field(default=None, ge=0)
+    max_supply: Optional[int] = Field(default=None, ge=1)
+    collection_id: Optional[int] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
 
@@ -56,6 +63,7 @@ class GiftOut(BaseModel):
     message: Optional[str] = None
     is_admin_gift: bool
     is_pinned: bool
+    serial_number: Optional[int] = None
     claimed_at: Optional[datetime] = None
     created_at: datetime
 
