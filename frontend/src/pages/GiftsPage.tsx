@@ -1,8 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { adminBroadcastGift, adminSendGift, fetchAdminTrophies, grantTrophy } from "@/admin/api";
-import { claimGift, createGiftInvoice, fetchGiftInvoiceStatus, fetchGiftSets, fetchMyGifts } from "@/api/gifts";
+import {
+  buyCollectibleWithCoins,
+  claimGift,
+  createGiftInvoice,
+  fetchGiftInvoiceStatus,
+  fetchGiftSets,
+  fetchMyGifts,
+  pinGift,
+} from "@/api/gifts";
 import { searchUsers } from "@/api/profile";
 import PlayerCard from "@/components/cards/PlayerCard";
 import EmptyState from "@/components/common/EmptyState";
@@ -11,14 +19,15 @@ import { IconCoin, IconGift, IconInboxEmpty, IconSearch, IconTrophy } from "@/co
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { hapticNotify, openTelegramInvoice, showConfirm } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { GiftClaimResult, GiftSet, TrophyDefinition, UserPublic } from "@/types";
+import type { Gift, GiftClaimResult, GiftSet, TrophyDefinition, UserPublic } from "@/types";
 
 export default function GiftsPage() {
   const user = useAuthStore((s) => s.user);
   const updateBalance = useAuthStore((s) => s.updateBalance);
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"mine" | "send">("mine");
+  const [tab, setTab] = useState<"mine" | "shop">("mine");
   const [claimResult, setClaimResult] = useState<GiftClaimResult | null>(null);
+  const [detailGift, setDetailGift] = useState<Gift | null>(null);
 
   const { data: myGifts } = useQuery({ queryKey: ["gifts", "mine"], queryFn: fetchMyGifts });
 
@@ -32,10 +41,24 @@ export default function GiftsPage() {
     },
   });
 
+  // Collectible gifts have no "open" ceremony — a random pack roll needs an
+  // explicit claim tap, but a cosmetic collectible's reward *is* the row
+  // existing, so silently mark any unclaimed one claimed the moment it shows
+  // up, instead of making the player hunt for a button that isn't there.
+  useEffect(() => {
+    const pendingCollectibles = (myGifts ?? []).filter((g) => g.gift_set.kind === "collectible" && !g.claimed_at);
+    if (pendingCollectibles.length === 0) return;
+    Promise.allSettled(pendingCollectibles.map((g) => claimGift(g.id))).then(() => {
+      queryClient.invalidateQueries({ queryKey: ["gifts", "mine"] });
+    });
+  }, [myGifts, queryClient]);
+
   if (!user) return null;
 
-  const pending = myGifts?.filter((g) => !g.claimed_at) ?? [];
-  const claimed = myGifts?.filter((g) => g.claimed_at) ?? [];
+  const collectibles = (myGifts ?? []).filter((g) => g.gift_set.kind === "collectible");
+  const pendingBundles = (myGifts ?? []).filter((g) => g.gift_set.kind === "bundle" && !g.claimed_at);
+  const claimedBundles = (myGifts ?? []).filter((g) => g.gift_set.kind === "bundle" && g.claimed_at);
+  const isEmpty = collectibles.length === 0 && pendingBundles.length === 0 && claimedBundles.length === 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -53,73 +76,110 @@ export default function GiftsPage() {
             tab === "mine" ? "bg-floodlight text-bg-base" : "text-ink-mist"
           }`}
         >
-          Мои подарки{pending.length > 0 ? ` (${pending.length})` : ""}
+          Мои подарки{pendingBundles.length > 0 ? ` (${pendingBundles.length})` : ""}
         </button>
         <button
-          onClick={() => setTab("send")}
+          onClick={() => setTab("shop")}
           className={`flex-1 rounded-xl py-2 text-sm font-semibold transition ${
-            tab === "send" ? "bg-floodlight text-bg-base" : "text-ink-mist"
+            tab === "shop" ? "bg-floodlight text-bg-base" : "text-ink-mist"
           }`}
         >
-          Отправить подарок
+          Магазин подарков
         </button>
       </div>
 
       {tab === "mine" ? (
-        <div className="flex flex-col gap-4">
-          {pending.length === 0 && claimed.length === 0 && (
-            <EmptyState icon={IconInboxEmpty} title="Пока нет подарков" description="Подарки от друзей и администрации появятся здесь." />
-          )}
-
-          {pending.length > 0 && (
-            <div className="flex flex-col gap-2">
-              {pending.map((g) => (
-                <div key={g.id} className="flex items-center justify-between rounded-2xl bg-bg-surface p-3">
-                  <div className="flex items-center gap-3">
-                    {g.gift_set.image_path ? (
-                      <img src={staticUrl(g.gift_set.image_path) ?? undefined} className="h-12 w-12 rounded-xl object-cover" />
-                    ) : (
-                      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-rarity-epic/10 text-2xl">🎁</span>
-                    )}
-                    <div>
-                      <p className="text-sm font-semibold text-ink-chalk">{g.gift_set.name}</p>
-                      <p className="text-xs text-ink-mist">
-                        {g.sender ? `От ${g.sender.username ?? g.sender.first_name ?? "игрока"}` : "От администрации"}
-                      </p>
-                      {g.message && <p className="mt-0.5 text-xs italic text-ink-mist-dim">«{g.message}»</p>}
-                    </div>
-                  </div>
+        isEmpty ? (
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => setTab("shop")}
+              className="rounded-2xl bg-floodlight py-3 text-sm font-bold text-bg-base active:scale-95"
+            >
+              Магазин подарков
+            </button>
+            <EmptyState icon={IconInboxEmpty} title="Подарков пока нет" description="Купи подарок себе или другу в магазине." />
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {collectibles.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {collectibles.map((g) => (
                   <button
-                    onClick={() => claimMutation.mutate(g.id)}
-                    disabled={claimMutation.isPending}
-                    className="shrink-0 rounded-xl bg-floodlight px-3 py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-40"
+                    key={g.id}
+                    onClick={() => setDetailGift(g)}
+                    className="flex flex-col items-center gap-1.5 rounded-2xl bg-bg-surface p-2.5 active:scale-[0.98]"
                   >
-                    Открыть
+                    <span className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-rarity-epic/10">
+                      {g.gift_set.image_path ? (
+                        <img src={staticUrl(g.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
+                      ) : (
+                        <IconGift size={26} className="text-rarity-epic" />
+                      )}
+                      {g.is_pinned && (
+                        <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent-lime text-[9px] font-bold text-bg-base">
+                          ★
+                        </span>
+                      )}
+                    </span>
+                    <span className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{g.gift_set.name}</span>
                   </button>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
 
-          {claimed.length > 0 && (
-            <div>
-              <p className="mb-2 text-xs font-semibold text-ink-mist-dim">История</p>
-              <div className="flex flex-col gap-1.5">
-                {claimed.map((g) => (
-                  <div key={g.id} className="flex items-center justify-between rounded-xl bg-bg-surface/60 px-3 py-2 text-xs">
-                    <span className="text-ink-mist">{g.gift_set.name}</span>
-                    <span className="text-ink-mist-dim">{new Date(g.claimed_at!).toLocaleDateString("ru-RU")}</span>
+            {pendingBundles.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {pendingBundles.map((g) => (
+                  <div key={g.id} className="flex items-center justify-between rounded-2xl bg-bg-surface p-3">
+                    <div className="flex items-center gap-3">
+                      {g.gift_set.image_path ? (
+                        <img src={staticUrl(g.gift_set.image_path) ?? undefined} className="h-12 w-12 rounded-xl object-cover" />
+                      ) : (
+                        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-rarity-epic/10">
+                          <IconGift size={22} className="text-rarity-epic" />
+                        </span>
+                      )}
+                      <div>
+                        <p className="text-sm font-semibold text-ink-chalk">{g.gift_set.name}</p>
+                        <p className="text-xs text-ink-mist">
+                          {g.sender ? `От ${g.sender.username ?? g.sender.first_name ?? "игрока"}` : "От администрации"}
+                        </p>
+                        {g.message && <p className="mt-0.5 text-xs italic text-ink-mist-dim">«{g.message}»</p>}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => claimMutation.mutate(g.id)}
+                      disabled={claimMutation.isPending}
+                      className="shrink-0 rounded-xl bg-floodlight px-3 py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-40"
+                    >
+                      Открыть
+                    </button>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-        </div>
+            )}
+
+            {claimedBundles.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-semibold text-ink-mist-dim">История</p>
+                <div className="flex flex-col gap-1.5">
+                  {claimedBundles.map((g) => (
+                    <div key={g.id} className="flex items-center justify-between rounded-xl bg-bg-surface/60 px-3 py-2 text-xs">
+                      <span className="text-ink-mist">{g.gift_set.name}</span>
+                      <span className="text-ink-mist-dim">{new Date(g.claimed_at!).toLocaleDateString("ru-RU")}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )
       ) : (
-        <SendGiftTab />
+        <ShopTab />
       )}
 
       {claimResult && <GiftClaimResultModal result={claimResult} onClose={() => setClaimResult(null)} />}
+      {detailGift && <GiftDetailSheet gift={detailGift} onClose={() => setDetailGift(null)} />}
     </div>
   );
 }
@@ -128,7 +188,10 @@ function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; on
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={onClose}>
       <div className="w-full max-w-sm rounded-2xl bg-bg-surface p-5" onClick={(e) => e.stopPropagation()}>
-        <p className="text-center font-display text-base font-bold text-ink-chalk">🎉 Подарок открыт!</p>
+        <p className="flex items-center justify-center gap-1.5 text-center font-display text-base font-bold text-ink-chalk">
+          <IconGift size={18} className="text-rarity-epic" />
+          Подарок открыт!
+        </p>
 
         {result.coins_credited > 0 && (
           <div className="mt-3 flex items-center justify-center gap-1.5 rounded-xl bg-accent-green/10 py-2 font-mono text-sm font-bold text-accent-green">
@@ -146,6 +209,53 @@ function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; on
 
         <button onClick={onClose} className="mt-4 w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95">
           Отлично!
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GiftDetailSheet({ gift, onClose }: { gift: Gift; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+
+  const pinMutation = useMutation({
+    mutationFn: (pinned: boolean) => pinGift(gift.id, pinned),
+    onSuccess: () => {
+      hapticNotify("success");
+      queryClient.invalidateQueries({ queryKey: ["gifts", "mine"] });
+      onClose();
+    },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось изменить закрепление"),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-bg-surface p-5 text-center" onClick={(e) => e.stopPropagation()}>
+        <span className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl bg-rarity-epic/10">
+          {gift.gift_set.image_path ? (
+            <img src={staticUrl(gift.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
+          ) : (
+            <IconGift size={40} className="text-rarity-epic" />
+          )}
+        </span>
+        <p className="mt-3 font-display text-base font-bold text-ink-chalk">{gift.gift_set.name}</p>
+        <p className="mt-1 text-xs text-ink-mist">
+          {gift.sender ? `От ${gift.sender.username ?? gift.sender.first_name ?? "игрока"}` : "От администрации"}
+        </p>
+        {gift.message && <p className="mt-1 text-xs italic text-ink-mist-dim">«{gift.message}»</p>}
+
+        {error && <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
+
+        <button
+          onClick={() => pinMutation.mutate(!gift.is_pinned)}
+          disabled={pinMutation.isPending}
+          className="mt-4 w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-40"
+        >
+          {gift.is_pinned ? "Открепить" : "Закрепить в профиле"}
+        </button>
+        <button onClick={onClose} className="mt-2 w-full rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist active:scale-95">
+          Закрыть
         </button>
       </div>
     </div>
@@ -203,8 +313,209 @@ function RecipientPicker({ target, onSelect }: { target: UserPublic | null; onSe
   );
 }
 
-function SendGiftTab() {
+function ShopTab() {
   const { data: giftSets } = useQuery({ queryKey: ["gift-sets"], queryFn: fetchGiftSets });
+  const [selectedSet, setSelectedSet] = useState<GiftSet | null>(null);
+
+  const bundleSets = (giftSets ?? []).filter((g) => g.kind === "bundle");
+  const collectibleSets = (giftSets ?? []).filter((g) => g.kind === "collectible");
+
+  if (selectedSet) {
+    return <CollectiblePurchasePanel giftSet={selectedSet} onDone={() => setSelectedSet(null)} />;
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <p className="mb-2 font-display text-sm font-bold text-ink-chalk">Наборы</p>
+        {bundleSets.length > 0 ? (
+          <BundleShop giftSets={bundleSets} />
+        ) : (
+          <EmptyState icon={IconGift} title="Наборов пока нет" description="Загляни позже — мы готовим подарки." />
+        )}
+      </div>
+      <div>
+        <p className="mb-2 font-display text-sm font-bold text-ink-chalk">Коллекционные</p>
+        {collectibleSets.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2">
+            {collectibleSets.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => setSelectedSet(g)}
+                className="flex flex-col items-center gap-2 rounded-2xl bg-bg-surface p-3 text-center active:scale-[0.98]"
+              >
+                {g.image_path ? (
+                  <img src={staticUrl(g.image_path) ?? undefined} className="h-16 w-16 rounded-xl object-cover" />
+                ) : (
+                  <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-rarity-epic/10">
+                    <IconGift size={28} className="text-rarity-epic" />
+                  </span>
+                )}
+                <p className="text-sm font-semibold text-ink-chalk">{g.name}</p>
+                <p className="flex items-center gap-2 font-mono text-xs font-bold text-accent-lime">
+                  {!!g.coins_price && (
+                    <span className="flex items-center gap-1">
+                      <IconCoin size={11} />
+                      {g.coins_price}
+                    </span>
+                  )}
+                  {!!g.stars_price && <span>{g.stars_price} ⭐</span>}
+                </p>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <EmptyState icon={IconGift} title="Коллекционных подарков пока нет" description="Загляни позже — мы готовим подарки." />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CollectiblePurchasePanel({ giftSet, onDone }: { giftSet: GiftSet; onDone: () => void }) {
+  const user = useAuthStore((s) => s.user);
+  const updateBalance = useAuthStore((s) => s.updateBalance);
+  const queryClient = useQueryClient();
+  const [recipientMode, setRecipientMode] = useState<"self" | "friend">("self");
+  const [target, setTarget] = useState<UserPublic | null>(null);
+  const [message, setMessage] = useState("");
+  const [currency, setCurrency] = useState<"stars" | "coins">(giftSet.coins_price > 0 ? "coins" : "stars");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const recipientId = recipientMode === "self" ? user?.id : target?.id;
+
+  const handleBuyWithCoins = async () => {
+    if (!recipientId) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const result = await buyCollectibleWithCoins(giftSet.id, recipientId, message || undefined);
+      updateBalance(result.new_balance);
+      hapticNotify("success");
+      queryClient.invalidateQueries({ queryKey: ["gifts", "mine"] });
+      setSuccess(true);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Не удалось купить подарок");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleBuyWithStars = async () => {
+    if (!recipientId) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const invoice = await createGiftInvoice(giftSet.id, recipientId, message || undefined);
+      const paymentStatus = await openTelegramInvoice(invoice.invoice_link);
+      if (paymentStatus === "cancelled") {
+        setBusy(false);
+        return;
+      }
+      if (paymentStatus === "failed") {
+        setError("Платёж не прошёл");
+        setBusy(false);
+        return;
+      }
+
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const status = await fetchGiftInvoiceStatus(invoice.payload_token);
+        if (status.status === "completed") {
+          hapticNotify("success");
+          queryClient.invalidateQueries({ queryKey: ["gifts", "mine"] });
+          setSuccess(true);
+          setBusy(false);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      throw new Error("Подарок ещё не отправлен — попробуй проверить через минуту");
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : err instanceof Error ? err.message : "Не удалось отправить подарок");
+      setBusy(false);
+    }
+  };
+
+  const handleConfirm = () => (currency === "coins" ? handleBuyWithCoins() : handleBuyWithStars());
+
+  if (success) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-2xl bg-bg-surface p-6 text-center">
+        <IconGift size={32} className="text-rarity-epic" />
+        <p className="font-display text-base font-bold text-ink-chalk">Подарок отправлен!</p>
+        <button onClick={onDone} className="mt-2 w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95">
+          Готово
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-ink-chalk">{giftSet.name}</p>
+        <button onClick={onDone} className="text-xs text-accent-lime">Назад</button>
+      </div>
+
+      {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
+
+      <div className="flex gap-2 rounded-xl bg-black/20 p-1">
+        <button
+          onClick={() => { setRecipientMode("self"); setTarget(null); }}
+          className={`flex-1 rounded-lg py-2 text-xs font-semibold ${recipientMode === "self" ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
+        >
+          Себе
+        </button>
+        <button
+          onClick={() => setRecipientMode("friend")}
+          className={`flex-1 rounded-lg py-2 text-xs font-semibold ${recipientMode === "friend" ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
+        >
+          Другу
+        </button>
+      </div>
+
+      {recipientMode === "friend" && <RecipientPicker target={target} onSelect={setTarget} />}
+
+      <input
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        maxLength={500}
+        placeholder="Поздравительная надпись (необязательно)"
+        className="rounded-xl bg-black/20 px-3 py-2.5 text-sm text-ink-chalk placeholder:text-ink-mist-dim outline-none"
+      />
+
+      {giftSet.stars_price > 0 && giftSet.coins_price > 0 && (
+        <div className="flex gap-2 rounded-xl bg-black/20 p-1">
+          <button
+            onClick={() => setCurrency("coins")}
+            className={`flex flex-1 items-center justify-center gap-1 rounded-lg py-2 text-xs font-semibold ${currency === "coins" ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
+          >
+            <IconCoin size={12} />
+            {giftSet.coins_price}
+          </button>
+          <button
+            onClick={() => setCurrency("stars")}
+            className={`flex-1 rounded-lg py-2 text-xs font-semibold ${currency === "stars" ? "bg-amber-400 text-bg-base" : "text-ink-mist"}`}
+          >
+            {giftSet.stars_price} ⭐
+          </button>
+        </div>
+      )}
+
+      <button
+        onClick={handleConfirm}
+        disabled={(recipientMode === "friend" && !target) || busy}
+        className="rounded-2xl bg-floodlight py-3 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-40"
+      >
+        {busy ? "Отправка..." : `Отправить за ${currency === "coins" ? `${giftSet.coins_price} монет` : `${giftSet.stars_price} ⭐`}`}
+      </button>
+    </div>
+  );
+}
+
+function BundleShop({ giftSets }: { giftSets: GiftSet[] }) {
   const [selectedSet, setSelectedSet] = useState<GiftSet | null>(null);
   const [target, setTarget] = useState<UserPublic | null>(null);
   const [message, setMessage] = useState("");
@@ -249,7 +560,7 @@ function SendGiftTab() {
   if (success) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-2xl bg-bg-surface p-6 text-center">
-        <span className="text-3xl">🎁</span>
+        <IconGift size={32} className="text-rarity-epic" />
         <p className="font-display text-base font-bold text-ink-chalk">Подарок отправлен!</p>
         <p className="text-sm text-ink-mist">{target?.username ?? target?.first_name} сможет открыть его в своём профиле.</p>
         <button
@@ -265,7 +576,7 @@ function SendGiftTab() {
   if (!selectedSet) {
     return (
       <div className="grid grid-cols-2 gap-2">
-        {giftSets?.map((g) => (
+        {giftSets.map((g) => (
           <button
             key={g.id}
             onClick={() => setSelectedSet(g)}
@@ -274,13 +585,14 @@ function SendGiftTab() {
             {g.image_path ? (
               <img src={staticUrl(g.image_path) ?? undefined} className="h-16 w-16 rounded-xl object-cover" />
             ) : (
-              <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-rarity-epic/10 text-3xl">🎁</span>
+              <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-rarity-epic/10">
+                <IconGift size={28} className="text-rarity-epic" />
+              </span>
             )}
             <p className="text-sm font-semibold text-ink-chalk">{g.name}</p>
             <p className="font-mono text-xs font-bold text-accent-lime">{g.stars_price} ⭐</p>
           </button>
         ))}
-        {giftSets?.length === 0 && <EmptyState icon={IconGift} title="Наборов пока нет" description="Загляни позже — мы готовим подарки." />}
       </div>
     );
   }
@@ -379,7 +691,7 @@ function AdminGiftControls() {
             >
               <option value="">Выбери набор...</option>
               {giftSets?.map((g) => (
-                <option key={g.id} value={g.id}>{g.name}</option>
+                <option key={g.id} value={g.id}>{g.name}{g.kind === "collectible" ? " (коллекционный)" : ""}</option>
               ))}
             </select>
           )}
