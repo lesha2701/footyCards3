@@ -18,9 +18,11 @@ import type { GiftSet } from "@/types";
 interface GiftSetForm {
   name: string;
   description: string;
+  kind: "bundle" | "collectible";
   pack_id: number | null;
   coins_amount: number;
   stars_price: number;
+  coins_price: number;
   is_active: boolean;
   sort_order: number;
 }
@@ -29,9 +31,11 @@ function giftSetToForm(g?: GiftSet): GiftSetForm {
   return {
     name: g?.name ?? "",
     description: g?.description ?? "",
+    kind: g?.kind ?? "bundle",
     pack_id: g?.pack_id ?? null,
     coins_amount: g?.coins_amount ?? 0,
     stars_price: g?.stars_price ?? 0,
+    coins_price: g?.coins_price ?? 0,
     is_active: g?.is_active ?? true,
     sort_order: g?.sort_order ?? 0,
   };
@@ -100,8 +104,13 @@ export default function AdminGiftsPage() {
               <div>
                 <p className="text-sm font-semibold">{g.name}</p>
                 <p className="text-[11px] text-slate-500">
-                  {g.stars_price} ⭐ · {g.coins_amount} монет{g.pack_id ? " · с паком" : ""} ·{" "}
-                  {g.is_active ? "Активен" : "Отключён"}
+                  <span className="rounded bg-white/10 px-1.5 py-0.5 font-semibold">
+                    {g.kind === "collectible" ? "Коллекционный" : "Набор"}
+                  </span>{" "}
+                  {g.kind === "collectible"
+                    ? `${g.stars_price} ⭐ · ${g.coins_price} монет`
+                    : `${g.stars_price} ⭐ · ${g.coins_amount} монет${g.pack_id ? " · с паком" : ""}`}{" "}
+                  · {g.is_active ? "Активен" : "Отключён"}
                 </p>
               </div>
             </div>
@@ -138,26 +147,56 @@ export default function AdminGiftsPage() {
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-slate-400">Пак в наборе (необязательно)</span>
-                <select
-                  value={form.pack_id ?? ""}
-                  onChange={(e) => setForm({ ...form, pack_id: e.target.value ? Number(e.target.value) : null })}
-                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
-                >
-                  <option value="">Без пака</option>
-                  {packs?.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                <span className="text-xs text-slate-400">Тип подарка</span>
+                <div className="flex gap-2 rounded-lg bg-bg-surface p-1">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, kind: "bundle" })}
+                    className={`flex-1 rounded-md py-1.5 text-xs font-semibold ${form.kind === "bundle" ? "bg-accent text-bg-base" : "text-slate-400"}`}
+                  >
+                    Набор
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, kind: "collectible" })}
+                    className={`flex-1 rounded-md py-1.5 text-xs font-semibold ${form.kind === "collectible" ? "bg-accent text-bg-base" : "text-slate-400"}`}
+                  >
+                    Коллекционный
+                  </button>
+                </div>
               </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-slate-400">Монеты в наборе</span>
-                <NumberInput min={0} value={form.coins_amount} onChange={(v) => setForm({ ...form, coins_amount: v })} />
-              </label>
+              {form.kind === "bundle" && (
+                <>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-slate-400">Пак в наборе (необязательно)</span>
+                    <select
+                      value={form.pack_id ?? ""}
+                      onChange={(e) => setForm({ ...form, pack_id: e.target.value ? Number(e.target.value) : null })}
+                      className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                    >
+                      <option value="">Без пака</option>
+                      {packs?.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-slate-400">Монеты в наборе</span>
+                    <NumberInput min={0} value={form.coins_amount} onChange={(v) => setForm({ ...form, coins_amount: v })} />
+                  </label>
+                </>
+              )}
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Цена в ⭐ (для покупки игроками)</span>
                 <NumberInput min={0} value={form.stars_price} onChange={(v) => setForm({ ...form, stars_price: v })} />
               </label>
+              {form.kind === "collectible" && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-400">Цена в монетах (для покупки игроками)</span>
+                  <NumberInput min={0} value={form.coins_price} onChange={(v) => setForm({ ...form, coins_price: v })} />
+                  <span className="text-[10px] text-slate-500">Нужна хотя бы одна цена — в ⭐ или в монетах.</span>
+                </label>
+              )}
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Порядок сортировки</span>
                 <NumberInput value={form.sort_order} onChange={(v) => setForm({ ...form, sort_order: v })} />
@@ -196,7 +235,7 @@ export default function AdminGiftsPage() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/png,image/jpeg,image/webp"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
                       className="hidden"
                       onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImageMutation.mutate(f); }}
                     />
