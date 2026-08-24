@@ -334,3 +334,20 @@ async def test_pin_bundle_gift_is_rejected(client, db_session, bot_token):
 
     resp = await client.patch(f"/api/v1/gifts/{gift_id}/pin", headers=recipient_headers, json={"pinned": True})
     assert resp.status_code == 409
+
+
+async def test_admin_can_upload_gif_image_for_gift_set(client, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    create_resp = await client.post(
+        "/api/v1/admin/gifts/sets", headers=auth,
+        json={"name": "Анимированный кубок", "kind": "collectible", "coins_price": 100},
+    )
+    gift_set_id = create_resp.json()["id"]
+
+    gif_bytes = b"GIF89a" + b"\x00" * 20  # minimal fake GIF payload — only the extension/content-type are validated
+    upload_resp = await client.post(
+        f"/api/v1/admin/gifts/sets/{gift_set_id}/image", headers=auth,
+        files={"file": ("cup.gif", gif_bytes, "image/gif")},
+    )
+    assert upload_resp.status_code == 200
+    assert upload_resp.json()["image_path"].endswith(".gif")

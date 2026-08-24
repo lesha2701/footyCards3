@@ -17,8 +17,8 @@ TROPHIES_DIR = STATIC_DIR / "trophies" / "uploads"
 GIFT_SETS_DIR = STATIC_DIR / "gift_sets" / "uploads"
 LEAGUE_TIERS_DIR = STATIC_DIR / "leagues" / "uploads"
 
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
-ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp"}
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
+ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 _SAFE_CHARS = re.compile(r"[^a-z0-9_-]+")
