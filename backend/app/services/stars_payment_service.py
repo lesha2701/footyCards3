@@ -27,7 +27,7 @@ from app.schemas.stars import (
     StarsInvoiceStatusOut,
 )
 from app.schemas.wheel import WheelPrizeOut, WheelSpinResultOut
-from app.services import collection_service
+from app.services import collection_service, gift_service
 from app.services.pack_service import _duplicate_counts_snapshot, get_opening_result, grant_bonus_pack_opening
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
@@ -198,6 +198,8 @@ async def create_gift_invoice(
         raise ConflictError("This gift set is not currently available")
     if gift_set.stars_price <= 0:
         raise ConflictError("This gift set cannot be purchased")
+    if gift_set.kind == GiftKind.collectible and gift_set.max_supply is not None and gift_set.next_serial_number > gift_set.max_supply:
+        raise ConflictError("Тираж этого подарка распродан")
 
     recipient = await db.get(User, recipient_id)
     if recipient is None:
@@ -338,9 +340,11 @@ async def deliver_payment(
         if gift_set is None or not gift_set.is_active or gift_set.stars_price != total_amount:
             raise ConflictError("This gift set is no longer available")
 
+        serial_number = await gift_service.reserve_gift_serial_numbers(db, gift_set)
+
         gift = Gift(
             gift_set_id=gift_set.id, sender_id=invoice.user_id, recipient_id=invoice.gift_recipient_id,
-            message=invoice.gift_message, is_admin_gift=False,
+            message=invoice.gift_message, is_admin_gift=False, serial_number=serial_number,
         )
         db.add(gift)
         await db.flush()

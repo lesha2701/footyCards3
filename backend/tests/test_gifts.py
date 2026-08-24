@@ -391,3 +391,105 @@ async def test_create_collectible_gift_set_with_only_coins_price_succeeds(client
     )
     assert create_resp.status_code == 200
     assert create_resp.json()["coins_price"] == 50
+
+
+async def test_collectible_purchases_get_sequential_serial_numbers(client, db_session, bot_token):
+    gift_set = await create_gift_set(db_session, kind=GiftKind.collectible, coins_price=10, stars_price=0)
+    buyer = await _register(client, db_session, 860020, bot_token)
+    headers = telegram_headers(860020, bot_token)
+
+    first = await client.post(
+        f"/api/v1/gifts/collectibles/{gift_set.id}/buy-with-coins", headers=headers, json={"recipient_id": buyer.id},
+    )
+    second = await client.post(
+        f"/api/v1/gifts/collectibles/{gift_set.id}/buy-with-coins", headers=headers, json={"recipient_id": buyer.id},
+    )
+    assert first.json()["gift"]["serial_number"] == 1
+    assert second.json()["gift"]["serial_number"] == 2
+
+
+async def test_buying_past_max_supply_is_rejected_and_not_charged(client, db_session, bot_token):
+    gift_set = await create_gift_set(
+        db_session, kind=GiftKind.collectible, coins_price=10, stars_price=0, max_supply=1,
+    )
+    buyer = await _register(client, db_session, 860021, bot_token)
+    headers = telegram_headers(860021, bot_token)
+
+    first = await client.post(
+        f"/api/v1/gifts/collectibles/{gift_set.id}/buy-with-coins", headers=headers, json={"recipient_id": buyer.id},
+    )
+    assert first.status_code == 200
+    balance_after_first = first.json()["new_balance"]
+
+    second = await client.post(
+        f"/api/v1/gifts/collectibles/{gift_set.id}/buy-with-coins", headers=headers, json={"recipient_id": buyer.id},
+    )
+    assert second.status_code == 409
+
+    await db_session.refresh(buyer)
+    assert buyer.balance == balance_after_first
+
+
+async def test_claiming_collectible_with_configured_prize_grants_it(client, db_session, bot_token):
+    await create_player(db_session, rarity=Rarity.epic)
+    pack = await create_pack(db_session, "gift-prize-pack", price=0, card_count=1, probabilities={Rarity.epic: 1.0})
+    gift_set = await create_gift_set(
+        db_session, kind=GiftKind.collectible, coins_price=10, stars_price=0,
+        coins_amount=25, pack_id=pack.id,
+    )
+    auth = await _admin_auth(client, bot_token)
+    recipient_headers = telegram_headers(860022, bot_token)
+    await client.post("/api/v1/auth/session", headers=recipient_headers)
+    recipient = await get_user_by_telegram_id(db_session, 860022)
+
+    send_resp = await client.post(
+        "/api/v1/admin/gifts/send", headers=auth,
+        json={"gift_set_id": gift_set.id, "user_id": recipient.id},
+    )
+    gift_id = send_resp.json()["id"]
+    assert send_resp.json()["serial_number"] == 1
+
+    claim_resp = await client.post(f"/api/v1/gifts/{gift_id}/claim", headers=recipient_headers)
+    assert claim_resp.status_code == 200
+    body = claim_resp.json()
+    assert body["coins_credited"] == 25
+    assert len(body["pack_result"]["cards"]) == 1
+    assert body["new_balance"] == 500 + 25
+
+
+async def test_broadcast_rejected_when_supply_cant_cover_all_recipients(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    await _register(client, db_session, 860023, bot_token)
+    await _register(client, db_session, 860024, bot_token)
+
+    gift_set = await create_gift_set(
+        db_session, kind=GiftKind.collectible, coins_price=10, stars_price=0, max_supply=1,
+    )
+
+    resp = await client.post(
+        "/api/v1/admin/gifts/broadcast", headers=auth,
+        json={"gift_set_id": gift_set.id},
+    )
+    assert resp.status_code == 409
+
+    mine = await client.get("/api/v1/gifts/mine", headers=telegram_headers(860023, bot_token))
+    assert mine.json() == []
+
+
+async def test_admin_cannot_shrink_max_supply_below_issued_count(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    gift_set = await create_gift_set(db_session, kind=GiftKind.collectible, coins_price=10, stars_price=0)
+    recipient_headers = telegram_headers(860025, bot_token)
+    await client.post("/api/v1/auth/session", headers=recipient_headers)
+    recipient = await get_user_by_telegram_id(db_session, 860025)
+
+    for _ in range(2):
+        await client.post(
+            "/api/v1/admin/gifts/send", headers=auth,
+            json={"gift_set_id": gift_set.id, "user_id": recipient.id},
+        )
+
+    resp = await client.put(
+        f"/api/v1/admin/gifts/sets/{gift_set.id}", headers=auth, json={"max_supply": 1},
+    )
+    assert resp.status_code == 409

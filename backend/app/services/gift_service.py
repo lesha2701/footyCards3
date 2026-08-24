@@ -29,11 +29,39 @@ async def list_my_gifts(db: AsyncSession, user: User) -> list[GiftOut]:
     return [GiftOut.model_validate(g) for g in result.scalars().all()]
 
 
+async def reserve_gift_serial_numbers(db: AsyncSession, gift_set: GiftSet, count: int = 1) -> Optional[int]:
+    """Atomically reserves `count` consecutive serial numbers on a
+    collectible gift_set and returns the first one — None for a bundle,
+    which is never numbered. Row-locks gift_set so concurrent mints (two
+    purchases, or a purchase racing an admin broadcast) can't hand out the
+    same number. Enforces max_supply; raises rather than partially
+    fulfilling an over-capacity request."""
+    if gift_set.kind != GiftKind.collectible:
+        return None
+    result = await db.execute(
+        select(GiftSet).where(GiftSet.id == gift_set.id).with_for_update().execution_options(populate_existing=True)
+    )
+    locked = result.scalar_one()
+    start = locked.next_serial_number
+    end = start + count - 1
+    if locked.max_supply is not None and end > locked.max_supply:
+        remaining = max(0, locked.max_supply - start + 1)
+        raise ConflictError(f"Недостаточно тиража: осталось {remaining}, а нужно {count}")
+    locked.next_serial_number = end + 1
+    db.add(locked)
+    return start
+
+
 async def claim_gift(db: AsyncSession, user: User, gift_id: int) -> GiftClaimResult:
     """Opens a pending gift — reward is only granted once the recipient
     explicitly claims it (never on receipt), mirroring opening a pack. Row
     locks the gift before checking claimed_at so two concurrent claim taps
-    (e.g. a double-tap) can't both pass the check and deliver twice."""
+    (e.g. a double-tap) can't both pass the check and deliver twice.
+
+    Both gift kinds share this exact reward logic: a collectible with no
+    configured coins_amount/pack_id just claims with nothing granted (the
+    common case — the row's existence is its own reward); one with a prize
+    configured grants it exactly like a bundle does."""
     result = await db.execute(
         select(Gift).where(Gift.id == gift_id).with_for_update(of=Gift).execution_options(populate_existing=True)
     )
@@ -44,18 +72,6 @@ async def claim_gift(db: AsyncSession, user: User, gift_id: int) -> GiftClaimRes
         raise ConflictError("This gift was already claimed")
 
     gift_set = gift.gift_set
-
-    if gift_set.kind == GiftKind.collectible:
-        # No pack to roll, no coins to credit — the gift row's existence is
-        # the reward. The frontend never shows a manual "open" button for
-        # these; it auto-claims them right after fetching the list.
-        gift.claimed_at = datetime.now(timezone.utc)
-        db.add(gift)
-        await db.commit()
-        await db.refresh(gift)
-        return GiftClaimResult(
-            gift=GiftOut.model_validate(gift), pack_result=None, coins_credited=0, new_balance=user.balance,
-        )
 
     pack_result = None
     if gift_set.pack_id is not None:
@@ -99,7 +115,12 @@ async def admin_send_gift_to_user(db: AsyncSession, gift_set_id: int, user_id: i
     if recipient is None:
         raise NotFoundError("User not found")
 
-    gift = Gift(gift_set_id=gift_set.id, sender_id=None, recipient_id=recipient.id, message=message, is_admin_gift=True)
+    serial_number = await reserve_gift_serial_numbers(db, gift_set)
+
+    gift = Gift(
+        gift_set_id=gift_set.id, sender_id=None, recipient_id=recipient.id, message=message,
+        is_admin_gift=True, serial_number=serial_number,
+    )
     db.add(gift)
     db.add(
         Notification(
@@ -129,6 +150,8 @@ async def admin_broadcast_gift(db: AsyncSession, gift_set_id: int, message: Opti
     if not user_ids:
         return 0
 
+    start_serial = await reserve_gift_serial_numbers(db, gift_set, count=len(user_ids))
+
     now = datetime.now(timezone.utc)
     await db.execute(
         insert(Gift),
@@ -136,9 +159,10 @@ async def admin_broadcast_gift(db: AsyncSession, gift_set_id: int, message: Opti
             {
                 "gift_set_id": gift_set.id, "sender_id": None, "recipient_id": uid,
                 "message": message, "is_admin_gift": True, "claimed_at": None,
+                "serial_number": (start_serial + i) if start_serial is not None else None,
                 "created_at": now, "updated_at": now,
             }
-            for uid in user_ids
+            for i, uid in enumerate(user_ids)
         ],
     )
     await db.execute(
@@ -174,12 +198,16 @@ async def buy_collectible_with_coins(
         raise NotFoundError("Recipient not found")
 
     buyer = await lock_user_for_update(db, buyer.id)
+    serial_number = await reserve_gift_serial_numbers(db, gift_set)
     await debit_coins(
         db, buyer, gift_set.coins_price, TransactionType.gift_purchase_coins,
         f"Подарок «{gift_set.name}»", related_object_type="gift_set", related_object_id=gift_set.id,
     )
 
-    gift = Gift(gift_set_id=gift_set.id, sender_id=buyer.id, recipient_id=recipient.id, message=message, is_admin_gift=False)
+    gift = Gift(
+        gift_set_id=gift_set.id, sender_id=buyer.id, recipient_id=recipient.id, message=message,
+        is_admin_gift=False, serial_number=serial_number,
+    )
     db.add(gift)
     await db.commit()
     await db.refresh(buyer)
