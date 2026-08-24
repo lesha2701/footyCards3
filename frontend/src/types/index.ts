@@ -631,6 +631,9 @@ export interface GiftSet {
   coins_amount: number;
   stars_price: number;
   coins_price: number;
+  max_supply: number | null;
+  next_serial_number: number;
+  collection_id: number | null;
   is_active: boolean;
   sort_order: number;
 }
@@ -642,6 +645,7 @@ export interface Gift {
   message: string | null;
   is_admin_gift: boolean;
   is_pinned: boolean;
+  serial_number: number | null;
   claimed_at: string | null;
   created_at: string;
 }

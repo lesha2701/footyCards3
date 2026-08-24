@@ -5,6 +5,7 @@ import {
   createGiftSet,
   deleteGiftSet,
   deleteGiftSetImage,
+  fetchAdminCardCollections,
   fetchAdminGiftSets,
   fetchAdminPacks,
   updateGiftSet,
@@ -13,6 +14,7 @@ import {
 import NumberInput from "@/components/common/NumberInput";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { showConfirm } from "@/lib/telegram";
+import type { CardCollection } from "@/admin/types";
 import type { GiftSet } from "@/types";
 
 interface GiftSetForm {
@@ -23,6 +25,8 @@ interface GiftSetForm {
   coins_amount: number;
   stars_price: number;
   coins_price: number;
+  max_supply: number;
+  collection_id: number | null;
   is_active: boolean;
   sort_order: number;
 }
@@ -36,6 +40,8 @@ function giftSetToForm(g?: GiftSet): GiftSetForm {
     coins_amount: g?.coins_amount ?? 0,
     stars_price: g?.stars_price ?? 0,
     coins_price: g?.coins_price ?? 0,
+    max_supply: g?.max_supply ?? 0,
+    collection_id: g?.collection_id ?? null,
     is_active: g?.is_active ?? true,
     sort_order: g?.sort_order ?? 0,
   };
@@ -45,6 +51,7 @@ export default function AdminGiftsPage() {
   const queryClient = useQueryClient();
   const { data: giftSets, isLoading } = useQuery({ queryKey: ["admin-gift-sets"], queryFn: fetchAdminGiftSets });
   const { data: packs } = useQuery({ queryKey: ["admin-packs-for-gifts"], queryFn: fetchAdminPacks });
+  const { data: collections } = useQuery({ queryKey: ["admin-card-collections-for-gifts"], queryFn: fetchAdminCardCollections });
   const [editing, setEditing] = useState<GiftSet | "new" | null>(null);
   const [form, setForm] = useState<GiftSetForm>(giftSetToForm());
   const [error, setError] = useState<string | null>(null);
@@ -53,8 +60,10 @@ export default function AdminGiftsPage() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-gift-sets"] });
 
   const saveMutation = useMutation({
-    mutationFn: () =>
-      editing === "new" ? createGiftSet({ ...form }) : updateGiftSet((editing as GiftSet).id, { ...form }),
+    mutationFn: () => {
+      const payload = { ...form, max_supply: form.max_supply > 0 ? form.max_supply : null };
+      return editing === "new" ? createGiftSet(payload) : updateGiftSet((editing as GiftSet).id, payload);
+    },
     onSuccess: () => { invalidate(); setEditing(null); setError(null); },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось сохранить набор"),
   });
@@ -111,6 +120,9 @@ export default function AdminGiftsPage() {
                     ? `${g.stars_price} ⭐ · ${g.coins_price} монет`
                     : `${g.stars_price} ⭐ · ${g.coins_amount} монет${g.pack_id ? " · с паком" : ""}`}{" "}
                   · {g.is_active ? "Активен" : "Отключён"}
+                  {g.kind === "collectible" && (
+                    <> · Тираж: {g.next_serial_number - 1}/{g.max_supply ?? "∞"}</>
+                  )}
                 </p>
               </div>
             </div>
@@ -167,37 +179,56 @@ export default function AdminGiftsPage() {
                   </div>
                 </label>
               )}
-              {form.kind === "bundle" && (
-                <>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs text-slate-400">Пак в наборе (необязательно)</span>
-                    <select
-                      value={form.pack_id ?? ""}
-                      onChange={(e) => setForm({ ...form, pack_id: e.target.value ? Number(e.target.value) : null })}
-                      className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
-                    >
-                      <option value="">Без пака</option>
-                      {packs?.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs text-slate-400">Монеты в наборе</span>
-                    <NumberInput min={0} value={form.coins_amount} onChange={(v) => setForm({ ...form, coins_amount: v })} />
-                  </label>
-                </>
-              )}
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">
+                  {form.kind === "bundle" ? "Пак в наборе (необязательно)" : "Пак-приз при получении (необязательно)"}
+                </span>
+                <select
+                  value={form.pack_id ?? ""}
+                  onChange={(e) => setForm({ ...form, pack_id: e.target.value ? Number(e.target.value) : null })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                >
+                  <option value="">Без пака</option>
+                  {packs?.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">
+                  {form.kind === "bundle" ? "Монеты в наборе" : "Монеты-приз при получении"}
+                </span>
+                <NumberInput min={0} value={form.coins_amount} onChange={(v) => setForm({ ...form, coins_amount: v })} />
+              </label>
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Цена в ⭐ (для покупки игроками)</span>
                 <NumberInput min={0} value={form.stars_price} onChange={(v) => setForm({ ...form, stars_price: v })} />
               </label>
               {form.kind === "collectible" && (
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-slate-400">Цена в монетах (для покупки игроками)</span>
-                  <NumberInput min={0} value={form.coins_price} onChange={(v) => setForm({ ...form, coins_price: v })} />
-                  <span className="text-[10px] text-slate-500">Нужна хотя бы одна цена — в ⭐ или в монетах.</span>
-                </label>
+                <>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-slate-400">Цена в монетах (для покупки игроками)</span>
+                    <NumberInput min={0} value={form.coins_price} onChange={(v) => setForm({ ...form, coins_price: v })} />
+                    <span className="text-[10px] text-slate-500">Нужна хотя бы одна цена — в ⭐ или в монетах.</span>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-slate-400">Тираж (0 = без ограничения)</span>
+                    <NumberInput min={0} value={form.max_supply} onChange={(v) => setForm({ ...form, max_supply: v })} />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-slate-400">Коллекция (необязательно)</span>
+                    <select
+                      value={form.collection_id ?? ""}
+                      onChange={(e) => setForm({ ...form, collection_id: e.target.value ? Number(e.target.value) : null })}
+                      className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                    >
+                      <option value="">Без коллекции</option>
+                      {collections?.map((c: CardCollection) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                </>
               )}
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Порядок сортировки</span>
