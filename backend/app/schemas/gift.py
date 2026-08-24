@@ -3,6 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.enums import GiftKind
 from app.schemas.pack import PackOpenResult
 from app.schemas.user import UserPublicOut
 
@@ -14,9 +15,11 @@ class GiftSetOut(BaseModel):
     name: str
     description: str
     image_path: Optional[str] = None
+    kind: GiftKind
     pack_id: Optional[int] = None
     coins_amount: int
     stars_price: int
+    coins_price: int
     is_active: bool
     sort_order: int
 
@@ -24,9 +27,11 @@ class GiftSetOut(BaseModel):
 class GiftSetCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     description: str = ""
+    kind: GiftKind = GiftKind.bundle
     pack_id: Optional[int] = None
     coins_amount: int = Field(default=0, ge=0)
     stars_price: int = Field(default=0, ge=0)
+    coins_price: int = Field(default=0, ge=0)
     is_active: bool = True
     sort_order: int = 0
 
@@ -34,9 +39,11 @@ class GiftSetCreate(BaseModel):
 class GiftSetUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=128)
     description: Optional[str] = None
+    kind: Optional[GiftKind] = None
     pack_id: Optional[int] = None
     coins_amount: Optional[int] = Field(default=None, ge=0)
     stars_price: Optional[int] = Field(default=None, ge=0)
+    coins_price: Optional[int] = Field(default=None, ge=0)
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
 
@@ -49,6 +56,7 @@ class GiftOut(BaseModel):
     sender: Optional[UserPublicOut] = None
     message: Optional[str] = None
     is_admin_gift: bool
+    is_pinned: bool
     claimed_at: Optional[datetime] = None
     created_at: datetime
 
@@ -60,10 +68,24 @@ class GiftClaimResult(BaseModel):
     new_balance: int
 
 
+class GiftPurchaseResult(BaseModel):
+    gift: GiftOut
+    new_balance: int
+
+
 class GiftSendIn(BaseModel):
     gift_set_id: int
     recipient_id: int
     message: Optional[str] = Field(default=None, max_length=500)
+
+
+class GiftBuyWithCoinsIn(BaseModel):
+    recipient_id: int
+    message: Optional[str] = Field(default=None, max_length=500)
+
+
+class GiftPinIn(BaseModel):
+    pinned: bool
 
 
 class AdminGiftSendIn(BaseModel):
