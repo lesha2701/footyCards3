@@ -4,7 +4,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.gift import GiftClaimResult, GiftOut, GiftSendIn, GiftSetOut
+from app.schemas.gift import (
+    GiftBuyWithCoinsIn,
+    GiftClaimResult,
+    GiftOut,
+    GiftPinIn,
+    GiftPurchaseResult,
+    GiftSendIn,
+    GiftSetOut,
+)
 from app.schemas.stars import StarsInvoiceCreateOut, StarsInvoiceStatusOut
 from app.services import gift_service, stars_payment_service
 
@@ -40,3 +48,18 @@ async def list_my_gifts(db: AsyncSession = Depends(get_db), user: User = Depends
 @router.post("/{gift_id}/claim", response_model=GiftClaimResult)
 async def claim_gift(gift_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await gift_service.claim_gift(db, user, gift_id)
+
+
+@router.post("/collectibles/{gift_set_id}/buy-with-coins", response_model=GiftPurchaseResult)
+async def buy_collectible_with_coins(
+    gift_set_id: int, payload: GiftBuyWithCoinsIn,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await gift_service.buy_collectible_with_coins(db, user, gift_set_id, payload.recipient_id, payload.message)
+
+
+@router.patch("/{gift_id}/pin", response_model=GiftOut)
+async def pin_gift(
+    gift_id: int, payload: GiftPinIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await gift_service.set_gift_pinned(db, user, gift_id, payload.pinned)

@@ -1,18 +1,18 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import insert, select
+from sqlalchemy import func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.models.enums import CardSource, NotificationType, TransactionType
+from app.models.enums import CardSource, GiftKind, NotificationType, TransactionType
 from app.models.gift import Gift, GiftSet
 from app.models.notification import Notification
 from app.models.user import User
-from app.schemas.gift import GiftClaimResult, GiftOut, GiftSetOut
+from app.schemas.gift import GiftClaimResult, GiftOut, GiftPurchaseResult, GiftSetOut
 from app.services import collection_service
 from app.services.pack_service import grant_bonus_pack_opening
-from app.services.wallet_service import credit_coins, lock_user_for_update
+from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 
 async def list_active_gift_sets(db: AsyncSession) -> list[GiftSetOut]:
@@ -44,6 +44,18 @@ async def claim_gift(db: AsyncSession, user: User, gift_id: int) -> GiftClaimRes
         raise ConflictError("This gift was already claimed")
 
     gift_set = gift.gift_set
+
+    if gift_set.kind == GiftKind.collectible:
+        # No pack to roll, no coins to credit — the gift row's existence is
+        # the reward. The frontend never shows a manual "open" button for
+        # these; it auto-claims them right after fetching the list.
+        gift.claimed_at = datetime.now(timezone.utc)
+        db.add(gift)
+        await db.commit()
+        await db.refresh(gift)
+        return GiftClaimResult(
+            gift=GiftOut.model_validate(gift), pack_result=None, coins_credited=0, new_balance=user.balance,
+        )
 
     pack_result = None
     if gift_set.pack_id is not None:
@@ -142,3 +154,67 @@ async def admin_broadcast_gift(db: AsyncSession, gift_set_id: int, message: Opti
     )
     await db.commit()
     return len(user_ids)
+
+
+async def buy_collectible_with_coins(
+    db: AsyncSession, buyer: User, gift_set_id: int, recipient_id: int, message: Optional[str],
+) -> GiftPurchaseResult:
+    gift_set = await db.get(GiftSet, gift_set_id)
+    if gift_set is None:
+        raise NotFoundError("Gift set not found")
+    if not gift_set.is_active:
+        raise ConflictError("This gift is not currently available")
+    if gift_set.kind != GiftKind.collectible:
+        raise ConflictError("This gift can only be bought with Stars")
+    if gift_set.coins_price <= 0:
+        raise ConflictError("This gift cannot be bought with coins")
+
+    recipient = await db.get(User, recipient_id)
+    if recipient is None:
+        raise NotFoundError("Recipient not found")
+
+    buyer = await lock_user_for_update(db, buyer.id)
+    await debit_coins(
+        db, buyer, gift_set.coins_price, TransactionType.gift_purchase_coins,
+        f"Подарок «{gift_set.name}»", related_object_type="gift_set", related_object_id=gift_set.id,
+    )
+
+    gift = Gift(gift_set_id=gift_set.id, sender_id=buyer.id, recipient_id=recipient.id, message=message, is_admin_gift=False)
+    db.add(gift)
+    await db.commit()
+    await db.refresh(buyer)
+    await db.refresh(gift)
+
+    return GiftPurchaseResult(gift=GiftOut.model_validate(gift), new_balance=buyer.balance)
+
+
+async def set_gift_pinned(db: AsyncSession, user: User, gift_id: int, pinned: bool) -> GiftOut:
+    result = await db.execute(
+        select(Gift).where(Gift.id == gift_id).with_for_update(of=Gift).execution_options(populate_existing=True)
+    )
+    gift = result.scalar_one_or_none()
+    if gift is None or gift.recipient_id != user.id:
+        raise NotFoundError("Gift not found")
+    if gift.gift_set.kind != GiftKind.collectible:
+        raise ConflictError("Only collectible gifts can be pinned")
+    if gift.claimed_at is None:
+        raise ConflictError("This gift hasn't been claimed yet")
+
+    if pinned and not gift.is_pinned:
+        pinned_count = (
+            await db.execute(
+                select(func.count()).select_from(Gift).where(Gift.recipient_id == user.id, Gift.is_pinned.is_(True))
+            )
+        ).scalar_one()
+        if pinned_count >= 3:
+            raise ConflictError("You can only pin up to 3 gifts — unpin one first")
+        gift.is_pinned = True
+        gift.pinned_at = datetime.now(timezone.utc)
+    elif not pinned:
+        gift.is_pinned = False
+        gift.pinned_at = None
+
+    db.add(gift)
+    await db.commit()
+    await db.refresh(gift)
+    return GiftOut.model_validate(gift)

@@ -12,7 +12,7 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.models.badge import UserBadge
 from app.models.card import UserCard
 from app.models.coin_package import CoinPackage
-from app.models.enums import CardSource, TransactionType, WheelSpinSource
+from app.models.enums import CardSource, GiftKind, TransactionType, WheelSpinSource
 from app.models.gift import Gift, GiftSet
 from app.models.pack import Pack, PackOpening, StarsInvoice
 from app.models.user import User
@@ -202,7 +202,7 @@ async def create_gift_invoice(
     recipient = await db.get(User, recipient_id)
     if recipient is None:
         raise NotFoundError("Recipient not found")
-    if recipient.id == user.id:
+    if recipient.id == user.id and gift_set.kind == GiftKind.bundle:
         raise ConflictError("You can't send a gift to yourself")
 
     payload_token = secrets.token_urlsafe(16)

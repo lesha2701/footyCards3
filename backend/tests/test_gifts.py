@@ -3,7 +3,7 @@ from sqlalchemy import select
 
 import app.core.rate_limit as rate_limit_module
 from app.config import get_settings
-from app.models.enums import Rarity
+from app.models.enums import GiftKind, Rarity
 from app.models.gift import Gift
 from app.services import stars_payment_service
 from tests.factories import create_gift_set, create_pack, create_player, get_user_by_telegram_id
@@ -202,3 +202,135 @@ async def test_deleting_gift_set_removes_pending_gifts(client, db_session, bot_t
 
     remaining = (await db_session.execute(select(Gift).where(Gift.gift_set_id == gift_set.id))).scalars().all()
     assert remaining == []
+
+
+async def test_buy_collectible_gift_with_coins_for_self(client, db_session, bot_token):
+    gift_set = await create_gift_set(
+        db_session, name="Золотой кубок", kind=GiftKind.collectible, coins_price=150, stars_price=0, coins_amount=0,
+    )
+    user = await _register(client, db_session, 860010, bot_token)
+    headers = telegram_headers(860010, bot_token)
+
+    resp = await client.post(
+        f"/api/v1/gifts/collectibles/{gift_set.id}/buy-with-coins", headers=headers,
+        json={"recipient_id": user.id},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["new_balance"] == 500 - 150
+    assert body["gift"]["gift_set"]["kind"] == "collectible"
+    assert body["gift"]["claimed_at"] is None
+
+    mine = await client.get("/api/v1/gifts/mine", headers=headers)
+    assert len(mine.json()) == 1
+
+
+async def test_buy_collectible_gift_with_coins_insufficient_balance(client, db_session, bot_token):
+    gift_set = await create_gift_set(db_session, kind=GiftKind.collectible, coins_price=999999, stars_price=0)
+    user = await _register(client, db_session, 860011, bot_token)
+    headers = telegram_headers(860011, bot_token)
+
+    resp = await client.post(
+        f"/api/v1/gifts/collectibles/{gift_set.id}/buy-with-coins", headers=headers,
+        json={"recipient_id": user.id},
+    )
+    assert resp.status_code == 400
+
+
+async def test_buy_bundle_gift_with_coins_is_rejected(client, db_session, bot_token):
+    gift_set = await create_gift_set(db_session, kind=GiftKind.bundle, coins_amount=10, stars_price=20)
+    user = await _register(client, db_session, 860012, bot_token)
+    headers = telegram_headers(860012, bot_token)
+
+    resp = await client.post(
+        f"/api/v1/gifts/collectibles/{gift_set.id}/buy-with-coins", headers=headers,
+        json={"recipient_id": user.id},
+    )
+    assert resp.status_code == 409
+
+
+async def test_collectible_gift_can_be_sent_to_self_with_stars(client, db_session, bot_token, monkeypatch):
+    monkeypatch.setattr(stars_payment_service, "_request_telegram_invoice_link", _fake_invoice_link)
+    gift_set = await create_gift_set(db_session, kind=GiftKind.collectible, stars_price=15, coins_price=0)
+    user = await _register(client, db_session, 860013, bot_token)
+    headers = telegram_headers(860013, bot_token)
+
+    resp = await client.post(
+        "/api/v1/gifts/invoice", headers=headers,
+        json={"gift_set_id": gift_set.id, "recipient_id": user.id},
+    )
+    assert resp.status_code == 200
+
+
+async def test_claiming_collectible_gift_grants_nothing(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    recipient_headers = telegram_headers(860014, bot_token)
+    await client.post("/api/v1/auth/session", headers=recipient_headers)
+    recipient = await get_user_by_telegram_id(db_session, 860014)
+
+    gift_set = await create_gift_set(db_session, kind=GiftKind.collectible, coins_price=10, stars_price=0)
+    send_resp = await client.post(
+        "/api/v1/admin/gifts/send", headers=auth,
+        json={"gift_set_id": gift_set.id, "user_id": recipient.id},
+    )
+    gift_id = send_resp.json()["id"]
+
+    claim_resp = await client.post(f"/api/v1/gifts/{gift_id}/claim", headers=recipient_headers)
+    assert claim_resp.status_code == 200
+    body = claim_resp.json()
+    assert body["coins_credited"] == 0
+    assert body["pack_result"] is None
+    assert body["new_balance"] == 500
+
+
+async def test_pin_and_unpin_collectible_gift(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    recipient_headers = telegram_headers(860015, bot_token)
+    await client.post("/api/v1/auth/session", headers=recipient_headers)
+    recipient = await get_user_by_telegram_id(db_session, 860015)
+
+    gift_ids = []
+    for i in range(4):
+        gift_set = await create_gift_set(
+            db_session, name=f"Кубок {i}", kind=GiftKind.collectible, coins_price=10, stars_price=0,
+        )
+        send_resp = await client.post(
+            "/api/v1/admin/gifts/send", headers=auth,
+            json={"gift_set_id": gift_set.id, "user_id": recipient.id},
+        )
+        gift_id = send_resp.json()["id"]
+        await client.post(f"/api/v1/gifts/{gift_id}/claim", headers=recipient_headers)
+        gift_ids.append(gift_id)
+
+    for gift_id in gift_ids[:3]:
+        resp = await client.patch(f"/api/v1/gifts/{gift_id}/pin", headers=recipient_headers, json={"pinned": True})
+        assert resp.status_code == 200
+        assert resp.json()["is_pinned"] is True
+
+    fourth = await client.patch(f"/api/v1/gifts/{gift_ids[3]}/pin", headers=recipient_headers, json={"pinned": True})
+    assert fourth.status_code == 409
+
+    unpin = await client.patch(f"/api/v1/gifts/{gift_ids[0]}/pin", headers=recipient_headers, json={"pinned": False})
+    assert unpin.status_code == 200
+    assert unpin.json()["is_pinned"] is False
+
+    now_ok = await client.patch(f"/api/v1/gifts/{gift_ids[3]}/pin", headers=recipient_headers, json={"pinned": True})
+    assert now_ok.status_code == 200
+
+
+async def test_pin_bundle_gift_is_rejected(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    recipient_headers = telegram_headers(860016, bot_token)
+    await client.post("/api/v1/auth/session", headers=recipient_headers)
+    recipient = await get_user_by_telegram_id(db_session, 860016)
+
+    gift_set = await create_gift_set(db_session, kind=GiftKind.bundle, coins_amount=10, stars_price=0)
+    send_resp = await client.post(
+        "/api/v1/admin/gifts/send", headers=auth,
+        json={"gift_set_id": gift_set.id, "user_id": recipient.id},
+    )
+    gift_id = send_resp.json()["id"]
+    await client.post(f"/api/v1/gifts/{gift_id}/claim", headers=recipient_headers)
+
+    resp = await client.patch(f"/api/v1/gifts/{gift_id}/pin", headers=recipient_headers, json={"pinned": True})
+    assert resp.status_code == 409
