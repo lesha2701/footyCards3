@@ -41,6 +41,13 @@ def _validate_max_supply(gift_set: GiftSet) -> None:
         raise ConflictError("Нельзя уменьшить тираж ниже уже выпущенного количества")
 
 
+def _validate_collectible_prize_vs_price(gift_set: GiftSet) -> None:
+    if gift_set.kind != GiftKind.collectible:
+        return
+    if gift_set.coins_price > 0 and gift_set.coins_amount >= gift_set.coins_price:
+        raise ConflictError("Монеты-приз не могут быть больше или равны цене подарка в монетах")
+
+
 @router.get("/sets", response_model=list[GiftSetOut])
 async def list_all_gift_sets(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(GiftSet).order_by(GiftSet.sort_order))
@@ -54,6 +61,7 @@ async def create_gift_set(
     gift_set = GiftSet(**payload.model_dump())
     _validate_collectible_pricing(gift_set)
     _validate_max_supply(gift_set)
+    _validate_collectible_prize_vs_price(gift_set)
     db.add(gift_set)
     await db.flush()
     await log_action(
@@ -78,6 +86,7 @@ async def update_gift_set(
         setattr(gift_set, key, value)
     _validate_collectible_pricing(gift_set)
     _validate_max_supply(gift_set)
+    _validate_collectible_prize_vs_price(gift_set)
     db.add(gift_set)
 
     await log_action(

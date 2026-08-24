@@ -503,3 +503,22 @@ async def test_admin_can_create_collectible_gift_set_with_max_supply(client, bot
     )
     assert create_resp.status_code == 200
     assert create_resp.json()["max_supply"] == 100
+
+
+async def test_admin_cannot_create_collectible_with_prize_at_or_above_price(client, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    create_resp = await client.post(
+        "/api/v1/admin/gifts/sets", headers=auth,
+        json={"name": "Дырявый кубок", "kind": "collectible", "coins_price": 10, "coins_amount": 50},
+    )
+    assert create_resp.status_code == 409
+
+
+async def test_admin_can_create_collectible_with_prize_below_price(client, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    create_resp = await client.post(
+        "/api/v1/admin/gifts/sets", headers=auth,
+        json={"name": "Честный кубок", "kind": "collectible", "coins_price": 10, "coins_amount": 5},
+    )
+    assert create_resp.status_code == 200
+    assert create_resp.json()["coins_amount"] == 5
