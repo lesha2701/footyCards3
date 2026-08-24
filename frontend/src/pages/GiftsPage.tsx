@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { adminBroadcastGift, adminSendGift, fetchAdminTrophies, grantTrophy } from "@/admin/api";
 import {
@@ -41,24 +41,15 @@ export default function GiftsPage() {
     },
   });
 
-  // Collectible gifts have no "open" ceremony — a random pack roll needs an
-  // explicit claim tap, but a cosmetic collectible's reward *is* the row
-  // existing, so silently mark any unclaimed one claimed the moment it shows
-  // up, instead of making the player hunt for a button that isn't there.
-  useEffect(() => {
-    const pendingCollectibles = (myGifts ?? []).filter((g) => g.gift_set.kind === "collectible" && !g.claimed_at);
-    if (pendingCollectibles.length === 0) return;
-    Promise.allSettled(pendingCollectibles.map((g) => claimGift(g.id))).then(() => {
-      queryClient.invalidateQueries({ queryKey: ["gifts", "mine"] });
-    });
-  }, [myGifts, queryClient]);
-
   if (!user) return null;
 
-  const collectibles = (myGifts ?? []).filter((g) => g.gift_set.kind === "collectible");
-  const pendingBundles = (myGifts ?? []).filter((g) => g.gift_set.kind === "bundle" && !g.claimed_at);
+  // Both gift kinds now share the same pending -> claim -> reveal lifecycle:
+  // a collectible with no configured prize just claims with nothing granted,
+  // one with coins/pack configured grants it exactly like a bundle does.
+  const collectibles = (myGifts ?? []).filter((g) => g.gift_set.kind === "collectible" && !!g.claimed_at);
+  const pendingGifts = (myGifts ?? []).filter((g) => !g.claimed_at);
   const claimedBundles = (myGifts ?? []).filter((g) => g.gift_set.kind === "bundle" && g.claimed_at);
-  const isEmpty = collectibles.length === 0 && pendingBundles.length === 0 && claimedBundles.length === 0;
+  const isEmpty = collectibles.length === 0 && pendingGifts.length === 0 && claimedBundles.length === 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -76,7 +67,7 @@ export default function GiftsPage() {
             tab === "mine" ? "bg-floodlight text-bg-base" : "text-ink-mist"
           }`}
         >
-          Мои подарки{pendingBundles.length > 0 ? ` (${pendingBundles.length})` : ""}
+          Мои подарки{pendingGifts.length > 0 ? ` (${pendingGifts.length})` : ""}
         </button>
         <button
           onClick={() => setTab("shop")}
@@ -122,14 +113,17 @@ export default function GiftsPage() {
                       )}
                     </span>
                     <span className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{g.gift_set.name}</span>
+                    {g.serial_number != null && (
+                      <span className="font-mono text-[10px] text-ink-mist-dim">№{g.serial_number}</span>
+                    )}
                   </button>
                 ))}
               </div>
             )}
 
-            {pendingBundles.length > 0 && (
+            {pendingGifts.length > 0 && (
               <div className="flex flex-col gap-2">
-                {pendingBundles.map((g) => (
+                {pendingGifts.map((g) => (
                   <div key={g.id} className="flex items-center justify-between rounded-2xl bg-bg-surface p-3">
                     <div className="flex items-center gap-3">
                       {g.gift_set.image_path ? (
@@ -185,13 +179,33 @@ export default function GiftsPage() {
 }
 
 function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; onClose: () => void }) {
+  const isCollectible = result.gift.gift_set.kind === "collectible";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={onClose}>
       <div className="w-full max-w-sm rounded-2xl bg-bg-surface p-5" onClick={(e) => e.stopPropagation()}>
-        <p className="flex items-center justify-center gap-1.5 text-center font-display text-base font-bold text-ink-chalk">
-          <IconGift size={18} className="text-rarity-epic" />
-          Подарок открыт!
-        </p>
+        {isCollectible ? (
+          <div className="flex flex-col items-center gap-1">
+            <span className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-rarity-epic/10">
+              {result.gift.gift_set.image_path ? (
+                <img src={staticUrl(result.gift.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
+              ) : (
+                <IconGift size={32} className="text-rarity-epic" />
+              )}
+            </span>
+            <p className="mt-2 font-display text-base font-bold text-ink-chalk">{result.gift.gift_set.name}</p>
+            {result.gift.serial_number != null && (
+              <p className="font-mono text-xs text-ink-mist">
+                №{result.gift.serial_number}
+                {result.gift.gift_set.max_supply ? ` из ${result.gift.gift_set.max_supply}` : ""}
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="flex items-center justify-center gap-1.5 text-center font-display text-base font-bold text-ink-chalk">
+            <IconGift size={18} className="text-rarity-epic" />
+            Подарок открыт!
+          </p>
+        )}
 
         {result.coins_credited > 0 && (
           <div className="mt-3 flex items-center justify-center gap-1.5 rounded-xl bg-accent-green/10 py-2 font-mono text-sm font-bold text-accent-green">
@@ -240,6 +254,12 @@ function GiftDetailSheet({ gift, onClose }: { gift: Gift; onClose: () => void })
           )}
         </span>
         <p className="mt-3 font-display text-base font-bold text-ink-chalk">{gift.gift_set.name}</p>
+        {gift.serial_number != null && (
+          <p className="mt-1 font-mono text-xs text-accent-lime">
+            №{gift.serial_number}
+            {gift.gift_set.max_supply ? ` из ${gift.gift_set.max_supply}` : ""}
+          </p>
+        )}
         <p className="mt-1 text-xs text-ink-mist">
           {gift.sender ? `От ${gift.sender.username ?? gift.sender.first_name ?? "игрока"}` : "От администрации"}
         </p>
@@ -361,6 +381,11 @@ function ShopTab() {
                   )}
                   {!!g.stars_price && <span>{g.stars_price} ⭐</span>}
                 </p>
+                {g.max_supply != null && (
+                  <p className="font-mono text-[10px] text-ink-mist-dim">
+                    Осталось {Math.max(0, g.max_supply - (g.next_serial_number - 1))} из {g.max_supply}
+                  </p>
+                )}
               </button>
             ))}
           </div>
@@ -383,8 +408,23 @@ function CollectiblePurchasePanel({ giftSet, onDone }: { giftSet: GiftSet; onDon
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [revealResult, setRevealResult] = useState<GiftClaimResult | null>(null);
 
   const recipientId = recipientMode === "self" ? user?.id : target?.id;
+
+  // Self-purchases feel instant: claim (and thus grant any configured
+  // prize) immediately after the purchase call succeeds, then show the same
+  // reveal modal a "received" gift shows after tapping "Открыть" — no
+  // separate trip to the pending list. Friend purchases keep the plain
+  // "sent" confirmation; the prize belongs to the recipient, who gets their
+  // own reveal when they claim it later.
+  const revealIfSelf = async (giftId: number) => {
+    const claimResult = await claimGift(giftId);
+    updateBalance(claimResult.new_balance);
+    hapticNotify("success");
+    queryClient.invalidateQueries({ queryKey: ["gifts", "mine"] });
+    setRevealResult(claimResult);
+  };
 
   const handleBuyWithCoins = async () => {
     if (!recipientId) return;
@@ -393,9 +433,13 @@ function CollectiblePurchasePanel({ giftSet, onDone }: { giftSet: GiftSet; onDon
     try {
       const result = await buyCollectibleWithCoins(giftSet.id, recipientId, message || undefined);
       updateBalance(result.new_balance);
-      hapticNotify("success");
       queryClient.invalidateQueries({ queryKey: ["gifts", "mine"] });
-      setSuccess(true);
+      if (recipientMode === "self") {
+        await revealIfSelf(result.gift.id);
+      } else {
+        hapticNotify("success");
+        setSuccess(true);
+      }
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Не удалось купить подарок");
     } finally {
@@ -423,9 +467,13 @@ function CollectiblePurchasePanel({ giftSet, onDone }: { giftSet: GiftSet; onDon
       for (let attempt = 0; attempt < 20; attempt++) {
         const status = await fetchGiftInvoiceStatus(invoice.payload_token);
         if (status.status === "completed") {
-          hapticNotify("success");
           queryClient.invalidateQueries({ queryKey: ["gifts", "mine"] });
-          setSuccess(true);
+          if (recipientMode === "self" && status.gift_result) {
+            await revealIfSelf(status.gift_result.id);
+          } else {
+            hapticNotify("success");
+            setSuccess(true);
+          }
           setBusy(false);
           return;
         }
@@ -439,6 +487,10 @@ function CollectiblePurchasePanel({ giftSet, onDone }: { giftSet: GiftSet; onDon
   };
 
   const handleConfirm = () => (currency === "coins" ? handleBuyWithCoins() : handleBuyWithStars());
+
+  if (revealResult) {
+    return <GiftClaimResultModal result={revealResult} onClose={onDone} />;
+  }
 
   if (success) {
     return (
