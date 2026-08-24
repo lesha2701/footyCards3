@@ -626,9 +626,11 @@ export interface GiftSet {
   name: string;
   description: string;
   image_path: string | null;
+  kind: "bundle" | "collectible";
   pack_id: number | null;
   coins_amount: number;
   stars_price: number;
+  coins_price: number;
   is_active: boolean;
   sort_order: number;
 }
@@ -639,6 +641,7 @@ export interface Gift {
   sender: UserPublic | null;
   message: string | null;
   is_admin_gift: boolean;
+  is_pinned: boolean;
   claimed_at: string | null;
   created_at: string;
 }
@@ -647,6 +650,11 @@ export interface GiftClaimResult {
   gift: Gift;
   pack_result: PackOpenResult | null;
   coins_credited: number;
+  new_balance: number;
+}
+
+export interface GiftPurchaseResult {
+  gift: Gift;
   new_balance: number;
 }
 

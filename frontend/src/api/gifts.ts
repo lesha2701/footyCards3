@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { Gift, GiftClaimResult, GiftSet, StarsInvoiceCreate, StarsInvoiceStatus } from "@/types";
+import type { Gift, GiftClaimResult, GiftPurchaseResult, GiftSet, StarsInvoiceCreate, StarsInvoiceStatus } from "@/types";
 
 export async function fetchGiftSets(): Promise<GiftSet[]> {
   const { data } = await api.get<GiftSet[]>("/gifts/sets");
@@ -27,5 +27,19 @@ export async function fetchMyGifts(): Promise<Gift[]> {
 
 export async function claimGift(giftId: number): Promise<GiftClaimResult> {
   const { data } = await api.post<GiftClaimResult>(`/gifts/${giftId}/claim`);
+  return data;
+}
+
+export async function buyCollectibleWithCoins(
+  giftSetId: number, recipientId: number, message?: string
+): Promise<GiftPurchaseResult> {
+  const { data } = await api.post<GiftPurchaseResult>(`/gifts/collectibles/${giftSetId}/buy-with-coins`, {
+    recipient_id: recipientId, message,
+  });
+  return data;
+}
+
+export async function pinGift(giftId: number, pinned: boolean): Promise<Gift> {
+  const { data } = await api.patch<Gift>(`/gifts/${giftId}/pin`, { pinned });
   return data;
 }
