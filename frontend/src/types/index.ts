@@ -941,3 +941,50 @@ export interface ApiError {
     details?: Record<string, unknown>;
   };
 }
+
+export type ClubType = "open" | "closed";
+export type ClubRole = "captain" | "assistant" | "member";
+export type ClubLogoShape = "shield" | "circle" | "hexagon" | "star" | "diamond" | "banner" | "crest" | "chevron";
+
+export interface ClubMember {
+  user_id: number;
+  username: string | null;
+  first_name: string | null;
+  avatar_url: string | null;
+  role: ClubRole;
+  joined_at: string;
+}
+
+export interface ClubSummary {
+  id: number;
+  name: string;
+  club_type: ClubType;
+  logo_shape: ClubLogoShape;
+  logo_color: string;
+  member_count: number;
+}
+
+export interface Club {
+  id: number;
+  name: string;
+  description: string;
+  club_type: ClubType;
+  logo_shape: ClubLogoShape;
+  logo_color: string;
+  captain_id: number;
+  founded_at: string;
+  member_count: number;
+  members: ClubMember[];
+  invite_code: string | null;
+  my_role: ClubRole | null;
+}
+
+export interface ClubJoinRequest {
+  id: number;
+  user_id: number;
+  username: string | null;
+  first_name: string | null;
+  avatar_url: string | null;
+  created_at: string;
+  status: "pending" | "accepted" | "rejected";
+}
