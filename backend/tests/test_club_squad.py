@@ -88,7 +88,16 @@ async def test_set_club_lineup_swaps_a_bench_card_into_a_slot(client, db_session
     ]
     resp = await client.put("/api/v1/clubs/me/lineup", headers=headers, json={"slots": slots_payload})
     assert resp.status_code == 200
-    assert resp.json()["is_complete"] is True
+    body = resp.json()
+    assert body["is_complete"] is True
+
+    # Regression check for the identity-map staleness bug fixed alongside
+    # this test: the PUT response itself (not just a subsequent GET) must
+    # reflect the just-swapped card in its slot. With expire_on_commit=False
+    # (see database.py), a re-read missing populate_existing=True can
+    # silently return the session's pre-swap cached ClubLineup object.
+    put_slot = next(s for s in body["slots"] if s["slot_code"] == matching_slot["slot_code"])
+    assert put_slot["card"]["id"] == bench_card["id"]
 
 
 async def test_non_manager_cannot_set_lineup(client, db_session, bot_token):

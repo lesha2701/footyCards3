@@ -91,8 +91,19 @@ async def seed_starting_squad(db: AsyncSession, club_id: int) -> None:
 
 
 async def _get_or_none_lineup(db: AsyncSession, club_id: int) -> ClubLineup | None:
+    # populate_existing=True is required here for the same reason as
+    # wallet_service.lock_user_for_update: the session's identity map may
+    # already hold this same ClubLineup object from earlier in the request
+    # (e.g. set_club_lineup's locked query before its delete-then-recreate),
+    # and this app's session factory uses expire_on_commit=False (see
+    # database.py), so a plain re-SELECT after commit would silently return
+    # that stale cached object — including its now-outdated `.cards`
+    # collection — instead of what this query actually just fetched.
     result = await db.execute(
-        select(ClubLineup).where(ClubLineup.club_id == club_id).options(joinedload(ClubLineup.cards).joinedload(ClubLineupCard.club_card))
+        select(ClubLineup)
+        .where(ClubLineup.club_id == club_id)
+        .options(joinedload(ClubLineup.cards).joinedload(ClubLineupCard.club_card))
+        .execution_options(populate_existing=True)
     )
     return result.unique().scalar_one_or_none()
 
