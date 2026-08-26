@@ -41,6 +41,7 @@ class Player(TimestampMixin, Base):
         ForeignKey("card_collections.id", ondelete="SET NULL"), nullable=True
     )
     next_serial_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    next_club_serial_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     cards: Mapped[list["UserCard"]] = relationship(back_populates="player")
     collection: Mapped[Optional["CardCollection"]] = relationship(back_populates="players", lazy="joined")

@@ -98,6 +98,11 @@ class ClubBudgetTransactionType(str, enum.Enum):
     pack_purchase = "pack_purchase"
 
 
+class ClubCardSource(str, enum.Enum):
+    starter_seed = "starter_seed"
+    club_pack = "club_pack"
+
+
 class ClubLogoShape(str, enum.Enum):
     shield = "shield"
     circle = "circle"
