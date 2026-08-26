@@ -83,6 +83,11 @@ def calculate_base_strength(cards_with_slots: list[tuple[UserCard, FormationSlot
     if not cards_with_slots:
         return 0
 
+    # The rarity bonus is per card (each card's own rarity boosts only its
+    # own contribution) rather than based on the team's average rarity —
+    # a team-average bonus would apply to the whole sum, so swapping in a
+    # single lower-rarity card could shrink the entire team's total even
+    # though that card's own rating went up, which read as a bug to players.
     total = 0.0
     for card, slot in cards_with_slots:
         player = card.player
@@ -92,10 +97,7 @@ def calculate_base_strength(cards_with_slots: list[tuple[UserCard, FormationSlot
             fit = 0.9
         else:
             fit = 0.75
-        total += player.rating * fit
-
-    avg_rarity = sum(RARITY_ORDER[c.player.rarity] for c, _ in cards_with_slots) / len(cards_with_slots)
-    total *= 1 + 0.03 * avg_rarity
+        total += player.rating * fit * (1 + 0.03 * RARITY_ORDER[player.rarity])
 
     clubs = Counter(c.player.club for c, _ in cards_with_slots)
     countries = Counter(c.player.country for c, _ in cards_with_slots)

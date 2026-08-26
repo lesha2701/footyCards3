@@ -1,11 +1,13 @@
+from types import SimpleNamespace
+
 import pytest
 
 import app.core.rate_limit as rate_limit_module
-from app.models.enums import CardSource
+from app.models.enums import RARITY_ORDER, CardSource, Rarity
 from app.models.game_config import GameConfig
 from app.services import match_service
 from app.services.card_creation import create_user_card
-from app.services.lineup_service import FORMATION_SLOTS, get_active_lineup
+from app.services.lineup_service import FORMATION_SLOTS, calculate_base_strength, get_active_lineup
 from app.services.match_situations import ATTACK_SITUATIONS, DEFENSE_SITUATIONS
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
@@ -582,6 +584,49 @@ async def test_box_foul_triggers_penalty_continuation(db_session, monkeypatch):
     assert scored_by == ("opponent" if event["event_type"] == "goal" else None)
     assert state["cards"]["5"]["sent_off"] is True
     assert state["red_card_applied"] is True
+
+
+def test_calculate_base_strength_rarity_bonus_only_affects_the_swapped_cards_own_contribution():
+    """The rarity bonus must apply per card, not to the team's average
+    rarity — so changing one card's rarity (holding its rating/position/
+    club/country fixed) must change the team's total by exactly that one
+    card's own rarity-bonus delta, leaving every other card's contribution
+    untouched. Before this fix, the bonus was based on the team's AVERAGE
+    rarity and applied to the whole sum, so a single card's rarity change
+    shifted the other 10 cards' contributions too — which is what let a
+    genuinely higher-rated swap-in still lower the total (the reported bug:
+    "adding a higher-rated player drops the squad's overall strength")."""
+
+    def fake_card(rating, rarity, position, club, country):
+        player = SimpleNamespace(rating=rating, rarity=rarity, position=position, club=club, country=country)
+        return SimpleNamespace(player=player)
+
+    # Deliberately non-uniform ratings across the other 10 cards: the old
+    # team-average formula and the new per-card formula only coincide when
+    # every card's rating*fit is identical, so varying them is what makes
+    # this test actually distinguish the two implementations.
+    slots_with_cards = [
+        (fake_card(60 + i * 3, Rarity.legendary, slot.ideal_position, f"Club{i}", f"Country{i}"), slot)
+        for i, slot in enumerate(FORMATION_SLOTS)
+    ]
+    baseline = calculate_base_strength(slots_with_cards)
+
+    swap_slot = FORMATION_SLOTS[0]
+    # Same rating, position, club, and country as the card it replaces —
+    # only rarity changes, isolating that one variable.
+    rarity_only_swap = fake_card(60, Rarity.common, swap_slot.ideal_position, "Club0", "Country0")
+    slots_with_cards[0] = (rarity_only_swap, swap_slot)
+    after_swap = calculate_base_strength(slots_with_cards)
+
+    old_contribution = 60 * 1.0 * (1 + 0.03 * RARITY_ORDER[Rarity.legendary])
+    new_contribution = 60 * 1.0 * (1 + 0.03 * RARITY_ORDER[Rarity.common])
+    expected_after_swap = round(baseline - old_contribution + new_contribution)
+
+    assert after_swap == expected_after_swap, (
+        f"Changing one card's rarity shifted the total by more than that card's own contribution — "
+        f"expected {expected_after_swap} (only the swapped card's own value changes), got {after_swap} "
+        f"(the other 10 cards' contributions were affected too)"
+    )
 
 
 def test_synthesize_bot_ratings_includes_clamped_gk():
