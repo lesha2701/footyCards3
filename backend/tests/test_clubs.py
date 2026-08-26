@@ -101,3 +101,121 @@ async def test_get_club_detail_hides_invite_code_from_non_members(client, db_ses
     member_resp = await client.get(f"/api/v1/clubs/{club_id}", headers=telegram_headers(820007, bot_token))
     assert member_resp.json()["invite_code"]
     assert member_resp.json()["my_role"] == "captain"
+
+
+async def _create_club(client, bot_token, telegram_id, name, club_type="open"):
+    await _register_only(client, bot_token, telegram_id)
+    headers = telegram_headers(telegram_id, bot_token)
+    resp = await client.post(
+        "/api/v1/clubs", headers=headers,
+        json={"name": name, "club_type": club_type, "logo_shape": "shield", "logo_color": "#FF0000"},
+    )
+    assert resp.status_code == 200
+    return resp.json(), headers
+
+
+async def _register_only(client, bot_token, telegram_id):
+    resp = await client.post("/api/v1/auth/session", headers=telegram_headers(telegram_id, bot_token))
+    assert resp.status_code == 200
+
+
+async def test_join_open_club_adds_member(client, db_session, bot_token):
+    club, _ = await _create_club(client, bot_token, 820101, "Открытый клуб")
+    await _register_only(client, bot_token, 820102)
+    headers2 = telegram_headers(820102, bot_token)
+
+    resp = await client.post(f"/api/v1/clubs/{club['id']}/join", headers=headers2)
+    assert resp.status_code == 200
+    assert resp.json()["member_count"] == 2
+
+
+async def test_join_closed_club_creates_request_then_accept_adds_member(client, db_session, bot_token):
+    club, captain_headers = await _create_club(client, bot_token, 820103, "Закрытый клуб", club_type="closed")
+    await _register_only(client, bot_token, 820104)
+    headers2 = telegram_headers(820104, bot_token)
+
+    direct_join = await client.post(f"/api/v1/clubs/{club['id']}/join", headers=headers2)
+    assert direct_join.status_code == 409
+
+    req_resp = await client.post(f"/api/v1/clubs/{club['id']}/join-requests", headers=headers2)
+    assert req_resp.status_code == 200
+    request_id = req_resp.json()["id"]
+
+    list_resp = await client.get("/api/v1/clubs/me/join-requests", headers=captain_headers)
+    assert len(list_resp.json()) == 1
+
+    accept_resp = await client.post(f"/api/v1/clubs/me/join-requests/{request_id}/accept", headers=captain_headers)
+    assert accept_resp.status_code == 200
+    assert accept_resp.json()["member_count"] == 2
+
+
+async def test_leave_club_promotes_longest_tenured_assistant(client, db_session, bot_token):
+    club, captain_headers = await _create_club(client, bot_token, 820105, "Клуб с ассистентом")
+    await _register_only(client, bot_token, 820106)
+    member_headers = telegram_headers(820106, bot_token)
+    join = await client.post(f"/api/v1/clubs/{club['id']}/join", headers=member_headers)
+    member_user_id = [m for m in join.json()["members"] if m["role"] == "member"][0]["user_id"]
+
+    appoint = await client.post(f"/api/v1/clubs/me/assistants/{member_user_id}/appoint", headers=captain_headers)
+    assert appoint.status_code == 200
+
+    leave_resp = await client.post("/api/v1/clubs/me/leave", headers=captain_headers)
+    assert leave_resp.status_code == 200
+
+    new_club_state = await client.get("/api/v1/clubs/me", headers=member_headers)
+    assert new_club_state.json()["captain_id"] == member_user_id
+
+
+async def test_leave_club_disbands_when_no_assistants(client, db_session, bot_token):
+    club, captain_headers = await _create_club(client, bot_token, 820107, "Клуб без ассистентов")
+    leave_resp = await client.post("/api/v1/clubs/me/leave", headers=captain_headers)
+    assert leave_resp.status_code == 200
+
+    check = await client.get(f"/api/v1/clubs/{club['id']}", headers=captain_headers)
+    assert check.status_code == 404
+
+
+async def test_kick_member_removes_them(client, db_session, bot_token):
+    club, captain_headers = await _create_club(client, bot_token, 820108, "Клуб-кикер")
+    await _register_only(client, bot_token, 820109)
+    member_headers = telegram_headers(820109, bot_token)
+    join = await client.post(f"/api/v1/clubs/{club['id']}/join", headers=member_headers)
+    member_user_id = [m for m in join.json()["members"] if m["role"] == "member"][0]["user_id"]
+
+    kick_resp = await client.post(f"/api/v1/clubs/me/members/{member_user_id}/kick", headers=captain_headers)
+    assert kick_resp.status_code == 200
+    assert kick_resp.json()["member_count"] == 1
+
+    solo_check = await client.get("/api/v1/clubs/me", headers=member_headers)
+    assert solo_check.status_code == 404
+
+
+async def test_join_by_invite_code(client, db_session, bot_token):
+    club, _ = await _create_club(client, bot_token, 820110, "Клуб по инвайту", club_type="closed")
+    await _register_only(client, bot_token, 820111)
+    headers2 = telegram_headers(820111, bot_token)
+
+    resp = await client.post("/api/v1/clubs/join-by-invite", headers=headers2, json={"invite_code": club["invite_code"]})
+    assert resp.status_code == 200
+    assert resp.json()["member_count"] == 2
+
+
+async def test_transfer_captain(client, db_session, bot_token):
+    club, captain_headers = await _create_club(client, bot_token, 820112, "Клуб-передача")
+    await _register_only(client, bot_token, 820113)
+    member_headers = telegram_headers(820113, bot_token)
+    join = await client.post(f"/api/v1/clubs/{club['id']}/join", headers=member_headers)
+    member_user_id = [m for m in join.json()["members"] if m["role"] == "member"][0]["user_id"]
+
+    resp = await client.post("/api/v1/clubs/me/transfer-captain", headers=captain_headers, json={"user_id": member_user_id})
+    assert resp.status_code == 200
+    assert resp.json()["captain_id"] == member_user_id
+
+
+async def test_disband_club(client, db_session, bot_token):
+    club, captain_headers = await _create_club(client, bot_token, 820114, "Клуб на роспуск")
+    resp = await client.post("/api/v1/clubs/me/disband", headers=captain_headers)
+    assert resp.status_code == 204
+
+    check = await client.get(f"/api/v1/clubs/{club['id']}", headers=captain_headers)
+    assert check.status_code == 404

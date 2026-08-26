@@ -1,12 +1,12 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.club import ClubCreate, ClubDetailOut, ClubSummaryOut
+from app.schemas.club import ClubCreate, ClubDetailOut, ClubJoinRequestOut, ClubSummaryOut, JoinByInviteIn, TransferCaptainIn
 from app.services import club_service
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
@@ -34,3 +34,65 @@ async def create_club(
     payload: ClubCreate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     return await club_service.create_club(db, user, payload)
+
+
+@router.post("/{club_id}/join", response_model=ClubDetailOut)
+async def join_club(club_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_service.join_open_club(db, user, club_id)
+
+
+@router.post("/{club_id}/join-requests", response_model=ClubJoinRequestOut)
+async def create_join_request(club_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_service.create_join_request(db, user, club_id)
+
+
+@router.get("/me/join-requests", response_model=list[ClubJoinRequestOut])
+async def list_join_requests(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_service.list_join_requests(db, user)
+
+
+@router.post("/me/join-requests/{request_id}/accept", response_model=ClubDetailOut)
+async def accept_join_request(request_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await club_service.respond_to_join_request(db, user, request_id, accept=True)
+    return await club_service.get_my_club_detail(db, user)
+
+
+@router.post("/me/join-requests/{request_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+async def reject_join_request(request_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await club_service.respond_to_join_request(db, user, request_id, accept=False)
+
+
+@router.post("/join-by-invite", response_model=ClubDetailOut)
+async def join_by_invite(payload: JoinByInviteIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_service.join_by_invite(db, user, payload.invite_code)
+
+
+@router.post("/me/leave", status_code=status.HTTP_200_OK)
+async def leave_club(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await club_service.leave_club(db, user)
+    return {"ok": True}
+
+
+@router.post("/me/members/{user_id}/kick", response_model=ClubDetailOut)
+async def kick_member(user_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_service.kick_member(db, user, user_id)
+
+
+@router.post("/me/assistants/{user_id}/appoint", response_model=ClubDetailOut)
+async def appoint_assistant(user_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_service.appoint_assistant(db, user, user_id)
+
+
+@router.post("/me/assistants/{user_id}/remove", response_model=ClubDetailOut)
+async def remove_assistant(user_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_service.remove_assistant(db, user, user_id)
+
+
+@router.post("/me/transfer-captain", response_model=ClubDetailOut)
+async def transfer_captain(payload: TransferCaptainIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_service.transfer_captain(db, user, payload.user_id)
+
+
+@router.post("/me/disband", status_code=status.HTTP_204_NO_CONTENT)
+async def disband_club(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await club_service.disband_club(db, user)
