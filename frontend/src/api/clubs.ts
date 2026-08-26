@@ -83,3 +83,8 @@ export async function transferCaptain(userId: number): Promise<Club> {
 export async function disbandClub(): Promise<void> {
   await api.post("/clubs/me/disband");
 }
+
+export async function claimDailyReward(): Promise<Club> {
+  const { data } = await api.post<Club>("/clubs/me/daily-claim");
+  return data;
+}

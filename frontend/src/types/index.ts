@@ -977,6 +977,7 @@ export interface Club {
   members: ClubMember[];
   invite_code: string | null;
   my_role: ClubRole | null;
+  budget: number;
 }
 
 export interface ClubJoinRequest {
@@ -987,4 +988,56 @@ export interface ClubJoinRequest {
   avatar_url: string | null;
   created_at: string;
   status: "pending" | "accepted" | "rejected";
+}
+
+export interface ClubCard {
+  id: number;
+  serial_number: number;
+  player: Player;
+  acquired_at: string;
+  is_in_lineup: boolean;
+}
+
+export interface ClubLineupSlot {
+  slot_code: string;
+  category: string;
+  ideal_position: string;
+  card: ClubCard | null;
+}
+
+export interface ClubLineup {
+  is_complete: boolean;
+  team_strength: number | null;
+  slots: ClubLineupSlot[];
+}
+
+export interface ClubPackRarityProbability {
+  rarity: string;
+  probability: number;
+}
+
+export interface ClubPack {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  price: number;
+  card_count: number;
+  guaranteed_min_rarity: string | null;
+  image_path: string | null;
+  is_active: boolean;
+  sort_order: number;
+  rarity_probabilities: ClubPackRarityProbability[];
+}
+
+export interface OpenedClubCard {
+  card: ClubCard;
+  is_new: boolean;
+}
+
+export interface ClubPackOpenResult {
+  opening_id: number;
+  pack: ClubPack;
+  cards: OpenedClubCard[];
+  new_budget: number;
 }
