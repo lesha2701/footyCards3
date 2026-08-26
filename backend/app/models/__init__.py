@@ -3,6 +3,7 @@ from app.models.badge import Badge, UserBadge
 from app.models.card import UserCard
 from app.models.card_collection import CardCollection, UserCollectionReward
 from app.models.card_upgrade import CardUpgradeAttempt, CardUpgradeRule
+from app.models.club import Club, ClubJoinRequest, ClubMember
 from app.models.coin_package import CoinPackage
 from app.models.daily_reward import DailyReward
 from app.models.game import GameSession, MemoryGameRound
@@ -31,6 +32,9 @@ __all__ = [
     "UserCollectionReward",
     "CardUpgradeAttempt",
     "CardUpgradeRule",
+    "Club",
+    "ClubJoinRequest",
+    "ClubMember",
     "CoinPackage",
     "DailyReward",
     "GameSession",
