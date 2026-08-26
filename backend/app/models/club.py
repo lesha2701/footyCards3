@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -23,7 +23,10 @@ class Club(Base):
     captain_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     # Permanent, unique deep-link token — see club_service.join_by_invite.
     invite_code: Mapped[str] = mapped_column(String(16), unique=True, nullable=False, index=True)
+    budget: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     founded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (CheckConstraint("budget >= 0", name="ck_clubs_budget_non_negative"),)
 
 
 class ClubMember(Base):

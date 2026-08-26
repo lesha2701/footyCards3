@@ -93,6 +93,11 @@ class ClubJoinRequestStatus(str, enum.Enum):
     rejected = "rejected"
 
 
+class ClubBudgetTransactionType(str, enum.Enum):
+    daily_claim = "daily_claim"
+    pack_purchase = "pack_purchase"
+
+
 class ClubLogoShape(str, enum.Enum):
     shield = "shield"
     circle = "circle"

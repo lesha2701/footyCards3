@@ -4,6 +4,7 @@ from app.models.card import UserCard
 from app.models.card_collection import CardCollection, UserCollectionReward
 from app.models.card_upgrade import CardUpgradeAttempt, CardUpgradeRule
 from app.models.club import Club, ClubJoinRequest, ClubMember
+from app.models.club_budget import ClubBudgetTransaction
 from app.models.coin_package import CoinPackage
 from app.models.daily_reward import DailyReward
 from app.models.game import GameSession, MemoryGameRound
@@ -35,6 +36,7 @@ __all__ = [
     "Club",
     "ClubJoinRequest",
     "ClubMember",
+    "ClubBudgetTransaction",
     "CoinPackage",
     "DailyReward",
     "GameSession",
