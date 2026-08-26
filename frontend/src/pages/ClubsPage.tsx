@@ -118,6 +118,7 @@ function ClubBrowseList() {
 const ROLE_LABELS: Record<string, string> = { captain: "Капитан", assistant: "Ассистент", member: "Участник" };
 
 function ClubHome({ club }: { club: Club }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const userId = useAuthStore((s) => s.user?.id);
   const isManager = club.my_role === "captain" || club.my_role === "assistant";
@@ -173,6 +174,15 @@ function ClubHome({ club }: { club: Club }) {
             </button>
           </div>
         </div>
+      )}
+
+      {isManager && (
+        <button
+          onClick={() => navigate("/clubs/squad")}
+          className="rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+        >
+          ⚽ Управление составом
+        </button>
       )}
 
       {isManager && club.club_type === "closed" && joinRequests && joinRequests.length > 0 && (

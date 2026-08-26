@@ -41,6 +41,7 @@ import HangmanGamePage from "@/pages/HangmanGamePage";
 import PairsGamePage from "@/pages/PairsGamePage";
 import ClubCreatePage from "@/pages/ClubCreatePage";
 import ClubsPage from "@/pages/ClubsPage";
+import ClubSquadPage from "@/pages/ClubSquadPage";
 import CollectionPage from "@/pages/CollectionPage";
 import TradesPage from "@/pages/TradesPage";
 import NewTradePage from "@/pages/NewTradePage";
@@ -184,6 +185,7 @@ export default function App() {
         <Route path="/trades/:id" element={<TradeDetailPage />} />
         <Route path="/clubs" element={<ClubsPage />} />
         <Route path="/clubs/create" element={<ClubCreatePage />} />
+        <Route path="/clubs/squad" element={<ClubSquadPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/wheel" element={<WheelPage />} />
         <Route path="/upgrade" element={<UpgradePage />} />
