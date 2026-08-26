@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_admin
@@ -19,10 +19,21 @@ router = APIRouter(prefix="/admin/trades", tags=["admin"], dependencies=[Depends
 
 
 @router.get("", response_model=list[TradeOfferOut])
-async def list_all_trades(status: Optional[TradeStatus] = None, db: AsyncSession = Depends(get_db)):
+async def list_all_trades(
+    status: Optional[TradeStatus] = None, username: Optional[str] = None, db: AsyncSession = Depends(get_db)
+):
     query = select(TradeOffer).order_by(TradeOffer.created_at.desc()).limit(200)
     if status:
         query = query.where(TradeOffer.status == status)
+    if username:
+        matching_user_ids = (
+            await db.execute(select(User.id).where(User.username.ilike(f"%{username}%")))
+        ).scalars().all()
+        if not matching_user_ids:
+            return []
+        query = query.where(
+            or_(TradeOffer.sender_id.in_(matching_user_ids), TradeOffer.receiver_id.in_(matching_user_ids))
+        )
     offers = (await db.execute(query)).scalars().all()
     return [await hydrate_offer(db, o) for o in offers]
 

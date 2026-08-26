@@ -42,6 +42,7 @@ import PairsGamePage from "@/pages/PairsGamePage";
 import CollectionPage from "@/pages/CollectionPage";
 import TradesPage from "@/pages/TradesPage";
 import NewTradePage from "@/pages/NewTradePage";
+import TradeDetailPage from "@/pages/TradeDetailPage";
 import TasksPage from "@/pages/TasksPage";
 import UpgradePage from "@/pages/UpgradePage";
 import RankingPage from "@/pages/RankingPage";
@@ -162,6 +163,7 @@ export default function App() {
         <Route path="/collection" element={<CollectionPage />} />
         <Route path="/trades" element={<TradesPage />} />
         <Route path="/trades/new" element={<NewTradePage />} />
+        <Route path="/trades/:id" element={<TradeDetailPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/wheel" element={<WheelPage />} />
         <Route path="/upgrade" element={<UpgradePage />} />

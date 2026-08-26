@@ -69,6 +69,7 @@ export default function TradesPage() {
             key={offer.id}
             offer={offer}
             myUserId={userId}
+            onOpen={() => navigate(`/trades/${offer.id}`)}
             onAccept={() => acceptMutation.mutate(offer.id)}
             onReject={() => rejectMutation.mutate(offer.id)}
             onCancel={() => cancelMutation.mutate(offer.id)}
@@ -93,12 +94,14 @@ function TabButton({ active, label, onClick }: { active: boolean; label: string;
 function TradeCard({
   offer,
   myUserId,
+  onOpen,
   onAccept,
   onReject,
   onCancel,
 }: {
   offer: TradeOffer;
   myUserId?: number;
+  onOpen: () => void;
   onAccept: () => void;
   onReject: () => void;
   onCancel: () => void;
@@ -107,7 +110,7 @@ function TradeCard({
   const isSender = offer.sender.id === myUserId;
 
   return (
-    <div className="rounded-2xl bg-bg-surface p-4">
+    <div onClick={onOpen} className="rounded-2xl bg-bg-surface p-4 active:scale-[0.99]">
       <div className="flex items-center justify-between text-sm">
         <span className="flex items-center gap-1 text-ink-mist">
           {isSender ? `Кому: ${offer.receiver.username ?? offer.receiver.first_name}` : `От: ${offer.sender.username ?? offer.sender.first_name}`}
@@ -125,7 +128,7 @@ function TradeCard({
       {offer.message && <p className="mt-2 text-xs italic text-ink-mist">«{offer.message}»</p>}
 
       {offer.status === "pending" && (
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
           {isReceiver && (
             <>
               <button onClick={onAccept} className="flex-1 rounded-xl bg-accent-green py-2 text-xs font-bold text-bg-base active:scale-95">

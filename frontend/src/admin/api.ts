@@ -298,8 +298,8 @@ export async function toggleWheelPrizeActive(id: number): Promise<AdminWheelPriz
 }
 
 // --- Trades ---
-export async function fetchAdminTrades(status?: TradeStatus): Promise<TradeOffer[]> {
-  const { data } = await api.get<TradeOffer[]>("/admin/trades", { params: { status } });
+export async function fetchAdminTrades(status?: TradeStatus, username?: string): Promise<TradeOffer[]> {
+  const { data } = await api.get<TradeOffer[]>("/admin/trades", { params: { status, username: username || undefined } });
   return data;
 }
 

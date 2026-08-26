@@ -1,15 +1,25 @@
+from app.config import get_settings
 from app.models.card import UserCard
 from app.models.enums import CardSource, Rarity
 from app.services.card_creation import create_user_card
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
 
+settings = get_settings()
 
-async def _register(client, db_session, telegram_id, bot_token):
-    headers = telegram_headers(telegram_id, bot_token)
+
+async def _register(client, db_session, telegram_id, bot_token, username=None):
+    headers = telegram_headers(telegram_id, bot_token, username=username)
     await client.post("/api/v1/auth/session", headers=headers)
     user = await get_user_by_telegram_id(db_session, telegram_id)
     return user, headers
+
+
+async def _admin_auth(client, bot_token):
+    admin_headers = telegram_headers(999000001, bot_token)  # matches ADMIN_TELEGRAM_IDS in conftest
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    token = session_resp.json()["admin_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 async def test_create_trade_locks_offered_card(client, db_session, bot_token):
@@ -239,3 +249,42 @@ async def test_cancel_trade_unlocks_cards(client, db_session, bot_token):
 
     await db_session.refresh(card)
     assert card.is_locked_in_trade is False
+
+
+async def test_admin_can_search_trades_by_either_side_username(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    sender, sender_headers = await _register(client, db_session, 730010, bot_token, username="alice_trader")
+    receiver, _ = await _register(client, db_session, 730011, bot_token, username="bob_trader")
+    stranger, stranger_headers = await _register(client, db_session, 730012, bot_token, username="carol_unrelated")
+
+    player = await create_player(db_session, rarity=Rarity.common)
+    card = await create_user_card(db_session, sender.id, player.id, CardSource.seed)
+    await db_session.commit()
+    await client.post(
+        "/api/v1/trades/offers", headers=sender_headers,
+        json={"receiver_id": receiver.id, "offered_card_ids": [card.id]},
+    )
+
+    other_player = await create_player(db_session, rarity=Rarity.common)
+    other_card = await create_user_card(db_session, stranger.id, other_player.id, CardSource.seed)
+    await db_session.commit()
+    await client.post(
+        "/api/v1/trades/offers", headers=stranger_headers,
+        json={"receiver_id": receiver.id, "offered_card_ids": [other_card.id]},
+    )
+
+    # Searching for the sender finds their trade.
+    by_sender = await client.get("/api/v1/admin/trades", headers=auth, params={"username": "alice"})
+    assert by_sender.status_code == 200
+    assert len(by_sender.json()) == 1
+    assert by_sender.json()[0]["sender"]["id"] == sender.id
+
+    # Searching for the receiver finds both trades they're party to.
+    by_receiver = await client.get("/api/v1/admin/trades", headers=auth, params={"username": "bob_trader"})
+    assert by_receiver.status_code == 200
+    assert len(by_receiver.json()) == 2
+
+    # No match returns an empty list, not an error.
+    no_match = await client.get("/api/v1/admin/trades", headers=auth, params={"username": "nobody_at_all"})
+    assert no_match.status_code == 200
+    assert no_match.json() == []
