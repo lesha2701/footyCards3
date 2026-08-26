@@ -176,9 +176,19 @@ async def set_club_lineup(db: AsyncSession, user: User, payload: ClubLineupSetRe
         slot = SLOTS_BY_CODE[slot_in.slot_code]
         card = cards_by_id[slot_in.club_card_id]
         if card.player.position not in CATEGORY_POSITIONS[slot.category]:
-            raise ConflictError(f"Игрок на позиции {card.player.position} не подходит для слота {slot.code}")
+            raise ConflictError(f"Игрок на позиции {card.player.position.value} не подходит для слота {slot.code}")
 
-    lineup = await _get_or_none_lineup(db, club_id)
+    # Lock the ClubLineup row before the delete-then-recreate below, mirroring
+    # lineup_service.set_lineup's own with_for_update() — a club's captain and
+    # up to 2 assistants can all submit lineup changes concurrently, so this
+    # serializes overlapping submissions instead of racing on the child rows.
+    lineup_result = await db.execute(
+        select(ClubLineup)
+        .where(ClubLineup.club_id == club_id)
+        .options(joinedload(ClubLineup.cards))
+        .with_for_update()
+    )
+    lineup = lineup_result.unique().scalar_one_or_none()
     if lineup is None:
         raise ConflictError("У клуба ещё нет состава")
 
