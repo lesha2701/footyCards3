@@ -6,7 +6,17 @@ import { ClubLogo } from "@/components/clubs/ClubLogo";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconPlus, IconUsers } from "@/components/icons";
-import { createJoinRequest, fetchClubs, fetchMyClub, joinClub, kickMember, leaveClub } from "@/api/clubs";
+import {
+  acceptJoinRequest,
+  createJoinRequest,
+  fetchClubs,
+  fetchMyClub,
+  fetchMyJoinRequests,
+  joinClub,
+  kickMember,
+  leaveClub,
+  rejectJoinRequest,
+} from "@/api/clubs";
 import { ApiRequestError } from "@/lib/api";
 import { showConfirm } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -109,6 +119,17 @@ function ClubHome({ club }: { club: Club }) {
   const leaveMutation = useMutation({ mutationFn: leaveClub, onSuccess: invalidate });
   const kickMutation = useMutation({ mutationFn: (id: number) => kickMember(id), onSuccess: invalidate });
 
+  const { data: joinRequests } = useQuery({
+    queryKey: ["clubs", "join-requests"],
+    queryFn: fetchMyJoinRequests,
+    enabled: isManager && club.club_type === "closed",
+  });
+  const acceptMutation = useMutation({ mutationFn: (id: number) => acceptJoinRequest(id), onSuccess: invalidate });
+  const rejectMutation = useMutation({
+    mutationFn: (id: number) => rejectJoinRequest(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["clubs", "join-requests"] }),
+  });
+
   const handleLeave = async () => {
     const confirmMsg = club.my_role === "captain" ? "Покинуть клуб? Капитанство перейдёт ассистенту (или клуб распустится, если ассистентов нет)." : "Покинуть клуб?";
     if (await showConfirm(confirmMsg)) leaveMutation.mutate();
@@ -129,6 +150,25 @@ function ClubHome({ club }: { club: Club }) {
       {club.invite_code && (
         <div className="rounded-2xl bg-bg-surface p-3 text-xs text-ink-mist">
           Ссылка-приглашение: <span className="font-mono text-ink-chalk">club_{club.invite_code}</span>
+        </div>
+      )}
+
+      {isManager && club.club_type === "closed" && joinRequests && joinRequests.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="font-display text-sm font-bold text-ink-chalk">Заявки на вступление</p>
+          {joinRequests.map((r) => (
+            <div key={r.id} className="flex items-center justify-between rounded-xl bg-bg-surface p-3">
+              <span className="text-sm text-ink-chalk">{r.username ?? r.first_name ?? `#${r.user_id}`}</span>
+              <div className="flex gap-2">
+                <button onClick={() => acceptMutation.mutate(r.id)} className="rounded-lg bg-accent-green px-2 py-1 text-[11px] font-bold text-bg-base">
+                  Принять
+                </button>
+                <button onClick={() => rejectMutation.mutate(r.id)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">
+                  Отклонить
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
