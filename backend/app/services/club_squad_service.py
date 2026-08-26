@@ -182,11 +182,22 @@ async def set_club_lineup(db: AsyncSession, user: User, payload: ClubLineupSetRe
     # lineup_service.set_lineup's own with_for_update() — a club's captain and
     # up to 2 assistants can all submit lineup changes concurrently, so this
     # serializes overlapping submissions instead of racing on the child rows.
+    #
+    # with_for_update(of=ClubLineup) scopes the row lock to just the
+    # `club_lineups` table: joinedload(ClubLineup.cards) is a LEFT OUTER JOIN
+    # to club_lineup_cards (and ClubLineupCard.club_card is itself
+    # lazy="joined", cascading further outer joins into club_cards/players/
+    # card_collections), and a plain FOR UPDATE tries to lock every joined
+    # table including the nullable side of those outer joins, which Postgres
+    # rejects outright (FeatureNotSupportedError: FOR UPDATE cannot be
+    # applied to the nullable side of an outer join). Restricting the lock to
+    # club_lineups keeps the eager-loaded cards while avoiding that
+    # restriction — same fix as wallet_service.lock_user_for_update.
     lineup_result = await db.execute(
         select(ClubLineup)
         .where(ClubLineup.club_id == club_id)
         .options(joinedload(ClubLineup.cards))
-        .with_for_update()
+        .with_for_update(of=ClubLineup)
     )
     lineup = lineup_result.unique().scalar_one_or_none()
     if lineup is None:
