@@ -284,3 +284,17 @@ async def test_create_club_seeds_a_complete_starting_squad(client, db_session, b
         await db_session.execute(select(ClubLineupCard.slot_code).where(ClubLineupCard.club_lineup_id == lineup.id))
     ).scalars().all()
     assert len(set(slot_codes)) == 11  # every formation slot filled exactly once
+
+
+async def test_claim_daily_reward_credits_budget_once_per_day(client, db_session, bot_token):
+    club, headers = await _create_club(client, bot_token, 820201, "Клуб с наградой")
+    resp = await client.post("/api/v1/clubs/me/daily-claim", headers=headers)
+    assert resp.status_code == 200
+
+    from app.models.club import Club
+    updated_club = await db_session.get(Club, club["id"])
+    await db_session.refresh(updated_club)
+    assert updated_club.budget == 200  # GameConfig.club_daily_reward_coins default
+
+    second_attempt = await client.post("/api/v1/clubs/me/daily-claim", headers=headers)
+    assert second_attempt.status_code == 409

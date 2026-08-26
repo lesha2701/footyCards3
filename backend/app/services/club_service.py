@@ -5,10 +5,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from app.core.timeutil import local_today
 from app.models.club import Club, ClubJoinRequest, ClubMember
-from app.models.enums import ClubJoinRequestStatus, ClubRole, ClubType, NotificationType, TransactionType
+from app.models.club_daily_claim import ClubDailyClaim
+from app.models.enums import ClubBudgetTransactionType, ClubJoinRequestStatus, ClubRole, ClubType, NotificationType, TransactionType
 from app.models.user import User
 from app.schemas.club import ClubCreate, ClubDetailOut, ClubJoinRequestOut, ClubMemberOut, ClubSummaryOut, ClubUpdate
+from app.services.club_budget_service import credit_club_budget
 from app.services.club_squad_service import seed_starting_squad
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
@@ -418,5 +421,28 @@ async def join_by_invite(db: AsyncSession, user: User, invite_code: str) -> Club
         raise ConflictError("В клубе нет свободных мест")
 
     db.add(ClubMember(club_id=club.id, user_id=user.id, role=ClubRole.member))
+    await db.commit()
+    return await _club_to_detail(db, club, requester_user_id=user.id)
+
+
+async def claim_daily_reward(db: AsyncSession, user: User) -> ClubDetailOut:
+    membership = await _require_membership(db, user.id)
+    today = local_today()
+
+    existing = await db.execute(
+        select(ClubDailyClaim).where(
+            ClubDailyClaim.club_id == membership.club_id, ClubDailyClaim.user_id == user.id, ClubDailyClaim.claim_date == today,
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise ConflictError("Сегодня награда уже получена")
+
+    club = await _lock_club(db, membership.club_id)
+    config = await get_config(db)
+    await credit_club_budget(
+        db, club, config.club_daily_reward_coins, ClubBudgetTransactionType.daily_claim,
+        f"Ежедневная награда от {user.username or user.first_name or f'#{user.id}'}",
+    )
+    db.add(ClubDailyClaim(club_id=club.id, user_id=user.id, claim_date=today))
     await db.commit()
     return await _club_to_detail(db, club, requester_user_id=user.id)

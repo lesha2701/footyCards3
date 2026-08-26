@@ -96,3 +96,8 @@ async def transfer_captain(payload: TransferCaptainIn, db: AsyncSession = Depend
 @router.post("/me/disband", status_code=status.HTTP_204_NO_CONTENT)
 async def disband_club(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await club_service.disband_club(db, user)
+
+
+@router.post("/me/daily-claim", response_model=ClubDetailOut)
+async def claim_daily_reward(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_service.claim_daily_reward(db, user)

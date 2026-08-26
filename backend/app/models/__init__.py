@@ -6,6 +6,7 @@ from app.models.card_upgrade import CardUpgradeAttempt, CardUpgradeRule
 from app.models.club import Club, ClubJoinRequest, ClubMember
 from app.models.club_budget import ClubBudgetTransaction
 from app.models.club_card import ClubCard
+from app.models.club_daily_claim import ClubDailyClaim
 from app.models.club_lineup import ClubLineup, ClubLineupCard
 from app.models.coin_package import CoinPackage
 from app.models.daily_reward import DailyReward
@@ -40,6 +41,7 @@ __all__ = [
     "ClubMember",
     "ClubBudgetTransaction",
     "ClubCard",
+    "ClubDailyClaim",
     "ClubLineup",
     "ClubLineupCard",
     "CoinPackage",
