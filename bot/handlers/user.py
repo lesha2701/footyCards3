@@ -40,6 +40,14 @@ async def cmd_start(message: Message) -> None:
         referrer_id = payload[len("ref_"):]
         if referrer_id.isdigit():
             keyboard = open_app_keyboard(query=f"?ref={referrer_id}")
+    elif payload and payload.startswith("club_"):
+        invite_code = payload[len("club_"):]
+        text = (
+            f"Привет, {message.from_user.first_name}! 👋\n\n"
+            "⚽ Тебя пригласили в клуб в <b>VICTOR FC</b>!\n\n"
+            "Нажми кнопку ниже, чтобы открыть приложение и вступить 👇"
+        )
+        keyboard = open_app_keyboard(query=f"?joinClub={invite_code}")
     elif payload == "chatpack":
         # Deep link from the "вкарта" group-chat button — the card is
         # already granted, this is just getting them into the Mini App to see it.
