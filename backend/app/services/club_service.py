@@ -9,6 +9,7 @@ from app.models.club import Club, ClubJoinRequest, ClubMember
 from app.models.enums import ClubJoinRequestStatus, ClubRole, ClubType, NotificationType, TransactionType
 from app.models.user import User
 from app.schemas.club import ClubCreate, ClubDetailOut, ClubJoinRequestOut, ClubMemberOut, ClubSummaryOut, ClubUpdate
+from app.services.club_squad_service import seed_starting_squad
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 from app.services.wallet_service import debit_coins, lock_user_for_update
@@ -108,6 +109,8 @@ async def create_club(db: AsyncSession, user: User, payload: ClubCreate) -> Club
 
     db.add(ClubMember(club_id=club.id, user_id=locked_user.id, role=ClubRole.captain))
     await db.flush()
+
+    await seed_starting_squad(db, club.id)
 
     await db.commit()
     await db.refresh(club)

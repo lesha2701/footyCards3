@@ -1,11 +1,29 @@
 import secrets
 
+import pytest_asyncio
 from sqlalchemy import select
 
 from app.models.club import Club, ClubMember
-from app.models.enums import ClubRole, ClubType, ClubLogoShape
-from tests.factories import get_user_by_telegram_id
+from app.models.enums import ClubRole, ClubType, ClubLogoShape, Position
+from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _seed_position_pool(db_session):
+    """club_service.create_club now seeds a starting squad on every club
+    creation (Task 4) — give every test in this file enough active players
+    per formation category (GK/DEF/MID/FWD) to draw from, since the pytest
+    suite's players table is otherwise empty (fresh SQLite schema per test,
+    see conftest.py's `_fresh_schema`)."""
+    for position in (Position.GK, Position.GK, Position.GK):
+        await create_player(db_session, position=position)
+    for position in (Position.LB, Position.LB, Position.CB, Position.CB, Position.RB, Position.RB):
+        await create_player(db_session, position=position)
+    for position in (Position.CDM, Position.CM, Position.CAM, Position.LM, Position.RM):
+        await create_player(db_session, position=position)
+    for position in (Position.LW, Position.LW, Position.ST, Position.ST, Position.RW):
+        await create_player(db_session, position=position)
 
 
 async def _register(client, db_session, telegram_id, bot_token):
@@ -236,3 +254,33 @@ async def test_disband_club(client, db_session, bot_token):
 
     check = await client.get(f"/api/v1/clubs/{club['id']}", headers=captain_headers)
     assert check.status_code == 404
+
+
+async def test_create_club_seeds_a_complete_starting_squad(client, db_session, bot_token):
+    from app.models.club_card import ClubCard
+    from app.models.club_lineup import ClubLineup, ClubLineupCard
+    from sqlalchemy import func, select
+
+    await _register_only(client, bot_token, 820200)
+    headers = telegram_headers(820200, bot_token)
+    resp = await client.post(
+        "/api/v1/clubs", headers=headers,
+        json={"name": "Клуб со стартовым составом", "club_type": "open", "logo_shape": "shield", "logo_color": "#FF0000"},
+    )
+    club_id = resp.json()["id"]
+
+    total_cards = (
+        await db_session.execute(select(func.count(ClubCard.id)).where(ClubCard.club_id == club_id))
+    ).scalar_one()
+    assert total_cards == 15  # 11 starters + 4 bench
+
+    lineup = (await db_session.execute(select(ClubLineup).where(ClubLineup.club_id == club_id))).scalar_one()
+    lineup_card_count = (
+        await db_session.execute(select(func.count(ClubLineupCard.id)).where(ClubLineupCard.club_lineup_id == lineup.id))
+    ).scalar_one()
+    assert lineup_card_count == 11
+
+    slot_codes = (
+        await db_session.execute(select(ClubLineupCard.slot_code).where(ClubLineupCard.club_lineup_id == lineup.id))
+    ).scalars().all()
+    assert len(set(slot_codes)) == 11  # every formation slot filled exactly once
