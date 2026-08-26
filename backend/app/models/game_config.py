@@ -14,6 +14,7 @@ class GameConfig(TimestampMixin, Base):
     __tablename__ = "game_config"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_creation_cost_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
 
     memory_daily_reward_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     memory_reward_cap: Mapped[int] = mapped_column(Integer, default=150, nullable=False)

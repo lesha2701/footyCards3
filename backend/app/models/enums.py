@@ -68,11 +68,40 @@ class TransactionType(str, enum.Enum):
     wheel_spin_reward = "wheel_spin_reward"
     league_reward = "league_reward"
     gift_purchase_coins = "gift_purchase_coins"
+    premium_subscription_adjustment = "premium_subscription_adjustment"
 
 
 class GiftKind(str, enum.Enum):
     bundle = "bundle"
     collectible = "collectible"
+
+
+class ClubRole(str, enum.Enum):
+    captain = "captain"
+    assistant = "assistant"
+    member = "member"
+
+
+class ClubType(str, enum.Enum):
+    open = "open"
+    closed = "closed"
+
+
+class ClubJoinRequestStatus(str, enum.Enum):
+    pending = "pending"
+    accepted = "accepted"
+    rejected = "rejected"
+
+
+class ClubLogoShape(str, enum.Enum):
+    shield = "shield"
+    circle = "circle"
+    hexagon = "hexagon"
+    star = "star"
+    diamond = "diamond"
+    banner = "banner"
+    crest = "crest"
+    chevron = "chevron"
 
 
 class TaskCategory(str, enum.Enum):
@@ -185,6 +214,12 @@ class NotificationType(str, enum.Enum):
     penalty_challenge_expired = "penalty_challenge_expired"
     trophy_granted = "trophy_granted"
     league_promoted = "league_promoted"
+    club_join_request_received = "club_join_request_received"
+    club_join_request_accepted = "club_join_request_accepted"
+    club_join_request_rejected = "club_join_request_rejected"
+    club_role_changed = "club_role_changed"
+    club_kicked = "club_kicked"
+    club_captain_transferred = "club_captain_transferred"
 
 
 class TradeCardSide(str, enum.Enum):
