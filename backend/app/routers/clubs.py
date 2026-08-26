@@ -7,7 +7,8 @@ from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.club import ClubCreate, ClubDetailOut, ClubJoinRequestOut, ClubSummaryOut, JoinByInviteIn, TransferCaptainIn
-from app.services import club_service
+from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest
+from app.services import club_service, club_squad_service
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
 
@@ -101,3 +102,18 @@ async def disband_club(db: AsyncSession = Depends(get_db), user: User = Depends(
 @router.post("/me/daily-claim", response_model=ClubDetailOut)
 async def claim_daily_reward(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_service.claim_daily_reward(db, user)
+
+
+@router.get("/me/lineup", response_model=ClubLineupOut)
+async def get_club_lineup(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_squad_service.get_club_lineup(db, user)
+
+
+@router.put("/me/lineup", response_model=ClubLineupOut)
+async def set_club_lineup(payload: ClubLineupSetRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_squad_service.set_club_lineup(db, user, payload)
+
+
+@router.get("/me/cards", response_model=list[ClubCardOut])
+async def list_club_cards(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_squad_service.list_club_cards(db, user)
