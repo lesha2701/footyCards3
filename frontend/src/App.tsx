@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import AppLayout from "@/components/layout/AppLayout";
 import AdminGuard from "@/admin/AdminGuard";
@@ -39,6 +39,8 @@ import PenaltySearchPage from "@/pages/PenaltySearchPage";
 import FreeKickGamePage from "@/pages/FreeKickGamePage";
 import HangmanGamePage from "@/pages/HangmanGamePage";
 import PairsGamePage from "@/pages/PairsGamePage";
+import ClubCreatePage from "@/pages/ClubCreatePage";
+import ClubsPage from "@/pages/ClubsPage";
 import CollectionPage from "@/pages/CollectionPage";
 import TradesPage from "@/pages/TradesPage";
 import NewTradePage from "@/pages/NewTradePage";
@@ -54,6 +56,7 @@ import LoadingScreen from "@/components/common/LoadingScreen";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import OnboardingScreen from "@/components/common/OnboardingScreen";
 import { createSession } from "@/api/auth";
+import { joinByInvite } from "@/api/clubs";
 import { useAuthStore } from "@/store/authStore";
 import { useUiStore } from "@/store/uiStore";
 import { getTelegramColorScheme, initTelegramApp, isInsideTelegram } from "@/lib/telegram";
@@ -73,6 +76,7 @@ export default function App() {
   const theme = useUiStore((s) => s.theme);
   const [error, setError] = useState<string | null>(null);
   const [onboardingSeen, setOnboardingSeen] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     initTelegramApp();
@@ -104,6 +108,20 @@ export default function App() {
       cancelled = true;
     };
   }, [setUser, setAdminToken, setReady]);
+
+  useEffect(() => {
+    if (!isReady || !user) return;
+    const joinClubCode = new URLSearchParams(window.location.search).get("joinClub");
+    if (!joinClubCode) return;
+    joinByInvite(joinClubCode)
+      .catch(() => undefined)
+      .finally(() => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("joinClub");
+        window.history.replaceState({}, "", url.toString());
+        navigate("/clubs", { replace: true });
+      });
+  }, [isReady, user, navigate]);
 
   if (error) return <ErrorScreen message={error} />;
   if (!isReady) return <LoadingScreen />;
@@ -164,6 +182,8 @@ export default function App() {
         <Route path="/trades" element={<TradesPage />} />
         <Route path="/trades/new" element={<NewTradePage />} />
         <Route path="/trades/:id" element={<TradeDetailPage />} />
+        <Route path="/clubs" element={<ClubsPage />} />
+        <Route path="/clubs/create" element={<ClubCreatePage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/wheel" element={<WheelPage />} />
         <Route path="/upgrade" element={<UpgradePage />} />
