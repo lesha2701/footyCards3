@@ -1,8 +1,36 @@
-import pytest_asyncio
+import asyncio
+import os
+import uuid
 
-from app.models.enums import Position
+import pytest
+import pytest_asyncio
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.models.club import Club, ClubMember
+from app.models.club_pack import ClubPack, ClubPackRarityProbability
+from app.models.enums import ClubLogoShape, ClubRole, ClubType, Position, Rarity
+from app.models.user import User
+from app.services.club_pack_service import open_club_pack
 from tests.factories import create_player
 from tests.utils import telegram_headers
+
+# The pytest suite's own `client`/`db_session` fixtures (tests/conftest.py) hardcode
+# DATABASE_URL to in-memory SQLite for every test, unconditionally overwriting whatever
+# real DATABASE_URL the process actually started with (verified: even inside the
+# `docker compose exec backend pytest ...` container, whose env really does point at the
+# dev Postgres instance, `tests.conftest.engine.url` is still `sqlite+aiosqlite://`).
+# A genuine two-independent-connection race additionally can't be reproduced against that
+# SQLite DB at all: it uses a single shared StaticPool connection, so two "concurrent"
+# AsyncSessions end up fighting over one physical DBAPI connection and raise an unrelated
+# greenlet/threading error instead of exercising Postgres's real unique-constraint timing.
+# So this test opens its own independent connection straight to the real dev Postgres
+# instance (matching docker-compose.yml's/.env.example's default credentials, overridable
+# via REAL_POSTGRES_URL) and skips gracefully if that instance isn't reachable — this is
+# the same "verify manually against real Postgres" real-DB check CLAUDE.md calls for with
+# row-locking-sensitive changes, just written as a permanent, self-cleaning regression test.
+REAL_POSTGRES_URL = os.environ.get("REAL_POSTGRES_URL", "postgresql+asyncpg://postgres:1234@postgres:5432/footycards")
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -112,3 +140,107 @@ async def test_open_club_pack_fails_on_insufficient_budget(client, db_session, b
 
     resp = await client.post(f"/api/v1/clubs/me/packs/{pack_id}/open", headers=headers, json={})
     assert resp.status_code == 400
+
+
+async def test_open_club_pack_concurrent_same_idempotency_key_no_double_debit():
+    """Genuine concurrency regression test for the flush-time IntegrityError bug: two truly
+    concurrent open_club_pack calls (asyncio.gather, two independent DB sessions/connections)
+    with the same idempotency_key both pass the pre-check SELECT before either commits, so both
+    attempt the INSERT into club_pack_openings. Postgres enforces the unique constraint on
+    (club_id, idempotency_key) at INSERT/flush time, not at COMMIT time — so, before the fix, the
+    losing call's `await db.flush()` (which sat outside the try/except IntegrityError block)
+    raised an unhandled exception instead of falling back to the winner's result. This differs
+    from test_open_club_pack_idempotency_key_prevents_double_charge above, which only issues two
+    *sequential* HTTP requests — the second request's pre-check always finds the first request's
+    already-committed row and returns early, never reaching `db.flush()`, so it can't catch this
+    bug. Runs against real Postgres (see REAL_POSTGRES_URL above) — skips if unreachable.
+    """
+    engine = create_async_engine(REAL_POSTGRES_URL, pool_pre_ping=True)
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except OSError as exc:
+        await engine.dispose()
+        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
+    except OperationalError as exc:
+        await engine.dispose()
+        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
+
+    RealSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+    suffix = uuid.uuid4().hex[:10]
+
+    setup = RealSessionLocal()
+    user = club_id = pack_id = None
+    user_id = None
+    try:
+        user = User(telegram_id=990_000_000_000 + uuid.uuid4().int % 1_000_000_000, username=f"race_{suffix}")
+        setup.add(user)
+        await setup.flush()
+
+        club = Club(
+            name=f"Race Club {suffix}", club_type=ClubType.open, logo_shape=ClubLogoShape.shield,
+            logo_color="#123456", captain_id=user.id, invite_code=f"race{suffix}"[:16], budget=200,
+        )
+        setup.add(club)
+        await setup.flush()
+
+        setup.add(ClubMember(club_id=club.id, user_id=user.id, role=ClubRole.captain))
+
+        pack = ClubPack(slug=f"race-pack-{suffix}", name="Гоночный пак (race test)", price=50, card_count=1, is_active=True)
+        setup.add(pack)
+        await setup.flush()
+        setup.add(ClubPackRarityProbability(club_pack_id=pack.id, rarity=Rarity.common, probability=1.0))
+
+        await setup.commit()
+        user_id, club_id, pack_id = user.id, club.id, pack.id
+
+        session_a = RealSessionLocal()
+        session_b = RealSessionLocal()
+        try:
+            user_a = await session_a.get(User, user_id)
+            user_b = await session_b.get(User, user_id)
+
+            results = await asyncio.gather(
+                open_club_pack(session_a, user_a, pack_id, "race-key"),
+                open_club_pack(session_b, user_b, pack_id, "race-key"),
+                return_exceptions=True,
+            )
+        finally:
+            await session_a.close()
+            await session_b.close()
+
+        for result in results:
+            assert not isinstance(result, BaseException), f"open_club_pack raised instead of handling the race: {result!r}"
+
+        opening_ids = {result.opening_id for result in results}
+        assert len(opening_ids) == 1, "both concurrent callers must resolve to the same winning opening"
+
+        budgets = {result.new_budget for result in results}
+        assert budgets == {150}, f"expected a single 50-coin debit from the 200-coin starting budget, got {budgets}"
+
+        async with RealSessionLocal() as verify:
+            final_club = await verify.get(Club, club_id)
+            assert final_club.budget == 150, "club budget must reflect exactly one debit, not two"
+    finally:
+        # Self-cleaning: this test writes real rows into the shared dev Postgres instance, so
+        # tear everything it created back down regardless of pass/fail. Deleting the club first
+        # cascades club_members/club_pack_openings/club_pack_opening_cards/club_cards/
+        # club_budget_transactions (all ondelete="CASCADE" on club_id/opening_id); the pack and
+        # user are deleted afterwards since nothing still references them at that point.
+        async with RealSessionLocal() as cleanup:
+            if club_id is not None:
+                club_row = await cleanup.get(Club, club_id)
+                if club_row is not None:
+                    await cleanup.delete(club_row)
+            if pack_id is not None:
+                pack_row = await cleanup.get(ClubPack, pack_id)
+                if pack_row is not None:
+                    await cleanup.delete(pack_row)
+            await cleanup.commit()
+            if user is not None and user_id is not None:
+                user_row = await cleanup.get(User, user_id)
+                if user_row is not None:
+                    await cleanup.delete(user_row)
+                    await cleanup.commit()
+        await setup.close()
+        await engine.dispose()
