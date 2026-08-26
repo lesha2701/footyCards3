@@ -87,6 +87,10 @@ async def create_club(db: AsyncSession, user: User, payload: ClubCreate) -> Club
     if existing is not None:
         raise ConflictError("Ты уже состоишь в клубе")
 
+    existing_name = await db.execute(select(Club).where(Club.name == payload.name))
+    if existing_name.scalar_one_or_none() is not None:
+        raise ConflictError("Клуб с таким названием уже существует")
+
     config = await get_config(db)
     locked_user = await lock_user_for_update(db, user.id)
     await debit_coins(
@@ -271,6 +275,17 @@ async def leave_club(db: AsyncSession, user: User) -> None:
         if successor is None:
             # No assistants to take over — the club disbands entirely,
             # per the approved design (even if regular members remain).
+            other_member_ids = (
+                await db.execute(
+                    select(ClubMember.user_id).where(ClubMember.club_id == club.id, ClubMember.user_id != user.id)
+                )
+            ).scalars().all()
+            for member_id in other_member_ids:
+                await notify(
+                    db, member_id, NotificationType.club_kicked,
+                    "Клуб распущен", f"Клуб «{club.name}» распущен — капитан покинул клуб, а ассистента для передачи капитанства не нашлось",
+                )
+
             await db.delete(club)
             await db.commit()
             return

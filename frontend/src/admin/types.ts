@@ -90,6 +90,7 @@ export interface AdminActionLog {
 }
 
 export interface GameConfig {
+  club_creation_cost_coins: number;
   memory_daily_reward_limit: number;
   memory_reward_cap: number;
   suspicious_memory_score_threshold: number;

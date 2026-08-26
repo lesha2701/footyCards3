@@ -17,8 +17,9 @@ import {
   leaveClub,
   rejectJoinRequest,
 } from "@/api/clubs";
+import { fetchMyProfile } from "@/api/profile";
 import { ApiRequestError } from "@/lib/api";
-import { showConfirm } from "@/lib/telegram";
+import { hapticNotify, showConfirm } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { Club } from "@/types";
 
@@ -40,6 +41,7 @@ function ClubBrowseList() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [requestSentId, setRequestSentId] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const { data: clubs, isLoading } = useQuery({ queryKey: ["clubs", "list", search], queryFn: () => fetchClubs(search) });
 
@@ -50,6 +52,7 @@ function ClubBrowseList() {
   });
   const requestMutation = useMutation({
     mutationFn: (id: number) => createJoinRequest(id),
+    onSuccess: (_data, id) => setRequestSentId(id),
     onError: (err) => setJoinError(err instanceof ApiRequestError ? err.message : "Не удалось отправить заявку"),
   });
 
@@ -92,6 +95,10 @@ function ClubBrowseList() {
               >
                 Вступить
               </button>
+            ) : requestSentId === c.id ? (
+              <span className="rounded-xl bg-accent-green/10 px-3 py-2 text-xs font-semibold text-accent-green">
+                Заявка отправлена
+              </span>
             ) : (
               <button
                 onClick={() => requestMutation.mutate(c.id)}
@@ -114,6 +121,7 @@ function ClubHome({ club }: { club: Club }) {
   const queryClient = useQueryClient();
   const userId = useAuthStore((s) => s.user?.id);
   const isManager = club.my_role === "captain" || club.my_role === "assistant";
+  const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["clubs"] });
   const leaveMutation = useMutation({ mutationFn: leaveClub, onSuccess: invalidate });
@@ -147,9 +155,23 @@ function ClubHome({ club }: { club: Club }) {
 
       {club.description && <p className="rounded-2xl bg-bg-surface p-3 text-sm text-ink-mist">{club.description}</p>}
 
-      {club.invite_code && (
-        <div className="rounded-2xl bg-bg-surface p-3 text-xs text-ink-mist">
-          Ссылка-приглашение: <span className="font-mono text-ink-chalk">club_{club.invite_code}</span>
+      {club.invite_code && profile && (
+        <div className="rounded-2xl bg-bg-surface p-3">
+          <p className="text-xs text-ink-mist">Ссылка-приглашение</p>
+          <div className="mt-2 flex items-center gap-2 rounded-xl bg-black/20 px-3 py-2">
+            <span className="flex-1 truncate font-mono text-xs text-ink-mist">
+              https://t.me/{profile.telegram_bot_username}?start=club_{club.invite_code}
+            </span>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`https://t.me/${profile.telegram_bot_username}?start=club_${club.invite_code}`);
+                hapticNotify("success");
+              }}
+              className="shrink-0 rounded-lg bg-floodlight px-2 py-1 text-[11px] font-bold text-bg-base"
+            >
+              Копировать
+            </button>
+          </div>
         </div>
       )}
 

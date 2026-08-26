@@ -60,6 +60,23 @@ async def test_create_club_fails_on_insufficient_balance(client, db_session, bot
     assert resp.status_code == 400  # InsufficientBalanceError maps to 400 (core/exceptions.py)
 
 
+async def test_create_club_rejects_duplicate_name(client, db_session, bot_token):
+    await _register(client, db_session, 820015, bot_token)
+    first = await client.post(
+        "/api/v1/clubs", headers=telegram_headers(820015, bot_token),
+        json={"name": "Уникальный клуб", "club_type": "open", "logo_shape": "shield", "logo_color": "#FF0000"},
+    )
+    assert first.status_code == 200
+
+    await _register(client, db_session, 820016, bot_token)
+    second = await client.post(
+        "/api/v1/clubs", headers=telegram_headers(820016, bot_token),
+        json={"name": "Уникальный клуб", "club_type": "open", "logo_shape": "circle", "logo_color": "#00FF00"},
+    )
+    assert second.status_code == 409
+    assert second.json()["error"]["message"] == "Клуб с таким названием уже существует"
+
+
 async def test_list_clubs_filters_by_search(client, db_session, bot_token):
     await _register(client, db_session, 820004, bot_token)
     await client.post(

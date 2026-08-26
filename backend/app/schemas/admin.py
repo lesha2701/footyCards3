@@ -128,6 +128,7 @@ class StarsPackPurchaseOut(BaseModel):
 class GameConfigOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    club_creation_cost_coins: int
     memory_daily_reward_limit: int
     memory_reward_cap: int
     suspicious_memory_score_threshold: int
@@ -210,6 +211,7 @@ class GameConfigOut(BaseModel):
 
 
 class GameConfigUpdate(BaseModel):
+    club_creation_cost_coins: Optional[int] = Field(default=None, ge=0)
     memory_daily_reward_limit: Optional[int] = Field(default=None, ge=0)
     memory_reward_cap: Optional[int] = Field(default=None, ge=0)
     suspicious_memory_score_threshold: Optional[int] = Field(default=None, ge=0)

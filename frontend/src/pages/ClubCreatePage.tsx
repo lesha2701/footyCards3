@@ -41,7 +41,7 @@ export default function ClubCreatePage() {
           <button
             key={s}
             onClick={() => setShape(s)}
-            className={`rounded-xl p-2 ${shape === s ? "bg-floodlight/30" : "bg-bg-surface"}`}
+            className={`rounded-xl p-2 ${shape === s ? "bg-bg-surface ring-2 ring-accent" : "bg-bg-surface"}`}
           >
             <ClubLogo shape={s} color={color} size={28} />
           </button>
