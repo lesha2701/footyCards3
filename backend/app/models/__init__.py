@@ -8,6 +8,7 @@ from app.models.club_budget import ClubBudgetTransaction
 from app.models.club_card import ClubCard
 from app.models.club_daily_claim import ClubDailyClaim
 from app.models.club_lineup import ClubLineup, ClubLineupCard
+from app.models.club_pack import ClubPack, ClubPackRarityProbability
 from app.models.coin_package import CoinPackage
 from app.models.daily_reward import DailyReward
 from app.models.game import GameSession, MemoryGameRound
@@ -44,6 +45,8 @@ __all__ = [
     "ClubDailyClaim",
     "ClubLineup",
     "ClubLineupCard",
+    "ClubPack",
+    "ClubPackRarityProbability",
     "CoinPackage",
     "DailyReward",
     "GameSession",
