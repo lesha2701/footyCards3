@@ -4,11 +4,14 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.user import User
 from app.schemas.club import ClubCreate, ClubDetailOut, ClubJoinRequestOut, ClubSummaryOut, JoinByInviteIn, TransferCaptainIn
+from app.schemas.club_pack import ClubPackOut
+from app.schemas.club_pack_open import ClubPackOpenResult, OpenClubPackRequest
 from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest
-from app.services import club_service, club_squad_service
+from app.services import club_pack_service, club_service, club_squad_service
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
 
@@ -18,6 +21,11 @@ async def list_clubs(
     search: Optional[str] = Query(default=None), db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)
 ):
     return await club_service.list_clubs(db, search)
+
+
+@router.get("/packs", response_model=list[ClubPackOut])
+async def list_club_packs(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
+    return await club_pack_service.list_club_packs(db)
 
 
 @router.get("/me", response_model=ClubDetailOut)
@@ -117,3 +125,9 @@ async def set_club_lineup(payload: ClubLineupSetRequest, db: AsyncSession = Depe
 @router.get("/me/cards", response_model=list[ClubCardOut])
 async def list_club_cards(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_squad_service.list_club_cards(db, user)
+
+
+@router.post("/me/packs/{club_pack_id}/open", response_model=ClubPackOpenResult)
+async def open_club_pack(club_pack_id: int, payload: OpenClubPackRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    check_rate_limit(f"open_club_pack:{user.id}", max_calls=10, window_seconds=60)
+    return await club_pack_service.open_club_pack(db, user, club_pack_id, payload.idempotency_key)
