@@ -41,7 +41,7 @@ def test_rank_breaks_a_full_tie_via_head_to_head():
         TournamentMatch(tournament_id=1, round_number=1, club_a_id=3, club_b_id=1, score_a=1, score_b=0, event_log=[], simulated_at=None),
     ]
     ranked = rank_standings(standings, matches)
-    assert len(ranked) == 3  # doesn't crash, produces a total order either way
+    assert [s.club_id for s in ranked] == [1, 2, 3]  # unbreakable cycle falls back to insertion order
 
 
 def test_rank_breaks_a_two_way_tie_via_head_to_head():
