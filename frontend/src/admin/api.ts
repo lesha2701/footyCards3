@@ -2,6 +2,7 @@ import { api } from "@/lib/api";
 import type {
   Badge,
   CardUpgradeRule,
+  ClubPack,
   CoinPackage,
   Gift,
   GiftSet,
@@ -201,6 +202,40 @@ export async function previewPack(id: number, simulations = 1000): Promise<PackP
 
 export async function deletePack(id: number): Promise<void> {
   await api.delete(`/admin/packs/${id}`);
+}
+
+// --- Club Packs ---
+export async function fetchAdminClubPacks(): Promise<ClubPack[]> {
+  const { data } = await api.get<ClubPack[]>("/admin/club-packs");
+  return data;
+}
+
+export async function createClubPack(payload: Record<string, unknown>): Promise<ClubPack> {
+  const { data } = await api.post<ClubPack>("/admin/club-packs", payload);
+  return data;
+}
+
+export async function updateClubPack(id: number, payload: Record<string, unknown>): Promise<ClubPack> {
+  const { data } = await api.put<ClubPack>(`/admin/club-packs/${id}`, payload);
+  return data;
+}
+
+export async function uploadClubPackImage(id: number, file: File): Promise<ClubPack> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<ClubPack>(`/admin/club-packs/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function toggleClubPackActive(id: number): Promise<ClubPack> {
+  const { data } = await api.post<ClubPack>(`/admin/club-packs/${id}/toggle-active`);
+  return data;
+}
+
+export async function deleteClubPack(id: number): Promise<void> {
+  await api.delete(`/admin/club-packs/${id}`);
 }
 
 // --- Card Collections ---

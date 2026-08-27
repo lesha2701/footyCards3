@@ -8,6 +8,7 @@ import AdminDashboardPage from "@/admin/pages/AdminDashboardPage";
 import AdminUsersPage from "@/admin/pages/AdminUsersPage";
 import AdminPlayersPage from "@/admin/pages/AdminPlayersPage";
 import AdminPacksPage from "@/admin/pages/AdminPacksPage";
+import AdminClubPacksPage from "@/admin/pages/AdminClubPacksPage";
 import AdminCardCollectionsPage from "@/admin/pages/AdminCardCollectionsPage";
 import AdminTasksPage from "@/admin/pages/AdminTasksPage";
 import AdminTradesPage from "@/admin/pages/AdminTradesPage";
@@ -146,6 +147,7 @@ export default function App() {
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="players" element={<AdminPlayersPage />} />
         <Route path="packs" element={<AdminPacksPage />} />
+        <Route path="club-packs" element={<AdminClubPacksPage />} />
         <Route path="card-collections" element={<AdminCardCollectionsPage />} />
         <Route path="tasks" element={<AdminTasksPage />} />
         <Route path="trades" element={<AdminTradesPage />} />
