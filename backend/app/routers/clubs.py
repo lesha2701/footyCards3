@@ -11,7 +11,8 @@ from app.schemas.club import ClubCreate, ClubDetailOut, ClubJoinRequestOut, Club
 from app.schemas.club_pack import ClubPackOut
 from app.schemas.club_pack_open import ClubPackOpenResult, OpenClubPackRequest
 from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest
-from app.services import club_pack_service, club_service, club_squad_service
+from app.schemas.tournament import TournamentApplyResult
+from app.services import club_pack_service, club_service, club_squad_service, tournament_queue_service
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
 
@@ -131,3 +132,8 @@ async def list_club_cards(db: AsyncSession = Depends(get_db), user: User = Depen
 async def open_club_pack(club_pack_id: int, payload: OpenClubPackRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     check_rate_limit(f"open_club_pack:{user.id}", max_calls=10, window_seconds=60)
     return await club_pack_service.open_club_pack(db, user, club_pack_id, payload.idempotency_key)
+
+
+@router.post("/tournament/apply", response_model=TournamentApplyResult)
+async def apply_to_tournament(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await tournament_queue_service.apply_to_tournament(db, user)
