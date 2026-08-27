@@ -1,13 +1,14 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.club import Club
-from app.models.enums import ClubBudgetTransactionType, TournamentStatus
+from app.models.enums import ClubBudgetTransactionType, NotificationType, TournamentStatus
 from app.models.tournament import Tournament
 from app.models.tournament_result import TournamentClubResult
 from app.models.tournament_standing import TournamentClubStanding
 from app.services.club_budget_service import credit_club_budget
 from app.services.game_config_service import get_config
 from app.services.tournament_standing_service import rank_standings
+from app.services import tournament_notification_service
 
 _STARS_BY_RANK = {1: 3, 2: 2, 3: 1, 4: 0, 5: 0, 6: -1, 7: -2, 8: -3}
 
@@ -49,6 +50,11 @@ async def conclude_tournament(
         )
         db.add(result)
         results.append(result)
+
+        await tournament_notification_service.notify_club_members(
+            db, club.id, NotificationType.club_tournament_results_ready,
+            "Турнир завершён", f"Твой клуб занял {rank}-е место в турнире — загляни за результатами!",
+        )
 
     tournament.status = TournamentStatus.completed
     db.add(tournament)
