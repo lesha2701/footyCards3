@@ -65,6 +65,7 @@ export default function AdminGamesPage() {
         <div className="grid grid-cols-2 gap-3">
           {field("hourly_game_limit", "Лимит игр в час (на каждую игру)")}
           {field("club_creation_cost_coins", "Стоимость создания клуба")}
+          {field("club_daily_reward_coins", "Ежедневная награда клуба")}
         </div>
       </section>
 
