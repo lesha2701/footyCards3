@@ -95,7 +95,8 @@ async def toggle_club_pack_active(pack_id: int, request: Request, db: AsyncSessi
 @router.delete("/{pack_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_club_pack(pack_id: int, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
     pack = await _get_pack_or_404(db, pack_id)
+    old_image_path = pack.image_path
     await log_action(db, admin.id, "delete_club_pack", "club_pack", pack_id, old_value=ClubPackOut.model_validate(pack).model_dump(mode="json"), ip_address=request.client.host if request.client else None)
-    delete_pack_image(pack.image_path)
     await db.delete(pack)
     await db.commit()
+    delete_pack_image(old_image_path)

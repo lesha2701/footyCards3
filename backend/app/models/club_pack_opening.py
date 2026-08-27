@@ -13,7 +13,7 @@ class ClubPackOpening(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False, index=True)
-    club_pack_id: Mapped[int] = mapped_column(ForeignKey("club_packs.id"), nullable=False)
+    club_pack_id: Mapped[int] = mapped_column(ForeignKey("club_packs.id", ondelete="CASCADE"), nullable=False)
     opened_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     price_paid: Mapped[int] = mapped_column(Integer, nullable=False)
     idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
