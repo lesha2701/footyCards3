@@ -42,6 +42,7 @@ import PairsGamePage from "@/pages/PairsGamePage";
 import ClubCreatePage from "@/pages/ClubCreatePage";
 import ClubsPage from "@/pages/ClubsPage";
 import ClubSquadPage from "@/pages/ClubSquadPage";
+import ClubPacksPage from "@/pages/ClubPacksPage";
 import CollectionPage from "@/pages/CollectionPage";
 import TradesPage from "@/pages/TradesPage";
 import NewTradePage from "@/pages/NewTradePage";
@@ -186,6 +187,7 @@ export default function App() {
         <Route path="/clubs" element={<ClubsPage />} />
         <Route path="/clubs/create" element={<ClubCreatePage />} />
         <Route path="/clubs/squad" element={<ClubSquadPage />} />
+        <Route path="/clubs/packs" element={<ClubPacksPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/wheel" element={<WheelPage />} />
         <Route path="/upgrade" element={<UpgradePage />} />

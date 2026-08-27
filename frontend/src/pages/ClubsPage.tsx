@@ -208,6 +208,15 @@ function ClubHome({ club }: { club: Club }) {
         </button>
       )}
 
+      {isManager && (
+        <button
+          onClick={() => navigate("/clubs/packs")}
+          className="rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+        >
+          🎁 Клубные паки
+        </button>
+      )}
+
       {isManager && club.club_type === "closed" && joinRequests && joinRequests.length > 0 && (
         <div className="flex flex-col gap-2">
           <p className="font-display text-sm font-bold text-ink-chalk">Заявки на вступление</p>
