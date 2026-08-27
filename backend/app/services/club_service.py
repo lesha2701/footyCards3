@@ -27,7 +27,16 @@ def _generate_invite_code() -> str:
 
 
 async def _lock_club(db: AsyncSession, club_id: int) -> Club:
-    result = await db.execute(select(Club).where(Club.id == club_id).with_for_update())
+    """Locks the club row so concurrent budget-mutating requests serialize.
+
+    `populate_existing=True` is required here: if a `Club` for this id is already in the
+    session's identity map (e.g. from an earlier read in the same request), SQLAlchemy would
+    otherwise silently return that stale (pre-lock) object instead of the freshly locked row —
+    the FOR UPDATE lock would still serialize correctly at the SQL level, but the caller's
+    check-then-write would read outdated `budget`, making the lock pointless. See
+    `wallet_service.lock_user_for_update`'s docstring for the identical reasoning.
+    """
+    result = await db.execute(select(Club).where(Club.id == club_id).with_for_update().execution_options(populate_existing=True))
     club = result.scalar_one_or_none()
     if club is None:
         raise NotFoundError("Клуб не найден")
