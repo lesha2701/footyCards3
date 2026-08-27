@@ -104,6 +104,11 @@ class TournamentQueueStatus(str, enum.Enum):
     formed = "formed"
 
 
+class TournamentStatus(str, enum.Enum):
+    active = "active"
+    completed = "completed"
+
+
 class ClubCardSource(str, enum.Enum):
     starter_seed = "starter_seed"
     club_pack = "club_pack"
