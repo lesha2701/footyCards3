@@ -227,6 +227,44 @@ async def test_leave_club_disbands_when_no_assistants(client, db_session, bot_to
     assert check.status_code == 404
 
 
+async def test_captain_less_disband_marks_active_tournament_club_withdrawn(client, db_session, bot_token):
+    from app.models.tournament import TournamentClub
+    from app.services.tournament_queue_service import apply_to_tournament
+
+    clubs_and_captains = []
+    for i in range(8):
+        telegram_id = 840000 + i
+        club, _ = await _create_club(client, bot_token, telegram_id, f"Клуб выбывания {i}")
+        second_member_id = telegram_id + 900_000
+        await _register_only(client, bot_token, second_member_id)
+        join_resp = await client.post(
+            f"/api/v1/clubs/{club['id']}/join", headers=telegram_headers(second_member_id, bot_token),
+        )
+        assert join_resp.status_code == 200
+        captain = await get_user_by_telegram_id(db_session, telegram_id)
+        clubs_and_captains.append((club["id"], captain))
+
+    tournament_id = None
+    for club_id, captain in clubs_and_captains:
+        result = await apply_to_tournament(db_session, captain)
+        if result.tournament_id is not None:
+            tournament_id = result.tournament_id
+    assert tournament_id is not None
+
+    disbanded_club_id, _sole_captain = clubs_and_captains[0]
+    resp = await client.post("/api/v1/clubs/me/leave", headers=telegram_headers(840000, bot_token))
+    assert resp.status_code == 200
+
+    tc = (
+        await db_session.execute(
+            select(TournamentClub).where(
+                TournamentClub.tournament_id == tournament_id, TournamentClub.club_id == disbanded_club_id,
+            )
+        )
+    ).scalar_one()
+    assert tc.is_withdrawn is True
+
+
 async def test_kick_member_removes_them(client, db_session, bot_token):
     club, captain_headers = await _create_club(client, bot_token, 820108, "Клуб-кикер")
     await _register_only(client, bot_token, 820109)

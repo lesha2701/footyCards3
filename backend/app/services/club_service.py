@@ -302,6 +302,23 @@ async def leave_club(db: AsyncSession, user: User) -> None:
                     "Клуб распущен", f"Клуб «{club.name}» распущен — капитан покинул клуб, а ассистента для передачи капитанства не нашлось",
                 )
 
+            # Local import to avoid a module-level circular-import risk symmetric to the one
+            # club_squad_service.py already documents with club_service.py — tournament_simulation_service.py
+            # doesn't import from club_service.py today, but keep this defensive/local per this
+            # codebase's convention for any newly-introduced cross-service reference here.
+            from app.models.enums import TournamentStatus
+            from app.models.tournament import Tournament, TournamentClub
+
+            active_participation = (
+                await db.execute(
+                    select(TournamentClub).join(Tournament, Tournament.id == TournamentClub.tournament_id)
+                    .where(TournamentClub.club_id == club.id, Tournament.status == TournamentStatus.active)
+                )
+            ).scalar_one_or_none()
+            if active_participation is not None:
+                active_participation.is_withdrawn = True
+                db.add(active_participation)
+
             await db.delete(club)
             await db.commit()
             return

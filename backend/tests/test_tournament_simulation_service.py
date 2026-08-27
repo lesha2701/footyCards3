@@ -134,6 +134,27 @@ async def test_simulate_next_round_updates_standings(db_session, eight_club_tour
     assert 8 <= total_points_awarded <= 12
 
 
+async def test_simulate_next_round_auto_scores_withdrawn_club_as_loss(db_session, eight_club_tournament):
+    tournament, _clubs_and_captains = eight_club_tournament
+    participants = (
+        await db_session.execute(select(TournamentClub).where(TournamentClub.tournament_id == tournament.id))
+    ).scalars().all()
+    withdrawn = participants[0]
+    withdrawn.is_withdrawn = True
+    db_session.add(withdrawn)
+    await db_session.commit()
+
+    matches = await simulate_next_round(db_session)
+    withdrawn_matches = [m for m in matches if m.club_a_id == withdrawn.club_id or m.club_b_id == withdrawn.club_id]
+    assert len(withdrawn_matches) == 1
+    m = withdrawn_matches[0]
+    assert m.event_log == []
+    if m.club_a_id == withdrawn.club_id:
+        assert (m.score_a, m.score_b) == (0, 3)
+    else:
+        assert (m.score_a, m.score_b) == (3, 0)
+
+
 async def test_simulate_next_round_concludes_tournament_at_round_14(db_session, eight_club_tournament_at_round_13):
     tournament, _clubs_and_captains = eight_club_tournament_at_round_13
     matches = await simulate_next_round(db_session)
