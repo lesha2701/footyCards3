@@ -1,18 +1,33 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
+from app.core.exceptions import NotFoundError
 from app.core.rate_limit import check_rate_limit
 from app.database import get_db
+from app.models.club import Club
+from app.models.tournament import Tournament, TournamentClub
+from app.models.tournament_match import TournamentMatch
+from app.models.tournament_queue import TournamentQueueEntry
+from app.models.tournament_standing import TournamentClubStanding
 from app.models.user import User
 from app.schemas.club import ClubCreate, ClubDetailOut, ClubJoinRequestOut, ClubSummaryOut, JoinByInviteIn, TransferCaptainIn
 from app.schemas.club_pack import ClubPackOut
 from app.schemas.club_pack_open import ClubPackOpenResult, OpenClubPackRequest
 from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest
-from app.schemas.tournament import TournamentApplyResult
+from app.schemas.tournament import (
+    TournamentApplyResult,
+    TournamentCurrentOut,
+    TournamentDetailOut,
+    TournamentMatchDetailOut,
+    TournamentMatchSummaryOut,
+    TournamentStandingOut,
+)
 from app.services import club_pack_service, club_service, club_squad_service, tournament_queue_service
+from app.services.tournament_standing_service import rank_standings
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
 
@@ -137,3 +152,71 @@ async def open_club_pack(club_pack_id: int, payload: OpenClubPackRequest, db: As
 @router.post("/tournament/apply", response_model=TournamentApplyResult)
 async def apply_to_tournament(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return await tournament_queue_service.apply_to_tournament(db, user)
+
+
+@router.get("/tournament/current", response_model=TournamentCurrentOut)
+async def get_current_tournament(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.services.club_service import _require_membership
+
+    membership = await _require_membership(db, user.id)
+    club_id = membership.club_id
+
+    active_tc = (
+        await db.execute(
+            select(TournamentClub).join(Tournament, Tournament.id == TournamentClub.tournament_id)
+            .where(TournamentClub.club_id == club_id, Tournament.status == "active")
+        )
+    ).scalar_one_or_none()
+    if active_tc is not None:
+        return TournamentCurrentOut(status="active", tournament_id=active_tc.tournament_id)
+
+    queue_entry = (await db.execute(select(TournamentQueueEntry).where(TournamentQueueEntry.club_id == club_id))).scalar_one_or_none()
+    if queue_entry is not None:
+        position = (
+            await db.execute(
+                select(func.count(TournamentQueueEntry.id))
+                .where(TournamentQueueEntry.queue_id == queue_entry.queue_id, TournamentQueueEntry.joined_at <= queue_entry.joined_at)
+            )
+        ).scalar_one()
+        return TournamentCurrentOut(status="queued", queue_position=position)
+
+    return TournamentCurrentOut(status="not_queued")
+
+
+@router.get("/tournament/{tournament_id}", response_model=TournamentDetailOut)
+async def get_tournament_detail(tournament_id: int, db: AsyncSession = Depends(get_db)):
+    tournament = await db.get(Tournament, tournament_id)
+    if tournament is None:
+        raise NotFoundError("Турнир не найден")
+
+    standings = (await db.execute(select(TournamentClubStanding).where(TournamentClubStanding.tournament_id == tournament_id))).scalars().all()
+    matches = (await db.execute(select(TournamentMatch).where(TournamentMatch.tournament_id == tournament_id))).scalars().all()
+    ranked = rank_standings(standings, matches)
+
+    club_names = {c.id: c.name for c in (await db.execute(select(Club).where(Club.id.in_([s.club_id for s in standings])))).scalars().all()}
+
+    return TournamentDetailOut(
+        id=tournament.id, status=tournament.status.value, rounds_simulated=tournament.rounds_simulated,
+        standings=[
+            TournamentStandingOut(
+                club_id=s.club_id, club_name=club_names.get(s.club_id, ""), points=s.points,
+                goals_for=s.goals_for, goals_against=s.goals_against, final_rank=index + 1,
+            )
+            for index, s in enumerate(ranked)
+        ],
+        matches=[
+            TournamentMatchSummaryOut(id=m.id, round_number=m.round_number, club_a_id=m.club_a_id, club_b_id=m.club_b_id, score_a=m.score_a, score_b=m.score_b)
+            for m in matches
+        ],
+    )
+
+
+@router.get("/tournament/{tournament_id}/matches/{match_id}", response_model=TournamentMatchDetailOut)
+async def get_tournament_match_detail(tournament_id: int, match_id: int, db: AsyncSession = Depends(get_db)):
+    match = await db.get(TournamentMatch, match_id)
+    if match is None or match.tournament_id != tournament_id:
+        raise NotFoundError("Матч не найден")
+    return TournamentMatchDetailOut(
+        id=match.id, round_number=match.round_number, club_a_id=match.club_a_id, club_b_id=match.club_b_id,
+        score_a=match.score_a, score_b=match.score_b, event_log=match.event_log,
+    )
