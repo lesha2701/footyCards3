@@ -8,6 +8,7 @@ import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconPlus, IconUsers } from "@/components/icons";
 import {
   acceptJoinRequest,
+  claimDailyReward,
   createJoinRequest,
   fetchClubs,
   fetchMyClub,
@@ -128,6 +129,13 @@ function ClubHome({ club }: { club: Club }) {
   const leaveMutation = useMutation({ mutationFn: leaveClub, onSuccess: invalidate });
   const kickMutation = useMutation({ mutationFn: (id: number) => kickMember(id), onSuccess: invalidate });
 
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const claimMutation = useMutation({
+    mutationFn: claimDailyReward,
+    onSuccess: () => { invalidate(); setClaimError(null); },
+    onError: (err) => setClaimError(err instanceof ApiRequestError ? err.message : "Не удалось получить награду"),
+  });
+
   const { data: joinRequests } = useQuery({
     queryKey: ["clubs", "join-requests"],
     queryFn: fetchMyJoinRequests,
@@ -153,6 +161,21 @@ function ClubHome({ club }: { club: Club }) {
           <p className="text-xs text-ink-mist-dim">{club.member_count}/11 участников · {ROLE_LABELS[club.my_role ?? "member"]}</p>
         </div>
       </div>
+
+      <div className="flex items-center justify-between rounded-2xl bg-bg-surface p-3">
+        <div>
+          <p className="text-xs text-ink-mist-dim">Бюджет клуба</p>
+          <p className="font-mono text-lg font-bold text-accent-lime">🪙 {club.budget}</p>
+        </div>
+        <button
+          onClick={() => claimMutation.mutate()}
+          disabled={claimMutation.isPending}
+          className="rounded-xl bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-40"
+        >
+          Ежедневная награда
+        </button>
+      </div>
+      {claimError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{claimError}</p>}
 
       {club.description && <p className="rounded-2xl bg-bg-surface p-3 text-sm text-ink-mist">{club.description}</p>}
 
