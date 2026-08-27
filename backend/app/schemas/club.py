@@ -48,6 +48,7 @@ class ClubDetailOut(BaseModel):
     captain_id: int
     founded_at: datetime
     member_count: int
+    budget: int
     members: list[ClubMemberOut]
     # Only populated when the requester is a member — never leak an
     # invite code to an outsider browsing the club list.
