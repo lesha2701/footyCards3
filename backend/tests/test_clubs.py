@@ -264,6 +264,69 @@ async def test_captain_less_disband_marks_active_tournament_club_withdrawn(clien
     ).scalar_one()
     assert tc.is_withdrawn is True
 
+    # Soft-disband, not hard-delete: the Club row itself must survive (so TournamentClub /
+    # TournamentMatch / TournamentClubStanding rows FK'd to it with ON DELETE CASCADE don't get
+    # silently wiped for every other club that ever played against it — see real-Postgres
+    # verification in the task-15 fix-round report).
+    disbanded_club_row = await db_session.get(Club, disbanded_club_id)
+    assert disbanded_club_row is not None
+    assert disbanded_club_row.is_disbanded is True
+    remaining_memberships = (
+        await db_session.execute(select(ClubMember).where(ClubMember.club_id == disbanded_club_id))
+    ).scalars().all()
+    assert remaining_memberships == []
+
+
+async def test_leave_club_without_tournament_history_still_hard_deletes(client, db_session, bot_token):
+    """Regression test: a club that never touched a tournament must behave exactly as before
+    the soft-disband fix — hard-deleted outright, not left behind as an is_disbanded ghost."""
+    club, captain_headers = await _create_club(client, bot_token, 830000, "Клуб без истории турниров")
+    leave_resp = await client.post("/api/v1/clubs/me/leave", headers=captain_headers)
+    assert leave_resp.status_code == 200
+
+    club_row = await db_session.get(Club, club["id"])
+    assert club_row is None
+
+
+async def test_disbanded_club_hidden_from_list_and_join_entry_points(client, db_session, bot_token):
+    from app.services.tournament_queue_service import apply_to_tournament
+
+    clubs_and_captains = []
+    for i in range(8):
+        telegram_id = 831000 + i
+        club, _ = await _create_club(client, bot_token, telegram_id, f"Клуб призрак {i}")
+        second_member_id = telegram_id + 900_000
+        await _register_only(client, bot_token, second_member_id)
+        join_resp = await client.post(
+            f"/api/v1/clubs/{club['id']}/join", headers=telegram_headers(second_member_id, bot_token),
+        )
+        assert join_resp.status_code == 200
+        captain = await get_user_by_telegram_id(db_session, telegram_id)
+        clubs_and_captains.append((club["id"], captain))
+
+    tournament_id = None
+    for club_id, captain in clubs_and_captains:
+        result = await apply_to_tournament(db_session, captain)
+        if result.tournament_id is not None:
+            tournament_id = result.tournament_id
+    assert tournament_id is not None
+
+    ghost_club_id, _sole_captain = clubs_and_captains[0]
+    resp = await client.post("/api/v1/clubs/me/leave", headers=telegram_headers(831000, bot_token))
+    assert resp.status_code == 200
+
+    list_resp = await client.get("/api/v1/clubs", headers=telegram_headers(831001, bot_token))
+    assert list_resp.status_code == 200
+    assert all(c["id"] != ghost_club_id for c in list_resp.json())
+
+    await _register_only(client, bot_token, 839999)
+    outsider_headers = telegram_headers(839999, bot_token)
+    join_attempt = await client.post(f"/api/v1/clubs/{ghost_club_id}/join", headers=outsider_headers)
+    assert join_attempt.status_code == 404
+
+    join_request_attempt = await client.post(f"/api/v1/clubs/{ghost_club_id}/join-requests", headers=outsider_headers)
+    assert join_request_attempt.status_code == 404
+
 
 async def test_kick_member_removes_them(client, db_session, bot_token):
     club, captain_headers = await _create_club(client, bot_token, 820108, "Клуб-кикер")

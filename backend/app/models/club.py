@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -29,6 +29,12 @@ class Club(Base):
     stars_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_tournament_applied_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     founded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    # Soft-disband marker: set instead of hard-deleting the Club row when the club has ever
+    # participated in a tournament (TournamentClub/TournamentMatch/TournamentClubStanding all
+    # FK to clubs.id with ON DELETE CASCADE — hard-deleting would silently destroy that
+    # tournament's history for every other club that ever played against it). A club with no
+    # tournament history is still hard-deleted exactly as before — see club_service.leave_club.
+    is_disbanded: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     __table_args__ = (CheckConstraint("budget >= 0", name="ck_clubs_budget_non_negative"),)
 

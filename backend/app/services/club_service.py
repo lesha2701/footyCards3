@@ -139,6 +139,7 @@ async def list_clubs(db: AsyncSession, search: Optional[str]) -> list[ClubSummar
     query = (
         select(Club, func.coalesce(member_count_subq.c.cnt, 0))
         .outerjoin(member_count_subq, member_count_subq.c.club_id == Club.id)
+        .where(Club.is_disbanded.is_(False))
         .order_by(func.coalesce(member_count_subq.c.cnt, 0).desc(), Club.founded_at.desc())
         .limit(100)
     )
@@ -171,6 +172,8 @@ async def join_open_club(db: AsyncSession, user: User, club_id: int) -> ClubDeta
     if await _get_membership(db, user.id) is not None:
         raise ConflictError("Ты уже состоишь в клубе")
     club = await _lock_club(db, club_id)
+    if club.is_disbanded:
+        raise NotFoundError("Клуб не найден")
     if club.club_type != ClubType.open:
         raise ConflictError("Это закрытый клуб — нужна заявка")
     if await _member_count(db, club_id) >= MAX_MEMBERS:
@@ -185,7 +188,7 @@ async def create_join_request(db: AsyncSession, user: User, club_id: int) -> Clu
     if await _get_membership(db, user.id) is not None:
         raise ConflictError("Ты уже состоишь в клубе")
     club = await db.get(Club, club_id)
-    if club is None:
+    if club is None or club.is_disbanded:
         raise NotFoundError("Клуб не найден")
     if club.club_type != ClubType.closed:
         raise ConflictError("Это открытый клуб — просто вступи")
@@ -309,15 +312,37 @@ async def leave_club(db: AsyncSession, user: User) -> None:
             from app.models.enums import TournamentStatus
             from app.models.tournament import Tournament, TournamentClub
 
-            active_participation = (
-                await db.execute(
-                    select(TournamentClub).join(Tournament, Tournament.id == TournamentClub.tournament_id)
-                    .where(TournamentClub.club_id == club.id, Tournament.status == TournamentStatus.active)
-                )
-            ).scalar_one_or_none()
-            if active_participation is not None:
-                active_participation.is_withdrawn = True
-                db.add(active_participation)
+            has_tournament_history = (
+                await db.execute(select(TournamentClub.id).where(TournamentClub.club_id == club.id).limit(1))
+            ).scalar_one_or_none() is not None
+
+            if has_tournament_history:
+                # Never hard-delete a club that has EVER participated in a tournament (active or
+                # completed) — TournamentClub/TournamentMatch/TournamentClubStanding all FK to
+                # clubs.id with ON DELETE CASCADE, so a hard delete would silently destroy that
+                # tournament's match history for every other club that played against it, not
+                # just this one's own rows. Soft-disband instead: keep the Club row (marked
+                # is_disbanded), drop its memberships explicitly (nothing cascades now).
+                active_participation = (
+                    await db.execute(
+                        select(TournamentClub).join(Tournament, Tournament.id == TournamentClub.tournament_id)
+                        .where(TournamentClub.club_id == club.id, Tournament.status == TournamentStatus.active)
+                    )
+                ).scalar_one_or_none()
+                if active_participation is not None:
+                    active_participation.is_withdrawn = True
+                    db.add(active_participation)
+
+                all_memberships = (
+                    await db.execute(select(ClubMember).where(ClubMember.club_id == club.id))
+                ).scalars().all()
+                for member_row in all_memberships:
+                    await db.delete(member_row)
+
+                club.is_disbanded = True
+                db.add(club)
+                await db.commit()
+                return
 
             await db.delete(club)
             await db.commit()
