@@ -11,7 +11,8 @@ from app.schemas.stars import (
     StarsPreCheckoutValidateIn,
     StarsPreCheckoutValidateOut,
 )
-from app.services import chat_pack_service, stars_payment_service
+from app.schemas.tournament import SimulateRoundResult
+from app.services import chat_pack_service, stars_payment_service, tournament_simulation_service
 
 router = APIRouter(prefix="/internal", tags=["internal"], dependencies=[Depends(verify_internal_secret)])
 
@@ -40,3 +41,13 @@ async def open_chat_pack(payload: ChatPackOpenIn, db: AsyncSession = Depends(get
     return await chat_pack_service.claim_chat_pack_for_telegram_user(
         db, payload.telegram_user_id, payload.username, payload.first_name, payload.last_name
     )
+
+
+@router.post("/clubs/simulate-round", response_model=SimulateRoundResult)
+async def simulate_round(db: AsyncSession = Depends(get_db)):
+    """Called by an external scheduler (cron/bot job) to advance every
+    active tournament by one round. See tournament_simulation_service.
+    simulate_next_round for the concurrency guarantees if this ever fires
+    twice close together."""
+    matches = await tournament_simulation_service.simulate_next_round(db)
+    return SimulateRoundResult(matches_simulated=len(matches))

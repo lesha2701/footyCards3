@@ -7,3 +7,7 @@ class TournamentApplyResult(BaseModel):
     queued: bool
     tournament_id: Optional[int] = None
     queue_position: Optional[int] = None
+
+
+class SimulateRoundResult(BaseModel):
+    matches_simulated: int

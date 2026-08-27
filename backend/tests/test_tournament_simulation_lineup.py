@@ -50,24 +50,30 @@ async def seeded_club_with_full_squad(client, db_session, bot_token):
 
 async def test_resolve_match_lineup_returns_engine_shape(db_session, seeded_club_with_full_squad):
     club, _captain = seeded_club_with_full_squad
-    lineup, had_sub = await resolve_match_lineup(db_session, club.id)
+    lineup, had_sub, cards_with_slots = await resolve_match_lineup(db_session, club.id)
     assert len(lineup) == 11
     assert had_sub is False
+    assert len(cards_with_slots) == 11
+    for card, slot in cards_with_slots:
+        assert card.id in {c["club_card_id"] for c in lineup}
+        assert slot.code in {"GK", "DEF1", "DEF2", "DEF3", "DEF4", "MID1", "MID2", "MID3", "FWD1", "FWD2", "FWD3"}
     for c in lineup:
         assert set(c.keys()) >= {"club_card_id", "player_id", "name", "rating", "position", "category"}
 
 
 async def test_resolve_match_lineup_substitutes_suspended_card(db_session, seeded_club_with_full_squad):
     club, _captain = seeded_club_with_full_squad
-    lineup, _ = await resolve_match_lineup(db_session, club.id)
+    lineup, _, _ = await resolve_match_lineup(db_session, club.id)
     suspended_card_id = lineup[0]["club_card_id"]
     db_session.add(ClubCardAvailability(club_card_id=suspended_card_id, rounds_remaining=2))
     await db_session.commit()
 
-    new_lineup, had_sub = await resolve_match_lineup(db_session, club.id)
+    new_lineup, had_sub, cards_with_slots = await resolve_match_lineup(db_session, club.id)
     assert had_sub is True
     assert suspended_card_id not in {c["club_card_id"] for c in new_lineup}
     assert len(new_lineup) == 11
+    assert len(cards_with_slots) == 11
+    assert suspended_card_id not in {c.id for c, _ in cards_with_slots}
 
 
 async def test_form_multiplier_is_one_with_no_history(db_session, seeded_club_with_full_squad):
