@@ -42,7 +42,10 @@ def test_shot_moments_pick_real_actors_from_both_sides():
         assert m["actors"]["pass_target"]["club_card_id"] in attacking_ids
         assert m["actors"]["defender"]["club_card_id"] in defending_ids
         for actor in m["actors"].values():
-            assert set(actor.keys()) >= {"club_card_id", "player_id", "name", "rating", "position"}
+            # Exact shape, not just a superset — _pick_actor trims to exactly
+            # the documented Actor keys regardless of what the source lineup
+            # entry carries (e.g. a fixture's extra "category" key).
+            assert set(actor.keys()) == {"club_card_id", "player_id", "name", "rating", "position"}
 
 
 def test_stronger_side_attacks_more_often(monkeypatch):
@@ -51,3 +54,14 @@ def test_stronger_side_attacks_more_often(monkeypatch):
     moments = engine.generate_moment_queue(140, 10, _FakeConfig(), lineup_a, lineup_b)
     attacking_a = sum(1 for m in moments if m["attacking_side"] == "a")
     assert attacking_a > len(moments) / 2
+
+
+def test_empty_net_shot_moment_has_no_actors_and_no_defense_situation_id():
+    lineup_a, lineup_b = _fake_lineup(1), _fake_lineup(2)
+    moment = engine._build_shot_moment(10, lineup_a, lineup_b, "a", "empty_net")
+    assert moment["kind"] == "shot"
+    assert moment["shot_type"] == "empty_net"
+    assert moment["situation_kind"] == "breakaway"
+    assert moment["situation_id"] is None
+    assert moment["actors"] == {}
+    assert "defense_situation_id" not in moment

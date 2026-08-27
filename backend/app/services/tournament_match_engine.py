@@ -24,13 +24,27 @@ def _pick_actor(lineup: list[dict], category: str, preferred_positions: tuple, e
     pool = [c for c in cards if c["position"] in preferred_positions] or cards
     if not pool:
         pool = [c for c in lineup if c["category"] != "GK" and c["club_card_id"] not in exclude_ids]
-    return dict(random.choice(pool))
+    card = random.choice(pool)
+    return {
+        "club_card_id": card["club_card_id"],
+        "player_id": card["player_id"],
+        "name": card["name"],
+        "rating": card["rating"],
+        "position": card["position"],
+    }
 
 
 def _build_shot_moment(minute: int, attacking_lineup: list[dict], defending_lineup: list[dict], attacking_side: str, shot_type: str) -> dict:
     moment = {"minute": minute, "kind": "shot", "attacking_side": attacking_side, "shot_type": shot_type}
 
     if shot_type == "empty_net":
+        # Special case, deliberately unlike every other shot moment: no real
+        # situation to draw actors from (it's an open-goal breakaway, not a
+        # crafted chance), so this moment carries no actors at all and — unlike
+        # situation_id elsewhere, which is set to None — omits the
+        # defense_situation_id key entirely rather than setting it to None.
+        # Callers (Task 11) must not assume `actors`/`defense_situation_id`
+        # are populated for every kind == "shot" moment.
         moment.update(situation_kind="breakaway", situation_id=None, actors={}, actions=["shoot"])
         return moment
 
@@ -52,9 +66,12 @@ def _build_shot_moment(minute: int, attacking_lineup: list[dict], defending_line
 
 def generate_moment_queue(strength_a: int, strength_b: int, config, lineup_a: list[dict], lineup_b: list[dict]) -> list[dict]:
     """Two-sided generalization of match_service._generate_moment_queue:
-    every shot moment carries real actors from BOTH the attacking club
-    (shooter/pass target) and the defending club (defender), unlike the
-    personal engine's user-vs-abstract-opponent shape."""
+    every non-empty-net shot moment carries real actors from BOTH the
+    attacking club (shooter/pass target) and the defending club (defender),
+    unlike the personal engine's user-vs-abstract-opponent shape. The
+    exception is `shot_type == "empty_net"`, whose moments carry no actors
+    and omit `defense_situation_id` entirely — see the comment in
+    `_build_shot_moment`."""
     total = strength_a + strength_b
     a_attack_prob = strength_a / total if total else 0.5
 
