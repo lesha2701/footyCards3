@@ -11,8 +11,8 @@ from app.schemas.stars import (
     StarsPreCheckoutValidateIn,
     StarsPreCheckoutValidateOut,
 )
-from app.schemas.tournament import SimulateRoundResult
-from app.services import chat_pack_service, stars_payment_service, tournament_simulation_service
+from app.schemas.tournament import LineupReminderResult, SimulateRoundResult
+from app.services import chat_pack_service, stars_payment_service, tournament_notification_service, tournament_simulation_service
 
 router = APIRouter(prefix="/internal", tags=["internal"], dependencies=[Depends(verify_internal_secret)])
 
@@ -51,3 +51,11 @@ async def simulate_round(db: AsyncSession = Depends(get_db)):
     twice close together."""
     matches = await tournament_simulation_service.simulate_next_round(db)
     return SimulateRoundResult(matches_simulated=len(matches))
+
+
+@router.post("/clubs/lineup-reminders", response_model=LineupReminderResult)
+async def lineup_reminders(db: AsyncSession = Depends(get_db)):
+    """Called by the bot's lineup-reminder loop, ~1h before each daily
+    simulation slot. See tournament_notification_service.send_lineup_reminders."""
+    count = await tournament_notification_service.send_lineup_reminders(db)
+    return LineupReminderResult(clubs_notified=count)

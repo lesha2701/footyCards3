@@ -53,3 +53,7 @@ class TournamentMatchDetailOut(BaseModel):
     score_a: int
     score_b: int
     event_log: list[dict]
+
+
+class LineupReminderResult(BaseModel):
+    clubs_notified: int
