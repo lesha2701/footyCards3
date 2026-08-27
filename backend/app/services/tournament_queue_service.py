@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError
-from app.models.club import Club
+from app.models.club import Club, ClubMember
 from app.models.club_lineup import ClubLineup, ClubLineupCard
 from app.models.enums import TournamentQueueStatus
 from app.models.tournament import Tournament, TournamentClub
@@ -17,6 +17,7 @@ from app.services.lineup_service import FORMATION_SLOTS
 from app.services.tournament_fixture_service import generate_fixtures
 
 TOURNAMENT_CLUB_COUNT = 8
+MIN_MEMBERS_TO_APPLY = 2
 
 
 async def _lock_queue_state(db: AsyncSession) -> TournamentQueueState:
@@ -99,6 +100,11 @@ async def apply_to_tournament(db: AsyncSession, user: User) -> TournamentApplyRe
     _require_manager(membership)
     club = await db.get(Club, membership.club_id)
 
+    member_count = (
+        await db.execute(select(func.count(ClubMember.id)).where(ClubMember.club_id == club.id))
+    ).scalar_one()
+    if member_count < MIN_MEMBERS_TO_APPLY:
+        raise ConflictError("В клубе должно быть минимум 2 участника")
     if not await _has_full_starting_xi(db, club.id):
         raise ConflictError("Заполни все 11 позиций в составе клуба, прежде чем подавать заявку")
     if await _is_in_active_tournament(db, club.id):

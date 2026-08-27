@@ -36,7 +36,13 @@ async def _create_club_with_full_squad(client, db_session, bot_token, telegram_i
     """Registers telegram_id as captain of a fresh club. club_service.create_club
     already auto-seeds a full 11/11 starting lineup via seed_starting_squad
     (Phase 2) — no extra lineup-filling step needed; every freshly created
-    club is tournament-eligible on the squad-completeness axis by default."""
+    club is tournament-eligible on the squad-completeness axis by default.
+
+    Also registers and joins a second member: apply_to_tournament requires >=2 members
+    (docs/superpowers/specs/2026-08-26-clubs-design.md, "Tournament: queue -> formation"
+    section), so every club this helper builds needs to be eligible on that axis too, not
+    just squad-completeness. The second member's telegram_id is derived from the captain's
+    with a fixed offset so it stays distinct from every other id used across this file's tests."""
     resp = await client.post("/api/v1/auth/session", headers=telegram_headers(telegram_id, bot_token))
     assert resp.status_code == 200
     captain = await get_user_by_telegram_id(db_session, telegram_id)
@@ -47,6 +53,13 @@ async def _create_club_with_full_squad(client, db_session, bot_token, telegram_i
     )
     assert create_resp.status_code == 200
     club = await db_session.get(Club, create_resp.json()["id"])
+
+    second_member_telegram_id = telegram_id + 900_000
+    resp2 = await client.post("/api/v1/auth/session", headers=telegram_headers(second_member_telegram_id, bot_token))
+    assert resp2.status_code == 200
+    join_resp = await client.post(f"/api/v1/clubs/{club.id}/join", headers=telegram_headers(second_member_telegram_id, bot_token))
+    assert join_resp.status_code == 200
+
     return club, captain
 
 
@@ -126,6 +139,15 @@ async def test_apply_rejects_incomplete_squad(client, db_session, bot_token):
         json={"name": "Неполный клуб", "club_type": "open", "logo_shape": "shield", "logo_color": "#FF0000"},
     )
     assert create_resp.status_code == 200
+
+    # Give this club a second member too, so the ConflictError asserted below is actually
+    # caused by the incomplete squad (the thing under test), not incidentally by the
+    # separate ">=2 members" check running first.
+    resp2 = await client.post("/api/v1/auth/session", headers=telegram_headers(1730300, bot_token))
+    assert resp2.status_code == 200
+    join_resp = await client.post(f"/api/v1/clubs/{create_resp.json()['id']}/join", headers=telegram_headers(1730300, bot_token))
+    assert join_resp.status_code == 200
+
     # club_service.create_club already auto-seeds a full 11/11 lineup today —
     # empty it out to exercise the "incomplete squad" rejection path.
     from app.models.club_lineup import ClubLineup, ClubLineupCard
@@ -135,6 +157,25 @@ async def test_apply_rejects_incomplete_squad(client, db_session, bot_token):
     for lc in (await db_session.execute(select(ClubLineupCard).where(ClubLineupCard.club_lineup_id == lineup.id))).scalars().all():
         await db_session.delete(lc)
     await db_session.commit()
+
+    with pytest.raises(ConflictError):
+        await apply_to_tournament(db_session, captain)
+
+
+async def test_apply_rejects_single_member_club(client, db_session, bot_token):
+    """The design spec (docs/superpowers/specs/2026-08-26-clubs-design.md, "Tournament: queue
+    -> formation" section) requires >=2 members as a queue-application validation criterion —
+    a solo-captain club, even with a full 11/11 starting XI, must not be able to apply."""
+    resp = await client.post("/api/v1/auth/session", headers=telegram_headers(830800, bot_token))
+    assert resp.status_code == 200
+    captain = await get_user_by_telegram_id(db_session, 830800)
+    create_resp = await client.post(
+        "/api/v1/clubs", headers=telegram_headers(830800, bot_token),
+        json={"name": "Клуб одиночка", "club_type": "open", "logo_shape": "shield", "logo_color": "#FF0000"},
+    )
+    assert create_resp.status_code == 200
+    # No second member joins — club_service.create_club already auto-seeds a full 11/11
+    # lineup, so this club is squad-complete; only the membership-count axis is under test.
 
     with pytest.raises(ConflictError):
         await apply_to_tournament(db_session, captain)
@@ -219,6 +260,14 @@ async def test_eight_concurrent_applications_form_exactly_one_tournament():
             setup.add(club)
             await setup.flush()
             setup.add(ClubMember(club_id=club.id, user_id=user.id, role=ClubRole.captain))
+
+            # apply_to_tournament requires >= 2 members — add a second one directly too,
+            # matching this test's raw-construction style rather than going through the API.
+            second_telegram_id = 990_600_000_000 + (uuid.uuid4().int % 1_000_000_000)
+            second_user = User(telegram_id=second_telegram_id, username=f"race2_{suffix}_{i}")
+            setup.add(second_user)
+            await setup.flush()
+            setup.add(ClubMember(club_id=club.id, user_id=second_user.id, role=ClubRole.member))
 
             lineup = ClubLineup(club_id=club.id)
             setup.add(lineup)
