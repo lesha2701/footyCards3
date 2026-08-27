@@ -142,6 +142,36 @@ async def test_open_club_pack_fails_on_insufficient_budget(client, db_session, b
     assert resp.status_code == 400
 
 
+async def test_open_club_pack_requires_manager_role(client, db_session, bot_token):
+    """Symmetric to test_club_squad.py's test_non_manager_cannot_set_lineup — pack opening is
+    the other manager-gated, budget-spending club route, and arguably the highest-value one to
+    guard (a plain member could otherwise drain the whole club budget)."""
+    admin_auth = await _admin_auth(client, bot_token)
+    for _ in range(5):
+        await create_player(db_session)
+    pack_resp = await client.post(
+        "/api/v1/admin/club-packs", headers=admin_auth,
+        json={
+            "slug": "club-manager-gate-pack", "name": "Пак под защитой", "price": 50, "card_count": 1,
+            "rarity_probabilities": [{"rarity": "common", "probability": 1.0}],
+        },
+    )
+    pack_id = pack_resp.json()["id"]
+
+    club, captain_headers = await _create_club(client, bot_token, 820403, "Клуб без прав на паки")
+    await client.post("/api/v1/clubs/me/daily-claim", headers=captain_headers)
+
+    await _register_only(client, bot_token, 820404)
+    member_headers = telegram_headers(820404, bot_token)
+    await client.post(f"/api/v1/clubs/{club['id']}/join", headers=member_headers)
+
+    resp = await client.post(f"/api/v1/clubs/me/packs/{pack_id}/open", headers=member_headers, json={})
+    assert resp.status_code == 403
+
+    club_detail = await client.get("/api/v1/clubs/me", headers=captain_headers)
+    assert club_detail.json()["budget"] == 200  # unchanged: the daily-claim credit, no pack debit
+
+
 async def test_open_club_pack_concurrent_same_idempotency_key_no_double_debit():
     """Genuine concurrency regression test for the flush-time IntegrityError bug: two truly
     concurrent open_club_pack calls (asyncio.gather, two independent DB sessions/connections)
