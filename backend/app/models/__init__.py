@@ -29,6 +29,7 @@ from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_match import TournamentMatch
 from app.models.tournament_standing import TournamentClubStanding
 from app.models.tournament_result import TournamentClubResult
+from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLog
 from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.transaction import CoinTransaction
 from app.models.trophy import TrophyDefinition, UserTrophy
@@ -90,6 +91,7 @@ __all__ = [
     "TournamentMatch",
     "TournamentClubStanding",
     "TournamentClubResult",
+    "TournamentSimulationSlotLog",
     "CoinTransaction",
     "TrophyDefinition",
     "UserTrophy",
