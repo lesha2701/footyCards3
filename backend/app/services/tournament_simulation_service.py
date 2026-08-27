@@ -7,11 +7,11 @@ from sqlalchemy.orm import joinedload
 
 from app.models.club_card import ClubCard
 from app.models.club_card_availability import ClubCardAvailability
-from app.models.enums import TournamentStatus
+from app.models.enums import NotificationType, TournamentStatus
 from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_match import TournamentMatch
 from app.models.tournament_standing import TournamentClubStanding
-from app.services import tournament_match_engine
+from app.services import tournament_match_engine, tournament_notification_service
 from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS, FORMATION_SLOTS, FormationSlot, calculate_base_strength
 from app.services.tournament_fixture_service import generate_fixtures
@@ -277,6 +277,17 @@ async def simulate_next_round(db: AsyncSession) -> list[TournamentMatch]:
             await _apply_engine_result(db, engine_result)
 
             round_matches.append(match)
+
+            await tournament_notification_service.notify_club_members(
+                db, club_a_id, NotificationType.club_match, "Матч сыгран",
+                f"Твой клуб сыграл матч {round_number}-го тура турнира — счёт {engine_result.score_a}:{engine_result.score_b}",
+                related_object_type="club_match", related_object_id=tournament.id,
+            )
+            await tournament_notification_service.notify_club_members(
+                db, club_b_id, NotificationType.club_match, "Матч сыгран",
+                f"Твой клуб сыграл матч {round_number}-го тура турнира — счёт {engine_result.score_b}:{engine_result.score_a}",
+                related_object_type="club_match", related_object_id=tournament.id,
+            )
 
         tournament.rounds_simulated = round_number
         db.add(tournament)

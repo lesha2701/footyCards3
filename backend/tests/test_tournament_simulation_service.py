@@ -155,6 +155,27 @@ async def test_simulate_next_round_auto_scores_withdrawn_club_as_loss(db_session
         assert (m.score_a, m.score_b) == (3, 0)
 
 
+async def test_simulate_next_round_notifies_both_clubs_on_a_real_match(db_session, eight_club_tournament):
+    from sqlalchemy import select
+
+    from app.models.enums import NotificationType
+    from app.models.notification import Notification
+    from app.services.tournament_simulation_service import simulate_next_round
+
+    tournament, clubs_and_captains = eight_club_tournament
+    matches = await simulate_next_round(db_session)
+    await db_session.commit()
+
+    real_matches = [m for m in matches if m.tournament_id == tournament.id and m.event_log]
+    assert real_matches  # at least one real (non-withdrawn) match this round
+
+    notifications = (
+        await db_session.execute(select(Notification).where(Notification.type == NotificationType.club_match))
+    ).scalars().all()
+    # 2 members per club (per Task 2's fixture convention) * 2 clubs per real match
+    assert len(notifications) == len(real_matches) * 4
+
+
 async def test_simulate_next_round_concludes_tournament_at_round_14(db_session, eight_club_tournament_at_round_13):
     tournament, _clubs_and_captains = eight_club_tournament_at_round_13
     matches = await simulate_next_round(db_session)
