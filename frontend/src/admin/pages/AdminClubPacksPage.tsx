@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { createClubPack, deleteClubPack, fetchAdminClubPacks, toggleClubPackActive, updateClubPack } from "@/admin/api";
-import { staticUrl } from "@/lib/api";
+import { ApiRequestError, staticUrl } from "@/lib/api";
+import { showConfirm } from "@/lib/telegram";
 import type { ClubPack } from "@/types";
 
 type Rarity = "common" | "rare" | "epic" | "legendary";
@@ -39,8 +40,22 @@ export default function AdminClubPacksPage() {
   const [error, setError] = useState<string | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-club-packs"] });
-  const toggleMutation = useMutation({ mutationFn: toggleClubPackActive, onSuccess: invalidate });
-  const deleteMutation = useMutation({ mutationFn: deleteClubPack, onSuccess: invalidate });
+  const toggleMutation = useMutation({
+    mutationFn: toggleClubPackActive,
+    onSuccess: invalidate,
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось изменить статус пака"),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: deleteClubPack,
+    onSuccess: invalidate,
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось удалить пак"),
+  });
+
+  const confirmDelete = async (p: ClubPack) => {
+    if (await showConfirm(`Удалить пак «${p.name}» навсегда? Это действие необратимо.`)) {
+      deleteMutation.mutate(p.id);
+    }
+  };
 
   const probabilitySum = RARITIES.reduce((sum, r) => sum + (form.probabilities[r] || 0), 0);
   const probabilitiesValid = Math.abs(probabilitySum - 100) < 2;
@@ -52,8 +67,16 @@ export default function AdminClubPacksPage() {
     is_active: form.is_active,
   });
 
-  const createMutation = useMutation({ mutationFn: () => createClubPack(buildPayload()), onSuccess: () => { invalidate(); setCreating(false); }, onError: () => setError("Не удалось создать пак") });
-  const updateMutation = useMutation({ mutationFn: () => updateClubPack(editing!.id, buildPayload()), onSuccess: () => { invalidate(); setEditing(null); }, onError: () => setError("Не удалось обновить пак") });
+  const createMutation = useMutation({
+    mutationFn: () => createClubPack(buildPayload()),
+    onSuccess: () => { invalidate(); setCreating(false); setError(null); },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось создать пак"),
+  });
+  const updateMutation = useMutation({
+    mutationFn: () => updateClubPack(editing!.id, buildPayload()),
+    onSuccess: () => { invalidate(); setEditing(null); setError(null); },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось обновить пак"),
+  });
 
   const openEdit = (p: ClubPack) => { setEditing(p); setForm(packToForm(p)); setError(null); };
 
@@ -80,7 +103,7 @@ export default function AdminClubPacksPage() {
             <div className="mt-2 flex flex-wrap gap-1">
               <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
               <button onClick={() => toggleMutation.mutate(p.id)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">{p.is_active ? "Отключить" : "Включить"}</button>
-              <button onClick={() => deleteMutation.mutate(p.id)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">Удалить</button>
+              <button onClick={() => confirmDelete(p)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">Удалить</button>
             </div>
           </div>
         ))}
