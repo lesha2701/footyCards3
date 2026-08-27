@@ -2,6 +2,7 @@ import secrets
 from typing import Optional
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
@@ -443,6 +444,24 @@ async def claim_daily_reward(db: AsyncSession, user: User) -> ClubDetailOut:
         db, club, config.club_daily_reward_coins, ClubBudgetTransactionType.daily_claim,
         f"Ежедневная награда от {user.username or user.first_name or f'#{user.id}'}",
     )
-    db.add(ClubDailyClaim(club_id=club.id, user_id=user.id, claim_date=today))
-    await db.commit()
+
+    # Captured as a plain int (not a `club.id` attribute access) for reuse after a possible
+    # `await db.rollback()` below — rollback expires every ORM object still attached to this
+    # session, and touching an expired attribute via a bare (non-awaited) attribute access
+    # outside SQLAlchemy's own async call plumbing raises `MissingGreenlet`, not a lazy-load.
+    # See `open_club_pack` in club_pack_service.py for the identical bug class and reasoning.
+    club_id = club.id
+
+    db.add(ClubDailyClaim(club_id=club_id, user_id=user.id, claim_date=today))
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Postgres enforces the (club_id, user_id, claim_date) unique constraint at
+        # INSERT/flush time, not at COMMIT time — so a genuine concurrent duplicate claim
+        # can slip past the pre-check SELECT above (which runs before any lock is held) and
+        # only get caught here. Discard this request's in-progress work and surface the same
+        # clean 409 the pre-check already raises for a sequential duplicate claim.
+        await db.rollback()
+        raise ConflictError("Сегодня награда уже получена")
+
     return await _club_to_detail(db, club, requester_user_id=user.id)

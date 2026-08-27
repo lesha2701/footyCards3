@@ -1,12 +1,29 @@
+import asyncio
+import os
 import secrets
+import uuid
 
+import pytest
 import pytest_asyncio
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.exceptions import ConflictError
 from app.models.club import Club, ClubMember
+from app.models.club_daily_claim import ClubDailyClaim
 from app.models.enums import ClubRole, ClubType, ClubLogoShape, Position
+from app.models.user import User
+from app.services.club_service import claim_daily_reward
+from app.services.game_config_service import get_config
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
+
+# See test_club_packs.py's REAL_POSTGRES_URL comment for why this test opens its own
+# independent connection to the real dev Postgres instance rather than using the pytest
+# suite's `client`/`db_session` fixtures (hardcoded to in-memory SQLite, single shared
+# connection, can't reproduce genuine two-connection unique-constraint race timing).
+REAL_POSTGRES_URL = os.environ.get("REAL_POSTGRES_URL", "postgresql+asyncpg://postgres:1234@postgres:5432/footycards")
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -298,3 +315,96 @@ async def test_claim_daily_reward_credits_budget_once_per_day(client, db_session
 
     second_attempt = await client.post("/api/v1/clubs/me/daily-claim", headers=headers)
     assert second_attempt.status_code == 409
+
+
+async def test_claim_daily_reward_concurrent_same_user_no_double_credit():
+    """Genuine concurrency regression test for the same unhandled-IntegrityError race as
+    test_club_packs.py's test_open_club_pack_concurrent_same_idempotency_key_no_double_debit:
+    two truly concurrent claim_daily_reward calls (asyncio.gather, two independent DB
+    sessions/connections) for the same user/club/day both pass the pre-check SELECT (which
+    runs before any lock is held) before either commits, so both attempt the INSERT into
+    club_daily_claims. Postgres enforces the (club_id, user_id, claim_date) unique constraint
+    at INSERT/flush time, not at COMMIT time — before the fix, the loser's `await db.commit()`
+    raised an unhandled IntegrityError instead of a clean ConflictError/409. Runs against real
+    Postgres (see REAL_POSTGRES_URL above) — skips if unreachable.
+    """
+    engine = create_async_engine(REAL_POSTGRES_URL, pool_pre_ping=True)
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except OSError as exc:
+        await engine.dispose()
+        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
+    except OperationalError as exc:
+        await engine.dispose()
+        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
+
+    RealSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+    suffix = uuid.uuid4().hex[:10]
+
+    setup = RealSessionLocal()
+    user = club_id = user_id = None
+    try:
+        user = User(telegram_id=991_000_000_000 + uuid.uuid4().int % 1_000_000_000, username=f"claim_race_{suffix}")
+        setup.add(user)
+        await setup.flush()
+
+        club = Club(
+            name=f"Claim Race Club {suffix}", club_type=ClubType.open, logo_shape=ClubLogoShape.shield,
+            logo_color="#654321", captain_id=user.id, invite_code=f"claim{suffix}"[:16], budget=0,
+        )
+        setup.add(club)
+        await setup.flush()
+
+        setup.add(ClubMember(club_id=club.id, user_id=user.id, role=ClubRole.captain))
+
+        await setup.commit()
+        user_id, club_id = user.id, club.id
+
+        session_a = RealSessionLocal()
+        session_b = RealSessionLocal()
+        try:
+            user_a = await session_a.get(User, user_id)
+            user_b = await session_b.get(User, user_id)
+
+            results = await asyncio.gather(
+                claim_daily_reward(session_a, user_a),
+                claim_daily_reward(session_b, user_b),
+                return_exceptions=True,
+            )
+        finally:
+            await session_a.close()
+            await session_b.close()
+
+        successes = [r for r in results if not isinstance(r, BaseException)]
+        failures = [r for r in results if isinstance(r, BaseException)]
+        assert len(successes) == 1, f"expected exactly one winner, got results: {results!r}"
+        assert len(failures) == 1, f"expected exactly one loser raising ConflictError, got results: {results!r}"
+        assert isinstance(failures[0], ConflictError), f"loser must raise ConflictError (409), not an unhandled exception: {failures[0]!r}"
+
+        async with RealSessionLocal() as verify:
+            config = await get_config(verify)
+            final_club = await verify.get(Club, club_id)
+            assert final_club.budget == config.club_daily_reward_coins, "club budget must reflect exactly one daily-reward credit, not two"
+            claims = (
+                await verify.execute(select(ClubDailyClaim).where(ClubDailyClaim.club_id == club_id, ClubDailyClaim.user_id == user_id))
+            ).scalars().all()
+            assert len(claims) == 1, "exactly one ClubDailyClaim row must exist despite two concurrent attempts"
+    finally:
+        # Self-cleaning: this test writes real rows into the shared dev Postgres instance, so
+        # tear everything it created back down regardless of pass/fail. Deleting the club first
+        # cascades club_members/club_daily_claims/club_budget_transactions (all
+        # ondelete="CASCADE" on club_id); the user is deleted afterwards.
+        async with RealSessionLocal() as cleanup:
+            if club_id is not None:
+                club_row = await cleanup.get(Club, club_id)
+                if club_row is not None:
+                    await cleanup.delete(club_row)
+            await cleanup.commit()
+            if user is not None and user_id is not None:
+                user_row = await cleanup.get(User, user_id)
+                if user_row is not None:
+                    await cleanup.delete(user_row)
+                    await cleanup.commit()
+        await setup.close()
+        await engine.dispose()
