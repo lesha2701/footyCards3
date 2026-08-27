@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -24,6 +25,9 @@ class Club(Base):
     # Permanent, unique deep-link token — see club_service.join_by_invite.
     invite_code: Mapped[str] = mapped_column(String(16), unique=True, nullable=False, index=True)
     budget: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cups_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    stars_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_tournament_applied_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     founded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     __table_args__ = (CheckConstraint("budget >= 0", name="ck_clubs_budget_non_negative"),)

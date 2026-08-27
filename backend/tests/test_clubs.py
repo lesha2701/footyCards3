@@ -408,3 +408,12 @@ async def test_claim_daily_reward_concurrent_same_user_no_double_credit():
                     await cleanup.commit()
         await setup.close()
         await engine.dispose()
+
+
+async def test_club_has_tournament_columns_with_zero_defaults(client, db_session, bot_token):
+    club, _ = await _create_club(client, bot_token, 820300, "ФК Тест")
+    result = await db_session.execute(select(Club).where(Club.name == "ФК Тест"))
+    club_row = result.scalar_one()
+    assert club_row.cups_count == 0
+    assert club_row.stars_count == 0
+    assert club_row.last_tournament_applied_at is None

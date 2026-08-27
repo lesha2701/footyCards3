@@ -96,6 +96,7 @@ class ClubJoinRequestStatus(str, enum.Enum):
 class ClubBudgetTransactionType(str, enum.Enum):
     daily_claim = "daily_claim"
     pack_purchase = "pack_purchase"
+    tournament_reward = "tournament_reward"
 
 
 class ClubCardSource(str, enum.Enum):
