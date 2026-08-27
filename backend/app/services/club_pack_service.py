@@ -97,6 +97,14 @@ async def open_club_pack(db: AsyncSession, user: User, club_pack_id: int, idempo
         # in-progress work (the opening row AND any cards minted before the conflict was hit)
         # and fall back to returning the winning concurrent request's result.
         await db.rollback()
+        if not idempotency_key:
+            # A keyless request has no idempotency contract to honor: the unique constraint
+            # is on (club_id, idempotency_key), and `idempotency_key IS NULL` would either
+            # match an unrelated earlier keyless opening for the same club or raise from
+            # `scalar_one()` (MultipleResultsFound/NoResultFound) — masking whatever the real
+            # constraint violation actually was. Re-raising as an unhandled 500 isn't ideal
+            # long-term, but is strictly better than silently returning a wrong opening.
+            raise
         existing = await db.execute(
             select(ClubPackOpening).where(ClubPackOpening.club_id == club_id, ClubPackOpening.idempotency_key == idempotency_key)
         )
