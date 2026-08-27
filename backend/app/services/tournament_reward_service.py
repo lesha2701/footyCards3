@@ -1,0 +1,55 @@
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.club import Club
+from app.models.enums import ClubBudgetTransactionType, TournamentStatus
+from app.models.tournament import Tournament
+from app.models.tournament_result import TournamentClubResult
+from app.models.tournament_standing import TournamentClubStanding
+from app.services.club_budget_service import credit_club_budget
+from app.services.game_config_service import get_config
+from app.services.tournament_standing_service import rank_standings
+
+_STARS_BY_RANK = {1: 3, 2: 2, 3: 1, 4: 0, 5: 0, 6: -1, 7: -2, 8: -3}
+
+
+async def conclude_tournament(
+    db: AsyncSession, tournament: Tournament, standings: list[TournamentClubStanding], matches: list
+) -> list[TournamentClubResult]:
+    config = await get_config(db)
+    budget_by_rank = {
+        1: config.club_tournament_budget_place_1, 2: config.club_tournament_budget_place_2,
+        3: config.club_tournament_budget_place_3, 4: config.club_tournament_budget_place_4,
+        5: config.club_tournament_budget_place_5, 6: config.club_tournament_budget_place_6,
+        7: config.club_tournament_budget_place_7, 8: config.club_tournament_budget_place_8,
+    }
+
+    ranked = rank_standings(standings, matches)
+    results: list[TournamentClubResult] = []
+
+    for index, standing in enumerate(ranked):
+        rank = index + 1
+        club = await db.get(Club, standing.club_id)
+        stars_delta = _STARS_BY_RANK[rank]
+        budget_awarded = budget_by_rank[rank]
+        cup_awarded = rank == 1
+
+        await credit_club_budget(
+            db, club, budget_awarded, ClubBudgetTransactionType.tournament_reward,
+            f"Награда за {rank}-е место в турнире #{tournament.id}",
+            related_object_type="tournament", related_object_id=tournament.id,
+        )
+        club.stars_count += stars_delta
+        if cup_awarded:
+            club.cups_count += 1
+        db.add(club)
+
+        result = TournamentClubResult(
+            tournament_id=tournament.id, club_id=club.id, final_rank=rank,
+            budget_awarded=budget_awarded, stars_delta=stars_delta, cup_awarded=cup_awarded,
+        )
+        db.add(result)
+        results.append(result)
+
+    tournament.status = TournamentStatus.completed
+    db.add(tournament)
+    return results
