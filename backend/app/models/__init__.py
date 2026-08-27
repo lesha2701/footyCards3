@@ -26,6 +26,8 @@ from app.models.task import TaskDefinition, UserTask
 from app.models.tournament_queue import TournamentQueue, TournamentQueueEntry, TournamentQueueState
 from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_match import TournamentMatch
+from app.models.tournament_standing import TournamentClubStanding
+from app.models.tournament_result import TournamentClubResult
 from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.transaction import CoinTransaction
 from app.models.trophy import TrophyDefinition, UserTrophy
@@ -84,6 +86,8 @@ __all__ = [
     "Tournament",
     "TournamentClub",
     "TournamentMatch",
+    "TournamentClubStanding",
+    "TournamentClubResult",
     "CoinTransaction",
     "TrophyDefinition",
     "UserTrophy",
