@@ -14,6 +14,7 @@ from handlers import payments as payments_handlers
 from handlers import user as user_handlers
 from services.free_pack_notifier import run_free_pack_notifier
 from services.notifier import run_notification_dispatcher
+from services.tournament_scheduler import run_lineup_reminder_loop, run_simulation_loop
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("footycards.bot")
@@ -44,6 +45,8 @@ async def run_polling() -> None:
         asyncio.create_task(run_notification_dispatcher(bot)),
         # Daily reward reminder disabled — see run_webhook() below.
         asyncio.create_task(run_free_pack_notifier(bot)),
+        asyncio.create_task(run_simulation_loop()),
+        asyncio.create_task(run_lineup_reminder_loop()),
     ]
 
     try:
@@ -68,6 +71,8 @@ async def run_webhook() -> None:
     asyncio.create_task(run_notification_dispatcher(bot))
     # Daily reward reminder disabled by request.
     asyncio.create_task(run_free_pack_notifier(bot))
+    asyncio.create_task(run_simulation_loop())
+    asyncio.create_task(run_lineup_reminder_loop())
 
     await bot.set_webhook(settings.bot_webhook_url, secret_token=settings.bot_webhook_secret, drop_pending_updates=True)
 
