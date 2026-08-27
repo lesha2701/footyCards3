@@ -174,6 +174,8 @@ async def test_simulate_next_round_notifies_both_clubs_on_a_real_match(db_sessio
     ).scalars().all()
     # 2 members per club (per Task 2's fixture convention) * 2 clubs per real match
     assert len(notifications) == len(real_matches) * 4
+    assert notifications[0].related_object_type == "club_match"
+    assert notifications[0].related_object_id == tournament.id
 
 
 async def test_simulate_next_round_concludes_tournament_at_round_14(db_session, eight_club_tournament_at_round_13):

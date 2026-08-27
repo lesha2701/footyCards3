@@ -95,6 +95,72 @@ async def test_send_lineup_reminders_notifies_club_with_suspended_starter(client
     assert len(notifications) == 2  # 2 members of the affected club
 
 
+async def test_send_lineup_reminders_skips_both_sides_of_a_withdrawn_fixture(client, db_session, bot_token):
+    from app.models.club import Club
+    from app.models.tournament import TournamentClub
+    from app.services.tournament_fixture_service import generate_fixtures
+
+    await _seed_position_pool(db_session)
+    club_ids_and_captains = []
+    for i in range(8):
+        await _create_club_with_full_squad(client, db_session, bot_token, 850300 + i * 2, f"Отозванные {i}")
+        club = (await db_session.execute(select(Club).where(Club.name == f"Отозванные {i}"))).scalar_one()
+        captain = await get_user_by_telegram_id(db_session, 850300 + i * 2)
+        club_ids_and_captains.append((club, captain))
+
+    tournament_id = None
+    for club, captain in club_ids_and_captains:
+        result = await apply_to_tournament(db_session, captain)
+        if result.tournament_id is not None:
+            tournament_id = result.tournament_id
+    assert tournament_id is not None
+
+    from app.models.club_lineup import ClubLineup, ClubLineupCard
+
+    first_club = club_ids_and_captains[0][0]
+    lineup = (await db_session.execute(select(ClubLineup).where(ClubLineup.club_id == first_club.id))).scalar_one()
+    lineup_card = (await db_session.execute(select(ClubLineupCard).where(ClubLineupCard.club_lineup_id == lineup.id))).scalars().first()
+    db_session.add(ClubCardAvailability(club_card_id=lineup_card.club_card_id, rounds_remaining=1))
+
+    # Same ordering send_lineup_reminders itself uses to build the club_ids list
+    # it feeds to generate_fixtures — needed to look up who round 1 pairs the
+    # withdrawn club against.
+    participants = (
+        await db_session.execute(
+            select(TournamentClub).where(TournamentClub.tournament_id == tournament_id).order_by(TournamentClub.id)
+        )
+    ).scalars().all()
+    withdrawn_tc = next(p for p in participants if p.club_id == first_club.id)
+    withdrawn_tc.is_withdrawn = True
+    db_session.add(withdrawn_tc)
+    await db_session.commit()
+
+    club_ids = [p.club_id for p in participants]
+    round_1_fixtures = [f for f in generate_fixtures(club_ids) if f[0] == 1]
+    _, club_a_id, club_b_id = next(f for f in round_1_fixtures if first_club.id in (f[1], f[2]))
+    opponent_id = club_b_id if club_a_id == first_club.id else club_a_id
+
+    notified = await send_lineup_reminders(db_session)
+    assert notified == 0
+
+    from app.models.enums import NotificationType
+
+    member_user_ids = (
+        await db_session.execute(
+            select(ClubMember.user_id).where(ClubMember.club_id.in_([first_club.id, opponent_id]))
+        )
+    ).scalars().all()
+    notifications = (
+        await db_session.execute(
+            select(Notification).where(
+                Notification.type == NotificationType.club_lineup_reminder,
+                Notification.user_id.in_(member_user_ids),
+            )
+        )
+    ).scalars().all()
+    assert notifications == []
+
+
 async def test_send_lineup_reminders_skips_clubs_with_no_suspension(client, db_session, bot_token):
     from app.models.club import Club
 
