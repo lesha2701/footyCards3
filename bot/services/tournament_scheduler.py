@@ -38,26 +38,35 @@ def _due_slots(
     return due
 
 
-async def _post_internal(path: str) -> dict:
+async def _post_internal(path: str, slot_key: str) -> dict:
     async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
-        async with session.post(f"{settings.internal_backend_url}/internal{path}", headers=_HEADERS) as resp:
+        async with session.post(
+            f"{settings.internal_backend_url}/internal{path}", headers=_HEADERS, params={"slot_key": slot_key}
+        ) as resp:
             resp.raise_for_status()
             return await resp.json()
 
 
 async def run_simulation_loop() -> None:
     """Fires POST /internal/clubs/simulate-round at each of SIMULATION_SLOTS,
-    once per slot per day, with catch-up (see _due_slots). simulate_next_round
-    is idempotent (per-Tournament row lock), so a duplicate/late fire is safe
-    — the risk this loop protects against is a MISSED fire, not a double one."""
+    once per slot per day, with catch-up (see _due_slots). The per-Tournament
+    row lock in simulate_next_round only makes two *concurrent* calls safe —
+    it does NOT protect against a duplicate/late fire hours or days apart (a
+    bot restart resets this loop's in-memory last_fired dict and would
+    otherwise re-fire an already-processed slot). That is instead guarded by
+    slot_key: it's derived from the due slot's nominal time (not wall-clock
+    now), passed to the backend, and try-inserted against
+    TournamentSimulationSlotLog there — a duplicate key makes the call a
+    genuine no-op regardless of in-memory state."""
     tz = ZoneInfo(settings.timezone)
     last_fired: dict[tuple[int, int], date] = {}
     while True:
         try:
             now = datetime.now(tz)
             for slot in _due_slots(now, last_fired):
-                data = await _post_internal("/clubs/simulate-round")
-                logger.info("Tournament round simulation fired for slot %s: %s matches", slot, data.get("matches_simulated"))
+                slot_key = f"{now.date().isoformat()}T{slot[0]:02d}:{slot[1]:02d}"
+                data = await _post_internal("/clubs/simulate-round", slot_key)
+                logger.info("Tournament round simulation fired for slot %s (key %s): %s matches", slot, slot_key, data.get("matches_simulated"))
                 last_fired[slot] = now.date()
         except Exception:  # noqa: BLE001 - keep the loop alive across transient HTTP/network errors
             logger.exception("Tournament simulation loop iteration failed")
@@ -67,15 +76,20 @@ async def run_simulation_loop() -> None:
 async def run_lineup_reminder_loop() -> None:
     """Fires POST /internal/clubs/lineup-reminders REMINDER_LEAD_MINUTES
     before each simulation slot, once per slot per day, with the same
-    catch-up behavior as run_simulation_loop."""
+    catch-up behavior and slot_key-based backend dedup as run_simulation_loop
+    (see its docstring) — the slot_key is built from the slot itself, not
+    the lead-adjusted fire time, so it lines up date/time-wise with the
+    corresponding simulate_round call even though the two are deduped
+    independently (different `kind`, same `slot_key`)."""
     tz = ZoneInfo(settings.timezone)
     last_fired: dict[tuple[int, int], date] = {}
     while True:
         try:
             now = datetime.now(tz)
             for slot in _due_slots(now, last_fired, lead_minutes=REMINDER_LEAD_MINUTES):
-                data = await _post_internal("/clubs/lineup-reminders")
-                logger.info("Lineup reminders fired for slot %s: %s clubs notified", slot, data.get("clubs_notified"))
+                slot_key = f"{now.date().isoformat()}T{slot[0]:02d}:{slot[1]:02d}"
+                data = await _post_internal("/clubs/lineup-reminders", slot_key)
+                logger.info("Lineup reminders fired for slot %s (key %s): %s clubs notified", slot, slot_key, data.get("clubs_notified"))
                 last_fired[slot] = now.date()
         except Exception:  # noqa: BLE001 - keep the loop alive across transient HTTP/network errors
             logger.exception("Lineup reminder loop iteration failed")
