@@ -285,6 +285,58 @@ async def _promote_longest_tenured_assistant(db: AsyncSession, club: Club) -> Op
     return result.scalar_one_or_none()
 
 
+async def _disband_or_soft_disband(db: AsyncSession, club: Club) -> None:
+    """Shared by leave_club's captain-less-disband branch and disband_club — both need the
+    identical decision: hard-delete the club (the common case, unchanged from Phase 1 — a club
+    that never touched a tournament) or soft-disband it (the fix for the cascade bug found in
+    review) when the club has ANY TournamentClub row at all, active or completed.
+
+    TournamentClub/TournamentMatch/TournamentClubStanding all FK to clubs.id with ON DELETE
+    CASCADE, so hard-deleting a club with tournament history would silently destroy that
+    tournament's match history for every other club that ever played against it, not just this
+    one's own rows — even for a tournament that already concluded. Soft-disband instead: keep
+    the Club row (marked is_disbanded), explicitly delete its ClubMember rows (nothing cascades
+    now, since the Club row itself is never deleted), and mark any currently-active
+    TournamentClub.is_withdrawn = True. Commits either way; caller does any pre-disband
+    notifications first.
+    """
+    # Local import to avoid a module-level circular-import risk symmetric to the one
+    # club_squad_service.py already documents with club_service.py — tournament_simulation_service.py
+    # doesn't import from club_service.py today, but keep this defensive/local per this
+    # codebase's convention for any newly-introduced cross-service reference here.
+    from app.models.enums import TournamentStatus
+    from app.models.tournament import Tournament, TournamentClub
+
+    has_tournament_history = (
+        await db.execute(select(TournamentClub.id).where(TournamentClub.club_id == club.id).limit(1))
+    ).scalar_one_or_none() is not None
+
+    if has_tournament_history:
+        active_participation = (
+            await db.execute(
+                select(TournamentClub).join(Tournament, Tournament.id == TournamentClub.tournament_id)
+                .where(TournamentClub.club_id == club.id, Tournament.status == TournamentStatus.active)
+            )
+        ).scalar_one_or_none()
+        if active_participation is not None:
+            active_participation.is_withdrawn = True
+            db.add(active_participation)
+
+        all_memberships = (
+            await db.execute(select(ClubMember).where(ClubMember.club_id == club.id))
+        ).scalars().all()
+        for member_row in all_memberships:
+            await db.delete(member_row)
+
+        club.is_disbanded = True
+        db.add(club)
+        await db.commit()
+        return
+
+    await db.delete(club)
+    await db.commit()
+
+
 async def leave_club(db: AsyncSession, user: User) -> None:
     membership = await _require_membership(db, user.id)
     club = await _lock_club(db, membership.club_id)
@@ -305,47 +357,7 @@ async def leave_club(db: AsyncSession, user: User) -> None:
                     "Клуб распущен", f"Клуб «{club.name}» распущен — капитан покинул клуб, а ассистента для передачи капитанства не нашлось",
                 )
 
-            # Local import to avoid a module-level circular-import risk symmetric to the one
-            # club_squad_service.py already documents with club_service.py — tournament_simulation_service.py
-            # doesn't import from club_service.py today, but keep this defensive/local per this
-            # codebase's convention for any newly-introduced cross-service reference here.
-            from app.models.enums import TournamentStatus
-            from app.models.tournament import Tournament, TournamentClub
-
-            has_tournament_history = (
-                await db.execute(select(TournamentClub.id).where(TournamentClub.club_id == club.id).limit(1))
-            ).scalar_one_or_none() is not None
-
-            if has_tournament_history:
-                # Never hard-delete a club that has EVER participated in a tournament (active or
-                # completed) — TournamentClub/TournamentMatch/TournamentClubStanding all FK to
-                # clubs.id with ON DELETE CASCADE, so a hard delete would silently destroy that
-                # tournament's match history for every other club that played against it, not
-                # just this one's own rows. Soft-disband instead: keep the Club row (marked
-                # is_disbanded), drop its memberships explicitly (nothing cascades now).
-                active_participation = (
-                    await db.execute(
-                        select(TournamentClub).join(Tournament, Tournament.id == TournamentClub.tournament_id)
-                        .where(TournamentClub.club_id == club.id, Tournament.status == TournamentStatus.active)
-                    )
-                ).scalar_one_or_none()
-                if active_participation is not None:
-                    active_participation.is_withdrawn = True
-                    db.add(active_participation)
-
-                all_memberships = (
-                    await db.execute(select(ClubMember).where(ClubMember.club_id == club.id))
-                ).scalars().all()
-                for member_row in all_memberships:
-                    await db.delete(member_row)
-
-                club.is_disbanded = True
-                db.add(club)
-                await db.commit()
-                return
-
-            await db.delete(club)
-            await db.commit()
+            await _disband_or_soft_disband(db, club)
             return
         successor.role = ClubRole.captain
         club.captain_id = successor.user_id
@@ -458,8 +470,7 @@ async def disband_club(db: AsyncSession, captain: User) -> None:
     for member_id in other_member_ids:
         await notify(db, member_id, NotificationType.club_kicked, "Клуб распущен", f"Клуб «{club.name}» распущен капитаном")
 
-    await db.delete(club)
-    await db.commit()
+    await _disband_or_soft_disband(db, club)
 
 
 async def join_by_invite(db: AsyncSession, user: User, invite_code: str) -> ClubDetailOut:
@@ -467,7 +478,7 @@ async def join_by_invite(db: AsyncSession, user: User, invite_code: str) -> Club
         raise ConflictError("Ты уже состоишь в клубе")
     result = await db.execute(select(Club).where(Club.invite_code == invite_code).with_for_update())
     club = result.scalar_one_or_none()
-    if club is None:
+    if club is None or club.is_disbanded:
         raise NotFoundError("Приглашение недействительно")
     if await _member_count(db, club.id) >= MAX_MEMBERS:
         raise ConflictError("В клубе нет свободных мест")

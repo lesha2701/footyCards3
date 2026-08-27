@@ -14,7 +14,7 @@ from app.models.club import Club, ClubMember
 from app.models.club_daily_claim import ClubDailyClaim
 from app.models.enums import ClubRole, ClubType, ClubLogoShape, Position
 from app.models.user import User
-from app.services.club_service import claim_daily_reward
+from app.services.club_service import claim_daily_reward, leave_club
 from app.services.game_config_service import get_config
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
@@ -374,6 +374,105 @@ async def test_disband_club(client, db_session, bot_token):
     assert check.status_code == 404
 
 
+async def test_disband_club_with_tournament_history_soft_disbands(client, db_session, bot_token):
+    """disband_club (POST /clubs/me/disband) is a separate, captain-initiated explicit-disband
+    entry point from leave_club's auto-disband-when-no-assistant branch — a captain WITH
+    assistants can call this directly. It must apply the same soft-disband decision (Club row
+    ID 449-462's original bug: unconditional db.delete(club) with no tournament-history check,
+    cascade-deleting TournamentClub/TournamentMatch/TournamentClubStanding rows)."""
+    from app.models.tournament import TournamentClub
+    from app.services.tournament_queue_service import apply_to_tournament
+
+    clubs_and_captains = []
+    for i in range(8):
+        telegram_id = 832000 + i
+        club, captain_headers = await _create_club(client, bot_token, telegram_id, f"Клуб роспуска {i}")
+        second_member_id = telegram_id + 900_000
+        await _register_only(client, bot_token, second_member_id)
+        join_resp = await client.post(
+            f"/api/v1/clubs/{club['id']}/join", headers=telegram_headers(second_member_id, bot_token),
+        )
+        assert join_resp.status_code == 200
+        if i == 0:
+            # Give the club-to-disband an assistant, so this exercises disband_club (reachable
+            # by a captain WITH an assistant present) rather than leave_club's no-assistant
+            # auto-disband path.
+            assistant_user_id = [m for m in join_resp.json()["members"] if m["role"] == "member"][0]["user_id"]
+            appoint = await client.post(
+                f"/api/v1/clubs/me/assistants/{assistant_user_id}/appoint", headers=captain_headers,
+            )
+            assert appoint.status_code == 200
+        captain = await get_user_by_telegram_id(db_session, telegram_id)
+        clubs_and_captains.append((club["id"], captain, captain_headers))
+
+    tournament_id = None
+    for club_id, captain, _headers in clubs_and_captains:
+        result = await apply_to_tournament(db_session, captain)
+        if result.tournament_id is not None:
+            tournament_id = result.tournament_id
+    assert tournament_id is not None
+
+    disbanded_club_id, _captain, disband_headers = clubs_and_captains[0]
+    resp = await client.post("/api/v1/clubs/me/disband", headers=disband_headers)
+    assert resp.status_code == 204
+
+    club_row = await db_session.get(Club, disbanded_club_id)
+    assert club_row is not None
+    assert club_row.is_disbanded is True
+    remaining_memberships = (
+        await db_session.execute(select(ClubMember).where(ClubMember.club_id == disbanded_club_id))
+    ).scalars().all()
+    assert remaining_memberships == []
+
+    tc = (
+        await db_session.execute(
+            select(TournamentClub).where(
+                TournamentClub.tournament_id == tournament_id, TournamentClub.club_id == disbanded_club_id,
+            )
+        )
+    ).scalar_one()
+    assert tc.is_withdrawn is True
+
+
+async def test_join_by_invite_rejects_disbanded_club(client, db_session, bot_token):
+    from app.models.tournament import TournamentClub
+    from app.services.tournament_queue_service import apply_to_tournament
+
+    clubs_and_captains = []
+    for i in range(8):
+        telegram_id = 833000 + i
+        club, _ = await _create_club(client, bot_token, telegram_id, f"Клуб инвайта {i}")
+        second_member_id = telegram_id + 900_000
+        await _register_only(client, bot_token, second_member_id)
+        join_resp = await client.post(
+            f"/api/v1/clubs/{club['id']}/join", headers=telegram_headers(second_member_id, bot_token),
+        )
+        assert join_resp.status_code == 200
+        captain = await get_user_by_telegram_id(db_session, telegram_id)
+        clubs_and_captains.append((club["id"], club["invite_code"], captain))
+
+    tournament_id = None
+    for club_id, _invite_code, captain in clubs_and_captains:
+        result = await apply_to_tournament(db_session, captain)
+        if result.tournament_id is not None:
+            tournament_id = result.tournament_id
+    assert tournament_id is not None
+
+    disbanded_club_id, disbanded_invite_code, _captain = clubs_and_captains[0]
+    resp = await client.post("/api/v1/clubs/me/leave", headers=telegram_headers(833000, bot_token))
+    assert resp.status_code == 200
+
+    club_row = await db_session.get(Club, disbanded_club_id)
+    assert club_row.is_disbanded is True
+
+    await _register_only(client, bot_token, 839998)
+    outsider_headers = telegram_headers(839998, bot_token)
+    invite_resp = await client.post(
+        "/api/v1/clubs/join-by-invite", headers=outsider_headers, json={"invite_code": disbanded_invite_code},
+    )
+    assert invite_resp.status_code == 404
+
+
 async def test_create_club_seeds_a_complete_starting_squad(client, db_session, bot_token):
     from app.models.club_card import ClubCard
     from app.models.club_lineup import ClubLineup, ClubLineupCard
@@ -504,6 +603,120 @@ async def test_claim_daily_reward_concurrent_same_user_no_double_credit():
             await cleanup.commit()
             if user is not None and user_id is not None:
                 user_row = await cleanup.get(User, user_id)
+                if user_row is not None:
+                    await cleanup.delete(user_row)
+                    await cleanup.commit()
+        await setup.close()
+        await engine.dispose()
+
+
+async def test_soft_disband_survives_real_postgres_cascade():
+    """Committed, CI-run proof that soft-disbanding a club with tournament history does NOT
+    trigger the ON DELETE CASCADE bug found in review: TournamentClub.club_id,
+    TournamentMatch.club_a_id/club_b_id, and TournamentClubStanding.club_id all FK to clubs.id
+    with ON DELETE CASCADE in the real schema — SQLite's in-memory test DB never enforces this
+    (no PRAGMA foreign_keys=ON), so the SQLite-backed tests elsewhere in this file would pass
+    even if leave_club regressed back to unconditionally calling db.delete(club). This test
+    builds a genuine Tournament/TournamentClub/TournamentMatch/TournamentClubStanding footprint
+    for one club directly against real Postgres (see REAL_POSTGRES_URL above), calls the actual
+    leave_club service function, and asserts every one of those rows is still there afterward —
+    proving _disband_or_soft_disband never issues db.delete(club) on this path. Skips if real
+    Postgres is unreachable.
+    """
+    from datetime import datetime, timezone
+
+    from app.models.enums import TournamentStatus
+    from app.models.tournament import Tournament, TournamentClub
+    from app.models.tournament_match import TournamentMatch
+    from app.models.tournament_standing import TournamentClubStanding
+
+    engine = create_async_engine(REAL_POSTGRES_URL, pool_pre_ping=True)
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except OSError as exc:
+        await engine.dispose()
+        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
+    except OperationalError as exc:
+        await engine.dispose()
+        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
+
+    RealSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+    suffix = uuid.uuid4().hex[:10]
+
+    setup = RealSessionLocal()
+    captain = club_id = captain_id = tournament_id = tc_id = standing_id = match_id = None
+    try:
+        captain = User(telegram_id=992_000_000_000 + uuid.uuid4().int % 1_000_000_000, username=f"soft_disband_{suffix}")
+        setup.add(captain)
+        await setup.flush()
+
+        club = Club(
+            name=f"Soft Disband Club {suffix}", club_type=ClubType.open, logo_shape=ClubLogoShape.shield,
+            logo_color="#112233", captain_id=captain.id, invite_code=f"sd{suffix}"[:16], budget=0,
+        )
+        setup.add(club)
+        await setup.flush()
+        setup.add(ClubMember(club_id=club.id, user_id=captain.id, role=ClubRole.captain))
+
+        tournament = Tournament(status=TournamentStatus.active, rounds_simulated=1)
+        setup.add(tournament)
+        await setup.flush()
+        tc = TournamentClub(tournament_id=tournament.id, club_id=club.id, is_withdrawn=False)
+        setup.add(tc)
+        standing = TournamentClubStanding(tournament_id=tournament.id, club_id=club.id, points=3, goals_for=2, goals_against=0)
+        setup.add(standing)
+        match = TournamentMatch(
+            tournament_id=tournament.id, round_number=1, club_a_id=club.id, club_b_id=club.id,
+            score_a=2, score_b=0, event_log=[], simulated_at=datetime.now(timezone.utc),
+        )
+        setup.add(match)
+        await setup.commit()
+
+        club_id, captain_id, tournament_id = club.id, captain.id, tournament.id
+        tc_id, standing_id, match_id = tc.id, standing.id, match.id
+
+        async with RealSessionLocal() as worker:
+            captain_row = await worker.get(User, captain_id)
+            await leave_club(worker, captain_row)
+
+        async with RealSessionLocal() as verify:
+            club_after = await verify.get(Club, club_id)
+            assert club_after is not None, "club row must NOT be hard-deleted when it has tournament history"
+            assert club_after.is_disbanded is True
+
+            members_after = (
+                await verify.execute(select(ClubMember).where(ClubMember.club_id == club_id))
+            ).scalars().all()
+            assert members_after == []
+
+            tc_after = await verify.get(TournamentClub, tc_id)
+            assert tc_after is not None, "TournamentClub row must survive — ON DELETE CASCADE must not fire"
+            assert tc_after.is_withdrawn is True
+
+            match_after = await verify.get(TournamentMatch, match_id)
+            assert match_after is not None, "TournamentMatch row must survive — ON DELETE CASCADE must not fire"
+
+            standing_after = await verify.get(TournamentClubStanding, standing_id)
+            assert standing_after is not None, "TournamentClubStanding row must survive — ON DELETE CASCADE must not fire"
+    finally:
+        # Self-cleaning against the shared dev Postgres instance. The club row was never hard-
+        # deleted by the code under test, so clean it up explicitly here (this cascades
+        # tournament_matches/tournament_clubs/tournament_club_standings/club_members via their
+        # own ON DELETE CASCADE — which is exactly fine for throwaway test scaffolding that has
+        # no other club depending on it, unlike the real disband path this test exists to guard).
+        async with RealSessionLocal() as cleanup:
+            if club_id is not None:
+                club_row = await cleanup.get(Club, club_id)
+                if club_row is not None:
+                    await cleanup.delete(club_row)
+            if tournament_id is not None:
+                tournament_row = await cleanup.get(Tournament, tournament_id)
+                if tournament_row is not None:
+                    await cleanup.delete(tournament_row)
+            await cleanup.commit()
+            if captain is not None and captain_id is not None:
+                user_row = await cleanup.get(User, captain_id)
                 if user_row is not None:
                     await cleanup.delete(user_row)
                     await cleanup.commit()
