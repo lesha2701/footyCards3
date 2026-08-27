@@ -108,23 +108,39 @@ def test_simulate_match_produces_deterministic_score_from_event_log(monkeypatch)
     assert result.score_a >= 0 and result.score_b >= 0
 
 
-def test_simulate_match_default_action_policy_shoots_on_positive_bias(monkeypatch):
-    # A situation with bias >= 0 should always resolve via "shoot", never "pass" —
-    # verified by checking every attack-kind event's payload["action"].
-    monkeypatch.setattr(engine.random, "random", lambda: 0.5)
-    lineup_a, lineup_b = _fake_lineup(1), _fake_lineup(2)
-    result = engine.simulate_match(70, 70, lineup_a, lineup_b, _FakeMatchConfig())
-    for e in result.event_log:
-        payload = e.get("payload", {})
-        if payload.get("action") in ("shoot", "pass") and "situation_id" in payload:
-            # This engine's resolved event payloads don't currently carry
-            # situation_id (see _resolve_shot_action), so this branch is a
-            # no-op today; kept so the check activates automatically if a
-            # future change starts threading situation_id through.
-            situation = engine.ATTACK_SITUATIONS_BY_ID[payload["situation_id"]]
-            if situation.bias >= 0:
-                assert payload["action"] == "shoot"
-    assert isinstance(result.event_log, list)
+def _hand_built_moment(situation) -> dict:
+    """A minimal, fully-formed shot moment for exercising _resolve_shot_action
+    directly — bypasses generate_moment_queue's random lottery so the action
+    policy (shoot iff situation.bias >= 0) is exercised deterministically
+    rather than hoping a random moment queue happens to produce a usable
+    sample of both bias signs."""
+    return {
+        "minute": 10,
+        "situation_id": situation.id,
+        "shot_type": situation.shot_type,
+        "actors": {
+            "shooter": {"club_card_id": 1, "player_id": 1, "name": "Shooter", "rating": 75, "position": "ST"},
+            "pass_target": {"club_card_id": 2, "player_id": 2, "name": "PassTarget", "rating": 75, "position": "CAM"},
+            "defender": {"club_card_id": 3, "player_id": 3, "name": "Defender", "rating": 75, "position": "CB"},
+        },
+    }
+
+
+def test_resolve_shot_action_follows_default_shoot_pass_policy_by_bias():
+    # Directly exercises _resolve_shot_action's action policy — shoot when
+    # the situation's bias is non-negative, pass otherwise — using two real
+    # AttackSituations with known bias signs, rather than going through
+    # simulate_match's random moment queue and hoping it samples both cases.
+    positive_situation = engine.ATTACK_SITUATIONS_BY_ID["att_box_through_ball"]
+    negative_situation = engine.ATTACK_SITUATIONS_BY_ID["att_box_narrow_angle"]
+    assert positive_situation.bias >= 0
+    assert negative_situation.bias < 0
+
+    event, _scorer = engine._resolve_shot_action("a", _hand_built_moment(positive_situation), _FakeMatchConfig())
+    assert event["payload"]["action"] == "shoot"
+
+    event, _scorer = engine._resolve_shot_action("a", _hand_built_moment(negative_situation), _FakeMatchConfig())
+    assert event["payload"]["action"] == "pass"
 
 
 def test_simulate_match_records_red_card_and_injury_availability(monkeypatch):
