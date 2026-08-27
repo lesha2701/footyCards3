@@ -99,6 +99,11 @@ class ClubBudgetTransactionType(str, enum.Enum):
     tournament_reward = "tournament_reward"
 
 
+class TournamentQueueStatus(str, enum.Enum):
+    open = "open"
+    formed = "formed"
+
+
 class ClubCardSource(str, enum.Enum):
     starter_seed = "starter_seed"
     club_pack = "club_pack"
