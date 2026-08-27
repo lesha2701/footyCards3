@@ -11,7 +11,7 @@ from app.database import get_db
 from app.models.club import Club
 from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_match import TournamentMatch
-from app.models.tournament_queue import TournamentQueueEntry
+from app.models.tournament_queue import TournamentQueueEntry, TournamentQueueState
 from app.models.tournament_standing import TournamentClubStanding
 from app.models.user import User
 from app.schemas.club import ClubCreate, ClubDetailOut, ClubJoinRequestOut, ClubSummaryOut, JoinByInviteIn, TransferCaptainIn
@@ -170,15 +170,31 @@ async def get_current_tournament(user: User = Depends(get_current_user), db: Asy
     if active_tc is not None:
         return TournamentCurrentOut(status="active", tournament_id=active_tc.tournament_id)
 
-    queue_entry = (await db.execute(select(TournamentQueueEntry).where(TournamentQueueEntry.club_id == club_id))).scalar_one_or_none()
-    if queue_entry is not None:
-        position = (
+    # Scoped to the currently-open queue only — mirrors tournament_queue_service's
+    # _is_already_queued. TournamentQueueEntry rows are never deleted once a queue forms
+    # (entries from past, already-`formed` queues stay as history), so an unscoped lookup by
+    # club_id alone would both misreport "queued" for a club whose old queue already formed
+    # and crash on scalar_one_or_none() once a club has 2+ historical entries across past
+    # queues. A club can only ever have at most one entry in the *current* open queue (Task 9
+    # already prevents re-applying while still queued/active), so this scoped lookup is safe
+    # with scalar_one_or_none().
+    state = (await db.execute(select(TournamentQueueState).where(TournamentQueueState.id == 1))).scalar_one_or_none()
+    if state is not None:
+        queue_entry = (
             await db.execute(
-                select(func.count(TournamentQueueEntry.id))
-                .where(TournamentQueueEntry.queue_id == queue_entry.queue_id, TournamentQueueEntry.joined_at <= queue_entry.joined_at)
+                select(TournamentQueueEntry).where(
+                    TournamentQueueEntry.club_id == club_id, TournamentQueueEntry.queue_id == state.current_queue_id
+                )
             )
-        ).scalar_one()
-        return TournamentCurrentOut(status="queued", queue_position=position)
+        ).scalar_one_or_none()
+        if queue_entry is not None:
+            position = (
+                await db.execute(
+                    select(func.count(TournamentQueueEntry.id))
+                    .where(TournamentQueueEntry.queue_id == queue_entry.queue_id, TournamentQueueEntry.joined_at <= queue_entry.joined_at)
+                )
+            ).scalar_one()
+            return TournamentCurrentOut(status="queued", queue_position=position)
 
     return TournamentCurrentOut(status="not_queued")
 
