@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.club import ClubMember
@@ -6,6 +7,7 @@ from app.models.club_card import ClubCard
 from app.models.club_card_availability import ClubCardAvailability
 from app.models.enums import NotificationType, TournamentStatus
 from app.models.tournament import Tournament, TournamentClub
+from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLog
 from app.services.notification_service import notify
 from app.services.tournament_fixture_service import generate_fixtures
 
@@ -43,12 +45,26 @@ async def _club_has_suspended_starter(db: AsyncSession, club_id: int) -> bool:
     return result.scalar_one_or_none() is not None
 
 
-async def send_lineup_reminders(db: AsyncSession) -> int:
+async def send_lineup_reminders(db: AsyncSession, slot_key: str | None = None) -> int:
     """For every active tournament's upcoming round, notifies every member
     of any club (on either side of a real, non-withdrawn fixture) whose
-    active lineup has a still-suspended starter. Read-only — mutates
-    nothing but the Notification rows it inserts. Returns the number of
-    (club, notified) events, for the internal endpoint's response."""
+    active lineup has a still-suspended starter. Mutates nothing but the
+    Notification rows it inserts (and, when slot_key is given, the dedup
+    log row below). Returns the number of (club, notified) events, for the
+    internal endpoint's response.
+
+    Time-based idempotency (surviving a bot restart that resets in-memory
+    scheduling state) is handled by the caller-supplied slot_key try-insert
+    against TournamentSimulationSlotLog below — a duplicate slot_key raises
+    IntegrityError and this function returns 0 without notifying anyone."""
+    if slot_key is not None:
+        try:
+            db.add(TournamentSimulationSlotLog(kind="lineup_reminders", slot_key=slot_key))
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            return 0
+
     tournaments = (
         await db.execute(
             select(Tournament).where(Tournament.status == TournamentStatus.active, Tournament.rounds_simulated < 14)

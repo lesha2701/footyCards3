@@ -44,18 +44,21 @@ async def open_chat_pack(payload: ChatPackOpenIn, db: AsyncSession = Depends(get
 
 
 @router.post("/clubs/simulate-round", response_model=SimulateRoundResult)
-async def simulate_round(db: AsyncSession = Depends(get_db)):
+async def simulate_round(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
     """Called by an external scheduler (cron/bot job) to advance every
     active tournament by one round. See tournament_simulation_service.
     simulate_next_round for the concurrency guarantees if this ever fires
-    twice close together."""
-    matches = await tournament_simulation_service.simulate_next_round(db)
+    twice close together, and for the slot_key-based dedup that makes a
+    duplicate/late fire of the same daily slot (e.g. after a bot restart)
+    a genuine no-op."""
+    matches = await tournament_simulation_service.simulate_next_round(db, slot_key=slot_key)
     return SimulateRoundResult(matches_simulated=len(matches))
 
 
 @router.post("/clubs/lineup-reminders", response_model=LineupReminderResult)
-async def lineup_reminders(db: AsyncSession = Depends(get_db)):
+async def lineup_reminders(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
     """Called by the bot's lineup-reminder loop, ~1h before each daily
-    simulation slot. See tournament_notification_service.send_lineup_reminders."""
-    count = await tournament_notification_service.send_lineup_reminders(db)
+    simulation slot. See tournament_notification_service.send_lineup_reminders
+    for the slot_key-based dedup that makes a duplicate/late fire a no-op."""
+    count = await tournament_notification_service.send_lineup_reminders(db, slot_key=slot_key)
     return LineupReminderResult(clubs_notified=count)

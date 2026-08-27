@@ -2,6 +2,7 @@ import random
 from datetime import datetime, timezone
 
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -10,6 +11,7 @@ from app.models.club_card_availability import ClubCardAvailability
 from app.models.enums import NotificationType, TournamentStatus
 from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_match import TournamentMatch
+from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLog
 from app.models.tournament_standing import TournamentClubStanding
 from app.services import tournament_match_engine, tournament_notification_service
 from app.services.game_config_service import get_config
@@ -185,7 +187,7 @@ async def _apply_engine_result(db: AsyncSession, engine_result: "tournament_matc
             db.add(existing)
 
 
-async def simulate_next_round(db: AsyncSession) -> list[TournamentMatch]:
+async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> list[TournamentMatch]:
     """Simulates the next round for every tournament that still has one due
     (status active, rounds_simulated < 14), persists TournamentMatch rows,
     updates standings, decays availability suspensions, and — on round 14 —
@@ -204,7 +206,24 @@ async def simulate_next_round(db: AsyncSession) -> list[TournamentMatch]:
     round-14 (reward distribution) idempotency hold under a genuine race —
     see test_simulate_next_round_is_idempotent_under_concurrent_calls and
     test_round_14_reward_distribution_cannot_double_fire_under_concurrency.
+
+    That per-Tournament lock only handles concurrent-caller races, though —
+    it does NOT make a duplicate/late fire hours or days apart safe, since
+    each such call legitimately re-reads rounds_simulated and simulates a
+    genuine new round. Time-based idempotency (surviving a bot restart that
+    resets in-memory scheduling state) is handled separately, by the
+    caller-supplied slot_key try-insert against TournamentSimulationSlotLog
+    below — a duplicate slot_key raises IntegrityError and this function
+    returns an empty list without simulating anything.
     """
+    if slot_key is not None:
+        try:
+            db.add(TournamentSimulationSlotLog(kind="simulate_round", slot_key=slot_key))
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            return []
+
     config = await get_config(db)
     candidates = (
         await db.execute(
