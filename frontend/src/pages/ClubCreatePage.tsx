@@ -1,10 +1,10 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { CLUB_LOGO_COLORS, CLUB_LOGO_SHAPES, ClubLogo } from "@/components/clubs/ClubLogo";
-import { IconChevronLeft } from "@/components/icons";
-import { createClub } from "@/api/clubs";
+import { IconChevronLeft, IconCoin } from "@/components/icons";
+import { createClub, fetchClubCreationCost } from "@/api/clubs";
 import { ApiRequestError } from "@/lib/api";
 import type { ClubLogoShape, ClubType } from "@/types";
 
@@ -16,6 +16,7 @@ export default function ClubCreatePage() {
   const [shape, setShape] = useState<ClubLogoShape>("shield");
   const [color, setColor] = useState(CLUB_LOGO_COLORS[0]);
   const [error, setError] = useState<string | null>(null);
+  const { data: creationCost } = useQuery({ queryKey: ["clubs", "creation-cost"], queryFn: fetchClubCreationCost });
 
   const mutation = useMutation({
     mutationFn: () => createClub({ name, description, club_type: clubType, logo_shape: shape, logo_color: color }),
@@ -96,6 +97,16 @@ export default function ClubCreatePage() {
       </div>
 
       {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
+
+      {creationCost != null && (
+        <p className="flex items-center justify-center gap-1.5 text-xs text-ink-mist-dim">
+          Стоимость создания клуба:
+          <span className="flex items-center gap-1 font-semibold text-ink-chalk">
+            <IconCoin size={14} className="text-accent-cyan" />
+            {creationCost}
+          </span>
+        </p>
+      )}
 
       <button
         onClick={() => mutation.mutate()}

@@ -6,6 +6,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.enums import ClubJoinRequestStatus, ClubLogoShape, ClubRole, ClubType
 
 
+class ClubCreationCostOut(BaseModel):
+    creation_cost_coins: int
+
+
 class ClubCreate(BaseModel):
     name: str = Field(min_length=3, max_length=64)
     description: str = Field(default="", max_length=512)
@@ -58,6 +62,10 @@ class ClubDetailOut(BaseModel):
     # invite code to an outsider browsing the club list.
     invite_code: Optional[str] = None
     my_role: Optional[ClubRole] = None
+    # Seconds until the requester can claim the club's daily reward again — null if it's
+    # available right now. Computed against the requester, not the club as a whole, since
+    # each member claims individually (see club_service.claim_daily_reward).
+    daily_reward_seconds_remaining: Optional[int] = None
 
 
 class ClubJoinRequestOut(BaseModel):

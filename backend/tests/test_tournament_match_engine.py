@@ -22,17 +22,17 @@ class _FakeConfig:
     match_shot_type_empty_net_weight = 10
 
 
-def test_moment_queue_has_between_14_and_22_moments():
+def test_moment_queue_has_between_18_and_26_moments():
     lineup_a, lineup_b = _fake_lineup(1), _fake_lineup(2)
     moments = engine.generate_moment_queue(70, 70, _FakeConfig(), lineup_a, lineup_b)
-    assert 14 <= len(moments) <= 22
+    assert 18 <= len(moments) <= 26
 
 
 def test_shot_moments_pick_real_actors_from_both_sides():
     lineup_a, lineup_b = _fake_lineup(1), _fake_lineup(2)
     moments = engine.generate_moment_queue(70, 70, _FakeConfig(), lineup_a, lineup_b)
     shot_moments = [m for m in moments if m["kind"] == "shot" and m["shot_type"] != "empty_net"]
-    assert shot_moments  # with 14-22 moments and the existing shot-chance weight, at least one is virtually certain
+    assert shot_moments  # with 18-26 moments and the existing shot-chance weight, at least one is virtually certain
     for m in shot_moments:
         attacking_lineup = lineup_a if m["attacking_side"] == "a" else lineup_b
         defending_lineup = lineup_b if m["attacking_side"] == "a" else lineup_a

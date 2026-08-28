@@ -93,6 +93,52 @@ async def test_current_returns_active_with_standings_after_formation(client, db_
     body = resp.json()
     assert body["status"] == "active"
     assert body["tournament_id"] == tournament.id
+    assert body["can_apply"] is False
+
+
+async def test_current_can_apply_true_when_never_applied(client, db_session, bot_token, seeded_club_with_full_squad):
+    club, captain = seeded_club_with_full_squad
+    resp = await client.get("/api/v1/clubs/tournament/current", headers=telegram_headers(captain.telegram_id, bot_token))
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["can_apply"] is True
+    assert body["cooldown_seconds_remaining"] is None
+
+
+async def test_current_reports_cooldown_after_tournament_completes_and_can_apply_stays_independent_of_status(
+    client, db_session, bot_token, eight_club_tournament
+):
+    from app.services.tournament_simulation_service import simulate_next_round
+
+    tournament, clubs_and_captains = eight_club_tournament
+    club0, captain0 = clubs_and_captains[0]
+
+    for _ in range(14):
+        await simulate_next_round(db_session)
+        await db_session.commit()
+    await db_session.refresh(club0)
+    assert club0.last_tournament_applied_at is not None  # conclude_tournament stamps every participant
+
+    resp = await client.get("/api/v1/clubs/tournament/current", headers=telegram_headers(captain0.telegram_id, bot_token))
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "completed"
+    assert body["tournament_id"] == tournament.id
+    # Default config cooldown is a few hours — freshly concluded, so still cooling down — and
+    # this must hold simultaneously with status == "completed", not be masked by it.
+    assert body["can_apply"] is False
+    assert body["cooldown_seconds_remaining"] is not None
+    assert body["cooldown_seconds_remaining"] > 0
+
+    club0.last_tournament_applied_at = None
+    db_session.add(club0)
+    await db_session.commit()
+
+    resp2 = await client.get("/api/v1/clubs/tournament/current", headers=telegram_headers(captain0.telegram_id, bot_token))
+    body2 = resp2.json()
+    assert body2["status"] == "completed"  # still shows the last tournament...
+    assert body2["can_apply"] is True  # ...while independently reporting the club is free to apply again
+    assert body2["cooldown_seconds_remaining"] is None
 
 
 async def test_detail_returns_standings_sorted_by_rank(client, db_session, bot_token, eight_club_tournament):
@@ -104,6 +150,28 @@ async def test_detail_returns_standings_sorted_by_rank(client, db_session, bot_t
     assert len(body["standings"]) == 8
     ranks = [s["final_rank"] for s in body["standings"]]
     assert ranks == sorted(ranks)
+
+
+async def test_detail_reports_next_round_countdown_while_active_none_once_completed(
+    client, db_session, bot_token, eight_club_tournament
+):
+    from app.services.tournament_simulation_service import simulate_next_round
+
+    tournament, clubs_and_captains = eight_club_tournament
+    _, captain = clubs_and_captains[0]
+
+    resp = await client.get(f"/api/v1/clubs/tournament/{tournament.id}", headers=telegram_headers(captain.telegram_id, bot_token))
+    assert resp.status_code == 200
+    remaining = resp.json()["next_round_seconds_remaining"]
+    assert remaining is not None
+    assert 0 <= remaining <= 16 * 3600  # slots are at most 16h apart (20:00 -> next day 12:00)
+
+    for _ in range(14):
+        await simulate_next_round(db_session)
+        await db_session.commit()
+
+    done_resp = await client.get(f"/api/v1/clubs/tournament/{tournament.id}", headers=telegram_headers(captain.telegram_id, bot_token))
+    assert done_resp.json()["next_round_seconds_remaining"] is None
 
 
 async def test_match_detail_includes_event_log(client, db_session, bot_token, eight_club_tournament):

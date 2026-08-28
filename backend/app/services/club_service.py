@@ -1,4 +1,5 @@
 import secrets
+from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import func, select
@@ -6,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
-from app.core.timeutil import local_today
+from app.core.timeutil import app_timezone, local_today
 from app.models.club import Club, ClubJoinRequest, ClubMember
 from app.models.club_daily_claim import ClubDailyClaim
 from app.models.enums import ClubBudgetTransactionType, ClubJoinRequestStatus, ClubRole, ClubType, NotificationType, TransactionType
@@ -83,10 +84,32 @@ async def _members_with_users(db: AsyncSession, club_id: int) -> list[ClubMember
     ]
 
 
+async def _daily_reward_seconds_remaining(db: AsyncSession, club_id: int, user_id: int) -> Optional[int]:
+    """None if the requester can claim today's club daily reward right now; otherwise the
+    number of seconds until local midnight (when `claim_daily_reward`'s `claim_date == today`
+    check next allows a fresh claim), mirroring that function's own gating exactly."""
+    today = local_today()
+    claimed = (
+        await db.execute(
+            select(ClubDailyClaim).where(
+                ClubDailyClaim.club_id == club_id, ClubDailyClaim.user_id == user_id, ClubDailyClaim.claim_date == today,
+            )
+        )
+    ).scalar_one_or_none()
+    if claimed is None:
+        return None
+    next_local_midnight = datetime.combine(today + timedelta(days=1), time.min, tzinfo=app_timezone())
+    remaining = (next_local_midnight.astimezone(timezone.utc) - datetime.now(timezone.utc)).total_seconds()
+    return max(0, int(remaining))
+
+
 async def _club_to_detail(db: AsyncSession, club: Club, requester_user_id: Optional[int]) -> ClubDetailOut:
     members = await _members_with_users(db, club.id)
     my_membership = next((m for m in members if m.user_id == requester_user_id), None)
     is_member = my_membership is not None
+    daily_reward_seconds_remaining = (
+        await _daily_reward_seconds_remaining(db, club.id, requester_user_id) if is_member and requester_user_id is not None else None
+    )
     return ClubDetailOut(
         id=club.id, name=club.name, description=club.description, club_type=club.club_type,
         logo_shape=club.logo_shape, logo_color=club.logo_color, captain_id=club.captain_id,
@@ -94,6 +117,7 @@ async def _club_to_detail(db: AsyncSession, club: Club, requester_user_id: Optio
         cups_count=club.cups_count, stars_count=club.stars_count, members=members,
         invite_code=club.invite_code if is_member else None,
         my_role=my_membership.role if my_membership else None,
+        daily_reward_seconds_remaining=daily_reward_seconds_remaining,
     )
 
 

@@ -4,11 +4,22 @@ import { useMemo } from "react";
 import { IconGlobe, IconHelp, IconStadium, IconTag } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
-import type { OpenedCard } from "@/types";
+import type { Player } from "@/types";
 
 export type Stage = "position" | "rarity" | "country" | "club" | "silhouette" | "reveal";
 export const STAGES: Stage[] = ["position", "rarity", "country", "club", "silhouette", "reveal"];
 export const STAGE_DURATION_MS = 900;
+
+// Structural rather than `OpenedCard` directly — reused by ClubPackOpenPage.tsx for
+// OpenedClubCard, whose `card` wrapper (ClubCard) carries different bookkeeping fields
+// (serial_number/acquired_at/is_in_lineup vs. a regular UserCard's) but the same `player`
+// shape, and which has no `duplicate_count` concept at all (a club's cards aren't
+// deduplicated the way a personal collection's are).
+export interface RevealableOpenedCard {
+  card: { player: Player };
+  is_new: boolean;
+  duplicate_count?: number;
+}
 
 export function RevealStage({
   opened,
@@ -17,7 +28,7 @@ export function RevealStage({
   total,
   onTap,
 }: {
-  opened: OpenedCard;
+  opened: RevealableOpenedCard;
   stage: Stage;
   index: number;
   total: number;
@@ -109,7 +120,7 @@ export function RevealStage({
             {opened.is_new && (
               <span className="inline-block rounded-full bg-accent-green px-2 py-0.5 text-[11px] font-bold text-bg-base">Новая!</span>
             )}
-            {opened.duplicate_count > 1 && (
+            {!!opened.duplicate_count && opened.duplicate_count > 1 && (
               <span className="ml-1 inline-block rounded-full bg-white/10 px-2 py-0.5 font-mono text-[11px] text-ink-mist">
                 ×{opened.duplicate_count} в коллекции
               </span>

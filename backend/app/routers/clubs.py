@@ -16,8 +16,17 @@ from app.models.tournament_queue import TournamentQueueEntry, TournamentQueueSta
 from app.models.tournament_result import TournamentClubResult
 from app.models.tournament_standing import TournamentClubStanding
 from app.models.user import User
-from app.schemas.club import ClubCreate, ClubDetailOut, ClubJoinRequestOut, ClubSummaryOut, JoinByInviteIn, TransferCaptainIn
+from app.schemas.club import (
+    ClubCreate,
+    ClubCreationCostOut,
+    ClubDetailOut,
+    ClubJoinRequestOut,
+    ClubSummaryOut,
+    JoinByInviteIn,
+    TransferCaptainIn,
+)
 from app.schemas.club_ranking import ClubRankingMetric, ClubRankingOut
+from app.schemas.club_game import ClubGameClaimOut, ClubGameStartOut, ClubGameSubmitOut, ClubGameSubmitRequest
 from app.schemas.club_pack import ClubPackOut
 from app.schemas.club_pack_open import ClubPackOpenResult, OpenClubPackRequest
 from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest
@@ -30,6 +39,7 @@ from app.schemas.tournament import (
     TournamentStandingOut,
 )
 from app.services import (
+    club_game_service,
     club_pack_service,
     club_ranking_service,
     club_service,
@@ -37,6 +47,7 @@ from app.services import (
     tournament_match_engine,
     tournament_queue_service,
 )
+from app.services.game_config_service import get_config
 from app.services.tournament_standing_service import rank_standings
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
@@ -59,6 +70,12 @@ async def get_club_leaderboard(
     metric: ClubRankingMetric, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     return await club_ranking_service.get_club_ranking(db, metric, current_user_id=user.id)
+
+
+@router.get("/creation-cost", response_model=ClubCreationCostOut)
+async def get_club_creation_cost(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
+    config = await get_config(db)
+    return ClubCreationCostOut(creation_cost_coins=config.club_creation_cost_coins)
 
 
 @router.get("/me", response_model=ClubDetailOut)
@@ -166,9 +183,70 @@ async def open_club_pack(club_pack_id: int, payload: OpenClubPackRequest, db: As
     return await club_pack_service.open_club_pack(db, user, club_pack_id, payload.idempotency_key)
 
 
+@router.post("/me/game/start", response_model=ClubGameStartOut)
+async def start_club_game(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    check_rate_limit(f"club_game_start:{user.id}", max_calls=20, window_seconds=60)
+    return await club_game_service.start_session(db, user)
+
+
+@router.post("/me/game/{session_id}/submit", response_model=ClubGameSubmitOut)
+async def submit_club_game_round(
+    session_id: int, payload: ClubGameSubmitRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await club_game_service.submit_round(db, user, session_id, payload.answer)
+
+
+@router.post("/me/game/{session_id}/end", response_model=ClubGameSubmitOut)
+async def end_club_game(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_game_service.end_session(db, user, session_id)
+
+
+@router.post("/me/game/{session_id}/claim", response_model=ClubGameClaimOut)
+async def claim_club_game_reward(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_game_service.claim_reward(db, user, session_id)
+
+
 @router.post("/tournament/apply", response_model=TournamentApplyResult)
 async def apply_to_tournament(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return await tournament_queue_service.apply_to_tournament(db, user)
+
+
+# Fixed daily times (local app timezone) the bot's scheduler fires a simulation round —
+# keep in sync with bot/services/tournament_scheduler.py's SIMULATION_SLOTS.
+_SIMULATION_SLOTS = [(12, 0), (20, 0)]
+
+
+def _next_round_seconds_remaining(tournament: Tournament) -> Optional[int]:
+    if tournament.status != TournamentStatus.active or tournament.rounds_simulated >= 14:
+        return None
+    from datetime import datetime, timedelta
+
+    from app.core.timeutil import app_timezone
+
+    now = datetime.now(app_timezone())
+    next_at = min(
+        (now.replace(hour=h, minute=m, second=0, microsecond=0) + timedelta(days=1))
+        if now.replace(hour=h, minute=m, second=0, microsecond=0) <= now
+        else now.replace(hour=h, minute=m, second=0, microsecond=0)
+        for h, m in _SIMULATION_SLOTS
+    )
+    return max(0, int((next_at - now).total_seconds()))
+
+
+async def _cooldown_seconds_remaining(db: AsyncSession, club: Club) -> Optional[int]:
+    """None once the club is free to submit a new tournament application; otherwise the
+    seconds left in `config.club_tournament_cooldown_hours` since its last application,
+    mirroring `tournament_queue_service.apply_to_tournament`'s own gating exactly."""
+    if club.last_tournament_applied_at is None:
+        return None
+    config = await get_config(db)
+    from datetime import datetime, timezone
+
+    from app.core.timeutil import ensure_aware
+
+    elapsed = (datetime.now(timezone.utc) - ensure_aware(club.last_tournament_applied_at)).total_seconds()
+    remaining = config.club_tournament_cooldown_hours * 3600 - elapsed
+    return max(0, int(remaining)) if remaining > 0 else None
 
 
 @router.get("/tournament/current", response_model=TournamentCurrentOut)
@@ -177,6 +255,7 @@ async def get_current_tournament(user: User = Depends(get_current_user), db: Asy
 
     membership = await _require_membership(db, user.id)
     club_id = membership.club_id
+    club = await db.get(Club, club_id)
 
     active_tc = (
         await db.execute(
@@ -185,7 +264,15 @@ async def get_current_tournament(user: User = Depends(get_current_user), db: Asy
         )
     ).scalar_one_or_none()
     if active_tc is not None:
-        return TournamentCurrentOut(status="active", tournament_id=active_tc.tournament_id)
+        return TournamentCurrentOut(status="active", tournament_id=active_tc.tournament_id, can_apply=False)
+
+    # can_apply/cooldown are computed once, up front, and reused across every branch below —
+    # a club can be simultaneously "showing its last completed tournament" (status) and "free
+    # to apply for a new one" (can_apply); these are independent facts about the club, not
+    # mutually exclusive states, so the frontend needs both regardless of which status string
+    # this endpoint returns.
+    cooldown_seconds_remaining = await _cooldown_seconds_remaining(db, club)
+    can_apply = cooldown_seconds_remaining is None
 
     # Scoped to the currently-open queue only — mirrors tournament_queue_service's
     # _is_already_queued. TournamentQueueEntry rows are never deleted once a queue forms
@@ -211,7 +298,7 @@ async def get_current_tournament(user: User = Depends(get_current_user), db: Asy
                     .where(TournamentQueueEntry.queue_id == queue_entry.queue_id, TournamentQueueEntry.joined_at <= queue_entry.joined_at)
                 )
             ).scalar_one()
-            return TournamentCurrentOut(status="queued", queue_position=position)
+            return TournamentCurrentOut(status="queued", queue_position=position, can_apply=False)
 
     completed_tc = (
         await db.execute(
@@ -222,9 +309,12 @@ async def get_current_tournament(user: User = Depends(get_current_user), db: Asy
         )
     ).scalar_one_or_none()
     if completed_tc is not None:
-        return TournamentCurrentOut(status="completed", tournament_id=completed_tc.tournament_id)
+        return TournamentCurrentOut(
+            status="completed", tournament_id=completed_tc.tournament_id,
+            can_apply=can_apply, cooldown_seconds_remaining=cooldown_seconds_remaining,
+        )
 
-    return TournamentCurrentOut(status="not_queued")
+    return TournamentCurrentOut(status="not_queued", can_apply=can_apply, cooldown_seconds_remaining=cooldown_seconds_remaining)
 
 
 @router.get("/tournament/{tournament_id}", response_model=TournamentDetailOut)
@@ -262,6 +352,7 @@ async def get_tournament_detail(tournament_id: int, db: AsyncSession = Depends(g
             TournamentMatchSummaryOut(id=m.id, round_number=m.round_number, club_a_id=m.club_a_id, club_b_id=m.club_b_id, score_a=m.score_a, score_b=m.score_b)
             for m in matches
         ],
+        next_round_seconds_remaining=_next_round_seconds_remaining(tournament),
     )
 
 

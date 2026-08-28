@@ -1,6 +1,9 @@
 import { api } from "@/lib/api";
 import type {
   Club,
+  ClubGameClaimResult,
+  ClubGameStart,
+  ClubGameSubmitResult,
   ClubJoinRequest,
   ClubSummary,
   TournamentApplyResult,
@@ -22,6 +25,11 @@ export async function fetchMyClub(): Promise<Club> {
 export async function fetchClub(id: number): Promise<Club> {
   const { data } = await api.get<Club>(`/clubs/${id}`);
   return data;
+}
+
+export async function fetchClubCreationCost(): Promise<number> {
+  const { data } = await api.get<{ creation_cost_coins: number }>("/clubs/creation-cost");
+  return data.creation_cost_coins;
 }
 
 export async function createClub(payload: {
@@ -114,5 +122,25 @@ export async function fetchTournamentDetail(id: number): Promise<TournamentDetai
 
 export async function fetchTournamentMatch(tournamentId: number, matchId: number): Promise<TournamentMatchDetail> {
   const { data } = await api.get<TournamentMatchDetail>(`/clubs/tournament/${tournamentId}/matches/${matchId}`);
+  return data;
+}
+
+export async function startClubGame(): Promise<ClubGameStart> {
+  const { data } = await api.post<ClubGameStart>("/clubs/me/game/start");
+  return data;
+}
+
+export async function submitClubGameRound(sessionId: number, answer: string[]): Promise<ClubGameSubmitResult> {
+  const { data } = await api.post<ClubGameSubmitResult>(`/clubs/me/game/${sessionId}/submit`, { answer });
+  return data;
+}
+
+export async function endClubGame(sessionId: number): Promise<ClubGameSubmitResult> {
+  const { data } = await api.post<ClubGameSubmitResult>(`/clubs/me/game/${sessionId}/end`);
+  return data;
+}
+
+export async function claimClubGameReward(sessionId: number): Promise<ClubGameClaimResult> {
+  const { data } = await api.post<ClubGameClaimResult>(`/clubs/me/game/${sessionId}/claim`);
   return data;
 }

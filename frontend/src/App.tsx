@@ -42,11 +42,13 @@ import FreeKickGamePage from "@/pages/FreeKickGamePage";
 import HangmanGamePage from "@/pages/HangmanGamePage";
 import PairsGamePage from "@/pages/PairsGamePage";
 import ClubCreatePage from "@/pages/ClubCreatePage";
+import ClubGamePage from "@/pages/ClubGamePage";
 import ClubsPage from "@/pages/ClubsPage";
 import TournamentMatchPage from "@/pages/TournamentMatchPage";
 import TournamentPage from "@/pages/TournamentPage";
 import ClubSquadPage from "@/pages/ClubSquadPage";
 import ClubPacksPage from "@/pages/ClubPacksPage";
+import ClubPackOpenPage from "@/pages/ClubPackOpenPage";
 import CollectionPage from "@/pages/CollectionPage";
 import TradesPage from "@/pages/TradesPage";
 import NewTradePage from "@/pages/NewTradePage";
@@ -195,6 +197,8 @@ export default function App() {
         <Route path="/clubs/create" element={<ClubCreatePage />} />
         <Route path="/clubs/squad" element={<ClubSquadPage />} />
         <Route path="/clubs/packs" element={<ClubPacksPage />} />
+        <Route path="/clubs/packs/:packId/open" element={<ClubPackOpenPage />} />
+        <Route path="/clubs/game" element={<ClubGamePage />} />
         <Route path="/clubs/tournament/:id" element={<TournamentPage />} />
         <Route path="/clubs/tournament/:id/matches/:matchId" element={<TournamentMatchPage />} />
         <Route path="/tasks" element={<TasksPage />} />

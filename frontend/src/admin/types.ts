@@ -103,6 +103,9 @@ export interface GameConfig {
   club_tournament_budget_place_6: number;
   club_tournament_budget_place_7: number;
   club_tournament_budget_place_8: number;
+  club_game_hourly_limit: number;
+  club_game_daily_reward_limit: number;
+  club_game_reward_cap: number;
   memory_daily_reward_limit: number;
   memory_reward_cap: number;
   suspicious_memory_score_threshold: number;

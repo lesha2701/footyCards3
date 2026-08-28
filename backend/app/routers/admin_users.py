@@ -194,7 +194,7 @@ async def reset_limits(user_id: int, request: Request, db: AsyncSession = Depend
     user = await _get_user_or_404(db, user_id)
 
     user.memory_rewarded_attempts_today = 0
-    for game in ("memory", "match", "saboteur", "penalty", "free_kick", "hangman"):
+    for game in ("memory", "match", "saboteur", "penalty", "free_kick", "hangman", "club_game"):
         setattr(user, f"{game}_hourly_attempts", 0)
         setattr(user, f"{game}_hour_started_at", None)
     db.add(user)

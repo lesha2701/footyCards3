@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 
 import { fetchClub } from "@/api/clubs";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
+import { IconStar, IconTrophy } from "@/components/icons";
 
 export function ClubPreviewPopup({ clubId, onClose }: { clubId: number | null; onClose: () => void }) {
   const { data: club, isLoading } = useQuery({
@@ -39,8 +40,14 @@ export function ClubPreviewPopup({ clubId, onClose }: { clubId: number | null; o
                   С {new Date(club.founded_at).toLocaleDateString("ru-RU")} · {club.member_count}/11 участников
                 </p>
                 <div className="flex gap-4 font-mono text-sm font-bold">
-                  <span className="text-accent-lime">🏆 {club.cups_count}</span>
-                  <span className="text-accent-cyan">⭐ {club.stars_count}</span>
+                  <span className="flex items-center gap-1 text-accent-lime">
+                    <IconTrophy size={14} />
+                    {club.cups_count}
+                  </span>
+                  <span className="flex items-center gap-1 text-accent-cyan">
+                    <IconStar size={14} />
+                    {club.stars_count}
+                  </span>
                 </div>
                 {club.description && <p className="text-sm text-ink-mist">{club.description}</p>}
               </div>

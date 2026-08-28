@@ -12,11 +12,18 @@ SHOT_TYPES = ("in_box", "long_range", "empty_net")
 
 # Copied verbatim from match_service.py — same weighting, same intent
 # (a "team gets a scoring chance" moment happens at this overall frequency;
-# only what happens within it differs from the personal engine).
+# only what happens within it differs from the personal engine). Deliberately
+# NOT the same value as match_service.py's own copy of this constant — that
+# module drives the personal Card Arena engine, a separate simulation this
+# constant must not affect. Tuned so a 4-5 goal side is a normal (if still
+# notable) result rather than a near-never tail: at equal strength this
+# puts a 5-goal side at ~2.8% of team-matches and a 4-goal side at ~8.5%,
+# versus ~0.8%/~3.3% before the tuning (picked by simulating a few thousand
+# equal-strength matches at each candidate weight).
 _FLAVOR_WEIGHTS: list[tuple[str, int]] = [
     ("corner", 9), ("yellow_card", 5), ("red_card", 1), ("offside", 6), ("possession", 20),
 ]
-_SHOT_CHANCE_WEIGHT = 26
+_SHOT_CHANCE_WEIGHT = 34
 
 # Distinct from match_service.py's personal-engine _EVENT_DESCRIPTIONS (phrased "your team" vs.
 # "{them}") — a tournament replay is watched from a neutral standpoint by any club's members, so
@@ -122,7 +129,7 @@ def generate_moment_queue(strength_a: int, strength_b: int, config, lineup_a: li
     total = strength_a + strength_b
     a_attack_prob = strength_a / total if total else 0.5
 
-    num_chances = random.randint(14, 22)
+    num_chances = random.randint(18, 26)
     minutes = sorted(random.sample(range(1, 90), num_chances))
 
     kinds = [t for t, _ in _FLAVOR_WEIGHTS] + ["shot_chance"]

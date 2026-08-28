@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
-import { createClubPack, deleteClubPack, fetchAdminClubPacks, toggleClubPackActive, updateClubPack } from "@/admin/api";
+import { createClubPack, deleteClubPack, fetchAdminClubPacks, toggleClubPackActive, updateClubPack, uploadClubPackImage } from "@/admin/api";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { showConfirm } from "@/lib/telegram";
 import type { ClubPack } from "@/types";
@@ -18,6 +18,7 @@ interface ClubPackForm {
   guaranteed_min_rarity: Rarity | "";
   probabilities: Record<Rarity, number>;
   is_active: boolean;
+  image_path: string | null;
 }
 
 function packToForm(p?: ClubPack): ClubPackForm {
@@ -27,7 +28,7 @@ function packToForm(p?: ClubPack): ClubPackForm {
     slug: p?.slug ?? "", name: p?.name ?? "", description: p?.description ?? "",
     price: p?.price ?? 100, card_count: p?.card_count ?? 3,
     guaranteed_min_rarity: (p?.guaranteed_min_rarity as Rarity) ?? "",
-    probabilities, is_active: p?.is_active ?? true,
+    probabilities, is_active: p?.is_active ?? true, image_path: p?.image_path ?? null,
   };
 }
 
@@ -38,6 +39,7 @@ export default function AdminClubPacksPage() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<ClubPackForm>(packToForm());
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-club-packs"] });
   const toggleMutation = useMutation({
@@ -77,6 +79,11 @@ export default function AdminClubPacksPage() {
     onSuccess: () => { invalidate(); setEditing(null); setError(null); },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось обновить пак"),
   });
+  const uploadImageMutation = useMutation({
+    mutationFn: (file: File) => uploadClubPackImage(editing!.id, file),
+    onSuccess: (p) => { invalidate(); setForm((f) => ({ ...f, image_path: p.image_path })); },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось загрузить изображение"),
+  });
 
   const openEdit = (p: ClubPack) => { setEditing(p); setForm(packToForm(p)); setError(null); };
 
@@ -114,6 +121,28 @@ export default function AdminClubPacksPage() {
           <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/10 bg-bg-base p-5" onClick={(e) => e.stopPropagation()}>
             <p className="mb-4 font-display text-lg font-bold">{editing ? "Редактировать клубный пак" : "Новый клубный пак"}</p>
             <div className="flex flex-col gap-2 text-sm">
+              {editing && (
+                <div className="flex items-center gap-3">
+                  <img src={staticUrl(form.image_path ?? undefined) ?? staticUrl("packs/basic.webp")} className="h-16 w-16 rounded-lg object-cover" />
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadImageMutation.isPending}
+                      className="rounded-lg bg-white/5 px-3 py-1.5 text-xs disabled:opacity-40"
+                    >
+                      {uploadImageMutation.isPending ? "Загрузка..." : "Загрузить изображение"}
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".png,.jpg,.jpeg,.webp"
+                      className="hidden"
+                      onChange={(e) => e.target.files?.[0] && uploadImageMutation.mutate(e.target.files[0])}
+                    />
+                  </div>
+                </div>
+              )}
               {!editing && (
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-slate-400">Slug</span>

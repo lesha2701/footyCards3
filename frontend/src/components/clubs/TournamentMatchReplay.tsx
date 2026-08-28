@@ -55,7 +55,11 @@ export function TournamentMatchReplay({
     return (
       <section className="rounded-2xl bg-bg-surface p-4 text-center">
         <p className="text-sm text-ink-mist">Матч не сыгран — один из клубов выбыл из турнира</p>
-        <p className="mt-2 font-mono text-lg font-bold text-ink-chalk">Итоговый счёт: {scoreA} : {scoreB}</p>
+        <div className="mt-2 flex items-center justify-center gap-2 font-mono text-lg font-bold text-ink-chalk">
+          <span className="w-8 text-right">{scoreA}</span>
+          <span>:</span>
+          <span className="w-8 text-left">{scoreB}</span>
+        </div>
       </section>
     );
   }
@@ -73,13 +77,20 @@ export function TournamentMatchReplay({
         )}
       </div>
 
-      <p className="mt-1 text-center font-mono text-lg font-bold text-ink-chalk">{liveScoreA} : {liveScoreB}</p>
+      <div className="mt-1 flex items-center justify-center gap-2 font-mono text-lg font-bold text-ink-chalk">
+        <span className="w-8 text-right">{liveScoreA}</span>
+        <span>:</span>
+        <span className="w-8 text-left">{liveScoreB}</span>
+      </div>
       <p className="text-center text-sm text-ink-mist">{clubAName} vs {clubBName}</p>
 
       {caughtUp && (
-        <p className="mt-1 text-center font-display text-sm font-bold text-ink-chalk">
-          Итоговый счёт: {scoreA} : {scoreB}
-        </p>
+        <div className="mt-1 flex items-center justify-center gap-2 font-display text-sm font-bold text-ink-chalk">
+          <span>Итоговый счёт:</span>
+          <span className="w-6 text-right">{scoreA}</span>
+          <span>:</span>
+          <span className="w-6 text-left">{scoreB}</span>
+        </div>
       )}
 
       <div ref={logRef} className="mt-3 max-h-64 space-y-1 overflow-y-auto text-xs">

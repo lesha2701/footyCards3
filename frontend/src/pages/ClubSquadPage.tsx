@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 
 import ClubCardPickerModal from "@/components/clubs/ClubCardPickerModal";
-import { IconChevronLeft, IconPlus } from "@/components/icons";
+import { IconChevronLeft, IconChevronUp, IconPlus, IconStar, IconTarget, IconUsers } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
+import { fetchMyClub } from "@/api/clubs";
 import { fetchClubCards, fetchClubLineup, setClubLineup } from "@/api/clubSquad";
 import { staticUrl } from "@/lib/api";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
@@ -14,10 +15,13 @@ import type { ClubCard, ClubLineupSlot } from "@/types";
 export default function ClubSquadPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { data: club } = useQuery({ queryKey: ["clubs", "me"], queryFn: fetchMyClub, retry: false });
   const { data: lineup, isLoading: lineupLoading } = useQuery({ queryKey: ["clubs", "lineup"], queryFn: fetchClubLineup });
   const { data: cards } = useQuery({ queryKey: ["clubs", "cards"], queryFn: fetchClubCards });
   const [pickerSlot, setPickerSlot] = useState<ClubLineupSlot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const canEdit = club?.my_role === "captain" || club?.my_role === "assistant";
 
   const setLineupMutation = useMutation({
     mutationFn: setClubLineup,
@@ -55,6 +59,12 @@ export default function ClubSquadPage() {
         <h1 className="font-display text-xl font-bold text-ink-chalk">Состав клуба</h1>
       </div>
 
+      {!canEdit && club && (
+        <p className="rounded-lg bg-white/5 px-3 py-2 text-xs text-ink-mist-dim">
+          Менять состав могут только капитан и ассистенты.
+        </p>
+      )}
+
       {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
 
       <section className="rounded-2xl bg-bg-surface p-4">
@@ -70,9 +80,11 @@ export default function ClubSquadPage() {
                 .map((slot) => (
                   <button
                     key={slot.slot_code}
-                    onClick={() => setPickerSlot(slot)}
-                    disabled={setLineupMutation.isPending}
-                    className="flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 disabled:opacity-60"
+                    onClick={canEdit ? () => setPickerSlot(slot) : undefined}
+                    disabled={!canEdit || setLineupMutation.isPending}
+                    className={`flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm ${
+                      canEdit ? "active:scale-95" : ""
+                    } ${setLineupMutation.isPending ? "opacity-60" : ""}`}
                   >
                     {slot.card ? (
                       <>
@@ -87,7 +99,11 @@ export default function ClubSquadPage() {
                       </>
                     ) : (
                       <>
-                        <IconPlus size={18} className="text-ink-mist-dim" />
+                        {canEdit ? (
+                          <IconPlus size={18} className="text-ink-mist-dim" />
+                        ) : (
+                          <span className="flex h-[18px] items-center text-ink-mist-dim">—</span>
+                        )}
                         <span className="text-[9px] text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
                       </>
                     )}
@@ -96,6 +112,59 @@ export default function ClubSquadPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="rounded-2xl bg-bg-surface p-4">
+        <button
+          onClick={() => setRulesOpen((v) => !v)}
+          className="flex w-full items-center justify-between text-left"
+        >
+          <span className="font-display text-sm font-bold text-ink-chalk">За что начисляется сила состава</span>
+          <IconChevronUp
+            size={16}
+            className={`shrink-0 text-ink-mist-dim transition-transform ${rulesOpen ? "" : "rotate-180"}`}
+          />
+        </button>
+
+        {rulesOpen && (
+          <div className="mt-4 flex flex-col gap-3">
+            <div className="flex gap-3 rounded-xl bg-white/5 p-3">
+              <IconTarget size={18} className="mt-0.5 shrink-0 text-accent-lime" />
+              <div>
+                <p className="text-sm font-semibold text-ink-chalk">Позиция игрока</p>
+                <p className="mt-0.5 text-xs text-ink-mist">
+                  Игрок на своей родной позиции даёт <b className="text-ink-chalk">100%</b> рейтинга. В пределах своей
+                  линии (например, защитник на другой защитной позиции) — <b className="text-ink-chalk">90%</b>.
+                  Не в своей линии — только <b className="text-ink-chalk">75%</b>.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 rounded-xl bg-white/5 p-3">
+              <IconStar size={18} className="mt-0.5 shrink-0 text-accent-lime" />
+              <div>
+                <p className="text-sm font-semibold text-ink-chalk">Редкость карточки</p>
+                <p className="mt-0.5 text-xs text-ink-mist">
+                  Каждая ступень редкости добавляет бонус к рейтингу карточки: обычная — без бонуса, редкая{" "}
+                  <b className="text-ink-chalk">+3%</b>, эпическая <b className="text-ink-chalk">+6%</b>, легендарная{" "}
+                  <b className="text-ink-chalk">+9%</b>.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 rounded-xl bg-white/5 p-3">
+              <IconUsers size={18} className="mt-0.5 shrink-0 text-accent-lime" />
+              <div>
+                <p className="text-sm font-semibold text-ink-chalk">Химия состава</p>
+                <p className="mt-0.5 text-xs text-ink-mist">
+                  Собери в составе игроков одного клуба или одной сборной: за каждого игрока сверх первого из самой
+                  многочисленной клубной группы — <b className="text-ink-chalk">+2</b> к силе состава, из самой
+                  многочисленной страны — <b className="text-ink-chalk">+1</b>.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       <div>

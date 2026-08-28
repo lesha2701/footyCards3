@@ -97,6 +97,7 @@ class ClubBudgetTransactionType(str, enum.Enum):
     daily_claim = "daily_claim"
     pack_purchase = "pack_purchase"
     tournament_reward = "tournament_reward"
+    club_game_reward = "club_game_reward"
 
 
 class TournamentQueueStatus(str, enum.Enum):
@@ -153,6 +154,7 @@ class GameType(str, enum.Enum):
     free_kick = "free_kick"
     football_hangman = "football_hangman"
     card_pairs = "card_pairs"
+    club_sequence = "club_sequence"
 
 
 class GameSessionStatus(str, enum.Enum):

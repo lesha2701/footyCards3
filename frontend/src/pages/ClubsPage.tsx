@@ -4,11 +4,13 @@ import { useNavigate } from "react-router-dom";
 
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import { ClubPreviewPopup } from "@/components/clubs/ClubPreviewPopup";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconPlus, IconUsers } from "@/components/icons";
+import { IconBrain, IconChart, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGoal, IconPlus, IconStar, IconTrophy, IconUsers } from "@/components/icons";
 import {
   acceptJoinRequest,
+  appointAssistant,
   applyToTournament,
   claimDailyReward,
   createJoinRequest,
@@ -20,10 +22,12 @@ import {
   kickMember,
   leaveClub,
   rejectJoinRequest,
+  removeAssistant,
 } from "@/api/clubs";
 import { fetchMyProfile } from "@/api/profile";
 import { ApiRequestError } from "@/lib/api";
-import { hapticNotify, showConfirm } from "@/lib/telegram";
+import { formatCountdown } from "@/lib/format";
+import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { Club } from "@/types";
 
@@ -83,9 +87,10 @@ function ClubBrowseList() {
 
       <button
         onClick={() => navigate("/clubs/leaderboard")}
-        className="rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
       >
-        🏆 Рейтинг клубов
+        <IconChart size={16} className="text-accent-lime" />
+        Рейтинг клубов
       </button>
 
       {joinError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{joinError}</p>}
@@ -141,6 +146,7 @@ function ClubHome({ club }: { club: Club }) {
   const queryClient = useQueryClient();
   const userId = useAuthStore((s) => s.user?.id);
   const isManager = club.my_role === "captain" || club.my_role === "assistant";
+  const isCaptain = club.my_role === "captain";
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
   const { data: tournamentCurrent } = useQuery({ queryKey: ["clubs", "tournament", "current"], queryFn: fetchTournamentCurrent });
   const [applyError, setApplyError] = useState<string | null>(null);
@@ -150,9 +156,14 @@ function ClubHome({ club }: { club: Club }) {
     onError: (err) => setApplyError(err instanceof ApiRequestError ? err.message : "Не удалось подать заявку"),
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["clubs"] });
-  const leaveMutation = useMutation({ mutationFn: leaveClub, onSuccess: invalidate });
-  const kickMutation = useMutation({ mutationFn: (id: number) => kickMember(id), onSuccess: invalidate });
+  const [actionError, setActionError] = useState<string | null>(null);
+  const invalidate = () => { queryClient.invalidateQueries({ queryKey: ["clubs"] }); setActionError(null); };
+  const onActionError = (err: unknown) => setActionError(err instanceof ApiRequestError ? err.message : "Не удалось выполнить действие");
+  const leaveMutation = useMutation({ mutationFn: leaveClub, onSuccess: invalidate, onError: onActionError });
+  const kickMutation = useMutation({ mutationFn: (id: number) => kickMember(id), onSuccess: invalidate, onError: onActionError });
+  const appointMutation = useMutation({ mutationFn: (id: number) => appointAssistant(id), onSuccess: invalidate, onError: onActionError });
+  const removeAssistantMutation = useMutation({ mutationFn: (id: number) => removeAssistant(id), onSuccess: invalidate, onError: onActionError });
+  const [confirmMemberAction, setConfirmMemberAction] = useState<{ type: "appoint" | "kick"; userId: number; name: string } | null>(null);
 
   const [claimError, setClaimError] = useState<string | null>(null);
   const claimMutation = useMutation({
@@ -172,37 +183,62 @@ function ClubHome({ club }: { club: Club }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["clubs", "join-requests"] }),
   });
 
-  const handleLeave = async () => {
-    const confirmMsg = club.my_role === "captain" ? "Покинуть клуб? Капитанство перейдёт ассистенту (или клуб распустится, если ассистентов нет)." : "Покинуть клуб?";
-    if (await showConfirm(confirmMsg)) leaveMutation.mutate();
-  };
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <ClubLogo shape={club.logo_shape} color={club.logo_color} size={56} />
-        <div>
-          <h1 className="font-display text-xl font-bold text-ink-chalk">{club.name}</h1>
-          <p className="text-xs text-ink-mist-dim">{club.member_count}/11 участников · {ROLE_LABELS[club.my_role ?? "member"]}</p>
+      <div className="rounded-2xl bg-bg-surface p-4">
+        <div className="flex items-center gap-3">
+          <ClubLogo shape={club.logo_shape} color={club.logo_color} size={56} />
+          <div className="flex-1">
+            <h1 className="font-display text-xl font-bold text-ink-chalk">{club.name}</h1>
+            <p className="text-xs text-ink-mist-dim">{club.member_count}/11 участников · {ROLE_LABELS[club.my_role ?? "member"]}</p>
+          </div>
         </div>
+        <div className="mt-3 flex items-center gap-4 border-t border-white/5 pt-3 text-xs text-ink-mist">
+          <span className="flex items-center gap-1">
+            <IconClock size={13} />
+            С {new Date(club.founded_at).toLocaleDateString("ru-RU")}
+          </span>
+          <span className="flex items-center gap-1 font-mono font-bold text-accent-lime">
+            <IconTrophy size={13} />
+            {club.cups_count}
+          </span>
+          <span className="flex items-center gap-1 font-mono font-bold text-accent-cyan">
+            <IconStar size={13} />
+            {club.stars_count}
+          </span>
+        </div>
+        {club.description && <p className="mt-3 border-t border-white/5 pt-3 text-sm text-ink-mist">{club.description}</p>}
       </div>
 
       <div className="flex items-center justify-between rounded-2xl bg-bg-surface p-3">
         <div>
           <p className="text-xs text-ink-mist-dim">Бюджет клуба</p>
-          <p className="font-mono text-lg font-bold text-accent-lime">🪙 {club.budget}</p>
+          <p className="flex items-center gap-1 font-mono text-lg font-bold text-accent-lime">
+            <IconCoin size={16} />
+            {club.budget}
+          </p>
         </div>
-        <button
-          onClick={() => claimMutation.mutate()}
-          disabled={claimMutation.isPending}
-          className="rounded-xl bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-40"
-        >
-          Ежедневная награда
-        </button>
+        {club.daily_reward_seconds_remaining !== null ? (
+          <div className="text-right text-xs text-ink-mist-dim">
+            <p>Награда получена</p>
+            <p className="flex items-center justify-end gap-1 font-semibold text-ink-mist">
+              <IconClock size={12} />
+              через {formatCountdown(club.daily_reward_seconds_remaining)}
+            </p>
+          </div>
+        ) : (
+          <button
+            onClick={() => claimMutation.mutate()}
+            disabled={claimMutation.isPending}
+            className="rounded-xl bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-40"
+          >
+            Ежедневная награда
+          </button>
+        )}
       </div>
       {claimError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{claimError}</p>}
-
-      {club.description && <p className="rounded-2xl bg-bg-surface p-3 text-sm text-ink-mist">{club.description}</p>}
 
       {club.invite_code && profile && (
         <div className="rounded-2xl bg-bg-surface p-3">
@@ -224,53 +260,73 @@ function ClubHome({ club }: { club: Club }) {
         </div>
       )}
 
-      {isManager && (
-        <button
-          onClick={() => navigate("/clubs/squad")}
-          className="rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-        >
-          ⚽ Управление составом
-        </button>
-      )}
+      <button
+        onClick={() => navigate("/clubs/squad")}
+        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+      >
+        <IconGoal size={16} className="text-accent-lime" />
+        {isManager ? "Управление составом" : "Состав клуба"}
+      </button>
 
       {isManager && (
         <button
           onClick={() => navigate("/clubs/packs")}
-          className="rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+          className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
         >
-          🎁 Клубные паки
-        </button>
-      )}
-
-      {tournamentCurrent?.status === "not_queued" && isManager && (
-        <button
-          onClick={() => applyMutation.mutate()}
-          disabled={applyMutation.isPending}
-          className="rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99] disabled:opacity-40"
-        >
-          🏆 Подать заявку на турнир
-        </button>
-      )}
-      {applyError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{applyError}</p>}
-      {tournamentCurrent?.status === "queued" && (
-        <div className="rounded-2xl bg-bg-surface p-3 text-sm text-ink-mist">
-          🏆 В очереди на турнир — место {tournamentCurrent.queue_position}
-        </div>
-      )}
-      {(tournamentCurrent?.status === "active" || tournamentCurrent?.status === "completed") && tournamentCurrent.tournament_id && (
-        <button
-          onClick={() => navigate(`/clubs/tournament/${tournamentCurrent.tournament_id}`)}
-          className="rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-        >
-          🏆 Турнир клуба
+          <IconGift size={16} className="text-accent-lime" />
+          Клубные паки
         </button>
       )}
 
       <button
-        onClick={() => navigate("/clubs/leaderboard")}
-        className="rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+        onClick={() => navigate("/clubs/game")}
+        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
       >
-        🏆 Рейтинг клубов
+        <IconBrain size={16} className="text-accent-lime" />
+        Клубная игра
+      </button>
+
+      {(tournamentCurrent?.status === "active" || tournamentCurrent?.status === "completed") && tournamentCurrent.tournament_id && (
+        <button
+          onClick={() => navigate(`/clubs/tournament/${tournamentCurrent.tournament_id}`)}
+          className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+        >
+          <IconFlagCheckered size={16} className="text-accent-lime" />
+          Турнир клуба
+        </button>
+      )}
+
+      {tournamentCurrent?.status === "queued" && (
+        <div className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-sm text-ink-mist">
+          <IconFlagCheckered size={16} className="text-accent-lime" />
+          В очереди на турнир — место {tournamentCurrent.queue_position}
+        </div>
+      )}
+
+      {isManager && tournamentCurrent?.can_apply && (
+        <button
+          onClick={() => applyMutation.mutate()}
+          disabled={applyMutation.isPending}
+          className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99] disabled:opacity-40"
+        >
+          <IconTrophy size={16} className="text-accent-lime" />
+          Подать заявку на турнир
+        </button>
+      )}
+      {isManager && !tournamentCurrent?.can_apply && tournamentCurrent?.cooldown_seconds_remaining != null && (
+        <div className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-xs text-ink-mist-dim">
+          <IconClock size={14} />
+          Новую заявку на турнир можно подать через {formatCountdown(tournamentCurrent.cooldown_seconds_remaining)}
+        </div>
+      )}
+      {applyError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{applyError}</p>}
+
+      <button
+        onClick={() => navigate("/clubs/leaderboard")}
+        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+      >
+        <IconChart size={16} className="text-accent-lime" />
+        Рейтинг клубов
       </button>
 
       {isManager && club.club_type === "closed" && joinRequests && joinRequests.length > 0 && (
@@ -292,26 +348,95 @@ function ClubHome({ club }: { club: Club }) {
         </div>
       )}
 
+      {actionError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{actionError}</p>}
+
       <div className="flex flex-col gap-2">
         <p className="font-display text-sm font-bold text-ink-chalk">Участники</p>
         {club.members.map((m) => (
           <div key={m.user_id} className="flex items-center justify-between rounded-xl bg-bg-surface p-3">
             <span className="text-sm text-ink-chalk">{m.username ?? m.first_name ?? `#${m.user_id}`} · {ROLE_LABELS[m.role]}</span>
-            {isManager && m.role === "member" && m.user_id !== userId && (
-              <button
-                onClick={() => kickMutation.mutate(m.user_id)}
-                className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400"
-              >
-                Исключить
-              </button>
-            )}
+            <div className="flex gap-2">
+              {isCaptain && m.role === "member" && m.user_id !== userId && (
+                <button
+                  onClick={() => setConfirmMemberAction({ type: "appoint", userId: m.user_id, name: m.username ?? m.first_name ?? `#${m.user_id}` })}
+                  className="rounded-lg bg-accent-lime/10 px-2 py-1 text-[11px] text-accent-lime"
+                >
+                  Назначить ассистентом
+                </button>
+              )}
+              {isCaptain && m.role === "assistant" && m.user_id !== userId && (
+                <button
+                  onClick={() => removeAssistantMutation.mutate(m.user_id)}
+                  className="rounded-lg bg-white/5 px-2 py-1 text-[11px] text-ink-mist"
+                >
+                  Понизить
+                </button>
+              )}
+              {isManager && m.role === "member" && m.user_id !== userId && (
+                <button
+                  onClick={() => setConfirmMemberAction({ type: "kick", userId: m.user_id, name: m.username ?? m.first_name ?? `#${m.user_id}` })}
+                  className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400"
+                >
+                  Исключить
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>
 
-      <button onClick={handleLeave} className="rounded-xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist active:scale-95">
+      <button onClick={() => setShowLeaveConfirm(true)} className="rounded-xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist active:scale-95">
         Покинуть клуб
       </button>
+
+      {showLeaveConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+          onClick={() => setShowLeaveConfirm(false)}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-bg-surface p-5 text-center" onClick={(e) => e.stopPropagation()}>
+            <p className="font-display text-base font-bold text-ink-chalk">Покинуть клуб?</p>
+            <p className="mt-2 text-sm text-ink-mist">
+              {club.my_role === "captain"
+                ? "Капитанство перейдёт ассистенту (или клуб распустится, если ассистентов нет)."
+                : "Это действие нельзя отменить."}
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => setShowLeaveConfirm(false)}
+                className="flex-1 rounded-xl bg-white/5 py-2.5 text-sm font-semibold text-ink-chalk active:scale-95"
+              >
+                Остаться
+              </button>
+              <button
+                onClick={() => { setShowLeaveConfirm(false); leaveMutation.mutate(); }}
+                className="flex-1 rounded-xl bg-red-500/80 py-2.5 text-sm font-bold text-white active:scale-95"
+              >
+                Покинуть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={!!confirmMemberAction}
+        title={confirmMemberAction?.type === "kick" ? `Исключить ${confirmMemberAction.name}?` : `Назначить ${confirmMemberAction?.name} ассистентом?`}
+        description={
+          confirmMemberAction?.type === "kick"
+            ? "Участник будет удалён из клуба. Это действие нельзя отменить."
+            : "Ассистент сможет управлять составом, паками и заявками на вступление."
+        }
+        danger={confirmMemberAction?.type === "kick"}
+        confirmLabel={confirmMemberAction?.type === "kick" ? "Исключить" : "Назначить"}
+        onConfirm={() => {
+          if (!confirmMemberAction) return;
+          if (confirmMemberAction.type === "kick") kickMutation.mutate(confirmMemberAction.userId);
+          else appointMutation.mutate(confirmMemberAction.userId);
+          setConfirmMemberAction(null);
+        }}
+        onCancel={() => setConfirmMemberAction(null)}
+      />
     </div>
   );
 }

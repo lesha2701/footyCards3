@@ -517,6 +517,22 @@ async def test_claim_daily_reward_credits_budget_once_per_day(client, db_session
     assert second_attempt.status_code == 409
 
 
+async def test_club_detail_reports_daily_reward_countdown_only_after_claiming(client, db_session, bot_token):
+    club, headers = await _create_club(client, bot_token, 820202, "Клуб с отсчётом")
+
+    before = await client.get("/api/v1/clubs/me", headers=headers)
+    assert before.json()["daily_reward_seconds_remaining"] is None
+
+    claim_resp = await client.post("/api/v1/clubs/me/daily-claim", headers=headers)
+    assert claim_resp.status_code == 200
+    assert claim_resp.json()["daily_reward_seconds_remaining"] is not None
+    assert claim_resp.json()["daily_reward_seconds_remaining"] > 0
+
+    after = await client.get("/api/v1/clubs/me", headers=headers)
+    assert after.json()["daily_reward_seconds_remaining"] is not None
+    assert after.json()["daily_reward_seconds_remaining"] > 0
+
+
 async def test_claim_daily_reward_concurrent_same_user_no_double_credit():
     """Genuine concurrency regression test for the same unhandled-IntegrityError race as
     test_club_packs.py's test_open_club_pack_concurrent_same_idempotency_key_no_double_debit:

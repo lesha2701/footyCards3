@@ -253,6 +253,28 @@ export interface MemoryLeaderboardEntry {
   best_score: number;
 }
 
+export interface ClubGameStart {
+  session_id: number;
+  round_number: number;
+  icons: string[];
+  sequence: string[];
+  reveal_ms: number;
+  answer_timeout_ms: number;
+}
+
+export interface ClubGameSubmitResult {
+  correct: boolean;
+  session_id: number;
+  score: number;
+  status: string;
+  next_round?: ClubGameStart;
+}
+
+export interface ClubGameClaimResult {
+  reward_coins: number;
+  new_club_budget: number;
+}
+
 export interface LineupSlot {
   slot_code: string;
   category: string;
@@ -982,6 +1004,7 @@ export interface Club {
   budget: number;
   cups_count: number;
   stars_count: number;
+  daily_reward_seconds_remaining: number | null;
 }
 
 export interface ClubJoinRequest {
@@ -1075,6 +1098,8 @@ export interface TournamentCurrent {
   status: TournamentCurrentStatus;
   queue_position: number | null;
   tournament_id: number | null;
+  can_apply: boolean;
+  cooldown_seconds_remaining: number | null;
 }
 
 export interface TournamentStanding {
@@ -1104,6 +1129,7 @@ export interface TournamentDetail {
   rounds_simulated: number;
   standings: TournamentStanding[];
   matches: TournamentMatchSummary[];
+  next_round_seconds_remaining: number | null;
 }
 
 export interface TournamentMatchDetail {
