@@ -1,6 +1,7 @@
 import random
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -219,5 +220,18 @@ async def set_club_lineup(db: AsyncSession, user: User, payload: ClubLineupSetRe
     await db.flush()
     for slot_in in payload.slots:
         db.add(ClubLineupCard(club_lineup_id=lineup.id, club_card_id=slot_in.club_card_id, slot_code=slot_in.slot_code))
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Observed in production as an unhandled 500 on PUT /clubs/me/lineup: the
+        # with_for_update(of=ClubLineup) lock above only serializes overlapping saves once
+        # each one's SELECT resolves it, but under real load (slow responses inviting a
+        # repeated/double tap, or a genuinely slow backend) enough overlapping submissions can
+        # still interleave around the delete-then-recreate below and collide on
+        # uq_club_lineup_card_once — reproduced directly with 6 concurrent identical saves
+        # against real Postgres (2 succeeded, 4 hit this exact IntegrityError). Surface a clean,
+        # retriable error instead of a raw 500 — the caller's own payload is still valid against
+        # the now-current state.
+        await db.rollback()
+        raise ConflictError("Не удалось сохранить состав — попробуй ещё раз")
     return await _lineup_to_out(db, club_id)

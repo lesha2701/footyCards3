@@ -1,10 +1,30 @@
-import pytest_asyncio
-from sqlalchemy import select
+import asyncio
+import os
+import uuid
 
+import pytest
+import pytest_asyncio
+from sqlalchemy import select, text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.core.exceptions import ConflictError
+from app.models.club import Club
 from app.models.club_lineup import ClubLineup, ClubLineupCard
-from app.models.enums import Position
+from app.models.enums import ClubLogoShape, ClubType, Position
+from app.models.user import User
+from app.schemas.club import ClubCreate
+from app.schemas.club_squad import ClubLineupSetRequest, ClubLineupSlotIn
+from app.services import club_service
+from app.services.club_squad_service import set_club_lineup
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
+
+# See test_club_packs.py's REAL_POSTGRES_URL comment for why this test opens its own
+# independent connection to the real dev Postgres instance rather than using the pytest
+# suite's `client`/`db_session` fixtures (hardcoded to in-memory SQLite, single shared
+# connection, can't reproduce genuine multi-connection unique-constraint race timing).
+REAL_POSTGRES_URL = os.environ.get("REAL_POSTGRES_URL", "postgresql+asyncpg://postgres:1234@postgres:5432/footycards")
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -110,3 +130,92 @@ async def test_non_manager_cannot_set_lineup(client, db_session, bot_token):
     slots_payload = [{"slot_code": s["slot_code"], "club_card_id": s["card"]["id"]} for s in lineup["slots"]]
     resp = await client.put("/api/v1/clubs/me/lineup", headers=member_headers, json={"slots": slots_payload})
     assert resp.status_code == 403
+
+
+async def test_set_lineup_concurrent_saves_no_unhandled_integrity_error():
+    """Genuine concurrency regression test for an unhandled IntegrityError observed in
+    production as a 500 on PUT /clubs/me/lineup: set_club_lineup's with_for_update(of=ClubLineup)
+    lock serializes overlapping saves once each one's SELECT resolves, but two truly concurrent
+    submissions (asyncio.gather) didn't reliably reproduce the crash — it took a wider fan-out to
+    expose reliably, matching how the reported bug surfaced under real load (a slow/hanging save
+    inviting repeated taps). With 6 concurrent identical saves against real Postgres, some
+    interleave around the delete-then-recreate of club_lineup_cards and collide on
+    uq_club_lineup_card_once. Before the fix this raised a raw IntegrityError (500); after, the
+    loser(s) get a clean ConflictError (409) instead. Skips if real Postgres is unreachable.
+    """
+    engine = create_async_engine(REAL_POSTGRES_URL, pool_pre_ping=True)
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except OSError as exc:
+        await engine.dispose()
+        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
+    except OperationalError as exc:
+        await engine.dispose()
+        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
+
+    RealSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+    suffix = uuid.uuid4().hex[:10]
+
+    setup = RealSessionLocal()
+    captain = club_id = None
+    try:
+        captain = User(telegram_id=991_300_000_000 + uuid.uuid4().int % 1_000_000_000, username=f"lineup_race_{suffix}", balance=10000)
+        setup.add(captain)
+        await setup.flush()
+        await setup.commit()
+
+        detail = await club_service.create_club(
+            setup, captain,
+            ClubCreate(name=f"Lineup Race Club {suffix}", description="", club_type=ClubType.open, logo_shape=ClubLogoShape.shield, logo_color="#abcdef"),
+        )
+        club_id = detail.id
+        await setup.close()
+        setup = None
+
+        async with RealSessionLocal() as verify:
+            lineup = (await verify.execute(select(ClubLineup).where(ClubLineup.club_id == club_id))).scalar_one()
+            cards = (await verify.execute(select(ClubLineupCard).where(ClubLineupCard.club_lineup_id == lineup.id))).scalars().all()
+            slot_to_card = {c.slot_code: c.club_card_id for c in cards}
+
+        payload = ClubLineupSetRequest(slots=[ClubLineupSlotIn(slot_code=code, club_card_id=cid) for code, cid in slot_to_card.items()])
+
+        concurrency = 6
+        sessions = [RealSessionLocal() for _ in range(concurrency)]
+        try:
+            captains = [await s.get(User, captain.id) for s in sessions]
+            results = await asyncio.gather(
+                *[set_club_lineup(sessions[i], captains[i], payload) for i in range(concurrency)],
+                return_exceptions=True,
+            )
+        finally:
+            for s in sessions:
+                await s.close()
+
+        successes = [r for r in results if not isinstance(r, BaseException)]
+        failures = [r for r in results if isinstance(r, BaseException)]
+        assert successes, f"expected at least one winner, got results: {results!r}"
+        for f in failures:
+            assert isinstance(f, ConflictError), f"every loser must raise ConflictError (409), not an unhandled exception: {f!r}"
+
+        async with RealSessionLocal() as final_verify:
+            final_lineup = (await final_verify.execute(select(ClubLineup).where(ClubLineup.club_id == club_id))).scalar_one()
+            final_cards = (
+                await final_verify.execute(select(ClubLineupCard).where(ClubLineupCard.club_lineup_id == final_lineup.id))
+            ).scalars().all()
+            assert len(final_cards) == 11, "lineup must end with exactly 11 cards, not duplicated or partially deleted"
+    finally:
+        async with RealSessionLocal() as cleanup:
+            if club_id is not None:
+                club_row = await cleanup.get(Club, club_id)
+                if club_row is not None:
+                    await cleanup.delete(club_row)
+            await cleanup.commit()
+            if captain is not None:
+                user_row = await cleanup.get(User, captain.id)
+                if user_row is not None:
+                    await cleanup.delete(user_row)
+            await cleanup.commit()
+        if setup is not None:
+            await setup.close()
+        await engine.dispose()
