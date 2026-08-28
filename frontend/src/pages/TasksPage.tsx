@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { claimTask, fetchTasks } from "@/api/tasks";
 import EmptyState from "@/components/common/EmptyState";
-import { IconChat, IconCheck, IconCoin, IconPack, IconParty, IconTarget, IconTrophy } from "@/components/icons";
+import { IconChat, IconCheck, IconCoin, IconPack, IconParty, IconTarget, IconTrophy, IconWarning } from "@/components/icons";
 import { ApiRequestError } from "@/lib/api";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -86,6 +86,14 @@ export default function TasksPage() {
           <div className="flex gap-2">
             <TabButton active={premiumFilter === "active"} label="Активные" onClick={() => setPremiumFilter("active")} />
             <TabButton active={premiumFilter === "done"} label="Выполненные" onClick={() => setPremiumFilter("done")} />
+          </div>
+
+          <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs text-ink-mist">
+            <IconWarning size={15} className="mt-0.5 shrink-0 text-amber-400" />
+            <p>
+              Если после получения награды отписаться от канала — награда будет списана с баланса. Чтобы вернуть её,
+              подпишись на канал заново: задание снова станет активным, и его можно будет получить ещё раз.
+            </p>
           </div>
 
           {!premiumTasks.length ? (
