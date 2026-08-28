@@ -66,6 +66,17 @@ export default function AdminGamesPage() {
           {field("hourly_game_limit", "Лимит игр в час (на каждую игру)")}
           {field("club_creation_cost_coins", "Стоимость создания клуба")}
           {field("club_daily_reward_coins", "Ежедневная награда клуба")}
+          {field("club_tournament_cooldown_hours", "Кулдаун между заявками на турнир, часы")}
+          {field("club_form_window_matches", "Окно формы клуба, матчей")}
+          {field("club_form_bonus_per_result", "Бонус формы за результат (напр. 0.02)")}
+          {field("club_tournament_budget_place_1", "Награда бюджетом за 1-е место")}
+          {field("club_tournament_budget_place_2", "Награда бюджетом за 2-е место")}
+          {field("club_tournament_budget_place_3", "Награда бюджетом за 3-е место")}
+          {field("club_tournament_budget_place_4", "Награда бюджетом за 4-е место")}
+          {field("club_tournament_budget_place_5", "Награда бюджетом за 5-е место")}
+          {field("club_tournament_budget_place_6", "Награда бюджетом за 6-е место")}
+          {field("club_tournament_budget_place_7", "Награда бюджетом за 7-е место")}
+          {field("club_tournament_budget_place_8", "Награда бюджетом за 8-е место")}
         </div>
       </section>
 

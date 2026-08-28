@@ -92,6 +92,17 @@ export interface AdminActionLog {
 export interface GameConfig {
   club_creation_cost_coins: number;
   club_daily_reward_coins: number;
+  club_tournament_cooldown_hours: number;
+  club_form_window_matches: number;
+  club_form_bonus_per_result: number;
+  club_tournament_budget_place_1: number;
+  club_tournament_budget_place_2: number;
+  club_tournament_budget_place_3: number;
+  club_tournament_budget_place_4: number;
+  club_tournament_budget_place_5: number;
+  club_tournament_budget_place_6: number;
+  club_tournament_budget_place_7: number;
+  club_tournament_budget_place_8: number;
   memory_daily_reward_limit: number;
   memory_reward_cap: number;
   suspicious_memory_score_threshold: number;
