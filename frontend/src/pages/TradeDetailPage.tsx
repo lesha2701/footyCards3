@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { acceptTradeOffer, cancelTradeOffer, fetchTradeOffer, rejectTradeOffer } from "@/api/trades";
@@ -6,6 +7,7 @@ import PlayerCard from "@/components/cards/PlayerCard";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconChevronLeft, IconCoin, IconSwap } from "@/components/icons";
+import { formatGameError } from "@/lib/errors";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { UserCard } from "@/types";
@@ -32,22 +34,35 @@ export default function TradeDetailPage() {
     enabled: Number.isFinite(tradeId),
   });
 
+  const [error, setError] = useState<string | null>(null);
+
   const invalidateAndReturn = () => {
     queryClient.invalidateQueries({ queryKey: ["trades"] });
     navigate("/trades");
+  };
+  // Refetches this offer on failure — e.g. the other side already resolved it (accepted/
+  // rejected/cancelled) or one of the cards involved was sold/traded away in the meantime —
+  // so the stale "pending" buttons don't keep inviting the player to retry an action that
+  // can only 409 again.
+  const onActionError = (err: unknown) => {
+    setError(formatGameError(err, "Не удалось выполнить действие"));
+    queryClient.invalidateQueries({ queryKey: ["trades", "detail", tradeId] });
   };
 
   const acceptMutation = useMutation({
     mutationFn: () => acceptTradeOffer(tradeId),
     onSuccess: (data) => { hapticNotify("success"); updateBalance(data.new_balance); invalidateAndReturn(); },
+    onError: onActionError,
   });
   const rejectMutation = useMutation({
     mutationFn: () => rejectTradeOffer(tradeId),
     onSuccess: invalidateAndReturn,
+    onError: onActionError,
   });
   const cancelMutation = useMutation({
     mutationFn: () => cancelTradeOffer(tradeId),
     onSuccess: invalidateAndReturn,
+    onError: onActionError,
   });
 
   if (isLoading || !offer) return <LoadingScreen />;
@@ -94,6 +109,8 @@ export default function TradeDetailPage() {
         cards={offer.requested_cards}
         coins={offer.receiver_coins}
       />
+
+      {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
 
       {offer.status === "pending" && (
         <div className="flex gap-2">
