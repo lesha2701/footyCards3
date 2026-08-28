@@ -65,7 +65,10 @@ async def update_club_pack(pack_id: int, payload: ClubPackUpdate, request: Reque
         await db.flush()
         for p in payload.rarity_probabilities:
             db.add(ClubPackRarityProbability(club_pack_id=pack.id, rarity=p.rarity, probability=p.probability))
-    db.add(pack)
+    # No db.add(pack) here: pack is already persistent (loaded via SELECT above), and
+    # re-adding it cascades save-update over rarity_probabilities (cascade="all,
+    # delete-orphan") — which, right after the delete loop above, still holds Python-side
+    # references to the now-deleted rows, crashing with "Instance has been deleted."
     await log_action(db, admin.id, "update_club_pack", "club_pack", pack_id, old_value=old_value, new_value=payload.model_dump(mode="json", exclude_unset=True), ip_address=request.client.host if request.client else None)
     await db.commit()
     return await _get_pack_or_404(db, pack_id)
