@@ -18,6 +18,11 @@ import type {
 } from "@/types";
 import type {
   AdminActionLog,
+  AdminClub,
+  AdminClubBudgetTransaction,
+  AdminClubDetail,
+  AdminClubMember,
+  AdminClubTournament,
   AdminUser,
   AdminWheelPrize,
   CardCollection,
@@ -311,6 +316,13 @@ export async function sendPremiumTaskBroadcast(taskCount: number, message: strin
   return data;
 }
 
+export async function backfillPremiumTaskCoins(): Promise<{ definitions_updated: number; users_credited: number }> {
+  const { data } = await api.post<{ definitions_updated: number; users_credited: number }>(
+    "/admin/tasks/backfill-premium-coins",
+  );
+  return data;
+}
+
 // --- Wheel of Fortune ---
 export async function fetchAdminWheelPrizes(): Promise<AdminWheelPrize[]> {
   const { data } = await api.get<AdminWheelPrize[]>("/admin/wheel/prizes");
@@ -590,5 +602,31 @@ export async function deleteLeagueTierImage(id: number): Promise<LeagueTier> {
 
 export async function backfillLeagueRewards(): Promise<{ rewarded_count: number }> {
   const { data } = await api.post<{ rewarded_count: number }>("/admin/leagues/backfill-rewards");
+  return data;
+}
+
+// --- Clubs ---
+export async function fetchAdminClubs(search: string, page: number): Promise<Page<AdminClub>> {
+  const { data } = await api.get<Page<AdminClub>>("/admin/clubs", { params: { search: search || undefined, page } });
+  return data;
+}
+
+export async function fetchAdminClub(id: number): Promise<AdminClubDetail> {
+  const { data } = await api.get<AdminClubDetail>(`/admin/clubs/${id}`);
+  return data;
+}
+
+export async function fetchAdminClubMembers(id: number): Promise<AdminClubMember[]> {
+  const { data } = await api.get<AdminClubMember[]>(`/admin/clubs/${id}/members`);
+  return data;
+}
+
+export async function fetchAdminClubBudgetTransactions(id: number, page = 1): Promise<Page<AdminClubBudgetTransaction>> {
+  const { data } = await api.get<Page<AdminClubBudgetTransaction>>(`/admin/clubs/${id}/budget-transactions`, { params: { page } });
+  return data;
+}
+
+export async function fetchAdminClubTournaments(id: number): Promise<AdminClubTournament[]> {
+  const { data } = await api.get<AdminClubTournament[]>(`/admin/clubs/${id}/tournaments`);
   return data;
 }

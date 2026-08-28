@@ -247,4 +247,56 @@ export interface SuspiciousMatch {
   created_at: string;
 }
 
+export interface AdminClub {
+  id: number;
+  name: string;
+  club_type: "open" | "closed";
+  logo_shape: "shield" | "circle" | "hexagon" | "star" | "diamond" | "banner" | "crest" | "chevron";
+  logo_color: string;
+  captain_id: number;
+  member_count: number;
+  budget: number;
+  cups_count: number;
+  stars_count: number;
+  founded_at: string;
+  is_disbanded: boolean;
+}
+
+export interface AdminClubDetail extends AdminClub {
+  description: string;
+  invite_code: string;
+  last_tournament_applied_at: string | null;
+}
+
+export interface AdminClubMember {
+  user_id: number;
+  username: string | null;
+  first_name: string | null;
+  role: "captain" | "assistant" | "member";
+  joined_at: string;
+}
+
+export interface AdminClubBudgetTransaction {
+  id: number;
+  amount: number;
+  balance_before: number;
+  balance_after: number;
+  type: "daily_claim" | "pack_purchase" | "tournament_reward";
+  description: string;
+  created_at: string;
+}
+
+export interface AdminClubTournament {
+  tournament_id: number;
+  status: "active" | "completed";
+  rounds_simulated: number;
+  points: number;
+  goals_for: number;
+  goals_against: number;
+  final_rank: number | null;
+  budget_awarded: number | null;
+  stars_delta: number | null;
+  cup_awarded: boolean | null;
+}
+
 export type { Page, Pack, PackRarityProbability, Player, TradeOffer, TradeStatus };
