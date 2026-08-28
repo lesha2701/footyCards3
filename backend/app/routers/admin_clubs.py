@@ -106,7 +106,7 @@ async def get_club_budget_transactions(club_id: int, params: PageParams = Depend
     result = await db.execute(
         select(ClubBudgetTransaction)
         .where(ClubBudgetTransaction.club_id == club_id)
-        .order_by(ClubBudgetTransaction.created_at.desc())
+        .order_by(ClubBudgetTransaction.created_at.desc(), ClubBudgetTransaction.id.desc())
         .offset(params.offset)
         .limit(params.page_size)
     )
@@ -147,10 +147,11 @@ async def get_club_tournaments(club_id: int, db: AsyncSession = Depends(get_db))
         AdminClubTournamentOut(
             tournament_id=t.id, status=t.status, rounds_simulated=t.rounds_simulated,
             points=s.points, goals_for=s.goals_for, goals_against=s.goals_against,
+            is_withdrawn=tc.is_withdrawn,
             final_rank=results_by_tournament[t.id].final_rank if t.id in results_by_tournament else None,
             budget_awarded=results_by_tournament[t.id].budget_awarded if t.id in results_by_tournament else None,
             stars_delta=results_by_tournament[t.id].stars_delta if t.id in results_by_tournament else None,
             cup_awarded=results_by_tournament[t.id].cup_awarded if t.id in results_by_tournament else None,
         )
-        for _, t, s in rows
+        for tc, t, s in rows
     ]

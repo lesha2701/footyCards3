@@ -9,7 +9,7 @@ const SECTIONS = [
   { to: "/admin/players", label: "Футболисты", icon: "⚽" },
   { to: "/admin/packs", label: "Паки", icon: "📦" },
   { to: "/admin/club-packs", label: "Клубные паки", icon: "🏟️" },
-  { to: "/admin/clubs", label: "Клубы", icon: "👥" },
+  { to: "/admin/clubs", label: "Клубы", icon: "🛡️" },
   { to: "/admin/card-collections", label: "Коллекции", icon: "🗃️" },
   { to: "/admin/tasks", label: "Задания", icon: "🎯" },
   { to: "/admin/trades", label: "Обмены", icon: "🔄" },

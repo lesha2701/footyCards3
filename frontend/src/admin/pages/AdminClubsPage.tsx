@@ -8,9 +8,10 @@ import {
   fetchAdminClubs,
   fetchAdminClubTournaments,
 } from "@/admin/api";
-import type { AdminClub } from "@/admin/types";
+import { ClubLogo } from "@/components/clubs/ClubLogo";
+import type { AdminClub, AdminClubMember } from "@/admin/types";
 
-const ROLE_LABELS: Record<string, string> = { captain: "Капитан", assistant: "Ассистент", member: "Участник" };
+const ROLE_LABELS: Record<AdminClubMember["role"], string> = { captain: "Капитан", assistant: "Ассистент", member: "Участник" };
 
 export default function AdminClubsPage() {
   const [search, setSearch] = useState("");
@@ -46,7 +47,12 @@ export default function AdminClubsPage() {
           <tbody>
             {data?.items.map((c) => (
               <tr key={c.id} className="border-t border-white/5">
-                <td className="px-3 py-2">{c.name}</td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <ClubLogo shape={c.logo_shape} color={c.logo_color} size={24} />
+                    {c.name}
+                  </div>
+                </td>
                 <td className="px-3 py-2 text-slate-400">{c.club_type === "open" ? "Открытый" : "Закрытый"}</td>
                 <td className="px-3 py-2">{c.member_count}/11</td>
                 <td className="px-3 py-2 text-amber-300">🪙{c.budget}</td>
@@ -142,6 +148,7 @@ function ClubDetailModal({ clubId, onClose }: { clubId: number; onClose: () => v
               <div key={m.user_id} className="flex items-center justify-between rounded-lg bg-bg-surface px-3 py-2 text-xs">
                 <span>{m.username ?? m.first_name ?? `#${m.user_id}`}</span>
                 <span className="text-slate-400">{ROLE_LABELS[m.role]}</span>
+                <span className="text-slate-500">{new Date(m.joined_at).toLocaleDateString("ru-RU")}</span>
               </div>
             ))}
             {!members?.length && <p className="text-sm text-slate-500">Нет участников</p>}
@@ -152,7 +159,10 @@ function ClubDetailModal({ clubId, onClose }: { clubId: number; onClose: () => v
           <div className="flex flex-col gap-2">
             {budgetTransactions?.items.map((t) => (
               <div key={t.id} className="flex items-center justify-between rounded-lg bg-bg-surface px-3 py-2 text-xs">
-                <span>{t.description || t.type}</span>
+                <div>
+                  <p>{t.description || t.type}</p>
+                  <p className="text-slate-500">{new Date(t.created_at).toLocaleString("ru-RU")} · {t.balance_before} → {t.balance_after}</p>
+                </div>
                 <span className={t.amount >= 0 ? "text-emerald-400" : "text-red-400"}>{t.amount}</span>
               </div>
             ))}
@@ -165,7 +175,7 @@ function ClubDetailModal({ clubId, onClose }: { clubId: number; onClose: () => v
             {tournaments?.map((t) => (
               <div key={t.tournament_id} className="flex items-center justify-between rounded-lg bg-bg-surface px-3 py-2 text-xs">
                 <div>
-                  <p>Турнир #{t.tournament_id} — {t.status === "completed" ? "завершён" : `тур ${t.rounds_simulated}/14`}</p>
+                  <p>Турнир #{t.tournament_id} — {t.status === "completed" ? "завершён" : `тур ${t.rounds_simulated}/14`}{t.is_withdrawn && " · снялся"}</p>
                   <p className="text-slate-400">{t.points} очк. · {t.goals_for}:{t.goals_against}</p>
                 </div>
                 {t.status === "completed" && (

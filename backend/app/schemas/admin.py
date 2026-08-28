@@ -227,7 +227,7 @@ class GameConfigUpdate(BaseModel):
     club_daily_reward_coins: Optional[int] = Field(default=None, ge=0)
     club_tournament_cooldown_hours: Optional[int] = Field(default=None, ge=0)
     club_form_window_matches: Optional[int] = Field(default=None, ge=1)
-    club_form_bonus_per_result: Optional[float] = Field(default=None, ge=0)
+    club_form_bonus_per_result: Optional[float] = Field(default=None, ge=0, le=1)
     club_tournament_budget_place_1: Optional[int] = Field(default=None, ge=0)
     club_tournament_budget_place_2: Optional[int] = Field(default=None, ge=0)
     club_tournament_budget_place_3: Optional[int] = Field(default=None, ge=0)

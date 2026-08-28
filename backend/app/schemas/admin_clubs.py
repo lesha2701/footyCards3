@@ -54,6 +54,7 @@ class AdminClubTournamentOut(BaseModel):
     points: int
     goals_for: int
     goals_against: int
+    is_withdrawn: bool
     final_rank: Optional[int] = None
     budget_awarded: Optional[int] = None
     stars_delta: Optional[int] = None

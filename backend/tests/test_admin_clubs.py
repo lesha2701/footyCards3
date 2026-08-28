@@ -110,6 +110,9 @@ async def test_get_club_budget_transactions_paginated(client, db_session, bot_to
 async def test_get_club_tournaments_shows_null_rewards_before_completion_and_real_values_after(
     client, db_session, bot_token
 ):
+    from sqlalchemy import select
+
+    from app.models.tournament import TournamentClub
     from app.services.tournament_simulation_service import simulate_next_round
     from app.services.tournament_queue_service import apply_to_tournament
 
@@ -143,6 +146,19 @@ async def test_get_club_tournaments_shows_null_rewards_before_completion_and_rea
     assert mid_body[0]["status"] == "active"
     assert mid_body[0]["final_rank"] is None
     assert mid_body[0]["budget_awarded"] is None
+    assert mid_body[0]["is_withdrawn"] is False
+
+    tc_row = (
+        await db_session.execute(
+            select(TournamentClub).where(TournamentClub.tournament_id == tournament_id, TournamentClub.club_id == club0.id)
+        )
+    ).scalar_one()
+    tc_row.is_withdrawn = True
+    db_session.add(tc_row)
+    await db_session.commit()
+
+    withdrawn_resp = await client.get(f"/api/v1/admin/clubs/{club0.id}/tournaments", headers=auth)
+    assert withdrawn_resp.json()[0]["is_withdrawn"] is True
 
     for _ in range(14):
         await simulate_next_round(db_session)

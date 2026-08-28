@@ -293,6 +293,7 @@ export interface AdminClubTournament {
   points: number;
   goals_for: number;
   goals_against: number;
+  is_withdrawn: boolean;
   final_rank: number | null;
   budget_awarded: number | null;
   stars_delta: number | null;

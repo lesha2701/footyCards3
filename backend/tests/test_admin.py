@@ -128,3 +128,16 @@ async def test_admin_can_update_club_tournament_game_config_fields(client, db_se
         "/api/v1/admin/games/config", headers={"Authorization": f"Bearer {admin_token}"}
     )
     assert get_resp.json()["club_tournament_budget_place_1"] == 1200
+
+
+async def test_admin_cannot_set_club_form_bonus_above_one(client, db_session, bot_token):
+    admin_headers = telegram_headers(999000001, bot_token)
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    admin_token = session_resp.json()["admin_token"]
+
+    resp = await client.put(
+        "/api/v1/admin/games/config",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"club_form_bonus_per_result": 1.5},
+    )
+    assert resp.status_code == 422
