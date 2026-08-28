@@ -9,11 +9,13 @@ import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconPlus, IconUsers } from "@/components/icons";
 import {
   acceptJoinRequest,
+  applyToTournament,
   claimDailyReward,
   createJoinRequest,
   fetchClubs,
   fetchMyClub,
   fetchMyJoinRequests,
+  fetchTournamentCurrent,
   joinClub,
   kickMember,
   leaveClub,
@@ -133,6 +135,13 @@ function ClubHome({ club }: { club: Club }) {
   const userId = useAuthStore((s) => s.user?.id);
   const isManager = club.my_role === "captain" || club.my_role === "assistant";
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
+  const { data: tournamentCurrent } = useQuery({ queryKey: ["clubs", "tournament", "current"], queryFn: fetchTournamentCurrent });
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const applyMutation = useMutation({
+    mutationFn: applyToTournament,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["clubs", "tournament", "current"] }); setApplyError(null); },
+    onError: (err) => setApplyError(err instanceof ApiRequestError ? err.message : "Не удалось подать заявку"),
+  });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["clubs"] });
   const leaveMutation = useMutation({ mutationFn: leaveClub, onSuccess: invalidate });
@@ -223,6 +232,30 @@ function ClubHome({ club }: { club: Club }) {
           className="rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
         >
           🎁 Клубные паки
+        </button>
+      )}
+
+      {tournamentCurrent?.status === "not_queued" && isManager && (
+        <button
+          onClick={() => applyMutation.mutate()}
+          disabled={applyMutation.isPending}
+          className="rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99] disabled:opacity-40"
+        >
+          🏆 Подать заявку на турнир
+        </button>
+      )}
+      {applyError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{applyError}</p>}
+      {tournamentCurrent?.status === "queued" && (
+        <div className="rounded-2xl bg-bg-surface p-3 text-sm text-ink-mist">
+          🏆 В очереди на турнир — место {tournamentCurrent.queue_position}
+        </div>
+      )}
+      {(tournamentCurrent?.status === "active" || tournamentCurrent?.status === "completed") && tournamentCurrent.tournament_id && (
+        <button
+          onClick={() => navigate(`/clubs/tournament/${tournamentCurrent.tournament_id}`)}
+          className="rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+        >
+          🏆 Турнир клуба
         </button>
       )}
 
