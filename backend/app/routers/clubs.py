@@ -15,6 +15,7 @@ from app.models.tournament_queue import TournamentQueueEntry, TournamentQueueSta
 from app.models.tournament_standing import TournamentClubStanding
 from app.models.user import User
 from app.schemas.club import ClubCreate, ClubDetailOut, ClubJoinRequestOut, ClubSummaryOut, JoinByInviteIn, TransferCaptainIn
+from app.schemas.club_ranking import ClubRankingMetric, ClubRankingOut
 from app.schemas.club_pack import ClubPackOut
 from app.schemas.club_pack_open import ClubPackOpenResult, OpenClubPackRequest
 from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest
@@ -26,7 +27,7 @@ from app.schemas.tournament import (
     TournamentMatchSummaryOut,
     TournamentStandingOut,
 )
-from app.services import club_pack_service, club_service, club_squad_service, tournament_queue_service
+from app.services import club_pack_service, club_ranking_service, club_service, club_squad_service, tournament_queue_service
 from app.services.tournament_standing_service import rank_standings
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
@@ -42,6 +43,13 @@ async def list_clubs(
 @router.get("/packs", response_model=list[ClubPackOut])
 async def list_club_packs(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
     return await club_pack_service.list_club_packs(db)
+
+
+@router.get("/leaderboard", response_model=ClubRankingOut)
+async def get_club_leaderboard(
+    metric: ClubRankingMetric, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await club_ranking_service.get_club_ranking(db, metric, current_user_id=user.id)
 
 
 @router.get("/me", response_model=ClubDetailOut)
