@@ -96,6 +96,11 @@ export async function transferCaptain(userId: number): Promise<Club> {
   return data;
 }
 
+export async function updateClubType(clubType: "open" | "closed"): Promise<Club> {
+  const { data } = await api.put<Club>("/clubs/me/type", { club_type: clubType });
+  return data;
+}
+
 export async function disbandClub(): Promise<void> {
   await api.post("/clubs/me/disband");
 }

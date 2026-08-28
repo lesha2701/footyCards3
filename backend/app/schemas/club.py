@@ -24,6 +24,10 @@ class ClubUpdate(BaseModel):
     logo_color: Optional[str] = Field(default=None, min_length=4, max_length=16)
 
 
+class ClubTypeUpdate(BaseModel):
+    club_type: ClubType
+
+
 class ClubMemberOut(BaseModel):
     user_id: int
     username: Optional[str]

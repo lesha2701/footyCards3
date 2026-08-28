@@ -22,6 +22,7 @@ from app.schemas.club import (
     ClubDetailOut,
     ClubJoinRequestOut,
     ClubSummaryOut,
+    ClubTypeUpdate,
     JoinByInviteIn,
     TransferCaptainIn,
 )
@@ -145,6 +146,11 @@ async def appoint_assistant(user_id: int, db: AsyncSession = Depends(get_db), us
 @router.post("/me/assistants/{user_id}/remove", response_model=ClubDetailOut)
 async def remove_assistant(user_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_service.remove_assistant(db, user, user_id)
+
+
+@router.put("/me/type", response_model=ClubDetailOut)
+async def update_club_type(payload: ClubTypeUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_service.update_club_type(db, user, payload.club_type)
 
 
 @router.post("/me/transfer-captain", response_model=ClubDetailOut)

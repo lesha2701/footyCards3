@@ -7,7 +7,7 @@ import { ClubPreviewPopup } from "@/components/clubs/ClubPreviewPopup";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconBrain, IconChart, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGoal, IconPlus, IconStar, IconTrophy, IconUsers } from "@/components/icons";
+import { IconBrain, IconChart, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconStar, IconTrophy, IconUsers } from "@/components/icons";
 import {
   acceptJoinRequest,
   appointAssistant,
@@ -23,6 +23,7 @@ import {
   leaveClub,
   rejectJoinRequest,
   removeAssistant,
+  updateClubType,
 } from "@/api/clubs";
 import { fetchMyProfile } from "@/api/profile";
 import { ApiRequestError } from "@/lib/api";
@@ -164,6 +165,7 @@ function ClubHome({ club }: { club: Club }) {
   const appointMutation = useMutation({ mutationFn: (id: number) => appointAssistant(id), onSuccess: invalidate, onError: onActionError });
   const removeAssistantMutation = useMutation({ mutationFn: (id: number) => removeAssistant(id), onSuccess: invalidate, onError: onActionError });
   const [confirmMemberAction, setConfirmMemberAction] = useState<{ type: "appoint" | "kick"; userId: number; name: string } | null>(null);
+  const clubTypeMutation = useMutation({ mutationFn: updateClubType, onSuccess: invalidate, onError: onActionError });
 
   const [claimError, setClaimError] = useState<string | null>(null);
   const claimMutation = useMutation({
@@ -210,6 +212,21 @@ function ClubHome({ club }: { club: Club }) {
           </span>
         </div>
         {club.description && <p className="mt-3 border-t border-white/5 pt-3 text-sm text-ink-mist">{club.description}</p>}
+        <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3">
+          <span className="flex items-center gap-1.5 text-xs text-ink-mist">
+            {club.club_type === "open" ? <IconGlobe size={13} /> : <IconLock size={13} />}
+            {club.club_type === "open" ? "Открытый клуб" : "Закрытый клуб (по заявке)"}
+          </span>
+          {isCaptain && (
+            <button
+              onClick={() => clubTypeMutation.mutate(club.club_type === "open" ? "closed" : "open")}
+              disabled={clubTypeMutation.isPending}
+              className="rounded-lg bg-white/5 px-2 py-1 text-[11px] font-semibold text-ink-mist active:scale-95 disabled:opacity-40"
+            >
+              Сделать {club.club_type === "open" ? "закрытым" : "открытым"}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center justify-between rounded-2xl bg-bg-surface p-3">

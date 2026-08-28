@@ -458,6 +458,18 @@ async def remove_assistant(db: AsyncSession, captain: User, target_user_id: int)
     return await _club_to_detail(db, club, requester_user_id=captain.id)
 
 
+async def update_club_type(db: AsyncSession, captain: User, club_type: ClubType) -> ClubDetailOut:
+    membership = await _require_membership(db, captain.id)
+    if membership.role != ClubRole.captain:
+        raise ForbiddenError("Только капитан может менять тип клуба")
+    club = await _lock_club(db, membership.club_id)
+
+    club.club_type = club_type
+    db.add(club)
+    await db.commit()
+    return await _club_to_detail(db, club, requester_user_id=captain.id)
+
+
 async def transfer_captain(db: AsyncSession, captain: User, target_user_id: int) -> ClubDetailOut:
     membership = await _require_membership(db, captain.id)
     if membership.role != ClubRole.captain:

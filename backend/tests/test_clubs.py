@@ -365,6 +365,41 @@ async def test_transfer_captain(client, db_session, bot_token):
     assert resp.json()["captain_id"] == member_user_id
 
 
+async def test_captain_can_change_club_type_after_creation(client, db_session, bot_token):
+    club, captain_headers = await _create_club(client, bot_token, 820140, "Клуб-смена-типа", club_type="open")
+    assert club["club_type"] == "open"
+
+    resp = await client.put("/api/v1/clubs/me/type", headers=captain_headers, json={"club_type": "closed"})
+    assert resp.status_code == 200
+    assert resp.json()["club_type"] == "closed"
+
+    check = await client.get(f"/api/v1/clubs/{club['id']}", headers=captain_headers)
+    assert check.json()["club_type"] == "closed"
+
+
+async def test_changing_club_type_to_closed_requires_join_request_afterwards(client, db_session, bot_token):
+    club, captain_headers = await _create_club(client, bot_token, 820141, "Клуб-теперь-закрыт", club_type="open")
+    await client.put("/api/v1/clubs/me/type", headers=captain_headers, json={"club_type": "closed"})
+
+    await _register_only(client, bot_token, 820142)
+    applicant_headers = telegram_headers(820142, bot_token)
+    direct_join = await client.post(f"/api/v1/clubs/{club['id']}/join", headers=applicant_headers)
+    assert direct_join.status_code == 409
+
+    request = await client.post(f"/api/v1/clubs/{club['id']}/join-requests", headers=applicant_headers)
+    assert request.status_code == 200
+
+
+async def test_non_captain_cannot_change_club_type(client, db_session, bot_token):
+    club, captain_headers = await _create_club(client, bot_token, 820143, "Клуб-чужой-тип", club_type="open")
+    await _register_only(client, bot_token, 820144)
+    member_headers = telegram_headers(820144, bot_token)
+    await client.post(f"/api/v1/clubs/{club['id']}/join", headers=member_headers)
+
+    resp = await client.put("/api/v1/clubs/me/type", headers=member_headers, json={"club_type": "closed"})
+    assert resp.status_code == 403
+
+
 async def test_disband_club(client, db_session, bot_token):
     club, captain_headers = await _create_club(client, bot_token, 820114, "Клуб на роспуск")
     resp = await client.post("/api/v1/clubs/me/disband", headers=captain_headers)
