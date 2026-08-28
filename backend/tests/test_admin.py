@@ -92,3 +92,39 @@ async def test_admin_toggle_trade_ban(client, db_session, bot_token):
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert resp2.json()["is_trade_banned"] is False
+
+
+async def test_admin_can_update_club_tournament_game_config_fields(client, db_session, bot_token):
+    admin_headers = telegram_headers(999000001, bot_token)  # matches ADMIN_TELEGRAM_IDS in conftest
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    admin_token = session_resp.json()["admin_token"]
+
+    resp = await client.put(
+        "/api/v1/admin/games/config",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={
+            "club_tournament_cooldown_hours": 4,
+            "club_form_window_matches": 5,
+            "club_form_bonus_per_result": 0.05,
+            "club_tournament_budget_place_1": 1200,
+            "club_tournament_budget_place_2": 900,
+            "club_tournament_budget_place_3": 700,
+            "club_tournament_budget_place_4": 500,
+            "club_tournament_budget_place_5": 350,
+            "club_tournament_budget_place_6": 250,
+            "club_tournament_budget_place_7": 150,
+            "club_tournament_budget_place_8": 80,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["club_tournament_cooldown_hours"] == 4
+    assert body["club_form_window_matches"] == 5
+    assert body["club_form_bonus_per_result"] == 0.05
+    assert body["club_tournament_budget_place_1"] == 1200
+    assert body["club_tournament_budget_place_8"] == 80
+
+    get_resp = await client.get(
+        "/api/v1/admin/games/config", headers={"Authorization": f"Bearer {admin_token}"}
+    )
+    assert get_resp.json()["club_tournament_budget_place_1"] == 1200

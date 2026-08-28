@@ -130,6 +130,17 @@ class GameConfigOut(BaseModel):
 
     club_creation_cost_coins: int
     club_daily_reward_coins: int
+    club_tournament_cooldown_hours: int
+    club_form_window_matches: int
+    club_form_bonus_per_result: float
+    club_tournament_budget_place_1: int
+    club_tournament_budget_place_2: int
+    club_tournament_budget_place_3: int
+    club_tournament_budget_place_4: int
+    club_tournament_budget_place_5: int
+    club_tournament_budget_place_6: int
+    club_tournament_budget_place_7: int
+    club_tournament_budget_place_8: int
     memory_daily_reward_limit: int
     memory_reward_cap: int
     suspicious_memory_score_threshold: int
@@ -214,6 +225,17 @@ class GameConfigOut(BaseModel):
 class GameConfigUpdate(BaseModel):
     club_creation_cost_coins: Optional[int] = Field(default=None, ge=0)
     club_daily_reward_coins: Optional[int] = Field(default=None, ge=0)
+    club_tournament_cooldown_hours: Optional[int] = Field(default=None, ge=0)
+    club_form_window_matches: Optional[int] = Field(default=None, ge=1)
+    club_form_bonus_per_result: Optional[float] = Field(default=None, ge=0)
+    club_tournament_budget_place_1: Optional[int] = Field(default=None, ge=0)
+    club_tournament_budget_place_2: Optional[int] = Field(default=None, ge=0)
+    club_tournament_budget_place_3: Optional[int] = Field(default=None, ge=0)
+    club_tournament_budget_place_4: Optional[int] = Field(default=None, ge=0)
+    club_tournament_budget_place_5: Optional[int] = Field(default=None, ge=0)
+    club_tournament_budget_place_6: Optional[int] = Field(default=None, ge=0)
+    club_tournament_budget_place_7: Optional[int] = Field(default=None, ge=0)
+    club_tournament_budget_place_8: Optional[int] = Field(default=None, ge=0)
     memory_daily_reward_limit: Optional[int] = Field(default=None, ge=0)
     memory_reward_cap: Optional[int] = Field(default=None, ge=0)
     suspicious_memory_score_threshold: Optional[int] = Field(default=None, ge=0)
