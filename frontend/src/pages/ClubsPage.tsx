@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ClubLogo } from "@/components/clubs/ClubLogo";
+import { ClubPreviewPopup } from "@/components/clubs/ClubPreviewPopup";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconPlus, IconUsers } from "@/components/icons";
@@ -43,6 +44,7 @@ function ClubBrowseList() {
   const [search, setSearch] = useState("");
   const [joinError, setJoinError] = useState<string | null>(null);
   const [requestSentId, setRequestSentId] = useState<number | null>(null);
+  const [previewClubId, setPreviewClubId] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const { data: clubs, isLoading } = useQuery({ queryKey: ["clubs", "list", search], queryFn: () => fetchClubs(search) });
 
@@ -84,11 +86,16 @@ function ClubBrowseList() {
       <div className="flex flex-col gap-2">
         {clubs?.map((c) => (
           <div key={c.id} className="flex items-center gap-3 rounded-2xl bg-bg-surface p-3">
-            <ClubLogo shape={c.logo_shape} color={c.logo_color} size={40} />
-            <div className="flex-1">
-              <p className="font-display text-sm font-bold text-ink-chalk">{c.name}</p>
-              <p className="text-xs text-ink-mist-dim">{c.member_count}/11 участников</p>
-            </div>
+            <button
+              onClick={() => setPreviewClubId(c.id)}
+              className="flex flex-1 items-center gap-3 text-left"
+            >
+              <ClubLogo shape={c.logo_shape} color={c.logo_color} size={40} />
+              <div className="flex-1">
+                <p className="font-display text-sm font-bold text-ink-chalk">{c.name}</p>
+                <p className="text-xs text-ink-mist-dim">{c.member_count}/11 участников</p>
+              </div>
+            </button>
             {c.club_type === "open" ? (
               <button
                 onClick={() => joinMutation.mutate(c.id)}
@@ -112,6 +119,8 @@ function ClubBrowseList() {
           </div>
         ))}
       </div>
+
+      <ClubPreviewPopup clubId={previewClubId} onClose={() => setPreviewClubId(null)} />
     </div>
   );
 }
