@@ -31,6 +31,7 @@ MAX_CONCURRENT_SENDS = 30
 _MATCH_PATH_PREFIXES = {
     "penalty_match": "/play/penalty/matches",
     "tactico_match": "/play/tactico/matches",
+    "club_match": "/clubs/tournament",
 }
 
 
