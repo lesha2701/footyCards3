@@ -257,6 +257,47 @@ function ClubHome({ club }: { club: Club }) {
       </div>
       {claimError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{claimError}</p>}
 
+      {(tournamentCurrent?.status === "active" || tournamentCurrent?.status === "completed") && tournamentCurrent.tournament_id && (
+        <button
+          onClick={() => navigate(`/clubs/tournament/${tournamentCurrent.tournament_id}`)}
+          className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+        >
+          <IconFlagCheckered size={16} className="text-accent-lime" />
+          Турнир клуба
+          {tournamentCurrent.status === "active" && (
+            <span className="ml-auto flex items-center gap-1.5 rounded-full bg-accent-lime/10 px-2 py-1 text-[10px] font-bold text-accent-lime">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-lime" />
+              Идёт
+            </span>
+          )}
+        </button>
+      )}
+
+      {tournamentCurrent?.status === "queued" && (
+        <div className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-sm text-ink-mist">
+          <IconFlagCheckered size={16} className="text-accent-lime" />
+          В очереди на турнир — место {tournamentCurrent.queue_position}
+        </div>
+      )}
+
+      {isManager && tournamentCurrent?.can_apply && (
+        <button
+          onClick={() => applyMutation.mutate()}
+          disabled={applyMutation.isPending}
+          className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99] disabled:opacity-40"
+        >
+          <IconTrophy size={16} className="text-accent-lime" />
+          Подать заявку на турнир
+        </button>
+      )}
+      {isManager && !tournamentCurrent?.can_apply && tournamentCurrent?.cooldown_seconds_remaining != null && (
+        <div className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-xs text-ink-mist-dim">
+          <IconClock size={14} />
+          Новую заявку на турнир можно подать через {formatCountdown(tournamentCurrent.cooldown_seconds_remaining)}
+        </div>
+      )}
+      {applyError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{applyError}</p>}
+
       {club.invite_code && profile && (
         <div className="rounded-2xl bg-bg-surface p-3">
           <p className="text-xs text-ink-mist">Ссылка-приглашение</p>
@@ -302,41 +343,6 @@ function ClubHome({ club }: { club: Club }) {
         <IconBrain size={16} className="text-accent-lime" />
         Клубная игра
       </button>
-
-      {(tournamentCurrent?.status === "active" || tournamentCurrent?.status === "completed") && tournamentCurrent.tournament_id && (
-        <button
-          onClick={() => navigate(`/clubs/tournament/${tournamentCurrent.tournament_id}`)}
-          className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-        >
-          <IconFlagCheckered size={16} className="text-accent-lime" />
-          Турнир клуба
-        </button>
-      )}
-
-      {tournamentCurrent?.status === "queued" && (
-        <div className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-sm text-ink-mist">
-          <IconFlagCheckered size={16} className="text-accent-lime" />
-          В очереди на турнир — место {tournamentCurrent.queue_position}
-        </div>
-      )}
-
-      {isManager && tournamentCurrent?.can_apply && (
-        <button
-          onClick={() => applyMutation.mutate()}
-          disabled={applyMutation.isPending}
-          className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99] disabled:opacity-40"
-        >
-          <IconTrophy size={16} className="text-accent-lime" />
-          Подать заявку на турнир
-        </button>
-      )}
-      {isManager && !tournamentCurrent?.can_apply && tournamentCurrent?.cooldown_seconds_remaining != null && (
-        <div className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-xs text-ink-mist-dim">
-          <IconClock size={14} />
-          Новую заявку на турнир можно подать через {formatCountdown(tournamentCurrent.cooldown_seconds_remaining)}
-        </div>
-      )}
-      {applyError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{applyError}</p>}
 
       <button
         onClick={() => navigate("/clubs/leaderboard")}
