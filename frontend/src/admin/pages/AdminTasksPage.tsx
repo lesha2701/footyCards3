@@ -1,7 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { createTask, deleteTask, fetchAdminPacks, fetchAdminTasks, sendPremiumTaskBroadcast, toggleTaskActive, updateTask } from "@/admin/api";
+import {
+  backfillPremiumTaskCoins,
+  createTask,
+  deleteTask,
+  fetchAdminPacks,
+  fetchAdminTasks,
+  sendPremiumTaskBroadcast,
+  toggleTaskActive,
+  updateTask,
+} from "@/admin/api";
 import type { TaskDefinition } from "@/admin/types";
 import { ApiRequestError } from "@/lib/api";
 import { showConfirm } from "@/lib/telegram";
@@ -61,6 +70,9 @@ export default function AdminTasksPage() {
   const [broadcastResult, setBroadcastResult] = useState<number | null>(null);
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
 
+  const [backfillResult, setBackfillResult] = useState<{ definitions_updated: number; users_credited: number } | null>(null);
+  const [backfillError, setBackfillError] = useState<string | null>(null);
+
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-tasks"] });
   const toggleMutation = useMutation({ mutationFn: toggleTaskActive, onSuccess: invalidate });
   const deleteMutation = useMutation({
@@ -89,6 +101,21 @@ export default function AdminTasksPage() {
     if (!(await showConfirm(`Отправить одно уведомление о новых премиум-заданиях (${broadcastCount} шт.) всем пользователям? Отменить рассылку будет нельзя.`))) return;
     setBroadcastResult(null);
     broadcastMutation.mutate();
+  };
+
+  const backfillMutation = useMutation({
+    mutationFn: backfillPremiumTaskCoins,
+    onSuccess: (res) => { setBackfillResult(res); setBackfillError(null); invalidate(); },
+    onError: (err) => {
+      setBackfillError(err instanceof ApiRequestError ? err.message : "Не удалось выполнить начисление");
+      setBackfillResult(null);
+    },
+  });
+
+  const runBackfill = async () => {
+    if (!(await showConfirm("Проставить 1000 монет тем активным премиум-заданиям, где награда сейчас 0, и задним числом начислить эти монеты игрокам, которые уже забрали такое задание? Действие безопасно повторять."))) return;
+    setBackfillResult(null);
+    backfillMutation.mutate();
   };
 
   const buildPayload = () => ({
@@ -170,6 +197,28 @@ export default function AdminTasksPage() {
         {broadcastError && <p className="mt-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{broadcastError}</p>}
         {broadcastResult !== null && (
           <p className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-400">Отправлено {broadcastResult} пользователям.</p>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-white/5 bg-bg-surface p-3">
+        <p className="mb-1 font-display text-sm font-bold">Начислить монеты за старые премиум-задания</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Разово: активным премиум-заданиям без награды (0 монет) проставляет 1000 монет и задним числом начисляет
+          эту сумму игрокам, которые уже забрали награду за такое задание. Безопасно нажимать повторно — уже
+          обработанные задания и игроки не трогаются второй раз.
+        </p>
+        <button
+          onClick={runBackfill}
+          disabled={backfillMutation.isPending}
+          className="rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-bg-base disabled:opacity-40"
+        >
+          {backfillMutation.isPending ? "Выполняется..." : "Начислить"}
+        </button>
+        {backfillError && <p className="mt-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{backfillError}</p>}
+        {backfillResult !== null && (
+          <p className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-400">
+            Обновлено заданий: {backfillResult.definitions_updated} · начислено игрокам: {backfillResult.users_credited}
+          </p>
         )}
       </div>
 

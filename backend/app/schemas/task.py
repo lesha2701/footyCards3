@@ -93,6 +93,11 @@ class TaskListOut(BaseModel):
     premium: list[TaskOut]
 
 
+class PremiumCoinsBackfillOut(BaseModel):
+    definitions_updated: int
+    users_credited: int
+
+
 class TaskClaimOut(BaseModel):
     reward_coins: int
     new_balance: int

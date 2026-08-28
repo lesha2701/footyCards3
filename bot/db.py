@@ -67,6 +67,56 @@ async def give_coins(telegram_id: int, amount: int, description: str) -> Optiona
             return await conn.fetchrow("SELECT * FROM users WHERE id = $1", user["id"])
 
 
+async def adjust_coins_allow_negative(user_id: int, amount: int, description: str) -> None:
+    """Like give_coins but keyed by internal user id (not telegram_id) and,
+    critically, allows the resulting balance to go negative — used by the
+    premium-subscription clawback sweep, which must be able to debit a
+    player who unsubscribed even past zero. give_coins() is left untouched
+    since it's also used for admin top-ups, where negative-balance semantics
+    would be a bug rather than a feature."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            user = await conn.fetchrow("SELECT * FROM users WHERE id = $1 FOR UPDATE", user_id)
+            if user is None:
+                return
+            new_balance = user["balance"] + amount
+            await conn.execute(
+                "UPDATE users SET balance = $2, updated_at = now() WHERE id = $1", user_id, new_balance
+            )
+            await conn.execute(
+                """INSERT INTO coin_transactions
+                   (user_id, amount, balance_before, balance_after, type, description, created_at)
+                   VALUES ($1, $2, $3, $4, 'premium_subscription_adjustment', $5, now())""",
+                user_id, amount, user["balance"], new_balance, description,
+            )
+
+
+async def fetch_claimed_premium_channel_tasks() -> list[asyncpg.Record]:
+    """Rows the premium-subscription sweep needs to re-check: every claimed
+    premium task with a positive coin snapshot and a channel to verify
+    membership against. `reward_coins_granted` — the amount THIS claim
+    actually credited — is what the sweep debits/credits, never the live
+    (possibly since-edited) task_definitions.reward_coins."""
+    pool = await get_pool()
+    return await pool.fetch(
+        """SELECT ut.id AS user_task_id, ut.user_id, ut.reward_coins_granted, ut.coins_withdrawn,
+                  u.telegram_id, td.channel_chat_id, td.channel_username
+           FROM user_tasks ut
+           JOIN task_definitions td ON td.id = ut.task_definition_id
+           JOIN users u ON u.id = ut.user_id
+           WHERE ut.reward_claimed = true
+             AND ut.reward_coins_granted IS NOT NULL AND ut.reward_coins_granted > 0
+             AND td.category = 'premium'
+             AND (td.channel_chat_id IS NOT NULL OR td.channel_username IS NOT NULL)"""
+    )
+
+
+async def set_task_coins_withdrawn(user_task_id: int, withdrawn: bool) -> None:
+    pool = await get_pool()
+    await pool.execute("UPDATE user_tasks SET coins_withdrawn = $2 WHERE id = $1", user_task_id, withdrawn)
+
+
 async def find_player_by_name(name: str) -> Optional[asyncpg.Record]:
     pool = await get_pool()
     return await pool.fetchrow(

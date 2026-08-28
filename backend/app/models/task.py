@@ -54,6 +54,16 @@ class UserTask(Base):
     metric_baseline: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     reward_claimed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Snapshot of the coin amount THIS claim actually credited (0 if
+    # game_rewards_blocked was set at claim time) — never re-derived from
+    # TaskDefinition.reward_coins, which an admin can edit afterwards for
+    # future claimants. NULL means claimed before this column existed; the
+    # premium-coins backfill (see task_service.backfill_premium_task_coins)
+    # fills it in for already-claimed premium tasks. The bot's periodic
+    # subscription sweep debits/credits exactly this amount, tracked via
+    # coins_withdrawn.
+    reward_coins_granted: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    coins_withdrawn: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     __table_args__ = (

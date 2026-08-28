@@ -270,6 +270,60 @@ async def evaluate_penalty_win_max_rating(db: AsyncSession, user: User, player_r
             db.add(user_task)
 
 
+PREMIUM_TASK_BACKFILL_COINS = 1000
+
+
+async def backfill_premium_task_coins(db: AsyncSession) -> tuple[int, int]:
+    """One-off, idempotent action for premium (channel-subscription) tasks
+    that predate coin rewards: sets `reward_coins=1000` on active premium
+    definitions still at 0, then retroactively credits that amount to users
+    who'd already claimed one of those tasks for 0 coins. Safe to call more
+    than once — the second call finds no definitions at `reward_coins=0` and
+    no claims with `reward_coins_granted IS NULL` left to touch."""
+    definitions_result = await db.execute(
+        select(TaskDefinition).where(
+            TaskDefinition.category == TaskCategory.premium,
+            TaskDefinition.is_active.is_(True),
+            TaskDefinition.reward_coins == 0,
+            or_(TaskDefinition.channel_username.is_not(None), TaskDefinition.channel_chat_id.is_not(None)),
+        )
+    )
+    definitions = definitions_result.scalars().all()
+    for definition in definitions:
+        definition.reward_coins = PREMIUM_TASK_BACKFILL_COINS
+        db.add(definition)
+    await db.flush()
+
+    definition_ids = [d.id for d in definitions]
+    if not definition_ids:
+        await db.commit()
+        return 0, 0
+
+    claims_result = await db.execute(
+        select(UserTask)
+        .where(
+            UserTask.task_definition_id.in_(definition_ids),
+            UserTask.reward_claimed.is_(True),
+            UserTask.reward_coins_granted.is_(None),
+        )
+        .with_for_update()
+    )
+    claims = claims_result.scalars().all()
+    credited_users = 0
+    for user_task in claims:
+        claimed_user = await lock_user_for_update(db, user_task.user_id)
+        await credit_coins(
+            db, claimed_user, PREMIUM_TASK_BACKFILL_COINS, TransactionType.premium_subscription_adjustment,
+            "Ретроактивное начисление за премиум-задание", "user_task", user_task.id,
+        )
+        user_task.reward_coins_granted = PREMIUM_TASK_BACKFILL_COINS
+        db.add(user_task)
+        credited_users += 1
+
+    await db.commit()
+    return len(definitions), credited_users
+
+
 async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> TaskClaimOut:
     result = await db.execute(
         select(UserTask, TaskDefinition)
@@ -303,6 +357,7 @@ async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> 
         raise ConflictError("Reward for this task has already been claimed")
 
     reward_coins = 0 if locked_user.game_rewards_blocked else definition.reward_coins
+    user_task.reward_coins_granted = reward_coins
     if reward_coins > 0:
         await credit_coins(
             db, locked_user, reward_coins, TransactionType.task_reward,

@@ -47,6 +47,7 @@ const TX_TYPE_LABELS: Record<string, string> = {
   referral_reward: "Реферальная награда",
   stars_coin_purchase: "Покупка монет за ⭐",
   stars_pack_bonus_coins: "Бонус монет за пак",
+  premium_subscription_adjustment: "Проверка подписки на канал",
 };
 
 function dayStreakLabel(days: number): string {

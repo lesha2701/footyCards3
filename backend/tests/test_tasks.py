@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+from sqlalchemy import select
+
 from app.models.enums import TaskCategory, TaskConditionType
 from app.models.task import TaskDefinition, UserTask
 from tests.factories import get_user_by_telegram_id
@@ -10,6 +12,13 @@ async def _register(client, db_session, telegram_id, bot_token):
     resp = await client.post("/api/v1/auth/session", headers=telegram_headers(telegram_id, bot_token))
     assert resp.status_code == 200
     return await get_user_by_telegram_id(db_session, telegram_id)
+
+
+async def _admin_auth(client, bot_token):
+    admin_headers = telegram_headers(999000001, bot_token)  # matches ADMIN_TELEGRAM_IDS in conftest
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    token = session_resp.json()["admin_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 async def _create_regular_tasks(db_session, count: int) -> list[TaskDefinition]:
@@ -449,3 +458,146 @@ async def test_referral_completion_progresses_referral_task(client, db_session, 
     invite_task_after = next(t for t in tasks_after if t["code"] == "invite_test")
     assert invite_task_after["is_completed"] is True
     assert invite_task_after["progress"] == 1
+
+
+async def test_claim_stores_reward_coins_granted_snapshot(client, db_session, bot_token):
+    """The premium-subscription clawback sweep (bot/services/
+    premium_subscription_check.py) debits/credits whatever THIS claim
+    actually granted, not the task definition's current reward_coins (an
+    admin can edit that later) — so every claim must snapshot the amount."""
+    await _create_regular_tasks(db_session, 6)
+    user = await _register(client, db_session, 810101, bot_token)
+    headers = telegram_headers(810101, bot_token)
+
+    tasks_before = (await client.get("/api/v1/tasks", headers=headers)).json()["regular"]
+    target = tasks_before[0]
+    task_def = (
+        await db_session.execute(select(TaskDefinition).where(TaskDefinition.code == target["code"]))
+    ).scalar_one()
+
+    user_task = await db_session.get(UserTask, target["user_task_id"])
+    user_task.progress = task_def.target_value
+    user_task.completed_at = datetime.now(timezone.utc)
+    db_session.add(user_task)
+    await db_session.commit()
+
+    resp = await client.post(f"/api/v1/tasks/{target['user_task_id']}/claim", headers=headers)
+    assert resp.status_code == 200
+
+    await db_session.refresh(user_task)
+    assert user_task.reward_coins_granted == task_def.reward_coins
+
+
+async def test_claim_blocked_user_stores_zero_reward_coins_granted(client, db_session, bot_token):
+    await _create_regular_tasks(db_session, 6)
+    user = await _register(client, db_session, 810102, bot_token)
+    headers = telegram_headers(810102, bot_token)
+    user.game_rewards_blocked = True
+    db_session.add(user)
+    await db_session.commit()
+
+    tasks_before = (await client.get("/api/v1/tasks", headers=headers)).json()["regular"]
+    target = tasks_before[0]
+    user_task = await db_session.get(UserTask, target["user_task_id"])
+    user_task.progress = 999
+    user_task.completed_at = datetime.now(timezone.utc)
+    db_session.add(user_task)
+    await db_session.commit()
+
+    resp = await client.post(f"/api/v1/tasks/{target['user_task_id']}/claim", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["reward_coins"] == 0
+
+    await db_session.refresh(user_task)
+    assert user_task.reward_coins_granted == 0
+
+
+async def test_admin_backfill_premium_coins_sets_reward_and_credits_claimed_users(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+
+    definition = TaskDefinition(
+        code="premium_legacy", name="Premium legacy", description="test", category=TaskCategory.premium,
+        condition_type=TaskConditionType.metric_counter, target_value=0, reward_coins=0,
+        channel_username="@legacy_channel",
+    )
+    db_session.add(definition)
+    await db_session.commit()
+    await db_session.refresh(definition)
+
+    user = await _register(client, db_session, 810103, bot_token)
+    # Simulate a claim made before this feature existed: reward_claimed is
+    # True but reward_coins_granted was never snapshotted (NULL).
+    db_session.add(
+        UserTask(
+            user_id=user.id, task_definition_id=definition.id, slot_index=None,
+            completed_at=datetime.now(timezone.utc), reward_claimed=True,
+        )
+    )
+    await db_session.commit()
+
+    resp = await client.post("/api/v1/admin/tasks/backfill-premium-coins", headers=auth)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["definitions_updated"] == 1
+    assert body["users_credited"] == 1
+
+    await db_session.refresh(definition)
+    assert definition.reward_coins == 1000
+
+    await db_session.refresh(user)
+    assert user.balance == 1500  # 500 starting balance + 1000 backfilled
+
+    user_task = (
+        await db_session.execute(select(UserTask).where(UserTask.task_definition_id == definition.id))
+    ).scalar_one()
+    assert user_task.reward_coins_granted == 1000
+
+
+async def test_admin_backfill_premium_coins_is_idempotent(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+
+    definition = TaskDefinition(
+        code="premium_legacy2", name="Premium legacy 2", description="test", category=TaskCategory.premium,
+        condition_type=TaskConditionType.metric_counter, target_value=0, reward_coins=0,
+        channel_username="@legacy_channel2",
+    )
+    db_session.add(definition)
+    await db_session.commit()
+    await db_session.refresh(definition)
+
+    user = await _register(client, db_session, 810104, bot_token)
+    db_session.add(
+        UserTask(
+            user_id=user.id, task_definition_id=definition.id, slot_index=None,
+            completed_at=datetime.now(timezone.utc), reward_claimed=True,
+        )
+    )
+    await db_session.commit()
+
+    first = await client.post("/api/v1/admin/tasks/backfill-premium-coins", headers=auth)
+    assert first.json() == {"definitions_updated": 1, "users_credited": 1}
+
+    second = await client.post("/api/v1/admin/tasks/backfill-premium-coins", headers=auth)
+    assert second.json() == {"definitions_updated": 0, "users_credited": 0}
+
+    await db_session.refresh(user)
+    assert user.balance == 1500  # only credited once
+
+
+async def test_admin_backfill_premium_coins_skips_definitions_with_existing_reward(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+
+    definition = TaskDefinition(
+        code="premium_configured", name="Premium configured", description="test", category=TaskCategory.premium,
+        condition_type=TaskConditionType.metric_counter, target_value=0, reward_coins=250,
+        channel_username="@configured_channel",
+    )
+    db_session.add(definition)
+    await db_session.commit()
+    await db_session.refresh(definition)
+
+    resp = await client.post("/api/v1/admin/tasks/backfill-premium-coins", headers=auth)
+    assert resp.json() == {"definitions_updated": 0, "users_credited": 0}
+
+    await db_session.refresh(definition)
+    assert definition.reward_coins == 250

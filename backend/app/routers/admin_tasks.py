@@ -8,9 +8,16 @@ from app.database import get_db
 from app.models.task import TaskDefinition, UserTask
 from app.models.user import User
 from app.schemas.broadcast import PremiumTaskBroadcastCreate, PremiumTaskBroadcastOut
-from app.schemas.task import TaskDefinitionCreate, TaskDefinitionOut, TaskDefinitionStatsOut, TaskDefinitionUpdate
+from app.schemas.task import (
+    PremiumCoinsBackfillOut,
+    TaskDefinitionCreate,
+    TaskDefinitionOut,
+    TaskDefinitionStatsOut,
+    TaskDefinitionUpdate,
+)
 from app.services.admin_log_service import log_action
 from app.services.broadcast_service import send_premium_task_broadcast
+from app.services.task_service import backfill_premium_task_coins
 
 router = APIRouter(prefix="/admin/tasks", tags=["admin"], dependencies=[Depends(get_current_admin)])
 
@@ -101,6 +108,18 @@ async def broadcast_premium_tasks(
     )
     await db.commit()
     return PremiumTaskBroadcastOut(recipients=recipients)
+
+
+@router.post("/backfill-premium-coins", response_model=PremiumCoinsBackfillOut)
+async def backfill_premium_coins(request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
+    definitions_updated, users_credited = await backfill_premium_task_coins(db)
+    await log_action(
+        db, admin.id, "backfill_premium_coins", "task_definition", 0,
+        new_value={"definitions_updated": definitions_updated, "users_credited": users_credited},
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    return PremiumCoinsBackfillOut(definitions_updated=definitions_updated, users_credited=users_credited)
 
 
 @router.post("/{task_id}/toggle-active", response_model=TaskDefinitionOut)
