@@ -12,6 +12,7 @@ from app.models.club import Club
 from app.models.enums import TournamentStatus
 from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_match import TournamentMatch
+from app.models.tournament_queue import TournamentQueueEntry, TournamentQueueState
 from app.models.tournament_result import TournamentClubResult
 from app.models.tournament_standing import TournamentClubStanding
 from app.schemas.admin_tournaments import AdminTournamentStatsOut, AdminTournamentSummaryOut
@@ -29,7 +30,17 @@ async def get_tournament_stats(db: AsyncSession = Depends(get_db)):
     completed_count = (
         await db.execute(select(func.count(Tournament.id)).where(Tournament.status == TournamentStatus.completed))
     ).scalar_one()
-    return AdminTournamentStatsOut(active_count=active_count, completed_count=completed_count)
+
+    state = await db.get(TournamentQueueState, 1)
+    queued_club_count = 0
+    if state is not None:
+        queued_club_count = (
+            await db.execute(
+                select(func.count(TournamentQueueEntry.id)).where(TournamentQueueEntry.queue_id == state.current_queue_id)
+            )
+        ).scalar_one()
+
+    return AdminTournamentStatsOut(active_count=active_count, completed_count=completed_count, queued_club_count=queued_club_count)
 
 
 @router.get("", response_model=Page[AdminTournamentSummaryOut])

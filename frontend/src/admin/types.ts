@@ -314,6 +314,7 @@ export interface AdminTournamentSummary {
 export interface AdminTournamentStats {
   active_count: number;
   completed_count: number;
+  queued_club_count: number;
 }
 
 export type { Page, Pack, PackRarityProbability, Player, TradeOffer, TradeStatus };

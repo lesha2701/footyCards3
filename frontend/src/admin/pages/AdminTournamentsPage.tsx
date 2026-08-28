@@ -33,6 +33,10 @@ export default function AdminTournamentsPage() {
           <p className="text-[11px] text-slate-400">Завершено всего</p>
           <p className="font-mono text-lg font-bold text-slate-100">{stats?.completed_count ?? "—"}</p>
         </div>
+        <div className="rounded-xl bg-bg-surface px-4 py-2.5">
+          <p className="text-[11px] text-slate-400">Клубов в очереди</p>
+          <p className="font-mono text-lg font-bold text-amber-300">{stats?.queued_club_count ?? "—"} / 8</p>
+        </div>
       </div>
 
       <div className="flex gap-2">

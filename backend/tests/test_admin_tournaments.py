@@ -1,6 +1,7 @@
 from app.models.club import Club
 from app.models.enums import TournamentStatus
 from app.models.tournament import Tournament, TournamentClub
+from app.models.tournament_queue import TournamentQueue, TournamentQueueEntry, TournamentQueueState
 from app.models.tournament_standing import TournamentClubStanding
 from tests.utils import telegram_headers
 
@@ -79,3 +80,21 @@ async def test_get_tournament_detail_404(client, bot_token):
     auth = await _admin_auth(client, bot_token)
     resp = await client.get("/api/v1/admin/tournaments/999999", headers=auth)
     assert resp.status_code == 404
+
+
+async def test_stats_reports_current_queue_depth(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+
+    queue = TournamentQueue(status="open")
+    db_session.add(queue)
+    await db_session.flush()
+    state = TournamentQueueState(id=1, current_queue_id=queue.id)
+    db_session.add(state)
+
+    clubs = [await _make_bare_club(db_session, f"QueuedClub{i}", f"queued{i}") for i in range(3)]
+    db_session.add_all([TournamentQueueEntry(queue_id=queue.id, club_id=c.id) for c in clubs])
+    await db_session.commit()
+
+    resp = await client.get("/api/v1/admin/tournaments/stats", headers=auth)
+    assert resp.status_code == 200
+    assert resp.json()["queued_club_count"] == 3

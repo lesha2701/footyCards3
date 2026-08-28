@@ -16,3 +16,4 @@ class AdminTournamentSummaryOut(BaseModel):
 class AdminTournamentStatsOut(BaseModel):
     active_count: int
     completed_count: int
+    queued_club_count: int
