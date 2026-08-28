@@ -69,6 +69,36 @@ async def test_create_invoice_success(client, db_session, bot_token, monkeypatch
     assert status_resp.json()["result"] is None
 
 
+async def test_create_invoice_converts_telegram_network_error_to_conflict(client, db_session, bot_token, monkeypatch):
+    """Observed in production as an unhandled 500 with a raw httpx.ConnectError traceback on
+    POST /gifts/invoice — same shape of bug for the pack invoice path, since both funnel
+    through _request_telegram_invoice_link. Reproduces it by making the httpx call itself
+    raise, rather than monkeypatching the whole helper function like every other test here."""
+    import httpx
+
+    class _FailingClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            raise httpx.ConnectError("boom")
+
+    monkeypatch.setattr(stars_payment_service.httpx, "AsyncClient", _FailingClient)
+    pack = await _make_stars_pack(db_session)
+    await _register(client, db_session, 850099, bot_token)
+    headers = telegram_headers(850099, bot_token)
+
+    resp = await client.post(f"/api/v1/packs/{pack.id}/stars-invoice", headers=headers)
+    assert resp.status_code == 409
+    assert "попробуй ещё раз" in resp.json()["error"]["message"]
+
+
 async def test_coin_purchase_rejected_for_stars_only_pack(client, db_session, bot_token):
     pack = await _make_stars_pack(db_session)
     user = await _register(client, db_session, 850003, bot_token)

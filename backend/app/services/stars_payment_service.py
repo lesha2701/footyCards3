@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import datetime, timezone
 
@@ -32,6 +33,7 @@ from app.services.pack_service import _duplicate_counts_snapshot, get_opening_re
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 async def list_active_coin_packages(db: AsyncSession) -> list[CoinPackageOut]:
@@ -130,9 +132,16 @@ async def _request_telegram_invoice_link(payload_token: str, title: str, descrip
         "prices": [{"label": title[:32], "amount": stars_amount}],
     }
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/createInvoiceLink"
-    async with httpx.AsyncClient(timeout=10, proxy=settings.telegram_proxy_url or None) as client:
-        resp = await client.post(url, json=body)
-    data = resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=10, proxy=settings.telegram_proxy_url or None) as client:
+            resp = await client.post(url, json=body)
+        data = resp.json()
+    except httpx.HTTPError:
+        # Network-level failure reaching api.telegram.org (DNS blip, connection reset, etc.) —
+        # otherwise bubbles up as an unhandled 500 with a giant traceback. Same fail-graceful
+        # pattern as telegram_service.check_channel_membership; the player can just retry.
+        logger.warning("_request_telegram_invoice_link: request to Telegram failed", exc_info=True)
+        raise ConflictError("Не удалось создать счёт для оплаты — попробуй ещё раз") from None
     if not data.get("ok"):
         raise ConflictError(f"Failed to create Telegram invoice: {data.get('description', 'unknown error')}")
     return data["result"]
