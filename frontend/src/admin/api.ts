@@ -11,6 +11,7 @@ import type {
   Page,
   Pack,
   Player,
+  TournamentDetail,
   TradeOffer,
   TradeStatus,
   TrophyDefinition,
@@ -23,6 +24,8 @@ import type {
   AdminClubDetail,
   AdminClubMember,
   AdminClubTournament,
+  AdminTournamentStats,
+  AdminTournamentSummary,
   AdminUser,
   AdminWheelPrize,
   CardCollection,
@@ -628,5 +631,24 @@ export async function fetchAdminClubBudgetTransactions(id: number, page = 1): Pr
 
 export async function fetchAdminClubTournaments(id: number): Promise<AdminClubTournament[]> {
   const { data } = await api.get<AdminClubTournament[]>(`/admin/clubs/${id}/tournaments`);
+  return data;
+}
+
+// --- Tournaments ---
+export async function fetchAdminTournamentStats(): Promise<AdminTournamentStats> {
+  const { data } = await api.get<AdminTournamentStats>("/admin/tournaments/stats");
+  return data;
+}
+
+export async function fetchAdminTournaments(
+  status: "active" | "completed" | undefined,
+  page: number
+): Promise<Page<AdminTournamentSummary>> {
+  const { data } = await api.get<Page<AdminTournamentSummary>>("/admin/tournaments", { params: { status, page } });
+  return data;
+}
+
+export async function fetchAdminTournamentDetail(id: number): Promise<TournamentDetail> {
+  const { data } = await api.get<TournamentDetail>(`/admin/tournaments/${id}`);
   return data;
 }

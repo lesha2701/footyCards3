@@ -303,4 +303,17 @@ export interface AdminClubTournament {
   cup_awarded: boolean | null;
 }
 
+export interface AdminTournamentSummary {
+  id: number;
+  status: "active" | "completed";
+  rounds_simulated: number;
+  club_count: number;
+  created_at: string;
+}
+
+export interface AdminTournamentStats {
+  active_count: number;
+  completed_count: number;
+}
+
 export type { Page, Pack, PackRarityProbability, Player, TradeOffer, TradeStatus };
