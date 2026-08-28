@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.club import ClubMember
 from app.models.club_card import ClubCard
 from app.models.club_card_availability import ClubCardAvailability
-from app.models.enums import NotificationType, TournamentStatus
+from app.models.enums import ClubRole, NotificationType, TournamentStatus
 from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLog
 from app.services.notification_service import notify
@@ -22,6 +22,22 @@ async def notify_club_members(
     user (a role change, a kick)."""
     member_ids = (await db.execute(select(ClubMember.user_id).where(ClubMember.club_id == club_id))).scalars().all()
     for user_id in member_ids:
+        await notify(db, user_id, type_, title, body, related_object_type, related_object_id)
+
+
+async def notify_club_managers(
+    db: AsyncSession, club_id: int, type_: NotificationType, title: str, body: str,
+    related_object_type: str | None = None, related_object_id: int | None = None,
+) -> None:
+    """Like notify_club_members, but only the captain and assistants — for events that are
+    actionable by management (e.g. the club can now apply for a new tournament) rather than
+    relevant to every member."""
+    manager_ids = (
+        await db.execute(
+            select(ClubMember.user_id).where(ClubMember.club_id == club_id, ClubMember.role.in_([ClubRole.captain, ClubRole.assistant]))
+        )
+    ).scalars().all()
+    for user_id in manager_ids:
         await notify(db, user_id, type_, title, body, related_object_type, related_object_id)
 
 

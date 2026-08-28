@@ -246,6 +246,7 @@ class NotificationType(str, enum.Enum):
     club_match = "club_match"
     club_lineup_reminder = "club_lineup_reminder"
     club_tournament_results_ready = "club_tournament_results_ready"
+    club_tournament_apply_available = "club_tournament_apply_available"
 
 
 class TradeCardSide(str, enum.Enum):

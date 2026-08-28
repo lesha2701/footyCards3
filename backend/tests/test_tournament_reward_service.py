@@ -1,6 +1,6 @@
 from sqlalchemy import select
 
-from app.models.club import Club
+from app.models.club import Club, ClubMember
 from app.models.tournament import Tournament
 from app.models.tournament_result import TournamentClubResult
 from app.models.tournament_standing import TournamentClubStanding
@@ -102,3 +102,51 @@ async def test_conclude_tournament_notifies_every_club(db_session):
         await db_session.execute(select(Notification).where(Notification.type == NotificationType.club_tournament_results_ready))
     ).scalars().all()
     assert len(notifications) == 8  # one captain per club, per this test's minimal setup
+
+
+async def test_conclude_notifies_only_managers_that_apply_is_available(db_session):
+    from app.models.enums import NotificationType
+    from app.models.notification import Notification
+    from app.models.user import User
+
+    tournament = Tournament(rounds_simulated=14)
+    db_session.add(tournament)
+    await db_session.flush()
+
+    club = await _make_club(db_session, "CApply1")
+    other_clubs = [await _make_club(db_session, f"CApply{i}") for i in range(2, 9)]
+
+    captain = User(telegram_id=910001, first_name="Captain")
+    assistant = User(telegram_id=910002, first_name="Assistant")
+    member = User(telegram_id=910003, first_name="Member")
+    db_session.add_all([captain, assistant, member])
+    await db_session.flush()
+    db_session.add_all(
+        [
+            ClubMember(club_id=club.id, user_id=captain.id, role="captain"),
+            ClubMember(club_id=club.id, user_id=assistant.id, role="assistant"),
+            ClubMember(club_id=club.id, user_id=member.id, role="member"),
+        ]
+    )
+
+    standings = [TournamentClubStanding(tournament_id=tournament.id, club_id=club.id, points=100)]
+    for i, other in enumerate(other_clubs):
+        standings.append(TournamentClubStanding(tournament_id=tournament.id, club_id=other.id, points=(7 - i)))
+    db_session.add_all(standings)
+    await db_session.flush()
+
+    # club.last_tournament_applied_at stays None (never applied before), so it
+    # can always immediately apply again — the notification should fire.
+    await conclude_tournament(db_session, tournament, standings, matches=[])
+    await db_session.commit()
+
+    notifications = (
+        await db_session.execute(
+            select(Notification).where(
+                Notification.type == NotificationType.club_tournament_apply_available,
+                Notification.user_id.in_([captain.id, assistant.id, member.id]),
+            )
+        )
+    ).scalars().all()
+    notified_user_ids = {n.user_id for n in notifications}
+    assert notified_user_ids == {captain.id, assistant.id}

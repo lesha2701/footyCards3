@@ -1,5 +1,8 @@
+from datetime import datetime, timezone
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.timeutil import ensure_aware
 from app.models.club import Club
 from app.models.enums import ClubBudgetTransactionType, NotificationType, TournamentStatus
 from app.models.tournament import Tournament
@@ -11,6 +14,18 @@ from app.services.tournament_standing_service import rank_standings
 from app.services import tournament_notification_service
 
 _STARS_BY_RANK = {1: 3, 2: 2, 3: 1, 4: 0, 5: 0, 6: -1, 7: -2, 8: -3}
+
+
+def _can_apply_now(club: Club, config) -> bool:
+    """Mirrors app.routers.clubs._cooldown_seconds_remaining's own gating exactly (can_apply is
+    None-cooldown), duplicated here rather than imported since routers must not be imported
+    from services. A club's cooldown is measured from its *last application*, not from when its
+    tournament concludes — by the time a 14-round tournament finishes (days), the cooldown has
+    virtually always already elapsed, but this still checks properly rather than assuming."""
+    if club.last_tournament_applied_at is None:
+        return True
+    elapsed = (datetime.now(timezone.utc) - ensure_aware(club.last_tournament_applied_at)).total_seconds()
+    return elapsed >= config.club_tournament_cooldown_hours * 3600
 
 
 async def conclude_tournament(
@@ -55,6 +70,12 @@ async def conclude_tournament(
             db, club.id, NotificationType.club_tournament_results_ready,
             "Турнир завершён", f"Твой клуб занял {rank}-е место в турнире — загляни за результатами!",
         )
+        if _can_apply_now(club, config):
+            await tournament_notification_service.notify_club_managers(
+                db, club.id, NotificationType.club_tournament_apply_available,
+                "Можно подавать новую заявку",
+                "Твой клуб уже может подать заявку на новый турнир!",
+            )
 
     tournament.status = TournamentStatus.completed
     db.add(tournament)
