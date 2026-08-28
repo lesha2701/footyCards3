@@ -96,11 +96,13 @@ async def fetch_claimed_premium_channel_tasks() -> list[asyncpg.Record]:
     """Rows the premium-subscription sweep needs to re-check: every claimed
     premium task with a positive coin snapshot and a channel to verify
     membership against. `reward_coins_granted` — the amount THIS claim
-    actually credited — is what the sweep debits/credits, never the live
-    (possibly since-edited) task_definitions.reward_coins."""
+    actually credited — is what the sweep claws back, never the live
+    (possibly since-edited) task_definitions.reward_coins. A row that's
+    already been clawed back and reset (reset_task_for_reclaim) drops out of
+    this WHERE clause on its own, since reward_claimed goes back to false."""
     pool = await get_pool()
     return await pool.fetch(
-        """SELECT ut.id AS user_task_id, ut.user_id, ut.reward_coins_granted, ut.coins_withdrawn,
+        """SELECT ut.id AS user_task_id, ut.user_id, ut.reward_coins_granted,
                   u.telegram_id, td.channel_chat_id, td.channel_username
            FROM user_tasks ut
            JOIN task_definitions td ON td.id = ut.task_definition_id
@@ -112,9 +114,16 @@ async def fetch_claimed_premium_channel_tasks() -> list[asyncpg.Record]:
     )
 
 
-async def set_task_coins_withdrawn(user_task_id: int, withdrawn: bool) -> None:
+async def reset_task_for_reclaim(user_task_id: int) -> None:
+    """Reverts a clawed-back premium task to its pre-claim state so it shows
+    up as claimable again — the player has to resubscribe and press "get
+    reward" themselves; there is no automatic restore."""
     pool = await get_pool()
-    await pool.execute("UPDATE user_tasks SET coins_withdrawn = $2 WHERE id = $1", user_task_id, withdrawn)
+    await pool.execute(
+        "UPDATE user_tasks SET reward_claimed = false, reward_coins_granted = NULL, coins_withdrawn = false "
+        "WHERE id = $1",
+        user_task_id,
+    )
 
 
 async def find_player_by_name(name: str) -> Optional[asyncpg.Record]:

@@ -209,6 +209,61 @@ async def test_premium_task_claim_succeeds_when_subscribed(client, db_session, b
     assert user.balance == 577
 
 
+async def test_premium_task_reclaimable_after_bot_resets_it_on_clawback(client, db_session, bot_token, monkeypatch):
+    """The premium-subscription clawback sweep (bot/services/premium_subscription_check.py,
+    bot/db.py's reset_task_for_reclaim) resets a withdrawn task's row straight in Postgres —
+    reward_claimed=False, reward_coins_granted=NULL, coins_withdrawn=False, completed_at
+    untouched — to make it claimable again without going through this backend at all. This
+    proves claim_task_reward correctly treats that reset state exactly like a fresh
+    never-claimed completion: still-completed, not-yet-claimed, live membership re-checked."""
+    async def fake_subscribed(*args, **kwargs):
+        return True
+
+    monkeypatch.setattr("app.services.task_service.check_channel_membership", fake_subscribed)
+
+    db_session.add(
+        TaskDefinition(
+            code="premium_reclaim_test", name="Premium Reclaim", description="test", category=TaskCategory.premium,
+            condition_type=TaskConditionType.metric_counter, target_value=0, reward_coins=77,
+            channel_username="@test_channel_reclaim",
+        )
+    )
+    await db_session.commit()
+
+    user = await _register(client, db_session, 810071, bot_token)
+    headers = telegram_headers(810071, bot_token)
+
+    tasks = (await client.get("/api/v1/tasks", headers=headers)).json()
+    premium_task = tasks["premium"][0]
+
+    first = await client.post(f"/api/v1/tasks/{premium_task['user_task_id']}/claim", headers=headers)
+    assert first.status_code == 200
+    await db_session.refresh(user)
+    assert user.balance == 577
+
+    # Simulate the bot sweep clawing it back after the player unsubscribed, then resetting it.
+    user_task = await db_session.get(UserTask, premium_task["user_task_id"])
+    user.balance -= 77
+    db_session.add(user)
+    user_task.reward_claimed = False
+    user_task.reward_coins_granted = None
+    user_task.coins_withdrawn = False
+    db_session.add(user_task)
+    await db_session.commit()
+
+    tasks_after_reset = (await client.get("/api/v1/tasks", headers=headers)).json()
+    reset_task = next(t for t in tasks_after_reset["premium"] if t["code"] == "premium_reclaim_test")
+    assert reset_task["is_completed"] is True
+    assert reset_task["is_claimed"] is False
+
+    second = await client.post(f"/api/v1/tasks/{reset_task['user_task_id']}/claim", headers=headers)
+    assert second.status_code == 200
+    assert second.json()["reward_coins"] == 77
+
+    await db_session.refresh(user)
+    assert user.balance == 577
+
+
 async def test_premium_task_exposes_invite_link_and_checks_via_username(client, db_session, bot_token, monkeypatch):
     seen_usernames = []
 
