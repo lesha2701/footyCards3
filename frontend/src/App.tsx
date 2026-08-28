@@ -53,6 +53,7 @@ import TradeDetailPage from "@/pages/TradeDetailPage";
 import TasksPage from "@/pages/TasksPage";
 import UpgradePage from "@/pages/UpgradePage";
 import RankingPage from "@/pages/RankingPage";
+import ClubLeaderboardPage from "@/pages/ClubLeaderboardPage";
 import LeaguePage from "@/pages/LeaguePage";
 import ProfilePage from "@/pages/ProfilePage";
 import GiftsPage from "@/pages/GiftsPage";
@@ -198,6 +199,7 @@ export default function App() {
         <Route path="/wheel" element={<WheelPage />} />
         <Route path="/upgrade" element={<UpgradePage />} />
         <Route path="/ranking" element={<RankingPage />} />
+        <Route path="/clubs/leaderboard" element={<ClubLeaderboardPage />} />
         <Route path="/league" element={<LeaguePage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/gifts" element={<GiftsPage />} />

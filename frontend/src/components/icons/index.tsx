@@ -97,6 +97,14 @@ export function IconTrophy(props: IconProps) {
   );
 }
 
+export function IconStar(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <polygon points="12,3 14.5,9.5 21,10 16,14.3 17.5,21 12,17.3 6.5,21 8,14.3 3,10 9.5,9.5" />
+    </IconBase>
+  );
+}
+
 export function IconTarget(props: IconProps) {
   return (
     <IconBase {...props}>
