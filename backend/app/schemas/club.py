@@ -36,6 +36,8 @@ class ClubSummaryOut(BaseModel):
     logo_shape: ClubLogoShape
     logo_color: str
     member_count: int
+    cups_count: int
+    stars_count: int
 
 
 class ClubDetailOut(BaseModel):
@@ -49,6 +51,8 @@ class ClubDetailOut(BaseModel):
     founded_at: datetime
     member_count: int
     budget: int
+    cups_count: int
+    stars_count: int
     members: list[ClubMemberOut]
     # Only populated when the requester is a member — never leak an
     # invite code to an outsider browsing the club list.

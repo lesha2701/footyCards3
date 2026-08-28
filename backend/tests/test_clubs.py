@@ -731,3 +731,30 @@ async def test_club_has_tournament_columns_with_zero_defaults(client, db_session
     assert club_row.cups_count == 0
     assert club_row.stars_count == 0
     assert club_row.last_tournament_applied_at is None
+
+
+async def test_club_detail_and_summary_expose_cups_and_stars_count(client, db_session, bot_token):
+    await _register(client, db_session, 820020, bot_token)
+    create_resp = await client.post(
+        "/api/v1/clubs", headers=telegram_headers(820020, bot_token),
+        json={"name": "Звёздный клуб", "club_type": "open", "logo_shape": "shield", "logo_color": "#FF0000"},
+    )
+    assert create_resp.status_code == 200
+    assert create_resp.json()["cups_count"] == 0
+    assert create_resp.json()["stars_count"] == 0
+
+    club_id = create_resp.json()["id"]
+    club_row = await db_session.get(Club, club_id)
+    club_row.cups_count = 3
+    club_row.stars_count = 7
+    db_session.add(club_row)
+    await db_session.commit()
+
+    detail_resp = await client.get(f"/api/v1/clubs/{club_id}", headers=telegram_headers(820020, bot_token))
+    assert detail_resp.json()["cups_count"] == 3
+    assert detail_resp.json()["stars_count"] == 7
+
+    list_resp = await client.get("/api/v1/clubs", headers=telegram_headers(820020, bot_token))
+    listed = next(c for c in list_resp.json() if c["id"] == club_id)
+    assert listed["cups_count"] == 3
+    assert listed["stars_count"] == 7
