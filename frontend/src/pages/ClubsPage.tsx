@@ -7,7 +7,7 @@ import { ClubPreviewPopup } from "@/components/clubs/ClubPreviewPopup";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconBrain, IconChart, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconStar, IconTrophy, IconUsers } from "@/components/icons";
+import { IconBrain, IconChart, IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconStar, IconTrophy, IconUsers } from "@/components/icons";
 import {
   acceptJoinRequest,
   appointAssistant,
@@ -284,10 +284,19 @@ function ClubHome({ club }: { club: Club }) {
         <button
           onClick={() => applyMutation.mutate()}
           disabled={applyMutation.isPending}
-          className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99] disabled:opacity-40"
+          className="relative flex items-center gap-4 overflow-hidden rounded-3xl bg-gradient-to-br from-accent-lime/25 via-accent-cyan/10 to-bg-surface p-5 text-left active:scale-[0.98] disabled:opacity-40"
         >
-          <IconTrophy size={16} className="text-accent-lime" />
-          Подать заявку на турнир
+          <div className="pointer-events-none absolute -right-6 -top-8 h-28 w-28 rounded-full bg-accent-lime/25 blur-2xl" />
+          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent-lime/20 text-accent-lime">
+            <IconTrophy size={22} />
+          </div>
+          <div className="relative min-w-0 flex-1">
+            <p className="font-display text-base font-bold text-ink-chalk">Клуб готов к турниру!</p>
+            <p className="mt-0.5 text-xs leading-snug text-ink-mist">
+              Можно подать заявку прямо сейчас — не упусти момент, пока в клубе достаточно участников
+            </p>
+          </div>
+          <IconChevronRight size={18} className="relative shrink-0 text-ink-mist-dim" />
         </button>
       )}
       {isManager && !tournamentCurrent?.can_apply && tournamentCurrent?.cooldown_seconds_remaining != null && (
