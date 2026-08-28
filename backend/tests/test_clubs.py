@@ -14,7 +14,7 @@ from app.models.club import Club, ClubMember
 from app.models.club_daily_claim import ClubDailyClaim
 from app.models.enums import ClubRole, ClubType, ClubLogoShape, Position
 from app.models.user import User
-from app.services.club_service import claim_daily_reward, leave_club
+from app.services.club_service import claim_daily_reward, join_by_invite, join_open_club, leave_club
 from app.services.game_config_service import get_config
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
@@ -659,6 +659,56 @@ async def test_claim_daily_reward_concurrent_same_user_no_double_credit():
                     await cleanup.commit()
         await setup.close()
         await engine.dispose()
+
+
+async def test_join_open_club_converts_race_integrity_error_to_conflict(client, db_session, bot_token, monkeypatch):
+    """Regression test for an unhandled IntegrityError observed in production as a 500 on
+    POST /clubs/{id}/join: club_members.user_id is globally unique (one club per user), and
+    the pre-check SELECT in join_open_club runs before any row lock is held, so under real
+    concurrent timing (e.g. a double-tap) it can report "not a member" for a user who, by the
+    time the INSERT actually runs, already has a committed membership row elsewhere — the
+    INSERT then violates the constraint. Real async-timing races proved too fast/serialized to
+    reproduce reliably via asyncio.gather in this test harness (the two requests' pre-checks
+    consistently ran far enough apart to see each other's committed state), so this reproduces
+    the exact failure mode deterministically instead: force the pre-check to report "not a
+    member" while a real conflicting membership row already exists, and assert the resulting
+    IntegrityError is converted into a clean ConflictError rather than propagating raw."""
+    existing_club, _ = await _create_club(client, bot_token, 820150, "Клуб А (уже в нём)")
+    await _register_only(client, bot_token, 820151)
+    joiner_headers = telegram_headers(820151, bot_token)
+    await client.post(f"/api/v1/clubs/{existing_club['id']}/join", headers=joiner_headers)
+    joiner = await get_user_by_telegram_id(db_session, 820151)
+
+    target_club, _ = await _create_club(client, bot_token, 820152, "Клуб Б (гонка вступления)")
+
+    async def fake_not_a_member(db, user_id):
+        return None
+
+    monkeypatch.setattr("app.services.club_service._get_membership", fake_not_a_member)
+
+    with pytest.raises(ConflictError, match="уже состоишь"):
+        await join_open_club(db_session, joiner, target_club["id"])
+
+
+async def test_join_by_invite_converts_race_integrity_error_to_conflict(client, db_session, bot_token, monkeypatch):
+    """Same race as test_join_open_club_converts_race_integrity_error_to_conflict above,
+    reproduced for join_by_invite — the sibling function has the identical
+    check-before-lock shape and was fixed the same way."""
+    existing_club, _ = await _create_club(client, bot_token, 820153, "Клуб В (уже в нём)")
+    await _register_only(client, bot_token, 820154)
+    joiner_headers = telegram_headers(820154, bot_token)
+    await client.post(f"/api/v1/clubs/{existing_club['id']}/join", headers=joiner_headers)
+    joiner = await get_user_by_telegram_id(db_session, 820154)
+
+    target_club, _ = await _create_club(client, bot_token, 820155, "Клуб Г (гонка приглашения)")
+
+    async def fake_not_a_member(db, user_id):
+        return None
+
+    monkeypatch.setattr("app.services.club_service._get_membership", fake_not_a_member)
+
+    with pytest.raises(ConflictError, match="уже состоишь"):
+        await join_by_invite(db_session, joiner, target_club["invite_code"])
 
 
 async def test_soft_disband_survives_real_postgres_cascade():

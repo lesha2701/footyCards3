@@ -206,7 +206,15 @@ async def join_open_club(db: AsyncSession, user: User, club_id: int) -> ClubDeta
         raise ConflictError("В клубе нет свободных мест")
 
     db.add(ClubMember(club_id=club.id, user_id=user.id, role=ClubRole.member))
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # club_members.user_id is unique (one club per user) — the pre-check SELECT above
+        # runs before any lock is held, so a genuine concurrent duplicate join (e.g. a
+        # double-tap, or a client retry) can slip past it and only get caught here. Same
+        # reasoning as claim_daily_reward's identical guard.
+        await db.rollback()
+        raise ConflictError("Ты уже состоишь в клубе")
     return await _club_to_detail(db, club, requester_user_id=user.id)
 
 
@@ -522,7 +530,13 @@ async def join_by_invite(db: AsyncSession, user: User, invite_code: str) -> Club
         raise ConflictError("В клубе нет свободных мест")
 
     db.add(ClubMember(club_id=club.id, user_id=user.id, role=ClubRole.member))
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Same race as join_open_club: the pre-check SELECT above runs before any lock is
+        # held, so a genuine concurrent duplicate join can slip past it.
+        await db.rollback()
+        raise ConflictError("Ты уже состоишь в клубе")
     return await _club_to_detail(db, club, requester_user_id=user.id)
 
 
