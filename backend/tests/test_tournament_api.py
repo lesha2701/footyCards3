@@ -195,3 +195,30 @@ async def test_current_does_not_crash_with_two_historical_queue_entries(client, 
     resp = await client.get("/api/v1/clubs/tournament/current", headers=telegram_headers(captain0.telegram_id, bot_token))
     assert resp.status_code == 200
     assert resp.json()["status"] == "not_queued"
+
+
+async def test_tournament_detail_exposes_reward_fields_only_after_completion(
+    client, db_session, bot_token, eight_club_tournament
+):
+    from app.services.tournament_simulation_service import simulate_next_round
+
+    tournament, clubs_and_captains = eight_club_tournament
+    _, captain = clubs_and_captains[0]
+
+    mid_resp = await client.get(f"/api/v1/clubs/tournament/{tournament.id}", headers=telegram_headers(captain.telegram_id, bot_token))
+    assert mid_resp.status_code == 200
+    assert all(s["budget_awarded"] is None for s in mid_resp.json()["standings"])
+
+    for _ in range(14):
+        await simulate_next_round(db_session)
+        await db_session.commit()
+
+    done_resp = await client.get(f"/api/v1/clubs/tournament/{tournament.id}", headers=telegram_headers(captain.telegram_id, bot_token))
+    assert done_resp.status_code == 200
+    standings = done_resp.json()["standings"]
+    assert all(s["budget_awarded"] is not None for s in standings)
+    assert all(s["stars_delta"] is not None for s in standings)
+    winner = next(s for s in standings if s["final_rank"] == 1)
+    assert winner["cup_awarded"] is True
+    runner_up = next(s for s in standings if s["final_rank"] == 2)
+    assert runner_up["cup_awarded"] is False

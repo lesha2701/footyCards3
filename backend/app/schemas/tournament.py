@@ -20,6 +20,9 @@ class TournamentStandingOut(BaseModel):
     goals_for: int
     goals_against: int
     final_rank: Optional[int] = None
+    budget_awarded: Optional[int] = None
+    stars_delta: Optional[int] = None
+    cup_awarded: Optional[bool] = None
 
 
 class TournamentMatchSummaryOut(BaseModel):

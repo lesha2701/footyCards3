@@ -9,9 +9,11 @@ from app.core.exceptions import NotFoundError
 from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.club import Club
+from app.models.enums import TournamentStatus
 from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_match import TournamentMatch
 from app.models.tournament_queue import TournamentQueueEntry, TournamentQueueState
+from app.models.tournament_result import TournamentClubResult
 from app.models.tournament_standing import TournamentClubStanding
 from app.models.user import User
 from app.schemas.club import ClubCreate, ClubDetailOut, ClubJoinRequestOut, ClubSummaryOut, JoinByInviteIn, TransferCaptainIn
@@ -219,12 +221,22 @@ async def get_tournament_detail(tournament_id: int, db: AsyncSession = Depends(g
 
     club_names = {c.id: c.name for c in (await db.execute(select(Club).where(Club.id.in_([s.club_id for s in standings])))).scalars().all()}
 
+    results_by_club: dict[int, TournamentClubResult] = {}
+    if tournament.status == TournamentStatus.completed:
+        results = (
+            await db.execute(select(TournamentClubResult).where(TournamentClubResult.tournament_id == tournament_id))
+        ).scalars().all()
+        results_by_club = {r.club_id: r for r in results}
+
     return TournamentDetailOut(
         id=tournament.id, status=tournament.status.value, rounds_simulated=tournament.rounds_simulated,
         standings=[
             TournamentStandingOut(
                 club_id=s.club_id, club_name=club_names.get(s.club_id, ""), points=s.points,
                 goals_for=s.goals_for, goals_against=s.goals_against, final_rank=index + 1,
+                budget_awarded=results_by_club[s.club_id].budget_awarded if s.club_id in results_by_club else None,
+                stars_delta=results_by_club[s.club_id].stars_delta if s.club_id in results_by_club else None,
+                cup_awarded=results_by_club[s.club_id].cup_awarded if s.club_id in results_by_club else None,
             )
             for index, s in enumerate(ranked)
         ],
