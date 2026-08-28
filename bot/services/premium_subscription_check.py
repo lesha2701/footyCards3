@@ -9,7 +9,7 @@ import db
 
 logger = logging.getLogger(__name__)
 
-CHECK_INTERVAL_SECONDS = 6 * 3600
+CHECK_INTERVAL_SECONDS = 10 * 60
 DELAY_BETWEEN_CHECKS_SECONDS = 0.05
 _MEMBER_STATUSES = {ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR}
 
