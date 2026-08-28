@@ -222,21 +222,44 @@ async def apply_to_tournament(user: User = Depends(get_current_user), db: AsyncS
 _SIMULATION_SLOTS = [(12, 0), (20, 0)]
 
 
-def _next_round_seconds_remaining(tournament: Tournament) -> Optional[int]:
-    if tournament.status != TournamentStatus.active or tournament.rounds_simulated >= 14:
-        return None
+async def _next_round_seconds_remaining(db: AsyncSession, tournament: Tournament) -> Optional[int]:
+    """Seconds until the next round fires, or 0 if one is already due. A slot's nominal time
+    passing does NOT mean it has fired yet — the bot's sweep only polls every
+    `LOOP_CHECK_INTERVAL_SECONDS` (15 min, see bot/services/tournament_scheduler.py), so there's
+    a real catch-up window after each slot time. Naively jumping straight to "the next slot
+    after this one" the instant the clock passes a slot time is actively misleading during that
+    window — e.g. at 20:04 it would claim ~16h remaining (until tomorrow's 12:00 slot) even
+    though the 20:00 round may simply not have been picked up by the sweep yet. Instead, check
+    TournamentSimulationSlotLog — the bot's own dedup record of which slots have actually run —
+    for the most recently passed slot; only advance past it once it's confirmed processed."""
     from datetime import datetime, timedelta
 
     from app.core.timeutil import app_timezone
+    from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLog
+
+    if tournament.status != TournamentStatus.active or tournament.rounds_simulated >= 14:
+        return None
 
     now = datetime.now(app_timezone())
-    next_at = min(
-        (now.replace(hour=h, minute=m, second=0, microsecond=0) + timedelta(days=1))
-        if now.replace(hour=h, minute=m, second=0, microsecond=0) <= now
-        else now.replace(hour=h, minute=m, second=0, microsecond=0)
-        for h, m in _SIMULATION_SLOTS
-    )
-    return max(0, int((next_at - now).total_seconds()))
+    today_slots = [now.replace(hour=h, minute=m, second=0, microsecond=0) for h, m in _SIMULATION_SLOTS]
+    all_instants = sorted(today_slots + [t + timedelta(days=1) for t in today_slots] + [t - timedelta(days=1) for t in today_slots])
+    upcoming = [t for t in all_instants if t > now]
+    past = [t for t in all_instants if t <= now]
+
+    if past:
+        last_slot_key = past[-1].strftime("%Y-%m-%dT%H:%M")
+        processed = (
+            await db.execute(
+                select(TournamentSimulationSlotLog.id).where(
+                    TournamentSimulationSlotLog.kind == "simulate_round",
+                    TournamentSimulationSlotLog.slot_key == last_slot_key,
+                )
+            )
+        ).scalar_one_or_none()
+        if processed is None:
+            return 0
+
+    return max(0, int((upcoming[0] - now).total_seconds()))
 
 
 async def _cooldown_seconds_remaining(db: AsyncSession, club: Club) -> Optional[int]:
@@ -358,7 +381,7 @@ async def get_tournament_detail(tournament_id: int, db: AsyncSession = Depends(g
             TournamentMatchSummaryOut(id=m.id, round_number=m.round_number, club_a_id=m.club_a_id, club_b_id=m.club_b_id, score_a=m.score_a, score_b=m.score_b)
             for m in matches
         ],
-        next_round_seconds_remaining=_next_round_seconds_remaining(tournament),
+        next_round_seconds_remaining=await _next_round_seconds_remaining(db, tournament),
     )
 
 

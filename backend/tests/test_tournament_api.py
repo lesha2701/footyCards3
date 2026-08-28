@@ -174,6 +174,47 @@ async def test_detail_reports_next_round_countdown_while_active_none_once_comple
     assert done_resp.json()["next_round_seconds_remaining"] is None
 
 
+async def test_next_round_countdown_is_zero_when_due_slot_not_yet_processed(client, db_session, bot_token, eight_club_tournament):
+    """Regression test: a slot's nominal time passing does not mean the bot's sweep has
+    actually picked it up yet (it only polls every 15 minutes — see
+    bot/services/tournament_scheduler.py's LOOP_CHECK_INTERVAL_SECONDS). Before this fix, the
+    countdown assumed any passed slot had already fired and jumped straight to the *next* one
+    — e.g. at 20:04 it would claim ~16h remaining until tomorrow's 12:00 slot even though the
+    20:00 round simply hadn't been swept yet, which read as "today's round got skipped" to
+    players. The most-recently-passed slot is now checked against
+    TournamentSimulationSlotLog (the bot's own dedup record of which slots actually ran) —
+    unprocessed, it must report due-now (0) instead of a ~16h wait."""
+    from datetime import datetime, timedelta
+
+    from app.core.timeutil import app_timezone
+    from app.routers.clubs import _SIMULATION_SLOTS
+
+    tournament, clubs_and_captains = eight_club_tournament
+    _, captain = clubs_and_captains[0]
+
+    now = datetime.now(app_timezone())
+    today_slots = [now.replace(hour=h, minute=m, second=0, microsecond=0) for h, m in _SIMULATION_SLOTS]
+    all_instants = sorted(today_slots + [t + timedelta(days=1) for t in today_slots] + [t - timedelta(days=1) for t in today_slots])
+    most_recently_passed = [t for t in all_instants if t <= now][-1]
+
+    # No TournamentSimulationSlotLog row exists for this slot (nothing in this test wrote one)
+    # — the sweep hasn't confirmed it ran, so the countdown must report due-now.
+    resp = await client.get(f"/api/v1/clubs/tournament/{tournament.id}", headers=telegram_headers(captain.telegram_id, bot_token))
+    assert resp.json()["next_round_seconds_remaining"] == 0
+
+    # Once the bot's dedup log confirms that exact slot ran, the countdown correctly advances
+    # to the real next slot instead of staying pinned at 0.
+    from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLog
+
+    db_session.add(TournamentSimulationSlotLog(kind="simulate_round", slot_key=most_recently_passed.strftime("%Y-%m-%dT%H:%M")))
+    await db_session.commit()
+
+    resp2 = await client.get(f"/api/v1/clubs/tournament/{tournament.id}", headers=telegram_headers(captain.telegram_id, bot_token))
+    remaining = resp2.json()["next_round_seconds_remaining"]
+    assert remaining is not None
+    assert 0 < remaining <= 16 * 3600
+
+
 async def test_match_detail_includes_event_log(client, db_session, bot_token, eight_club_tournament):
     from app.services.tournament_simulation_service import simulate_next_round
 
