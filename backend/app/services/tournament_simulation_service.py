@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from app.models.club import Club
 from app.models.club_card import ClubCard
 from app.models.club_card_availability import ClubCardAvailability
 from app.models.enums import NotificationType, TournamentStatus
@@ -252,6 +253,8 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
         club_ids = [p.club_id for p in participants]
         withdrawn_ids = {p.club_id for p in participants if p.is_withdrawn}
 
+        club_names = {c.id: c.name for c in (await db.execute(select(Club).where(Club.id.in_(club_ids)))).scalars().all()}
+
         fixtures = [f for f in generate_fixtures(club_ids) if f[0] == round_number]
         standings_rows = (
             await db.execute(select(TournamentClubStanding).where(TournamentClubStanding.tournament_id == tournament.id))
@@ -278,7 +281,10 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
 
             strength_a, lineup_a = await match_strength(db, club_a_id, config)
             strength_b, lineup_b = await match_strength(db, club_b_id, config)
-            engine_result = tournament_match_engine.simulate_match(strength_a, strength_b, lineup_a, lineup_b, config)
+            engine_result = tournament_match_engine.simulate_match(
+                strength_a, strength_b, lineup_a, lineup_b, config,
+                club_names[club_a_id], club_names[club_b_id],
+            )
 
             match = TournamentMatch(
                 tournament_id=tournament.id, round_number=round_number, club_a_id=club_a_id, club_b_id=club_b_id,

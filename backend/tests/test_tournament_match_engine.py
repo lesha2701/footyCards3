@@ -184,3 +184,26 @@ def test_simulate_match_records_red_card_and_injury_availability(monkeypatch):
     assert all(club_card_id == 999 and rounds == 1 for club_card_id, rounds in result.red_cards)
     assert result.injuries, "expected at least one injury to be recorded"
     assert all(club_card_id == 999 for club_card_id, _rounds in result.injuries)
+
+
+def test_simulate_match_events_carry_club_name_descriptions(monkeypatch):
+    monkeypatch.setattr(engine.random, "random", lambda: 0.99)  # every roll fails -> every shot scores, same trick as the existing determinism test
+    lineup_a, lineup_b = _fake_lineup(1), _fake_lineup(2)
+    result = engine.simulate_match(70, 70, lineup_a, lineup_b, _FakeMatchConfig(), "Реал Мадрид", "Барселона")
+
+    assert result.event_log  # sanity: there is something to check
+    for event in result.event_log:
+        assert isinstance(event["description"], str) and event["description"]
+        assert "Player" not in event["description"]  # never names an individual player, only the club
+        club_name = "Реал Мадрид" if event["team"] == "a" else "Барселона"
+        assert club_name in event["description"]
+
+
+def test_simulate_match_default_club_names_when_omitted():
+    # Existing two call sites in this file (test_simulate_match_produces_deterministic_score_from_event_log,
+    # and the one further below) call simulate_match with only 5 positional args — confirms that keeps working
+    # via the new params' defaults, not a breaking signature change.
+    lineup_a, lineup_b = _fake_lineup(1), _fake_lineup(2)
+    result = engine.simulate_match(70, 70, lineup_a, lineup_b, _FakeMatchConfig())
+    for event in result.event_log:
+        assert event["description"]

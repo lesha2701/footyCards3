@@ -18,6 +18,50 @@ _FLAVOR_WEIGHTS: list[tuple[str, int]] = [
 ]
 _SHOT_CHANCE_WEIGHT = 26
 
+# Distinct from match_service.py's personal-engine _EVENT_DESCRIPTIONS (phrased "your team" vs.
+# "{them}") — a tournament replay is watched from a neutral standpoint by any club's members, so
+# every description names the real club instead. Never names an individual player, matching the
+# personal engine's own team-level-only phrasing. Exactly 7 event types — confirmed exhaustive:
+# generate_moment_queue only ever appends "flavor" moments (never persisted to event_log, see the
+# `continue` in simulate_match below) or one of these 7 resolved shot/tackle outcomes.
+_EVENT_DESCRIPTIONS: dict[str, list[str]] = {
+    "goal": [
+        "⚽ Гол! {club} открывает счёт!",
+        "⚽ ГОЛ! {club} забивает!",
+        "⚽ {club} находит путь в ворота!",
+    ],
+    "shot": [
+        "🎯 {club} бьёт — мимо ворот",
+        "🎯 Удар {club} уходит выше перекладины",
+    ],
+    "save": [
+        "🧤 Вратарь {club} спасает свою команду!",
+        "🧤 Отличный сейв на счету {club}!",
+    ],
+    "blocked": [
+        "🛡️ Защитник {club} блокирует удар!",
+        "🛡️ {club} накрывает удар в последний момент!",
+    ],
+    "pass_failed": [
+        "❌ Пас {club} не находит адресата — атака сорвана",
+        "❌ {club} теряет мяч в решающей передаче",
+    ],
+    "tackle_won": [
+        "🛡️ Защитник {club} чисто отбирает мяч в подкате!",
+        "🛡️ {club} прерывает атаку точным подкатом",
+    ],
+    "foul_stopped": [
+        "🟨 Фол защитника {club} останавливает атаку",
+        "🟨 {club} фолит, чтобы сорвать атаку",
+    ],
+}
+
+
+def _describe_event(event_type: str, team: str, club_a_name: str, club_b_name: str) -> str:
+    club = club_a_name if team == "a" else club_b_name
+    template = random.choice(_EVENT_DESCRIPTIONS[event_type])
+    return template.format(club=club)
+
 
 def _pick_actor(lineup: list[dict], category: str, preferred_positions: tuple, exclude_ids: tuple[int, ...] = ()) -> dict:
     """Same fallback shape as match_service._pick_actor, generalized to a
@@ -226,7 +270,10 @@ def _resolve_breakaway(attacking_side: str, moment: dict, lineup: list[dict], co
     return event, (attacking_side if outcome == "goal" else "none")
 
 
-def simulate_match(strength_a: int, strength_b: int, lineup_a: list[dict], lineup_b: list[dict], config) -> "MatchResult":
+def simulate_match(
+    strength_a: int, strength_b: int, lineup_a: list[dict], lineup_b: list[dict], config,
+    club_a_name: str = "Клуб A", club_b_name: str = "Клуб B",
+) -> "MatchResult":
     """strength_a/strength_b are the caller's already-adjusted strengths
     (substitution penalty + form multiplier already applied — see
     tournament_simulation_service.match_strength) and drive the
@@ -245,6 +292,7 @@ def simulate_match(strength_a: int, strength_b: int, lineup_a: list[dict], lineu
             lineup = lineup_a if attacking_side == "a" else lineup_b
             event, scorer = _resolve_breakaway(attacking_side, moment, lineup, config)
             result.event_log.append(event)
+            event["description"] = _describe_event(event["event_type"], event["team"], club_a_name, club_b_name)
             if scorer != "none":
                 setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
             continue
@@ -257,12 +305,14 @@ def simulate_match(strength_a: int, strength_b: int, lineup_a: list[dict], lineu
         # blocker/keeper roll, same as the personal engine.
         event, scorer = _resolve_shot_action(attacking_side, moment, config)
         result.event_log.append(event)
+        event["description"] = _describe_event(event["event_type"], event["team"], club_a_name, club_b_name)
         if scorer != "none":
             setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
 
         if event["event_type"] in ("blocked", "save") and random.random() < 0.15:
             defense_event, defense_scorer, card = _resolve_defense_tackle(defending_side, moment, config)
             result.event_log.append(defense_event)
+            defense_event["description"] = _describe_event(defense_event["event_type"], defense_event["team"], club_a_name, club_b_name)
             if defense_scorer != "none":
                 setattr(result, f"score_{defense_scorer}", getattr(result, f"score_{defense_scorer}") + 1)
             if card is not None:
