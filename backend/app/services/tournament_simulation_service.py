@@ -303,14 +303,17 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
 
             round_matches.append(match)
 
+            # Deliberately no score in the notification text — the app shows the match as a
+            # staged, event-by-event reveal (TournamentMatchReplay.tsx), and putting the final
+            # score in a push notification spoils that before the player ever opens it.
             await tournament_notification_service.notify_club_members(
                 db, club_a_id, NotificationType.club_match, "Матч сыгран",
-                f"Твой клуб сыграл матч {round_number}-го тура турнира — счёт {engine_result.score_a}:{engine_result.score_b}",
+                f"Твой клуб сыграл матч {round_number}-го тура турнира — смотри результат в приложении",
                 related_object_type="club_match", related_object_id=tournament.id,
             )
             await tournament_notification_service.notify_club_members(
                 db, club_b_id, NotificationType.club_match, "Матч сыгран",
-                f"Твой клуб сыграл матч {round_number}-го тура турнира — счёт {engine_result.score_b}:{engine_result.score_a}",
+                f"Твой клуб сыграл матч {round_number}-го тура турнира — смотри результат в приложении",
                 related_object_type="club_match", related_object_id=tournament.id,
             )
 

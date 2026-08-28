@@ -177,6 +177,12 @@ async def test_simulate_next_round_notifies_both_clubs_on_a_real_match(db_sessio
     assert notifications[0].related_object_type == "club_match"
     assert notifications[0].related_object_id == tournament.id
 
+    # Regression: the notification body must never leak the final score — the app shows the
+    # match as a staged, event-by-event reveal, and a score in the push notification spoils it
+    # before the player ever opens the app.
+    for n in notifications:
+        assert ":" not in n.body, f"notification body must not contain a score: {n.body!r}"
+
 
 async def test_simulate_next_round_concludes_tournament_at_round_14(db_session, eight_club_tournament_at_round_13):
     tournament, _clubs_and_captains = eight_club_tournament_at_round_13
