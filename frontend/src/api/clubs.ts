@@ -1,5 +1,13 @@
 import { api } from "@/lib/api";
-import type { Club, ClubJoinRequest, ClubSummary } from "@/types";
+import type {
+  Club,
+  ClubJoinRequest,
+  ClubSummary,
+  TournamentApplyResult,
+  TournamentCurrent,
+  TournamentDetail,
+  TournamentMatchDetail,
+} from "@/types";
 
 export async function fetchClubs(search?: string): Promise<ClubSummary[]> {
   const { data } = await api.get<ClubSummary[]>("/clubs", { params: { search: search || undefined } });
@@ -86,5 +94,25 @@ export async function disbandClub(): Promise<void> {
 
 export async function claimDailyReward(): Promise<Club> {
   const { data } = await api.post<Club>("/clubs/me/daily-claim");
+  return data;
+}
+
+export async function applyToTournament(): Promise<TournamentApplyResult> {
+  const { data } = await api.post<TournamentApplyResult>("/clubs/tournament/apply");
+  return data;
+}
+
+export async function fetchTournamentCurrent(): Promise<TournamentCurrent> {
+  const { data } = await api.get<TournamentCurrent>("/clubs/tournament/current");
+  return data;
+}
+
+export async function fetchTournamentDetail(id: number): Promise<TournamentDetail> {
+  const { data } = await api.get<TournamentDetail>(`/clubs/tournament/${id}`);
+  return data;
+}
+
+export async function fetchTournamentMatch(tournamentId: number, matchId: number): Promise<TournamentMatchDetail> {
+  const { data } = await api.get<TournamentMatchDetail>(`/clubs/tournament/${tournamentId}/matches/${matchId}`);
   return data;
 }

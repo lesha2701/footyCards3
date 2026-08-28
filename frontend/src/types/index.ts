@@ -962,6 +962,8 @@ export interface ClubSummary {
   logo_shape: ClubLogoShape;
   logo_color: string;
   member_count: number;
+  cups_count: number;
+  stars_count: number;
 }
 
 export interface Club {
@@ -978,6 +980,8 @@ export interface Club {
   invite_code: string | null;
   my_role: ClubRole | null;
   budget: number;
+  cups_count: number;
+  stars_count: number;
 }
 
 export interface ClubJoinRequest {
@@ -1040,4 +1044,74 @@ export interface ClubPackOpenResult {
   pack: ClubPack;
   cards: OpenedClubCard[];
   new_budget: number;
+}
+
+export type ClubRankingMetric = "cups" | "stars";
+
+export interface ClubRankingEntry {
+  rank: number;
+  club_id: number;
+  name: string;
+  logo_shape: ClubLogoShape;
+  logo_color: string;
+  value: number;
+}
+
+export interface ClubRankingResult {
+  metric: ClubRankingMetric;
+  top: ClubRankingEntry[];
+  me: ClubRankingEntry | null;
+}
+
+export type TournamentCurrentStatus = "not_queued" | "queued" | "active" | "completed";
+
+export interface TournamentApplyResult {
+  queued: boolean;
+  tournament_id: number | null;
+  queue_position: number | null;
+}
+
+export interface TournamentCurrent {
+  status: TournamentCurrentStatus;
+  queue_position: number | null;
+  tournament_id: number | null;
+}
+
+export interface TournamentStanding {
+  club_id: number;
+  club_name: string;
+  points: number;
+  goals_for: number;
+  goals_against: number;
+  final_rank: number | null;
+  budget_awarded: number | null;
+  stars_delta: number | null;
+  cup_awarded: boolean | null;
+}
+
+export interface TournamentMatchSummary {
+  id: number;
+  round_number: number;
+  club_a_id: number;
+  club_b_id: number;
+  score_a: number;
+  score_b: number;
+}
+
+export interface TournamentDetail {
+  id: number;
+  status: string;
+  rounds_simulated: number;
+  standings: TournamentStanding[];
+  matches: TournamentMatchSummary[];
+}
+
+export interface TournamentMatchDetail {
+  id: number;
+  round_number: number;
+  club_a_id: number;
+  club_b_id: number;
+  score_a: number;
+  score_b: number;
+  event_log: MatchEvent[];
 }
