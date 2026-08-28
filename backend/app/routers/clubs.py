@@ -29,7 +29,14 @@ from app.schemas.tournament import (
     TournamentMatchSummaryOut,
     TournamentStandingOut,
 )
-from app.services import club_pack_service, club_ranking_service, club_service, club_squad_service, tournament_queue_service
+from app.services import (
+    club_pack_service,
+    club_ranking_service,
+    club_service,
+    club_squad_service,
+    tournament_match_engine,
+    tournament_queue_service,
+)
 from app.services.tournament_standing_service import rank_standings
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
@@ -206,11 +213,22 @@ async def get_current_tournament(user: User = Depends(get_current_user), db: Asy
             ).scalar_one()
             return TournamentCurrentOut(status="queued", queue_position=position)
 
+    completed_tc = (
+        await db.execute(
+            select(TournamentClub).join(Tournament, Tournament.id == TournamentClub.tournament_id)
+            .where(TournamentClub.club_id == club_id, Tournament.status == TournamentStatus.completed)
+            .order_by(Tournament.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if completed_tc is not None:
+        return TournamentCurrentOut(status="completed", tournament_id=completed_tc.tournament_id)
+
     return TournamentCurrentOut(status="not_queued")
 
 
 @router.get("/tournament/{tournament_id}", response_model=TournamentDetailOut)
-async def get_tournament_detail(tournament_id: int, db: AsyncSession = Depends(get_db)):
+async def get_tournament_detail(tournament_id: int, db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
     tournament = await db.get(Tournament, tournament_id)
     if tournament is None:
         raise NotFoundError("Турнир не найден")
@@ -248,11 +266,27 @@ async def get_tournament_detail(tournament_id: int, db: AsyncSession = Depends(g
 
 
 @router.get("/tournament/{tournament_id}/matches/{match_id}", response_model=TournamentMatchDetailOut)
-async def get_tournament_match_detail(tournament_id: int, match_id: int, db: AsyncSession = Depends(get_db)):
+async def get_tournament_match_detail(
+    tournament_id: int, match_id: int, db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)
+):
     match = await db.get(TournamentMatch, match_id)
     if match is None or match.tournament_id != tournament_id:
         raise NotFoundError("Матч не найден")
+
+    event_log = match.event_log
+    if any("description" not in event for event in event_log):
+        club_names = {
+            c.id: c.name
+            for c in (await db.execute(select(Club).where(Club.id.in_([match.club_a_id, match.club_b_id])))).scalars().all()
+        }
+        club_a_name, club_b_name = club_names.get(match.club_a_id, ""), club_names.get(match.club_b_id, "")
+        event_log = [
+            event if "description" in event
+            else {**event, "description": tournament_match_engine._describe_event(event["event_type"], event["team"], club_a_name, club_b_name)}
+            for event in event_log
+        ]
+
     return TournamentMatchDetailOut(
         id=match.id, round_number=match.round_number, club_a_id=match.club_a_id, club_b_id=match.club_b_id,
-        score_a=match.score_a, score_b=match.score_b, event_log=match.event_log,
+        score_a=match.score_a, score_b=match.score_b, event_log=event_log,
     )

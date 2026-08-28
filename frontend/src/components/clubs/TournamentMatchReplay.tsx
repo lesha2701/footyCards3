@@ -51,6 +51,15 @@ export function TournamentMatchReplay({
   const liveScoreA = revealed.filter((e) => e.event_type === "goal" && e.team === "a").length;
   const liveScoreB = revealed.filter((e) => e.event_type === "goal" && e.team === "b").length;
 
+  if (total === 0) {
+    return (
+      <section className="rounded-2xl bg-bg-surface p-4 text-center">
+        <p className="text-sm text-ink-mist">Матч не сыгран — один из клубов выбыл из турнира</p>
+        <p className="mt-2 font-mono text-lg font-bold text-ink-chalk">Итоговый счёт: {scoreA} : {scoreB}</p>
+      </section>
+    );
+  }
+
   return (
     <section className="rounded-2xl bg-bg-surface p-4">
       <div className="flex items-center justify-between">

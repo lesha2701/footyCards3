@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 
 import { fetchTournamentDetail, fetchTournamentMatch } from "@/api/clubs";
+import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { TournamentMatchReplay } from "@/components/clubs/TournamentMatchReplay";
 
@@ -13,12 +14,15 @@ export default function TournamentMatchPage() {
   const { data: tournament } = useQuery({
     queryKey: ["clubs", "tournament", tournamentId],
     queryFn: () => fetchTournamentDetail(tournamentId),
+    enabled: Number.isFinite(tournamentId),
   });
-  const { data: match, isLoading } = useQuery({
+  const { data: match, isLoading, isError } = useQuery({
     queryKey: ["clubs", "tournament", tournamentId, "matches", matchIdNum],
     queryFn: () => fetchTournamentMatch(tournamentId, matchIdNum),
+    enabled: Number.isFinite(tournamentId) && Number.isFinite(matchIdNum),
   });
 
+  if (isError) return <EmptyState title="Не удалось загрузить турнир" description="Попробуй обновить страницу" />;
   if (isLoading || !match) return <ListSkeleton />;
 
   const clubAName = tournament?.standings.find((s) => s.club_id === match.club_a_id)?.club_name ?? "Клуб A";

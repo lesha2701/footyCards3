@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { fetchTournamentDetail, fetchMyClub } from "@/api/clubs";
 import { ClubPreviewPopup } from "@/components/clubs/ClubPreviewPopup";
+import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 
 function resultsGateKey(tournamentId: number) {
@@ -17,14 +18,15 @@ export default function TournamentPage() {
   const [previewClubId, setPreviewClubId] = useState<number | null>(null);
   const [resultsRevealed, setResultsRevealed] = useState(() => localStorage.getItem(resultsGateKey(tournamentId)) === "1");
 
-  const { data: tournament, isLoading } = useQuery({
+  const { data: tournament, isLoading, isError } = useQuery({
     queryKey: ["clubs", "tournament", tournamentId],
     queryFn: () => fetchTournamentDetail(tournamentId),
+    enabled: Number.isFinite(tournamentId),
   });
   const { data: myClub } = useQuery({ queryKey: ["clubs", "me"], queryFn: fetchMyClub, retry: false });
 
   if (isLoading) return <ListSkeleton />;
-  if (!tournament) return null;
+  if (isError || !tournament) return <EmptyState title="Не удалось загрузить турнир" description="Попробуй обновить страницу" />;
 
   const revealResults = () => {
     localStorage.setItem(resultsGateKey(tournamentId), "1");
@@ -85,10 +87,12 @@ export default function TournamentPage() {
               <span className="text-ink-chalk">#{s.final_rank} {s.club_name}</span>
               <div className="flex items-center gap-2 font-mono text-xs">
                 {s.cup_awarded && <span>🏆</span>}
-                <span className={s.stars_delta && s.stars_delta > 0 ? "text-accent-lime" : "text-ink-mist"}>
-                  ⭐ {s.stars_delta && s.stars_delta > 0 ? `+${s.stars_delta}` : s.stars_delta}
-                </span>
-                <span className="text-accent-cyan">🪙 +{s.budget_awarded}</span>
+                {s.stars_delta !== null && (
+                  <span className={s.stars_delta > 0 ? "text-accent-lime" : "text-ink-mist"}>
+                    ⭐ {s.stars_delta > 0 ? `+${s.stars_delta}` : s.stars_delta}
+                  </span>
+                )}
+                {s.budget_awarded !== null && <span className="text-accent-cyan">🪙 +{s.budget_awarded}</span>}
               </div>
             </div>
           ))}

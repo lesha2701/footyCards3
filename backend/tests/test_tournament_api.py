@@ -122,13 +122,15 @@ async def test_match_detail_includes_event_log(client, db_session, bot_token, ei
     assert isinstance(resp.json()["event_log"], list)
 
 
-async def test_current_returns_not_queued_after_tournament_completes_without_reapplying(
+async def test_current_returns_completed_after_tournament_completes_without_reapplying(
     client, db_session, bot_token, eight_club_tournament
 ):
     """Regression test for the queue-scoping bug: a club that finished its tournament and
     hasn't reapplied still has an old TournamentQueueEntry row sitting in that tournament's
     now-formed, historical queue (entries are never deleted). /tournament/current must not
-    mistake that old entry for a live "queued" state."""
+    mistake that old entry for a live "queued" state — it must instead resolve to the
+    completed-tournament branch (previously this fell all the way through to "not_queued",
+    the Critical bug fixed by adding the completed check)."""
     from app.services.tournament_simulation_service import simulate_next_round
 
     tournament, clubs_and_captains = eight_club_tournament
@@ -142,7 +144,7 @@ async def test_current_returns_not_queued_after_tournament_completes_without_rea
 
     resp = await client.get("/api/v1/clubs/tournament/current", headers=telegram_headers(captain.telegram_id, bot_token))
     assert resp.status_code == 200
-    assert resp.json()["status"] == "not_queued"
+    assert resp.json()["status"] == "completed"
 
 
 async def test_current_does_not_crash_with_two_historical_queue_entries(client, db_session, bot_token, eight_club_tournament):
@@ -181,7 +183,9 @@ async def test_current_does_not_crash_with_two_historical_queue_entries(client, 
     assert tournament2_id is not None  # 8th application formed a second tournament
 
     # Mark tournament 2 completed too, so club0 currently has no *active* tournament and the
-    # endpoint actually falls through to the (previously buggy) queue lookup.
+    # endpoint actually falls through to the (previously buggy) queue lookup, and then to the
+    # completed-tournament check (club0 belongs to two completed tournaments now — the most
+    # recent one, tournament2, should win).
     tournament2 = await db_session.get(Tournament, tournament2_id)
     tournament2.status = TournamentStatus.completed
     db_session.add(tournament2)
@@ -194,7 +198,51 @@ async def test_current_does_not_crash_with_two_historical_queue_entries(client, 
 
     resp = await client.get("/api/v1/clubs/tournament/current", headers=telegram_headers(captain0.telegram_id, bot_token))
     assert resp.status_code == 200
-    assert resp.json()["status"] == "not_queued"
+    body = resp.json()
+    assert body["status"] == "completed"
+    assert body["tournament_id"] == tournament2_id
+
+
+async def test_current_returns_completed_with_tournament_id_after_finishing(client, db_session, bot_token, eight_club_tournament):
+    from app.services.tournament_simulation_service import simulate_next_round
+
+    tournament, clubs_and_captains = eight_club_tournament
+    _, captain = clubs_and_captains[0]
+
+    for _ in range(14):
+        await simulate_next_round(db_session)
+        await db_session.commit()
+
+    resp = await client.get("/api/v1/clubs/tournament/current", headers=telegram_headers(captain.telegram_id, bot_token))
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "completed"
+    assert body["tournament_id"] == tournament.id
+
+
+async def test_match_detail_synthesizes_description_for_legacy_events_without_one(client, db_session, bot_token, eight_club_tournament):
+    from app.services.tournament_simulation_service import simulate_next_round
+
+    tournament, clubs_and_captains = eight_club_tournament
+    _, captain = clubs_and_captains[0]
+    matches = await simulate_next_round(db_session)
+    await db_session.commit()
+    match = next(m for m in matches if m.tournament_id == tournament.id)
+
+    # Simulate a "legacy" match by stripping description from the stored event_log,
+    # matching what a match simulated before this description-generation feature shipped looks like.
+    stripped_log = [{k: v for k, v in event.items() if k != "description"} for event in match.event_log]
+    match.event_log = stripped_log
+    db_session.add(match)
+    await db_session.commit()
+
+    resp = await client.get(
+        f"/api/v1/clubs/tournament/{tournament.id}/matches/{match.id}", headers=telegram_headers(captain.telegram_id, bot_token)
+    )
+    assert resp.status_code == 200
+    events = resp.json()["event_log"]
+    assert events, "expected at least one event"
+    assert all(e["description"] for e in events)
 
 
 async def test_tournament_detail_exposes_reward_fields_only_after_completion(
