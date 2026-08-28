@@ -17,7 +17,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS 'premium_subscription_adjustment'")
+    # Postgres refuses to reference a brand-new enum value (in a CHECK
+    # constraint, INSERT, etc.) inside the same transaction that added it via
+    # ALTER TYPE ... ADD VALUE — raises UnsafeNewEnumValueUsageError. Alembic
+    # runs every migration in one shared transaction per `upgrade` invocation,
+    # and migration 0055's CHECK constraint references this exact value, so
+    # the ALTER TYPE has to commit on its own first.
+    with op.get_context().autocommit_block():
+        op.execute("ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS 'premium_subscription_adjustment'")
     op.add_column("user_tasks", sa.Column("reward_coins_granted", sa.Integer(), nullable=True))
     op.add_column(
         "user_tasks", sa.Column("coins_withdrawn", sa.Boolean(), nullable=False, server_default=sa.false())
