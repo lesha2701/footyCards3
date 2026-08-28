@@ -47,12 +47,21 @@ async def run_premium_subscription_check(bot: Bot) -> None:
                         "Подписка на канал восстановлена — награда за задание возвращена",
                     )
                     await db.set_task_coins_withdrawn(row["user_task_id"], False)
+                    await db.create_notification(
+                        row["user_id"], "premium_task_coins_restored", "Награда возвращена",
+                        f"Ты снова подписан на канал — {row['reward_coins_granted']} 🪙 за премиум-задание вернулись на баланс.",
+                    )
                 elif not is_member and not row["coins_withdrawn"]:
                     await db.adjust_coins_allow_negative(
                         row["user_id"], -row["reward_coins_granted"],
                         "Отписка от канала — награда за премиум-задание списана",
                     )
                     await db.set_task_coins_withdrawn(row["user_task_id"], True)
+                    await db.create_notification(
+                        row["user_id"], "premium_task_coins_withdrawn", "Награда списана",
+                        f"Ты отписался от канала — {row['reward_coins_granted']} 🪙 за премиум-задание списаны с баланса. "
+                        "Подпишись снова, чтобы вернуть их.",
+                    )
 
                 await asyncio.sleep(DELAY_BETWEEN_CHECKS_SECONDS)
         except Exception:  # noqa: BLE001 - keep the sweep alive across transient DB/network errors
