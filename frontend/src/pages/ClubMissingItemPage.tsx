@@ -10,10 +10,59 @@ import {
   startMissingItemGame,
   submitMissingItemRound,
 } from "@/api/clubs";
-import { IconCheck, IconChevronLeft, IconCoin, IconFlag } from "@/components/icons";
+import {
+  IconBall,
+  IconBoot,
+  IconBrain,
+  IconCard,
+  IconCheck,
+  IconChevronLeft,
+  IconClock,
+  IconCoin,
+  IconFire,
+  IconFlag,
+  IconFlagCheckered,
+  IconGift,
+  IconGloves,
+  IconGoal,
+  IconParty,
+  IconChart,
+  IconShirt,
+  IconStadium,
+  IconStar,
+  IconTarget,
+  IconTrophy,
+  type IconProps,
+} from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import type { ClubMissingItemReveal, ClubMissingItemStart } from "@/types";
+
+// Values must match backend/app/services/club_missing_item_service.py ITEMS
+// exactly — the server generates/validates rounds using these emoji as
+// opaque IDs; the player only ever sees the icon they map to here.
+const ITEM_MAP: Record<string, { Icon: (props: IconProps) => JSX.Element; className: string }> = {
+  "⚽": { Icon: IconBall, className: "text-ink-chalk" },
+  "🥅": { Icon: IconGoal, className: "text-accent-cyan" },
+  "🏆": { Icon: IconTrophy, className: "text-accent-lime" },
+  "👟": { Icon: IconBoot, className: "text-amber-500" },
+  "🧤": { Icon: IconGloves, className: "text-sky-400" },
+  "👕": { Icon: IconShirt, className: "text-accent-lime" },
+  "🏟️": { Icon: IconStadium, className: "text-ink-mist" },
+  "🚩": { Icon: IconFlag, className: "text-red-400" },
+  "🏁": { Icon: IconFlagCheckered, className: "text-ink-chalk" },
+  "🎯": { Icon: IconTarget, className: "text-red-500" },
+  "🔥": { Icon: IconFire, className: "text-orange-500" },
+  "⭐": { Icon: IconStar, className: "text-amber-400" },
+  "🟨": { Icon: IconCard, className: "text-amber-400" },
+  "🟥": { Icon: IconCard, className: "text-red-500" },
+  "🪙": { Icon: IconCoin, className: "text-accent-lime" },
+  "🎁": { Icon: IconGift, className: "text-pink-400" },
+  "⏱️": { Icon: IconClock, className: "text-ink-mist" },
+  "🧠": { Icon: IconBrain, className: "text-purple-400" },
+  "🎉": { Icon: IconParty, className: "text-accent-cyan" },
+  "📊": { Icon: IconChart, className: "text-sky-400" },
+};
 
 type Phase = "idle" | "memorize" | "revealing" | "answering" | "gameover";
 
@@ -124,7 +173,7 @@ export default function ClubMissingItemPage() {
     return (
       <div className="flex flex-col gap-5">
         <div className="flex items-center gap-2">
-          <button onClick={() => navigate("/clubs")} className="rounded-full bg-bg-surface p-2 active:scale-95">
+          <button onClick={() => navigate("/clubs/games")} className="rounded-full bg-bg-surface p-2 active:scale-95">
             <IconChevronLeft size={18} className="text-ink-chalk" />
           </button>
           <h1 className="font-display text-xl font-bold text-ink-chalk">Что исчезло?</h1>
@@ -178,7 +227,7 @@ export default function ClubMissingItemPage() {
           <button onClick={() => setPhase("idle")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
             Ещё раз
           </button>
-          <button onClick={() => navigate("/clubs")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
+          <button onClick={() => navigate("/clubs/games")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
             Назад
           </button>
         </div>
@@ -215,18 +264,23 @@ export default function ClubMissingItemPage() {
       )}
 
       <div className="flex flex-wrap justify-center gap-3">
-        {(phase === "answering" ? session?.items ?? [] : displayedItems).map((item, i) => (
-          <button
-            key={`${item}-${i}`}
-            onClick={() => pickAnswer(item)}
-            disabled={phase !== "answering" || submitMutation.isPending || answerTimeLeftMs <= 0}
-            className={`flex h-16 w-16 items-center justify-center rounded-2xl bg-bg-surface text-3xl transition-colors active:scale-90 disabled:opacity-90 ${
-              phase === "answering" ? "active:bg-accent-lime/30" : ""
-            }`}
-          >
-            {item}
-          </button>
-        ))}
+        {(phase === "answering" ? session?.items ?? [] : displayedItems).map((item, i) => {
+          const entry = ITEM_MAP[item];
+          if (!entry) return null;
+          const { Icon, className } = entry;
+          return (
+            <button
+              key={`${item}-${i}`}
+              onClick={() => pickAnswer(item)}
+              disabled={phase !== "answering" || submitMutation.isPending || answerTimeLeftMs <= 0}
+              className={`flex h-16 w-16 items-center justify-center rounded-2xl bg-bg-surface transition-colors active:scale-90 disabled:opacity-90 ${
+                phase === "answering" ? "active:bg-accent-lime/30" : ""
+              }`}
+            >
+              <Icon size={28} className={className} />
+            </button>
+          );
+        })}
       </div>
 
       {phase === "memorize" && (

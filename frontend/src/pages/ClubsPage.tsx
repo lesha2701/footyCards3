@@ -7,7 +7,7 @@ import { ClubPreviewPopup } from "@/components/clubs/ClubPreviewPopup";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconBrain, IconChart, IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconStar, IconTarget, IconTrophy, IconUsers } from "@/components/icons";
+import { IconBrain, IconChart, IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconStar, IconTrophy, IconUsers } from "@/components/icons";
 import {
   acceptJoinRequest,
   appointAssistant,
@@ -354,19 +354,11 @@ function ClubHome({ club }: { club: Club }) {
       )}
 
       <button
-        onClick={() => navigate("/clubs/game")}
+        onClick={() => navigate("/clubs/games")}
         className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
       >
         <IconBrain size={16} className="text-accent-lime" />
-        Клубная игра
-      </button>
-
-      <button
-        onClick={() => navigate("/clubs/missing-item")}
-        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-      >
-        <IconTarget size={16} className="text-accent-lime" />
-        Что исчезло?
+        Клубные игры
       </button>
 
       <button

@@ -17,11 +17,12 @@ ACTIVITY_WINDOW_DAYS = 7
 
 
 async def get_club_activity(db: AsyncSession, user: User) -> list[ClubMemberActivityOut]:
-    """Club-scoped activity only: the club's own mini-game (GameType.club_sequence, played
-    via /clubs/game — not the seven general-purpose mini-games elsewhere in the app) and the
-    club's own daily reward (ClubDailyClaim, the "Ежедневная награда" button on the club home
-    screen — not the player's personal, club-unrelated DailyReward). Mixing in app-wide
-    activity produced nonsense numbers for clubs that were created only yesterday."""
+    """Club-scoped activity only: the club's own mini-games (GameType.club_sequence and
+    club_missing_item, played via /clubs/game and /clubs/missing-item — not the seven
+    general-purpose mini-games elsewhere in the app) and the club's own daily reward
+    (ClubDailyClaim, the "Ежедневная награда" button on the club home screen — not the
+    player's personal, club-unrelated DailyReward). Mixing in app-wide activity produced
+    nonsense numbers for clubs that were created only yesterday."""
     membership = await _require_membership(db, user.id)
     club_id = membership.club_id
 
@@ -46,7 +47,7 @@ async def get_club_activity(db: AsyncSession, user: User) -> list[ClubMemberActi
             select(GameSession.user_id, func.count(GameSession.id))
             .where(
                 GameSession.user_id.in_(member_ids),
-                GameSession.game_type == GameType.club_sequence,
+                GameSession.game_type.in_([GameType.club_sequence, GameType.club_missing_item]),
                 GameSession.created_at >= since,
             )
             .group_by(GameSession.user_id)

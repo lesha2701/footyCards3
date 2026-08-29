@@ -188,7 +188,7 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> ClubGam
         if club is not None and not club.is_disbanded:
             await credit_club_budget(
                 db, club, reward, ClubBudgetTransactionType.club_game_reward,
-                f"Клубная игра: {user.username or user.first_name or f'#{user.id}'}",
+                f"Повтори порядок: {user.username or user.first_name or f'#{user.id}'}",
                 related_object_type="game_session", related_object_id=session.id,
             )
             new_budget = club.budget

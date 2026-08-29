@@ -44,6 +44,7 @@ import HangmanGamePage from "@/pages/HangmanGamePage";
 import PairsGamePage from "@/pages/PairsGamePage";
 import ClubCreatePage from "@/pages/ClubCreatePage";
 import ClubGamePage from "@/pages/ClubGamePage";
+import ClubGamesPage from "@/pages/ClubGamesPage";
 import ClubMissingItemPage from "@/pages/ClubMissingItemPage";
 import ClubsPage from "@/pages/ClubsPage";
 import TournamentMatchPage from "@/pages/TournamentMatchPage";
@@ -203,6 +204,7 @@ export default function App() {
         <Route path="/clubs/activity" element={<ClubActivityPage />} />
         <Route path="/clubs/packs" element={<ClubPacksPage />} />
         <Route path="/clubs/packs/:packId/open" element={<ClubPackOpenPage />} />
+        <Route path="/clubs/games" element={<ClubGamesPage />} />
         <Route path="/clubs/game" element={<ClubGamePage />} />
         <Route path="/clubs/missing-item" element={<ClubMissingItemPage />} />
         <Route path="/clubs/tournament/:id" element={<TournamentPage />} />

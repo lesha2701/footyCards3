@@ -43,19 +43,21 @@ async def _make_club_with_two_members(client, db_session, bot_token):
     return club_id, captain, member, captain_headers, member_headers
 
 
-async def test_activity_counts_only_club_game_and_club_daily_reward(client, db_session, bot_token):
-    """Regression test: a player's app-wide mini-game plays (any GameType other than
-    club_sequence) and their personal DailyReward claims must NOT be counted — only the
-    club's own mini-game and the club's own daily reward (ClubDailyClaim). Reported in
-    production as clubs created "yesterday" already showing hundreds of "games played",
-    because the query was pulling in the player's whole app-wide history."""
+async def test_activity_counts_only_club_games_and_club_daily_reward(client, db_session, bot_token):
+    """Regression test: a player's app-wide mini-game plays (any GameType other than the two
+    club-scoped games) and their personal DailyReward claims must NOT be counted — only the
+    club's own mini-games (club_sequence, club_missing_item) and the club's own daily reward
+    (ClubDailyClaim). Reported in production as clubs created "yesterday" already showing
+    hundreds of "games played", because the query was pulling in the player's whole app-wide
+    history."""
     club_id, captain, member, captain_headers, _ = await _make_club_with_two_members(client, db_session, bot_token)
 
     now = datetime.now(timezone.utc)
     stale = now - timedelta(days=30)
 
-    # Counts: recent club_sequence session.
+    # Counts: recent club_sequence and club_missing_item sessions — both club games count.
     db_session.add(GameSession(user_id=captain.id, game_type="club_sequence", created_at=now))
+    db_session.add(GameSession(user_id=captain.id, game_type="club_missing_item", created_at=now))
     # Must NOT count: a general mini-game and a stale club_sequence session.
     db_session.add(GameSession(user_id=captain.id, game_type="memory_sequence", created_at=now))
     db_session.add(GameSession(user_id=captain.id, game_type="club_sequence", created_at=stale))
@@ -71,7 +73,7 @@ async def test_activity_counts_only_club_game_and_club_daily_reward(client, db_s
     assert resp.status_code == 200
     by_user = {row["user_id"]: row for row in resp.json()}
 
-    assert by_user[captain.id]["games_played"] == 1
+    assert by_user[captain.id]["games_played"] == 2
     assert by_user[captain.id]["daily_rewards_claimed"] == 1
     assert by_user[member.id]["games_played"] == 0
     assert by_user[member.id]["daily_rewards_claimed"] == 0

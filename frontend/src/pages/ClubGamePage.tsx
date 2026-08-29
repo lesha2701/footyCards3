@@ -180,10 +180,10 @@ export default function ClubGamePage() {
     return (
       <div className="flex flex-col gap-5">
         <div className="flex items-center gap-2">
-          <button onClick={() => navigate("/clubs")} className="rounded-full bg-bg-surface p-2 active:scale-95">
+          <button onClick={() => navigate("/clubs/games")} className="rounded-full bg-bg-surface p-2 active:scale-95">
             <IconChevronLeft size={18} className="text-ink-chalk" />
           </button>
-          <h1 className="font-display text-xl font-bold text-ink-chalk">Клубная игра</h1>
+          <h1 className="font-display text-xl font-bold text-ink-chalk">Повтори порядок</h1>
         </div>
 
         <p className="text-sm text-ink-mist">
@@ -233,7 +233,7 @@ export default function ClubGamePage() {
           <button onClick={() => setPhase("idle")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
             Ещё раз
           </button>
-          <button onClick={() => navigate("/clubs")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
+          <button onClick={() => navigate("/clubs/games")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
             Назад
           </button>
         </div>

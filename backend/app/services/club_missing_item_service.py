@@ -25,8 +25,14 @@ from app.services.wallet_service import lock_user_for_update
 # replacement (unlike club_game_service's ICONS, reused as a memorized
 # ORDER where repeats are fine), so the pool size is also the hard cap on
 # how many rounds the game can go before there's nothing left to add. Round R
-# needs INITIAL_ITEM_COUNT + R - 1 distinct items.
-ITEMS = ["⚽", "🥅", "🟨", "🟥", "👟", "🧤", "🏆", "🚩", "🎯", "🔥", "🧦", "📣", "🥇", "🥈", "🥉", "⏱️", "🏟️", "🌟", "🛡️", "⚡"]
+# needs INITIAL_ITEM_COUNT + R - 1 distinct items. Values are opaque IDs
+# shared with the frontend's icon grid — same idea as club_game_service's
+# ICONS, matched to real icon components client-side instead of shown as
+# raw emoji (see frontend/src/pages/ClubMissingItemPage.tsx's ITEM_MAP).
+ITEMS = [
+    "⚽", "🥅", "🏆", "👟", "🧤", "👕", "🏟️", "🚩", "🏁", "🎯",
+    "🔥", "⭐", "🟨", "🟥", "🪙", "🎁", "⏱️", "🧠", "🎉", "📊",
+]
 INITIAL_ITEM_COUNT = 5
 ANSWER_TIMEOUT_MS = 15000
 
