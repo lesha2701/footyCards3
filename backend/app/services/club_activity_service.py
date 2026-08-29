@@ -5,12 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.club import ClubMember
-from app.models.daily_reward import DailyReward
-from app.models.enums import NotificationType
+from app.models.club_daily_claim import ClubDailyClaim
+from app.models.enums import GameType, NotificationType
 from app.models.game import GameSession
-from app.models.match import Match
-from app.models.penalty import PenaltyMatch
-from app.models.tactico import TacticoMatch
 from app.models.user import User
 from app.schemas.club_activity import ClubMemberActivityOut
 from app.services.club_service import _get_membership, _require_manager, _require_membership
@@ -18,14 +15,13 @@ from app.services.notification_service import notify
 
 ACTIVITY_WINDOW_DAYS = 7
 
-# Match-shaped tables where a club member can appear on either side of a real
-# (non-bot) game — opponent_user_id is NULL for bot games, so counting it
-# separately from user_id (rather than "OR") lets a single grouped query
-# attribute a game to whichever real player was actually in it.
-_TWO_SIDED_GAME_MODELS = (Match, PenaltyMatch, TacticoMatch)
-
 
 async def get_club_activity(db: AsyncSession, user: User) -> list[ClubMemberActivityOut]:
+    """Club-scoped activity only: the club's own mini-game (GameType.club_sequence, played
+    via /clubs/game — not the seven general-purpose mini-games elsewhere in the app) and the
+    club's own daily reward (ClubDailyClaim, the "Ежедневная награда" button on the club home
+    screen — not the player's personal, club-unrelated DailyReward). Mixing in app-wide
+    activity produced nonsense numbers for clubs that were created only yesterday."""
     membership = await _require_membership(db, user.id)
     club_id = membership.club_id
 
@@ -41,46 +37,34 @@ async def get_club_activity(db: AsyncSession, user: User) -> list[ClubMemberActi
     if not member_ids:
         return []
 
-    since = datetime.now(timezone.utc) - timedelta(days=ACTIVITY_WINDOW_DAYS)
-    games_played: dict[int, int] = {uid: 0 for uid in member_ids}
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(days=ACTIVITY_WINDOW_DAYS)
 
-    single_sided = (
+    games_played: dict[int, int] = {uid: 0 for uid in member_ids}
+    game_rows = (
         await db.execute(
             select(GameSession.user_id, func.count(GameSession.id))
-            .where(GameSession.user_id.in_(member_ids), GameSession.created_at >= since)
+            .where(
+                GameSession.user_id.in_(member_ids),
+                GameSession.game_type == GameType.club_sequence,
+                GameSession.created_at >= since,
+            )
             .group_by(GameSession.user_id)
         )
     ).all()
-    for uid, count in single_sided:
+    for uid, count in game_rows:
         games_played[uid] += count
-
-    for model in _TWO_SIDED_GAME_MODELS:
-        as_initiator = (
-            await db.execute(
-                select(model.user_id, func.count(model.id))
-                .where(model.user_id.in_(member_ids), model.created_at >= since)
-                .group_by(model.user_id)
-            )
-        ).all()
-        for uid, count in as_initiator:
-            games_played[uid] += count
-
-        as_opponent = (
-            await db.execute(
-                select(model.opponent_user_id, func.count(model.id))
-                .where(model.opponent_user_id.in_(member_ids), model.created_at >= since)
-                .group_by(model.opponent_user_id)
-            )
-        ).all()
-        for uid, count in as_opponent:
-            games_played[uid] += count
 
     daily_rewards_claimed: dict[int, int] = {uid: 0 for uid in member_ids}
     reward_rows = (
         await db.execute(
-            select(DailyReward.user_id, func.count(DailyReward.id))
-            .where(DailyReward.user_id.in_(member_ids), DailyReward.created_at >= since)
-            .group_by(DailyReward.user_id)
+            select(ClubDailyClaim.user_id, func.count(ClubDailyClaim.id))
+            .where(
+                ClubDailyClaim.club_id == club_id,
+                ClubDailyClaim.user_id.in_(member_ids),
+                ClubDailyClaim.claim_date >= since.date(),
+            )
+            .group_by(ClubDailyClaim.user_id)
         )
     ).all()
     for uid, count in reward_rows:
@@ -108,7 +92,7 @@ async def remind_member(db: AsyncSession, actor: User, target_user_id: int) -> N
 
     await notify(
         db, target_user_id, NotificationType.club_activity_reminder, "Клуб ждёт тебя!",
-        "Капитан или ассистент клуба заметил, что ты давно не играл в мини-игры и не забирал ежедневную "
-        "награду — загляни в приложение!",
+        "Капитан или ассистент клуба заметил, что ты давно не играл в клубную мини-игру и не забирал "
+        "ежедневную награду клуба — загляни в приложение!",
     )
     await db.commit()
