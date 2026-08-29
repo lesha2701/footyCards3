@@ -6,6 +6,10 @@ import type {
   ClubGameSubmitResult,
   ClubJoinRequest,
   ClubMemberActivity,
+  ClubMissingItemClaimResult,
+  ClubMissingItemReveal,
+  ClubMissingItemStart,
+  ClubMissingItemSubmitResult,
   ClubSummary,
   TournamentApplyResult,
   TournamentCurrent,
@@ -157,5 +161,30 @@ export async function endClubGame(sessionId: number): Promise<ClubGameSubmitResu
 
 export async function claimClubGameReward(sessionId: number): Promise<ClubGameClaimResult> {
   const { data } = await api.post<ClubGameClaimResult>(`/clubs/me/game/${sessionId}/claim`);
+  return data;
+}
+
+export async function startMissingItemGame(): Promise<ClubMissingItemStart> {
+  const { data } = await api.post<ClubMissingItemStart>("/clubs/me/missing-item/start");
+  return data;
+}
+
+export async function revealMissingItemRound(sessionId: number): Promise<ClubMissingItemReveal> {
+  const { data } = await api.post<ClubMissingItemReveal>(`/clubs/me/missing-item/${sessionId}/reveal`);
+  return data;
+}
+
+export async function submitMissingItemRound(sessionId: number, answer: string): Promise<ClubMissingItemSubmitResult> {
+  const { data } = await api.post<ClubMissingItemSubmitResult>(`/clubs/me/missing-item/${sessionId}/submit`, { answer });
+  return data;
+}
+
+export async function endMissingItemGame(sessionId: number): Promise<ClubMissingItemSubmitResult> {
+  const { data } = await api.post<ClubMissingItemSubmitResult>(`/clubs/me/missing-item/${sessionId}/end`);
+  return data;
+}
+
+export async function claimMissingItemReward(sessionId: number): Promise<ClubMissingItemClaimResult> {
+  const { data } = await api.post<ClubMissingItemClaimResult>(`/clubs/me/missing-item/${sessionId}/claim`);
   return data;
 }

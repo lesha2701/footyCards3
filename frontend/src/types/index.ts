@@ -275,6 +275,33 @@ export interface ClubGameClaimResult {
   new_club_budget: number;
 }
 
+export interface ClubMissingItemStart {
+  session_id: number;
+  round_number: number;
+  items: string[];
+}
+
+export interface ClubMissingItemReveal {
+  session_id: number;
+  round_number: number;
+  items_shown: string[];
+  hide_after_ms: number;
+  answer_timeout_ms: number;
+}
+
+export interface ClubMissingItemSubmitResult {
+  correct: boolean;
+  session_id: number;
+  score: number;
+  status: string;
+  next_round?: ClubMissingItemStart;
+}
+
+export interface ClubMissingItemClaimResult {
+  reward_coins: number;
+  new_club_budget: number;
+}
+
 export interface LineupSlot {
   slot_code: string;
   category: string;

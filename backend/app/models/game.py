@@ -41,3 +41,23 @@ class MemoryGameRound(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     session: Mapped["GameSession"] = relationship(back_populates="rounds")
+
+
+class MissingItemRound(Base):
+    """One round of the "Что исчезло?" club mini-game. Not shared with
+    MemoryGameRound: that model's `sequence` is a memorized ORDER (repeats
+    allowed), while this round needs a fixed SET of distinct items plus a
+    server-secret `removed_item` the client must never see before submitting
+    an answer — different enough shape to warrant its own table."""
+
+    __tablename__ = "missing_item_rounds"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("game_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    round_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    items: Mapped[str] = mapped_column(String(256), nullable=False)
+    # NULL until the player presses "Запомнил" (reveal_round) — set then, and
+    # never sent to the client directly; only compared against their answer.
+    removed_item: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    was_correct: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)

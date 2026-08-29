@@ -29,6 +29,13 @@ from app.schemas.club import (
 from app.schemas.club_activity import ClubMemberActivityOut
 from app.schemas.club_ranking import ClubRankingMetric, ClubRankingOut
 from app.schemas.club_game import ClubGameClaimOut, ClubGameStartOut, ClubGameSubmitOut, ClubGameSubmitRequest
+from app.schemas.club_missing_item import (
+    ClubMissingItemClaimOut,
+    ClubMissingItemRevealOut,
+    ClubMissingItemStartOut,
+    ClubMissingItemSubmitOut,
+    ClubMissingItemSubmitRequest,
+)
 from app.schemas.club_pack import ClubPackOut
 from app.schemas.club_pack_open import ClubPackOpenResult, OpenClubPackRequest
 from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest
@@ -43,6 +50,7 @@ from app.schemas.tournament import (
 from app.services import (
     club_activity_service,
     club_game_service,
+    club_missing_item_service,
     club_pack_service,
     club_ranking_service,
     club_service,
@@ -223,6 +231,34 @@ async def end_club_game(session_id: int, db: AsyncSession = Depends(get_db), use
 @router.post("/me/game/{session_id}/claim", response_model=ClubGameClaimOut)
 async def claim_club_game_reward(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_game_service.claim_reward(db, user, session_id)
+
+
+@router.post("/me/missing-item/start", response_model=ClubMissingItemStartOut)
+async def start_missing_item_game(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    check_rate_limit(f"club_missing_item_start:{user.id}", max_calls=20, window_seconds=60)
+    return await club_missing_item_service.start_session(db, user)
+
+
+@router.post("/me/missing-item/{session_id}/reveal", response_model=ClubMissingItemRevealOut)
+async def reveal_missing_item_round(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_missing_item_service.reveal_round(db, user, session_id)
+
+
+@router.post("/me/missing-item/{session_id}/submit", response_model=ClubMissingItemSubmitOut)
+async def submit_missing_item_round(
+    session_id: int, payload: ClubMissingItemSubmitRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await club_missing_item_service.submit_round(db, user, session_id, payload.answer)
+
+
+@router.post("/me/missing-item/{session_id}/end", response_model=ClubMissingItemSubmitOut)
+async def end_missing_item_game(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_missing_item_service.end_session(db, user, session_id)
+
+
+@router.post("/me/missing-item/{session_id}/claim", response_model=ClubMissingItemClaimOut)
+async def claim_missing_item_reward(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_missing_item_service.claim_reward(db, user, session_id)
 
 
 @router.post("/tournament/apply", response_model=TournamentApplyResult)
