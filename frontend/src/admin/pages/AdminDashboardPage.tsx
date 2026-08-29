@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 
-import { clearMaintenanceBanner, fetchDashboard, startMaintenanceBanner } from "@/admin/api";
+import { clearMaintenanceBanner, fetchAnnouncementAdmin, fetchDashboard, setAnnouncement, startMaintenanceBanner } from "@/admin/api";
 import { fetchMaintenanceStatus } from "@/api/maintenance";
 
 export default function AdminDashboardPage() {
@@ -16,6 +17,7 @@ export default function AdminDashboardPage() {
       <h1 className="font-display text-2xl font-bold">Дашборд</h1>
 
       <MaintenanceBannerSection />
+      <AnnouncementBannerSection />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Пользователей" value={data.total_users} />
@@ -90,6 +92,67 @@ function MaintenanceBannerSection() {
           {startMutation.isPending ? "Включаю..." : "Готовлю обновление (баннер на 5 мин)"}
         </button>
       )}
+    </section>
+  );
+}
+
+function AnnouncementBannerSection() {
+  const queryClient = useQueryClient();
+  const { data: announcement } = useQuery({
+    queryKey: ["announcement-admin"],
+    queryFn: fetchAnnouncementAdmin,
+  });
+  const [text, setText] = useState("");
+
+  useEffect(() => {
+    setText(announcement?.text ?? "");
+  }, [announcement?.text]);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["announcement-admin"] });
+  const saveMutation = useMutation({ mutationFn: () => setAnnouncement(text.trim()), onSuccess: invalidate });
+  const clearMutation = useMutation({ mutationFn: () => setAnnouncement(""), onSuccess: invalidate });
+
+  return (
+    <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+      <p className="mb-1 font-display text-base font-bold">📣 Баннер-объявление</p>
+      <p className="mb-3 text-xs text-slate-500">
+        Показывает всем игрокам в мини-аппе баннер с этим текстом, пока он не закроет его крестиком. Новый текст
+        снова покажется всем, даже тем, кто закрыл предыдущий.
+      </p>
+
+      {announcement?.text && (
+        <div className="mb-3 rounded-xl bg-accent-cyan/10 px-3 py-2 text-xs text-accent-cyan">
+          Сейчас активен: «{announcement.text}»
+        </div>
+      )}
+
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={3}
+        maxLength={500}
+        placeholder="Текст баннера для игроков, например: «31 августа турнир будет недоступен несколько часов из-за техработ»"
+        className="w-full rounded-lg bg-bg-base px-3 py-2 text-sm outline-none"
+      />
+
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={() => saveMutation.mutate()}
+          disabled={!text.trim() || saveMutation.isPending}
+          className="rounded-lg bg-accent px-4 py-2 text-xs font-bold text-bg-base disabled:opacity-40"
+        >
+          {saveMutation.isPending ? "Сохраняю..." : "Показать баннер"}
+        </button>
+        {announcement?.text && (
+          <button
+            onClick={() => clearMutation.mutate()}
+            disabled={clearMutation.isPending}
+            className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold disabled:opacity-50"
+          >
+            Убрать баннер
+          </button>
+        )}
+      </div>
     </section>
   );
 }

@@ -27,6 +27,7 @@ from app.routers import (
     admin_trophies,
     admin_users,
     admin_wheel,
+    announcement,
     auth,
     broadcasts,
     card_collections,
@@ -108,6 +109,7 @@ app.include_router(gifts.router, prefix=API_PREFIX)
 app.include_router(lineups.router, prefix=API_PREFIX)
 app.include_router(maintenance.router, prefix=API_PREFIX)
 app.include_router(broadcasts.router, prefix=API_PREFIX)
+app.include_router(announcement.router, prefix=API_PREFIX)
 app.include_router(matches.router, prefix=API_PREFIX)
 app.include_router(penalty_matches.router, prefix=API_PREFIX)
 app.include_router(tactico.router, prefix=API_PREFIX)

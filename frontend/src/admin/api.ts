@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import type {
+  Announcement,
   Badge,
   CardUpgradeRule,
   ClubPack,
@@ -53,6 +54,17 @@ export async function startMaintenanceBanner(): Promise<MaintenanceStatus> {
 
 export async function clearMaintenanceBanner(): Promise<MaintenanceStatus> {
   const { data } = await api.post<MaintenanceStatus>("/admin/maintenance/clear");
+  return data;
+}
+
+// --- Announcement banner ---
+export async function fetchAnnouncementAdmin(): Promise<Announcement> {
+  const { data } = await api.get<Announcement>("/announcement");
+  return data;
+}
+
+export async function setAnnouncement(text: string): Promise<Announcement> {
+  const { data } = await api.post<Announcement>("/admin/announcement", { text });
   return data;
 }
 

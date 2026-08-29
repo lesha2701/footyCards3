@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 
 import LeaveConfirmDialog from "@/components/common/LeaveConfirmDialog";
+import AnnouncementBanner from "@/components/layout/AnnouncementBanner";
 import BottomNav from "@/components/layout/BottomNav";
 import MaintenanceBanner from "@/components/layout/MaintenanceBanner";
 import TopBar from "@/components/layout/TopBar";
@@ -49,6 +50,7 @@ export default function AppLayout() {
       <TopBar />
       <MaintenanceBanner />
       <UpdateBanner />
+      <AnnouncementBanner />
       <main className="flex-1 px-4 pb-24 pt-3">
         <Outlet />
       </main>

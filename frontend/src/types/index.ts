@@ -351,6 +351,11 @@ export interface UpdateBroadcastStatus {
   broadcast_at: string | null;
 }
 
+export interface Announcement {
+  text: string | null;
+  updated_at: string | null;
+}
+
 export interface FeatureFlags {
   matchmaking_enabled: boolean;
   wheel_enabled: boolean;

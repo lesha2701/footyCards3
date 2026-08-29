@@ -146,6 +146,14 @@ class GameConfig(TimestampMixin, Base):
     # than what the client last dismissed (tracked client-side, not here).
     last_update_broadcast_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Admin-authored text shown to every player as a dismissible banner throughout the
+    # Mini App (see routers/announcement.py) — a pure in-app notice, unlike the Telegram
+    # push broadcasts.py sends. NULL means no banner. announcement_updated_at is stamped
+    # whenever the text changes so the client re-shows it even if a player already
+    # dismissed a previous announcement (dismissal itself is tracked client-side, not here).
+    announcement_text: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    announcement_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     wheel_free_spins_per_day: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     wheel_spin_cost_coins: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
     wheel_spin_cost_stars: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
