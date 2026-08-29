@@ -335,6 +335,14 @@ function ClubHome({ club }: { club: Club }) {
         {isManager ? "Управление составом" : "Состав клуба"}
       </button>
 
+      <button
+        onClick={() => navigate("/clubs/activity")}
+        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+      >
+        <IconChart size={16} className="text-accent-lime" />
+        Активность клуба
+      </button>
+
       {isManager && (
         <button
           onClick={() => navigate("/clubs/packs")}

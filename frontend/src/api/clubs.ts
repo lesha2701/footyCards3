@@ -5,6 +5,7 @@ import type {
   ClubGameStart,
   ClubGameSubmitResult,
   ClubJoinRequest,
+  ClubMemberActivity,
   ClubSummary,
   TournamentApplyResult,
   TournamentCurrent,
@@ -79,6 +80,15 @@ export async function leaveClub(): Promise<void> {
 export async function kickMember(userId: number): Promise<Club> {
   const { data } = await api.post<Club>(`/clubs/me/members/${userId}/kick`);
   return data;
+}
+
+export async function fetchClubActivity(): Promise<ClubMemberActivity[]> {
+  const { data } = await api.get<ClubMemberActivity[]>("/clubs/me/activity");
+  return data;
+}
+
+export async function remindMember(userId: number): Promise<void> {
+  await api.post(`/clubs/me/members/${userId}/remind`);
 }
 
 export async function appointAssistant(userId: number): Promise<Club> {

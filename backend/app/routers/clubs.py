@@ -26,6 +26,7 @@ from app.schemas.club import (
     JoinByInviteIn,
     TransferCaptainIn,
 )
+from app.schemas.club_activity import ClubMemberActivityOut
 from app.schemas.club_ranking import ClubRankingMetric, ClubRankingOut
 from app.schemas.club_game import ClubGameClaimOut, ClubGameStartOut, ClubGameSubmitOut, ClubGameSubmitRequest
 from app.schemas.club_pack import ClubPackOut
@@ -40,6 +41,7 @@ from app.schemas.tournament import (
     TournamentStandingOut,
 )
 from app.services import (
+    club_activity_service,
     club_game_service,
     club_pack_service,
     club_ranking_service,
@@ -136,6 +138,17 @@ async def leave_club(db: AsyncSession = Depends(get_db), user: User = Depends(ge
 @router.post("/me/members/{user_id}/kick", response_model=ClubDetailOut)
 async def kick_member(user_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_service.kick_member(db, user, user_id)
+
+
+@router.get("/me/activity", response_model=list[ClubMemberActivityOut])
+async def get_club_activity(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_activity_service.get_club_activity(db, user)
+
+
+@router.post("/me/members/{user_id}/remind", status_code=status.HTTP_204_NO_CONTENT)
+async def remind_member(user_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    check_rate_limit(f"club_remind:{user.id}", max_calls=20, window_seconds=3600)
+    await club_activity_service.remind_member(db, user, user_id)
 
 
 @router.post("/me/assistants/{user_id}/appoint", response_model=ClubDetailOut)

@@ -249,6 +249,7 @@ class NotificationType(str, enum.Enum):
     club_tournament_apply_available = "club_tournament_apply_available"
     premium_task_coins_withdrawn = "premium_task_coins_withdrawn"
     premium_task_coins_restored = "premium_task_coins_restored"
+    club_activity_reminder = "club_activity_reminder"
 
 
 class TradeCardSide(str, enum.Enum):

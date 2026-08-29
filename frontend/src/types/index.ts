@@ -982,6 +982,15 @@ export interface ClubMember {
   joined_at: string;
 }
 
+export interface ClubMemberActivity {
+  user_id: number;
+  username: string | null;
+  first_name: string | null;
+  role: ClubRole;
+  games_played: number;
+  daily_rewards_claimed: number;
+}
+
 export interface ClubSummary {
   id: number;
   name: string;
