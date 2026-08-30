@@ -219,3 +219,14 @@ async def test_set_lineup_concurrent_saves_no_unhandled_integrity_error():
         if setup is not None:
             await setup.close()
         await engine.dispose()
+
+
+async def test_new_club_lineup_defaults_to_4_3_3_balanced_central(client, db_session, bot_token):
+    from app.models.club_lineup import ClubLineup
+
+    club, _headers = await _create_club(client, bot_token, 820310, "Клуб с тактикой по умолчанию")
+    # `select` is already imported at the top of this file (`from sqlalchemy import select, text`).
+    lineup = (await db_session.execute(select(ClubLineup).where(ClubLineup.club_id == club["id"]))).scalar_one()
+    assert lineup.formation == "4-3-3"
+    assert lineup.mentality == "BALANCED"
+    assert lineup.playstyle == "CENTRAL_PLAY"
