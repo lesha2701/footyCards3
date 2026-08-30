@@ -119,3 +119,41 @@ def test_resolve_quality_weights_very_high_more_at_strong_advantage(monkeypatch)
     assert captured["weights"] == [0.05, 0.20, 0.50, 0.25]
     svc.resolve_quality(0.20)
     assert captured["weights"] == [0.55, 0.35, 0.09, 0.01]
+
+
+def _back_line(n: int, start_id: int = 1) -> list[_FakeCard]:
+    return [_FakeCard(start_id + i, _FakePlayer(Position.CB, 70)) for i in range(n)]
+
+
+def test_park_the_bus_keeps_the_full_back_line_eligible():
+    cards = _back_line(4)
+    pool = svc.defensive_pool(cards, "PARK_THE_BUS", "CENTRAL_PLAY")
+    assert len(pool) == 4
+
+
+def test_attacking_shrinks_the_pool_below_the_full_back_line():
+    cards = _back_line(4)
+    pool = svc.defensive_pool(cards, "ATTACKING", "CENTRAL_PLAY")
+    assert len(pool) < 4
+    assert len(pool) >= 1
+
+
+def test_high_press_shrinks_the_pool_further_than_the_same_mentality_without_it():
+    cards = _back_line(10)
+    without_press = svc.defensive_pool(cards, "ATTACKING", "CENTRAL_PLAY")
+    with_press = svc.defensive_pool(cards, "ATTACKING", "HIGH_PRESS")
+    assert len(with_press) <= len(without_press)
+
+
+def test_defensive_pool_never_drops_below_one():
+    cards = _back_line(1)
+    pool = svc.defensive_pool(cards, "ATTACKING", "HIGH_PRESS")
+    assert len(pool) == 1
+
+
+def test_defensive_pool_is_drawn_from_real_unmodified_ratings():
+    cards = _back_line(4)
+    pool = svc.defensive_pool(cards, "ATTACKING", "CENTRAL_PLAY")
+    for card in pool:
+        assert card.player.rating == 70  # never adjusted, per spec §6.4
+        assert card in cards

@@ -91,3 +91,24 @@ def resolve_stage1(ratio: float) -> str:
 def resolve_quality(combined_advantage: float) -> str:
     low, normal, high, very_high = _band(combined_advantage, STAGE2_BANDS)
     return random.choices(["LOW", "NORMAL", "HIGH", "VERY_HIGH"], weights=[low, normal, high, very_high], k=1)[0]
+
+
+def defensive_pool(cards: list[Any], mentality: str, playstyle: str) -> list[Any]:
+    """Spec §6.4: a transition moment's defensive duelist is drawn from a
+    mentality-sized random SUBSET of the team's real defensive-zone
+    contributors, re-rolled fresh every call — never from a rating-adjusted
+    version of the back line. "Defensive-zone contributors" = anyone with
+    nonzero central_defence or wing_defence weight (CB/LB/RB/CDM, plus GK's
+    small 0.15 sliver — rarely picked in practice since weighted_pick still
+    weights by that same small value)."""
+    contributors = [c for c in cards if zone_weight(c.player.position, "central_defence") > 0 or zone_weight(c.player.position, "wing_defence") > 0]
+    if not contributors:
+        return []
+
+    fraction = SAMPLE_FRACTION[mentality]
+    if playstyle == "HIGH_PRESS":
+        fraction *= HIGH_PRESS_POOL_MULT
+
+    pool_size = max(1, round(fraction * len(contributors)))
+    pool_size = min(pool_size, len(contributors))
+    return random.sample(contributors, pool_size)
