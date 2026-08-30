@@ -161,6 +161,7 @@ async def test_club_game_daily_reward_cap_still_allows_play_with_zero_reward(cli
     claim = await client.post(f"/api/v1/clubs/me/game/{session_id}/claim", headers=headers)
     assert claim.status_code == 200
     assert claim.json()["reward_coins"] == 0
+    assert claim.json()["daily_cap_reached"] is True
 
     await db_session.refresh(user)
     assert user.club_game_rewarded_attempts_today == daily_limit

@@ -165,3 +165,33 @@ async def test_hourly_limit_blocks_after_one_start(client, db_session, bot_token
 
     resp = await client.post("/api/v1/clubs/me/missing-item/start", headers=headers)
     assert resp.status_code == 200
+
+
+async def test_daily_reward_cap_still_allows_play_with_zero_reward(client, db_session, bot_token):
+    from datetime import datetime, timezone
+
+    from app.services.game_config_service import get_config
+    from tests.factories import get_user_by_telegram_id
+
+    _, headers = await _create_club_and_join(client, bot_token, 760009, "Игровой клуб 8")
+    user = await get_user_by_telegram_id(db_session, 760009)
+
+    config = await get_config(db_session)
+    daily_limit = config.club_missing_item_daily_reward_limit
+    user.club_missing_item_rewarded_attempts_today = daily_limit
+    user.club_missing_item_attempts_reset_at = datetime.now(timezone.utc)
+    db_session.add(user)
+    await db_session.commit()
+
+    start = (await client.post("/api/v1/clubs/me/missing-item/start", headers=headers)).json()
+    session_id = start["session_id"]
+    await client.post(f"/api/v1/clubs/me/missing-item/{session_id}/reveal", headers=headers)
+    await client.post(f"/api/v1/clubs/me/missing-item/{session_id}/end", headers=headers)
+
+    claim = await client.post(f"/api/v1/clubs/me/missing-item/{session_id}/claim", headers=headers)
+    assert claim.status_code == 200
+    assert claim.json()["reward_coins"] == 0
+    assert claim.json()["daily_cap_reached"] is True
+
+    await db_session.refresh(user)
+    assert user.club_missing_item_rewarded_attempts_today == daily_limit

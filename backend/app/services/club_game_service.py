@@ -201,4 +201,4 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> ClubGam
         club = await db.get(Club, club_id)
         new_budget = club.budget if club is not None else 0
 
-    return ClubGameClaimOut(reward_coins=reward, new_club_budget=new_budget or 0)
+    return ClubGameClaimOut(reward_coins=reward, new_club_budget=new_budget or 0, daily_cap_reached=daily_cap_reached)

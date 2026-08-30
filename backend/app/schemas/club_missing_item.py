@@ -32,3 +32,8 @@ class ClubMissingItemSubmitOut(BaseModel):
 class ClubMissingItemClaimOut(BaseModel):
     reward_coins: int
     new_club_budget: int
+    # True when reward_coins is 0 (or lower than the earned score) specifically because the
+    # player already used up today's rewarded attempts for this game — lets the client explain
+    # the zero instead of it looking like a silent bug. False for every other reason (genuinely
+    # scored 0, banned from rewards, club disbanded mid-claim).
+    daily_cap_reached: bool = False

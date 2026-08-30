@@ -15,7 +15,7 @@ import {
 } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
-import type { ClubGameStart } from "@/types";
+import type { ClubGameClaimResult, ClubGameStart } from "@/types";
 
 // Values must match backend/app/services/club_game_service.py ICONS exactly —
 // the server generates/validates sequences using these emoji as opaque IDs.
@@ -42,7 +42,7 @@ export default function ClubGamePage() {
   const [score, setScore] = useState(0);
   const [revealIndex, setRevealIndex] = useState<number | null>(null);
   const [tapFlashIndex, setTapFlashIndex] = useState<number | null>(null);
-  const [claimResult, setClaimResult] = useState<{ reward_coins: number; new_club_budget: number } | null>(null);
+  const [claimResult, setClaimResult] = useState<ClubGameClaimResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [timeLeftMs, setTimeLeftMs] = useState(0);
   const inputRef = useRef<string[]>([]);
@@ -222,6 +222,12 @@ export default function ClubGamePage() {
               <IconCoin size={16} />
             </p>
             <p className="text-xs text-accent-green">Новый бюджет клуба: {claimResult.new_club_budget}</p>
+            {claimResult.reward_coins === 0 && claimResult.daily_cap_reached && (
+              <p className="mt-1 text-xs text-amber-300">
+                Дневной лимит наградных попыток в этой игре исчерпан — результат не пропал, но награда не начисляется
+                до завтра.
+              </p>
+            )}
           </div>
         ) : claimMutation.isError ? (
           <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">

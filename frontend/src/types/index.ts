@@ -273,6 +273,7 @@ export interface ClubGameSubmitResult {
 export interface ClubGameClaimResult {
   reward_coins: number;
   new_club_budget: number;
+  daily_cap_reached: boolean;
 }
 
 export interface ClubMissingItemStart {
@@ -300,6 +301,7 @@ export interface ClubMissingItemSubmitResult {
 export interface ClubMissingItemClaimResult {
   reward_coins: number;
   new_club_budget: number;
+  daily_cap_reached: boolean;
 }
 
 export interface LineupSlot {
