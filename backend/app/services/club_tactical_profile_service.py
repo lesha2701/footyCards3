@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.models.enums import Position
-from app.services.lineup_service import FormationSlot, calculate_base_strength
+from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot, calculate_base_strength
 
 ZONES = ("central_attack", "wing_attack", "midfield_control", "central_defence", "wing_defence", "goalkeeping")
 
@@ -70,3 +70,72 @@ def compute_profile(cards_with_slots: list[tuple[Any, FormationSlot]]) -> TeamTa
         zone_values[zone] = round(weighted_sum / weight_total, 1) if weight_total > 0 else 0.0
 
     return TeamTacticalProfile(team_strength=calculate_base_strength(cards_with_slots), **zone_values)
+
+
+# Which zone(s) each playstyle actually leans on — used by playstyle_alignment
+# below to check whether a squad's chosen playstyle plays to its OWN strongest
+# zones, independent of how strong the squad is in absolute terms (spec §9).
+PLAYSTYLE_ZONES: dict[str, tuple[str, ...]] = {
+    "WING_PLAY": ("wing_attack", "wing_defence"),
+    "CENTRAL_PLAY": ("central_attack", "midfield_control"),
+    "POSSESSION": ("midfield_control",),
+    "HIGH_PRESS": ("midfield_control", "wing_defence"),
+    "COUNTER_ATTACK": ("central_attack", "wing_attack"),
+}
+
+
+def _formation_fit_score(cards_with_slots: list[tuple[Any, FormationSlot]]) -> float:
+    """Average of the same 1.0/0.9/0.75 per-slot fit calculate_base_strength
+    uses, normalized from its [0.75, 1.0] range into [0, 1] — a squad using
+    every slot's ideal position scores 1.0, a squad using only category-legal
+    but off-position players throughout scores 0.0."""
+    if not cards_with_slots:
+        return 0.0
+    fits = []
+    for card, slot in cards_with_slots:
+        if card.player.position == slot.ideal_position:
+            fits.append(1.0)
+        elif card.player.position in CATEGORY_POSITIONS[slot.category]:
+            fits.append(0.9)
+        else:
+            fits.append(0.75)
+    avg_fit = sum(fits) / len(fits)
+    return max(0.0, min(1.0, (avg_fit - 0.75) / (1.0 - 0.75)))
+
+
+def _playstyle_alignment(profile: TeamTacticalProfile, playstyle: str) -> float:
+    """Ranks this squad's 6 zones best-to-worst and scores how highly the
+    playstyle's target zone(s) rank — 1.0 if they're this squad's very best
+    zone(s), 0.0 if they're the worst, regardless of the squad's absolute
+    strength (spec §9: "is the zone(s) this playstyle uses actually this
+    squad's STRONGEST zone(s)?")."""
+    zone_values = {zone: getattr(profile, zone) for zone in ZONES}
+    ranked = sorted(zone_values, key=zone_values.get, reverse=True)
+    target_zones = PLAYSTYLE_ZONES[playstyle]
+    scores = [1 - (ranked.index(zone) / (len(ranked) - 1)) for zone in target_zones]
+    return sum(scores) / len(scores)
+
+
+# target[mentality]: where PARK_THE_BUS/DEFENSIVE want (defence − attack) to
+# lean positive, ATTACKING wants it to lean negative, BALANCED wants it near
+# zero. A 20-rating gap between defence and attack zones is treated as
+# already a full lean (clamped to +/-1) — ratings run ~58-99, so 20 points is
+# a large, clearly-intentional squad shape rather than incidental variance.
+_MENTALITY_FIT_TARGET = {"PARK_THE_BUS": 1.0, "DEFENSIVE": 0.5, "BALANCED": 0.0, "ATTACKING": -1.0}
+
+
+def _mentality_fit(profile: TeamTacticalProfile, mentality: str) -> float:
+    defence_avg = (profile.central_defence + profile.wing_defence) / 2
+    attack_avg = (profile.central_attack + profile.wing_attack) / 2
+    gap = max(-1.0, min(1.0, (defence_avg - attack_avg) / 20))
+    target = _MENTALITY_FIT_TARGET[mentality]
+    return max(0.0, 1 - abs(gap - target) / 2)
+
+
+def compute_tactical_fit(
+    cards_with_slots: list[tuple[Any, FormationSlot]], profile: TeamTacticalProfile, mentality: str, playstyle: str, config
+) -> int:
+    formation_component = _formation_fit_score(cards_with_slots) * float(config.club_tactical_fit_formation_weight)
+    playstyle_component = _playstyle_alignment(profile, playstyle) * float(config.club_tactical_fit_playstyle_weight)
+    mentality_component = _mentality_fit(profile, mentality) * float(config.club_tactical_fit_mentality_weight)
+    return round(100 * (formation_component + playstyle_component + mentality_component))

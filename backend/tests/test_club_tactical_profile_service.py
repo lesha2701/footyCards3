@@ -91,3 +91,39 @@ def test_5_3_2_produces_lower_wing_attack_than_4_3_3_for_identical_lb_rb_ratings
     four_three_three = svc.compute_profile(_cards_with_slots({**shared, "FWD1": 90, "FWD3": 90}, "4-3-3"))
     five_three_two = svc.compute_profile(_cards_with_slots({**shared, "DEF5": 75}, "5-3-2"))
     assert four_three_three.wing_attack > five_three_two.wing_attack
+
+
+class _FakeTacticalFitConfig:
+    club_tactical_fit_formation_weight = 0.40
+    club_tactical_fit_playstyle_weight = 0.40
+    club_tactical_fit_mentality_weight = 0.20
+
+
+def test_tactical_fit_is_a_percentage():
+    cards = _cards_with_slots({})
+    profile = svc.compute_profile(cards)
+    fit = svc.compute_tactical_fit(cards, profile, "BALANCED", "CENTRAL_PLAY", _FakeTacticalFitConfig())
+    assert 0 <= fit <= 100
+
+
+def test_wing_play_scores_higher_fit_for_a_squad_with_strong_flanks_than_weak_flanks():
+    strong_flanks = _cards_with_slots({"FWD1": 92, "FWD3": 92, "DEF1": 85, "DEF4": 85, "FWD2": 65})
+    weak_flanks = _cards_with_slots({"FWD1": 65, "FWD3": 65, "DEF1": 65, "DEF4": 65, "FWD2": 92})
+    config = _FakeTacticalFitConfig()
+
+    strong_profile = svc.compute_profile(strong_flanks)
+    weak_profile = svc.compute_profile(weak_flanks)
+
+    strong_fit = svc.compute_tactical_fit(strong_flanks, strong_profile, "BALANCED", "WING_PLAY", config)
+    weak_fit = svc.compute_tactical_fit(weak_flanks, weak_profile, "BALANCED", "WING_PLAY", config)
+    assert strong_fit > weak_fit
+
+
+def test_park_the_bus_mentality_fit_favors_a_defence_heavy_squad_over_an_attack_heavy_one():
+    defence_heavy = _cards_with_slots({"DEF1": 90, "DEF2": 90, "DEF3": 90, "DEF4": 90, "FWD2": 60})
+    attack_heavy = _cards_with_slots({"DEF1": 60, "DEF2": 60, "DEF3": 60, "DEF4": 60, "FWD2": 90})
+
+    defence_profile = svc.compute_profile(defence_heavy)
+    attack_profile = svc.compute_profile(attack_heavy)
+
+    assert svc._mentality_fit(defence_profile, "PARK_THE_BUS") > svc._mentality_fit(attack_profile, "PARK_THE_BUS")
