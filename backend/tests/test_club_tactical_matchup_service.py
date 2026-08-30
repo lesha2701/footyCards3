@@ -157,3 +157,59 @@ def test_defensive_pool_is_drawn_from_real_unmodified_ratings():
     for card in pool:
         assert card.player.rating == 70  # never adjusted, per spec §6.4
         assert card in cards
+
+
+from app.services.club_tactical_profile_service import TeamTacticalProfile as _TTP
+
+
+def _side(cards, mentality="BALANCED", playstyle="CENTRAL_PLAY", midfield_control=70) -> "svc.ClubTacticalSide":
+    profile = _TTP(central_attack=70, wing_attack=70, midfield_control=midfield_control, central_defence=70, wing_defence=70, goalkeeping=70, team_strength=700)
+    return svc.ClubTacticalSide(cards=cards, profile=profile, mentality=mentality, playstyle=playstyle)
+
+
+def test_first_pass_quality_factor_increases_with_midfield_control():
+    assert svc._first_pass_quality_factor(90) > svc._first_pass_quality_factor(60)
+
+
+def test_resolve_counter_strongly_favors_elite_attacker_against_weak_bus_defence():
+    elite_forwards = [
+        _FakeCard(1, _FakePlayer(Position.ST, 95)), _FakeCard(2, _FakePlayer(Position.LW, 93)), _FakeCard(3, _FakePlayer(Position.RW, 94)),
+        _FakeCard(4, _FakePlayer(Position.CM, 80)),
+    ]
+    weak_defenders = [_FakeCard(10 + i, _FakePlayer(Position.CB, 65)) for i in range(4)]
+
+    y = _side(elite_forwards, mentality="ATTACKING", playstyle="COUNTER_ATTACK")  # Y just won the ball, now counters
+    x = _side(weak_defenders, mentality="PARK_THE_BUS", playstyle="BALANCED")     # X is the bus side conceding the counter
+
+    # A ~95-rated forward (boosted by COUNTER_ATTACK's 1.5x transition bonus)
+    # against a genuinely 65-rated defender lands the duel's zone_ratio around
+    # 0.6-0.65 — comfortably in STAGE1_BANDS' "0.60-0.75" bucket, not the top
+    # ">0.75" one, since the defender's rating is never reduced (spec §6.5's
+    # whole point: PARK_THE_BUS keeps the full pool eligible, but every
+    # member of it stays genuinely weak). Assert on the duel's own ratio and,
+    # among transitions that actually advance, the quality skew — not a flat
+    # "most of all trials are high quality", since many phases legitimately
+    # stall or get won back before any shot chance exists at all.
+    trials = 300
+    ratios = []
+    advanced = 0
+    high_or_very_high = 0
+    for _ in range(trials):
+        outcome = svc.resolve_counter("a", y, x)
+        if outcome is not None:
+            advanced += 1
+            quality, ratio = outcome
+            ratios.append(ratio)
+            if quality in ("HIGH", "VERY_HIGH", "CLEAN_BREAKAWAY"):
+                high_or_very_high += 1
+
+    assert advanced > 0
+    assert sum(ratios) / len(ratios) > 0.55  # the duel itself consistently favors Y's elite forwards
+    assert high_or_very_high / advanced > 0.40  # among successful transitions, quality skews toward HIGH/VERY_HIGH
+
+
+def test_resolve_counter_returns_none_on_a_stalled_or_re_broken_transition(monkeypatch):
+    monkeypatch.setattr(svc, "resolve_stage1", lambda ratio: "stall")
+    y = _side([_FakeCard(1, _FakePlayer(Position.ST, 80))])
+    x = _side([_FakeCard(2, _FakePlayer(Position.CB, 80))])
+    assert svc.resolve_counter("a", y, x) is None

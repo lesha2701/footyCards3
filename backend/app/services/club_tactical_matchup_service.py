@@ -112,3 +112,56 @@ def defensive_pool(cards: list[Any], mentality: str, playstyle: str) -> list[Any
     pool_size = max(1, round(fraction * len(contributors)))
     pool_size = min(pool_size, len(contributors))
     return random.sample(contributors, pool_size)
+
+
+# --- Counter-attack chain (spec §6.5) ----------------------------------------
+
+
+@dataclass
+class ClubTacticalSide:
+    cards: list[Any]
+    profile: TeamTacticalProfile
+    mentality: str
+    playstyle: str
+
+
+def _first_pass_quality_factor(midfield_control: float) -> float:
+    """A weak outlet pass caps how dangerous a counter can be, even with elite
+    forwards waiting (spec §6.5). Scaled around 70 (a "solid" personal-engine
+    midfielder rating) so an average midfield neither boosts nor caps the
+    counter (factor 1.0), while a genuinely weak one (~58, the engine's rating
+    floor) meaningfully blunts it and a genuinely elite one (~99) sharpens it."""
+    return max(0.7, min(1.15, 0.7 + (midfield_control - 58) / (99 - 58) * 0.45))
+
+
+def resolve_counter(attacking_side_label: str, y: ClubTacticalSide, x: ClubTacticalSide) -> tuple[str, float] | None:
+    """Spec §6.5: Y (the team that just won the Stage-1 duel) gets an
+    immediate transition check against X's shrunk defensive pool (Task 7),
+    resolved via the SAME picked-duelist mechanism as Stage 1/Stage 2 (Task
+    6) — not a team-aggregate. Returns (quality_tier, combined_advantage) on
+    a successful transition, or None if it stalls or the ball is win back
+    immediately (no further recursive counter chain in Phase 1 — bounded
+    scope, matches the "roughly 40-70 phases" budget instead of unbounded
+    recursion)."""
+    zone = random.choices(["central_attack", "wing_attack"], weights=[0.6, 0.4], k=1)[0]
+    defence_zone = "wing_defence" if zone == "wing_attack" else "central_defence"
+
+    y_duelist = weighted_pick(y.cards, zone)
+    pool = defensive_pool(x.cards, x.mentality, x.playstyle)
+    x_duelist = weighted_pick(pool, defence_zone)
+
+    eff_y = y_duelist.player.rating * position_fit(y_duelist.player.position, zone) * TRANSITION_BONUS[y.playstyle] * _first_pass_quality_factor(y.profile.midfield_control)
+    eff_x = x_duelist.player.rating * position_fit(x_duelist.player.position, defence_zone)
+    total = eff_y + eff_x
+    ratio = eff_y / total if total else 0.5
+
+    outcome = resolve_stage1(ratio)
+    if outcome != "advance":
+        return None
+
+    quality = resolve_quality(ratio)
+    if quality == "VERY_HIGH" and len(pool) == 1:
+        # Thinnest possible cover beaten decisively — the keeper-race
+        # breakaway case _resolve_breakaway (Task 9) already handles.
+        return "CLEAN_BREAKAWAY", ratio
+    return quality, ratio
