@@ -1,36 +1,11 @@
 import random
 from dataclasses import dataclass, field
 
-from app.services.match_situations import (
-    ATTACK_SITUATIONS_BY_ID,
-    ATTACK_SITUATIONS_BY_SHOT_TYPE,
-    DEFENSE_SITUATIONS_BY_ID,
-    DEFENSE_SITUATIONS_BY_SHOT_TYPE,
-)
-
-SHOT_TYPES = ("in_box", "long_range", "empty_net")
-
-# Copied verbatim from match_service.py — same weighting, same intent
-# (a "team gets a scoring chance" moment happens at this overall frequency;
-# only what happens within it differs from the personal engine). Deliberately
-# NOT the same value as match_service.py's own copy of this constant — that
-# module drives the personal Card Arena engine, a separate simulation this
-# constant must not affect. Tuned so a 4-5 goal side is a normal (if still
-# notable) result rather than a near-never tail: at equal strength this
-# puts a 5-goal side at ~2.8% of team-matches and a 4-goal side at ~8.5%,
-# versus ~0.8%/~3.3% before the tuning (picked by simulating a few thousand
-# equal-strength matches at each candidate weight).
-_FLAVOR_WEIGHTS: list[tuple[str, int]] = [
-    ("corner", 9), ("yellow_card", 5), ("red_card", 1), ("offside", 6), ("possession", 20),
-]
-_SHOT_CHANCE_WEIGHT = 34
-
 # Distinct from match_service.py's personal-engine _EVENT_DESCRIPTIONS (phrased "your team" vs.
 # "{them}") — a tournament replay is watched from a neutral standpoint by any club's members, so
 # every description names the real club instead. Never names an individual player, matching the
 # personal engine's own team-level-only phrasing. Exactly 7 event types — confirmed exhaustive:
-# generate_moment_queue only ever appends "flavor" moments (never persisted to event_log, see the
-# `continue` in simulate_match below) or one of these 7 resolved shot/tackle outcomes.
+# simulate_match only ever resolves one of these 7 shot/tackle outcomes per Chance.
 _EVENT_DESCRIPTIONS: dict[str, list[str]] = {
     "goal": [
         "⚽ Гол! {club} открывает счёт!",
@@ -70,89 +45,17 @@ def _describe_event(event_type: str, team: str, club_a_name: str, club_b_name: s
     return template.format(club=club)
 
 
-def _pick_actor(lineup: list[dict], category: str, preferred_positions: tuple, exclude_ids: tuple[int, ...] = ()) -> dict:
-    """Same fallback shape as match_service._pick_actor, generalized to a
-    plain list-of-dicts lineup instead of a LineupOut (both sides are real
-    here, so there's no single privileged "user" lineup to special-case)."""
-    cards = [c for c in lineup if c["category"] == category and c["club_card_id"] not in exclude_ids]
-    pool = [c for c in cards if c["position"] in preferred_positions] or cards
-    if not pool:
-        pool = [c for c in lineup if c["category"] != "GK" and c["club_card_id"] not in exclude_ids]
-    card = random.choice(pool)
-    return {
-        "club_card_id": card["club_card_id"],
-        "player_id": card["player_id"],
-        "name": card["name"],
-        "rating": card["rating"],
-        "position": card["position"],
-    }
+from app.services import club_tactical_matchup_service
 
-
-def _build_shot_moment(minute: int, attacking_lineup: list[dict], defending_lineup: list[dict], attacking_side: str, shot_type: str) -> dict:
-    moment = {"minute": minute, "kind": "shot", "attacking_side": attacking_side, "shot_type": shot_type}
-
-    if shot_type == "empty_net":
-        # Special case, deliberately unlike every other shot moment: no real
-        # situation to draw actors from (it's an open-goal breakaway, not a
-        # crafted chance), so this moment carries no actors at all and — unlike
-        # situation_id elsewhere, which is set to None — omits the
-        # defense_situation_id key entirely rather than setting it to None.
-        # Callers (Task 11) must not assume `actors`/`defense_situation_id`
-        # are populated for every kind == "shot" moment.
-        moment.update(situation_kind="breakaway", situation_id=None, actors={}, actions=["shoot"])
-        return moment
-
-    situation = random.choice(ATTACK_SITUATIONS_BY_SHOT_TYPE[shot_type])
-    shooter = _pick_actor(attacking_lineup, situation.shooter_category, situation.shooter_positions)
-    pass_target = _pick_actor(
-        attacking_lineup, situation.pass_target_category, situation.pass_target_positions, exclude_ids=(shooter["club_card_id"],)
-    )
-    defense_situation = random.choice(DEFENSE_SITUATIONS_BY_SHOT_TYPE[shot_type])
-    defender = _pick_actor(defending_lineup, defense_situation.defender_category, defense_situation.defender_positions)
-
-    moment.update(
-        situation_kind="attack", situation_id=situation.id, defense_situation_id=defense_situation.id,
-        actors={"shooter": shooter, "pass_target": pass_target, "defender": defender},
-        actions=["shoot", "pass"],
-    )
-    return moment
-
-
-def generate_moment_queue(strength_a: int, strength_b: int, config, lineup_a: list[dict], lineup_b: list[dict]) -> list[dict]:
-    """Two-sided generalization of match_service._generate_moment_queue:
-    every non-empty-net shot moment carries real actors from BOTH the
-    attacking club (shooter/pass target) and the defending club (defender),
-    unlike the personal engine's user-vs-abstract-opponent shape. The
-    exception is `shot_type == "empty_net"`, whose moments carry no actors
-    and omit `defense_situation_id` entirely — see the comment in
-    `_build_shot_moment`."""
-    total = strength_a + strength_b
-    a_attack_prob = strength_a / total if total else 0.5
-
-    num_chances = random.randint(18, 26)
-    minutes = sorted(random.sample(range(1, 90), num_chances))
-
-    kinds = [t for t, _ in _FLAVOR_WEIGHTS] + ["shot_chance"]
-    weights = [w for _, w in _FLAVOR_WEIGHTS] + [_SHOT_CHANCE_WEIGHT]
-    shot_weights = [
-        config.match_shot_type_in_box_weight, config.match_shot_type_long_range_weight, config.match_shot_type_empty_net_weight,
-    ]
-
-    moments: list[dict] = []
-    for minute in minutes:
-        attacking_side = "a" if random.random() < a_attack_prob else "b"
-        kind = random.choices(kinds, weights=weights, k=1)[0]
-        if kind == "shot_chance":
-            shot_type = random.choices(list(SHOT_TYPES), weights=shot_weights, k=1)[0]
-            attacking_lineup, defending_lineup = (lineup_a, lineup_b) if attacking_side == "a" else (lineup_b, lineup_a)
-            moments.append(_build_shot_moment(minute, attacking_lineup, defending_lineup, attacking_side, shot_type))
-        else:
-            moments.append({"minute": minute, "kind": "flavor", "event_type": kind, "attacking_side": attacking_side})
-    return moments
+# Maps a Chance's quality tier (club_tactical_matchup_service.Chance.quality)
+# onto the same units situation.bias used to nudge effective rating in the
+# old engine (spec §6.7).
+QUALITY_BIAS: dict[str, float] = {"LOW": -6, "NORMAL": 0, "HIGH": 5, "VERY_HIGH": 10}
 
 
 # --- Resolution -------------------------------------------------------------
-# The functions below decide the OUTCOME of each moment generated above,
+# The functions below decide the OUTCOME of each chance produced by the
+# tactical Chance pipeline (club_tactical_matchup_service.simulate_match_phases),
 # reusing the exact same probability curves as the personal Card Arena engine
 # (backend/app/services/match_service.py) — _lerp_chance, _lerp_chance_positive,
 # _clamp_rating and _resolve_shot_continuation are copied verbatim from there
@@ -194,25 +97,23 @@ class MatchResult:
     red_cards: list[tuple[int, int]] = field(default_factory=list)     # (club_card_id, rounds_remaining=1)
 
 
-def _resolve_shot_action(attacking_side: str, moment: dict, config) -> tuple[dict, str]:
-    """Default action policy for auto-resolution (nobody is watching live):
-    shoot when the situation's bias is non-negative (a "clear" chance), pass
-    otherwise; the shooter/pass-target choice, and every subsequent
-    miss/block/save roll, is otherwise identical to a human picking the same
-    action in the personal engine."""
-    situation = ATTACK_SITUATIONS_BY_ID[moment["situation_id"]]
+def _resolve_shot_action(attacking_side: str, moment: dict, config, quality_bias: float = 0) -> tuple[dict, str]:
+    """Shoots when quality_bias is non-negative (a clear chance), passes
+    otherwise — same shoot/pass split the old situation.bias-driven policy
+    used, now driven by the tactical pipeline's resolved chance quality
+    instead of a scripted ATTACK_SITUATIONS template (spec §6.7)."""
     shooter = moment["actors"]["shooter"]
     pass_target = moment["actors"]["pass_target"]
     defender = moment["actors"]["defender"]
     shot_type = moment["shot_type"]
 
-    action = "shoot" if situation.bias >= 0 else "pass"
+    action = "shoot" if quality_bias >= 0 else "pass"
     if action == "shoot":
-        eff_rating = _clamp_rating(shooter["rating"] + situation.bias)
+        eff_rating = _clamp_rating(shooter["rating"] + quality_bias)
         missed = random.random() < _lerp_chance(eff_rating, float(config.match_attack_shoot_miss_chance_min), float(config.match_attack_shoot_miss_chance_max))
         scorer = shooter
     else:
-        eff_passer_rating = _clamp_rating(shooter["rating"] - situation.bias)
+        eff_passer_rating = _clamp_rating(shooter["rating"] - quality_bias)
         pass_failed = random.random() < _lerp_chance(eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max))
         if pass_failed:
             event = {
@@ -236,7 +137,7 @@ def _resolve_defense_tackle(defending_side: str, moment: dict, config) -> tuple[
     rating-driven foul/card rolls as a human picking 'tackle' today).
     Returns (event, scoring_side_or_none, (club_card_id, 'red'|'yellow')_or_none)."""
     defender = moment["actors"]["defender"]
-    defense_situation = DEFENSE_SITUATIONS_BY_ID[moment["defense_situation_id"]]
+    is_box = moment["is_box"]
     shot_type = moment["shot_type"]
 
     foul = random.random() < _lerp_chance(defender["rating"], float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max))
@@ -250,7 +151,7 @@ def _resolve_defense_tackle(defending_side: str, moment: dict, config) -> tuple[
     is_red = random.random() < _lerp_chance(defender["rating"], float(config.match_tackle_red_chance_min), float(config.match_tackle_red_chance_max))
     card_kind = "red" if is_red else "yellow"
 
-    if "box" in defense_situation.tags:
+    if is_box:
         eff_gk = _clamp_rating(defender["rating"] - config.match_penalty_gk_rating_penalty)
         saved = random.random() < _lerp_chance_positive(eff_gk, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max))
         outcome = "save" if saved else "goal"
@@ -278,25 +179,27 @@ def _resolve_breakaway(attacking_side: str, moment: dict, lineup: list[dict], co
 
 
 def simulate_match(
-    strength_a: int, strength_b: int, lineup_a: list[dict], lineup_b: list[dict], config,
+    side_a: "club_tactical_matchup_service.ClubTacticalSide", side_b: "club_tactical_matchup_service.ClubTacticalSide",
+    lineup_a: list[dict], lineup_b: list[dict], config,
     club_a_name: str = "Клуб A", club_b_name: str = "Клуб B",
 ) -> "MatchResult":
-    """strength_a/strength_b are the caller's already-adjusted strengths
-    (substitution penalty + form multiplier already applied — see
-    tournament_simulation_service.match_strength) and drive the
-    attacking-probability split; they are NOT recomputed here from the raw
-    lineup, so those adjustments actually influence which side attacks more."""
-    moments = generate_moment_queue(strength_a, strength_b, config, lineup_a, lineup_b)
+    """Replaces the old strength-driven random moment queue: chances now come
+    from club_tactical_matchup_service's possession-phase pipeline (spec §6),
+    already carrying a resolved quality tier and real picked duelists.
+    lineup_a/lineup_b (the plain category-tagged actor dicts
+    tournament_simulation_service.resolve_match_lineup already produces) are
+    still needed for _resolve_breakaway's unchanged fwd_candidates lookup on
+    a clean-breakaway chance."""
+    chances = club_tactical_matchup_service.simulate_match_phases(side_a, side_b, config)
 
     result = MatchResult(score_a=0, score_b=0)
-    for moment in moments:
-        if moment["kind"] == "flavor":
-            continue  # not persisted to event_log — purely narrative in the personal engine, same here
-        attacking_side = moment["attacking_side"]
+    for chance in chances:
+        attacking_side = chance.attacking_side
         defending_side = "b" if attacking_side == "a" else "a"
 
-        if moment["situation_kind"] == "breakaway":
+        if chance.shot_type == "empty_net":
             lineup = lineup_a if attacking_side == "a" else lineup_b
+            moment = {"minute": chance.minute}
             event, scorer = _resolve_breakaway(attacking_side, moment, lineup, config)
             result.event_log.append(event)
             event["description"] = _describe_event(event["event_type"], event["team"], club_a_name, club_b_name)
@@ -304,13 +207,12 @@ def simulate_match(
                 setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
             continue
 
-        # Defense is attempted only when a blocked/saved shot has a further
-        # (15%) chance the defender committed a foul in the process — mirrors
-        # match_service's "tackle can stop an attack before it becomes a shot"
-        # flow for the "box"/foul path; everywhere else, shoot/pass resolves
-        # directly against the defender's rating via _resolve_shot_continuation's
-        # blocker/keeper roll, same as the personal engine.
-        event, scorer = _resolve_shot_action(attacking_side, moment, config)
+        moment = {
+            "minute": chance.minute, "shot_type": chance.shot_type, "is_box": chance.is_box,
+            "actors": {"shooter": chance.shooter, "pass_target": chance.pass_target, "defender": chance.defender},
+        }
+        quality_bias = QUALITY_BIAS[chance.quality]
+        event, scorer = _resolve_shot_action(attacking_side, moment, config, quality_bias)
         result.event_log.append(event)
         event["description"] = _describe_event(event["event_type"], event["team"], club_a_name, club_b_name)
         if scorer != "none":
