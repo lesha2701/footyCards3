@@ -218,6 +218,12 @@ def simulate_match(
         if scorer != "none":
             setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
 
+        # Defense is attempted only when a blocked/saved shot has a further
+        # (15%) chance the defender committed a foul in the process — mirrors
+        # match_service's "tackle can stop an attack before it becomes a shot"
+        # flow for the box/foul path; everywhere else, shoot/pass resolves
+        # directly against the defender's rating via _resolve_shot_continuation's
+        # blocker/keeper roll, same as the personal engine.
         if event["event_type"] in ("blocked", "save") and random.random() < 0.15:
             defense_event, defense_scorer, card = _resolve_defense_tackle(defending_side, moment, config)
             result.event_log.append(defense_event)

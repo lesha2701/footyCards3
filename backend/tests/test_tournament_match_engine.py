@@ -1,5 +1,3 @@
-import random
-
 from app.services import tournament_match_engine as engine
 
 
@@ -68,13 +66,12 @@ def test_resolve_shot_action_defaults_quality_bias_to_zero_which_shoots():
 
 
 from app.services.club_tactical_matchup_service import ClubTacticalSide, build_side
-from app.services.club_tactical_profile_service import TeamTacticalProfile
 
 
 def _fake_side(rating: int = 75, mentality: str = "BALANCED", playstyle: str = "CENTRAL_PLAY") -> ClubTacticalSide:
     from dataclasses import dataclass as _dc
 
-    from app.models.enums import Position, Rarity
+    from app.models.enums import Rarity
 
     @_dc
     class _P:
@@ -101,12 +98,31 @@ def _fake_side(rating: int = 75, mentality: str = "BALANCED", playstyle: str = "
     return build_side(cards_with_slots, mentality, playstyle)
 
 
-def test_resolve_defense_tackle_reads_is_box_from_the_moment():
+def _hand_built_defense_moment(is_box: bool) -> dict:
     # _resolve_defense_tackle's body reads moment["shot_type"] unconditionally
     # (for its event payloads) alongside moment["is_box"] — both keys required.
-    moment = {"minute": 10, "shot_type": "in_box", "is_box": True, "actors": {"defender": {"club_card_id": 3, "player_id": 3, "name": "D", "rating": 60, "position": "CB"}}}
-    event, _scorer, _card = engine._resolve_defense_tackle("a", moment, _FakeMatchConfig())
-    assert event["event_type"] in ("tackle_won", "goal", "save", "foul_stopped")
+    return {
+        "minute": 10, "shot_type": "in_box" if is_box else "long_range", "is_box": is_box,
+        "actors": {"defender": {"club_card_id": 3, "player_id": 3, "name": "D", "rating": 60, "position": "CB"}},
+    }
+
+
+def test_resolve_defense_tackle_reads_is_box_from_the_moment(monkeypatch):
+    # random.random() forced to 0.0 makes every "random.random() < threshold"
+    # check True (every configured min/max chance here is a positive float),
+    # so the foul roll, the red-card roll, and (in the box branch) the
+    # penalty-save roll are all forced True — isolates the actual is_box
+    # branch under test from those other rolls. A wrong `if is_box:` (e.g.
+    # inverted) would make one of the two assertions below fail, unlike the
+    # old assertion that accepted either branch's outcomes.
+    monkeypatch.setattr(engine.random, "random", lambda: 0.0)
+
+    event, _scorer, _card = engine._resolve_defense_tackle("a", _hand_built_defense_moment(is_box=True), _FakeMatchConfig())
+    assert event["payload"]["is_penalty"] is True
+
+    event, _scorer, _card = engine._resolve_defense_tackle("a", _hand_built_defense_moment(is_box=False), _FakeMatchConfig())
+    assert event["event_type"] == "foul_stopped"
+    assert event["payload"]["is_penalty"] is False
 
 
 def test_simulate_match_with_tactical_sides_produces_a_valid_result():
@@ -115,9 +131,56 @@ def test_simulate_match_with_tactical_sides_produces_a_valid_result():
     lineup_b = [{"club_card_id": 200 + i, "player_id": 200 + i, "name": f"B{i}", "rating": 70, "position": "ST", "category": "FWD"} for i in range(11)]
 
     result = engine.simulate_match(side_a, side_b, lineup_a, lineup_b, _FakeMatchConfig())
+    assert result.event_log  # sanity: there is something to check — 40-70 real phases reliably promote at least one chance
     assert result.score_a >= 0 and result.score_b >= 0
     for event in result.event_log:
         assert event["description"]
+
+
+def test_simulate_match_records_red_card_and_injury_availability(monkeypatch):
+    # Force every phase to resolve to a controlled, non-empty-net shot
+    # chance, stub _resolve_shot_action to always report "blocked" (never a
+    # goal, so score bookkeeping stays out of the way), stub
+    # _resolve_defense_tackle to always hand back a red card for a known
+    # club_card_id, and force random.random() low so both the post-shot 15%
+    # foul-check gate and the 30% injury gate always fire. Unlike the
+    # pre-refactor version of this test, random.choices can no longer shape
+    # which moments get generated — the new simulate_match builds its moments
+    # from real Chance objects produced by
+    # club_tactical_matchup_service.simulate_match_phases, so that function
+    # itself is stubbed to hand back a controlled Chance list instead.
+    from app.services.club_tactical_matchup_service import Chance
+
+    fake_chances = [Chance(attacking_side="a", minute=10, quality="NORMAL", shot_type="in_box", is_box=True)]
+
+    def fake_resolve_shot_action(attacking_side, moment, config, quality_bias=0):
+        event = {
+            "minute": moment["minute"], "event_type": "blocked", "team": attacking_side,
+            "payload": {"shot_type": moment["shot_type"], "action": "shoot", "shooter": "X", "missed": False, "blocked": True},
+        }
+        return event, "none"
+
+    def fake_resolve_defense_tackle(defending_side, moment, config):
+        event = {
+            "minute": moment["minute"], "event_type": "foul_stopped", "team": defending_side,
+            "payload": {"shot_type": moment["shot_type"], "action": "tackle", "defender": "Y", "card": "red", "is_penalty": False},
+        }
+        return event, "none", (999, "red")
+
+    monkeypatch.setattr(engine.club_tactical_matchup_service, "simulate_match_phases", lambda side_a, side_b, config: fake_chances)
+    monkeypatch.setattr(engine.random, "random", lambda: 0.0)
+    monkeypatch.setattr(engine, "_resolve_shot_action", fake_resolve_shot_action)
+    monkeypatch.setattr(engine, "_resolve_defense_tackle", fake_resolve_defense_tackle)
+
+    side_a, side_b = _fake_side(), _fake_side()
+    lineup_a = [{"club_card_id": 100 + i, "player_id": 100 + i, "name": f"A{i}", "rating": 75, "position": "ST", "category": "FWD"} for i in range(11)]
+    lineup_b = [{"club_card_id": 200 + i, "player_id": 200 + i, "name": f"B{i}", "rating": 75, "position": "ST", "category": "FWD"} for i in range(11)]
+    result = engine.simulate_match(side_a, side_b, lineup_a, lineup_b, _FakeMatchConfig())
+
+    assert result.red_cards, "expected at least one red card to be recorded"
+    assert all(club_card_id == 999 and rounds == 1 for club_card_id, rounds in result.red_cards)
+    assert result.injuries, "expected at least one injury to be recorded"
+    assert all(club_card_id == 999 for club_card_id, _rounds in result.injuries)
 
 
 def test_simulate_match_produces_a_deterministic_score_from_event_log(monkeypatch):
@@ -136,6 +199,7 @@ def test_simulate_match_produces_a_deterministic_score_from_event_log(monkeypatc
     lineup_a = [{"club_card_id": 100 + i, "player_id": 100 + i, "name": f"A{i}", "rating": 75, "position": "ST", "category": "FWD"} for i in range(11)]
     lineup_b = [{"club_card_id": 200 + i, "player_id": 200 + i, "name": f"B{i}", "rating": 75, "position": "ST", "category": "FWD"} for i in range(11)]
     result = engine.simulate_match(side_a, side_b, lineup_a, lineup_b, _FakeMatchConfig())
+    assert result.event_log  # sanity: there is something to check
     goals_in_log = sum(1 for e in result.event_log if e["event_type"] == "goal")
     assert goals_in_log == result.score_a + result.score_b
 
@@ -145,6 +209,7 @@ def test_simulate_match_events_carry_real_club_name_descriptions():
     lineup_a = [{"club_card_id": 100 + i, "player_id": 100 + i, "name": f"A{i}", "rating": 75, "position": "ST", "category": "FWD"} for i in range(11)]
     lineup_b = [{"club_card_id": 200 + i, "player_id": 200 + i, "name": f"B{i}", "rating": 75, "position": "ST", "category": "FWD"} for i in range(11)]
     result = engine.simulate_match(side_a, side_b, lineup_a, lineup_b, _FakeMatchConfig(), "Реал Мадрид", "Барселона")
+    assert result.event_log  # sanity: there is something to check
     for event in result.event_log:
         assert isinstance(event["description"], str) and event["description"]
         club_name = "Реал Мадрид" if event["team"] == "a" else "Барселона"
