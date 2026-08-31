@@ -46,6 +46,11 @@ class _FakePlayer:
     position: Position
     rating: int
     display_name: str = "Test Player"  # _card_to_actor (Task 9) reads this
+    # calculate_base_strength (via compute_profile, Task 9) reads rarity/club/country;
+    # defaults mirror the same fixture pattern used in test_club_tactical_profile_service.py.
+    rarity: str = "common"
+    club: int = 1
+    country: int = 1
 
 
 @dataclass
@@ -213,3 +218,73 @@ def test_resolve_counter_returns_none_on_a_stalled_or_re_broken_transition(monke
     y = _side([_FakeCard(1, _FakePlayer(Position.ST, 80))])
     x = _side([_FakeCard(2, _FakePlayer(Position.CB, 80))])
     assert svc.resolve_counter("a", y, x) is None
+
+
+class _FakePhaseConfig:
+    club_tactical_phases_per_match_min = 40
+    club_tactical_phases_per_match_max = 70
+    club_tactical_promoted_chance_target_min = 15
+    club_tactical_promoted_chance_target_max = 25
+    match_shot_type_in_box_weight = 55
+    match_shot_type_long_range_weight = 35
+    match_shot_type_empty_net_weight = 10
+
+
+def _full_squad(rating: int = 75) -> list[tuple[_FakeCard, object]]:
+    """Pairs each fake card with a REAL FormationSlot from the 4-3-3 registry
+    (Task 1) — compute_profile's team_strength field calls the existing
+    calculate_base_strength(cards_with_slots), which reads slot.ideal_position
+    and slot.category directly, so a None slot would crash there even though
+    the zone math itself never touches slot."""
+    from app.services.club_formation_service import get_formation_slots
+
+    slots = get_formation_slots("4-3-3")
+    return [(_FakeCard(i, _FakePlayer(slot.ideal_position, rating)), slot) for i, slot in enumerate(slots)]
+
+
+def test_pick_progression_zone_returns_a_valid_zone_or_none():
+    for playstyle in svc.PLAYSTYLES:
+        for _ in range(30):
+            zone = svc.pick_progression_zone(playstyle)
+            assert zone in ("central_attack", "wing_attack", None)
+
+
+def test_build_side_computes_a_real_profile():
+    side = svc.build_side(_full_squad(), "BALANCED", "CENTRAL_PLAY")
+    assert side.mentality == "BALANCED"
+    assert side.profile.central_attack > 0
+
+
+def test_simulate_match_phases_returns_a_bounded_list_of_chances():
+    side_a = svc.build_side(_full_squad(), "BALANCED", "CENTRAL_PLAY")
+    side_b = svc.build_side(_full_squad(rating=70), "BALANCED", "CENTRAL_PLAY")
+    chances = svc.simulate_match_phases(side_a, side_b, _FakePhaseConfig())
+    assert len(chances) <= _FakePhaseConfig.club_tactical_promoted_chance_target_max
+    for chance in chances:
+        assert chance.attacking_side in ("a", "b")
+        assert chance.quality in ("LOW", "NORMAL", "HIGH", "VERY_HIGH")
+        assert chance.shot_type in ("in_box", "long_range", "empty_net")
+
+
+def test_much_stronger_side_produces_more_chances_than_a_much_weaker_one():
+    # Deliberately no monkeypatching here: random.sample is used for TWO
+    # different things in this module (minute selection in
+    # simulate_match_phases AND pool sampling in defensive_pool), so a naive
+    # blanket patch would corrupt defensive_pool's output. The rating/
+    # mentality gap (95 ATTACKING vs 60 PARK_THE_BUS) skews both
+    # initiative_probability and every duel ratio heavily enough that a
+    # single real run, summed over several trials, is a reliable signal.
+    # Playstyle is held constant (CENTRAL_PLAY) on both sides so mentality
+    # and rating are the only varying factors — "DEFENSIVE" is a MENTALITY
+    # value (already used on the mentality argument for consistency with
+    # the "much weaker" framing), not a member of PLAYSTYLES, so it cannot
+    # be passed as the playstyle argument here.
+    side_a = svc.build_side(_full_squad(rating=95), "ATTACKING", "CENTRAL_PLAY")
+    side_b = svc.build_side(_full_squad(rating=60), "PARK_THE_BUS", "CENTRAL_PLAY")
+
+    a_total = b_total = 0
+    for _ in range(10):
+        chances = svc.simulate_match_phases(side_a, side_b, _FakePhaseConfig())
+        a_total += sum(1 for c in chances if c.attacking_side == "a")
+        b_total += sum(1 for c in chances if c.attacking_side == "b")
+    assert a_total > b_total
