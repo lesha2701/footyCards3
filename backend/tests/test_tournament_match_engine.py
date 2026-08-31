@@ -3,29 +3,17 @@ import random
 from app.services import tournament_match_engine as engine
 
 
-def _fake_lineup(club_id: int):
-    """A minimal fake lineup: list of (club_card_id, player_id, name, rating, position, category) tuples,
-    one per FORMATION_SLOTS category, enough for _pick_actor to find candidates in every category."""
-    return [
-        {"club_card_id": club_id * 100 + i, "player_id": club_id * 100 + i, "name": f"Player{club_id}-{i}",
-         "rating": 70, "position": pos, "category": cat}
-        for i, (cat, pos) in enumerate([
-            ("GK", "GK"), ("DEF", "CB"), ("DEF", "CB"), ("DEF", "LB"), ("DEF", "RB"),
-            ("MID", "CDM"), ("MID", "CM"), ("MID", "CAM"), ("FWD", "LW"), ("FWD", "ST"), ("FWD", "RW"),
-        ])
-    ]
-
-
 class _FakeConfig:
     match_shot_type_in_box_weight = 55
     match_shot_type_long_range_weight = 35
     match_shot_type_empty_net_weight = 10
 
 
-# _FakeMatchConfig exposes every match_* field the resolution code (Task 11)
-# reads, mirroring GameConfig's defaults (see app/models/game_config.py) —
-# _FakeConfig above only covers the shot-type weights generate_moment_queue
-# (Task 10) needs, so this subclass adds the rest rather than duplicating them.
+# _FakeMatchConfig exposes every match_* field the resolution code reads,
+# mirroring GameConfig's defaults (see app/models/game_config.py) —
+# _FakeConfig above only covers the shot-type weights
+# club_tactical_matchup_service._pick_shot_type needs, so this subclass adds
+# the rest rather than duplicating them.
 class _FakeMatchConfig(_FakeConfig):
     match_shot_miss_chance_min = 0.08
     match_shot_miss_chance_max = 0.30
