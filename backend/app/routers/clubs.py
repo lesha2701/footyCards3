@@ -38,7 +38,7 @@ from app.schemas.club_missing_item import (
 )
 from app.schemas.club_pack import ClubPackOut
 from app.schemas.club_pack_open import ClubPackOpenResult, OpenClubPackRequest
-from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest
+from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest, ClubTacticsSetRequest
 from app.schemas.tournament import (
     TournamentApplyResult,
     TournamentCurrentOut,
@@ -197,6 +197,11 @@ async def get_club_lineup(db: AsyncSession = Depends(get_db), user: User = Depen
 @router.put("/me/lineup", response_model=ClubLineupOut)
 async def set_club_lineup(payload: ClubLineupSetRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_squad_service.set_club_lineup(db, user, payload)
+
+
+@router.put("/me/tactics", response_model=ClubLineupOut)
+async def set_club_tactics(payload: ClubTacticsSetRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_squad_service.set_club_tactics(db, user, payload)
 
 
 @router.get("/me/cards", response_model=list[ClubCardOut])

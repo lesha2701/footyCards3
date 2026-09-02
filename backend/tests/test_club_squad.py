@@ -230,3 +230,88 @@ async def test_new_club_lineup_defaults_to_4_3_3_balanced_central(client, db_ses
     assert lineup.formation == "4-3-3"
     assert lineup.mentality == "BALANCED"
     assert lineup.playstyle == "CENTRAL_PLAY"
+
+
+async def test_get_club_lineup_reports_formation_mentality_playstyle_and_fit(client, db_session, bot_token):
+    _, headers = await _create_club(client, bot_token, 820320, "Клуб с тактикой в ответе")
+    resp = await client.get("/api/v1/clubs/me/lineup", headers=headers)
+    body = resp.json()
+    assert body["formation"] == "4-3-3"
+    assert body["mentality"] == "BALANCED"
+    assert body["playstyle"] == "CENTRAL_PLAY"
+    assert 0 <= body["tactical_fit"] <= 100
+
+
+async def test_set_club_tactics_updates_formation_mentality_playstyle(client, db_session, bot_token):
+    _, headers = await _create_club(client, bot_token, 820321, "Клуб меняет тактику")
+    resp = await client.put(
+        "/api/v1/clubs/me/tactics", headers=headers,
+        json={"formation": "4-4-2", "mentality": "ATTACKING", "playstyle": "WING_PLAY"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["formation"] == "4-4-2"
+    assert body["mentality"] == "ATTACKING"
+    assert body["playstyle"] == "WING_PLAY"
+    assert len(body["slots"]) == 11
+
+
+async def test_set_club_tactics_rejects_unknown_formation(client, db_session, bot_token):
+    _, headers = await _create_club(client, bot_token, 820322, "Клуб с плохой тактикой")
+    resp = await client.put(
+        "/api/v1/clubs/me/tactics", headers=headers,
+        json={"formation": "4-2-4", "mentality": "BALANCED", "playstyle": "CENTRAL_PLAY"},
+    )
+    assert resp.status_code == 409
+
+
+async def test_set_club_tactics_rejects_unknown_mentality(client, db_session, bot_token):
+    _, headers = await _create_club(client, bot_token, 820323, "Клуб с плохим настроем")
+    resp = await client.put(
+        "/api/v1/clubs/me/tactics", headers=headers,
+        json={"formation": "4-3-3", "mentality": "BERSERK", "playstyle": "CENTRAL_PLAY"},
+    )
+    assert resp.status_code == 409
+
+
+async def test_set_club_tactics_non_manager_forbidden(client, db_session, bot_token):
+    club, captain_headers = await _create_club(client, bot_token, 820324, "Клуб с рядовым участником")
+    await _register_only(client, bot_token, 820325)
+    member_headers = telegram_headers(820325, bot_token)
+    await client.post(f"/api/v1/clubs/{club['id']}/join", headers=member_headers)
+
+    resp = await client.put(
+        "/api/v1/clubs/me/tactics", headers=member_headers,
+        json={"formation": "4-4-2", "mentality": "BALANCED", "playstyle": "CENTRAL_PLAY"},
+    )
+    assert resp.status_code == 403
+
+
+async def test_changing_formation_clears_slots_not_present_in_the_new_formation_and_keeps_shared_ones(client, db_session, bot_token):
+    _, headers = await _create_club(client, bot_token, 820326, "Клуб меняет формацию")
+    before = (await client.get("/api/v1/clubs/me/lineup", headers=headers)).json()
+    gk_card_id_before = next(s["card"]["id"] for s in before["slots"] if s["slot_code"] == "GK")
+
+    resp = await client.put(
+        "/api/v1/clubs/me/tactics", headers=headers,
+        json={"formation": "4-4-2", "mentality": "BALANCED", "playstyle": "CENTRAL_PLAY"},
+    )
+    body = resp.json()
+    # 4-3-3's slot codes are GK,DEF1-4,MID1-3,FWD1-3; 4-4-2's are
+    # GK,DEF1-4,MID1-4,FWD1-2 — only FWD3 exists in 4-3-3 but not 4-4-2 (its
+    # card gets freed to the bench), and only MID4 exists in 4-4-2 but not
+    # 4-3-3 (newly empty, nothing to free). Every other code is shared and
+    # keeps its card. So exactly one slot goes from filled to missing.
+    assert body["is_complete"] is False
+
+    gk_slot = next(s for s in body["slots"] if s["slot_code"] == "GK")
+    assert gk_slot["card"]["id"] == gk_card_id_before  # shared-code slot kept its card
+    mid4_slot = next(s for s in body["slots"] if s["slot_code"] == "MID4")
+    assert mid4_slot["card"] is None  # 4-3-3 never had a MID4 code to carry over
+
+    cards_resp = (await client.get("/api/v1/clubs/me/cards", headers=headers)).json()
+    freed_cards = [c for c in cards_resp if not c["is_in_lineup"]]
+    # seed_starting_squad mints 4 bench cards on top of the 11 starters
+    # (Task 1's fixture, unchanged by this feature); the formation switch
+    # frees exactly one more (the card that was in FWD3) on top of those.
+    assert len(freed_cards) == 5

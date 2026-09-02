@@ -23,6 +23,10 @@ class ClubLineupSlotOut(BaseModel):
 class ClubLineupOut(BaseModel):
     is_complete: bool
     team_strength: int | None
+    formation: str
+    mentality: str
+    playstyle: str
+    tactical_fit: int
     slots: list[ClubLineupSlotOut]
 
 
@@ -33,3 +37,9 @@ class ClubLineupSlotIn(BaseModel):
 
 class ClubLineupSetRequest(BaseModel):
     slots: list[ClubLineupSlotIn]
+
+
+class ClubTacticsSetRequest(BaseModel):
+    formation: str
+    mentality: str
+    playstyle: str

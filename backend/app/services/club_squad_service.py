@@ -11,10 +11,14 @@ from app.models.club_lineup import ClubLineup, ClubLineupCard
 from app.models.enums import ClubCardSource, Position
 from app.models.player import Player
 from app.models.user import User
-from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest, ClubLineupSlotOut
+from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest, ClubLineupSlotOut, ClubTacticsSetRequest
 from app.schemas.player import PlayerOut
 from app.services.club_card_service import create_club_card
-from app.services.lineup_service import CATEGORY_POSITIONS, FORMATION_SLOTS, SLOTS_BY_CODE, calculate_base_strength
+from app.services.club_formation_service import CLUB_FORMATIONS, DEFAULT_FORMATION, get_formation_slots, get_slots_by_code
+from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES
+from app.services.club_tactical_profile_service import compute_profile, compute_tactical_fit
+from app.services.game_config_service import get_config
+from app.services.lineup_service import CATEGORY_POSITIONS, calculate_base_strength
 
 # app.services.club_service imports seed_starting_squad from this module at
 # module load time, so a module-level `from app.services.club_service import
@@ -69,7 +73,7 @@ async def seed_starting_squad(db: AsyncSession, club_id: int) -> None:
 
     used_player_ids: set[int] = set()
 
-    for slot in FORMATION_SLOTS:
+    for slot in get_formation_slots(DEFAULT_FORMATION):
         positions = list(CATEGORY_POSITIONS[slot.category])
         # Position enum members compare by value against Player.position's
         # own enum column — no str() conversion needed, matches how
@@ -128,12 +132,15 @@ async def list_club_cards(db: AsyncSession, user: User) -> list[ClubCardOut]:
 
 async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
     lineup = await _get_or_none_lineup(db, club_id)
+    formation = lineup.formation if lineup else DEFAULT_FORMATION
+    mentality = lineup.mentality if lineup else "BALANCED"
+    playstyle = lineup.playstyle if lineup else "CENTRAL_PLAY"
     by_slot = {lc.slot_code: lc.club_card for lc in lineup.cards} if lineup else {}
     in_lineup_ids = {lc.club_card_id for lc in lineup.cards} if lineup else set()
 
     slots = []
     cards_with_slots = []
-    for slot in FORMATION_SLOTS:
+    for slot in get_formation_slots(formation):
         card = by_slot.get(slot.code)
         slots.append(
             ClubLineupSlotOut(
@@ -144,9 +151,17 @@ async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
         if card:
             cards_with_slots.append((card, slot))
 
-    is_complete = len(cards_with_slots) == len(FORMATION_SLOTS)
+    is_complete = len(cards_with_slots) == len(get_formation_slots(formation))
     team_strength = calculate_base_strength(cards_with_slots) if is_complete else None
-    return ClubLineupOut(is_complete=is_complete, team_strength=team_strength, slots=slots)
+
+    config = await get_config(db)
+    profile = compute_profile(cards_with_slots) if cards_with_slots else None
+    tactical_fit = compute_tactical_fit(cards_with_slots, profile, mentality, playstyle, config) if profile else 0
+
+    return ClubLineupOut(
+        is_complete=is_complete, team_strength=team_strength, formation=formation, mentality=mentality,
+        playstyle=playstyle, tactical_fit=tactical_fit, slots=slots,
+    )
 
 
 async def get_club_lineup(db: AsyncSession, user: User) -> ClubLineupOut:
@@ -163,10 +178,14 @@ async def set_club_lineup(db: AsyncSession, user: User, payload: ClubLineupSetRe
     _require_manager(membership)
     club_id = membership.club_id
 
+    current_lineup = await _get_or_none_lineup(db, club_id)
+    formation = current_lineup.formation if current_lineup else DEFAULT_FORMATION
+    slots_by_code = get_slots_by_code(formation)
+
     slot_codes = [s.slot_code for s in payload.slots]
     if len(slot_codes) != len(set(slot_codes)):
         raise ConflictError("Один слот не может использоваться дважды")
-    if any(code not in SLOTS_BY_CODE for code in slot_codes):
+    if any(code not in slots_by_code for code in slot_codes):
         raise ConflictError("Неизвестный слот состава")
 
     card_ids = [s.club_card_id for s in payload.slots]
@@ -185,7 +204,7 @@ async def set_club_lineup(db: AsyncSession, user: User, payload: ClubLineupSetRe
         raise ConflictError("Один футболист не может занимать две позиции")
 
     for slot_in in payload.slots:
-        slot = SLOTS_BY_CODE[slot_in.slot_code]
+        slot = slots_by_code[slot_in.slot_code]
         card = cards_by_id[slot_in.club_card_id]
         if card.player.position not in CATEGORY_POSITIONS[slot.category]:
             raise ConflictError(f"Игрок на позиции {card.player.position.value} не подходит для слота {slot.code}")
@@ -234,4 +253,43 @@ async def set_club_lineup(db: AsyncSession, user: User, payload: ClubLineupSetRe
         # the now-current state.
         await db.rollback()
         raise ConflictError("Не удалось сохранить состав — попробуй ещё раз")
+    return await _lineup_to_out(db, club_id)
+
+
+async def set_club_tactics(db: AsyncSession, user: User, payload: ClubTacticsSetRequest) -> ClubLineupOut:
+    """PUT /clubs/me/tactics — mirrors set_club_lineup's captain/assistant-
+    only gating. Changing formation reconciles existing slots (spec §3):
+    ClubLineupCard rows whose slot_code doesn't exist in the new formation
+    are cleared (freeing their card to the bench); slots that share a code
+    across both formations (GK, DEF1, ...) keep their card."""
+    from app.services.club_service import _require_manager, _require_membership
+
+    membership = await _require_membership(db, user.id)
+    _require_manager(membership)
+    club_id = membership.club_id
+
+    if payload.formation not in CLUB_FORMATIONS:
+        raise ConflictError(f"Неизвестная схема: {payload.formation}")
+    if payload.mentality not in MENTALITIES:
+        raise ConflictError(f"Неизвестный настрой: {payload.mentality}")
+    if payload.playstyle not in PLAYSTYLES:
+        raise ConflictError(f"Неизвестный стиль игры: {payload.playstyle}")
+
+    lineup_result = await db.execute(
+        select(ClubLineup).where(ClubLineup.club_id == club_id).options(joinedload(ClubLineup.cards)).with_for_update(of=ClubLineup)
+    )
+    lineup = lineup_result.unique().scalar_one_or_none()
+    if lineup is None:
+        raise ConflictError("У клуба ещё нет состава")
+
+    new_slot_codes = set(get_slots_by_code(payload.formation).keys())
+    for lc in list(lineup.cards):
+        if lc.slot_code not in new_slot_codes:
+            await db.delete(lc)
+
+    lineup.formation = payload.formation
+    lineup.mentality = payload.mentality
+    lineup.playstyle = payload.playstyle
+    db.add(lineup)
+    await db.commit()
     return await _lineup_to_out(db, club_id)
