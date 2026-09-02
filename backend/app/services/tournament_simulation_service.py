@@ -15,13 +15,13 @@ from app.models.tournament_match import TournamentMatch
 from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLog
 from app.models.tournament_standing import TournamentClubStanding
 from app.services import tournament_match_engine, tournament_notification_service
+from app.services.club_formation_service import get_formation_slots
+from app.services.club_tactical_matchup_service import build_side
 from app.services.game_config_service import get_config
-from app.services.lineup_service import CATEGORY_POSITIONS, FORMATION_SLOTS, FormationSlot, calculate_base_strength
+from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot, calculate_base_strength
 from app.services.tournament_fixture_service import generate_fixtures
 from app.services.tournament_reward_service import conclude_tournament
 from app.services.tournament_standing_service import apply_match_result
-
-SUBSTITUTION_PENALTY = 0.5
 
 
 def _card_to_actor(card: ClubCard, category: str) -> dict:
@@ -33,21 +33,20 @@ def _card_to_actor(card: ClubCard, category: str) -> dict:
 
 async def resolve_match_lineup(
     db: AsyncSession, club_id: int
-) -> tuple[list[dict], bool, list[tuple[ClubCard, FormationSlot]]]:
-    """Returns (engine-ready lineup list, had_substitution, cards_with_slots).
-    Substitutes any slot whose card is currently suspended
-    (ClubCardAvailability.rounds_remaining > 0) from the bench — any ClubCard
-    for this club not currently in the lineup — same category first, any
-    category as fallback. `cards_with_slots` mirrors `result` but carries the
-    real (ClubCard, FormationSlot) ORM pairs actually used per slot (post-
-    substitution), so callers (match_strength) can feed them straight into
-    lineup_service.calculate_base_strength instead of reconstructing fakes."""
+) -> tuple[list[dict], bool, list[tuple[ClubCard, FormationSlot]], "ClubLineup | None"]:
+    """Returns (engine-ready lineup list, had_substitution, cards_with_slots,
+    club_lineup). Iterates the club's OWN formation (club_formation_service,
+    via club_lineup.formation) instead of the shared personal-engine
+    FORMATION_SLOTS — a club playing 4-4-2 must substitute into 4-4-2's slot
+    set, not 4-3-3's. club_lineup is returned alongside so callers can read
+    its mentality/playstyle without a second fetch."""
     from app.services.club_squad_service import _get_or_none_lineup
 
     lineup = await _get_or_none_lineup(db, club_id)
     if lineup is None:
-        return [], False, []
+        return [], False, [], None
 
+    formation_slots = get_formation_slots(lineup.formation)
     by_slot = {lc.slot_code: lc.club_card for lc in lineup.cards}
     lineup_card_ids = {lc.club_card_id for lc in lineup.cards}
 
@@ -73,7 +72,7 @@ async def resolve_match_lineup(
     result: list[dict] = []
     cards_with_slots: list[tuple[ClubCard, FormationSlot]] = []
 
-    for slot in FORMATION_SLOTS:
+    for slot in formation_slots:
         card = by_slot.get(slot.code)
         if card is None or card.id in suspended_ids:
             had_substitution = True
@@ -92,7 +91,7 @@ async def resolve_match_lineup(
             result.append(_card_to_actor(card, slot.category))
             cards_with_slots.append((card, slot))
 
-    return result, had_substitution, cards_with_slots
+    return result, had_substitution, cards_with_slots, lineup
 
 
 async def form_multiplier(db: AsyncSession, club_id: int, config) -> float:
@@ -115,16 +114,13 @@ async def form_multiplier(db: AsyncSession, club_id: int, config) -> float:
 
 
 async def match_strength(db: AsyncSession, club_id: int, config) -> tuple[int, list[dict]]:
-    """Returns (final strength, engine-ready lineup) — bundled together since
-    the orchestration in simulate_next_round needs both from one lineup
-    resolution pass. Uses the real lineup_service.calculate_base_strength
-    (rating*position-fit*rarity-bonus, plus a club/country chemistry bonus)
-    against the actual post-substitution (ClubCard, FormationSlot) pairs —
-    no more rating-average stopgap."""
-    lineup, had_substitution, cards_with_slots = await resolve_match_lineup(db, club_id)
+    """UI-facing team_strength only — no longer plumbed into match
+    resolution (spec §5, §6.1): the tactical engine's initiative comes from
+    TeamTacticalProfile.midfield_control × mentality instead. Substitution's
+    effect is now emergent through the zones a weaker sub feeds, so no flat
+    penalty is applied here any more."""
+    lineup, _had_substitution, cards_with_slots, _club_lineup = await resolve_match_lineup(db, club_id)
     base = calculate_base_strength(cards_with_slots)
-    if had_substitution:
-        base = round(base * SUBSTITUTION_PENALTY)
     multiplier = await form_multiplier(db, club_id, config)
     return max(1, round(base * multiplier)), lineup
 
@@ -279,10 +275,12 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
                 round_matches.append(match)
                 continue
 
-            strength_a, lineup_a = await match_strength(db, club_a_id, config)
-            strength_b, lineup_b = await match_strength(db, club_b_id, config)
+            lineup_a, _had_sub_a, cards_with_slots_a, club_lineup_a = await resolve_match_lineup(db, club_a_id)
+            lineup_b, _had_sub_b, cards_with_slots_b, club_lineup_b = await resolve_match_lineup(db, club_b_id)
+            side_a = build_side(cards_with_slots_a, club_lineup_a.mentality, club_lineup_a.playstyle)
+            side_b = build_side(cards_with_slots_b, club_lineup_b.mentality, club_lineup_b.playstyle)
             engine_result = tournament_match_engine.simulate_match(
-                strength_a, strength_b, lineup_a, lineup_b, config,
+                side_a, side_b, lineup_a, lineup_b, config,
                 club_names[club_a_id], club_names[club_b_id],
             )
 
