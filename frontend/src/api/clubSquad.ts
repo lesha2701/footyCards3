@@ -15,3 +15,8 @@ export async function fetchClubCards(): Promise<ClubCard[]> {
   const { data } = await api.get<ClubCard[]>("/clubs/me/cards");
   return data;
 }
+
+export async function setClubTactics(payload: { formation: string; mentality: string; playstyle: string }): Promise<ClubLineup> {
+  const { data } = await api.put<ClubLineup>("/clubs/me/tactics", payload);
+  return data;
+}

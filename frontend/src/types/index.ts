@@ -1078,6 +1078,10 @@ export interface ClubLineupSlot {
 export interface ClubLineup {
   is_complete: boolean;
   team_strength: number | null;
+  formation: string;
+  mentality: string;
+  playstyle: string;
+  tactical_fit: number;
   slots: ClubLineupSlot[];
 }
 

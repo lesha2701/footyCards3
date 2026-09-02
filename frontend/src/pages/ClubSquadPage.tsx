@@ -6,9 +6,10 @@ import ClubCardPickerModal from "@/components/clubs/ClubCardPickerModal";
 import { IconChevronLeft, IconChevronUp, IconPlus, IconStar, IconTarget, IconUsers } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchMyClub } from "@/api/clubs";
-import { fetchClubCards, fetchClubLineup, setClubLineup } from "@/api/clubSquad";
+import { fetchClubCards, fetchClubLineup, setClubLineup, setClubTactics } from "@/api/clubSquad";
 import { staticUrl } from "@/lib/api";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
+import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
 import { formatGameError } from "@/lib/errors";
 import type { ClubCard, ClubLineupSlot } from "@/types";
 
@@ -28,6 +29,17 @@ export default function ClubSquadPage() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["clubs", "lineup"] }); queryClient.invalidateQueries({ queryKey: ["clubs", "cards"] }); },
     onError: (err) => setError(formatGameError(err, "Не удалось обновить состав")),
   });
+
+  const setTacticsMutation = useMutation({
+    mutationFn: setClubTactics,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["clubs", "lineup"] }); queryClient.invalidateQueries({ queryKey: ["clubs", "cards"] }); },
+    onError: (err) => setError(formatGameError(err, "Не удалось обновить тактику")),
+  });
+
+  const updateTactics = (patch: Partial<{ formation: string; mentality: string; playstyle: string }>) => {
+    if (!lineup) return;
+    setTacticsMutation.mutate({ formation: lineup.formation, mentality: lineup.mentality, playstyle: lineup.playstyle, ...patch });
+  };
 
   if (lineupLoading) return <ListSkeleton />;
 
@@ -69,9 +81,38 @@ export default function ClubSquadPage() {
 
       <section className="rounded-2xl bg-bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
-          <p className="font-display text-base font-bold text-ink-chalk">Состав 4-3-3</p>
+          <p className="font-display text-base font-bold text-ink-chalk">Состав {lineup?.formation}</p>
           {lineup?.is_complete && <span className="font-mono text-sm font-bold text-accent-cyan">Сила: {lineup.team_strength}</span>}
         </div>
+
+        {canEdit && lineup && (
+          <div className="mb-3 flex flex-col gap-2">
+            <select
+              value={lineup.formation}
+              onChange={(e) => updateTactics({ formation: e.target.value })}
+              disabled={setTacticsMutation.isPending}
+              className="rounded-lg bg-white/5 px-2 py-1.5 text-xs text-ink-chalk"
+            >
+              {FORMATIONS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+            </select>
+            <select
+              value={lineup.mentality}
+              onChange={(e) => updateTactics({ mentality: e.target.value })}
+              disabled={setTacticsMutation.isPending}
+              className="rounded-lg bg-white/5 px-2 py-1.5 text-xs text-ink-chalk"
+            >
+              {MENTALITIES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+            <select
+              value={lineup.playstyle}
+              onChange={(e) => updateTactics({ playstyle: e.target.value })}
+              disabled={setTacticsMutation.isPending}
+              className="rounded-lg bg-white/5 px-2 py-1.5 text-xs text-ink-chalk"
+            >
+              {PLAYSTYLES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+          </div>
+        )}
         <div className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
           {(["FWD", "MID", "DEF", "GK"] as const).map((category) => (
             <div key={category} className="relative flex justify-evenly gap-2">
