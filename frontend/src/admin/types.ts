@@ -184,10 +184,14 @@ export interface GameConfig {
   tactico_bot_optimal_pick_chance_hard: number;
   tactico_max_legendary_cards: number;
   tactico_max_epic_cards: number;
+  tactico_max_diamond_cards: number;
+  match_max_diamond_cards: number;
   wheel_free_spins_per_day: number;
   wheel_spin_cost_coins: number;
   wheel_spin_cost_stars: number;
   wheel_duplicate_badge_coins: number;
+  bingo_reward_coins: number;
+  bingo_reward_pack_id: number | null;
 }
 
 export interface CardCollection {

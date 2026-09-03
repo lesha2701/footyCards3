@@ -67,6 +67,7 @@ const RARITY_GLYPH_BG: Record<Rarity, string> = {
   rare: "bg-blue-500/12 text-blue-400",
   epic: "bg-purple-500/12 text-purple-400",
   legendary: "bg-amber-400/12 text-amber-400",
+  diamond: "bg-cyan-400/12 text-cyan-300",
 };
 
 function glyphBgClass(prize: WheelPrize): string {

@@ -3,15 +3,18 @@ import { useState } from "react";
 
 import { fetchUpgradeableCards, fetchUpgradeRules } from "@/api/collection";
 import CardUpgradeModal from "@/components/cards/CardUpgradeModal";
+import DiamondFeedModal from "@/components/cards/DiamondFeedModal";
 import PlayerCard from "@/components/cards/PlayerCard";
 import EmptyState from "@/components/common/EmptyState";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
-import { IconChevronRight, IconCoin, IconUpgrade } from "@/components/icons";
+import { IconChevronRight, IconCoin, IconStar, IconUpgrade } from "@/components/icons";
 import { effectiveUpgradeChance } from "@/lib/cardUpgrade";
 import { RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import type { Rarity, UserCard } from "@/types";
 
 const RARITY_SEQUENCE: Rarity[] = ["common", "rare", "epic", "legendary"];
+
+type UpgradeTab = "upgrade" | "diamond";
 
 // Mirrors the backend's MAX_STAKED_CARDS (schemas/card_upgrade.py) — purely
 // a client-side UX cap, the server is the actual source of truth.
@@ -21,11 +24,23 @@ export default function UpgradePage() {
   const { data: rules, isLoading: rulesLoading } = useQuery({ queryKey: ["upgrade-rules"], queryFn: fetchUpgradeRules });
   const upgradeableRarities = RARITY_SEQUENCE.filter((r) => rules?.some((rule) => rule.from_rarity === r && rule.is_active));
 
+  const [tab, setTab] = useState<UpgradeTab>("upgrade");
+  const [feedingCard, setFeedingCard] = useState<UserCard | null>(null);
   const [rarity, setRarity] = useState<Rarity | null>(null);
   const [selected, setSelected] = useState<UserCard[]>([]);
   const [upgrading, setUpgrading] = useState(false);
   const effectiveRarity = rarity ?? upgradeableRarities[0] ?? null;
   const currentRule = rules?.find((r) => r.from_rarity === effectiveRarity && r.is_active);
+
+  // Diamond cards don't go through the common→rare→epic→legendary rule chain
+  // above (their own upgrade mechanic isn't final yet), so this is a separate
+  // tab reusing the same "your unlocked cards of this rarity" endpoint, just
+  // as a showcase list for now rather than wiring it into the staking flow.
+  const { data: diamondCards, isLoading: diamondLoading } = useQuery({
+    queryKey: ["upgrade-cards", "diamond"],
+    queryFn: () => fetchUpgradeableCards("diamond"),
+    enabled: tab === "diamond",
+  });
 
   const selectRarity = (r: Rarity) => {
     setRarity(r);
@@ -68,7 +83,7 @@ export default function UpgradePage() {
           </div>
         </div>
 
-        {!!RARITY_SEQUENCE.length && (
+        {tab === "upgrade" && !!RARITY_SEQUENCE.length && (
           <div className="relative mt-4 flex items-center gap-1.5 overflow-x-auto pb-1">
             {RARITY_SEQUENCE.map((r, i) => (
               <div key={r} className="flex shrink-0 items-center gap-1.5">
@@ -85,7 +100,7 @@ export default function UpgradePage() {
           </div>
         )}
 
-        {currentRule && (
+        {tab === "upgrade" && currentRule && (
           <div className="relative mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-black/20 px-3 py-2.5">
             <span className="font-mono text-xs text-ink-mist">
               Шанс успеха{" "}
@@ -107,49 +122,101 @@ export default function UpgradePage() {
         )}
       </section>
 
-      {!rulesLoading && upgradeableRarities.length === 0 && (
-        <EmptyState icon={IconUpgrade} title="Апгрейд пока недоступен" description="Загляни позже — правила ещё не настроены" />
+      <div className="flex gap-2 rounded-2xl bg-bg-surface p-1">
+        <button
+          onClick={() => setTab("upgrade")}
+          className={`flex-1 rounded-xl py-2 text-xs font-semibold ${tab === "upgrade" ? "bg-amber-400 text-bg-base" : "text-ink-mist"}`}
+        >
+          Апгрейд
+        </button>
+        <button
+          onClick={() => setTab("diamond")}
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold ${
+            tab === "diamond" ? "bg-rarity-diamond text-bg-base" : "text-ink-mist"
+          }`}
+        >
+          <IconStar size={13} />
+          Диамантовые игроки
+        </button>
+      </div>
+
+      {tab === "upgrade" && (
+        <>
+          {!rulesLoading && upgradeableRarities.length === 0 && (
+            <EmptyState icon={IconUpgrade} title="Апгрейд пока недоступен" description="Загляни позже — правила ещё не настроены" />
+          )}
+
+          {upgradeableRarities.length > 0 && (
+            <>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {upgradeableRarities.map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => selectRarity(r)}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
+                      effectiveRarity === r ? "bg-amber-400 text-bg-base" : "bg-white/5 text-ink-mist"
+                    }`}
+                  >
+                    {RARITY_LABELS[r]}
+                  </button>
+                ))}
+              </div>
+
+              {isLoading && <CardGridSkeleton count={9} />}
+              {!isLoading && !cards?.length && (
+                <EmptyState
+                  icon={IconUpgrade}
+                  title="Нечего улучшать"
+                  description={`Нет доступных карточек редкости «${RARITY_LABELS[effectiveRarity!]}» — открой паки, или освободи карточки из состава/обмена`}
+                />
+              )}
+
+              <div className="grid grid-cols-3 gap-2 pb-20">
+                {cards?.map((card) => (
+                  <PlayerCard
+                    key={card.id}
+                    player={card.player}
+                    selected={selected.some((c) => c.id === card.id)}
+                    onClick={() => toggleCard(card)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </>
       )}
 
-      {upgradeableRarities.length > 0 && (
+      {tab === "diamond" && (
         <>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {upgradeableRarities.map((r) => (
-              <button
-                key={r}
-                onClick={() => selectRarity(r)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
-                  effectiveRarity === r ? "bg-amber-400 text-bg-base" : "bg-white/5 text-ink-mist"
-                }`}
-              >
-                {RARITY_LABELS[r]}
-              </button>
-            ))}
-          </div>
+          <p className="text-xs text-ink-mist">
+            Твои диамантовые карточки. Скорми им другие карты, чтобы поднять рейтинг — нажми на карточку, чтобы начать.
+          </p>
 
-          {isLoading && <CardGridSkeleton count={9} />}
-          {!isLoading && !cards?.length && (
+          {diamondLoading && <CardGridSkeleton count={9} />}
+          {!diamondLoading && !diamondCards?.length && (
             <EmptyState
-              icon={IconUpgrade}
-              title="Нечего улучшать"
-              description={`Нет доступных карточек редкости «${RARITY_LABELS[effectiveRarity!]}» — открой паки, или освободи карточки из состава/обмена`}
+              icon={IconStar}
+              title="Пока нет диамантовых карточек"
+              description="Они выпадают из паков с шансом, который настраивает админ — загляни позже"
             />
           )}
 
           <div className="grid grid-cols-3 gap-2 pb-20">
-            {cards?.map((card) => (
+            {diamondCards?.map((card) => (
               <PlayerCard
                 key={card.id}
                 player={card.player}
-                selected={selected.some((c) => c.id === card.id)}
-                onClick={() => toggleCard(card)}
+                selected={feedingCard?.id === card.id}
+                onClick={() => setFeedingCard(card)}
               />
             ))}
           </div>
         </>
       )}
 
-      {selected.length > 0 && (
+      {feedingCard && <DiamondFeedModal card={feedingCard} onClose={() => setFeedingCard(null)} />}
+
+      {tab === "upgrade" && selected.length > 0 && (
         <div className="safe-bottom fixed inset-x-0 bottom-16 z-20 flex justify-center px-4">
           <div className="flex w-full max-w-md items-center gap-3 rounded-2xl border border-amber-400/20 bg-bg-surface p-3 shadow-lg">
             <button

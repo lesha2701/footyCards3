@@ -6,8 +6,8 @@ import { ApiRequestError, staticUrl } from "@/lib/api";
 import { showConfirm } from "@/lib/telegram";
 import type { ClubPack } from "@/types";
 
-type Rarity = "common" | "rare" | "epic" | "legendary";
-const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary"];
+type Rarity = "common" | "rare" | "epic" | "legendary" | "diamond";
+const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
 
 interface ClubPackForm {
   slug: string;
@@ -22,7 +22,7 @@ interface ClubPackForm {
 }
 
 function packToForm(p?: ClubPack): ClubPackForm {
-  const probabilities = { common: 0, rare: 0, epic: 0, legendary: 0 } as Record<Rarity, number>;
+  const probabilities = { common: 0, rare: 0, epic: 0, legendary: 0, diamond: 0 } as Record<Rarity, number>;
   for (const rp of p?.rarity_probabilities ?? []) probabilities[rp.rarity as Rarity] = rp.probability * 100;
   return {
     slug: p?.slug ?? "", name: p?.name ?? "", description: p?.description ?? "",

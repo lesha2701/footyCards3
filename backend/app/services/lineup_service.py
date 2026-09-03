@@ -8,10 +8,12 @@ from sqlalchemy.orm import joinedload
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.models.card import UserCard
-from app.models.enums import RARITY_ORDER, Position
+from app.models.enums import RARITY_ORDER, Position, Rarity
 from app.models.lineup import Lineup, LineupCard
 from app.models.user import User
 from app.schemas.lineup import LineupOut, LineupSetRequest, LineupSlotOut
+from app.services.game_config_service import get_config
+from app.services.player_stats_service import effective_card_stats
 
 
 @dataclass(frozen=True)
@@ -97,7 +99,13 @@ def calculate_base_strength(cards_with_slots: list[tuple[UserCard, FormationSlot
             fit = 0.9
         else:
             fit = 0.75
-        total += player.rating * fit * (1 + 0.03 * RARITY_ORDER[player.rarity])
+        # club_tactical_profile_service.py reuses this function with ClubCard
+        # rows (a separate club-owned card pool with no diamond-leveling
+        # concept of its own) alongside personal UserCard rows — getattr
+        # keeps this function correct for both instead of forcing an
+        # unrelated column onto ClubCard.
+        rating, _, _ = effective_card_stats(player, getattr(card, "diamond_rating_bonus", 0))
+        total += rating * fit * (1 + 0.03 * RARITY_ORDER[player.rarity])
 
     clubs = Counter(c.player.club for c, _ in cards_with_slots)
     countries = Counter(c.player.country for c, _ in cards_with_slots)
@@ -155,10 +163,11 @@ async def get_active_lineup(db: AsyncSession, user: User) -> LineupOut:
 
     is_complete = len(cards_with_slots) == len(FORMATION_SLOTS)
     strength = calculate_base_strength(cards_with_slots) if is_complete else None
+    config = await get_config(db)
 
     return LineupOut(
         id=lineup.id, formation=lineup.formation, tactic=lineup.tactic, is_complete=is_complete,
-        team_strength=strength, slots=slots_out,
+        team_strength=strength, max_diamond=config.match_max_diamond_cards, slots=slots_out,
     )
 
 
@@ -199,6 +208,11 @@ async def set_lineup(db: AsyncSession, user: User, payload: LineupSetRequest) ->
                 f"Player {card.player.display_name} is already assigned to another slot; even duplicate copies can't fill two slots"
             )
         player_ids_seen.add(card.player_id)
+
+    config = await get_config(db)
+    diamond_count = sum(1 for card in cards_by_id.values() if card.player.rarity == Rarity.diamond)
+    if diamond_count > config.match_max_diamond_cards:
+        raise ConflictError(f"Максимум {config.match_max_diamond_cards} диамантовых карт в составе")
 
     lineup = await _get_or_create_lineup(db, user.id)
 

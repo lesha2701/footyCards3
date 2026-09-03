@@ -20,6 +20,8 @@ const SECTIONS = [
   { to: "/admin/wheel", label: "Колесо фортуны", icon: "🎡" },
   { to: "/admin/games", label: "Игры", icon: "🎮" },
   { to: "/admin/upgrades", label: "Апгрейд", icon: "🎲" },
+  { to: "/admin/diamond-upgrades", label: "Диамант", icon: "💎" },
+  { to: "/admin/bingo", label: "Бинго недели", icon: "🎱" },
   { to: "/admin/shop", label: "Магазин", icon: "🛒" },
   { to: "/admin/broadcasts", label: "Рассылка", icon: "📣" },
   { to: "/admin/log", label: "Журнал", icon: "📜" },

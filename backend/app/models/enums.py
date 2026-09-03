@@ -6,9 +6,10 @@ class Rarity(str, enum.Enum):
     rare = "rare"
     epic = "epic"
     legendary = "legendary"
+    diamond = "diamond"
 
 
-RARITY_ORDER = {Rarity.common: 0, Rarity.rare: 1, Rarity.epic: 2, Rarity.legendary: 3}
+RARITY_ORDER = {Rarity.common: 0, Rarity.rare: 1, Rarity.epic: 2, Rarity.legendary: 3, Rarity.diamond: 4}
 
 
 class Position(str, enum.Enum):
@@ -69,6 +70,7 @@ class TransactionType(str, enum.Enum):
     league_reward = "league_reward"
     gift_purchase_coins = "gift_purchase_coins"
     premium_subscription_adjustment = "premium_subscription_adjustment"
+    bingo_reward = "bingo_reward"
 
 
 class GiftKind(str, enum.Enum):
@@ -270,3 +272,17 @@ class WheelSpinSource(str, enum.Enum):
     free = "free"
     coins = "coins"
     stars = "stars"
+
+
+class BingoGoalType(str, enum.Enum):
+    """A weekly Bingo goal's metric. New game types are added here, plus one
+    increment call at the relevant event site — see bingo_service.py."""
+
+    packs_opened = "packs_opened"
+    rare_drops = "rare_drops"
+    epic_drops = "epic_drops"
+    legendary_drops = "legendary_drops"
+    tactico_matches_played = "tactico_matches_played"
+    penalty_matches_played = "penalty_matches_played"
+    arena_matches_played = "arena_matches_played"
+    trades_completed = "trades_completed"

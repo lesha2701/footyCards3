@@ -9,7 +9,7 @@ import { RARITY_LABELS } from "@/lib/rarity";
 import { showConfirm } from "@/lib/telegram";
 import type { Pack, Rarity } from "@/types";
 
-const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary"];
+const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
 
 const COVER_TEMPLATES: { rarity: Rarity; path: string }[] = RARITIES.map((rarity) => ({
   rarity,
@@ -32,7 +32,7 @@ interface PackForm {
 }
 
 function packToForm(p?: Pack): PackForm {
-  const probabilities: Record<Rarity, number> = { common: 0, rare: 0, epic: 0, legendary: 0 };
+  const probabilities: Record<Rarity, number> = { common: 0, rare: 0, epic: 0, legendary: 0, diamond: 0 };
   p?.rarity_probabilities.forEach((rp) => { probabilities[rp.rarity] = rp.probability; });
   return {
     slug: p?.slug ?? "",

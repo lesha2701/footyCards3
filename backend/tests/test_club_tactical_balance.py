@@ -17,6 +17,8 @@ class _FakePlayer:
     rarity: str = "common"
     club: int = 1
     country: int = 1
+    attack_rating: int | None = None
+    defense_rating: int | None = None
 
 
 @dataclass
@@ -24,6 +26,7 @@ class _FakeCard:
     id: int
     player_id: int
     player: _FakePlayer
+    diamond_rating_bonus: int = 0
 
 
 class _Config:

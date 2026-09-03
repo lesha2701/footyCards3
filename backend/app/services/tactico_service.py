@@ -12,6 +12,7 @@ from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.timeutil import ensure_aware
 from app.models.card import UserCard
 from app.models.enums import (
+    BingoGoalType,
     MatchDifficulty,
     MatchResult,
     NotificationType,
@@ -26,11 +27,12 @@ from app.models.tactico import TacticoMatch, TacticoQueueEntry, TacticoSquad, Ta
 from app.models.user import User
 from app.schemas.ranking import RankingMetric
 from app.schemas.tactico import TacticoCardOut, TacticoMatchOut, TacticoRoundOut, TacticoSquadOut, TacticoStatsOut
-from app.services import league_service, ranking_service
+from app.services import bingo_service, league_service, ranking_service
 from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS
 from app.services.match_service import BOT_NAMES
 from app.services.notification_service import notify
+from app.services.player_stats_service import effective_card_stats
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
 SQUAD_SIZE = 11
@@ -78,6 +80,7 @@ async def get_squad(db: AsyncSession, user: User) -> TacticoSquadOut:
     return TacticoSquadOut(
         is_complete=len(cards) == SQUAD_SIZE, cards=cards,
         max_legendary=config.tactico_max_legendary_cards, max_epic=config.tactico_max_epic_cards,
+        max_diamond=config.tactico_max_diamond_cards,
     )
 
 
@@ -103,10 +106,13 @@ async def set_squad(db: AsyncSession, user: User, user_card_ids: list[int]) -> T
 
     legendary_count = sum(1 for c in cards_by_id.values() if c.player.rarity == Rarity.legendary)
     epic_count = sum(1 for c in cards_by_id.values() if c.player.rarity == Rarity.epic)
+    diamond_count = sum(1 for c in cards_by_id.values() if c.player.rarity == Rarity.diamond)
     if legendary_count > config.tactico_max_legendary_cards:
         raise ConflictError(f"Максимум {config.tactico_max_legendary_cards} легендарных карт в составе Тактико")
     if epic_count > config.tactico_max_epic_cards:
         raise ConflictError(f"Максимум {config.tactico_max_epic_cards} эпических карт в составе Тактико")
+    if diamond_count > config.tactico_max_diamond_cards:
+        raise ConflictError(f"Максимум {config.tactico_max_diamond_cards} диамантовых карт в составе Тактико")
 
     squad = await _get_or_create_squad(db, user.id)
     old_result = await db.execute(select(TacticoSquadCard).where(TacticoSquadCard.squad_id == squad.id))
@@ -162,7 +168,8 @@ def _resolve_round_winner(user_snap: dict, opponent_snap: dict, phase: str, bonu
     return "draw"
 
 
-def _card_snapshot(player: Player, user_card_id: Optional[int] = None) -> dict:
+def _card_snapshot(player: Player, user_card_id: Optional[int] = None, diamond_rating_bonus: int = 0) -> dict:
+    rating, attack_rating, defense_rating = effective_card_stats(player, diamond_rating_bonus)
     return {
         "user_card_id": user_card_id,
         "player_id": player.id,
@@ -170,9 +177,9 @@ def _card_snapshot(player: Player, user_card_id: Optional[int] = None) -> dict:
         "position": player.position.value,
         "image_path": player.image_path,
         "rarity": player.rarity.value,
-        "rating": player.rating,
-        "attack_rating": player.attack_rating if player.attack_rating is not None else player.rating,
-        "defense_rating": player.defense_rating if player.defense_rating is not None else player.rating,
+        "rating": rating,
+        "attack_rating": attack_rating,
+        "defense_rating": defense_rating,
     }
 
 
@@ -228,7 +235,7 @@ def _record_pick(state: dict, side: str, card: UserCard) -> None:
         raise ConflictError("You already submitted a card for this round")
     pool.remove(card.id)
     state[f"{side}_pending_card_id"] = card.id
-    state[f"{side}_pending_snapshot"] = _card_snapshot(card.player, user_card_id=card.id)
+    state[f"{side}_pending_snapshot"] = _card_snapshot(card.player, user_card_id=card.id, diamond_rating_bonus=card.diamond_rating_bonus)
 
 
 def _bot_submit(state: dict, difficulty: MatchDifficulty, config: GameConfig, bonus_pct: float) -> None:
@@ -702,6 +709,10 @@ async def _finish_match(
     db.add(match)
     await db.commit()
 
+    # Bingo of the Week: one finished match (any opponent type/result)
+    # counts as one game played toward the collective goal.
+    await bingo_service.increment_goal(db, BingoGoalType.tactico_matches_played, 1)
+
 
 async def forfeit_match(db: AsyncSession, user: User, match_id: int) -> TacticoMatchOut:
     """Immediately ends an in-progress match as a loss for the forfeiting
@@ -838,7 +849,12 @@ async def _hydrate_match(db: AsyncSession, match: TacticoMatch, viewer: User) ->
                 )
                 cards_by_id = {c.id: c for c in cards_result.unique().scalars().all()}
                 pickable_cards = [
-                    TacticoCardOut(**_card_snapshot(cards_by_id[cid].player, user_card_id=cid))
+                    TacticoCardOut(
+                        **_card_snapshot(
+                            cards_by_id[cid].player, user_card_id=cid,
+                            diamond_rating_bonus=cards_by_id[cid].diamond_rating_bonus,
+                        )
+                    )
                     for cid in pool_ids
                     if cid in cards_by_id
                 ]

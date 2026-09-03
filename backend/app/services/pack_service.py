@@ -10,12 +10,12 @@ from sqlalchemy.orm import joinedload
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.card import UserCard
 from app.models.card_collection import CardCollection
-from app.models.enums import RARITY_ORDER, CardSource, NotificationType, Rarity, TransactionType
+from app.models.enums import RARITY_ORDER, BingoGoalType, CardSource, NotificationType, Rarity, TransactionType
 from app.models.pack import Pack, PackOpening, PackOpeningCard, PackRarityProbability
 from app.models.player import Player
 from app.models.user import User
 from app.schemas.pack import OpenedCardOut, PackOpenResult, PackOut
-from app.services import collection_service, notification_service, task_service
+from app.services import bingo_service, collection_service, notification_service, task_service
 from app.services.card_creation import create_user_card
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
@@ -375,6 +375,18 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
                 return await get_opening_result(db, user, existing)
         raise
     await db.refresh(locked_user)
+
+    # Bingo of the Week: counted only for a real player-initiated open (not
+    # grant_bonus_pack_opening's server-granted packs, e.g. Bingo's own
+    # reward or task/collection rewards) — self-contained, own commit, runs
+    # after this open is durably committed.
+    await bingo_service.increment_goal(db, BingoGoalType.packs_opened, 1)
+    rarity_counts: dict[Rarity, int] = {}
+    for item in opened_items:
+        rarity_counts[item.card.player.rarity] = rarity_counts.get(item.card.player.rarity, 0) + 1
+    await bingo_service.increment_goal(db, BingoGoalType.rare_drops, rarity_counts.get(Rarity.rare, 0))
+    await bingo_service.increment_goal(db, BingoGoalType.epic_drops, rarity_counts.get(Rarity.epic, 0))
+    await bingo_service.increment_goal(db, BingoGoalType.legendary_drops, rarity_counts.get(Rarity.legendary, 0))
 
     return PackOpenResult(
         opening_id=opening.id,

@@ -58,10 +58,12 @@ export default function TacticoSquadPage() {
   const cards = [...collectionCards, ...(squad?.cards.filter((c) => !seenIds.has(c.id)) ?? [])];
   const maxLegendary = squad?.max_legendary ?? 3;
   const maxEpic = squad?.max_epic ?? 3;
+  const maxDiamond = squad?.max_diamond ?? 1;
 
   const cardsById = new Map<number, UserCard>(cards.map((c) => [c.id, c]));
   const legendaryCount = selectedIds.filter((id) => cardsById.get(id)?.player.rarity === "legendary").length;
   const epicCount = selectedIds.filter((id) => cardsById.get(id)?.player.rarity === "epic").length;
+  const diamondCount = selectedIds.filter((id) => cardsById.get(id)?.player.rarity === "diamond").length;
 
   const toggle = (card: UserCard) => {
     const id = card.id;
@@ -84,6 +86,11 @@ export default function TacticoSquadPage() {
       setError(`Максимум ${maxEpic} эпических карт в составе`);
       return;
     }
+    if (card.player.rarity === "diamond" && diamondCount >= maxDiamond) {
+      haptic("medium");
+      setError(`Максимум ${maxDiamond} диамантовых карт в составе`);
+      return;
+    }
     setError(null);
     setSelectedIds((prev) => [...prev, id]);
   };
@@ -94,7 +101,7 @@ export default function TacticoSquadPage() {
         <h1 className="font-display text-xl font-bold text-ink-chalk">Состав Тактико</h1>
         <p className="mt-1 text-xs text-ink-mist">
           Выбери ровно {SQUAD_SIZE} карточек — без позиций и формации, только твои сильнейшие. Не более {maxLegendary}{" "}
-          легендарных и {maxEpic} эпических, чтобы состав решала не только редкость карт.
+          легендарных, {maxEpic} эпических и {maxDiamond} диамантовых, чтобы состав решала не только редкость карт.
         </p>
       </div>
 
@@ -104,6 +111,9 @@ export default function TacticoSquadPage() {
         </span>
         <span className={`rounded-full px-2.5 py-1 ${epicCount >= maxEpic ? "bg-rarity-epic/20 text-rarity-epic" : "bg-white/5 text-ink-mist"}`}>
           Эпических: {epicCount}/{maxEpic}
+        </span>
+        <span className={`rounded-full px-2.5 py-1 ${diamondCount >= maxDiamond ? "bg-rarity-diamond/20 text-rarity-diamond" : "bg-white/5 text-ink-mist"}`}>
+          Диамантовых: {diamondCount}/{maxDiamond}
         </span>
       </div>
 
@@ -121,7 +131,8 @@ export default function TacticoSquadPage() {
           const rarityBlocked =
             !selected &&
             ((card.player.rarity === "legendary" && legendaryCount >= maxLegendary) ||
-              (card.player.rarity === "epic" && epicCount >= maxEpic));
+              (card.player.rarity === "epic" && epicCount >= maxEpic) ||
+              (card.player.rarity === "diamond" && diamondCount >= maxDiamond));
           return (
             <PlayerCard
               key={card.id}

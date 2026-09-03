@@ -42,6 +42,25 @@ async def test_open_pack_success(client, db_session, bot_token):
     assert body["new_balance"] == 500 - 100
 
 
+async def test_open_pack_can_drop_a_diamond_card(client, db_session, bot_token):
+    await create_player(db_session, rarity=Rarity.diamond, rating=60)
+    pack = await create_pack(db_session, "diamond_test", price=100, card_count=3, probabilities={Rarity.diamond: 1.0})
+
+    user = await _register(client, db_session, 700099, bot_token)
+    user_id = user.id
+    headers = telegram_headers(700099, bot_token)
+
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["cards"]) == 3
+    assert all(c["card"]["player"]["rarity"] == "diamond" for c in body["cards"])
+
+    db_session.expire_all()
+    cards = (await db_session.execute(select(UserCard).where(UserCard.owner_id == user_id))).scalars().all()
+    assert len(cards) == 3
+
+
 async def test_open_pack_with_collection_player_does_not_crash(client, db_session, bot_token):
     from app.models.card_collection import CardCollection
 

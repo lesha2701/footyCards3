@@ -598,8 +598,11 @@ def test_calculate_base_strength_rarity_bonus_only_affects_the_swapped_cards_own
     "adding a higher-rated player drops the squad's overall strength")."""
 
     def fake_card(rating, rarity, position, club, country):
-        player = SimpleNamespace(rating=rating, rarity=rarity, position=position, club=club, country=country)
-        return SimpleNamespace(player=player)
+        player = SimpleNamespace(
+            rating=rating, attack_rating=rating, defense_rating=rating, rarity=rarity, position=position,
+            club=club, country=country,
+        )
+        return SimpleNamespace(player=player, diamond_rating_bonus=0)
 
     # Deliberately non-uniform ratings across the other 10 cards: the old
     # team-average formula and the new per-card formula only coincide when

@@ -11,11 +11,11 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.timeutil import ensure_aware
 from app.models.card import UserCard
-from app.models.enums import MatchResult, NotificationType, PenaltyMatchStatus, PenaltyOpponentType
+from app.models.enums import BingoGoalType, MatchResult, NotificationType, PenaltyMatchStatus, PenaltyOpponentType
 from app.models.penalty import PenaltyMatch, PenaltyQueueEntry
 from app.models.user import User
 from app.schemas.penalty_match import PenaltyMatchOut, PenaltyRoundOut
-from app.services import league_service
+from app.services import bingo_service, league_service
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 from app.services.penalty_service import PENALTY_ZONES, _resolve_shot
@@ -293,6 +293,10 @@ async def submit_pick(db: AsyncSession, user: User, match_id: int, zone: str) ->
     db.add(match)
     await db.commit()
     await db.refresh(match)
+
+    if match.status == PenaltyMatchStatus.finished:
+        await bingo_service.increment_goal(db, BingoGoalType.penalty_matches_played, 1)
+
     return await _hydrate_match(db, match, user)
 
 
@@ -425,6 +429,7 @@ async def forfeit_match(db: AsyncSession, user: User, match_id: int) -> PenaltyM
     await _finish_match(db, match, state, forced_loser=forfeiting_side)
     await db.commit()
     await db.refresh(match)
+    await bingo_service.increment_goal(db, BingoGoalType.penalty_matches_played, 1)
     return await _hydrate_match(db, match, user)
 
 
@@ -462,6 +467,8 @@ async def _auto_resolve_overdue(db: AsyncSession) -> int:
                 flag_modified(match, "server_state")
                 db.add(match)
             await db.commit()
+            if match.status == PenaltyMatchStatus.finished:
+                await bingo_service.increment_goal(db, BingoGoalType.penalty_matches_played, 1)
             swept += 1
             continue
 
@@ -478,6 +485,8 @@ async def _auto_resolve_overdue(db: AsyncSession) -> int:
         flag_modified(match, "server_state")
         db.add(match)
         await db.commit()
+        if match.status == PenaltyMatchStatus.finished:
+            await bingo_service.increment_goal(db, BingoGoalType.penalty_matches_played, 1)
         swept += 1
     return swept
 

@@ -47,10 +47,14 @@ export default function NewTradePage() {
 
   // Neither side's collection ever offers/requests a card locked elsewhere
   // (admin lock, in a trade, in a Card Arena lineup, or in a Tactico
-  // squad) — the backend rejects all four at accept time anyway, so
-  // showing them as pickable here just sets the offer up to fail later.
-  const isTradeable = (c: { is_locked_by_admin: boolean; is_locked_in_trade: boolean; is_in_lineup: boolean; is_in_tactico_squad: boolean }) =>
-    !c.is_locked_by_admin && !c.is_locked_in_trade && !c.is_in_lineup && !c.is_in_tactico_squad;
+  // squad) — the backend rejects all four (plus diamond rarity, which never
+  // trades at all) at accept time anyway, so showing them as pickable here
+  // just sets the offer up to fail later.
+  const isTradeable = (c: {
+    is_locked_by_admin: boolean; is_locked_in_trade: boolean; is_in_lineup: boolean; is_in_tactico_squad: boolean;
+    player: { rarity: string };
+  }) =>
+    !c.is_locked_by_admin && !c.is_locked_in_trade && !c.is_in_lineup && !c.is_in_tactico_squad && c.player.rarity !== "diamond";
 
   const createMutation = useMutation({
     mutationFn: createTradeOffer,

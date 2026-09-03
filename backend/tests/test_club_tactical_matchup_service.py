@@ -51,6 +51,8 @@ class _FakePlayer:
     rarity: str = "common"
     club: int = 1
     country: int = 1
+    attack_rating: int | None = None
+    defense_rating: int | None = None
 
 
 @dataclass
@@ -58,6 +60,7 @@ class _FakeCard:
     id: int
     player: _FakePlayer
     player_id: int = 0  # _card_to_actor (Task 9) reads this
+    diamond_rating_bonus: int = 0
 
 
 def test_weighted_pick_only_returns_eligible_positions_for_the_zone():

@@ -22,8 +22,8 @@ _TIMEOUT = aiohttp.ClientTimeout(total=8)
 
 TRIGGER = "вкарта"
 
-RARITY_LABELS = {"common": "Обычная", "rare": "Редкая", "epic": "Эпическая", "legendary": "Легендарная"}
-RARITY_EMOJI = {"common": "⚪️", "rare": "🔵", "epic": "🟣", "legendary": "🟡"}
+RARITY_LABELS = {"common": "Обычная", "rare": "Редкая", "epic": "Эпическая", "legendary": "Легендарная", "diamond": "Диамантовая"}
+RARITY_EMOJI = {"common": "⚪️", "rare": "🔵", "epic": "🟣", "legendary": "🟡", "diamond": "💎"}
 POSITION_LABELS = {
     "GK": "Вратарь", "LB": "Левый защитник", "CB": "Центральный защитник", "RB": "Правый защитник",
     "CDM": "Опорный полузащитник", "CM": "Центральный полузащитник", "CAM": "Атакующий полузащитник",
