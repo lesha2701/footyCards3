@@ -12,6 +12,7 @@ class TacticoSquadOut(BaseModel):
     cards: list[UserCardOut]
     max_legendary: int
     max_epic: int
+    max_diamond: int
 
 
 class TacticoSquadSetRequest(BaseModel):

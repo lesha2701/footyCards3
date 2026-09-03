@@ -140,6 +140,9 @@ class GameConfig(TimestampMixin, Base):
     tactico_bot_optimal_pick_chance_hard: Mapped[float] = mapped_column(Numeric(4, 2), default=0.90, nullable=False)
     tactico_max_legendary_cards: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     tactico_max_epic_cards: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    tactico_max_diamond_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+    match_max_diamond_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     # Set by an admin right before deploying an update (see routers/maintenance.py);
     # the Mini App shows a "may be flaky for a few minutes" banner while now() < this.
@@ -162,3 +165,6 @@ class GameConfig(TimestampMixin, Base):
     wheel_spin_cost_coins: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
     wheel_spin_cost_stars: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     wheel_duplicate_badge_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+
+    bingo_reward_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    bingo_reward_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

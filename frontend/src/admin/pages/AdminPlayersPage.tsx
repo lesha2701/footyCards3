@@ -19,7 +19,7 @@ import { ApiRequestError, staticUrl } from "@/lib/api";
 import { RARITY_LABELS } from "@/lib/rarity";
 import type { Player, Position, Rarity } from "@/types";
 
-const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary"];
+const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
 const POSITIONS: Position[] = ["GK", "LB", "CB", "RB", "CDM", "CM", "CAM", "LM", "RM", "LW", "RW", "ST"];
 
 const emptyForm = {
@@ -210,7 +210,15 @@ export default function AdminPlayersPage() {
                 <OptionalNumberField label="Защита (авто, если пусто)" value={form.defense_rating} onChange={(v) => setForm({ ...form, defense_rating: v })} />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <SelectField label="Редкость" value={form.rarity} options={RARITIES.map((r) => ({ value: r, label: RARITY_LABELS[r] }))} onChange={(v) => setForm({ ...form, rarity: v as Rarity })} />
+                <SelectField
+                  label="Редкость"
+                  value={form.rarity}
+                  options={RARITIES.map((r) => ({ value: r, label: RARITY_LABELS[r] }))}
+                  // Diamond is a special/collectible rarity, not a "best
+                  // stats" one — defaults the rating to 60 when picked
+                  // (still editable afterward, this is just a starting point).
+                  onChange={(v) => setForm({ ...form, rarity: v as Rarity, rating: v === "diamond" ? 60 : form.rating })}
+                />
                 <SelectField label="Позиция" value={form.position} options={POSITIONS.map((p) => ({ value: p, label: p }))} onChange={(v) => setForm({ ...form, position: v as Position })} />
               </div>
               <label className="flex flex-col gap-1">

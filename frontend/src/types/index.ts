@@ -1,4 +1,4 @@
-export type Rarity = "common" | "rare" | "epic" | "legendary";
+export type Rarity = "common" | "rare" | "epic" | "legendary" | "diamond";
 export type Position = "GK" | "LB" | "CB" | "RB" | "CDM" | "CM" | "CAM" | "LM" | "RM" | "LW" | "RW" | "ST";
 export type TradeStatus = "pending" | "accepted" | "rejected" | "cancelled" | "expired";
 export type MatchDifficulty = "easy" | "medium" | "hard";
@@ -75,6 +75,26 @@ export interface UserCard {
   is_in_tactico_squad: boolean;
   hidden_from_trade: boolean;
   duplicate_count?: number;
+  diamond_rating_bonus: number;
+}
+
+export interface DiamondUpgradeTier {
+  id: number;
+  min_rating: number;
+  max_rating: number;
+  common_cost: number;
+  rare_cost: number;
+  epic_cost: number;
+  legendary_cost: number;
+  is_active: boolean;
+}
+
+export interface FeedCardsResult {
+  diamond_card: UserCard;
+  material_rarity: Rarity;
+  cards_consumed: number;
+  cards_returned: number;
+  rating_gained: number;
 }
 
 export interface CardUpgradeRule {
@@ -317,6 +337,7 @@ export interface Lineup {
   tactic: LineupTactic;
   is_complete: boolean;
   team_strength: number | null;
+  max_diamond: number;
   slots: LineupSlot[];
 }
 
@@ -472,6 +493,7 @@ export interface TacticoSquad {
   cards: UserCard[];
   max_legendary: number;
   max_epic: number;
+  max_diamond: number;
 }
 
 export interface TacticoStats {
@@ -1183,4 +1205,58 @@ export interface TournamentMatchDetail {
   score_a: number;
   score_b: number;
   event_log: MatchEvent[];
+}
+
+export type BingoGoalType =
+  | "packs_opened"
+  | "rare_drops"
+  | "epic_drops"
+  | "legendary_drops"
+  | "tactico_matches_played"
+  | "penalty_matches_played"
+  | "arena_matches_played"
+  | "trades_completed";
+
+export interface BingoGoal {
+  goal_type: BingoGoalType;
+  target_value: number;
+  current_value: number;
+  is_completed: boolean;
+}
+
+export interface BingoCurrent {
+  is_enabled: boolean;
+  week_number: number | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  goals: BingoGoal[];
+  all_goals_completed: boolean;
+  reward_coins: number;
+  reward_pack_id: number | null;
+  reward_pack_name: string | null;
+  reward_pack_image_path: string | null;
+  has_claimed: boolean;
+}
+
+export interface BingoClaimResult {
+  coins_granted: number;
+  granted_pack: PackOpenResult | null;
+  new_balance: number;
+}
+
+export interface BingoGoalDefinition {
+  id: number;
+  goal_type: BingoGoalType;
+  target_value: number;
+  is_active: boolean;
+}
+
+export interface BingoState {
+  is_enabled: boolean;
+  started_at: string | null;
+}
+
+export interface BingoStatsPreviewItem {
+  goal_type: BingoGoalType;
+  trailing_7d_count: number;
 }

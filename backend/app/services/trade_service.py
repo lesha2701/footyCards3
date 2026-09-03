@@ -3,16 +3,16 @@ from typing import Optional
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.exceptions import ConflictError, ForbiddenError, InsufficientBalanceError, NotFoundError
 from app.core.timeutil import ensure_aware
 from app.models.card import UserCard
-from app.models.enums import NotificationType, TradeCardSide, TradeStatus, TransactionType
+from app.models.enums import BingoGoalType, NotificationType, Rarity, TradeCardSide, TradeStatus, TransactionType
 from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.user import User
 from app.schemas.trade import TradeAcceptOut, TradeCreateRequest, TradeOfferOut
-from app.services import task_service
+from app.services import bingo_service, task_service
 from app.services.collection_service import grant_collection_rewards_for_new_cards
 from app.services.notification_service import notify
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
@@ -137,6 +137,7 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
         # card as unlocked before either commits and both proceed.
         result = await db.execute(
             select(UserCard).where(UserCard.id.in_(all_card_ids)).order_by(UserCard.id)
+            .options(selectinload(UserCard.player))
             .with_for_update().execution_options(populate_existing=True)
         )
         cards_by_id = {c.id: c for c in result.scalars().all()}
@@ -150,6 +151,8 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
         for card in offered_cards:
             if card.owner_id != sender.id:
                 raise ForbiddenError("You can only offer your own cards")
+            if card.player.rarity == Rarity.diamond:
+                raise ConflictError("Diamond cards cannot be traded")
             if card.is_locked():
                 raise ConflictError(f"Card #{card.serial_number} is not available for trade")
 
@@ -162,6 +165,8 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
         for card in requested_cards:
             if card.owner_id != receiver.id:
                 raise ConflictError("Requested cards must belong to the trade partner")
+            if card.player.rarity == Rarity.diamond:
+                raise ConflictError("Diamond cards cannot be traded")
             if card.is_locked() or card.hidden_from_trade:
                 raise ConflictError(f"Card #{card.serial_number} is not available for trade")
 
@@ -350,6 +355,10 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
 
     await db.commit()
     await db.refresh(offer)
+
+    # Bingo of the Week: one completed trade counts once, not per side.
+    await bingo_service.increment_goal(db, BingoGoalType.trades_completed, 1)
+
     hydrated = await hydrate_offer(db, offer)
     return TradeAcceptOut(**hydrated.model_dump(), new_balance=receiver.balance)
 

@@ -30,6 +30,11 @@ class UserCard(Base):
     is_in_lineup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_in_tactico_squad: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     hidden_from_trade: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Diamond-rarity only: rating points earned by feeding this specific
+    # copy other cards (see diamond_upgrade_service.py). Lives on the owned
+    # card, not Player.rating, so leveling one copy never affects other
+    # users' copies of the same diamond player.
+    diamond_rating_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     owner: Mapped["User"] = relationship(back_populates="cards")
     player: Mapped["Player"] = relationship(back_populates="cards")

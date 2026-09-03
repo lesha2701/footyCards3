@@ -20,6 +20,8 @@ import AdminGiftsPage from "@/admin/pages/AdminGiftsPage";
 import AdminWheelPage from "@/admin/pages/AdminWheelPage";
 import AdminGamesPage from "@/admin/pages/AdminGamesPage";
 import AdminUpgradesPage from "@/admin/pages/AdminUpgradesPage";
+import AdminDiamondUpgradesPage from "@/admin/pages/AdminDiamondUpgradesPage";
+import AdminBingoPage from "@/admin/pages/AdminBingoPage";
 import AdminShopPage from "@/admin/pages/AdminShopPage";
 import AdminBroadcastsPage from "@/admin/pages/AdminBroadcastsPage";
 import AdminLogPage from "@/admin/pages/AdminLogPage";
@@ -59,6 +61,7 @@ import NewTradePage from "@/pages/NewTradePage";
 import TradeDetailPage from "@/pages/TradeDetailPage";
 import TasksPage from "@/pages/TasksPage";
 import UpgradePage from "@/pages/UpgradePage";
+import BingoPage from "@/pages/BingoPage";
 import RankingPage from "@/pages/RankingPage";
 import ClubLeaderboardPage from "@/pages/ClubLeaderboardPage";
 import LeaguePage from "@/pages/LeaguePage";
@@ -169,6 +172,8 @@ export default function App() {
         <Route path="wheel" element={<AdminWheelPage />} />
         <Route path="games" element={<AdminGamesPage />} />
         <Route path="upgrades" element={<AdminUpgradesPage />} />
+        <Route path="diamond-upgrades" element={<AdminDiamondUpgradesPage />} />
+        <Route path="bingo" element={<AdminBingoPage />} />
         <Route path="shop" element={<AdminShopPage />} />
         <Route path="broadcasts" element={<AdminBroadcastsPage />} />
         <Route path="log" element={<AdminLogPage />} />
@@ -212,6 +217,7 @@ export default function App() {
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/wheel" element={<WheelPage />} />
         <Route path="/upgrade" element={<UpgradePage />} />
+        <Route path="/bingo" element={<BingoPage />} />
         <Route path="/ranking" element={<RankingPage />} />
         <Route path="/clubs/leaderboard" element={<ClubLeaderboardPage />} />
         <Route path="/league" element={<LeaguePage />} />

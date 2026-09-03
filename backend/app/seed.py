@@ -49,9 +49,16 @@ RARITY_COLORS = {
     Rarity.rare: ((37, 99, 235), (14, 165, 233)),
     Rarity.epic: ((147, 51, 234), (219, 39, 119)),
     Rarity.legendary: ((245, 158, 11), (239, 68, 68)),
+    Rarity.diamond: ((165, 243, 252), (56, 189, 248)),
 }
-RARITY_SELL_PRICE = {Rarity.common: 10, Rarity.rare: 35, Rarity.epic: 120, Rarity.legendary: 400}
-RATING_RANGES = {Rarity.common: (58, 73), Rarity.rare: (74, 81), Rarity.epic: (82, 88), Rarity.legendary: (90, 99)}
+RARITY_SELL_PRICE = {Rarity.common: 10, Rarity.rare: 35, Rarity.epic: 120, Rarity.legendary: 400, Rarity.diamond: 900}
+RATING_RANGES = {
+    Rarity.common: (58, 73), Rarity.rare: (74, 81), Rarity.epic: (82, 88), Rarity.legendary: (90, 99),
+    # Diamond is a special/collectible rarity, not a "best stats" one — it
+    # defaults to a fixed 60 rather than a high range (spec: "по умолчанию
+    # они задаются с указанным рейтингом 60").
+    Rarity.diamond: (60, 60),
+}
 
 FIRST_NAMES = [
     "Лукас", "Матео", "Диего", "Кевин", "Бруно", "Хавьер", "Родриго", "Фелипе", "Марко", "Андрес",
@@ -140,7 +147,7 @@ def generate_placeholder_image() -> None:
 
 
 def build_players_data() -> list[dict]:
-    rarity_counts = [(Rarity.common, 20), (Rarity.rare, 12), (Rarity.epic, 8), (Rarity.legendary, 4)]
+    rarity_counts = [(Rarity.common, 20), (Rarity.rare, 12), (Rarity.epic, 8), (Rarity.legendary, 4), (Rarity.diamond, 2)]
     total_needed = sum(c for _, c in rarity_counts)
 
     all_pairs = [(f, l) for f in FIRST_NAMES for l in LAST_NAMES]

@@ -14,7 +14,7 @@ import { fetchCollections } from "@/api/collections";
 import { RARITY_LABELS, RARITY_ORDER } from "@/lib/rarity";
 import type { Rarity } from "@/types";
 
-const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary"];
+const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
 
 const PAGE_SIZE = 60;
 

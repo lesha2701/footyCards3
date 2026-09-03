@@ -222,10 +222,14 @@ class GameConfigOut(BaseModel):
     tactico_bot_optimal_pick_chance_hard: float
     tactico_max_legendary_cards: int
     tactico_max_epic_cards: int
+    tactico_max_diamond_cards: int
+    match_max_diamond_cards: int
     wheel_free_spins_per_day: int
     wheel_spin_cost_coins: int
     wheel_spin_cost_stars: int
     wheel_duplicate_badge_coins: int
+    bingo_reward_coins: int
+    bingo_reward_pack_id: Optional[int] = None
 
 
 class GameConfigUpdate(BaseModel):
@@ -323,10 +327,14 @@ class GameConfigUpdate(BaseModel):
     tactico_bot_optimal_pick_chance_hard: Optional[float] = Field(default=None, ge=0, le=1)
     tactico_max_legendary_cards: Optional[int] = Field(default=None, ge=0, le=11)
     tactico_max_epic_cards: Optional[int] = Field(default=None, ge=0, le=11)
+    tactico_max_diamond_cards: Optional[int] = Field(default=None, ge=0, le=11)
+    match_max_diamond_cards: Optional[int] = Field(default=None, ge=0, le=11)
     wheel_free_spins_per_day: Optional[int] = Field(default=None, ge=0)
     wheel_spin_cost_coins: Optional[int] = Field(default=None, ge=0)
     wheel_spin_cost_stars: Optional[int] = Field(default=None, ge=0)
     wheel_duplicate_badge_coins: Optional[int] = Field(default=None, ge=0)
+    bingo_reward_coins: Optional[int] = Field(default=None, ge=0)
+    bingo_reward_pack_id: Optional[int] = Field(default=None)
 
 
 class SuspiciousMemorySessionOut(BaseModel):

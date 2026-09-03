@@ -9,7 +9,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.timeutil import ensure_aware
-from app.models.enums import MatchDifficulty, MatchResult, MatchStatus, TransactionType
+from app.models.enums import BingoGoalType, MatchDifficulty, MatchResult, MatchStatus, TransactionType
 from app.models.game_config import GameConfig
 from app.models.match import Match, MatchEvent
 from app.models.user import User
@@ -22,7 +22,7 @@ from app.schemas.match import (
 )
 from app.schemas.lineup import LineupOut
 from app.schemas.ranking import RankingMetric
-from app.services import league_service, ranking_service, task_service
+from app.services import bingo_service, league_service, ranking_service, task_service
 from app.services.game_config_service import get_config
 from app.services.lineup_service import TACTIC_MULTIPLIERS, get_active_lineup, split_strength
 from app.services.match_situations import (
@@ -609,6 +609,9 @@ async def _finalize_match(
 
     await league_service.sync_league_rewards_for_user(db, locked_user)
     await db.commit()
+
+    # Bingo of the Week: one finished Card Arena match counts once.
+    await bingo_service.increment_goal(db, BingoGoalType.arena_matches_played, 1)
 
 
 async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) -> MatchOut:

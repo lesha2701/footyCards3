@@ -2,9 +2,13 @@ import { api } from "@/lib/api";
 import type {
   Announcement,
   Badge,
+  BingoGoalDefinition,
+  BingoState,
+  BingoStatsPreviewItem,
   CardUpgradeRule,
   ClubPack,
   CoinPackage,
+  DiamondUpgradeTier,
   Gift,
   GiftSet,
   LeagueTier,
@@ -402,6 +406,70 @@ export async function updateUpgradeRule(
   payload: Partial<Pick<CardUpgradeRule, "success_chance" | "coin_cost" | "is_active">>,
 ): Promise<CardUpgradeRule> {
   const { data } = await api.put<CardUpgradeRule>(`/admin/card-upgrades/${id}`, payload);
+  return data;
+}
+
+// --- Diamond upgrade tiers ---
+type DiamondUpgradeTierFields = Omit<DiamondUpgradeTier, "id">;
+
+export async function fetchDiamondUpgradeTiers(): Promise<DiamondUpgradeTier[]> {
+  const { data } = await api.get<DiamondUpgradeTier[]>("/admin/diamond-upgrade-tiers");
+  return data;
+}
+
+export async function createDiamondUpgradeTier(payload: DiamondUpgradeTierFields): Promise<DiamondUpgradeTier> {
+  const { data } = await api.post<DiamondUpgradeTier>("/admin/diamond-upgrade-tiers", payload);
+  return data;
+}
+
+export async function updateDiamondUpgradeTier(
+  id: number,
+  payload: Partial<DiamondUpgradeTierFields>,
+): Promise<DiamondUpgradeTier> {
+  const { data } = await api.put<DiamondUpgradeTier>(`/admin/diamond-upgrade-tiers/${id}`, payload);
+  return data;
+}
+
+export async function deleteDiamondUpgradeTier(id: number): Promise<void> {
+  await api.delete(`/admin/diamond-upgrade-tiers/${id}`);
+}
+
+// --- Bingo of the Week ---
+export async function fetchBingoState(): Promise<BingoState> {
+  const { data } = await api.get<BingoState>("/admin/bingo/state");
+  return data;
+}
+
+export async function updateBingoState(isEnabled: boolean): Promise<BingoState> {
+  const { data } = await api.put<BingoState>("/admin/bingo/state", { is_enabled: isEnabled });
+  return data;
+}
+
+export async function fetchBingoGoals(): Promise<BingoGoalDefinition[]> {
+  const { data } = await api.get<BingoGoalDefinition[]>("/admin/bingo/goals");
+  return data;
+}
+
+export async function createBingoGoal(
+  payload: Pick<BingoGoalDefinition, "goal_type" | "target_value" | "is_active">,
+): Promise<BingoGoalDefinition> {
+  const { data } = await api.post<BingoGoalDefinition>("/admin/bingo/goals", payload);
+  return data;
+}
+
+export async function updateBingoGoal(
+  id: number, payload: Partial<Pick<BingoGoalDefinition, "target_value" | "is_active">>,
+): Promise<BingoGoalDefinition> {
+  const { data } = await api.put<BingoGoalDefinition>(`/admin/bingo/goals/${id}`, payload);
+  return data;
+}
+
+export async function deleteBingoGoal(id: number): Promise<void> {
+  await api.delete(`/admin/bingo/goals/${id}`);
+}
+
+export async function fetchBingoStatsPreview(): Promise<BingoStatsPreviewItem[]> {
+  const { data } = await api.get<BingoStatsPreviewItem[]>("/admin/bingo/stats-preview");
   return data;
 }
 

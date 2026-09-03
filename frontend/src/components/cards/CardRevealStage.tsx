@@ -56,7 +56,7 @@ export function RevealStage({
             className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-floodlight blur-3xl"
           />
         )}
-        {revealed && player.rarity === "legendary" && <LegendaryConfetti />}
+        {revealed && (player.rarity === "legendary" || player.rarity === "diamond") && <LegendaryConfetti />}
         <motion.div
           initial={{ scale: 0.85, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}

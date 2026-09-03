@@ -10,6 +10,7 @@ export default {
           rare: "#3b82f6",
           epic: "#a855f7",
           legendary: "#f59e0b",
+          diamond: "#38bdf8",
         },
         bg: {
           base: "#07090a",
@@ -40,6 +41,7 @@ export default {
       boxShadow: {
         glow: "0 0 24px rgba(62, 209, 126, 0.35)",
         "glow-legendary": "0 0 32px rgba(245, 158, 11, 0.55)",
+        "glow-diamond": "0 0 32px rgba(56, 189, 248, 0.55)",
         "glow-epic": "0 0 32px rgba(168, 85, 247, 0.5)",
         "glow-rare": "0 0 24px rgba(59, 130, 246, 0.45)",
       },

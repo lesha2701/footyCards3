@@ -1,3 +1,6 @@
+import pytest
+
+import app.core.rate_limit as rate_limit_module
 from app.config import get_settings
 from app.models.card import UserCard
 from app.models.enums import CardSource, Rarity
@@ -6,6 +9,16 @@ from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
 
 settings = get_settings()
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    # create_offer/accept_offer are rate-limited per user.id, and SQLite's
+    # per-test fresh DB restarts auto-increment ids at 1 — so tests sharing
+    # "user #1" as the trade sender share one bucket across the whole file
+    # without this (see test_packs.py's identical fixture/comment).
+    rate_limit_module._hits.clear()
+    yield
 
 
 async def _register(client, db_session, telegram_id, bot_token, username=None):
@@ -38,6 +51,42 @@ async def test_create_trade_locks_offered_card(client, db_session, bot_token):
 
     await db_session.refresh(card)
     assert card.is_locked_in_trade is True
+
+
+async def test_cannot_offer_a_diamond_card(client, db_session, bot_token):
+    sender, sender_headers = await _register(client, db_session, 730091, bot_token)
+    receiver, _ = await _register(client, db_session, 730092, bot_token)
+
+    player = await create_player(db_session, rarity=Rarity.diamond, rating=60)
+    card = await create_user_card(db_session, sender.id, player.id, CardSource.seed)
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/v1/trades/offers", headers=sender_headers,
+        json={"receiver_id": receiver.id, "offered_card_ids": [card.id], "requested_card_ids": []},
+    )
+    assert resp.status_code == 409
+
+    await db_session.refresh(card)
+    assert card.is_locked_in_trade is False
+
+
+async def test_cannot_request_a_diamond_card(client, db_session, bot_token):
+    sender, sender_headers = await _register(client, db_session, 730093, bot_token)
+    receiver, _ = await _register(client, db_session, 730094, bot_token)
+
+    player = await create_player(db_session, rarity=Rarity.diamond, rating=60)
+    card = await create_user_card(db_session, receiver.id, player.id, CardSource.seed)
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/v1/trades/offers", headers=sender_headers,
+        json={"receiver_id": receiver.id, "offered_card_ids": [], "requested_card_ids": [card.id]},
+    )
+    assert resp.status_code == 409
+
+    await db_session.refresh(card)
+    assert card.is_locked_in_trade is False
 
 
 async def test_cannot_trade_with_self(client, db_session, bot_token):

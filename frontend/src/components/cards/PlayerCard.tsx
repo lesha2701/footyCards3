@@ -30,7 +30,7 @@ export default function PlayerCard({ player, size = "md", badge, footer, onClick
       className={`group relative flex aspect-[3/4] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-b ${
         RARITY_GRADIENTS[player.rarity]
       } ${RARITY_GLOW[player.rarity]} p-[2px] transition-transform active:scale-[0.97] ${
-        selected ? "ring-4 ring-accent-lime" : ""
+        selected ? (player.rarity === "diamond" ? "ring-4 ring-rarity-diamond shadow-glow-diamond" : "ring-4 ring-accent-lime") : ""
       } ${dimmed ? "opacity-40 grayscale" : ""} ${onClick ? "cursor-pointer" : "cursor-default"}`}
     >
       <div className="flex h-full w-full flex-col overflow-hidden rounded-[14px] bg-bg-surface/90">

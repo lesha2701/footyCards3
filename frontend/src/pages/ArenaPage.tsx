@@ -52,11 +52,13 @@ export default function ArenaPage() {
   const [pickerSlot, setPickerSlot] = useState<FormationSlot | null>(null);
   const [match, setMatch] = useState<Match | null>(null);
   const [matchError, setMatchError] = useState<string | null>(null);
+  const [lineupError, setLineupError] = useState<string | null>(null);
   const [simulating, setSimulating] = useState(false);
 
   const setLineupMutation = useMutation({
     mutationFn: setActiveLineup,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["lineup"] }),
+    onSuccess: () => { setLineupError(null); queryClient.invalidateQueries({ queryKey: ["lineup"] }); },
+    onError: (err) => setLineupError(formatGameError(err, "Не удалось обновить состав")),
   });
 
   const setTacticMutation = useMutation({
@@ -121,6 +123,12 @@ export default function ArenaPage() {
     : lineup?.slots.filter((s) => s.card)
   )?.map((s) => s.card!.player.id) ?? [];
 
+  const maxDiamond = lineup?.max_diamond ?? 1;
+  const diamondCount = (pickerSlot
+    ? lineup?.slots.filter((s) => s.card && s.slot_code !== pickerSlot.code)
+    : lineup?.slots.filter((s) => s.card)
+  )?.filter((s) => s.card!.player.rarity === "diamond").length ?? 0;
+
   const cardsForSlot = (slot: FormationSlot): UserCard[] => {
     const positions = CATEGORY_POSITIONS[slot.category];
     return (collectionPage?.items ?? []).filter((c) => positions.includes(c.player.position));
@@ -131,8 +139,14 @@ export default function ArenaPage() {
       .filter((s) => s.card && s.slot_code !== slot.code)
       .map((s) => ({ slot_code: s.slot_code, user_card_id: s.card!.id }));
     currentSlots.push({ slot_code: slot.code, user_card_id: card.id });
-    await setLineupMutation.mutateAsync(currentSlots);
-    setPickerSlot(null);
+    try {
+      await setLineupMutation.mutateAsync(currentSlots);
+      setPickerSlot(null);
+    } catch {
+      // Error is surfaced via setLineupMutation's onError; keep the picker
+      // open so the player can choose a different card instead of it
+      // silently reverting to the previous slot state.
+    }
   };
 
   const lastFive = (history ?? []).slice(0, 5).reverse();
@@ -158,6 +172,8 @@ export default function ArenaPage() {
         </div>
       )}
 
+      {lineupError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{lineupError}</p>}
+
       <section className="rounded-2xl bg-bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
           <p className="font-display text-base font-bold text-ink-chalk">Состав 4-3-3</p>
@@ -165,6 +181,11 @@ export default function ArenaPage() {
             <span className="font-mono text-sm font-bold text-accent-cyan">Сила: {lineup.team_strength}</span>
           )}
         </div>
+        <p className="mb-3 text-[11px] font-semibold">
+          <span className={`rounded-full px-2.5 py-1 ${diamondCount >= maxDiamond ? "bg-rarity-diamond/20 text-rarity-diamond" : "bg-white/5 text-ink-mist"}`}>
+            Диамантовых: {diamondCount}/{maxDiamond}
+          </span>
+        </p>
         <div className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
           <div className="pointer-events-none absolute inset-x-3 top-1/2 h-px -translate-y-1/2 bg-white/10" />
           <div className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
@@ -297,7 +318,9 @@ export default function ArenaPage() {
           open
           title={`Выбери на позицию ${CATEGORY_LABELS[pickerSlot.category]}`}
           cards={cardsForSlot(pickerSlot)}
-          disabledCardIds={cardsForSlot(pickerSlot).filter((c) => usedPlayerIds.includes(c.player.id)).map((c) => c.id)}
+          disabledCardIds={cardsForSlot(pickerSlot)
+            .filter((c) => usedPlayerIds.includes(c.player.id) || (c.player.rarity === "diamond" && diamondCount >= maxDiamond))
+            .map((c) => c.id)}
           onSelect={(card) => assignSlot(pickerSlot, card)}
           onClose={() => setPickerSlot(null)}
         />

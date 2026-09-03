@@ -2,10 +2,11 @@ from datetime import datetime
 from typing import List, Literal, Optional
 
 from fastapi import Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.models.enums import CardSource, Position, Rarity
 from app.schemas.player import PlayerOut
+from app.services.player_stats_service import effective_card_stats
 
 
 class UserCardListItem(BaseModel):
@@ -22,6 +23,32 @@ class UserCardListItem(BaseModel):
     is_in_tactico_squad: bool
     hidden_from_trade: bool
     duplicate_count: int = 1
+    diamond_rating_bonus: int = 0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _apply_diamond_bonus(cls, data):
+        """Same per-copy rating bake-in as UserCardOut — see its docstring."""
+        if isinstance(data, dict):
+            return data
+        bonus = getattr(data, "diamond_rating_bonus", 0) or 0
+        player_out = PlayerOut.model_validate(data.player)
+        if bonus > 0:
+            rating, attack, defense = effective_card_stats(data.player, bonus)
+            player_out = player_out.model_copy(update={"rating": rating, "attack_rating": attack, "defense_rating": defense})
+        return {
+            "id": data.id,
+            "serial_number": data.serial_number,
+            "player": player_out,
+            "acquired_at": data.acquired_at,
+            "source": data.source,
+            "is_locked_by_admin": data.is_locked_by_admin,
+            "is_locked_in_trade": data.is_locked_in_trade,
+            "is_in_lineup": data.is_in_lineup,
+            "is_in_tactico_squad": data.is_in_tactico_squad,
+            "hidden_from_trade": data.hidden_from_trade,
+            "diamond_rating_bonus": bonus,
+        }
 
 
 SortBy = Literal["rating", "rarity", "acquired_at"]

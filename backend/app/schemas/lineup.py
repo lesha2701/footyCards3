@@ -18,6 +18,7 @@ class LineupOut(BaseModel):
     tactic: str
     is_complete: bool
     team_strength: Optional[int] = None
+    max_diamond: int
     slots: list[LineupSlotOut]
 
 

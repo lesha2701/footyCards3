@@ -1,5 +1,14 @@
 import { api } from "@/lib/api";
-import type { CardUpgradeResult, CardUpgradeRule, CollectionStats, Page, Rarity, UserCard } from "@/types";
+import type {
+  CardUpgradeResult,
+  CardUpgradeRule,
+  CollectionStats,
+  DiamondUpgradeTier,
+  FeedCardsResult,
+  Page,
+  Rarity,
+  UserCard,
+} from "@/types";
 
 export interface CollectionFilters {
   rarity?: string;
@@ -73,6 +82,19 @@ export async function upgradeCards(
     user_card_ids: userCardIds,
     to_rarity: toRarity,
     idempotency_key: idempotencyKey,
+  });
+  return data;
+}
+
+export async function fetchDiamondUpgradeTiers(): Promise<DiamondUpgradeTier[]> {
+  const { data } = await api.get<DiamondUpgradeTier[]>("/collection/diamond-upgrade-tiers");
+  return data;
+}
+
+export async function feedDiamondCard(diamondCardId: number, materialCardIds: number[]): Promise<FeedCardsResult> {
+  const { data } = await api.post<FeedCardsResult>("/collection/diamond-upgrade/feed", {
+    diamond_card_id: diamondCardId,
+    material_card_ids: materialCardIds,
   });
   return data;
 }

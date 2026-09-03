@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
+import { fetchCurrentBingo } from "@/api/bingo";
 import { fetchDailyRewardCalendar } from "@/api/dailyRewards";
 import { fetchFeatureFlags } from "@/api/featureFlags";
 import { claimFreePack, fetchFreePackStatus } from "@/api/freePack";
@@ -26,6 +27,7 @@ import {
   IconUsers,
   type IconProps,
 } from "@/components/icons";
+import type { BingoCurrent } from "@/types";
 import { staticUrl } from "@/lib/api";
 import { haptic, hapticNotify, openTelegramLink } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -57,6 +59,7 @@ export default function HomePage() {
   const { data: wheelStatus } = useQuery({ queryKey: ["wheel-status"], queryFn: fetchWheelStatus });
   const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags, refetchInterval: 30000 });
   const { data: leagueStatus } = useQuery({ queryKey: ["league-status"], queryFn: fetchLeagueStatus });
+  const { data: bingo } = useQuery({ queryKey: ["bingo-current"], queryFn: fetchCurrentBingo });
 
   const claimFreePackMutation = useMutation({
     mutationFn: claimFreePack,
@@ -172,6 +175,8 @@ export default function HomePage() {
       </button>
 
       <ChatInviteCard />
+
+      {bingo?.is_enabled && <BingoBanner bingo={bingo} onClick={() => navigate("/bingo")} />}
 
       <div className="flex flex-col gap-3">
         {profile?.referral_reward_pending && (
@@ -296,6 +301,43 @@ function ChatInviteCard() {
         <p className="mt-0.5 text-xs leading-snug text-ink-mist">
           Хвастайся дропом, договаривайся об обменах и открывай паки по слову «вкарта» — раз в 4 часа прямо в чате
         </p>
+      </div>
+      <IconChevronRight size={18} className="relative shrink-0 text-ink-mist-dim" />
+    </button>
+  );
+}
+
+// Time remaining is computed once, from `ends_at`, whenever this component
+// mounts/re-renders (i.e. whenever the player navigates to Home) — no
+// setInterval ticking it down live, by design.
+function formatTimeRemaining(endsAt: string): string {
+  const ms = new Date(endsAt).getTime() - Date.now();
+  if (ms <= 0) return "меньше минуты";
+  const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+  const hours = Math.floor((ms % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  if (days > 0) return `${days} дн. ${hours} ч.`;
+  const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
+  if (hours > 0) return `${hours} ч. ${minutes} мин.`;
+  return `${minutes} мин.`;
+}
+
+function BingoBanner({ bingo, onClick }: { bingo: BingoCurrent; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="relative flex items-center gap-4 overflow-hidden rounded-3xl bg-gradient-to-br from-fuchsia-500/25 via-purple-600/10 to-bg-surface p-5 text-left active:scale-[0.98]"
+    >
+      <div className="pointer-events-none absolute -right-6 -top-8 h-28 w-28 rounded-full bg-fuchsia-400/20 blur-2xl" />
+      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-fuchsia-400/20 text-fuchsia-300">
+        <IconUsers size={22} />
+      </div>
+      <div className="relative min-w-0 flex-1">
+        <p className="font-display text-base font-bold text-ink-chalk">Бинго недели</p>
+        {bingo.ends_at && (
+          <p className="mt-0.5 text-xs leading-snug text-ink-mist">
+            Осталось: {formatTimeRemaining(bingo.ends_at)}
+          </p>
+        )}
       </div>
       <IconChevronRight size={18} className="relative shrink-0 text-ink-mist-dim" />
     </button>

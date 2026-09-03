@@ -168,6 +168,7 @@ export default function AdminGamesPage() {
           {field("difficulty_medium_multiplier", "Множитель: средний (всегда применяется в Card Arena)")}
           {field("difficulty_hard_multiplier", "Множитель: сложный (только бот Тактико — недостижим)")}
           {field("suspicious_score_margin", "Порог подозрительной разницы счёта")}
+          {field("match_max_diamond_cards", "Макс. диамантовых карт в составе")}
         </div>
       </section>
 
@@ -264,6 +265,7 @@ export default function AdminGamesPage() {
           {field("tactico_bot_optimal_pick_chance_hard", "Точность бота: сложный (0-1, недостижим)")}
           {field("tactico_max_legendary_cards", "Макс. легендарных карт в составе")}
           {field("tactico_max_epic_cards", "Макс. эпических карт в составе")}
+          {field("tactico_max_diamond_cards", "Макс. диамантовых карт в составе")}
         </div>
       </section>
 
