@@ -19,9 +19,10 @@ export default function TacticoSquadPage() {
   const queryClient = useQueryClient();
 
   const { data: squad } = useQuery({ queryKey: ["tactico-squad"], queryFn: fetchTacticoSquad });
+  const [search, setSearch] = useState("");
   const { data: collectionPage, isLoading } = useQuery({
-    queryKey: ["collection-for-tactico"],
-    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc" }),
+    queryKey: ["collection-for-tactico", search],
+    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc", search: search || undefined }),
   });
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -118,6 +119,13 @@ export default function TacticoSquadPage() {
       </div>
 
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
+
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Поиск по имени..."
+        className="w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk placeholder:text-ink-mist-dim outline-none"
+      />
 
       {isLoading && <CardGridSkeleton count={9} />}
 

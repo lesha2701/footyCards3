@@ -11,6 +11,7 @@ from app.models.enums import Rarity
 from app.models.user import User
 from app.schemas.card import UserCardOut
 from app.schemas.diamond_upgrade import FeedCardsResult
+from app.services.game_config_service import get_config
 from app.services.player_stats_service import effective_card_stats
 from app.services.wallet_service import lock_user_for_update
 
@@ -25,6 +26,19 @@ _COST_FIELD = {
 async def list_tiers(db: AsyncSession) -> list[DiamondUpgradeTier]:
     result = await db.execute(select(DiamondUpgradeTier).order_by(DiamondUpgradeTier.min_rating))
     return list(result.scalars().all())
+
+
+async def get_effective_rating_cap(db: AsyncSession) -> int:
+    """The rating a diamond card's rating cannot be fed PAST — the admin-
+    configurable soft cap (default 95) when enabled, otherwise the absolute
+    technical ceiling every card is clamped to (99). Never applied
+    retroactively: a card already above this (e.g. from before the setting
+    existed, or the cap was lowered later) simply can't be fed further —
+    it's never downgraded."""
+    config = await get_config(db)
+    if not config.diamond_rating_cap_enabled:
+        return 99
+    return min(99, config.diamond_rating_cap)
 
 
 async def _tier_for_rating(db: AsyncSession, rating: int) -> Optional[DiamondUpgradeTier]:
@@ -78,15 +92,19 @@ async def feed_cards(
         raise ConflictError("All material cards must be the same rarity")
 
     current_rating, _, _ = effective_card_stats(diamond_card.player, diamond_card.diamond_rating_bonus)
-    if current_rating >= 99:
-        raise ConflictError("This card is already at the maximum rating")
+    rating_cap = await get_effective_rating_cap(db)
+    if current_rating >= rating_cap:
+        raise ConflictError(f"This card is already at the maximum rating ({rating_cap})")
 
     tier = await _tier_for_rating(db, current_rating)
     if tier is None:
         raise ConflictError("Upgrade is not configured yet for this card's current rating")
 
     cost = getattr(tier, _COST_FIELD[material_rarity])
-    max_gain = 99 - current_rating
+    if cost is None:
+        raise ConflictError(f"{material_rarity.value} cards cannot be used to upgrade at this rating")
+
+    max_gain = rating_cap - current_rating
     gained = min(len(material_cards) // cost, max_gain)
     if gained <= 0:
         raise ConflictError(f"Need at least {cost} cards of this rarity for +1 rating")

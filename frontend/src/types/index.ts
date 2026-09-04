@@ -82,10 +82,11 @@ export interface DiamondUpgradeTier {
   id: number;
   min_rating: number;
   max_rating: number;
-  common_cost: number;
-  rare_cost: number;
-  epic_cost: number;
-  legendary_cost: number;
+  // null means that rarity cannot be used to level up a card in this band.
+  common_cost: number | null;
+  rare_cost: number | null;
+  epic_cost: number | null;
+  legendary_cost: number | null;
   is_active: boolean;
 }
 

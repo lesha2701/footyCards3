@@ -224,6 +224,8 @@ class GameConfigOut(BaseModel):
     tactico_max_epic_cards: int
     tactico_max_diamond_cards: int
     match_max_diamond_cards: int
+    diamond_rating_cap: int
+    diamond_rating_cap_enabled: bool
     wheel_free_spins_per_day: int
     wheel_spin_cost_coins: int
     wheel_spin_cost_stars: int
@@ -329,6 +331,8 @@ class GameConfigUpdate(BaseModel):
     tactico_max_epic_cards: Optional[int] = Field(default=None, ge=0, le=11)
     tactico_max_diamond_cards: Optional[int] = Field(default=None, ge=0, le=11)
     match_max_diamond_cards: Optional[int] = Field(default=None, ge=0, le=11)
+    diamond_rating_cap: Optional[int] = Field(default=None, ge=1, le=99)
+    diamond_rating_cap_enabled: Optional[bool] = None
     wheel_free_spins_per_day: Optional[int] = Field(default=None, ge=0)
     wheel_spin_cost_coins: Optional[int] = Field(default=None, ge=0)
     wheel_spin_cost_stars: Optional[int] = Field(default=None, ge=0)

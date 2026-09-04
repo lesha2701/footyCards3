@@ -7,6 +7,7 @@ import {
   fetchDiamondUpgradeTiers,
   updateDiamondUpgradeTier,
 } from "@/admin/api";
+import NullableNumberInput from "@/components/common/NullableNumberInput";
 import NumberInput from "@/components/common/NumberInput";
 import { ApiRequestError } from "@/lib/api";
 import type { DiamondUpgradeTier } from "@/types";
@@ -72,7 +73,8 @@ export default function AdminDiamondUpgradesPage() {
         <h1 className="font-display text-2xl font-bold">Апгрейд диамантовых карт</h1>
         <p className="mt-1 text-xs text-slate-400">
           Сколько карточек той или иной редкости нужно скормить диамантовой карте для +1 рейтинга, в зависимости от её
-          текущего рейтинга. Диапазоны рейтинга не должны пересекаться.
+          текущего рейтинга. Диапазоны рейтинга не должны пересекаться. Оставь поле пустым (прочерк), чтобы эта
+          редкость была недоступна для апгрейда в этом диапазоне.
         </p>
       </div>
 
@@ -95,19 +97,19 @@ export default function AdminDiamondUpgradesPage() {
               </label>
               <label className="flex items-center gap-1.5">
                 <span className="text-xs text-slate-400">Обычных за +1</span>
-                <NumberInput min={1} value={form.common_cost} onChange={(v) => patch(t.id, { common_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
+                <NullableNumberInput min={1} value={form.common_cost} onChange={(v) => patch(t.id, { common_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
               </label>
               <label className="flex items-center gap-1.5">
                 <span className="text-xs text-slate-400">Редких за +1</span>
-                <NumberInput min={1} value={form.rare_cost} onChange={(v) => patch(t.id, { rare_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
+                <NullableNumberInput min={1} value={form.rare_cost} onChange={(v) => patch(t.id, { rare_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
               </label>
               <label className="flex items-center gap-1.5">
                 <span className="text-xs text-slate-400">Эпик за +1</span>
-                <NumberInput min={1} value={form.epic_cost} onChange={(v) => patch(t.id, { epic_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
+                <NullableNumberInput min={1} value={form.epic_cost} onChange={(v) => patch(t.id, { epic_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
               </label>
               <label className="flex items-center gap-1.5">
                 <span className="text-xs text-slate-400">Легенд за +1</span>
-                <NumberInput min={1} value={form.legendary_cost} onChange={(v) => patch(t.id, { legendary_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
+                <NullableNumberInput min={1} value={form.legendary_cost} onChange={(v) => patch(t.id, { legendary_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
               </label>
               <label className="flex items-center gap-2 text-xs">
                 <input type="checkbox" checked={form.is_active} onChange={(e) => patch(t.id, { is_active: e.target.checked })} />
@@ -146,19 +148,19 @@ export default function AdminDiamondUpgradesPage() {
         </label>
         <label className="flex items-center gap-1.5">
           <span className="text-xs text-slate-400">Обычных за +1</span>
-          <NumberInput min={1} value={newTier.common_cost} onChange={(v) => setNewTier({ ...newTier, common_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
+          <NullableNumberInput min={1} value={newTier.common_cost} onChange={(v) => setNewTier({ ...newTier, common_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
         </label>
         <label className="flex items-center gap-1.5">
           <span className="text-xs text-slate-400">Редких за +1</span>
-          <NumberInput min={1} value={newTier.rare_cost} onChange={(v) => setNewTier({ ...newTier, rare_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
+          <NullableNumberInput min={1} value={newTier.rare_cost} onChange={(v) => setNewTier({ ...newTier, rare_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
         </label>
         <label className="flex items-center gap-1.5">
           <span className="text-xs text-slate-400">Эпик за +1</span>
-          <NumberInput min={1} value={newTier.epic_cost} onChange={(v) => setNewTier({ ...newTier, epic_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
+          <NullableNumberInput min={1} value={newTier.epic_cost} onChange={(v) => setNewTier({ ...newTier, epic_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
         </label>
         <label className="flex items-center gap-1.5">
           <span className="text-xs text-slate-400">Легенд за +1</span>
-          <NumberInput min={1} value={newTier.legendary_cost} onChange={(v) => setNewTier({ ...newTier, legendary_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
+          <NullableNumberInput min={1} value={newTier.legendary_cost} onChange={(v) => setNewTier({ ...newTier, legendary_cost: v })} className="w-16 rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none" />
         </label>
         <button
           onClick={() => createMutation.mutate()}

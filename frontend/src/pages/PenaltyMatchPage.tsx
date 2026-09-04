@@ -75,9 +75,10 @@ export default function PenaltyMatchPage() {
     },
   });
 
+  const [cardSearch, setCardSearch] = useState("");
   const { data: collection } = useQuery({
-    queryKey: ["collection", "penalty-pvp-accept"],
-    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc" }),
+    queryKey: ["collection", "penalty-pvp-accept", cardSearch],
+    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc", search: cardSearch || undefined }),
     enabled: acceptingCard,
   });
 
@@ -199,7 +200,9 @@ export default function PenaltyMatchPage() {
             title="Выбери карточку"
             cards={collection?.items ?? []}
             onSelect={(card) => acceptMutation.mutate(card.id)}
-            onClose={() => setAcceptingCard(false)}
+            onClose={() => { setAcceptingCard(false); setCardSearch(""); }}
+            searchValue={cardSearch}
+            onSearchChange={setCardSearch}
           />
         )}
       </div>

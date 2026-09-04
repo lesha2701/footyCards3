@@ -37,9 +37,10 @@ export default function FreeKickGamePage() {
   const localStartRef = useRef(0);
   const rafRef = useRef<number | null>(null);
 
+  const [cardSearch, setCardSearch] = useState("");
   const { data: collection } = useQuery({
-    queryKey: ["collection", "free-kick"],
-    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc" }),
+    queryKey: ["collection", "free-kick", cardSearch],
+    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc", search: cardSearch || undefined }),
   });
 
   const startMutation = useMutation({
@@ -116,6 +117,8 @@ export default function FreeKickGamePage() {
           cards={collection?.items ?? []}
           onSelect={(card) => startMutation.mutate(card.id)}
           onClose={() => navigate("/play")}
+          searchValue={cardSearch}
+          onSearchChange={setCardSearch}
         />
       </div>
     );

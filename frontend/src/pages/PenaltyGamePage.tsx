@@ -57,10 +57,11 @@ export default function PenaltyGamePage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [settled, setSettled] = useState(true);
   const [pickedZone, setPickedZone] = useState<PenaltyDirection | null>(null);
+  const [cardSearch, setCardSearch] = useState("");
 
   const { data: collection } = useQuery({
-    queryKey: ["collection", "penalty"],
-    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc" }),
+    queryKey: ["collection", "penalty", cardSearch],
+    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc", search: cardSearch || undefined }),
   });
   // Refetches periodically so an admin's "kill switch" toggle takes effect
   // for already-open sessions without requiring a reload.
@@ -197,7 +198,9 @@ export default function PenaltyGamePage() {
             title="Выбери карточку для матча"
             cards={collection?.items ?? []}
             onSelect={(card) => navigate("/play/penalty/matches/search", { state: { userCardId: card.id } })}
-            onClose={() => setPickingForSearch(false)}
+            onClose={() => { setPickingForSearch(false); setCardSearch(""); }}
+            searchValue={cardSearch}
+            onSearchChange={setCardSearch}
           />
         )}
       </div>
@@ -217,7 +220,9 @@ export default function PenaltyGamePage() {
           title="Выбери игрока"
           cards={collection?.items ?? []}
           onSelect={(card) => startMutation.mutate(card.id)}
-          onClose={() => setChoosingBot(false)}
+          onClose={() => { setChoosingBot(false); setCardSearch(""); }}
+          searchValue={cardSearch}
+          onSearchChange={setCardSearch}
         />
       </div>
     );
