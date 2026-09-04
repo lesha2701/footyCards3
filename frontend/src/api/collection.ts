@@ -91,6 +91,11 @@ export async function fetchDiamondUpgradeTiers(): Promise<DiamondUpgradeTier[]> 
   return data;
 }
 
+export async function fetchDiamondUpgradeCap(): Promise<number> {
+  const { data } = await api.get<{ cap: number }>("/collection/diamond-upgrade-cap");
+  return data.cap;
+}
+
 export async function feedDiamondCard(diamondCardId: number, materialCardIds: number[]): Promise<FeedCardsResult> {
   const { data } = await api.post<FeedCardsResult>("/collection/diamond-upgrade/feed", {
     diamond_card_id: diamondCardId,

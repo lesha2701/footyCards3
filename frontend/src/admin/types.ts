@@ -186,6 +186,8 @@ export interface GameConfig {
   tactico_max_epic_cards: number;
   tactico_max_diamond_cards: number;
   match_max_diamond_cards: number;
+  diamond_rating_cap: number;
+  diamond_rating_cap_enabled: boolean;
   wheel_free_spins_per_day: number;
   wheel_spin_cost_coins: number;
   wheel_spin_cost_stars: number;

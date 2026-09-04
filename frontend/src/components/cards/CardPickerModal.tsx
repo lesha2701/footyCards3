@@ -12,9 +12,17 @@ interface Props {
   disabledCardIds?: number[];
   onSelect: (card: UserCard) => void;
   onClose: () => void;
+  // Controlled search box, rendered at the top when provided — the parent
+  // owns the value and feeds it into its own card-fetching query (server-
+  // side search), so cards beyond whatever page size it fetches are still
+  // reachable instead of just being cut off.
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
 }
 
-export default function CardPickerModal({ open, title, cards, disabledCardIds = [], onSelect, onClose }: Props) {
+export default function CardPickerModal({
+  open, title, cards, disabledCardIds = [], onSelect, onClose, searchValue, onSearchChange,
+}: Props) {
   return (
     <AnimatePresence>
       {open && (
@@ -37,6 +45,14 @@ export default function CardPickerModal({ open, title, cards, disabledCardIds = 
               <p className="font-display text-lg font-bold text-slate-100">{title}</p>
               <button onClick={onClose} className="rounded-full bg-white/5 px-3 py-1.5 text-sm text-slate-300">Закрыть</button>
             </div>
+            {onSearchChange && (
+              <input
+                value={searchValue ?? ""}
+                onChange={(e) => onSearchChange(e.target.value)}
+                placeholder="Поиск по имени..."
+                className="mb-3 w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk placeholder:text-ink-mist-dim outline-none"
+              />
+            )}
             {cards.length === 0 ? (
               <EmptyState icon={IconCollection} title="Нет подходящих карточек" description="Открой паки, чтобы получить игроков этой позиции" />
             ) : (

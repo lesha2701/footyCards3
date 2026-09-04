@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { feedDiamondCard, fetchDiamondUpgradeTiers, fetchUpgradeableCards } from "@/api/collection";
+import { feedDiamondCard, fetchDiamondUpgradeCap, fetchDiamondUpgradeTiers, fetchUpgradeableCards } from "@/api/collection";
 import { IconChevronRight, IconStar, IconUpgrade } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
@@ -29,9 +29,10 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
   const [result, setResult] = useState<FeedCardsResult | null>(null);
 
   const { data: tiers } = useQuery({ queryKey: ["diamond-upgrade-tiers"], queryFn: fetchDiamondUpgradeTiers });
+  const { data: ratingCap } = useQuery({ queryKey: ["diamond-upgrade-cap"], queryFn: fetchDiamondUpgradeCap });
   const currentRating = card.player.rating;
   const tier = tiers?.find((t) => t.is_active && t.min_rating <= currentRating && currentRating < t.max_rating);
-  const atCap = currentRating >= 99;
+  const atCap = ratingCap !== undefined && currentRating >= ratingCap;
 
   const { data: materialCards, isLoading: materialLoading } = useQuery({
     queryKey: ["upgrade-cards", rarity],
@@ -40,8 +41,9 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
   });
 
   const cost = rarity && tier ? tier[COST_FIELD[rarity]!] : null;
-  const gain = cost ? Math.floor(selected.length / cost) : 0;
-  const leftover = cost ? selected.length % cost : 0;
+  const maxGain = ratingCap !== undefined ? Math.max(0, ratingCap - currentRating) : Infinity;
+  const gain = cost ? Math.min(Math.floor(selected.length / cost), maxGain) : 0;
+  const leftover = cost ? selected.length - gain * cost : 0;
 
   const toggleCard = (c: UserCard) => {
     setSelected((prev) => (prev.some((s) => s.id === c.id) ? prev.filter((s) => s.id !== c.id) : [...prev, c]));
@@ -78,7 +80,7 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
         </p>
 
         {atCap && (
-          <p className="mt-4 rounded-xl bg-white/5 px-3 py-2 text-xs text-ink-mist">Эта карта уже достигла максимального рейтинга (99).</p>
+          <p className="mt-4 rounded-xl bg-white/5 px-3 py-2 text-xs text-ink-mist">Эта карта уже достигла максимального рейтинга ({ratingCap}).</p>
         )}
 
         {!atCap && phase === "rarity" && (
@@ -90,7 +92,7 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
                 return (
                   <button
                     key={r}
-                    disabled={!tier}
+                    disabled={!tier || rCost == null}
                     onClick={() => { setRarity(r); setSelected([]); setPhase("pick"); }}
                     className="flex items-center justify-between rounded-2xl bg-bg-raised px-4 py-3 text-left active:scale-[0.98] disabled:opacity-40"
                   >

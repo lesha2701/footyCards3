@@ -32,7 +32,7 @@ export default function AdminGamesPage() {
     </label>
   );
 
-  const toggle = (key: "matchmaking_enabled" | "wheel_enabled" | "leagues_enabled", label: string) => (
+  const toggle = (key: "matchmaking_enabled" | "wheel_enabled" | "leagues_enabled" | "diamond_rating_cap_enabled", label: string) => (
     <label className="flex items-center gap-2 text-sm">
       <input
         type="checkbox"
@@ -77,6 +77,19 @@ export default function AdminGamesPage() {
           {field("club_tournament_budget_place_6", "Награда бюджетом за 6-е место")}
           {field("club_tournament_budget_place_7", "Награда бюджетом за 7-е место")}
           {field("club_tournament_budget_place_8", "Награда бюджетом за 8-е место")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Диамантовые карты — апгрейд рейтинга</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Мягкий потолок рейтинга при прокачке: карту нельзя докормить выше этого значения. Уже существующие карты с
+          более высоким рейтингом не трогаются — просто больше не растут. Сними галочку, чтобы вернуть жёсткий
+          технический потолок 99.
+        </p>
+        <div className="flex flex-wrap items-center gap-4">
+          {field("diamond_rating_cap", "Потолок рейтинга")}
+          {toggle("diamond_rating_cap_enabled", "Ограничение включено")}
         </div>
       </section>
 

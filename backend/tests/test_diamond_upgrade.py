@@ -1,3 +1,5 @@
+from typing import Optional
+
 from sqlalchemy import select
 
 from app.models.card import UserCard
@@ -15,7 +17,17 @@ async def _register(client, db_session, telegram_id, bot_token):
     return await get_user_by_telegram_id(db_session, telegram_id)
 
 
-async def _seed_tier(db_session, min_rating, max_rating, common=10, rare=5, epic=3, legendary=1) -> DiamondUpgradeTier:
+async def _admin_auth(client, bot_token):
+    admin_headers = telegram_headers(999000001, bot_token)  # matches ADMIN_TELEGRAM_IDS in conftest
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    token = session_resp.json()["admin_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+async def _seed_tier(
+    db_session, min_rating, max_rating,
+    common: Optional[int] = 10, rare: Optional[int] = 5, epic: Optional[int] = 3, legendary: Optional[int] = 1,
+) -> DiamondUpgradeTier:
     tier = DiamondUpgradeTier(
         min_rating=min_rating, max_rating=max_rating,
         common_cost=common, rare_cost=rare, epic_cost=epic, legendary_cost=legendary, is_active=True,
@@ -116,6 +128,29 @@ async def test_feed_below_cost_is_rejected(client, db_session, bot_token):
     assert len(remaining) == 1 + 5
 
 
+async def test_feed_a_rarity_with_no_cost_set_is_rejected(client, db_session, bot_token):
+    user = await _register(client, db_session, 950012, bot_token)
+    user_id = user.id
+    diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=60)
+    legendary_player = await create_player(db_session, rarity=Rarity.legendary, rating=90)
+    diamond_card = await _give_card(db_session, user_id, diamond_player.id, 1)
+    material_ids = await _give_n_cards(db_session, user_id, legendary_player.id, 5)
+    # legendary_cost left unset ("—" in the admin UI) — this rarity can't level up this band.
+    await _seed_tier(db_session, 60, 70, common=10, rare=5, epic=3, legendary=None)
+
+    headers = telegram_headers(950012, bot_token)
+    resp = await client.post(
+        "/api/v1/collection/diamond-upgrade/feed",
+        headers=headers,
+        json={"diamond_card_id": diamond_card.id, "material_card_ids": material_ids},
+    )
+    assert resp.status_code == 409
+
+    db_session.expire_all()
+    remaining = (await db_session.execute(select(UserCard).where(UserCard.owner_id == user_id))).scalars().all()
+    assert len(remaining) == 1 + 5
+
+
 async def test_feed_mixed_rarity_material_is_rejected(client, db_session, bot_token):
     user = await _register(client, db_session, 950004, bot_token)
     user_id = user.id
@@ -172,7 +207,13 @@ async def test_feed_without_a_configured_tier_is_rejected(client, db_session, bo
     assert resp.status_code == 409
 
 
-async def test_rating_gain_is_capped_at_99(client, db_session, bot_token):
+async def test_rating_gain_is_capped_at_99_when_the_soft_cap_is_disabled(client, db_session, bot_token):
+    admin_headers = await _admin_auth(client, bot_token)
+    resp = await client.put(
+        "/api/v1/admin/games/config", headers=admin_headers, json={"diamond_rating_cap_enabled": False},
+    )
+    assert resp.status_code == 200
+
     user = await _register(client, db_session, 950007, bot_token)
     user_id = user.id
     diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=98)
@@ -194,6 +235,98 @@ async def test_rating_gain_is_capped_at_99(client, db_session, bot_token):
     assert body["cards_consumed"] == 1
     assert body["cards_returned"] == 9
     assert body["diamond_card"]["player"]["rating"] == 99
+
+
+async def test_feed_is_rejected_at_the_default_95_rating_cap(client, db_session, bot_token):
+    user = await _register(client, db_session, 950013, bot_token)
+    user_id = user.id
+    diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=95)
+    legendary_player = await create_player(db_session, rarity=Rarity.legendary, rating=90)
+    diamond_card = await _give_card(db_session, user_id, diamond_player.id, 1)
+    material_ids = await _give_n_cards(db_session, user_id, legendary_player.id, 5)
+    await _seed_tier(db_session, 90, 100, legendary=1)
+
+    headers = telegram_headers(950013, bot_token)
+    resp = await client.post(
+        "/api/v1/collection/diamond-upgrade/feed",
+        headers=headers,
+        json={"diamond_card_id": diamond_card.id, "material_card_ids": material_ids},
+    )
+    assert resp.status_code == 409
+
+    db_session.expire_all()
+    remaining = (await db_session.execute(select(UserCard).where(UserCard.owner_id == user_id))).scalars().all()
+    assert len(remaining) == 1 + 5
+
+
+async def test_feed_gain_clamps_to_the_default_95_rating_cap(client, db_session, bot_token):
+    user = await _register(client, db_session, 950014, bot_token)
+    user_id = user.id
+    diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=94)
+    legendary_player = await create_player(db_session, rarity=Rarity.legendary, rating=90)
+    diamond_card = await _give_card(db_session, user_id, diamond_player.id, 1)
+    # 10 legendary cards, cost 1 each -> would be +10 uncapped, must clamp to +1 (94 -> 95).
+    material_ids = await _give_n_cards(db_session, user_id, legendary_player.id, 10)
+    await _seed_tier(db_session, 90, 100, legendary=1)
+
+    headers = telegram_headers(950014, bot_token)
+    resp = await client.post(
+        "/api/v1/collection/diamond-upgrade/feed",
+        headers=headers,
+        json={"diamond_card_id": diamond_card.id, "material_card_ids": material_ids},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["rating_gained"] == 1
+    assert body["cards_consumed"] == 1
+    assert body["cards_returned"] == 9
+    assert body["diamond_card"]["player"]["rating"] == 95
+
+
+async def test_a_card_already_above_the_cap_is_never_downgraded_but_cannot_feed_further(client, db_session, bot_token):
+    """Mirrors a card that reached 99 before this cap existed (or after the
+    cap was lowered) — feeding must refuse further gains without ever
+    reducing diamond_rating_bonus."""
+    user = await _register(client, db_session, 950015, bot_token)
+    user_id = user.id
+    diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=60)
+    legendary_player = await create_player(db_session, rarity=Rarity.legendary, rating=90)
+    diamond_card = await _give_card(db_session, user_id, diamond_player.id, 1)
+    diamond_card_id = diamond_card.id
+    diamond_card.diamond_rating_bonus = 39  # 60 + 39 = 99, already above the default 95 cap
+    db_session.add(diamond_card)
+    await db_session.commit()
+
+    material_ids = await _give_n_cards(db_session, user_id, legendary_player.id, 5)
+    await _seed_tier(db_session, 90, 100, legendary=1)
+
+    headers = telegram_headers(950015, bot_token)
+    resp = await client.post(
+        "/api/v1/collection/diamond-upgrade/feed",
+        headers=headers,
+        json={"diamond_card_id": diamond_card_id, "material_card_ids": material_ids},
+    )
+    assert resp.status_code == 409
+
+    db_session.expire_all()
+    refreshed = await db_session.get(UserCard, diamond_card_id)
+    assert refreshed.diamond_rating_bonus == 39
+
+
+async def test_diamond_upgrade_cap_endpoint_reflects_config(client, db_session, bot_token):
+    user_headers = telegram_headers(950016, bot_token)
+    await client.post("/api/v1/auth/session", headers=user_headers)
+
+    resp = await client.get("/api/v1/collection/diamond-upgrade-cap", headers=user_headers)
+    assert resp.status_code == 200
+    assert resp.json()["cap"] == 95
+
+    admin_headers = await _admin_auth(client, bot_token)
+    await client.put("/api/v1/admin/games/config", headers=admin_headers, json={"diamond_rating_cap_enabled": False})
+
+    resp = await client.get("/api/v1/collection/diamond-upgrade-cap", headers=user_headers)
+    assert resp.status_code == 200
+    assert resp.json()["cap"] == 99
 
 
 async def test_multiple_tiers_pick_the_band_matching_current_rating(client, db_session, bot_token):

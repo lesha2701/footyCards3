@@ -144,6 +144,14 @@ class GameConfig(TimestampMixin, Base):
 
     match_max_diamond_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
+    # Soft ceiling on diamond card leveling (feed_cards never lets a card's
+    # rating cross this via NEW feeding) — separate from the absolute 99
+    # technical ceiling every card is clamped to. Disabling it just lifts
+    # the soft ceiling back to 99; it never downgrades a card that already
+    # sits above the configured cap (e.g. from before this setting existed).
+    diamond_rating_cap: Mapped[int] = mapped_column(Integer, default=95, nullable=False)
+    diamond_rating_cap_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
     # Set by an admin right before deploying an update (see routers/maintenance.py);
     # the Mini App shows a "may be flaky for a few minutes" banner while now() < this.
     maintenance_banner_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

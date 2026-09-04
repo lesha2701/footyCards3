@@ -32,11 +32,12 @@ export default function PenaltyMatchesPage() {
   const [pickingOpponent, setPickingOpponent] = useState<UserPublic | null>(null);
   const [pickingForSearch, setPickingForSearch] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cardSearch, setCardSearch] = useState("");
 
   const { data: matches, isLoading } = useQuery({ queryKey: ["penalty-matches"], queryFn: fetchPenaltyMatches });
   const { data: collection } = useQuery({
-    queryKey: ["collection", "penalty-pvp"],
-    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc" }),
+    queryKey: ["collection", "penalty-pvp", cardSearch],
+    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc", search: cardSearch || undefined }),
     enabled: pickingOpponent !== null || pickingForSearch,
   });
   const activeMatch = matches?.find((m) => m.status === "in_progress");
@@ -141,7 +142,9 @@ export default function PenaltyMatchesPage() {
           title={`Выбери карточку против ${pickingOpponent.username ?? pickingOpponent.first_name ?? "соперника"}`}
           cards={collection?.items ?? []}
           onSelect={(card) => { setChallengeSheetOpen(false); challengeMutation.mutate(card.id); }}
-          onClose={() => { setPickingOpponent(null); setChallengeSheetOpen(false); }}
+          onClose={() => { setPickingOpponent(null); setChallengeSheetOpen(false); setCardSearch(""); }}
+          searchValue={cardSearch}
+          onSearchChange={setCardSearch}
         />
       )}
 
@@ -151,7 +154,9 @@ export default function PenaltyMatchesPage() {
           title="Выбери карточку для матча"
           cards={collection?.items ?? []}
           onSelect={(card) => navigate("/play/penalty/matches/search", { state: { userCardId: card.id } })}
-          onClose={() => setPickingForSearch(false)}
+          onClose={() => { setPickingForSearch(false); setCardSearch(""); }}
+          searchValue={cardSearch}
+          onSearchChange={setCardSearch}
         />
       )}
     </div>

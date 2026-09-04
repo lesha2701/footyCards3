@@ -42,9 +42,10 @@ export default function ArenaPage() {
   const updateBalance = useAuthStore((s) => s.updateBalance);
 
   const { data: lineup, isLoading: lineupLoading } = useQuery({ queryKey: ["lineup"], queryFn: fetchActiveLineup });
+  const [pickerSearch, setPickerSearch] = useState("");
   const { data: collectionPage } = useQuery({
-    queryKey: ["collection-for-lineup"],
-    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc" }),
+    queryKey: ["collection-for-lineup", pickerSearch],
+    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc", search: pickerSearch || undefined }),
   });
   const { data: stats } = useQuery({ queryKey: ["arena-stats"], queryFn: fetchArenaStats });
   const { data: history } = useQuery({ queryKey: ["match-history"], queryFn: fetchMatchHistory });
@@ -322,7 +323,9 @@ export default function ArenaPage() {
             .filter((c) => usedPlayerIds.includes(c.player.id) || (c.player.rarity === "diamond" && diamondCount >= maxDiamond))
             .map((c) => c.id)}
           onSelect={(card) => assignSlot(pickerSlot, card)}
-          onClose={() => setPickerSlot(null)}
+          onClose={() => { setPickerSlot(null); setPickerSearch(""); }}
+          searchValue={pickerSearch}
+          onSearchChange={setPickerSearch}
         />
       )}
     </div>

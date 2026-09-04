@@ -16,26 +16,30 @@ class DiamondUpgradeTierOut(BaseModel):
     id: int
     min_rating: int
     max_rating: int
-    common_cost: int
-    rare_cost: int
-    epic_cost: int
-    legendary_cost: int
+    # None means that rarity cannot be used to level up a card in this band.
+    common_cost: Optional[int]
+    rare_cost: Optional[int]
+    epic_cost: Optional[int]
+    legendary_cost: Optional[int]
     is_active: bool
 
 
 class DiamondUpgradeTierCreate(BaseModel):
     min_rating: int = Field(ge=1, le=99)
     max_rating: int = Field(ge=1, le=99)
-    common_cost: int = Field(ge=1)
-    rare_cost: int = Field(ge=1)
-    epic_cost: int = Field(ge=1)
-    legendary_cost: int = Field(ge=1)
+    common_cost: Optional[int] = Field(default=None, ge=1)
+    rare_cost: Optional[int] = Field(default=None, ge=1)
+    epic_cost: Optional[int] = Field(default=None, ge=1)
+    legendary_cost: Optional[int] = Field(default=None, ge=1)
     is_active: bool = True
 
 
 class DiamondUpgradeTierUpdate(BaseModel):
     min_rating: Optional[int] = Field(default=None, ge=1, le=99)
     max_rating: Optional[int] = Field(default=None, ge=1, le=99)
+    # Sending an explicit null clears the cost (rarity becomes unavailable);
+    # omitting the field entirely leaves it unchanged (see exclude_unset in
+    # the admin router).
     common_cost: Optional[int] = Field(default=None, ge=1)
     rare_cost: Optional[int] = Field(default=None, ge=1)
     epic_cost: Optional[int] = Field(default=None, ge=1)
@@ -54,3 +58,7 @@ class FeedCardsResult(BaseModel):
     cards_consumed: int
     cards_returned: int
     rating_gained: int
+
+
+class DiamondRatingCapOut(BaseModel):
+    cap: int
