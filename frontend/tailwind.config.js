@@ -10,7 +10,11 @@ export default {
           rare: "#3b82f6",
           epic: "#a855f7",
           legendary: "#f59e0b",
-          diamond: "#38bdf8",
+          // Icy turquoise, not blue — rare already owns saturated blue as
+          // its identity, so diamond leans lighter/cooler to read as
+          // "ice/prism" rather than "another blue card". The rainbow itself
+          // lives in the animated diamond-holo gradient/glow below.
+          diamond: "#67e8f9",
         },
         bg: {
           base: "#07090a",
@@ -41,7 +45,10 @@ export default {
       boxShadow: {
         glow: "0 0 24px rgba(62, 209, 126, 0.35)",
         "glow-legendary": "0 0 32px rgba(245, 158, 11, 0.55)",
-        "glow-diamond": "0 0 32px rgba(56, 189, 248, 0.55)",
+        // Blended violet + cyan halo, evoking light splitting into color —
+        // deliberately not a single flat blue like glow-rare. Static (no
+        // pulsing) — only the border gradient itself animates.
+        "glow-diamond": "0 0 20px rgba(232, 121, 249, 0.45), 0 0 36px rgba(103, 232, 249, 0.4)",
         "glow-epic": "0 0 32px rgba(168, 85, 247, 0.5)",
         "glow-rare": "0 0 24px rgba(59, 130, 246, 0.45)",
       },
@@ -50,6 +57,7 @@ export default {
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "goal-flash": "goalFlash 1.1s ease-out forwards",
         "legendary-pulse": "legendaryPulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "diamond-shimmer": "diamondShimmer 2.2s ease-in-out infinite",
       },
       keyframes: {
         shimmer: {
@@ -66,6 +74,18 @@ export default {
         // read as "here", just gently breathing, not flicker toward invisible.
         legendaryPulse: {
           "50%": { opacity: "0.7" },
+        },
+        // Only the border's background-position travels — no opacity swing.
+        // An animated opacity dip read as flicker/eye strain, so the diamond
+        // border stays fully opaque throughout; the shimmer is carried
+        // entirely by the gradient sweeping under the oversized
+        // bg-[length:...] from RARITY_GLOW.diamond. Every call site's
+        // gradient is `bg-gradient-to-b` (to bottom) — that only varies
+        // along Y, so animating X (what this used to do) moved the position
+        // without ever changing a visible pixel. Y is the axis that matters.
+        diamondShimmer: {
+          "0%, 100%": { backgroundPosition: "50% 0%" },
+          "50%": { backgroundPosition: "50% 100%" },
         },
       },
     },

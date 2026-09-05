@@ -1,13 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { feedDiamondCard, fetchDiamondUpgradeCap, fetchDiamondUpgradeTiers, fetchUpgradeableCards } from "@/api/collection";
+import {
+  feedDiamondCard,
+  fetchDiamondMaterialCards,
+  fetchDiamondUpgradeCap,
+  fetchDiamondUpgradeTiers,
+  fetchUpgradeableCards,
+} from "@/api/collection";
 import { IconChevronRight, IconStar, IconUpgrade } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
-import type { FeedCardsResult, Rarity, UserCard } from "@/types";
+import type { DiamondMaterialBandKind, FeedCardsResult, Rarity, UserCard } from "@/types";
 
 const MATERIAL_RARITIES: Rarity[] = ["common", "rare", "epic", "legendary"];
 const COST_FIELD: Record<Rarity, "common_cost" | "rare_cost" | "epic_cost" | "legendary_cost" | null> = {
@@ -16,6 +22,14 @@ const COST_FIELD: Record<Rarity, "common_cost" | "rare_cost" | "epic_cost" | "le
   epic: "epic_cost",
   legendary: "legendary_cost",
   diamond: null,
+};
+
+// The two fixed extension bands (above the admin-configured cap) aren't
+// rarity-driven — every material card is diamond, so the "choose a rarity"
+// step is skipped entirely and this text explains what's needed instead.
+const EXTENSION_BAND_LABELS: Record<Exclude<DiamondMaterialBandKind, "admin_tier">, string> = {
+  any_diamond: "Любые другие диамантовые карты",
+  same_player_diamond: "Только копии именно этой карты",
 };
 
 type Phase = "rarity" | "pick" | "confirm" | "result";
@@ -30,18 +44,37 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
 
   const { data: tiers } = useQuery({ queryKey: ["diamond-upgrade-tiers"], queryFn: fetchDiamondUpgradeTiers });
   const { data: ratingCap } = useQuery({ queryKey: ["diamond-upgrade-cap"], queryFn: fetchDiamondUpgradeCap });
+  const { data: band, isLoading: bandLoading } = useQuery({
+    queryKey: ["diamond-material-cards", card.id],
+    queryFn: () => fetchDiamondMaterialCards(card.id),
+  });
   const currentRating = card.player.rating;
   const tier = tiers?.find((t) => t.is_active && t.min_rating <= currentRating && currentRating < t.max_rating);
   const atCap = ratingCap !== undefined && currentRating >= ratingCap;
+  const isExtensionBand = !!band && band.kind !== "admin_tier";
 
-  const { data: materialCards, isLoading: materialLoading } = useQuery({
+  // Extension bands have no rarity to choose (every material card is
+  // diamond) — jump straight to picking cards as soon as we know the band.
+  useEffect(() => {
+    if (isExtensionBand && phase === "rarity") {
+      setRarity("diamond");
+      setPhase("pick");
+    }
+  }, [isExtensionBand, phase]);
+
+  const { data: adminTierCards, isLoading: adminTierLoading } = useQuery({
     queryKey: ["upgrade-cards", rarity],
     queryFn: () => fetchUpgradeableCards(rarity!),
-    enabled: !!rarity && phase === "pick",
+    enabled: !!rarity && phase === "pick" && !isExtensionBand,
   });
 
-  const cost = rarity && tier ? tier[COST_FIELD[rarity]!] : null;
-  const maxGain = ratingCap !== undefined ? Math.max(0, ratingCap - currentRating) : Infinity;
+  const materialCards = isExtensionBand ? band?.cards : adminTierCards;
+  const materialLoading = isExtensionBand ? bandLoading : adminTierLoading;
+
+  const cost = isExtensionBand ? band?.cost ?? null : rarity && tier ? tier[COST_FIELD[rarity]!] : null;
+  const effectiveCeiling =
+    ratingCap !== undefined ? Math.min(ratingCap, isExtensionBand ? band!.ceiling : ratingCap) : undefined;
+  const maxGain = effectiveCeiling !== undefined ? Math.max(0, effectiveCeiling - currentRating) : Infinity;
   const gain = cost ? Math.min(Math.floor(selected.length / cost), maxGain) : 0;
   const leftover = cost ? selected.length - gain * cost : 0;
 
@@ -56,6 +89,7 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
       setResult(data);
       setPhase("result");
       queryClient.invalidateQueries({ queryKey: ["upgrade-cards"] });
+      queryClient.invalidateQueries({ queryKey: ["diamond-material-cards"] });
       queryClient.invalidateQueries({ queryKey: ["collection"] });
       queryClient.invalidateQueries({ queryKey: ["collection-stats"] });
     },
@@ -83,7 +117,9 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
           <p className="mt-4 rounded-xl bg-white/5 px-3 py-2 text-xs text-ink-mist">Эта карта уже достигла максимального рейтинга ({ratingCap}).</p>
         )}
 
-        {!atCap && phase === "rarity" && (
+        {!atCap && bandLoading && <p className="mt-4 text-xs text-ink-mist">Загрузка...</p>}
+
+        {!atCap && !bandLoading && !isExtensionBand && phase === "rarity" && (
           <>
             <p className="mt-4 text-xs text-ink-mist">Выбери редкость карт, которые скормишь этой карточке:</p>
             <div className="mt-3 flex flex-col gap-2">
@@ -116,10 +152,11 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
           </>
         )}
 
-        {phase === "pick" && rarity && (
+        {!atCap && phase === "pick" && rarity && (
           <>
             <p className="mt-4 text-xs text-ink-mist">
-              {RARITY_LABELS[rarity]} · нужно <b className="text-ink-chalk">{cost}</b> шт. за +1 рейтинг
+              {isExtensionBand ? EXTENSION_BAND_LABELS[band!.kind as Exclude<DiamondMaterialBandKind, "admin_tier">] : RARITY_LABELS[rarity]}
+              {" "}· нужно <b className="text-ink-chalk">{cost}</b> шт. за +1 рейтинг
             </p>
             {materialLoading && <p className="mt-3 text-xs text-ink-mist">Загрузка...</p>}
             {!materialLoading && !materialCards?.length && (
@@ -149,12 +186,19 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
               {leftover > 0 && <span className="text-ink-mist-dim"> (останется {leftover} без изменений)</span>}
             </div>
             <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => setPhase("rarity")}
-                className="flex-1 rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist active:scale-95"
-              >
-                Назад
-              </button>
+              {!isExtensionBand && (
+                <button
+                  onClick={() => setPhase("rarity")}
+                  className="flex-1 rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist active:scale-95"
+                >
+                  Назад
+                </button>
+              )}
+              {isExtensionBand && (
+                <button onClick={onClose} className="flex-1 rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist active:scale-95">
+                  Закрыть
+                </button>
+              )}
               <button
                 onClick={() => { setFeedError(null); setPhase("confirm"); }}
                 disabled={gain <= 0}
@@ -169,8 +213,9 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
         {phase === "confirm" && rarity && (
           <>
             <p className="mt-4 text-sm text-ink-mist">
-              Ты скормишь <b className="text-ink-chalk">{gain * (cost ?? 0)}</b> карт ({RARITY_LABELS[rarity]}) и получишь{" "}
-              <b className="text-rarity-diamond">+{gain}</b> к рейтингу ({currentRating} → {currentRating + gain}). Карты
+              Ты скормишь <b className="text-ink-chalk">{gain * (cost ?? 0)}</b> карт (
+              {isExtensionBand ? EXTENSION_BAND_LABELS[band!.kind as Exclude<DiamondMaterialBandKind, "admin_tier">] : RARITY_LABELS[rarity]}) и
+              получишь <b className="text-rarity-diamond">+{gain}</b> к рейтингу ({currentRating} → {currentRating + gain}). Карты
               будут безвозвратно потрачены.
             </p>
             {feedError && <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{feedError}</p>}

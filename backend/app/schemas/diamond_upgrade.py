@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -62,3 +62,12 @@ class FeedCardsResult(BaseModel):
 
 class DiamondRatingCapOut(BaseModel):
     cap: int
+
+
+class DiamondMaterialCardsOut(BaseModel):
+    # "admin_tier" means the ordinary per-rarity /upgrade-cards flow applies
+    # (cards is always [] for it); the two extension bands are diamond-only.
+    kind: Literal["admin_tier", "any_diamond", "same_player_diamond"]
+    cost: Optional[int]
+    ceiling: int
+    cards: list[UserCardOut]

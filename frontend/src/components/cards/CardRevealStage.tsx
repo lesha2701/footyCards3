@@ -56,7 +56,8 @@ export function RevealStage({
             className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-floodlight blur-3xl"
           />
         )}
-        {revealed && (player.rarity === "legendary" || player.rarity === "diamond") && <LegendaryConfetti />}
+        {revealed && player.rarity === "legendary" && <LegendaryConfetti />}
+        {revealed && player.rarity === "diamond" && <DiamondSparkle />}
         <motion.div
           initial={{ scale: 0.85, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -165,6 +166,71 @@ function LegendaryConfetti() {
           className="absolute left-1/2 top-1/2 h-2.5 w-1.5 rounded-[1px]"
           style={{ backgroundColor: piece.color }}
         />
+      ))}
+    </div>
+  );
+}
+
+// Icy/violet star sparks + a slowly-rotating prismatic halo behind the card —
+// a diamond reveal should read as "light refracting", distinct from
+// legendary's warm falling gold confetti.
+const DIAMOND_SPARK_COLORS = ["#67e8f9", "#f0abfc", "#c4b5fd", "#5eead4", "#ffffff"];
+
+function DiamondSparkle() {
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 22 }, (_, i) => {
+        const angle = (Math.PI * 2 * i) / 22 + Math.random() * 0.3;
+        const distance = 80 + Math.random() * 110;
+        return {
+          id: i,
+          x: Math.cos(angle) * distance,
+          y: Math.sin(angle) * distance,
+          rotate: Math.random() * 360,
+          // repeat: Infinity below loops each star forever — delay staggers
+          // the first spawn, repeatDelay staggers every spawn after that, so
+          // stars keep flickering in for as long as the reveal is on screen
+          // instead of firing once and going dark.
+          delay: Math.random() * 1.4,
+          repeatDelay: 0.5 + Math.random() * 1.3,
+          duration: 1.0 + Math.random() * 0.5,
+          scale: 0.6 + Math.random() * 0.7,
+          color: DIAMOND_SPARK_COLORS[i % DIAMOND_SPARK_COLORS.length],
+        };
+      }),
+    []
+  );
+
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-visible">
+      <motion.div
+        initial={{ opacity: 0, rotate: 0, scale: 0.8 }}
+        animate={{ opacity: 0.55, rotate: 360, scale: 1.6 }}
+        transition={{
+          opacity: { duration: 0.6 },
+          scale: { duration: 0.6 },
+          rotate: { duration: 6, repeat: Infinity, ease: "linear" },
+        }}
+        className="absolute inset-0 -z-10 rounded-full blur-2xl"
+        style={{ background: "conic-gradient(from 0deg, #67e8f9, #f0abfc, #c4b5fd, #5eead4, #67e8f9)" }}
+      />
+      {pieces.map((piece) => (
+        <motion.span
+          key={piece.id}
+          initial={{ x: 0, y: 0, opacity: 0, rotate: 0, scale: 0 }}
+          animate={{ x: [0, piece.x], y: [0, piece.y], opacity: [0, 1, 0], rotate: piece.rotate, scale: [0, piece.scale, piece.scale] }}
+          transition={{
+            duration: piece.duration,
+            delay: piece.delay,
+            repeat: Infinity,
+            repeatDelay: piece.repeatDelay,
+            ease: "easeOut",
+          }}
+          className="absolute left-1/2 top-1/2 text-base leading-none"
+          style={{ color: piece.color }}
+        >
+          ✦
+        </motion.span>
       ))}
     </div>
   );

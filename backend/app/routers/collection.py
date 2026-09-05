@@ -20,7 +20,13 @@ from app.schemas.collection import (
     SetCardHiddenRequest,
     UserCardListItem,
 )
-from app.schemas.diamond_upgrade import DiamondRatingCapOut, DiamondUpgradeTierOut, FeedCardsRequest, FeedCardsResult
+from app.schemas.diamond_upgrade import (
+    DiamondMaterialCardsOut,
+    DiamondRatingCapOut,
+    DiamondUpgradeTierOut,
+    FeedCardsRequest,
+    FeedCardsResult,
+)
 from app.services.card_upgrade_service import list_rules, list_upgradeable_cards, upgrade_card
 from app.services.collection_service import (
     collection_stats,
@@ -30,7 +36,7 @@ from app.services.collection_service import (
     sell_cards,
     set_card_hidden,
 )
-from app.services.diamond_upgrade_service import feed_cards, get_effective_rating_cap, list_tiers
+from app.services.diamond_upgrade_service import feed_cards, get_effective_rating_cap, get_material_cards, list_tiers
 
 router = APIRouter(prefix="/collection", tags=["collection"])
 
@@ -115,6 +121,13 @@ async def get_diamond_upgrade_tiers(db: AsyncSession = Depends(get_db), _user: U
 @router.get("/diamond-upgrade-cap", response_model=DiamondRatingCapOut)
 async def get_diamond_upgrade_cap(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
     return DiamondRatingCapOut(cap=await get_effective_rating_cap(db))
+
+
+@router.get("/diamond-upgrade/material-cards", response_model=DiamondMaterialCardsOut)
+async def get_diamond_material_cards_route(
+    diamond_card_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await get_material_cards(db, user.id, diamond_card_id)
 
 
 @router.post("/diamond-upgrade/feed", response_model=FeedCardsResult)
