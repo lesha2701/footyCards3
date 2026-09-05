@@ -98,6 +98,15 @@ export interface FeedCardsResult {
   rating_gained: number;
 }
 
+export type DiamondMaterialBandKind = "admin_tier" | "any_diamond" | "same_player_diamond";
+
+export interface DiamondMaterialCardsOut {
+  kind: DiamondMaterialBandKind;
+  cost: number | null;
+  ceiling: number;
+  cards: UserCard[];
+}
+
 export interface CardUpgradeRule {
   id: number;
   from_rarity: Rarity;

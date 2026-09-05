@@ -208,6 +208,9 @@ async def test_feed_without_a_configured_tier_is_rejected(client, db_session, bo
 
 
 async def test_rating_gain_is_capped_at_99_when_the_soft_cap_is_disabled(client, db_session, bot_token):
+    """Above 95 the upgrade path is the fixed same-player-duplicates
+    extension band (95-98 is the "any diamond" band, 98-99 is this one),
+    not the admin tier table — 10 material cards per +1 rating, clamped to 99."""
     admin_headers = await _admin_auth(client, bot_token)
     resp = await client.put(
         "/api/v1/admin/games/config", headers=admin_headers, json={"diamond_rating_cap_enabled": False},
@@ -217,11 +220,9 @@ async def test_rating_gain_is_capped_at_99_when_the_soft_cap_is_disabled(client,
     user = await _register(client, db_session, 950007, bot_token)
     user_id = user.id
     diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=98)
-    legendary_player = await create_player(db_session, rarity=Rarity.legendary, rating=90)
-    diamond_card = await _give_card(db_session, user_id, diamond_player.id, 1)
-    # 10 legendary cards, cost 1 each -> would be +10 uncapped, must clamp to +1 (98 -> 99).
-    material_ids = await _give_n_cards(db_session, user_id, legendary_player.id, 10)
-    await _seed_tier(db_session, 90, 100, legendary=1)
+    diamond_card = await _give_card(db_session, user_id, diamond_player.id, 999)
+    # 20 duplicate diamond cards of the same player, cost 10 each -> would be +2 uncapped, must clamp to +1 (98 -> 99).
+    material_ids = await _give_n_cards(db_session, user_id, diamond_player.id, 20)
 
     headers = telegram_headers(950007, bot_token)
     resp = await client.post(
@@ -232,9 +233,164 @@ async def test_rating_gain_is_capped_at_99_when_the_soft_cap_is_disabled(client,
     assert resp.status_code == 200
     body = resp.json()
     assert body["rating_gained"] == 1
-    assert body["cards_consumed"] == 1
-    assert body["cards_returned"] == 9
+    assert body["cards_consumed"] == 10
+    assert body["cards_returned"] == 10
     assert body["diamond_card"]["player"]["rating"] == 99
+
+
+async def test_extension_band_95_to_98_accepts_any_other_diamond_card(client, db_session, bot_token):
+    admin_headers = await _admin_auth(client, bot_token)
+    await client.put("/api/v1/admin/games/config", headers=admin_headers, json={"diamond_rating_cap_enabled": False})
+
+    user = await _register(client, db_session, 950017, bot_token)
+    user_id = user.id
+    diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=95)
+    other_diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=60)
+    diamond_card = await _give_card(db_session, user_id, diamond_player.id, 1)
+    material_ids = await _give_n_cards(db_session, user_id, other_diamond_player.id, 10)
+
+    headers = telegram_headers(950017, bot_token)
+    resp = await client.post(
+        "/api/v1/collection/diamond-upgrade/feed",
+        headers=headers,
+        json={"diamond_card_id": diamond_card.id, "material_card_ids": material_ids},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["rating_gained"] == 1
+    assert body["cards_consumed"] == 10
+    assert body["diamond_card"]["player"]["rating"] == 96
+
+
+async def test_extension_band_95_to_98_rejects_non_diamond_material(client, db_session, bot_token):
+    admin_headers = await _admin_auth(client, bot_token)
+    await client.put("/api/v1/admin/games/config", headers=admin_headers, json={"diamond_rating_cap_enabled": False})
+
+    user = await _register(client, db_session, 950018, bot_token)
+    user_id = user.id
+    diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=95)
+    legendary_player = await create_player(db_session, rarity=Rarity.legendary, rating=90)
+    diamond_card = await _give_card(db_session, user_id, diamond_player.id, 1)
+    material_ids = await _give_n_cards(db_session, user_id, legendary_player.id, 10)
+    await _seed_tier(db_session, 90, 100, legendary=1)
+
+    headers = telegram_headers(950018, bot_token)
+    resp = await client.post(
+        "/api/v1/collection/diamond-upgrade/feed",
+        headers=headers,
+        json={"diamond_card_id": diamond_card.id, "material_card_ids": material_ids},
+    )
+    assert resp.status_code == 409
+
+
+async def test_extension_band_98_to_99_rejects_a_different_players_diamond_cards(client, db_session, bot_token):
+    admin_headers = await _admin_auth(client, bot_token)
+    await client.put("/api/v1/admin/games/config", headers=admin_headers, json={"diamond_rating_cap_enabled": False})
+
+    user = await _register(client, db_session, 950019, bot_token)
+    user_id = user.id
+    diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=98)
+    other_diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=60)
+    diamond_card = await _give_card(db_session, user_id, diamond_player.id, 1)
+    material_ids = await _give_n_cards(db_session, user_id, other_diamond_player.id, 10)
+
+    headers = telegram_headers(950019, bot_token)
+    resp = await client.post(
+        "/api/v1/collection/diamond-upgrade/feed",
+        headers=headers,
+        json={"diamond_card_id": diamond_card.id, "material_card_ids": material_ids},
+    )
+    assert resp.status_code == 409
+
+
+async def test_diamond_material_below_95_is_still_rejected_even_with_cap_disabled(client, db_session, bot_token):
+    admin_headers = await _admin_auth(client, bot_token)
+    await client.put("/api/v1/admin/games/config", headers=admin_headers, json={"diamond_rating_cap_enabled": False})
+
+    user = await _register(client, db_session, 950020, bot_token)
+    user_id = user.id
+    diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=60)
+    other_diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=60)
+    diamond_card = await _give_card(db_session, user_id, diamond_player.id, 1)
+    other_diamond_card = await _give_card(db_session, user_id, other_diamond_player.id, 1)
+    await _seed_tier(db_session, 60, 70)
+
+    headers = telegram_headers(950020, bot_token)
+    resp = await client.post(
+        "/api/v1/collection/diamond-upgrade/feed",
+        headers=headers,
+        json={"diamond_card_id": diamond_card.id, "material_card_ids": [other_diamond_card.id]},
+    )
+    assert resp.status_code == 409
+
+
+async def test_material_cards_endpoint_returns_other_diamonds_for_the_95_to_98_band(client, db_session, bot_token):
+    admin_headers = await _admin_auth(client, bot_token)
+    await client.put("/api/v1/admin/games/config", headers=admin_headers, json={"diamond_rating_cap_enabled": False})
+
+    user = await _register(client, db_session, 950021, bot_token)
+    user_id = user.id
+    diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=95)
+    other_diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=60)
+    diamond_card = await _give_card(db_session, user_id, diamond_player.id, 1)
+    other_diamond_card = await _give_card(db_session, user_id, other_diamond_player.id, 1)
+
+    headers = telegram_headers(950021, bot_token)
+    resp = await client.get(
+        "/api/v1/collection/diamond-upgrade/material-cards",
+        headers=headers,
+        params={"diamond_card_id": diamond_card.id},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["kind"] == "any_diamond"
+    assert body["cost"] == 10
+    assert body["ceiling"] == 98
+    assert [c["id"] for c in body["cards"]] == [other_diamond_card.id]
+
+
+async def test_material_cards_endpoint_returns_only_same_player_cards_for_the_98_to_99_band(client, db_session, bot_token):
+    admin_headers = await _admin_auth(client, bot_token)
+    await client.put("/api/v1/admin/games/config", headers=admin_headers, json={"diamond_rating_cap_enabled": False})
+
+    user = await _register(client, db_session, 950022, bot_token)
+    user_id = user.id
+    diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=98)
+    other_diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=60)
+    diamond_card = await _give_card(db_session, user_id, diamond_player.id, 1)
+    duplicate_card = await _give_card(db_session, user_id, diamond_player.id, 2)
+    await _give_card(db_session, user_id, other_diamond_player.id, 1)
+
+    headers = telegram_headers(950022, bot_token)
+    resp = await client.get(
+        "/api/v1/collection/diamond-upgrade/material-cards",
+        headers=headers,
+        params={"diamond_card_id": diamond_card.id},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["kind"] == "same_player_diamond"
+    assert body["cost"] == 10
+    assert body["ceiling"] == 99
+    assert [c["id"] for c in body["cards"]] == [duplicate_card.id]
+
+
+async def test_material_cards_endpoint_returns_empty_for_the_admin_tier_band(client, db_session, bot_token):
+    user = await _register(client, db_session, 950023, bot_token)
+    user_id = user.id
+    diamond_player = await create_player(db_session, rarity=Rarity.diamond, rating=60)
+    diamond_card = await _give_card(db_session, user_id, diamond_player.id, 1)
+
+    headers = telegram_headers(950023, bot_token)
+    resp = await client.get(
+        "/api/v1/collection/diamond-upgrade/material-cards",
+        headers=headers,
+        params={"diamond_card_id": diamond_card.id},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["kind"] == "admin_tier"
+    assert body["cards"] == []
 
 
 async def test_feed_is_rejected_at_the_default_95_rating_cap(client, db_session, bot_token):

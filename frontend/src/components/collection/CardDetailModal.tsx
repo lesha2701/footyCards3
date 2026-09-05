@@ -1,6 +1,6 @@
 import { IconCoin, IconLock, IconTag, IconUpgrade } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
-import { POSITION_LABELS, RARITY_LABELS } from "@/lib/rarity";
+import { POSITION_LABELS, RARITY_GLOW, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import type { UserCard } from "@/types";
 
 export default function CardDetailModal({
@@ -19,9 +19,18 @@ export default function CardDetailModal({
   onUpgrade?: () => void;
 }) {
   const player = card.player;
+  const isDiamond = player.rarity === "diamond";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-xs rounded-3xl border border-white/10 bg-bg-surface p-5" onClick={(e) => e.stopPropagation()}>
+      <div
+        className={
+          isDiamond
+            ? `w-full max-w-xs rounded-3xl bg-gradient-to-b ${RARITY_GRADIENTS.diamond} p-[3px] ${RARITY_GLOW.diamond}`
+            : "w-full max-w-xs rounded-3xl border border-white/10 bg-bg-surface p-5"
+        }
+        onClick={(e) => e.stopPropagation()}
+      >
+      <div className={isDiamond ? "rounded-[21px] bg-bg-surface p-5" : ""}>
         <img
           src={staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
           alt={player.display_name}
@@ -89,6 +98,7 @@ export default function CardDetailModal({
             {player.quick_sell_price}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import type {
   CardUpgradeResult,
   CardUpgradeRule,
   CollectionStats,
+  DiamondMaterialCardsOut,
   DiamondUpgradeTier,
   FeedCardsResult,
   Page,
@@ -94,6 +95,13 @@ export async function fetchDiamondUpgradeTiers(): Promise<DiamondUpgradeTier[]> 
 export async function fetchDiamondUpgradeCap(): Promise<number> {
   const { data } = await api.get<{ cap: number }>("/collection/diamond-upgrade-cap");
   return data.cap;
+}
+
+export async function fetchDiamondMaterialCards(diamondCardId: number): Promise<DiamondMaterialCardsOut> {
+  const { data } = await api.get<DiamondMaterialCardsOut>("/collection/diamond-upgrade/material-cards", {
+    params: { diamond_card_id: diamondCardId },
+  });
+  return data;
 }
 
 export async function feedDiamondCard(diamondCardId: number, materialCardIds: number[]): Promise<FeedCardsResult> {
