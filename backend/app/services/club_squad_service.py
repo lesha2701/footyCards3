@@ -6,12 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.core.exceptions import ConflictError
+from app.models.club import Club
 from app.models.club_card import ClubCard
 from app.models.club_lineup import ClubLineup, ClubLineupCard
 from app.models.enums import ClubCardSource, Position
 from app.models.player import Player
+from app.models.tournament import Tournament, TournamentClub
 from app.models.user import User
-from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest, ClubLineupSlotOut, ClubTacticsSetRequest
+from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest, ClubLineupSlotOut, ClubTacticsSetRequest, NextOpponentOut
 from app.schemas.player import PlayerOut
 from app.services.club_card_service import create_club_card
 from app.services.club_formation_service import CLUB_FORMATIONS, DEFAULT_FORMATION, get_formation_slots, get_slots_by_code
@@ -19,6 +21,7 @@ from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES
 from app.services.club_tactical_profile_service import ZONES, _playstyle_alignment, compute_profile, compute_tactical_fit
 from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS, calculate_base_strength
+from app.services.tournament_fixture_service import generate_fixtures
 
 # app.services.club_service imports seed_starting_squad from this module at
 # module load time, so a module-level `from app.services.club_service import
@@ -330,3 +333,61 @@ async def set_club_tactics(db: AsyncSession, user: User, payload: ClubTacticsSet
     db.add(lineup)
     await db.commit()
     return await _lineup_to_out(db, club_id)
+
+
+async def get_next_opponent(db: AsyncSession, user: User) -> NextOpponentOut:
+    """GET /clubs/tournament/next-opponent (spec §10). Never returns the
+    opponent's formation/mentality/playstyle — only the 4 rolled-up numbers.
+    A live snapshot of the opponent's CURRENT lineup, not a locked
+    prediction — matches spec §10's explicit "can still shift between views
+    if the opponent changes their squad before kickoff" behavior, since it's
+    resolved fresh on every call, not cached or computed at fixture-generation
+    time."""
+    from app.services.club_service import _require_membership
+
+    membership = await _require_membership(db, user.id)
+    club_id = membership.club_id
+
+    active_tc = (
+        await db.execute(
+            select(TournamentClub).join(Tournament, Tournament.id == TournamentClub.tournament_id)
+            .where(TournamentClub.club_id == club_id, Tournament.status == "active")
+        )
+    ).scalar_one_or_none()
+    if active_tc is None:
+        raise ConflictError("Клуб не участвует в активном турнире")
+
+    tournament = await db.get(Tournament, active_tc.tournament_id)
+    round_number = tournament.rounds_simulated + 1
+    if round_number > 14:
+        raise ConflictError("Турнир уже завершён")
+
+    participants = (
+        await db.execute(
+            select(TournamentClub).where(TournamentClub.tournament_id == tournament.id).order_by(TournamentClub.id)
+        )
+    ).scalars().all()
+    club_ids = [p.club_id for p in participants]
+    pairing = next(
+        (f for f in generate_fixtures(club_ids) if f[0] == round_number and club_id in (f[1], f[2])), None,
+    )
+    if pairing is None:
+        raise ConflictError("На следующий тур соперник не назначен")
+    opponent_club_id = pairing[2] if pairing[1] == club_id else pairing[1]
+
+    opponent_club = await db.get(Club, opponent_club_id)
+    opponent_lineup = await _get_or_none_lineup(db, opponent_club_id)
+    opponent_formation = opponent_lineup.formation if opponent_lineup else DEFAULT_FORMATION
+    opponent_by_slot = {lc.slot_code: lc.club_card for lc in opponent_lineup.cards} if opponent_lineup else {}
+    opponent_cards_with_slots = [
+        (opponent_by_slot[slot.code], slot) for slot in get_formation_slots(opponent_formation) if slot.code in opponent_by_slot
+    ]
+    profile = compute_profile(opponent_cards_with_slots) if opponent_cards_with_slots else None
+
+    return NextOpponentOut(
+        round_number=round_number, opponent_club_id=opponent_club_id, opponent_club_name=opponent_club.name,
+        attack=round((profile.central_attack + profile.wing_attack) / 2) if profile else 0,
+        midfield=round(profile.midfield_control) if profile else 0,
+        defence=round((profile.central_defence + profile.wing_defence) / 2) if profile else 0,
+        goalkeeping=round(profile.goalkeeping) if profile else 0,
+    )

@@ -339,3 +339,55 @@ async def test_tactical_fit_hint_praises_a_well_aligned_playstyle(client, db_ses
         "Хорошо подходит для контроля мяча", "Хорошо подходит для высокого прессинга",
         "Хорошо подходит для контратак",
     ) or body["tactical_fit_hint"].startswith("Слабое место: ")
+
+
+async def test_next_opponent_rejects_a_club_with_no_active_tournament(client, db_session, bot_token):
+    _, headers = await _create_club(client, bot_token, 820340, "Клуб без турнира")
+    resp = await client.get("/api/v1/clubs/tournament/next-opponent", headers=headers)
+    assert resp.status_code == 409
+
+
+async def test_next_opponent_reports_round_and_opponent_for_an_active_tournament(client, db_session, bot_token):
+    from sqlalchemy import select
+    from app.models.club import Club
+    from app.services.club_squad_service import get_next_opponent
+    from app.services.tournament_queue_service import apply_to_tournament
+    from tests.factories import get_user_by_telegram_id
+
+    club_ids_and_users = []
+    for i in range(8):
+        club, _headers = await _create_club(client, bot_token, 820350 + i, f"Скаутинг {i}")
+        # apply_to_tournament requires >=2 club members (MIN_MEMBERS_TO_APPLY,
+        # see app/services/tournament_queue_service.py) — mirrors
+        # test_tournament_queue_service.py's _create_club_with_full_squad
+        # helper, which adds a second member for the same reason. _create_club
+        # here only registers the captain, so a second member is joined here.
+        second_member_telegram_id = 820350 + i + 900_000
+        await _register_only(client, bot_token, second_member_telegram_id)
+        join_resp = await client.post(
+            f"/api/v1/clubs/{club['id']}/join", headers=telegram_headers(second_member_telegram_id, bot_token)
+        )
+        assert join_resp.status_code == 200
+        user = await get_user_by_telegram_id(db_session, 820350 + i)
+        club_ids_and_users.append((club, user))
+
+    tournament_id = None
+    for _club, user in club_ids_and_users:
+        result = await apply_to_tournament(db_session, user)
+        if result.tournament_id is not None:
+            tournament_id = result.tournament_id
+    assert tournament_id is not None
+
+    first_club, first_user = club_ids_and_users[0]
+    out = await get_next_opponent(db_session, first_user)
+    assert out.round_number == 1
+    assert out.opponent_club_id != first_club["id"]
+    opponent = await db_session.get(Club, out.opponent_club_id)
+    assert out.opponent_club_name == opponent.name
+    # Fresh clubs' seeded starting squads (see _seed_position_pool) give every
+    # zone a real, positive value — never all-zero, since compute_profile
+    # only returns 0.0 for a genuinely empty lineup (no cards at all).
+    assert out.attack > 0
+    assert out.midfield > 0
+    assert out.defence > 0
+    assert out.goalkeeping > 0

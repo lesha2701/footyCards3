@@ -38,7 +38,7 @@ from app.schemas.club_missing_item import (
 )
 from app.schemas.club_pack import ClubPackOut
 from app.schemas.club_pack_open import ClubPackOpenResult, OpenClubPackRequest
-from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest, ClubTacticsSetRequest
+from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest, ClubTacticsSetRequest, NextOpponentOut
 from app.schemas.tournament import (
     TournamentApplyResult,
     TournamentCurrentOut,
@@ -398,6 +398,11 @@ async def get_current_tournament(user: User = Depends(get_current_user), db: Asy
         )
 
     return TournamentCurrentOut(status="not_queued", can_apply=can_apply, cooldown_seconds_remaining=cooldown_seconds_remaining)
+
+
+@router.get("/tournament/next-opponent", response_model=NextOpponentOut)
+async def get_next_opponent(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_squad_service.get_next_opponent(db, user)
 
 
 @router.get("/tournament/{tournament_id}", response_model=TournamentDetailOut)

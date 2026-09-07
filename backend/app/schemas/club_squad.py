@@ -44,3 +44,13 @@ class ClubTacticsSetRequest(BaseModel):
     formation: str
     mentality: str
     playstyle: str
+
+
+class NextOpponentOut(BaseModel):
+    round_number: int
+    opponent_club_id: int
+    opponent_club_name: str
+    attack: int
+    midfield: int
+    defence: int
+    goalkeeping: int
