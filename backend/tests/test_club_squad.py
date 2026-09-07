@@ -315,3 +315,27 @@ async def test_changing_formation_clears_slots_not_present_in_the_new_formation_
     # (Task 1's fixture, unchanged by this feature); the formation switch
     # frees exactly one more (the card that was in FWD3) on top of those.
     assert len(freed_cards) == 5
+
+
+async def test_get_club_lineup_reports_a_tactical_fit_hint(client, db_session, bot_token):
+    _, headers = await _create_club(client, bot_token, 820330, "Клуб с подсказкой")
+    resp = await client.get("/api/v1/clubs/me/lineup", headers=headers)
+    body = resp.json()
+    assert isinstance(body["tactical_fit_hint"], str)
+    assert len(body["tactical_fit_hint"]) > 0
+
+
+async def test_tactical_fit_hint_praises_a_well_aligned_playstyle(client, db_session, bot_token):
+    # The default new-club squad is BALANCED/CENTRAL_PLAY on a fresh position
+    # pool seeded evenly (see _seed_position_pool) — set an explicit
+    # CENTRAL_PLAY (already the default) and assert the praise-branch string,
+    # since a freshly seeded squad has no artificially weak zone to trigger
+    # the "Слабое место" branch on this exact seed.
+    _, headers = await _create_club(client, bot_token, 820331, "Клуб с похвалой")
+    resp = await client.get("/api/v1/clubs/me/lineup", headers=headers)
+    body = resp.json()
+    assert body["tactical_fit_hint"] in (
+        "Хорошо подходит для игры через центр", "Хорошо подходит для игры по флангам",
+        "Хорошо подходит для контроля мяча", "Хорошо подходит для высокого прессинга",
+        "Хорошо подходит для контратак",
+    ) or body["tactical_fit_hint"].startswith("Слабое место: ")

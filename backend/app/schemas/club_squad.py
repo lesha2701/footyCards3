@@ -27,6 +27,7 @@ class ClubLineupOut(BaseModel):
     mentality: str
     playstyle: str
     tactical_fit: int
+    tactical_fit_hint: str
     slots: list[ClubLineupSlotOut]
 
 

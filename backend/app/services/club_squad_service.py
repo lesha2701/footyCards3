@@ -16,7 +16,7 @@ from app.schemas.player import PlayerOut
 from app.services.club_card_service import create_club_card
 from app.services.club_formation_service import CLUB_FORMATIONS, DEFAULT_FORMATION, get_formation_slots, get_slots_by_code
 from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES
-from app.services.club_tactical_profile_service import compute_profile, compute_tactical_fit
+from app.services.club_tactical_profile_service import ZONES, _playstyle_alignment, compute_profile, compute_tactical_fit
 from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS, calculate_base_strength
 
@@ -31,6 +31,42 @@ from app.services.lineup_service import CATEGORY_POSITIONS, calculate_base_stren
 # category, giving every fresh club a small reserve pool from day one (per
 # the design spec's "so a club is never caught with nobody to substitute").
 BENCH_CATEGORIES = ["GK", "DEF", "MID", "FWD"]
+
+# Russian zone labels for the tactical-fit hint (spec §9) — deliberately not
+# shared with any frontend label file: this string is entirely server-
+# generated and never round-trips through a select/enum on the client.
+_ZONE_LABELS_RU: dict[str, str] = {
+    "central_attack": "атака через центр",
+    "wing_attack": "атака флангами",
+    "midfield_control": "контроль полузащиты",
+    "central_defence": "центральная защита",
+    "wing_defence": "фланговая защита",
+    "goalkeeping": "игра вратаря",
+}
+
+_PLAYSTYLE_FIT_HINTS: dict[str, str] = {
+    "WING_PLAY": "Хорошо подходит для игры по флангам",
+    "CENTRAL_PLAY": "Хорошо подходит для игры через центр",
+    "POSSESSION": "Хорошо подходит для контроля мяча",
+    "HIGH_PRESS": "Хорошо подходит для высокого прессинга",
+    "COUNTER_ATTACK": "Хорошо подходит для контратак",
+}
+
+
+def _tactical_fit_hint(profile, playstyle: str) -> str:
+    """One-line hint for the squad screen (spec §9): praise when the chosen
+    playstyle's target zone(s) are genuinely among this squad's strongest
+    (reuses club_tactical_profile_service's own _playstyle_alignment, the
+    same 0-1 score compute_tactical_fit already folds in — no new zone-
+    ranking logic), otherwise name the squad's single weakest zone. 0.65 is
+    "target zone(s) rank in roughly the top third of the 6" — _playstyle_alignment
+    returns 1.0 for a #1-ranked zone, 0.8 for #2, 0.6 for #3 (out of 6 zones,
+    ranks 0-5 map to scores 1.0, 0.8, 0.6, 0.4, 0.2, 0.0)."""
+    if _playstyle_alignment(profile, playstyle) >= 0.65:
+        return _PLAYSTYLE_FIT_HINTS[playstyle]
+    zone_values = {zone: getattr(profile, zone) for zone in ZONES}
+    weakest_zone = min(zone_values, key=zone_values.get)
+    return f"Слабое место: {_ZONE_LABELS_RU[weakest_zone]}"
 
 
 async def _pick_weakest_active_player_id(db: AsyncSession, positions: list[Position], excluded_player_ids: set[int]) -> int:
@@ -157,10 +193,11 @@ async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
     config = await get_config(db)
     profile = compute_profile(cards_with_slots) if cards_with_slots else None
     tactical_fit = compute_tactical_fit(cards_with_slots, profile, mentality, playstyle, config) if profile else 0
+    tactical_fit_hint = _tactical_fit_hint(profile, playstyle) if profile else "Заполни состав, чтобы увидеть подсказку"
 
     return ClubLineupOut(
         is_complete=is_complete, team_strength=team_strength, formation=formation, mentality=mentality,
-        playstyle=playstyle, tactical_fit=tactical_fit, slots=slots,
+        playstyle=playstyle, tactical_fit=tactical_fit, tactical_fit_hint=tactical_fit_hint, slots=slots,
     )
 
 
