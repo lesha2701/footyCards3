@@ -214,3 +214,43 @@ def test_simulate_match_events_carry_real_club_name_descriptions():
         assert isinstance(event["description"], str) and event["description"]
         club_name = "Реал Мадрид" if event["team"] == "a" else "Барселона"
         assert club_name in event["description"]
+
+
+def test_describe_event_uses_tactic_flavor_for_a_high_quality_goal():
+    import random
+    from app.services import tournament_match_engine as engine
+
+    random.seed(1)
+    descriptions = {
+        engine._describe_event("goal", "a", "Клуб А", "Клуб Б", playstyle="COUNTER_ATTACK", quality="VERY_HIGH")
+        for _ in range(50)
+    }
+    # Over 50 draws, at least one COUNTER_ATTACK-flavored template must have
+    # been picked — the flavor pool is mixed with the generic pool (spec
+    # §11: "occasionally tactic-flavored", not every single goal), so this
+    # asserts the flavor CAN appear, not that every draw uses it.
+    assert any("контратак" in d.lower() for d in descriptions)
+
+
+def test_describe_event_ignores_playstyle_for_a_low_quality_goal():
+    import random
+    from app.services import tournament_match_engine as engine
+
+    random.seed(1)
+    descriptions = {
+        engine._describe_event("goal", "a", "Клуб А", "Клуб Б", playstyle="COUNTER_ATTACK", quality="LOW")
+        for _ in range(50)
+    }
+    # LOW quality never gets tactic flavor (spec's examples are all
+    # standout-moment phrasing) — every description must be one of the
+    # original 3 generic goal templates.
+    assert descriptions <= {
+        "⚽ Гол! Клуб А открывает счёт!", "⚽ ГОЛ! Клуб А забивает!", "⚽ Клуб А находит путь в ворота!",
+    }
+
+
+def test_describe_event_still_works_with_no_playstyle_or_quality_passed():
+    from app.services import tournament_match_engine as engine
+
+    description = engine._describe_event("tackle_won", "b", "Клуб А", "Клуб Б")
+    assert "Клуб Б" in description

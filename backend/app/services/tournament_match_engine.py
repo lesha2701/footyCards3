@@ -38,10 +38,36 @@ _EVENT_DESCRIPTIONS: dict[str, list[str]] = {
     ],
 }
 
+# Tactic-flavored variants for a standout ("HIGH"/"VERY_HIGH" quality) goal —
+# mixed into the generic pool below rather than replacing it, so a
+# tactic-flavored description appears "occasionally", never every time (spec
+# §11). Only "goal" gets flavor text — spec's own 3 examples are all
+# scoring-moment phrasing, and extending this to every event type would be
+# scope beyond what's asked.
+_PLAYSTYLE_GOAL_FLAVOR: dict[str, list[str]] = {
+    "COUNTER_ATTACK": [
+        "⚡ Быстрая контратака {club} застаёт соперника врасплох!",
+        "⚡ {club} убегает в разрушительную контратаку!",
+    ],
+    "HIGH_PRESS": [
+        "🔥 Высокий прессинг {club} перехватывает мяч — и сразу гол!",
+        "🔥 {club} выигрывает мяч прессингом в опасной зоне!",
+    ],
+    "CENTRAL_PLAY": ["🎯 {club} находит момент через центр поля!"],
+    "WING_PLAY": ["🎯 {club} врывается с фланга и не оставляет шансов!"],
+    "POSSESSION": ["🎯 {club} терпеливо выводит мяч на убойную позицию!"],
+}
 
-def _describe_event(event_type: str, team: str, club_a_name: str, club_b_name: str) -> str:
+
+def _describe_event(
+    event_type: str, team: str, club_a_name: str, club_b_name: str,
+    playstyle: str | None = None, quality: str | None = None,
+) -> str:
     club = club_a_name if team == "a" else club_b_name
-    template = random.choice(_EVENT_DESCRIPTIONS[event_type])
+    pool = _EVENT_DESCRIPTIONS[event_type]
+    if event_type == "goal" and quality in ("HIGH", "VERY_HIGH") and playstyle in _PLAYSTYLE_GOAL_FLAVOR:
+        pool = pool + _PLAYSTYLE_GOAL_FLAVOR[playstyle]
+    template = random.choice(pool)
     return template.format(club=club)
 
 
@@ -196,13 +222,17 @@ def simulate_match(
     for chance in chances:
         attacking_side = chance.attacking_side
         defending_side = "b" if attacking_side == "a" else "a"
+        attacking_playstyle = side_a.playstyle if attacking_side == "a" else side_b.playstyle
 
         if chance.shot_type == "empty_net":
             lineup = lineup_a if attacking_side == "a" else lineup_b
             moment = {"minute": chance.minute}
             event, scorer = _resolve_breakaway(attacking_side, moment, lineup, config)
             result.event_log.append(event)
-            event["description"] = _describe_event(event["event_type"], event["team"], club_a_name, club_b_name)
+            event["description"] = _describe_event(
+                event["event_type"], event["team"], club_a_name, club_b_name,
+                playstyle=attacking_playstyle, quality=chance.quality,
+            )
             if scorer != "none":
                 setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
             continue
@@ -214,7 +244,10 @@ def simulate_match(
         quality_bias = QUALITY_BIAS[chance.quality]
         event, scorer = _resolve_shot_action(attacking_side, moment, config, quality_bias)
         result.event_log.append(event)
-        event["description"] = _describe_event(event["event_type"], event["team"], club_a_name, club_b_name)
+        event["description"] = _describe_event(
+            event["event_type"], event["team"], club_a_name, club_b_name,
+            playstyle=attacking_playstyle, quality=chance.quality,
+        )
         if scorer != "none":
             setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
 
