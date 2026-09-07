@@ -280,7 +280,7 @@ function ClubHome({ club }: { club: Club }) {
         </button>
       )}
 
-      {nextOpponent && (
+      {tournamentCurrent?.status === "active" && nextOpponent && (
         <div className="rounded-2xl bg-bg-surface p-3">
           <div className="mb-2 flex items-center gap-2 text-xs text-ink-mist">
             <IconGoal size={14} className="text-accent-lime" />
