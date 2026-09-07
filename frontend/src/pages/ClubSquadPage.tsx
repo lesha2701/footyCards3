@@ -85,32 +85,36 @@ export default function ClubSquadPage() {
           {lineup?.is_complete && <span className="font-mono text-sm font-bold text-accent-cyan">Сила: {lineup.team_strength}</span>}
         </div>
 
+        {lineup?.is_complete && (
+          <div className="mb-3 flex items-center justify-between rounded-xl bg-white/5 px-3 py-2">
+            <span className="text-xs text-ink-mist">{lineup.tactical_fit_hint}</span>
+            <span className="shrink-0 font-mono text-xs font-bold text-accent-lime">{lineup.tactical_fit}%</span>
+          </div>
+        )}
+
         {canEdit && lineup && (
           <div className="mb-3 flex flex-col gap-2">
-            <select
+            <TacticRow
+              label="Схема"
+              options={FORMATIONS}
               value={lineup.formation}
-              onChange={(e) => updateTactics({ formation: e.target.value })}
               disabled={setTacticsMutation.isPending}
-              className="rounded-lg bg-white/5 px-2 py-1.5 text-xs text-ink-chalk"
-            >
-              {FORMATIONS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-            </select>
-            <select
+              onChange={(value) => updateTactics({ formation: value })}
+            />
+            <TacticRow
+              label="Настрой"
+              options={MENTALITIES}
               value={lineup.mentality}
-              onChange={(e) => updateTactics({ mentality: e.target.value })}
               disabled={setTacticsMutation.isPending}
-              className="rounded-lg bg-white/5 px-2 py-1.5 text-xs text-ink-chalk"
-            >
-              {MENTALITIES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-            <select
+              onChange={(value) => updateTactics({ mentality: value })}
+            />
+            <TacticRow
+              label="Стиль игры"
+              options={PLAYSTYLES}
               value={lineup.playstyle}
-              onChange={(e) => updateTactics({ playstyle: e.target.value })}
               disabled={setTacticsMutation.isPending}
-              className="rounded-lg bg-white/5 px-2 py-1.5 text-xs text-ink-chalk"
-            >
-              {PLAYSTYLES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
+              onChange={(value) => updateTactics({ playstyle: value })}
+            />
           </div>
         )}
         <div className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
@@ -233,6 +237,36 @@ export default function ClubSquadPage() {
           onClose={() => setPickerSlot(null)}
         />
       )}
+    </div>
+  );
+}
+
+function TacticRow({
+  label, options, value, disabled, onChange,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <p className="mb-1 text-[10px] uppercase tracking-wide text-ink-mist-dim">{label}</p>
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            onClick={() => onChange(option.value)}
+            disabled={disabled}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
+              value === option.value ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

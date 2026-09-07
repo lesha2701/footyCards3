@@ -1114,6 +1114,7 @@ export interface ClubLineup {
   mentality: string;
   playstyle: string;
   tactical_fit: number;
+  tactical_fit_hint: string;
   slots: ClubLineupSlot[];
 }
 
