@@ -1182,6 +1182,16 @@ export interface TournamentCurrent {
   cooldown_seconds_remaining: number | null;
 }
 
+export interface NextOpponent {
+  round_number: number;
+  opponent_club_id: number;
+  opponent_club_name: string;
+  attack: number;
+  midfield: number;
+  defence: number;
+  goalkeeping: number;
+}
+
 export interface TournamentStanding {
   club_id: number;
   club_name: string;

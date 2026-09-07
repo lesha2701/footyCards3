@@ -11,6 +11,7 @@ import type {
   ClubMissingItemStart,
   ClubMissingItemSubmitResult,
   ClubSummary,
+  NextOpponent,
   TournamentApplyResult,
   TournamentCurrent,
   TournamentDetail,
@@ -131,6 +132,11 @@ export async function applyToTournament(): Promise<TournamentApplyResult> {
 
 export async function fetchTournamentCurrent(): Promise<TournamentCurrent> {
   const { data } = await api.get<TournamentCurrent>("/clubs/tournament/current");
+  return data;
+}
+
+export async function fetchNextOpponent(): Promise<NextOpponent> {
+  const { data } = await api.get<NextOpponent>("/clubs/tournament/next-opponent");
   return data;
 }
 

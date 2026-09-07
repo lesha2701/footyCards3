@@ -17,6 +17,7 @@ import {
   fetchClubs,
   fetchMyClub,
   fetchMyJoinRequests,
+  fetchNextOpponent,
   fetchTournamentCurrent,
   joinClub,
   kickMember,
@@ -150,6 +151,12 @@ function ClubHome({ club }: { club: Club }) {
   const isCaptain = club.my_role === "captain";
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
   const { data: tournamentCurrent } = useQuery({ queryKey: ["clubs", "tournament", "current"], queryFn: fetchTournamentCurrent });
+  const { data: nextOpponent } = useQuery({
+    queryKey: ["clubs", "tournament", "next-opponent"],
+    queryFn: fetchNextOpponent,
+    enabled: tournamentCurrent?.status === "active",
+    retry: false,
+  });
   const [applyError, setApplyError] = useState<string | null>(null);
   const applyMutation = useMutation({
     mutationFn: applyToTournament,
@@ -271,6 +278,44 @@ function ClubHome({ club }: { club: Club }) {
             </span>
           )}
         </button>
+      )}
+
+      {nextOpponent && (
+        <div className="rounded-2xl bg-bg-surface p-3">
+          <div className="mb-2 flex items-center gap-2 text-xs text-ink-mist">
+            <IconGoal size={14} className="text-accent-lime" />
+            Тур {nextOpponent.round_number} · Следующий соперник
+          </div>
+          <p className="mb-2 font-display text-sm font-bold text-ink-chalk">{nextOpponent.opponent_club_name}</p>
+          <div className="grid grid-cols-4 gap-2 text-center">
+            <div>
+              <p className="font-mono text-sm font-bold text-accent-cyan">{nextOpponent.attack}</p>
+              <p className="text-[9px] text-ink-mist-dim">Атака</p>
+            </div>
+            <div>
+              <p className="font-mono text-sm font-bold text-accent-cyan">{nextOpponent.midfield}</p>
+              <p className="text-[9px] text-ink-mist-dim">Полузащита</p>
+            </div>
+            <div>
+              <p className="font-mono text-sm font-bold text-accent-cyan">{nextOpponent.defence}</p>
+              <p className="text-[9px] text-ink-mist-dim">Защита</p>
+            </div>
+            <div>
+              <p className="font-mono text-sm font-bold text-accent-cyan">{nextOpponent.goalkeeping}</p>
+              <p className="text-[9px] text-ink-mist-dim">Вратарь</p>
+            </div>
+          </div>
+          {isManager && (
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => navigate("/clubs/squad")}
+                className="flex-1 rounded-xl bg-white/5 py-2 text-xs font-semibold text-ink-mist active:scale-95"
+              >
+                Изменить состав
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {tournamentCurrent?.status === "queued" && (
