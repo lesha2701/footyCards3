@@ -1138,6 +1138,7 @@ export interface ClubLineup {
   playstyle: string;
   tactical_fit: number;
   tactical_fit_hint: string;
+  coach: EquippedCoach | null;
   slots: ClubLineupSlot[];
 }
 
@@ -1307,4 +1308,42 @@ export interface BingoState {
 export interface BingoStatsPreviewItem {
   goal_type: BingoGoalType;
   trailing_7d_count: number;
+}
+
+export interface EquippedCoach {
+  id: number;
+  display_name: string;
+  rarity: Rarity;
+  image_path: string | null;
+  boosts: CoachBoost[];
+}
+
+export interface ClubCoachCard {
+  id: number;
+  serial_number: number;
+  coach: EquippedCoach;
+  acquired_at: string;
+}
+
+export interface ClubCoachPackRarityProbability {
+  rarity: Rarity;
+  probability: number;
+}
+
+export interface ClubCoachPack {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  price: number;
+  card_count: number;
+  image_path: string | null;
+  is_active: boolean;
+  rarity_probabilities: ClubCoachPackRarityProbability[];
+}
+
+export interface ClubCoachPackOpenResult {
+  pack: ClubCoachPack;
+  cards: { card: ClubCoachCard; is_new: boolean }[];
+  new_budget: number;
 }

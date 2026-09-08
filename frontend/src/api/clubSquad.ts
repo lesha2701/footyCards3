@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { ClubCard, ClubLineup } from "@/types";
+import type { ClubCard, ClubCoachCard, ClubLineup } from "@/types";
 
 export async function fetchClubLineup(): Promise<ClubLineup> {
   const { data } = await api.get<ClubLineup>("/clubs/me/lineup");
@@ -18,5 +18,15 @@ export async function fetchClubCards(): Promise<ClubCard[]> {
 
 export async function setClubTactics(payload: { formation: string; mentality: string; playstyle: string }): Promise<ClubLineup> {
   const { data } = await api.put<ClubLineup>("/clubs/me/tactics", payload);
+  return data;
+}
+
+export async function fetchClubCoachCards(): Promise<ClubCoachCard[]> {
+  const { data } = await api.get<ClubCoachCard[]>("/clubs/me/coach-cards");
+  return data;
+}
+
+export async function setClubCoach(clubCoachCardId: number | null): Promise<ClubLineup> {
+  const { data } = await api.put<ClubLineup>("/clubs/me/coach", { club_coach_card_id: clubCoachCardId });
   return data;
 }
