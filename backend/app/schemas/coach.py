@@ -33,15 +33,23 @@ class CoachBoostCreate(BaseModel):
     magnitude: float = Field(ge=-1.0, le=20.0)
 
 
-def _validate_boosts(rarity: Rarity, boosts: list[CoachBoostCreate]) -> list[CoachBoostCreate]:
+def _validate_boost_types(rarity: Rarity, boost_types: list[CoachBoostType]) -> None:
+    """Lower-level check that only needs the boost TYPES, not full
+    CoachBoostCreate objects with magnitudes — so it's reusable from the
+    service layer, where an "effective" (post-update) boost list may be a
+    mix of existing ORM CoachBoost rows and/or new CoachBoostCreate payload
+    objects, both of which expose a `.boost_type` attribute."""
     if rarity not in BOOST_SLOTS_BY_RARITY:
         raise ValueError(f"Coach rarity must be one of {list(BOOST_SLOTS_BY_RARITY)}, got {rarity}")
     required = BOOST_SLOTS_BY_RARITY[rarity]
-    if len(boosts) != required:
-        raise ValueError(f"{rarity.value} coaches must have exactly {required} boost(s), got {len(boosts)}")
-    types = [b.boost_type for b in boosts]
-    if len(set(types)) != len(types):
+    if len(boost_types) != required:
+        raise ValueError(f"{rarity.value} coaches must have exactly {required} boost(s), got {len(boost_types)}")
+    if len(set(boost_types)) != len(boost_types):
         raise ValueError("A coach cannot have the same boost_type twice")
+
+
+def _validate_boosts(rarity: Rarity, boosts: list[CoachBoostCreate]) -> list[CoachBoostCreate]:
+    _validate_boost_types(rarity, [b.boost_type for b in boosts])
     return boosts
 
 

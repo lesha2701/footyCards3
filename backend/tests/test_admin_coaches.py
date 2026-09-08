@@ -55,6 +55,92 @@ async def test_create_coach_rejects_bad_rarity_boost_count(client, db_session, b
     assert resp.status_code == 422
 
 
+async def test_update_coach_rarity_only_to_diamond_returns_clean_conflict(client, db_session, bot_token):
+    # Regression: a rarity-only PUT to "diamond" used to sail past the
+    # schema layer (which had no boosts to validate against) and hit the
+    # DB's ck_coaches_rarity_not_diamond CheckConstraint as a raw
+    # IntegrityError, surfacing as an unhandled 500. It must now come back
+    # as a clean ConflictError response (409), not a 500.
+    token = await _admin_token(client, bot_token)
+    auth = {"Authorization": f"Bearer {token}"}
+
+    create_resp = await client.post(
+        "/api/v1/admin/coaches", headers=auth,
+        json={
+            "display_name": "Diamond Hopeful", "rarity": "legendary", "quick_sell_price": 50,
+            "boosts": [
+                {"boost_type": "attack_central", "magnitude": 6.0},
+                {"boost_type": "defence_central", "magnitude": 6.0},
+                {"boost_type": "goalkeeping", "magnitude": 4.0},
+            ],
+        },
+    )
+    coach_id = create_resp.json()["id"]
+
+    update_resp = await client.put(
+        f"/api/v1/admin/coaches/{coach_id}", headers=auth, json={"rarity": "diamond"},
+    )
+    assert update_resp.status_code == 409, update_resp.text
+    assert update_resp.json()["error"]["code"] == "conflict"
+
+
+async def test_update_coach_rarity_only_leaving_mismatched_boosts_rejected(client, db_session, bot_token):
+    # Rarity-only PUT that drops a legendary (3-boost) coach to common
+    # (1-boost) must be rejected rather than leaving an inconsistent row.
+    token = await _admin_token(client, bot_token)
+    auth = {"Authorization": f"Bearer {token}"}
+
+    create_resp = await client.post(
+        "/api/v1/admin/coaches", headers=auth,
+        json={
+            "display_name": "Downgrade Candidate", "rarity": "legendary", "quick_sell_price": 50,
+            "boosts": [
+                {"boost_type": "attack_central", "magnitude": 6.0},
+                {"boost_type": "defence_central", "magnitude": 6.0},
+                {"boost_type": "goalkeeping", "magnitude": 4.0},
+            ],
+        },
+    )
+    coach_id = create_resp.json()["id"]
+
+    update_resp = await client.put(
+        f"/api/v1/admin/coaches/{coach_id}", headers=auth, json={"rarity": "common"},
+    )
+    assert update_resp.status_code == 409, update_resp.text
+
+    # The coach must be left completely untouched by the rejected update.
+    list_resp = await client.get("/api/v1/admin/coaches", headers=auth)
+    coach = next(c for c in list_resp.json()["items"] if c["id"] == coach_id)
+    assert coach["rarity"] == "legendary"
+    assert len(coach["boosts"]) == 3
+
+
+async def test_update_coach_boosts_only_leaving_mismatched_count_rejected(client, db_session, bot_token):
+    # Boosts-only PUT that would leave a legendary coach with only 1 boost
+    # (needs 3) must be rejected.
+    token = await _admin_token(client, bot_token)
+    auth = {"Authorization": f"Bearer {token}"}
+
+    create_resp = await client.post(
+        "/api/v1/admin/coaches", headers=auth,
+        json={
+            "display_name": "Under-boost Candidate", "rarity": "legendary", "quick_sell_price": 50,
+            "boosts": [
+                {"boost_type": "attack_central", "magnitude": 6.0},
+                {"boost_type": "defence_central", "magnitude": 6.0},
+                {"boost_type": "goalkeeping", "magnitude": 4.0},
+            ],
+        },
+    )
+    coach_id = create_resp.json()["id"]
+
+    update_resp = await client.put(
+        f"/api/v1/admin/coaches/{coach_id}", headers=auth,
+        json={"boosts": [{"boost_type": "attack_central", "magnitude": 6.0}]},
+    )
+    assert update_resp.status_code == 409, update_resp.text
+
+
 async def test_toggle_active_and_delete_coach(client, db_session, bot_token):
     token = await _admin_token(client, bot_token)
     auth = {"Authorization": f"Bearer {token}"}
