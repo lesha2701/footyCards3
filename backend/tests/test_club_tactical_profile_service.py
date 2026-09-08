@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from app.models.enums import Position
+from app.models.coach import Coach, CoachBoost
+from app.models.enums import CoachBoostType, Position, Rarity
 from app.services import club_tactical_profile_service as svc
 from app.services.club_formation_service import CLUB_FORMATIONS, get_formation_slots
 
@@ -134,3 +135,40 @@ def test_park_the_bus_mentality_fit_favors_a_defence_heavy_squad_over_an_attack_
     attack_profile = svc.compute_profile(attack_heavy)
 
     assert svc._mentality_fit(defence_profile, "PARK_THE_BUS") > svc._mentality_fit(attack_profile, "PARK_THE_BUS")
+
+
+def test_compute_profile_with_no_coach_matches_current_behavior():
+    cards_with_slots = _cards_with_slots({})
+    profile_without_arg = svc.compute_profile(cards_with_slots)
+    profile_with_none = svc.compute_profile(cards_with_slots, coach=None)
+    assert profile_without_arg == profile_with_none
+
+
+def test_compute_profile_applies_attack_central_boost():
+    cards_with_slots = _cards_with_slots({})
+    coach = Coach(display_name="Attack Coach", rarity=Rarity.legendary)
+    coach.boosts = [
+        CoachBoost(boost_type=CoachBoostType.ATTACK_CENTRAL, magnitude=5.0),
+        CoachBoost(boost_type=CoachBoostType.DEFENCE_CENTRAL, magnitude=5.0),
+        CoachBoost(boost_type=CoachBoostType.GOALKEEPING, magnitude=5.0),
+    ]
+    base = svc.compute_profile(cards_with_slots)
+    boosted = svc.compute_profile(cards_with_slots, coach=coach)
+    assert boosted.central_attack == round(min(99.0, base.central_attack + 5.0), 1)
+    assert boosted.wing_attack == base.wing_attack  # unaffected zone stays exactly the same
+
+
+def test_compute_profile_squad_stability_raises_effective_depth_cap():
+    # 3-5-2 gives midfield_control a weight_total of 3.40 (5 midfield slots
+    # plus 3 CBs' minor 0.10 contribution each) -- see
+    # club_tactical_profile_service.compute_profile's DEPTH_BONUS_SCALE
+    # docstring for the same 3-5-2-vs-4-3-3 worked comparison -- pushing the
+    # raw depth bonus (2.0 * (3.40 - 1.0) = 4.8) meaningfully above 1.0 and
+    # close to DEPTH_BONUS_CAP (6.0), unlike any 4-3-3/4-4-2 fixture in this
+    # file.
+    cards_with_slots_with_real_depth = _cards_with_slots({}, formation="3-5-2")
+    coach = Coach(display_name="Stability Coach", rarity=Rarity.common)
+    coach.boosts = [CoachBoost(boost_type=CoachBoostType.SQUAD_STABILITY, magnitude=2.0)]
+    base = svc.compute_profile(cards_with_slots_with_real_depth)
+    boosted = svc.compute_profile(cards_with_slots_with_real_depth, coach=coach)
+    assert boosted.midfield_control >= base.midfield_control  # never LOWER with a positive boost

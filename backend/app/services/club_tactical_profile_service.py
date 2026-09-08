@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from typing import Any
 
+from app.models.coach import Coach
 from app.models.enums import Position
+from app.services.coach_boost_service import apply_zone_boosts, depth_bonus_cap_for, resolve_active_boosts
 from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot, calculate_base_strength
 
 ZONES = ("central_attack", "wing_attack", "midfield_control", "central_defence", "wing_defence", "goalkeeping")
@@ -77,7 +79,10 @@ DEPTH_BONUS_SCALE = 2.0
 DEPTH_BONUS_CAP = 6.0
 
 
-def compute_profile(cards_with_slots: list[tuple[Any, FormationSlot]]) -> TeamTacticalProfile:
+def compute_profile(cards_with_slots: list[tuple[Any, FormationSlot]], coach: "Coach | None" = None) -> TeamTacticalProfile:
+    boosts = resolve_active_boosts(coach)
+    depth_cap = depth_bonus_cap_for(DEPTH_BONUS_CAP, boosts)
+
     zone_values: dict[str, float] = {}
     for zone in ZONES:
         weighted_sum = 0.0
@@ -89,10 +94,13 @@ def compute_profile(cards_with_slots: list[tuple[Any, FormationSlot]]) -> TeamTa
                 weight_total += weight
         if weight_total > 0:
             base_avg = weighted_sum / weight_total
-            depth_bonus = max(0.0, min(DEPTH_BONUS_CAP, DEPTH_BONUS_SCALE * (weight_total - 1.0)))
+            depth_bonus = max(0.0, min(depth_cap, DEPTH_BONUS_SCALE * (weight_total - 1.0)))
             zone_values[zone] = round(min(99.0, base_avg + depth_bonus), 1)
         else:
             zone_values[zone] = 0.0
+
+    zone_values = apply_zone_boosts(zone_values, boosts)
+    zone_values = {zone: round(min(99.0, value), 1) for zone, value in zone_values.items()}
 
     return TeamTacticalProfile(team_strength=calculate_base_strength(cards_with_slots), **zone_values)
 
