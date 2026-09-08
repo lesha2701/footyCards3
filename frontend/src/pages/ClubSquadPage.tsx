@@ -8,8 +8,9 @@ import {
 } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchMyClub } from "@/api/clubs";
-import { fetchClubCards, fetchClubLineup, setClubLineup, setClubTactics } from "@/api/clubSquad";
+import { fetchClubCards, fetchClubCoachCards, fetchClubLineup, setClubCoach, setClubLineup, setClubTactics } from "@/api/clubSquad";
 import { staticUrl } from "@/lib/api";
+import { BOOST_TYPE_LABELS } from "@/lib/coaches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
 import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
 import { formatGameError } from "@/lib/errors";
@@ -19,12 +20,13 @@ export default function ClubSquadPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: club } = useQuery({ queryKey: ["clubs", "me"], queryFn: fetchMyClub, retry: false });
+  const canEdit = club?.my_role === "captain" || club?.my_role === "assistant";
   const { data: lineup, isLoading: lineupLoading } = useQuery({ queryKey: ["clubs", "lineup"], queryFn: fetchClubLineup });
   const { data: cards } = useQuery({ queryKey: ["clubs", "cards"], queryFn: fetchClubCards });
+  const { data: coachCards } = useQuery({ queryKey: ["clubs", "coach-cards"], queryFn: fetchClubCoachCards, enabled: canEdit });
   const [pickerSlot, setPickerSlot] = useState<ClubLineupSlot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
-  const canEdit = club?.my_role === "captain" || club?.my_role === "assistant";
 
   const setLineupMutation = useMutation({
     mutationFn: setClubLineup,
@@ -36,6 +38,12 @@ export default function ClubSquadPage() {
     mutationFn: setClubTactics,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["clubs", "lineup"] }); queryClient.invalidateQueries({ queryKey: ["clubs", "cards"] }); },
     onError: (err) => setError(formatGameError(err, "Не удалось обновить тактику")),
+  });
+
+  const setCoachMutation = useMutation({
+    mutationFn: setClubCoach,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["clubs", "lineup"] }),
+    onError: (err) => setError(formatGameError(err, "Не удалось назначить тренера")),
   });
 
   const updateTactics = (patch: Partial<{ formation: string; mentality: string; playstyle: string }>) => {
@@ -94,6 +102,15 @@ export default function ClubSquadPage() {
           </div>
         )}
 
+        {lineup?.coach && (
+          <div className="mb-3 rounded-xl bg-white/5 px-3 py-2">
+            <p className="text-xs font-semibold text-ink-chalk">{lineup.coach.display_name}</p>
+            <p className="mt-0.5 text-[11px] text-ink-mist">
+              {lineup.coach.boosts.map((b) => BOOST_TYPE_LABELS[b.boost_type]).join(", ")}
+            </p>
+          </div>
+        )}
+
         {canEdit && lineup && (
           <div className="mb-3 flex flex-col gap-1.5">
             <TacticSelect
@@ -116,6 +133,16 @@ export default function ClubSquadPage() {
               value={lineup.playstyle}
               disabled={setTacticsMutation.isPending}
               onChange={(value) => updateTactics({ playstyle: value })}
+            />
+            <TacticSelect
+              label="Тренер"
+              options={[
+                { value: "", label: "Без тренера" },
+                ...(coachCards ?? []).map((c) => ({ value: String(c.id), label: c.coach.display_name })),
+              ]}
+              value={lineup.coach ? String((coachCards ?? []).find((c) => c.coach.id === lineup.coach!.id)?.id ?? "") : ""}
+              disabled={setCoachMutation.isPending}
+              onChange={(value) => setCoachMutation.mutate(value ? Number(value) : null)}
             />
           </div>
         )}

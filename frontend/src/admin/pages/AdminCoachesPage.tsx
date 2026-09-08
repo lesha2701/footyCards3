@@ -6,6 +6,7 @@ import {
   toggleCoachActive, toggleCoachPackDroppable, updateCoach, uploadCoachImage,
 } from "@/admin/api";
 import { ApiRequestError, staticUrl } from "@/lib/api";
+import { BOOST_TYPES, BOOST_TYPE_LABELS } from "@/lib/coaches";
 import { RARITY_LABELS } from "@/lib/rarity";
 import type { Coach, CoachBoostType, Rarity } from "@/types";
 
@@ -13,18 +14,6 @@ const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary"];
 
 const BOOST_SLOTS_BY_RARITY: Record<Rarity, number> = {
   common: 1, rare: 1, epic: 2, legendary: 3, diamond: 0,
-};
-
-const BOOST_TYPES: CoachBoostType[] = [
-  "attack_central", "attack_wing", "midfield_control", "defence_central", "defence_wing",
-  "goalkeeping", "passing_accuracy", "ball_control", "defensive_discipline", "counter_mastery", "squad_stability",
-];
-
-const BOOST_TYPE_LABELS: Record<CoachBoostType, string> = {
-  attack_central: "Атака в центре", attack_wing: "Атака на флангах", midfield_control: "Контроль полузащиты",
-  defence_central: "Защита в центре", defence_wing: "Защита на флангах", goalkeeping: "Игра вратаря",
-  passing_accuracy: "Точность передач", ball_control: "Контроль мяча", defensive_discipline: "Дисциплина в обороне",
-  counter_mastery: "Мастерство контратак", squad_stability: "Стабильность состава",
 };
 
 type BoostFormRow = { boost_type: CoachBoostType; magnitude: number };
