@@ -3,13 +3,20 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { RevealStage, STAGES, STAGE_DURATION_MS } from "@/components/cards/CardRevealStage";
+import { CoachRevealStage, COACH_STAGES, COACH_STAGE_DURATION_MS } from "@/components/cards/CoachRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { IconCoin } from "@/components/icons";
 import { openClubPack } from "@/api/clubPacks";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { haptic, hapticNotify } from "@/lib/telegram";
-import type { ClubPackOpenResult } from "@/types";
+import type { ClubPackOpenResult, OpenedClubPackItem } from "@/types";
+
+function stagesFor(item: OpenedClubPackItem) {
+  return item.kind === "coach"
+    ? { stages: COACH_STAGES as readonly string[], duration: COACH_STAGE_DURATION_MS }
+    : { stages: STAGES as readonly string[], duration: STAGE_DURATION_MS };
+}
 
 export default function ClubPackOpenPage() {
   const { packId } = useParams<{ packId: string }>();
@@ -30,8 +37,6 @@ export default function ClubPackOpenPage() {
   >({ status: "pending" });
 
   useEffect(() => {
-    // Guards against React 18 StrictMode's dev-only double-invoke of effects, same reasoning
-    // as PackOpenPage.tsx's identical guard.
     if (hasStartedRef.current) return;
     hasStartedRef.current = true;
 
@@ -47,12 +52,14 @@ export default function ClubPackOpenPage() {
   }, []);
 
   const result = requestState.status === "success" ? requestState.data : null;
+  const currentItem = result ? result.cards[cardIndex] : null;
+  const currentStages = currentItem ? stagesFor(currentItem) : null;
 
   const advance = () => {
-    if (!result) return;
+    if (!result || !currentStages) return;
     haptic("light");
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (stageIndex < STAGES.length - 1) setStageIndex((i) => i + 1);
+    if (stageIndex < currentStages.stages.length - 1) setStageIndex((i) => i + 1);
   };
 
   const nextCard = () => {
@@ -69,8 +76,8 @@ export default function ClubPackOpenPage() {
   };
 
   useEffect(() => {
-    if (phase !== "revealing" || stageIndex >= STAGES.length - 1) return;
-    timerRef.current = setTimeout(advance, STAGE_DURATION_MS);
+    if (phase !== "revealing" || !currentStages || stageIndex >= currentStages.stages.length - 1) return;
+    timerRef.current = setTimeout(advance, currentStages.duration);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
@@ -82,15 +89,16 @@ export default function ClubPackOpenPage() {
     if (timerRef.current) clearTimeout(timerRef.current);
     haptic("light");
     setPhase("revealing");
-    setCardIndex(result.cards.length - 1);
-    setStageIndex(STAGES.length - 1);
+    const lastIndex = result.cards.length - 1;
+    setCardIndex(lastIndex);
+    setStageIndex(stagesFor(result.cards[lastIndex]).stages.length - 1);
   };
 
   if (requestState.status === "pending") return <LoadingScreen />;
   if (requestState.status === "error") {
     return <ErrorScreen message={requestState.message} onRetry={() => navigate("/clubs/packs")} />;
   }
-  if (!result) return null;
+  if (!result || !currentItem || !currentStages) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg-base">
@@ -122,15 +130,26 @@ export default function ClubPackOpenPage() {
 
       {phase === "revealing" && (
         <div className="flex flex-1 flex-col">
-          <RevealStage
-            key={`${cardIndex}-${stageIndex}`}
-            opened={result.cards[cardIndex]}
-            stage={STAGES[stageIndex]}
-            index={cardIndex}
-            total={result.cards.length}
-            onTap={advance}
-          />
-          {stageIndex === STAGES.length - 1 && (
+          {currentItem.kind === "coach" ? (
+            <CoachRevealStage
+              key={`${cardIndex}-${stageIndex}`}
+              opened={{ card: { coach: currentItem.coach_card!.coach }, is_new: currentItem.is_new }}
+              stage={COACH_STAGES[stageIndex] ?? COACH_STAGES[COACH_STAGES.length - 1]}
+              index={cardIndex}
+              total={result.cards.length}
+              onTap={advance}
+            />
+          ) : (
+            <RevealStage
+              key={`${cardIndex}-${stageIndex}`}
+              opened={{ card: { player: currentItem.card!.player }, is_new: currentItem.is_new }}
+              stage={STAGES[stageIndex] ?? STAGES[STAGES.length - 1]}
+              index={cardIndex}
+              total={result.cards.length}
+              onTap={advance}
+            />
+          )}
+          {stageIndex === currentStages.stages.length - 1 && (
             <div className="safe-bottom px-6 pb-6 pt-2">
               <button
                 onClick={nextCard}
@@ -147,17 +166,30 @@ export default function ClubPackOpenPage() {
         <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
           <h2 className="text-center font-display text-2xl font-bold text-ink-chalk">Пак открыт!</h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {result.cards.map((oc) => (
-              <div key={oc.card.id} className="flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2">
-                <img
-                  src={staticUrl(oc.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                  alt={oc.card.player.display_name}
-                  className="aspect-square w-full rounded-lg object-cover"
-                />
-                <span className="truncate text-[10px] font-semibold text-ink-chalk">{oc.card.player.display_name}</span>
-                {oc.is_new && <span className="text-[9px] font-bold text-accent-green">Новая!</span>}
-              </div>
-            ))}
+            {result.cards.map((item) =>
+              item.kind === "coach" ? (
+                <div key={`coach-${item.coach_card!.id}`} className="flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2">
+                  <img
+                    src={staticUrl(item.coach_card!.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                    alt={item.coach_card!.coach.display_name}
+                    className="aspect-square w-full rounded-lg object-cover"
+                  />
+                  <span className="truncate text-[10px] font-semibold text-ink-chalk">{item.coach_card!.coach.display_name}</span>
+                  <span className="text-[9px] font-bold text-accent-cyan">Тренер</span>
+                  {item.is_new && <span className="text-[9px] font-bold text-accent-green">Новый!</span>}
+                </div>
+              ) : (
+                <div key={`player-${item.card!.id}`} className="flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2">
+                  <img
+                    src={staticUrl(item.card!.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                    alt={item.card!.player.display_name}
+                    className="aspect-square w-full rounded-lg object-cover"
+                  />
+                  <span className="truncate text-[10px] font-semibold text-ink-chalk">{item.card!.player.display_name}</span>
+                  {item.is_new && <span className="text-[9px] font-bold text-accent-green">Новая!</span>}
+                </div>
+              )
+            )}
           </div>
           <p className="flex items-center justify-center gap-1 text-sm text-ink-mist-dim">
             Новый бюджет клуба:
