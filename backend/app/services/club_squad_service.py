@@ -201,8 +201,7 @@ async def list_club_coach_cards(db: AsyncSession, user: User) -> list[ClubCoachC
             .options(joinedload(ClubCoachCard.coach).joinedload(Coach.boosts))
         )
     ).scalars().unique().all()
-    # ClubCoachCardOut has no from_attributes config (see club_coach_pack_service.
-    # _to_club_coach_card_out, the existing precedent) — construct explicitly
+    # ClubCoachCardOut has no from_attributes config — construct explicitly
     # rather than model_validate(orm_object), which would reject a raw ORM instance.
     return [ClubCoachCardOut(id=c.id, serial_number=c.serial_number, coach=c.coach, acquired_at=c.acquired_at) for c in cards]
 

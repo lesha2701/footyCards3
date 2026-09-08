@@ -111,8 +111,8 @@ async def pick_random_player(db: AsyncSession, rarity: Rarity) -> Player:
 
 async def pick_random_coach(db: AsyncSession, rarity: Rarity) -> Coach:
     # `selectinload(Coach.boosts)` — like admin_coaches.py's own list query — since
-    # CoachOut nests boosts and callers (club_coach_pack_service.open_club_coach_pack)
-    # serialize the returned Coach straight into a response without a further query.
+    # CoachOut nests boosts and callers serialize the returned Coach straight into
+    # a response without a further query.
     result = await db.execute(
         select(Coach)
         .where(Coach.rarity == rarity, Coach.is_active.is_(True), Coach.is_pack_droppable.is_(True))
