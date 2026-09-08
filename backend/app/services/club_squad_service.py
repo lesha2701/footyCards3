@@ -192,9 +192,15 @@ async def list_club_coach_cards(db: AsyncSession, user: User) -> list[ClubCoachC
     membership = await _require_membership(db, user.id)
     cards = (
         await db.execute(
-            select(ClubCoachCard).where(ClubCoachCard.club_id == membership.club_id).order_by(ClubCoachCard.acquired_at)
+            select(ClubCoachCard)
+            .where(ClubCoachCard.club_id == membership.club_id)
+            .order_by(ClubCoachCard.acquired_at)
+            # ClubCoachCard.coach is lazy="joined" on the model, but that does
+            # not cascade to Coach.boosts (a separate lazy="select" relationship)
+            # — without this, serializing coach.boosts below hits MissingGreenlet.
+            .options(joinedload(ClubCoachCard.coach).joinedload(Coach.boosts))
         )
-    ).scalars().all()
+    ).scalars().unique().all()
     # ClubCoachCardOut has no from_attributes config (see club_coach_pack_service.
     # _to_club_coach_card_out, the existing precedent) — construct explicitly
     # rather than model_validate(orm_object), which would reject a raw ORM instance.

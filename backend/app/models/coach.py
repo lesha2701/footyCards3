@@ -41,7 +41,16 @@ class CoachBoost(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     coach_id: Mapped[int] = mapped_column(ForeignKey("coaches.id", ondelete="CASCADE"), nullable=False, index=True)
-    boost_type: Mapped[CoachBoostType] = mapped_column(Enum(CoachBoostType, name="coach_boost_type_enum"), nullable=False)
+    # CoachBoostType's member names (ATTACK_CENTRAL) differ from their values
+    # (attack_central) — every other enum in this codebase has matching
+    # name/value pairs, which is why this is the only column that needs
+    # values_callable. Without it, SQLAlchemy binds/reads native enums by
+    # member .name by default, which doesn't match the lowercase labels the
+    # migration actually created in Postgres (LookupError on every read).
+    boost_type: Mapped[CoachBoostType] = mapped_column(
+        Enum(CoachBoostType, name="coach_boost_type_enum", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        nullable=False,
+    )
     magnitude: Mapped[float] = mapped_column(Numeric(6, 3), nullable=False)
 
     coach: Mapped["Coach"] = relationship(back_populates="boosts")
