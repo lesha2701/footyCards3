@@ -20,8 +20,10 @@ class ClubCoachPackOut(BaseModel):
     description: str
     price: int
     card_count: int
+    guaranteed_min_rarity: Optional[Rarity]
     image_path: str | None
     is_active: bool
+    sort_order: int
     rarity_probabilities: list[ClubCoachPackRarityProbabilityOut]
 
 

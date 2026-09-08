@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -66,3 +66,15 @@ async def update_club_coach_pack(pack_id: int, payload: ClubCoachPackUpdate, req
     await log_action(db, admin.id, "update_club_coach_pack", "club_coach_pack", pack_id, old_value=old_value, new_value=payload.model_dump(mode="json", exclude_unset=True), ip_address=request.client.host if request.client else None)
     await db.commit()
     return await _get_pack_or_404(db, pack_id)
+
+
+@router.delete("/{pack_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_club_coach_pack(pack_id: int, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
+    pack = await _get_pack_or_404(db, pack_id)
+    # Unlike ClubPack, ClubCoachPack has no image-upload endpoint in this phase (no
+    # POST "/{pack_id}/image" route, no `save_pack_image`/`delete_pack_image` usage anywhere
+    # for coach packs), so `image_path` is never meaningfully populated — no image-cleanup
+    # step needed here, unlike `delete_club_pack`.
+    await log_action(db, admin.id, "delete_club_coach_pack", "club_coach_pack", pack_id, old_value=ClubCoachPackOut.model_validate(pack).model_dump(mode="json"), ip_address=request.client.host if request.client else None)
+    await db.delete(pack)
+    await db.commit()

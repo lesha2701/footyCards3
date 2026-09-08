@@ -41,3 +41,22 @@ async def test_create_and_update_club_coach_pack(client, db_session, bot_token):
 
     list_resp = await client.get("/api/v1/admin/club-coach-packs", headers=auth)
     assert any(p["id"] == pack_id for p in list_resp.json())
+
+
+async def test_delete_club_coach_pack(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    create_resp = await client.post(
+        "/api/v1/admin/club-coach-packs", headers=auth,
+        json={
+            "slug": "coach-to-delete", "name": "Тренерский на удаление", "price": 700, "card_count": 1,
+            "rarity_probabilities": [{"rarity": "common", "probability": 1.0}],
+        },
+    )
+    assert create_resp.status_code == 200
+    pack_id = create_resp.json()["id"]
+
+    delete_resp = await client.delete(f"/api/v1/admin/club-coach-packs/{pack_id}", headers=auth)
+    assert delete_resp.status_code == 204
+
+    list_resp = await client.get("/api/v1/admin/club-coach-packs", headers=auth)
+    assert not any(p["id"] == pack_id for p in list_resp.json())
