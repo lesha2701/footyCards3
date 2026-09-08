@@ -1337,8 +1337,10 @@ export interface ClubCoachPack {
   description: string;
   price: number;
   card_count: number;
+  guaranteed_min_rarity: string | null;
   image_path: string | null;
   is_active: boolean;
+  sort_order: number;
   rarity_probabilities: ClubCoachPackRarityProbability[];
 }
 
