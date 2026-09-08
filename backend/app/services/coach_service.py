@@ -5,7 +5,7 @@ from app.models.coach import Coach, CoachBoost
 from app.schemas.coach import CoachCreate, CoachUpdate
 
 
-async def _get_coach_or_404(db: AsyncSession, coach_id: int) -> Coach:
+async def get_coach_or_404(db: AsyncSession, coach_id: int) -> Coach:
     coach = await db.get(Coach, coach_id)
     if not coach:
         raise NotFoundError("Coach not found")
@@ -23,7 +23,7 @@ async def create_coach(db: AsyncSession, payload: CoachCreate) -> Coach:
 
 
 async def update_coach(db: AsyncSession, coach_id: int, payload: CoachUpdate) -> Coach:
-    coach = await _get_coach_or_404(db, coach_id)
+    coach = await get_coach_or_404(db, coach_id)
     updates = payload.model_dump(exclude_unset=True, exclude={"boosts"})
     for key, value in updates.items():
         setattr(coach, key, value)
