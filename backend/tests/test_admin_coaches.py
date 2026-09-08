@@ -147,7 +147,7 @@ async def test_toggle_active_and_delete_coach(client, db_session, bot_token):
 
     create_resp = await client.post(
         "/api/v1/admin/coaches", headers=auth,
-        json={"display_name": "Togglable Coach", "rarity": "common", "boosts": [{"boost_type": "ball_control", "magnitude": 1.0}]},
+        json={"display_name": "Togglable Coach", "rarity": "common", "boosts": [{"boost_type": "ball_control", "magnitude": 0.1}]},
     )
     coach_id = create_resp.json()["id"]
 

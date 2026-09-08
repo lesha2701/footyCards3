@@ -6,7 +6,7 @@ import {
   toggleCoachActive, toggleCoachPackDroppable, updateCoach, uploadCoachImage,
 } from "@/admin/api";
 import { ApiRequestError, staticUrl } from "@/lib/api";
-import { BOOST_TYPES, BOOST_TYPE_LABELS } from "@/lib/coaches";
+import { BOOST_TYPES, BOOST_TYPE_LABELS, BOOST_TYPE_UNIT_HINTS } from "@/lib/coaches";
 import { RARITY_LABELS } from "@/lib/rarity";
 import type { Coach, CoachBoostType, Rarity } from "@/types";
 
@@ -195,6 +195,9 @@ export default function AdminCoachesPage() {
                     }}
                     className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
                   />
+                  {BOOST_TYPE_UNIT_HINTS[boost.boost_type] && (
+                    <p className="col-span-2 text-[10px] text-amber-400">{BOOST_TYPE_UNIT_HINTS[boost.boost_type]}</p>
+                  )}
                 </div>
               ))}
               {!boostsValid && (

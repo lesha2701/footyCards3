@@ -37,7 +37,7 @@ async def test_update_coach_replaces_all_boosts(db_session):
 async def test_update_coach_without_boosts_leaves_them_untouched(db_session):
     created = await create_coach(db_session, CoachCreate(
         display_name="Partial Update Coach", rarity=Rarity.rare,
-        boosts=[CoachBoostCreate(boost_type=CoachBoostType.BALL_CONTROL, magnitude=1.0)],
+        boosts=[CoachBoostCreate(boost_type=CoachBoostType.BALL_CONTROL, magnitude=0.1)],
     ))
 
     updated = await update_coach(db_session, created.id, CoachUpdate(is_active=False))

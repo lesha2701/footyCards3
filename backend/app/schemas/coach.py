@@ -25,12 +25,44 @@ class CoachBoostOut(BaseModel):
     magnitude: float
 
 
+# Spec §4: most boosts are expressed in flat rating points (legendary tier
+# tops out around 8), where the blanket [-1, 20] bound below is already a
+# safe fat-finger guard. Three boosts are additive to a small multiplier
+# instead (BALL_CONTROL -> INITIATIVE_MULT, DEFENSIVE_DISCIPLINE ->
+# MENTALITY_DEFENSE_SHIFT, COUNTER_MASTERY -> TRANSITION_BONUS) with
+# legendary tiers of 0.12/0.04/0.4 respectively — the same blanket bound
+# would let an admin fat-finger a rating-point-sized number (e.g. "2")
+# into one of these and multiply a whole match phase by an order of
+# magnitude nobody intended. Bounds below give ~2.5x headroom over the
+# spec's current legendary tier for each, not a hard lock to those
+# placeholder numbers (spec §4 itself says they're not final).
+_TIGHT_MAGNITUDE_BOUNDS: dict[CoachBoostType, tuple[float, float]] = {
+    CoachBoostType.BALL_CONTROL: (-0.3, 0.3),
+    CoachBoostType.DEFENSIVE_DISCIPLINE: (-0.1, 0.1),
+    CoachBoostType.COUNTER_MASTERY: (-1.0, 1.0),
+}
+
+
 class CoachBoostCreate(BaseModel):
     boost_type: CoachBoostType
-    # Sane fat-finger guard only in this phase — see this plan's Global
-    # Constraints: the real tuned magnitude table (spec §4) isn't enforced
-    # here, since nothing reads this value yet.
+    # Blanket fat-finger guard for the 8 rating-point-scale boost types
+    # (zone boosts, SQUAD_STABILITY, PASSING_ACCURACY) — the real tuned
+    # magnitude table (spec §4) isn't enforced number-for-number here.
+    # The 3 small-multiplier boost types get a tighter, type-specific
+    # bound instead, see _TIGHT_MAGNITUDE_BOUNDS and _check_magnitude below.
     magnitude: float = Field(ge=-1.0, le=20.0)
+
+    @model_validator(mode="after")
+    def _check_magnitude(self) -> "CoachBoostCreate":
+        bounds = _TIGHT_MAGNITUDE_BOUNDS.get(self.boost_type)
+        if bounds is not None:
+            lo, hi = bounds
+            if not (lo <= self.magnitude <= hi):
+                raise ValueError(
+                    f"magnitude for {self.boost_type.value} must be between {lo} and {hi} "
+                    f"(this boost is additive to a small multiplier, not a rating-point value), got {self.magnitude}"
+                )
+        return self
 
 
 def _validate_boost_types(rarity: Rarity, boost_types: list[CoachBoostType]) -> None:
