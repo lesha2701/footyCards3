@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -29,7 +29,20 @@ class ClubPackOpeningCard(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     opening_id: Mapped[int] = mapped_column(ForeignKey("club_pack_openings.id", ondelete="CASCADE"), nullable=False, index=True)
-    club_card_id: Mapped[int] = mapped_column(ForeignKey("club_cards.id", ondelete="CASCADE"), nullable=False)
-    is_new_player: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    # Exactly one of these two is set per row — a pack slot resolves to either
+    # a player or a coach (see open_club_pack's per-slot coach_drop_chance
+    # coin flip), never both, never neither. Portable boolean-expression CHECK
+    # (not Postgres's num_nonnulls()) so the SQLite test suite enforces it too.
+    club_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("club_cards.id", ondelete="CASCADE"), nullable=True)
+    club_coach_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("club_coach_cards.id", ondelete="CASCADE"), nullable=True)
+    is_new: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
     opening: Mapped["ClubPackOpening"] = relationship(back_populates="cards")
+
+    __table_args__ = (
+        CheckConstraint(
+            "(club_card_id IS NOT NULL AND club_coach_card_id IS NULL) OR "
+            "(club_card_id IS NULL AND club_coach_card_id IS NOT NULL)",
+            name="ck_club_pack_opening_card_exactly_one_kind",
+        ),
+    )

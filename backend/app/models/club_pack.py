@@ -21,6 +21,11 @@ class ClubPack(TimestampMixin, Base):
     image_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Fraction of this pack's card_count slots that roll a coach instead of a
+    # player (independent per-slot coin flip, see club_pack_service.open_club_pack).
+    # 0.0 (default) means every existing pack stays player-only until an admin
+    # opts it in.
+    coach_drop_chance: Mapped[float] = mapped_column(Numeric(5, 4), default=0.0, nullable=False)
 
     rarity_probabilities: Mapped[list["ClubPackRarityProbability"]] = relationship(
         back_populates="pack", cascade="all, delete-orphan"
