@@ -206,11 +206,21 @@ async def test_simulate_next_round_concludes_tournament_at_round_14(db_session, 
     assert ranks == list(range(1, 9))
 
 
-async def test_equipped_coach_boosts_flow_into_simulated_match(db_session, eight_club_tournament):
-    """Task 8 regression: a club's equipped coach must actually reach
-    build_side via the real resolve_match_lineup -> club_lineup.club_coach_card.coach
-    chain that simulate_next_round's own call sites use (Step 3 of the task-8
-    brief), not just be readable off the model in isolation."""
+async def test_equipped_coach_boosts_flow_into_simulated_match(db_session, eight_club_tournament, monkeypatch):
+    """Task 8 regression: a club's equipped coach must actually reach the
+    two `build_side` call sites INSIDE `simulate_next_round` (the real
+    production entry point this task modified), not just be readable via
+    resolve_match_lineup -> club_lineup.club_coach_card.coach in isolation.
+
+    A previous version of this test called `build_side` directly in the
+    test body (re-deriving `coach=` itself) and never called
+    `simulate_next_round` at all — it passed even with the production fix
+    reverted, since it wasn't exercising the code it was meant to guard.
+    This version spies on `build_side` as imported into
+    tournament_simulation_service (the exact name `simulate_next_round`
+    calls) and asserts the equipped club's real Coach object flows through
+    from a genuine round simulation. See the Task 8 fix-round report for
+    the revert/confirm-fails, restore/confirm-passes verification."""
     _tournament, clubs_and_captains = eight_club_tournament
     club_a, _captain_a = clubs_and_captains[0]
 
@@ -231,13 +241,30 @@ async def test_equipped_coach_boosts_flow_into_simulated_match(db_session, eight
     db_session.add(club_lineup_a)
     await db_session.commit()
 
-    _lineup_a_reloaded, _, cards_with_slots_a, club_lineup_a_reloaded = await resolve_match_lineup(db_session, club_a.id)
-    side_a = build_side(
-        cards_with_slots_a, club_lineup_a_reloaded.mentality, club_lineup_a_reloaded.playstyle,
-        coach=club_lineup_a_reloaded.club_coach_card.coach if club_lineup_a_reloaded.club_coach_card else None,
+    real_build_side = build_side
+    captured_coaches: list = []
+
+    def _spy_build_side(*args, **kwargs):
+        captured_coaches.append(kwargs.get("coach"))
+        return real_build_side(*args, **kwargs)
+
+    # Patch the name as looked up inside tournament_simulation_service (it was
+    # imported there via `from ... import build_side`), which is the exact
+    # call site simulate_next_round's per-fixture loop invokes.
+    monkeypatch.setattr("app.services.tournament_simulation_service.build_side", _spy_build_side)
+
+    await simulate_next_round(db_session)
+    await db_session.commit()
+
+    assert captured_coaches, "simulate_next_round never called build_side for a real (non-withdrawn) match this round"
+    passed_coach_ids = {c.id for c in captured_coaches if c is not None}
+    assert coach.id in passed_coach_ids, (
+        "simulate_next_round's build_side call site(s) never passed the equipped club's coach through "
+        f"as coach=; captured coach values this round: {captured_coaches!r}"
     )
-    assert side_a.coach is not None
-    assert side_a.coach.display_name == "Simulation Coach"
+    matching = [c for c in captured_coaches if c is not None and c.id == coach.id]
+    assert len(matching) == 1, f"expected exactly one build_side call carrying the equipped coach, got {len(matching)}"
+    assert matching[0].display_name == "Simulation Coach"
 
 
 # --- Real-Postgres concurrency tests ----------------------------------------
