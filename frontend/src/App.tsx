@@ -56,6 +56,8 @@ import ClubActivityPage from "@/pages/ClubActivityPage";
 import ClubSquadPage from "@/pages/ClubSquadPage";
 import ClubPacksPage from "@/pages/ClubPacksPage";
 import ClubPackOpenPage from "@/pages/ClubPackOpenPage";
+import ClubCoachPacksPage from "@/pages/ClubCoachPacksPage";
+import ClubCoachPackOpenPage from "@/pages/ClubCoachPackOpenPage";
 import CollectionPage from "@/pages/CollectionPage";
 import TradesPage from "@/pages/TradesPage";
 import NewTradePage from "@/pages/NewTradePage";
@@ -211,6 +213,8 @@ export default function App() {
         <Route path="/clubs/activity" element={<ClubActivityPage />} />
         <Route path="/clubs/packs" element={<ClubPacksPage />} />
         <Route path="/clubs/packs/:packId/open" element={<ClubPackOpenPage />} />
+        <Route path="/clubs/coach-packs" element={<ClubCoachPacksPage />} />
+        <Route path="/clubs/coach-packs/:packId/open" element={<ClubCoachPackOpenPage />} />
         <Route path="/clubs/games" element={<ClubGamesPage />} />
         <Route path="/clubs/game" element={<ClubGamePage />} />
         <Route path="/clubs/missing-item" element={<ClubMissingItemPage />} />
