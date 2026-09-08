@@ -13,6 +13,7 @@ from app.routers import (
     admin_card_upgrades,
     admin_club_packs,
     admin_clubs,
+    admin_coaches,
     admin_coin_packages,
     admin_dashboard,
     admin_diamond_upgrades,
@@ -129,6 +130,7 @@ app.include_router(notifications.router, prefix=API_PREFIX)
 app.include_router(admin_dashboard.router, prefix=API_PREFIX)
 app.include_router(admin_users.router, prefix=API_PREFIX)
 app.include_router(admin_players.router, prefix=API_PREFIX)
+app.include_router(admin_coaches.router, prefix=API_PREFIX)
 app.include_router(admin_packs.router, prefix=API_PREFIX)
 app.include_router(admin_badges.router, prefix=API_PREFIX)
 app.include_router(admin_coin_packages.router, prefix=API_PREFIX)

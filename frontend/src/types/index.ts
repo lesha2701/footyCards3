@@ -63,6 +63,29 @@ export interface Player {
   collection_name: string | null;
 }
 
+export type CoachBoostType =
+  | "attack_central" | "attack_wing" | "midfield_control"
+  | "defence_central" | "defence_wing" | "goalkeeping"
+  | "passing_accuracy" | "ball_control" | "defensive_discipline"
+  | "counter_mastery" | "squad_stability";
+
+export interface CoachBoost {
+  id: number;
+  boost_type: CoachBoostType;
+  magnitude: number;
+}
+
+export interface Coach {
+  id: number;
+  display_name: string;
+  rarity: Rarity;
+  image_path: string | null;
+  quick_sell_price: number;
+  is_active: boolean;
+  is_pack_droppable: boolean;
+  boosts: CoachBoost[];
+}
+
 export interface UserCard {
   id: number;
   serial_number: number;

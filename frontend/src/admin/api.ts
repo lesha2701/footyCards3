@@ -6,6 +6,7 @@ import type {
   BingoState,
   BingoStatsPreviewItem,
   CardUpgradeRule,
+  Coach,
   ClubPack,
   CoinPackage,
   DiamondUpgradeTier,
@@ -187,6 +188,50 @@ export async function importPlayersCsv(file: File) {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return data as { created: number; updated: number; errors: { row: number; error: string }[] };
+}
+
+// --- Coaches ---
+export async function fetchAdminCoaches(search: string, page: number): Promise<Page<Coach>> {
+  const { data } = await api.get<Page<Coach>>("/admin/coaches", { params: { search: search || undefined, page, include_inactive: true } });
+  return data;
+}
+
+export async function createCoach(payload: Record<string, unknown>): Promise<Coach> {
+  const { data } = await api.post<Coach>("/admin/coaches", payload);
+  return data;
+}
+
+export async function updateCoach(id: number, payload: Record<string, unknown>): Promise<Coach> {
+  const { data } = await api.put<Coach>(`/admin/coaches/${id}`, payload);
+  return data;
+}
+
+export async function toggleCoachActive(id: number): Promise<Coach> {
+  const { data } = await api.post<Coach>(`/admin/coaches/${id}/toggle-active`);
+  return data;
+}
+
+export async function toggleCoachPackDroppable(id: number): Promise<Coach> {
+  const { data } = await api.post<Coach>(`/admin/coaches/${id}/toggle-pack-droppable`);
+  return data;
+}
+
+export async function deleteCoach(id: number) {
+  await api.delete(`/admin/coaches/${id}`);
+}
+
+export async function uploadCoachImage(id: number, file: File): Promise<Coach> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<Coach>(`/admin/coaches/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function deleteCoachImage(id: number): Promise<Coach> {
+  const { data } = await api.delete<Coach>(`/admin/coaches/${id}/image`);
+  return data;
 }
 
 // --- Packs ---

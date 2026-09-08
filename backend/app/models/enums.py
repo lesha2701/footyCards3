@@ -12,6 +12,20 @@ class Rarity(str, enum.Enum):
 RARITY_ORDER = {Rarity.common: 0, Rarity.rare: 1, Rarity.epic: 2, Rarity.legendary: 3, Rarity.diamond: 4}
 
 
+class CoachBoostType(str, enum.Enum):
+    ATTACK_CENTRAL = "attack_central"
+    ATTACK_WING = "attack_wing"
+    MIDFIELD_CONTROL = "midfield_control"
+    DEFENCE_CENTRAL = "defence_central"
+    DEFENCE_WING = "defence_wing"
+    GOALKEEPING = "goalkeeping"
+    PASSING_ACCURACY = "passing_accuracy"
+    BALL_CONTROL = "ball_control"
+    DEFENSIVE_DISCIPLINE = "defensive_discipline"
+    COUNTER_MASTERY = "counter_mastery"
+    SQUAD_STABILITY = "squad_stability"
+
+
 class Position(str, enum.Enum):
     GK = "GK"
     LB = "LB"

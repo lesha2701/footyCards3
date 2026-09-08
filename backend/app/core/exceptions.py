@@ -1,4 +1,5 @@
 from fastapi import Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -54,9 +55,13 @@ def register_exception_handlers(app):
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):
+        # exc.errors() carries the raw exception instance under ctx.error for
+        # custom (e.g. model_validator-raised ValueError) errors, which isn't
+        # JSON-serializable on its own — jsonable_encoder is what FastAPI's
+        # own default handler uses to sanitize it before this hits JSONResponse.
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=_error_body("validation_error", "Invalid request data", {"errors": exc.errors()}),
+            content=_error_body("validation_error", "Invalid request data", {"errors": jsonable_encoder(exc.errors())}),
         )
 
     @app.exception_handler(StarletteHTTPException)
