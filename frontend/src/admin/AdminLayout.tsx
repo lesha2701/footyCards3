@@ -10,6 +10,7 @@ const SECTIONS = [
   { to: "/admin/coaches", label: "Тренеры", icon: "🧑‍🏫" },
   { to: "/admin/packs", label: "Паки", icon: "📦" },
   { to: "/admin/club-packs", label: "Клубные паки", icon: "🏟️" },
+  { to: "/admin/club-coach-packs", label: "Клубные паки тренеров", icon: "🧑‍🏫" },
   { to: "/admin/clubs", label: "Клубы", icon: "🛡️" },
   { to: "/admin/tournaments", label: "Турниры", icon: "🏆" },
   { to: "/admin/card-collections", label: "Коллекции", icon: "🗃️" },

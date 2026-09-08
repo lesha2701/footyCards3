@@ -7,6 +7,7 @@ import type {
   BingoStatsPreviewItem,
   CardUpgradeRule,
   Coach,
+  ClubCoachPack,
   ClubPack,
   CoinPackage,
   DiamondUpgradeTier,
@@ -305,6 +306,36 @@ export async function toggleClubPackActive(id: number): Promise<ClubPack> {
 
 export async function deleteClubPack(id: number): Promise<void> {
   await api.delete(`/admin/club-packs/${id}`);
+}
+
+// --- Club Coach Packs ---
+// ClubCoachPack (frontend/src/types/index.ts) mirrors the public-facing shape of
+// ClubCoachPackOut and omits two admin-only fields (guaranteed_min_rarity, sort_order)
+// that the backend schema (backend/app/schemas/club_coach_pack.py) does return/accept.
+// This extends it locally rather than editing the shared type, so admin CRUD still gets
+// full field coverage without widening every other consumer of ClubCoachPack.
+export interface ClubCoachPackAdmin extends ClubCoachPack {
+  guaranteed_min_rarity: string | null;
+  sort_order: number;
+}
+
+export async function fetchAdminClubCoachPacks(): Promise<ClubCoachPackAdmin[]> {
+  const { data } = await api.get<ClubCoachPackAdmin[]>("/admin/club-coach-packs");
+  return data;
+}
+
+export async function createClubCoachPack(payload: Record<string, unknown>): Promise<ClubCoachPackAdmin> {
+  const { data } = await api.post<ClubCoachPackAdmin>("/admin/club-coach-packs", payload);
+  return data;
+}
+
+export async function updateClubCoachPack(id: number, payload: Record<string, unknown>): Promise<ClubCoachPackAdmin> {
+  const { data } = await api.put<ClubCoachPackAdmin>(`/admin/club-coach-packs/${id}`, payload);
+  return data;
+}
+
+export async function deleteClubCoachPack(id: number): Promise<void> {
+  await api.delete(`/admin/club-coach-packs/${id}`);
 }
 
 // --- Card Collections ---

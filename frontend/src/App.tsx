@@ -9,6 +9,7 @@ import AdminUsersPage from "@/admin/pages/AdminUsersPage";
 import AdminPlayersPage from "@/admin/pages/AdminPlayersPage";
 import AdminCoachesPage from "@/admin/pages/AdminCoachesPage";
 import AdminPacksPage from "@/admin/pages/AdminPacksPage";
+import AdminClubCoachPacksPage from "@/admin/pages/AdminClubCoachPacksPage";
 import AdminClubPacksPage from "@/admin/pages/AdminClubPacksPage";
 import AdminClubsPage from "@/admin/pages/AdminClubsPage";
 import AdminTournamentsPage from "@/admin/pages/AdminTournamentsPage";
@@ -165,6 +166,7 @@ export default function App() {
         <Route path="coaches" element={<AdminCoachesPage />} />
         <Route path="packs" element={<AdminPacksPage />} />
         <Route path="club-packs" element={<AdminClubPacksPage />} />
+        <Route path="club-coach-packs" element={<AdminClubCoachPacksPage />} />
         <Route path="clubs" element={<AdminClubsPage />} />
         <Route path="tournaments" element={<AdminTournamentsPage />} />
         <Route path="card-collections" element={<AdminCardCollectionsPage />} />
