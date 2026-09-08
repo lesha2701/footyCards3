@@ -57,13 +57,13 @@ export function CoachRevealStage({
               <motion.img
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                src={staticUrl(coach.image_path ?? undefined)}
+                src={staticUrl(coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                 alt={coach.display_name}
                 className="h-full w-full object-cover"
               />
             ) : showFrom("silhouette") ? (
               <img
-                src={staticUrl(coach.image_path ?? undefined)}
+                src={staticUrl(coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                 alt=""
                 className="h-full w-full object-cover opacity-30 blur-sm"
               />

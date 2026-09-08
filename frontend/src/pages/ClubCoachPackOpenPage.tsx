@@ -150,7 +150,7 @@ export default function ClubCoachPackOpenPage() {
             {result.cards.map((oc) => (
               <div key={oc.card.id} className="flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2">
                 <img
-                  src={staticUrl(oc.card.coach.image_path ?? undefined)}
+                  src={staticUrl(oc.card.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                   alt={oc.card.coach.display_name}
                   className="aspect-square w-full rounded-lg object-cover"
                 />
