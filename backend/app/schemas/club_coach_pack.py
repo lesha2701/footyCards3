@@ -1,4 +1,6 @@
-from pydantic import BaseModel, ConfigDict
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import Rarity
 from app.schemas.club_squad import ClubCoachCardOut
@@ -36,3 +38,31 @@ class ClubCoachPackOpenResult(BaseModel):
 
 class OpenClubCoachPackRequest(BaseModel):
     idempotency_key: str | None = None
+
+
+class ClubCoachPackRarityProbabilityIn(BaseModel):
+    rarity: Rarity
+    probability: float = Field(ge=0, le=1)
+
+
+class ClubCoachPackCreate(BaseModel):
+    slug: str
+    name: str
+    description: str = ""
+    price: int = Field(ge=0)
+    card_count: int = Field(default=1, ge=1, le=10)
+    guaranteed_min_rarity: Optional[Rarity] = None
+    rarity_probabilities: list[ClubCoachPackRarityProbabilityIn]
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class ClubCoachPackUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    price: Optional[int] = Field(default=None, ge=0)
+    card_count: Optional[int] = Field(default=None, ge=1, le=10)
+    guaranteed_min_rarity: Optional[Rarity] = None
+    rarity_probabilities: Optional[list[ClubCoachPackRarityProbabilityIn]] = None
+    is_active: Optional[bool] = None
+    sort_order: Optional[int] = None

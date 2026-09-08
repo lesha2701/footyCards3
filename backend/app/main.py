@@ -11,6 +11,7 @@ from app.routers import (
     admin_bingo,
     admin_card_collections,
     admin_card_upgrades,
+    admin_club_coach_packs,
     admin_club_packs,
     admin_clubs,
     admin_coaches,
@@ -141,6 +142,7 @@ app.include_router(admin_card_upgrades.router, prefix=API_PREFIX)
 app.include_router(admin_diamond_upgrades.router, prefix=API_PREFIX)
 app.include_router(admin_bingo.router, prefix=API_PREFIX)
 app.include_router(admin_club_packs.router, prefix=API_PREFIX)
+app.include_router(admin_club_coach_packs.router, prefix=API_PREFIX)
 app.include_router(admin_clubs.router, prefix=API_PREFIX)
 app.include_router(admin_tournaments.router, prefix=API_PREFIX)
 app.include_router(admin_tasks.router, prefix=API_PREFIX)
