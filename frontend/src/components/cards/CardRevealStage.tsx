@@ -11,7 +11,7 @@ export const STAGES: Stage[] = ["position", "rarity", "country", "club", "silhou
 export const STAGE_DURATION_MS = 900;
 
 // Structural rather than `OpenedCard` directly — reused by ClubPackOpenPage.tsx for
-// OpenedClubCard, whose `card` wrapper (ClubCard) carries different bookkeeping fields
+// OpenedClubPackItem, whose `card` wrapper (ClubCard) carries different bookkeeping fields
 // (serial_number/acquired_at/is_in_lineup vs. a regular UserCard's) but the same `player`
 // shape, and which has no `duplicate_count` concept at all (a club's cards aren't
 // deduplicated the way a personal collection's are).

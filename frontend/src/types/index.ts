@@ -1158,18 +1158,21 @@ export interface ClubPack {
   image_path: string | null;
   is_active: boolean;
   sort_order: number;
+  coach_drop_chance: number;
   rarity_probabilities: ClubPackRarityProbability[];
 }
 
-export interface OpenedClubCard {
-  card: ClubCard;
+export interface OpenedClubPackItem {
+  kind: "player" | "coach";
+  card: ClubCard | null;
+  coach_card: ClubCoachCard | null;
   is_new: boolean;
 }
 
 export interface ClubPackOpenResult {
   opening_id: number;
   pack: ClubPack;
-  cards: OpenedClubCard[];
+  cards: OpenedClubPackItem[];
   new_budget: number;
 }
 
@@ -1325,27 +1328,3 @@ export interface ClubCoachCard {
   acquired_at: string;
 }
 
-export interface ClubCoachPackRarityProbability {
-  rarity: Rarity;
-  probability: number;
-}
-
-export interface ClubCoachPack {
-  id: number;
-  slug: string;
-  name: string;
-  description: string;
-  price: number;
-  card_count: number;
-  guaranteed_min_rarity: string | null;
-  image_path: string | null;
-  is_active: boolean;
-  sort_order: number;
-  rarity_probabilities: ClubCoachPackRarityProbability[];
-}
-
-export interface ClubCoachPackOpenResult {
-  pack: ClubCoachPack;
-  cards: { card: ClubCoachCard; is_new: boolean }[];
-  new_budget: number;
-}
