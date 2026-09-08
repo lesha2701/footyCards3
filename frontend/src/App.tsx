@@ -9,7 +9,6 @@ import AdminUsersPage from "@/admin/pages/AdminUsersPage";
 import AdminPlayersPage from "@/admin/pages/AdminPlayersPage";
 import AdminCoachesPage from "@/admin/pages/AdminCoachesPage";
 import AdminPacksPage from "@/admin/pages/AdminPacksPage";
-import AdminClubCoachPacksPage from "@/admin/pages/AdminClubCoachPacksPage";
 import AdminClubPacksPage from "@/admin/pages/AdminClubPacksPage";
 import AdminClubsPage from "@/admin/pages/AdminClubsPage";
 import AdminTournamentsPage from "@/admin/pages/AdminTournamentsPage";
@@ -57,8 +56,6 @@ import ClubActivityPage from "@/pages/ClubActivityPage";
 import ClubSquadPage from "@/pages/ClubSquadPage";
 import ClubPacksPage from "@/pages/ClubPacksPage";
 import ClubPackOpenPage from "@/pages/ClubPackOpenPage";
-import ClubCoachPacksPage from "@/pages/ClubCoachPacksPage";
-import ClubCoachPackOpenPage from "@/pages/ClubCoachPackOpenPage";
 import CollectionPage from "@/pages/CollectionPage";
 import TradesPage from "@/pages/TradesPage";
 import NewTradePage from "@/pages/NewTradePage";
@@ -166,7 +163,6 @@ export default function App() {
         <Route path="coaches" element={<AdminCoachesPage />} />
         <Route path="packs" element={<AdminPacksPage />} />
         <Route path="club-packs" element={<AdminClubPacksPage />} />
-        <Route path="club-coach-packs" element={<AdminClubCoachPacksPage />} />
         <Route path="clubs" element={<AdminClubsPage />} />
         <Route path="tournaments" element={<AdminTournamentsPage />} />
         <Route path="card-collections" element={<AdminCardCollectionsPage />} />
@@ -215,8 +211,6 @@ export default function App() {
         <Route path="/clubs/activity" element={<ClubActivityPage />} />
         <Route path="/clubs/packs" element={<ClubPacksPage />} />
         <Route path="/clubs/packs/:packId/open" element={<ClubPackOpenPage />} />
-        <Route path="/clubs/coach-packs" element={<ClubCoachPacksPage />} />
-        <Route path="/clubs/coach-packs/:packId/open" element={<ClubCoachPackOpenPage />} />
         <Route path="/clubs/games" element={<ClubGamesPage />} />
         <Route path="/clubs/game" element={<ClubGamePage />} />
         <Route path="/clubs/missing-item" element={<ClubMissingItemPage />} />
