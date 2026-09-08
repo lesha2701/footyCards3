@@ -1,9 +1,19 @@
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import Rarity
 from app.schemas.club_squad import ClubCoachCardOut
+
+
+def _reject_diamond(rarity: Optional[Rarity]) -> Optional[Rarity]:
+    # Coach carries ck_coaches_rarity_not_diamond — a pack advertising
+    # "diamond" odds (rarity_probabilities) or a "diamond" guaranteed
+    # minimum could never actually be fulfilled by pick_random_coach,
+    # silently violating the pack's own contract.
+    if rarity == Rarity.diamond:
+        raise ValueError("Coach packs cannot reference the 'diamond' rarity — coaches are never diamond")
+    return rarity
 
 
 class ClubCoachPackRarityProbabilityOut(BaseModel):
@@ -46,6 +56,8 @@ class ClubCoachPackRarityProbabilityIn(BaseModel):
     rarity: Rarity
     probability: float = Field(ge=0, le=1)
 
+    _reject_diamond_rarity = field_validator("rarity")(_reject_diamond)
+
 
 class ClubCoachPackCreate(BaseModel):
     slug: str
@@ -58,6 +70,8 @@ class ClubCoachPackCreate(BaseModel):
     is_active: bool = True
     sort_order: int = 0
 
+    _reject_diamond_min_rarity = field_validator("guaranteed_min_rarity")(_reject_diamond)
+
 
 class ClubCoachPackUpdate(BaseModel):
     name: Optional[str] = None
@@ -68,3 +82,5 @@ class ClubCoachPackUpdate(BaseModel):
     rarity_probabilities: Optional[list[ClubCoachPackRarityProbabilityIn]] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
+
+    _reject_diamond_min_rarity = field_validator("guaranteed_min_rarity")(_reject_diamond)

@@ -109,7 +109,7 @@ export default function ClubCoachPackOpenPage() {
           className="flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center"
         >
           <motion.img
-            src={staticUrl(result.pack.image_path ?? undefined)}
+            src={staticUrl(result.pack.image_path ?? undefined) ?? staticUrl("packs/basic.webp")}
             alt={result.pack.name}
             className="w-52 drop-shadow-2xl"
             animate={{ scale: [1, 1.04, 1], rotate: [0, -1.5, 1.5, 0] }}

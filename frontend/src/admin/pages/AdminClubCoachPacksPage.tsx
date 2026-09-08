@@ -5,8 +5,12 @@ import { createClubCoachPack, deleteClubCoachPack, fetchAdminClubCoachPacks, upd
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { showConfirm } from "@/lib/telegram";
 
-type Rarity = "common" | "rare" | "epic" | "legendary" | "diamond";
-const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
+// No "diamond" — Coach carries a DB check constraint against it
+// (ck_coaches_rarity_not_diamond), unlike player cards. A pack that could
+// roll "diamond" would silently violate its own advertised odds, since
+// pick_random_coach can never find one and falls through to any rarity.
+type Rarity = "common" | "rare" | "epic" | "legendary";
+const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary"];
 
 interface ClubCoachPackForm {
   slug: string;
@@ -21,7 +25,7 @@ interface ClubCoachPackForm {
 }
 
 function packToForm(p?: ClubCoachPackAdmin): ClubCoachPackForm {
-  const probabilities = { common: 0, rare: 0, epic: 0, legendary: 0, diamond: 0 } as Record<Rarity, number>;
+  const probabilities = { common: 0, rare: 0, epic: 0, legendary: 0 } as Record<Rarity, number>;
   for (const rp of p?.rarity_probabilities ?? []) probabilities[rp.rarity as Rarity] = rp.probability * 100;
   return {
     slug: p?.slug ?? "", name: p?.name ?? "", description: p?.description ?? "",
