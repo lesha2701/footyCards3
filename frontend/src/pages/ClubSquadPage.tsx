@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 
 import ClubCardPickerModal from "@/components/clubs/ClubCardPickerModal";
+import ClubCoachCardPickerModal from "@/components/clubs/ClubCoachCardPickerModal";
 import {
   IconBoot, IconChevronLeft, IconChevronUp, IconFlag, IconPlus, IconStadium, IconStar, IconTarget, IconUsers,
 } from "@/components/icons";
@@ -10,7 +11,6 @@ import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchMyClub } from "@/api/clubs";
 import { fetchClubCards, fetchClubCoachCards, fetchClubLineup, setClubCoach, setClubLineup, setClubTactics } from "@/api/clubSquad";
 import { staticUrl } from "@/lib/api";
-import { BOOST_TYPE_LABELS } from "@/lib/coaches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
 import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
 import { formatGameError } from "@/lib/errors";
@@ -25,6 +25,7 @@ export default function ClubSquadPage() {
   const { data: cards } = useQuery({ queryKey: ["clubs", "cards"], queryFn: fetchClubCards });
   const { data: coachCards } = useQuery({ queryKey: ["clubs", "coach-cards"], queryFn: fetchClubCoachCards, enabled: canEdit });
   const [pickerSlot, setPickerSlot] = useState<ClubLineupSlot | null>(null);
+  const [coachPickerOpen, setCoachPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
 
@@ -42,7 +43,7 @@ export default function ClubSquadPage() {
 
   const setCoachMutation = useMutation({
     mutationFn: setClubCoach,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["clubs", "lineup"] }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["clubs", "lineup"] }); setCoachPickerOpen(false); },
     onError: (err) => setError(formatGameError(err, "Не удалось назначить тренера")),
   });
 
@@ -102,15 +103,6 @@ export default function ClubSquadPage() {
           </div>
         )}
 
-        {lineup?.coach && (
-          <div className="mb-3 rounded-xl bg-white/5 px-3 py-2">
-            <p className="text-xs font-semibold text-ink-chalk">{lineup.coach.display_name}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">
-              {lineup.coach.boosts.map((b) => BOOST_TYPE_LABELS[b.boost_type]).join(", ")}
-            </p>
-          </div>
-        )}
-
         {canEdit && lineup && (
           <div className="mb-3 flex flex-col gap-1.5">
             <TacticSelect
@@ -134,21 +126,41 @@ export default function ClubSquadPage() {
               disabled={setTacticsMutation.isPending}
               onChange={(value) => updateTactics({ playstyle: value })}
             />
-            <TacticSelect
-              label="Тренер"
-              options={[
-                { value: "", label: "Без тренера" },
-                ...(coachCards ?? []).map((c) => ({ value: String(c.id), label: c.coach.display_name })),
-              ]}
-              value={lineup.coach ? String((coachCards ?? []).find((c) => c.coach.id === lineup.coach!.id)?.id ?? "") : ""}
-              disabled={setCoachMutation.isPending}
-              onChange={(value) => setCoachMutation.mutate(value ? Number(value) : null)}
-            />
           </div>
         )}
         <div className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
           {(["FWD", "MID", "DEF", "GK"] as const).map((category) => (
             <div key={category} className="relative flex justify-evenly gap-2">
+              {category === "GK" && (
+                <button
+                  onClick={canEdit ? () => setCoachPickerOpen(true) : undefined}
+                  disabled={!canEdit || setCoachMutation.isPending}
+                  className={`absolute left-0 top-0 flex min-w-0 max-w-[72px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm ${
+                    canEdit ? "active:scale-95" : ""
+                  } ${setCoachMutation.isPending ? "opacity-60" : ""}`}
+                >
+                  {lineup?.coach ? (
+                    <>
+                      <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
+                        <img
+                          src={staticUrl(lineup.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                          alt="" className="h-full w-full object-cover" loading="lazy"
+                        />
+                      </div>
+                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">Тренер</span>
+                    </>
+                  ) : (
+                    <>
+                      {canEdit ? (
+                        <IconPlus size={16} className="text-ink-mist-dim" />
+                      ) : (
+                        <span className="flex h-[16px] items-center text-ink-mist-dim">—</span>
+                      )}
+                      <span className="text-[8px] text-ink-mist-dim">Тренер</span>
+                    </>
+                  )}
+                </button>
+              )}
               {lineup?.slots
                 .filter((slot) => slot.category === category)
                 .map((slot) => (
@@ -305,6 +317,13 @@ export default function ClubSquadPage() {
           onClose={() => setPickerSlot(null)}
         />
       )}
+
+      <ClubCoachCardPickerModal
+        open={coachPickerOpen}
+        cards={coachCards ?? []}
+        onSelect={(card) => setCoachMutation.mutate(card ? card.id : null)}
+        onClose={() => setCoachPickerOpen(false)}
+      />
     </div>
   );
 }
