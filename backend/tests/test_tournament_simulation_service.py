@@ -7,14 +7,17 @@ import pytest_asyncio
 from sqlalchemy import func, select
 
 from app.models.club import Club
-from app.models.enums import Position, TournamentStatus
+from app.models.club_coach_card import ClubCoachCard
+from app.models.coach import Coach, CoachBoost
+from app.models.enums import ClubCoachCardSource, CoachBoostType, Position, Rarity, TournamentStatus
 from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_match import TournamentMatch
 from app.models.tournament_result import TournamentClubResult
 from app.models.tournament_standing import TournamentClubStanding
+from app.services.club_tactical_matchup_service import build_side
 from app.services.lineup_service import FORMATION_SLOTS
 from app.services.tournament_queue_service import apply_to_tournament
-from app.services.tournament_simulation_service import simulate_next_round
+from app.services.tournament_simulation_service import resolve_match_lineup, simulate_next_round
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
 
@@ -201,6 +204,40 @@ async def test_simulate_next_round_concludes_tournament_at_round_14(db_session, 
     assert len(results) == 8
     ranks = sorted(r.final_rank for r in results)
     assert ranks == list(range(1, 9))
+
+
+async def test_equipped_coach_boosts_flow_into_simulated_match(db_session, eight_club_tournament):
+    """Task 8 regression: a club's equipped coach must actually reach
+    build_side via the real resolve_match_lineup -> club_lineup.club_coach_card.coach
+    chain that simulate_next_round's own call sites use (Step 3 of the task-8
+    brief), not just be readable off the model in isolation."""
+    _tournament, clubs_and_captains = eight_club_tournament
+    club_a, _captain_a = clubs_and_captains[0]
+
+    coach = Coach(display_name="Simulation Coach", rarity=Rarity.legendary)
+    coach.boosts = [
+        CoachBoost(boost_type=CoachBoostType.ATTACK_CENTRAL, magnitude=8.0),
+        CoachBoost(boost_type=CoachBoostType.DEFENCE_CENTRAL, magnitude=8.0),
+        CoachBoost(boost_type=CoachBoostType.GOALKEEPING, magnitude=8.0),
+    ]
+    db_session.add(coach)
+    await db_session.flush()
+    card = ClubCoachCard(club_id=club_a.id, coach_id=coach.id, serial_number=1, source=ClubCoachCardSource.club_pack)
+    db_session.add(card)
+    await db_session.flush()
+
+    _lineup_a, _had_sub_a, _cards_with_slots_a, club_lineup_a = await resolve_match_lineup(db_session, club_a.id)
+    club_lineup_a.club_coach_card_id = card.id
+    db_session.add(club_lineup_a)
+    await db_session.commit()
+
+    _lineup_a_reloaded, _, cards_with_slots_a, club_lineup_a_reloaded = await resolve_match_lineup(db_session, club_a.id)
+    side_a = build_side(
+        cards_with_slots_a, club_lineup_a_reloaded.mentality, club_lineup_a_reloaded.playstyle,
+        coach=club_lineup_a_reloaded.club_coach_card.coach if club_lineup_a_reloaded.club_coach_card else None,
+    )
+    assert side_a.coach is not None
+    assert side_a.coach.display_name == "Simulation Coach"
 
 
 # --- Real-Postgres concurrency tests ----------------------------------------
