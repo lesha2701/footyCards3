@@ -75,6 +75,94 @@ async def _create_club(client, bot_token, telegram_id, name):
     return resp.json(), headers
 
 
+async def test_open_club_pack_with_coach_drop_chance_can_yield_a_coach(client, db_session, bot_token):
+    from app.models.club_pack import ClubPack, ClubPackRarityProbability
+    from app.models.coach import Coach, CoachBoost
+    from app.models.enums import CoachBoostType, Rarity
+
+    coach = Coach(display_name="Slot Test Coach", rarity=Rarity.common, is_active=True, is_pack_droppable=True)
+    coach.boosts = [CoachBoost(boost_type=CoachBoostType.GOALKEEPING, magnitude=1.0)]
+    db_session.add(coach)
+
+    pack = ClubPack(slug="coach-slot-pack", name="Coach Slot Pack", price=50, card_count=5, coach_drop_chance=1.0)
+    pack.rarity_probabilities = [ClubPackRarityProbability(rarity=Rarity.common, probability=1.0)]
+    db_session.add(pack)
+    await db_session.commit()
+    await db_session.refresh(pack)
+
+    club, headers = await _create_club(client, bot_token, 830500, "Клуб со слотами тренеров")
+    await client.post("/api/v1/clubs/me/daily-claim", headers=headers)
+
+    resp = await client.post(f"/api/v1/clubs/me/packs/{pack.id}/open", headers=headers, json={"idempotency_key": "slot-key-1"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["cards"]) == 5
+    # coach_drop_chance=1.0 -> every slot must resolve to a coach.
+    assert all(item["kind"] == "coach" for item in body["cards"])
+    assert all(item["coach_card"]["coach"]["display_name"] == "Slot Test Coach" for item in body["cards"])
+    assert all(item["card"] is None for item in body["cards"])
+
+
+async def test_open_club_pack_with_zero_coach_drop_chance_never_yields_a_coach(client, db_session, bot_token):
+    from app.models.club_pack import ClubPack, ClubPackRarityProbability
+    from app.models.enums import Rarity
+
+    pack = ClubPack(slug="no-coach-pack", name="No Coach Pack", price=50, card_count=3, coach_drop_chance=0.0)
+    pack.rarity_probabilities = [ClubPackRarityProbability(rarity=Rarity.common, probability=1.0)]
+    db_session.add(pack)
+    await db_session.commit()
+    await db_session.refresh(pack)
+
+    club, headers = await _create_club(client, bot_token, 830501, "Клуб без тренеров")
+    await client.post("/api/v1/clubs/me/daily-claim", headers=headers)
+
+    resp = await client.post(f"/api/v1/clubs/me/packs/{pack.id}/open", headers=headers, json={"idempotency_key": "slot-key-2"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert all(item["kind"] == "player" for item in body["cards"])
+
+
+async def test_open_club_pack_with_mid_range_coach_drop_chance_yields_both_kinds(client, db_session, bot_token):
+    """The 0.0/1.0 extremes above can't catch a bug where the per-slot roll
+    is wired backwards (e.g. `>=` vs `<`, or the branches swapped) as long as
+    it still degenerates correctly at the extremes — only a mid-range chance
+    actually exercises `random.random() < coach_drop_chance` picking *both*
+    branches. A single large-card_count pack keeps this a single, still-fast
+    request while making a false pass astronomically unlikely: with
+    coach_drop_chance=0.5 across 40 independent slots, the chance every slot
+    lands on the same kind is 2 * 0.5**40, far below any realistic flake
+    tolerance."""
+    from app.models.club_pack import ClubPack, ClubPackRarityProbability
+    from app.models.coach import Coach, CoachBoost
+    from app.models.enums import CoachBoostType, Rarity
+
+    coach = Coach(display_name="Mid Range Coach", rarity=Rarity.common, is_active=True, is_pack_droppable=True)
+    coach.boosts = [CoachBoost(boost_type=CoachBoostType.GOALKEEPING, magnitude=1.0)]
+    db_session.add(coach)
+
+    pack = ClubPack(slug="mid-coach-pack", name="Mid Coach Pack", price=50, card_count=40, coach_drop_chance=0.5)
+    pack.rarity_probabilities = [ClubPackRarityProbability(rarity=Rarity.common, probability=1.0)]
+    db_session.add(pack)
+    await db_session.commit()
+    await db_session.refresh(pack)
+
+    club, headers = await _create_club(client, bot_token, 830502, "Клуб со смешанными слотами")
+    await client.post("/api/v1/clubs/me/daily-claim", headers=headers)
+
+    resp = await client.post(f"/api/v1/clubs/me/packs/{pack.id}/open", headers=headers, json={"idempotency_key": "slot-key-3"})
+    assert resp.status_code == 200
+    body = resp.json()
+    kinds = {item["kind"] for item in body["cards"]}
+    assert kinds == {"player", "coach"}, f"expected both kinds among 40 slots at coach_drop_chance=0.5, got {kinds}"
+    for item in body["cards"]:
+        if item["kind"] == "coach":
+            assert item["card"] is None
+            assert item["coach_card"] is not None
+        else:
+            assert item["coach_card"] is None
+            assert item["card"] is not None
+
+
 async def test_open_club_pack_debits_budget_and_mints_cards(client, db_session, bot_token):
     admin_auth = await _admin_auth(client, bot_token)
     for _ in range(5):
