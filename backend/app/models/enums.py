@@ -132,6 +132,10 @@ class ClubCardSource(str, enum.Enum):
     club_pack = "club_pack"
 
 
+class ClubCoachCardSource(str, enum.Enum):
+    club_pack = "club_pack"
+
+
 class ClubLogoShape(str, enum.Enum):
     shield = "shield"
     circle = "circle"
