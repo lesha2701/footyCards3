@@ -5,11 +5,12 @@ from typing import Optional
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.card import UserCard
 from app.models.card_collection import CardCollection
+from app.models.coach import Coach
 from app.models.enums import RARITY_ORDER, BingoGoalType, CardSource, NotificationType, Rarity, TransactionType
 from app.models.pack import Pack, PackOpening, PackOpeningCard, PackRarityProbability
 from app.models.player import Player
@@ -106,6 +107,33 @@ async def pick_random_player(db: AsyncSession, rarity: Rarity) -> Player:
     if player is None:
         raise ConflictError("No active players configured; cannot open packs")
     return player
+
+
+async def pick_random_coach(db: AsyncSession, rarity: Rarity) -> Coach:
+    # `selectinload(Coach.boosts)` — like admin_coaches.py's own list query — since
+    # CoachOut nests boosts and callers (club_coach_pack_service.open_club_coach_pack)
+    # serialize the returned Coach straight into a response without a further query.
+    result = await db.execute(
+        select(Coach)
+        .where(Coach.rarity == rarity, Coach.is_active.is_(True), Coach.is_pack_droppable.is_(True))
+        .options(selectinload(Coach.boosts))
+        .order_by(func.random())
+        .limit(1)
+    )
+    coach = result.scalar_one_or_none()
+    if coach is None:
+        # Fall back to any active, pack-droppable coach if this rarity has none configured.
+        result = await db.execute(
+            select(Coach)
+            .where(Coach.is_active.is_(True), Coach.is_pack_droppable.is_(True))
+            .options(selectinload(Coach.boosts))
+            .order_by(func.random())
+            .limit(1)
+        )
+        coach = result.scalar_one_or_none()
+    if coach is None:
+        raise ConflictError("No active coaches configured; cannot open coach packs")
+    return coach
 
 
 async def get_opening_result(db: AsyncSession, user: User, opening: PackOpening) -> PackOpenResult:

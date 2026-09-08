@@ -35,6 +35,7 @@ from app.routers import (
     bingo,
     broadcasts,
     card_collections,
+    club_coach_packs,
     clubs,
     collection,
     daily_rewards,
@@ -126,6 +127,7 @@ app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(leaderboard.router, prefix=API_PREFIX)
 app.include_router(leagues.router, prefix=API_PREFIX)
 app.include_router(clubs.router, prefix=API_PREFIX)
+app.include_router(club_coach_packs.router, prefix=API_PREFIX)
 app.include_router(notifications.router, prefix=API_PREFIX)
 app.include_router(admin_dashboard.router, prefix=API_PREFIX)
 app.include_router(admin_users.router, prefix=API_PREFIX)
