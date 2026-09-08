@@ -7,6 +7,7 @@ import AdminLayout from "@/admin/AdminLayout";
 import AdminDashboardPage from "@/admin/pages/AdminDashboardPage";
 import AdminUsersPage from "@/admin/pages/AdminUsersPage";
 import AdminPlayersPage from "@/admin/pages/AdminPlayersPage";
+import AdminCoachesPage from "@/admin/pages/AdminCoachesPage";
 import AdminPacksPage from "@/admin/pages/AdminPacksPage";
 import AdminClubPacksPage from "@/admin/pages/AdminClubPacksPage";
 import AdminClubsPage from "@/admin/pages/AdminClubsPage";
@@ -159,6 +160,7 @@ export default function App() {
         <Route index element={<AdminDashboardPage />} />
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="players" element={<AdminPlayersPage />} />
+        <Route path="coaches" element={<AdminCoachesPage />} />
         <Route path="packs" element={<AdminPacksPage />} />
         <Route path="club-packs" element={<AdminClubPacksPage />} />
         <Route path="clubs" element={<AdminClubsPage />} />
