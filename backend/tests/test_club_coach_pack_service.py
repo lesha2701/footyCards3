@@ -116,3 +116,43 @@ async def test_open_club_coach_pack_idempotency_key_prevents_double_charge(clien
 
     club_detail = await client.get("/api/v1/clubs/me", headers=headers)
     assert club_detail.json()["budget"] == 150  # only debited once: 200 - 50, not 200 - 100
+
+
+# --- Route-level coverage for the two GET endpoints. Neither had any route
+# test before this — the final whole-branch review for this plan flagged
+# that gap explicitly, since GET /clubs/coach-packs is exactly the route a
+# real, live-only router-registration bug hit (club_coach_packs.router was
+# registered after clubs.router, whose untyped GET /{club_id} swallowed
+# "coach-packs" first) and GET /clubs/me/coach-cards is exactly where a
+# real, live-only MissingGreenlet (missing Coach.boosts eager-load) hit —
+# both already fixed, but a route-level test is what would have caught
+# either regressing again on SQLite, without needing real Postgres.
+
+
+async def test_get_club_coach_packs_lists_active_packs(client, db_session, bot_token):
+    await _seed_coach_pack(db_session, "coach-list-pack", price=75)
+    club, headers = await _create_club(client, bot_token, 830402, "Клуб со списком паков")
+
+    resp = await client.get("/api/v1/clubs/coach-packs", headers=headers)
+    assert resp.status_code == 200
+    slugs = [p["slug"] for p in resp.json()]
+    assert "coach-list-pack" in slugs
+
+
+async def test_get_club_coach_cards_lists_owned_cards_with_boosts(client, db_session, bot_token):
+    pack = await _seed_coach_pack(db_session, "coach-cards-pack", price=50, card_count=1)
+    club, headers = await _create_club(client, bot_token, 830403, "Клуб со своими тренерами")
+    await client.post("/api/v1/clubs/me/daily-claim", headers=headers)
+    open_resp = await client.post(
+        f"/api/v1/clubs/me/coach-packs/{pack.id}/open", headers=headers, json={"idempotency_key": "coach-list-key"}
+    )
+    assert open_resp.status_code == 200
+
+    resp = await client.get("/api/v1/clubs/me/coach-cards", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    # This is the exact serialization path (ClubCoachCardOut -> coach.boosts)
+    # that raised MissingGreenlet before the eager-load fix.
+    assert len(body[0]["coach"]["boosts"]) == 1
+    assert body[0]["coach"]["boosts"][0]["boost_type"] == "goalkeeping"

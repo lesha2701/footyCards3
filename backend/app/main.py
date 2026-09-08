@@ -127,6 +127,11 @@ app.include_router(profile.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(leaderboard.router, prefix=API_PREFIX)
 app.include_router(leagues.router, prefix=API_PREFIX)
+# club_coach_packs.router MUST be registered before clubs.router: clubs.py
+# has an untyped GET /{club_id} that FastAPI/Starlette will match against
+# any single path segment, including "coach-packs", before falling through
+# to a more specific router registered later — swapping this order silently
+# 422s every GET /clubs/coach-packs request (found live, fixed here).
 app.include_router(club_coach_packs.router, prefix=API_PREFIX)
 app.include_router(clubs.router, prefix=API_PREFIX)
 app.include_router(notifications.router, prefix=API_PREFIX)

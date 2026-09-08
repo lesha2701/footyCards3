@@ -94,3 +94,32 @@ async def test_cannot_equip_another_clubs_coach_card(client, db_session, bot_tok
 
     with pytest.raises(ConflictError):
         await set_club_coach(db_session, captain, ClubCoachSetRequest(club_coach_card_id=foreign_card.id))
+
+
+async def test_put_clubs_me_coach_route_equips_and_clears(client, db_session, bot_token):
+    """Route-level coverage for PUT /clubs/me/coach — the two tests above
+    call set_club_coach directly, which never exercises FastAPI's routing,
+    request validation, or response serialization. The final whole-branch
+    review for this plan flagged that gap explicitly."""
+    club, captain, lineup = await _seed_club_with_captain_and_lineup(
+        client, db_session, bot_token, 840103, "Клуб с роутом тренера"
+    )
+    headers = telegram_headers(840103, bot_token)
+
+    coach = Coach(display_name="Route Test Coach", rarity=Rarity.rare)
+    coach.boosts = [CoachBoost(boost_type=CoachBoostType.MIDFIELD_CONTROL, magnitude=3.0)]
+    db_session.add(coach)
+    await db_session.flush()
+    card = ClubCoachCard(club_id=club["id"], coach_id=coach.id, serial_number=1, source=ClubCoachCardSource.club_pack)
+    db_session.add(card)
+    await db_session.commit()
+
+    equip_resp = await client.put("/api/v1/clubs/me/coach", headers=headers, json={"club_coach_card_id": card.id})
+    assert equip_resp.status_code == 200
+    body = equip_resp.json()
+    assert body["coach"]["display_name"] == "Route Test Coach"
+    assert body["coach"]["boosts"][0]["boost_type"] == "midfield_control"
+
+    clear_resp = await client.put("/api/v1/clubs/me/coach", headers=headers, json={"club_coach_card_id": None})
+    assert clear_resp.status_code == 200
+    assert clear_resp.json()["coach"] is None
