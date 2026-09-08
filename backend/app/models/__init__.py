@@ -8,6 +8,8 @@ from app.models.club_budget import ClubBudgetTransaction
 from app.models.club_card import ClubCard
 from app.models.club_card_availability import ClubCardAvailability
 from app.models.club_coach_card import ClubCoachCard
+from app.models.club_coach_pack import ClubCoachPack, ClubCoachPackRarityProbability
+from app.models.club_coach_pack_opening import ClubCoachPackOpening, ClubCoachPackOpeningCard
 from app.models.club_daily_claim import ClubDailyClaim
 from app.models.club_lineup import ClubLineup, ClubLineupCard
 from app.models.club_pack import ClubPack, ClubPackRarityProbability
@@ -54,6 +56,10 @@ __all__ = [
     "ClubCard",
     "ClubCardAvailability",
     "ClubCoachCard",
+    "ClubCoachPack",
+    "ClubCoachPackRarityProbability",
+    "ClubCoachPackOpening",
+    "ClubCoachPackOpeningCard",
     "ClubDailyClaim",
     "ClubLineup",
     "ClubLineupCard",

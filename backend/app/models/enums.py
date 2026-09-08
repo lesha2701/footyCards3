@@ -115,6 +115,7 @@ class ClubBudgetTransactionType(str, enum.Enum):
     tournament_reward = "tournament_reward"
     club_game_reward = "club_game_reward"
     club_missing_item_reward = "club_missing_item_reward"
+    coach_pack_purchase = "coach_pack_purchase"
 
 
 class TournamentQueueStatus(str, enum.Enum):
