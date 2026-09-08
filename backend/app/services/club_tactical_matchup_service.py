@@ -2,7 +2,15 @@ import random
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.models.coach import Coach
 from app.services.club_tactical_profile_service import TeamTacticalProfile, position_fit, zone_weight
+from app.services.coach_boost_service import (
+    defensive_shift_for,
+    first_pass_input_bonus,
+    initiative_mult_for,
+    resolve_active_boosts,
+    transition_bonus_for,
+)
 
 MENTALITIES = ("PARK_THE_BUS", "DEFENSIVE", "BALANCED", "ATTACKING")
 PLAYSTYLES = ("WING_PLAY", "CENTRAL_PLAY", "POSSESSION", "HIGH_PRESS", "COUNTER_ATTACK")
@@ -61,9 +69,11 @@ def _amplify(ratio: float, k: float | None = None) -> float:
     return max(0.0, min(1.0, 0.5 + (ratio - 0.5) * k))
 
 
-def initiative_probability(profile_a: TeamTacticalProfile, mentality_a: str, profile_b: TeamTacticalProfile, mentality_b: str) -> float:
-    score_a = profile_a.midfield_control * INITIATIVE_MULT[mentality_a]
-    score_b = profile_b.midfield_control * INITIATIVE_MULT[mentality_b]
+def initiative_probability(side_a: "ClubTacticalSide", side_b: "ClubTacticalSide") -> float:
+    mult_a = initiative_mult_for(INITIATIVE_MULT[side_a.mentality], resolve_active_boosts(side_a.coach))
+    mult_b = initiative_mult_for(INITIATIVE_MULT[side_b.mentality], resolve_active_boosts(side_b.coach))
+    score_a = side_a.profile.midfield_control * mult_a
+    score_b = side_b.profile.midfield_control * mult_b
     total = score_a + score_b
     return score_a / total if total else 0.5
 
@@ -235,6 +245,7 @@ class ClubTacticalSide:
     profile: TeamTacticalProfile
     mentality: str
     playstyle: str
+    coach: "Coach | None" = None
 
 
 def _first_pass_quality_factor(midfield_control: float) -> float:
@@ -262,7 +273,10 @@ def resolve_counter(attacking_side_label: str, y: ClubTacticalSide, x: ClubTacti
     pool = defensive_pool(x.cards, x.mentality, x.playstyle)
     x_duelist = weighted_pick(pool, defence_zone)
 
-    eff_y = y_duelist.player.rating * position_fit(y_duelist.player.position, zone) * TRANSITION_BONUS[y.playstyle] * _first_pass_quality_factor(y.profile.midfield_control)
+    y_boosts = resolve_active_boosts(y.coach)
+    transition_bonus = transition_bonus_for(y.playstyle, TRANSITION_BONUS[y.playstyle], y_boosts)
+    midfield_for_pass = y.profile.midfield_control + first_pass_input_bonus(y_boosts)
+    eff_y = y_duelist.player.rating * position_fit(y_duelist.player.position, zone) * transition_bonus * _first_pass_quality_factor(midfield_for_pass)
     eff_x = x_duelist.player.rating * position_fit(x_duelist.player.position, defence_zone)
     total = eff_y + eff_x
     raw_ratio = eff_y / total if total else 0.5
@@ -397,7 +411,7 @@ def defender_ratio_shift_for(defender: "ClubTacticalSide") -> float:
     shift = MENTALITY_DEFENSE_SHIFT[defender.mentality]
     if defender.playstyle == "HIGH_PRESS":
         shift += HIGH_PRESS_DEFENSE_SHIFT
-    return shift
+    return defensive_shift_for(defender.mentality, shift, resolve_active_boosts(defender.coach))
 
 
 def _pick_shot_type(config) -> str:
@@ -424,10 +438,10 @@ class Chance:
     defender: dict = field(default_factory=dict)
 
 
-def build_side(cards_with_slots: list[tuple[Any, Any]], mentality: str, playstyle: str) -> ClubTacticalSide:
-    profile = compute_profile(cards_with_slots)
+def build_side(cards_with_slots: list[tuple[Any, Any]], mentality: str, playstyle: str, coach: "Coach | None" = None) -> ClubTacticalSide:
+    profile = compute_profile(cards_with_slots, coach=coach)
     cards = [card for card, _slot in cards_with_slots]
-    return ClubTacticalSide(cards=cards, profile=profile, mentality=mentality, playstyle=playstyle)
+    return ClubTacticalSide(cards=cards, profile=profile, mentality=mentality, playstyle=playstyle, coach=coach)
 
 
 # Second half of the problem-1 fix. The counter-attack chain (§6.5) already
@@ -520,7 +534,7 @@ def _resolve_progression_and_duel(attacker: ClubTacticalSide, defender: ClubTact
 
 
 def simulate_phase(minute: int, side_a: ClubTacticalSide, side_b: ClubTacticalSide, config) -> Chance | None:
-    p_a_initiative = initiative_probability(side_a.profile, side_a.mentality, side_b.profile, side_b.mentality)
+    p_a_initiative = initiative_probability(side_a, side_b)
     if random.random() < p_a_initiative:
         return _resolve_progression_and_duel(side_a, side_b, "a", minute, config)
     return _resolve_progression_and_duel(side_b, side_a, "b", minute, config)

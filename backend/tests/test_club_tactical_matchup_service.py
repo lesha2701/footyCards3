@@ -1,3 +1,5 @@
+from app.models.coach import Coach, CoachBoost
+from app.models.enums import CoachBoostType, Rarity
 from app.services import club_tactical_matchup_service as svc
 from app.services.club_tactical_profile_service import TeamTacticalProfile
 
@@ -17,21 +19,29 @@ def test_initiative_mult_table():
     assert svc.INITIATIVE_MULT == {"PARK_THE_BUS": 0.55, "DEFENSIVE": 0.80, "BALANCED": 1.00, "ATTACKING": 1.25}
 
 
+def _initiative_side(profile: TeamTacticalProfile, mentality: str) -> "svc.ClubTacticalSide":
+    # initiative_probability (Task 7) now takes ClubTacticalSide objects
+    # instead of bare (profile, mentality) pairs, so these pre-existing
+    # tests need a minimal side wrapper — cards/playstyle are irrelevant to
+    # initiative_probability itself, only profile/mentality/coach are read.
+    return svc.ClubTacticalSide(cards=[], profile=profile, mentality=mentality, playstyle="CENTRAL_PLAY")
+
+
 def test_equal_profiles_and_mentalities_split_initiative_evenly():
     p = _profile()
-    assert svc.initiative_probability(p, "BALANCED", p, "BALANCED") == 0.5
+    assert svc.initiative_probability(_initiative_side(p, "BALANCED"), _initiative_side(p, "BALANCED")) == 0.5
 
 
 def test_attacking_mentality_wins_more_initiative_than_park_the_bus_at_equal_midfield():
     p = _profile()
-    prob = svc.initiative_probability(p, "ATTACKING", p, "PARK_THE_BUS")
+    prob = svc.initiative_probability(_initiative_side(p, "ATTACKING"), _initiative_side(p, "PARK_THE_BUS"))
     assert prob > 0.5
 
 
 def test_stronger_midfield_wins_more_initiative_at_equal_mentality():
     strong = _profile(midfield_control=90)
     weak = _profile(midfield_control=50)
-    prob = svc.initiative_probability(strong, "BALANCED", weak, "BALANCED")
+    prob = svc.initiative_probability(_initiative_side(strong, "BALANCED"), _initiative_side(weak, "BALANCED"))
     assert prob > 0.5
 
 
@@ -170,9 +180,38 @@ def test_defensive_pool_is_drawn_from_real_unmodified_ratings():
 from app.services.club_tactical_profile_service import TeamTacticalProfile as _TTP
 
 
-def _side(cards, mentality="BALANCED", playstyle="CENTRAL_PLAY", midfield_control=70) -> "svc.ClubTacticalSide":
+def _side(cards, mentality="BALANCED", playstyle="CENTRAL_PLAY", midfield_control=70, coach=None) -> "svc.ClubTacticalSide":
     profile = _TTP(central_attack=70, wing_attack=70, midfield_control=midfield_control, central_defence=70, wing_defence=70, goalkeeping=70, team_strength=700)
-    return svc.ClubTacticalSide(cards=cards, profile=profile, mentality=mentality, playstyle=playstyle)
+    return svc.ClubTacticalSide(cards=cards, profile=profile, mentality=mentality, playstyle=playstyle, coach=coach)
+
+
+def test_defender_ratio_shift_for_applies_defensive_discipline_only_when_attacking():
+    coach = Coach(display_name="Discipline Coach", rarity=Rarity.rare)
+    coach.boosts = [CoachBoost(boost_type=CoachBoostType.DEFENSIVE_DISCIPLINE, magnitude=0.02)]
+    attacking_side = _side(_back_line(1), mentality="ATTACKING", playstyle="BALANCED", coach=coach)
+    balanced_side = _side(_back_line(1), mentality="BALANCED", playstyle="BALANCED", coach=coach)
+
+    shift_attacking = svc.defender_ratio_shift_for(attacking_side)
+    shift_balanced = svc.defender_ratio_shift_for(balanced_side)
+    assert shift_attacking > svc.MENTALITY_DEFENSE_SHIFT["ATTACKING"]  # boost narrowed the penalty
+    assert shift_balanced == svc.MENTALITY_DEFENSE_SHIFT["BALANCED"]  # no-op for non-ATTACKING
+
+
+def test_defender_ratio_shift_for_never_exceeds_zero_with_extreme_coach_magnitude():
+    coach = Coach(display_name="Extreme Coach", rarity=Rarity.legendary)
+    coach.boosts = [CoachBoost(boost_type=CoachBoostType.DEFENSIVE_DISCIPLINE, magnitude=100.0)]
+    side = _side(_back_line(1), mentality="ATTACKING", playstyle="BALANCED", coach=coach)
+    assert svc.defender_ratio_shift_for(side) == 0.0  # regression test for coach_boost_service.py's own clamp
+
+
+def test_build_side_threads_coach_into_profile():
+    coach = Coach(display_name="Profile Coach", rarity=Rarity.common)
+    coach.boosts = [CoachBoost(boost_type=CoachBoostType.ATTACK_CENTRAL, magnitude=3.0)]
+    cards_with_slots = _full_squad()
+    side_without = svc.build_side(cards_with_slots, "BALANCED", "CENTRAL_PLAY")
+    side_with = svc.build_side(cards_with_slots, "BALANCED", "CENTRAL_PLAY", coach=coach)
+    assert side_with.profile.central_attack > side_without.profile.central_attack
+    assert side_with.coach is coach
 
 
 def test_first_pass_quality_factor_increases_with_midfield_control():
