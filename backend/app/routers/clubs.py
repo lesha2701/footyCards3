@@ -38,7 +38,15 @@ from app.schemas.club_missing_item import (
 )
 from app.schemas.club_pack import ClubPackOut
 from app.schemas.club_pack_open import ClubPackOpenResult, OpenClubPackRequest
-from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest, ClubTacticsSetRequest, NextOpponentOut
+from app.schemas.club_squad import (
+    ClubCardOut,
+    ClubCoachCardOut,
+    ClubCoachSetRequest,
+    ClubLineupOut,
+    ClubLineupSetRequest,
+    ClubTacticsSetRequest,
+    NextOpponentOut,
+)
 from app.schemas.tournament import (
     TournamentApplyResult,
     TournamentCurrentOut,
@@ -204,9 +212,19 @@ async def set_club_tactics(payload: ClubTacticsSetRequest, db: AsyncSession = De
     return await club_squad_service.set_club_tactics(db, user, payload)
 
 
+@router.put("/me/coach", response_model=ClubLineupOut)
+async def set_club_coach(payload: ClubCoachSetRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_squad_service.set_club_coach(db, user, payload)
+
+
 @router.get("/me/cards", response_model=list[ClubCardOut])
 async def list_club_cards(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_squad_service.list_club_cards(db, user)
+
+
+@router.get("/me/coach-cards", response_model=list[ClubCoachCardOut])
+async def list_club_coach_cards(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_squad_service.list_club_coach_cards(db, user)
 
 
 @router.post("/me/packs/{club_pack_id}/open", response_model=ClubPackOpenResult)

@@ -16,8 +16,10 @@ class ClubLineup(Base):
     formation: Mapped[str] = mapped_column(String(16), default="4-3-3", nullable=False, server_default="4-3-3")
     mentality: Mapped[str] = mapped_column(String(16), default="BALANCED", nullable=False, server_default="BALANCED")
     playstyle: Mapped[str] = mapped_column(String(16), default="CENTRAL_PLAY", nullable=False, server_default="CENTRAL_PLAY")
+    club_coach_card_id: Mapped[int | None] = mapped_column(ForeignKey("club_coach_cards.id", ondelete="SET NULL"), nullable=True)
 
     cards: Mapped[list["ClubLineupCard"]] = relationship(back_populates="lineup", cascade="all, delete-orphan")
+    club_coach_card: Mapped["ClubCoachCard | None"] = relationship(lazy="joined")
 
 
 class ClubLineupCard(Base):

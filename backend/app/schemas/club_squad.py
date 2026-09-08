@@ -1,8 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-from app.schemas.coach import CoachOut
+from app.schemas.coach import CoachBoostOut, CoachOut
 from app.schemas.player import PlayerOut
 
 
@@ -12,6 +12,20 @@ class ClubCardOut(BaseModel):
     player: PlayerOut
     acquired_at: datetime
     is_in_lineup: bool
+
+
+class EquippedCoachOut(BaseModel):
+    """The coach currently equipped on a club's lineup — a leaner view than
+    CoachOut (no admin-only fields like quick_sell_price/is_active/
+    is_pack_droppable), used for ClubLineupOut.coach."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    display_name: str
+    rarity: str
+    image_path: str | None
+    boosts: list[CoachBoostOut]
 
 
 class ClubCoachCardOut(BaseModel):
@@ -43,6 +57,7 @@ class ClubLineupOut(BaseModel):
     tactical_fit: int
     tactical_fit_hint: str
     slots: list[ClubLineupSlotOut]
+    coach: EquippedCoachOut | None = None
 
 
 class ClubLineupSlotIn(BaseModel):
@@ -52,6 +67,10 @@ class ClubLineupSlotIn(BaseModel):
 
 class ClubLineupSetRequest(BaseModel):
     slots: list[ClubLineupSlotIn]
+
+
+class ClubCoachSetRequest(BaseModel):
+    club_coach_card_id: int | None
 
 
 class ClubTacticsSetRequest(BaseModel):

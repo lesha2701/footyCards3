@@ -8,12 +8,24 @@ from sqlalchemy.orm import joinedload
 from app.core.exceptions import ConflictError
 from app.models.club import Club
 from app.models.club_card import ClubCard
+from app.models.club_coach_card import ClubCoachCard
 from app.models.club_lineup import ClubLineup, ClubLineupCard
+from app.models.coach import Coach
 from app.models.enums import ClubCardSource, Position
 from app.models.player import Player
 from app.models.tournament import Tournament, TournamentClub
 from app.models.user import User
-from app.schemas.club_squad import ClubCardOut, ClubLineupOut, ClubLineupSetRequest, ClubLineupSlotOut, ClubTacticsSetRequest, NextOpponentOut
+from app.schemas.club_squad import (
+    ClubCardOut,
+    ClubCoachCardOut,
+    ClubCoachSetRequest,
+    ClubLineupOut,
+    ClubLineupSetRequest,
+    ClubLineupSlotOut,
+    ClubTacticsSetRequest,
+    EquippedCoachOut,
+    NextOpponentOut,
+)
 from app.schemas.player import PlayerOut
 from app.services.club_card_service import create_club_card
 from app.services.club_formation_service import CLUB_FORMATIONS, DEFAULT_FORMATION, get_formation_slots, get_slots_by_code
@@ -146,7 +158,10 @@ async def _get_or_none_lineup(db: AsyncSession, club_id: int) -> ClubLineup | No
     result = await db.execute(
         select(ClubLineup)
         .where(ClubLineup.club_id == club_id)
-        .options(joinedload(ClubLineup.cards).joinedload(ClubLineupCard.club_card))
+        .options(
+            joinedload(ClubLineup.cards).joinedload(ClubLineupCard.club_card),
+            joinedload(ClubLineup.club_coach_card).joinedload(ClubCoachCard.coach).joinedload(Coach.boosts),
+        )
         .execution_options(populate_existing=True)
     )
     return result.unique().scalar_one_or_none()
@@ -167,6 +182,23 @@ async def list_club_cards(db: AsyncSession, user: User) -> list[ClubCardOut]:
     lineup = await _get_or_none_lineup(db, membership.club_id)
     in_lineup_ids = {lc.club_card_id for lc in lineup.cards} if lineup else set()
     return [_club_card_to_out(c, in_lineup_ids) for c in cards]
+
+
+async def list_club_coach_cards(db: AsyncSession, user: User) -> list[ClubCoachCardOut]:
+    """GET /clubs/me/coach-cards — mirrors list_club_cards above, one per
+    club-owned ClubCoachCard (a club may own several)."""
+    from app.services.club_service import _require_membership
+
+    membership = await _require_membership(db, user.id)
+    cards = (
+        await db.execute(
+            select(ClubCoachCard).where(ClubCoachCard.club_id == membership.club_id).order_by(ClubCoachCard.acquired_at)
+        )
+    ).scalars().all()
+    # ClubCoachCardOut has no from_attributes config (see club_coach_pack_service.
+    # _to_club_coach_card_out, the existing precedent) — construct explicitly
+    # rather than model_validate(orm_object), which would reject a raw ORM instance.
+    return [ClubCoachCardOut(id=c.id, serial_number=c.serial_number, coach=c.coach, acquired_at=c.acquired_at) for c in cards]
 
 
 async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
@@ -198,9 +230,14 @@ async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
     tactical_fit = compute_tactical_fit(cards_with_slots, profile, mentality, playstyle, config) if profile else 0
     tactical_fit_hint = _tactical_fit_hint(profile, playstyle) if profile else "Заполни состав, чтобы увидеть подсказку"
 
+    coach_out = None
+    if lineup and lineup.club_coach_card:
+        coach_out = EquippedCoachOut.model_validate(lineup.club_coach_card.coach)
+
     return ClubLineupOut(
         is_complete=is_complete, team_strength=team_strength, formation=formation, mentality=mentality,
         playstyle=playstyle, tactical_fit=tactical_fit, tactical_fit_hint=tactical_fit_hint, slots=slots,
+        coach=coach_out,
     )
 
 
@@ -330,6 +367,34 @@ async def set_club_tactics(db: AsyncSession, user: User, payload: ClubTacticsSet
     lineup.formation = payload.formation
     lineup.mentality = payload.mentality
     lineup.playstyle = payload.playstyle
+    db.add(lineup)
+    await db.commit()
+    return await _lineup_to_out(db, club_id)
+
+
+async def set_club_coach(db: AsyncSession, user: User, payload: ClubCoachSetRequest) -> ClubLineupOut:
+    """PUT /clubs/me/coach — mirrors set_club_tactics's captain/assistant-
+    only gating and row-locking. A None club_coach_card_id clears the
+    equipped coach."""
+    from app.services.club_service import _require_manager, _require_membership
+
+    membership = await _require_membership(db, user.id)
+    _require_manager(membership)
+    club_id = membership.club_id
+
+    if payload.club_coach_card_id is not None:
+        card = await db.get(ClubCoachCard, payload.club_coach_card_id)
+        if card is None or card.club_id != club_id:
+            raise ConflictError("Тренер не принадлежит этому клубу")
+
+    lineup_result = await db.execute(
+        select(ClubLineup).where(ClubLineup.club_id == club_id).options(joinedload(ClubLineup.cards)).with_for_update(of=ClubLineup)
+    )
+    lineup = lineup_result.unique().scalar_one_or_none()
+    if lineup is None:
+        raise ConflictError("У клуба ещё нет состава")
+
+    lineup.club_coach_card_id = payload.club_coach_card_id
     db.add(lineup)
     await db.commit()
     return await _lineup_to_out(db, club_id)
