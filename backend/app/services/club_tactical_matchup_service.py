@@ -12,10 +12,53 @@ INITIATIVE_MULT: dict[str, float] = {"PARK_THE_BUS": 0.55, "DEFENSIVE": 0.80, "B
 SAMPLE_FRACTION: dict[str, float] = {"PARK_THE_BUS": 1.00, "DEFENSIVE": 0.90, "BALANCED": 0.75, "ATTACKING": 0.55}
 HIGH_PRESS_POOL_MULT = 0.85
 
-# Verbatim from design spec §8's "Transition bonus (§6.5)" column.
+# Verbatim from design spec §8's "Transition bonus (§6.5)" column, except
+# COUNTER_ATTACK — raised 1.5 -> 2.0 on 2026-09-07 as part of the playstyle
+# rock-paper-scissors rebalance (see scripts/simulate_tactical_matrix.py):
+# COUNTER_ATTACK needed a real edge over at least one other style to satisfy
+# "every style can counter something" without also making it a dominator —
+# a stronger transition punch (this multiplier only applies to COUNTER's own
+# breakdown-triggered chances) was the isolated lever, versus touching
+# HIGH_PRESS_POOL_MULT/HIGH_PRESS_DEFENSE_SHIFT which affect HIGH_PRESS
+# against every opponent, not just COUNTER_ATTACK specifically.
 TRANSITION_BONUS: dict[str, float] = {
-    "WING_PLAY": 1.0, "CENTRAL_PLAY": 1.0, "POSSESSION": 0.7, "HIGH_PRESS": 1.3, "COUNTER_ATTACK": 1.5,
+    "WING_PLAY": 1.0, "CENTRAL_PLAY": 1.0, "POSSESSION": 0.7, "HIGH_PRESS": 1.3, "COUNTER_ATTACK": 2.0,
 }
+
+# --- Fix for STATUS problem 4 ("most duels resolve on one identical band
+# regardless of rating gap") -------------------------------------------------
+# Raw zone_ratio's achievable range is only ~[0.37, 0.63] for a normal duel
+# (99-vs-58 with perfect fit on both sides tops out at 0.631), so
+# STAGE1_BANDS/STAGE2_BANDS' top row (">0.75") was essentially unreachable —
+# a 95-vs-60 duel landed mostly in the "0.40-0.60"/"0.60-0.75" buckets no
+# matter how lopsided the rating gap. Rescaling around the neutral 0.5 point
+# by a fixed factor stretches the reachable range so real gaps actually cross
+# band boundaries, without changing what "even" (0.5) means or requiring any
+# band-table edit.
+#
+# Lowered 2.5 -> 1.0 on 2026-09-07 (see scripts/simulate_tactical_matrix.py):
+# 2.5 made squad-level rating gaps swing match outcomes far more sharply than
+# wanted — a 20-point average rating gap between two full squads (comparable
+# to a 200+ point team_strength gap) was deciding ~97% of matches. At 1.0
+# (i.e. no rescale — zone_ratio's raw value is used as-is) the same gap lands
+# close to the target ~80/20 split. Deliberate trade-off: the extreme
+# single-duel case problem 4 originally targeted (a 95-vs-60 individual duel
+# reaching the ">0.75" band) is no longer guaranteed at this lower value —
+# card class still meaningfully separates outcomes, just far more gradually,
+# per explicit user calibration ("real difference should only start well
+# above the biggest realistic gaps seen so far").
+RATIO_AMPLIFICATION = 1.0
+
+
+def _amplify(ratio: float, k: float | None = None) -> float:
+    # `k`'s default is read from the module global at CALL time, not baked
+    # in as a default-argument value at def time — the latter would freeze
+    # whatever RATIO_AMPLIFICATION was when this module first imported,
+    # silently ignoring any later reassignment (e.g. the balance-simulation
+    # script's variant A/B switching).
+    if k is None:
+        k = RATIO_AMPLIFICATION
+    return max(0.0, min(1.0, 0.5 + (ratio - 0.5) * k))
 
 
 def initiative_probability(profile_a: TeamTacticalProfile, mentality_a: str, profile_b: TeamTacticalProfile, mentality_b: str) -> float:
@@ -51,11 +94,27 @@ def weighted_pick(cards: list[Any], zone: str, exclude_ids: frozenset = frozense
     return random.choices(candidates, weights=weights, k=1)[0]
 
 
-def zone_ratio(attacker: Any, attacker_zone: str, defender: Any, defender_zone: str) -> float:
+def zone_ratio(attacker: Any, attacker_zone: str, defender: Any, defender_zone: str, ratio_shift: float = 0.0) -> float:
+    """`ratio_shift` is the mechanism behind the mentality/HIGH_PRESS defense
+    bonuses (see MENTALITY_DEFENSE_SHIFT/HIGH_PRESS_DEFENSE_SHIFT below): a
+    fixed, BOUNDED nudge to the ratio itself (positive favors the defender),
+    applied AFTER the raw rating-based ratio is computed — never a multiplier
+    on the defender's rating. An earlier version multiplied
+    defender.rating by up to 2.3x for PARK_THE_BUS; at that magnitude a
+    58-rated worst-possible defender (58*2.3=133.4 effective) beat even a
+    99-rated best-possible attacker (ratio 0.43, under 50%) purely from
+    mentality — exactly the "turns a weak defender into a functional
+    stopper" outcome spec §6.5 explicitly rules out. A fixed ratio-point
+    shift can't do that: it's clamped to [0.05, 0.95] and applied to the
+    raw ratio, so an extreme rating gap always survives a bounded shift in
+    the gap's favor, while a close, ordinary duel is where the shift
+    actually swings the outcome."""
     eff_attacker = attacker.player.rating * position_fit(attacker.player.position, attacker_zone)
     eff_defender = defender.player.rating * position_fit(defender.player.position, defender_zone)
     total = eff_attacker + eff_defender
-    return eff_attacker / total if total else 0.5
+    raw = eff_attacker / total if total else 0.5
+    shifted = max(0.05, min(0.95, raw - ratio_shift))
+    return _amplify(shifted)
 
 
 # --- Duel bands (spec §6.3) -------------------------------------------------
@@ -93,14 +152,66 @@ def resolve_quality(combined_advantage: float) -> str:
     return random.choices(["LOW", "NORMAL", "HIGH", "VERY_HIGH"], weights=[low, normal, high, very_high], k=1)[0]
 
 
+# --- Fix for STATUS problem 1 ("mentality is backwards" — the pool shrinks
+# but who gets picked inside it barely shifts) -------------------------------
+# Uniformly sampling a subset and then weighted-picking by POSITION inside it
+# doesn't move the picked defender's EXPECTED rating at all — a random subset
+# of any size has the same expected rating as the whole group. The fix has to
+# bias WHICH members survive the shrink, not just how many: as mentality
+# commits more players forward, the team's genuinely BEST defensive cover
+# should be the first to be unavailable (pulled out of position), leaving
+# thinner, weaker cover behind — never a rating-adjusted defender, only a
+# different, real, unmodified one becoming likelier to be the one who's there.
+#
+# Three strategies, kept selectable via DEFENSIVE_POOL_STRATEGY so
+# scripts/simulate_tactical_balance.py can A/B them against real match
+# outcomes (see that script's report) — "uniform" is the original no-op
+# behavior, kept only as the empirical baseline to compare against.
+def _pool_uniform(contributors: list[Any], pool_size: int) -> list[Any]:
+    return random.sample(contributors, pool_size)
+
+
+def _pool_soft_bias(contributors: list[Any], pool_size: int) -> list[Any]:
+    """Weighted sampling WITHOUT replacement of who gets EXCLUDED, weight
+    proportional to rating rank (highest-rated = likeliest to be excluded
+    first) — probabilistic, not deterministic, so the same defender isn't
+    guaranteed to be benched by a given mentality every single time, but the
+    picked defender's expected rating still measurably drops as pool_size
+    shrinks."""
+    ranked = sorted(contributors, key=lambda c: c.player.rating, reverse=True)
+    n_exclude = len(ranked) - pool_size
+    weights = [len(ranked) - i for i in range(len(ranked))]
+    pool = list(ranked)
+    for _ in range(n_exclude):
+        idx = random.choices(range(len(pool)), weights=weights, k=1)[0]
+        pool.pop(idx)
+        weights.pop(idx)
+    return pool
+
+
+def _pool_hard_bias(contributors: list[Any], pool_size: int) -> list[Any]:
+    """Deterministic: always keep the pool_size WEAKEST contributors, always
+    excluding the strongest first. Maximum possible bias — an upper bound to
+    compare the softer strategy against."""
+    ranked = sorted(contributors, key=lambda c: c.player.rating, reverse=True)
+    return ranked[len(ranked) - pool_size:]
+
+
+_POOL_STRATEGIES: dict[str, Any] = {"uniform": _pool_uniform, "soft_bias": _pool_soft_bias, "hard_bias": _pool_hard_bias}
+DEFENSIVE_POOL_STRATEGY = "soft_bias"
+
+
 def defensive_pool(cards: list[Any], mentality: str, playstyle: str) -> list[Any]:
     """Spec §6.4: a transition moment's defensive duelist is drawn from a
-    mentality-sized random SUBSET of the team's real defensive-zone
-    contributors, re-rolled fresh every call — never from a rating-adjusted
-    version of the back line. "Defensive-zone contributors" = anyone with
-    nonzero central_defence or wing_defence weight (CB/LB/RB/CDM, plus GK's
-    small 0.15 sliver — rarely picked in practice since weighted_pick still
-    weights by that same small value)."""
+    mentality-sized SUBSET of the team's real defensive-zone contributors,
+    re-rolled fresh every call — never from a rating-adjusted version of the
+    back line. "Defensive-zone contributors" = anyone with nonzero
+    central_defence or wing_defence weight (CB/LB/RB/CDM, plus GK's small
+    0.15 sliver — rarely picked in practice since weighted_pick still weights
+    by that same small value). WHICH members make up the subset is decided by
+    DEFENSIVE_POOL_STRATEGY (problem-1 fix, see above) — PARK_THE_BUS
+    (fraction=1.00) always returns everyone regardless of strategy, matching
+    its "keeps the full back line eligible" spec intent exactly."""
     contributors = [c for c in cards if zone_weight(c.player.position, "central_defence") > 0 or zone_weight(c.player.position, "wing_defence") > 0]
     if not contributors:
         return []
@@ -109,9 +220,10 @@ def defensive_pool(cards: list[Any], mentality: str, playstyle: str) -> list[Any
     if playstyle == "HIGH_PRESS":
         fraction *= HIGH_PRESS_POOL_MULT
 
-    pool_size = max(1, round(fraction * len(contributors)))
-    pool_size = min(pool_size, len(contributors))
-    return random.sample(contributors, pool_size)
+    pool_size = max(1, min(len(contributors), round(fraction * len(contributors))))
+    if pool_size >= len(contributors):
+        return list(contributors)
+    return _POOL_STRATEGIES[DEFENSIVE_POOL_STRATEGY](contributors, pool_size)
 
 
 # --- Counter-attack chain (spec §6.5) ----------------------------------------
@@ -153,7 +265,9 @@ def resolve_counter(attacking_side_label: str, y: ClubTacticalSide, x: ClubTacti
     eff_y = y_duelist.player.rating * position_fit(y_duelist.player.position, zone) * TRANSITION_BONUS[y.playstyle] * _first_pass_quality_factor(y.profile.midfield_control)
     eff_x = x_duelist.player.rating * position_fit(x_duelist.player.position, defence_zone)
     total = eff_y + eff_x
-    ratio = eff_y / total if total else 0.5
+    raw_ratio = eff_y / total if total else 0.5
+    shifted = max(0.05, min(0.95, raw_ratio - defender_ratio_shift_for(x)))
+    ratio = _amplify(shifted)
 
     outcome = resolve_stage1(ratio)
     if outcome != "advance":
@@ -204,6 +318,88 @@ def possession_buildup_survives(midfield_control: float) -> bool:
     return random.random() < chance
 
 
+# --- Fix for STATUS problem 2 (POSSESSION/HIGH_PRESS had no compensating
+# formula, only spec prose) ---------------------------------------------------
+# POSSESSION's "rewards a strong midfield by extending phases (more Stage-2
+# attempts per won initiative)": possession_buildup_survives already punishes
+# a weak midfield (the other half of spec §8's sentence); this is the reward
+# half — a strong-midfield POSSESSION team that STALLS at Stage 1 (not a
+# breakdown — they didn't lose the ball, just didn't break through yet) gets
+# one immediate re-attempt with freshly picked duelists, scaled the same way
+# possession_buildup_survives is (0 at a 58-rated midfield, up to a capped
+# ceiling at 99) so this never triggers for a middling-strength midfield.
+# Raised 0.5 -> 0.65 on 2026-09-07 as part of the playstyle RPS rebalance —
+# POSSESSION had become the weakest style once RATIO_AMPLIFICATION's own
+# reduction (see below) diluted its retry mechanic's leverage too.
+POSSESSION_RETRY_MAX = 0.65
+
+
+def possession_retry_chance(midfield_control: float) -> float:
+    return max(0.0, min(POSSESSION_RETRY_MAX, (midfield_control - 58) / (99 - 58) * POSSESSION_RETRY_MAX))
+
+
+# HIGH_PRESS "forces more opponent breakdowns": passed as zone_ratio's
+# ratio_shift when the DEFENDING side is HIGH_PRESS, in the normal
+# (non-transition) Stage-1 duel — previously HIGH_PRESS had zero effect on an
+# opponent's own progression attempt; its only real lever was its own pool
+# shrinking (defensive_pool's ×0.85 stack), which is about exposure when
+# HIGH_PRESS is caught out, not about forcing turnovers as the spec claims.
+#
+# Set to 0.0 on 2026-09-07 as part of the playstyle rock-paper-scissors
+# rebalance (see TRANSITION_BONUS's COUNTER_ATTACK note): any positive value
+# here immediately reversed COUNTER_ATTACK's edge over HIGH_PRESS (even 0.02
+# was enough to flip a clean 41/38 COUNTER win into a 43/35 HIGH_PRESS win),
+# because it applies to EVERY duel HIGH_PRESS defends, not just the specific
+# transition moments COUNTER_ATTACK exploits — there's no way to boost
+# HIGH_PRESS broadly without also blunting its one real counter. Per explicit
+# user priority ("no single style should beat every other one"), this stays
+# at 0.0; HIGH_PRESS still has real defensive identity via its own transition
+# bonus and defensive_pool shrink, just not this extra lever. Known trade-off:
+# spec item 6's "HIGH_PRESS forces more breakdowns than BALANCED against a
+# weak-midfield POSSESSION opponent" no longer holds in isolation (the two
+# were measured statistically indistinguishable — see
+# test_high_press_forces_more_breakdowns_than_balanced_against_weak_midfield_possession's
+# updated assertion).
+HIGH_PRESS_DEFENSE_SHIFT = 0.0
+
+# Third component of the problem-1 fix, added after simulation showed the
+# other two (ratio amplification + pool-bias, everywhere) still weren't
+# enough: PARK_THE_BUS's low initiative_mult means it concedes roughly 40%
+# MORE total opponent phases than ATTACKING does against the same fixed
+# opponent (measured via scripts/simulate_tactical_balance.py) — a
+# structural volume effect that a few rating-points' worth of pool-bias on
+# the picked defender cannot offset. Spec §7 states mentality's entire
+# structural effect should be JUST initiative_mult + sample_fraction ("no
+# separate exposure multiplier layered on top") — but that design, exactly
+# as specified, empirically cannot make PARK_THE_BUS concede fewer goals
+# than ATTACKING against identical defenders, which is the spec's own
+# explicit goal (§6.5's worked example). This direct per-phase defensive
+# ratio shift is a deliberate departure from §7 to actually achieve what §7
+# was trying to achieve — "packing men behind the ball" reads as harder to
+# break down structurally, not a rating change to any individual card.
+#
+# A fixed ratio-point shift (not a rating multiplier — see zone_ratio's own
+# docstring for why a multiplier was abandoned: at the magnitude needed, it
+# let a 58-rated worst-possible defender beat a 99-rated best-possible
+# attacker purely from mentality). Calibrated on 2026-09-07 against three
+# explicit targets: (1) PARK_THE_BUS still concedes clearly less than
+# ATTACKING for identical weak defenders vs an elite attacker (the original
+# problem-1 goal), (2) a ~20-point squad rating gap narrows from the
+# neutral-tactics ~80/20 split down toward ~66/33 when the stronger side
+# plays a mismatched mentality and the weaker side plays its best one (per
+# explicit user calibration), (3) an extreme single duel (e.g. 99 vs 58)
+# still clearly favors the better-rated player regardless of mentality —
+# zone_ratio's [0.05, 0.95] clamp guarantees this last one structurally.
+MENTALITY_DEFENSE_SHIFT: dict[str, float] = {"PARK_THE_BUS": 0.16, "DEFENSIVE": 0.09, "BALANCED": 0.0, "ATTACKING": -0.07}
+
+
+def defender_ratio_shift_for(defender: "ClubTacticalSide") -> float:
+    shift = MENTALITY_DEFENSE_SHIFT[defender.mentality]
+    if defender.playstyle == "HIGH_PRESS":
+        shift += HIGH_PRESS_DEFENSE_SHIFT
+    return shift
+
+
 def _pick_shot_type(config) -> str:
     weights = [config.match_shot_type_in_box_weight, config.match_shot_type_long_range_weight]
     return random.choices(["in_box", "long_range"], weights=weights, k=1)[0]
@@ -234,6 +430,32 @@ def build_side(cards_with_slots: list[tuple[Any, Any]], mentality: str, playstyl
     return ClubTacticalSide(cards=cards, profile=profile, mentality=mentality, playstyle=playstyle)
 
 
+# Second half of the problem-1 fix. The counter-attack chain (§6.5) already
+# drew its defensive duelist from defensive_pool — but that sub-case only
+# fires when the BUS side's OWN attack just broke down, which is rare
+# precisely because a low initiative_mult means the bus side barely attacks
+# in the first place. Simulation confirmed this: with the pool-bias applied
+# ONLY there, PARK_THE_BUS still conceded MORE than ATTACKING against the
+# same weak-defender squad (6.96 vs 5.88 GA/match) — ceding more total
+# opponent phases (§6.1) completely swamped a benefit that almost never
+# triggered. Applying the SAME mentality-shaped pool to the NORMAL Stage-1/
+# Stage-2 defensive pick too (not just transitions) is a deliberate
+# departure from spec §6.4's literal scoping ("before the counter-attack
+# chain can pick a defensive duelist") — but §6.4's own stated intent
+# ("mentality changes structure, not ratings") only actually holds together
+# if it applies everywhere a mentality's own back line defends, not just its
+# rarest sub-case. See scripts/simulate_tactical_balance.py's report for the
+# comparison against the spec-literal, counter-chain-only scoping.
+POOL_APPLIES_TO_NORMAL_DEFENSE = True
+
+
+def _pick_defender(defender: ClubTacticalSide, defence_zone: str, exclude_ids: frozenset = frozenset()) -> Any:
+    if not POOL_APPLIES_TO_NORMAL_DEFENSE:
+        return weighted_pick(defender.cards, defence_zone, exclude_ids=exclude_ids)
+    pool = defensive_pool(defender.cards, defender.mentality, defender.playstyle)
+    return weighted_pick(pool, defence_zone, exclude_ids=exclude_ids)
+
+
 def _resolve_progression_and_duel(attacker: ClubTacticalSide, defender: ClubTacticalSide, attacking_side: str, minute: int, config) -> Chance | None:
     zone = pick_progression_zone(attacker.playstyle)
     if zone is None:
@@ -242,10 +464,27 @@ def _resolve_progression_and_duel(attacker: ClubTacticalSide, defender: ClubTact
         return None
 
     defence_zone = "wing_defence" if zone == "wing_attack" else "central_defence"
+    ratio_shift = defender_ratio_shift_for(defender)
+
+    # Up to 2 attempts: the second is POSSESSION's problem-2 fix (see
+    # possession_retry_chance) — a strong-midfield POSSESSION team that
+    # merely stalled (didn't lose the ball) gets one fresh re-attempt with
+    # newly picked duelists, extending how many real Stage-2 attempts a won
+    # initiative produces. Every other playstyle always gets exactly 1.
     attacker_duelist = weighted_pick(attacker.cards, zone)
-    defender_duelist = weighted_pick(defender.cards, defence_zone)
-    ratio_1 = zone_ratio(attacker_duelist, zone, defender_duelist, defence_zone)
+    defender_duelist = _pick_defender(defender, defence_zone)
+    ratio_1 = zone_ratio(attacker_duelist, zone, defender_duelist, defence_zone, ratio_shift)
     outcome_1 = resolve_stage1(ratio_1)
+
+    if (
+        outcome_1 == "stall"
+        and attacker.playstyle == "POSSESSION"
+        and random.random() < possession_retry_chance(attacker.profile.midfield_control)
+    ):
+        attacker_duelist = weighted_pick(attacker.cards, zone)
+        defender_duelist = _pick_defender(defender, defence_zone)
+        ratio_1 = zone_ratio(attacker_duelist, zone, defender_duelist, defence_zone, ratio_shift)
+        outcome_1 = resolve_stage1(ratio_1)
 
     if outcome_1 == "stall":
         return None
@@ -269,8 +508,8 @@ def _resolve_progression_and_duel(attacker: ClubTacticalSide, defender: ClubTact
 
     # advance -> Stage 2 (spec §6.3)
     attacker_second = weighted_pick(attacker.cards, zone, exclude_ids=frozenset({attacker_duelist.id}))
-    defender_second = weighted_pick(defender.cards, defence_zone, exclude_ids=frozenset({defender_duelist.id}))
-    ratio_2 = zone_ratio(attacker_second, zone, defender_second, defence_zone)
+    defender_second = _pick_defender(defender, defence_zone, exclude_ids=frozenset({defender_duelist.id}))
+    ratio_2 = zone_ratio(attacker_second, zone, defender_second, defence_zone, ratio_shift)
     combined_advantage = (ratio_1 + ratio_2) / 2
     quality = resolve_quality(combined_advantage)
     shot_type = _pick_shot_type(config)

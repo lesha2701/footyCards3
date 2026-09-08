@@ -57,6 +57,26 @@ class TeamTacticalProfile:
     team_strength: int
 
 
+# Fix for STATUS problem 3 ("formation choice is inert"): a plain weighted
+# average is scale-invariant in contributor count by construction — 3-5-2's
+# 5 midfield slots average to the exact same midfield_control as 4-3-3's 3
+# at equal per-position ratings, contradicting spec §4's own claim that more
+# genuine contributors should raise the zone. `weight_total` (the average's
+# own denominator) is already the right depth signal: a zone fed by more/
+# stronger-weighted slots has a higher weight_total (e.g. 3-5-2's 5 midfield
+# slots sum to weight_total=3.10 for midfield_control vs 4-3-3's 3 slots
+# summing to 2.40 — see club_tactical_matchup_service module docstring for
+# the worked numbers). `weight_total - 1.0` is formation-agnostic (anchors
+# the bonus at "zero once a single full-weight contributor exists", so a
+# lone ST alone in central_attack gets none) and one-directional (clamped at
+# 0, never penalizes a thin zone beyond what the average already reflects —
+# only rewards genuine depth). The cap keeps it a minor structural nudge
+# (bounded well inside the 58-99 rating scale §5 requires this to "read like
+# a rating"), not a dominant term.
+DEPTH_BONUS_SCALE = 2.0
+DEPTH_BONUS_CAP = 6.0
+
+
 def compute_profile(cards_with_slots: list[tuple[Any, FormationSlot]]) -> TeamTacticalProfile:
     zone_values: dict[str, float] = {}
     for zone in ZONES:
@@ -67,7 +87,12 @@ def compute_profile(cards_with_slots: list[tuple[Any, FormationSlot]]) -> TeamTa
             if weight > 0:
                 weighted_sum += card.player.rating * weight
                 weight_total += weight
-        zone_values[zone] = round(weighted_sum / weight_total, 1) if weight_total > 0 else 0.0
+        if weight_total > 0:
+            base_avg = weighted_sum / weight_total
+            depth_bonus = max(0.0, min(DEPTH_BONUS_CAP, DEPTH_BONUS_SCALE * (weight_total - 1.0)))
+            zone_values[zone] = round(min(99.0, base_avg + depth_bonus), 1)
+        else:
+            zone_values[zone] = 0.0
 
     return TeamTacticalProfile(team_strength=calculate_base_strength(cards_with_slots), **zone_values)
 

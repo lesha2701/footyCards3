@@ -189,15 +189,18 @@ def test_resolve_counter_strongly_favors_elite_attacker_against_weak_bus_defence
     y = _side(elite_forwards, mentality="ATTACKING", playstyle="COUNTER_ATTACK")  # Y just won the ball, now counters
     x = _side(weak_defenders, mentality="PARK_THE_BUS", playstyle="BALANCED")     # X is the bus side conceding the counter
 
-    # A ~95-rated forward (boosted by COUNTER_ATTACK's 1.5x transition bonus)
-    # against a genuinely 65-rated defender lands the duel's zone_ratio around
-    # 0.6-0.65 — comfortably in STAGE1_BANDS' "0.60-0.75" bucket, not the top
-    # ">0.75" one, since the defender's rating is never reduced (spec §6.5's
-    # whole point: PARK_THE_BUS keeps the full pool eligible, but every
-    # member of it stays genuinely weak). Assert on the duel's own ratio and,
-    # among transitions that actually advance, the quality skew — not a flat
-    # "most of all trials are high quality", since many phases legitimately
-    # stall or get won back before any shot chance exists at all.
+    # A ~95-rated forward (boosted by COUNTER_ATTACK's transition bonus)
+    # against a genuinely 65-rated defender on PARK_THE_BUS: the defender
+    # gets a bounded ratio_shift (2026-09-07 rebalance — see
+    # MENTALITY_DEFENSE_SHIFT's docstring), not a rating multiplier, so the
+    # attacker's real quality edge survives but is meaningfully compressed —
+    # average ratio lands ~0.53, not the ~0.6-0.65 an unshifted duel would
+    # give. Assert on the duel's own ratio and, among transitions that
+    # actually advance, the quality skew — not a flat "most of all trials are
+    # high quality", since many phases legitimately stall or get won back
+    # before any shot chance exists at all. Thresholds sit with a safe margin
+    # below the observed averages (~0.53 ratio, ~0.27 high-quality share) so
+    # this doesn't flip on ordinary sampling noise.
     trials = 300
     ratios = []
     advanced = 0
@@ -212,8 +215,8 @@ def test_resolve_counter_strongly_favors_elite_attacker_against_weak_bus_defence
                 high_or_very_high += 1
 
     assert advanced > 0
-    assert sum(ratios) / len(ratios) > 0.55  # the duel itself consistently favors Y's elite forwards
-    assert high_or_very_high / advanced > 0.40  # among successful transitions, quality skews toward HIGH/VERY_HIGH
+    assert sum(ratios) / len(ratios) > 0.50  # the duel itself favors Y's elite forwards, even though bounded
+    assert high_or_very_high / advanced > 0.15  # among successful transitions, some real skew toward HIGH/VERY_HIGH
 
 
 def test_resolve_counter_returns_none_on_a_stalled_or_re_broken_transition(monkeypatch):

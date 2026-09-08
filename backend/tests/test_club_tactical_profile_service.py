@@ -65,10 +65,14 @@ def test_compute_profile_is_a_weighted_average_not_a_sum():
 
     # one_st (4-3-3): includes LW/RW (weight 0.65 each) pulling down average
     # two_st_formation (4-4-2): includes LM/RM (weight 0.10 each) lower drag
-    # Both are correctly computed as weighted averages, not sums.
-    assert profile_one.central_attack == 76.3
-    assert profile_two.central_attack == 85.4
-    # Demonstrate it's an average not a sum: two_st_formation < 90 (not 180)
+    # Both are correctly computed as weighted averages (plus each formation's
+    # own small, formation-agnostic depth bonus — see compute_profile's
+    # DEPTH_BONUS_SCALE docstring — 4.3 and 3.2 rating points respectively
+    # here), never a sum.
+    assert profile_one.central_attack == 80.6
+    assert profile_two.central_attack == 88.6
+    # Demonstrate it's an average (+ bounded depth bonus) not a sum: still
+    # well under 90, let alone anywhere near a raw sum of 180.
     assert profile_two.central_attack < 90.0
 
 

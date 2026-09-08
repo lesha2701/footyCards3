@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 
 import ClubCardPickerModal from "@/components/clubs/ClubCardPickerModal";
-import { IconChevronLeft, IconChevronUp, IconPlus, IconStar, IconTarget, IconUsers } from "@/components/icons";
+import {
+  IconBoot, IconChevronLeft, IconChevronUp, IconFlag, IconPlus, IconStadium, IconStar, IconTarget, IconUsers,
+} from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchMyClub } from "@/api/clubs";
 import { fetchClubCards, fetchClubLineup, setClubLineup, setClubTactics } from "@/api/clubSquad";
@@ -93,22 +95,22 @@ export default function ClubSquadPage() {
         )}
 
         {canEdit && lineup && (
-          <div className="mb-3 flex flex-col gap-2">
-            <TacticRow
+          <div className="mb-3 flex flex-col gap-1.5">
+            <TacticSelect
               label="Схема"
               options={FORMATIONS}
               value={lineup.formation}
               disabled={setTacticsMutation.isPending}
               onChange={(value) => updateTactics({ formation: value })}
             />
-            <TacticRow
+            <TacticSelect
               label="Настрой"
               options={MENTALITIES}
               value={lineup.mentality}
               disabled={setTacticsMutation.isPending}
               onChange={(value) => updateTactics({ mentality: value })}
             />
-            <TacticRow
+            <TacticSelect
               label="Стиль игры"
               options={PLAYSTYLES}
               value={lineup.playstyle}
@@ -164,7 +166,7 @@ export default function ClubSquadPage() {
           onClick={() => setRulesOpen((v) => !v)}
           className="flex w-full items-center justify-between text-left"
         >
-          <span className="font-display text-sm font-bold text-ink-chalk">За что начисляется сила состава</span>
+          <span className="font-display text-sm font-bold text-ink-chalk">Гайд: как собрать состав и тактику</span>
           <IconChevronUp
             size={16}
             className={`shrink-0 text-ink-mist-dim transition-transform ${rulesOpen ? "" : "rotate-180"}`}
@@ -208,6 +210,45 @@ export default function ClubSquadPage() {
                 </p>
               </div>
             </div>
+
+            <div className="my-1 h-px bg-white/10" />
+
+            <div className="flex gap-3 rounded-xl bg-white/5 p-3">
+              <IconStadium size={18} className="mt-0.5 shrink-0 text-accent-cyan" />
+              <div>
+                <p className="text-sm font-semibold text-ink-chalk">Схема</p>
+                <p className="mt-0.5 text-xs text-ink-mist">
+                  Схема определяет расстановку линий на поле. Чем больше сильных игроков стоит в одной линии
+                  (например, в атаке при схеме 4-3-3), тем больше бонус получает эта зона — выбирай схему под
+                  сильные стороны своего состава.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 rounded-xl bg-white/5 p-3">
+              <IconFlag size={18} className="mt-0.5 shrink-0 text-accent-cyan" />
+              <div>
+                <p className="text-sm font-semibold text-ink-chalk">Настрой</p>
+                <p className="mt-0.5 text-xs text-ink-mist">
+                  Оборонительные настрои («Автобус у ворот», «Оборонительный») укрепляют защиту, но отдают
+                  инициативу — команда реже владеет мячом и создаёт меньше моментов. «Атакующий» — наоборот:
+                  больше моментов, но слабее защита. «Сбалансированный» — золотая середина.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 rounded-xl bg-white/5 p-3">
+              <IconBoot size={18} className="mt-0.5 shrink-0 text-accent-cyan" />
+              <div>
+                <p className="text-sm font-semibold text-ink-chalk">Стиль игры</p>
+                <p className="mt-0.5 text-xs text-ink-mist">
+                  «Игра флангами» и «Игра через центр» лучше раскрывают сильных крайних или центральных игроков.
+                  «Контроль мяча» помогает команде с сильной полузащитой дольше владеть мячом и создавать больше
+                  моментов за матч. «Высокий прессинг» чаще заставляет соперника терять мяч в опасной зоне — но
+                  именно против него особенно опасны быстрые «Контратаки».
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </section>
@@ -241,7 +282,7 @@ export default function ClubSquadPage() {
   );
 }
 
-function TacticRow({
+function TacticSelect({
   label, options, value, disabled, onChange,
 }: {
   label: string;
@@ -250,23 +291,25 @@ function TacticRow({
   disabled: boolean;
   onChange: (value: string) => void;
 }) {
+  const selected = options.find((o) => o.value === value);
   return (
-    <div>
-      <p className="mb-1 text-[10px] uppercase tracking-wide text-ink-mist-dim">{label}</p>
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+    <div className={`relative flex items-center justify-between gap-3 rounded-xl bg-white/5 px-3 py-2.5 ${disabled ? "opacity-60" : ""}`}>
+      <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-mist-dim">{label}</span>
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className="truncate text-sm font-semibold text-ink-chalk">{selected?.label ?? value}</span>
+        <IconChevronUp size={14} className="shrink-0 rotate-180 text-ink-mist-dim" />
+      </span>
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
+        className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 disabled:cursor-default"
+      >
         {options.map((option) => (
-          <button
-            key={option.value}
-            onClick={() => onChange(option.value)}
-            disabled={disabled}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
-              value === option.value ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
-            }`}
-          >
-            {option.label}
-          </button>
+          <option key={option.value} value={option.value}>{option.label}</option>
         ))}
-      </div>
+      </select>
     </div>
   );
 }
