@@ -33,7 +33,7 @@ export const CATEGORY_LABELS: Record<FormationSlot["category"], string> = {
 };
 
 export const TACTICS: { value: "attacking" | "balanced" | "defensive"; label: string; description: string }[] = [
-  { value: "attacking", label: "Атакующая", description: "+Атака / −Защита" },
-  { value: "balanced", label: "Сбалансированная", description: "Без изменений" },
-  { value: "defensive", label: "Оборонительная", description: "+Защита / −Атака" },
+  { value: "attacking", label: "Атакующая", description: "+Сила атаки" },
+  { value: "balanced", label: "Сбалансированная", description: "+Бонус всем" },
+  { value: "defensive", label: "Оборонительная", description: "+Сила защиты" },
 ];

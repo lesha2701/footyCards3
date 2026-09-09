@@ -48,6 +48,18 @@ TACTIC_MULTIPLIERS: dict[str, tuple[float, float]] = {
     "defensive": (0.85, 1.15),
 }
 
+# tactic -> category -> multiplier applied to each card's own contribution to
+# team_strength in calculate_base_strength. Rewards matching your tactic to
+# your squad's real strengths: "attacking"/"defensive" give a real bump to
+# FWD/DEF respectively (and nothing elsewhere), "balanced" gives a smaller
+# bump to every category — so whichever category your squad is objectively
+# strongest in is also the more advantageous tactic to pick.
+TACTIC_CATEGORY_MULTIPLIERS: dict[str, dict[str, float]] = {
+    "attacking": {"FWD": 1.08},
+    "balanced": {"GK": 1.02, "DEF": 1.02, "MID": 1.02, "FWD": 1.02},
+    "defensive": {"DEF": 1.08},
+}
+
 CATEGORY_POSITIONS = {
     "GK": {Position.GK},
     "DEF": {Position.LB, Position.CB, Position.RB},
@@ -102,10 +114,18 @@ async def _get_or_create_lineup(db: AsyncSession, user_id: int) -> Lineup:
 
 
 def calculate_base_strength(
-    cards_with_slots: list[tuple[UserCard, FormationSlot]], coach: "Coach | None" = None
+    cards_with_slots: list[tuple[UserCard, FormationSlot]],
+    coach: "Coach | None" = None,
+    tactic: "str | None" = None,
 ) -> int:
     if not cards_with_slots:
         return 0
+
+    # tactic=None (the default) applies no category multiplier at all — this
+    # keeps club_tactical_profile_service.py, tournament_simulation_service.py
+    # and club_squad_service.py (which all call this with a single positional
+    # argument, no tactic concept of their own) byte-for-byte unaffected.
+    category_multipliers = TACTIC_CATEGORY_MULTIPLIERS.get(tactic, {}) if tactic else {}
 
     # The rarity bonus is per card (each card's own rarity boosts only its
     # own contribution) rather than based on the team's average rarity —
@@ -127,7 +147,8 @@ def calculate_base_strength(
         # keeps this function correct for both instead of forcing an
         # unrelated column onto ClubCard.
         rating, _, _ = effective_card_stats(player, getattr(card, "diamond_rating_bonus", 0))
-        total += rating * fit * (1 + 0.03 * RARITY_ORDER[player.rarity])
+        category_mult = category_multipliers.get(slot.category, 1.0)
+        total += rating * fit * (1 + 0.03 * RARITY_ORDER[player.rarity]) * category_mult
 
     clubs = Counter(c.player.club for c, _ in cards_with_slots)
     countries = Counter(c.player.country for c, _ in cards_with_slots)
@@ -186,7 +207,7 @@ async def get_active_lineup(db: AsyncSession, user: User) -> LineupOut:
 
     is_complete = len(cards_with_slots) == len(FORMATION_SLOTS)
     coach = lineup.user_coach_card.coach if lineup.user_coach_card else None
-    strength = calculate_base_strength(cards_with_slots, coach=coach) if is_complete else None
+    strength = calculate_base_strength(cards_with_slots, coach=coach, tactic=lineup.tactic) if is_complete else None
     config = await get_config(db)
 
     return LineupOut(
