@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
+import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
 import EmptyState from "@/components/common/EmptyState";
 import {
   IconBall,
@@ -16,9 +17,10 @@ import {
 } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
-import { fetchActiveLineup, setActiveLineup, setLineupTactic } from "@/api/lineups";
+import { fetchActiveLineup, fetchUserCoachCards, setActiveLineup, setLineupCoach, setLineupTactic } from "@/api/lineups";
 import { actMatch, fetchArenaStats, fetchMatchHistory, forfeitMatch, playMatch } from "@/api/matches";
 import { staticUrl } from "@/lib/api";
+import { BOOST_TYPE_LABELS } from "@/lib/coaches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, TACTICS, type FormationSlot } from "@/lib/formation";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
@@ -56,6 +58,8 @@ export default function ArenaPage() {
   const [lineupError, setLineupError] = useState<string | null>(null);
   const [simulating, setSimulating] = useState(false);
   const [strengthHintOpen, setStrengthHintOpen] = useState(false);
+  const [coachPickerOpen, setCoachPickerOpen] = useState(false);
+  const { data: coachCards } = useQuery({ queryKey: ["lineup", "coach-cards"], queryFn: fetchUserCoachCards });
 
   const setLineupMutation = useMutation({
     mutationFn: setActiveLineup,
@@ -66,6 +70,12 @@ export default function ArenaPage() {
   const setTacticMutation = useMutation({
     mutationFn: setLineupTactic,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["lineup"] }),
+  });
+
+  const setCoachMutation = useMutation({
+    mutationFn: setLineupCoach,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["lineup"] }); setCoachPickerOpen(false); },
+    onError: (err) => setLineupError(formatGameError(err, "Не удалось назначить тренера")),
   });
 
   const playMutation = useMutation({
@@ -247,9 +257,41 @@ export default function ArenaPage() {
                     </button>
                   );
                 })}
+              {category === "GK" && (
+                <button
+                  onClick={() => setCoachPickerOpen(true)}
+                  disabled={setCoachMutation.isPending}
+                  className={`absolute left-0 top-0 flex min-w-0 max-w-[72px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 ${setCoachMutation.isPending ? "opacity-60" : ""}`}
+                >
+                  {lineup?.coach ? (
+                    <>
+                      <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
+                        <img
+                          src={staticUrl(lineup.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                          alt="" className="h-full w-full object-cover" loading="lazy"
+                        />
+                      </div>
+                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">Тренер</span>
+                    </>
+                  ) : (
+                    <>
+                      <IconPlus size={16} className="text-ink-mist-dim" />
+                      <span className="text-[8px] text-ink-mist-dim">Тренер</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           ))}
         </div>
+        {lineup?.coach && (
+          <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
+            <p className="text-xs font-semibold text-ink-chalk">{lineup.coach.display_name}</p>
+            <p className="mt-0.5 text-[11px] text-ink-mist">
+              {lineup.coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="rounded-2xl bg-bg-surface p-4">
@@ -345,6 +387,13 @@ export default function ArenaPage() {
           onSearchChange={setPickerSearch}
         />
       )}
+
+      <UserCoachCardPickerModal
+        open={coachPickerOpen}
+        cards={coachCards ?? []}
+        onSelect={(card) => setCoachMutation.mutate(card ? card.id : null)}
+        onClose={() => setCoachPickerOpen(false)}
+      />
     </div>
   );
 }
