@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 
-import { IconBrain, IconChevronLeft, IconChevronRight, IconTarget } from "@/components/icons";
+import { IconBrain, IconChevronLeft, IconChevronRight, IconGoal } from "@/components/icons";
 
 const GAMES = [
   {
@@ -10,10 +10,10 @@ const GAMES = [
     description: "Запомни, в каком порядке загораются иконки, и повтори последовательность",
   },
   {
-    to: "/clubs/missing-item",
-    icon: IconTarget,
-    title: "Что исчезло?",
-    description: "Запомни предметы и угадай, какой из них пропал",
+    to: "/clubs/penalty",
+    icon: IconGoal,
+    title: "Пенальти",
+    description: "Серия пенальти против бота — выбери игрока из состава клуба",
   },
 ];
 
