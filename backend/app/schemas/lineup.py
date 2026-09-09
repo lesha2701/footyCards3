@@ -1,10 +1,9 @@
-from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
 from app.schemas.card import UserCardOut
-from app.schemas.coach import CoachBoostOut, CoachOut
+from app.schemas.coach import CoachBoostOut
 from app.schemas.pack import UserCoachCardOut
 
 
