@@ -4,8 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.lineup import LineupOut, LineupSetRequest, LineupTacticRequest
-from app.services.lineup_service import get_active_lineup, set_lineup, set_tactic
+from app.schemas.lineup import LineupCoachSetRequest, LineupOut, LineupSetRequest, LineupTacticRequest
+from app.services.lineup_service import get_active_lineup, set_lineup, set_lineup_coach, set_tactic
 
 router = APIRouter(prefix="/lineups", tags=["lineups"])
 
@@ -27,3 +27,10 @@ async def update_tactic(
     payload: LineupTacticRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     return await set_tactic(db, user, payload.tactic)
+
+
+@router.put("/coach", response_model=LineupOut)
+async def update_lineup_coach(
+    payload: LineupCoachSetRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await set_lineup_coach(db, user, payload)

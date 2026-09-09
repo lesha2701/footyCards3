@@ -4,14 +4,17 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.models.card import UserCard
+from app.models.coach import Coach
 from app.models.enums import RARITY_ORDER, Position, Rarity
 from app.models.lineup import Lineup, LineupCard
 from app.models.user import User
-from app.schemas.lineup import LineupOut, LineupSetRequest, LineupSlotOut
+from app.models.user_coach_card import UserCoachCard
+from app.schemas.lineup import EquippedCoachOut, LineupCoachSetRequest, LineupOut, LineupSetRequest, LineupSlotOut
+from app.services.coach_boost_service import arena_rarity_team_strength_bonus
 from app.services.game_config_service import get_config
 from app.services.player_stats_service import effective_card_stats
 
@@ -54,7 +57,24 @@ CATEGORY_POSITIONS = {
 
 
 def _active_lineup_query(user_id: int):
-    return select(Lineup).where(Lineup.user_id == user_id, Lineup.is_active.is_(True)).options(joinedload(Lineup.cards))
+    # populate_existing=True is required here for the same reason as
+    # wallet_service.lock_user_for_update / club_squad_service._get_or_none_lineup:
+    # the session's identity map may already hold this same Lineup object
+    # from earlier in the request (e.g. set_lineup_coach re-fetching after
+    # its own commit), and this app's session factory uses
+    # expire_on_commit=False (see database.py), so a plain re-SELECT after
+    # commit would silently return that stale cached object — including a
+    # now-cleared `.user_coach_card` still pointing at the old coach —
+    # instead of what this query actually just fetched.
+    return (
+        select(Lineup)
+        .where(Lineup.user_id == user_id, Lineup.is_active.is_(True))
+        .options(
+            joinedload(Lineup.cards),
+            joinedload(Lineup.user_coach_card).joinedload(UserCoachCard.coach).selectinload(Coach.boosts),
+        )
+        .execution_options(populate_existing=True)
+    )
 
 
 async def _get_or_create_lineup(db: AsyncSession, user_id: int) -> Lineup:
@@ -81,7 +101,9 @@ async def _get_or_create_lineup(db: AsyncSession, user_id: int) -> Lineup:
     return lineup
 
 
-def calculate_base_strength(cards_with_slots: list[tuple[UserCard, FormationSlot]]) -> int:
+def calculate_base_strength(
+    cards_with_slots: list[tuple[UserCard, FormationSlot]], coach: "Coach | None" = None
+) -> int:
     if not cards_with_slots:
         return 0
 
@@ -111,6 +133,7 @@ def calculate_base_strength(cards_with_slots: list[tuple[UserCard, FormationSlot
     countries = Counter(c.player.country for c, _ in cards_with_slots)
     chemistry_bonus = (clubs.most_common(1)[0][1] - 1) * 2 + (countries.most_common(1)[0][1] - 1) * 1
     total += chemistry_bonus
+    total += arena_rarity_team_strength_bonus(coach)
 
     return round(total)
 
@@ -162,13 +185,31 @@ async def get_active_lineup(db: AsyncSession, user: User) -> LineupOut:
             cards_with_slots.append((card, slot))
 
     is_complete = len(cards_with_slots) == len(FORMATION_SLOTS)
-    strength = calculate_base_strength(cards_with_slots) if is_complete else None
+    coach = lineup.user_coach_card.coach if lineup.user_coach_card else None
+    strength = calculate_base_strength(cards_with_slots, coach=coach) if is_complete else None
     config = await get_config(db)
 
     return LineupOut(
         id=lineup.id, formation=lineup.formation, tactic=lineup.tactic, is_complete=is_complete,
-        team_strength=strength, max_diamond=config.match_max_diamond_cards, slots=slots_out,
+        team_strength=strength, max_diamond=config.match_max_diamond_cards,
+        coach=EquippedCoachOut(
+            id=coach.id, display_name=coach.display_name, rarity=coach.rarity.value,
+            image_path=coach.image_path, boosts=coach.boosts,
+        ) if coach else None,
+        slots=slots_out,
     )
+
+
+async def set_lineup_coach(db: AsyncSession, user: User, payload: LineupCoachSetRequest) -> LineupOut:
+    lineup = await _get_or_create_lineup(db, user.id)
+    if payload.user_coach_card_id is not None:
+        card = await db.get(UserCoachCard, payload.user_coach_card_id)
+        if card is None or card.user_id != user.id:
+            raise ConflictError("Тренер не найден в вашей коллекции")
+    lineup.user_coach_card_id = payload.user_coach_card_id
+    db.add(lineup)
+    await db.commit()
+    return await get_active_lineup(db, user)
 
 
 async def set_lineup(db: AsyncSession, user: User, payload: LineupSetRequest) -> LineupOut:

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
 from app.models.coach import Coach
-from app.models.enums import CoachBoostType
+from app.models.enums import CoachBoostType, Rarity
 
 # This module is deliberately a one-way leaf: it imports nothing from
 # club_tactical_profile_service.py / club_tactical_matchup_service.py /
@@ -119,3 +119,29 @@ def arena_team_strength_bonus(boosts: ActiveCoachBoosts) -> int:
     """Arena hook — spec §5 item 3's Arena stand-in (MIDFIELD_CONTROL has
     no Arena category of its own, so it bumps team_strength directly)."""
     return round(boosts.by_type.get(CoachBoostType.MIDFIELD_CONTROL, 0.0))
+
+
+# Starting-point numbers on the same scale this codebase already uses for
+# zone-boost base_units (spec §4: common=1 tier -> 2 rating points, up to
+# legendary=4 tier -> 8) — not validated by simulation yet, same "starting
+# point, not final" caveat every other magnitude in this match engine
+# carries until it's been through a real balance pass.
+_ARENA_RARITY_TEAM_STRENGTH_BONUS: dict[Rarity, int] = {
+    Rarity.common: 2,
+    Rarity.rare: 4,
+    Rarity.epic: 6,
+    Rarity.legendary: 8,
+}
+
+
+def arena_rarity_team_strength_bonus(coach: "Coach | None") -> int:
+    """A simple, universal Card Arena squad-power bonus scaled only by the
+    equipped coach's own rarity — independent of which specific boosts it
+    has. This is a deliberately simpler, first-cut mechanic than
+    arena_category_bonus/arena_pass_fail_chance_reduction/
+    arena_team_strength_bonus above (which read individual boost types via
+    ActiveCoachBoosts) — those remain in place for a future full-fidelity
+    Arena pass; this function only ever reads .rarity, never .boosts."""
+    if coach is None:
+        return 0
+    return _ARENA_RARITY_TEAM_STRENGTH_BONUS.get(coach.rarity, 0)

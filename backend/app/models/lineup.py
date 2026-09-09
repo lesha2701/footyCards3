@@ -16,8 +16,12 @@ class Lineup(TimestampMixin, Base):
     formation: Mapped[str] = mapped_column(String(16), nullable=False, default="4-3-3")
     tactic: Mapped[str] = mapped_column(String(16), nullable=False, default="balanced")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    user_coach_card_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_coach_cards.id", ondelete="SET NULL"), nullable=True
+    )
 
     cards: Mapped[list["LineupCard"]] = relationship(back_populates="lineup", cascade="all, delete-orphan")
+    user_coach_card: Mapped["UserCoachCard | None"] = relationship(lazy="joined")
 
     __table_args__ = (
         # Enforces "at most one active lineup per user" at the DB level —
