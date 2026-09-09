@@ -4,6 +4,7 @@ from app.services.coach_boost_service import (
     apply_zone_boosts,
     arena_category_bonus,
     arena_pass_fail_chance_reduction,
+    arena_rarity_team_strength_bonus,
     arena_team_strength_bonus,
     defensive_shift_for,
     depth_bonus_cap_for,
@@ -102,3 +103,18 @@ def test_arena_pass_fail_chance_reduction_reads_passing_accuracy():
 def test_arena_team_strength_bonus_reads_midfield_control():
     boosts = resolve_active_boosts(_coach((CoachBoostType.MIDFIELD_CONTROL, 5.0)))
     assert arena_team_strength_bonus(boosts) == 5
+
+
+def test_arena_rarity_team_strength_bonus_maps_each_rarity():
+    assert arena_rarity_team_strength_bonus(_coach_of_rarity(Rarity.common)) == 2
+    assert arena_rarity_team_strength_bonus(_coach_of_rarity(Rarity.rare)) == 4
+    assert arena_rarity_team_strength_bonus(_coach_of_rarity(Rarity.epic)) == 6
+    assert arena_rarity_team_strength_bonus(_coach_of_rarity(Rarity.legendary)) == 8
+
+
+def test_arena_rarity_team_strength_bonus_is_zero_with_no_coach():
+    assert arena_rarity_team_strength_bonus(None) == 0
+
+
+def _coach_of_rarity(rarity: Rarity) -> Coach:
+    return Coach(display_name="Rarity Bonus Fixture Coach", rarity=rarity)
