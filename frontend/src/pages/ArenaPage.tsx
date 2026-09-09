@@ -55,6 +55,7 @@ export default function ArenaPage() {
   const [matchError, setMatchError] = useState<string | null>(null);
   const [lineupError, setLineupError] = useState<string | null>(null);
   const [simulating, setSimulating] = useState(false);
+  const [strengthHintOpen, setStrengthHintOpen] = useState(false);
 
   const setLineupMutation = useMutation({
     mutationFn: setActiveLineup,
@@ -179,9 +180,25 @@ export default function ArenaPage() {
         <div className="mb-3 flex items-center justify-between">
           <p className="font-display text-base font-bold text-ink-chalk">Состав 4-3-3</p>
           {lineup?.is_complete && (
-            <span className="font-mono text-sm font-bold text-accent-cyan">Сила: {lineup.team_strength}</span>
+            <button
+              onClick={() => setStrengthHintOpen((v) => !v)}
+              className="flex items-center gap-1 font-mono text-sm font-bold text-accent-cyan"
+            >
+              Сила: {lineup.team_strength}
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold text-ink-mist-dim">?</span>
+            </button>
           )}
         </div>
+        {strengthHintOpen && (
+          <div className="mb-3 rounded-xl bg-white/5 px-3 py-2 text-[11px] leading-relaxed text-ink-mist">
+            <p className="mb-1 font-semibold text-ink-chalk">Что влияет на силу состава:</p>
+            <p>· Позиция игрока: 100% рейтинга на своей позиции, 90% на смежной, 75% не по профилю</p>
+            <p>· Химия: бонус за игроков одного клуба и одной страны в составе</p>
+            <p>· Редкость карточки: чем выше редкость, тем больше вклад рейтинга в силу</p>
+            <p>· Тренер: даёт фиксированный бонус к силе по своей редкости, независимо от бустов</p>
+            <p className="mt-1 text-ink-mist-dim">Поэтому простая замена на игрока с более высоким рейтингом не всегда увеличивает силу — важна ещё позиция и химия.</p>
+          </div>
+        )}
         <p className="mb-3 text-[11px] font-semibold">
           <span className={`rounded-full px-2.5 py-1 ${diamondCount >= maxDiamond ? "bg-rarity-diamond/20 text-rarity-diamond" : "bg-white/5 text-ink-mist"}`}>
             Диамантовых: {diamondCount}/{maxDiamond}
