@@ -103,6 +103,47 @@ async def test_open_club_pack_with_coach_drop_chance_can_yield_a_coach(client, d
     assert all(item["card"] is None for item in body["cards"])
 
 
+async def test_open_club_pack_with_diamond_rarity_never_yields_a_coach(client, db_session, bot_token):
+    """`Coach` has a DB check constraint forbidding `Rarity.diamond` (see
+    `app/models/coach.py`), so `pick_random_coach(db, Rarity.diamond)` can never find a
+    matching row and always falls through to its "any active, pack-droppable coach"
+    fallback — an arbitrary, typically common, rarity coach. Even with coach_drop_chance=1.0,
+    a diamond-rarity slot must be forced down the player path instead of silently paying out
+    an arbitrary-rarity coach, since a coach can structurally never be diamond. This mirrors
+    the diamond-rejection fix the old dedicated ClubCoachPack system already had before this
+    plan merged coaches into the regular ClubPack."""
+    from app.models.club_pack import ClubPack, ClubPackRarityProbability
+    from app.models.coach import Coach, CoachBoost
+    from app.models.enums import CoachBoostType, Rarity
+
+    # A coach exists and is droppable so the fallback (if the bug regresses) would have
+    # something to hand out — proving the fix, not just an absence of coaches to draw.
+    coach = Coach(display_name="Should Never Be Drawn Coach", rarity=Rarity.common, is_active=True, is_pack_droppable=True)
+    coach.boosts = [CoachBoost(boost_type=CoachBoostType.GOALKEEPING, magnitude=1.0)]
+    db_session.add(coach)
+
+    await create_player(db_session, rarity=Rarity.diamond, position=Position.ST)
+
+    pack = ClubPack(slug="diamond-coach-pack", name="Diamond Coach Pack", price=50, card_count=5, coach_drop_chance=1.0)
+    pack.rarity_probabilities = [ClubPackRarityProbability(rarity=Rarity.diamond, probability=1.0)]
+    db_session.add(pack)
+    await db_session.commit()
+    await db_session.refresh(pack)
+
+    club, headers = await _create_club(client, bot_token, 830503, "Клуб с бриллиантовыми слотами")
+    await client.post("/api/v1/clubs/me/daily-claim", headers=headers)
+
+    resp = await client.post(f"/api/v1/clubs/me/packs/{pack.id}/open", headers=headers, json={"idempotency_key": "diamond-key-1"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["cards"]) == 5
+    # Even with coach_drop_chance=1.0, a diamond-rarity slot must always resolve to a
+    # player — a coach can never structurally be diamond, so it must never be eligible.
+    assert all(item["kind"] == "player" for item in body["cards"])
+    assert all(item["card"]["player"]["rarity"] == "diamond" for item in body["cards"])
+    assert all(item["coach_card"] is None for item in body["cards"])
+
+
 async def test_open_club_pack_with_zero_coach_drop_chance_never_yields_a_coach(client, db_session, bot_token):
     from app.models.club_pack import ClubPack, ClubPackRarityProbability
     from app.models.enums import Rarity

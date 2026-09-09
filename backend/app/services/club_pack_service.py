@@ -13,7 +13,7 @@ from app.models.club_coach_card import ClubCoachCard
 from app.models.club_pack import ClubPack
 from app.models.club_pack_opening import ClubPackOpening, ClubPackOpeningCard
 from app.models.coach import Coach
-from app.models.enums import ClubBudgetTransactionType, ClubCardSource, ClubCoachCardSource
+from app.models.enums import ClubBudgetTransactionType, ClubCardSource, ClubCoachCardSource, Rarity
 from app.models.user import User
 from app.schemas.club_pack import ClubPackOut
 from app.schemas.club_pack_open import ClubPackOpenResult, OpenedClubPackItemOut
@@ -49,7 +49,9 @@ def _coach_item(club_coach_card: ClubCoachCard, is_new: bool) -> OpenedClubPackI
 
 async def _get_result_for_existing_opening(db: AsyncSession, opening: ClubPackOpening) -> ClubPackOpenResult:
     pack = await db.get(ClubPack, opening.club_pack_id, options=[joinedload(ClubPack.rarity_probabilities)])
-    cards_result = await db.execute(select(ClubPackOpeningCard).where(ClubPackOpeningCard.opening_id == opening.id))
+    cards_result = await db.execute(
+        select(ClubPackOpeningCard).where(ClubPackOpeningCard.opening_id == opening.id).order_by(ClubPackOpeningCard.id)
+    )
     opening_cards = cards_result.scalars().all()
 
     club_card_ids = [oc.club_card_id for oc in opening_cards if oc.club_card_id is not None]
@@ -125,7 +127,7 @@ async def open_club_pack(db: AsyncSession, user: User, club_pack_id: int, idempo
             # Each slot is an independent coin flip against the pack's coach_drop_chance —
             # not a fixed count of coach slots — so a coach_drop_chance of e.g. 0.3 means every
             # slot has an independent 30% chance of resolving to a coach instead of a player.
-            if coach_drop_chance > 0 and random.random() < coach_drop_chance:
+            if coach_drop_chance > 0 and rarity != Rarity.diamond and random.random() < coach_drop_chance:
                 coach = await pick_random_coach(db, rarity)
                 is_new = coach.id not in existing_coach_ids
                 existing_coach_ids.add(coach.id)
