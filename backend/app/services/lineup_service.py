@@ -275,7 +275,17 @@ async def set_lineup(db: AsyncSession, user: User, payload: LineupSetRequest) ->
     # "old" lineup_cards, each delete only what it saw, and then collide on
     # uq_lineup_card_once when the second one's insert hits a row the first
     # one already committed.
-    await db.execute(select(Lineup).where(Lineup.id == lineup.id).with_for_update())
+    #
+    # with_for_update(of=Lineup) scopes the row lock to just the `lineups`
+    # table: Lineup.user_coach_card is lazy="joined", so a bare
+    # select(Lineup) always carries a LEFT OUTER JOIN to user_coach_cards
+    # (and transitively coaches) even though no coach data is used here —
+    # and a plain FOR UPDATE tries to lock that nullable-side join too,
+    # which Postgres rejects outright (FeatureNotSupportedError: FOR UPDATE
+    # cannot be applied to the nullable side of an outer join). Same fix as
+    # wallet_service.lock_user_for_update / club_squad_service's own
+    # with_for_update(of=ClubLineup).
+    await db.execute(select(Lineup).where(Lineup.id == lineup.id).with_for_update(of=Lineup))
 
     old_result = await db.execute(select(LineupCard).where(LineupCard.lineup_id == lineup.id))
     old_lineup_cards = old_result.scalars().all()
