@@ -132,7 +132,7 @@ async def pick_random_coach(db: AsyncSession, rarity: Rarity) -> Coach:
         )
         coach = result.scalar_one_or_none()
     if coach is None:
-        raise ConflictError("No active coaches configured; cannot open coach packs")
+        raise ConflictError("No active coaches configured; cannot resolve this pack's coach slot")
     return coach
 
 
