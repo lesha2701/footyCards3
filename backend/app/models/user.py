@@ -100,6 +100,12 @@ class User(TimestampMixin, Base):
     club_game_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     club_game_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Что исчезло? (club-scoped mini-game; reward credits the club's budget)
+    club_missing_item_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    club_missing_item_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    club_missing_item_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    club_missing_item_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Пенальти (club-scoped mini-game; reward credits the club's budget)
     club_penalty_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     club_penalty_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
