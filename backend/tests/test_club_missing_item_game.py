@@ -159,7 +159,7 @@ async def test_hourly_limit_blocks_after_one_start(client, db_session, bot_token
     assert details["retry_after_seconds"] > 0
 
     user = await get_user_by_telegram_id(db_session, 760008)
-    user.club_missing_item_hour_started_at = user.club_missing_item_hour_started_at - timedelta(hours=2)
+    user.club_penalty_hour_started_at = user.club_penalty_hour_started_at - timedelta(hours=2)
     db_session.add(user)
     await db_session.commit()
 
@@ -177,9 +177,9 @@ async def test_daily_reward_cap_still_allows_play_with_zero_reward(client, db_se
     user = await get_user_by_telegram_id(db_session, 760009)
 
     config = await get_config(db_session)
-    daily_limit = config.club_missing_item_daily_reward_limit
-    user.club_missing_item_rewarded_attempts_today = daily_limit
-    user.club_missing_item_attempts_reset_at = datetime.now(timezone.utc)
+    daily_limit = config.club_penalty_daily_reward_limit
+    user.club_penalty_rewarded_attempts_today = daily_limit
+    user.club_penalty_attempts_reset_at = datetime.now(timezone.utc)
     db_session.add(user)
     await db_session.commit()
 
@@ -194,4 +194,4 @@ async def test_daily_reward_cap_still_allows_play_with_zero_reward(client, db_se
     assert claim.json()["daily_cap_reached"] is True
 
     await db_session.refresh(user)
-    assert user.club_missing_item_rewarded_attempts_today == daily_limit
+    assert user.club_penalty_rewarded_attempts_today == daily_limit

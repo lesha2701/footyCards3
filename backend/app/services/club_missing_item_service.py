@@ -47,19 +47,19 @@ def _items_for_round(round_number: int) -> list[str]:
 
 async def _ensure_daily_reset(db: AsyncSession, user: User) -> None:
     today = local_today()
-    reset_day = local_today(user.club_missing_item_attempts_reset_at) if user.club_missing_item_attempts_reset_at else None
+    reset_day = local_today(user.club_penalty_attempts_reset_at) if user.club_penalty_attempts_reset_at else None
     if reset_day != today:
-        user.club_missing_item_rewarded_attempts_today = 0
-        user.club_missing_item_attempts_reset_at = datetime.now(timezone.utc)
+        user.club_penalty_rewarded_attempts_today = 0
+        user.club_penalty_attempts_reset_at = datetime.now(timezone.utc)
         db.add(user)
 
 
 async def _ensure_hourly_reset(db: AsyncSession, user: User) -> None:
     now = datetime.now(timezone.utc)
-    started = user.club_missing_item_hour_started_at
+    started = user.club_penalty_hour_started_at
     if started is None or now - ensure_aware(started) >= timedelta(hours=1):
-        user.club_missing_item_hourly_attempts = 0
-        user.club_missing_item_hour_started_at = now
+        user.club_penalty_hourly_attempts = 0
+        user.club_penalty_hour_started_at = now
         db.add(user)
 
 
@@ -68,18 +68,18 @@ async def start_session(db: AsyncSession, user: User) -> ClubMissingItemStartOut
     config = await get_config(db)
     locked_user = await lock_user_for_update(db, user.id)
     await _ensure_hourly_reset(db, locked_user)
-    if locked_user.club_missing_item_hourly_attempts >= config.club_missing_item_hourly_limit:
+    if locked_user.club_penalty_hourly_attempts >= config.club_penalty_hourly_limit:
         remaining = timedelta(hours=1) - (
-            datetime.now(timezone.utc) - ensure_aware(locked_user.club_missing_item_hour_started_at)
+            datetime.now(timezone.utc) - ensure_aware(locked_user.club_penalty_hour_started_at)
         )
         raise ConflictError(
             "Hourly play limit reached for this game",
             details={
-                "hourly_limit": config.club_missing_item_hourly_limit,
+                "hourly_limit": config.club_penalty_hourly_limit,
                 "retry_after_seconds": max(0, int(remaining.total_seconds())),
             },
         )
-    locked_user.club_missing_item_hourly_attempts += 1
+    locked_user.club_penalty_hourly_attempts += 1
     db.add(locked_user)
 
     await _ensure_daily_reset(db, locked_user)
@@ -160,7 +160,7 @@ async def submit_round(db: AsyncSession, user: User, session_id: int, answer: st
     if not correct:
         session.status = GameSessionStatus.lost
         session.finished_at = datetime.now(timezone.utc)
-        session.reward_coins = min(session.score, config.club_missing_item_reward_cap)
+        session.reward_coins = min(session.score, config.club_penalty_reward_win)
         await db.commit()
         return ClubMissingItemSubmitOut(correct=False, session_id=session.id, score=session.score, status=session.status.value)
 
@@ -173,7 +173,7 @@ async def submit_round(db: AsyncSession, user: User, session_id: int, answer: st
         # rather than an error. Same reward calc as a loss/voluntary end.
         session.status = GameSessionStatus.won
         session.finished_at = datetime.now(timezone.utc)
-        session.reward_coins = min(session.score, config.club_missing_item_reward_cap)
+        session.reward_coins = min(session.score, config.club_penalty_reward_win)
         db.add(session)
         await db.commit()
         return ClubMissingItemSubmitOut(correct=True, session_id=session.id, score=session.score, status=session.status.value)
@@ -197,7 +197,7 @@ async def end_session(db: AsyncSession, user: User, session_id: int) -> ClubMiss
         raise ConflictError("This game session has already finished")
     session.status = GameSessionStatus.lost
     session.finished_at = datetime.now(timezone.utc)
-    session.reward_coins = min(session.score, config.club_missing_item_reward_cap)
+    session.reward_coins = min(session.score, config.club_penalty_reward_win)
     await db.commit()
     return ClubMissingItemSubmitOut(correct=False, session_id=session.id, score=session.score, status=session.status.value)
 
@@ -216,13 +216,13 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> ClubMis
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked_user)
-    daily_cap_reached = locked_user.club_missing_item_rewarded_attempts_today >= config.club_missing_item_daily_reward_limit
+    daily_cap_reached = locked_user.club_penalty_rewarded_attempts_today >= config.club_penalty_daily_reward_limit
 
-    reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else min(session.score, config.club_missing_item_reward_cap)
+    reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else min(session.score, config.club_penalty_reward_win)
     session.is_rewarded = True
     session.status = GameSessionStatus.rewarded
     if not daily_cap_reached:
-        locked_user.club_missing_item_rewarded_attempts_today += 1
+        locked_user.club_penalty_rewarded_attempts_today += 1
     db.add(locked_user)
     db.add(session)
 

@@ -144,9 +144,11 @@ class GameConfigOut(BaseModel):
     club_game_hourly_limit: int
     club_game_daily_reward_limit: int
     club_game_reward_cap: int
-    club_missing_item_hourly_limit: int
-    club_missing_item_daily_reward_limit: int
-    club_missing_item_reward_cap: int
+    club_penalty_hourly_limit: int
+    club_penalty_daily_reward_limit: int
+    club_penalty_reward_win: int
+    club_penalty_reward_loss: int
+    club_penalty_bot_miss_chance: float
     memory_daily_reward_limit: int
     memory_reward_cap: int
     suspicious_memory_score_threshold: int
@@ -251,9 +253,11 @@ class GameConfigUpdate(BaseModel):
     club_game_hourly_limit: Optional[int] = Field(default=None, ge=1)
     club_game_daily_reward_limit: Optional[int] = Field(default=None, ge=0)
     club_game_reward_cap: Optional[int] = Field(default=None, ge=0)
-    club_missing_item_hourly_limit: Optional[int] = Field(default=None, ge=1)
-    club_missing_item_daily_reward_limit: Optional[int] = Field(default=None, ge=0)
-    club_missing_item_reward_cap: Optional[int] = Field(default=None, ge=0)
+    club_penalty_hourly_limit: Optional[int] = Field(default=None, ge=1)
+    club_penalty_daily_reward_limit: Optional[int] = Field(default=None, ge=0)
+    club_penalty_reward_win: Optional[int] = Field(default=None, ge=0)
+    club_penalty_reward_loss: Optional[int] = Field(default=None, ge=0)
+    club_penalty_bot_miss_chance: Optional[float] = Field(default=None, ge=0, le=1)
     memory_daily_reward_limit: Optional[int] = Field(default=None, ge=0)
     memory_reward_cap: Optional[int] = Field(default=None, ge=0)
     suspicious_memory_score_threshold: Optional[int] = Field(default=None, ge=0)

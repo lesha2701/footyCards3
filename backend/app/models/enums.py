@@ -115,6 +115,7 @@ class ClubBudgetTransactionType(str, enum.Enum):
     tournament_reward = "tournament_reward"
     club_game_reward = "club_game_reward"
     club_missing_item_reward = "club_missing_item_reward"
+    club_penalty_reward = "club_penalty_reward"
     # Zero writers left anywhere in the codebase — the dedicated ClubCoachPack system
     # that produced this value was removed (see 0095_drop_club_coach_packs.py). Do NOT
     # delete this member: Postgres cannot drop a single enum value once added, so the
@@ -183,6 +184,7 @@ class GameType(str, enum.Enum):
     card_pairs = "card_pairs"
     club_sequence = "club_sequence"
     club_missing_item = "club_missing_item"
+    club_penalty = "club_penalty"
 
 
 class GameSessionStatus(str, enum.Enum):
