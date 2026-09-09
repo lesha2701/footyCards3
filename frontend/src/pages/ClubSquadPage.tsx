@@ -11,6 +11,7 @@ import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchMyClub } from "@/api/clubs";
 import { fetchClubCards, fetchClubCoachCards, fetchClubLineup, setClubCoach, setClubLineup, setClubTactics } from "@/api/clubSquad";
 import { staticUrl } from "@/lib/api";
+import { BOOST_TYPE_LABELS } from "@/lib/coaches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
 import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
 import { formatGameError } from "@/lib/errors";
@@ -198,6 +199,15 @@ export default function ClubSquadPage() {
             </div>
           ))}
         </div>
+
+        {lineup?.coach && (
+          <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
+            <p className="text-xs font-semibold text-ink-chalk">{lineup.coach.display_name}</p>
+            <p className="mt-0.5 text-[11px] text-ink-mist">
+              {lineup.coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="rounded-2xl bg-bg-surface p-4">
