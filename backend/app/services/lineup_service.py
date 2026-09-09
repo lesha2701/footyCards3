@@ -13,7 +13,7 @@ from app.models.enums import RARITY_ORDER, Position, Rarity
 from app.models.lineup import Lineup, LineupCard
 from app.models.user import User
 from app.models.user_coach_card import UserCoachCard
-from app.schemas.lineup import EquippedCoachOut, LineupCoachSetRequest, LineupOut, LineupSetRequest, LineupSlotOut
+from app.schemas.lineup import EquippedCoachOut, LineupCoachSetRequest, LineupOut, LineupSetRequest, LineupSlotOut, UserCoachCardOut
 from app.services.coach_boost_service import arena_rarity_team_strength_bonus
 from app.services.game_config_service import get_config
 from app.services.player_stats_service import effective_card_stats
@@ -200,7 +200,7 @@ async def get_active_lineup(db: AsyncSession, user: User) -> LineupOut:
     )
 
 
-async def list_user_coach_cards(db: AsyncSession, user: User) -> list:
+async def list_user_coach_cards(db: AsyncSession, user: User) -> list[UserCoachCardOut]:
     """GET /lineups/coach-cards — list all coaches owned by the user, mirroring
     club_squad_service.list_club_coach_cards."""
     result = await db.execute(
