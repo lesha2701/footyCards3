@@ -36,6 +36,14 @@ from app.schemas.club_missing_item import (
     ClubMissingItemSubmitOut,
     ClubMissingItemSubmitRequest,
 )
+from app.schemas.club_penalty import (
+    ClubPenaltyClaimOut,
+    ClubPenaltyForfeitOut,
+    ClubPenaltyKickOut,
+    ClubPenaltyKickRequest,
+    ClubPenaltyStartOut,
+    ClubPenaltyStartRequest,
+)
 from app.schemas.club_pack import ClubPackOut
 from app.schemas.club_pack_open import ClubPackOpenResult, OpenClubPackRequest
 from app.schemas.club_squad import (
@@ -60,6 +68,7 @@ from app.services import (
     club_game_service,
     club_missing_item_service,
     club_pack_service,
+    club_penalty_service,
     club_ranking_service,
     club_service,
     club_squad_service,
@@ -282,6 +291,31 @@ async def end_missing_item_game(session_id: int, db: AsyncSession = Depends(get_
 @router.post("/me/missing-item/{session_id}/claim", response_model=ClubMissingItemClaimOut)
 async def claim_missing_item_reward(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_missing_item_service.claim_reward(db, user, session_id)
+
+
+@router.post("/me/penalty/start", response_model=ClubPenaltyStartOut)
+async def start_club_penalty(
+    payload: ClubPenaltyStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    check_rate_limit(f"club_penalty_start:{user.id}", max_calls=20, window_seconds=60)
+    return await club_penalty_service.start_session(db, user, payload.club_card_id)
+
+
+@router.post("/me/penalty/{session_id}/kick", response_model=ClubPenaltyKickOut)
+async def kick_club_penalty(
+    session_id: int, payload: ClubPenaltyKickRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await club_penalty_service.resolve_kick(db, user, session_id, payload.direction)
+
+
+@router.post("/me/penalty/{session_id}/claim", response_model=ClubPenaltyClaimOut)
+async def claim_club_penalty_reward(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_penalty_service.claim_reward(db, user, session_id)
+
+
+@router.post("/me/penalty/{session_id}/forfeit", response_model=ClubPenaltyForfeitOut)
+async def forfeit_club_penalty(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_penalty_service.forfeit_session(db, user, session_id)
 
 
 @router.post("/tournament/apply", response_model=TournamentApplyResult)

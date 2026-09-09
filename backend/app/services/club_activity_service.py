@@ -18,7 +18,7 @@ ACTIVITY_WINDOW_DAYS = 7
 
 async def get_club_activity(db: AsyncSession, user: User) -> list[ClubMemberActivityOut]:
     """Club-scoped activity only: the club's own mini-games (GameType.club_sequence and
-    club_missing_item, played via /clubs/game and /clubs/missing-item — not the seven
+    club_missing_item, played via /clubs/game and /clubs/penalty — not the seven
     general-purpose mini-games elsewhere in the app) and the club's own daily reward
     (ClubDailyClaim, the "Ежедневная награда" button on the club home screen — not the
     player's personal, club-unrelated DailyReward). Mixing in app-wide activity produced
@@ -47,7 +47,11 @@ async def get_club_activity(db: AsyncSession, user: User) -> list[ClubMemberActi
             select(GameSession.user_id, func.count(GameSession.id))
             .where(
                 GameSession.user_id.in_(member_ids),
-                GameSession.game_type.in_([GameType.club_sequence, GameType.club_missing_item]),
+                # club_missing_item stays in this list even though nothing produces it
+                # going forward (see club_penalty plan, 2026-09-09) — it's a 7-day
+                # rolling window (ACTIVITY_WINDOW_DAYS), so recently-played sessions from
+                # before the cutover still need to count until they age out naturally.
+                GameSession.game_type.in_([GameType.club_sequence, GameType.club_missing_item, GameType.club_penalty]),
                 GameSession.created_at >= since,
             )
             .group_by(GameSession.user_id)
