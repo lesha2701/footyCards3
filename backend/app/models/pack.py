@@ -3,6 +3,7 @@ from typing import Optional
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
@@ -45,6 +46,12 @@ class Pack(TimestampMixin, Base):
     available_from: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     available_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Fraction of this pack's card_count slots that roll a coach instead of
+    # a player (independent per-slot coin flip, see
+    # pack_service.roll_and_create_cards — mirrors ClubPack.coach_drop_chance
+    # exactly). 0.0 (default) means every existing pack stays player-only
+    # until an admin opts it in.
+    coach_drop_chance: Mapped[float] = mapped_column(Numeric(5, 4), default=0.0, nullable=False)
 
     rarity_probabilities: Mapped[list["PackRarityProbability"]] = relationship(
         back_populates="pack", cascade="all, delete-orphan"
@@ -87,12 +94,29 @@ class PackOpeningCard(Base):
     opening_id: Mapped[int] = mapped_column(
         ForeignKey("pack_openings.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    user_card_id: Mapped[int] = mapped_column(
-        ForeignKey("user_cards.id", ondelete="CASCADE"), nullable=False, index=True
+    # Exactly one of these two is set per row — a pack slot resolves to
+    # either a player or a coach (see pack_service.roll_and_create_cards's
+    # per-slot coach_drop_chance coin flip), never both, never neither.
+    # Portable boolean-expression CHECK (no Postgres-only functions) so the
+    # SQLite test suite enforces it too — mirrors
+    # ck_club_pack_opening_card_exactly_one_kind exactly.
+    user_card_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_cards.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    is_new_player: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    user_coach_card_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_coach_cards.id", ondelete="CASCADE"), nullable=True
+    )
+    is_new: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     opening: Mapped["PackOpening"] = relationship(back_populates="cards")
+
+    __table_args__ = (
+        CheckConstraint(
+            "(user_card_id IS NOT NULL AND user_coach_card_id IS NULL) OR "
+            "(user_card_id IS NULL AND user_coach_card_id IS NOT NULL)",
+            name="ck_pack_opening_card_exactly_one_kind",
+        ),
+    )
 
 
 class StarsInvoice(TimestampMixin, Base):

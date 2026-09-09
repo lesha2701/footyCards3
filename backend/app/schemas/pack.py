@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.enums import Rarity
 from app.schemas.badge import BadgeOut
 from app.schemas.card import UserCardOut
+from app.schemas.coach import CoachOut
 
 
 class PackRarityProbabilityOut(BaseModel):
@@ -35,6 +36,7 @@ class PackOut(BaseModel):
     available_from: Optional[datetime]
     available_until: Optional[datetime]
     rarity_probabilities: list[PackRarityProbabilityOut]
+    coach_drop_chance: float
     user_purchase_count: int = 0
     is_available_now: bool = True
 
@@ -60,6 +62,7 @@ class PackCreate(BaseModel):
     available_from: Optional[datetime] = None
     available_until: Optional[datetime] = None
     rarity_probabilities: list[PackRarityProbabilityIn]
+    coach_drop_chance: float = Field(default=0.0, ge=0, le=1)
 
 
 class PackUpdate(BaseModel):
@@ -77,10 +80,29 @@ class PackUpdate(BaseModel):
     available_from: Optional[datetime] = None
     available_until: Optional[datetime] = None
     rarity_probabilities: Optional[list[PackRarityProbabilityIn]] = None
+    coach_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
+
+
+class UserCoachCardOut(BaseModel):
+    """One personal user-owned coach card — mirrors the club-side
+    ClubCoachCardOut exactly, substituting personal coach models."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    serial_number: int
+    coach: CoachOut
+    acquired_at: datetime
 
 
 class OpenedCardOut(BaseModel):
     card: UserCardOut
+    is_new: bool
+    duplicate_count: int
+
+
+class OpenedCoachCardOut(BaseModel):
+    card: UserCoachCardOut
     is_new: bool
     duplicate_count: int
 
@@ -96,6 +118,7 @@ class PackOpenResult(BaseModel):
     opening_id: int
     pack: PackOut
     cards: list[OpenedCardOut]
+    coach_cards: list[OpenedCoachCardOut] = []
     new_balance: int
     referral_bonus_coins: Optional[int] = None
     collection_rewards: list[CollectionRewardGrantOut] = []

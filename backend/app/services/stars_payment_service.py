@@ -84,7 +84,7 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
             card = card_query.unique().scalar_one()
             # dup_counts is taken now (well after the card was granted), so it
             # already includes this very card — unlike the pack branch above,
-            # which reads a persisted is_new_player flag captured at grant
+            # which reads a persisted is_new flag captured at grant
             # time, a wheel card_rarity prize has no such flag, so "is this
             # still the player's only copy" is recomputed from a fresh
             # snapshot here. This is a reasonable approximation (matches "new"

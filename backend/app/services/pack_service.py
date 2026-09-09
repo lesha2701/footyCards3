@@ -158,7 +158,7 @@ async def get_opening_result(db: AsyncSession, user: User, opening: PackOpening)
         items.append(
             OpenedCardOut(
                 card=card,
-                is_new=oc.is_new_player,
+                is_new=oc.is_new,
                 duplicate_count=dup_counts.get(card.player_id, 1),
             )
         )
@@ -193,7 +193,7 @@ async def roll_and_create_cards(
 
         user_card = await create_user_card(db, user.id, player.id, source, opening.id)
 
-        db.add(PackOpeningCard(opening_id=opening.id, user_card_id=user_card.id, is_new_player=is_new))
+        db.add(PackOpeningCard(opening_id=opening.id, user_card_id=user_card.id, is_new=is_new))
         user_card.player = player
         opened_items.append(
             OpenedCardOut(card=user_card, is_new=is_new, duplicate_count=dup_counts[player.id])
