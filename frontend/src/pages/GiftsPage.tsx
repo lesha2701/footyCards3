@@ -223,7 +223,7 @@ function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; on
               <div key={`coach-${c.card.id}`} className="flex flex-col items-center gap-1.5 overflow-hidden rounded-2xl bg-rarity-epic/10 p-2">
                 <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-black/20">
                   <img
-                    src={staticUrl(c.card.coach.image_path ?? undefined) ?? undefined}
+                    src={staticUrl(c.card.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                     alt={c.card.coach.display_name}
                     className="h-full w-full object-cover"
                   />
