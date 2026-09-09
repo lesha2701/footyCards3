@@ -190,12 +190,27 @@ export interface Pack {
   available_from: string | null;
   available_until: string | null;
   rarity_probabilities: PackRarityProbability[];
+  sort_order: number;
+  coach_drop_chance: number;
   user_purchase_count: number;
   is_available_now: boolean;
 }
 
 export interface OpenedCard {
   card: UserCard;
+  is_new: boolean;
+  duplicate_count: number;
+}
+
+export interface UserCoachCard {
+  id: number;
+  serial_number: number;
+  coach: EquippedCoach;
+  acquired_at: string;
+}
+
+export interface OpenedCoachCard {
+  card: UserCoachCard;
   is_new: boolean;
   duplicate_count: number;
 }
@@ -211,6 +226,7 @@ export interface PackOpenResult {
   opening_id: number;
   pack: Pack;
   cards: OpenedCard[];
+  coach_cards: OpenedCoachCard[];
   new_balance: number;
   referral_bonus_coins: number | null;
   collection_rewards: CollectionRewardGrant[];
@@ -371,6 +387,7 @@ export interface Lineup {
   is_complete: boolean;
   team_strength: number | null;
   max_diamond: number;
+  coach: EquippedCoach | null;
   slots: LineupSlot[];
 }
 

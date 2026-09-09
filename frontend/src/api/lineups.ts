@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { Lineup, LineupTactic } from "@/types";
+import type { Lineup, LineupTactic, UserCoachCard } from "@/types";
 
 export async function fetchActiveLineup(): Promise<Lineup> {
   const { data } = await api.get<Lineup>("/lineups/active");
@@ -13,5 +13,15 @@ export async function setActiveLineup(slots: { slot_code: string; user_card_id: 
 
 export async function setLineupTactic(tactic: LineupTactic): Promise<Lineup> {
   const { data } = await api.post<Lineup>("/lineups/tactic", { tactic });
+  return data;
+}
+
+export async function setLineupCoach(userCoachCardId: number | null): Promise<Lineup> {
+  const { data } = await api.put<Lineup>("/lineups/coach", { user_coach_card_id: userCoachCardId });
+  return data;
+}
+
+export async function fetchUserCoachCards(): Promise<UserCoachCard[]> {
+  const { data } = await api.get<UserCoachCard[]>("/lineups/coach-cards");
   return data;
 }
