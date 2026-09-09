@@ -25,6 +25,7 @@ interface PackForm {
   bonus_coins: number | "";
   badge_id: number | "";
   card_count: number;
+  coach_drop_chance: number;
   guaranteed_min_rarity: Rarity | "";
   is_active: boolean;
   image_path: string | null;
@@ -43,6 +44,7 @@ function packToForm(p?: Pack): PackForm {
     bonus_coins: p?.bonus_coins ?? "",
     badge_id: p?.badge_id ?? "",
     card_count: p?.card_count ?? 3,
+    coach_drop_chance: (p?.coach_drop_chance ?? 0) * 100,
     guaranteed_min_rarity: p?.guaranteed_min_rarity ?? "",
     is_active: p?.is_active ?? true,
     image_path: p?.image_path ?? null,
@@ -83,6 +85,7 @@ export default function AdminPacksPage() {
     bonus_coins: form.bonus_coins === "" ? null : form.bonus_coins,
     badge_id: form.badge_id === "" ? null : form.badge_id,
     card_count: form.card_count,
+    coach_drop_chance: form.coach_drop_chance / 100,
     guaranteed_min_rarity: form.guaranteed_min_rarity || null,
     is_active: form.is_active,
     image_path: form.image_path,
@@ -174,6 +177,7 @@ export default function AdminPacksPage() {
                 <NumField label="Цена, монеты" value={form.price} min={0} onChange={(v) => setForm({ ...form, price: v })} />
                 <NumField label="Карт в паке" value={form.card_count} min={1} max={12} onChange={(v) => setForm({ ...form, card_count: v })} />
               </div>
+              <NumField label="Шанс тренера вместо игрока (%) — 0 = только игроки" value={form.coach_drop_chance} min={0} max={100} onChange={(v) => setForm({ ...form, coach_drop_chance: v })} />
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Цена в звёздах ⭐ (если указано — пак покупается ТОЛЬКО за звёзды, цена в монетах игнорируется)</span>
                 <input
