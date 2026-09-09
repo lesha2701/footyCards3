@@ -1,9 +1,10 @@
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
 from app.schemas.card import UserCardOut
-from app.schemas.coach import CoachBoostOut
+from app.schemas.coach import CoachBoostOut, CoachOut
 
 
 class LineupSlotOut(BaseModel):
@@ -26,6 +27,16 @@ class EquippedCoachOut(BaseModel):
     rarity: str
     image_path: Optional[str]
     boosts: list[CoachBoostOut]
+
+
+class UserCoachCardOut(BaseModel):
+    """One user-owned coach card — mirrors app.schemas.club_squad.ClubCoachCardOut
+    field-for-field, substituting personal UserCoachCard for the club variant."""
+
+    id: int
+    serial_number: int
+    coach: CoachOut
+    acquired_at: datetime
 
 
 class LineupOut(BaseModel):

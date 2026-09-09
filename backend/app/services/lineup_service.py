@@ -200,6 +200,18 @@ async def get_active_lineup(db: AsyncSession, user: User) -> LineupOut:
     )
 
 
+async def list_user_coach_cards(db: AsyncSession, user: User) -> list:
+    """GET /lineups/coach-cards — list all coaches owned by the user, mirroring
+    club_squad_service.list_club_coach_cards."""
+    result = await db.execute(
+        select(UserCoachCard)
+        .where(UserCoachCard.user_id == user.id)
+        .options(joinedload(UserCoachCard.coach).selectinload(Coach.boosts))
+        .order_by(UserCoachCard.id)
+    )
+    return result.unique().scalars().all()
+
+
 async def set_lineup_coach(db: AsyncSession, user: User, payload: LineupCoachSetRequest) -> LineupOut:
     lineup = await _get_or_create_lineup(db, user.id)
     if payload.user_coach_card_id is not None:

@@ -54,3 +54,26 @@ async def test_cannot_equip_another_users_coach_card(client, db_session, bot_tok
 
     with pytest.raises(ConflictError):
         await set_lineup_coach(db_session, user, LineupCoachSetRequest(user_coach_card_id=foreign_card.id))
+
+
+async def test_list_user_coach_cards_returns_owned_coaches_with_boosts(client, db_session, bot_token):
+    headers = telegram_headers(840203, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+
+    coach = Coach(display_name="List Test Coach", rarity=Rarity.legendary)
+    coach.boosts = [
+        CoachBoost(boost_type=CoachBoostType.ATTACK_CENTRAL, magnitude=8.0),
+        CoachBoost(boost_type=CoachBoostType.DEFENCE_CENTRAL, magnitude=8.0),
+        CoachBoost(boost_type=CoachBoostType.GOALKEEPING, magnitude=8.0),
+    ]
+    db_session.add(coach)
+    await db_session.flush()
+    user = await get_user_by_telegram_id(db_session, 840203)
+    db_session.add(UserCoachCard(user_id=user.id, coach_id=coach.id, serial_number=1, source="pack"))
+    await db_session.commit()
+
+    resp = await client.get("/api/v1/lineups/coach-cards", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    assert len(body[0]["coach"]["boosts"]) == 3
