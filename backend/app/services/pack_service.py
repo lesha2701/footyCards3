@@ -123,10 +123,15 @@ async def pick_random_coach(db: AsyncSession, rarity: Rarity) -> Coach:
     )
     coach = result.scalar_one_or_none()
     if coach is None:
-        # Fall back to any active, pack-droppable coach if this rarity has none configured.
+        # Fall back to any active, pack-droppable coach of this rarity tier or
+        # LOWER if this rarity has none configured — never higher, or an empty
+        # roster tier (the expected state right after this ships, since
+        # seed.py creates no coaches) could mint e.g. a legendary coach for a
+        # common-tier pack slot, worth a permanent +8 Arena bonus.
+        eligible_rarities = [r for r, order in RARITY_ORDER.items() if order <= RARITY_ORDER[rarity]]
         result = await db.execute(
             select(Coach)
-            .where(Coach.is_active.is_(True), Coach.is_pack_droppable.is_(True))
+            .where(Coach.rarity.in_(eligible_rarities), Coach.is_active.is_(True), Coach.is_pack_droppable.is_(True))
             .options(selectinload(Coach.boosts))
             .order_by(func.random())
             .limit(1)

@@ -241,6 +241,36 @@ async def test_open_pack_with_diamond_rarity_never_yields_a_coach(client, db_ses
     assert all(item["card"]["player"]["rarity"] == "diamond" for item in body["cards"])
 
 
+async def test_pick_random_coach_fallback_never_yields_a_higher_rarity(client, db_session, bot_token):
+    # Regression: pick_random_coach's "no coach of the exact requested rarity"
+    # fallback used to draw from ANY active, pack-droppable coach regardless
+    # of rarity — so a common-tier pack slot could mint a legendary coach
+    # (worth a permanent +8 Arena bonus) purely because no common-rarity
+    # coach happened to be seeded. The fallback must now only ever draw a
+    # coach at or below the requested rarity; with nothing at or below
+    # common configured, it must fail cleanly instead of reaching upward.
+    from app.core.exceptions import ConflictError
+    from app.models.coach import Coach, CoachBoost
+    from app.models.enums import CoachBoostType
+    from app.services.pack_service import pick_random_coach
+
+    coach = Coach(display_name="Only Legendary Coach", rarity=Rarity.legendary, is_active=True, is_pack_droppable=True)
+    coach.boosts = [
+        CoachBoost(boost_type=CoachBoostType.ATTACK_CENTRAL, magnitude=6.0),
+        CoachBoost(boost_type=CoachBoostType.DEFENCE_CENTRAL, magnitude=6.0),
+        CoachBoost(boost_type=CoachBoostType.GOALKEEPING, magnitude=4.0),
+    ]
+    db_session.add(coach)
+    await db_session.commit()
+
+    with pytest.raises(ConflictError):
+        await pick_random_coach(db_session, Rarity.common)
+
+    # Sanity: requesting the coach's own rarity still resolves it directly.
+    resolved = await pick_random_coach(db_session, Rarity.legendary)
+    assert resolved.display_name == "Only Legendary Coach"
+
+
 async def test_open_pack_idempotent_replay_preserves_rarity_order(client, db_session, bot_token):
     for _ in range(10):
         await create_player(db_session, rarity=Rarity.common)
