@@ -107,3 +107,86 @@ async def test_penalty_forfeit_mid_match_counts_as_a_loss(client, bot_token):
         f"/api/v1/clubs/me/penalty/{session_id}/kick", headers=headers, json={"direction": "top_left"}
     )
     assert kick_after_forfeit.status_code == 409
+
+
+async def test_penalty_claim_credits_club_budget_not_player_coins(client, db_session, bot_token):
+    from tests.factories import get_user_by_telegram_id
+
+    club, headers = await _create_club_and_join(client, bot_token, 764006, "Кошелёк Клуб")
+    card_id = await _first_club_card_id(client, headers)
+    user = await get_user_by_telegram_id(db_session, 764006)
+    balance_before = user.balance
+    budget_before = club["budget"]
+
+    start = await client.post("/api/v1/clubs/me/penalty/start", headers=headers, json={"club_card_id": card_id})
+    session_id = start.json()["session_id"]
+    forfeit = await client.post(f"/api/v1/clubs/me/penalty/{session_id}/forfeit", headers=headers)
+    assert forfeit.status_code == 200
+
+    claim = await client.post(f"/api/v1/clubs/me/penalty/{session_id}/claim", headers=headers)
+    assert claim.status_code == 200
+    reward = claim.json()["reward_coins"]
+    assert reward > 0
+    assert claim.json()["new_club_budget"] == budget_before + reward
+
+    await db_session.refresh(user)
+    assert user.balance == balance_before  # reward goes to the club, never the player's own coins
+
+    second_claim = await client.post(f"/api/v1/clubs/me/penalty/{session_id}/claim", headers=headers)
+    assert second_claim.status_code == 409
+
+
+async def test_penalty_hourly_limit_blocks_after_one_start(client, db_session, bot_token):
+    from datetime import timedelta
+
+    from tests.factories import get_user_by_telegram_id
+
+    _, headers = await _create_club_and_join(client, bot_token, 764007, "Лимит Клуб")
+    card_id = await _first_club_card_id(client, headers)
+
+    resp = await client.post("/api/v1/clubs/me/penalty/start", headers=headers, json={"club_card_id": card_id})
+    assert resp.status_code == 200
+
+    resp = await client.post("/api/v1/clubs/me/penalty/start", headers=headers, json={"club_card_id": card_id})
+    assert resp.status_code == 409
+    details = resp.json()["error"]["details"]
+    assert details["hourly_limit"] == 1
+    assert details["retry_after_seconds"] > 0
+
+    user = await get_user_by_telegram_id(db_session, 764007)
+    user.club_penalty_hour_started_at = user.club_penalty_hour_started_at - timedelta(hours=2)
+    db_session.add(user)
+    await db_session.commit()
+
+    resp = await client.post("/api/v1/clubs/me/penalty/start", headers=headers, json={"club_card_id": card_id})
+    assert resp.status_code == 200
+
+
+async def test_penalty_daily_reward_cap_still_allows_play_with_zero_reward(client, db_session, bot_token):
+    from datetime import datetime, timezone
+
+    from app.services.game_config_service import get_config
+    from tests.factories import get_user_by_telegram_id
+
+    _, headers = await _create_club_and_join(client, bot_token, 764008, "Дневной Лимит Клуб")
+    card_id = await _first_club_card_id(client, headers)
+    user = await get_user_by_telegram_id(db_session, 764008)
+
+    config = await get_config(db_session)
+    daily_limit = config.club_penalty_daily_reward_limit
+    user.club_penalty_rewarded_attempts_today = daily_limit
+    user.club_penalty_attempts_reset_at = datetime.now(timezone.utc)
+    db_session.add(user)
+    await db_session.commit()
+
+    start = await client.post("/api/v1/clubs/me/penalty/start", headers=headers, json={"club_card_id": card_id})
+    session_id = start.json()["session_id"]
+    await client.post(f"/api/v1/clubs/me/penalty/{session_id}/forfeit", headers=headers)
+
+    claim = await client.post(f"/api/v1/clubs/me/penalty/{session_id}/claim", headers=headers)
+    assert claim.status_code == 200
+    assert claim.json()["reward_coins"] == 0
+    assert claim.json()["daily_cap_reached"] is True
+
+    await db_session.refresh(user)
+    assert user.club_penalty_rewarded_attempts_today == daily_limit
