@@ -3,8 +3,10 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import UserCard
+from app.models.coach import Coach
 from app.models.enums import CardSource
 from app.models.player import Player
+from app.models.user_coach_card import UserCoachCard
 
 
 async def create_user_card(
@@ -36,6 +38,28 @@ async def create_user_card(
         owner_id=owner_id, player_id=player_id, source=source, source_ref_id=source_ref_id,
         serial_number=serial_number,
     )
+    db.add(card)
+    await db.flush()
+    return card
+
+
+async def create_user_coach_card(
+    db: AsyncSession, owner_id: int, coach_id: int, source: CardSource, source_ref_id: Optional[int] = None
+) -> UserCoachCard:
+    """Mirrors create_user_card exactly, but against Coach.next_serial_number
+    (the personal-ownership counter — distinct from next_club_serial_number,
+    which club coach acquisitions use) — personal coach acquisitions must
+    never affect club-side serial-number scarcity, and the counter must be
+    read-and-incremented under a row lock rather than a racy
+    MAX(serial_number) + 1 scan, matching every other serial-number
+    allocation in this codebase."""
+    coach = await db.get(Coach, coach_id)
+    await db.refresh(coach, attribute_names=["next_serial_number"], with_for_update=True)
+    serial_number = coach.next_serial_number
+    coach.next_serial_number += 1
+    db.add(coach)
+
+    card = UserCoachCard(user_id=owner_id, coach_id=coach_id, source=source, source_ref_id=source_ref_id, serial_number=serial_number)
     db.add(card)
     await db.flush()
     return card

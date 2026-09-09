@@ -13,6 +13,7 @@ from app.models.club_lineup import ClubLineup, ClubLineupCard
 from app.models.club_pack import ClubPack, ClubPackRarityProbability
 from app.models.club_pack_opening import ClubPackOpening, ClubPackOpeningCard
 from app.models.coach import Coach, CoachBoost
+from app.models.user_coach_card import UserCoachCard
 from app.models.coin_package import CoinPackage
 from app.models.daily_reward import DailyReward
 from app.models.game import GameSession, MemoryGameRound
@@ -43,6 +44,7 @@ __all__ = [
     "Badge",
     "UserBadge",
     "UserCard",
+    "UserCoachCard",
     "CardCollection",
     "UserCollectionReward",
     "CardUpgradeAttempt",
