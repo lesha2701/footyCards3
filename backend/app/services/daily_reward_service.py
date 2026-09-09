@@ -103,7 +103,7 @@ async def _grant_free_pack(
     for rarity in rarities:
         player = await pick_random_player(db, rarity)
         card = await create_user_card(db, user.id, player.id, CardSource.daily_reward, opening.id)
-        db.add(PackOpeningCard(opening_id=opening.id, user_card_id=card.id, is_new=False))
+        db.add(PackOpeningCard(opening_id=opening.id, user_card_id=card.id, user_coach_card_id=None, is_new=False))
         card.player = player
         last_card = card
         player_ids.append(player.id)

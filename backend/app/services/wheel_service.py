@@ -101,13 +101,13 @@ async def _grant_prize(db: AsyncSession, user: User, prize: WheelPrize, source: 
         db.add(opening)
         await db.flush()
         dup_counts = await _duplicate_counts_snapshot(db, user.id)
-        opened_items = await roll_and_create_cards(db, user, pack, opening, dup_counts, CardSource.wheel)
+        opened_items, opened_coach_items = await roll_and_create_cards(db, user, pack, opening, dup_counts, CardSource.wheel)
         collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(
             db, user, [item.card.player.id for item in opened_items]
         )
         pack_result = PackOpenResult(
-            opening_id=opening.id, pack=PackOut.model_validate(pack), cards=opened_items, new_balance=user.balance,
-            collection_rewards=collection_rewards,
+            opening_id=opening.id, pack=PackOut.model_validate(pack), cards=opened_items, coach_cards=opened_coach_items,
+            new_balance=user.balance, collection_rewards=collection_rewards,
         )
         spin.pack_opening_id = opening.id
 

@@ -190,6 +190,57 @@ async def test_open_pack_cards_sorted_by_rarity_ascending(client, db_session, bo
     assert orders == sorted(orders)
 
 
+async def test_open_pack_with_coach_drop_chance_can_yield_a_coach(client, db_session, bot_token):
+    from app.models.coach import Coach, CoachBoost
+    from app.models.enums import CoachBoostType
+
+    coach = Coach(display_name="Personal Slot Test Coach", rarity=Rarity.common, is_active=True, is_pack_droppable=True)
+    coach.boosts = [CoachBoost(boost_type=CoachBoostType.GOALKEEPING, magnitude=1.0)]
+    db_session.add(coach)
+    pack = await create_pack(
+        db_session, "coach-slot-personal-pack", price=50, card_count=5,
+        probabilities={Rarity.common: 1.0}, coach_drop_chance=1.0,
+    )
+
+    user = await _register(client, db_session, 830600, bot_token)
+    headers = telegram_headers(830600, bot_token)
+
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={"idempotency_key": "personal-slot-key-1"})
+    assert resp.status_code == 200
+    body = resp.json()
+    # coach_drop_chance=1.0 -> every slot must resolve to a coach.
+    assert len(body["cards"]) == 0
+    assert len(body["coach_cards"]) == 5
+    assert all(item["card"]["coach"]["display_name"] == "Personal Slot Test Coach" for item in body["coach_cards"])
+
+
+async def test_open_pack_with_diamond_rarity_never_yields_a_coach(client, db_session, bot_token):
+    """`Coach` has a DB check constraint forbidding `Rarity.diamond`, so even with
+    coach_drop_chance=1.0 a diamond-rarity slot must always resolve to a player —
+    mirrors club_pack_service's identical diamond-rejection fix."""
+    from app.models.coach import Coach, CoachBoost
+    from app.models.enums import CoachBoostType
+
+    coach = Coach(display_name="Should Never Appear Coach", rarity=Rarity.common, is_active=True, is_pack_droppable=True)
+    coach.boosts = [CoachBoost(boost_type=CoachBoostType.GOALKEEPING, magnitude=1.0)]
+    db_session.add(coach)
+    await create_player(db_session, rarity=Rarity.diamond, rating=95)
+    pack = await create_pack(
+        db_session, "diamond-personal-pack", price=50, card_count=5,
+        probabilities={Rarity.diamond: 1.0}, coach_drop_chance=1.0,
+    )
+
+    user = await _register(client, db_session, 830601, bot_token)
+    headers = telegram_headers(830601, bot_token)
+
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={"idempotency_key": "diamond-personal-key-1"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["coach_cards"]) == 0
+    assert len(body["cards"]) == 5
+    assert all(item["card"]["player"]["rarity"] == "diamond" for item in body["cards"])
+
+
 async def test_open_pack_idempotent_replay_preserves_rarity_order(client, db_session, bot_token):
     for _ in range(10):
         await create_player(db_session, rarity=Rarity.common)

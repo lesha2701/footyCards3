@@ -44,10 +44,13 @@ async def _grant_chat_pack(db: AsyncSession, user: User, slug: str) -> Optional[
     await db.flush()
 
     dup_counts = await _duplicate_counts_snapshot(db, user.id)
-    opened_items = await roll_and_create_cards(db, user, pack, opening, dup_counts, CardSource.chat_pack)
+    opened_items, opened_coach_items = await roll_and_create_cards(db, user, pack, opening, dup_counts, CardSource.chat_pack)
     await track_pack_opened_tasks(db, user, dup_counts)
 
-    return PackOpenResult(opening_id=opening.id, pack=PackOut.model_validate(pack), cards=opened_items, new_balance=user.balance)
+    return PackOpenResult(
+        opening_id=opening.id, pack=PackOut.model_validate(pack), cards=opened_items, coach_cards=opened_coach_items,
+        new_balance=user.balance,
+    )
 
 
 async def claim_chat_pack_for_telegram_user(

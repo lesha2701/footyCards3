@@ -15,9 +15,10 @@ from app.models.enums import RARITY_ORDER, BingoGoalType, CardSource, Notificati
 from app.models.pack import Pack, PackOpening, PackOpeningCard, PackRarityProbability
 from app.models.player import Player
 from app.models.user import User
-from app.schemas.pack import OpenedCardOut, PackOpenResult, PackOut
+from app.models.user_coach_card import UserCoachCard
+from app.schemas.pack import OpenedCardOut, OpenedCoachCardOut, PackOpenResult, PackOut
 from app.services import bingo_service, collection_service, notification_service, task_service
-from app.services.card_creation import create_user_card
+from app.services.card_creation import create_user_card, create_user_coach_card
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
@@ -145,25 +146,49 @@ async def get_opening_result(db: AsyncSession, user: User, opening: PackOpening)
         .order_by(PackOpeningCard.id)
     )
     opening_cards = result.unique().scalars().all()
-    card_ids = [oc.user_card_id for oc in opening_cards]
+
+    card_ids = [oc.user_card_id for oc in opening_cards if oc.user_card_id is not None]
     cards_result = await db.execute(
         select(UserCard).where(UserCard.id.in_(card_ids)).options(joinedload(UserCard.player))
-    )
-    cards_by_id = {c.id: c for c in cards_result.unique().scalars().all()}
+    ) if card_ids else None
+    cards_by_id = {c.id: c for c in cards_result.unique().scalars().all()} if cards_result else {}
+
+    coach_card_ids = [oc.user_coach_card_id for oc in opening_cards if oc.user_coach_card_id is not None]
+    coach_cards_result = await db.execute(
+        select(UserCoachCard).where(UserCoachCard.id.in_(coach_card_ids)).options(joinedload(UserCoachCard.coach).selectinload(Coach.boosts))
+    ) if coach_card_ids else None
+    coach_cards_by_id = {c.id: c for c in coach_cards_result.unique().scalars().all()} if coach_cards_result else {}
 
     dup_counts = await _duplicate_counts_snapshot(db, user.id)
-    items = []
+    coach_dup_counts = await _duplicate_coach_counts_snapshot(db, user.id)
+
+    items: list[OpenedCardOut] = []
+    coach_items: list[OpenedCoachCardOut] = []
     for oc in opening_cards:
-        card = cards_by_id[oc.user_card_id]
-        items.append(
-            OpenedCardOut(
-                card=card,
-                is_new=oc.is_new,
-                duplicate_count=dup_counts.get(card.player_id, 1),
+        if oc.user_card_id is not None:
+            card = cards_by_id[oc.user_card_id]
+            items.append(
+                OpenedCardOut(
+                    card=card,
+                    is_new=oc.is_new,
+                    duplicate_count=dup_counts.get(card.player_id, 1),
+                )
             )
-        )
+        else:
+            coach_card = coach_cards_by_id[oc.user_coach_card_id]
+            coach_items.append(
+                OpenedCoachCardOut(
+                    card=coach_card,
+                    is_new=oc.is_new,
+                    duplicate_count=coach_dup_counts.get(coach_card.coach_id, 1),
+                )
+            )
     items.sort(key=lambda item: RARITY_ORDER[item.card.player.rarity])
-    return PackOpenResult(opening_id=opening.id, pack=PackOut.model_validate(pack), cards=items, new_balance=user.balance)
+    coach_items.sort(key=lambda item: RARITY_ORDER[item.card.coach.rarity])
+    return PackOpenResult(
+        opening_id=opening.id, pack=PackOut.model_validate(pack), cards=items, coach_cards=coach_items,
+        new_balance=user.balance,
+    )
 
 
 async def _duplicate_counts_snapshot(db: AsyncSession, user_id: int) -> dict[int, int]:
@@ -173,6 +198,15 @@ async def _duplicate_counts_snapshot(db: AsyncSession, user_id: int) -> dict[int
     return {player_id: count for player_id, count in result.all()}
 
 
+async def _duplicate_coach_counts_snapshot(db: AsyncSession, user_id: int) -> dict[int, int]:
+    result = await db.execute(
+        select(UserCoachCard.coach_id, func.count(UserCoachCard.id))
+        .where(UserCoachCard.user_id == user_id)
+        .group_by(UserCoachCard.coach_id)
+    )
+    return {coach_id: count for coach_id, count in result.all()}
+
+
 async def roll_and_create_cards(
     db: AsyncSession,
     user: User,
@@ -180,27 +214,52 @@ async def roll_and_create_cards(
     opening: PackOpening,
     dup_counts: dict[int, int],
     source: CardSource,
-) -> list[OpenedCardOut]:
+) -> tuple[list[OpenedCardOut], list[OpenedCoachCardOut]]:
     seen_this_opening: set[int] = set()
+    seen_coaches_this_opening: set[int] = set()
     rolled_rarities = roll_rarities(pack.rarity_probabilities, pack.card_count, pack.guaranteed_min_rarity)
 
+    # Each slot is an independent coin flip against the pack's coach_drop_chance —
+    # not a fixed count of coach slots — mirrors club_pack_service.open_club_pack
+    # exactly. A diamond-rarity slot is always forced down the player path: `Coach`
+    # has a DB check constraint forbidding Rarity.diamond, so a coach can
+    # structurally never be diamond.
+    coach_drop_chance = float(pack.coach_drop_chance)
+    coach_dup_counts = await _duplicate_coach_counts_snapshot(db, user.id) if coach_drop_chance > 0 else {}
+
     opened_items: list[OpenedCardOut] = []
+    opened_coach_items: list[OpenedCoachCardOut] = []
     for rarity in rolled_rarities:
-        player = await pick_random_player(db, rarity)
-        is_new = dup_counts.get(player.id, 0) == 0 and player.id not in seen_this_opening
-        seen_this_opening.add(player.id)
-        dup_counts[player.id] = dup_counts.get(player.id, 0) + 1
+        if coach_drop_chance > 0 and rarity != Rarity.diamond and random.random() < coach_drop_chance:
+            coach = await pick_random_coach(db, rarity)
+            is_new = coach_dup_counts.get(coach.id, 0) == 0 and coach.id not in seen_coaches_this_opening
+            seen_coaches_this_opening.add(coach.id)
+            coach_dup_counts[coach.id] = coach_dup_counts.get(coach.id, 0) + 1
 
-        user_card = await create_user_card(db, user.id, player.id, source, opening.id)
+            user_coach_card = await create_user_coach_card(db, user.id, coach.id, source, opening.id)
 
-        db.add(PackOpeningCard(opening_id=opening.id, user_card_id=user_card.id, is_new=is_new))
-        user_card.player = player
-        opened_items.append(
-            OpenedCardOut(card=user_card, is_new=is_new, duplicate_count=dup_counts[player.id])
-        )
+            db.add(PackOpeningCard(opening_id=opening.id, user_card_id=None, user_coach_card_id=user_coach_card.id, is_new=is_new))
+            user_coach_card.coach = coach
+            opened_coach_items.append(
+                OpenedCoachCardOut(card=user_coach_card, is_new=is_new, duplicate_count=coach_dup_counts[coach.id])
+            )
+        else:
+            player = await pick_random_player(db, rarity)
+            is_new = dup_counts.get(player.id, 0) == 0 and player.id not in seen_this_opening
+            seen_this_opening.add(player.id)
+            dup_counts[player.id] = dup_counts.get(player.id, 0) + 1
+
+            user_card = await create_user_card(db, user.id, player.id, source, opening.id)
+
+            db.add(PackOpeningCard(opening_id=opening.id, user_card_id=user_card.id, user_coach_card_id=None, is_new=is_new))
+            user_card.player = player
+            opened_items.append(
+                OpenedCardOut(card=user_card, is_new=is_new, duplicate_count=dup_counts[player.id])
+            )
 
     opened_items.sort(key=lambda item: RARITY_ORDER[item.card.player.rarity])
-    return opened_items
+    opened_coach_items.sort(key=lambda item: RARITY_ORDER[item.card.coach.rarity])
+    return opened_items, opened_coach_items
 
 
 async def track_pack_opened_tasks(db: AsyncSession, user: User, dup_counts: dict[int, int]) -> None:
@@ -293,12 +352,12 @@ async def grant_bonus_pack_opening(
     await db.flush()
 
     dup_counts = await _duplicate_counts_snapshot(db, user.id)
-    opened_items = await roll_and_create_cards(db, user, pack, opening, dup_counts, source)
+    opened_items, opened_coach_items = await roll_and_create_cards(db, user, pack, opening, dup_counts, source)
     referral_bonus_coins = await maybe_grant_referral_bonus_for_locked_user(db, user)
 
     return PackOpenResult(
-        opening_id=opening.id, pack=PackOut.model_validate(pack), cards=opened_items, new_balance=user.balance,
-        referral_bonus_coins=referral_bonus_coins,
+        opening_id=opening.id, pack=PackOut.model_validate(pack), cards=opened_items, coach_cards=opened_coach_items,
+        new_balance=user.balance, referral_bonus_coins=referral_bonus_coins,
     )
 
 
@@ -365,7 +424,7 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
     await db.flush()
 
     dup_counts = await _duplicate_counts_snapshot(db, locked_user.id)
-    opened_items = await roll_and_create_cards(db, locked_user, pack, opening, dup_counts, CardSource.pack)
+    opened_items, opened_coach_items = await roll_and_create_cards(db, locked_user, pack, opening, dup_counts, CardSource.pack)
     await track_pack_opened_tasks(db, locked_user, dup_counts)
     collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(
         db, locked_user, [item.card.player.id for item in opened_items]
@@ -420,6 +479,7 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
         opening_id=opening.id,
         pack=PackOut.model_validate(pack),
         cards=opened_items,
+        coach_cards=opened_coach_items,
         new_balance=locked_user.balance,
         referral_bonus_coins=referral_bonus_coins,
         collection_rewards=collection_rewards,
