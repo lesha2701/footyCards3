@@ -36,7 +36,7 @@ class ClubPenaltyClaimOut(BaseModel):
     result: str
     # True when reward_coins is 0 specifically because the player already used up
     # today's rewarded attempts for this game — same meaning as
-    # ClubMissingItemClaimOut.daily_cap_reached.
+    # ClubGameClaimOut.daily_cap_reached.
     daily_cap_reached: bool = False
 
 

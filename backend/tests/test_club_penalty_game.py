@@ -9,7 +9,7 @@ from tests.utils import telegram_headers
 async def _seed_position_pool(db_session):
     """club_service.create_club seeds a starting squad on every club creation — give
     every test in this file enough active players per formation category to draw from,
-    mirroring test_club_missing_item_game.py's identical fixture."""
+    mirroring test_clubs.py's identical fixture (see its docstring for the full rationale)."""
     for position in (Position.GK, Position.GK, Position.GK):
         await create_player(db_session, position=position)
     for position in (Position.LB, Position.LB, Position.CB, Position.CB, Position.RB, Position.RB):

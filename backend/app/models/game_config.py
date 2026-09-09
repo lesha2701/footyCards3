@@ -32,10 +32,6 @@ class GameConfig(TimestampMixin, Base):
     club_game_daily_reward_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     club_game_reward_cap: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
 
-    club_missing_item_hourly_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    club_missing_item_daily_reward_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
-    club_missing_item_reward_cap: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
-
     club_penalty_hourly_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     club_penalty_daily_reward_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     club_penalty_reward_win: Mapped[int] = mapped_column(Integer, default=45, nullable=False)

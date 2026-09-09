@@ -100,7 +100,7 @@ def _apply_finish(session: GameSession, state: dict, result: str, config) -> Non
     """Shared by a natural finish (resolve_kick) and an explicit forfeit — marks the
     session finished with the given result and its reward. Unlike personal Penalty, no
     rating/league/task hooks: club mini-games stay decoupled from the personal track,
-    same as club_game_service and club_missing_item_service. session.status is always
+    same as club_game_service. session.status is always
     GameSessionStatus.won regardless of win/loss — mirrors penalty_service.py's own
     quirk exactly ("won" means "finished, reward claimable", not "the player won"; the
     real outcome lives in state["result"])."""
