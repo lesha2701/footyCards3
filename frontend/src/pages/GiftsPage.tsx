@@ -17,6 +17,7 @@ import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconCoin, IconGift, IconInboxEmpty, IconSearch, IconTrophy } from "@/components/icons";
 import { ApiRequestError, staticUrl } from "@/lib/api";
+import { RARITY_LABELS } from "@/lib/rarity";
 import { hapticNotify, openTelegramInvoice, showConfirm } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { Gift, GiftClaimResult, GiftSet, TrophyDefinition, UserPublic } from "@/types";
@@ -213,10 +214,23 @@ function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; on
           </div>
         )}
 
-        {result.pack_result && result.pack_result.cards.length > 0 && (
+        {result.pack_result && (result.pack_result.cards.length > 0 || result.pack_result.coach_cards.length > 0) && (
           <div className="mt-3 grid grid-cols-3 gap-2">
             {result.pack_result.cards.map((c) => (
               <PlayerCard key={c.card.id} player={c.card.player} size="sm" />
+            ))}
+            {result.pack_result.coach_cards.map((c) => (
+              <div key={`coach-${c.card.id}`} className="flex flex-col items-center gap-1.5 overflow-hidden rounded-2xl bg-rarity-epic/10 p-2">
+                <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-black/20">
+                  <img
+                    src={staticUrl(c.card.coach.image_path ?? undefined) ?? undefined}
+                    alt={c.card.coach.display_name}
+                    className="h-full w-full object-cover"
+                  />
+                </span>
+                <p className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{c.card.coach.display_name}</p>
+                <p className="text-[10px] text-ink-mist">Тренер · {RARITY_LABELS[c.card.coach.rarity]}</p>
+              </div>
             ))}
           </div>
         )}
