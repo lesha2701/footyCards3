@@ -110,6 +110,7 @@ export default function PackOpenPage() {
     // actions in place so this path still offers "open another".
     if (
       result.cards.length === 1 &&
+      result.coach_cards.length === 0 &&
       !result.referral_bonus_coins &&
       result.collection_rewards.length === 0 &&
       !result.pack.bonus_coins &&
@@ -183,6 +184,16 @@ export default function PackOpenPage() {
     // (the common case) would skip showing the card entirely.
     if (timerRef.current) clearTimeout(timerRef.current);
     haptic("light");
+    // A pack whose every slot rolled a coach has no player cards at all, so
+    // there is nothing for the staged reveal to fast-forward through —
+    // entering "revealing" here would render RevealStage with
+    // result.cards[-1] (undefined) and crash. Coach cards only ever appear
+    // in the summary grid, so go straight there.
+    if (result.cards.length === 0) {
+      hapticNotify("success");
+      setPhase("summary");
+      return;
+    }
     setPhase("revealing"); // in case skip is tapped from the packshot screen, before opening
     setCardIndex(result.cards.length - 1);
     setStageIndex(STAGES.length - 1);
@@ -206,7 +217,21 @@ export default function PackOpenPage() {
       )}
 
       {phase === "packshot" && (
-        <PackShot pack={result.pack} onOpen={() => { haptic("medium"); setPhase("revealing"); }} />
+        <PackShot
+          pack={result.pack}
+          onOpen={() => {
+            haptic("medium");
+            // Same zero-player-cards case as skipAll below — a coach-only
+            // pack has nothing to show in the staged reveal, so skip it
+            // entirely rather than rendering RevealStage with an undefined card.
+            if (result.cards.length === 0) {
+              hapticNotify("success");
+              setPhase("summary");
+              return;
+            }
+            setPhase("revealing");
+          }}
+        />
       )}
 
       {phase === "revealing" && (
@@ -325,8 +350,11 @@ function Summary({
   // A single-card pack's one card was already fully shown during the reveal
   // stage — re-displaying it here (and the generic "Pack opened" heading)
   // would be pure repetition, so this screen is only reached at all when
-  // there's an actual reward banner below worth showing.
-  const showRecap = result.cards.length > 1;
+  // there's an actual reward banner below worth showing. Coach cards never
+  // go through that staged reveal (they only ever appear in this grid), so
+  // any coach card always earns the recap — otherwise an all-coach pack
+  // (result.cards.length === 0) would never show its coach card anywhere.
+  const showRecap = result.coach_cards.length > 0 || result.cards.length > 1;
   return (
     <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
       {showRecap && <h2 className="text-center font-display text-2xl font-bold text-ink-chalk">Пак открыт!</h2>}
@@ -387,6 +415,32 @@ function Summary({
                       {opened.card.player.collection_name}
                     </p>
                   )}
+                </div>
+              </div>
+              {opened.is_new && (
+                <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
+              )}
+              {opened.duplicate_count > 1 && (
+                <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
+                  ×{opened.duplicate_count}
+                </span>
+              )}
+            </div>
+          ))}
+          {result.coach_cards.map((opened) => (
+            <div
+              key={`coach-${opened.card.id}`}
+              className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.coach.rarity]} p-[2px] ${RARITY_GLOW[opened.card.coach.rarity]}`}
+            >
+              <div className="flex flex-col rounded-[14px] bg-bg-surface">
+                <img
+                  src={staticUrl(opened.card.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                  alt={opened.card.coach.display_name}
+                  className="aspect-square w-full object-cover"
+                />
+                <div className="p-2 text-center">
+                  <p className="truncate text-xs font-bold text-ink-chalk">{opened.card.coach.display_name}</p>
+                  <p className="text-[10px] text-ink-mist">Тренер · {RARITY_LABELS[opened.card.coach.rarity]}</p>
                 </div>
               </div>
               {opened.is_new && (
