@@ -1,3 +1,6 @@
+from app.models.coach import Coach
+from app.models.user_coach_card import UserCoachCard
+from tests.factories import get_user_by_telegram_id
 from tests.utils import telegram_headers
 
 
@@ -160,3 +163,38 @@ async def test_toggle_active_and_delete_coach(client, db_session, bot_token):
 
     list_resp = await client.get("/api/v1/admin/coaches", headers=auth)
     assert all(c["id"] != coach_id for c in list_resp.json()["items"])
+
+
+async def test_delete_coach_with_owned_user_card_returns_conflict_not_500(client, db_session, bot_token):
+    # Regression: UserCoachCard/ClubCoachCard reference coaches.id with no
+    # ON DELETE clause, so deleting an owned coach used to raise an
+    # unhandled IntegrityError (bare 500) — and delete_coach_image() ran
+    # before that failing delete, orphaning the image file. Deleting a
+    # coach with owned copies must now come back as a clean 409 and leave
+    # the coach row (and its image) untouched.
+    token = await _admin_token(client, bot_token)
+    auth = {"Authorization": f"Bearer {token}"}
+
+    create_resp = await client.post(
+        "/api/v1/admin/coaches", headers=auth,
+        json={"display_name": "Owned Coach", "rarity": "common", "boosts": [{"boost_type": "ball_control", "magnitude": 0.1}]},
+    )
+    assert create_resp.status_code == 200, create_resp.text
+    coach_id = create_resp.json()["id"]
+
+    headers = telegram_headers(840300, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 840300)
+
+    coach = await db_session.get(Coach, coach_id)
+    db_session.add(UserCoachCard(user_id=user.id, coach_id=coach.id, serial_number=1, source="pack"))
+    await db_session.commit()
+
+    delete_resp = await client.delete(f"/api/v1/admin/coaches/{coach_id}", headers=auth)
+    assert delete_resp.status_code == 409, delete_resp.text
+    assert delete_resp.json()["error"]["code"] == "conflict"
+
+    list_resp = await client.get("/api/v1/admin/coaches", headers=auth)
+    surviving = next((c for c in list_resp.json()["items"] if c["id"] == coach_id), None)
+    assert surviving is not None
+    assert surviving["display_name"] == "Owned Coach"

@@ -6,10 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.dependencies import get_current_admin
+from app.core.exceptions import ConflictError
 from app.core.pagination import Page, PageParams
 from app.database import get_db
+from app.models.club_coach_card import ClubCoachCard
 from app.models.coach import Coach
 from app.models.user import User
+from app.models.user_coach_card import UserCoachCard
 from app.schemas.coach import CoachCreate, CoachOut, CoachUpdate
 from app.services.admin_log_service import log_action
 from app.services.coach_service import create_coach, get_coach_or_404, update_coach
@@ -109,17 +112,25 @@ async def toggle_pack_droppable(coach_id: int, request: Request, db: AsyncSessio
 @router.delete("/{coach_id}")
 async def delete_coach(coach_id: int, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
     coach = await get_coach_or_404(db, coach_id)
-    # No FK-guard against owned copies yet (UserCoachCard/ClubCoachCard
-    # don't exist until a later phase) — unlike delete_player's card_count
-    # check, deleting a coach in this phase is unconditional. A later
-    # phase MUST add an equivalent guard once those tables exist.
-    delete_coach_image(coach.image_path)
+    user_card_count = (
+        await db.execute(select(func.count(UserCoachCard.id)).where(UserCoachCard.coach_id == coach_id))
+    ).scalar_one()
+    club_card_count = (
+        await db.execute(select(func.count(ClubCoachCard.id)).where(ClubCoachCard.coach_id == coach_id))
+    ).scalar_one()
+    card_count = user_card_count + club_card_count
+    if card_count > 0:
+        raise ConflictError(
+            f"Cannot delete: {card_count} card instance(s) reference this coach. Deactivate it instead.",
+            details={"user_card_count": user_card_count, "club_card_count": club_card_count},
+        )
     await log_action(
         db, admin.id, "delete_coach", "coach", coach_id, old_value={"display_name": coach.display_name},
         ip_address=request.client.host if request.client else None,
     )
     await db.delete(coach)
     await db.commit()
+    delete_coach_image(coach.image_path)
     return {"status": "ok"}
 
 
