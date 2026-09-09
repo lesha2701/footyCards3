@@ -14,7 +14,24 @@ interface Props {
   onClose: () => void;
 }
 
+function dedupeByCoach(cards: ClubCoachCard[]): ClubCoachCard[] {
+  // A club can own several ClubCoachCard copies of the same underlying Coach
+  // (packs can repeat), but every copy shares identical boosts/rarity/name —
+  // picking any one has the exact same effect, so the picker shows one row
+  // per distinct coach, not one per owned card. Keep the lowest serial
+  // number (earliest acquired) as the representative card.
+  const byCoach = new Map<number, ClubCoachCard>();
+  for (const card of cards) {
+    const existing = byCoach.get(card.coach.id);
+    if (!existing || card.serial_number < existing.serial_number) {
+      byCoach.set(card.coach.id, card);
+    }
+  }
+  return [...byCoach.values()];
+}
+
 export default function ClubCoachCardPickerModal({ open, cards, onSelect, onClose }: Props) {
+  const uniqueCards = dedupeByCoach(cards);
   return (
     <AnimatePresence>
       {open && (
@@ -43,11 +60,11 @@ export default function ClubCoachCardPickerModal({ open, cards, onSelect, onClos
             >
               Без тренера
             </button>
-            {cards.length === 0 ? (
+            {uniqueCards.length === 0 ? (
               <EmptyState icon={IconCollection} title="У клуба пока нет тренера" description="Открой клубные паки, чтобы получить тренера" />
             ) : (
               <div className="flex flex-col gap-2">
-                {cards.map((c) => (
+                {uniqueCards.map((c) => (
                   <button
                     key={c.id}
                     onClick={() => onSelect(c)}
