@@ -6,12 +6,13 @@ import type {
   ClubGameSubmitResult,
   ClubJoinRequest,
   ClubMemberActivity,
-  ClubMissingItemClaimResult,
-  ClubMissingItemReveal,
-  ClubMissingItemStart,
-  ClubMissingItemSubmitResult,
+  ClubPenaltyClaim,
+  ClubPenaltyForfeit,
+  ClubPenaltyKick,
+  ClubPenaltyStart,
   ClubSummary,
   NextOpponent,
+  PenaltyDirection,
   TournamentApplyResult,
   TournamentCurrent,
   TournamentDetail,
@@ -170,27 +171,22 @@ export async function claimClubGameReward(sessionId: number): Promise<ClubGameCl
   return data;
 }
 
-export async function startMissingItemGame(): Promise<ClubMissingItemStart> {
-  const { data } = await api.post<ClubMissingItemStart>("/clubs/me/missing-item/start");
+export async function startClubPenalty(clubCardId: number): Promise<ClubPenaltyStart> {
+  const { data } = await api.post<ClubPenaltyStart>("/clubs/me/penalty/start", { club_card_id: clubCardId });
   return data;
 }
 
-export async function revealMissingItemRound(sessionId: number): Promise<ClubMissingItemReveal> {
-  const { data } = await api.post<ClubMissingItemReveal>(`/clubs/me/missing-item/${sessionId}/reveal`);
+export async function kickClubPenalty(sessionId: number, direction: PenaltyDirection): Promise<ClubPenaltyKick> {
+  const { data } = await api.post<ClubPenaltyKick>(`/clubs/me/penalty/${sessionId}/kick`, { direction });
   return data;
 }
 
-export async function submitMissingItemRound(sessionId: number, answer: string): Promise<ClubMissingItemSubmitResult> {
-  const { data } = await api.post<ClubMissingItemSubmitResult>(`/clubs/me/missing-item/${sessionId}/submit`, { answer });
+export async function claimClubPenaltyReward(sessionId: number): Promise<ClubPenaltyClaim> {
+  const { data } = await api.post<ClubPenaltyClaim>(`/clubs/me/penalty/${sessionId}/claim`);
   return data;
 }
 
-export async function endMissingItemGame(sessionId: number): Promise<ClubMissingItemSubmitResult> {
-  const { data } = await api.post<ClubMissingItemSubmitResult>(`/clubs/me/missing-item/${sessionId}/end`);
-  return data;
-}
-
-export async function claimMissingItemReward(sessionId: number): Promise<ClubMissingItemClaimResult> {
-  const { data } = await api.post<ClubMissingItemClaimResult>(`/clubs/me/missing-item/${sessionId}/claim`);
+export async function forfeitClubPenalty(sessionId: number): Promise<ClubPenaltyForfeit> {
+  const { data } = await api.post<ClubPenaltyForfeit>(`/clubs/me/penalty/${sessionId}/forfeit`);
   return data;
 }

@@ -344,32 +344,37 @@ export interface ClubGameClaimResult {
   daily_cap_reached: boolean;
 }
 
-export interface ClubMissingItemStart {
+export interface ClubPenaltyStart {
   session_id: number;
-  round_number: number;
-  items: string[];
+  player_rating: number;
+  first_kicker: "player" | "bot";
 }
 
-export interface ClubMissingItemReveal {
+export interface ClubPenaltyKick {
   session_id: number;
-  round_number: number;
-  items_shown: string[];
-  hide_after_ms: number;
-  answer_timeout_ms: number;
+  kicker: "player" | "bot";
+  outcome: "goal" | "saved" | "miss";
+  player_direction: PenaltyDirection | null;
+  bot_direction: PenaltyDirection;
+  player_score: number;
+  bot_score: number;
+  next_kicker: "player" | "bot" | null;
+  is_finished: boolean;
+  result: "win" | "loss" | null;
 }
 
-export interface ClubMissingItemSubmitResult {
-  correct: boolean;
-  session_id: number;
-  score: number;
-  status: string;
-  next_round?: ClubMissingItemStart;
-}
-
-export interface ClubMissingItemClaimResult {
+export interface ClubPenaltyClaim {
   reward_coins: number;
   new_club_budget: number;
+  result: string;
   daily_cap_reached: boolean;
+}
+
+export interface ClubPenaltyForfeit {
+  session_id: number;
+  player_score: number;
+  bot_score: number;
+  result: string;
 }
 
 export interface LineupSlot {

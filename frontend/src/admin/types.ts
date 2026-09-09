@@ -106,9 +106,11 @@ export interface GameConfig {
   club_game_hourly_limit: number;
   club_game_daily_reward_limit: number;
   club_game_reward_cap: number;
-  club_missing_item_hourly_limit: number;
-  club_missing_item_daily_reward_limit: number;
-  club_missing_item_reward_cap: number;
+  club_penalty_hourly_limit: number;
+  club_penalty_daily_reward_limit: number;
+  club_penalty_reward_win: number;
+  club_penalty_reward_loss: number;
+  club_penalty_bot_miss_chance: number;
   memory_daily_reward_limit: number;
   memory_reward_cap: number;
   suspicious_memory_score_threshold: number;
@@ -293,7 +295,7 @@ export interface AdminClubBudgetTransaction {
   amount: number;
   balance_before: number;
   balance_after: number;
-  type: "daily_claim" | "pack_purchase" | "tournament_reward" | "club_game_reward" | "club_missing_item_reward";
+  type: "daily_claim" | "pack_purchase" | "tournament_reward" | "club_game_reward" | "club_missing_item_reward" | "club_penalty_reward";
   description: string;
   created_at: string;
 }
