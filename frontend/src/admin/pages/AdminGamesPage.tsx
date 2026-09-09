@@ -104,12 +104,14 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-3 font-display text-base font-bold">Что исчезло? (клубная игра)</p>
+        <p className="mb-3 font-display text-base font-bold">Пенальти (клубная игра)</p>
         <p className="mb-3 text-xs text-slate-500">Награда за игру идёт в бюджет клуба, а не игроку лично.</p>
         <div className="grid grid-cols-2 gap-3">
-          {field("club_missing_item_hourly_limit", "Лимит игр в час (на участника)")}
-          {field("club_missing_item_daily_reward_limit", "Лимит наградных попыток/день")}
-          {field("club_missing_item_reward_cap", "Максимальная награда")}
+          {field("club_penalty_hourly_limit", "Лимит игр в час (на участника)")}
+          {field("club_penalty_daily_reward_limit", "Лимит наградных попыток/день")}
+          {field("club_penalty_reward_win", "Награда за победу")}
+          {field("club_penalty_reward_loss", "Награда за поражение")}
+          {field("club_penalty_bot_miss_chance", "Шанс промаха бота (0-1)")}
         </div>
       </section>
 
