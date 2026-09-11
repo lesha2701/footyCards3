@@ -142,7 +142,10 @@ async def apply_to_tournament(db: AsyncSession, user: User) -> TournamentApplyRe
 
     for club_id in club_ids:
         db.add(TournamentClub(tournament_id=tournament.id, club_id=club_id))
-        db.add(TournamentClubStanding(tournament_id=tournament.id, club_id=club_id))
+        db.add(TournamentClubStanding(
+            tournament_id=tournament.id, club_id=club_id,
+            training_uses_remaining=config.club_training_uses_per_tournament,
+        ))
         club_row = await db.get(Club, club_id)
         club_row.last_tournament_applied_at = datetime.now(timezone.utc)
         db.add(club_row)
