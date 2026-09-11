@@ -2,7 +2,7 @@ from sqlalchemy import select
 
 from app.models.club import ClubMember
 from app.models.club_card_availability import ClubCardAvailability
-from app.models.enums import Position
+from app.models.enums import ClubCardAvailabilityReason, Position
 from app.models.notification import Notification
 from app.services.tournament_notification_service import notify_club_members, send_lineup_reminders
 from app.services.tournament_queue_service import apply_to_tournament
@@ -81,7 +81,7 @@ async def test_send_lineup_reminders_notifies_club_with_suspended_starter(client
     first_club = club_ids_and_captains[0][0]
     lineup = (await db_session.execute(select(ClubLineup).where(ClubLineup.club_id == first_club.id))).scalar_one()
     lineup_card = (await db_session.execute(select(ClubLineupCard).where(ClubLineupCard.club_lineup_id == lineup.id))).scalars().first()
-    db_session.add(ClubCardAvailability(club_card_id=lineup_card.club_card_id, rounds_remaining=1))
+    db_session.add(ClubCardAvailability(club_card_id=lineup_card.club_card_id, rounds_remaining=1, reason=ClubCardAvailabilityReason.red_card))
     await db_session.commit()
 
     notified = await send_lineup_reminders(db_session)
@@ -120,7 +120,7 @@ async def test_send_lineup_reminders_skips_both_sides_of_a_withdrawn_fixture(cli
     first_club = club_ids_and_captains[0][0]
     lineup = (await db_session.execute(select(ClubLineup).where(ClubLineup.club_id == first_club.id))).scalar_one()
     lineup_card = (await db_session.execute(select(ClubLineupCard).where(ClubLineupCard.club_lineup_id == lineup.id))).scalars().first()
-    db_session.add(ClubCardAvailability(club_card_id=lineup_card.club_card_id, rounds_remaining=1))
+    db_session.add(ClubCardAvailability(club_card_id=lineup_card.club_card_id, rounds_remaining=1, reason=ClubCardAvailabilityReason.red_card))
 
     # Same ordering send_lineup_reminders itself uses to build the club_ids list
     # it feeds to generate_fixtures — needed to look up who round 1 pairs the

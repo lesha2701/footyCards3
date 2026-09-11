@@ -37,6 +37,8 @@ class _FakeMatchConfig(_FakeConfig):
     club_tactical_phases_per_match_max = 70
     club_tactical_promoted_chance_target_min = 15
     club_tactical_promoted_chance_target_max = 25
+    club_tactical_tackle_attempt_chance = 0.20
+    club_tactical_injury_chance = 0.35
 
 
 def _hand_built_moment(shot_type: str = "in_box") -> dict:

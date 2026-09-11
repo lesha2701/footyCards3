@@ -1,7 +1,8 @@
-from sqlalchemy import ForeignKey, Integer
+from sqlalchemy import Enum, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.enums import ClubCardAvailabilityReason
 
 
 class ClubCardAvailability(Base):
@@ -14,3 +15,6 @@ class ClubCardAvailability(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     club_card_id: Mapped[int] = mapped_column(ForeignKey("club_cards.id", ondelete="CASCADE"), unique=True, nullable=False)
     rounds_remaining: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[ClubCardAvailabilityReason] = mapped_column(
+        Enum(ClubCardAvailabilityReason, name="club_card_availability_reason_enum"), nullable=False,
+    )

@@ -154,6 +154,8 @@ class GameConfigOut(BaseModel):
     club_penalty_reward_win: int
     club_penalty_reward_loss: int
     club_penalty_bot_miss_chance: float
+    club_tactical_tackle_attempt_chance: float
+    club_tactical_injury_chance: float
     memory_daily_reward_limit: int
     memory_reward_cap: int
     suspicious_memory_score_threshold: int
@@ -268,6 +270,8 @@ class GameConfigUpdate(BaseModel):
     club_penalty_reward_win: Optional[int] = Field(default=None, ge=0)
     club_penalty_reward_loss: Optional[int] = Field(default=None, ge=0)
     club_penalty_bot_miss_chance: Optional[float] = Field(default=None, ge=0, le=1)
+    club_tactical_tackle_attempt_chance: Optional[float] = Field(default=None, ge=0, le=1)
+    club_tactical_injury_chance: Optional[float] = Field(default=None, ge=0, le=1)
     memory_daily_reward_limit: Optional[int] = Field(default=None, ge=0)
     memory_reward_cap: Optional[int] = Field(default=None, ge=0)
     suspicious_memory_score_threshold: Optional[int] = Field(default=None, ge=0)

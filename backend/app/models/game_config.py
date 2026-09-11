@@ -52,6 +52,8 @@ class GameConfig(TimestampMixin, Base):
     club_tactical_fit_formation_weight: Mapped[float] = mapped_column(Numeric(4, 2), default=0.40, nullable=False)
     club_tactical_fit_playstyle_weight: Mapped[float] = mapped_column(Numeric(4, 2), default=0.40, nullable=False)
     club_tactical_fit_mentality_weight: Mapped[float] = mapped_column(Numeric(4, 2), default=0.20, nullable=False)
+    club_tactical_tackle_attempt_chance: Mapped[float] = mapped_column(Numeric(4, 2), default=0.20, nullable=False)
+    club_tactical_injury_chance: Mapped[float] = mapped_column(Numeric(4, 2), default=0.35, nullable=False)
 
     memory_daily_reward_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     memory_reward_cap: Mapped[int] = mapped_column(Integer, default=150, nullable=False)

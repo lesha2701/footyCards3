@@ -135,6 +135,11 @@ class TournamentStatus(str, enum.Enum):
     completed = "completed"
 
 
+class ClubCardAvailabilityReason(str, enum.Enum):
+    red_card = "red_card"
+    injury = "injury"
+
+
 class ClubCardSource(str, enum.Enum):
     starter_seed = "starter_seed"
     club_pack = "club_pack"

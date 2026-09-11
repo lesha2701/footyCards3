@@ -2,7 +2,7 @@ import pytest_asyncio
 
 from app.models.club import Club
 from app.models.club_card_availability import ClubCardAvailability
-from app.models.enums import Position
+from app.models.enums import ClubCardAvailabilityReason, Position
 from app.services.tournament_simulation_service import form_multiplier, resolve_match_lineup
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
@@ -66,7 +66,7 @@ async def test_resolve_match_lineup_substitutes_suspended_card(db_session, seede
     club, _captain = seeded_club_with_full_squad
     lineup, _, _, _ = await resolve_match_lineup(db_session, club.id)
     suspended_card_id = lineup[0]["club_card_id"]
-    db_session.add(ClubCardAvailability(club_card_id=suspended_card_id, rounds_remaining=2))
+    db_session.add(ClubCardAvailability(club_card_id=suspended_card_id, rounds_remaining=2, reason=ClubCardAvailabilityReason.injury))
     await db_session.commit()
 
     new_lineup, had_sub, cards_with_slots, _club_lineup = await resolve_match_lineup(db_session, club.id)
@@ -92,7 +92,7 @@ async def test_match_strength_no_longer_applies_a_flat_substitution_penalty(db_s
     club, _captain = seeded_club_with_full_squad
     lineup, _, cards_with_slots, _club_lineup = await resolve_match_lineup(db_session, club.id)
     suspended_card_id = lineup[0]["club_card_id"]
-    db_session.add(ClubCardAvailability(club_card_id=suspended_card_id, rounds_remaining=2))
+    db_session.add(ClubCardAvailability(club_card_id=suspended_card_id, rounds_remaining=2, reason=ClubCardAvailabilityReason.injury))
     await db_session.commit()
 
     config = await get_config(db_session)

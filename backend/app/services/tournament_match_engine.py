@@ -252,12 +252,13 @@ def simulate_match(
             setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
 
         # Defense is attempted only when a blocked/saved shot has a further
-        # (15%) chance the defender committed a foul in the process — mirrors
-        # match_service's "tackle can stop an attack before it becomes a shot"
-        # flow for the box/foul path; everywhere else, shoot/pass resolves
-        # directly against the defender's rating via _resolve_shot_continuation's
-        # blocker/keeper roll, same as the personal engine.
-        if event["event_type"] in ("blocked", "save") and random.random() < 0.15:
+        # (config.club_tactical_tackle_attempt_chance) chance the defender
+        # committed a foul in the process — mirrors match_service's "tackle
+        # can stop an attack before it becomes a shot" flow for the box/foul
+        # path; everywhere else, shoot/pass resolves directly against the
+        # defender's rating via _resolve_shot_continuation's blocker/keeper
+        # roll, same as the personal engine.
+        if event["event_type"] in ("blocked", "save") and random.random() < float(config.club_tactical_tackle_attempt_chance):
             defense_event, defense_scorer, card = _resolve_defense_tackle(defending_side, moment, config)
             result.event_log.append(defense_event)
             defense_event["description"] = _describe_event(defense_event["event_type"], defense_event["team"], club_a_name, club_b_name)
@@ -267,7 +268,7 @@ def simulate_match(
                 club_card_id, card_kind = card
                 if card_kind == "red":
                     result.red_cards.append((club_card_id, 1))
-                    if random.random() < 0.3:
+                    if random.random() < float(config.club_tactical_injury_chance):
                         result.injuries.append((club_card_id, random.randint(1, 3)))
 
     return result

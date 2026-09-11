@@ -172,16 +172,32 @@ async def _apply_engine_result(db: AsyncSession, engine_result: "tournament_matc
     minted by this match must still hold for the *next* round, not be
     decremented to 0 in the very round it was earned. A club_card_id that
     picked up both a red card and its associated injury roll in the same
-    match keeps the longer of the two (max), rather than one overwriting
-    the other."""
-    for club_card_id, rounds in [*engine_result.red_cards, *engine_result.injuries]:
+    match keeps the longer of the two (max) rounds_remaining, and ends up
+    labeled reason=injury — the more informative outcome, since the two
+    loops below process red_cards first, injuries second, and injuries can
+    only ever fire as a bonus on top of an existing red card, never alone."""
+    from app.models.enums import ClubCardAvailabilityReason
+
+    for club_card_id, rounds in engine_result.red_cards:
         existing = (
             await db.execute(select(ClubCardAvailability).where(ClubCardAvailability.club_card_id == club_card_id))
         ).scalar_one_or_none()
         if existing is None:
-            db.add(ClubCardAvailability(club_card_id=club_card_id, rounds_remaining=rounds))
+            db.add(ClubCardAvailability(club_card_id=club_card_id, rounds_remaining=rounds, reason=ClubCardAvailabilityReason.red_card))
         else:
             existing.rounds_remaining = max(existing.rounds_remaining, rounds)
+            existing.reason = ClubCardAvailabilityReason.red_card
+            db.add(existing)
+
+    for club_card_id, rounds in engine_result.injuries:
+        existing = (
+            await db.execute(select(ClubCardAvailability).where(ClubCardAvailability.club_card_id == club_card_id))
+        ).scalar_one_or_none()
+        if existing is None:
+            db.add(ClubCardAvailability(club_card_id=club_card_id, rounds_remaining=rounds, reason=ClubCardAvailabilityReason.injury))
+        else:
+            existing.rounds_remaining = max(existing.rounds_remaining, rounds)
+            existing.reason = ClubCardAvailabilityReason.injury
             db.add(existing)
 
 
