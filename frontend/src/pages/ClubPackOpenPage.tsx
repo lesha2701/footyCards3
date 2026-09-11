@@ -165,10 +165,13 @@ export default function ClubPackOpenPage() {
       {phase === "summary" && (
         <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
           <h2 className="text-center font-display text-2xl font-bold text-ink-chalk">Пак открыт!</h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className={result.cards.length === 1 ? "flex justify-center" : "grid grid-cols-2 gap-3 sm:grid-cols-3"}>
             {result.cards.map((item) =>
               item.kind === "coach" ? (
-                <div key={`coach-${item.coach_card!.id}`} className="flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2">
+                <div
+                  key={`coach-${item.coach_card!.id}`}
+                  className={`flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2 ${result.cards.length === 1 ? "w-2/5" : ""}`}
+                >
                   <img
                     src={staticUrl(item.coach_card!.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                     alt={item.coach_card!.coach.display_name}
@@ -179,7 +182,10 @@ export default function ClubPackOpenPage() {
                   {item.is_new && <span className="text-[9px] font-bold text-accent-green">Новый!</span>}
                 </div>
               ) : (
-                <div key={`player-${item.card!.id}`} className="flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2">
+                <div
+                  key={`player-${item.card!.id}`}
+                  className={`flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2 ${result.cards.length === 1 ? "w-2/5" : ""}`}
+                >
                   <img
                     src={staticUrl(item.card!.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                     alt={item.card!.player.display_name}
