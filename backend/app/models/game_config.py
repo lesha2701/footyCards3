@@ -28,6 +28,10 @@ class GameConfig(TimestampMixin, Base):
     club_tournament_budget_place_7: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
     club_tournament_budget_place_8: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
 
+    club_match_reward_win: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    club_match_reward_draw: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    club_match_reward_loss: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+
     club_game_hourly_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     club_game_daily_reward_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     club_game_reward_cap: Mapped[int] = mapped_column(Integer, default=100, nullable=False)

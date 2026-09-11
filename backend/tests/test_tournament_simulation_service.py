@@ -158,6 +158,59 @@ async def test_simulate_next_round_auto_scores_withdrawn_club_as_loss(db_session
         assert (m.score_a, m.score_b) == (3, 0)
 
 
+async def test_simulate_next_round_credits_both_clubs_by_result(db_session, eight_club_tournament):
+    from app.services.game_config_service import get_config
+
+    tournament, _clubs_and_captains = eight_club_tournament
+    config = await get_config(db_session)
+
+    clubs_before = {}
+    for club, _captain in _clubs_and_captains:
+        await db_session.refresh(club)
+        clubs_before[club.id] = club.budget
+
+    matches = await simulate_next_round(db_session)
+    await db_session.commit()
+
+    round_1_matches = [m for m in matches if m.tournament_id == tournament.id]
+    assert len(round_1_matches) == 4
+    for m in round_1_matches:
+        for club, _captain in _clubs_and_captains:
+            if club.id not in (m.club_a_id, m.club_b_id):
+                continue
+            await db_session.refresh(club)
+            my_score, opp_score = (m.score_a, m.score_b) if club.id == m.club_a_id else (m.score_b, m.score_a)
+            expected_reward = (
+                config.club_match_reward_win if my_score > opp_score
+                else config.club_match_reward_loss if my_score < opp_score
+                else config.club_match_reward_draw
+            )
+            assert club.budget == clubs_before[club.id] + expected_reward
+
+
+async def test_simulate_next_round_does_not_reward_withdrawn_clubs(db_session, eight_club_tournament):
+    from sqlalchemy import select as sa_select
+
+    from app.models.club import Club as ClubModel
+    from app.models.tournament import TournamentClub
+
+    tournament, _clubs_and_captains = eight_club_tournament
+    participants = (
+        await db_session.execute(sa_select(TournamentClub).where(TournamentClub.tournament_id == tournament.id))
+    ).scalars().all()
+    withdrawn = participants[0]
+    withdrawn.is_withdrawn = True
+    db_session.add(withdrawn)
+    await db_session.commit()
+
+    withdrawn_club = await db_session.get(ClubModel, withdrawn.club_id)
+    budget_before = withdrawn_club.budget
+
+    await simulate_next_round(db_session)
+    await db_session.refresh(withdrawn_club)
+    assert withdrawn_club.budget == budget_before
+
+
 async def test_simulate_next_round_notifies_both_clubs_on_a_real_match(db_session, eight_club_tournament):
     from sqlalchemy import select
 

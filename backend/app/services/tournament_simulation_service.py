@@ -9,12 +9,13 @@ from sqlalchemy.orm import joinedload
 from app.models.club import Club
 from app.models.club_card import ClubCard
 from app.models.club_card_availability import ClubCardAvailability
-from app.models.enums import NotificationType, TournamentStatus
+from app.models.enums import ClubBudgetTransactionType, NotificationType, TournamentStatus
 from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_match import TournamentMatch
 from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLog
 from app.models.tournament_standing import TournamentClubStanding
 from app.services import tournament_match_engine, tournament_notification_service
+from app.services.club_budget_service import credit_club_budget
 from app.services.club_formation_service import get_formation_slots
 from app.services.club_tactical_matchup_service import build_side
 from app.services.game_config_service import get_config
@@ -249,7 +250,8 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
         club_ids = [p.club_id for p in participants]
         withdrawn_ids = {p.club_id for p in participants if p.is_withdrawn}
 
-        club_names = {c.id: c.name for c in (await db.execute(select(Club).where(Club.id.in_(club_ids)))).scalars().all()}
+        clubs_by_id = {c.id: c for c in (await db.execute(select(Club).where(Club.id.in_(club_ids)))).scalars().all()}
+        club_names = {cid: c.name for cid, c in clubs_by_id.items()}
 
         fixtures = [f for f in generate_fixtures(club_ids) if f[0] == round_number]
         standings_rows = (
@@ -293,6 +295,25 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
             )
             db.add(match)
             apply_match_result(standings_by_club[club_a_id], standings_by_club[club_b_id], engine_result.score_a, engine_result.score_b)
+
+            from app.services.club_service import _lock_club
+
+            club_a = await _lock_club(db, club_a_id)
+            club_b = await _lock_club(db, club_b_id)
+            if engine_result.score_a > engine_result.score_b:
+                reward_a, reward_b = config.club_match_reward_win, config.club_match_reward_loss
+            elif engine_result.score_a < engine_result.score_b:
+                reward_a, reward_b = config.club_match_reward_loss, config.club_match_reward_win
+            else:
+                reward_a = reward_b = config.club_match_reward_draw
+            await credit_club_budget(
+                db, club_a, reward_a, ClubBudgetTransactionType.tournament_match_reward,
+                f"Матч {round_number}-го тура турнира", related_object_type="tournament_match", related_object_id=tournament.id,
+            )
+            await credit_club_budget(
+                db, club_b, reward_b, ClubBudgetTransactionType.tournament_match_reward,
+                f"Матч {round_number}-го тура турнира", related_object_type="tournament_match", related_object_id=tournament.id,
+            )
 
             # Decay pre-existing suspensions for both clubs now that their
             # match has been played, BEFORE this same match's own new
