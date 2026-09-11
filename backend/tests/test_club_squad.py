@@ -391,3 +391,109 @@ async def test_next_opponent_reports_round_and_opponent_for_an_active_tournament
     assert out.midfield > 0
     assert out.defence > 0
     assert out.goalkeeping > 0
+
+
+# --- Squad training (Тренировка состава) ------------------------------------
+# eight_club_tournament below mirrors test_tournament_simulation_service.py's
+# own fixture of the same name/shape — this codebase's convention is a fresh,
+# file-local copy rather than a cross-file import (no test file in this repo
+# imports another test file's fixtures).
+
+
+async def _create_club_with_full_squad(client, db_session, bot_token, telegram_id, name):
+    """Registers telegram_id as captain of a fresh club (auto-seeded 11/11 lineup via
+    seed_starting_squad), plus a second member so apply_to_tournament's >=2-members check
+    passes."""
+    club, headers = await _create_club(client, bot_token, telegram_id, name)
+    captain = await get_user_by_telegram_id(db_session, telegram_id)
+
+    second_member_telegram_id = telegram_id + 900_000
+    await _register_only(client, bot_token, second_member_telegram_id)
+    join_resp = await client.post(
+        f"/api/v1/clubs/{club['id']}/join", headers=telegram_headers(second_member_telegram_id, bot_token)
+    )
+    assert join_resp.status_code == 200
+
+    return club, captain
+
+
+@pytest_asyncio.fixture
+async def eight_club_tournament(client, db_session, bot_token):
+    """Registers 8 clubs and applies each to the tournament queue — the 8th application forms
+    the Tournament. Yields (tournament, clubs_and_captains) so callers can authenticate as any
+    of the 8 captains."""
+    from app.models.tournament import Tournament
+    from app.services.tournament_queue_service import apply_to_tournament
+
+    clubs_and_captains = []
+    tournament_id = None
+    for i in range(8):
+        club, captain = await _create_club_with_full_squad(client, db_session, bot_token, 821000 + i, f"Клуб тренировки {i}")
+        result = await apply_to_tournament(db_session, captain)
+        clubs_and_captains.append((club, captain))
+        if result.tournament_id is not None:
+            tournament_id = result.tournament_id
+
+    assert tournament_id is not None
+    tournament = await db_session.get(Tournament, tournament_id)
+    return tournament, clubs_and_captains
+
+
+async def test_activate_training_requires_manager(db_session, eight_club_tournament):
+    from app.core.exceptions import ForbiddenError
+    from app.models.club import ClubMember
+    from app.models.user import User
+    from app.services.club_squad_service import activate_training
+
+    tournament, clubs_and_captains = eight_club_tournament
+    club, captain = clubs_and_captains[0]
+
+    # eight_club_tournament's own fixture always adds a second, plain member to every club —
+    # no new member needs creating here.
+    other_membership = (
+        await db_session.execute(
+            select(ClubMember).where(ClubMember.club_id == club["id"], ClubMember.user_id != captain.id)
+        )
+    ).scalar_one()
+    assert other_membership.role.value == "member"
+    plain_member = await db_session.get(User, other_membership.user_id)
+
+    with pytest.raises(ForbiddenError):
+        await activate_training(db_session, plain_member)
+
+
+async def test_activate_training_boosts_exactly_the_next_round_and_is_consumed(db_session, eight_club_tournament):
+    from app.models.tournament_standing import TournamentClubStanding
+    from app.services.club_squad_service import activate_training, get_club_lineup
+    from app.services.tournament_simulation_service import simulate_next_round
+
+    tournament, clubs_and_captains = eight_club_tournament
+    club, captain = clubs_and_captains[0]
+
+    lineup_before = await get_club_lineup(db_session, captain)
+    assert lineup_before.training_uses_remaining == 3
+    assert lineup_before.training_boost_active is False
+
+    boosted = await activate_training(db_session, captain)
+    assert boosted.training_uses_remaining == 2
+    assert boosted.training_boost_active is True
+    assert boosted.team_strength > lineup_before.team_strength
+
+    # Re-activating for the same still-upcoming round must be rejected.
+    with pytest.raises(ConflictError):
+        await activate_training(db_session, captain)
+
+    await simulate_next_round(db_session)
+    await db_session.commit()
+
+    standing = (
+        await db_session.execute(
+            select(TournamentClubStanding).where(
+                TournamentClubStanding.tournament_id == tournament.id, TournamentClubStanding.club_id == club["id"],
+            )
+        )
+    ).scalar_one()
+    assert standing.training_boost_round is None  # consumed, even though only 1 round was simulated
+
+    lineup_after = await get_club_lineup(db_session, captain)
+    assert lineup_after.training_boost_active is False

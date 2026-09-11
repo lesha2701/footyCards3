@@ -438,8 +438,11 @@ class Chance:
     defender: dict = field(default_factory=dict)
 
 
-def build_side(cards_with_slots: list[tuple[Any, Any]], mentality: str, playstyle: str, coach: "Coach | None" = None) -> ClubTacticalSide:
-    profile = compute_profile(cards_with_slots, coach=coach)
+def build_side(
+    cards_with_slots: list[tuple[Any, Any]], mentality: str, playstyle: str,
+    coach: "Coach | None" = None, training_multiplier: float = 1.0,
+) -> ClubTacticalSide:
+    profile = compute_profile(cards_with_slots, coach=coach, training_multiplier=training_multiplier)
     cards = [card for card, _slot in cards_with_slots]
     return ClubTacticalSide(cards=cards, profile=profile, mentality=mentality, playstyle=playstyle, coach=coach)
 

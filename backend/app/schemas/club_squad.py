@@ -58,6 +58,9 @@ class ClubLineupOut(BaseModel):
     tactical_fit_hint: str
     slots: list[ClubLineupSlotOut]
     coach: EquippedCoachOut | None = None
+    training_uses_remaining: int = 0
+    training_boost_active: bool = False
+    in_active_tournament: bool = False
 
 
 class ClubLineupSlotIn(BaseModel):

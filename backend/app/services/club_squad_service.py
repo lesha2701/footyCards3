@@ -206,6 +206,67 @@ async def list_club_coach_cards(db: AsyncSession, user: User) -> list[ClubCoachC
     return [ClubCoachCardOut(id=c.id, serial_number=c.serial_number, coach=c.coach, acquired_at=c.acquired_at) for c in cards]
 
 
+async def _training_state(db: AsyncSession, club_id: int, config) -> tuple[float, int, bool, bool]:
+    """Returns (multiplier_to_apply_now, uses_remaining, boost_active_for_next_round,
+    in_active_tournament). multiplier is 1.0 unless the club has an activated boost that
+    targets its own upcoming round; uses_remaining/in_active_tournament are 0/False when the
+    club isn't currently in an active tournament at all."""
+    from app.models.enums import TournamentStatus
+    from app.models.tournament import Tournament
+    from app.models.tournament_standing import TournamentClubStanding
+
+    row = (
+        await db.execute(
+            select(TournamentClubStanding, Tournament.rounds_simulated)
+            .join(Tournament, Tournament.id == TournamentClubStanding.tournament_id)
+            .where(TournamentClubStanding.club_id == club_id, Tournament.status == TournamentStatus.active)
+        )
+    ).first()
+    if row is None:
+        return 1.0, 0, False, False
+    standing, rounds_simulated = row
+    next_round = rounds_simulated + 1
+    active = standing.training_boost_round == next_round
+    multiplier = 1.0 + float(config.club_training_boost_pct) if active else 1.0
+    return multiplier, standing.training_uses_remaining, active, True
+
+
+async def activate_training(db: AsyncSession, user: User) -> ClubLineupOut:
+    from app.models.enums import TournamentStatus
+    from app.models.tournament import Tournament
+    from app.models.tournament_standing import TournamentClubStanding
+    from app.services.club_service import _require_manager, _require_membership
+
+    membership = await _require_membership(db, user.id)
+    _require_manager(membership)
+    club_id = membership.club_id
+
+    row = (
+        await db.execute(
+            select(TournamentClubStanding, Tournament)
+            .join(Tournament, Tournament.id == TournamentClubStanding.tournament_id)
+            .where(TournamentClubStanding.club_id == club_id, Tournament.status == TournamentStatus.active)
+            .with_for_update(of=TournamentClubStanding)
+        )
+    ).first()
+    if row is None:
+        raise ConflictError("Клуб сейчас не участвует в турнире")
+    standing, tournament = row
+    next_round = tournament.rounds_simulated + 1
+
+    if standing.training_boost_round == next_round:
+        raise ConflictError("Тренировка уже активирована на следующий тур")
+    if standing.training_uses_remaining <= 0:
+        raise ConflictError("Тренировки на этот турнир закончились")
+
+    standing.training_uses_remaining -= 1
+    standing.training_boost_round = next_round
+    db.add(standing)
+    await db.commit()
+
+    return await _lineup_to_out(db, club_id)
+
+
 async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
     lineup = await _get_or_none_lineup(db, club_id)
     formation = lineup.formation if lineup else DEFAULT_FORMATION
@@ -228,10 +289,12 @@ async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
             cards_with_slots.append((card, slot))
 
     is_complete = len(cards_with_slots) == len(get_formation_slots(formation))
-    team_strength = calculate_base_strength(cards_with_slots) if is_complete else None
 
     config = await get_config(db)
-    profile = compute_profile(cards_with_slots) if cards_with_slots else None
+    multiplier, training_uses_remaining, training_boost_active, in_active_tournament = await _training_state(db, club_id, config)
+
+    team_strength = round(calculate_base_strength(cards_with_slots) * multiplier) if is_complete else None
+    profile = compute_profile(cards_with_slots, training_multiplier=multiplier) if cards_with_slots else None
     tactical_fit = compute_tactical_fit(cards_with_slots, profile, mentality, playstyle, config) if profile else 0
     tactical_fit_hint = _tactical_fit_hint(profile, playstyle) if profile else "Заполни состав, чтобы увидеть подсказку"
 
@@ -242,7 +305,8 @@ async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
     return ClubLineupOut(
         is_complete=is_complete, team_strength=team_strength, formation=formation, mentality=mentality,
         playstyle=playstyle, tactical_fit=tactical_fit, tactical_fit_hint=tactical_fit_hint, slots=slots,
-        coach=coach_out,
+        coach=coach_out, training_uses_remaining=training_uses_remaining,
+        training_boost_active=training_boost_active, in_active_tournament=in_active_tournament,
     )
 
 

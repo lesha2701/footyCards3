@@ -218,6 +218,11 @@ async def set_club_coach(payload: ClubCoachSetRequest, db: AsyncSession = Depend
     return await club_squad_service.set_club_coach(db, user, payload)
 
 
+@router.post("/me/training", response_model=ClubLineupOut)
+async def activate_club_training(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_squad_service.activate_training(db, user)
+
+
 @router.get("/me/cards", response_model=list[ClubCardOut])
 async def list_club_cards(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_squad_service.list_club_cards(db, user)

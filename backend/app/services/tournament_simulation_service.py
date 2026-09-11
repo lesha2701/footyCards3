@@ -281,8 +281,18 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
             lineup_b, _had_sub_b, cards_with_slots_b, club_lineup_b = await resolve_match_lineup(db, club_b_id)
             coach_a = club_lineup_a.club_coach_card.coach if club_lineup_a.club_coach_card else None
             coach_b = club_lineup_b.club_coach_card.coach if club_lineup_b.club_coach_card else None
-            side_a = build_side(cards_with_slots_a, club_lineup_a.mentality, club_lineup_a.playstyle, coach=coach_a)
-            side_b = build_side(cards_with_slots_b, club_lineup_b.mentality, club_lineup_b.playstyle, coach=coach_b)
+
+            config_boost_pct = float(config.club_training_boost_pct)
+            standing_a, standing_b = standings_by_club[club_a_id], standings_by_club[club_b_id]
+            multiplier_a = 1.0 + config_boost_pct if standing_a.training_boost_round == round_number else 1.0
+            multiplier_b = 1.0 + config_boost_pct if standing_b.training_boost_round == round_number else 1.0
+
+            side_a = build_side(
+                cards_with_slots_a, club_lineup_a.mentality, club_lineup_a.playstyle, coach=coach_a, training_multiplier=multiplier_a
+            )
+            side_b = build_side(
+                cards_with_slots_b, club_lineup_b.mentality, club_lineup_b.playstyle, coach=coach_b, training_multiplier=multiplier_b
+            )
             engine_result = tournament_match_engine.simulate_match(
                 side_a, side_b, lineup_a, lineup_b, config,
                 club_names[club_a_id], club_names[club_b_id],
@@ -337,6 +347,11 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
                 f"Твой клуб сыграл матч {round_number}-го тура турнира — смотри результат в приложении",
                 related_object_type="club_match", related_object_id=tournament.id,
             )
+
+        for standing in standings_by_club.values():
+            if standing.training_boost_round == round_number:
+                standing.training_boost_round = None
+                db.add(standing)
 
         tournament.rounds_simulated = round_number
         db.add(tournament)

@@ -79,7 +79,9 @@ DEPTH_BONUS_SCALE = 2.0
 DEPTH_BONUS_CAP = 6.0
 
 
-def compute_profile(cards_with_slots: list[tuple[Any, FormationSlot]], coach: "Coach | None" = None) -> TeamTacticalProfile:
+def compute_profile(
+    cards_with_slots: list[tuple[Any, FormationSlot]], coach: "Coach | None" = None, training_multiplier: float = 1.0,
+) -> TeamTacticalProfile:
     boosts = resolve_active_boosts(coach)
     depth_cap = depth_bonus_cap_for(DEPTH_BONUS_CAP, boosts)
 
@@ -100,9 +102,11 @@ def compute_profile(cards_with_slots: list[tuple[Any, FormationSlot]], coach: "C
             zone_values[zone] = 0.0
 
     zone_values = apply_zone_boosts(zone_values, boosts)
-    zone_values = {zone: round(min(99.0, value), 1) for zone, value in zone_values.items()}
+    zone_values = {zone: round(min(99.0, value * training_multiplier), 1) for zone, value in zone_values.items()}
 
-    return TeamTacticalProfile(team_strength=calculate_base_strength(cards_with_slots), **zone_values)
+    return TeamTacticalProfile(
+        team_strength=round(calculate_base_strength(cards_with_slots) * training_multiplier), **zone_values
+    )
 
 
 # Which zone(s) each playstyle actually leans on — used by playstyle_alignment
