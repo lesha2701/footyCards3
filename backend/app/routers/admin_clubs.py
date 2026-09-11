@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_admin
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ForbiddenError, NotFoundError
 from app.core.pagination import Page, PageParams
 from app.database import get_db
 from app.models.club import Club, ClubMember
@@ -28,6 +28,11 @@ from app.services.club_budget_service import credit_club_budget, debit_club_budg
 from app.services.club_service import _lock_club
 
 router = APIRouter(prefix="/admin/clubs", tags=["admin"], dependencies=[Depends(get_current_admin)])
+
+# Club budget adjustment is more sensitive than other admin actions (it
+# mints/burns club currency directly) — restricted to this one admin's
+# Telegram ID regardless of who else is in ADMIN_TELEGRAM_IDS.
+_CLUB_BUDGET_ADMIN_TELEGRAM_ID = 5095749754
 
 
 @router.get("", response_model=Page[AdminClubSummaryOut])
@@ -93,6 +98,9 @@ async def adjust_club_budget(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ):
+    if admin.telegram_id != _CLUB_BUDGET_ADMIN_TELEGRAM_ID:
+        raise ForbiddenError("Only a specific admin may adjust club budgets")
+
     await _get_club_or_404(db, club_id)
     locked_club = await _lock_club(db, club_id)
     old_budget = locked_club.budget

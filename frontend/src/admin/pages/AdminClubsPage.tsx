@@ -11,8 +11,13 @@ import {
 } from "@/admin/api";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import type { AdminClub, AdminClubMember } from "@/admin/types";
+import { useAuthStore } from "@/store/authStore";
 
 const ROLE_LABELS: Record<AdminClubMember["role"], string> = { captain: "Капитан", assistant: "Ассистент", member: "Участник" };
+
+// Mirrors the backend's _CLUB_BUDGET_ADMIN_TELEGRAM_ID restriction in
+// admin_clubs.py — hides the control for admins who'd get a 403 anyway.
+const CLUB_BUDGET_ADMIN_TELEGRAM_ID = 5095749754;
 
 export default function AdminClubsPage() {
   const [search, setSearch] = useState("");
@@ -88,6 +93,7 @@ export default function AdminClubsPage() {
 
 function ClubDetailModal({ clubId, onClose }: { clubId: number; onClose: () => void }) {
   const queryClient = useQueryClient();
+  const canEditBudget = useAuthStore((s) => s.user?.telegram_id === CLUB_BUDGET_ADMIN_TELEGRAM_ID);
   const [tab, setTab] = useState<"overview" | "members" | "budget" | "tournaments">("overview");
   const [budgetAmount, setBudgetAmount] = useState(0);
   const [budgetReason, setBudgetReason] = useState("");
@@ -157,27 +163,29 @@ function ClubDetailModal({ clubId, onClose }: { clubId: number; onClose: () => v
               {club.description && <div className="col-span-2"><Info label="Описание" value={club.description} /></div>}
             </div>
 
-            <div className="rounded-xl bg-bg-surface p-3">
-              <p className="mb-2 text-xs font-semibold text-slate-400">Изменить бюджет клуба</p>
-              <div className="flex gap-2">
-                <input type="number" min={0} value={budgetAmount} onChange={(e) => setBudgetAmount(Number(e.target.value))} className="w-24 rounded-lg bg-black/30 px-2 py-1.5 text-sm outline-none" />
-                <input value={budgetReason} onChange={(e) => setBudgetReason(e.target.value)} placeholder="Причина" className="flex-1 rounded-lg bg-black/30 px-2 py-1.5 text-sm outline-none" />
-                <button
-                  onClick={() => budgetMutation.mutate(1)}
-                  disabled={!budgetAmount}
-                  className="rounded-lg bg-emerald-500/80 px-3 py-1.5 text-xs font-bold text-bg-base disabled:opacity-40"
-                >
-                  Начислить
-                </button>
-                <button
-                  onClick={() => budgetMutation.mutate(-1)}
-                  disabled={!budgetAmount}
-                  className="rounded-lg bg-red-500/80 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40"
-                >
-                  Списать
-                </button>
+            {canEditBudget && (
+              <div className="rounded-xl bg-bg-surface p-3">
+                <p className="mb-2 text-xs font-semibold text-slate-400">Изменить бюджет клуба</p>
+                <div className="flex gap-2">
+                  <input type="number" min={0} value={budgetAmount} onChange={(e) => setBudgetAmount(Number(e.target.value))} className="w-24 rounded-lg bg-black/30 px-2 py-1.5 text-sm outline-none" />
+                  <input value={budgetReason} onChange={(e) => setBudgetReason(e.target.value)} placeholder="Причина" className="flex-1 rounded-lg bg-black/30 px-2 py-1.5 text-sm outline-none" />
+                  <button
+                    onClick={() => budgetMutation.mutate(1)}
+                    disabled={!budgetAmount}
+                    className="rounded-lg bg-emerald-500/80 px-3 py-1.5 text-xs font-bold text-bg-base disabled:opacity-40"
+                  >
+                    Начислить
+                  </button>
+                  <button
+                    onClick={() => budgetMutation.mutate(-1)}
+                    disabled={!budgetAmount}
+                    className="rounded-lg bg-red-500/80 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40"
+                  >
+                    Списать
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 

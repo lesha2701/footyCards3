@@ -28,6 +28,16 @@ async def _admin_auth(client, bot_token):
     return {"Authorization": f"Bearer {token}"}
 
 
+async def _budget_admin_auth(client, bot_token):
+    # 5095749754 matches _CLUB_BUDGET_ADMIN_TELEGRAM_ID in admin_clubs.py — the
+    # one admin allowed to adjust club budgets. Also present in conftest's
+    # ADMIN_TELEGRAM_IDS so get_current_admin accepts it.
+    admin_headers = telegram_headers(5095749754, bot_token)
+    session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
+    token = session_resp.json()["admin_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 async def _make_club(client, db_session, bot_token, telegram_id, name, club_type="open"):
     await client.post("/api/v1/auth/session", headers=telegram_headers(telegram_id, bot_token))
     resp = await client.post(
@@ -108,7 +118,7 @@ async def test_get_club_budget_transactions_paginated(client, db_session, bot_to
 
 
 async def test_admin_can_credit_club_budget(client, db_session, bot_token):
-    auth = await _admin_auth(client, bot_token)
+    auth = await _budget_admin_auth(client, bot_token)
     club = await _make_club(client, db_session, bot_token, 870006, "Клуб начисления")
     starting_budget = club.budget
 
@@ -126,7 +136,7 @@ async def test_admin_can_credit_club_budget(client, db_session, bot_token):
 
 
 async def test_admin_can_debit_club_budget(client, db_session, bot_token):
-    auth = await _admin_auth(client, bot_token)
+    auth = await _budget_admin_auth(client, bot_token)
     club = await _make_club(client, db_session, bot_token, 870007, "Клуб списания")
     await client.post(
         f"/api/v1/admin/clubs/{club.id}/budget", headers=auth, json={"amount": 500, "description": "Пополнение"}
@@ -146,7 +156,7 @@ async def test_admin_can_debit_club_budget(client, db_session, bot_token):
 
 
 async def test_admin_debit_club_budget_insufficient_funds_returns_4xx(client, db_session, bot_token):
-    auth = await _admin_auth(client, bot_token)
+    auth = await _budget_admin_auth(client, bot_token)
     club = await _make_club(client, db_session, bot_token, 870008, "Клуб без денег")
     assert club.budget == 0
 
@@ -154,6 +164,19 @@ async def test_admin_debit_club_budget_insufficient_funds_returns_4xx(client, db
         f"/api/v1/admin/clubs/{club.id}/budget", headers=auth, json={"amount": -100, "description": "Слишком много"}
     )
     assert 400 <= resp.status_code < 500
+
+
+async def test_regular_admin_cannot_adjust_club_budget(client, db_session, bot_token):
+    # Only the specific admin in _CLUB_BUDGET_ADMIN_TELEGRAM_ID may mint/burn
+    # club currency — any other admin (even one otherwise fully authorized
+    # via get_current_admin/ADMIN_TELEGRAM_IDS) must be rejected.
+    auth = await _admin_auth(client, bot_token)
+    club = await _make_club(client, db_session, bot_token, 870009, "Клуб под защитой")
+
+    resp = await client.post(
+        f"/api/v1/admin/clubs/{club.id}/budget", headers=auth, json={"amount": 100, "description": "Попытка"}
+    )
+    assert resp.status_code == 403
 
 
 async def test_get_club_tournaments_shows_null_rewards_before_completion_and_real_values_after(
