@@ -1139,6 +1139,7 @@ export interface Club {
   cups_count: number;
   stars_count: number;
   daily_reward_seconds_remaining: number | null;
+  personal_match_earnings: number | null;
 }
 
 export interface ClubJoinRequest {

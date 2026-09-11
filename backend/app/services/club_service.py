@@ -103,12 +103,31 @@ async def _daily_reward_seconds_remaining(db: AsyncSession, club_id: int, user_i
     return max(0, int(remaining))
 
 
+async def _personal_match_earnings(db: AsyncSession, user_id: int) -> int:
+    """All-time total of this user's own personal club-tournament-match reward
+    credits (TransactionType.club_tournament_match_reward) — the per-member
+    500/250/50 win/draw/loss coins, independent of the club's own budget.
+    Not scoped to any particular tournament, deliberately kept simple."""
+    from app.models.enums import TransactionType
+    from app.models.transaction import CoinTransaction
+
+    result = await db.execute(
+        select(func.coalesce(func.sum(CoinTransaction.amount), 0)).where(
+            CoinTransaction.user_id == user_id, CoinTransaction.type == TransactionType.club_tournament_match_reward
+        )
+    )
+    return result.scalar_one()
+
+
 async def _club_to_detail(db: AsyncSession, club: Club, requester_user_id: Optional[int]) -> ClubDetailOut:
     members = await _members_with_users(db, club.id)
     my_membership = next((m for m in members if m.user_id == requester_user_id), None)
     is_member = my_membership is not None
     daily_reward_seconds_remaining = (
         await _daily_reward_seconds_remaining(db, club.id, requester_user_id) if is_member and requester_user_id is not None else None
+    )
+    personal_match_earnings = (
+        await _personal_match_earnings(db, requester_user_id) if is_member and requester_user_id is not None else None
     )
     return ClubDetailOut(
         id=club.id, name=club.name, description=club.description, club_type=club.club_type,
@@ -118,6 +137,7 @@ async def _club_to_detail(db: AsyncSession, club: Club, requester_user_id: Optio
         invite_code=club.invite_code if is_member else None,
         my_role=my_membership.role if my_membership else None,
         daily_reward_seconds_remaining=daily_reward_seconds_remaining,
+        personal_match_earnings=personal_match_earnings,
     )
 
 

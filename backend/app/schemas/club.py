@@ -71,6 +71,10 @@ class ClubDetailOut(BaseModel):
     # available right now. Computed against the requester, not the club as a whole, since
     # each member claims individually (see club_service.claim_daily_reward).
     daily_reward_seconds_remaining: Optional[int] = None
+    # All-time sum of this requester's own personal club-tournament-match reward credits
+    # (TransactionType.club_tournament_match_reward) — null for a non-member, 0 if they're a
+    # member with no such credits yet. See club_service._personal_match_earnings.
+    personal_match_earnings: Optional[int] = None
 
 
 class ClubJoinRequestOut(BaseModel):

@@ -12,10 +12,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.exceptions import ConflictError
 from app.models.club import Club, ClubMember
 from app.models.club_daily_claim import ClubDailyClaim
-from app.models.enums import ClubRole, ClubType, ClubLogoShape, Position
+from app.models.enums import ClubRole, ClubType, ClubLogoShape, Position, TransactionType
 from app.models.user import User
 from app.services.club_service import claim_daily_reward, join_by_invite, join_open_club, leave_club
 from app.services.game_config_service import get_config
+from app.services.wallet_service import credit_coins
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
 
@@ -931,3 +932,37 @@ async def test_up_to_four_assistants_can_be_appointed(client, db_session, bot_to
 
     resp = await client.post(f"/api/v1/clubs/me/assistants/{member_ids[4]}/appoint", headers=captain_headers)
     assert resp.status_code == 409
+
+
+async def test_club_detail_reports_personal_match_earnings_total_for_member(client, db_session, bot_token):
+    club, headers = await _create_club(client, bot_token, 820401, "Клуб с заработком")
+    user = await get_user_by_telegram_id(db_session, 820401)
+
+    locked = await db_session.get(User, user.id)
+    await credit_coins(db_session, locked, 500, TransactionType.club_tournament_match_reward, "Победа в матче клуба")
+    await credit_coins(db_session, locked, 250, TransactionType.club_tournament_match_reward, "Ничья в матче клуба")
+    await credit_coins(db_session, locked, 100, TransactionType.admin_adjustment, "Не связано с матчами клуба")
+    db_session.add(locked)
+    await db_session.commit()
+
+    resp = await client.get("/api/v1/clubs/me", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["personal_match_earnings"] == 750
+
+
+async def test_club_detail_reports_zero_personal_match_earnings_with_no_transactions(client, db_session, bot_token):
+    club, headers = await _create_club(client, bot_token, 820402, "Клуб без заработка")
+
+    resp = await client.get("/api/v1/clubs/me", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["personal_match_earnings"] == 0
+
+
+async def test_club_detail_hides_personal_match_earnings_from_non_members(client, db_session, bot_token):
+    club, _ = await _create_club(client, bot_token, 820403, "Клуб для чужих")
+    await _register_only(client, bot_token, 820404)
+    outsider_headers = telegram_headers(820404, bot_token)
+
+    resp = await client.get(f"/api/v1/clubs/{club['id']}", headers=outsider_headers)
+    assert resp.status_code == 200
+    assert resp.json()["personal_match_earnings"] is None
