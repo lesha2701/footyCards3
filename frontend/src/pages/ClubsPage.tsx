@@ -186,10 +186,11 @@ function ClubHome({ club }: { club: Club }) {
     queryFn: fetchMyJoinRequests,
     enabled: isManager && club.club_type === "closed",
   });
-  const acceptMutation = useMutation({ mutationFn: (id: number) => acceptJoinRequest(id), onSuccess: invalidate });
+  const acceptMutation = useMutation({ mutationFn: (id: number) => acceptJoinRequest(id), onSuccess: invalidate, onError: onActionError });
   const rejectMutation = useMutation({
     mutationFn: (id: number) => rejectJoinRequest(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["clubs", "join-requests"] }),
+    onError: onActionError,
   });
 
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
@@ -421,10 +422,18 @@ function ClubHome({ club }: { club: Club }) {
             <div key={r.id} className="flex items-center justify-between rounded-xl bg-bg-surface p-3">
               <span className="text-sm text-ink-chalk">{r.username ?? r.first_name ?? `#${r.user_id}`}</span>
               <div className="flex gap-2">
-                <button onClick={() => acceptMutation.mutate(r.id)} className="rounded-lg bg-accent-green px-2 py-1 text-[11px] font-bold text-bg-base">
+                <button
+                  onClick={() => acceptMutation.mutate(r.id)}
+                  disabled={acceptMutation.isPending}
+                  className="rounded-lg bg-accent-green px-2 py-1 text-[11px] font-bold text-bg-base disabled:opacity-50"
+                >
                   Принять
                 </button>
-                <button onClick={() => rejectMutation.mutate(r.id)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">
+                <button
+                  onClick={() => rejectMutation.mutate(r.id)}
+                  disabled={rejectMutation.isPending}
+                  className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400 disabled:opacity-50"
+                >
                   Отклонить
                 </button>
               </div>
