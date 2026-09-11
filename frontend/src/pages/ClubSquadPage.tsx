@@ -103,13 +103,6 @@ export default function ClubSquadPage() {
           {lineup?.is_complete && <span className="font-mono text-sm font-bold text-accent-cyan">Сила: {lineup.team_strength}</span>}
         </div>
 
-        {lineup?.is_complete && (
-          <div className="mb-3 flex items-center justify-between rounded-xl bg-white/5 px-3 py-2">
-            <span className="text-xs text-ink-mist">{lineup.tactical_fit_hint}</span>
-            <span className="shrink-0 font-mono text-xs font-bold text-accent-lime">{lineup.tactical_fit}%</span>
-          </div>
-        )}
-
         {lineup?.in_active_tournament && (
           <button
             onClick={() => trainingMutation.mutate()}
