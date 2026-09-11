@@ -91,6 +91,15 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Красные карточки и травмы (клубный турнир)</p>
+        <p className="mb-3 text-xs text-slate-500">Влияет только на клубные турнирные матчи — на Card Arena не распространяется.</p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("club_tactical_tackle_attempt_chance", "Шанс попытки подката (0-1)")}
+          {field("club_tactical_injury_chance", "Шанс травмы при красной (0-1)")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-1 font-display text-base font-bold">Диамантовые карты — апгрейд рейтинга</p>
         <p className="mb-3 text-xs text-slate-400">
           Мягкий потолок рейтинга при прокачке: карту нельзя докормить выше этого значения. Уже существующие карты с

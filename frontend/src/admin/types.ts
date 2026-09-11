@@ -114,6 +114,8 @@ export interface GameConfig {
   club_penalty_reward_win: number;
   club_penalty_reward_loss: number;
   club_penalty_bot_miss_chance: number;
+  club_tactical_tackle_attempt_chance: number;
+  club_tactical_injury_chance: number;
   memory_daily_reward_limit: number;
   memory_reward_cap: number;
   suspicious_memory_score_threshold: number;
