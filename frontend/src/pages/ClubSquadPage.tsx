@@ -197,14 +197,26 @@ export default function ClubSquadPage() {
                   >
                     {slot.card ? (
                       <>
-                        <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
+                        <div className={`relative aspect-square w-full overflow-hidden rounded-lg bg-black/40 ${
+                          slot.card.availability ? "ring-2 ring-red-500" : ""
+                        }`}>
                           <img
                             src={staticUrl(slot.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                             alt="" className="h-full w-full object-cover" loading="lazy"
                           />
+                          {slot.card.availability && (
+                            <span className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-sm bg-red-600 text-[10px] font-black leading-none text-white">
+                              {slot.card.availability.reason === "red_card" ? "▮" : "+"}
+                            </span>
+                          )}
                         </div>
                         <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[9px] font-bold leading-none text-accent-cyan">{slot.card.player.position}</span>
                         <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.card.player.rating}</span>
+                        {slot.card.availability && (
+                          <span className="text-center font-mono text-[8px] font-bold leading-tight text-red-400">
+                            {slot.card.availability.reason === "red_card" ? "Диск." : "Травма"} · {slot.card.availability.rounds_remaining}т
+                          </span>
+                        )}
                       </>
                     ) : (
                       <>

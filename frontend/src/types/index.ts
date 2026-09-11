@@ -1136,12 +1136,18 @@ export interface ClubJoinRequest {
   status: "pending" | "accepted" | "rejected";
 }
 
+export interface ClubCardAvailability {
+  reason: "red_card" | "injury";
+  rounds_remaining: number;
+}
+
 export interface ClubCard {
   id: number;
   serial_number: number;
   player: Player;
   acquired_at: string;
   is_in_lineup: boolean;
+  availability: ClubCardAvailability | null;
 }
 
 export interface ClubLineupSlot {
