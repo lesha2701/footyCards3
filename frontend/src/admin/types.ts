@@ -103,6 +103,9 @@ export interface GameConfig {
   club_tournament_budget_place_6: number;
   club_tournament_budget_place_7: number;
   club_tournament_budget_place_8: number;
+  club_match_reward_win: number;
+  club_match_reward_draw: number;
+  club_match_reward_loss: number;
   club_game_hourly_limit: number;
   club_game_daily_reward_limit: number;
   club_game_reward_cap: number;

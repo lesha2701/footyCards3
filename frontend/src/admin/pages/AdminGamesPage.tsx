@@ -81,6 +81,16 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Награда за матч турнира</p>
+        <p className="mb-3 text-xs text-slate-500">Начисляется в бюджет клуба за каждый сыгранный матч тура — отдельно от награды за итоговое место.</p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("club_match_reward_win", "Награда за победу")}
+          {field("club_match_reward_draw", "Награда за ничью")}
+          {field("club_match_reward_loss", "Награда за поражение")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-1 font-display text-base font-bold">Диамантовые карты — апгрейд рейтинга</p>
         <p className="mb-3 text-xs text-slate-400">
           Мягкий потолок рейтинга при прокачке: карту нельзя докормить выше этого значения. Уже существующие карты с
