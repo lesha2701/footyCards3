@@ -1085,6 +1085,7 @@ export interface ClubMember {
   avatar_url: string | null;
   role: ClubRole;
   joined_at: string;
+  personal_reward_enabled: boolean;
 }
 
 export interface ClubMemberActivity {

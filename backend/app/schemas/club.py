@@ -35,6 +35,7 @@ class ClubMemberOut(BaseModel):
     avatar_url: Optional[str]
     role: ClubRole
     joined_at: datetime
+    personal_reward_enabled: bool
 
 
 class ClubSummaryOut(BaseModel):
@@ -88,3 +89,7 @@ class JoinByInviteIn(BaseModel):
 
 class TransferCaptainIn(BaseModel):
     user_id: int
+
+
+class PersonalRewardToggleIn(BaseModel):
+    enabled: bool

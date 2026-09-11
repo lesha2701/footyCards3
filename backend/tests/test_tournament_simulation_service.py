@@ -211,6 +211,111 @@ async def test_simulate_next_round_does_not_reward_withdrawn_clubs(db_session, e
     assert withdrawn_club.budget == budget_before
 
 
+async def test_simulate_next_round_credits_every_member_personally_by_result(db_session, eight_club_tournament):
+    from app.models.club import ClubMember
+    from app.models.user import User
+    from app.services.game_config_service import get_config
+
+    tournament, _clubs_and_captains = eight_club_tournament
+    config = await get_config(db_session)
+
+    # Two members per club (captain + one joined member, per _create_club_with_full_squad).
+    members_by_club: dict[int, list] = {}
+    balances_before: dict[int, int] = {}
+    for club, _captain in _clubs_and_captains:
+        rows = (
+            await db_session.execute(select(ClubMember.user_id).where(ClubMember.club_id == club.id))
+        ).scalars().all()
+        members_by_club[club.id] = list(rows)
+        for user_id in rows:
+            user = await db_session.get(User, user_id)
+            await db_session.refresh(user)
+            balances_before[user_id] = user.balance
+
+    matches = await simulate_next_round(db_session)
+    await db_session.commit()
+
+    round_1_matches = [m for m in matches if m.tournament_id == tournament.id]
+    assert len(round_1_matches) == 4
+    for m in round_1_matches:
+        for club, _captain in _clubs_and_captains:
+            if club.id not in (m.club_a_id, m.club_b_id):
+                continue
+            my_score, opp_score = (m.score_a, m.score_b) if club.id == m.club_a_id else (m.score_b, m.score_a)
+            expected_reward = (
+                config.club_member_match_reward_win if my_score > opp_score
+                else config.club_member_match_reward_loss if my_score < opp_score
+                else config.club_member_match_reward_draw
+            )
+            for user_id in members_by_club[club.id]:
+                user = await db_session.get(User, user_id)
+                await db_session.refresh(user)
+                assert user.balance == balances_before[user_id] + expected_reward
+
+
+async def test_simulate_next_round_skips_member_with_personal_reward_disabled(db_session, eight_club_tournament):
+    from app.models.club import ClubMember
+    from app.models.user import User
+
+    tournament, _clubs_and_captains = eight_club_tournament
+
+    club, _captain = _clubs_and_captains[0]
+    member_rows = (
+        await db_session.execute(select(ClubMember).where(ClubMember.club_id == club.id))
+    ).scalars().all()
+    assert len(member_rows) == 2
+    disabled_member, enabled_member = member_rows[0], member_rows[1]
+    disabled_member.personal_reward_enabled = False
+    db_session.add(disabled_member)
+    await db_session.commit()
+
+    disabled_user = await db_session.get(User, disabled_member.user_id)
+    enabled_user = await db_session.get(User, enabled_member.user_id)
+    await db_session.refresh(disabled_user)
+    await db_session.refresh(enabled_user)
+    disabled_balance_before = disabled_user.balance
+    enabled_balance_before = enabled_user.balance
+
+    await simulate_next_round(db_session)
+    await db_session.commit()
+
+    await db_session.refresh(disabled_user)
+    await db_session.refresh(enabled_user)
+    assert disabled_user.balance == disabled_balance_before
+    assert enabled_user.balance != enabled_balance_before
+
+
+async def test_simulate_next_round_does_not_personally_reward_withdrawn_clubs(db_session, eight_club_tournament):
+    from app.models.club import ClubMember
+    from app.models.tournament import TournamentClub
+    from app.models.user import User
+
+    tournament, _clubs_and_captains = eight_club_tournament
+    participants = (
+        await db_session.execute(select(TournamentClub).where(TournamentClub.tournament_id == tournament.id))
+    ).scalars().all()
+    withdrawn = participants[0]
+    withdrawn.is_withdrawn = True
+    db_session.add(withdrawn)
+    await db_session.commit()
+
+    member_rows = (
+        await db_session.execute(select(ClubMember).where(ClubMember.club_id == withdrawn.club_id))
+    ).scalars().all()
+    balances_before = {}
+    for m in member_rows:
+        user = await db_session.get(User, m.user_id)
+        await db_session.refresh(user)
+        balances_before[m.user_id] = user.balance
+
+    await simulate_next_round(db_session)
+
+    for m in member_rows:
+        user = await db_session.get(User, m.user_id)
+        await db_session.refresh(user)
+        assert user.balance == balances_before[m.user_id]
+
+
 async def test_simulate_next_round_notifies_both_clubs_on_a_real_match(db_session, eight_club_tournament):
     from sqlalchemy import select
 

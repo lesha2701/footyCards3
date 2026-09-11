@@ -107,6 +107,11 @@ export async function removeAssistant(userId: number): Promise<Club> {
   return data;
 }
 
+export async function setMemberPersonalReward(userId: number, enabled: boolean): Promise<Club> {
+  const { data } = await api.patch<Club>(`/clubs/me/members/${userId}/personal-reward`, { enabled });
+  return data;
+}
+
 export async function transferCaptain(userId: number): Promise<Club> {
   const { data } = await api.post<Club>("/clubs/me/transfer-captain", { user_id: userId });
   return data;

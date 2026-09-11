@@ -106,6 +106,9 @@ export interface GameConfig {
   club_match_reward_win: number;
   club_match_reward_draw: number;
   club_match_reward_loss: number;
+  club_member_match_reward_win: number;
+  club_member_match_reward_draw: number;
+  club_member_match_reward_loss: number;
   club_game_hourly_limit: number;
   club_game_daily_reward_limit: number;
   club_game_reward_cap: number;

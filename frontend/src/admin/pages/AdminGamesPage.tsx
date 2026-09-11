@@ -91,6 +91,16 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Личная награда участникам за матч</p>
+        <p className="mb-3 text-xs text-slate-500">Начисляется лично каждому участнику клуба (кроме тех, у кого капитан отключил эту награду) за каждый сыгранный матч тура.</p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("club_member_match_reward_win", "Награда за победу")}
+          {field("club_member_match_reward_draw", "Награда за ничью")}
+          {field("club_member_match_reward_loss", "Награда за поражение")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Красные карточки и травмы (клубный турнир)</p>
         <p className="mb-3 text-xs text-slate-500">Влияет только на клубные турнирные матчи — на Card Arena не распространяется.</p>
         <div className="grid grid-cols-2 gap-3">

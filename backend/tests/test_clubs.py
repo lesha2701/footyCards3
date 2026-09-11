@@ -390,6 +390,50 @@ async def test_changing_club_type_to_closed_requires_join_request_afterwards(cli
     assert request.status_code == 200
 
 
+async def test_captain_can_toggle_member_personal_reward(client, db_session, bot_token):
+    club, captain_headers = await _create_club(client, bot_token, 820150, "Клуб-переключатель")
+    await _register_only(client, bot_token, 820151)
+    member_headers = telegram_headers(820151, bot_token)
+    join = await client.post(f"/api/v1/clubs/{club['id']}/join", headers=member_headers)
+    member_user_id = [m for m in join.json()["members"] if m["role"] == "member"][0]["user_id"]
+
+    off_resp = await client.patch(
+        f"/api/v1/clubs/me/members/{member_user_id}/personal-reward", headers=captain_headers, json={"enabled": False},
+    )
+    assert off_resp.status_code == 200
+    updated_member = next(m for m in off_resp.json()["members"] if m["user_id"] == member_user_id)
+    assert updated_member["personal_reward_enabled"] is False
+
+    on_resp = await client.patch(
+        f"/api/v1/clubs/me/members/{member_user_id}/personal-reward", headers=captain_headers, json={"enabled": True},
+    )
+    assert on_resp.status_code == 200
+    updated_member = next(m for m in on_resp.json()["members"] if m["user_id"] == member_user_id)
+    assert updated_member["personal_reward_enabled"] is True
+
+    # The control also applies to the captain's own row, not just other members.
+    self_resp = await client.patch(
+        f"/api/v1/clubs/me/members/{[m for m in on_resp.json()['members'] if m['role'] == 'captain'][0]['user_id']}/personal-reward",
+        headers=captain_headers, json={"enabled": False},
+    )
+    assert self_resp.status_code == 200
+    captain_row = next(m for m in self_resp.json()["members"] if m["role"] == "captain")
+    assert captain_row["personal_reward_enabled"] is False
+
+
+async def test_non_captain_cannot_toggle_member_personal_reward(client, db_session, bot_token):
+    club, captain_headers = await _create_club(client, bot_token, 820152, "Клуб-запрет-переключателя")
+    await _register_only(client, bot_token, 820153)
+    member_headers = telegram_headers(820153, bot_token)
+    join = await client.post(f"/api/v1/clubs/{club['id']}/join", headers=member_headers)
+    member_user_id = [m for m in join.json()["members"] if m["role"] == "member"][0]["user_id"]
+
+    resp = await client.patch(
+        f"/api/v1/clubs/me/members/{member_user_id}/personal-reward", headers=member_headers, json={"enabled": False},
+    )
+    assert resp.status_code == 403
+
+
 async def test_non_captain_cannot_change_club_type(client, db_session, bot_token):
     club, captain_headers = await _create_club(client, bot_token, 820143, "Клуб-чужой-тип", club_type="open")
     await _register_only(client, bot_token, 820144)

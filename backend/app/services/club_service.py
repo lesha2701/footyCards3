@@ -78,7 +78,7 @@ async def _members_with_users(db: AsyncSession, club_id: int) -> list[ClubMember
     return [
         ClubMemberOut(
             user_id=u.id, username=u.username, first_name=u.first_name, avatar_url=u.avatar_url,
-            role=m.role, joined_at=m.joined_at,
+            role=m.role, joined_at=m.joined_at, personal_reward_enabled=m.personal_reward_enabled,
         )
         for m, u in rows
     ]
@@ -462,6 +462,22 @@ async def remove_assistant(db: AsyncSession, captain: User, target_user_id: int)
     target.role = ClubRole.member
     db.add(target)
     await notify(db, target_user_id, NotificationType.club_role_changed, "Новая роль", f"Ты больше не ассистент в «{club.name}»")
+    await db.commit()
+    return await _club_to_detail(db, club, requester_user_id=captain.id)
+
+
+async def set_member_personal_reward_enabled(db: AsyncSession, captain: User, target_user_id: int, enabled: bool) -> ClubDetailOut:
+    membership = await _require_membership(db, captain.id)
+    if membership.role != ClubRole.captain:
+        raise ForbiddenError("Только капитан может управлять личными наградами участников")
+    club = await _lock_club(db, membership.club_id)
+
+    target = await _get_membership(db, target_user_id)
+    if target is None or target.club_id != club.id:
+        raise ConflictError("Этот игрок не состоит в твоём клубе")
+
+    target.personal_reward_enabled = enabled
+    db.add(target)
     await db.commit()
     return await _club_to_detail(db, club, requester_user_id=captain.id)
 

@@ -24,6 +24,7 @@ import {
   leaveClub,
   rejectJoinRequest,
   removeAssistant,
+  setMemberPersonalReward,
   updateClubType,
 } from "@/api/clubs";
 import { fetchMyProfile } from "@/api/profile";
@@ -173,6 +174,11 @@ function ClubHome({ club }: { club: Club }) {
   const kickMutation = useMutation({ mutationFn: (id: number) => kickMember(id), onSuccess: invalidate, onError: onActionError });
   const appointMutation = useMutation({ mutationFn: (id: number) => appointAssistant(id), onSuccess: invalidate, onError: onActionError });
   const removeAssistantMutation = useMutation({ mutationFn: (id: number) => removeAssistant(id), onSuccess: invalidate, onError: onActionError });
+  const togglePersonalRewardMutation = useMutation({
+    mutationFn: ({ userId, enabled }: { userId: number; enabled: boolean }) => setMemberPersonalReward(userId, enabled),
+    onSuccess: invalidate,
+    onError: onActionError,
+  });
   const [confirmMemberAction, setConfirmMemberAction] = useState<{ type: "appoint" | "kick"; userId: number; name: string } | null>(null);
   const clubTypeMutation = useMutation({ mutationFn: updateClubType, onSuccess: invalidate, onError: onActionError });
 
@@ -474,6 +480,15 @@ function ClubHome({ club }: { club: Club }) {
                   className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400"
                 >
                   Исключить
+                </button>
+              )}
+              {isCaptain && (
+                <button
+                  onClick={() => togglePersonalRewardMutation.mutate({ userId: m.user_id, enabled: !m.personal_reward_enabled })}
+                  className={`rounded-lg px-2 py-1 text-[11px] ${m.personal_reward_enabled ? "bg-accent-lime/10 text-accent-lime" : "bg-white/5 text-ink-mist"}`}
+                  title="Личная награда за матчи турнира"
+                >
+                  {m.personal_reward_enabled ? "Награда: вкл" : "Награда: выкл"}
                 </button>
               )}
             </div>

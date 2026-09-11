@@ -85,6 +85,7 @@ class TransactionType(str, enum.Enum):
     gift_purchase_coins = "gift_purchase_coins"
     premium_subscription_adjustment = "premium_subscription_adjustment"
     bingo_reward = "bingo_reward"
+    club_tournament_match_reward = "club_tournament_match_reward"
 
 
 class GiftKind(str, enum.Enum):

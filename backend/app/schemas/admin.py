@@ -144,6 +144,9 @@ class GameConfigOut(BaseModel):
     club_match_reward_win: int
     club_match_reward_draw: int
     club_match_reward_loss: int
+    club_member_match_reward_win: int
+    club_member_match_reward_draw: int
+    club_member_match_reward_loss: int
     club_training_boost_pct: float
     club_training_uses_per_tournament: int
     club_game_hourly_limit: int
@@ -260,6 +263,9 @@ class GameConfigUpdate(BaseModel):
     club_match_reward_win: Optional[int] = Field(default=None, ge=0)
     club_match_reward_draw: Optional[int] = Field(default=None, ge=0)
     club_match_reward_loss: Optional[int] = Field(default=None, ge=0)
+    club_member_match_reward_win: Optional[int] = Field(default=None, ge=0)
+    club_member_match_reward_draw: Optional[int] = Field(default=None, ge=0)
+    club_member_match_reward_loss: Optional[int] = Field(default=None, ge=0)
     club_training_boost_pct: Optional[float] = Field(default=None, ge=0, le=1)
     club_training_uses_per_tournament: Optional[int] = Field(default=None, ge=0)
     club_game_hourly_limit: Optional[int] = Field(default=None, ge=1)

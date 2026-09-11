@@ -165,6 +165,29 @@ async def _decay_availability(db: AsyncSession, club_id: int) -> None:
             db.add(row)
 
 
+async def _credit_personal_match_rewards(db: AsyncSession, club_id: int, amount: int, round_number: int, tournament_id: int) -> None:
+    """Credits every club member (captain, assistants, regular members alike) whose own
+    `personal_reward_enabled` flag is still on — the captain can turn individual members off
+    (e.g. inactive players) via ClubMember.personal_reward_enabled; this reads that flag live
+    at crediting time, it is not snapshotted anywhere earlier."""
+    from app.models.club import ClubMember
+    from app.models.enums import TransactionType
+    from app.services import wallet_service
+
+    member_user_ids = (
+        await db.execute(
+            select(ClubMember.user_id).where(ClubMember.club_id == club_id, ClubMember.personal_reward_enabled.is_(True))
+        )
+    ).scalars().all()
+    for user_id in member_user_ids:
+        user = await wallet_service.lock_user_for_update(db, user_id)
+        await wallet_service.credit_coins(
+            db, user, amount, TransactionType.club_tournament_match_reward,
+            f"Личная награда за матч {round_number}-го тура турнира клуба",
+            related_object_type="tournament_match", related_object_id=tournament_id,
+        )
+
+
 async def _apply_engine_result(db: AsyncSession, engine_result: "tournament_match_engine.MatchResult") -> None:
     """Persists the new suspensions this match itself produced (injuries:
     1-3 future rounds; red cards: next round only). Must run AFTER
@@ -339,6 +362,16 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
                 db, club_b, reward_b, ClubBudgetTransactionType.tournament_match_reward,
                 f"Матч {round_number}-го тура турнира", related_object_type="tournament_match", related_object_id=tournament.id,
             )
+
+            if engine_result.score_a > engine_result.score_b:
+                member_reward_a, member_reward_b = config.club_member_match_reward_win, config.club_member_match_reward_loss
+            elif engine_result.score_a < engine_result.score_b:
+                member_reward_a, member_reward_b = config.club_member_match_reward_loss, config.club_member_match_reward_win
+            else:
+                member_reward_a = member_reward_b = config.club_member_match_reward_draw
+
+            await _credit_personal_match_rewards(db, club_a_id, member_reward_a, round_number, tournament.id)
+            await _credit_personal_match_rewards(db, club_b_id, member_reward_b, round_number, tournament.id)
 
             # Decay pre-existing suspensions for both clubs now that their
             # match has been played, BEFORE this same match's own new

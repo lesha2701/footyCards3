@@ -24,6 +24,7 @@ from app.schemas.club import (
     ClubSummaryOut,
     ClubTypeUpdate,
     JoinByInviteIn,
+    PersonalRewardToggleIn,
     TransferCaptainIn,
 )
 from app.schemas.club_activity import ClubMemberActivityOut
@@ -176,6 +177,11 @@ async def appoint_assistant(user_id: int, db: AsyncSession = Depends(get_db), us
 @router.post("/me/assistants/{user_id}/remove", response_model=ClubDetailOut)
 async def remove_assistant(user_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_service.remove_assistant(db, user, user_id)
+
+
+@router.patch("/me/members/{user_id}/personal-reward", response_model=ClubDetailOut)
+async def set_member_personal_reward(user_id: int, payload: PersonalRewardToggleIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_service.set_member_personal_reward_enabled(db, user, user_id, payload.enabled)
 
 
 @router.put("/me/type", response_model=ClubDetailOut)

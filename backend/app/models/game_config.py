@@ -32,6 +32,10 @@ class GameConfig(TimestampMixin, Base):
     club_match_reward_draw: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     club_match_reward_loss: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
 
+    club_member_match_reward_win: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
+    club_member_match_reward_draw: Mapped[int] = mapped_column(Integer, default=250, nullable=False)
+    club_member_match_reward_loss: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+
     club_training_boost_pct: Mapped[float] = mapped_column(Numeric(4, 2), default=0.10, nullable=False)
     club_training_uses_per_tournament: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
 

@@ -48,6 +48,11 @@ class ClubMember(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     role: Mapped[ClubRole] = mapped_column(Enum(ClubRole, name="club_role_enum"), default=ClubRole.member, nullable=False)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    # Captain-controlled per-member opt-out for the personal match reward every member gets
+    # (see tournament_simulation_service._credit_personal_match_rewards) — the captain can turn
+    # this off for a specific member (e.g. an inactive player who shouldn't get a free reward).
+    # Applies to any member row, including assistants and the captain's own row.
+    personal_reward_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
 class ClubJoinRequest(Base):
