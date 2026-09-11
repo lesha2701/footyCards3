@@ -32,10 +32,6 @@ from app.schemas.game import (
     PenaltyStartOut,
     PenaltyStartRequest,
     PenaltyStatsOut,
-    PositionMatchAttemptOut,
-    PositionMatchAttemptRequest,
-    PositionMatchClaimOut,
-    PositionMatchStartOut,
     SaboteurClaimOut,
     SaboteurRevealOut,
     SaboteurRevealRequest,
@@ -49,7 +45,6 @@ from app.services import (
     memory_game_service,
     pairs_service,
     penalty_service,
-    position_match_service,
     saboteur_service,
 )
 from app.services.game_config_service import get_config
@@ -197,24 +192,3 @@ async def pairs_flip(session_id: int, payload: PairsFlipRequest, db: AsyncSessio
 @router.post("/pairs/{session_id}/claim", response_model=PairsClaimOut)
 async def pairs_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await pairs_service.claim_reward(db, user, session_id)
-
-
-# --- Своя позиция (position match) ---
-
-@router.post("/position-match/start", response_model=PositionMatchStartOut)
-async def position_match_start(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"position_match_start:{user.id}", max_calls=20, window_seconds=60)
-    return await position_match_service.start_session(db, user)
-
-
-@router.post("/position-match/{session_id}/match", response_model=PositionMatchAttemptOut)
-async def position_match_attempt(
-    session_id: int, payload: PositionMatchAttemptRequest,
-    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
-):
-    return await position_match_service.submit_attempt(db, user, session_id, payload.player_id, payload.position)
-
-
-@router.post("/position-match/{session_id}/claim", response_model=PositionMatchClaimOut)
-async def position_match_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    return await position_match_service.claim_reward(db, user, session_id)

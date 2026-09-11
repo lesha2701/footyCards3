@@ -20,9 +20,6 @@ import type {
   PenaltyKickResult,
   PenaltyStartResult,
   PenaltyStats,
-  PositionMatchAttemptResult,
-  PositionMatchClaimResult,
-  PositionMatchStartResult,
   SaboteurClaimResult,
   SaboteurRevealResult,
   SaboteurStartResult,
@@ -155,26 +152,5 @@ export async function flipPairsCard(sessionId: number, position: number): Promis
 
 export async function claimPairsReward(sessionId: number): Promise<PairsClaimResult> {
   const { data } = await api.post<PairsClaimResult>(`/games/pairs/${sessionId}/claim`);
-  return data;
-}
-
-// --- Своя позиция ---
-
-export async function startPositionMatch(): Promise<PositionMatchStartResult> {
-  const { data } = await api.post<PositionMatchStartResult>("/games/position-match/start");
-  return data;
-}
-
-export async function submitPositionMatchAttempt(
-  sessionId: number, playerId: number, position: string
-): Promise<PositionMatchAttemptResult> {
-  const { data } = await api.post<PositionMatchAttemptResult>(`/games/position-match/${sessionId}/match`, {
-    player_id: playerId, position,
-  });
-  return data;
-}
-
-export async function claimPositionMatchReward(sessionId: number): Promise<PositionMatchClaimResult> {
-  const { data } = await api.post<PositionMatchClaimResult>(`/games/position-match/${sessionId}/claim`);
   return data;
 }

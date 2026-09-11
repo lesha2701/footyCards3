@@ -112,7 +112,11 @@ async def test_club_game_claim_credits_club_budget_not_player_coins(client, db_s
     assert second_claim.status_code == 409
 
 
-async def test_club_game_hourly_limit_blocks_after_one_start(client, db_session, bot_token):
+async def test_club_game_shared_hourly_limit_blocks_after_default_two_starts(client, db_session, bot_token):
+    """Hourly play is gated by a pool shared across every club mini-game (see
+    test_club_game_limits.py for the cross-game sharing itself) — this just
+    confirms the default limit (2) and reset-after-an-hour behavior still work
+    when a member spends the whole pool on one game."""
     from datetime import timedelta
 
     from tests.factories import get_user_by_telegram_id
@@ -121,15 +125,17 @@ async def test_club_game_hourly_limit_blocks_after_one_start(client, db_session,
 
     resp = await client.post("/api/v1/clubs/me/game/start", headers=headers)
     assert resp.status_code == 200
+    resp = await client.post("/api/v1/clubs/me/game/start", headers=headers)
+    assert resp.status_code == 200
 
     resp = await client.post("/api/v1/clubs/me/game/start", headers=headers)
     assert resp.status_code == 409
     details = resp.json()["error"]["details"]
-    assert details["hourly_limit"] == 1
+    assert details["hourly_limit"] == 2
     assert details["retry_after_seconds"] > 0
 
     user = await get_user_by_telegram_id(db_session, 750006)
-    user.club_game_hour_started_at = user.club_game_hour_started_at - timedelta(hours=2)
+    user.club_games_hour_started_at = user.club_games_hour_started_at - timedelta(hours=2)
     db_session.add(user)
     await db_session.commit()
 

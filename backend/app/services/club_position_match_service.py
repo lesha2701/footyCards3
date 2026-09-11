@@ -1,24 +1,28 @@
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
-from app.core.timeutil import ensure_aware, local_today
+from app.core.timeutil import local_today
 from app.models.card_collection import CardCollection
-from app.models.enums import GameSessionStatus, GameType, TransactionType
+from app.models.club import Club
+from app.models.enums import ClubBudgetTransactionType, GameSessionStatus, GameType
 from app.models.game import GameSession
 from app.models.player import Player
 from app.models.user import User
-from app.schemas.game import (
-    PositionMatchAttemptOut,
-    PositionMatchCardOut,
-    PositionMatchClaimOut,
-    PositionMatchStartOut,
+from app.schemas.club_position_match import (
+    ClubPositionMatchAttemptOut,
+    ClubPositionMatchCardOut,
+    ClubPositionMatchClaimOut,
+    ClubPositionMatchStartOut,
 )
+from app.services.club_budget_service import credit_club_budget
+from app.services.club_game_limits_service import consume_club_game_slot
+from app.services.club_service import _lock_club, _require_membership
 from app.services.game_config_service import get_config
-from app.services.wallet_service import credit_coins, lock_user_for_update
+from app.services.wallet_service import lock_user_for_update
 
 CARDS_PER_ROUND = 5
 
@@ -64,39 +68,18 @@ async def _deal_cards(db: AsyncSession) -> list[Player]:
 
 async def _ensure_daily_reset(db: AsyncSession, user: User) -> None:
     today = local_today()
-    reset_day = local_today(user.position_match_attempts_reset_at) if user.position_match_attempts_reset_at else None
+    reset_day = local_today(user.club_position_match_attempts_reset_at) if user.club_position_match_attempts_reset_at else None
     if reset_day != today:
-        user.position_match_rewarded_attempts_today = 0
-        user.position_match_attempts_reset_at = datetime.now(timezone.utc)
+        user.club_position_match_rewarded_attempts_today = 0
+        user.club_position_match_attempts_reset_at = datetime.now(timezone.utc)
         db.add(user)
 
 
-async def _ensure_hourly_reset(db: AsyncSession, user: User) -> None:
-    now = datetime.now(timezone.utc)
-    started = user.position_match_hour_started_at
-    if started is None or now - ensure_aware(started) >= timedelta(hours=1):
-        user.position_match_hourly_attempts = 0
-        user.position_match_hour_started_at = now
-        db.add(user)
-
-
-async def start_session(db: AsyncSession, user: User) -> PositionMatchStartOut:
+async def start_session(db: AsyncSession, user: User) -> ClubPositionMatchStartOut:
+    membership = await _require_membership(db, user.id)
     config = await get_config(db)
     locked_user = await lock_user_for_update(db, user.id)
-    await _ensure_hourly_reset(db, locked_user)
-    if locked_user.position_match_hourly_attempts >= config.hourly_game_limit:
-        remaining = timedelta(hours=1) - (
-            datetime.now(timezone.utc) - ensure_aware(locked_user.position_match_hour_started_at)
-        )
-        raise ConflictError(
-            "Hourly play limit reached for this game",
-            details={
-                "hourly_limit": config.hourly_game_limit,
-                "retry_after_seconds": max(0, int(remaining.total_seconds())),
-            },
-        )
-    locked_user.position_match_hourly_attempts += 1
-    db.add(locked_user)
+    await consume_club_game_slot(db, locked_user, config)
 
     await _ensure_daily_reset(db, locked_user)
 
@@ -107,8 +90,9 @@ async def start_session(db: AsyncSession, user: User) -> PositionMatchStartOut:
     random.shuffle(shuffled_positions)
 
     session = GameSession(
-        user_id=locked_user.id, game_type=GameType.position_match, status=GameSessionStatus.in_progress,
+        user_id=locked_user.id, game_type=GameType.club_position_match, status=GameSessionStatus.in_progress,
         server_state={
+            "club_id": membership.club_id,
             "card_ids": card_ids,
             "positions_by_card_id": {str(p.id): p.position.value for p in players},
             "matched_player_ids": [],
@@ -119,17 +103,17 @@ async def start_session(db: AsyncSession, user: User) -> PositionMatchStartOut:
     await db.commit()
     await db.refresh(session)
 
-    return PositionMatchStartOut(
+    return ClubPositionMatchStartOut(
         session_id=session.id,
-        cards=[PositionMatchCardOut.model_validate(p) for p in players],
+        cards=[ClubPositionMatchCardOut.model_validate(p) for p in players],
         positions=shuffled_positions,
-        max_mistakes=config.position_match_max_mistakes,
+        max_mistakes=config.club_position_match_max_mistakes,
     )
 
 
 async def _get_session(db: AsyncSession, user_id: int, session_id: int) -> GameSession:
     session = await db.get(GameSession, session_id)
-    if not session or session.game_type != GameType.position_match:
+    if not session or session.game_type != GameType.club_position_match:
         raise NotFoundError("Game session not found")
     if session.user_id != user_id:
         raise ForbiddenError("This session does not belong to you")
@@ -137,10 +121,13 @@ async def _get_session(db: AsyncSession, user_id: int, session_id: int) -> GameS
 
 
 def _reward_for(mistakes: int, config) -> int:
-    return max(config.position_match_reward_min, config.position_match_reward_perfect - mistakes * config.position_match_penalty_per_mistake)
+    return max(
+        config.club_position_match_reward_min,
+        config.club_position_match_reward_perfect - mistakes * config.club_position_match_penalty_per_mistake,
+    )
 
 
-async def submit_attempt(db: AsyncSession, user: User, session_id: int, player_id: int, position: str) -> PositionMatchAttemptOut:
+async def submit_attempt(db: AsyncSession, user: User, session_id: int, player_id: int, position: str) -> ClubPositionMatchAttemptOut:
     config = await get_config(db)
     session = await _get_session(db, user.id, session_id)
     if session.status != GameSessionStatus.in_progress:
@@ -169,7 +156,7 @@ async def submit_attempt(db: AsyncSession, user: User, session_id: int, player_i
         session.status = GameSessionStatus.won
         session.finished_at = datetime.now(timezone.utc)
         session.reward_coins = _reward_for(mistakes, config)
-    elif mistakes >= config.position_match_max_mistakes:
+    elif mistakes >= config.club_position_match_max_mistakes:
         session.status = GameSessionStatus.lost
         session.finished_at = datetime.now(timezone.utc)
         session.reward_coins = 0
@@ -178,13 +165,13 @@ async def submit_attempt(db: AsyncSession, user: User, session_id: int, player_i
     db.add(session)
     await db.commit()
 
-    return PositionMatchAttemptOut(
+    return ClubPositionMatchAttemptOut(
         session_id=session.id, correct=is_correct, matched_player_ids=matched_player_ids,
-        mistakes=mistakes, max_mistakes=config.position_match_max_mistakes, status=session.status.value,
+        mistakes=mistakes, max_mistakes=config.club_position_match_max_mistakes, status=session.status.value,
     )
 
 
-async def claim_reward(db: AsyncSession, user: User, session_id: int) -> PositionMatchClaimOut:
+async def claim_reward(db: AsyncSession, user: User, session_id: int) -> ClubPositionMatchClaimOut:
     config = await get_config(db)
     session = await _get_session(db, user.id, session_id)
     if session.status not in (GameSessionStatus.lost, GameSessionStatus.won):
@@ -195,20 +182,33 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> Positio
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked_user)
-    daily_cap_reached = locked_user.position_match_rewarded_attempts_today >= config.position_match_daily_limit
+    daily_cap_reached = locked_user.club_position_match_rewarded_attempts_today >= config.club_position_match_daily_reward_limit
 
     reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else session.reward_coins
     session.is_rewarded = True
     if not daily_cap_reached:
-        locked_user.position_match_rewarded_attempts_today += 1
-
-    if reward > 0:
-        await credit_coins(
-            db, locked_user, reward, TransactionType.game_reward,
-            "Награда за Свою позицию", related_object_type="game_session", related_object_id=session.id,
-        )
+        locked_user.club_position_match_rewarded_attempts_today += 1
+    db.add(locked_user)
     db.add(session)
-    await db.commit()
-    await db.refresh(locked_user)
 
-    return PositionMatchClaimOut(reward_coins=reward, new_balance=locked_user.balance)
+    club_id = (session.server_state or {}).get("club_id")
+    new_budget = None
+    if reward > 0 and club_id is not None:
+        club = await _lock_club(db, club_id)
+        if club is not None and not club.is_disbanded:
+            await credit_club_budget(
+                db, club, reward, ClubBudgetTransactionType.club_position_match_reward,
+                f"Своя позиция: {user.username or user.first_name or f'#{user.id}'}",
+                related_object_type="game_session", related_object_id=session.id,
+            )
+            new_budget = club.budget
+        else:
+            reward = 0
+
+    await db.commit()
+
+    if new_budget is None and club_id is not None:
+        club = await db.get(Club, club_id)
+        new_budget = club.budget if club is not None else 0
+
+    return ClubPositionMatchClaimOut(reward_coins=reward, new_club_budget=new_budget or 0, daily_cap_reached=daily_cap_reached)

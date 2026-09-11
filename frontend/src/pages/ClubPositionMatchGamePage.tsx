@@ -1,15 +1,13 @@
-import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { claimPositionMatchReward, startPositionMatch, submitPositionMatchAttempt } from "@/api/games";
-import { IconCoin, IconShirt, IconTrophy } from "@/components/icons";
+import { claimClubPositionMatchReward, startClubPositionMatch, submitClubPositionMatchAttempt } from "@/api/clubs";
+import { IconChevronLeft, IconCoin, IconShirt, IconTrophy } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
 import { POSITION_LABELS, RARITY_GRADIENTS, RARITY_GLOW } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
-import { useAuthStore } from "@/store/authStore";
-import type { PositionMatchCard, PositionMatchClaimResult } from "@/types";
+import type { ClubPositionMatchCard, ClubPositionMatchClaim } from "@/types";
 
 type Phase = "idle" | "playing" | "finished";
 
@@ -19,13 +17,12 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export default function PositionMatchGamePage() {
+export default function ClubPositionMatchGamePage() {
   const navigate = useNavigate();
-  const updateBalance = useAuthStore((s) => s.updateBalance);
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [sessionId, setSessionId] = useState<number | null>(null);
-  const [cards, setCards] = useState<PositionMatchCard[]>([]);
+  const [cards, setCards] = useState<ClubPositionMatchCard[]>([]);
   const [positions, setPositions] = useState<string[]>([]);
   const [maxMistakes, setMaxMistakes] = useState(3);
   const [matchedCardIds, setMatchedCardIds] = useState<Set<number>>(new Set());
@@ -35,21 +32,31 @@ export default function PositionMatchGamePage() {
   const [wrongFlash, setWrongFlash] = useState<{ cardId: number; position: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [won, setWon] = useState(false);
-  const [claimResult, setClaimResult] = useState<PositionMatchClaimResult | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [claimResult, setClaimResult] = useState<ClubPositionMatchClaim | null>(null);
+  const [claimError, setClaimError] = useState<unknown>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const claimMutation = useMutation({
-    mutationFn: () => claimPositionMatchReward(sessionId!),
-    onSuccess: (data) => {
-      updateBalance(data.new_balance);
+  const claim = async (id: number) => {
+    setClaiming(true);
+    setClaimError(null);
+    try {
+      const data = await claimClubPositionMatchReward(id);
       hapticNotify("success");
       setClaimResult(data);
-    },
-  });
+    } catch (err) {
+      setClaimError(err);
+    } finally {
+      setClaiming(false);
+    }
+  };
 
-  const startMutation = useMutation({
-    mutationFn: startPositionMatch,
-    onSuccess: (data) => {
+  const start = async () => {
+    setStarting(true);
+    setErrorMsg(null);
+    try {
+      const data = await startClubPositionMatch();
       setSessionId(data.session_id);
       setCards(data.cards);
       setPositions(data.positions);
@@ -61,11 +68,14 @@ export default function PositionMatchGamePage() {
       setWrongFlash(null);
       setWon(false);
       setClaimResult(null);
-      setErrorMsg(null);
+      setClaimError(null);
       setPhase("playing");
-    },
-    onError: (err) => setErrorMsg(formatGameError(err, "Не удалось начать игру")),
-  });
+    } catch (err) {
+      setErrorMsg(formatGameError(err, "Не удалось начать игру"));
+    } finally {
+      setStarting(false);
+    }
+  };
 
   const handleCardClick = (cardId: number) => {
     if (busy || matchedCardIds.has(cardId)) return;
@@ -79,7 +89,7 @@ export default function PositionMatchGamePage() {
     setBusy(true);
     haptic("light");
     try {
-      const result = await submitPositionMatchAttempt(sessionId!, cardId, position);
+      const result = await submitClubPositionMatchAttempt(sessionId!, cardId, position);
       setMistakes(result.mistakes);
       setSelectedCardId(null);
 
@@ -88,10 +98,9 @@ export default function PositionMatchGamePage() {
         setMatchedCardIds((prev) => new Set(prev).add(cardId));
         setMatchedPositions((prev) => new Set(prev).add(position));
         if (result.status === "won") {
-          hapticNotify("success");
           setWon(true);
           setPhase("finished");
-          claimMutation.mutate();
+          claim(result.session_id);
         }
         setBusy(false);
         return;
@@ -104,7 +113,7 @@ export default function PositionMatchGamePage() {
       if (result.status === "lost") {
         setWon(false);
         setPhase("finished");
-        claimMutation.mutate();
+        claim(result.session_id);
       }
       setBusy(false);
     } catch (err) {
@@ -116,19 +125,25 @@ export default function PositionMatchGamePage() {
   if (phase === "idle") {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="font-display text-xl font-bold text-ink-chalk">Своя позиция</h1>
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate("/clubs/games")} className="rounded-full bg-bg-surface p-2 active:scale-95">
+            <IconChevronLeft size={18} className="text-ink-chalk" />
+          </button>
+          <h1 className="font-display text-xl font-bold text-ink-chalk">Своя позиция</h1>
+        </div>
         <p className="text-sm text-ink-mist">
           5 случайных футболистов и их позиции — вперемешку. Сопоставь карточку слева с её позицией справа.
-          За каждую ошибку награда уменьшается, а если ошибок будет слишком много — раунд проигран.
+          За каждую ошибку награда уменьшается, а если ошибок будет слишком много — раунд проигран. Награда идёт в
+          бюджет клуба.
         </p>
 
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
         <button
-          onClick={() => startMutation.mutate()}
-          disabled={startMutation.isPending}
+          onClick={start}
+          disabled={starting}
           className="rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
         >
-          {startMutation.isPending ? "Загрузка..." : "Начать игру"}
+          {starting ? "Загрузка..." : "Начать игру"}
         </button>
       </div>
     );
@@ -143,22 +158,25 @@ export default function PositionMatchGamePage() {
         </p>
         <p className="text-sm text-ink-mist">Ошибок: {mistakes}</p>
 
-        {claimMutation.isPending ? (
+        {claiming ? (
           <p className="text-sm text-ink-mist">Начисление...</p>
         ) : claimResult ? (
-          claimResult.reward_coins > 0 ? (
-            <div className="rounded-2xl bg-accent-green/10 px-5 py-3">
-              <p className="flex items-center justify-center gap-1.5 font-mono text-lg font-bold text-accent-green">
-                Ты получил +{claimResult.reward_coins}
-                <IconCoin size={16} />
+          <div className="rounded-2xl bg-accent-green/10 px-5 py-3">
+            <p className="flex items-center justify-center gap-1.5 font-mono text-lg font-bold text-accent-green">
+              Бюджет клуба +{claimResult.reward_coins}
+              <IconCoin size={16} />
+            </p>
+            <p className="text-xs text-accent-green">Новый бюджет клуба: {claimResult.new_club_budget}</p>
+            {claimResult.reward_coins === 0 && claimResult.daily_cap_reached && (
+              <p className="mt-1 text-xs text-amber-300">
+                Дневной лимит наградных попыток в этой игре исчерпан — результат не пропал, но награда не
+                начисляется до завтра.
               </p>
-            </div>
-          ) : (
-            <p className="text-sm text-ink-mist">Награды нет</p>
-          )
-        ) : claimMutation.isError ? (
+            )}
+          </div>
+        ) : claimError ? (
           <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">
-            {formatGameError(claimMutation.error, "Не удалось начислить награду")}
+            {formatGameError(claimError, "Не удалось начислить награду")}
           </p>
         ) : null}
 
@@ -166,7 +184,7 @@ export default function PositionMatchGamePage() {
           <button onClick={() => setPhase("idle")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
             Ещё раз
           </button>
-          <button onClick={() => navigate("/play")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
+          <button onClick={() => navigate("/clubs/games")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
             Назад
           </button>
         </div>
@@ -234,7 +252,7 @@ function CardButton({
   disabled,
   onClick,
 }: {
-  card: PositionMatchCard;
+  card: ClubPositionMatchCard;
   isMatched: boolean;
   isSelected: boolean;
   isWrong: boolean;

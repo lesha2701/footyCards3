@@ -10,6 +10,9 @@ import type {
   ClubPenaltyForfeit,
   ClubPenaltyKick,
   ClubPenaltyStart,
+  ClubPositionMatchAttempt,
+  ClubPositionMatchClaim,
+  ClubPositionMatchStart,
   ClubStats,
   ClubSummary,
   NextOpponent,
@@ -199,5 +202,24 @@ export async function claimClubPenaltyReward(sessionId: number): Promise<ClubPen
 
 export async function forfeitClubPenalty(sessionId: number): Promise<ClubPenaltyForfeit> {
   const { data } = await api.post<ClubPenaltyForfeit>(`/clubs/me/penalty/${sessionId}/forfeit`);
+  return data;
+}
+
+export async function startClubPositionMatch(): Promise<ClubPositionMatchStart> {
+  const { data } = await api.post<ClubPositionMatchStart>("/clubs/me/position-match/start");
+  return data;
+}
+
+export async function submitClubPositionMatchAttempt(
+  sessionId: number, playerId: number, position: string
+): Promise<ClubPositionMatchAttempt> {
+  const { data } = await api.post<ClubPositionMatchAttempt>(`/clubs/me/position-match/${sessionId}/match`, {
+    player_id: playerId, position,
+  });
+  return data;
+}
+
+export async function claimClubPositionMatchReward(sessionId: number): Promise<ClubPositionMatchClaim> {
+  const { data } = await api.post<ClubPositionMatchClaim>(`/clubs/me/position-match/${sessionId}/claim`);
   return data;
 }

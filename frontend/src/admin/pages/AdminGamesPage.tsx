@@ -131,10 +131,20 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Клубные игры — общий лимит</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Один пул попыток в час на участника, общий для всех трёх клубных игр ниже — можно потратить на любую их
+          комбинацию (например, дважды сыграть в пенальти).
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("club_games_hourly_limit", "Игр в час (на участника, суммарно)")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Клубная игра «Повтори порядок»</p>
         <p className="mb-3 text-xs text-slate-500">Награда за игру идёт в бюджет клуба, а не игроку лично.</p>
         <div className="grid grid-cols-2 gap-3">
-          {field("club_game_hourly_limit", "Лимит игр в час (на участника)")}
           {field("club_game_daily_reward_limit", "Лимит наградных попыток/день")}
           {field("club_game_reward_cap", "Максимальная награда")}
         </div>
@@ -144,11 +154,25 @@ export default function AdminGamesPage() {
         <p className="mb-3 font-display text-base font-bold">Пенальти (клубная игра)</p>
         <p className="mb-3 text-xs text-slate-500">Награда за игру идёт в бюджет клуба, а не игроку лично.</p>
         <div className="grid grid-cols-2 gap-3">
-          {field("club_penalty_hourly_limit", "Лимит игр в час (на участника)")}
           {field("club_penalty_daily_reward_limit", "Лимит наградных попыток/день")}
           {field("club_penalty_reward_win", "Награда за победу")}
           {field("club_penalty_reward_loss", "Награда за поражение")}
           {field("club_penalty_bot_miss_chance", "Шанс промаха бота (0-1)")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Своя позиция (клубная игра)</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Награда за игру идёт в бюджет клуба. Награда = награда за идеальный раунд − ошибки × штраф за ошибку, но не
+          ниже минимальной. После указанного числа ошибок раунд засчитывается как проигранный (награда 0).
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("club_position_match_daily_reward_limit", "Лимит наградных попыток/день")}
+          {field("club_position_match_max_mistakes", "Ошибок до поражения")}
+          {field("club_position_match_reward_perfect", "Награда за идеальный раунд")}
+          {field("club_position_match_reward_min", "Минимальная награда")}
+          {field("club_position_match_penalty_per_mistake", "Штраф за ошибку")}
         </div>
       </section>
 
@@ -343,21 +367,6 @@ export default function AdminGamesPage() {
           {field("pairs_error_bracket_size", "Ошибок в одной группе")}
           {field("pairs_bracket_penalty", "Штраф за группу ошибок")}
           {field("pairs_bonus_coins", "Бонус за особую карту")}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-1 font-display text-base font-bold">Своя позиция</p>
-        <p className="mb-3 text-xs text-slate-500">
-          Награда = награда за идеальный раунд − ошибки × штраф за ошибку, но не ниже минимальной. После указанного
-          числа ошибок раунд засчитывается как проигранный (награда 0).
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          {field("position_match_daily_limit", "Лимит наградных попыток/день")}
-          {field("position_match_max_mistakes", "Ошибок до поражения")}
-          {field("position_match_reward_perfect", "Награда за идеальный раунд")}
-          {field("position_match_reward_min", "Минимальная награда")}
-          {field("position_match_penalty_per_mistake", "Штраф за ошибку")}
         </div>
       </section>
 

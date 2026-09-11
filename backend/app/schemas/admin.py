@@ -149,14 +149,18 @@ class GameConfigOut(BaseModel):
     club_member_match_reward_loss: int
     club_training_boost_pct: float
     club_training_uses_per_tournament: int
-    club_game_hourly_limit: int
+    club_games_hourly_limit: int
     club_game_daily_reward_limit: int
     club_game_reward_cap: int
-    club_penalty_hourly_limit: int
     club_penalty_daily_reward_limit: int
     club_penalty_reward_win: int
     club_penalty_reward_loss: int
     club_penalty_bot_miss_chance: float
+    club_position_match_daily_reward_limit: int
+    club_position_match_max_mistakes: int
+    club_position_match_reward_perfect: int
+    club_position_match_reward_min: int
+    club_position_match_penalty_per_mistake: int
     club_tactical_tackle_attempt_chance: float
     club_tactical_injury_chance: float
     memory_daily_reward_limit: int
@@ -223,11 +227,6 @@ class GameConfigOut(BaseModel):
     pairs_error_bracket_size: int
     pairs_bracket_penalty: int
     pairs_bonus_coins: int
-    position_match_daily_limit: int
-    position_match_max_mistakes: int
-    position_match_reward_perfect: int
-    position_match_reward_min: int
-    position_match_penalty_per_mistake: int
     tactico_challenge_expiry_hours: int
     tactico_round_timeout_hours: int
     tactico_phase_bonus_pct: float
@@ -273,14 +272,18 @@ class GameConfigUpdate(BaseModel):
     club_member_match_reward_loss: Optional[int] = Field(default=None, ge=0)
     club_training_boost_pct: Optional[float] = Field(default=None, ge=0, le=1)
     club_training_uses_per_tournament: Optional[int] = Field(default=None, ge=0)
-    club_game_hourly_limit: Optional[int] = Field(default=None, ge=1)
+    club_games_hourly_limit: Optional[int] = Field(default=None, ge=1)
     club_game_daily_reward_limit: Optional[int] = Field(default=None, ge=0)
     club_game_reward_cap: Optional[int] = Field(default=None, ge=0)
-    club_penalty_hourly_limit: Optional[int] = Field(default=None, ge=1)
     club_penalty_daily_reward_limit: Optional[int] = Field(default=None, ge=0)
     club_penalty_reward_win: Optional[int] = Field(default=None, ge=0)
     club_penalty_reward_loss: Optional[int] = Field(default=None, ge=0)
     club_penalty_bot_miss_chance: Optional[float] = Field(default=None, ge=0, le=1)
+    club_position_match_daily_reward_limit: Optional[int] = Field(default=None, ge=0)
+    club_position_match_max_mistakes: Optional[int] = Field(default=None, ge=1)
+    club_position_match_reward_perfect: Optional[int] = Field(default=None, ge=0)
+    club_position_match_reward_min: Optional[int] = Field(default=None, ge=0)
+    club_position_match_penalty_per_mistake: Optional[int] = Field(default=None, ge=0)
     club_tactical_tackle_attempt_chance: Optional[float] = Field(default=None, ge=0, le=1)
     club_tactical_injury_chance: Optional[float] = Field(default=None, ge=0, le=1)
     memory_daily_reward_limit: Optional[int] = Field(default=None, ge=0)
@@ -347,11 +350,6 @@ class GameConfigUpdate(BaseModel):
     pairs_error_bracket_size: Optional[int] = Field(default=None, ge=1)
     pairs_bracket_penalty: Optional[int] = Field(default=None, ge=0)
     pairs_bonus_coins: Optional[int] = Field(default=None, ge=0)
-    position_match_daily_limit: Optional[int] = Field(default=None, ge=0)
-    position_match_max_mistakes: Optional[int] = Field(default=None, ge=1)
-    position_match_reward_perfect: Optional[int] = Field(default=None, ge=0)
-    position_match_reward_min: Optional[int] = Field(default=None, ge=0)
-    position_match_penalty_per_mistake: Optional[int] = Field(default=None, ge=0)
     tactico_challenge_expiry_hours: Optional[int] = Field(default=None, ge=1)
     tactico_round_timeout_hours: Optional[int] = Field(default=None, ge=1)
     tactico_phase_bonus_pct: Optional[float] = Field(default=None, ge=0, le=1)

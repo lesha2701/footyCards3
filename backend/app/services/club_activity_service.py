@@ -51,7 +51,10 @@ async def get_club_activity(db: AsyncSession, user: User) -> list[ClubMemberActi
                 # going forward (see club_penalty plan, 2026-09-09) — it's a 7-day
                 # rolling window (ACTIVITY_WINDOW_DAYS), so recently-played sessions from
                 # before the cutover still need to count until they age out naturally.
-                GameSession.game_type.in_([GameType.club_sequence, GameType.club_missing_item, GameType.club_penalty]),
+                GameSession.game_type.in_([
+                    GameType.club_sequence, GameType.club_missing_item, GameType.club_penalty,
+                    GameType.club_position_match,
+                ]),
                 GameSession.created_at >= since,
             )
             .group_by(GameSession.user_id)

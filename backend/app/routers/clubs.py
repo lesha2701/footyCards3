@@ -41,6 +41,12 @@ from app.schemas.club_penalty import (
 )
 from app.schemas.club_pack import ClubPackOut
 from app.schemas.club_pack_open import ClubPackOpenResult, OpenClubPackRequest
+from app.schemas.club_position_match import (
+    ClubPositionMatchAttemptOut,
+    ClubPositionMatchAttemptRequest,
+    ClubPositionMatchClaimOut,
+    ClubPositionMatchStartOut,
+)
 from app.schemas.club_squad import (
     ClubCardOut,
     ClubCoachCardOut,
@@ -63,6 +69,7 @@ from app.services import (
     club_game_service,
     club_pack_service,
     club_penalty_service,
+    club_position_match_service,
     club_ranking_service,
     club_service,
     club_squad_service,
@@ -298,6 +305,25 @@ async def claim_club_penalty_reward(session_id: int, db: AsyncSession = Depends(
 @router.post("/me/penalty/{session_id}/forfeit", response_model=ClubPenaltyForfeitOut)
 async def forfeit_club_penalty(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_penalty_service.forfeit_session(db, user, session_id)
+
+
+@router.post("/me/position-match/start", response_model=ClubPositionMatchStartOut)
+async def start_club_position_match(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    check_rate_limit(f"club_position_match_start:{user.id}", max_calls=20, window_seconds=60)
+    return await club_position_match_service.start_session(db, user)
+
+
+@router.post("/me/position-match/{session_id}/match", response_model=ClubPositionMatchAttemptOut)
+async def club_position_match_attempt(
+    session_id: int, payload: ClubPositionMatchAttemptRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await club_position_match_service.submit_attempt(db, user, session_id, payload.player_id, payload.position)
+
+
+@router.post("/me/position-match/{session_id}/claim", response_model=ClubPositionMatchClaimOut)
+async def claim_club_position_match_reward(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_position_match_service.claim_reward(db, user, session_id)
 
 
 @router.post("/tournament/apply", response_model=TournamentApplyResult)

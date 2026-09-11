@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 
-import { IconBrain, IconChevronLeft, IconChevronRight, IconGoal } from "@/components/icons";
+import { IconBrain, IconChevronLeft, IconChevronRight, IconGoal, IconShirt } from "@/components/icons";
 
 const GAMES = [
   {
@@ -14,6 +14,12 @@ const GAMES = [
     icon: IconGoal,
     title: "Пенальти",
     description: "Серия пенальти против бота — выбери игрока из состава клуба",
+  },
+  {
+    to: "/clubs/position-match",
+    icon: IconShirt,
+    title: "Своя позиция",
+    description: "Сопоставь футболистов с их позициями на поле",
   },
 ];
 
@@ -30,7 +36,8 @@ export default function ClubGamesPage() {
       </div>
 
       <p className="text-xs text-ink-mist">
-        Каждая игра доступна раз в час каждому участнику клуба — награда пополняет бюджет клуба.
+        На все три игры вместе — 2 попытки в час на участника, можно тратить на любую комбинацию (например, дважды
+        сыграть в пенальти). Награда пополняет бюджет клуба.
       </p>
 
       <div className="flex flex-col gap-3">

@@ -377,6 +377,36 @@ export interface ClubPenaltyForfeit {
   result: string;
 }
 
+export interface ClubPositionMatchCard {
+  id: number;
+  display_name: string;
+  rating: number;
+  rarity: Rarity;
+  image_path: string | null;
+}
+
+export interface ClubPositionMatchStart {
+  session_id: number;
+  cards: ClubPositionMatchCard[];
+  positions: string[];
+  max_mistakes: number;
+}
+
+export interface ClubPositionMatchAttempt {
+  session_id: number;
+  correct: boolean;
+  matched_player_ids: number[];
+  mistakes: number;
+  max_mistakes: number;
+  status: "in_progress" | "won" | "lost" | "rewarded" | "expired";
+}
+
+export interface ClubPositionMatchClaim {
+  reward_coins: number;
+  new_club_budget: number;
+  daily_cap_reached: boolean;
+}
+
 export interface LineupSlot {
   slot_code: string;
   category: string;
@@ -476,7 +506,6 @@ export interface GameLimits {
   hangman: number;
   tactico: number;
   pairs: number;
-  position_match: number;
 }
 
 export interface ArenaLeaderboardEntry {
@@ -1013,35 +1042,6 @@ export interface PairsFlipResult {
 }
 
 export interface PairsClaimResult {
-  reward_coins: number;
-  new_balance: number;
-}
-
-export interface PositionMatchCard {
-  id: number;
-  display_name: string;
-  rating: number;
-  rarity: Rarity;
-  image_path: string | null;
-}
-
-export interface PositionMatchStartResult {
-  session_id: number;
-  cards: PositionMatchCard[];
-  positions: string[];
-  max_mistakes: number;
-}
-
-export interface PositionMatchAttemptResult {
-  session_id: number;
-  correct: boolean;
-  matched_player_ids: number[];
-  mistakes: number;
-  max_mistakes: number;
-  status: "in_progress" | "won" | "lost" | "rewarded" | "expired";
-}
-
-export interface PositionMatchClaimResult {
   reward_coins: number;
   new_balance: number;
 }

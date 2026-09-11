@@ -39,15 +39,23 @@ class GameConfig(TimestampMixin, Base):
     club_training_boost_pct: Mapped[float] = mapped_column(Numeric(4, 2), default=0.10, nullable=False)
     club_training_uses_per_tournament: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
 
-    club_game_hourly_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Shared hourly pool across every club-scoped mini-game — see
+    # User.club_games_hourly_attempts / club_game_limits_service.
+    club_games_hourly_limit: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+
     club_game_daily_reward_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     club_game_reward_cap: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
 
-    club_penalty_hourly_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     club_penalty_daily_reward_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     club_penalty_reward_win: Mapped[int] = mapped_column(Integer, default=45, nullable=False)
     club_penalty_reward_loss: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     club_penalty_bot_miss_chance: Mapped[float] = mapped_column(Numeric(4, 2), default=0.12, nullable=False)
+
+    club_position_match_daily_reward_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    club_position_match_max_mistakes: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    club_position_match_reward_perfect: Mapped[int] = mapped_column(Integer, default=35, nullable=False)
+    club_position_match_reward_min: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    club_position_match_penalty_per_mistake: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
 
     club_tactical_phases_per_match_min: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
     club_tactical_phases_per_match_max: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
@@ -141,12 +149,6 @@ class GameConfig(TimestampMixin, Base):
     pairs_error_bracket_size: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     pairs_bracket_penalty: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     pairs_bonus_coins: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
-
-    position_match_daily_limit: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
-    position_match_max_mistakes: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
-    position_match_reward_perfect: Mapped[int] = mapped_column(Integer, default=35, nullable=False)
-    position_match_reward_min: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
-    position_match_penalty_per_mistake: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
 
     free_pack_interval_hours: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     free_pack_pack_slug: Mapped[str] = mapped_column(String, default="basic", nullable=False)

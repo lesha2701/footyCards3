@@ -1,9 +1,8 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
-from app.models.enums import Rarity
 from app.schemas.player import PlayerOut
 
 
@@ -195,7 +194,6 @@ class GameLimitsOut(BaseModel):
     hangman: int
     tactico: int
     pairs: int
-    position_match: int
 
 
 # --- Найди пару (card pairs memory match) ---
@@ -229,46 +227,5 @@ class PairsFlipOut(BaseModel):
 
 
 class PairsClaimOut(BaseModel):
-    reward_coins: int
-    new_balance: int
-
-
-# --- Своя позиция (position match) ---
-
-class PositionMatchCardOut(BaseModel):
-    """Deliberately narrower than PlayerOut — omits `position`, the answer
-    the player has to guess. Including it here would let anyone read the
-    correct match straight out of the network response."""
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    display_name: str
-    rating: int
-    rarity: Rarity
-    image_path: Optional[str]
-
-
-class PositionMatchStartOut(BaseModel):
-    session_id: int
-    cards: list[PositionMatchCardOut]
-    positions: list[str]
-    max_mistakes: int
-
-
-class PositionMatchAttemptRequest(BaseModel):
-    player_id: int
-    position: str
-
-
-class PositionMatchAttemptOut(BaseModel):
-    session_id: int
-    correct: bool
-    matched_player_ids: list[int]
-    mistakes: int
-    max_mistakes: int
-    status: str
-
-
-class PositionMatchClaimOut(BaseModel):
     reward_coins: int
     new_balance: int

@@ -1,17 +1,18 @@
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
-from app.core.timeutil import ensure_aware, local_today
+from app.core.timeutil import local_today
 from app.models.club import Club
 from app.models.enums import ClubBudgetTransactionType, GameSessionStatus, GameType
 from app.models.game import GameSession, MemoryGameRound
 from app.models.user import User
 from app.schemas.club_game import ClubGameClaimOut, ClubGameStartOut, ClubGameSubmitOut
 from app.services.club_budget_service import credit_club_budget
+from app.services.club_game_limits_service import consume_club_game_slot
 from app.services.club_service import _lock_club, _require_membership
 from app.services.game_config_service import get_config
 from app.services.wallet_service import lock_user_for_update
@@ -41,31 +42,11 @@ async def _ensure_daily_reset(db: AsyncSession, user: User) -> None:
         db.add(user)
 
 
-async def _ensure_hourly_reset(db: AsyncSession, user: User) -> None:
-    now = datetime.now(timezone.utc)
-    started = user.club_game_hour_started_at
-    if started is None or now - ensure_aware(started) >= timedelta(hours=1):
-        user.club_game_hourly_attempts = 0
-        user.club_game_hour_started_at = now
-        db.add(user)
-
-
 async def start_session(db: AsyncSession, user: User) -> ClubGameStartOut:
     membership = await _require_membership(db, user.id)
     config = await get_config(db)
     locked_user = await lock_user_for_update(db, user.id)
-    await _ensure_hourly_reset(db, locked_user)
-    if locked_user.club_game_hourly_attempts >= config.club_game_hourly_limit:
-        remaining = timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(locked_user.club_game_hour_started_at))
-        raise ConflictError(
-            "Hourly play limit reached for this game",
-            details={
-                "hourly_limit": config.club_game_hourly_limit,
-                "retry_after_seconds": max(0, int(remaining.total_seconds())),
-            },
-        )
-    locked_user.club_game_hourly_attempts += 1
-    db.add(locked_user)
+    await consume_club_game_slot(db, locked_user, config)
 
     await _ensure_daily_reset(db, locked_user)
 

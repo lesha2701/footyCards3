@@ -125,6 +125,7 @@ class ClubBudgetTransactionType(str, enum.Enum):
     # would break parity with it.
     coach_pack_purchase = "coach_pack_purchase"
     admin_adjustment = "admin_adjustment"
+    club_position_match_reward = "club_position_match_reward"
 
 
 class TournamentQueueStatus(str, enum.Enum):
@@ -190,10 +191,15 @@ class GameType(str, enum.Enum):
     free_kick = "free_kick"
     football_hangman = "football_hangman"
     card_pairs = "card_pairs"
+    # Retired the same day it shipped — moved into the club games instead
+    # (see club_position_match below). Zero writers left; kept only because
+    # Postgres cannot drop a single enum value once added (same precedent as
+    # ClubBudgetTransactionType.coach_pack_purchase).
     position_match = "position_match"
     club_sequence = "club_sequence"
     club_missing_item = "club_missing_item"
     club_penalty = "club_penalty"
+    club_position_match = "club_position_match"
 
 
 class GameSessionStatus(str, enum.Enum):

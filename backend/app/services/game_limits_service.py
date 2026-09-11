@@ -25,5 +25,4 @@ def get_remaining_plays(user: User, config: GameConfig) -> GameLimitsOut:
         hangman=_remaining(user.hangman_hourly_attempts, user.hangman_hour_started_at, limit),
         tactico=_remaining(user.tactico_hourly_attempts, user.tactico_hour_started_at, limit),
         pairs=_remaining(user.pairs_hourly_attempts, user.pairs_hour_started_at, limit),
-        position_match=_remaining(user.position_match_hourly_attempts, user.position_match_hour_started_at, limit),
     )

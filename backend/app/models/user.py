@@ -94,23 +94,27 @@ class User(TimestampMixin, Base):
     pairs_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     pairs_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Своя позиция (position match)
-    position_match_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    position_match_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    position_match_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    position_match_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Shared hourly pool across every club-scoped mini-game (Повтори порядок,
+    # Пенальти, Своя позиция) — a member gets club_games_hourly_limit plays
+    # per hour TOTAL, spendable on any mix of these games, not N plays of
+    # each independently. See club_game_limits_service.consume_club_game_slot.
+    club_games_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    club_games_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Club Sequence (club-scoped mini-game; reward credits the club's budget)
+    # Daily reward cap only — hourly play is gated by the shared pool above.
     club_game_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     club_game_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    club_game_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    club_game_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Пенальти (club-scoped mini-game; reward credits the club's budget)
+    # Daily reward cap only — hourly play is gated by the shared pool above.
     club_penalty_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     club_penalty_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    club_penalty_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    club_penalty_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Своя позиция (club-scoped mini-game; reward credits the club's budget)
+    # Daily reward cap only — hourly play is gated by the shared pool above.
+    club_position_match_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    club_position_match_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Free pack (every N hours)
     free_pack_available_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
