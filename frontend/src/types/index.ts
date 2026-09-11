@@ -1161,6 +1161,9 @@ export interface ClubLineup {
   tactical_fit_hint: string;
   coach: EquippedCoach | null;
   slots: ClubLineupSlot[];
+  training_uses_remaining: number;
+  training_boost_active: boolean;
+  in_active_tournament: boolean;
 }
 
 export interface ClubPackRarityProbability {

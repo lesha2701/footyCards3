@@ -9,7 +9,7 @@ import {
 } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchMyClub } from "@/api/clubs";
-import { fetchClubCards, fetchClubCoachCards, fetchClubLineup, setClubCoach, setClubLineup, setClubTactics } from "@/api/clubSquad";
+import { activateClubTraining, fetchClubCards, fetchClubCoachCards, fetchClubLineup, setClubCoach, setClubLineup, setClubTactics } from "@/api/clubSquad";
 import { staticUrl } from "@/lib/api";
 import { BOOST_TYPE_LABELS } from "@/lib/coaches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
@@ -46,6 +46,12 @@ export default function ClubSquadPage() {
     mutationFn: setClubCoach,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["clubs", "lineup"] }); setCoachPickerOpen(false); },
     onError: (err) => setError(formatGameError(err, "Не удалось назначить тренера")),
+  });
+
+  const trainingMutation = useMutation({
+    mutationFn: activateClubTraining,
+    onSuccess: (data) => queryClient.setQueryData(["clubs", "lineup"], data),
+    onError: (err) => setError(formatGameError(err, "Не удалось активировать тренировку")),
   });
 
   const updateTactics = (patch: Partial<{ formation: string; mentality: string; playstyle: string }>) => {
@@ -102,6 +108,22 @@ export default function ClubSquadPage() {
             <span className="text-xs text-ink-mist">{lineup.tactical_fit_hint}</span>
             <span className="shrink-0 font-mono text-xs font-bold text-accent-lime">{lineup.tactical_fit}%</span>
           </div>
+        )}
+
+        {lineup?.in_active_tournament && (
+          <button
+            onClick={() => trainingMutation.mutate()}
+            disabled={trainingMutation.isPending || lineup.training_boost_active || lineup.training_uses_remaining <= 0}
+            className={`mb-3 flex w-full items-center justify-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-bold active:scale-95 disabled:opacity-50 ${
+              lineup.training_boost_active ? "bg-accent-green/20 text-accent-green" : "bg-accent-lime/10 text-accent-lime"
+            }`}
+          >
+            {lineup.training_boost_active
+              ? "Тренировка активна на след. тур ✓"
+              : lineup.training_uses_remaining > 0
+                ? `Тренировка состава (${lineup.training_uses_remaining} ост.)`
+                : "Тренировки закончились"}
+          </button>
         )}
 
         {canEdit && lineup && (

@@ -30,3 +30,8 @@ export async function setClubCoach(clubCoachCardId: number | null): Promise<Club
   const { data } = await api.put<ClubLineup>("/clubs/me/coach", { club_coach_card_id: clubCoachCardId });
   return data;
 }
+
+export async function activateClubTraining(): Promise<ClubLineup> {
+  const { data } = await api.post<ClubLineup>("/clubs/me/training");
+  return data;
+}
