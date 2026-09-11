@@ -1097,6 +1097,20 @@ export interface ClubMemberActivity {
   daily_rewards_claimed: number;
 }
 
+export interface ClubStats {
+  matches_played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goals_scored: number;
+  goals_conceded: number;
+  win_rate_pct: number;
+  draw_rate_pct: number;
+  loss_rate_pct: number;
+  goals_scored_per_match: number;
+  goals_conceded_per_match: number;
+}
+
 export interface ClubSummary {
   id: number;
   name: string;

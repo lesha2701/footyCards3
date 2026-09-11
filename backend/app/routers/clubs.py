@@ -29,6 +29,7 @@ from app.schemas.club import (
 )
 from app.schemas.club_activity import ClubMemberActivityOut
 from app.schemas.club_ranking import ClubRankingMetric, ClubRankingOut
+from app.schemas.club_stats import ClubStatsOut
 from app.schemas.club_game import ClubGameClaimOut, ClubGameStartOut, ClubGameSubmitOut, ClubGameSubmitRequest
 from app.schemas.club_penalty import (
     ClubPenaltyClaimOut,
@@ -65,6 +66,7 @@ from app.services import (
     club_ranking_service,
     club_service,
     club_squad_service,
+    club_stats_service,
     tournament_match_engine,
     tournament_queue_service,
 )
@@ -161,6 +163,11 @@ async def kick_member(user_id: int, db: AsyncSession = Depends(get_db), user: Us
 @router.get("/me/activity", response_model=list[ClubMemberActivityOut])
 async def get_club_activity(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_activity_service.get_club_activity(db, user)
+
+
+@router.get("/me/stats", response_model=ClubStatsOut)
+async def get_club_stats(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_stats_service.get_club_stats(db, user)
 
 
 @router.post("/me/members/{user_id}/remind", status_code=status.HTTP_204_NO_CONTENT)

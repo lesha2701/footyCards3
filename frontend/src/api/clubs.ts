@@ -10,6 +10,7 @@ import type {
   ClubPenaltyForfeit,
   ClubPenaltyKick,
   ClubPenaltyStart,
+  ClubStats,
   ClubSummary,
   NextOpponent,
   PenaltyDirection,
@@ -90,6 +91,11 @@ export async function kickMember(userId: number): Promise<Club> {
 
 export async function fetchClubActivity(): Promise<ClubMemberActivity[]> {
   const { data } = await api.get<ClubMemberActivity[]>("/clubs/me/activity");
+  return data;
+}
+
+export async function fetchClubStats(): Promise<ClubStats> {
+  const { data } = await api.get<ClubStats>("/clubs/me/stats");
   return data;
 }
 
