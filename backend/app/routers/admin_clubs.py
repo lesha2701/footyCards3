@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,10 +10,12 @@ from app.core.pagination import Page, PageParams
 from app.database import get_db
 from app.models.club import Club, ClubMember
 from app.models.club_budget import ClubBudgetTransaction
+from app.models.enums import ClubBudgetTransactionType
 from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_result import TournamentClubResult
 from app.models.tournament_standing import TournamentClubStanding
 from app.models.user import User
+from app.schemas.admin import BalanceAdjustRequest
 from app.schemas.admin_clubs import (
     AdminClubBudgetTransactionOut,
     AdminClubDetailOut,
@@ -21,6 +23,9 @@ from app.schemas.admin_clubs import (
     AdminClubSummaryOut,
     AdminClubTournamentOut,
 )
+from app.services.admin_log_service import log_action
+from app.services.club_budget_service import credit_club_budget, debit_club_budget
+from app.services.club_service import _lock_club
 
 router = APIRouter(prefix="/admin/clubs", tags=["admin"], dependencies=[Depends(get_current_admin)])
 
@@ -77,6 +82,39 @@ async def get_club(club_id: int, db: AsyncSession = Depends(get_db)):
         stars_count=club.stars_count, founded_at=club.founded_at, is_disbanded=club.is_disbanded,
         description=club.description, invite_code=club.invite_code,
         last_tournament_applied_at=club.last_tournament_applied_at,
+    )
+
+
+@router.post("/{club_id}/budget", response_model=AdminClubDetailOut)
+async def adjust_club_budget(
+    club_id: int,
+    payload: BalanceAdjustRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    await _get_club_or_404(db, club_id)
+    locked_club = await _lock_club(db, club_id)
+    old_budget = locked_club.budget
+
+    if payload.amount >= 0:
+        await credit_club_budget(db, locked_club, payload.amount, ClubBudgetTransactionType.admin_adjustment, payload.description)
+    else:
+        await debit_club_budget(db, locked_club, -payload.amount, ClubBudgetTransactionType.admin_adjustment, payload.description)
+
+    await log_action(
+        db, admin.id, "adjust_club_budget", "club", club_id,
+        old_value={"budget": old_budget}, new_value={"budget": locked_club.budget, "delta": payload.amount},
+        ip_address=request.client.host if request.client else None, extra=payload.description,
+    )
+    await db.commit()
+    count = await _member_count(db, club_id)
+    return AdminClubDetailOut(
+        id=locked_club.id, name=locked_club.name, club_type=locked_club.club_type, logo_shape=locked_club.logo_shape,
+        logo_color=locked_club.logo_color, captain_id=locked_club.captain_id, member_count=count, budget=locked_club.budget,
+        cups_count=locked_club.cups_count, stars_count=locked_club.stars_count, founded_at=locked_club.founded_at,
+        is_disbanded=locked_club.is_disbanded, description=locked_club.description, invite_code=locked_club.invite_code,
+        last_tournament_applied_at=locked_club.last_tournament_applied_at,
     )
 
 

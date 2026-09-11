@@ -107,6 +107,55 @@ async def test_get_club_budget_transactions_paginated(client, db_session, bot_to
     assert body["items"][0]["type"] == "daily_claim"
 
 
+async def test_admin_can_credit_club_budget(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    club = await _make_club(client, db_session, bot_token, 870006, "Клуб начисления")
+    starting_budget = club.budget
+
+    resp = await client.post(
+        f"/api/v1/admin/clubs/{club.id}/budget", headers=auth, json={"amount": 500, "description": "Бонус админа"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["budget"] == starting_budget + 500
+
+    tx_resp = await client.get(f"/api/v1/admin/clubs/{club.id}/budget-transactions", headers=auth)
+    items = tx_resp.json()["items"]
+    admin_tx = next(t for t in items if t["type"] == "admin_adjustment")
+    assert admin_tx["amount"] == 500
+    assert admin_tx["description"] == "Бонус админа"
+
+
+async def test_admin_can_debit_club_budget(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    club = await _make_club(client, db_session, bot_token, 870007, "Клуб списания")
+    await client.post(
+        f"/api/v1/admin/clubs/{club.id}/budget", headers=auth, json={"amount": 500, "description": "Пополнение"}
+    )
+
+    resp = await client.post(
+        f"/api/v1/admin/clubs/{club.id}/budget", headers=auth, json={"amount": -200, "description": "Штраф"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["budget"] == 300
+
+    tx_resp = await client.get(f"/api/v1/admin/clubs/{club.id}/budget-transactions", headers=auth)
+    items = tx_resp.json()["items"]
+    debit_tx = next(t for t in items if t["type"] == "admin_adjustment" and t["amount"] < 0)
+    assert debit_tx["amount"] == -200
+    assert debit_tx["description"] == "Штраф"
+
+
+async def test_admin_debit_club_budget_insufficient_funds_returns_4xx(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    club = await _make_club(client, db_session, bot_token, 870008, "Клуб без денег")
+    assert club.budget == 0
+
+    resp = await client.post(
+        f"/api/v1/admin/clubs/{club.id}/budget", headers=auth, json={"amount": -100, "description": "Слишком много"}
+    )
+    assert 400 <= resp.status_code < 500
+
+
 async def test_get_club_tournaments_shows_null_rewards_before_completion_and_real_values_after(
     client, db_session, bot_token
 ):

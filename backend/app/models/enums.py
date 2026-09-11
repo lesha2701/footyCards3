@@ -124,6 +124,7 @@ class ClubBudgetTransactionType(str, enum.Enum):
     # real DB enum still carries 'coach_pack_purchase' and removing the Python member
     # would break parity with it.
     coach_pack_purchase = "coach_pack_purchase"
+    admin_adjustment = "admin_adjustment"
 
 
 class TournamentQueueStatus(str, enum.Enum):

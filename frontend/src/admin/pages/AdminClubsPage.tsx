@@ -1,7 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
+  adjustClubBudget,
   fetchAdminClub,
   fetchAdminClubBudgetTransactions,
   fetchAdminClubMembers,
@@ -86,7 +87,10 @@ export default function AdminClubsPage() {
 }
 
 function ClubDetailModal({ clubId, onClose }: { clubId: number; onClose: () => void }) {
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<"overview" | "members" | "budget" | "tournaments">("overview");
+  const [budgetAmount, setBudgetAmount] = useState(0);
+  const [budgetReason, setBudgetReason] = useState("");
 
   const { data: club } = useQuery({ queryKey: ["admin-club", clubId], queryFn: () => fetchAdminClub(clubId) });
   const { data: members } = useQuery({
@@ -103,6 +107,17 @@ function ClubDetailModal({ clubId, onClose }: { clubId: number; onClose: () => v
     queryKey: ["admin-club-tournaments", clubId],
     queryFn: () => fetchAdminClubTournaments(clubId),
     enabled: tab === "tournaments",
+  });
+
+  const invalidateClub = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin-club", clubId] });
+    queryClient.invalidateQueries({ queryKey: ["admin-clubs"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-club-budget", clubId] });
+  };
+  const budgetMutation = useMutation({
+    mutationFn: (sign: 1 | -1) =>
+      adjustClubBudget(clubId, sign * Math.abs(budgetAmount), budgetReason || "Корректировка администратором"),
+    onSuccess: invalidateClub,
   });
 
   return (
@@ -126,19 +141,43 @@ function ClubDetailModal({ clubId, onClose }: { clubId: number; onClose: () => v
         </div>
 
         {tab === "overview" && club && (
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <Info label="Тип" value={club.club_type === "open" ? "Открытый" : "Закрытый"} />
-            <Info label="Капитан (ID)" value={club.captain_id} />
-            <Info label="Основан" value={new Date(club.founded_at).toLocaleDateString("ru-RU")} />
-            <Info label="Бюджет" value={`🪙${club.budget}`} />
-            <Info label="Кубки / Звёзды" value={`🏆${club.cups_count} / ⭐${club.stars_count}`} />
-            <Info label="Код приглашения" value={club.invite_code} />
-            <Info label="Статус" value={club.is_disbanded ? "Расформирован" : "Активен"} />
-            <Info
-              label="Последняя заявка на турнир"
-              value={club.last_tournament_applied_at ? new Date(club.last_tournament_applied_at).toLocaleDateString("ru-RU") : "—"}
-            />
-            {club.description && <div className="col-span-2"><Info label="Описание" value={club.description} /></div>}
+          <div className="flex flex-col gap-4 text-sm">
+            <div className="grid grid-cols-2 gap-3">
+              <Info label="Тип" value={club.club_type === "open" ? "Открытый" : "Закрытый"} />
+              <Info label="Капитан (ID)" value={club.captain_id} />
+              <Info label="Основан" value={new Date(club.founded_at).toLocaleDateString("ru-RU")} />
+              <Info label="Бюджет" value={`🪙${club.budget}`} />
+              <Info label="Кубки / Звёзды" value={`🏆${club.cups_count} / ⭐${club.stars_count}`} />
+              <Info label="Код приглашения" value={club.invite_code} />
+              <Info label="Статус" value={club.is_disbanded ? "Расформирован" : "Активен"} />
+              <Info
+                label="Последняя заявка на турнир"
+                value={club.last_tournament_applied_at ? new Date(club.last_tournament_applied_at).toLocaleDateString("ru-RU") : "—"}
+              />
+              {club.description && <div className="col-span-2"><Info label="Описание" value={club.description} /></div>}
+            </div>
+
+            <div className="rounded-xl bg-bg-surface p-3">
+              <p className="mb-2 text-xs font-semibold text-slate-400">Изменить бюджет клуба</p>
+              <div className="flex gap-2">
+                <input type="number" min={0} value={budgetAmount} onChange={(e) => setBudgetAmount(Number(e.target.value))} className="w-24 rounded-lg bg-black/30 px-2 py-1.5 text-sm outline-none" />
+                <input value={budgetReason} onChange={(e) => setBudgetReason(e.target.value)} placeholder="Причина" className="flex-1 rounded-lg bg-black/30 px-2 py-1.5 text-sm outline-none" />
+                <button
+                  onClick={() => budgetMutation.mutate(1)}
+                  disabled={!budgetAmount}
+                  className="rounded-lg bg-emerald-500/80 px-3 py-1.5 text-xs font-bold text-bg-base disabled:opacity-40"
+                >
+                  Начислить
+                </button>
+                <button
+                  onClick={() => budgetMutation.mutate(-1)}
+                  disabled={!budgetAmount}
+                  className="rounded-lg bg-red-500/80 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40"
+                >
+                  Списать
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

@@ -745,6 +745,11 @@ export async function fetchAdminClub(id: number): Promise<AdminClubDetail> {
   return data;
 }
 
+export async function adjustClubBudget(id: number, amount: number, description: string): Promise<AdminClubDetail> {
+  const { data } = await api.post<AdminClubDetail>(`/admin/clubs/${id}/budget`, { amount, description });
+  return data;
+}
+
 export async function fetchAdminClubMembers(id: number): Promise<AdminClubMember[]> {
   const { data } = await api.get<AdminClubMember[]>(`/admin/clubs/${id}/members`);
   return data;
