@@ -214,7 +214,7 @@ export default function ClubSquadPage() {
                         <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.card.player.rating}</span>
                         {slot.card.availability && (
                           <span className="text-center font-mono text-[8px] font-bold leading-tight text-red-400">
-                            {slot.card.availability.reason === "red_card" ? "Диск." : "Травма"} · {slot.card.availability.rounds_remaining}т
+                            {slot.card.availability.reason === "red_card" ? "Кр." : "Травма"} · {slot.card.availability.rounds_remaining}т
                           </span>
                         )}
                       </>

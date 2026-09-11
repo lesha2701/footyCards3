@@ -266,8 +266,7 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
         club_ids = [p.club_id for p in participants]
         withdrawn_ids = {p.club_id for p in participants if p.is_withdrawn}
 
-        clubs_by_id = {c.id: c for c in (await db.execute(select(Club).where(Club.id.in_(club_ids)))).scalars().all()}
-        club_names = {cid: c.name for cid, c in clubs_by_id.items()}
+        club_names = {c.id: c.name for c in (await db.execute(select(Club).where(Club.id.in_(club_ids)))).scalars().all()}
 
         fixtures = [f for f in generate_fixtures(club_ids) if f[0] == round_number]
         standings_rows = (

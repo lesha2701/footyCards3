@@ -100,6 +100,14 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Тренировка состава (клубный турнир)</p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("club_training_boost_pct", "Усиление состава (0-1, напр. 0.10 = +10%)")}
+          {field("club_training_uses_per_tournament", "Число тренировок за турнир")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-1 font-display text-base font-bold">Диамантовые карты — апгрейд рейтинга</p>
         <p className="mb-3 text-xs text-slate-400">
           Мягкий потолок рейтинга при прокачке: карту нельзя докормить выше этого значения. Уже существующие карты с
