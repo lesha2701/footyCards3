@@ -859,3 +859,31 @@ async def test_club_detail_and_summary_expose_cups_and_stars_count(client, db_se
     listed = next(c for c in list_resp.json() if c["id"] == club_id)
     assert listed["cups_count"] == 3
     assert listed["stars_count"] == 7
+
+
+async def test_up_to_four_assistants_can_be_appointed(client, db_session, bot_token):
+    # Mirrors this file's own club-creation helper — captain + 4 members, all appointed
+    # assistant, the 5th appointment attempt must be rejected.
+    captain_headers = telegram_headers(870301, bot_token)
+    await client.post("/api/v1/auth/session", headers=captain_headers)
+    create_resp = await client.post(
+        "/api/v1/clubs", headers=captain_headers,
+        json={"name": "Ассистенты клуб", "club_type": "open", "logo_shape": "shield", "logo_color": "#00FF00"},
+    )
+    assert create_resp.status_code == 200
+    club_id = create_resp.json()["id"]
+
+    member_ids = []
+    for i in range(5):
+        headers = telegram_headers(870302 + i, bot_token)
+        resp = await client.post("/api/v1/auth/session", headers=headers)
+        member_ids.append(resp.json()["user"]["id"])
+        join_resp = await client.post(f"/api/v1/clubs/{club_id}/join", headers=headers)
+        assert join_resp.status_code == 200
+
+    for user_id in member_ids[:4]:
+        resp = await client.post(f"/api/v1/clubs/me/assistants/{user_id}/appoint", headers=captain_headers)
+        assert resp.status_code == 200
+
+    resp = await client.post(f"/api/v1/clubs/me/assistants/{member_ids[4]}/appoint", headers=captain_headers)
+    assert resp.status_code == 409

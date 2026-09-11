@@ -142,6 +142,7 @@ function ClubBrowseList() {
 }
 
 const ROLE_LABELS: Record<string, string> = { captain: "Капитан", assistant: "Ассистент", member: "Участник" };
+const MAX_ASSISTANTS = 4;
 
 function ClubHome({ club }: { club: Club }) {
   const navigate = useNavigate();
@@ -149,6 +150,7 @@ function ClubHome({ club }: { club: Club }) {
   const userId = useAuthStore((s) => s.user?.id);
   const isManager = club.my_role === "captain" || club.my_role === "assistant";
   const isCaptain = club.my_role === "captain";
+  const assistantCount = club.members.filter((m) => m.role === "assistant").length;
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
   const { data: tournamentCurrent } = useQuery({ queryKey: ["clubs", "tournament", "current"], queryFn: fetchTournamentCurrent });
   const { data: nextOpponent } = useQuery({
@@ -450,7 +452,7 @@ function ClubHome({ club }: { club: Club }) {
           <div key={m.user_id} className="flex items-center justify-between rounded-xl bg-bg-surface p-3">
             <span className="text-sm text-ink-chalk">{m.username ?? m.first_name ?? `#${m.user_id}`} · {ROLE_LABELS[m.role]}</span>
             <div className="flex gap-2">
-              {isCaptain && m.role === "member" && m.user_id !== userId && (
+              {isCaptain && m.role === "member" && m.user_id !== userId && assistantCount < MAX_ASSISTANTS && (
                 <button
                   onClick={() => setConfirmMemberAction({ type: "appoint", userId: m.user_id, name: m.username ?? m.first_name ?? `#${m.user_id}` })}
                   className="rounded-lg bg-accent-lime/10 px-2 py-1 text-[11px] text-accent-lime"

@@ -20,7 +20,7 @@ from app.services.notification_service import notify
 from app.services.wallet_service import debit_coins, lock_user_for_update
 
 MAX_MEMBERS = 11
-MAX_ASSISTANTS = 2
+MAX_ASSISTANTS = 4
 
 
 def _generate_invite_code() -> str:
