@@ -142,6 +142,12 @@ class GameConfig(TimestampMixin, Base):
     pairs_bracket_penalty: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     pairs_bonus_coins: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
 
+    position_match_daily_limit: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    position_match_max_mistakes: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    position_match_reward_perfect: Mapped[int] = mapped_column(Integer, default=35, nullable=False)
+    position_match_reward_min: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    position_match_penalty_per_mistake: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+
     free_pack_interval_hours: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     free_pack_pack_slug: Mapped[str] = mapped_column(String, default="basic", nullable=False)
 

@@ -45,6 +45,7 @@ import PenaltySearchPage from "@/pages/PenaltySearchPage";
 import FreeKickGamePage from "@/pages/FreeKickGamePage";
 import HangmanGamePage from "@/pages/HangmanGamePage";
 import PairsGamePage from "@/pages/PairsGamePage";
+import PositionMatchGamePage from "@/pages/PositionMatchGamePage";
 import ClubCreatePage from "@/pages/ClubCreatePage";
 import ClubGamePage from "@/pages/ClubGamePage";
 import ClubGamesPage from "@/pages/ClubGamesPage";
@@ -202,6 +203,7 @@ export default function App() {
         <Route path="/play/free-kick" element={<FreeKickGamePage />} />
         <Route path="/play/hangman" element={<HangmanGamePage />} />
         <Route path="/play/pairs" element={<PairsGamePage />} />
+        <Route path="/play/position-match" element={<PositionMatchGamePage />} />
         <Route path="/collection" element={<CollectionPage />} />
         <Route path="/trades" element={<TradesPage />} />
         <Route path="/trades/new" element={<NewTradePage />} />

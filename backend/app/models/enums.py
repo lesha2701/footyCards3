@@ -190,6 +190,7 @@ class GameType(str, enum.Enum):
     free_kick = "free_kick"
     football_hangman = "football_hangman"
     card_pairs = "card_pairs"
+    position_match = "position_match"
     club_sequence = "club_sequence"
     club_missing_item = "club_missing_item"
     club_penalty = "club_penalty"

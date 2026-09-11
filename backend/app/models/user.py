@@ -94,6 +94,12 @@ class User(TimestampMixin, Base):
     pairs_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     pairs_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Своя позиция (position match)
+    position_match_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    position_match_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    position_match_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    position_match_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Club Sequence (club-scoped mini-game; reward credits the club's budget)
     club_game_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     club_game_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

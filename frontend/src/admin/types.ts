@@ -185,6 +185,11 @@ export interface GameConfig {
   pairs_error_bracket_size: number;
   pairs_bracket_penalty: number;
   pairs_bonus_coins: number;
+  position_match_daily_limit: number;
+  position_match_max_mistakes: number;
+  position_match_reward_perfect: number;
+  position_match_reward_min: number;
+  position_match_penalty_per_mistake: number;
   tactico_challenge_expiry_hours: number;
   tactico_round_timeout_hours: number;
   tactico_phase_bonus_pct: number;

@@ -12,6 +12,7 @@ import {
   IconGoal,
   IconHelp,
   IconProfile,
+  IconShirt,
   IconTarget,
   IconTrophy,
   type IconProps,
@@ -121,6 +122,16 @@ export default function PlayPage() {
           title="Найди пару"
           description="Переворачивай карточки и находи одинаковых футболистов"
           remaining={limits?.pairs}
+          limit={limits?.hourly_limit}
+        />
+
+        <GameCard
+          onClick={() => navigate("/play/position-match")}
+          Icon={IconShirt}
+          badgeClass="bg-rarity-diamond"
+          title="Своя позиция"
+          description="Сопоставь футболистов с их позициями на поле"
+          remaining={limits?.position_match}
           limit={limits?.hourly_limit}
         />
       </div>

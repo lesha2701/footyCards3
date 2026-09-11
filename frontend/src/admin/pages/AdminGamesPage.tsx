@@ -346,6 +346,21 @@ export default function AdminGamesPage() {
         </div>
       </section>
 
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Своя позиция</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Награда = награда за идеальный раунд − ошибки × штраф за ошибку, но не ниже минимальной. После указанного
+          числа ошибок раунд засчитывается как проигранный (награда 0).
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("position_match_daily_limit", "Лимит наградных попыток/день")}
+          {field("position_match_max_mistakes", "Ошибок до поражения")}
+          {field("position_match_reward_perfect", "Награда за идеальный раунд")}
+          {field("position_match_reward_min", "Минимальная награда")}
+          {field("position_match_penalty_per_mistake", "Штраф за ошибку")}
+        </div>
+      </section>
+
       <button onClick={() => updateMutation.mutate()} className="self-start rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-bg-base">
         Сохранить настройки
       </button>
