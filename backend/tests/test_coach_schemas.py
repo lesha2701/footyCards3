@@ -5,8 +5,8 @@ from app.models.enums import CoachBoostType, Rarity
 from app.schemas.coach import CoachBoostCreate, CoachCreate
 
 
-def _boost(boost_type: CoachBoostType, magnitude: float = 2.0) -> CoachBoostCreate:
-    return CoachBoostCreate(boost_type=boost_type, magnitude=magnitude)
+def _boost(boost_type: CoachBoostType) -> CoachBoostCreate:
+    return CoachBoostCreate(boost_type=boost_type)
 
 
 def test_legendary_coach_needs_exactly_three_distinct_boosts():
@@ -46,7 +46,7 @@ def test_duplicate_boost_type_on_one_coach_is_rejected():
     with pytest.raises(ValidationError):
         CoachCreate(
             display_name="Duplicate Boost Coach", rarity=Rarity.rare,
-            boosts=[_boost(CoachBoostType.ATTACK_CENTRAL), _boost(CoachBoostType.ATTACK_CENTRAL, magnitude=3.0)],
+            boosts=[_boost(CoachBoostType.ATTACK_CENTRAL), _boost(CoachBoostType.ATTACK_CENTRAL)],
         )
 
 

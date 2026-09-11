@@ -6,7 +6,7 @@ import {
   toggleCoachActive, toggleCoachPackDroppable, updateCoach, uploadCoachImage,
 } from "@/admin/api";
 import { ApiRequestError, staticUrl } from "@/lib/api";
-import { BOOST_TYPES, BOOST_TYPE_LABELS, BOOST_TYPE_UNIT_HINTS } from "@/lib/coaches";
+import { BOOST_TYPES, BOOST_TYPE_LABELS, magnitudeFor } from "@/lib/coaches";
 import { RARITY_LABELS } from "@/lib/rarity";
 import type { Coach, CoachBoostType, Rarity } from "@/types";
 
@@ -16,11 +16,11 @@ const BOOST_SLOTS_BY_RARITY: Record<Rarity, number> = {
   common: 1, rare: 1, epic: 2, legendary: 3, diamond: 0,
 };
 
-type BoostFormRow = { boost_type: CoachBoostType; magnitude: number };
+type BoostFormRow = { boost_type: CoachBoostType };
 
 const emptyForm = {
   display_name: "", rarity: "common" as Rarity, quick_sell_price: 10, is_active: true, is_pack_droppable: true,
-  boosts: [{ boost_type: "attack_central" as CoachBoostType, magnitude: 2 }] as BoostFormRow[],
+  boosts: [{ boost_type: "attack_central" as CoachBoostType }] as BoostFormRow[],
 };
 
 export default function AdminCoachesPage() {
@@ -63,7 +63,7 @@ export default function AdminCoachesPage() {
     setForm({
       display_name: c.display_name, rarity: c.rarity, quick_sell_price: c.quick_sell_price,
       is_active: c.is_active, is_pack_droppable: c.is_pack_droppable,
-      boosts: c.boosts.map((b) => ({ boost_type: b.boost_type, magnitude: b.magnitude })),
+      boosts: c.boosts.map((b) => ({ boost_type: b.boost_type })),
     });
   };
 
@@ -75,7 +75,7 @@ export default function AdminCoachesPage() {
     const boosts = form.boosts.slice(0, slots);
     while (boosts.length < slots) {
       const unused = BOOST_TYPES.find((t) => !boosts.some((b) => b.boost_type === t)) ?? BOOST_TYPES[0];
-      boosts.push({ boost_type: unused, magnitude: 2 });
+      boosts.push({ boost_type: unused });
     }
     setForm({ ...form, rarity, boosts });
   };
@@ -186,18 +186,9 @@ export default function AdminCoachesPage() {
                   >
                     {BOOST_TYPES.map((t) => <option key={t} value={t}>{BOOST_TYPE_LABELS[t]}</option>)}
                   </select>
-                  <input
-                    type="number" step="0.1" value={boost.magnitude}
-                    onChange={(e) => {
-                      const boosts = [...form.boosts];
-                      boosts[i] = { ...boosts[i], magnitude: Number(e.target.value) };
-                      setForm({ ...form, boosts });
-                    }}
-                    className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
-                  />
-                  {BOOST_TYPE_UNIT_HINTS[boost.boost_type] && (
-                    <p className="col-span-2 text-[10px] text-amber-400">{BOOST_TYPE_UNIT_HINTS[boost.boost_type]}</p>
-                  )}
+                  <p className="rounded-lg bg-bg-surface px-3 py-2 text-sm text-slate-400">
+                    {magnitudeFor(boost.boost_type, form.rarity)}
+                  </p>
                 </div>
               ))}
               {!boostsValid && (

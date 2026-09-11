@@ -24,15 +24,19 @@ async def test_admin_can_create_list_and_update_coach(client, db_session, bot_to
         json={
             "display_name": "Пеп Хренандес", "rarity": "legendary", "quick_sell_price": 50,
             "boosts": [
-                {"boost_type": "attack_central", "magnitude": 6.0},
-                {"boost_type": "defence_central", "magnitude": 6.0},
-                {"boost_type": "goalkeeping", "magnitude": 4.0},
+                {"boost_type": "attack_central"},
+                {"boost_type": "defence_central"},
+                {"boost_type": "goalkeeping"},
             ],
         },
     )
     assert create_resp.status_code == 200, create_resp.text
     coach_id = create_resp.json()["id"]
     assert len(create_resp.json()["boosts"]) == 3
+    # No "magnitude" was sent — the server derives it from (boost_type,
+    # rarity=legendary, tier 4): ATTACK_CENTRAL/DEFENCE_CENTRAL/GOALKEEPING
+    # all have base_unit 2, so 2*4 == 8.0 for each.
+    assert {b["magnitude"] for b in create_resp.json()["boosts"]} == {8.0}
 
     list_resp = await client.get("/api/v1/admin/coaches", headers=auth)
     assert list_resp.status_code == 200
@@ -52,7 +56,7 @@ async def test_create_coach_rejects_bad_rarity_boost_count(client, db_session, b
         "/api/v1/admin/coaches", headers={"Authorization": f"Bearer {token}"},
         json={
             "display_name": "Under-boosted", "rarity": "legendary",
-            "boosts": [{"boost_type": "attack_central", "magnitude": 4.0}],
+            "boosts": [{"boost_type": "attack_central"}],
         },
     )
     assert resp.status_code == 422
@@ -72,9 +76,9 @@ async def test_update_coach_rarity_only_to_diamond_returns_clean_conflict(client
         json={
             "display_name": "Diamond Hopeful", "rarity": "legendary", "quick_sell_price": 50,
             "boosts": [
-                {"boost_type": "attack_central", "magnitude": 6.0},
-                {"boost_type": "defence_central", "magnitude": 6.0},
-                {"boost_type": "goalkeeping", "magnitude": 4.0},
+                {"boost_type": "attack_central"},
+                {"boost_type": "defence_central"},
+                {"boost_type": "goalkeeping"},
             ],
         },
     )
@@ -98,9 +102,9 @@ async def test_update_coach_rarity_only_leaving_mismatched_boosts_rejected(clien
         json={
             "display_name": "Downgrade Candidate", "rarity": "legendary", "quick_sell_price": 50,
             "boosts": [
-                {"boost_type": "attack_central", "magnitude": 6.0},
-                {"boost_type": "defence_central", "magnitude": 6.0},
-                {"boost_type": "goalkeeping", "magnitude": 4.0},
+                {"boost_type": "attack_central"},
+                {"boost_type": "defence_central"},
+                {"boost_type": "goalkeeping"},
             ],
         },
     )
@@ -129,9 +133,9 @@ async def test_update_coach_boosts_only_leaving_mismatched_count_rejected(client
         json={
             "display_name": "Under-boost Candidate", "rarity": "legendary", "quick_sell_price": 50,
             "boosts": [
-                {"boost_type": "attack_central", "magnitude": 6.0},
-                {"boost_type": "defence_central", "magnitude": 6.0},
-                {"boost_type": "goalkeeping", "magnitude": 4.0},
+                {"boost_type": "attack_central"},
+                {"boost_type": "defence_central"},
+                {"boost_type": "goalkeeping"},
             ],
         },
     )
@@ -139,7 +143,7 @@ async def test_update_coach_boosts_only_leaving_mismatched_count_rejected(client
 
     update_resp = await client.put(
         f"/api/v1/admin/coaches/{coach_id}", headers=auth,
-        json={"boosts": [{"boost_type": "attack_central", "magnitude": 6.0}]},
+        json={"boosts": [{"boost_type": "attack_central"}]},
     )
     assert update_resp.status_code == 409, update_resp.text
 
@@ -150,7 +154,7 @@ async def test_toggle_active_and_delete_coach(client, db_session, bot_token):
 
     create_resp = await client.post(
         "/api/v1/admin/coaches", headers=auth,
-        json={"display_name": "Togglable Coach", "rarity": "common", "boosts": [{"boost_type": "ball_control", "magnitude": 0.1}]},
+        json={"display_name": "Togglable Coach", "rarity": "common", "boosts": [{"boost_type": "ball_control"}]},
     )
     coach_id = create_resp.json()["id"]
 
@@ -177,7 +181,7 @@ async def test_delete_coach_with_owned_user_card_returns_conflict_not_500(client
 
     create_resp = await client.post(
         "/api/v1/admin/coaches", headers=auth,
-        json={"display_name": "Owned Coach", "rarity": "common", "boosts": [{"boost_type": "ball_control", "magnitude": 0.1}]},
+        json={"display_name": "Owned Coach", "rarity": "common", "boosts": [{"boost_type": "ball_control"}]},
     )
     assert create_resp.status_code == 200, create_resp.text
     coach_id = create_resp.json()["id"]
@@ -198,3 +202,27 @@ async def test_delete_coach_with_owned_user_card_returns_conflict_not_500(client
     surviving = next((c for c in list_resp.json()["items"] if c["id"] == coach_id), None)
     assert surviving is not None
     assert surviving["display_name"] == "Owned Coach"
+
+
+async def test_create_coach_boost_payload_with_no_magnitude_key_succeeds(client, db_session, bot_token):
+    # The client-facing contract genuinely no longer requires (or accepts as
+    # meaningful) a magnitude: each boost dict in the request body carries
+    # only boost_type, and the server derives magnitude itself from
+    # (boost_type, rarity) — confirms this end-to-end over the real HTTP
+    # endpoint, not just at the Pydantic-schema level.
+    token = await _admin_token(client, bot_token)
+    auth = {"Authorization": f"Bearer {token}"}
+
+    create_resp = await client.post(
+        "/api/v1/admin/coaches", headers=auth,
+        json={
+            "display_name": "No Magnitude In Request", "rarity": "rare",
+            "boosts": [{"boost_type": "counter_mastery"}],
+        },
+    )
+    assert create_resp.status_code == 200, create_resp.text
+    boosts = create_resp.json()["boosts"]
+    assert len(boosts) == 1
+    assert boosts[0]["boost_type"] == "counter_mastery"
+    # rare = tier 2, base_unit for COUNTER_MASTERY = 0.1 -> 0.2
+    assert boosts[0]["magnitude"] == 0.2

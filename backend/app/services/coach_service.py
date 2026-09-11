@@ -2,7 +2,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.coach import Coach, CoachBoost
+from app.models.enums import CoachBoostType, Rarity
 from app.schemas.coach import CoachCreate, CoachUpdate, _validate_boost_types
+
+# Spec §4 (docs/superpowers/specs/2026-09-08-coach-cards-design.md) — magnitude =
+# base_unit * tier_index, tier_index = common:1, rare:2, epic:3, legendary:4. The
+# single source of truth for boost magnitude: the admin panel no longer sends a
+# magnitude at all, this derives it from (boost_type, coach's own rarity) so a
+# wrong-scale value (e.g. typing "2" for a boost whose real scale tops out at 0.12)
+# can no longer happen.
+_TIER_INDEX_BY_RARITY: dict[Rarity, int] = {
+    Rarity.common: 1, Rarity.rare: 2, Rarity.epic: 3, Rarity.legendary: 4,
+}
+_BASE_UNIT_BY_BOOST_TYPE: dict[CoachBoostType, float] = {
+    CoachBoostType.ATTACK_CENTRAL: 2, CoachBoostType.ATTACK_WING: 2, CoachBoostType.MIDFIELD_CONTROL: 2,
+    CoachBoostType.DEFENCE_CENTRAL: 2, CoachBoostType.DEFENCE_WING: 2, CoachBoostType.GOALKEEPING: 2,
+    CoachBoostType.PASSING_ACCURACY: 1, CoachBoostType.SQUAD_STABILITY: 1,
+    CoachBoostType.BALL_CONTROL: 0.03, CoachBoostType.DEFENSIVE_DISCIPLINE: 0.01, CoachBoostType.COUNTER_MASTERY: 0.1,
+}
+
+
+def magnitude_for(boost_type: CoachBoostType, rarity: Rarity) -> float:
+    return round(_BASE_UNIT_BY_BOOST_TYPE[boost_type] * _TIER_INDEX_BY_RARITY[rarity], 3)
 
 
 async def get_coach_or_404(db: AsyncSession, coach_id: int) -> Coach:
@@ -15,7 +36,7 @@ async def get_coach_or_404(db: AsyncSession, coach_id: int) -> Coach:
 async def create_coach(db: AsyncSession, payload: CoachCreate) -> Coach:
     data = payload.model_dump(exclude={"boosts"})
     coach = Coach(**data)
-    coach.boosts = [CoachBoost(boost_type=b.boost_type, magnitude=b.magnitude) for b in payload.boosts]
+    coach.boosts = [CoachBoost(boost_type=b.boost_type, magnitude=magnitude_for(b.boost_type, coach.rarity)) for b in payload.boosts]
     db.add(coach)
     await db.flush()
     await db.refresh(coach, attribute_names=["boosts"])
@@ -56,7 +77,10 @@ async def update_coach(db: AsyncSession, coach_id: int, payload: CoachUpdate) ->
     if payload.boosts is not None:
         # Replace-all: simplest correct semantics for "up to 3 rows" in an
         # admin-only phase — no per-boost PATCH exists yet.
-        coach.boosts = [CoachBoost(boost_type=b.boost_type, magnitude=b.magnitude) for b in payload.boosts]
+        coach.boosts = [
+            CoachBoost(boost_type=b.boost_type, magnitude=magnitude_for(b.boost_type, effective_rarity))
+            for b in payload.boosts
+        ]
 
     db.add(coach)
     await db.flush()
