@@ -77,6 +77,27 @@ async def update_coach(db: AsyncSession, coach_id: int, payload: CoachUpdate) ->
     if payload.boosts is not None:
         # Replace-all: simplest correct semantics for "up to 3 rows" in an
         # admin-only phase — no per-boost PATCH exists yet.
+        #
+        # Two-phase on purpose: SQLAlchemy's unit-of-work flushes INSERT/UPDATE
+        # before DELETE by default, so a single `coach.boosts = [new list]`
+        # reassignment races the new rows' INSERT against the old rows'
+        # delete-orphan DELETE. Whenever the new payload keeps at least one
+        # boost_type that was already present (a very normal edit — e.g. the
+        # admin only changes one of three slots), the new row's INSERT hits
+        # uq_coach_boost_type_once before the old row is physically gone
+        # (real Postgres bug, reproduced in production: coach_id=7 editing
+        # while keeping 'passing_accuracy' raised UniqueViolationError).
+        # Clearing and flushing first forces the DELETEs to land before any
+        # new row referencing the same (coach_id, boost_type) is inserted.
+        #
+        # `coach.boosts` may not be loaded yet in this session (the branch
+        # above only refreshes it when payload.boosts is None) — accessing
+        # an unloaded collection to .clear() it would trigger an implicit
+        # lazy-load, unsupported under async SQLAlchemy (MissingGreenlet).
+        # Explicit refresh first makes this safe regardless of prior state.
+        await db.refresh(coach, attribute_names=["boosts"])
+        coach.boosts.clear()
+        await db.flush()
         coach.boosts = [
             CoachBoost(boost_type=b.boost_type, magnitude=magnitude_for(b.boost_type, effective_rarity))
             for b in payload.boosts

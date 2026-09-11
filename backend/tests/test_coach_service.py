@@ -34,6 +34,38 @@ async def test_update_coach_replaces_all_boosts(db_session):
     assert updated.boosts[0].boost_type == CoachBoostType.PASSING_ACCURACY
 
 
+async def test_update_coach_keeping_one_overlapping_boost_type_does_not_violate_unique_constraint(db_session):
+    """Regression test — reproduced live in production (coach_id=7): editing a coach
+    while keeping one of its existing boost_types among the new payload used to raise
+    IntegrityError/UniqueViolationError on uq_coach_boost_type_once, because SQLAlchemy's
+    default flush ordering emits INSERT for the new rows before DELETE for the
+    delete-orphaned old ones — colliding on (coach_id, boost_type) whenever a type is
+    reused. This is exactly the "change 1 of 3 slots" edit an admin does constantly."""
+    created = await create_coach(db_session, CoachCreate(
+        display_name="Overlap Edit Coach", rarity=Rarity.legendary,
+        boosts=[
+            CoachBoostCreate(boost_type=CoachBoostType.PASSING_ACCURACY),
+            CoachBoostCreate(boost_type=CoachBoostType.ATTACK_CENTRAL),
+            CoachBoostCreate(boost_type=CoachBoostType.GOALKEEPING),
+        ],
+    ))
+
+    updated = await update_coach(db_session, created.id, CoachUpdate(
+        boosts=[
+            CoachBoostCreate(boost_type=CoachBoostType.PASSING_ACCURACY),  # kept from before
+            CoachBoostCreate(boost_type=CoachBoostType.DEFENCE_WING),
+            CoachBoostCreate(boost_type=CoachBoostType.ATTACK_WING),
+        ],
+    ))
+
+    assert {b.boost_type for b in updated.boosts} == {
+        CoachBoostType.PASSING_ACCURACY, CoachBoostType.DEFENCE_WING, CoachBoostType.ATTACK_WING,
+    }
+    # Exactly 3 rows, not 4 — confirms the old ATTACK_CENTRAL/GOALKEEPING rows were
+    # genuinely deleted, not left dangling alongside the new ones.
+    assert len(updated.boosts) == 3
+
+
 async def test_update_coach_without_boosts_leaves_them_untouched(db_session):
     created = await create_coach(db_session, CoachCreate(
         display_name="Partial Update Coach", rarity=Rarity.rare,
