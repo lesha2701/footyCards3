@@ -23,8 +23,12 @@ class BingoState(Base):
 
 
 class BingoGoalDefinition(TimestampMixin, Base):
-    """Admin-tunable list of weekly goals. Editing target_value/is_active or
-    adding a row here never touches an already-running week — see
+    """Admin-tunable list of weekly goals. Editing target_value on an
+    already-active goal propagates immediately to the currently-running
+    week's BingoWeekGoal too (see bingo_service.update_goal_definition) —
+    it's a live recalibration of a number players are already tracking
+    toward. Toggling is_active, or adding a brand-new row, is a structural
+    change and still never touches an already-running week: see
     BingoWeekGoal, which snapshots this at the moment each new week starts.
     At most one active row per goal_type (enforced in bingo_service)."""
 
@@ -54,9 +58,12 @@ class BingoWeek(Base):
 
 class BingoWeekGoal(Base):
     """A frozen-at-week-start copy of one BingoGoalDefinition, plus the live
-    counter every hook increments. This snapshot is what makes admin edits
-    to BingoGoalDefinition apply "next week only" — nothing here changes
-    except current_value once the row exists."""
+    counter every hook increments. This snapshot is what makes is_active
+    toggles and brand-new BingoGoalDefinition rows apply "next week only" —
+    but target_value edits on an already-active goal are pushed into this
+    row's target_value live (see bingo_service.update_goal_definition), so
+    that field can change mid-week too; only current_value is otherwise
+    touched once the row exists."""
 
     __tablename__ = "bingo_week_goals"
 

@@ -20,7 +20,7 @@ from app.models.enums import (
     TransactionType,
 )
 from app.models.match import Match
-from app.models.pack import PackOpening
+from app.models.pack import PackOpening, PackOpeningCard
 from app.models.penalty import PenaltyMatch
 from app.models.player import Player
 from app.models.tactico import TacticoMatch
@@ -290,6 +290,24 @@ async def update_goal_definition(
         await _assert_no_other_active(db, definition.goal_type, exclude_id=definition_id)
     if target_value is not None:
         definition.target_value = target_value
+        # Also push the new number into the currently-running week's live goal, if
+        # one exists for this goal_type — unlike is_active toggles and brand-new
+        # definitions (which only take effect next week, via the snapshot
+        # get_or_create_current_week takes at week-start), a target_value change is
+        # a live recalibration the admin explicitly wants to apply immediately, not
+        # wait a week for.
+        current_week = await get_or_create_current_week(db)
+        if current_week is not None:
+            week_goal = (
+                await db.execute(
+                    select(BingoWeekGoal).where(
+                        BingoWeekGoal.week_id == current_week.id, BingoWeekGoal.goal_type == definition.goal_type
+                    )
+                )
+            ).scalar_one_or_none()
+            if week_goal is not None:
+                week_goal.target_value = target_value
+                db.add(week_goal)
     if is_active is not None:
         definition.is_active = is_active
     db.add(definition)
@@ -308,15 +326,36 @@ async def delete_goal_definition(db: AsyncSession, definition_id: int) -> None:
 async def get_stats_preview(db: AsyncSession) -> list[BingoStatsPreviewItem]:
     """Trailing-7-day totals across ALL players, for every goal type — lets
     an admin see real recent activity before picking a target, so it's
-    neither trivially easy nor unreachable. Uses the exact same counting
-    rules the live hooks use (e.g. rarity drops only count real pack opens,
-    not admin-granted cards) so the preview is a fair predictor."""
+    neither trivially easy nor unreachable. Every metric here (including
+    packs_opened) counts only real player-initiated activity — the exact
+    same counting rules the live hooks use (e.g. rarity drops and pack opens
+    only count real pack opens via CardSource.pack, never admin/task/reward-
+    granted cards or bonus pack grants) — so the preview is a fair
+    predictor."""
+    # Always "the trailing 7 days as of right now", not the currently-running
+    # (or most recently completed) BingoWeek's own starts_at/ends_at window —
+    # this is meant to help an admin calibrate a target from recent trends
+    # before starting a new event, not to retroactively audit one specific
+    # past week, so don't expect it to reconcile exactly with any week's own
+    # boundaries.
     since = datetime.now(timezone.utc) - WEEK_DURATION
 
     async def count(stmt) -> int:
         return (await db.execute(stmt)).scalar_one() or 0
 
-    packs_opened = await count(select(func.count(PackOpening.id)).where(PackOpening.created_at >= since))
+    # Real pack opens only: a PackOpening row exists for every pack-creating
+    # path (bonus grants, task/collection/league rewards, gifts, the free
+    # periodic pack, daily rewards, ...), but only pack_service.open_pack
+    # both creates a PackOpening AND rolls cards with CardSource.pack AND
+    # fires the live bingo hook — so join through to UserCard and filter on
+    # that same source, matching the live counter exactly. DISTINCT because
+    # a single opening has one PackOpeningCard row per card slot.
+    packs_opened = await count(
+        select(func.count(func.distinct(PackOpening.id)))
+        .join(PackOpeningCard, PackOpeningCard.opening_id == PackOpening.id)
+        .join(UserCard, UserCard.id == PackOpeningCard.user_card_id)
+        .where(PackOpening.created_at >= since, UserCard.source == CardSource.pack)
+    )
 
     rarity_drop_counts: dict[Rarity, int] = {}
     for rarity in (Rarity.rare, Rarity.epic, Rarity.legendary):

@@ -73,7 +73,7 @@ async def test_at_most_one_active_goal_per_type(client, db_session, bot_token):
     assert resp2.status_code == 409
 
 
-async def test_editing_target_mid_week_does_not_affect_current_week(client, db_session, bot_token):
+async def test_editing_target_mid_week_updates_current_week_live(client, db_session, bot_token):
     admin_headers = await _admin_auth(client, bot_token)
     await client.put("/api/v1/admin/bingo/state", headers=admin_headers, json={"is_enabled": True})
     create_resp = await client.post(
@@ -86,13 +86,77 @@ async def test_editing_target_mid_week_does_not_affect_current_week(client, db_s
     week = await bingo_service.get_or_create_current_week(db_session)
     week_id = week.id
 
-    await client.put(f"/api/v1/admin/bingo/goals/{goal_id}", headers=admin_headers, json={"target_value": 1500})
+    # Bump current_value so we can confirm the edit only moves target_value,
+    # never touches progress already made this week.
+    db_session.expire_all()
+    goal_row = (
+        await db_session.execute(select(BingoWeekGoal).where(BingoWeekGoal.week_id == week_id))
+    ).scalar_one()
+    goal_row.current_value = 3
+    db_session.add(goal_row)
+    await db_session.commit()
+
+    resp = await client.put(f"/api/v1/admin/bingo/goals/{goal_id}", headers=admin_headers, json={"target_value": 1500})
+    assert resp.status_code == 200
 
     db_session.expire_all()
     snapshot = (
         await db_session.execute(select(BingoWeekGoal).where(BingoWeekGoal.week_id == week_id))
     ).scalar_one()
-    assert snapshot.target_value == 1000  # unchanged — the edit only affects next week's snapshot
+    # target_value edits on an active goal propagate immediately to the
+    # currently-running week — this is the mid-week recalibration feature.
+    assert snapshot.target_value == 1500
+    assert snapshot.current_value == 3  # progress untouched — only the target moved
+
+
+async def test_toggling_is_active_alone_does_not_touch_current_week_target(client, db_session, bot_token):
+    admin_headers = await _admin_auth(client, bot_token)
+    await client.put("/api/v1/admin/bingo/state", headers=admin_headers, json={"is_enabled": True})
+    create_resp = await client.post(
+        "/api/v1/admin/bingo/goals", headers=admin_headers,
+        json={"goal_type": "packs_opened", "target_value": 1000, "is_active": True},
+    )
+    goal_id = create_resp.json()["id"]
+
+    week = await bingo_service.get_or_create_current_week(db_session)
+    week_id = week.id
+
+    # Toggle is_active off then back on, without touching target_value at all.
+    resp_off = await client.put(
+        f"/api/v1/admin/bingo/goals/{goal_id}", headers=admin_headers, json={"is_active": False}
+    )
+    assert resp_off.status_code == 200
+
+    db_session.expire_all()
+    snapshot = (
+        await db_session.execute(select(BingoWeekGoal).where(BingoWeekGoal.week_id == week_id))
+    ).scalar_one()
+    # Structural change (is_active toggle) stays scoped to next week only —
+    # the currently-running week's snapshot is untouched.
+    assert snapshot.target_value == 1000
+
+
+async def test_new_goal_definition_mid_week_creates_no_week_goal_row(client, db_session, bot_token):
+    admin_headers = await _admin_auth(client, bot_token)
+    await client.put("/api/v1/admin/bingo/state", headers=admin_headers, json={"is_enabled": True})
+
+    # Week 1 starts with zero goals configured.
+    week = await bingo_service.get_or_create_current_week(db_session)
+    week_id = week.id
+
+    create_resp = await client.post(
+        "/api/v1/admin/bingo/goals", headers=admin_headers,
+        json={"goal_type": "packs_opened", "target_value": 1000, "is_active": True},
+    )
+    assert create_resp.status_code == 200
+
+    db_session.expire_all()
+    rows = (
+        await db_session.execute(select(BingoWeekGoal).where(BingoWeekGoal.week_id == week_id))
+    ).scalars().all()
+    # Creating a brand-new goal definition mid-week must not retroactively
+    # create a BingoWeekGoal row in the already-running week.
+    assert rows == []
 
 
 async def test_goal_added_mid_week_does_not_start_counting_until_next_week(client, db_session, bot_token):
@@ -384,3 +448,57 @@ async def test_admin_stats_preview_counts_trailing_week_activity(client, db_sess
     counts = {item["goal_type"]: item["trailing_7d_count"] for item in stats.json()}
     assert counts["packs_opened"] >= 1
     assert "trades_completed" in counts
+
+
+async def test_stats_preview_packs_opened_excludes_bonus_granted_packs(client, db_session, bot_token):
+    from datetime import datetime, timezone
+
+    from app.models.card import UserCard
+    from app.models.enums import CardSource
+    from app.models.pack import Pack, PackOpening, PackOpeningCard
+
+    admin_headers = await _admin_auth(client, bot_token)
+    player = await create_player(db_session, rarity=Rarity.common)
+    pack = Pack(slug="bonus-vs-real-pack", name="Bonus Vs Real", price=100, card_count=1)
+    db_session.add(pack)
+    await db_session.flush()
+
+    user = await _register(client, db_session, 960012, bot_token)
+
+    # A real pack open: PackOpening + a UserCard with source=pack, linked via
+    # PackOpeningCard — this is what pack_service.open_pack actually produces
+    # and what the live bingo hook counts.
+    real_opening = PackOpening(
+        user_id=user.id, pack_id=pack.id, price_paid=100, created_at=datetime.now(timezone.utc)
+    )
+    db_session.add(real_opening)
+    await db_session.flush()
+    real_card = UserCard(owner_id=user.id, player_id=player.id, source=CardSource.pack)
+    db_session.add(real_card)
+    await db_session.flush()
+    real_card.serial_number = real_card.id
+    db_session.add(real_card)
+    db_session.add(PackOpeningCard(opening_id=real_opening.id, user_card_id=real_card.id, is_new=True))
+    await db_session.commit()
+
+    # A bonus-granted-style pack open: PackOpening row exists, but the card
+    # behind it has a non-pack source (e.g. task reward) — this is what
+    # grant_bonus_pack_opening-style paths produce, and the live hook never
+    # fires for these.
+    bonus_opening = PackOpening(
+        user_id=user.id, pack_id=pack.id, price_paid=0, created_at=datetime.now(timezone.utc)
+    )
+    db_session.add(bonus_opening)
+    await db_session.flush()
+    bonus_card = UserCard(owner_id=user.id, player_id=player.id, source=CardSource.task)
+    db_session.add(bonus_card)
+    await db_session.flush()
+    bonus_card.serial_number = bonus_card.id
+    db_session.add(bonus_card)
+    db_session.add(PackOpeningCard(opening_id=bonus_opening.id, user_card_id=bonus_card.id, is_new=True))
+    await db_session.commit()
+
+    stats = await client.get("/api/v1/admin/bingo/stats-preview", headers=admin_headers)
+    assert stats.status_code == 200
+    counts = {item["goal_type"]: item["trailing_7d_count"] for item in stats.json()}
+    assert counts["packs_opened"] == 1  # only the real open, not the bonus-granted one
