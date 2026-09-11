@@ -355,6 +355,11 @@ function Summary({
   // any coach card always earns the recap — otherwise an all-coach pack
   // (result.cards.length === 0) would never show its coach card anywhere.
   const showRecap = result.coach_cards.length > 0 || result.cards.length > 1;
+  // grid-cols-2 leaves a lone card pinned to the left column instead of
+  // centered — only matters when the recap shows exactly one card (e.g. a
+  // pack that granted a single coach card and nothing else).
+  const totalOpened = result.cards.length + result.coach_cards.length;
+  const singleCardWidthClass = totalOpened === 1 ? "w-2/5" : "";
   return (
     <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
       {showRecap && <h2 className="text-center font-display text-2xl font-bold text-ink-chalk">Пак открыт!</h2>}
@@ -394,11 +399,11 @@ function Summary({
         </div>
       ))}
       {showRecap && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className={totalOpened === 1 ? "flex justify-center" : "grid grid-cols-2 gap-3 sm:grid-cols-3"}>
           {result.cards.map((opened) => (
             <div
               key={opened.card.id}
-              className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.player.rarity]} p-[2px] ${RARITY_GLOW[opened.card.player.rarity]}`}
+              className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.player.rarity]} p-[2px] ${RARITY_GLOW[opened.card.player.rarity]} ${singleCardWidthClass}`}
             >
               <div className="flex flex-col rounded-[14px] bg-bg-surface">
                 <img
@@ -430,7 +435,7 @@ function Summary({
           {result.coach_cards.map((opened) => (
             <div
               key={`coach-${opened.card.id}`}
-              className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.coach.rarity]} p-[2px] ${RARITY_GLOW[opened.card.coach.rarity]}`}
+              className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.coach.rarity]} p-[2px] ${RARITY_GLOW[opened.card.coach.rarity]} ${singleCardWidthClass}`}
             >
               <div className="flex flex-col rounded-[14px] bg-bg-surface">
                 <img
