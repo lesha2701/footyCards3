@@ -1,9 +1,11 @@
+import pytest_asyncio
 from sqlalchemy import select
 
-from app.models.club import ClubMember
+from app.models.club import Club, ClubMember
 from app.models.club_card_availability import ClubCardAvailability
 from app.models.enums import ClubCardAvailabilityReason, Position
 from app.models.notification import Notification
+from app.models.tournament import Tournament
 from app.services.tournament_notification_service import notify_club_members, send_lineup_reminders
 from app.services.tournament_queue_service import apply_to_tournament
 from tests.factories import create_player, get_user_by_telegram_id
@@ -40,6 +42,82 @@ async def _create_club_with_full_squad(client, db_session, bot_token, telegram_i
     assert join_resp.status_code == 200
 
     return create_resp.json()["id"], captain
+
+
+async def _create_club_with_full_squad_orm(client, db_session, bot_token, telegram_id, name):
+    """Same as _create_club_with_full_squad above, but returns the ORM Club object rather than
+    a bare id — needed by eight_club_tournament below, which mirrors test_tournament_api.py's
+    fixture of the same name/shape (each test file gets its own local copy per this codebase's
+    convention)."""
+    resp = await client.post("/api/v1/auth/session", headers=telegram_headers(telegram_id, bot_token))
+    assert resp.status_code == 200
+    captain = await get_user_by_telegram_id(db_session, telegram_id)
+
+    create_resp = await client.post(
+        "/api/v1/clubs", headers=telegram_headers(telegram_id, bot_token),
+        json={"name": name, "club_type": "open", "logo_shape": "shield", "logo_color": "#FF0000"},
+    )
+    assert create_resp.status_code == 200
+    club = await db_session.get(Club, create_resp.json()["id"])
+
+    second_member_telegram_id = telegram_id + 900_000
+    resp2 = await client.post("/api/v1/auth/session", headers=telegram_headers(second_member_telegram_id, bot_token))
+    assert resp2.status_code == 200
+    join_resp = await client.post(f"/api/v1/clubs/{club.id}/join", headers=telegram_headers(second_member_telegram_id, bot_token))
+    assert join_resp.status_code == 200
+
+    return club, captain
+
+
+@pytest_asyncio.fixture
+async def eight_club_tournament(client, db_session, bot_token):
+    """Registers 8 clubs and applies each to the tournament queue — the 8th application forms
+    the Tournament. Yields (tournament, clubs_and_captains) so callers can authenticate as any
+    of the 8 captains."""
+    await _seed_position_pool(db_session)
+    clubs_and_captains = []
+    tournament_id = None
+    for i in range(8):
+        club, captain = await _create_club_with_full_squad_orm(client, db_session, bot_token, 853000 + i, f"Клуб уведомлений {i}")
+        result = await apply_to_tournament(db_session, captain)
+        clubs_and_captains.append((club, captain))
+        if result.tournament_id is not None:
+            tournament_id = result.tournament_id
+
+    assert tournament_id is not None
+    tournament = await db_session.get(Tournament, tournament_id)
+    return tournament, clubs_and_captains
+
+
+async def test_lineup_reminder_names_the_player_and_reason(db_session, eight_club_tournament):
+    from sqlalchemy import select
+
+    from app.models.club_card import ClubCard
+    from app.models.club_card_availability import ClubCardAvailability
+    from app.models.club_lineup import ClubLineupCard
+    from app.models.enums import ClubCardAvailabilityReason, NotificationType
+    from app.models.notification import Notification
+    from app.services.tournament_notification_service import send_lineup_reminders
+
+    tournament, clubs_and_captains = eight_club_tournament
+    club, _captain = clubs_and_captains[0]
+
+    lineup_card = (
+        await db_session.execute(select(ClubLineupCard).join(ClubCard, ClubCard.id == ClubLineupCard.club_card_id).where(ClubCard.club_id == club.id).limit(1))
+    ).scalar_one()
+    starter = await db_session.get(ClubCard, lineup_card.club_card_id)
+    db_session.add(ClubCardAvailability(club_card_id=starter.id, rounds_remaining=2, reason=ClubCardAvailabilityReason.injury))
+    await db_session.commit()
+
+    count = await send_lineup_reminders(db_session)
+    assert count > 0
+
+    notifications = (
+        await db_session.execute(select(Notification).where(Notification.type == NotificationType.club_lineup_reminder))
+    ).scalars().all()
+    assert notifications
+    bodies = [n.body for n in notifications]
+    assert any("травма" in b and "2 тура" in b for b in bodies)
 
 
 async def test_notify_club_members_notifies_every_member(client, db_session, bot_token):

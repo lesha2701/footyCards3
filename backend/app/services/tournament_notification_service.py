@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.club import ClubMember
 from app.models.club_card import ClubCard
 from app.models.club_card_availability import ClubCardAvailability
-from app.models.enums import ClubRole, NotificationType, TournamentStatus
+from app.models.enums import ClubCardAvailabilityReason, ClubRole, NotificationType, TournamentStatus
 from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLog
 from app.services.notification_service import notify
@@ -41,24 +41,31 @@ async def notify_club_managers(
         await notify(db, user_id, type_, title, body, related_object_type, related_object_id)
 
 
-async def _club_has_suspended_starter(db: AsyncSession, club_id: int) -> bool:
+async def _suspended_starters(db: AsyncSession, club_id: int) -> list[tuple[str, "ClubCardAvailabilityReason", int]]:
     """Read-only check — does NOT call resolve_match_lineup (Task 12),
     which also performs substitution and returns engine-shaped actor
-    dicts neither needed nor wanted for a preview check."""
+    dicts neither needed nor wanted for a preview check. Returns
+    (player_display_name, reason, rounds_remaining) for every starter
+    currently suspended, so the reminder can name names instead of a
+    generic "someone" — previously this only returned a boolean."""
+    from app.models.player import Player
     from app.services.club_squad_service import _get_or_none_lineup
 
     lineup = await _get_or_none_lineup(db, club_id)
     if lineup is None:
-        return False
+        return []
     lineup_card_ids = {lc.club_card_id for lc in lineup.cards}
     if not lineup_card_ids:
-        return False
-    result = await db.execute(
-        select(ClubCardAvailability.id)
-        .where(ClubCardAvailability.club_card_id.in_(lineup_card_ids), ClubCardAvailability.rounds_remaining > 0)
-        .limit(1)
-    )
-    return result.scalar_one_or_none() is not None
+        return []
+    rows = (
+        await db.execute(
+            select(ClubCardAvailability.reason, ClubCardAvailability.rounds_remaining, Player.display_name)
+            .join(ClubCard, ClubCard.id == ClubCardAvailability.club_card_id)
+            .join(Player, Player.id == ClubCard.player_id)
+            .where(ClubCardAvailability.club_card_id.in_(lineup_card_ids), ClubCardAvailability.rounds_remaining > 0)
+        )
+    ).all()
+    return [(name, reason, rounds) for reason, rounds, name in rows]
 
 
 async def send_lineup_reminders(db: AsyncSession, slot_key: str | None = None) -> int:
@@ -103,11 +110,17 @@ async def send_lineup_reminders(db: AsyncSession, slot_key: str | None = None) -
             if club_a_id in withdrawn_ids or club_b_id in withdrawn_ids:
                 continue
             for club_id in (club_a_id, club_b_id):
-                if await _club_has_suspended_starter(db, club_id):
+                suspended = await _suspended_starters(db, club_id)
+                if suspended:
+                    parts = []
+                    for name, reason, rounds in suspended:
+                        reason_label = "красная карточка" if reason == ClubCardAvailabilityReason.red_card else "травма"
+                        tour_word = "тур" if rounds == 1 else "тура"
+                        parts.append(f"{name} — {reason_label} ({rounds} {tour_word})")
                     await notify_club_members(
                         db, club_id, NotificationType.club_lineup_reminder,
                         "Кто-то из состава не сыграет",
-                        "В стартовом составе клуба есть игрок под дисквалификацией — проверь состав перед следующим туром турнира.",
+                        f"Перед следующим туром замени в составе: {'; '.join(parts)}.",
                     )
                     notified_count += 1
 

@@ -6,12 +6,18 @@ from app.schemas.coach import CoachBoostOut, CoachOut
 from app.schemas.player import PlayerOut
 
 
+class ClubCardAvailabilityOut(BaseModel):
+    reason: str
+    rounds_remaining: int
+
+
 class ClubCardOut(BaseModel):
     id: int
     serial_number: int
     player: PlayerOut
     acquired_at: datetime
     is_in_lineup: bool
+    availability: ClubCardAvailabilityOut | None = None
 
 
 class EquippedCoachOut(BaseModel):

@@ -16,6 +16,7 @@ from app.models.player import Player
 from app.models.tournament import Tournament, TournamentClub
 from app.models.user import User
 from app.schemas.club_squad import (
+    ClubCardAvailabilityOut,
     ClubCardOut,
     ClubCoachCardOut,
     ClubCoachSetRequest,
@@ -167,10 +168,27 @@ async def _get_or_none_lineup(db: AsyncSession, club_id: int) -> ClubLineup | No
     return result.unique().scalar_one_or_none()
 
 
-def _club_card_to_out(card: ClubCard, in_lineup_ids: set[int]) -> ClubCardOut:
+async def _availability_by_card_id(db: AsyncSession, club_id: int) -> dict[int, "ClubCardAvailability"]:
+    from app.models.club_card_availability import ClubCardAvailability
+
+    rows = (
+        await db.execute(
+            select(ClubCardAvailability)
+            .join(ClubCard, ClubCard.id == ClubCardAvailability.club_card_id)
+            .where(ClubCard.club_id == club_id, ClubCardAvailability.rounds_remaining > 0)
+        )
+    ).scalars().all()
+    return {row.club_card_id: row for row in rows}
+
+
+def _club_card_to_out(
+    card: ClubCard, in_lineup_ids: set[int], availability_by_card_id: dict[int, "ClubCardAvailability"] | None = None,
+) -> ClubCardOut:
+    availability = (availability_by_card_id or {}).get(card.id)
     return ClubCardOut(
         id=card.id, serial_number=card.serial_number, player=PlayerOut.model_validate(card.player),
         acquired_at=card.acquired_at, is_in_lineup=card.id in in_lineup_ids,
+        availability=ClubCardAvailabilityOut(reason=availability.reason.value, rounds_remaining=availability.rounds_remaining) if availability else None,
     )
 
 
@@ -181,7 +199,8 @@ async def list_club_cards(db: AsyncSession, user: User) -> list[ClubCardOut]:
     cards = (await db.execute(select(ClubCard).where(ClubCard.club_id == membership.club_id).order_by(ClubCard.acquired_at))).scalars().all()
     lineup = await _get_or_none_lineup(db, membership.club_id)
     in_lineup_ids = {lc.club_card_id for lc in lineup.cards} if lineup else set()
-    return [_club_card_to_out(c, in_lineup_ids) for c in cards]
+    availability_by_card_id = await _availability_by_card_id(db, membership.club_id)
+    return [_club_card_to_out(c, in_lineup_ids, availability_by_card_id) for c in cards]
 
 
 async def list_club_coach_cards(db: AsyncSession, user: User) -> list[ClubCoachCardOut]:
@@ -275,6 +294,7 @@ async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
     by_slot = {lc.slot_code: lc.club_card for lc in lineup.cards} if lineup else {}
     in_lineup_ids = {lc.club_card_id for lc in lineup.cards} if lineup else set()
 
+    availability_by_card_id = await _availability_by_card_id(db, club_id)
     slots = []
     cards_with_slots = []
     for slot in get_formation_slots(formation):
@@ -282,7 +302,7 @@ async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
         slots.append(
             ClubLineupSlotOut(
                 slot_code=slot.code, category=slot.category, ideal_position=slot.ideal_position.value,
-                card=_club_card_to_out(card, in_lineup_ids) if card else None,
+                card=_club_card_to_out(card, in_lineup_ids, availability_by_card_id) if card else None,
             )
         )
         if card:
