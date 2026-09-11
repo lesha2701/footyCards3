@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,7 @@ from app.models.player import Player
 from app.models.tactico import TacticoMatch
 from app.models.trade import TradeOffer
 from app.models.user import User
+from app.models.user_coach_card import UserCoachCard
 from app.schemas.bingo import BingoClaimResult, BingoCurrentOut, BingoGoalOut, BingoStatsPreviewItem
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
@@ -289,14 +290,21 @@ async def update_goal_definition(
     if is_active and not definition.is_active:
         await _assert_no_other_active(db, definition.goal_type, exclude_id=definition_id)
     if target_value is not None:
-        definition.target_value = target_value
         # Also push the new number into the currently-running week's live goal, if
         # one exists for this goal_type — unlike is_active toggles and brand-new
         # definitions (which only take effect next week, via the snapshot
         # get_or_create_current_week takes at week-start), a target_value change is
         # a live recalibration the admin explicitly wants to apply immediately, not
         # wait a week for.
+        #
+        # Called before mutating `definition`: get_or_create_current_week can
+        # perform its own full commit when a week-rollover fires, and if that
+        # happened after definition.target_value was already set in-memory,
+        # the dirty `definition` could get swept into that unrelated commit
+        # instead of being committed together with the AdminActionLog row the
+        # router writes afterward.
         current_week = await get_or_create_current_week(db)
+        definition.target_value = target_value
         if current_week is not None:
             week_goal = (
                 await db.execute(
@@ -347,14 +355,26 @@ async def get_stats_preview(db: AsyncSession) -> list[BingoStatsPreviewItem]:
     # path (bonus grants, task/collection/league rewards, gifts, the free
     # periodic pack, daily rewards, ...), but only pack_service.open_pack
     # both creates a PackOpening AND rolls cards with CardSource.pack AND
-    # fires the live bingo hook — so join through to UserCard and filter on
-    # that same source, matching the live counter exactly. DISTINCT because
-    # a single opening has one PackOpeningCard row per card slot.
+    # fires the live bingo hook — so join through to UserCard/UserCoachCard
+    # and filter on that same source, matching the live counter exactly.
+    # Each PackOpeningCard row resolves to exactly one of UserCard or
+    # UserCoachCard (roll_and_create_cards's per-slot coach_drop_chance coin
+    # flip — see PackOpeningCard's own CHECK constraint), never both, never
+    # neither — so this must be an OUTER join to both sides plus an OR, not
+    # a plain inner join to UserCard alone: an opening whose every slot
+    # rolled a coach card has no UserCard rows at all, and an inner join
+    # would silently drop it even though it's a real, counter-incrementing
+    # open. DISTINCT because a single opening has one PackOpeningCard row
+    # per card slot.
     packs_opened = await count(
         select(func.count(func.distinct(PackOpening.id)))
         .join(PackOpeningCard, PackOpeningCard.opening_id == PackOpening.id)
-        .join(UserCard, UserCard.id == PackOpeningCard.user_card_id)
-        .where(PackOpening.created_at >= since, UserCard.source == CardSource.pack)
+        .outerjoin(UserCard, UserCard.id == PackOpeningCard.user_card_id)
+        .outerjoin(UserCoachCard, UserCoachCard.id == PackOpeningCard.user_coach_card_id)
+        .where(
+            PackOpening.created_at >= since,
+            or_(UserCard.source == CardSource.pack, UserCoachCard.source == CardSource.pack),
+        )
     )
 
     rarity_drop_counts: dict[Rarity, int] = {}
