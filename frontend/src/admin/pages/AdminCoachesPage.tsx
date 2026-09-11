@@ -6,7 +6,7 @@ import {
   toggleCoachActive, toggleCoachPackDroppable, updateCoach, uploadCoachImage,
 } from "@/admin/api";
 import { ApiRequestError, staticUrl } from "@/lib/api";
-import { BOOST_TYPES, BOOST_TYPE_LABELS, magnitudeFor } from "@/lib/coaches";
+import { BOOST_TYPES, BOOST_TYPE_LABELS } from "@/lib/coaches";
 import { RARITY_LABELS } from "@/lib/rarity";
 import type { Coach, CoachBoostType, Rarity } from "@/types";
 
@@ -174,22 +174,18 @@ export default function AdminCoachesPage() {
 
               <p className="mt-2 text-xs font-semibold text-slate-300">Усиления ({slotsForRarity} для этой редкости)</p>
               {form.boosts.map((boost, i) => (
-                <div key={i} className="grid grid-cols-2 gap-2">
-                  <select
-                    value={boost.boost_type}
-                    onChange={(e) => {
-                      const boosts = [...form.boosts];
-                      boosts[i] = { ...boosts[i], boost_type: e.target.value as CoachBoostType };
-                      setForm({ ...form, boosts });
-                    }}
-                    className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
-                  >
-                    {BOOST_TYPES.map((t) => <option key={t} value={t}>{BOOST_TYPE_LABELS[t]}</option>)}
-                  </select>
-                  <p className="rounded-lg bg-bg-surface px-3 py-2 text-sm text-slate-400">
-                    {magnitudeFor(boost.boost_type, form.rarity)}
-                  </p>
-                </div>
+                <select
+                  key={i}
+                  value={boost.boost_type}
+                  onChange={(e) => {
+                    const boosts = [...form.boosts];
+                    boosts[i] = { ...boosts[i], boost_type: e.target.value as CoachBoostType };
+                    setForm({ ...form, boosts });
+                  }}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                >
+                  {BOOST_TYPES.map((t) => <option key={t} value={t}>{BOOST_TYPE_LABELS[t]}</option>)}
+                </select>
               ))}
               {!boostsValid && (
                 <p className="text-[11px] text-red-400">
