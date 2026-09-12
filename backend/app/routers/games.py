@@ -38,8 +38,18 @@ from app.schemas.game import (
     SaboteurStartOut,
     SaboteurStartRequest,
 )
+from app.schemas.fut_draft import (
+    FutDraftClaimOut,
+    FutDraftFormationRequest,
+    FutDraftLeaderboardEntry,
+    FutDraftMatchResultOut,
+    FutDraftPickRequest,
+    FutDraftStartOut,
+    FutDraftStateOut,
+)
 from app.services import (
     free_kick_service,
+    fut_draft_service,
     game_limits_service,
     hangman_service,
     memory_game_service,
@@ -192,3 +202,42 @@ async def pairs_flip(session_id: int, payload: PairsFlipRequest, db: AsyncSessio
 @router.post("/pairs/{session_id}/claim", response_model=PairsClaimOut)
 async def pairs_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await pairs_service.claim_reward(db, user, session_id)
+
+
+# --- FUT Draft ---
+
+@router.get("/fut-draft/leaderboard", response_model=list[FutDraftLeaderboardEntry])
+async def fut_draft_leaderboard(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
+    return await fut_draft_service.leaderboard(db)
+
+
+@router.post("/fut-draft/start", response_model=FutDraftStartOut)
+async def fut_draft_start(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    check_rate_limit(f"fut_draft_start:{user.id}", max_calls=10, window_seconds=60)
+    return await fut_draft_service.start_draft(db, user)
+
+
+@router.post("/fut-draft/{session_id}/formation", response_model=FutDraftStateOut)
+async def fut_draft_choose_formation(
+    session_id: int, payload: FutDraftFormationRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await fut_draft_service.choose_formation(db, user, session_id, payload.formation)
+
+
+@router.post("/fut-draft/{session_id}/pick", response_model=FutDraftStateOut)
+async def fut_draft_pick(
+    session_id: int, payload: FutDraftPickRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await fut_draft_service.submit_pick(db, user, session_id, payload.player_id)
+
+
+@router.post("/fut-draft/{session_id}/match/start", response_model=FutDraftMatchResultOut)
+async def fut_draft_start_match(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await fut_draft_service.start_match(db, user, session_id)
+
+
+@router.post("/fut-draft/{session_id}/claim", response_model=FutDraftClaimOut)
+async def fut_draft_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await fut_draft_service.claim_reward(db, user, session_id)

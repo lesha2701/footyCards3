@@ -3,6 +3,11 @@ import type {
   FreeKickClaimResult,
   FreeKickKickResult,
   FreeKickStartResult,
+  FutDraftClaim,
+  FutDraftLeaderboardEntry,
+  FutDraftMatchResult,
+  FutDraftStart,
+  FutDraftState,
   GameLimits,
   HangmanClaimResult,
   HangmanGuessResult,
@@ -152,5 +157,37 @@ export async function flipPairsCard(sessionId: number, position: number): Promis
 
 export async function claimPairsReward(sessionId: number): Promise<PairsClaimResult> {
   const { data } = await api.post<PairsClaimResult>(`/games/pairs/${sessionId}/claim`);
+  return data;
+}
+
+// --- FUT Draft ---
+
+export async function startFutDraft(): Promise<FutDraftStart> {
+  const { data } = await api.post<FutDraftStart>("/games/fut-draft/start");
+  return data;
+}
+
+export async function chooseFutDraftFormation(sessionId: number, formation: string): Promise<FutDraftState> {
+  const { data } = await api.post<FutDraftState>(`/games/fut-draft/${sessionId}/formation`, { formation });
+  return data;
+}
+
+export async function submitFutDraftPick(sessionId: number, playerId: number): Promise<FutDraftState> {
+  const { data } = await api.post<FutDraftState>(`/games/fut-draft/${sessionId}/pick`, { player_id: playerId });
+  return data;
+}
+
+export async function startFutDraftMatch(sessionId: number): Promise<FutDraftMatchResult> {
+  const { data } = await api.post<FutDraftMatchResult>(`/games/fut-draft/${sessionId}/match/start`);
+  return data;
+}
+
+export async function claimFutDraftReward(sessionId: number): Promise<FutDraftClaim> {
+  const { data } = await api.post<FutDraftClaim>(`/games/fut-draft/${sessionId}/claim`);
+  return data;
+}
+
+export async function fetchFutDraftLeaderboard(): Promise<FutDraftLeaderboardEntry[]> {
+  const { data } = await api.get<FutDraftLeaderboardEntry[]>("/games/fut-draft/leaderboard");
   return data;
 }

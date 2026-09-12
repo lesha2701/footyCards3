@@ -177,6 +177,33 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">FUT Draft</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Шансы пяти уровней пика должны в сумме давать 100. Легендарки выпадают только в джекпот-пике — это то, что
+          держит их редкими. Награда — по числу побед в серии из 4 матчей (0 побед = проиграл первый матч).
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("fut_draft_entry_cost", "Цена входа, монеты")}
+        </div>
+        <p className="mb-2 mt-3 text-xs font-semibold text-slate-400">Шансы пика (%, сумма = 100)</p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("fut_draft_weak_chance", "Слабый")}
+          {field("fut_draft_normal_chance", "Обычный")}
+          {field("fut_draft_strong_chance", "Сильный")}
+          {field("fut_draft_top_chance", "Топовый")}
+          {field("fut_draft_jackpot_chance", "Джекпот")}
+        </div>
+        <p className="mb-2 mt-3 text-xs font-semibold text-slate-400">Награда по числу побед</p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("fut_draft_reward_win_0", "0 побед")}
+          {field("fut_draft_reward_win_1", "1 победа")}
+          {field("fut_draft_reward_win_2", "2 победы")}
+          {field("fut_draft_reward_win_3", "3 победы")}
+          {field("fut_draft_reward_win_4", "4 победы (идеальный драфт)")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Бесплатный пак</p>
         <div className="grid grid-cols-2 gap-3">
           {field("free_pack_interval_hours", "Интервал, часы")}

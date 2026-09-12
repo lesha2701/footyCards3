@@ -116,6 +116,10 @@ class User(TimestampMixin, Base):
     club_position_match_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     club_position_match_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # FUT Draft — best squad strength ever assembled, drives the leaderboard
+    # (same "personal best" pattern as memory_best_score).
+    fut_draft_best_squad_strength: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
     # Free pack (every N hours)
     free_pack_available_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     free_pack_notified: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

@@ -121,6 +121,17 @@ export interface GameConfig {
   club_position_match_reward_perfect: number;
   club_position_match_reward_min: number;
   club_position_match_penalty_per_mistake: number;
+  fut_draft_entry_cost: number;
+  fut_draft_weak_chance: number;
+  fut_draft_normal_chance: number;
+  fut_draft_strong_chance: number;
+  fut_draft_top_chance: number;
+  fut_draft_jackpot_chance: number;
+  fut_draft_reward_win_0: number;
+  fut_draft_reward_win_1: number;
+  fut_draft_reward_win_2: number;
+  fut_draft_reward_win_3: number;
+  fut_draft_reward_win_4: number;
   club_tactical_tackle_attempt_chance: number;
   club_tactical_injury_chance: number;
   club_training_boost_pct: number;

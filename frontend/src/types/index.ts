@@ -1046,6 +1046,67 @@ export interface PairsClaimResult {
   new_balance: number;
 }
 
+export interface FutDraftCandidate {
+  id: number;
+  display_name: string;
+  rating: number;
+  rarity: Rarity;
+  club: string;
+  country: string;
+  image_path: string | null;
+}
+
+export interface FutDraftPick {
+  slot_code: string;
+  player: FutDraftCandidate;
+}
+
+export interface FutDraftStart {
+  session_id: number;
+  formation_options: string[];
+  entry_cost: number;
+  new_balance: number;
+}
+
+export interface FutDraftState {
+  session_id: number;
+  formation: string;
+  phase: "drafting" | "ready";
+  slot_index: number;
+  total_slots: number;
+  slot_category: string | null;
+  candidates: FutDraftCandidate[] | null;
+  picks: FutDraftPick[];
+  team_strength: number | null;
+}
+
+export interface FutDraftMatchResult {
+  session_id: number;
+  round_number: number;
+  user_score: number;
+  bot_score: number;
+  result: "win" | "draw" | "loss";
+  wins: number;
+  is_finished: boolean;
+  status: string;
+}
+
+export interface FutDraftClaim {
+  reward_coins: number;
+  new_balance: number;
+  wins: number;
+  team_strength: number;
+  is_new_best: boolean;
+  best_squad_strength: number;
+}
+
+export interface FutDraftLeaderboardEntry {
+  user_id: number;
+  display_name: string;
+  avatar_url: string | null;
+  best_squad_strength: number;
+}
+
 export interface FreePackStatus {
   available: boolean;
   available_at: string | null;

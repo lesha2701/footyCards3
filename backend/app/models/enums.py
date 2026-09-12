@@ -81,6 +81,7 @@ class TransactionType(str, enum.Enum):
     gift_coins = "gift_coins"
     wheel_spin_cost = "wheel_spin_cost"
     wheel_spin_reward = "wheel_spin_reward"
+    fut_draft_entry = "fut_draft_entry"
     league_reward = "league_reward"
     gift_purchase_coins = "gift_purchase_coins"
     premium_subscription_adjustment = "premium_subscription_adjustment"
@@ -200,6 +201,7 @@ class GameType(str, enum.Enum):
     club_missing_item = "club_missing_item"
     club_penalty = "club_penalty"
     club_position_match = "club_position_match"
+    fut_draft = "fut_draft"
 
 
 class GameSessionStatus(str, enum.Enum):

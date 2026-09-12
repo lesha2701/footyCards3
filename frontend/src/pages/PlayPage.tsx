@@ -12,6 +12,7 @@ import {
   IconGoal,
   IconHelp,
   IconProfile,
+  IconStar,
   IconTarget,
   IconTrophy,
   type IconProps,
@@ -123,6 +124,15 @@ export default function PlayPage() {
           remaining={limits?.pairs}
           limit={limits?.hourly_limit}
         />
+
+        <GameCard
+          onClick={() => navigate("/play/fut-draft")}
+          Icon={IconStar}
+          badgeClass="bg-rarity-legendary"
+          title="FUT Draft"
+          description="Задрафти временный состав из случайных карт и сыграй серию матчей"
+          noLimit
+        />
       </div>
     </div>
   );
@@ -137,6 +147,7 @@ function GameCard({
   stat,
   remaining,
   limit,
+  noLimit,
 }: {
   onClick: () => void;
   Icon: (props: IconProps) => JSX.Element;
@@ -146,6 +157,7 @@ function GameCard({
   stat?: string;
   remaining?: number;
   limit?: number;
+  noLimit?: boolean;
 }) {
   return (
     <button onClick={onClick} className="flex items-center gap-3 rounded-2xl bg-bg-surface p-4 text-left active:scale-[0.98]">
@@ -165,6 +177,8 @@ function GameCard({
             </p>
             <p className="text-[10px] text-ink-mist-dim">осталось в час</p>
           </>
+        ) : noLimit ? (
+          <p className="text-[10px] text-ink-mist-dim">Платный вход</p>
         ) : (
           <p className="text-[10px] text-ink-mist-dim">...</p>
         )}

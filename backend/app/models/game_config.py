@@ -57,6 +57,23 @@ class GameConfig(TimestampMixin, Base):
     club_position_match_reward_min: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     club_position_match_penalty_per_mistake: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
 
+    fut_draft_entry_cost: Mapped[int] = mapped_column(Integer, default=400, nullable=False)
+    # Chance (0-100, all five must sum to 100) that a given slot's pick is
+    # dealt from each tier — see fut_draft_service.TIER_COMPOSITIONS for the
+    # exact rarity mix each tier deals. Legendary only ever appears via the
+    # jackpot tier, keeping it rare across the whole draft on purpose.
+    fut_draft_weak_chance: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    fut_draft_normal_chance: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    fut_draft_strong_chance: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    fut_draft_top_chance: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
+    fut_draft_jackpot_chance: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Reward (coins) by number of match wins reached (0-4) before the run ended.
+    fut_draft_reward_win_0: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    fut_draft_reward_win_1: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    fut_draft_reward_win_2: Mapped[int] = mapped_column(Integer, default=350, nullable=False)
+    fut_draft_reward_win_3: Mapped[int] = mapped_column(Integer, default=700, nullable=False)
+    fut_draft_reward_win_4: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
+
     club_tactical_phases_per_match_min: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
     club_tactical_phases_per_match_max: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
     club_tactical_promoted_chance_target_min: Mapped[int] = mapped_column(Integer, default=15, nullable=False)

@@ -161,6 +161,17 @@ class GameConfigOut(BaseModel):
     club_position_match_reward_perfect: int
     club_position_match_reward_min: int
     club_position_match_penalty_per_mistake: int
+    fut_draft_entry_cost: int
+    fut_draft_weak_chance: int
+    fut_draft_normal_chance: int
+    fut_draft_strong_chance: int
+    fut_draft_top_chance: int
+    fut_draft_jackpot_chance: int
+    fut_draft_reward_win_0: int
+    fut_draft_reward_win_1: int
+    fut_draft_reward_win_2: int
+    fut_draft_reward_win_3: int
+    fut_draft_reward_win_4: int
     club_tactical_tackle_attempt_chance: float
     club_tactical_injury_chance: float
     memory_daily_reward_limit: int
@@ -284,6 +295,17 @@ class GameConfigUpdate(BaseModel):
     club_position_match_reward_perfect: Optional[int] = Field(default=None, ge=0)
     club_position_match_reward_min: Optional[int] = Field(default=None, ge=0)
     club_position_match_penalty_per_mistake: Optional[int] = Field(default=None, ge=0)
+    fut_draft_entry_cost: Optional[int] = Field(default=None, ge=0)
+    fut_draft_weak_chance: Optional[int] = Field(default=None, ge=0, le=100)
+    fut_draft_normal_chance: Optional[int] = Field(default=None, ge=0, le=100)
+    fut_draft_strong_chance: Optional[int] = Field(default=None, ge=0, le=100)
+    fut_draft_top_chance: Optional[int] = Field(default=None, ge=0, le=100)
+    fut_draft_jackpot_chance: Optional[int] = Field(default=None, ge=0, le=100)
+    fut_draft_reward_win_0: Optional[int] = Field(default=None, ge=0)
+    fut_draft_reward_win_1: Optional[int] = Field(default=None, ge=0)
+    fut_draft_reward_win_2: Optional[int] = Field(default=None, ge=0)
+    fut_draft_reward_win_3: Optional[int] = Field(default=None, ge=0)
+    fut_draft_reward_win_4: Optional[int] = Field(default=None, ge=0)
     club_tactical_tackle_attempt_chance: Optional[float] = Field(default=None, ge=0, le=1)
     club_tactical_injury_chance: Optional[float] = Field(default=None, ge=0, le=1)
     memory_daily_reward_limit: Optional[int] = Field(default=None, ge=0)
