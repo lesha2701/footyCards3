@@ -5,6 +5,10 @@ from pydantic import BaseModel, ConfigDict
 from app.models.enums import Rarity
 
 
+class FutDraftConfigOut(BaseModel):
+    entry_cost: int
+
+
 class FutDraftCandidateOut(BaseModel):
     """Unlike the position-match games, showing the card's own stats IS the
     point here — the player has to weigh raw rating against club/country fit,
@@ -20,9 +24,11 @@ class FutDraftCandidateOut(BaseModel):
     image_path: Optional[str]
 
 
-class FutDraftPickOut(BaseModel):
+class FutDraftSlotOut(BaseModel):
     slot_code: str
-    player: FutDraftCandidateOut
+    category: str
+    ideal_position: str
+    player: Optional[FutDraftCandidateOut] = None
 
 
 class FutDraftStartOut(BaseModel):
@@ -36,6 +42,10 @@ class FutDraftFormationRequest(BaseModel):
     formation: str
 
 
+class FutDraftOpenSlotRequest(BaseModel):
+    slot_code: str
+
+
 class FutDraftPickRequest(BaseModel):
     player_id: int
 
@@ -44,12 +54,18 @@ class FutDraftStateOut(BaseModel):
     session_id: int
     formation: str
     phase: str  # "drafting" | "ready"
-    slot_index: int
-    total_slots: int
-    slot_category: Optional[str] = None
+    slots: list[FutDraftSlotOut]
+    pending_slot: Optional[str] = None
     candidates: Optional[list[FutDraftCandidateOut]] = None
-    picks: list[FutDraftPickOut]
-    team_strength: Optional[int] = None
+    team_strength: int
+    last_pick_strength_delta: Optional[int] = None
+
+
+class FutDraftMatchEventOut(BaseModel):
+    minute: int
+    team: str  # "user" | "bot"
+    type: str  # "goal" | "miss"
+    text: str
 
 
 class FutDraftMatchResultOut(BaseModel):
@@ -58,6 +74,7 @@ class FutDraftMatchResultOut(BaseModel):
     user_score: int
     bot_score: int
     result: str  # "win" | "draw" | "loss"
+    events: list[FutDraftMatchEventOut]
     wins: int
     is_finished: bool
     status: str

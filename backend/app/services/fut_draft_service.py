@@ -14,9 +14,11 @@ from app.models.user import User
 from app.schemas.fut_draft import (
     FutDraftCandidateOut,
     FutDraftClaimOut,
+    FutDraftConfigOut,
     FutDraftLeaderboardEntry,
+    FutDraftMatchEventOut,
     FutDraftMatchResultOut,
-    FutDraftPickOut,
+    FutDraftSlotOut,
     FutDraftStartOut,
     FutDraftStateOut,
 )
@@ -46,6 +48,11 @@ TIER_COMPOSITIONS: dict[str, list[Rarity]] = {
 _DIFFICULTY_SEQUENCE = [MatchDifficulty.easy, MatchDifficulty.medium, MatchDifficulty.hard, MatchDifficulty.hard]
 
 
+async def get_public_config(db: AsyncSession) -> FutDraftConfigOut:
+    config = await get_config(db)
+    return FutDraftConfigOut(entry_cost=config.fut_draft_entry_cost)
+
+
 def _formation_options() -> list[str]:
     codes = list(CLUB_FORMATIONS.keys())
     return random.sample(codes, k=min(FORMATION_OPTIONS_COUNT, len(codes)))
@@ -69,31 +76,25 @@ def _roll_tier(weights: list[tuple[str, int]], forbid_weak: bool) -> str:
     return random.choices(tiers, weights=ws, k=1)[0]
 
 
-def _generate_tier_sequence(config, total_slots: int) -> list[str]:
-    """Rolls one tier per slot, then applies the whole-draft guarantees on
-    top: at least one jackpot-tier slot, at least MIN_STRONG_OR_BETTER_SLOTS
-    slots of "strong" or better, never more than MAX_CONSECUTIVE_WEAK weak
-    slots in a row. The guarantees only ever upgrade a slot's tier (never
-    downgrade), so they can't reintroduce a weak-streak violation."""
+def _roll_tier_for_open_slot(config, state: dict, remaining_count: int) -> str:
+    """Tiers are rolled lazily, one per slot, at the moment the player opens
+    it — not precomputed — because the player picks which slot to open in
+    whatever order they like (this is the whole "как в фифе" point). The two
+    whole-draft guarantees (>=1 jackpot slot, >=MIN_STRONG_OR_BETTER_SLOTS
+    strong-or-better slots) are enforced as pity timers keyed off how many
+    slots are left to open, not off a fixed position in a sequence — this
+    keeps them correct regardless of open order. The "no 3 weak in a row"
+    guard applies to the player's actual reveal order (weak_streak), which
+    is the only order that matters for how a run actually *feels*."""
+    if remaining_count == 1 and not state["jackpot_seen"]:
+        return "jackpot"
+
+    needed_strong = max(0, MIN_STRONG_OR_BETTER_SLOTS - state["strong_or_better_count"])
     weights = _tier_weights(config)
-    sequence: list[str] = []
-    consecutive_weak = 0
-    for _ in range(total_slots):
-        tier = _roll_tier(weights, forbid_weak=consecutive_weak >= MAX_CONSECUTIVE_WEAK)
-        sequence.append(tier)
-        consecutive_weak = consecutive_weak + 1 if tier == "weak" else 0
+    if needed_strong >= remaining_count:
+        weights = [(t, w) for t, w in weights if t in STRONG_OR_BETTER_TIERS]
 
-    if "jackpot" not in sequence:
-        sequence[random.randrange(total_slots)] = "jackpot"
-
-    strong_count = sum(1 for t in sequence if t in STRONG_OR_BETTER_TIERS)
-    if strong_count < MIN_STRONG_OR_BETTER_SLOTS:
-        weak_spots = [i for i, t in enumerate(sequence) if t not in STRONG_OR_BETTER_TIERS]
-        random.shuffle(weak_spots)
-        for i in weak_spots[: MIN_STRONG_OR_BETTER_SLOTS - strong_count]:
-            sequence[i] = "strong"
-
-    return sequence
+    return _roll_tier(weights, forbid_weak=state["weak_streak"] >= MAX_CONSECUTIVE_WEAK)
 
 
 def _active_filter():
@@ -176,13 +177,16 @@ async def start_draft(db: AsyncSession, user: User) -> FutDraftStartOut:
             "phase": "choose_formation",
             "formation_options": formation_options,
             "formation": None,
-            "tier_sequence": [],
-            "slot_index": 0,
-            "current_candidates": [],
-            "picks": [],
+            "picks": {},  # slot_code -> player_id
+            "tiers": {},  # slot_code -> tier, assigned lazily as slots are opened
+            "pending_slot": None,
+            "pending_candidates": [],
             "club_counts": {},
             "country_counts": {},
-            "team_strength": None,
+            "weak_streak": 0,
+            "jackpot_seen": False,
+            "strong_or_better_count": 0,
+            "team_strength": 0,
             "match_round": 0,
             "match_results": [],
         },
@@ -206,34 +210,49 @@ async def _get_session(db: AsyncSession, user_id: int, session_id: int) -> GameS
     return session
 
 
-async def _hydrate_picks(db: AsyncSession, picks: list[dict]) -> list[FutDraftPickOut]:
+async def _compute_team_strength(db: AsyncSession, picks: dict, slots: list[FormationSlot]) -> int:
     if not picks:
-        return []
-    player_ids = [p["player_id"] for p in picks]
+        return 0
+    slots_by_code = {s.code: s for s in slots}
+    player_ids = list(picks.values())
     result = await db.execute(select(Player).where(Player.id.in_(player_ids)))
     players_by_id = {p.id: p for p in result.scalars().all()}
-    return [
-        FutDraftPickOut(slot_code=p["slot_code"], player=FutDraftCandidateOut.model_validate(players_by_id[p["player_id"]]))
-        for p in picks
+    cards_with_slots = [
+        (SimpleNamespace(player=players_by_id[player_id]), slots_by_code[slot_code])
+        for slot_code, player_id in picks.items()
+    ]
+    return calculate_base_strength(cards_with_slots)
+
+
+async def _state_out(
+    db: AsyncSession, session: GameSession, slots: list[FormationSlot], candidates: list[Player] | None,
+    last_pick_strength_delta: int | None = None,
+) -> FutDraftStateOut:
+    state = session.server_state
+    picks: dict = state["picks"]
+    player_ids = list(picks.values())
+    players_by_id: dict[int, Player] = {}
+    if player_ids:
+        result = await db.execute(select(Player).where(Player.id.in_(player_ids)))
+        players_by_id = {p.id: p for p in result.scalars().all()}
+
+    slots_out = [
+        FutDraftSlotOut(
+            slot_code=s.code, category=s.category, ideal_position=s.ideal_position.value,
+            player=FutDraftCandidateOut.model_validate(players_by_id[picks[s.code]]) if s.code in picks else None,
+        )
+        for s in slots
     ]
 
-
-async def _state_out(db: AsyncSession, session: GameSession, slots: list[FormationSlot], candidates: list[Player]) -> FutDraftStateOut:
-    state = session.server_state
-    picks_out = await _hydrate_picks(db, state["picks"])
-    slot_index = state["slot_index"]
-    drafting = state["phase"] == "drafting"
     return FutDraftStateOut(
-        session_id=session.id, formation=state["formation"], phase=state["phase"],
-        slot_index=slot_index, total_slots=len(slots),
-        slot_category=slots[slot_index].category if drafting and slot_index < len(slots) else None,
-        candidates=[FutDraftCandidateOut.model_validate(c) for c in candidates] if drafting else None,
-        picks=picks_out, team_strength=state.get("team_strength"),
+        session_id=session.id, formation=state["formation"], phase=state["phase"], slots=slots_out,
+        pending_slot=state["pending_slot"],
+        candidates=[FutDraftCandidateOut.model_validate(c) for c in candidates] if candidates is not None else None,
+        team_strength=state["team_strength"], last_pick_strength_delta=last_pick_strength_delta,
     )
 
 
 async def choose_formation(db: AsyncSession, user: User, session_id: int, formation: str) -> FutDraftStateOut:
-    config = await get_config(db)
     session = await _get_session(db, user.id, session_id)
     if session.status != GameSessionStatus.in_progress:
         raise ConflictError("This draft has already finished")
@@ -244,13 +263,45 @@ async def choose_formation(db: AsyncSession, user: User, session_id: int, format
         raise ConflictError("This formation was not offered")
 
     slots = get_formation_slots(formation)
-    tier_sequence = _generate_tier_sequence(config, len(slots))
-    candidates = await _deal_slot_candidates(db, slots[0], tier_sequence[0], {}, {}, set())
+    state.update({"phase": "drafting", "formation": formation})
+    session.server_state = state
+    db.add(session)
+    await db.commit()
 
-    state.update({
-        "phase": "drafting", "formation": formation, "tier_sequence": tier_sequence,
-        "slot_index": 0, "current_candidates": [p.id for p in candidates],
-    })
+    return await _state_out(db, session, slots, None)
+
+
+async def open_slot(db: AsyncSession, user: User, session_id: int, slot_code: str) -> FutDraftStateOut:
+    config = await get_config(db)
+    session = await _get_session(db, user.id, session_id)
+    if session.status != GameSessionStatus.in_progress:
+        raise ConflictError("This draft has already finished")
+    state = dict(session.server_state)
+    if state["phase"] != "drafting":
+        raise ConflictError("This draft is not currently drafting a squad")
+    if state["pending_slot"] is not None:
+        raise ConflictError("Pick the card offered for the currently open slot first")
+
+    slots = get_formation_slots(state["formation"])
+    slots_by_code = {s.code: s for s in slots}
+    slot = slots_by_code.get(slot_code)
+    if slot is None:
+        raise ConflictError("Unknown slot")
+    if slot_code in state["picks"]:
+        raise ConflictError("This slot is already filled")
+
+    remaining = [s.code for s in slots if s.code not in state["picks"]]
+    tier = _roll_tier_for_open_slot(config, state, len(remaining))
+    already_picked_ids = set(state["picks"].values())
+    candidates = await _deal_slot_candidates(
+        db, slot, tier, state["club_counts"], state["country_counts"], already_picked_ids,
+    )
+
+    tiers = dict(state["tiers"])
+    tiers[slot_code] = tier
+    state["tiers"] = tiers
+    state["pending_slot"] = slot_code
+    state["pending_candidates"] = [p.id for p in candidates]
     session.server_state = state
     db.add(session)
     await db.commit()
@@ -263,18 +314,17 @@ async def submit_pick(db: AsyncSession, user: User, session_id: int, player_id: 
     if session.status != GameSessionStatus.in_progress:
         raise ConflictError("This draft has already finished")
     state = dict(session.server_state)
-    if state["phase"] != "drafting":
-        raise ConflictError("This draft is not currently drafting a squad")
-    if player_id not in state["current_candidates"]:
+    if state["phase"] != "drafting" or state["pending_slot"] is None:
+        raise ConflictError("No slot is currently open to pick for")
+    if player_id not in state["pending_candidates"]:
         raise ConflictError("This card was not offered for this slot")
 
     slots = get_formation_slots(state["formation"])
-    slot_index = state["slot_index"]
-    slot = slots[slot_index]
+    slot_code = state["pending_slot"]
 
     player = await db.get(Player, player_id)
-    picks = list(state["picks"])
-    picks.append({"slot_code": slot.code, "player_id": player_id})
+    picks = dict(state["picks"])
+    picks[slot_code] = player_id
     state["picks"] = picks
 
     club_counts = dict(state["club_counts"])
@@ -284,38 +334,28 @@ async def submit_pick(db: AsyncSession, user: User, session_id: int, player_id: 
     state["club_counts"] = club_counts
     state["country_counts"] = country_counts
 
-    next_index = slot_index + 1
-    already_picked_ids = {p["player_id"] for p in picks}
+    tier = state["tiers"][slot_code]
+    state["weak_streak"] = state["weak_streak"] + 1 if tier == "weak" else 0
+    if tier == "jackpot":
+        state["jackpot_seen"] = True
+    if tier in STRONG_OR_BETTER_TIERS:
+        state["strong_or_better_count"] = state["strong_or_better_count"] + 1
 
-    if next_index < len(slots):
-        candidates = await _deal_slot_candidates(
-            db, slots[next_index], state["tier_sequence"][next_index], club_counts, country_counts, already_picked_ids,
-        )
-        state["slot_index"] = next_index
-        state["current_candidates"] = [p.id for p in candidates]
-        session.server_state = state
-        db.add(session)
-        await db.commit()
-        return await _state_out(db, session, slots, candidates)
+    state["pending_slot"] = None
+    state["pending_candidates"] = []
 
-    strength = await _compute_team_strength(db, picks, slots)
-    state["team_strength"] = strength
-    state["phase"] = "ready"
-    state["current_candidates"] = []
+    old_strength = state["team_strength"]
+    new_strength = await _compute_team_strength(db, picks, slots)
+    state["team_strength"] = new_strength
+
+    if len(picks) == len(slots):
+        state["phase"] = "ready"
+
     session.server_state = state
     db.add(session)
     await db.commit()
-    return await _state_out(db, session, slots, [])
 
-
-async def _compute_team_strength(db: AsyncSession, picks: list[dict], slots: list[FormationSlot]) -> int:
-    player_ids = [p["player_id"] for p in picks]
-    result = await db.execute(select(Player).where(Player.id.in_(player_ids)))
-    players_by_id = {p.id: p for p in result.scalars().all()}
-    cards_with_slots = [
-        (SimpleNamespace(player=players_by_id[pick["player_id"]]), slot) for pick, slot in zip(picks, slots)
-    ]
-    return calculate_base_strength(cards_with_slots)
+    return await _state_out(db, session, slots, None, last_pick_strength_delta=new_strength - old_strength)
 
 
 def _resolve_match(user_strength: int, bot_strength: int) -> tuple[str, int, int]:
@@ -342,6 +382,36 @@ def _resolve_match(user_strength: int, bot_strength: int) -> tuple[str, int, int
     else:
         user_score = bot_score = random.randint(0, 2)
     return result, user_score, bot_score
+
+
+async def _generate_events(db: AsyncSession, picks: dict, user_score: int, bot_score: int) -> list[FutDraftMatchEventOut]:
+    """Not a real chance-by-chance simulation (see _resolve_match) — the
+    final score is already decided; this only reconstructs a plausible-
+    looking timeline of goals (attributed to real squad picks for the user's
+    side, for flavor) plus a couple of near-misses, so the match plays out
+    on screen the way Card Arena's does instead of just flashing a result."""
+    scorer_pool: list[str] = []
+    if user_score > 0 and picks:
+        result = await db.execute(select(Player).where(Player.id.in_(list(picks.values()))))
+        scorer_pool = [p.display_name for p in result.scalars().all()]
+
+    extra_misses = random.randint(1, 3)
+    total_events = user_score + bot_score + extra_misses
+    minutes = sorted(random.sample(range(1, 91), k=min(90, total_events)))
+    kinds = (["user_goal"] * user_score) + (["bot_goal"] * bot_score) + (["miss"] * extra_misses)
+    random.shuffle(kinds)
+
+    events: list[FutDraftMatchEventOut] = []
+    for minute, kind in zip(minutes, kinds):
+        if kind == "user_goal":
+            scorer = random.choice(scorer_pool) if scorer_pool else "Твоя команда"
+            events.append(FutDraftMatchEventOut(minute=minute, team="user", type="goal", text=f"Гол! {scorer}"))
+        elif kind == "bot_goal":
+            events.append(FutDraftMatchEventOut(minute=minute, team="bot", type="goal", text="Гол соперника"))
+        else:
+            team = random.choice(["user", "bot"])
+            events.append(FutDraftMatchEventOut(minute=minute, team=team, type="miss", text="Момент не реализован"))
+    return events
 
 
 def _reward_for_wins(wins: int, config) -> int:
@@ -374,6 +444,7 @@ async def start_match(db: AsyncSession, user: User, session_id: int) -> FutDraft
     user_strength = max(1, round(team_strength * (1 + random.uniform(-0.05, 0.05))))
     bot_strength = max(1, round(team_strength * float(multiplier) * (1 + random.uniform(-0.05, 0.05))))
     result, user_score, bot_score = _resolve_match(user_strength, bot_strength)
+    events = await _generate_events(db, state["picks"], user_score, bot_score)
 
     match_results = list(state["match_results"]) + [result]
     state["match_results"] = match_results
@@ -393,7 +464,7 @@ async def start_match(db: AsyncSession, user: User, session_id: int) -> FutDraft
 
     return FutDraftMatchResultOut(
         session_id=session.id, round_number=state["match_round"], user_score=user_score, bot_score=bot_score,
-        result=result, wins=wins, is_finished=is_finished, status=session.status.value,
+        result=result, events=events, wins=wins, is_finished=is_finished, status=session.status.value,
     )
 
 

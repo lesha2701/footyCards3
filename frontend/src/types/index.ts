@@ -1046,6 +1046,10 @@ export interface PairsClaimResult {
   new_balance: number;
 }
 
+export interface FutDraftConfig {
+  entry_cost: number;
+}
+
 export interface FutDraftCandidate {
   id: number;
   display_name: string;
@@ -1056,9 +1060,11 @@ export interface FutDraftCandidate {
   image_path: string | null;
 }
 
-export interface FutDraftPick {
+export interface FutDraftSlot {
   slot_code: string;
-  player: FutDraftCandidate;
+  category: string;
+  ideal_position: string;
+  player: FutDraftCandidate | null;
 }
 
 export interface FutDraftStart {
@@ -1072,12 +1078,18 @@ export interface FutDraftState {
   session_id: number;
   formation: string;
   phase: "drafting" | "ready";
-  slot_index: number;
-  total_slots: number;
-  slot_category: string | null;
+  slots: FutDraftSlot[];
+  pending_slot: string | null;
   candidates: FutDraftCandidate[] | null;
-  picks: FutDraftPick[];
-  team_strength: number | null;
+  team_strength: number;
+  last_pick_strength_delta: number | null;
+}
+
+export interface FutDraftMatchEvent {
+  minute: number;
+  team: "user" | "bot";
+  type: "goal" | "miss";
+  text: string;
 }
 
 export interface FutDraftMatchResult {
@@ -1086,6 +1098,7 @@ export interface FutDraftMatchResult {
   user_score: number;
   bot_score: number;
   result: "win" | "draw" | "loss";
+  events: FutDraftMatchEvent[];
   wins: number;
   is_finished: boolean;
   status: string;

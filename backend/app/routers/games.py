@@ -40,9 +40,11 @@ from app.schemas.game import (
 )
 from app.schemas.fut_draft import (
     FutDraftClaimOut,
+    FutDraftConfigOut,
     FutDraftFormationRequest,
     FutDraftLeaderboardEntry,
     FutDraftMatchResultOut,
+    FutDraftOpenSlotRequest,
     FutDraftPickRequest,
     FutDraftStartOut,
     FutDraftStateOut,
@@ -206,6 +208,11 @@ async def pairs_claim(session_id: int, db: AsyncSession = Depends(get_db), user:
 
 # --- FUT Draft ---
 
+@router.get("/fut-draft/config", response_model=FutDraftConfigOut)
+async def fut_draft_config(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
+    return await fut_draft_service.get_public_config(db)
+
+
 @router.get("/fut-draft/leaderboard", response_model=list[FutDraftLeaderboardEntry])
 async def fut_draft_leaderboard(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
     return await fut_draft_service.leaderboard(db)
@@ -223,6 +230,14 @@ async def fut_draft_choose_formation(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await fut_draft_service.choose_formation(db, user, session_id, payload.formation)
+
+
+@router.post("/fut-draft/{session_id}/slot", response_model=FutDraftStateOut)
+async def fut_draft_open_slot(
+    session_id: int, payload: FutDraftOpenSlotRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await fut_draft_service.open_slot(db, user, session_id, payload.slot_code)
 
 
 @router.post("/fut-draft/{session_id}/pick", response_model=FutDraftStateOut)

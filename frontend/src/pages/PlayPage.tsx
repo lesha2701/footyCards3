@@ -64,6 +64,15 @@ export default function PlayPage() {
         />
 
         <GameCard
+          onClick={() => navigate("/play/fut-draft")}
+          Icon={IconStar}
+          badgeClass="bg-rarity-legendary"
+          title="FUT Draft"
+          description="Задрафти временный состав из случайных карт и сыграй серию матчей"
+          noLimit
+        />
+
+        <GameCard
           onClick={() => navigate("/play/memory")}
           Icon={IconBrain}
           badgeClass="bg-accent-cyan"
@@ -123,15 +132,6 @@ export default function PlayPage() {
           description="Переворачивай карточки и находи одинаковых футболистов"
           remaining={limits?.pairs}
           limit={limits?.hourly_limit}
-        />
-
-        <GameCard
-          onClick={() => navigate("/play/fut-draft")}
-          Icon={IconStar}
-          badgeClass="bg-rarity-legendary"
-          title="FUT Draft"
-          description="Задрафти временный состав из случайных карт и сыграй серию матчей"
-          noLimit
         />
       </div>
     </div>

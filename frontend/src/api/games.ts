@@ -4,6 +4,7 @@ import type {
   FreeKickKickResult,
   FreeKickStartResult,
   FutDraftClaim,
+  FutDraftConfig,
   FutDraftLeaderboardEntry,
   FutDraftMatchResult,
   FutDraftStart,
@@ -162,6 +163,11 @@ export async function claimPairsReward(sessionId: number): Promise<PairsClaimRes
 
 // --- FUT Draft ---
 
+export async function fetchFutDraftConfig(): Promise<FutDraftConfig> {
+  const { data } = await api.get<FutDraftConfig>("/games/fut-draft/config");
+  return data;
+}
+
 export async function startFutDraft(): Promise<FutDraftStart> {
   const { data } = await api.post<FutDraftStart>("/games/fut-draft/start");
   return data;
@@ -169,6 +175,11 @@ export async function startFutDraft(): Promise<FutDraftStart> {
 
 export async function chooseFutDraftFormation(sessionId: number, formation: string): Promise<FutDraftState> {
   const { data } = await api.post<FutDraftState>(`/games/fut-draft/${sessionId}/formation`, { formation });
+  return data;
+}
+
+export async function openFutDraftSlot(sessionId: number, slotCode: string): Promise<FutDraftState> {
+  const { data } = await api.post<FutDraftState>(`/games/fut-draft/${sessionId}/slot`, { slot_code: slotCode });
   return data;
 }
 
