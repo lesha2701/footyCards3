@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+import pytest
 import pytest_asyncio
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -50,6 +51,44 @@ def test_lazy_tier_guarantees_hold_across_many_full_runs():
             current = current + 1 if tier == "weak" else 0
             max_weak_streak = max(max_weak_streak, current)
         assert max_weak_streak <= 2
+
+
+def test_fut_draft_chemistry_bonus_sums_every_qualifying_club_and_country():
+    """A squad with two different clubs (and two different countries) each
+    reaching 2+ picks should be rewarded for both groups, not just whichever
+    happens to be the single biggest one."""
+    config = SimpleNamespace(fut_draft_club_bonus_per_extra=12, fut_draft_country_bonus_per_extra=6)
+    club_counts = {"ПСЖ": 3, "Бавария": 2, "Реал": 1}
+    country_counts = {"Франция": 3, "Германия": 2, "Испания": 1}
+    bonus = fut_draft_service._fut_draft_chemistry_bonus(config, club_counts, country_counts)
+    # clubs: (3-1)*12 + (2-1)*12 = 36; countries: (3-1)*6 + (2-1)*6 = 18
+    assert bonus == 36 + 18
+
+
+def test_fut_draft_chemistry_hints_list_every_qualifying_club_and_country():
+    config = SimpleNamespace(fut_draft_club_bonus_per_extra=12, fut_draft_country_bonus_per_extra=6)
+    state = {
+        "picks": {}, "club_counts": {"ПСЖ": 3, "Бавария": 2, "Реал": 1},
+        "country_counts": {"Франция": 3, "Германия": 2, "Испания": 1},
+    }
+    hints = fut_draft_service._chemistry_hints(config, state, {}, {})
+    assert "Одноклубники «ПСЖ» ×3: +24 к силе" in hints
+    assert "Одноклубники «Бавария» ×2: +12 к силе" in hints
+    assert not any("Реал" in h for h in hints)
+    assert "Один регион «Франция» ×3: +12 к силе" in hints
+    assert "Один регион «Германия» ×2: +6 к силе" in hints
+    assert not any("Испания" in h for h in hints)
+
+
+def test_fut_draft_round_bot_boost_ramps_from_zero_to_the_configured_percent():
+    """Match 1 (round index 0) gets no boost; the boost ramps up linearly and
+    reaches the full configured percentage on the final (4th) match."""
+    config = SimpleNamespace(fut_draft_round_bot_boost_pct=20)
+    assert fut_draft_service._round_bot_boost(config, 0) == 1.0
+    assert fut_draft_service._round_bot_boost(config, 3) == pytest.approx(1.2)
+    # Ramps monotonically in between.
+    boosts = [fut_draft_service._round_bot_boost(config, r) for r in range(4)]
+    assert boosts == sorted(boosts)
 
 
 async def _register(client, bot_token, telegram_id):
@@ -290,7 +329,10 @@ async def test_fut_draft_card_arena_round_plays_out_with_the_real_engine(client,
     squad, driven by /card-arena/action the same way the frontend's "skip"
     auto-play does (pick whichever action is offered), just to prove the
     reused match_service engine actually runs end-to-end against a temporary
-    draft squad without exceptions and produces a coherent result."""
+    draft squad without exceptions and produces a coherent result. A real
+    draw (rare but possible) hands off to a coin flip — see
+    test_fut_draft_draw_hands_off_to_a_coin_flip for that path in isolation;
+    here it's just played through with an arbitrary call."""
     headers, body = await _start(client, db_session, bot_token, 770013)
     session_id = body["session_id"]
     await _draft_full_squad(client, headers, session_id, body["formation_options"])
@@ -303,6 +345,13 @@ async def test_fut_draft_card_arena_round_plays_out_with_the_real_engine(client,
     for _ in range(200):  # generous upper bound; a real round is a few dozen moments at most
         if not round_state["round_in_progress"]:
             break
+        if round_state["game_type"] == "coin_flip":
+            resp = await client.post(
+                f"/api/v1/games/fut-draft/{session_id}/coin-flip", headers=headers, json={"choice": "heads"},
+            )
+            assert resp.status_code == 200
+            round_state = resp.json()
+            continue
         pending = round_state["pending_moment"]
         assert pending is not None
         resp = await client.post(
@@ -313,9 +362,80 @@ async def test_fut_draft_card_arena_round_plays_out_with_the_real_engine(client,
         round_state = resp.json()
 
     assert round_state["round_in_progress"] is False
-    assert round_state["result"] in ("win", "draw", "loss")
-    assert len(round_state["events"]) > 0
+    assert round_state["result"] in ("win", "loss")
     assert round_state["wins"] == (1 if round_state["result"] == "win" else 0)
+
+
+async def test_fut_draft_draw_hands_off_to_a_coin_flip(client, db_session, bot_token, monkeypatch):
+    """A round that ends 0:0 (forced here by making the moment queue empty,
+    so the round auto-finalizes with no goals for either side) isn't
+    finalized outright — it hands off to a coin flip: guess right and it's
+    a win, guess wrong and it's a loss, either way the round then finalizes
+    for real."""
+    monkeypatch.setattr(fut_draft_service, "_generate_moment_queue", lambda *a, **k: [])
+    monkeypatch.setattr(fut_draft_service.random, "choice", lambda seq: "heads")
+
+    headers, body = await _start(client, db_session, bot_token, 770014)
+    session_id = body["session_id"]
+    await _draft_full_squad(client, headers, session_id, body["formation_options"])
+
+    resp = await client.post(f"/api/v1/games/fut-draft/{session_id}/match/start", headers=headers)
+    assert resp.status_code == 200
+    drawn = resp.json()
+    assert drawn["game_type"] == "coin_flip"
+    assert drawn["round_in_progress"] is True
+    assert set(drawn["coin_flip_choices"]) == {"heads", "tails"}
+    assert drawn["user_score"] == 0
+    assert drawn["bot_score"] == 0
+
+    # Correct guess (random.choice patched to always land "heads") -> win.
+    resp = await client.post(
+        f"/api/v1/games/fut-draft/{session_id}/coin-flip", headers=headers, json={"choice": "heads"},
+    )
+    assert resp.status_code == 200
+    won = resp.json()
+    assert won["round_in_progress"] is False
+    assert won["game_type"] == "card_arena"  # attributed to the round that produced the draw
+    assert won["result"] == "win"
+    assert won["coin_flip_result"] == "heads"
+    assert won["wins"] == 1
+    assert won["is_finished"] is False  # only 1 of 4 matches played
+
+
+async def test_fut_draft_coin_flip_wrong_guess_is_a_loss_and_ends_the_series(client, db_session, bot_token, monkeypatch):
+    monkeypatch.setattr(fut_draft_service, "_generate_moment_queue", lambda *a, **k: [])
+    monkeypatch.setattr(fut_draft_service.random, "choice", lambda seq: "heads")
+
+    headers, body = await _start(client, db_session, bot_token, 770015)
+    session_id = body["session_id"]
+    await _draft_full_squad(client, headers, session_id, body["formation_options"])
+
+    resp = await client.post(f"/api/v1/games/fut-draft/{session_id}/match/start", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["game_type"] == "coin_flip"
+
+    resp = await client.post(
+        f"/api/v1/games/fut-draft/{session_id}/coin-flip", headers=headers, json={"choice": "tails"},
+    )
+    assert resp.status_code == 200
+    lost = resp.json()
+    assert lost["round_in_progress"] is False
+    assert lost["result"] == "loss"
+    assert lost["coin_flip_result"] == "heads"
+    assert lost["wins"] == 0
+    assert lost["is_finished"] is True
+    assert lost["status"] == "lost"
+
+
+async def test_fut_draft_coin_flip_rejects_when_none_pending(client, db_session, bot_token):
+    headers, body = await _start(client, db_session, bot_token, 770016)
+    session_id = body["session_id"]
+    await _draft_full_squad(client, headers, session_id, body["formation_options"])
+
+    resp = await client.post(
+        f"/api/v1/games/fut-draft/{session_id}/coin-flip", headers=headers, json={"choice": "heads"},
+    )
+    assert resp.status_code == 409
 
 
 async def test_fut_draft_tactico_round_is_interactive_and_stops_the_series_on_loss(client, db_session, bot_token, monkeypatch):

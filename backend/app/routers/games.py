@@ -41,6 +41,7 @@ from app.schemas.game import (
 from app.schemas.fut_draft import (
     FutDraftCardArenaActionRequest,
     FutDraftClaimOut,
+    FutDraftCoinFlipRequest,
     FutDraftConfigOut,
     FutDraftFormationRequest,
     FutDraftLeaderboardEntry,
@@ -278,6 +279,14 @@ async def fut_draft_penalty_kick(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await fut_draft_service.submit_penalty_kick(db, user, session_id, payload.direction)
+
+
+@router.post("/fut-draft/{session_id}/coin-flip", response_model=FutDraftRoundOut)
+async def fut_draft_coin_flip(
+    session_id: int, payload: FutDraftCoinFlipRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await fut_draft_service.submit_coin_flip(db, user, session_id, payload.choice)
 
 
 @router.post("/fut-draft/{session_id}/claim", response_model=FutDraftClaimOut)

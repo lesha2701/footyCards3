@@ -102,15 +102,21 @@ class FutDraftPenaltyKickRequest(BaseModel):
     direction: str
 
 
+class FutDraftCoinFlipRequest(BaseModel):
+    choice: Literal["heads", "tails"]
+
+
 class FutDraftRoundOut(BaseModel):
-    """Covers three shapes with one schema: a fully-resolved Card Arena
-    round (round_in_progress=False, events populated), and the two genuinely
-    turn-based flavors mid-play (round_in_progress=True) — Тактико (phase/
+    """Covers all shapes with one schema: a fully-resolved Card Arena round
+    (round_in_progress=False, events populated), the two genuinely turn-
+    based flavors mid-play (round_in_progress=True) — Тактико (phase/
     total_phases/tactic_choices) and Пенальти (kick_number/picked_player/
     zone_choices) — each driven by its own follow-up endpoint one turn at a
-    time until round_in_progress flips to False."""
+    time until round_in_progress flips to False, and a drawn round's
+    tiebreaker (game_type="coin_flip", round_in_progress=True while a call
+    is pending) via POST /fut-draft/{session_id}/coin-flip."""
     session_id: int
-    game_type: str  # "card_arena" | "tactico" | "penalty"
+    game_type: str  # "card_arena" | "tactico" | "penalty" | "coin_flip"
     round_in_progress: bool
 
     events: list[FutDraftMatchEventOut] = []
@@ -127,11 +133,20 @@ class FutDraftRoundOut(BaseModel):
     zone_choices: Optional[list[str]] = None
     last_kick_result: Optional[str] = None
 
+    # A round that ends in a draw is decided by a coin flip instead of
+    # ending the series outright — call heads or tails, guess right and it
+    # counts as a win, guess wrong and it's a loss.
+    coin_flip_choices: Optional[list[Literal["heads", "tails"]]] = None
+    coin_flip_result: Optional[Literal["heads", "tails"]] = None
+
     user_score: int = 0
     bot_score: int = 0
 
     round_number: Optional[int] = None
-    result: Optional[str] = None  # this round's "win" | "draw" | "loss", only once round_in_progress is False
+    # This round's final "win" | "loss", only once round_in_progress is
+    # False — a draw is never terminal, it's replaced by the coin flip's
+    # own win/loss before the round is ever reported as finished.
+    result: Optional[str] = None
     wins: int = 0
     is_finished: bool = False  # whole draft series finished
     status: str = "in_progress"

@@ -246,15 +246,12 @@ async def _get_session(db: AsyncSession, user_id: int, session_id: int) -> GameS
 
 
 def _fut_draft_chemistry_bonus(config, club_counts: dict, country_counts: dict) -> int:
-    bonus = 0
-    if club_counts:
-        top_count = max(club_counts.values())
-        if top_count >= 2:
-            bonus += (top_count - 1) * config.fut_draft_club_bonus_per_extra
-    if country_counts:
-        top_count = max(country_counts.values())
-        if top_count >= 2:
-            bonus += (top_count - 1) * config.fut_draft_country_bonus_per_extra
+    """Sums the bonus across EVERY club/country group with 2+ picks, not
+    just the single largest one — a squad with 3 PSG and 2 Bayern picks
+    should be rewarded (and shown, see _chemistry_hints) for both groups,
+    not just whichever happens to be biggest."""
+    bonus = sum((count - 1) * config.fut_draft_club_bonus_per_extra for count in club_counts.values() if count >= 2)
+    bonus += sum((count - 1) * config.fut_draft_country_bonus_per_extra for count in country_counts.values() if count >= 2)
     return bonus
 
 
@@ -282,14 +279,15 @@ def _chemistry_hints(config, state: dict, players_by_id: dict[int, Player], slot
     club_counts: dict = state["club_counts"]
     country_counts: dict = state["country_counts"]
 
-    if club_counts:
-        top_club, top_count = max(club_counts.items(), key=lambda kv: kv[1])
-        if top_count >= 2:
-            hints.append(f"Одноклубники «{top_club}» ×{top_count}: +{(top_count - 1) * config.fut_draft_club_bonus_per_extra} к силе")
-    if country_counts:
-        top_country, top_count = max(country_counts.items(), key=lambda kv: kv[1])
-        if top_count >= 2:
-            hints.append(f"Один регион «{top_country}» ×{top_count}: +{(top_count - 1) * config.fut_draft_country_bonus_per_extra} к силе")
+    # Every qualifying group, not just the single biggest one — sorted by
+    # count desc so the strongest synergy leads, ties broken by name for a
+    # stable order across renders.
+    for club, count in sorted(club_counts.items(), key=lambda kv: (-kv[1], kv[0])):
+        if count >= 2:
+            hints.append(f"Одноклубники «{club}» ×{count}: +{(count - 1) * config.fut_draft_club_bonus_per_extra} к силе")
+    for country, count in sorted(country_counts.items(), key=lambda kv: (-kv[1], kv[0])):
+        if count >= 2:
+            hints.append(f"Один регион «{country}» ×{count}: +{(count - 1) * config.fut_draft_country_bonus_per_extra} к силе")
     if picks:
         exact_fit = sum(
             1 for slot_code, player_id in picks.items()
@@ -557,9 +555,40 @@ def _reward_for_wins(wins: int, config) -> int:
 
 
 def _finalize_round(session: GameSession, state: dict, config, game_type: str, result: str, user_score: int, bot_score: int) -> FutDraftRoundOut:
-    """Shared tail for all three flavors once a round's win/draw/loss is
-    known: records it, advances (or ends) the 4-match series, and computes
-    the reward the same way regardless of which game decided this round."""
+    """Entry point every flavor's finishing path calls once a round's
+    win/draw/loss is known. A draw doesn't end the round outright — it
+    hands off to a coin flip (call heads or tails; guess right and it
+    counts as a win, guess wrong and it's a loss — see submit_coin_flip)
+    instead of ending the series on what was really a toss-up. Any other
+    result finalizes for real through _finalize_round_definitive."""
+    if result == "draw":
+        return _start_coin_flip(session, state, game_type, user_score, bot_score)
+    return _finalize_round_definitive(session, state, config, game_type, result, user_score, bot_score)
+
+
+def _start_coin_flip(session: GameSession, state: dict, source_game_type: str, user_score: int, bot_score: int) -> FutDraftRoundOut:
+    active = {
+        "game_type": "coin_flip", "source_game_type": source_game_type,
+        "user_score": user_score, "bot_score": bot_score,
+    }
+    state["active_round"] = active
+    session.server_state = state
+    flag_modified(session, "server_state")
+
+    wins = sum(1 for r in state["match_results"] if r == "win")
+    return FutDraftRoundOut(
+        session_id=session.id, game_type="coin_flip", round_in_progress=True,
+        coin_flip_choices=["heads", "tails"],
+        user_score=user_score, bot_score=bot_score,
+        wins=wins, status=session.status.value,
+    )
+
+
+def _finalize_round_definitive(session: GameSession, state: dict, config, game_type: str, result: str, user_score: int, bot_score: int) -> FutDraftRoundOut:
+    """Shared tail for every flavor (including a coin flip's own outcome)
+    once a round's real win/loss is known: records it, advances (or ends)
+    the 4-match series, and computes the reward the same way regardless of
+    which game — or coin flip — decided this round."""
     match_results = list(state["match_results"]) + [result]
     state["match_results"] = match_results
     state["match_round"] = state["match_round"] + 1
@@ -584,6 +613,41 @@ def _finalize_round(session: GameSession, state: dict, config, game_type: str, r
     )
 
 
+def _round_bot_boost(config, match_round: int) -> float:
+    """Bots get progressively tougher across the MAX_MATCHES-match series —
+    linearly ramped from no boost in match 1 up to
+    `fut_draft_round_bot_boost_pct` in the final match — on top of the
+    round's own easy/medium difficulty multiplier. Without this, a very
+    strong squad faces the same relative difficulty in every round and wins
+    the whole series far too often."""
+    if MAX_MATCHES <= 1:
+        return 1.0
+    return 1 + (float(config.fut_draft_round_bot_boost_pct) / 100) * (match_round / (MAX_MATCHES - 1))
+
+
+async def submit_coin_flip(db: AsyncSession, user: User, session_id: int, choice: str) -> FutDraftRoundOut:
+    config = await get_config(db)
+    session = await _get_session(db, user.id, session_id)
+    if session.status != GameSessionStatus.in_progress:
+        raise ConflictError("This draft has already finished")
+    state = dict(session.server_state)
+    active = state.get("active_round")
+    if not active or active["game_type"] != "coin_flip":
+        raise ConflictError("No coin flip is currently pending")
+    if choice not in ("heads", "tails"):
+        raise ConflictError("Unknown coin flip choice")
+
+    landed = random.choice(["heads", "tails"])
+    result = "win" if choice == landed else "loss"
+    round_out = _finalize_round_definitive(
+        session, state, config, active["source_game_type"], result, active["user_score"], active["bot_score"],
+    )
+    round_out.coin_flip_result = landed
+    db.add(session)
+    await db.commit()
+    return round_out
+
+
 async def start_match(db: AsyncSession, user: User, session_id: int) -> FutDraftRoundOut:
     config = await get_config(db)
     session = await _get_session(db, user.id, session_id)
@@ -603,7 +667,7 @@ async def start_match(db: AsyncSession, user: User, session_id: int) -> FutDraft
         MatchDifficulty.hard: config.difficulty_hard_multiplier,
     }[difficulty])
     team_strength = state["team_strength"]
-    bot_strength = max(1, round(team_strength * multiplier))
+    bot_strength = max(1, round(team_strength * multiplier * _round_bot_boost(config, match_round)))
 
     # Every round is Card Arena for now, played out with the exact same
     # engine as the real Card Arena (app.services.match_service) — see

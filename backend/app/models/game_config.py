@@ -79,6 +79,12 @@ class GameConfig(TimestampMixin, Base):
     # change to the shared personal-lineup formula.
     fut_draft_club_bonus_per_extra: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
     fut_draft_country_bonus_per_extra: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    # Bots get progressively tougher across the 4-match series, on top of
+    # their own easy/medium difficulty multiplier — this is the percentage
+    # the final (4th) match's bot strength is boosted by, ramped up linearly
+    # from 0% in match 1. Keeps a very strong squad from steamrolling every
+    # round at the same relative difficulty, without making the bots brutal.
+    fut_draft_round_bot_boost_pct: Mapped[float] = mapped_column(Numeric(4, 2), default=20.0, nullable=False)
 
     club_tactical_phases_per_match_min: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
     club_tactical_phases_per_match_max: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
