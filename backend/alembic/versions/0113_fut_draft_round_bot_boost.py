@@ -3,7 +3,7 @@ configurable % by the final match), so a strong squad doesn't steamroll
 every round at the same relative difficulty.
 
 Revision ID: 0113
-Revises: 0112
+Revises: 0111
 Create Date: 2026-09-12
 
 """
@@ -13,7 +13,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = "0113"
-down_revision: Union[str, None] = "0112"
+down_revision: Union[str, None] = "0111"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
