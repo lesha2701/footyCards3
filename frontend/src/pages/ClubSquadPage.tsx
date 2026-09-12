@@ -103,6 +103,27 @@ export default function ClubSquadPage() {
           {lineup?.is_complete && <span className="font-mono text-sm font-bold text-accent-cyan">Сила: {lineup.team_strength}</span>}
         </div>
 
+        {lineup?.is_complete && (
+          <div className="mb-3 grid grid-cols-4 gap-2 rounded-xl bg-white/5 px-3 py-2.5 text-center">
+            <div>
+              <p className="font-mono text-sm font-bold text-accent-cyan">{lineup.attack}</p>
+              <p className="text-[9px] text-ink-mist-dim">Атака</p>
+            </div>
+            <div>
+              <p className="font-mono text-sm font-bold text-accent-cyan">{lineup.midfield}</p>
+              <p className="text-[9px] text-ink-mist-dim">Полузащита</p>
+            </div>
+            <div>
+              <p className="font-mono text-sm font-bold text-accent-cyan">{lineup.defence}</p>
+              <p className="text-[9px] text-ink-mist-dim">Защита</p>
+            </div>
+            <div>
+              <p className="font-mono text-sm font-bold text-accent-cyan">{lineup.goalkeeping}</p>
+              <p className="text-[9px] text-ink-mist-dim">Вратарь</p>
+            </div>
+          </div>
+        )}
+
         {lineup?.in_active_tournament && (
           <button
             onClick={() => trainingMutation.mutate()}

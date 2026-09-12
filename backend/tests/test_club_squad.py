@@ -73,6 +73,27 @@ async def test_get_club_lineup_is_complete_after_creation(client, db_session, bo
     assert all(s["card"] is not None for s in body["slots"])
 
 
+async def test_get_club_lineup_reports_line_stats_for_own_squad(client, db_session, bot_token):
+    """Same 4 rolled-up numbers (attack/midfield/defence/goalkeeping) shown
+    for the next tournament opponent's lineup should also be exposed for a
+    club's own lineup, so the squad screen can show them too. Each number is
+    a plain average of the ratings of the players actually fielded in that
+    line — not compute_profile's cross-zone weighted value, which a player
+    could see credit a midfielder's partial contribution to "attack" and
+    read as higher than either forward's own rating."""
+    _, headers = await _create_club(client, bot_token, 820320, "Клуб со статами линий")
+    resp = await client.get("/api/v1/clubs/me/lineup", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_complete"] is True
+
+    category_by_stat = {"attack": "FWD", "midfield": "MID", "defence": "DEF", "goalkeeping": "GK"}
+    for stat, category in category_by_stat.items():
+        ratings = [s["card"]["player"]["rating"] for s in body["slots"] if s["category"] == category]
+        assert ratings  # every category has at least one slot in any formation
+        assert body[stat] == round(sum(ratings) / len(ratings))
+
+
 async def test_list_club_cards_includes_bench(client, db_session, bot_token):
     _, headers = await _create_club(client, bot_token, 820301, "Клуб со скамейкой")
     resp = await client.get("/api/v1/clubs/me/cards", headers=headers)
@@ -385,8 +406,8 @@ async def test_next_opponent_reports_round_and_opponent_for_an_active_tournament
     opponent = await db_session.get(Club, out.opponent_club_id)
     assert out.opponent_club_name == opponent.name
     # Fresh clubs' seeded starting squads (see _seed_position_pool) give every
-    # zone a real, positive value — never all-zero, since compute_profile
-    # only returns 0.0 for a genuinely empty lineup (no cards at all).
+    # line a real, positive value — never all-zero, since _category_line_stats
+    # only returns 0 for a line with no cards fielded in it at all.
     assert out.attack > 0
     assert out.midfield > 0
     assert out.defence > 0

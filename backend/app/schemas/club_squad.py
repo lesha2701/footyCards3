@@ -67,6 +67,13 @@ class ClubLineupOut(BaseModel):
     training_uses_remaining: int = 0
     training_boost_active: bool = False
     in_active_tournament: bool = False
+    # Same 4 rolled-up numbers NextOpponentOut shows for the opponent's
+    # lineup, computed the same way (club_tactical_profile_service.compute_profile),
+    # so the squad screen can show them for your own lineup too.
+    attack: int = 0
+    midfield: int = 0
+    defence: int = 0
+    goalkeeping: int = 0
 
 
 class ClubLineupSlotIn(BaseModel):

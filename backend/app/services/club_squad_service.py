@@ -286,6 +286,28 @@ async def activate_training(db: AsyncSession, user: User) -> ClubLineupOut:
     return await _lineup_to_out(db, club_id)
 
 
+def _category_line_stats(cards_with_slots: list) -> tuple[int, int, int, int]:
+    """Plain average rating of the players actually fielded in each line —
+    attack (FWD), midfield (MID), defence (DEF), goalkeeping (GK) — shown for
+    both the opponent preview (NextOpponentOut) and a club's own lineup
+    (ClubLineupOut). Deliberately NOT compute_profile's cross-zone weighted
+    values (those also credit e.g. a CAM's partial contribution to attack,
+    plus a depth bonus) — shown to the player as a line stat, it should read
+    as literally "average rating of the players in this line", matching what
+    they see on the pitch, not a number a single line's own players couldn't
+    produce on their own."""
+    sums = {"FWD": 0.0, "MID": 0.0, "DEF": 0.0, "GK": 0.0}
+    counts = {"FWD": 0, "MID": 0, "DEF": 0, "GK": 0}
+    for card, slot in cards_with_slots:
+        sums[slot.category] += card.player.rating
+        counts[slot.category] += 1
+
+    def avg(category: str) -> int:
+        return round(sums[category] / counts[category]) if counts[category] else 0
+
+    return avg("FWD"), avg("MID"), avg("DEF"), avg("GK")
+
+
 async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
     lineup = await _get_or_none_lineup(db, club_id)
     formation = lineup.formation if lineup else DEFAULT_FORMATION
@@ -322,11 +344,13 @@ async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
     if lineup and lineup.club_coach_card:
         coach_out = EquippedCoachOut.model_validate(lineup.club_coach_card.coach)
 
+    attack, midfield, defence, goalkeeping = _category_line_stats(cards_with_slots)
     return ClubLineupOut(
         is_complete=is_complete, team_strength=team_strength, formation=formation, mentality=mentality,
         playstyle=playstyle, tactical_fit=tactical_fit, tactical_fit_hint=tactical_fit_hint, slots=slots,
         coach=coach_out, training_uses_remaining=training_uses_remaining,
         training_boost_active=training_boost_active, in_active_tournament=in_active_tournament,
+        attack=attack, midfield=midfield, defence=defence, goalkeeping=goalkeeping,
     )
 
 
@@ -536,12 +560,9 @@ async def get_next_opponent(db: AsyncSession, user: User) -> NextOpponentOut:
     opponent_cards_with_slots = [
         (opponent_by_slot[slot.code], slot) for slot in get_formation_slots(opponent_formation) if slot.code in opponent_by_slot
     ]
-    profile = compute_profile(opponent_cards_with_slots) if opponent_cards_with_slots else None
+    attack, midfield, defence, goalkeeping = _category_line_stats(opponent_cards_with_slots)
 
     return NextOpponentOut(
         round_number=round_number, opponent_club_id=opponent_club_id, opponent_club_name=opponent_club.name,
-        attack=round((profile.central_attack + profile.wing_attack) / 2) if profile else 0,
-        midfield=round(profile.midfield_control) if profile else 0,
-        defence=round((profile.central_defence + profile.wing_defence) / 2) if profile else 0,
-        goalkeeping=round(profile.goalkeeping) if profile else 0,
+        attack=attack, midfield=midfield, defence=defence, goalkeeping=goalkeeping,
     )
