@@ -209,6 +209,7 @@ async def test_fut_draft_rejects_picking_a_card_not_offered(client, db_session, 
 async def test_fut_draft_wins_all_four_matches_and_claims_top_reward(client, db_session, bot_token, monkeypatch):
     from app.services.game_config_service import get_config
 
+    monkeypatch.setattr(fut_draft_service, "_ROUND_GAME_TYPES", ["card_arena"])
     monkeypatch.setattr(fut_draft_service, "_resolve_match", lambda user_strength, bot_strength: ("win", 3, 0))
 
     headers, body = await _start(client, db_session, bot_token, 770007)
@@ -244,6 +245,7 @@ async def test_fut_draft_wins_all_four_matches_and_claims_top_reward(client, db_
 async def test_fut_draft_loses_first_match_and_stops_the_series(client, db_session, bot_token, monkeypatch):
     from app.services.game_config_service import get_config
 
+    monkeypatch.setattr(fut_draft_service, "_ROUND_GAME_TYPES", ["tactico"])
     monkeypatch.setattr(fut_draft_service, "_resolve_match", lambda user_strength, bot_strength: ("loss", 0, 2))
 
     headers, body = await _start(client, db_session, bot_token, 770008)
@@ -266,7 +268,51 @@ async def test_fut_draft_loses_first_match_and_stops_the_series(client, db_sessi
     assert claim.json()["reward_coins"] == config.fut_draft_reward_win_0
 
 
+async def test_fut_draft_penalty_round_uses_a_squad_card_and_is_decided_independently(client, db_session, bot_token, monkeypatch):
+    """The one round flavor with a genuinely different determinant: a single
+    squad card's own shooting ability vs the bot, not overall squad strength."""
+    monkeypatch.setattr(fut_draft_service, "_ROUND_GAME_TYPES", ["penalty"])
+    # player_miss_chance -> 0 for the user's kicks, the real (>0) config
+    # value for the bot's — _resolve_shot keys off that alone here, sidestepping
+    # the shot/dive zone randomness so the outcome is fully deterministic.
+    monkeypatch.setattr(fut_draft_service, "player_miss_chance", lambda rating: 0.0)
+    monkeypatch.setattr(fut_draft_service, "_resolve_shot", lambda miss_chance, shot_zone, dive_zone: "miss" if miss_chance > 0 else "goal")
+
+    headers, body = await _start(client, db_session, bot_token, 770010)
+    session_id = body["session_id"]
+    await _draft_full_squad(client, headers, session_id, body["formation_options"])
+
+    resp = await client.post(f"/api/v1/games/fut-draft/{session_id}/match/start", headers=headers)
+    assert resp.status_code == 200
+    result = resp.json()
+    assert result["game_type"] == "penalty"
+    assert result["result"] == "win"
+    assert result["user_score"] == 5
+    assert result["bot_score"] == 0
+    # 5 regulation rounds, one event per kick per side, no sudden death needed.
+    assert len(result["events"]) == 10
+    assert all(e["type"] == "goal" for e in result["events"] if e["team"] == "user")
+    assert all(e["type"] == "miss" for e in result["events"] if e["team"] == "bot")
+
+
+async def test_fut_draft_chemistry_hints_reflect_club_and_country_bonuses(client, db_session, bot_token):
+    headers, body = await _start(client, db_session, bot_token, 770011)
+    session_id = body["session_id"]
+    state = await _choose_formation(client, headers, session_id, body["formation_options"])
+    slot_code = state["slots"][0]["slot_code"]
+
+    resp = await client.post(f"/api/v1/games/fut-draft/{session_id}/slot", headers=headers, json={"slot_code": slot_code})
+    candidate = resp.json()["candidates"][0]
+
+    resp = await client.post(
+        f"/api/v1/games/fut-draft/{session_id}/pick", headers=headers, json={"player_id": candidate["id"]},
+    )
+    state = resp.json()
+    assert any(hint.startswith("На своей позиции") for hint in state["chemistry_hints"])
+
+
 async def test_fut_draft_leaderboard_orders_by_best_squad_strength(client, db_session, bot_token, monkeypatch):
+    monkeypatch.setattr(fut_draft_service, "_ROUND_GAME_TYPES", ["card_arena"])
     monkeypatch.setattr(fut_draft_service, "_resolve_match", lambda user_strength, bot_strength: ("loss", 0, 1))
 
     headers_a, body_a = await _start(client, db_session, bot_token, 770009)

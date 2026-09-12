@@ -1048,6 +1048,7 @@ export interface PairsClaimResult {
 
 export interface FutDraftConfig {
   entry_cost: number;
+  reward_by_wins: number[];
 }
 
 export interface FutDraftCandidate {
@@ -1055,6 +1056,7 @@ export interface FutDraftCandidate {
   display_name: string;
   rating: number;
   rarity: Rarity;
+  position: string;
   club: string;
   country: string;
   image_path: string | null;
@@ -1083,6 +1085,7 @@ export interface FutDraftState {
   candidates: FutDraftCandidate[] | null;
   team_strength: number;
   last_pick_strength_delta: number | null;
+  chemistry_hints: string[];
 }
 
 export interface FutDraftMatchEvent {
@@ -1092,9 +1095,12 @@ export interface FutDraftMatchEvent {
   text: string;
 }
 
+export type FutDraftGameType = "card_arena" | "tactico" | "penalty";
+
 export interface FutDraftMatchResult {
   session_id: number;
   round_number: number;
+  game_type: FutDraftGameType;
   user_score: number;
   bot_score: number;
   result: "win" | "draw" | "loss";

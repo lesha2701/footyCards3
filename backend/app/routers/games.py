@@ -220,7 +220,7 @@ async def fut_draft_leaderboard(db: AsyncSession = Depends(get_db), _user: User 
 
 @router.post("/fut-draft/start", response_model=FutDraftStartOut)
 async def fut_draft_start(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"fut_draft_start:{user.id}", max_calls=10, window_seconds=60)
+    check_rate_limit(f"fut_draft_start:{user.id}", max_calls=20, window_seconds=60)
     return await fut_draft_service.start_draft(db, user)
 
 

@@ -2,23 +2,25 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.enums import Rarity
+from app.models.enums import Position, Rarity
 
 
 class FutDraftConfigOut(BaseModel):
     entry_cost: int
+    reward_by_wins: list[int]  # index i = reward for reaching i wins (0-4)
 
 
 class FutDraftCandidateOut(BaseModel):
     """Unlike the position-match games, showing the card's own stats IS the
-    point here — the player has to weigh raw rating against club/country fit,
-    so nothing is hidden."""
+    point here — the player has to weigh raw rating against position fit and
+    club/country synergy, so nothing is hidden."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     display_name: str
     rating: int
     rarity: Rarity
+    position: Position
     club: str
     country: str
     image_path: Optional[str]
@@ -59,6 +61,7 @@ class FutDraftStateOut(BaseModel):
     candidates: Optional[list[FutDraftCandidateOut]] = None
     team_strength: int
     last_pick_strength_delta: Optional[int] = None
+    chemistry_hints: list[str] = []
 
 
 class FutDraftMatchEventOut(BaseModel):
@@ -71,6 +74,7 @@ class FutDraftMatchEventOut(BaseModel):
 class FutDraftMatchResultOut(BaseModel):
     session_id: int
     round_number: int
+    game_type: str  # "card_arena" | "tactico" | "penalty"
     user_score: int
     bot_score: int
     result: str  # "win" | "draw" | "loss"
