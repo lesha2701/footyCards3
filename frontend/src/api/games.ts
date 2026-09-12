@@ -6,13 +6,14 @@ import type {
   FutDraftClaim,
   FutDraftConfig,
   FutDraftLeaderboardEntry,
-  FutDraftMatchResult,
+  FutDraftRound,
   FutDraftStart,
   FutDraftState,
   GameLimits,
   HangmanClaimResult,
   HangmanGuessResult,
   HangmanStartResult,
+  MatchActionKind,
   MemoryClaimResult,
   MemoryLeaderboardEntry,
   MemoryStart,
@@ -188,8 +189,23 @@ export async function submitFutDraftPick(sessionId: number, playerId: number): P
   return data;
 }
 
-export async function startFutDraftMatch(sessionId: number): Promise<FutDraftMatchResult> {
-  const { data } = await api.post<FutDraftMatchResult>(`/games/fut-draft/${sessionId}/match/start`);
+export async function startFutDraftMatch(sessionId: number): Promise<FutDraftRound> {
+  const { data } = await api.post<FutDraftRound>(`/games/fut-draft/${sessionId}/match/start`);
+  return data;
+}
+
+export async function submitFutDraftCardArenaAction(sessionId: number, action: MatchActionKind): Promise<FutDraftRound> {
+  const { data } = await api.post<FutDraftRound>(`/games/fut-draft/${sessionId}/card-arena/action`, { action });
+  return data;
+}
+
+export async function submitFutDraftTacticoPhase(sessionId: number, choice: string): Promise<FutDraftRound> {
+  const { data } = await api.post<FutDraftRound>(`/games/fut-draft/${sessionId}/tactico/phase`, { choice });
+  return data;
+}
+
+export async function submitFutDraftPenaltyKick(sessionId: number, direction: string): Promise<FutDraftRound> {
+  const { data } = await api.post<FutDraftRound>(`/games/fut-draft/${sessionId}/penalty/kick`, { direction });
   return data;
 }
 

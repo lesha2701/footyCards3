@@ -39,15 +39,18 @@ from app.schemas.game import (
     SaboteurStartRequest,
 )
 from app.schemas.fut_draft import (
+    FutDraftCardArenaActionRequest,
     FutDraftClaimOut,
     FutDraftConfigOut,
     FutDraftFormationRequest,
     FutDraftLeaderboardEntry,
-    FutDraftMatchResultOut,
     FutDraftOpenSlotRequest,
+    FutDraftPenaltyKickRequest,
     FutDraftPickRequest,
+    FutDraftRoundOut,
     FutDraftStartOut,
     FutDraftStateOut,
+    FutDraftTacticoChoiceRequest,
 )
 from app.services import (
     free_kick_service,
@@ -248,9 +251,33 @@ async def fut_draft_pick(
     return await fut_draft_service.submit_pick(db, user, session_id, payload.player_id)
 
 
-@router.post("/fut-draft/{session_id}/match/start", response_model=FutDraftMatchResultOut)
+@router.post("/fut-draft/{session_id}/match/start", response_model=FutDraftRoundOut)
 async def fut_draft_start_match(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await fut_draft_service.start_match(db, user, session_id)
+
+
+@router.post("/fut-draft/{session_id}/card-arena/action", response_model=FutDraftRoundOut)
+async def fut_draft_card_arena_action(
+    session_id: int, payload: FutDraftCardArenaActionRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await fut_draft_service.submit_card_arena_action(db, user, session_id, payload.action)
+
+
+@router.post("/fut-draft/{session_id}/tactico/phase", response_model=FutDraftRoundOut)
+async def fut_draft_tactico_phase(
+    session_id: int, payload: FutDraftTacticoChoiceRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await fut_draft_service.submit_tactico_phase(db, user, session_id, payload.choice)
+
+
+@router.post("/fut-draft/{session_id}/penalty/kick", response_model=FutDraftRoundOut)
+async def fut_draft_penalty_kick(
+    session_id: int, payload: FutDraftPenaltyKickRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await fut_draft_service.submit_penalty_kick(db, user, session_id, payload.direction)
 
 
 @router.post("/fut-draft/{session_id}/claim", response_model=FutDraftClaimOut)

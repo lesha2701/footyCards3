@@ -172,6 +172,8 @@ class GameConfigOut(BaseModel):
     fut_draft_reward_win_2: int
     fut_draft_reward_win_3: int
     fut_draft_reward_win_4: int
+    fut_draft_club_bonus_per_extra: int
+    fut_draft_country_bonus_per_extra: int
     club_tactical_tackle_attempt_chance: float
     club_tactical_injury_chance: float
     memory_daily_reward_limit: int
@@ -306,6 +308,8 @@ class GameConfigUpdate(BaseModel):
     fut_draft_reward_win_2: Optional[int] = Field(default=None, ge=0)
     fut_draft_reward_win_3: Optional[int] = Field(default=None, ge=0)
     fut_draft_reward_win_4: Optional[int] = Field(default=None, ge=0)
+    fut_draft_club_bonus_per_extra: Optional[int] = Field(default=None, ge=0)
+    fut_draft_country_bonus_per_extra: Optional[int] = Field(default=None, ge=0)
     club_tactical_tackle_attempt_chance: Optional[float] = Field(default=None, ge=0, le=1)
     club_tactical_injury_chance: Optional[float] = Field(default=None, ge=0, le=1)
     memory_daily_reward_limit: Optional[int] = Field(default=None, ge=0)

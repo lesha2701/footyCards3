@@ -1088,23 +1088,39 @@ export interface FutDraftState {
   chemistry_hints: string[];
 }
 
-export interface FutDraftMatchEvent {
-  minute: number;
-  team: "user" | "bot";
-  type: "goal" | "miss";
-  text: string;
-}
-
 export type FutDraftGameType = "card_arena" | "tactico" | "penalty";
 
-export interface FutDraftMatchResult {
+// Mirrors the backend's FutDraftRoundOut: one round of one of the three
+// flavors, either mid-play (round_in_progress=true, driven one turn at a
+// time via submitFutDraftCardArenaAction/submitFutDraftTacticoPhase/
+// submitFutDraftPenaltyKick) or fully resolved (round_in_progress=false,
+// result/wins/is_finished populated). Card Arena events/pending_moment
+// reuse MatchEvent/MatchPendingMoment field-for-field — it's the exact same
+// match_service engine, just against a temporary draft squad.
+export interface FutDraftRound {
   session_id: number;
-  round_number: number;
   game_type: FutDraftGameType;
+  round_in_progress: boolean;
+
+  events: MatchEvent[];
+  pending_moment: MatchPendingMoment | null;
+  opponent_name: string | null;
+
+  phase: number | null;
+  total_phases: number | null;
+  tactic_choices: string[] | null;
+  last_phase_result: string | null;
+
+  kick_number: number | null;
+  picked_player: FutDraftCandidate | null;
+  zone_choices: string[] | null;
+  last_kick_result: string | null;
+
   user_score: number;
   bot_score: number;
-  result: "win" | "draw" | "loss";
-  events: FutDraftMatchEvent[];
+
+  round_number: number | null;
+  result: "win" | "draw" | "loss" | null;
   wins: number;
   is_finished: boolean;
   status: string;
@@ -1296,6 +1312,10 @@ export interface ClubLineup {
   training_uses_remaining: number;
   training_boost_active: boolean;
   in_active_tournament: boolean;
+  attack: number;
+  midfield: number;
+  defence: number;
+  goalkeeping: number;
 }
 
 export interface ClubPackRarityProbability {

@@ -73,6 +73,12 @@ class GameConfig(TimestampMixin, Base):
     fut_draft_reward_win_2: Mapped[int] = mapped_column(Integer, default=350, nullable=False)
     fut_draft_reward_win_3: Mapped[int] = mapped_column(Integer, default=700, nullable=False)
     fut_draft_reward_win_4: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
+    # Extra team-strength bonus on top of calculate_base_strength's own
+    # (much smaller) built-in chemistry bonus — per additional pick sharing
+    # the draft's most common club/country. FUT Draft's own economy, not a
+    # change to the shared personal-lineup formula.
+    fut_draft_club_bonus_per_extra: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
+    fut_draft_country_bonus_per_extra: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
 
     club_tactical_phases_per_match_min: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
     club_tactical_phases_per_match_max: Mapped[int] = mapped_column(Integer, default=70, nullable=False)

@@ -1,9 +1,11 @@
 import random
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.models.card_collection import CardCollection
@@ -17,14 +19,25 @@ from app.schemas.fut_draft import (
     FutDraftConfigOut,
     FutDraftLeaderboardEntry,
     FutDraftMatchEventOut,
-    FutDraftMatchResultOut,
+    FutDraftPendingMomentOut,
+    FutDraftRoundOut,
     FutDraftSlotOut,
     FutDraftStartOut,
     FutDraftStateOut,
 )
 from app.services.club_formation_service import CLUB_FORMATIONS, get_formation_slots
 from app.services.game_config_service import get_config
-from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot, calculate_base_strength
+from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot, calculate_base_strength, split_strength
+from app.services.match_service import (
+    BOT_NAMES,
+    _advance,
+    _category_avg,
+    _generate_moment_queue,
+    _is_interactive,
+    _resolve_action,
+    _synthesize_bot_ratings,
+    _with_jitter,
+)
 from app.services.penalty_service import PENALTY_ZONES, _resolve_shot, player_miss_chance
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
@@ -48,20 +61,13 @@ TIER_COMPOSITIONS: dict[str, list[Rarity]] = {
 
 # Rounds 1-2 are an easy warm-up, rounds 3-4 step up to a standard bot —
 # deliberately no "hard" tier: a full run should be winnable often enough to
-# actually see the later rounds' animations, not a fast, frequent wipe-out.
+# actually see the later rounds, not a fast, frequent wipe-out.
 _ROUND_DIFFICULTY = [MatchDifficulty.easy, MatchDifficulty.easy, MatchDifficulty.medium, MatchDifficulty.medium]
-_ROUND_GAME_TYPES = ["card_arena", "tactico", "penalty"]
 
-_GOAL_TEXT = {
-    "card_arena": "Гол! {scorer}",
-    "tactico": "Гол после розыгрыша схемы! {scorer}",
-}
-_MISS_TEXTS = {
-    "card_arena": ["Момент не реализован", "Вратарь спасает", "Удар мимо ворот"],
-    "tactico": ["Тактическая схема не сработала", "Соперник разгадал манёвр", "Момент не реализован"],
-}
-_BOT_MISS_TEXTS = ["Гол соперника", "Соперник реализует момент"]
-_BOT_SAVE_TEXTS = ["Ты выручаешь оборону!", "Соперник промахивается", "Хорошая игра в защите"]
+TACTICO_PHASES = 4
+TACTIC_CHOICES = ["Играть через центр", "Играть флангами", "Прессинг с первых минут"]
+
+PENALTY_REGULATION_KICKS = 5
 
 
 async def get_public_config(db: AsyncSession) -> FutDraftConfigOut:
@@ -217,6 +223,7 @@ async def start_draft(db: AsyncSession, user: User) -> FutDraftStartOut:
             "team_strength": 0,
             "match_round": 0,
             "match_results": [],
+            "active_round": None,
         },
     )
     db.add(session)
@@ -238,7 +245,20 @@ async def _get_session(db: AsyncSession, user_id: int, session_id: int) -> GameS
     return session
 
 
-async def _compute_team_strength(db: AsyncSession, picks: dict, slots: list[FormationSlot]) -> int:
+def _fut_draft_chemistry_bonus(config, club_counts: dict, country_counts: dict) -> int:
+    bonus = 0
+    if club_counts:
+        top_count = max(club_counts.values())
+        if top_count >= 2:
+            bonus += (top_count - 1) * config.fut_draft_club_bonus_per_extra
+    if country_counts:
+        top_count = max(country_counts.values())
+        if top_count >= 2:
+            bonus += (top_count - 1) * config.fut_draft_country_bonus_per_extra
+    return bonus
+
+
+async def _compute_team_strength(db: AsyncSession, picks: dict, slots: list[FormationSlot], config, club_counts: dict, country_counts: dict) -> int:
     if not picks:
         return 0
     slots_by_code = {s.code: s for s in slots}
@@ -249,14 +269,14 @@ async def _compute_team_strength(db: AsyncSession, picks: dict, slots: list[Form
         (SimpleNamespace(player=players_by_id[player_id]), slots_by_code[slot_code])
         for slot_code, player_id in picks.items()
     ]
-    return calculate_base_strength(cards_with_slots)
+    base = calculate_base_strength(cards_with_slots)
+    return base + _fut_draft_chemistry_bonus(config, club_counts, country_counts)
 
 
-def _chemistry_hints(state: dict, players_by_id: dict[int, Player], slots_by_code: dict[str, FormationSlot]) -> list[str]:
-    """Mirrors calculate_base_strength's own chemistry formula exactly
-    (club bonus = (count-1)*2, country bonus = (count-1)*1) so the numbers
-    shown here are the real contribution, not an approximation — the whole
-    point is proving to the player that a "smart" pick actually helped."""
+def _chemistry_hints(config, state: dict, players_by_id: dict[int, Player], slots_by_code: dict[str, FormationSlot]) -> list[str]:
+    """Mirrors _fut_draft_chemistry_bonus exactly so the numbers shown here
+    are the real contribution, not an approximation — the whole point is
+    proving to the player that a "smart" pick actually helped."""
     hints: list[str] = []
     picks: dict = state["picks"]
     club_counts: dict = state["club_counts"]
@@ -265,11 +285,11 @@ def _chemistry_hints(state: dict, players_by_id: dict[int, Player], slots_by_cod
     if club_counts:
         top_club, top_count = max(club_counts.items(), key=lambda kv: kv[1])
         if top_count >= 2:
-            hints.append(f"Одноклубники «{top_club}» ×{top_count}: +{(top_count - 1) * 2} к силе")
+            hints.append(f"Одноклубники «{top_club}» ×{top_count}: +{(top_count - 1) * config.fut_draft_club_bonus_per_extra} к силе")
     if country_counts:
         top_country, top_count = max(country_counts.items(), key=lambda kv: kv[1])
         if top_count >= 2:
-            hints.append(f"Один регион «{top_country}» ×{top_count}: +{(top_count - 1) * 1} к силе")
+            hints.append(f"Один регион «{top_country}» ×{top_count}: +{(top_count - 1) * config.fut_draft_country_bonus_per_extra} к силе")
     if picks:
         exact_fit = sum(
             1 for slot_code, player_id in picks.items()
@@ -281,7 +301,7 @@ def _chemistry_hints(state: dict, players_by_id: dict[int, Player], slots_by_cod
 
 async def _state_out(
     db: AsyncSession, session: GameSession, slots: list[FormationSlot], candidates: list[Player] | None,
-    last_pick_strength_delta: int | None = None,
+    config, last_pick_strength_delta: int | None = None,
 ) -> FutDraftStateOut:
     state = session.server_state
     picks: dict = state["picks"]
@@ -305,11 +325,12 @@ async def _state_out(
         pending_slot=state["pending_slot"],
         candidates=[FutDraftCandidateOut.model_validate(c) for c in candidates] if candidates is not None else None,
         team_strength=state["team_strength"], last_pick_strength_delta=last_pick_strength_delta,
-        chemistry_hints=_chemistry_hints(state, players_by_id, slots_by_code),
+        chemistry_hints=_chemistry_hints(config, state, players_by_id, slots_by_code),
     )
 
 
 async def choose_formation(db: AsyncSession, user: User, session_id: int, formation: str) -> FutDraftStateOut:
+    config = await get_config(db)
     session = await _get_session(db, user.id, session_id)
     if session.status != GameSessionStatus.in_progress:
         raise ConflictError("This draft has already finished")
@@ -322,10 +343,11 @@ async def choose_formation(db: AsyncSession, user: User, session_id: int, format
     slots = get_formation_slots(formation)
     state.update({"phase": "drafting", "formation": formation})
     session.server_state = state
+    flag_modified(session, "server_state")
     db.add(session)
     await db.commit()
 
-    return await _state_out(db, session, slots, None)
+    return await _state_out(db, session, slots, None, config)
 
 
 async def open_slot(db: AsyncSession, user: User, session_id: int, slot_code: str) -> FutDraftStateOut:
@@ -360,13 +382,15 @@ async def open_slot(db: AsyncSession, user: User, session_id: int, slot_code: st
     state["pending_slot"] = slot_code
     state["pending_candidates"] = [p.id for p in candidates]
     session.server_state = state
+    flag_modified(session, "server_state")
     db.add(session)
     await db.commit()
 
-    return await _state_out(db, session, slots, candidates)
+    return await _state_out(db, session, slots, candidates, config)
 
 
 async def submit_pick(db: AsyncSession, user: User, session_id: int, player_id: int) -> FutDraftStateOut:
+    config = await get_config(db)
     session = await _get_session(db, user.id, session_id)
     if session.status != GameSessionStatus.in_progress:
         raise ConflictError("This draft has already finished")
@@ -402,135 +426,127 @@ async def submit_pick(db: AsyncSession, user: User, session_id: int, player_id: 
     state["pending_candidates"] = []
 
     old_strength = state["team_strength"]
-    new_strength = await _compute_team_strength(db, picks, slots)
+    new_strength = await _compute_team_strength(db, picks, slots, config, club_counts, country_counts)
     state["team_strength"] = new_strength
 
     if len(picks) == len(slots):
         state["phase"] = "ready"
 
     session.server_state = state
+    flag_modified(session, "server_state")
     db.add(session)
     await db.commit()
 
-    return await _state_out(db, session, slots, None, last_pick_strength_delta=new_strength - old_strength)
+    return await _state_out(db, session, slots, None, config, last_pick_strength_delta=new_strength - old_strength)
 
 
-def _resolve_match(user_strength: int, bot_strength: int) -> tuple[str, int, int]:
-    """A single dice roll (win probability from relative strength, plus a
-    flat draw chance) instead of the interactive moment-by-moment Card Arena
-    engine — deliberately simpler for a fast, repeatable arcade-style series.
-    The scoreline is generated after the fact purely for display. Used for
-    the card_arena/tactico round flavors — penalty rounds are decided by
-    _resolve_penalty_shootout instead, on the drafted card's own rating."""
-    win_prob = user_strength / (user_strength + bot_strength)
-    draw_chance = 0.12
-    roll = random.random()
-    if roll < draw_chance:
-        result = "draw"
-    elif roll < draw_chance + (1 - draw_chance) * win_prob:
-        result = "win"
-    else:
-        result = "loss"
-
-    if result == "win":
-        user_score = random.randint(1, 3)
-        bot_score = random.randint(0, user_score - 1)
-    elif result == "loss":
-        bot_score = random.randint(1, 3)
-        user_score = random.randint(0, bot_score - 1)
-    else:
-        user_score = bot_score = random.randint(0, 2)
-    return result, user_score, bot_score
+def _fut_draft_lineup_adapter(picks: dict, slots: list[FormationSlot], players_by_id: dict[int, Player]) -> SimpleNamespace:
+    """Presents the temporary draft squad in the same shape
+    app.services.match_service's moment-generation/resolution functions
+    expect from a real LineupOut (`.slots[i].category`, `.slots[i].card.id`,
+    `.slots[i].card.player.{rating,position,display_name,id}`) — duck-typed,
+    same trick _compute_team_strength already uses to feed calculate_base_strength
+    a temporary squad. Lets Card Arena rounds reuse the exact real engine
+    instead of a separate one, per the spec that FUT Draft's Card Arena plays
+    exactly like the real thing."""
+    slots_by_code = {s.code: s for s in slots}
+    adapter_slots = [
+        SimpleNamespace(category=slots_by_code[slot_code].category, card=SimpleNamespace(id=player_id, player=players_by_id[player_id]))
+        for slot_code, player_id in picks.items()
+    ]
+    return SimpleNamespace(slots=adapter_slots)
 
 
-async def _generate_match_events(db: AsyncSession, picks: dict, user_score: int, bot_score: int, game_type: str) -> list[FutDraftMatchEventOut]:
-    """Not a real chance-by-chance simulation (see _resolve_match) — the
-    final score is already decided; this reconstructs a plausible-looking
-    timeline of goals (attributed to real squad picks for the user's side)
-    plus a generous helping of near-misses, so the match takes a real
-    while to play out on screen instead of flashing 3-4 beats and a result."""
-    scorer_pool: list[str] = []
-    if user_score > 0 and picks:
-        result = await db.execute(select(Player).where(Player.id.in_(list(picks.values()))))
-        scorer_pool = [p.display_name for p in result.scalars().all()]
-
-    total_beats = random.randint(10, 16)
-    extra_misses = max(0, total_beats - user_score - bot_score)
-    minutes = sorted(random.sample(range(1, 91), k=min(90, user_score + bot_score + extra_misses)))
-    kinds = (["user_goal"] * user_score) + (["bot_goal"] * bot_score) + (["miss"] * extra_misses)
-    random.shuffle(kinds)
-
-    goal_template = _GOAL_TEXT[game_type]
-    miss_texts = _MISS_TEXTS[game_type]
-    events: list[FutDraftMatchEventOut] = []
-    for minute, kind in zip(minutes, kinds):
-        if kind == "user_goal":
-            scorer = random.choice(scorer_pool) if scorer_pool else "Твоя команда"
-            events.append(FutDraftMatchEventOut(minute=minute, team="user", type="goal", text=goal_template.format(scorer=scorer)))
-        elif kind == "bot_goal":
-            events.append(FutDraftMatchEventOut(minute=minute, team="bot", type="goal", text=random.choice(_BOT_MISS_TEXTS)))
-        else:
-            team = random.choice(["user", "bot"])
-            text = random.choice(miss_texts) if team == "user" else random.choice(_BOT_SAVE_TEXTS)
-            events.append(FutDraftMatchEventOut(minute=minute, team=team, type="miss", text=text))
-    return events
+def _result_from_scores(user_score: int, opponent_score: int) -> str:
+    if user_score > opponent_score:
+        return "win"
+    if user_score < opponent_score:
+        return "loss"
+    return "draw"
 
 
-async def _resolve_penalty_round(db: AsyncSession, config, picks: dict) -> tuple[str, int, int, list[FutDraftMatchEventOut]]:
-    """The one round flavor with a genuinely different determinant: not
-    squad strength, but a single randomly-picked squad card's own shooting
-    ability (player_miss_chance, same formula as the personal Penalty game)
-    against the bot's configured goalkeeping — 5 kicks each, sudden death if
-    still level, exactly like a real shootout."""
-    player_name = "Игрок"
-    miss_chance = 0.15
-    if picks:
-        player = await db.get(Player, random.choice(list(picks.values())))
-        if player:
-            player_name = player.display_name
-            miss_chance = player_miss_chance(player.rating)
-    bot_miss_chance = float(config.penalty_bot_miss_chance)
+def _card_arena_pending_moment(active: dict) -> Optional[FutDraftPendingMomentOut]:
+    """Mirrors app.models.match.Match.pending_moment exactly, read from
+    FUT Draft's own active_round dict instead of a persisted Match row."""
+    moments = active["moments"]
+    i = active["next_index"]
+    if i >= len(moments):
+        return None
+    moment = moments[i]
+    if moment["kind"] != "shot" or not _is_interactive(moment):
+        return None
+    situation_kind = moment.get("situation_kind", "")
+    kind = "breakaway" if situation_kind.startswith("breakaway") else situation_kind
+    return FutDraftPendingMomentOut(
+        seq=i, team=moment["team"], kind=kind, shot_type=moment["shot_type"],
+        description=moment.get("description", ""), actions=moment.get("actions", []), actors=moment.get("actors", {}),
+    )
 
-    events: list[FutDraftMatchEventOut] = []
-    user_score = 0
-    bot_score = 0
 
-    def _kick(kick_no: int, is_user: bool, chance: float) -> bool:
-        shot_zone = random.choice(PENALTY_ZONES)
-        dive_zone = random.choice(PENALTY_ZONES)
-        outcome = _resolve_shot(chance, shot_zone, dive_zone)
-        scored = outcome == "goal"
-        if is_user:
-            text = f"Гол! {player_name} не оставляет шансов" if scored else (
-                f"{player_name} не забивает" if outcome == "miss" else f"Вратарь соперника парирует удар {player_name}"
-            )
-            events.append(FutDraftMatchEventOut(minute=kick_no, team="user", type="goal" if scored else "miss", text=text))
-        else:
-            text = "Соперник забивает" if scored else random.choice(_BOT_SAVE_TEXTS)
-            events.append(FutDraftMatchEventOut(minute=kick_no, team="bot", type="goal" if scored else "miss", text=text))
-        return scored
+def _card_arena_round_out(session: GameSession, active: dict, wins: int) -> FutDraftRoundOut:
+    return FutDraftRoundOut(
+        session_id=session.id, game_type="card_arena", round_in_progress=True,
+        events=[FutDraftMatchEventOut(**e) for e in active["events"]],
+        pending_moment=_card_arena_pending_moment(active),
+        opponent_name=active["opponent_name"],
+        user_score=active["user_score"], bot_score=active["opponent_score"],
+        wins=wins, status=session.status.value,
+    )
 
-    round_no = 0
-    while round_no < 5:
-        round_no += 1
-        if _kick(round_no, True, miss_chance):
-            user_score += 1
-        if _kick(round_no, False, bot_miss_chance):
-            bot_score += 1
 
-    while user_score == bot_score and round_no < 15:
-        round_no += 1
-        scored_user = _kick(round_no, True, miss_chance)
-        if scored_user:
-            user_score += 1
-        scored_bot = _kick(round_no, False, bot_miss_chance)
-        if scored_bot:
-            bot_score += 1
-        if scored_user != scored_bot:
-            break
+async def _start_card_arena_round(db: AsyncSession, session: GameSession, state: dict, config, team_strength: int, bot_strength: int) -> FutDraftRoundOut:
+    result = await db.execute(select(Player).where(Player.id.in_(list(state["picks"].values()))))
+    players_by_id = {p.id: p for p in result.scalars().all()}
+    slots = get_formation_slots(state["formation"])
+    lineup = _fut_draft_lineup_adapter(state["picks"], slots, players_by_id)
 
-    result = "win" if user_score > bot_score else "loss" if user_score < bot_score else "draw"
-    return result, user_score, bot_score, events
+    user_strength = _with_jitter(team_strength)
+    opponent_strength = _with_jitter(bot_strength)
+    # FUT Draft squads have no tactic selector — "balanced" keeps the
+    # attack/defense split neutral, same default a real lineup starts on.
+    user_attack, _user_defense = split_strength(user_strength, "balanced")
+    opponent_attack, _opponent_defense = split_strength(opponent_strength, "balanced")
+
+    user_fwd, user_def, user_gk = _category_avg(lineup, "FWD"), _category_avg(lineup, "DEF"), _category_avg(lineup, "GK")
+    opponent_fwd, opponent_def, opponent_gk = _synthesize_bot_ratings(user_fwd, user_def, user_gk, opponent_strength, user_strength)
+    opponent_name = random.choice(BOT_NAMES)
+
+    active = {
+        "game_type": "card_arena",
+        "moments": _generate_moment_queue(user_attack, opponent_attack, config, lineup, opponent_name),
+        "next_index": 0,
+        "user_score": 0,
+        "opponent_score": 0,
+        "ratings": {
+            "user_fwd": user_fwd, "user_def": user_def, "user_gk": user_gk,
+            "opponent_fwd": opponent_fwd, "opponent_def": opponent_def, "opponent_gk": opponent_gk,
+        },
+        "cards": {},
+        "red_card_applied": False,
+        "opponent_name": opponent_name,
+        "events": [],
+    }
+    active["events"] = _advance(active, config, opponent_name)
+
+    if active["next_index"] >= len(active["moments"]):
+        # Rare edge case: the randomly-generated queue drew zero shot
+        # chances at all — finalize immediately rather than leaving the
+        # round stuck in_progress forever with nothing left to advance it.
+        result_str = _result_from_scores(active["user_score"], active["opponent_score"])
+        round_out = _finalize_round(session, state, config, "card_arena", result_str, active["user_score"], active["opponent_score"])
+        round_out.events = [FutDraftMatchEventOut(**e) for e in active["events"]]
+        round_out.opponent_name = opponent_name
+        db.add(session)
+        await db.commit()
+        return round_out
+
+    state["active_round"] = active
+    session.server_state = state
+    flag_modified(session, "server_state")
+    db.add(session)
+    await db.commit()
+    wins = sum(1 for r in state["match_results"] if r == "win")
+    return _card_arena_round_out(session, active, wins)
 
 
 def _reward_for_wins(wins: int, config) -> int:
@@ -540,7 +556,35 @@ def _reward_for_wins(wins: int, config) -> int:
     }[wins]
 
 
-async def start_match(db: AsyncSession, user: User, session_id: int) -> FutDraftMatchResultOut:
+def _finalize_round(session: GameSession, state: dict, config, game_type: str, result: str, user_score: int, bot_score: int) -> FutDraftRoundOut:
+    """Shared tail for all three flavors once a round's win/draw/loss is
+    known: records it, advances (or ends) the 4-match series, and computes
+    the reward the same way regardless of which game decided this round."""
+    match_results = list(state["match_results"]) + [result]
+    state["match_results"] = match_results
+    state["match_round"] = state["match_round"] + 1
+    state["active_round"] = None
+
+    wins = sum(1 for r in match_results if r == "win")
+    is_finished = result != "win" or state["match_round"] >= MAX_MATCHES
+
+    if is_finished:
+        session.status = GameSessionStatus.won if wins == MAX_MATCHES else GameSessionStatus.lost
+        session.finished_at = datetime.now(timezone.utc)
+        session.reward_coins = _reward_for_wins(wins, config)
+
+    session.server_state = state
+    flag_modified(session, "server_state")
+
+    return FutDraftRoundOut(
+        session_id=session.id, game_type=game_type, round_in_progress=False,
+        events=[], user_score=user_score, bot_score=bot_score,
+        round_number=state["match_round"], result=result, wins=wins,
+        is_finished=is_finished, status=session.status.value,
+    )
+
+
+async def start_match(db: AsyncSession, user: User, session_id: int) -> FutDraftRoundOut:
     config = await get_config(db)
     session = await _get_session(db, user.id, session_id)
     if session.status != GameSessionStatus.in_progress:
@@ -552,44 +596,208 @@ async def start_match(db: AsyncSession, user: User, session_id: int) -> FutDraft
     if match_round >= MAX_MATCHES:
         raise ConflictError("All matches have already been played")
 
-    game_type = random.choice(_ROUND_GAME_TYPES)
+    difficulty = _ROUND_DIFFICULTY[match_round]
+    multiplier = float({
+        MatchDifficulty.easy: config.difficulty_easy_multiplier,
+        MatchDifficulty.medium: config.difficulty_medium_multiplier,
+        MatchDifficulty.hard: config.difficulty_hard_multiplier,
+    }[difficulty])
+    team_strength = state["team_strength"]
+    bot_strength = max(1, round(team_strength * multiplier))
 
-    if game_type == "penalty":
-        result, user_score, bot_score, events = await _resolve_penalty_round(db, config, state["picks"])
-    else:
-        difficulty = _ROUND_DIFFICULTY[match_round]
-        multiplier = {
-            MatchDifficulty.easy: config.difficulty_easy_multiplier,
-            MatchDifficulty.medium: config.difficulty_medium_multiplier,
-            MatchDifficulty.hard: config.difficulty_hard_multiplier,
-        }[difficulty]
-        team_strength = state["team_strength"]
-        user_strength = max(1, round(team_strength * (1 + random.uniform(-0.05, 0.05))))
-        bot_strength = max(1, round(team_strength * float(multiplier) * (1 + random.uniform(-0.05, 0.05))))
-        result, user_score, bot_score = _resolve_match(user_strength, bot_strength)
-        events = await _generate_match_events(db, state["picks"], user_score, bot_score, game_type)
+    # Every round is Card Arena for now, played out with the exact same
+    # engine as the real Card Arena (app.services.match_service) — see
+    # _start_card_arena_round. Тактико/Пенальти keep their own turn-based
+    # implementations below, unreachable from this selection for now but
+    # left in place in case round-type variety comes back later.
+    game_type = "card_arena"
 
-    match_results = list(state["match_results"]) + [result]
-    state["match_results"] = match_results
-    state["match_round"] = match_round + 1
+    if game_type == "card_arena":
+        return await _start_card_arena_round(db, session, state, config, team_strength, bot_strength)
 
-    wins = sum(1 for r in match_results if r == "win")
-    is_finished = result != "win" or state["match_round"] >= MAX_MATCHES
+    if game_type == "tactico":
+        state["active_round"] = {
+            "game_type": "tactico", "bot_strength": bot_strength, "phase": 0,
+            "user_score": 0, "bot_score": 0,
+        }
+        session.server_state = state
+        flag_modified(session, "server_state")
+        db.add(session)
+        await db.commit()
+        wins = sum(1 for r in state["match_results"] if r == "win")
+        return FutDraftRoundOut(
+            session_id=session.id, game_type="tactico", round_in_progress=True,
+            phase=1, total_phases=TACTICO_PHASES, tactic_choices=TACTIC_CHOICES,
+            user_score=0, bot_score=0, wins=wins, status=session.status.value,
+        )
 
-    if is_finished:
-        session.status = GameSessionStatus.won if wins == MAX_MATCHES else GameSessionStatus.lost
-        session.finished_at = datetime.now(timezone.utc)
-        session.reward_coins = _reward_for_wins(wins, config)
-
+    # penalty
+    player_id = random.choice(list(state["picks"].values())) if state["picks"] else None
+    player = await db.get(Player, player_id) if player_id else None
+    miss_chance = player_miss_chance(player.rating) if player else 0.15
+    state["active_round"] = {
+        "game_type": "penalty", "miss_chance": miss_chance, "bot_miss_chance": float(config.penalty_bot_miss_chance),
+        "kick_number": 0, "user_score": 0, "bot_score": 0,
+    }
     session.server_state = state
+    flag_modified(session, "server_state")
     db.add(session)
     await db.commit()
-
-    return FutDraftMatchResultOut(
-        session_id=session.id, round_number=state["match_round"], game_type=game_type,
-        user_score=user_score, bot_score=bot_score,
-        result=result, events=events, wins=wins, is_finished=is_finished, status=session.status.value,
+    wins = sum(1 for r in state["match_results"] if r == "win")
+    return FutDraftRoundOut(
+        session_id=session.id, game_type="penalty", round_in_progress=True,
+        kick_number=1, picked_player=FutDraftCandidateOut.model_validate(player) if player else None,
+        zone_choices=list(PENALTY_ZONES), user_score=0, bot_score=0, wins=wins, status=session.status.value,
     )
+
+
+async def submit_tactico_phase(db: AsyncSession, user: User, session_id: int, choice: str) -> FutDraftRoundOut:
+    config = await get_config(db)
+    session = await _get_session(db, user.id, session_id)
+    if session.status != GameSessionStatus.in_progress:
+        raise ConflictError("This draft has already finished")
+    state = dict(session.server_state)
+    active = state.get("active_round")
+    if not active or active["game_type"] != "tactico":
+        raise ConflictError("No Тактико round is currently in progress")
+    if choice not in TACTIC_CHOICES:
+        raise ConflictError("Unknown tactical choice")
+
+    team_strength = state["team_strength"]
+    bot_strength = active["bot_strength"]
+    win_prob = team_strength / (team_strength + bot_strength)
+
+    if random.random() < win_prob:
+        active["user_score"] += 1
+        last_phase_result = f"«{choice}» сработало — гол!"
+    elif random.random() < (bot_strength / (team_strength + bot_strength)) * 0.6:
+        active["bot_score"] += 1
+        last_phase_result = "Соперник наказал за потерю — гол соперника"
+    else:
+        last_phase_result = f"«{choice}» не принесло гола, но оборона выстояла"
+
+    active["phase"] += 1
+    round_in_progress = active["phase"] < TACTICO_PHASES
+
+    if not round_in_progress:
+        result = "win" if active["user_score"] > active["bot_score"] else "loss" if active["user_score"] < active["bot_score"] else "draw"
+        round_out = _finalize_round(session, state, config, "tactico", result, active["user_score"], active["bot_score"])
+        round_out.last_phase_result = last_phase_result
+        db.add(session)
+        await db.commit()
+        return round_out
+
+    state["active_round"] = active
+    session.server_state = state
+    flag_modified(session, "server_state")
+    db.add(session)
+    await db.commit()
+    wins = sum(1 for r in state["match_results"] if r == "win")
+    return FutDraftRoundOut(
+        session_id=session.id, game_type="tactico", round_in_progress=True,
+        phase=active["phase"] + 1, total_phases=TACTICO_PHASES, tactic_choices=TACTIC_CHOICES,
+        last_phase_result=last_phase_result, user_score=active["user_score"], bot_score=active["bot_score"],
+        wins=wins, status=session.status.value,
+    )
+
+
+async def submit_penalty_kick(db: AsyncSession, user: User, session_id: int, direction: str) -> FutDraftRoundOut:
+    config = await get_config(db)
+    session = await _get_session(db, user.id, session_id)
+    if session.status != GameSessionStatus.in_progress:
+        raise ConflictError("This draft has already finished")
+    state = dict(session.server_state)
+    active = state.get("active_round")
+    if not active or active["game_type"] != "penalty":
+        raise ConflictError("No Пенальти round is currently in progress")
+    if direction not in PENALTY_ZONES:
+        raise ConflictError("Invalid direction")
+
+    bot_dive = random.choice(PENALTY_ZONES)
+    user_outcome = _resolve_shot(active["miss_chance"], direction, bot_dive)
+    scored_user = user_outcome == "goal"
+    if scored_user:
+        active["user_score"] += 1
+        last_kick_result = "Гол! Точный удар"
+    else:
+        last_kick_result = "Не забил" if user_outcome == "miss" else "Вратарь соперника парирует удар"
+
+    bot_shot_zone = random.choice(PENALTY_ZONES)
+    user_dive = random.choice(PENALTY_ZONES)
+    bot_outcome = _resolve_shot(active["bot_miss_chance"], bot_shot_zone, user_dive)
+    scored_bot = bot_outcome == "goal"
+    if scored_bot:
+        active["bot_score"] += 1
+
+    active["kick_number"] += 1
+    regulation_done = active["kick_number"] >= PENALTY_REGULATION_KICKS
+    tied = active["user_score"] == active["bot_score"]
+    round_in_progress = not regulation_done or tied
+
+    if not round_in_progress:
+        result = "win" if active["user_score"] > active["bot_score"] else "loss"
+        round_out = _finalize_round(session, state, config, "penalty", result, active["user_score"], active["bot_score"])
+        round_out.last_kick_result = last_kick_result
+        db.add(session)
+        await db.commit()
+        return round_out
+
+    state["active_round"] = active
+    session.server_state = state
+    flag_modified(session, "server_state")
+    db.add(session)
+    await db.commit()
+    wins = sum(1 for r in state["match_results"] if r == "win")
+    return FutDraftRoundOut(
+        session_id=session.id, game_type="penalty", round_in_progress=True,
+        kick_number=active["kick_number"] + 1, zone_choices=list(PENALTY_ZONES),
+        last_kick_result=last_kick_result, user_score=active["user_score"], bot_score=active["bot_score"],
+        wins=wins, status=session.status.value,
+    )
+
+
+async def submit_card_arena_action(db: AsyncSession, user: User, session_id: int, action: str) -> FutDraftRoundOut:
+    config = await get_config(db)
+    session = await _get_session(db, user.id, session_id)
+    if session.status != GameSessionStatus.in_progress:
+        raise ConflictError("This draft has already finished")
+    state = dict(session.server_state)
+    active = state.get("active_round")
+    if not active or active["game_type"] != "card_arena":
+        raise ConflictError("No Card Arena round is currently in progress")
+
+    moments = active["moments"]
+    i = active["next_index"]
+    if i >= len(moments) or moments[i]["kind"] != "shot" or not _is_interactive(moments[i]):
+        raise ConflictError("No pending action for this round")
+    pending = moments[i]
+    if action not in pending["actions"]:
+        raise ConflictError(f"Action '{action}' is not available for this moment")
+
+    event, scored_by = _resolve_action(pending, action, active, config, active["opponent_name"])
+    if scored_by:
+        active[f"{scored_by}_score"] += 1
+    active["next_index"] = i + 1
+
+    new_events = [event] + _advance(active, config, active["opponent_name"])
+    active["events"] = active["events"] + new_events
+
+    if active["next_index"] >= len(moments):
+        result = _result_from_scores(active["user_score"], active["opponent_score"])
+        round_out = _finalize_round(session, state, config, "card_arena", result, active["user_score"], active["opponent_score"])
+        round_out.events = [FutDraftMatchEventOut(**e) for e in active["events"]]
+        round_out.opponent_name = active["opponent_name"]
+        db.add(session)
+        await db.commit()
+        return round_out
+
+    state["active_round"] = active
+    session.server_state = state
+    flag_modified(session, "server_state")
+    db.add(session)
+    await db.commit()
+    wins = sum(1 for r in state["match_results"] if r == "win")
+    return _card_arena_round_out(session, active, wins)
 
 
 async def claim_reward(db: AsyncSession, user: User, session_id: int) -> FutDraftClaimOut:

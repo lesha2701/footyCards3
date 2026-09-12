@@ -10,18 +10,25 @@ import {
   openFutDraftSlot,
   startFutDraft,
   startFutDraftMatch,
+  submitFutDraftCardArenaAction,
+  submitFutDraftPenaltyKick,
   submitFutDraftPick,
+  submitFutDraftTacticoPhase,
 } from "@/api/games";
 import {
   IconBall,
+  IconBoot,
   IconClose,
   IconCoin,
   IconFlagCheckered,
+  IconGloves,
   IconGoal,
   IconHelp,
   IconPlus,
   IconShirt,
+  IconSwap,
   IconTrophy,
+  IconUsers,
   type IconProps,
 } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
@@ -29,9 +36,17 @@ import { formatGameError } from "@/lib/errors";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_TEXT } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { FutDraftCandidate, FutDraftClaim, FutDraftGameType, FutDraftMatchResult, FutDraftSlot } from "@/types";
+import type {
+  FutDraftCandidate,
+  FutDraftClaim,
+  FutDraftGameType,
+  FutDraftRound,
+  FutDraftSlot,
+  MatchActionKind,
+  MatchPendingMoment,
+} from "@/types";
 
-type Phase = "idle" | "choose_formation" | "drafting" | "ready" | "roulette" | "match" | "finished";
+type Phase = "idle" | "choose_formation" | "drafting" | "ready" | "match" | "finished";
 
 const EVENT_STEP_MS = 900;
 const RESULT_LABELS: Record<string, string> = { win: "Победа", draw: "Ничья", loss: "Поражение" };
@@ -44,7 +59,15 @@ const GAME_TYPE_META: Record<FutDraftGameType, { label: string; Icon: (p: IconPr
   tactico: { label: "Тактико", Icon: IconFlagCheckered },
   penalty: { label: "Пенальти", Icon: IconGoal },
 };
-const ROULETTE_ORDER: FutDraftGameType[] = ["card_arena", "tactico", "penalty"];
+
+const ACTION_LABELS: Record<MatchActionKind, { label: string; Icon: (props: IconProps) => JSX.Element }> = {
+  shoot: { label: "Ударить", Icon: IconBoot },
+  pass: { label: "Отдать пас", Icon: IconSwap },
+  tackle: { label: "Сделать подкат", Icon: IconUsers },
+  block: { label: "Заблокировать удар", Icon: IconGoal },
+  keeper: { label: "Довериться вратарю", Icon: IconGloves },
+  strike: { label: "Ударить!", Icon: IconBoot },
+};
 
 export default function FutDraftGamePage() {
   const navigate = useNavigate();
@@ -62,9 +85,8 @@ export default function FutDraftGamePage() {
   const [showStrengthHint, setShowStrengthHint] = useState(false);
   const [chemistryHints, setChemistryHints] = useState<string[]>([]);
   const [viewingPlayer, setViewingPlayer] = useState<FutDraftCandidate | null>(null);
-  const [matchHistory, setMatchHistory] = useState<FutDraftMatchResult[]>([]);
-  const [pendingMatch, setPendingMatch] = useState<FutDraftMatchResult | null>(null);
-  const [currentMatch, setCurrentMatch] = useState<FutDraftMatchResult | null>(null);
+  const [matchHistory, setMatchHistory] = useState<FutDraftRound[]>([]);
+  const [currentRound, setCurrentRound] = useState<FutDraftRound | null>(null);
   const [claimResult, setClaimResult] = useState<FutDraftClaim | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -90,8 +112,7 @@ export default function FutDraftGamePage() {
     setChemistryHints([]);
     setViewingPlayer(null);
     setMatchHistory([]);
-    setPendingMatch(null);
-    setCurrentMatch(null);
+    setCurrentRound(null);
     setClaimResult(null);
     setErrorMsg(null);
   };
@@ -186,8 +207,8 @@ export default function FutDraftGamePage() {
     setErrorMsg(null);
     try {
       const result = await startFutDraftMatch(sessionId);
-      setPendingMatch(result);
-      setPhase("roulette");
+      setCurrentRound(result);
+      setPhase("match");
     } catch (err) {
       setErrorMsg(formatGameError(err, "Не удалось сыграть матч"));
     } finally {
@@ -195,22 +216,67 @@ export default function FutDraftGamePage() {
     }
   };
 
-  const handleRouletteDone = () => {
-    if (!pendingMatch) return;
-    setCurrentMatch(pendingMatch);
-    setPendingMatch(null);
-    setPhase("match");
-  };
-
-  const handleMatchFinished = (match: FutDraftMatchResult) => {
-    setMatchHistory((prev) => [...prev, match]);
-    setCurrentMatch(null);
-    if (match.is_finished) {
-      hapticNotify(match.wins === 4 ? "success" : "warning");
+  const handleRoundFinished = (round: FutDraftRound) => {
+    setMatchHistory((prev) => [...prev, round]);
+    setCurrentRound(null);
+    if (round.is_finished) {
+      hapticNotify(round.wins === 4 ? "success" : "warning");
       setPhase("finished");
-      claim(match.session_id);
+      claim(round.session_id);
     } else {
       setPhase("ready");
+    }
+  };
+
+  const handleRoundStep = (round: FutDraftRound) => {
+    if (round.round_in_progress) {
+      setCurrentRound(round);
+    } else {
+      handleRoundFinished(round);
+    }
+  };
+
+  const playCardArenaAction = async (action: MatchActionKind) => {
+    if (busy || sessionId === null) return;
+    setBusy(true);
+    setErrorMsg(null);
+    try {
+      const round = await submitFutDraftCardArenaAction(sessionId, action);
+      handleRoundStep(round);
+    } catch (err) {
+      setErrorMsg(formatGameError(err, "Не удалось выполнить действие"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const playTacticoPhase = async (choice: string) => {
+    if (busy || sessionId === null) return;
+    setBusy(true);
+    setErrorMsg(null);
+    haptic("medium");
+    try {
+      const round = await submitFutDraftTacticoPhase(sessionId, choice);
+      handleRoundStep(round);
+    } catch (err) {
+      setErrorMsg(formatGameError(err, "Не удалось сыграть эпизод"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const playPenaltyKick = async (direction: string) => {
+    if (busy || sessionId === null) return;
+    setBusy(true);
+    setErrorMsg(null);
+    haptic("medium");
+    try {
+      const round = await submitFutDraftPenaltyKick(sessionId, direction);
+      handleRoundStep(round);
+    } catch (err) {
+      setErrorMsg(formatGameError(err, "Не удалось пробить пенальти"));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -345,7 +411,7 @@ export default function FutDraftGamePage() {
                         const Icon = GAME_TYPE_META[r.game_type].Icon;
                         return <Icon size={12} />;
                       })()}
-                      Матч {i + 1} · {GAME_TYPE_META[r.game_type].label} ({RESULT_LABELS[r.result]})
+                      Матч {i + 1} · {GAME_TYPE_META[r.game_type].label} ({r.result ? RESULT_LABELS[r.result] : ""})
                     </span>
                     <span className="font-mono font-bold text-ink-chalk">{r.user_score}:{r.bot_score}</span>
                   </div>
@@ -367,12 +433,21 @@ export default function FutDraftGamePage() {
     );
   }
 
-  if (phase === "roulette" && pendingMatch) {
-    return <GameRoulette result={pendingMatch} onDone={handleRouletteDone} />;
-  }
-
-  if (phase === "match" && currentMatch) {
-    return <FutDraftMatchSimulation match={currentMatch} onFinished={handleMatchFinished} />;
+  if (phase === "match" && currentRound) {
+    if (currentRound.game_type === "tactico") {
+      return <TacticoRoundPlayer round={currentRound} busy={busy} errorMsg={errorMsg} onChoose={playTacticoPhase} />;
+    }
+    if (currentRound.game_type === "penalty") {
+      return <PenaltyRoundPlayer round={currentRound} busy={busy} errorMsg={errorMsg} onKick={playPenaltyKick} />;
+    }
+    return (
+      <CardArenaRoundPlayer
+        round={currentRound}
+        busy={busy}
+        onAct={playCardArenaAction}
+        onFinished={handleRoundFinished}
+      />
+    );
   }
 
   const wins = matchHistory.filter((r) => r.result === "win").length;
@@ -465,12 +540,12 @@ function Pitch({
                 key={slot.slot_code}
                 onClick={() => (slot.player ? onPlayerClick(slot.player) : onSlotClick(slot.slot_code))}
                 disabled={slot.player ? false : disabled}
-                className={`flex w-[72px] shrink-0 flex-col items-center gap-1 rounded-xl p-1.5 backdrop-blur-sm active:scale-95 disabled:active:scale-100 ${
+                className={`flex h-[104px] w-[72px] shrink-0 flex-col items-center justify-center gap-1 rounded-xl p-1.5 backdrop-blur-sm active:scale-95 disabled:active:scale-100 ${
                   slot.player ? `bg-gradient-to-b ${RARITY_GRADIENTS[slot.player.rarity]} ${RARITY_GLOW[slot.player.rarity]} p-[1.5px]` : "bg-black/30"
                 }`}
               >
                 {slot.player ? (
-                  <div className="flex w-full flex-col items-center gap-1 rounded-[9px] bg-bg-surface p-1">
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-1 rounded-[9px] bg-bg-surface p-1">
                     <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
                       {slot.player.image_path ? (
                         <img src={staticUrl(slot.player.image_path) ?? undefined} alt="" className="h-full w-full object-cover" loading="lazy" />
@@ -582,69 +657,46 @@ function PlayerDetailModal({ card, onClose }: { card: FutDraftCandidate; onClose
   );
 }
 
-function GameRoulette({ result, onDone }: { result: FutDraftMatchResult; onDone: () => void }) {
-  const [index, setIndex] = useState(0);
-  const doneRef = useRef(false);
-
-  useEffect(() => {
-    const delays = [90, 90, 90, 100, 110, 130, 160, 200, 260, 340];
-    const finalIndex = ROULETTE_ORDER.indexOf(result.game_type);
-    let cancelled = false;
-
-    function tick(step: number) {
-      if (cancelled) return;
-      if (step >= delays.length) {
-        setIndex(finalIndex);
-        haptic("medium");
-        if (!doneRef.current) {
-          doneRef.current = true;
-          setTimeout(onDone, 800);
-        }
-        return;
-      }
-      setIndex((prev) => (prev + 1) % ROULETTE_ORDER.length);
-      setTimeout(() => tick(step + 1), delays[step]);
-    }
-    tick(0);
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const current = GAME_TYPE_META[ROULETTE_ORDER[index]];
-  return (
-    <div className="flex flex-col items-center gap-4 py-16">
-      <p className="text-sm text-ink-mist">Определяем игру раунда...</p>
-      <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-bg-surface">
-        <current.Icon size={40} className="text-accent-lime" />
-      </div>
-      <p className="font-display text-lg font-bold text-ink-chalk">{current.label}</p>
-    </div>
-  );
-}
-
-function FutDraftMatchSimulation({
-  match,
+function CardArenaRoundPlayer({
+  round,
+  busy,
+  onAct,
   onFinished,
 }: {
-  match: FutDraftMatchResult;
-  onFinished: (match: FutDraftMatchResult) => void;
+  round: FutDraftRound;
+  busy: boolean;
+  onAct: (action: MatchActionKind) => void;
+  onFinished: (round: FutDraftRound) => void;
 }) {
+  // Runs the exact same moment-by-moment engine as the real Card Arena
+  // (app.services.match_service) against the temporary draft squad — this
+  // component mirrors ArenaPage.tsx's MatchSimulation/ActionPrompt closely
+  // on purpose, so the round plays out and reads exactly like the real one.
   const [revealedCount, setRevealedCount] = useState(0);
   const [autoSkip, setAutoSkip] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finishedFiredRef = useRef(false);
+  const ackedBreakawayRef = useRef(-1);
 
-  const isPenalty = match.game_type === "penalty";
-  const total = match.events.length;
+  const total = round.events.length;
   const caughtUp = revealedCount >= total;
+  const isFinished = !round.round_in_progress;
+
+  // An opponent breakaway (empty net) has no meaningful save choice — it
+  // still gets a beat of its own instead of just appearing in the log, so
+  // it doesn't read as a sudden, unexplained goal.
+  const nextEvent = !caughtUp ? round.events[revealedCount] : null;
+  const isBreakawayNext =
+    !!nextEvent &&
+    nextEvent.team === "opponent" &&
+    nextEvent.payload?.shot_type === "empty_net" &&
+    ackedBreakawayRef.current !== revealedCount;
 
   useEffect(() => {
     if (caughtUp) {
-      if (!finishedFiredRef.current) {
+      if (isFinished && !finishedFiredRef.current) {
         finishedFiredRef.current = true;
-        const t = setTimeout(() => onFinished(match), 700);
+        const t = setTimeout(() => onFinished(round), 700);
         return () => clearTimeout(t);
       }
       return;
@@ -653,60 +705,257 @@ function FutDraftMatchSimulation({
       setRevealedCount(total);
       return;
     }
+    if (isBreakawayNext) return; // wait for the player to acknowledge it
     timerRef.current = setTimeout(() => {
-      if (match.events[revealedCount]?.type === "goal") haptic("medium");
+      if (["goal", "save", "blocked"].includes(round.events[revealedCount]?.event_type)) haptic("medium");
       setRevealedCount((c) => c + 1);
     }, EVENT_STEP_MS);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revealedCount, caughtUp, autoSkip, total]);
+  }, [revealedCount, caughtUp, isFinished, autoSkip, isBreakawayNext, total]);
+
+  // Auto-play any pending action while skipping, so the round resolves
+  // itself all the way to the final result without further input.
+  useEffect(() => {
+    if (!autoSkip || !caughtUp || isFinished || busy) return;
+    const pending = round.pending_moment;
+    if (!pending) return;
+    onAct(pending.actions[Math.floor(Math.random() * pending.actions.length)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSkip, caughtUp, isFinished, busy, round]);
 
   const skip = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     setAutoSkip(true);
   };
 
-  const revealed = match.events.slice(0, revealedCount);
-  const liveUserScore = revealed.filter((e) => e.type === "goal" && e.team === "user").length;
-  const liveBotScore = revealed.filter((e) => e.type === "goal" && e.team === "bot").length;
+  const ackBreakaway = () => {
+    ackedBreakawayRef.current = revealedCount;
+    setRevealedCount((c) => c + 1);
+  };
+
+  const revealed = round.events.slice(0, revealedCount);
   const currentMinute = revealed.length ? revealed[revealed.length - 1].minute : 0;
-  const meta = GAME_TYPE_META[match.game_type];
+  const pendingMoment = caughtUp && !isFinished && !autoSkip ? round.pending_moment : null;
+
+  // The live score only counts goals among the *revealed* events, so it
+  // climbs to the final score in step with the commentary instead of
+  // spoiling the outcome the instant the round starts.
+  const liveUserScore = revealed.filter((e) => e.event_type === "goal" && e.team === "user").length;
+  const liveOpponentScore = revealed.filter((e) => e.event_type === "goal" && e.team === "opponent").length;
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-4">
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-1.5 font-mono text-xs text-ink-mist-dim">
-          <meta.Icon size={12} />
-          {meta.label}
-          {" · "}
-          {caughtUp ? "завершено" : autoSkip ? "пропускаем..." : isPenalty ? `удар ${currentMinute}` : `${currentMinute}'`}
+          <IconBall size={12} />
+          {caughtUp && isFinished ? "Матч завершён" : autoSkip ? "Пропускаем матч..." : `${currentMinute}' · идёт матч...`}
         </span>
-        {!autoSkip && !caughtUp && (
+        {!autoSkip && !(caughtUp && isFinished) && (
           <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-ink-chalk">
             Пропустить
           </button>
         )}
       </div>
 
-      <p className="text-center font-mono text-2xl font-bold text-ink-chalk">{liveUserScore} : {liveBotScore}</p>
+      <p className="mt-1 text-center font-mono text-lg font-bold text-ink-chalk">{liveUserScore} : {liveOpponentScore}</p>
+      {round.opponent_name && <p className="text-center text-sm text-ink-mist">vs {round.opponent_name}</p>}
 
-      {caughtUp && (
+      {caughtUp && isFinished && round.result && (
         <p
-          className={`text-center font-display text-sm font-bold ${
-            match.result === "win" ? "text-accent-green" : match.result === "loss" ? "text-red-400" : "text-ink-mist"
+          className={`mt-1 text-center font-display text-sm font-bold ${
+            round.result === "win" ? "text-accent-green" : round.result === "loss" ? "text-red-400" : "text-ink-mist"
           }`}
         >
-          {RESULT_LABELS[match.result]}
+          {RESULT_LABELS[round.result]}
         </p>
       )}
 
       <div className="flex max-h-56 flex-col gap-1 overflow-y-auto text-xs">
         {revealed.map((e, i) => (
           <p key={i} className={e.team === "user" ? "text-accent-green" : "text-ink-mist"}>
-            <span className="font-mono text-ink-mist-dim">{isPenalty ? `Удар ${e.minute}` : `${e.minute}'`}</span> {e.text}
+            <span className="font-mono text-ink-mist-dim">{e.minute}&apos;</span> {e.description}
           </p>
+        ))}
+      </div>
+
+      {isBreakawayNext && !autoSkip && (
+        <div className="mt-1 flex flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
+          <p className="text-sm font-semibold text-ink-chalk">😰 Соперник выходит один на один с твоим вратарём!</p>
+          <button
+            onClick={ackBreakaway}
+            className="rounded-2xl bg-white/10 px-8 py-3 font-display text-base font-bold text-ink-chalk active:scale-95"
+          >
+            Смотреть
+          </button>
+        </div>
+      )}
+
+      {pendingMoment && <CardArenaActionPrompt pending={pendingMoment} disabled={busy} onAct={onAct} />}
+    </div>
+  );
+}
+
+function CardArenaActionPrompt({
+  pending,
+  disabled,
+  onAct,
+}: {
+  pending: MatchPendingMoment;
+  disabled: boolean;
+  onAct: (action: MatchActionKind) => void;
+}) {
+  // Subtitle under a button shows the actor it concerns, if any — the
+  // shooter for "shoot", the teammate for "pass". Defense actions all
+  // concern the same named defender, already mentioned in the situation
+  // text above, so no per-button subtitle is needed there.
+  const subtitleFor = (action: MatchActionKind): string | null => {
+    if (action === "shoot") return pending.actors.shooter?.name ?? null;
+    if (action === "pass") return pending.actors.pass_target?.name ?? null;
+    return null;
+  };
+
+  return (
+    <div className="mt-1 flex flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
+      <p className="text-sm font-semibold text-ink-chalk">{pending.description}</p>
+      <div className={`grid gap-2 ${pending.actions.length === 1 ? "grid-cols-1" : pending.actions.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+        {pending.actions.map((action) => {
+          const { label, Icon } = ACTION_LABELS[action];
+          const subtitle = subtitleFor(action);
+          return (
+            <button
+              key={action}
+              onClick={() => onAct(action)}
+              disabled={disabled}
+              className="flex flex-col items-center gap-1.5 rounded-2xl bg-bg-surface px-4 py-3 text-sm font-semibold text-ink-chalk active:scale-90 disabled:opacity-40"
+            >
+              <Icon size={16} />
+              {label}
+              {subtitle && <span className="text-[10px] font-normal text-ink-mist-dim">{subtitle}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TacticoRoundPlayer({
+  round,
+  busy,
+  errorMsg,
+  onChoose,
+}: {
+  round: FutDraftRound;
+  busy: boolean;
+  errorMsg: string | null;
+  onChoose: (choice: string) => void;
+}) {
+  const meta = GAME_TYPE_META.tactico;
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-4">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 font-mono text-xs text-ink-mist-dim">
+          <meta.Icon size={12} />
+          {meta.label} · эпизод {round.phase}/{round.total_phases}
+        </span>
+      </div>
+
+      <p className="text-center font-mono text-2xl font-bold text-ink-chalk">{round.user_score} : {round.bot_score}</p>
+
+      {round.last_phase_result && (
+        <p className="rounded-xl bg-white/5 px-3 py-2 text-center text-xs text-ink-mist">{round.last_phase_result}</p>
+      )}
+
+      {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
+
+      <p className="text-center text-xs font-semibold text-ink-mist-dim">Выбери тактику на этот эпизод</p>
+      <div className="flex flex-col gap-2">
+        {(round.tactic_choices ?? []).map((choice) => (
+          <button
+            key={choice}
+            onClick={() => onChoose(choice)}
+            disabled={busy}
+            className="rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-chalk active:scale-95 disabled:opacity-50"
+          >
+            {choice}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const PENALTY_ZONE_LABELS: Record<string, string> = {
+  top_left: "Верх, слева",
+  top_center: "Верх, центр",
+  top_right: "Верх, справа",
+  bottom_left: "Низ, слева",
+  bottom_center: "Низ, центр",
+  bottom_right: "Низ, справа",
+};
+
+function PenaltyRoundPlayer({
+  round,
+  busy,
+  errorMsg,
+  onKick,
+}: {
+  round: FutDraftRound;
+  busy: boolean;
+  errorMsg: string | null;
+  onKick: (direction: string) => void;
+}) {
+  const meta = GAME_TYPE_META.penalty;
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-4">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 font-mono text-xs text-ink-mist-dim">
+          <meta.Icon size={12} />
+          {meta.label} · удар {round.kick_number}
+        </span>
+      </div>
+
+      <p className="text-center font-mono text-2xl font-bold text-ink-chalk">{round.user_score} : {round.bot_score}</p>
+
+      {round.picked_player && (
+        <div className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2">
+          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-bg-raised">
+            {round.picked_player.image_path ? (
+              <img
+                src={staticUrl(round.picked_player.image_path) ?? undefined}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                <IconShirt size={14} className="text-ink-mist-dim" />
+              </div>
+            )}
+          </div>
+          <p className="truncate text-sm font-semibold text-ink-chalk">{round.picked_player.display_name}</p>
+        </div>
+      )}
+
+      {round.last_kick_result && (
+        <p className="rounded-xl bg-white/5 px-3 py-2 text-center text-xs text-ink-mist">{round.last_kick_result}</p>
+      )}
+
+      {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
+
+      <p className="text-center text-xs font-semibold text-ink-mist-dim">Выбери, куда пробить</p>
+      <div className="grid grid-cols-3 gap-2">
+        {(round.zone_choices ?? []).map((zone) => (
+          <button
+            key={zone}
+            onClick={() => onKick(zone)}
+            disabled={busy}
+            className="rounded-xl bg-white/5 py-3 text-[11px] font-semibold text-ink-chalk active:scale-95 disabled:opacity-50"
+          >
+            {PENALTY_ZONE_LABELS[zone] ?? zone}
+          </button>
         ))}
       </div>
     </div>

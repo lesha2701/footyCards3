@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest_asyncio
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.enums import Position, Rarity
 from app.services import fut_draft_service
@@ -71,6 +72,22 @@ async def _choose_formation(client, headers, session_id, formation_options):
     )
     assert resp.status_code == 200
     return resp.json()
+
+
+async def _seed_active_round(db_session, session_id, active_round):
+    """Bypasses /match/start (which now always opens a Card Arena round) to
+    put a session directly into a Тактико/Пенальти round, so those still-
+    present-but-currently-unreachable-by-the-roulette code paths stay
+    covered by their own tests."""
+    from app.models.game import GameSession
+
+    session = await db_session.get(GameSession, session_id)
+    state = dict(session.server_state)
+    state["active_round"] = active_round
+    session.server_state = state
+    flag_modified(session, "server_state")
+    db_session.add(session)
+    await db_session.commit()
 
 
 async def _draft_full_squad(client, headers, session_id, formation_options):
@@ -206,11 +223,27 @@ async def test_fut_draft_rejects_picking_a_card_not_offered(client, db_session, 
     assert resp.status_code == 409
 
 
+def _force_one_goal_breakaway(monkeypatch):
+    """Card Arena rounds now run the exact real match_service engine against
+    the draft squad — forcing a deterministic outcome means controlling that
+    engine's own inputs, not a FUT-Draft-only shortcut. A single user
+    breakaway (empty net) moment is interactive (team == "user") but skips
+    all of match_situations' actor/situation machinery, and pinning
+    random() so `_resolve_breakaway`'s miss roll never fires guarantees the
+    "strike" action always scores."""
+    fixed_moment = {
+        "minute": 10, "kind": "shot", "team": "user", "shot_type": "empty_net",
+        "situation_kind": "breakaway_user", "situation_id": None, "actors": {},
+        "description": "Пустые ворота! Не отправь мяч в трибуны.", "actions": ["strike"],
+    }
+    monkeypatch.setattr(fut_draft_service, "_generate_moment_queue", lambda *a, **k: [dict(fixed_moment)])
+    monkeypatch.setattr(fut_draft_service.random, "random", lambda: 0.99)
+
+
 async def test_fut_draft_wins_all_four_matches_and_claims_top_reward(client, db_session, bot_token, monkeypatch):
     from app.services.game_config_service import get_config
 
-    monkeypatch.setattr(fut_draft_service, "_ROUND_GAME_TYPES", ["card_arena"])
-    monkeypatch.setattr(fut_draft_service, "_resolve_match", lambda user_strength, bot_strength: ("win", 3, 0))
+    _force_one_goal_breakaway(monkeypatch)
 
     headers, body = await _start(client, db_session, bot_token, 770007)
     session_id = body["session_id"]
@@ -220,8 +253,18 @@ async def test_fut_draft_wins_all_four_matches_and_claims_top_reward(client, db_
     for _ in range(4):
         resp = await client.post(f"/api/v1/games/fut-draft/{session_id}/match/start", headers=headers)
         assert resp.status_code == 200
+        opened = resp.json()
+        assert opened["game_type"] == "card_arena"
+        assert opened["round_in_progress"] is True
+        assert opened["pending_moment"]["actions"] == ["strike"]
+
+        resp = await client.post(
+            f"/api/v1/games/fut-draft/{session_id}/card-arena/action", headers=headers, json={"action": "strike"},
+        )
+        assert resp.status_code == 200
         last_result = resp.json()
-        assert len(last_result["events"]) >= 3  # at least the goals themselves
+        assert last_result["round_in_progress"] is False
+        assert len(last_result["events"]) >= 1
 
     assert last_result["wins"] == 4
     assert last_result["is_finished"] is True
@@ -242,19 +285,73 @@ async def test_fut_draft_wins_all_four_matches_and_claims_top_reward(client, db_
     assert second_claim.status_code == 409
 
 
-async def test_fut_draft_loses_first_match_and_stops_the_series(client, db_session, bot_token, monkeypatch):
-    from app.services.game_config_service import get_config
-
-    monkeypatch.setattr(fut_draft_service, "_ROUND_GAME_TYPES", ["tactico"])
-    monkeypatch.setattr(fut_draft_service, "_resolve_match", lambda user_strength, bot_strength: ("loss", 0, 2))
-
-    headers, body = await _start(client, db_session, bot_token, 770008)
+async def test_fut_draft_card_arena_round_plays_out_with_the_real_engine(client, db_session, bot_token):
+    """No monkeypatching here — a real Card Arena round against the drafted
+    squad, driven by /card-arena/action the same way the frontend's "skip"
+    auto-play does (pick whichever action is offered), just to prove the
+    reused match_service engine actually runs end-to-end against a temporary
+    draft squad without exceptions and produces a coherent result."""
+    headers, body = await _start(client, db_session, bot_token, 770013)
     session_id = body["session_id"]
     await _draft_full_squad(client, headers, session_id, body["formation_options"])
 
     resp = await client.post(f"/api/v1/games/fut-draft/{session_id}/match/start", headers=headers)
     assert resp.status_code == 200
-    result = resp.json()
+    round_state = resp.json()
+    assert round_state["game_type"] == "card_arena"
+
+    for _ in range(200):  # generous upper bound; a real round is a few dozen moments at most
+        if not round_state["round_in_progress"]:
+            break
+        pending = round_state["pending_moment"]
+        assert pending is not None
+        resp = await client.post(
+            f"/api/v1/games/fut-draft/{session_id}/card-arena/action",
+            headers=headers, json={"action": pending["actions"][0]},
+        )
+        assert resp.status_code == 200
+        round_state = resp.json()
+
+    assert round_state["round_in_progress"] is False
+    assert round_state["result"] in ("win", "draw", "loss")
+    assert len(round_state["events"]) > 0
+    assert round_state["wins"] == (1 if round_state["result"] == "win" else 0)
+
+
+async def test_fut_draft_tactico_round_is_interactive_and_stops_the_series_on_loss(client, db_session, bot_token, monkeypatch):
+    """Тактико's turn-based implementation stays in the codebase (in case
+    round-type variety comes back) even though every round is Card Arena
+    for now — seed a round directly into a Тактико state (bypassing
+    /match/start, which can no longer open one) to keep it covered."""
+    from app.services.game_config_service import get_config
+
+    # random() >= any win_prob in (0,1) forces every phase to fail for the
+    # user; the second random() call (bot's punish roll) also never fires
+    # since 1.0 is never < the (<1) threshold, so it's a clean 0-0 fizzle...
+    # to get an actual bot goal instead, alternate: first call fails the user,
+    # second call (bot's roll) always succeeds.
+    calls = iter([0.99, 0.0] * 10)
+    monkeypatch.setattr(fut_draft_service.random, "random", lambda: next(calls))
+
+    headers, body = await _start(client, db_session, bot_token, 770008)
+    session_id = body["session_id"]
+    await _draft_full_squad(client, headers, session_id, body["formation_options"])
+    await _seed_active_round(db_session, session_id, {
+        "game_type": "tactico", "bot_strength": 500, "phase": 0, "user_score": 0, "bot_score": 0,
+    })
+
+    result = None
+    for _ in range(4):
+        resp = await client.post(
+            f"/api/v1/games/fut-draft/{session_id}/tactico/phase", headers=headers,
+            json={"choice": fut_draft_service.TACTIC_CHOICES[0]},
+        )
+        assert resp.status_code == 200
+        result = resp.json()
+
+    assert result["round_in_progress"] is False
+    assert result["result"] == "loss"
+    assert result["bot_score"] > result["user_score"]
     assert result["wins"] == 0
     assert result["is_finished"] is True
     assert result["status"] == "lost"
@@ -268,12 +365,25 @@ async def test_fut_draft_loses_first_match_and_stops_the_series(client, db_sessi
     assert claim.json()["reward_coins"] == config.fut_draft_reward_win_0
 
 
-async def test_fut_draft_penalty_round_uses_a_squad_card_and_is_decided_independently(client, db_session, bot_token, monkeypatch):
-    """The one round flavor with a genuinely different determinant: a single
-    squad card's own shooting ability vs the bot, not overall squad strength."""
-    monkeypatch.setattr(fut_draft_service, "_ROUND_GAME_TYPES", ["penalty"])
-    # player_miss_chance -> 0 for the user's kicks, the real (>0) config
-    # value for the bot's — _resolve_shot keys off that alone here, sidestepping
+async def test_fut_draft_tactico_rejects_an_unknown_choice(client, db_session, bot_token, monkeypatch):
+    headers, body = await _start(client, db_session, bot_token, 770012)
+    session_id = body["session_id"]
+    await _draft_full_squad(client, headers, session_id, body["formation_options"])
+    await _seed_active_round(db_session, session_id, {
+        "game_type": "tactico", "bot_strength": 500, "phase": 0, "user_score": 0, "bot_score": 0,
+    })
+
+    resp = await client.post(
+        f"/api/v1/games/fut-draft/{session_id}/tactico/phase", headers=headers, json={"choice": "Несуществующий вариант"},
+    )
+    assert resp.status_code == 409
+
+
+async def test_fut_draft_penalty_round_is_interactive_and_uses_a_squad_card(client, db_session, bot_token, monkeypatch):
+    """Пенальти's kick-by-kick implementation also stays in the codebase for
+    the same reason as Тактико's above — seeded directly the same way."""
+    # player_miss_chance -> 0 for the user's kicks, a fixed positive value
+    # for the bot's — _resolve_shot keys off that alone here, sidestepping
     # the shot/dive zone randomness so the outcome is fully deterministic.
     monkeypatch.setattr(fut_draft_service, "player_miss_chance", lambda rating: 0.0)
     monkeypatch.setattr(fut_draft_service, "_resolve_shot", lambda miss_chance, shot_zone, dive_zone: "miss" if miss_chance > 0 else "goal")
@@ -281,18 +391,26 @@ async def test_fut_draft_penalty_round_uses_a_squad_card_and_is_decided_independ
     headers, body = await _start(client, db_session, bot_token, 770010)
     session_id = body["session_id"]
     await _draft_full_squad(client, headers, session_id, body["formation_options"])
+    await _seed_active_round(db_session, session_id, {
+        "game_type": "penalty", "miss_chance": 0.0, "bot_miss_chance": 0.5,
+        "kick_number": 0, "user_score": 0, "bot_score": 0,
+    })
 
-    resp = await client.post(f"/api/v1/games/fut-draft/{session_id}/match/start", headers=headers)
-    assert resp.status_code == 200
-    result = resp.json()
+    result = None
+    for _ in range(5):
+        resp = await client.post(
+            f"/api/v1/games/fut-draft/{session_id}/penalty/kick", headers=headers, json={"direction": "top_left"},
+        )
+        assert resp.status_code == 200
+        result = resp.json()
+
+    assert result["round_in_progress"] is False
     assert result["game_type"] == "penalty"
     assert result["result"] == "win"
     assert result["user_score"] == 5
     assert result["bot_score"] == 0
-    # 5 regulation rounds, one event per kick per side, no sudden death needed.
-    assert len(result["events"]) == 10
-    assert all(e["type"] == "goal" for e in result["events"] if e["team"] == "user")
-    assert all(e["type"] == "miss" for e in result["events"] if e["team"] == "bot")
+    assert result["is_finished"] is False  # only 1 of 4 draft matches played
+    assert result["wins"] == 1
 
 
 async def test_fut_draft_chemistry_hints_reflect_club_and_country_bonuses(client, db_session, bot_token):
@@ -312,8 +430,16 @@ async def test_fut_draft_chemistry_hints_reflect_club_and_country_bonuses(client
 
 
 async def test_fut_draft_leaderboard_orders_by_best_squad_strength(client, db_session, bot_token, monkeypatch):
-    monkeypatch.setattr(fut_draft_service, "_ROUND_GAME_TYPES", ["card_arena"])
-    monkeypatch.setattr(fut_draft_service, "_resolve_match", lambda user_strength, bot_strength: ("loss", 0, 1))
+    # A single opponent breakaway (empty net) is auto-resolved inside
+    # /match/start itself (non-interactive — see _is_interactive), so one
+    # call is enough to finalize the round as a loss, no follow-up action
+    # needed.
+    fixed_moment = {
+        "minute": 10, "kind": "shot", "team": "opponent", "shot_type": "empty_net",
+        "situation_kind": "breakaway_opponent", "situation_id": None, "actors": {}, "description": "", "actions": [],
+    }
+    monkeypatch.setattr(fut_draft_service, "_generate_moment_queue", lambda *a, **k: [dict(fixed_moment)])
+    monkeypatch.setattr(fut_draft_service.random, "random", lambda: 0.99)
 
     headers_a, body_a = await _start(client, db_session, bot_token, 770009)
     await _draft_full_squad(client, headers_a, body_a["session_id"], body_a["formation_options"])
