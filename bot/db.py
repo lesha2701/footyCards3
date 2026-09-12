@@ -14,10 +14,12 @@ async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
         # max_size bumped alongside the backend's DB pool sizing (see
-        # backend/app/config.py) — the notification dispatcher now sends
+        # backend/app/config.py) — the notification dispatcher sends
         # concurrently (up to MAX_CONCURRENT_SENDS in services/notifier.py),
-        # each delivery followed by its own mark_notification_sent() write,
-        # so a bigger user base means more of these can be in flight at once.
+        # so a bigger user base means more sends can be in flight at once.
+        # mark_notifications_sent() is batched once per poll (not one write
+        # per delivery), so this pool mainly needs headroom for concurrent
+        # sends' own queries, not one connection per in-flight send.
         _pool = await asyncpg.create_pool(settings.asyncpg_dsn, min_size=1, max_size=10)
     return _pool
 
@@ -184,9 +186,14 @@ async def fetch_unsent_notifications(limit: int = 50) -> list[asyncpg.Record]:
     )
 
 
-async def mark_notification_sent(notification_id: int) -> None:
+async def mark_notifications_sent(notification_ids: list[int]) -> None:
+    """Batched — one UPDATE for the whole just-delivered poll batch instead
+    of one per message, which was the main source of DB load during a large
+    broadcast (thousands of single-row writes competing for the pool)."""
+    if not notification_ids:
+        return
     pool = await get_pool()
-    await pool.execute("UPDATE notifications SET telegram_sent = true WHERE id = $1", notification_id)
+    await pool.execute("UPDATE notifications SET telegram_sent = true WHERE id = ANY($1::int[])", notification_ids)
 
 
 async def fetch_users_missing_daily_reward(today: date) -> list[asyncpg.Record]:

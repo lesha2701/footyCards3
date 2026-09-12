@@ -12,14 +12,16 @@ logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 5
 BATCH_SIZE = 200
-# Telegram's bot-wide soft limit is ~30 messages/sec. A concurrency cap
-# alone does NOT bound throughput to this — if requests come back fast,
-# N concurrent slots can produce far more than N sends/sec (confirmed
-# locally: 300 fast-failing sends drained in ~1s, i.e. ~300/sec). The
-# RateLimiter below is what actually keeps real send *attempts* under the
-# limit; MAX_CONCURRENT_SENDS just bounds how many requests can be
-# in-flight at once so a burst of slow responses doesn't pile up tasks.
-TARGET_SENDS_PER_SECOND = 25.0
+# Telegram's bot-wide soft limit is ~30 messages/sec, but capped well below
+# that here — a bulk broadcast/gift send at the old 25/sec was driving the
+# host's CPU load close to 100%. A concurrency cap alone does NOT bound
+# throughput to this — if requests come back fast, N concurrent slots can
+# produce far more than N sends/sec (confirmed locally: 300 fast-failing
+# sends drained in ~1s, i.e. ~300/sec). The RateLimiter below is what
+# actually keeps real send *attempts* under the limit; MAX_CONCURRENT_SENDS
+# just bounds how many requests can be in-flight at once so a burst of slow
+# responses doesn't pile up tasks.
+TARGET_SENDS_PER_SECOND = 15.0
 MAX_CONCURRENT_SENDS = 30
 
 
@@ -42,25 +44,40 @@ def _keyboard_for(related_object_type: str | None, related_object_id: int | None
     return open_app_keyboard(f"{prefix}/{related_object_id}", text="🎮 Перейти в игру")
 
 
-async def _deliver_one(bot: Bot, row, semaphore: asyncio.Semaphore, rate_limiter: "RateLimiter") -> None:
+async def _deliver_one(bot: Bot, row, semaphore: asyncio.Semaphore, rate_limiter: "RateLimiter") -> int:
+    """Returns row["id"] regardless of whether the send succeeded — the
+    caller marks every attempted row as sent in one batched UPDATE (see
+    run_notification_dispatcher), matching the previous per-row behavior
+    (a permanently failed send was still marked sent, not retried).
+
+    Must never raise: with the batched mark, an exception escaping here
+    would make asyncio.gather() drop the whole poll batch's ids, and every
+    row in it — including ones that were already successfully delivered by
+    sibling tasks — would be re-sent as a duplicate on the next poll. The
+    outer try/except is the backstop for anything beyond aiogram's own
+    TelegramAPIError (e.g. a network-level error).
+    """
     keyboard = _keyboard_for(row["related_object_type"], row["related_object_id"])
     text = f"<b>{row['title']}</b>\n{row['body']}"
     async with semaphore:
         await rate_limiter.acquire()
         try:
-            await bot.send_message(row["telegram_id"], text, reply_markup=keyboard)
-        except TelegramRetryAfter as exc:
-            # Telegram's own flood-control backoff — wait it out and retry once,
-            # rather than just dropping the message.
-            await asyncio.sleep(exc.retry_after)
-            await rate_limiter.acquire()
             try:
                 await bot.send_message(row["telegram_id"], text, reply_markup=keyboard)
-            except TelegramAPIError as exc2:
-                logger.warning("Failed to deliver notification %s after retry: %s", row["id"], exc2)
-        except TelegramAPIError as exc:
-            logger.warning("Failed to deliver notification %s: %s", row["id"], exc)
-    await db.mark_notification_sent(row["id"])
+            except TelegramRetryAfter as exc:
+                # Telegram's own flood-control backoff — wait it out and retry once,
+                # rather than just dropping the message.
+                await asyncio.sleep(exc.retry_after)
+                await rate_limiter.acquire()
+                try:
+                    await bot.send_message(row["telegram_id"], text, reply_markup=keyboard)
+                except TelegramAPIError as exc2:
+                    logger.warning("Failed to deliver notification %s after retry: %s", row["id"], exc2)
+            except TelegramAPIError as exc:
+                logger.warning("Failed to deliver notification %s: %s", row["id"], exc)
+        except Exception:  # noqa: BLE001 - see docstring: must not escape and drop the whole batch
+            logger.exception("Unexpected error delivering notification %s", row["id"])
+    return row["id"]
 
 
 async def run_notification_dispatcher(bot: Bot) -> None:
@@ -78,6 +95,12 @@ async def run_notification_dispatcher(bot: Bot) -> None:
     one-at-a-time dispatcher took tens of minutes to drain a ~9000-row
     broadcast; this drains the same backlog in a few minutes while
     actually respecting Telegram's rate limit throughout.
+
+    mark_notifications_sent is called once per poll with every id from the
+    batch, not once per delivery — during a large broadcast that was
+    thousands of individual single-row UPDATEs competing for the DB pool
+    (see bot/db.py's pool-sizing comment), a real contributor to host CPU
+    load alongside the send rate itself.
     """
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_SENDS)
     rate_limiter = RateLimiter(TARGET_SENDS_PER_SECOND)
@@ -85,7 +108,8 @@ async def run_notification_dispatcher(bot: Bot) -> None:
         try:
             rows = await db.fetch_unsent_notifications(limit=BATCH_SIZE)
             if rows:
-                await asyncio.gather(*(_deliver_one(bot, row, semaphore, rate_limiter) for row in rows))
+                sent_ids = await asyncio.gather(*(_deliver_one(bot, row, semaphore, rate_limiter) for row in rows))
+                await db.mark_notifications_sent(list(sent_ids))
             if len(rows) < BATCH_SIZE:
                 await asyncio.sleep(POLL_INTERVAL_SECONDS)
         except Exception:  # noqa: BLE001 - keep the dispatcher loop alive across transient DB/network errors
