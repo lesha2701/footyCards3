@@ -1088,7 +1088,8 @@ export interface FutDraftState {
   chemistry_hints: string[];
 }
 
-export type FutDraftGameType = "card_arena" | "tactico" | "penalty";
+export type FutDraftGameType = "card_arena" | "tactico" | "penalty" | "coin_flip";
+export type FutDraftCoinFlipChoice = "heads" | "tails";
 
 // Mirrors the backend's FutDraftRoundOut: one round of one of the three
 // flavors, either mid-play (round_in_progress=true, driven one turn at a
@@ -1115,6 +1116,11 @@ export interface FutDraftRound {
   picked_player: FutDraftCandidate | null;
   zone_choices: string[] | null;
   last_kick_result: string | null;
+
+  // A drawn round is decided by a coin flip instead of ending the series
+  // outright — call heads or tails, guess right and it's a win.
+  coin_flip_choices: FutDraftCoinFlipChoice[] | null;
+  coin_flip_result: FutDraftCoinFlipChoice | null;
 
   user_score: number;
   bot_score: number;

@@ -4,6 +4,7 @@ import type {
   FreeKickKickResult,
   FreeKickStartResult,
   FutDraftClaim,
+  FutDraftCoinFlipChoice,
   FutDraftConfig,
   FutDraftLeaderboardEntry,
   FutDraftRound,
@@ -206,6 +207,11 @@ export async function submitFutDraftTacticoPhase(sessionId: number, choice: stri
 
 export async function submitFutDraftPenaltyKick(sessionId: number, direction: string): Promise<FutDraftRound> {
   const { data } = await api.post<FutDraftRound>(`/games/fut-draft/${sessionId}/penalty/kick`, { direction });
+  return data;
+}
+
+export async function submitFutDraftCoinFlip(sessionId: number, choice: FutDraftCoinFlipChoice): Promise<FutDraftRound> {
+  const { data } = await api.post<FutDraftRound>(`/games/fut-draft/${sessionId}/coin-flip`, { choice });
   return data;
 }
 

@@ -11,6 +11,7 @@ import {
   startFutDraft,
   startFutDraftMatch,
   submitFutDraftCardArenaAction,
+  submitFutDraftCoinFlip,
   submitFutDraftPenaltyKick,
   submitFutDraftPick,
   submitFutDraftTacticoPhase,
@@ -36,9 +37,11 @@ import { formatGameError } from "@/lib/errors";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_TEXT } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
+import { useMatchGuardStore } from "@/store/matchGuardStore";
 import type {
   FutDraftCandidate,
   FutDraftClaim,
+  FutDraftCoinFlipChoice,
   FutDraftGameType,
   FutDraftRound,
   FutDraftSlot,
@@ -47,6 +50,13 @@ import type {
 } from "@/types";
 
 type Phase = "idle" | "choose_formation" | "drafting" | "ready" | "match" | "finished";
+// The flavor the round actually started as — kept separate from
+// currentRound.game_type, which switches to "coin_flip" mid-round on a
+// draw. Keying the rendered component off this instead means the same
+// CardArenaRoundPlayer/TacticoRoundPlayer instance stays mounted straight
+// through a coin flip (it renders the coin-flip prompt itself), instead of
+// the whole match-log animation getting cut off by a remount.
+type RoundKind = "card_arena" | "tactico" | "penalty";
 
 const EVENT_STEP_MS = 900;
 const RESULT_LABELS: Record<string, string> = { win: "Победа", draw: "Ничья", loss: "Поражение" };
@@ -58,6 +68,7 @@ const GAME_TYPE_META: Record<FutDraftGameType, { label: string; Icon: (p: IconPr
   card_arena: { label: "Card Arena", Icon: IconBall },
   tactico: { label: "Тактико", Icon: IconFlagCheckered },
   penalty: { label: "Пенальти", Icon: IconGoal },
+  coin_flip: { label: "Жребий", Icon: IconCoin },
 };
 
 const ACTION_LABELS: Record<MatchActionKind, { label: string; Icon: (props: IconProps) => JSX.Element }> = {
@@ -87,12 +98,35 @@ export default function FutDraftGamePage() {
   const [viewingPlayer, setViewingPlayer] = useState<FutDraftCandidate | null>(null);
   const [matchHistory, setMatchHistory] = useState<FutDraftRound[]>([]);
   const [currentRound, setCurrentRound] = useState<FutDraftRound | null>(null);
+  const [roundKind, setRoundKind] = useState<RoundKind | null>(null);
   const [claimResult, setClaimResult] = useState<FutDraftClaim | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const candidatesRef = useRef<HTMLDivElement>(null);
 
   const { data: config } = useQuery({ queryKey: ["fut-draft-config"], queryFn: fetchFutDraftConfig });
   const { data: leaderboard } = useQuery({ queryKey: ["fut-draft-leaderboard"], queryFn: fetchFutDraftLeaderboard });
+
+  // On mobile the candidate cards land below the fold — without this the
+  // player often doesn't notice they appeared at all after tapping a slot.
+  useEffect(() => {
+    if (pendingSlot) candidatesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [pendingSlot]);
+
+  // Guards in-app navigation for the whole draft, not just a live match —
+  // leaving mid-draft abandons the session server-side with no way back
+  // (there's no resume-on-mount), so a stray tap on the bottom nav would
+  // silently lose the entry fee and every pick made so far.
+  useEffect(() => {
+    if (phase !== "idle" && phase !== "finished") {
+      useMatchGuardStore.getState().activate(
+        "Драфт ещё не завершён. Если выйдешь сейчас, прогресс будет потерян, а потраченные монеты не вернутся.",
+      );
+    } else {
+      useMatchGuardStore.getState().deactivate();
+    }
+    return () => useMatchGuardStore.getState().deactivate();
+  }, [phase]);
 
   useEffect(() => {
     if (strengthDelta === null) return;
@@ -113,6 +147,7 @@ export default function FutDraftGamePage() {
     setViewingPlayer(null);
     setMatchHistory([]);
     setCurrentRound(null);
+    setRoundKind(null);
     setClaimResult(null);
     setErrorMsg(null);
   };
@@ -207,6 +242,7 @@ export default function FutDraftGamePage() {
     setErrorMsg(null);
     try {
       const result = await startFutDraftMatch(sessionId);
+      setRoundKind(result.game_type as RoundKind);
       setCurrentRound(result);
       setPhase("match");
     } catch (err) {
@@ -219,6 +255,7 @@ export default function FutDraftGamePage() {
   const handleRoundFinished = (round: FutDraftRound) => {
     setMatchHistory((prev) => [...prev, round]);
     setCurrentRound(null);
+    setRoundKind(null);
     if (round.is_finished) {
       hapticNotify(round.wins === 4 ? "success" : "warning");
       setPhase("finished");
@@ -280,6 +317,21 @@ export default function FutDraftGamePage() {
     }
   };
 
+  const playCoinFlip = async (choice: FutDraftCoinFlipChoice) => {
+    if (busy || sessionId === null) return;
+    setBusy(true);
+    setErrorMsg(null);
+    haptic("medium");
+    try {
+      const round = await submitFutDraftCoinFlip(sessionId, choice);
+      handleRoundStep(round);
+    } catch (err) {
+      setErrorMsg(formatGameError(err, "Не удалось бросить монету"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (phase === "idle") {
     return (
       <div className="flex flex-col gap-5">
@@ -329,7 +381,7 @@ export default function FutDraftGamePage() {
               Лучшие составы
             </p>
             <div className="flex flex-col gap-2">
-              {leaderboard.slice(0, 5).map((entry, i) => (
+              {leaderboard.slice(0, 10).map((entry, i) => (
                 <div key={entry.user_id} className="flex items-center justify-between text-sm">
                   <span className="text-ink-mist">{i + 1}. {entry.display_name}</span>
                   <span className="font-mono font-bold text-accent-cyan">{entry.best_squad_strength}</span>
@@ -392,7 +444,7 @@ export default function FutDraftGamePage() {
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
 
         {pendingSlot && (
-          <div className="flex flex-col gap-3">
+          <div ref={candidatesRef} className="flex flex-col gap-3 scroll-mt-4">
             <p className="text-xs font-semibold text-ink-mist-dim">Выбери игрока на эту позицию</p>
             {candidates.map((card) => (
               <DraftCandidateCard key={card.id} card={card} disabled={busy} onClick={() => pick(card.id)} />
@@ -433,11 +485,22 @@ export default function FutDraftGamePage() {
     );
   }
 
-  if (phase === "match" && currentRound) {
-    if (currentRound.game_type === "tactico") {
-      return <TacticoRoundPlayer round={currentRound} busy={busy} errorMsg={errorMsg} onChoose={playTacticoPhase} />;
+  if (phase === "match" && currentRound && roundKind) {
+    // Keyed off roundKind (the flavor the round STARTED as), not
+    // currentRound.game_type — a draw flips game_type to "coin_flip"
+    // mid-round, and switching the rendered component on that would cut
+    // off CardArenaRoundPlayer's match-log animation mid-playback. Each
+    // player component renders its own coin-flip prompt instead when it
+    // sees that game_type on its round prop.
+    if (roundKind === "tactico") {
+      return (
+        <TacticoRoundPlayer
+          round={currentRound} busy={busy} errorMsg={errorMsg}
+          onChoose={playTacticoPhase} onCoinFlip={playCoinFlip}
+        />
+      );
     }
-    if (currentRound.game_type === "penalty") {
+    if (roundKind === "penalty") {
       return <PenaltyRoundPlayer round={currentRound} busy={busy} errorMsg={errorMsg} onKick={playPenaltyKick} />;
     }
     return (
@@ -445,6 +508,7 @@ export default function FutDraftGamePage() {
         round={currentRound}
         busy={busy}
         onAct={playCardArenaAction}
+        onCoinFlip={playCoinFlip}
         onFinished={handleRoundFinished}
       />
     );
@@ -661,11 +725,13 @@ function CardArenaRoundPlayer({
   round,
   busy,
   onAct,
+  onCoinFlip,
   onFinished,
 }: {
   round: FutDraftRound;
   busy: boolean;
   onAct: (action: MatchActionKind) => void;
+  onCoinFlip: (choice: FutDraftCoinFlipChoice) => void;
   onFinished: (round: FutDraftRound) => void;
 }) {
   // Runs the exact same moment-by-moment engine as the real Card Arena
@@ -738,7 +804,8 @@ function CardArenaRoundPlayer({
 
   const revealed = round.events.slice(0, revealedCount);
   const currentMinute = revealed.length ? revealed[revealed.length - 1].minute : 0;
-  const pendingMoment = caughtUp && !isFinished && !autoSkip ? round.pending_moment : null;
+  const awaitingCoinFlip = round.game_type === "coin_flip" && round.round_in_progress;
+  const pendingMoment = caughtUp && !isFinished && !awaitingCoinFlip && !autoSkip ? round.pending_moment : null;
 
   // The live score only counts goals among the *revealed* events, so it
   // climbs to the final score in step with the commentary instead of
@@ -751,9 +818,15 @@ function CardArenaRoundPlayer({
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-1.5 font-mono text-xs text-ink-mist-dim">
           <IconBall size={12} />
-          {caughtUp && isFinished ? "Матч завершён" : autoSkip ? "Пропускаем матч..." : `${currentMinute}' · идёт матч...`}
+          {caughtUp && isFinished
+            ? "Матч завершён"
+            : caughtUp && awaitingCoinFlip
+              ? "Ничья — жребий"
+              : autoSkip
+                ? "Пропускаем матч..."
+                : `${currentMinute}' · идёт матч...`}
         </span>
-        {!autoSkip && !(caughtUp && isFinished) && (
+        {!autoSkip && !(caughtUp && isFinished) && !awaitingCoinFlip && (
           <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-ink-chalk">
             Пропустить
           </button>
@@ -764,13 +837,20 @@ function CardArenaRoundPlayer({
       {round.opponent_name && <p className="text-center text-sm text-ink-mist">vs {round.opponent_name}</p>}
 
       {caughtUp && isFinished && round.result && (
-        <p
-          className={`mt-1 text-center font-display text-sm font-bold ${
-            round.result === "win" ? "text-accent-green" : round.result === "loss" ? "text-red-400" : "text-ink-mist"
-          }`}
-        >
-          {RESULT_LABELS[round.result]}
-        </p>
+        <>
+          <p
+            className={`mt-1 text-center font-display text-sm font-bold ${
+              round.result === "win" ? "text-accent-green" : "text-red-400"
+            }`}
+          >
+            {RESULT_LABELS[round.result]}
+          </p>
+          {round.coin_flip_result && (
+            <p className="text-center text-xs text-ink-mist-dim">
+              Монета: {round.coin_flip_result === "heads" ? "Орёл" : "Решка"}
+            </p>
+          )}
+        </>
       )}
 
       <div className="flex max-h-56 flex-col gap-1 overflow-y-auto text-xs">
@@ -794,6 +874,7 @@ function CardArenaRoundPlayer({
       )}
 
       {pendingMoment && <CardArenaActionPrompt pending={pendingMoment} disabled={busy} onAct={onAct} />}
+      {caughtUp && awaitingCoinFlip && <CoinFlipPrompt disabled={busy} onFlip={onCoinFlip} />}
     </div>
   );
 }
@@ -842,24 +923,61 @@ function CardArenaActionPrompt({
   );
 }
 
+function CoinFlipPrompt({
+  disabled,
+  onFlip,
+}: {
+  disabled: boolean;
+  onFlip: (choice: FutDraftCoinFlipChoice) => void;
+}) {
+  return (
+    <div className="mt-1 flex flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
+      <p className="text-sm font-semibold text-ink-chalk">
+        🪙 Ничья! Как в плей-офф — жребий решает, кто идёт дальше. Угадаешь — победа.
+      </p>
+      <div className="grid w-full grid-cols-2 gap-2">
+        <button
+          onClick={() => onFlip("heads")}
+          disabled={disabled}
+          className="flex flex-col items-center gap-1.5 rounded-2xl bg-bg-surface px-4 py-3 text-sm font-semibold text-ink-chalk active:scale-90 disabled:opacity-40"
+        >
+          <IconCoin size={16} />
+          Орёл
+        </button>
+        <button
+          onClick={() => onFlip("tails")}
+          disabled={disabled}
+          className="flex flex-col items-center gap-1.5 rounded-2xl bg-bg-surface px-4 py-3 text-sm font-semibold text-ink-chalk active:scale-90 disabled:opacity-40"
+        >
+          <IconCoin size={16} />
+          Решка
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TacticoRoundPlayer({
   round,
   busy,
   errorMsg,
   onChoose,
+  onCoinFlip,
 }: {
   round: FutDraftRound;
   busy: boolean;
   errorMsg: string | null;
   onChoose: (choice: string) => void;
+  onCoinFlip: (choice: FutDraftCoinFlipChoice) => void;
 }) {
   const meta = GAME_TYPE_META.tactico;
+  const awaitingCoinFlip = round.game_type === "coin_flip" && round.round_in_progress;
   return (
     <div className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-4">
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-1.5 font-mono text-xs text-ink-mist-dim">
           <meta.Icon size={12} />
-          {meta.label} · эпизод {round.phase}/{round.total_phases}
+          {awaitingCoinFlip ? `${meta.label} · ничья` : `${meta.label} · эпизод ${round.phase}/${round.total_phases}`}
         </span>
       </div>
 
@@ -868,22 +986,33 @@ function TacticoRoundPlayer({
       {round.last_phase_result && (
         <p className="rounded-xl bg-white/5 px-3 py-2 text-center text-xs text-ink-mist">{round.last_phase_result}</p>
       )}
+      {round.coin_flip_result && (
+        <p className="text-center text-xs text-ink-mist-dim">
+          Монета: {round.coin_flip_result === "heads" ? "Орёл" : "Решка"}
+        </p>
+      )}
 
       {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
 
-      <p className="text-center text-xs font-semibold text-ink-mist-dim">Выбери тактику на этот эпизод</p>
-      <div className="flex flex-col gap-2">
-        {(round.tactic_choices ?? []).map((choice) => (
-          <button
-            key={choice}
-            onClick={() => onChoose(choice)}
-            disabled={busy}
-            className="rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-chalk active:scale-95 disabled:opacity-50"
-          >
-            {choice}
-          </button>
-        ))}
-      </div>
+      {awaitingCoinFlip ? (
+        <CoinFlipPrompt disabled={busy} onFlip={onCoinFlip} />
+      ) : (
+        <>
+          <p className="text-center text-xs font-semibold text-ink-mist-dim">Выбери тактику на этот эпизод</p>
+          <div className="flex flex-col gap-2">
+            {(round.tactic_choices ?? []).map((choice) => (
+              <button
+                key={choice}
+                onClick={() => onChoose(choice)}
+                disabled={busy}
+                className="rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-chalk active:scale-95 disabled:opacity-50"
+              >
+                {choice}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

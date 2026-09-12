@@ -134,6 +134,7 @@ export interface GameConfig {
   fut_draft_reward_win_4: number;
   fut_draft_club_bonus_per_extra: number;
   fut_draft_country_bonus_per_extra: number;
+  fut_draft_round_bot_boost_pct: number;
   club_tactical_tackle_attempt_chance: number;
   club_tactical_injury_chance: number;
   club_training_boost_pct: number;

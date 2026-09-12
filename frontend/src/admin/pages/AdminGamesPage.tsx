@@ -206,6 +206,10 @@ export default function AdminGamesPage() {
           {field("fut_draft_club_bonus_per_extra", "За доп. одноклубника")}
           {field("fut_draft_country_bonus_per_extra", "За доп. игрока из региона")}
         </div>
+        <p className="mb-2 mt-3 text-xs font-semibold text-slate-400">Сложность ботов по раундам</p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("fut_draft_round_bot_boost_pct", "Усиление бота к 4 матчу, % (0 = как раньше)")}
+        </div>
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
