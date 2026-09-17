@@ -249,6 +249,15 @@ export interface AdminWheelPrize {
   badge_id: number | null;
 }
 
+export interface DailyRewardOption {
+  id: number;
+  day: number;
+  option_index: number;
+  coins: number;
+  free_pack_slug: string | null;
+  grants_random_card: boolean;
+}
+
 export interface TaskDefinition {
   id: number;
   code: string;

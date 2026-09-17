@@ -16,11 +16,18 @@ from app.models.pack import Pack, PackOpening, PackOpeningCard, PackRarityProbab
 from app.models.player import Player
 from app.models.user import User
 from app.models.user_coach_card import UserCoachCard
-from app.schemas.pack import OpenedCardOut, OpenedCoachCardOut, PackOpenResult, PackOut
+from app.schemas.pack import OpenedCardOut, OpenedCoachCardOut, PackBulkOpenResult, PackOpenResult, PackOut
 from app.services import bingo_service, collection_service, notification_service, task_service
 from app.services.card_creation import create_user_card, create_user_coach_card
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
+
+# Hard ceiling on a single bulk-open request, independent of anything the
+# frontend sends — matches the largest quick-pick preset in the UI. Keeps a
+# single request's card-creation work (each card does a row-locked
+# read-increment-write on its Player, see card_creation.create_user_card)
+# bounded, and keeps one commit's blast radius sane if something goes wrong.
+MAX_BULK_PACK_QUANTITY = 100
 
 
 async def _get_pack_or_404(db: AsyncSession, pack_id: int) -> Pack:
@@ -45,7 +52,7 @@ def _assert_pack_available(pack: Pack) -> None:
         raise ConflictError("This pack sale has ended")
 
 
-async def _assert_purchase_limit(db: AsyncSession, pack: Pack, user_id: int) -> None:
+async def _assert_purchase_limit(db: AsyncSession, pack: Pack, user_id: int, quantity: int = 1) -> None:
     if pack.purchase_limit_per_user is None:
         return
     count = (
@@ -55,7 +62,7 @@ async def _assert_purchase_limit(db: AsyncSession, pack: Pack, user_id: int) -> 
             )
         )
     ).scalar_one()
-    if count >= pack.purchase_limit_per_user:
+    if count + quantity > pack.purchase_limit_per_user:
         raise ConflictError("Purchase limit reached for this pack")
 
 
@@ -486,6 +493,172 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
         cards=opened_items,
         coach_cards=opened_coach_items,
         new_balance=locked_user.balance,
+        referral_bonus_coins=referral_bonus_coins,
+        collection_rewards=collection_rewards,
+    )
+
+
+def _bulk_sub_key(idempotency_key: Optional[str], index: int) -> Optional[str]:
+    # Each pack in the batch gets its own real PackOpening row (same shape
+    # every other reader of pack_openings already expects) with its own
+    # derived idempotency key — sub-key #0 existing is what a retry checks
+    # to decide "this whole batch already went through" (see open_pack_bulk):
+    # since every sub-key is written in the SAME transaction as the single
+    # commit below, either all `quantity` of them exist or none do.
+    return f"{idempotency_key}:{index}" if idempotency_key else None
+
+
+async def _get_bulk_opening_result(
+    db: AsyncSession, user: User, pack: Pack, quantity: int, idempotency_key: str
+) -> PackBulkOpenResult:
+    sub_keys = [_bulk_sub_key(idempotency_key, i) for i in range(quantity)]
+    result = await db.execute(
+        select(PackOpening).where(PackOpening.user_id == user.id, PackOpening.idempotency_key.in_(sub_keys))
+    )
+    openings_by_key = {o.idempotency_key: o for o in result.scalars().all()}
+    if len(openings_by_key) != quantity:
+        # Atomicity means this should never happen (all sub-keys are written
+        # in one transaction) — surfacing a clear error beats silently
+        # returning a partial/wrong result if it somehow ever does.
+        raise ConflictError("This bulk pack opening is incomplete — please retry")
+    ordered = [openings_by_key[k] for k in sub_keys]
+
+    all_items: list[OpenedCardOut] = []
+    all_coach_items: list[OpenedCoachCardOut] = []
+    for opening in ordered:
+        single = await get_opening_result(db, user, opening)
+        all_items.extend(single.cards)
+        all_coach_items.extend(single.coach_cards)
+    all_items.sort(key=lambda item: RARITY_ORDER[item.card.player.rarity])
+    all_coach_items.sort(key=lambda item: RARITY_ORDER[item.card.coach.rarity])
+
+    return PackBulkOpenResult(
+        pack=PackOut.model_validate(pack), quantity=quantity, opening_ids=[o.id for o in ordered],
+        cards=all_items, coach_cards=all_coach_items, new_balance=user.balance,
+        total_price_paid=sum(o.price_paid for o in ordered),
+    )
+
+
+async def open_pack_bulk(
+    db: AsyncSession, user: User, pack_id: int, quantity: int, idempotency_key: Optional[str]
+) -> PackBulkOpenResult:
+    """Opens `quantity` copies of the same pack in one atomic request —
+    quantity is validated here regardless of what the frontend already
+    enforces (never trust the client for anything balance-affecting). Every
+    pack in the batch is its own real PackOpening row (so history, stats and
+    per-pack idempotency all keep working exactly like a single open), but
+    the whole batch is one debit and one commit: either every pack in the
+    batch is granted or none are, never a partial charge."""
+    if quantity < 1 or quantity > MAX_BULK_PACK_QUANTITY:
+        raise ConflictError(f"Quantity must be between 1 and {MAX_BULK_PACK_QUANTITY}")
+
+    pack = await _get_pack_or_404(db, pack_id)
+
+    if idempotency_key:
+        existing_first = (
+            await db.execute(
+                select(PackOpening).where(
+                    PackOpening.user_id == user.id, PackOpening.idempotency_key == _bulk_sub_key(idempotency_key, 0)
+                )
+            )
+        ).scalar_one_or_none()
+        if existing_first is not None:
+            return await _get_bulk_opening_result(db, user, pack, quantity, idempotency_key)
+
+    _assert_pack_available(pack)
+    await _assert_purchase_limit(db, pack, user.id, quantity=quantity)
+
+    # Same buyer(+referrer) locking order as open_pack — see that function's
+    # comment for why the order must be canonical (ascending id) rather than
+    # always-buyer-first.
+    pending_referrer_id = (
+        user.referred_by_id if user.referred_by_id is not None and not user.referral_reward_granted else None
+    )
+    if pending_referrer_id is not None:
+        first_id, second_id = sorted([user.id, pending_referrer_id])
+        first_locked = await lock_user_for_update(db, first_id)
+        second_locked = await lock_user_for_update(db, second_id)
+        locked_user = first_locked if first_locked.id == user.id else second_locked
+        pre_locked_referrer: Optional[User] = first_locked if first_locked.id == pending_referrer_id else second_locked
+    else:
+        locked_user = await lock_user_for_update(db, user.id)
+        pre_locked_referrer = None
+
+    total_price = pack.price * quantity
+    await debit_coins(
+        db, locked_user, total_price, TransactionType.pack_purchase,
+        f"Открытие {quantity}× пака «{pack.name}»",
+        related_object_type="pack", related_object_id=pack.id,
+    )
+
+    dup_counts = await _duplicate_counts_snapshot(db, locked_user.id)
+    opening_ids: list[int] = []
+    all_opened_items: list[OpenedCardOut] = []
+    all_opened_coach_items: list[OpenedCoachCardOut] = []
+    for i in range(quantity):
+        opening = PackOpening(
+            user_id=locked_user.id, pack_id=pack.id, price_paid=pack.price,
+            idempotency_key=_bulk_sub_key(idempotency_key, i),
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(opening)
+        await db.flush()
+        opened_items, opened_coach_items = await roll_and_create_cards(db, locked_user, pack, opening, dup_counts, CardSource.pack)
+        opening_ids.append(opening.id)
+        all_opened_items.extend(opened_items)
+        all_opened_coach_items.extend(opened_coach_items)
+
+    await track_pack_opened_tasks(db, locked_user, dup_counts)
+    collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(
+        db, locked_user, [item.card.player.id for item in all_opened_items]
+    )
+
+    referral_bonus_coins: Optional[int] = None
+    if locked_user.referred_by_id is not None and not locked_user.referral_reward_granted:
+        referrer = pre_locked_referrer or await lock_user_for_update(db, locked_user.referred_by_id)
+        referral_bonus_coins = await _credit_referral_bonus(db, locked_user, referrer)
+
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Mirrors open_pack's own race handling: a duplicated client-side
+        # submit racing itself hits the sub-key-0 unique constraint — the
+        # loser rolls back and returns the winner's already-committed batch
+        # instead of erroring or double-charging.
+        await db.rollback()
+        if idempotency_key:
+            existing_first = (
+                await db.execute(
+                    select(PackOpening).where(
+                        PackOpening.user_id == user.id,
+                        PackOpening.idempotency_key == _bulk_sub_key(idempotency_key, 0),
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing_first is not None:
+                return await _get_bulk_opening_result(db, user, pack, quantity, idempotency_key)
+        raise
+    await db.refresh(locked_user)
+
+    await bingo_service.increment_goal(db, BingoGoalType.packs_opened, quantity)
+    rarity_counts: dict[Rarity, int] = {}
+    for item in all_opened_items:
+        rarity_counts[item.card.player.rarity] = rarity_counts.get(item.card.player.rarity, 0) + 1
+    await bingo_service.increment_goal(db, BingoGoalType.rare_drops, rarity_counts.get(Rarity.rare, 0))
+    await bingo_service.increment_goal(db, BingoGoalType.epic_drops, rarity_counts.get(Rarity.epic, 0))
+    await bingo_service.increment_goal(db, BingoGoalType.legendary_drops, rarity_counts.get(Rarity.legendary, 0))
+
+    all_opened_items.sort(key=lambda item: RARITY_ORDER[item.card.player.rarity])
+    all_opened_coach_items.sort(key=lambda item: RARITY_ORDER[item.card.coach.rarity])
+
+    return PackBulkOpenResult(
+        pack=PackOut.model_validate(pack),
+        quantity=quantity,
+        opening_ids=opening_ids,
+        cards=all_opened_items,
+        coach_cards=all_opened_coach_items,
+        new_balance=locked_user.balance,
+        total_price_paid=total_price,
         referral_bonus_coins=referral_bonus_coins,
         collection_rewards=collection_rewards,
     )

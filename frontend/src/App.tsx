@@ -18,6 +18,7 @@ import AdminTradesPage from "@/admin/pages/AdminTradesPage";
 import AdminTrophiesPage from "@/admin/pages/AdminTrophiesPage";
 import AdminLeaguesPage from "@/admin/pages/AdminLeaguesPage";
 import AdminGiftsPage from "@/admin/pages/AdminGiftsPage";
+import AdminDailyRewardsPage from "@/admin/pages/AdminDailyRewardsPage";
 import AdminWheelPage from "@/admin/pages/AdminWheelPage";
 import AdminGamesPage from "@/admin/pages/AdminGamesPage";
 import AdminUpgradesPage from "@/admin/pages/AdminUpgradesPage";
@@ -35,12 +36,14 @@ import MemoryGamePage from "@/pages/MemoryGamePage";
 import ArenaPage from "@/pages/ArenaPage";
 import TacticoMatchesPage from "@/pages/TacticoMatchesPage";
 import TacticoMatchPage from "@/pages/TacticoMatchPage";
+import TacticoOpenChallengePage from "@/pages/TacticoOpenChallengePage";
 import TacticoSearchPage from "@/pages/TacticoSearchPage";
 import TacticoSquadPage from "@/pages/TacticoSquadPage";
 import SaboteurGamePage from "@/pages/SaboteurGamePage";
 import PenaltyGamePage from "@/pages/PenaltyGamePage";
 import PenaltyMatchesPage from "@/pages/PenaltyMatchesPage";
 import PenaltyMatchPage from "@/pages/PenaltyMatchPage";
+import PenaltyOpenChallengePage from "@/pages/PenaltyOpenChallengePage";
 import PenaltySearchPage from "@/pages/PenaltySearchPage";
 import FreeKickGamePage from "@/pages/FreeKickGamePage";
 import HangmanGamePage from "@/pages/HangmanGamePage";
@@ -175,6 +178,7 @@ export default function App() {
         <Route path="leagues" element={<AdminLeaguesPage />} />
         <Route path="gifts" element={<AdminGiftsPage />} />
         <Route path="wheel" element={<AdminWheelPage />} />
+        <Route path="daily-rewards" element={<AdminDailyRewardsPage />} />
         <Route path="games" element={<AdminGamesPage />} />
         <Route path="upgrades" element={<AdminUpgradesPage />} />
         <Route path="diamond-upgrades" element={<AdminDiamondUpgradesPage />} />
@@ -196,11 +200,13 @@ export default function App() {
         <Route path="/play/tactico/squad" element={<TacticoSquadPage />} />
         <Route path="/play/tactico/search" element={<TacticoSearchPage />} />
         <Route path="/play/tactico/matches/:matchId" element={<TacticoMatchPage />} />
+        <Route path="/play/tactico/open/:matchId" element={<TacticoOpenChallengePage />} />
         <Route path="/play/saboteur" element={<SaboteurGamePage />} />
         <Route path="/play/penalty" element={<PenaltyGamePage />} />
         <Route path="/play/penalty/matches" element={<PenaltyMatchesPage />} />
         <Route path="/play/penalty/matches/search" element={<PenaltySearchRoute />} />
         <Route path="/play/penalty/matches/:matchId" element={<PenaltyMatchPage />} />
+        <Route path="/play/penalty/open/:matchId" element={<PenaltyOpenChallengePage />} />
         <Route path="/play/free-kick" element={<FreeKickGamePage />} />
         <Route path="/play/hangman" element={<HangmanGamePage />} />
         <Route path="/play/pairs" element={<PairsGamePage />} />

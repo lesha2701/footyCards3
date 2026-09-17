@@ -231,6 +231,18 @@ export interface PackOpenResult {
   collection_rewards: CollectionRewardGrant[];
 }
 
+export interface PackBulkOpenResult {
+  pack: Pack;
+  quantity: number;
+  opening_ids: number[];
+  cards: OpenedCard[];
+  coach_cards: OpenedCoachCard[];
+  new_balance: number;
+  total_price_paid: number;
+  referral_bonus_coins: number | null;
+  collection_rewards: CollectionRewardGrant[];
+}
+
 export interface StarsInvoiceCreate {
   invoice_link: string;
   payload_token: string;
@@ -416,6 +428,9 @@ export interface LineupSlot {
 
 export interface Lineup {
   id: number | null;
+  template_index: number;
+  name: string;
+  is_active: boolean;
   formation: string;
   tactic: LineupTactic;
   is_complete: boolean;
@@ -573,6 +588,9 @@ export interface TradeOffer {
 }
 
 export interface TacticoSquad {
+  template_index: number;
+  name: string;
+  is_active: boolean;
   is_complete: boolean;
   cards: UserCard[];
   max_legendary: number;
@@ -591,7 +609,7 @@ export interface PenaltyStats {
 }
 
 export type TacticoPhase = "attack" | "defense";
-export type TacticoOpponentType = "bot" | "friend" | "online";
+export type TacticoOpponentType = "bot" | "friend" | "online" | "chat";
 export type TacticoMatchStatus = "pending_accept" | "in_progress" | "finished" | "declined" | "cancelled" | "expired";
 
 export interface TacticoSearchStatus {
@@ -638,9 +656,18 @@ export interface TacticoMatch {
   result: "win" | "draw" | "loss" | null;
   reward_coins: number;
   rating_delta: number;
+  stake_coins: number;
   created_at: string;
   expires_at: string | null;
   resolved_at: string | null;
+}
+
+export interface TacticoOpenChallengePreview {
+  id: number;
+  creator_name: string;
+  stake_coins: number;
+  status: TacticoMatchStatus;
+  is_own_challenge: boolean;
 }
 
 export interface DailyRewardDay {
@@ -935,7 +962,7 @@ export interface PenaltyForfeitResult {
 }
 
 export type PenaltyMatchStatus = "pending_accept" | "in_progress" | "finished" | "declined" | "cancelled" | "expired";
-export type PenaltyOpponentType = "friend" | "online";
+export type PenaltyOpponentType = "friend" | "online" | "chat";
 
 export interface PenaltyRound {
   kicker: "user" | "opponent";
@@ -960,9 +987,19 @@ export interface PenaltyMatch {
   match_deadline: string | null;
   result: MatchResult | null;
   rating_delta: number;
+  stake_coins: number;
+  reward_coins: number;
   created_at: string;
   expires_at: string | null;
   resolved_at: string | null;
+}
+
+export interface PenaltyOpenChallengePreview {
+  id: number;
+  creator_name: string;
+  stake_coins: number;
+  status: PenaltyMatchStatus;
+  is_own_challenge: boolean;
 }
 
 export interface PenaltySearchStatus {
@@ -1306,6 +1343,9 @@ export interface ClubLineupSlot {
 }
 
 export interface ClubLineup {
+  template_index: number;
+  name: string;
+  is_active: boolean;
   is_complete: boolean;
   team_strength: number | null;
   formation: string;

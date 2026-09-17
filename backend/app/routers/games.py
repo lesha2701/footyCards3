@@ -51,6 +51,7 @@ from app.schemas.fut_draft import (
     FutDraftRoundOut,
     FutDraftStartOut,
     FutDraftStateOut,
+    FutDraftSwapSlotsRequest,
     FutDraftTacticoChoiceRequest,
 )
 from app.services import (
@@ -250,6 +251,14 @@ async def fut_draft_pick(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await fut_draft_service.submit_pick(db, user, session_id, payload.player_id)
+
+
+@router.post("/fut-draft/{session_id}/swap", response_model=FutDraftStateOut)
+async def fut_draft_swap_slots(
+    session_id: int, payload: FutDraftSwapSlotsRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await fut_draft_service.swap_slots(db, user, session_id, payload.slot_code_a, payload.slot_code_b)
 
 
 @router.post("/fut-draft/{session_id}/match/start", response_model=FutDraftRoundOut)

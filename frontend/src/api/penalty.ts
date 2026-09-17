@@ -1,10 +1,27 @@
 import { api } from "@/lib/api";
-import type { PenaltyDirection, PenaltyMatch, PenaltySearchStatus } from "@/types";
+import type { PenaltyDirection, PenaltyMatch, PenaltyOpenChallengePreview, PenaltySearchStatus } from "@/types";
 
 export async function createPenaltyChallenge(opponentUserId: number, userCardId: number): Promise<PenaltyMatch> {
   const { data } = await api.post<PenaltyMatch>("/games/penalty/challenges", {
     opponent_user_id: opponentUserId, user_card_id: userCardId,
   });
+  return data;
+}
+
+export async function createPenaltyOpenChallenge(userCardId: number, stakeCoins: number): Promise<PenaltyMatch> {
+  const { data } = await api.post<PenaltyMatch>("/games/penalty/challenges/open", {
+    user_card_id: userCardId, stake_coins: stakeCoins,
+  });
+  return data;
+}
+
+export async function fetchPenaltyOpenChallenge(id: number): Promise<PenaltyOpenChallengePreview> {
+  const { data } = await api.get<PenaltyOpenChallengePreview>(`/games/penalty/challenges/open/${id}`);
+  return data;
+}
+
+export async function acceptPenaltyOpenChallenge(id: number, userCardId: number): Promise<PenaltyMatch> {
+  const { data } = await api.post<PenaltyMatch>(`/games/penalty/challenges/open/${id}/accept`, { user_card_id: userCardId });
   return data;
 }
 

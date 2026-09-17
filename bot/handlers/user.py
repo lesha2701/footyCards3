@@ -25,6 +25,10 @@ HELP_TEXT = (
 
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
+    # Reaching /start at all means the bot isn't blocked for this user
+    # (if it ever was) — clears it so broadcasts/gifts/notifications
+    # resume reaching them.
+    await db.mark_bot_unblocked_by_telegram_id(message.from_user.id)
     payload = message.text.split(maxsplit=1)[1] if message.text and " " in message.text else None
 
     text = (
@@ -48,6 +52,26 @@ async def cmd_start(message: Message) -> None:
             "Нажми кнопку ниже, чтобы открыть приложение и вступить 👇"
         )
         keyboard = open_app_keyboard(query=f"?joinClub={invite_code}")
+    elif payload and payload.startswith("tactico_open_"):
+        match_id = payload[len("tactico_open_"):]
+        text = (
+            f"Привет, {message.from_user.first_name}! 👋\n\n"
+            "⚔️ Тебя вызвали на матч в Тактико!\n\n"
+            "Нажми кнопку ниже, чтобы посмотреть детали вызова и принять его 👇"
+        )
+        keyboard = (
+            open_app_keyboard(path=f"/play/tactico/open/{match_id}") if match_id.isdigit() else open_app_keyboard()
+        )
+    elif payload and payload.startswith("penalty_open_"):
+        match_id = payload[len("penalty_open_"):]
+        text = (
+            f"Привет, {message.from_user.first_name}! 👋\n\n"
+            "🥅 Тебя вызвали на серию пенальти!\n\n"
+            "Нажми кнопку ниже, чтобы посмотреть детали вызова и принять его 👇"
+        )
+        keyboard = (
+            open_app_keyboard(path=f"/play/penalty/open/{match_id}") if match_id.isdigit() else open_app_keyboard()
+        )
     elif payload == "chatpack":
         # Deep link from the "вкарта" group-chat button — the card is
         # already granted, this is just getting them into the Mini App to see it.

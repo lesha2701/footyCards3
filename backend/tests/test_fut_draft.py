@@ -4,6 +4,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.orm.attributes import flag_modified
 
+import app.core.rate_limit as rate_limit_module
 from app.models.enums import Position, Rarity
 from app.services import fut_draft_service
 from app.services.fut_draft_service import MIN_STRONG_OR_BETTER_SLOTS, STRONG_OR_BETTER_TIERS
@@ -22,6 +23,18 @@ async def _seed_full_pool(db_session):
         for rarity in (Rarity.common, Rarity.rare, Rarity.epic, Rarity.legendary):
             for _ in range(3):
                 await create_player(db_session, rarity=rarity, position=position)
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    # The in-memory rate limiter (app/core/rate_limit.py) is keyed by numeric
+    # user id and lives for the whole pytest process, but every test gets a
+    # fresh DB (autoincrement ids restart at 1, see conftest.py's
+    # _fresh_schema) — without this, tests whose first-created user lands on
+    # the same low id collide on the same "fut_draft_start:<id>" bucket and
+    # can trip the 20-calls/60s limit purely from unrelated tests' calls.
+    rate_limit_module._hits.clear()
+    yield
 
 
 def test_lazy_tier_guarantees_hold_across_many_full_runs():
@@ -51,6 +64,21 @@ def test_lazy_tier_guarantees_hold_across_many_full_runs():
             current = current + 1 if tier == "weak" else 0
             max_weak_streak = max(max_weak_streak, current)
         assert max_weak_streak <= 2
+
+
+def test_clean_group_key_collapses_whitespace_variants():
+    """Regression test: two DB rows meant to name the same club/country but
+    entered with a stray leading/trailing/doubled space (a real admin-entry
+    slip) must collapse to the exact same grouping key — otherwise
+    club_counts/country_counts silently split into two separate entries,
+    which both under-counts the chemistry bonus (two groups of 2 pay less
+    than one group of 4) and shows the exact same hint line twice."""
+    from app.services.lineup_service import clean_group_key
+
+    assert clean_group_key("Англия") == "Англия"
+    assert clean_group_key("Англия ") == "Англия"
+    assert clean_group_key(" Англия") == "Англия"
+    assert clean_group_key("Ан  глия") == "Ан глия"
 
 
 def test_fut_draft_chemistry_bonus_sums_every_qualifying_club_and_country():
@@ -123,6 +151,26 @@ async def _seed_active_round(db_session, session_id, active_round):
     session = await db_session.get(GameSession, session_id)
     state = dict(session.server_state)
     state["active_round"] = active_round
+    session.server_state = state
+    flag_modified(session, "server_state")
+    db_session.add(session)
+    await db_session.commit()
+
+
+async def _force_offer(db_session, session_id, slot_code, player_id):
+    """Bypasses the random slot-open roulette so a test can pick a specific
+    Player for a specific slot — sets up the exact state /pick expects
+    (pending_slot + pending_candidates containing player_id), same
+    direct-state-manipulation trick as _seed_active_round above."""
+    from app.models.game import GameSession
+
+    session = await db_session.get(GameSession, session_id)
+    state = dict(session.server_state)
+    state["pending_slot"] = slot_code
+    state["pending_candidates"] = [player_id]
+    tiers = dict(state["tiers"])
+    tiers[slot_code] = "normal"
+    state["tiers"] = tiers
     session.server_state = state
     flag_modified(session, "server_state")
     db_session.add(session)
@@ -549,6 +597,35 @@ async def test_fut_draft_chemistry_hints_reflect_club_and_country_bonuses(client
     assert any(hint.startswith("На своей позиции") for hint in state["chemistry_hints"])
 
 
+async def test_fut_draft_country_bonus_merges_whitespace_variants_into_one_group(client, db_session, bot_token):
+    """Regression test for a real bug: two players whose `country` differs
+    only by a stray space ("Англия" vs "Англия ", a plausible admin-entry
+    slip) must still count as ONE region group — otherwise the chemistry
+    hint for that region is shown twice (both under the same visible text)
+    and the bonus itself is under-counted (two groups of 1 extra each pay
+    less than one group of 3 extra)."""
+    headers, body = await _start(client, db_session, bot_token, 770025)
+    session_id = body["session_id"]
+    state = await _choose_formation(client, headers, session_id, body["formation_options"])
+    slot_codes = [s["slot_code"] for s in state["slots"]]
+
+    players = []
+    for i, country in enumerate(["Англия", "Англия ", " Англия", "Германия"]):
+        player = await create_player(db_session, country=country, club=f"Клуб {i}")
+        players.append(player)
+
+    for slot_code, player in zip(slot_codes, players):
+        await _force_offer(db_session, session_id, slot_code, player.id)
+        resp = await client.post(
+            f"/api/v1/games/fut-draft/{session_id}/pick", headers=headers, json={"player_id": player.id},
+        )
+        assert resp.status_code == 200
+        state = resp.json()
+
+    england_hints = [h for h in state["chemistry_hints"] if "Англия" in h]
+    assert england_hints == ["Один регион «Англия» ×3: +12 к силе"]
+
+
 async def test_fut_draft_leaderboard_orders_by_best_squad_strength(client, db_session, bot_token, monkeypatch):
     # A single opponent breakaway (empty net) is auto-resolved inside
     # /match/start itself (non-interactive — see _is_interactive), so one
@@ -574,3 +651,87 @@ async def test_fut_draft_leaderboard_orders_by_best_squad_strength(client, db_se
     assert any(e["user_id"] == user_a.id for e in entries)
     strengths = [e["best_squad_strength"] for e in entries]
     assert strengths == sorted(strengths, reverse=True)
+
+
+# ---------------------------------------------------------------------------
+# Swap slots (post-draft rearranging)
+# ---------------------------------------------------------------------------
+
+async def test_fut_draft_swap_slots_exchanges_players(client, db_session, bot_token):
+    headers, body = await _start(client, db_session, bot_token, 770020)
+    state = await _draft_full_squad(client, headers, body["session_id"], body["formation_options"])
+    session_id = body["session_id"]
+
+    filled = [s for s in state["slots"] if s["player"] is not None]
+    slot_a, slot_b = filled[0], filled[1]
+    player_a_id, player_b_id = slot_a["player"]["id"], slot_b["player"]["id"]
+    assert player_a_id != player_b_id
+
+    resp = await client.post(
+        f"/api/v1/games/fut-draft/{session_id}/swap", headers=headers,
+        json={"slot_code_a": slot_a["slot_code"], "slot_code_b": slot_b["slot_code"]},
+    )
+    assert resp.status_code == 200
+    new_state = resp.json()
+    by_code = {s["slot_code"]: s for s in new_state["slots"]}
+    assert by_code[slot_a["slot_code"]]["player"]["id"] == player_b_id
+    assert by_code[slot_b["slot_code"]]["player"]["id"] == player_a_id
+    # Every other slot is untouched.
+    for s in filled[2:]:
+        assert by_code[s["slot_code"]]["player"]["id"] == s["player"]["id"]
+    assert new_state["last_pick_strength_delta"] is not None
+
+
+async def test_fut_draft_swap_rejects_the_same_slot_twice(client, db_session, bot_token):
+    headers, body = await _start(client, db_session, bot_token, 770021)
+    state = await _draft_full_squad(client, headers, body["session_id"], body["formation_options"])
+    slot_code = state["slots"][0]["slot_code"]
+
+    resp = await client.post(
+        f"/api/v1/games/fut-draft/{body['session_id']}/swap", headers=headers,
+        json={"slot_code_a": slot_code, "slot_code_b": slot_code},
+    )
+    assert resp.status_code == 409
+
+
+async def test_fut_draft_swap_rejects_unknown_slot(client, db_session, bot_token):
+    headers, body = await _start(client, db_session, bot_token, 770022)
+    state = await _draft_full_squad(client, headers, body["session_id"], body["formation_options"])
+    slot_code = state["slots"][0]["slot_code"]
+
+    resp = await client.post(
+        f"/api/v1/games/fut-draft/{body['session_id']}/swap", headers=headers,
+        json={"slot_code_a": slot_code, "slot_code_b": "NOT_A_REAL_SLOT"},
+    )
+    assert resp.status_code == 409
+
+
+async def test_fut_draft_swap_rejects_before_squad_is_ready(client, db_session, bot_token):
+    headers, body = await _start(client, db_session, bot_token, 770023)
+    session_id = body["session_id"]
+    state = await _choose_formation(client, headers, session_id, body["formation_options"])
+    slot_codes = [s["slot_code"] for s in state["slots"]]
+
+    resp = await client.post(
+        f"/api/v1/games/fut-draft/{session_id}/swap", headers=headers,
+        json={"slot_code_a": slot_codes[0], "slot_code_b": slot_codes[1]},
+    )
+    assert resp.status_code == 409
+
+
+async def test_fut_draft_swap_rejects_during_an_active_match(client, db_session, bot_token):
+    headers, body = await _start(client, db_session, bot_token, 770024)
+    session_id = body["session_id"]
+    state = await _draft_full_squad(client, headers, session_id, body["formation_options"])
+    slot_codes = [s["slot_code"] for s in state["slots"]]
+
+    await _seed_active_round(db_session, session_id, {
+        "game_type": "card_arena", "moments": [], "next_index": 0, "user_score": 0, "opponent_score": 0,
+        "ratings": {}, "cards": {}, "red_card_applied": False, "opponent_name": "Bot", "events": [],
+    })
+
+    resp = await client.post(
+        f"/api/v1/games/fut-draft/{session_id}/swap", headers=headers,
+        json={"slot_code_a": slot_codes[0], "slot_code_b": slot_codes[1]},
+    )
+    assert resp.status_code == 409

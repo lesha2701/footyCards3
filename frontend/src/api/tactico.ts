@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { TacticoMatch, TacticoSearchStatus, TacticoSquad, TacticoStats } from "@/types";
+import type { TacticoMatch, TacticoOpenChallengePreview, TacticoSearchStatus, TacticoSquad, TacticoStats } from "@/types";
 
 export async function fetchTacticoStats(): Promise<TacticoStats> {
   const { data } = await api.get<TacticoStats>("/tactico/stats");
@@ -16,6 +16,26 @@ export async function setTacticoSquad(userCardIds: number[]): Promise<TacticoSqu
   return data;
 }
 
+export async function fetchTacticoSquadTemplates(): Promise<TacticoSquad[]> {
+  const { data } = await api.get<TacticoSquad[]>("/tactico/squad/templates");
+  return data;
+}
+
+export async function setTacticoSquadTemplate(templateIndex: number, userCardIds: number[]): Promise<TacticoSquad> {
+  const { data } = await api.put<TacticoSquad>(`/tactico/squad/templates/${templateIndex}`, { user_card_ids: userCardIds });
+  return data;
+}
+
+export async function renameTacticoSquadTemplate(templateIndex: number, name: string): Promise<TacticoSquad> {
+  const { data } = await api.put<TacticoSquad>(`/tactico/squad/templates/${templateIndex}/name`, { name });
+  return data;
+}
+
+export async function activateTacticoSquadTemplate(templateIndex: number): Promise<TacticoSquad> {
+  const { data } = await api.post<TacticoSquad>(`/tactico/squad/templates/${templateIndex}/activate`);
+  return data;
+}
+
 export async function createTacticoBotMatch(difficulty: "easy" | "medium" | "hard"): Promise<TacticoMatch> {
   const { data } = await api.post<TacticoMatch>("/tactico/matches/bot", { difficulty });
   return data;
@@ -23,6 +43,21 @@ export async function createTacticoBotMatch(difficulty: "easy" | "medium" | "har
 
 export async function createTacticoChallenge(receiverId: number): Promise<TacticoMatch> {
   const { data } = await api.post<TacticoMatch>("/tactico/matches/challenge", { receiver_id: receiverId });
+  return data;
+}
+
+export async function createTacticoOpenChallenge(stakeCoins: number): Promise<TacticoMatch> {
+  const { data } = await api.post<TacticoMatch>("/tactico/matches/open-challenge", { stake_coins: stakeCoins });
+  return data;
+}
+
+export async function fetchTacticoOpenChallenge(id: number): Promise<TacticoOpenChallengePreview> {
+  const { data } = await api.get<TacticoOpenChallengePreview>(`/tactico/matches/open/${id}`);
+  return data;
+}
+
+export async function acceptTacticoOpenChallenge(id: number): Promise<TacticoMatch> {
+  const { data } = await api.post<TacticoMatch>(`/tactico/matches/open/${id}/accept`);
   return data;
 }
 

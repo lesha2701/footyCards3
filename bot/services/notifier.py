@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramAPIError, TelegramRetryAfter
+from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError, TelegramRetryAfter
 
 import db
 from keyboards import open_app_keyboard
@@ -64,6 +64,11 @@ async def _deliver_one(bot: Bot, row, semaphore: asyncio.Semaphore, rate_limiter
         try:
             try:
                 await bot.send_message(row["telegram_id"], text, reply_markup=keyboard)
+            except TelegramForbiddenError:
+                # User blocked the bot — not transient, no point retrying.
+                # Mark it now so this (and every other queued) notification
+                # for them stops being fetched/attempted going forward.
+                await db.mark_bot_blocked(row["user_id"])
             except TelegramRetryAfter as exc:
                 # Telegram's own flood-control backoff — wait it out and retry once,
                 # rather than just dropping the message.
@@ -71,6 +76,8 @@ async def _deliver_one(bot: Bot, row, semaphore: asyncio.Semaphore, rate_limiter
                 await rate_limiter.acquire()
                 try:
                     await bot.send_message(row["telegram_id"], text, reply_markup=keyboard)
+                except TelegramForbiddenError:
+                    await db.mark_bot_blocked(row["user_id"])
                 except TelegramAPIError as exc2:
                     logger.warning("Failed to deliver notification %s after retry: %s", row["id"], exc2)
             except TelegramAPIError as exc:

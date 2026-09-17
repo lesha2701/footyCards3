@@ -9,7 +9,10 @@ import {
 } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchMyClub } from "@/api/clubs";
-import { activateClubTraining, fetchClubCards, fetchClubCoachCards, fetchClubLineup, setClubCoach, setClubLineup, setClubTactics } from "@/api/clubSquad";
+import {
+  activateClubLineupTemplate, activateClubTraining, fetchClubCards, fetchClubCoachCards, fetchClubLineupTemplates,
+  renameClubLineupTemplate, setClubCoachTemplate, setClubLineupTemplate, setClubTacticsTemplate,
+} from "@/api/clubSquad";
 import { staticUrl } from "@/lib/api";
 import { BOOST_TYPE_LABELS } from "@/lib/coaches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
@@ -22,7 +25,11 @@ export default function ClubSquadPage() {
   const queryClient = useQueryClient();
   const { data: club } = useQuery({ queryKey: ["clubs", "me"], queryFn: fetchMyClub, retry: false });
   const canEdit = club?.my_role === "captain" || club?.my_role === "assistant";
-  const { data: lineup, isLoading: lineupLoading } = useQuery({ queryKey: ["clubs", "lineup"], queryFn: fetchClubLineup });
+  const { data: templates, isLoading: lineupLoading } = useQuery({ queryKey: ["clubs", "lineup-templates"], queryFn: fetchClubLineupTemplates });
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const activeIndex = templates?.find((t) => t.is_active)?.template_index ?? 1;
+  const viewedIndex = selectedIndex ?? activeIndex;
+  const lineup = templates?.find((t) => t.template_index === viewedIndex);
   const { data: cards } = useQuery({ queryKey: ["clubs", "cards"], queryFn: fetchClubCards });
   const { data: coachCards } = useQuery({ queryKey: ["clubs", "coach-cards"], queryFn: fetchClubCoachCards, enabled: canEdit });
   const [pickerSlot, setPickerSlot] = useState<ClubLineupSlot | null>(null);
@@ -31,27 +38,40 @@ export default function ClubSquadPage() {
   const [rulesOpen, setRulesOpen] = useState(false);
 
   const setLineupMutation = useMutation({
-    mutationFn: setClubLineup,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["clubs", "lineup"] }); queryClient.invalidateQueries({ queryKey: ["clubs", "cards"] }); },
+    mutationFn: (slots: { slot_code: string; club_card_id: number }[]) => setClubLineupTemplate(viewedIndex, slots),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["clubs", "lineup-templates"] }); queryClient.invalidateQueries({ queryKey: ["clubs", "cards"] }); },
     onError: (err) => setError(formatGameError(err, "Не удалось обновить состав")),
   });
 
   const setTacticsMutation = useMutation({
-    mutationFn: setClubTactics,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["clubs", "lineup"] }); queryClient.invalidateQueries({ queryKey: ["clubs", "cards"] }); },
+    mutationFn: (payload: { formation: string; mentality: string; playstyle: string }) => setClubTacticsTemplate(viewedIndex, payload),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["clubs", "lineup-templates"] }); queryClient.invalidateQueries({ queryKey: ["clubs", "cards"] }); },
     onError: (err) => setError(formatGameError(err, "Не удалось обновить тактику")),
   });
 
   const setCoachMutation = useMutation({
-    mutationFn: setClubCoach,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["clubs", "lineup"] }); setCoachPickerOpen(false); },
+    mutationFn: (clubCoachCardId: number | null) => setClubCoachTemplate(viewedIndex, clubCoachCardId),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["clubs", "lineup-templates"] }); setCoachPickerOpen(false); },
     onError: (err) => setError(formatGameError(err, "Не удалось назначить тренера")),
   });
 
   const trainingMutation = useMutation({
     mutationFn: activateClubTraining,
-    onSuccess: (data) => queryClient.setQueryData(["clubs", "lineup"], data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["clubs", "lineup-templates"] }),
     onError: (err) => setError(formatGameError(err, "Не удалось активировать тренировку")),
+  });
+
+  const activateMutation = useMutation({
+    mutationFn: () => activateClubLineupTemplate(viewedIndex),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["clubs", "lineup-templates"] }),
+    onError: (err) => setError(formatGameError(err, "Не удалось переключить шаблон")),
+  });
+
+  const [renamingTemplate, setRenamingTemplate] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const renameMutation = useMutation({
+    mutationFn: (name: string) => renameClubLineupTemplate(viewedIndex, name),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["clubs", "lineup-templates"] }); setRenamingTemplate(false); },
   });
 
   const updateTactics = (patch: Partial<{ formation: string; mentality: string; playstyle: string }>) => {
@@ -93,6 +113,65 @@ export default function ClubSquadPage() {
         <p className="rounded-lg bg-white/5 px-3 py-2 text-xs text-ink-mist-dim">
           Менять состав могут только капитан и ассистенты.
         </p>
+      )}
+
+      {canEdit && (
+        <>
+          <section className="flex gap-1.5 overflow-x-auto pb-1">
+            {(templates ?? []).map((t) => (
+              <button
+                key={t.template_index}
+                onClick={() => { setSelectedIndex(t.template_index); setRenamingTemplate(false); }}
+                className={`flex shrink-0 flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 ${
+                  t.template_index === viewedIndex ? "bg-accent-lime text-bg-base" : "bg-white/5 text-ink-mist"
+                }`}
+              >
+                <span className="whitespace-nowrap text-[11px] font-bold">{t.name}</span>
+                {t.is_active && (
+                  <span className={`text-[8px] ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
+                    Активный
+                  </span>
+                )}
+              </button>
+            ))}
+          </section>
+
+          {renamingTemplate ? (
+            <div className="flex gap-2">
+              <input
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                maxLength={64}
+                className="flex-1 rounded-xl bg-bg-surface px-3 py-2 text-sm text-ink-chalk outline-none"
+                autoFocus
+              />
+              <button
+                onClick={() => renameMutation.mutate(renameValue)}
+                disabled={!renameValue.trim() || renameMutation.isPending}
+                className="rounded-xl bg-accent-lime px-4 py-2 text-xs font-bold text-bg-base disabled:opacity-40"
+              >
+                Сохранить
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => { setRenameValue(lineup?.name ?? ""); setRenamingTemplate(true); }}
+              className="self-start text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2"
+            >
+              Переименовать «{lineup?.name}»
+            </button>
+          )}
+
+          {viewedIndex !== activeIndex && (
+            <button
+              onClick={() => activateMutation.mutate()}
+              disabled={activateMutation.isPending}
+              className="rounded-xl bg-accent-lime/10 px-3 py-2 text-center text-xs font-semibold text-accent-lime disabled:opacity-40"
+            >
+              {activateMutation.isPending ? "Переключаем..." : `Сделать «${lineup?.name}» активным для матчей`}
+            </button>
+          )}
+        </>
       )}
 
       {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}

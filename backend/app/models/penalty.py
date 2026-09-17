@@ -41,6 +41,9 @@ class PenaltyMatch(Base):
     opponent_score: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     result: Mapped[Optional[MatchResult]] = mapped_column(Enum(MatchResult, name="match_result_enum"), nullable=True)
     rating_delta: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Open (chat-invite) challenges only — see TacticoMatch.stake_coins for
+    # the full explanation; mirrored here identically.
+    stake_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     server_state: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)

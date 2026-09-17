@@ -12,6 +12,10 @@ class Lineup(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    # 1..5 — one of 5 fixed, always-present saved squads (see
+    # lineup_service._ensure_templates). Not user-facing as a raw number;
+    # the UI shows `name` and a 5-tab switcher.
+    template_index: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     name: Mapped[str] = mapped_column(String(64), nullable=False, default="Основной состав")
     formation: Mapped[str] = mapped_column(String(16), nullable=False, default="4-3-3")
     tactic: Mapped[str] = mapped_column(String(16), nullable=False, default="balanced")
@@ -24,12 +28,13 @@ class Lineup(TimestampMixin, Base):
     user_coach_card: Mapped["UserCoachCard | None"] = relationship(lazy="joined")
 
     __table_args__ = (
+        UniqueConstraint("user_id", "template_index", name="uq_lineup_user_template"),
         # Enforces "at most one active lineup per user" at the DB level —
-        # lineup_service._get_or_create_lineup does a check-then-insert with
-        # no row to lock (there's nothing to select FOR UPDATE when no
-        # lineup exists yet), so without this, two concurrent first-time
-        # calls (e.g. picking a tactic and picking a card slot in quick
-        # succession) can both see "no active lineup" and both insert one.
+        # lineup_service._ensure_templates does a check-then-insert with no
+        # row to lock when a template doesn't exist yet, so without this,
+        # two concurrent first-time requests could both seed template_index=1
+        # as active. Still valid with 5 templates: "at most one active among
+        # a user's rows" is unchanged, just now among 5 instead of 1.
         Index(
             "uq_lineup_one_active_per_user", "user_id", unique=True,
             postgresql_where=text("is_active"), sqlite_where=text("is_active"),

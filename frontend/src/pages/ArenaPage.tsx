@@ -17,7 +17,10 @@ import {
 } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
-import { fetchActiveLineup, fetchUserCoachCards, setActiveLineup, setLineupCoach, setLineupTactic } from "@/api/lineups";
+import {
+  activateLineupTemplate, fetchLineupTemplates, fetchUserCoachCards,
+  renameLineupTemplate, setLineupTemplate, setLineupTemplateCoach, setLineupTemplateTactic,
+} from "@/api/lineups";
 import { actMatch, fetchArenaStats, fetchMatchHistory, forfeitMatch, playMatch } from "@/api/matches";
 import { staticUrl } from "@/lib/api";
 import { BOOST_TYPE_LABELS } from "@/lib/coaches";
@@ -26,7 +29,7 @@ import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
-import type { Match, MatchActionKind, MatchPendingMoment, MatchResult, UserCard } from "@/types";
+import type { LineupTactic, Match, MatchActionKind, MatchPendingMoment, MatchResult, UserCard } from "@/types";
 
 const EVENT_STEP_MS = 950;
 
@@ -43,7 +46,11 @@ export default function ArenaPage() {
   const queryClient = useQueryClient();
   const updateBalance = useAuthStore((s) => s.updateBalance);
 
-  const { data: lineup, isLoading: lineupLoading } = useQuery({ queryKey: ["lineup"], queryFn: fetchActiveLineup });
+  const { data: templates, isLoading: lineupLoading } = useQuery({ queryKey: ["lineup-templates"], queryFn: fetchLineupTemplates });
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const activeIndex = templates?.find((t) => t.is_active)?.template_index ?? 1;
+  const viewedIndex = selectedIndex ?? activeIndex;
+  const lineup = templates?.find((t) => t.template_index === viewedIndex);
   const [pickerSearch, setPickerSearch] = useState("");
   const { data: collectionPage } = useQuery({
     queryKey: ["collection-for-lineup", pickerSearch],
@@ -62,20 +69,33 @@ export default function ArenaPage() {
   const { data: coachCards } = useQuery({ queryKey: ["lineup", "coach-cards"], queryFn: fetchUserCoachCards });
 
   const setLineupMutation = useMutation({
-    mutationFn: setActiveLineup,
-    onSuccess: () => { setLineupError(null); queryClient.invalidateQueries({ queryKey: ["lineup"] }); },
+    mutationFn: (slots: { slot_code: string; user_card_id: number }[]) => setLineupTemplate(viewedIndex, slots),
+    onSuccess: () => { setLineupError(null); queryClient.invalidateQueries({ queryKey: ["lineup-templates"] }); },
     onError: (err) => setLineupError(formatGameError(err, "Не удалось обновить состав")),
   });
 
   const setTacticMutation = useMutation({
-    mutationFn: setLineupTactic,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["lineup"] }),
+    mutationFn: (tactic: LineupTactic) => setLineupTemplateTactic(viewedIndex, tactic),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["lineup-templates"] }),
   });
 
   const setCoachMutation = useMutation({
-    mutationFn: setLineupCoach,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["lineup"] }); setCoachPickerOpen(false); },
+    mutationFn: (userCoachCardId: number | null) => setLineupTemplateCoach(viewedIndex, userCoachCardId),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["lineup-templates"] }); setCoachPickerOpen(false); },
     onError: (err) => setLineupError(formatGameError(err, "Не удалось назначить тренера")),
+  });
+
+  const activateMutation = useMutation({
+    mutationFn: () => activateLineupTemplate(viewedIndex),
+    onSuccess: () => { haptic("medium"); queryClient.invalidateQueries({ queryKey: ["lineup-templates"] }); },
+    onError: (err) => setLineupError(formatGameError(err, "Не удалось переключить шаблон")),
+  });
+
+  const [renamingTemplate, setRenamingTemplate] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const renameMutation = useMutation({
+    mutationFn: (name: string) => renameLineupTemplate(viewedIndex, name),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["lineup-templates"] }); setRenamingTemplate(false); },
   });
 
   const playMutation = useMutation({
@@ -185,6 +205,61 @@ export default function ArenaPage() {
       )}
 
       {lineupError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{lineupError}</p>}
+
+      <section className="flex gap-1.5 overflow-x-auto pb-1">
+        {(templates ?? []).map((t) => (
+          <button
+            key={t.template_index}
+            onClick={() => { setSelectedIndex(t.template_index); setRenamingTemplate(false); }}
+            className={`flex shrink-0 flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 ${
+              t.template_index === viewedIndex ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
+            }`}
+          >
+            <span className="whitespace-nowrap text-[11px] font-bold">{t.name}</span>
+            {t.is_active && (
+              <span className={`text-[8px] ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
+                Активный
+              </span>
+            )}
+          </button>
+        ))}
+      </section>
+
+      {renamingTemplate ? (
+        <div className="flex gap-2">
+          <input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            maxLength={64}
+            className="flex-1 rounded-xl bg-bg-surface px-3 py-2 text-sm text-ink-chalk outline-none"
+            autoFocus
+          />
+          <button
+            onClick={() => renameMutation.mutate(renameValue)}
+            disabled={!renameValue.trim() || renameMutation.isPending}
+            className="rounded-xl bg-floodlight px-4 py-2 text-xs font-bold text-bg-base disabled:opacity-40"
+          >
+            Сохранить
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => { setRenameValue(lineup?.name ?? ""); setRenamingTemplate(true); }}
+          className="self-start text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2"
+        >
+          Переименовать «{lineup?.name}»
+        </button>
+      )}
+
+      {viewedIndex !== activeIndex && (
+        <button
+          onClick={() => activateMutation.mutate()}
+          disabled={activateMutation.isPending}
+          className="rounded-xl bg-accent-lime/10 px-3 py-2 text-center text-xs font-semibold text-accent-lime disabled:opacity-40"
+        >
+          {activateMutation.isPending ? "Переключаем..." : `Сделать «${lineup?.name}» активным для матчей`}
+        </button>
+      )}
 
       <section className="rounded-2xl bg-bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">

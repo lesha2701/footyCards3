@@ -27,7 +27,13 @@ from app.schemas.fut_draft import (
 )
 from app.services.club_formation_service import CLUB_FORMATIONS, get_formation_slots
 from app.services.game_config_service import get_config
-from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot, calculate_base_strength, split_strength
+from app.services.lineup_service import (
+    CATEGORY_POSITIONS,
+    FormationSlot,
+    calculate_base_strength,
+    clean_group_key,
+    split_strength,
+)
 from app.services.match_service import (
     BOT_NAMES,
     _advance,
@@ -172,12 +178,16 @@ async def _eligible_pool(db: AsyncSession, rarity: Rarity, category: str, exclud
 
 
 def _weighted_choice(pool: list[Player], club_counts: dict, country_counts: dict) -> Player:
+    # club_counts/country_counts are keyed by clean_group_key(...) (see
+    # submit_pick below) — apply the same normalization when looking a
+    # freshly-dealt candidate up, so a candidate with no whitespace quirk of
+    # its own still correctly matches an existing, already-normalized group.
     weights = []
     for p in pool:
         w = 1.0
-        if club_counts.get(p.club, 0) >= 2:
+        if club_counts.get(clean_group_key(p.club), 0) >= 2:
             w *= 2.5
-        if country_counts.get(p.country, 0) >= 2:
+        if country_counts.get(clean_group_key(p.country), 0) >= 2:
             w *= 1.5
         weights.append(w)
     return random.choices(pool, weights=weights, k=1)[0]
@@ -406,10 +416,12 @@ async def submit_pick(db: AsyncSession, user: User, session_id: int, player_id: 
     picks[slot_code] = player_id
     state["picks"] = picks
 
+    club_key = clean_group_key(player.club)
+    country_key = clean_group_key(player.country)
     club_counts = dict(state["club_counts"])
-    club_counts[player.club] = club_counts.get(player.club, 0) + 1
+    club_counts[club_key] = club_counts.get(club_key, 0) + 1
     country_counts = dict(state["country_counts"])
-    country_counts[player.country] = country_counts.get(player.country, 0) + 1
+    country_counts[country_key] = country_counts.get(country_key, 0) + 1
     state["club_counts"] = club_counts
     state["country_counts"] = country_counts
 
@@ -429,6 +441,54 @@ async def submit_pick(db: AsyncSession, user: User, session_id: int, player_id: 
 
     if len(picks) == len(slots):
         state["phase"] = "ready"
+
+    session.server_state = state
+    flag_modified(session, "server_state")
+    db.add(session)
+    await db.commit()
+
+    return await _state_out(db, session, slots, None, config, last_pick_strength_delta=new_strength - old_strength)
+
+
+async def swap_slots(db: AsyncSession, user: User, session_id: int, slot_code_a: str, slot_code_b: str) -> FutDraftStateOut:
+    """Lets the player rearrange an already-drafted squad between matches to
+    chase a better fit (e.g. move a naturally-CB player out of a CDM slot
+    they were forced into during the draft) — the same 100%/90%/75%
+    position-fit formula calculate_base_strength already applies rewards a
+    smarter arrangement with real strength. Only allowed once the squad is
+    complete (phase == "ready") and no match is currently being played
+    (active_round is None) — mid-drafting the slot-filling flow already
+    owns picks, and mid-match the engine has already read the squad for
+    that round."""
+    config = await get_config(db)
+    session = await _get_session(db, user.id, session_id)
+    if session.status != GameSessionStatus.in_progress:
+        raise ConflictError("This draft has already finished")
+    state = dict(session.server_state)
+    if state["phase"] != "ready":
+        raise ConflictError("The squad is not ready to rearrange yet")
+    if state["active_round"] is not None:
+        raise ConflictError("Cannot rearrange the squad while a match is in progress")
+    if slot_code_a == slot_code_b:
+        raise ConflictError("Pick two different slots to swap")
+
+    slots = get_formation_slots(state["formation"])
+    slots_by_code = {s.code: s for s in slots}
+    if slot_code_a not in slots_by_code or slot_code_b not in slots_by_code:
+        raise ConflictError("Unknown slot")
+
+    picks = dict(state["picks"])
+    if slot_code_a not in picks or slot_code_b not in picks:
+        raise ConflictError("Both slots must be filled to swap them")
+
+    picks[slot_code_a], picks[slot_code_b] = picks[slot_code_b], picks[slot_code_a]
+    state["picks"] = picks
+
+    old_strength = state["team_strength"]
+    new_strength = await _compute_team_strength(
+        db, picks, slots, config, state["club_counts"], state["country_counts"]
+    )
+    state["team_strength"] = new_strength
 
     session.server_state = state
     flag_modified(session, "server_state")

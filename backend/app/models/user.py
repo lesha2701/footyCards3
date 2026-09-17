@@ -22,6 +22,12 @@ class User(TimestampMixin, Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     game_rewards_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Set by the bot (asyncpg, not this ORM) when a send_message attempt
+    # raises TelegramForbiddenError; cleared when the user next sends /start.
+    # Broadcasts/gifts/notifications should never queue a Telegram message
+    # for a user with this set — see bot/services/notifier.py and
+    # broadcast_service.py / gift_service.py's recipient queries.
+    bot_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Admin-imposed trade ban (moderation tool) — distinct from accept_trades
     # below, which is the user's own opt-out preference. Blocks both sending
     # and accepting trade offers.

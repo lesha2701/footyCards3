@@ -9,6 +9,9 @@ from app.schemas.penalty_match import (
     PenaltyAcceptRequest,
     PenaltyChallengeRequest,
     PenaltyMatchOut,
+    PenaltyOpenChallengeAcceptRequest,
+    PenaltyOpenChallengePreviewOut,
+    PenaltyOpenChallengeRequest,
     PenaltyPickRequest,
     PenaltySearchRequest,
     PenaltySearchStatusOut,
@@ -24,6 +27,27 @@ async def create_challenge(
 ):
     check_rate_limit(f"penalty_challenge:{user.id}", max_calls=10, window_seconds=60)
     return await penalty_match_service.create_challenge(db, user, payload.opponent_user_id, payload.user_card_id)
+
+
+@router.post("/challenges/open", response_model=PenaltyMatchOut)
+async def create_open_challenge(
+    payload: PenaltyOpenChallengeRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    check_rate_limit(f"penalty_open_challenge:{user.id}", max_calls=10, window_seconds=60)
+    return await penalty_match_service.create_open_challenge(db, user, payload.user_card_id, payload.stake_coins)
+
+
+@router.get("/challenges/open/{match_id}", response_model=PenaltyOpenChallengePreviewOut)
+async def preview_open_challenge(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await penalty_match_service.preview_open_challenge(db, user, match_id)
+
+
+@router.post("/challenges/open/{match_id}/accept", response_model=PenaltyMatchOut)
+async def accept_open_challenge(
+    match_id: int, payload: PenaltyOpenChallengeAcceptRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await penalty_match_service.accept_open_challenge(db, user, match_id, payload.user_card_id)
 
 
 @router.post("/challenges/{match_id}/accept", response_model=PenaltyMatchOut)

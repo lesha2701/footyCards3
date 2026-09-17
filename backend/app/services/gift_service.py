@@ -144,14 +144,20 @@ async def admin_broadcast_gift(db: AsyncSession, gift_set_id: int, message: Opti
     Notification table + notifier.py delivery path as
     broadcast_service.send_update_broadcast), so the bulk grant doesn't sit
     silently in-app — recipients are paced at notifier.py's rate limit
-    rather than pinged all at once."""
+    rather than pinged all at once. The gift itself still goes to every
+    user regardless of bot_blocked (it's a real in-app grant, unaffected
+    by whether Telegram can reach them) — only the Telegram notification
+    is skipped for users who've blocked the bot, since it would never
+    be delivered."""
     gift_set = await db.get(GiftSet, gift_set_id)
     if gift_set is None:
         raise NotFoundError("Gift set not found")
 
-    user_ids = (await db.execute(select(User.id))).scalars().all()
-    if not user_ids:
+    user_rows = (await db.execute(select(User.id, User.bot_blocked))).all()
+    if not user_rows:
         return 0
+    user_ids = [row[0] for row in user_rows]
+    notifiable_user_ids = [row[0] for row in user_rows if not row[1]]
 
     start_serial = await reserve_gift_serial_numbers(db, gift_set, count=len(user_ids))
 
@@ -168,17 +174,18 @@ async def admin_broadcast_gift(db: AsyncSession, gift_set_id: int, message: Opti
             for i, uid in enumerate(user_ids)
         ],
     )
-    await db.execute(
-        insert(Notification),
-        [
-            {
-                "user_id": uid, "type": NotificationType.admin_message,
-                "title": "🎁 Подарок!", "body": message or "Тебе подарок в приложении — открой и забери!",
-                "is_read": False, "telegram_sent": False, "created_at": now,
-            }
-            for uid in user_ids
-        ],
-    )
+    if notifiable_user_ids:
+        await db.execute(
+            insert(Notification),
+            [
+                {
+                    "user_id": uid, "type": NotificationType.admin_message,
+                    "title": "🎁 Подарок!", "body": message or "Тебе подарок в приложении — открой и забери!",
+                    "is_read": False, "telegram_sent": False, "created_at": now,
+                }
+                for uid in notifiable_user_ids
+            ],
+        )
     await db.commit()
     return len(user_ids)
 

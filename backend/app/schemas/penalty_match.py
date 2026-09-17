@@ -29,6 +29,8 @@ class PenaltyMatchOut(BaseModel):
     match_deadline: Optional[datetime] = None
     result: Optional[MatchResult] = None
     rating_delta: int
+    stake_coins: int = 0
+    reward_coins: int = 0
     created_at: datetime
     expires_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
@@ -41,6 +43,23 @@ class PenaltyChallengeRequest(BaseModel):
 
 class PenaltyAcceptRequest(BaseModel):
     user_card_id: int
+
+
+class PenaltyOpenChallengeRequest(BaseModel):
+    user_card_id: int
+    stake_coins: int = 0
+
+
+class PenaltyOpenChallengeAcceptRequest(BaseModel):
+    user_card_id: int
+
+
+class PenaltyOpenChallengePreviewOut(BaseModel):
+    id: int
+    creator_name: str
+    stake_coins: int
+    status: PenaltyMatchStatus
+    is_own_challenge: bool
 
 
 class PenaltyPickRequest(BaseModel):

@@ -128,4 +128,21 @@ class OpenPackRequest(BaseModel):
     idempotency_key: Optional[str] = None
 
 
+class OpenPackBulkRequest(BaseModel):
+    quantity: int = Field(ge=1, le=100)
+    idempotency_key: Optional[str] = None
+
+
+class PackBulkOpenResult(BaseModel):
+    pack: PackOut
+    quantity: int
+    opening_ids: list[int]
+    cards: list[OpenedCardOut]
+    coach_cards: list[OpenedCoachCardOut] = []
+    new_balance: int
+    total_price_paid: int
+    referral_bonus_coins: Optional[int] = None
+    collection_rewards: list[CollectionRewardGrantOut] = []
+
+
 CollectionRewardGrantOut.model_rebuild()

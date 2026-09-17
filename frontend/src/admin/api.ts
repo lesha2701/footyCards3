@@ -35,6 +35,7 @@ import type {
   AdminUser,
   AdminWheelPrize,
   CardCollection,
+  DailyRewardOption,
   Dashboard,
   GameConfig,
   PackPreview,
@@ -406,6 +407,18 @@ export async function deleteWheelPrize(id: number): Promise<void> {
 }
 export async function toggleWheelPrizeActive(id: number): Promise<AdminWheelPrize> {
   const { data } = await api.post<AdminWheelPrize>(`/admin/wheel/prizes/${id}/toggle-active`);
+  return data;
+}
+
+// --- Daily reward options ---
+export async function fetchDailyRewardOptions(): Promise<DailyRewardOption[]> {
+  const { data } = await api.get<DailyRewardOption[]>("/admin/daily-reward-options");
+  return data;
+}
+export async function updateDailyRewardOptions(
+  options: Omit<DailyRewardOption, "id">[],
+): Promise<DailyRewardOption[]> {
+  const { data } = await api.put<DailyRewardOption[]>("/admin/daily-reward-options", { options });
   return data;
 }
 

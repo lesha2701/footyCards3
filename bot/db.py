@@ -176,11 +176,16 @@ async def get_stats() -> dict:
 
 
 async def fetch_unsent_notifications(limit: int = 50) -> list[asyncpg.Record]:
+    """Excludes bot_blocked users up front — no point fetching a row just to
+    have _deliver_one immediately fail it with TelegramForbiddenError. Their
+    still-unsent rows are cleared out by mark_bot_blocked() the moment the
+    block is discovered, so this WHERE isn't the only thing keeping them
+    out of future batches."""
     pool = await get_pool()
     return await pool.fetch(
-        """SELECT n.id, n.title, n.body, n.related_object_type, n.related_object_id, u.telegram_id
+        """SELECT n.id, n.user_id, n.title, n.body, n.related_object_type, n.related_object_id, u.telegram_id
            FROM notifications n JOIN users u ON u.id = n.user_id
-           WHERE n.telegram_sent = false
+           WHERE n.telegram_sent = false AND u.bot_blocked = false
            ORDER BY n.id ASC LIMIT $1""",
         limit,
     )
@@ -194,6 +199,33 @@ async def mark_notifications_sent(notification_ids: list[int]) -> None:
         return
     pool = await get_pool()
     await pool.execute("UPDATE notifications SET telegram_sent = true WHERE id = ANY($1::int[])", notification_ids)
+
+
+async def mark_bot_blocked(user_id: int) -> None:
+    """Records that this user has blocked the bot (a send attempt raised
+    TelegramForbiddenError) and drains their remaining unsent notification
+    backlog — otherwise those rows would sit unsent forever now that
+    fetch_unsent_notifications excludes bot_blocked users up front, quietly
+    defeating the whole point of ix_notifications_unsent staying small."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute("UPDATE users SET bot_blocked = true WHERE id = $1", user_id)
+            await conn.execute(
+                "UPDATE notifications SET telegram_sent = true WHERE user_id = $1 AND telegram_sent = false",
+                user_id,
+            )
+
+
+async def mark_bot_unblocked_by_telegram_id(telegram_id: int) -> None:
+    """Called from /start — the user reaching the bot at all means they're
+    no longer blocking it. The `AND bot_blocked = true` guard makes this a
+    cheap no-op write for the vast majority of users who were never
+    blocked."""
+    pool = await get_pool()
+    await pool.execute(
+        "UPDATE users SET bot_blocked = false WHERE telegram_id = $1 AND bot_blocked = true", telegram_id
+    )
 
 
 async def fetch_users_missing_daily_reward(today: date) -> list[asyncpg.Record]:
@@ -221,7 +253,7 @@ async def fetch_users_with_available_unnotified_free_pack() -> list[asyncpg.Reco
     return await pool.fetch(
         """SELECT id, telegram_id FROM users
            WHERE free_pack_available_at IS NOT NULL AND free_pack_available_at <= now()
-             AND free_pack_notified = false"""
+             AND free_pack_notified = false AND bot_blocked = false"""
     )
 
 
@@ -237,5 +269,5 @@ async def get_active_packs() -> list[asyncpg.Record]:
 
 async def get_all_user_telegram_ids() -> list[int]:
     pool = await get_pool()
-    rows = await pool.fetch("SELECT telegram_id FROM users WHERE is_banned = false")
+    rows = await pool.fetch("SELECT telegram_id FROM users WHERE is_banned = false AND bot_blocked = false")
     return [r["telegram_id"] for r in rows]

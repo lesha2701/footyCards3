@@ -16,6 +16,12 @@ import { useAuthStore } from "@/store/authStore";
 import { usePacksUiStore } from "@/store/packsUiStore";
 import type { Pack, PackOpenResult } from "@/types";
 
+// Matches backend's pack_service.MAX_BULK_PACK_QUANTITY — enforced there
+// regardless, but clamping here too avoids the user typing something the
+// server will just reject.
+const MAX_BULK_PACK_QUANTITY = 100;
+const BULK_QUANTITY_PRESETS = [5, 10, 100];
+
 export default function PacksPage() {
   const { data: packs, isLoading } = useQuery({ queryKey: ["packs"], queryFn: fetchPacks });
   const balance = useAuthStore((s) => s.user?.balance ?? 0);
@@ -25,6 +31,7 @@ export default function PacksPage() {
   const starsSortDirection = usePacksUiStore((s) => s.starsSortDirection);
   const setStarsSortDirection = usePacksUiStore((s) => s.setStarsSortDirection);
   const [tab, setTab] = useState<"coins" | "stars">("coins");
+  const [openingPack, setOpeningPack] = useState<Pack | null>(null);
 
   const coinPacks = packs?.filter((p) => p.stars_price == null);
   const starsPacks = packs?.filter((p) => p.stars_price != null);
@@ -72,7 +79,7 @@ export default function PacksPage() {
           )}
           <div className="grid grid-cols-1 gap-4">
             {sortedCoinPacks?.map((pack) => (
-              <PackCard key={pack.id} pack={pack} canAfford={balance >= pack.price} onOpen={() => navigate(`/packs/${pack.id}/open`)} />
+              <PackCard key={pack.id} pack={pack} canAfford={balance >= pack.price} onOpen={() => setOpeningPack(pack)} />
             ))}
           </div>
         </>
@@ -113,6 +120,96 @@ export default function PacksPage() {
           </button>
         </>
       )}
+
+      {openingPack && (
+        <QuantitySheet
+          pack={openingPack}
+          balance={balance}
+          onClose={() => setOpeningPack(null)}
+          onConfirm={(quantity) => {
+            const pack = openingPack;
+            setOpeningPack(null);
+            navigate(`/packs/${pack.id}/open`, quantity > 1 ? { state: { quantity } } : undefined);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function QuantitySheet({
+  pack,
+  balance,
+  onClose,
+  onConfirm,
+}: {
+  pack: Pack;
+  balance: number;
+  onClose: () => void;
+  onConfirm: (quantity: number) => void;
+}) {
+  const [quantityText, setQuantityText] = useState("1");
+  const remaining = pack.purchase_limit_per_user !== null
+    ? Math.max(0, pack.purchase_limit_per_user - pack.user_purchase_count)
+    : null;
+  const maxQuantity = remaining !== null ? Math.min(MAX_BULK_PACK_QUANTITY, remaining) : MAX_BULK_PACK_QUANTITY;
+
+  const parsed = Math.floor(Number(quantityText));
+  const quantity = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), maxQuantity) : 0;
+  const totalPrice = pack.price * quantity;
+  const canAfford = balance >= totalPrice;
+  const valid = quantity >= 1 && canAfford;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={onClose}>
+      <div className="w-full rounded-t-3xl bg-bg-base p-5" onClick={(e) => e.stopPropagation()}>
+        <p className="mb-1 font-display text-base font-bold text-ink-chalk">Сколько паков открыть?</p>
+        <p className="mb-3 text-xs text-ink-mist">«{pack.name}» — {pack.price} монет за пак</p>
+
+        <div className="mb-3 flex gap-2">
+          {BULK_QUANTITY_PRESETS.map((preset) => (
+            <button
+              key={preset}
+              onClick={() => setQuantityText(String(Math.min(preset, maxQuantity)))}
+              disabled={maxQuantity < 1}
+              className={`flex-1 rounded-xl py-2 text-sm font-semibold active:scale-95 disabled:opacity-30 ${
+                quantity === Math.min(preset, maxQuantity) ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
+              }`}
+            >
+              {preset}
+            </button>
+          ))}
+        </div>
+
+        <input
+          type="number"
+          min={1}
+          max={maxQuantity}
+          inputMode="numeric"
+          value={quantityText}
+          onChange={(e) => setQuantityText(e.target.value)}
+          className="mb-2 w-full rounded-xl bg-bg-surface px-4 py-2.5 text-center text-sm text-ink-chalk outline-none"
+        />
+
+        {remaining !== null && (
+          <p className="mb-2 text-center text-[11px] text-ink-mist-dim">
+            Осталось доступно: {remaining} {remaining === 1 ? "пак" : "паков"}
+          </p>
+        )}
+
+        <div className="mb-3 flex items-center justify-center gap-1.5 font-mono text-sm font-semibold text-accent-lime">
+          <IconCoin size={14} />
+          {totalPrice} {!canAfford && quantity >= 1 && <span className="text-red-400">— не хватает монет</span>}
+        </div>
+
+        <button
+          onClick={() => onConfirm(quantity)}
+          disabled={!valid}
+          className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-40 disabled:grayscale"
+        >
+          {quantity > 1 ? `Открыть ${quantity} паков` : "Открыть"}
+        </button>
+      </div>
     </div>
   );
 }

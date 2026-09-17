@@ -632,6 +632,34 @@ def test_calculate_base_strength_rarity_bonus_only_affects_the_swapped_cards_own
     )
 
 
+def test_calculate_base_strength_chemistry_bonus_merges_whitespace_variant_clubs_and_countries():
+    """Regression test — same root cause as FUT Draft's identical fix
+    (lineup_service.clean_group_key, shared by both): cards whose club/
+    country strings differ only by a stray space (a plausible admin-entry
+    slip) must still count as the SAME chemistry group. Before the fix,
+    Counter(c.player.club for ...) keyed by the raw string, so a group could
+    silently split into smaller ones and calculate_base_strength's
+    most_common(1) either missed the true biggest group or under-counted
+    it — a squad with a real 4-player club/country synergy quietly paid
+    less than it should have."""
+
+    def fake_card(rating, position, club, country):
+        player = SimpleNamespace(
+            rating=rating, attack_rating=rating, defense_rating=rating, rarity=Rarity.common, position=position,
+            club=club, country=country,
+        )
+        return SimpleNamespace(player=player, diamond_rating_bonus=0)
+
+    clean_cards = [(fake_card(70, slot.ideal_position, "Клуб", "Страна"), slot) for slot in FORMATION_SLOTS[:4]]
+    dirty_variants = [("Клуб", "Страна"), ("Клуб ", "Страна "), (" Клуб", " Страна"), ("Клуб", "Страна")]
+    dirty_cards = [
+        (fake_card(70, FORMATION_SLOTS[i].ideal_position, club, country), FORMATION_SLOTS[i])
+        for i, (club, country) in enumerate(dirty_variants)
+    ]
+
+    assert calculate_base_strength(clean_cards) == calculate_base_strength(dirty_cards)
+
+
 def test_synthesize_bot_ratings_includes_clamped_gk():
     fwd, defence, gk = match_service._synthesize_bot_ratings(
         user_fwd=90, user_def=85, user_gk=80, opponent_strength=200, user_strength=100

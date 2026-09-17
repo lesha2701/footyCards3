@@ -1422,3 +1422,276 @@ async def test_tactico_online_win_triggers_league_reward(client, db_session, bot
 
     notifications_a = (await client.get("/api/v1/notifications", headers=headers_a)).json()
     assert any(n["type"] == "league_promoted" for n in notifications_a)
+
+
+# ---------------------------------------------------------------------------
+# Open (chat-invite) challenges
+# ---------------------------------------------------------------------------
+
+async def test_open_challenge_create_and_preview(client, db_session, bot_token):
+    headers_a = await _register(client, bot_token, 951000)
+    user_a = await get_user_by_telegram_id(db_session, 951000)
+    cards_a = await _build_squad_cards(db_session, user_a.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": cards_a})
+
+    resp = await client.post("/api/v1/tactico/matches/open-challenge", headers=headers_a, json={"stake_coins": 100})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "pending_accept"
+    assert body["opponent_type"] == "chat"
+    assert body["stake_coins"] == 100
+    match_id = body["id"]
+
+    resp = await client.get(f"/api/v1/tactico/matches/open/{match_id}", headers=headers_a)
+    assert resp.status_code == 200
+    preview = resp.json()
+    assert preview["is_own_challenge"] is True
+    assert preview["stake_coins"] == 100
+    assert preview["status"] == "pending_accept"
+
+    # An unrelated third user can preview it too — no party requirement.
+    headers_c = await _register(client, bot_token, 951001)
+    resp = await client.get(f"/api/v1/tactico/matches/open/{match_id}", headers=headers_c)
+    assert resp.status_code == 200
+    assert resp.json()["is_own_challenge"] is False
+    assert resp.json()["creator_name"]
+
+
+async def test_open_challenge_no_coins_moved_until_accepted(client, db_session, bot_token):
+    headers_a = await _register(client, bot_token, 951010)
+    user_a = await get_user_by_telegram_id(db_session, 951010)
+    cards_a = await _build_squad_cards(db_session, user_a.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": cards_a})
+    balance_before = user_a.balance
+
+    resp = await client.post("/api/v1/tactico/matches/open-challenge", headers=headers_a, json={"stake_coins": 100})
+    match_id = resp.json()["id"]
+
+    await db_session.refresh(user_a)
+    assert user_a.balance == balance_before  # nothing debited yet, just an offer
+
+    # Cancelling before anyone accepts needs no refund, and must not crash on
+    # notifying a None opponent (nobody has claimed the challenge yet).
+    resp = await client.post(f"/api/v1/tactico/matches/{match_id}/cancel", headers=headers_a)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "cancelled"
+    await db_session.refresh(user_a)
+    assert user_a.balance == balance_before
+
+
+async def test_open_challenge_accepted_by_first_claimer_debits_both_and_blocks_a_second_accept(
+    client, db_session, bot_token, monkeypatch,
+):
+    monkeypatch.setattr(tactico_service, "_pick_phase", lambda: "attack")
+
+    headers_a = await _register(client, bot_token, 951020)
+    user_a = await get_user_by_telegram_id(db_session, 951020)
+    cards_a = await _build_squad_cards(db_session, user_a.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": cards_a})
+    balance_a_before = user_a.balance
+
+    resp = await client.post("/api/v1/tactico/matches/open-challenge", headers=headers_a, json={"stake_coins": 100})
+    match_id = resp.json()["id"]
+
+    headers_b = await _register(client, bot_token, 951021)
+    user_b = await get_user_by_telegram_id(db_session, 951021)
+    cards_b = await _build_squad_cards(db_session, user_b.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_b, json={"user_card_ids": cards_b})
+    balance_b_before = user_b.balance
+
+    resp = await client.post(f"/api/v1/tactico/matches/open/{match_id}/accept", headers=headers_b)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "in_progress"
+    assert body["opponent_user_id"] == user_a.id  # B's own view: the opponent is A
+
+    await db_session.refresh(user_a)
+    await db_session.refresh(user_b)
+    assert user_a.balance == balance_a_before - 100
+    assert user_b.balance == balance_b_before - 100
+
+    # A second, later acceptor is too late — the challenge is already claimed.
+    headers_c = await _register(client, bot_token, 951022)
+    user_c = await get_user_by_telegram_id(db_session, 951022)
+    cards_c = await _build_squad_cards(db_session, user_c.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_c, json={"user_card_ids": cards_c})
+    resp = await client.post(f"/api/v1/tactico/matches/open/{match_id}/accept", headers=headers_c)
+    assert resp.status_code == 409
+
+
+async def test_open_challenge_cannot_accept_own_challenge(client, db_session, bot_token):
+    headers_a = await _register(client, bot_token, 951030)
+    user_a = await get_user_by_telegram_id(db_session, 951030)
+    cards_a = await _build_squad_cards(db_session, user_a.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": cards_a})
+
+    resp = await client.post("/api/v1/tactico/matches/open-challenge", headers=headers_a, json={"stake_coins": 0})
+    match_id = resp.json()["id"]
+
+    resp = await client.post(f"/api/v1/tactico/matches/open/{match_id}/accept", headers=headers_a)
+    assert resp.status_code == 409
+
+
+async def test_open_challenge_rejects_creation_when_creator_cannot_afford_stake(client, db_session, bot_token):
+    headers_a = await _register(client, bot_token, 951040)
+    user_a = await get_user_by_telegram_id(db_session, 951040)
+    cards_a = await _build_squad_cards(db_session, user_a.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": cards_a})
+
+    resp = await client.post(
+        "/api/v1/tactico/matches/open-challenge", headers=headers_a, json={"stake_coins": user_a.balance + 1}
+    )
+    assert resp.status_code == 409
+
+
+async def test_open_challenge_rejects_accept_when_acceptor_cannot_afford_stake(client, db_session, bot_token):
+    headers_a = await _register(client, bot_token, 951050)
+    user_a = await get_user_by_telegram_id(db_session, 951050)
+    cards_a = await _build_squad_cards(db_session, user_a.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": cards_a})
+    resp = await client.post("/api/v1/tactico/matches/open-challenge", headers=headers_a, json={"stake_coins": 100})
+    match_id = resp.json()["id"]
+
+    headers_b = await _register(client, bot_token, 951051)
+    user_b = await get_user_by_telegram_id(db_session, 951051)
+    cards_b = await _build_squad_cards(db_session, user_b.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_b, json={"user_card_ids": cards_b})
+    user_b.balance = 10
+    db_session.add(user_b)
+    await db_session.commit()
+
+    resp = await client.post(f"/api/v1/tactico/matches/open/{match_id}/accept", headers=headers_b)
+    assert resp.status_code == 409
+
+    # Nothing should have been debited from either side — the whole accept failed.
+    await db_session.refresh(user_a)
+    assert user_a.balance == 500
+
+
+async def test_open_challenge_stake_pot_goes_to_the_winner(client, db_session, bot_token, monkeypatch):
+    monkeypatch.setattr(tactico_service, "_pick_phase", lambda: "attack")
+
+    headers_a = await _register(client, bot_token, 951060)
+    user_a = await get_user_by_telegram_id(db_session, 951060)
+    cards_a = await _build_squad_cards(
+        db_session, user_a.id, count=11, position=Position.ST, rating=90, attack_rating=99, defense_rating=1
+    )
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": cards_a})
+
+    headers_b = await _register(client, bot_token, 951061)
+    user_b = await get_user_by_telegram_id(db_session, 951061)
+    cards_b = await _build_squad_cards(
+        db_session, user_b.id, count=11, position=Position.CM, rating=20, attack_rating=1, defense_rating=1
+    )
+    await client.put("/api/v1/tactico/squad", headers=headers_b, json={"user_card_ids": cards_b})
+
+    balance_a_before = user_a.balance
+    balance_b_before = user_b.balance
+
+    resp = await client.post("/api/v1/tactico/matches/open-challenge", headers=headers_a, json={"stake_coins": 100})
+    match_id = resp.json()["id"]
+    resp = await client.post(f"/api/v1/tactico/matches/open/{match_id}/accept", headers=headers_b)
+    assert resp.status_code == 200
+
+    guard = 0
+    a_view = (await client.get(f"/api/v1/tactico/matches/{match_id}", headers=headers_a)).json()
+    while a_view["status"] == "in_progress":
+        guard += 1
+        assert guard < 15
+        if not a_view["waiting_for_opponent"]:
+            card_id = a_view["pickable_cards"][0]["user_card_id"]
+            await client.post(f"/api/v1/tactico/matches/{match_id}/rounds", headers=headers_a, json={"user_card_id": card_id})
+        b_view = (await client.get(f"/api/v1/tactico/matches/{match_id}", headers=headers_b)).json()
+        if b_view["status"] == "in_progress" and not b_view["waiting_for_opponent"]:
+            card_id = b_view["pickable_cards"][0]["user_card_id"]
+            await client.post(f"/api/v1/tactico/matches/{match_id}/rounds", headers=headers_b, json={"user_card_id": card_id})
+        a_view = (await client.get(f"/api/v1/tactico/matches/{match_id}", headers=headers_a)).json()
+
+    assert a_view["status"] == "finished"
+    assert a_view["result"] == "win"
+    assert a_view["reward_coins"] == 200  # the whole 2x-stake pot
+
+    b_view = (await client.get(f"/api/v1/tactico/matches/{match_id}", headers=headers_b)).json()
+    assert b_view["result"] == "loss"
+    assert b_view["reward_coins"] == 0
+
+    await db_session.refresh(user_a)
+    await db_session.refresh(user_b)
+    assert user_a.balance == balance_a_before + 100  # -100 stake, +200 pot
+    assert user_b.balance == balance_b_before - 100
+
+
+async def test_open_challenge_draw_refunds_both_stakes(client, db_session, bot_token, monkeypatch):
+    monkeypatch.setattr(tactico_service, "_pick_phase", lambda: "attack")
+
+    headers_a = await _register(client, bot_token, 951070)
+    user_a = await get_user_by_telegram_id(db_session, 951070)
+    cards_a = await _build_squad_cards(db_session, user_a.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": cards_a})
+
+    headers_b = await _register(client, bot_token, 951071)
+    user_b = await get_user_by_telegram_id(db_session, 951071)
+    cards_b = await _build_squad_cards(db_session, user_b.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_b, json={"user_card_ids": cards_b})
+
+    balance_a_before = user_a.balance
+    balance_b_before = user_b.balance
+
+    resp = await client.post("/api/v1/tactico/matches/open-challenge", headers=headers_a, json={"stake_coins": 100})
+    match_id = resp.json()["id"]
+    await client.post(f"/api/v1/tactico/matches/open/{match_id}/accept", headers=headers_b)
+
+    guard = 0
+    a_view = (await client.get(f"/api/v1/tactico/matches/{match_id}", headers=headers_a)).json()
+    while a_view["status"] == "in_progress":
+        guard += 1
+        assert guard < 15
+        if not a_view["waiting_for_opponent"]:
+            card_id = a_view["pickable_cards"][0]["user_card_id"]
+            await client.post(f"/api/v1/tactico/matches/{match_id}/rounds", headers=headers_a, json={"user_card_id": card_id})
+        b_view = (await client.get(f"/api/v1/tactico/matches/{match_id}", headers=headers_b)).json()
+        if b_view["status"] == "in_progress" and not b_view["waiting_for_opponent"]:
+            card_id = b_view["pickable_cards"][0]["user_card_id"]
+            await client.post(f"/api/v1/tactico/matches/{match_id}/rounds", headers=headers_b, json={"user_card_id": card_id})
+        a_view = (await client.get(f"/api/v1/tactico/matches/{match_id}", headers=headers_a)).json()
+
+    assert a_view["status"] == "finished"
+    assert a_view["result"] == "draw"
+    assert a_view["reward_coins"] == 100  # stake refunded, not a profit
+
+    b_view = (await client.get(f"/api/v1/tactico/matches/{match_id}", headers=headers_b)).json()
+    assert b_view["result"] == "draw"
+    assert b_view["reward_coins"] == 100
+
+    await db_session.refresh(user_a)
+    await db_session.refresh(user_b)
+    assert user_a.balance == balance_a_before  # debited 100 at accept, refunded 100 at finish
+    assert user_b.balance == balance_b_before
+
+
+async def test_open_challenge_expires_and_cannot_be_accepted(client, db_session, bot_token):
+    from app.models.tactico import TacticoMatch
+
+    headers_a = await _register(client, bot_token, 951080)
+    user_a = await get_user_by_telegram_id(db_session, 951080)
+    cards_a = await _build_squad_cards(db_session, user_a.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_a, json={"user_card_ids": cards_a})
+
+    resp = await client.post("/api/v1/tactico/matches/open-challenge", headers=headers_a, json={"stake_coins": 0})
+    match_id = resp.json()["id"]
+
+    match = await db_session.get(TacticoMatch, match_id)
+    match.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
+    db_session.add(match)
+    await db_session.commit()
+
+    headers_b = await _register(client, bot_token, 951081)
+    user_b = await get_user_by_telegram_id(db_session, 951081)
+    cards_b = await _build_squad_cards(db_session, user_b.id, count=11, position=Position.CM, rating=70)
+    await client.put("/api/v1/tactico/squad", headers=headers_b, json={"user_card_ids": cards_b})
+
+    resp = await client.post(f"/api/v1/tactico/matches/open/{match_id}/accept", headers=headers_b)
+    assert resp.status_code == 409
+
+    resp = await client.get(f"/api/v1/tactico/matches/open/{match_id}", headers=headers_b)
+    assert resp.json()["status"] == "expired"

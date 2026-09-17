@@ -52,6 +52,7 @@ from app.schemas.club_squad import (
     ClubCoachCardOut,
     ClubCoachSetRequest,
     ClubLineupOut,
+    ClubLineupRenameRequest,
     ClubLineupSetRequest,
     ClubTacticsSetRequest,
     NextOpponentOut,
@@ -241,6 +242,50 @@ async def set_club_coach(payload: ClubCoachSetRequest, db: AsyncSession = Depend
 @router.post("/me/training", response_model=ClubLineupOut)
 async def activate_club_training(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_squad_service.activate_training(db, user)
+
+
+@router.get("/me/lineup/templates", response_model=list[ClubLineupOut])
+async def read_club_lineup_templates(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_squad_service.list_club_lineup_templates(db, user)
+
+
+@router.put("/me/lineup/templates/{template_index}", response_model=ClubLineupOut)
+async def update_club_lineup_template(
+    template_index: int, payload: ClubLineupSetRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await club_squad_service.set_club_lineup(db, user, payload, template_index)
+
+
+@router.put("/me/tactics/templates/{template_index}", response_model=ClubLineupOut)
+async def update_club_tactics_template(
+    template_index: int, payload: ClubTacticsSetRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await club_squad_service.set_club_tactics(db, user, payload, template_index)
+
+
+@router.put("/me/coach/templates/{template_index}", response_model=ClubLineupOut)
+async def update_club_coach_template(
+    template_index: int, payload: ClubCoachSetRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await club_squad_service.set_club_coach(db, user, payload, template_index)
+
+
+@router.put("/me/lineup/templates/{template_index}/name", response_model=ClubLineupOut)
+async def rename_club_lineup_template_route(
+    template_index: int, payload: ClubLineupRenameRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await club_squad_service.rename_club_lineup_template(db, user, template_index, payload.name)
+
+
+@router.post("/me/lineup/templates/{template_index}/activate", response_model=ClubLineupOut)
+async def activate_club_lineup_template_route(
+    template_index: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await club_squad_service.activate_club_lineup_template(db, user, template_index)
 
 
 @router.get("/me/cards", response_model=list[ClubCardOut])

@@ -8,6 +8,9 @@ from app.schemas.card import UserCardOut
 
 
 class TacticoSquadOut(BaseModel):
+    template_index: int
+    name: str
+    is_active: bool
     is_complete: bool
     cards: list[UserCardOut]
     max_legendary: int
@@ -17,6 +20,10 @@ class TacticoSquadOut(BaseModel):
 
 class TacticoSquadSetRequest(BaseModel):
     user_card_ids: list[int]
+
+
+class TacticoSquadRenameRequest(BaseModel):
+    name: str
 
 
 class TacticoCardOut(BaseModel):
@@ -61,6 +68,7 @@ class TacticoMatchOut(BaseModel):
     result: Optional[MatchResult] = None
     reward_coins: int
     rating_delta: int
+    stake_coins: int = 0
     created_at: datetime
     expires_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
@@ -68,6 +76,18 @@ class TacticoMatchOut(BaseModel):
 
 class TacticoChallengeRequest(BaseModel):
     receiver_id: int
+
+
+class TacticoOpenChallengeRequest(BaseModel):
+    stake_coins: int = 0
+
+
+class TacticoOpenChallengePreviewOut(BaseModel):
+    id: int
+    creator_name: str
+    stake_coins: int
+    status: TacticoMatchStatus
+    is_own_challenge: bool
 
 
 class TacticoBotMatchRequest(BaseModel):

@@ -818,3 +818,303 @@ async def test_penalty_bot_win_triggers_league_reward(client, db_session, bot_to
     if body["result"] == "win":
         notifications = (await client.get("/api/v1/notifications", headers=headers)).json()
         assert any(n["type"] == "league_promoted" for n in notifications)
+
+
+# ---------------------------------------------------------------------------
+# Open (chat-invite) challenges — mirrors test_tactico.py's open-challenge
+# section; see that file for the design rationale (no coins move until
+# accept, first acceptor claims it, stake settles at finish).
+# ---------------------------------------------------------------------------
+
+async def test_penalty_open_challenge_create_and_preview(client, db_session, bot_token):
+    sender = await _register(client, db_session, 863001, bot_token)
+    sender_card = await _grant_card(db_session, sender.id)
+    sender_headers = telegram_headers(863001, bot_token)
+
+    resp = await client.post(
+        "/api/v1/games/penalty/challenges/open", headers=sender_headers,
+        json={"user_card_id": sender_card.id, "stake_coins": 100},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "pending_accept"
+    assert body["opponent_type"] == "chat"
+    assert body["stake_coins"] == 100
+    match_id = body["id"]
+
+    resp = await client.get(f"/api/v1/games/penalty/challenges/open/{match_id}", headers=sender_headers)
+    assert resp.status_code == 200
+    preview = resp.json()
+    assert preview["is_own_challenge"] is True
+    assert preview["stake_coins"] == 100
+    assert preview["status"] == "pending_accept"
+
+    stranger = await _register(client, db_session, 863002, bot_token)
+    stranger_headers = telegram_headers(863002, bot_token)
+    resp = await client.get(f"/api/v1/games/penalty/challenges/open/{match_id}", headers=stranger_headers)
+    assert resp.status_code == 200
+    assert resp.json()["is_own_challenge"] is False
+    assert resp.json()["creator_name"]
+
+
+async def test_penalty_open_challenge_no_coins_moved_until_accepted(client, db_session, bot_token):
+    sender = await _register(client, db_session, 863010, bot_token)
+    sender_card = await _grant_card(db_session, sender.id)
+    sender_headers = telegram_headers(863010, bot_token)
+    balance_before = sender.balance
+
+    resp = await client.post(
+        "/api/v1/games/penalty/challenges/open", headers=sender_headers,
+        json={"user_card_id": sender_card.id, "stake_coins": 100},
+    )
+    match_id = resp.json()["id"]
+
+    await db_session.refresh(sender)
+    assert sender.balance == balance_before
+
+    resp = await client.post(f"/api/v1/games/penalty/challenges/{match_id}/cancel", headers=sender_headers)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "cancelled"
+    await db_session.refresh(sender)
+    assert sender.balance == balance_before
+
+
+async def test_penalty_open_challenge_accepted_by_first_claimer_debits_both_and_blocks_a_second_accept(
+    client, db_session, bot_token,
+):
+    sender = await _register(client, db_session, 863020, bot_token)
+    sender_card = await _grant_card(db_session, sender.id)
+    sender_headers = telegram_headers(863020, bot_token)
+    balance_sender_before = sender.balance
+
+    resp = await client.post(
+        "/api/v1/games/penalty/challenges/open", headers=sender_headers,
+        json={"user_card_id": sender_card.id, "stake_coins": 100},
+    )
+    match_id = resp.json()["id"]
+
+    acceptor = await _register(client, db_session, 863021, bot_token)
+    acceptor_card = await _grant_card(db_session, acceptor.id)
+    acceptor_headers = telegram_headers(863021, bot_token)
+    balance_acceptor_before = acceptor.balance
+
+    resp = await client.post(
+        f"/api/v1/games/penalty/challenges/open/{match_id}/accept", headers=acceptor_headers,
+        json={"user_card_id": acceptor_card.id},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "in_progress"
+    assert body["opponent_user_id"] == sender.id
+
+    await db_session.refresh(sender)
+    await db_session.refresh(acceptor)
+    assert sender.balance == balance_sender_before - 100
+    assert acceptor.balance == balance_acceptor_before - 100
+
+    latecomer = await _register(client, db_session, 863022, bot_token)
+    latecomer_card = await _grant_card(db_session, latecomer.id)
+    latecomer_headers = telegram_headers(863022, bot_token)
+    resp = await client.post(
+        f"/api/v1/games/penalty/challenges/open/{match_id}/accept", headers=latecomer_headers,
+        json={"user_card_id": latecomer_card.id},
+    )
+    assert resp.status_code == 409
+
+
+async def test_penalty_open_challenge_cannot_accept_own_challenge(client, db_session, bot_token):
+    sender = await _register(client, db_session, 863030, bot_token)
+    sender_card = await _grant_card(db_session, sender.id)
+    sender_headers = telegram_headers(863030, bot_token)
+
+    resp = await client.post(
+        "/api/v1/games/penalty/challenges/open", headers=sender_headers,
+        json={"user_card_id": sender_card.id, "stake_coins": 0},
+    )
+    match_id = resp.json()["id"]
+
+    resp = await client.post(
+        f"/api/v1/games/penalty/challenges/open/{match_id}/accept", headers=sender_headers,
+        json={"user_card_id": sender_card.id},
+    )
+    assert resp.status_code == 409
+
+
+async def test_penalty_open_challenge_rejects_creation_when_creator_cannot_afford_stake(client, db_session, bot_token):
+    sender = await _register(client, db_session, 863040, bot_token)
+    sender_card = await _grant_card(db_session, sender.id)
+    sender_headers = telegram_headers(863040, bot_token)
+
+    resp = await client.post(
+        "/api/v1/games/penalty/challenges/open", headers=sender_headers,
+        json={"user_card_id": sender_card.id, "stake_coins": sender.balance + 1},
+    )
+    assert resp.status_code == 409
+
+
+async def test_penalty_open_challenge_rejects_accept_when_acceptor_cannot_afford_stake(client, db_session, bot_token):
+    sender = await _register(client, db_session, 863050, bot_token)
+    sender_card = await _grant_card(db_session, sender.id)
+    sender_headers = telegram_headers(863050, bot_token)
+    resp = await client.post(
+        "/api/v1/games/penalty/challenges/open", headers=sender_headers,
+        json={"user_card_id": sender_card.id, "stake_coins": 100},
+    )
+    match_id = resp.json()["id"]
+
+    acceptor = await _register(client, db_session, 863051, bot_token)
+    acceptor_card = await _grant_card(db_session, acceptor.id)
+    acceptor_headers = telegram_headers(863051, bot_token)
+    acceptor.balance = 10
+    db_session.add(acceptor)
+    await db_session.commit()
+
+    resp = await client.post(
+        f"/api/v1/games/penalty/challenges/open/{match_id}/accept", headers=acceptor_headers,
+        json={"user_card_id": acceptor_card.id},
+    )
+    assert resp.status_code == 409
+
+    await db_session.refresh(sender)
+    assert sender.balance == 500
+
+
+async def test_penalty_open_challenge_stake_pot_goes_to_the_winner(client, db_session, bot_token):
+    sender = await _register(client, db_session, 863060, bot_token)
+    sender_card = await _grant_card(db_session, sender.id, rating=99)
+    sender_headers = telegram_headers(863060, bot_token)
+    balance_sender_before = sender.balance
+
+    resp = await client.post(
+        "/api/v1/games/penalty/challenges/open", headers=sender_headers,
+        json={"user_card_id": sender_card.id, "stake_coins": 100},
+    )
+    match_id = resp.json()["id"]
+
+    acceptor = await _register(client, db_session, 863061, bot_token)
+    acceptor_card = await _grant_card(db_session, acceptor.id, rating=99)
+    acceptor_headers = telegram_headers(863061, bot_token)
+    balance_acceptor_before = acceptor.balance
+
+    resp = await client.post(
+        f"/api/v1/games/penalty/challenges/open/{match_id}/accept", headers=acceptor_headers,
+        json={"user_card_id": acceptor_card.id},
+    )
+    assert resp.status_code == 200
+
+    # Same mismatch-vs-match pattern as the friend-challenge win test above:
+    # sender's kicks always beat the dive, acceptor's are always saved.
+    for i in range(10):
+        kicker_headers = sender_headers if i % 2 == 0 else acceptor_headers
+        other_headers = acceptor_headers if i % 2 == 0 else sender_headers
+        dive_zone = "top_right" if i % 2 == 0 else "top_left"
+        r1 = await client.post(
+            f"/api/v1/games/penalty/matches/{match_id}/pick", headers=kicker_headers, json={"zone": "top_left"}
+        )
+        r2 = await client.post(
+            f"/api/v1/games/penalty/matches/{match_id}/pick", headers=other_headers, json={"zone": dive_zone}
+        )
+
+    final = r2.json()
+    assert final["status"] == "finished"
+    assert final["result"] == "win"
+    assert final["reward_coins"] == 200
+
+    acceptor_view = (await client.get(f"/api/v1/games/penalty/matches/{match_id}", headers=acceptor_headers)).json()
+    assert acceptor_view["result"] == "loss"
+    assert acceptor_view["reward_coins"] == 0
+
+    await db_session.refresh(sender)
+    await db_session.refresh(acceptor)
+    assert sender.balance == balance_sender_before + 100
+    assert acceptor.balance == balance_acceptor_before - 100
+
+
+async def test_penalty_open_challenge_draw_refunds_both_stakes(client, db_session, bot_token):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.penalty import PenaltyMatch
+    from sqlalchemy.orm.attributes import flag_modified
+
+    sender = await _register(client, db_session, 863070, bot_token)
+    sender_card = await _grant_card(db_session, sender.id)
+    sender_headers = telegram_headers(863070, bot_token)
+    balance_sender_before = sender.balance
+
+    resp = await client.post(
+        "/api/v1/games/penalty/challenges/open", headers=sender_headers,
+        json={"user_card_id": sender_card.id, "stake_coins": 100},
+    )
+    match_id = resp.json()["id"]
+
+    acceptor = await _register(client, db_session, 863071, bot_token)
+    acceptor_card = await _grant_card(db_session, acceptor.id)
+    acceptor_headers = telegram_headers(863071, bot_token)
+    balance_acceptor_before = acceptor.balance
+
+    await client.post(
+        f"/api/v1/games/penalty/challenges/open/{match_id}/accept", headers=acceptor_headers,
+        json={"user_card_id": acceptor_card.id},
+    )
+
+    # Every kick saved (both sides dive the zone they shot) — score stays
+    # 0:0, then the match clock (not regulation) ends it in a draw.
+    await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=sender_headers, json={"zone": "top_left"})
+    await client.post(f"/api/v1/games/penalty/matches/{match_id}/pick", headers=acceptor_headers, json={"zone": "top_left"})
+
+    match = await db_session.get(PenaltyMatch, match_id)
+    state = dict(match.server_state)
+    state["match_deadline"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    match.server_state = state
+    flag_modified(match, "server_state")
+    db_session.add(match)
+    await db_session.commit()
+
+    resp = await client.get(f"/api/v1/games/penalty/matches/{match_id}", headers=sender_headers)
+    body = resp.json()
+    assert body["status"] == "finished"
+    assert body["result"] == "draw"
+    assert body["reward_coins"] == 100
+
+    acceptor_view = (await client.get(f"/api/v1/games/penalty/matches/{match_id}", headers=acceptor_headers)).json()
+    assert acceptor_view["result"] == "draw"
+    assert acceptor_view["reward_coins"] == 100
+
+    await db_session.refresh(sender)
+    await db_session.refresh(acceptor)
+    assert sender.balance == balance_sender_before
+    assert acceptor.balance == balance_acceptor_before
+
+
+async def test_penalty_open_challenge_expires_and_cannot_be_accepted(client, db_session, bot_token):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.penalty import PenaltyMatch
+
+    sender = await _register(client, db_session, 863080, bot_token)
+    sender_card = await _grant_card(db_session, sender.id)
+    sender_headers = telegram_headers(863080, bot_token)
+
+    resp = await client.post(
+        "/api/v1/games/penalty/challenges/open", headers=sender_headers,
+        json={"user_card_id": sender_card.id, "stake_coins": 0},
+    )
+    match_id = resp.json()["id"]
+
+    match = await db_session.get(PenaltyMatch, match_id)
+    match.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
+    db_session.add(match)
+    await db_session.commit()
+
+    acceptor = await _register(client, db_session, 863081, bot_token)
+    acceptor_card = await _grant_card(db_session, acceptor.id)
+    acceptor_headers = telegram_headers(863081, bot_token)
+
+    resp = await client.post(
+        f"/api/v1/games/penalty/challenges/open/{match_id}/accept", headers=acceptor_headers,
+        json={"user_card_id": acceptor_card.id},
+    )
+    assert resp.status_code == 409
+
+    resp = await client.get(f"/api/v1/games/penalty/challenges/open/{match_id}", headers=acceptor_headers)
+    assert resp.json()["status"] == "expired"

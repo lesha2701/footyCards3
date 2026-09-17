@@ -3,19 +3,43 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { RevealStage, STAGES, STAGE_DURATION_MS } from "@/components/cards/CardRevealStage";
+import { CoachRevealStage, COACH_STAGES, COACH_STAGE_DURATION_MS } from "@/components/cards/CoachRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconCoin, IconHandshake, IconTag } from "@/components/icons";
-import { openPack } from "@/api/packs";
+import { openPack, openPackBulk } from "@/api/packs";
 import { useStarsPackPurchase } from "@/hooks/useStarsPackPurchase";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { PackOpenResult } from "@/types";
+import type { OpenedCard, OpenedCoachCard, PackBulkOpenResult, PackOpenResult } from "@/types";
+
+// Bulk reveal walks player cards and coach cards as one combined sequence
+// (backend keeps them as two separate arrays, same shape as a single pack's
+// result) — players first, then coaches, matching the order they already
+// appear in in BulkSummary's grid below.
+type BulkRevealItem = { kind: "player"; item: OpenedCard } | { kind: "coach"; item: OpenedCoachCard };
+
+function bulkStagesFor(entry: BulkRevealItem) {
+  return entry.kind === "coach"
+    ? { stages: COACH_STAGES as readonly string[], duration: COACH_STAGE_DURATION_MS }
+    : { stages: STAGES as readonly string[], duration: STAGE_DURATION_MS };
+}
 
 export default function PackOpenPage() {
+  const location = useLocation();
+  // A quantity > 1 comes only from PacksPage's quantity sheet (never from
+  // the Stars-purchase flow, which stays single-pack-only) — routed to its
+  // own view entirely so the delicate staged single-card reveal animation
+  // below is never touched by the bulk path.
+  const quantity = (location.state as { quantity?: number } | null)?.quantity ?? 1;
+  if (quantity > 1) return <BulkPackOpenView quantity={quantity} />;
+  return <SinglePackOpenView />;
+}
+
+function SinglePackOpenView() {
   const { packId } = useParams<{ packId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -277,6 +301,307 @@ export default function PackOpenPage() {
           error={isStarsPack ? buyStarsPackAgainError : null}
         />
       )}
+    </div>
+  );
+}
+
+/** Opening N packs at once stages through every card — player and coach
+ * alike — one at a time, same reveal animations as a single pack, but
+ * auto-advances card to card instead of waiting for a tap, since card_count
+ * up to 12 and quantity up to 100 can mean hundreds of cards, too many to
+ * click through individually. A visible "Пропустить" escape hatch jumps
+ * straight to the summary grid at any point. */
+function BulkPackOpenView({ quantity }: { quantity: number }) {
+  const { packId } = useParams<{ packId: string }>();
+  const navigate = useNavigate();
+  const updateBalance = useAuthStore((s) => s.updateBalance);
+  const balance = useAuthStore((s) => s.user?.balance ?? 0);
+
+  const [phase, setPhase] = useState<"packshot" | "revealing" | "summary">("packshot");
+  const [cardIndex, setCardIndex] = useState(0);
+  const [stageIndex, setStageIndex] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasStartedRef = useRef(false);
+  const idempotencyKeyRef = useRef<string | null>(null);
+  if (idempotencyKeyRef.current === null) {
+    idempotencyKeyRef.current = `pack-bulk-${packId}-${crypto.randomUUID()}`;
+  }
+
+  const [requestState, setRequestState] = useState<
+    { status: "idle" } | { status: "pending" } | { status: "success"; data: PackBulkOpenResult } | { status: "error"; message: string }
+  >({ status: "idle" });
+
+  const runOpen = () => {
+    if (!packId) return;
+    setRequestState({ status: "pending" });
+    openPackBulk(Number(packId), quantity, idempotencyKeyRef.current!)
+      .then((data) => {
+        updateBalance(data.new_balance);
+        setRequestState({ status: "success", data });
+      })
+      .catch((err: unknown) => {
+        setRequestState({
+          status: "error",
+          message: err instanceof ApiRequestError ? err.message : "Не удалось открыть паки",
+        });
+      });
+  };
+
+  useEffect(() => {
+    // Guards React 18 StrictMode's dev-only double-invoke of effects, same
+    // as the single-pack view above — the ref persists across that replay.
+    if (hasStartedRef.current) return;
+    hasStartedRef.current = true;
+    runOpen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const result = requestState.status === "success" ? requestState.data : null;
+  const revealItems: BulkRevealItem[] = result
+    ? [
+        ...result.cards.map((item): BulkRevealItem => ({ kind: "player", item })),
+        ...result.coach_cards.map((item): BulkRevealItem => ({ kind: "coach", item })),
+      ]
+    : [];
+  const currentItem = revealItems[cardIndex] ?? null;
+  const currentStages = currentItem ? bulkStagesFor(currentItem) : null;
+
+  useEffect(() => {
+    if (phase !== "revealing" || !currentStages) return;
+    timerRef.current = setTimeout(() => {
+      if (stageIndex < currentStages.stages.length - 1) {
+        setStageIndex((i) => i + 1);
+        return;
+      }
+      if (cardIndex < revealItems.length - 1) {
+        setCardIndex((i) => i + 1);
+        setStageIndex(0);
+        return;
+      }
+      hapticNotify("success");
+      setPhase("summary");
+    }, currentStages.duration);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, cardIndex, stageIndex, result]);
+
+  // Tapping the card fast-forwards through its stages, then on to the next
+  // card — same gesture as the single-pack view's tap-to-advance, just
+  // continuing on to the next card instead of stopping at "reveal".
+  const advanceOnTap = () => {
+    if (!currentStages) return;
+    haptic("light");
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (stageIndex < currentStages.stages.length - 1) {
+      setStageIndex((i) => i + 1);
+    } else if (cardIndex < revealItems.length - 1) {
+      setCardIndex((i) => i + 1);
+      setStageIndex(0);
+    } else {
+      hapticNotify("success");
+      setPhase("summary");
+    }
+  };
+
+  const resetForReopen = () => {
+    setPhase("packshot");
+    setCardIndex(0);
+    setStageIndex(0);
+  };
+
+  const reopen = () => {
+    haptic("light");
+    idempotencyKeyRef.current = `pack-bulk-${packId}-${crypto.randomUUID()}`;
+    resetForReopen();
+    runOpen();
+  };
+
+  const skipToSummary = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    haptic("light");
+    hapticNotify("success");
+    setPhase("summary");
+  };
+
+  if (requestState.status === "pending" || requestState.status === "idle") return <LoadingScreen />;
+  if (requestState.status === "error") {
+    return <ErrorScreen message={requestState.message} onRetry={() => navigate("/packs")} />;
+  }
+  if (!result) return null;
+
+  const canOpenAnother = balance >= result.pack.price * quantity;
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-bg-base">
+      {phase !== "summary" && (
+        <button
+          onClick={skipToSummary}
+          className="safe-top absolute right-4 top-4 z-10 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-ink-chalk"
+        >
+          Пропустить
+        </button>
+      )}
+
+      {phase === "packshot" && (
+        <button
+          onClick={() => {
+            haptic("medium");
+            // An empty batch (shouldn't normally happen) has nothing to
+            // stage through — go straight to the grid.
+            if (revealItems.length === 0) {
+              hapticNotify("success");
+              setPhase("summary");
+              return;
+            }
+            setPhase("revealing");
+          }}
+          className="flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center"
+        >
+          <motion.img
+            src={staticUrl(result.pack.image_path ?? undefined)}
+            alt={result.pack.name}
+            className="w-52 drop-shadow-2xl"
+            animate={{ scale: [1, 1.04, 1], rotate: [0, -1.5, 1.5, 0] }}
+            transition={{ repeat: Infinity, duration: 1.6 }}
+          />
+          <p className="font-display text-xl font-bold text-ink-chalk">{quantity}× {result.pack.name}</p>
+          <p className="animate-pulse text-sm text-accent-lime">Нажми, чтобы открыть</p>
+        </button>
+      )}
+
+      {phase === "revealing" && currentItem && currentStages && (
+        currentItem.kind === "coach" ? (
+          <CoachRevealStage
+            key={`${cardIndex}-${stageIndex}`}
+            opened={{ card: { coach: currentItem.item.card.coach }, is_new: currentItem.item.is_new }}
+            stage={(COACH_STAGES[stageIndex] ?? COACH_STAGES[COACH_STAGES.length - 1])}
+            index={cardIndex}
+            total={revealItems.length}
+            onTap={advanceOnTap}
+          />
+        ) : (
+          <RevealStage
+            key={`${cardIndex}-${stageIndex}`}
+            opened={currentItem.item}
+            stage={(STAGES[stageIndex] ?? STAGES[STAGES.length - 1])}
+            index={cardIndex}
+            total={revealItems.length}
+            onTap={advanceOnTap}
+          />
+        )
+      )}
+
+      {phase === "summary" && (
+        <BulkSummary
+          result={result}
+          onDone={() => navigate("/packs")}
+          onOpenAnother={reopen}
+          canOpenAnother={canOpenAnother}
+        />
+      )}
+    </div>
+  );
+}
+
+function BulkSummary({
+  result,
+  onDone,
+  onOpenAnother,
+  canOpenAnother,
+}: {
+  result: PackBulkOpenResult;
+  onDone: () => void;
+  onOpenAnother: () => void;
+  canOpenAnother: boolean;
+}) {
+  const totalOpened = result.cards.length + result.coach_cards.length;
+  return (
+    <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
+      <h2 className="text-center font-display text-2xl font-bold text-ink-chalk">
+        Открыто {result.quantity} × «{result.pack.name}»!
+      </h2>
+      <p className="flex items-center justify-center gap-1.5 text-center text-sm text-ink-mist">
+        Потрачено {result.total_price_paid} <IconCoin size={13} className="text-accent-lime" />
+        <span className="text-ink-mist-dim">· получено карт: {totalOpened}</span>
+      </p>
+      {!!result.referral_bonus_coins && (
+        <div className="flex items-center justify-center gap-2 rounded-2xl bg-accent-lime/10 px-4 py-3 text-center">
+          <IconHandshake size={18} className="text-accent-lime" />
+          <p className="text-sm font-semibold text-accent-lime">
+            Бонус за приглашение: +{result.referral_bonus_coins}
+          </p>
+          <IconCoin size={14} className="text-accent-lime" />
+        </div>
+      )}
+      {result.collection_rewards.map((grant) => (
+        <div key={grant.collection_id} className="flex items-center justify-center gap-2 rounded-2xl bg-accent-lime/10 px-4 py-3 text-center">
+          <IconTag size={18} className="text-accent-lime" />
+          <p className="text-sm font-semibold text-accent-lime">
+            Коллекция «{grant.collection_name}» собрана! +{grant.reward_coins}
+            {grant.granted_pack ? ` + пак «${grant.granted_pack.pack.name}»` : ""}
+          </p>
+          <IconCoin size={14} className="text-accent-lime" />
+        </div>
+      ))}
+      <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+        {result.cards.map((opened) => (
+          <div
+            key={opened.card.id}
+            className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.player.rarity]} p-[2px] ${RARITY_GLOW[opened.card.player.rarity]}`}
+          >
+            <div className="flex flex-col rounded-[14px] bg-bg-surface">
+              <img
+                src={staticUrl(opened.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                alt={opened.card.player.display_name}
+                className="aspect-square w-full object-cover"
+              />
+              <div className="p-1.5 text-center">
+                <p className="truncate text-[11px] font-bold text-ink-chalk">{opened.card.player.display_name}</p>
+                <p className="text-[9px] text-ink-mist">{RARITY_LABELS[opened.card.player.rarity]}</p>
+              </div>
+            </div>
+            {opened.is_new && (
+              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
+            )}
+            {opened.duplicate_count > 1 && (
+              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
+                ×{opened.duplicate_count}
+              </span>
+            )}
+          </div>
+        ))}
+        {result.coach_cards.map((opened) => (
+          <div
+            key={`coach-${opened.card.id}`}
+            className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.coach.rarity]} p-[2px] ${RARITY_GLOW[opened.card.coach.rarity]}`}
+          >
+            <div className="flex flex-col rounded-[14px] bg-bg-surface">
+              <img
+                src={staticUrl(opened.card.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                alt={opened.card.coach.display_name}
+                className="aspect-square w-full object-cover"
+              />
+              <div className="p-1.5 text-center">
+                <p className="truncate text-[11px] font-bold text-ink-chalk">{opened.card.coach.display_name}</p>
+                <p className="text-[9px] text-ink-mist">Тренер · {RARITY_LABELS[opened.card.coach.rarity]}</p>
+              </div>
+            </div>
+            {opened.is_new && (
+              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
+            )}
+            {opened.duplicate_count > 1 && (
+              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
+                ×{opened.duplicate_count}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="mt-2">
+        <ReopenActions onDone={onDone} onOpenAnother={onOpenAnother} canOpenAnother={canOpenAnother} busy={false} error={null} />
+      </div>
     </div>
   );
 }

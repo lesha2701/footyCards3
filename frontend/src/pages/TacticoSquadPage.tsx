@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
-import { fetchTacticoSquad, setTacticoSquad } from "@/api/tactico";
+import {
+  activateTacticoSquadTemplate, fetchTacticoSquadTemplates, renameTacticoSquadTemplate, setTacticoSquadTemplate,
+} from "@/api/tactico";
 import { fetchCollection } from "@/api/collection";
 import PlayerCard from "@/components/cards/PlayerCard";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
@@ -15,10 +16,14 @@ import type { UserCard } from "@/types";
 const SQUAD_SIZE = 11;
 
 export default function TacticoSquadPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: squad } = useQuery({ queryKey: ["tactico-squad"], queryFn: fetchTacticoSquad });
+  const { data: templates } = useQuery({ queryKey: ["tactico-squad-templates"], queryFn: fetchTacticoSquadTemplates });
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const activeIndex = templates?.find((t) => t.is_active)?.template_index ?? 1;
+  const viewedIndex = selectedIndex ?? activeIndex;
+  const squad = templates?.find((t) => t.template_index === viewedIndex);
+
   const [search, setSearch] = useState("");
   const { data: collectionPage, isLoading } = useQuery({
     queryKey: ["collection-for-tactico", search],
@@ -26,24 +31,37 @@ export default function TacticoSquadPage() {
   });
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [initialized, setInitialized] = useState(false);
+  const [initializedFor, setInitializedFor] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (squad && !initialized) {
+    if (squad && initializedFor !== squad.template_index) {
       setSelectedIds(squad.cards.map((c) => c.id));
-      setInitialized(true);
+      setInitializedFor(squad.template_index);
     }
-  }, [squad, initialized]);
+  }, [squad, initializedFor]);
 
   const saveMutation = useMutation({
-    mutationFn: () => setTacticoSquad(selectedIds),
+    mutationFn: () => setTacticoSquadTemplate(viewedIndex, selectedIds),
     onSuccess: () => {
       hapticNotify("success");
-      queryClient.invalidateQueries({ queryKey: ["tactico-squad"] });
-      navigate("/play/tactico");
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["tactico-squad-templates"] });
     },
     onError: (err) => setError(formatGameError(err, "Не удалось сохранить состав")),
+  });
+
+  const activateMutation = useMutation({
+    mutationFn: () => activateTacticoSquadTemplate(viewedIndex),
+    onSuccess: () => { haptic("medium"); queryClient.invalidateQueries({ queryKey: ["tactico-squad-templates"] }); },
+    onError: (err) => setError(formatGameError(err, "Не удалось переключить шаблон")),
+  });
+
+  const [renamingTemplate, setRenamingTemplate] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const renameMutation = useMutation({
+    mutationFn: (name: string) => renameTacticoSquadTemplate(viewedIndex, name),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["tactico-squad-templates"] }); setRenamingTemplate(false); },
   });
 
   // The collection fetch is capped at 100 cards (the API's page_size max),
@@ -105,6 +123,61 @@ export default function TacticoSquadPage() {
           легендарных, {maxEpic} эпических и {maxDiamond} диамантовых, чтобы состав решала не только редкость карт.
         </p>
       </div>
+
+      <section className="flex gap-1.5 overflow-x-auto pb-1">
+        {(templates ?? []).map((t) => (
+          <button
+            key={t.template_index}
+            onClick={() => { setSelectedIndex(t.template_index); setRenamingTemplate(false); }}
+            className={`flex shrink-0 flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 ${
+              t.template_index === viewedIndex ? "bg-accent-lime text-bg-base" : "bg-white/5 text-ink-mist"
+            }`}
+          >
+            <span className="whitespace-nowrap text-[11px] font-bold">{t.name}</span>
+            {t.is_active && (
+              <span className={`text-[8px] ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
+                Активный
+              </span>
+            )}
+          </button>
+        ))}
+      </section>
+
+      {renamingTemplate ? (
+        <div className="flex gap-2">
+          <input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            maxLength={64}
+            className="flex-1 rounded-xl bg-bg-surface px-3 py-2 text-sm text-ink-chalk outline-none"
+            autoFocus
+          />
+          <button
+            onClick={() => renameMutation.mutate(renameValue)}
+            disabled={!renameValue.trim() || renameMutation.isPending}
+            className="rounded-xl bg-accent-lime px-4 py-2 text-xs font-bold text-bg-base disabled:opacity-40"
+          >
+            Сохранить
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => { setRenameValue(squad?.name ?? ""); setRenamingTemplate(true); }}
+          className="self-start text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2"
+        >
+          Переименовать «{squad?.name}»
+        </button>
+      )}
+
+      {viewedIndex !== activeIndex && (
+        <button
+          onClick={() => activateMutation.mutate()}
+          disabled={activateMutation.isPending}
+          className="rounded-xl bg-accent-lime/10 px-3 py-2 text-center text-xs font-semibold text-accent-lime disabled:opacity-40"
+        >
+          {activateMutation.isPending ? "Переключаем..." : `Сделать «${squad?.name}» активным для матчей`}
+        </button>
+      )}
 
       <div className="flex gap-2 text-[11px] font-semibold">
         <span className={`rounded-full px-2.5 py-1 ${legendaryCount >= maxLegendary ? "bg-rarity-legendary/20 text-rarity-legendary" : "bg-white/5 text-ink-mist"}`}>

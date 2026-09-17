@@ -110,6 +110,36 @@ async def test_admin_broadcast_reaches_all_users(client, db_session, bot_token):
         assert mine.json()[0]["message"] == "Всем игрокам с праздником!"
 
 
+async def test_admin_broadcast_still_grants_the_gift_but_skips_the_notification_for_bot_blocked_users(
+    client, db_session, bot_token,
+):
+    """The in-app gift itself doesn't depend on Telegram reachability — only
+    the Telegram notification should be skipped for a user who's blocked
+    the bot (bot_blocked, set by the bot process via asyncpg)."""
+    auth = await _admin_auth(client, bot_token)
+
+    blocked = await _register(client, db_session, 860006, bot_token)
+    headers_blocked = telegram_headers(860006, bot_token)
+    blocked.bot_blocked = True
+    db_session.add(blocked)
+    await db_session.commit()
+
+    gift_set = await create_gift_set(db_session, name="Для всех, даже заблокировавших", coins_amount=25, stars_price=0)
+
+    broadcast_resp = await client.post(
+        "/api/v1/admin/gifts/broadcast", headers=auth,
+        json={"gift_set_id": gift_set.id, "message": "Проверка bot_blocked"},
+    )
+    assert broadcast_resp.status_code == 200
+
+    mine = (await client.get("/api/v1/gifts/mine", headers=headers_blocked)).json()
+    assert len(mine) == 1
+    assert mine[0]["message"] == "Проверка bot_blocked"
+
+    notifications = (await client.get("/api/v1/notifications", headers=headers_blocked)).json()
+    assert not any(n["body"] == "Проверка bot_blocked" for n in notifications)
+
+
 async def test_player_can_buy_gift_for_another_player_with_stars(client, db_session, bot_token, monkeypatch):
     monkeypatch.setattr(stars_payment_service, "_request_telegram_invoice_link", _fake_invoice_link)
     await create_player(db_session, rarity=Rarity.epic)

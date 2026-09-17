@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { Pack, PackOpenResult, StarsInvoiceCreate, StarsInvoiceStatus } from "@/types";
+import type { Pack, PackBulkOpenResult, PackOpenResult, StarsInvoiceCreate, StarsInvoiceStatus } from "@/types";
 
 export async function fetchPacks(): Promise<Pack[]> {
   const { data } = await api.get<Pack[]>("/packs");
@@ -8,6 +8,13 @@ export async function fetchPacks(): Promise<Pack[]> {
 
 export async function openPack(packId: number, idempotencyKey: string): Promise<PackOpenResult> {
   const { data } = await api.post<PackOpenResult>(`/packs/${packId}/open`, { idempotency_key: idempotencyKey });
+  return data;
+}
+
+export async function openPackBulk(packId: number, quantity: number, idempotencyKey: string): Promise<PackBulkOpenResult> {
+  const { data } = await api.post<PackBulkOpenResult>(`/packs/${packId}/open-bulk`, {
+    quantity, idempotency_key: idempotencyKey,
+  });
   return data;
 }
 

@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramAPIError, TelegramRetryAfter
+from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError, TelegramRetryAfter
 
 import db
 from keyboards import open_app_keyboard
@@ -31,6 +31,10 @@ async def _remind_one(bot: Bot, user, semaphore: asyncio.Semaphore, rate_limiter
                 "🎁 Твой бесплатный пак снова доступен!",
                 reply_markup=open_app_keyboard(),
             )
+        except TelegramForbiddenError:
+            # User blocked the bot — not transient, no point retrying.
+            await db.mark_bot_blocked(user["id"])
+            return
         except TelegramRetryAfter as exc:
             await asyncio.sleep(exc.retry_after)
             await rate_limiter.acquire()
@@ -40,6 +44,9 @@ async def _remind_one(bot: Bot, user, semaphore: asyncio.Semaphore, rate_limiter
                     "🎁 Твой бесплатный пак снова доступен!",
                     reply_markup=open_app_keyboard(),
                 )
+            except TelegramForbiddenError:
+                await db.mark_bot_blocked(user["id"])
+                return
             except TelegramAPIError as exc2:
                 logger.warning("Failed to remind user %s after retry: %s", user["telegram_id"], exc2)
                 return

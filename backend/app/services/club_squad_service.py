@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.core.exceptions import ConflictError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models.club import Club
 from app.models.club_card import ClubCard
 from app.models.club_coach_card import ClubCoachCard
@@ -147,6 +147,76 @@ async def seed_starting_squad(db: AsyncSession, club_id: int) -> None:
     await db.flush()
 
 
+CLUB_TEMPLATE_COUNT = 5
+DEFAULT_CLUB_TEMPLATE_NAMES = {i: f"Шаблон {i}" for i in range(1, CLUB_TEMPLATE_COUNT + 1)}
+
+
+def _club_lineup_templates_query(club_id: int):
+    return (
+        select(ClubLineup)
+        .where(ClubLineup.club_id == club_id)
+        .options(
+            joinedload(ClubLineup.cards).joinedload(ClubLineupCard.club_card),
+            joinedload(ClubLineup.club_coach_card).joinedload(ClubCoachCard.coach).joinedload(Coach.boosts),
+        )
+        .order_by(ClubLineup.template_index)
+        .execution_options(populate_existing=True)
+    )
+
+
+async def _ensure_club_lineup_templates(db: AsyncSession, club_id: int) -> list[ClubLineup]:
+    """Lazily seeds any of the 5 fixed template slots that don't exist yet
+    for this club — same pattern as lineup_service._ensure_templates. Only
+    ever called from the owning club's own squad-editing paths (never from
+    a cross-club read like an opponent preview — see _get_or_none_lineup's
+    docstring for why that distinction matters)."""
+    result = await db.execute(_club_lineup_templates_query(club_id))
+    templates = list(result.unique().scalars().all())
+    existing_indexes = {t.template_index for t in templates}
+    missing = [i for i in range(1, CLUB_TEMPLATE_COUNT + 1) if i not in existing_indexes]
+    if not missing:
+        return templates
+
+    has_active = any(t.is_active for t in templates)
+    try:
+        async with db.begin_nested():
+            for i in missing:
+                db.add(ClubLineup(
+                    club_id=club_id, template_index=i, name=DEFAULT_CLUB_TEMPLATE_NAMES[i],
+                    is_active=(i == 1 and not has_active),
+                ))
+            await db.flush()
+    except IntegrityError:
+        pass
+
+    result = await db.execute(_club_lineup_templates_query(club_id))
+    return list(result.unique().scalars().all())
+
+
+async def _get_club_lineup_row(db: AsyncSession, club_id: int, template_index: int | None) -> ClubLineup:
+    templates = await _ensure_club_lineup_templates(db, club_id)
+    if template_index is None:
+        return next(t for t in templates if t.is_active)
+    if not 1 <= template_index <= CLUB_TEMPLATE_COUNT:
+        raise NotFoundError(f"template_index must be between 1 and {CLUB_TEMPLATE_COUNT}")
+    return next(t for t in templates if t.template_index == template_index)
+
+
+async def _lock_club_lineup_row(db: AsyncSession, club_id: int, template_index: int | None) -> ClubLineup:
+    """Ensures + resolves the target row (unlocked), then re-fetches it
+    locked by id — scoping the lock to ClubLineup.id (not a
+    club_id/template_index WHERE) avoids Postgres's 'FOR UPDATE on the
+    nullable side of an outer join' rejection from the eager-loaded
+    cards/coach relationships (same fix as wallet_service.lock_user_for_update)."""
+    row = await _get_club_lineup_row(db, club_id, template_index)
+    result = await db.execute(
+        select(ClubLineup).where(ClubLineup.id == row.id)
+        .options(joinedload(ClubLineup.cards))
+        .with_for_update(of=ClubLineup)
+    )
+    return result.unique().scalar_one()
+
+
 async def _get_or_none_lineup(db: AsyncSession, club_id: int) -> ClubLineup | None:
     # populate_existing=True is required here for the same reason as
     # wallet_service.lock_user_for_update: the session's identity map may
@@ -156,9 +226,19 @@ async def _get_or_none_lineup(db: AsyncSession, club_id: int) -> ClubLineup | No
     # database.py), so a plain re-SELECT after commit would silently return
     # that stale cached object — including its now-outdated `.cards`
     # collection — instead of what this query actually just fetched.
+    #
+    # This is the READ-ONLY, cross-club lookup — used by opponent-lineup
+    # preview and tournament notification/simulation/queue services. It
+    # deliberately never lazily creates rows (unlike _get_club_lineup_row,
+    # used only by the owning club's own squad screen): a read of another
+    # club's data must never have the side effect of writing to it. The
+    # is_active filter is the only change from this function's pre-template
+    # form — for every club's pre-migration row (is_active=True via the
+    # migration's server_default) this resolves to the exact same row as
+    # before.
     result = await db.execute(
         select(ClubLineup)
-        .where(ClubLineup.club_id == club_id)
+        .where(ClubLineup.club_id == club_id, ClubLineup.is_active.is_(True))
         .options(
             joinedload(ClubLineup.cards).joinedload(ClubLineupCard.club_card),
             joinedload(ClubLineup.club_coach_card).joinedload(ClubCoachCard.coach).joinedload(Coach.boosts),
@@ -308,8 +388,8 @@ def _category_line_stats(cards_with_slots: list) -> tuple[int, int, int, int]:
     return avg("FWD"), avg("MID"), avg("DEF"), avg("GK")
 
 
-async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
-    lineup = await _get_or_none_lineup(db, club_id)
+async def _lineup_to_out(db: AsyncSession, club_id: int, template_index: int | None = None) -> ClubLineupOut:
+    lineup = await _get_club_lineup_row(db, club_id, template_index)
     formation = lineup.formation if lineup else DEFAULT_FORMATION
     mentality = lineup.mentality if lineup else "BALANCED"
     playstyle = lineup.playstyle if lineup else "CENTRAL_PLAY"
@@ -346,6 +426,7 @@ async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
 
     attack, midfield, defence, goalkeeping = _category_line_stats(cards_with_slots)
     return ClubLineupOut(
+        template_index=lineup.template_index, name=lineup.name, is_active=lineup.is_active,
         is_complete=is_complete, team_strength=team_strength, formation=formation, mentality=mentality,
         playstyle=playstyle, tactical_fit=tactical_fit, tactical_fit_hint=tactical_fit_hint, slots=slots,
         coach=coach_out, training_uses_remaining=training_uses_remaining,
@@ -354,22 +435,97 @@ async def _lineup_to_out(db: AsyncSession, club_id: int) -> ClubLineupOut:
     )
 
 
-async def get_club_lineup(db: AsyncSession, user: User) -> ClubLineupOut:
+async def get_club_lineup(db: AsyncSession, user: User, template_index: int | None = None) -> ClubLineupOut:
     from app.services.club_service import _require_membership
 
     membership = await _require_membership(db, user.id)
-    return await _lineup_to_out(db, membership.club_id)
+    return await _lineup_to_out(db, membership.club_id, template_index)
 
 
-async def set_club_lineup(db: AsyncSession, user: User, payload: ClubLineupSetRequest) -> ClubLineupOut:
+async def list_club_lineup_templates(db: AsyncSession, user: User) -> list[ClubLineupOut]:
+    from app.services.club_service import _require_membership
+
+    membership = await _require_membership(db, user.id)
+    templates = await _ensure_club_lineup_templates(db, membership.club_id)
+    return [await _lineup_to_out(db, membership.club_id, t.template_index) for t in templates]
+
+
+async def rename_club_lineup_template(db: AsyncSession, user: User, template_index: int, name: str) -> ClubLineupOut:
+    from app.services.club_service import _require_manager, _require_membership
+
+    membership = await _require_membership(db, user.id)
+    _require_manager(membership)
+    if not name.strip():
+        raise ConflictError("Название не может быть пустым")
+
+    lineup = await _get_club_lineup_row(db, membership.club_id, template_index)
+    lineup.name = name.strip()[:64]
+    db.add(lineup)
+    await db.commit()
+    return await _lineup_to_out(db, membership.club_id, template_index)
+
+
+async def activate_club_lineup_template(db: AsyncSession, user: User, template_index: int) -> ClubLineupOut:
+    """Unlike lineup_service.activate_template / tactico_service
+    .activate_squad_template, no card-lock recompute is needed here —
+    ClubCard has no trade-lock concept at all. This is just a two-row
+    is_active flip."""
     from app.services.club_service import _require_manager, _require_membership
 
     membership = await _require_membership(db, user.id)
     _require_manager(membership)
     club_id = membership.club_id
 
-    current_lineup = await _get_or_none_lineup(db, club_id)
-    formation = current_lineup.formation if current_lineup else DEFAULT_FORMATION
+    templates = await _ensure_club_lineup_templates(db, club_id)
+    if not 1 <= template_index <= CLUB_TEMPLATE_COUNT:
+        raise NotFoundError(f"template_index must be between 1 and {CLUB_TEMPLATE_COUNT}")
+    new_active = next(t for t in templates if t.template_index == template_index)
+    old_active = next((t for t in templates if t.is_active), None)
+
+    if old_active is None or old_active.id != new_active.id:
+        if old_active is not None:
+            old_active.is_active = False
+            db.add(old_active)
+            # Flushed separately from setting the new row active — see
+            # lineup_service.activate_template's identical comment for why
+            # (SQLAlchemy doesn't guarantee same-table UPDATE ordering
+            # matches db.add() call order, which can otherwise collide
+            # with the partial unique index uq_club_lineup_one_active_per_club).
+            await db.flush()
+        new_active.is_active = True
+        db.add(new_active)
+        await db.commit()
+
+    return await _lineup_to_out(db, club_id, template_index)
+
+
+async def set_club_lineup(
+    db: AsyncSession, user: User, payload: ClubLineupSetRequest, template_index: int | None = None
+) -> ClubLineupOut:
+    from app.services.club_service import _require_manager, _require_membership
+
+    membership = await _require_membership(db, user.id)
+    _require_manager(membership)
+    club_id = membership.club_id
+
+    # Lock the target template row up front (this also ensures all 5
+    # templates exist) — the formation-lookup and the delete-then-recreate
+    # below both need the same locked row, avoiding the double
+    # fetch-then-relock this function used to do against the club's single
+    # row.
+    #
+    # with_for_update(of=ClubLineup) scopes the row lock to just the
+    # `club_lineups` table: joinedload(ClubLineup.cards) is a LEFT OUTER JOIN
+    # to club_lineup_cards (and ClubLineupCard.club_card is itself
+    # lazy="joined", cascading further outer joins into club_cards/players/
+    # card_collections), and a plain FOR UPDATE tries to lock every joined
+    # table including the nullable side of those outer joins, which Postgres
+    # rejects outright (FeatureNotSupportedError: FOR UPDATE cannot be
+    # applied to the nullable side of an outer join). Restricting the lock to
+    # club_lineups keeps the eager-loaded cards while avoiding that
+    # restriction — same fix as wallet_service.lock_user_for_update.
+    lineup = await _lock_club_lineup_row(db, club_id, template_index)
+    formation = lineup.formation
     slots_by_code = get_slots_by_code(formation)
 
     slot_codes = [s.slot_code for s in payload.slots]
@@ -399,31 +555,6 @@ async def set_club_lineup(db: AsyncSession, user: User, payload: ClubLineupSetRe
         if card.player.position not in CATEGORY_POSITIONS[slot.category]:
             raise ConflictError(f"Игрок на позиции {card.player.position.value} не подходит для слота {slot.code}")
 
-    # Lock the ClubLineup row before the delete-then-recreate below, mirroring
-    # lineup_service.set_lineup's own with_for_update() — a club's captain and
-    # up to 2 assistants can all submit lineup changes concurrently, so this
-    # serializes overlapping submissions instead of racing on the child rows.
-    #
-    # with_for_update(of=ClubLineup) scopes the row lock to just the
-    # `club_lineups` table: joinedload(ClubLineup.cards) is a LEFT OUTER JOIN
-    # to club_lineup_cards (and ClubLineupCard.club_card is itself
-    # lazy="joined", cascading further outer joins into club_cards/players/
-    # card_collections), and a plain FOR UPDATE tries to lock every joined
-    # table including the nullable side of those outer joins, which Postgres
-    # rejects outright (FeatureNotSupportedError: FOR UPDATE cannot be
-    # applied to the nullable side of an outer join). Restricting the lock to
-    # club_lineups keeps the eager-loaded cards while avoiding that
-    # restriction — same fix as wallet_service.lock_user_for_update.
-    lineup_result = await db.execute(
-        select(ClubLineup)
-        .where(ClubLineup.club_id == club_id)
-        .options(joinedload(ClubLineup.cards))
-        .with_for_update(of=ClubLineup)
-    )
-    lineup = lineup_result.unique().scalar_one_or_none()
-    if lineup is None:
-        raise ConflictError("У клуба ещё нет состава")
-
     for lc in list(lineup.cards):
         await db.delete(lc)
     await db.flush()
@@ -443,10 +574,12 @@ async def set_club_lineup(db: AsyncSession, user: User, payload: ClubLineupSetRe
         # the now-current state.
         await db.rollback()
         raise ConflictError("Не удалось сохранить состав — попробуй ещё раз")
-    return await _lineup_to_out(db, club_id)
+    return await _lineup_to_out(db, club_id, lineup.template_index)
 
 
-async def set_club_tactics(db: AsyncSession, user: User, payload: ClubTacticsSetRequest) -> ClubLineupOut:
+async def set_club_tactics(
+    db: AsyncSession, user: User, payload: ClubTacticsSetRequest, template_index: int | None = None
+) -> ClubLineupOut:
     """PUT /clubs/me/tactics — mirrors set_club_lineup's captain/assistant-
     only gating. Changing formation reconciles existing slots (spec §3):
     ClubLineupCard rows whose slot_code doesn't exist in the new formation
@@ -465,12 +598,7 @@ async def set_club_tactics(db: AsyncSession, user: User, payload: ClubTacticsSet
     if payload.playstyle not in PLAYSTYLES:
         raise ConflictError(f"Неизвестный стиль игры: {payload.playstyle}")
 
-    lineup_result = await db.execute(
-        select(ClubLineup).where(ClubLineup.club_id == club_id).options(joinedload(ClubLineup.cards)).with_for_update(of=ClubLineup)
-    )
-    lineup = lineup_result.unique().scalar_one_or_none()
-    if lineup is None:
-        raise ConflictError("У клуба ещё нет состава")
+    lineup = await _lock_club_lineup_row(db, club_id, template_index)
 
     new_slot_codes = set(get_slots_by_code(payload.formation).keys())
     for lc in list(lineup.cards):
@@ -482,10 +610,12 @@ async def set_club_tactics(db: AsyncSession, user: User, payload: ClubTacticsSet
     lineup.playstyle = payload.playstyle
     db.add(lineup)
     await db.commit()
-    return await _lineup_to_out(db, club_id)
+    return await _lineup_to_out(db, club_id, lineup.template_index)
 
 
-async def set_club_coach(db: AsyncSession, user: User, payload: ClubCoachSetRequest) -> ClubLineupOut:
+async def set_club_coach(
+    db: AsyncSession, user: User, payload: ClubCoachSetRequest, template_index: int | None = None
+) -> ClubLineupOut:
     """PUT /clubs/me/coach — mirrors set_club_tactics's captain/assistant-
     only gating and row-locking. A None club_coach_card_id clears the
     equipped coach."""
@@ -500,17 +630,11 @@ async def set_club_coach(db: AsyncSession, user: User, payload: ClubCoachSetRequ
         if card is None or card.club_id != club_id:
             raise ConflictError("Тренер не принадлежит этому клубу")
 
-    lineup_result = await db.execute(
-        select(ClubLineup).where(ClubLineup.club_id == club_id).options(joinedload(ClubLineup.cards)).with_for_update(of=ClubLineup)
-    )
-    lineup = lineup_result.unique().scalar_one_or_none()
-    if lineup is None:
-        raise ConflictError("У клуба ещё нет состава")
-
+    lineup = await _lock_club_lineup_row(db, club_id, template_index)
     lineup.club_coach_card_id = payload.club_coach_card_id
     db.add(lineup)
     await db.commit()
-    return await _lineup_to_out(db, club_id)
+    return await _lineup_to_out(db, club_id, lineup.template_index)
 
 
 async def get_next_opponent(db: AsyncSession, user: User) -> NextOpponentOut:

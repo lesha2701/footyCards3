@@ -31,6 +31,9 @@ class EquippedCoachOut(BaseModel):
 
 class LineupOut(BaseModel):
     id: Optional[int] = None
+    template_index: int
+    name: str
+    is_active: bool
     formation: str
     tactic: str
     is_complete: bool
@@ -55,3 +58,7 @@ class LineupTacticRequest(BaseModel):
 
 class LineupCoachSetRequest(BaseModel):
     user_coach_card_id: Optional[int] = None
+
+
+class LineupRenameRequest(BaseModel):
+    name: str

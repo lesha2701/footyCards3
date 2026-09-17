@@ -27,3 +27,21 @@ class DailyRewardClaimOut(BaseModel):
     new_balance: int
     granted_card: Optional[UserCardOut] = None
     granted_pack_name: Optional[str] = None
+
+
+class DailyRewardOptionIn(BaseModel):
+    day: int
+    option_index: int
+    coins: int
+    free_pack_slug: Optional[str] = None
+    grants_random_card: bool = False
+
+
+class DailyRewardOptionOut(DailyRewardOptionIn):
+    id: int
+
+    model_config = {"from_attributes": True}
+
+
+class DailyRewardOptionsUpdate(BaseModel):
+    options: list[DailyRewardOptionIn]

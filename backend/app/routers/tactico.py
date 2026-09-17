@@ -9,9 +9,12 @@ from app.schemas.tactico import (
     TacticoBotMatchRequest,
     TacticoChallengeRequest,
     TacticoMatchOut,
+    TacticoOpenChallengePreviewOut,
+    TacticoOpenChallengeRequest,
     TacticoRoundSubmitRequest,
     TacticoSearchStatusOut,
     TacticoSquadOut,
+    TacticoSquadRenameRequest,
     TacticoSquadSetRequest,
     TacticoStatsOut,
 )
@@ -37,6 +40,34 @@ async def set_squad(
     return await tactico_service.set_squad(db, user, payload.user_card_ids)
 
 
+@router.get("/squad/templates", response_model=list[TacticoSquadOut])
+async def read_squad_templates(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await tactico_service.list_squad_templates(db, user)
+
+
+@router.put("/squad/templates/{template_index}", response_model=TacticoSquadOut)
+async def update_squad_template(
+    template_index: int, payload: TacticoSquadSetRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await tactico_service.set_squad(db, user, payload.user_card_ids, template_index)
+
+
+@router.put("/squad/templates/{template_index}/name", response_model=TacticoSquadOut)
+async def rename_squad_template_route(
+    template_index: int, payload: TacticoSquadRenameRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await tactico_service.rename_squad_template(db, user, template_index, payload.name)
+
+
+@router.post("/squad/templates/{template_index}/activate", response_model=TacticoSquadOut)
+async def activate_squad_template_route(
+    template_index: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await tactico_service.activate_squad_template(db, user, template_index)
+
+
 @router.post("/matches/bot", response_model=TacticoMatchOut)
 async def create_bot_match(
     payload: TacticoBotMatchRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
@@ -51,6 +82,24 @@ async def create_challenge(
 ):
     check_rate_limit(f"tactico_challenge:{user.id}", max_calls=10, window_seconds=60)
     return await tactico_service.create_challenge(db, user, payload.receiver_id)
+
+
+@router.post("/matches/open-challenge", response_model=TacticoMatchOut)
+async def create_open_challenge(
+    payload: TacticoOpenChallengeRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    check_rate_limit(f"tactico_open_challenge:{user.id}", max_calls=10, window_seconds=60)
+    return await tactico_service.create_open_challenge(db, user, payload.stake_coins)
+
+
+@router.get("/matches/open/{match_id}", response_model=TacticoOpenChallengePreviewOut)
+async def preview_open_challenge(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await tactico_service.preview_open_challenge(db, user, match_id)
+
+
+@router.post("/matches/open/{match_id}/accept", response_model=TacticoMatchOut)
+async def accept_open_challenge(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await tactico_service.accept_open_challenge(db, user, match_id)
 
 
 @router.post("/matches/{match_id}/accept", response_model=TacticoMatchOut)

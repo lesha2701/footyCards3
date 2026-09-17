@@ -19,6 +19,7 @@ const SECTIONS = [
   { to: "/admin/leagues", label: "Лиги", icon: "🏅" },
   { to: "/admin/gifts", label: "Подарки", icon: "🎁" },
   { to: "/admin/wheel", label: "Колесо фортуны", icon: "🎡" },
+  { to: "/admin/daily-rewards", label: "Ежедневные награды", icon: "🗓️" },
   { to: "/admin/games", label: "Игры", icon: "🎮" },
   { to: "/admin/upgrades", label: "Апгрейд", icon: "🎲" },
   { to: "/admin/diamond-upgrades", label: "Диамант", icon: "💎" },

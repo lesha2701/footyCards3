@@ -44,8 +44,12 @@ async def send_update_broadcast(db: AsyncSession, message: str) -> tuple[int, da
     Notification row per recipient (the bot process polls unsent rows and
     delivers them as real Telegram messages, see bot/services/notifier.py),
     and stamps GameConfig.last_update_broadcast_at so the Mini App can show
-    a dismissible "update available" banner."""
-    user_ids = (await db.execute(select(User.id).where(User.is_banned.is_(False)))).scalars().all()
+    a dismissible "update available" banner. Skips users who have blocked
+    the bot (bot_blocked) — queuing a Notification for them would just sit
+    unsent (or get delivered straight to a TelegramForbiddenError)."""
+    user_ids = (
+        await db.execute(select(User.id).where(User.is_banned.is_(False), User.bot_blocked.is_(False)))
+    ).scalars().all()
 
     now = datetime.now(timezone.utc)
     if user_ids:
@@ -72,8 +76,11 @@ async def send_premium_task_broadcast(db: AsyncSession, task_count: int, message
     """Notifies every non-banned user that new premium tasks are available,
     as a single admin-triggered broadcast (one Notification row per
     recipient, bulk-inserted) instead of one notification per task created
-    — avoids spamming players when several premium tasks are added at once."""
-    user_ids = (await db.execute(select(User.id).where(User.is_banned.is_(False)))).scalars().all()
+    — avoids spamming players when several premium tasks are added at once.
+    Skips bot_blocked users — see send_update_broadcast's docstring."""
+    user_ids = (
+        await db.execute(select(User.id).where(User.is_banned.is_(False), User.bot_blocked.is_(False)))
+    ).scalars().all()
 
     now = datetime.now(timezone.utc)
     if user_ids:

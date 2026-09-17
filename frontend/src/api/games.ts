@@ -190,6 +190,13 @@ export async function submitFutDraftPick(sessionId: number, playerId: number): P
   return data;
 }
 
+export async function swapFutDraftSlots(sessionId: number, slotCodeA: string, slotCodeB: string): Promise<FutDraftState> {
+  const { data } = await api.post<FutDraftState>(`/games/fut-draft/${sessionId}/swap`, {
+    slot_code_a: slotCodeA, slot_code_b: slotCodeB,
+  });
+  return data;
+}
+
 export async function startFutDraftMatch(sessionId: number): Promise<FutDraftRound> {
   const { data } = await api.post<FutDraftRound>(`/games/fut-draft/${sessionId}/match/start`);
   return data;

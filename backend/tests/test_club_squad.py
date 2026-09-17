@@ -195,7 +195,12 @@ async def test_set_lineup_concurrent_saves_no_unhandled_integrity_error():
         setup = None
 
         async with RealSessionLocal() as verify:
-            lineup = (await verify.execute(select(ClubLineup).where(ClubLineup.club_id == club_id))).scalar_one()
+            # A club now has 5 ClubLineup template rows (Phase 3 of the
+            # lineup-templates feature) — this race test only cares about
+            # the one seed_starting_squad fills in, template_index=1.
+            lineup = (
+                await verify.execute(select(ClubLineup).where(ClubLineup.club_id == club_id, ClubLineup.template_index == 1))
+            ).scalar_one()
             cards = (await verify.execute(select(ClubLineupCard).where(ClubLineupCard.club_lineup_id == lineup.id))).scalars().all()
             slot_to_card = {c.slot_code: c.club_card_id for c in cards}
 
@@ -220,7 +225,9 @@ async def test_set_lineup_concurrent_saves_no_unhandled_integrity_error():
             assert isinstance(f, ConflictError), f"every loser must raise ConflictError (409), not an unhandled exception: {f!r}"
 
         async with RealSessionLocal() as final_verify:
-            final_lineup = (await final_verify.execute(select(ClubLineup).where(ClubLineup.club_id == club_id))).scalar_one()
+            final_lineup = (
+                await final_verify.execute(select(ClubLineup).where(ClubLineup.club_id == club_id, ClubLineup.template_index == 1))
+            ).scalar_one()
             final_cards = (
                 await final_verify.execute(select(ClubLineupCard).where(ClubLineupCard.club_lineup_id == final_lineup.id))
             ).scalars().all()

@@ -15,6 +15,7 @@ import {
   submitFutDraftPenaltyKick,
   submitFutDraftPick,
   submitFutDraftTacticoPhase,
+  swapFutDraftSlots,
 } from "@/api/games";
 import {
   IconBall,
@@ -96,6 +97,8 @@ export default function FutDraftGamePage() {
   const [showStrengthHint, setShowStrengthHint] = useState(false);
   const [chemistryHints, setChemistryHints] = useState<string[]>([]);
   const [viewingPlayer, setViewingPlayer] = useState<FutDraftCandidate | null>(null);
+  const [swapMode, setSwapMode] = useState(false);
+  const [selectedSlotForSwap, setSelectedSlotForSwap] = useState<string | null>(null);
   const [matchHistory, setMatchHistory] = useState<FutDraftRound[]>([]);
   const [currentRound, setCurrentRound] = useState<FutDraftRound | null>(null);
   const [roundKind, setRoundKind] = useState<RoundKind | null>(null);
@@ -223,6 +226,43 @@ export default function FutDraftGamePage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const swapSlots = async (slotCodeA: string, slotCodeB: string) => {
+    if (busy || sessionId === null) return;
+    setBusy(true);
+    haptic("medium");
+    try {
+      const state = await swapFutDraftSlots(sessionId, slotCodeA, slotCodeB);
+      setSlots(state.slots);
+      setTeamStrength(state.team_strength);
+      setStrengthDelta(state.last_pick_strength_delta ?? null);
+      setChemistryHints(state.chemistry_hints);
+    } catch (err) {
+      setErrorMsg(formatGameError(err, "Не удалось поменять игроков местами"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSlotTap = (slot: FutDraftSlot) => {
+    if (!swapMode || !slot.player) {
+      if (slot.player) setViewingPlayer(slot.player);
+      else openSlot(slot.slot_code);
+      return;
+    }
+    if (selectedSlotForSwap === null) {
+      haptic("light");
+      setSelectedSlotForSwap(slot.slot_code);
+      return;
+    }
+    if (selectedSlotForSwap === slot.slot_code) {
+      setSelectedSlotForSwap(null);
+      return;
+    }
+    const target = selectedSlotForSwap;
+    setSelectedSlotForSwap(null);
+    swapSlots(target, slot.slot_code);
   };
 
   const claim = async (id: number) => {
@@ -425,11 +465,31 @@ export default function FutDraftGamePage() {
           onToggleHint={() => setShowStrengthHint((v) => !v)}
         />
 
+        {phase === "ready" && !pendingSlot && (
+          <button
+            onClick={() => {
+              haptic("light");
+              setSelectedSlotForSwap(null);
+              setSwapMode((v) => !v);
+            }}
+            className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold active:scale-95 ${
+              swapMode ? "bg-accent-lime text-bg-base" : "bg-white/5 text-ink-mist"
+            }`}
+          >
+            <IconSwap size={14} />
+            {swapMode
+              ? selectedSlotForSwap
+                ? "Выбери, с кем поменять"
+                : "Выбери первого игрока"
+              : "Поменять игроков местами"}
+          </button>
+        )}
+
         <Pitch
           formation={formation}
           slots={slots}
-          onSlotClick={openSlot}
-          onPlayerClick={(player) => setViewingPlayer(player)}
+          onSlotTap={handleSlotTap}
+          selectedSlotCode={swapMode ? selectedSlotForSwap : null}
           disabled={busy || pendingSlot !== null}
         />
 
@@ -582,14 +642,14 @@ function StrengthBar({
 function Pitch({
   formation,
   slots,
-  onSlotClick,
-  onPlayerClick,
+  onSlotTap,
+  selectedSlotCode,
   disabled,
 }: {
   formation: string;
   slots: FutDraftSlot[];
-  onSlotClick: (slotCode: string) => void;
-  onPlayerClick: (player: FutDraftCandidate) => void;
+  onSlotTap: (slot: FutDraftSlot) => void;
+  selectedSlotCode: string | null;
   disabled: boolean;
 }) {
   return (
@@ -602,9 +662,11 @@ function Pitch({
             .map((slot) => (
               <button
                 key={slot.slot_code}
-                onClick={() => (slot.player ? onPlayerClick(slot.player) : onSlotClick(slot.slot_code))}
+                onClick={() => onSlotTap(slot)}
                 disabled={slot.player ? false : disabled}
                 className={`flex h-[104px] w-[72px] shrink-0 flex-col items-center justify-center gap-1 rounded-xl p-1.5 backdrop-blur-sm active:scale-95 disabled:active:scale-100 ${
+                  slot.slot_code === selectedSlotCode ? "ring-2 ring-accent-lime" : ""
+                } ${
                   slot.player ? `bg-gradient-to-b ${RARITY_GRADIENTS[slot.player.rarity]} ${RARITY_GLOW[slot.player.rarity]} p-[1.5px]` : "bg-black/30"
                 }`}
               >

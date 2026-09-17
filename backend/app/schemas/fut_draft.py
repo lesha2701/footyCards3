@@ -53,6 +53,11 @@ class FutDraftPickRequest(BaseModel):
     player_id: int
 
 
+class FutDraftSwapSlotsRequest(BaseModel):
+    slot_code_a: str
+    slot_code_b: str
+
+
 class FutDraftStateOut(BaseModel):
     session_id: int
     formation: str

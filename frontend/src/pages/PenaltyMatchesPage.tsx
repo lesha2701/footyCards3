@@ -2,15 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { createPenaltyChallenge, fetchPenaltyMatches } from "@/api/penalty";
+import { createPenaltyChallenge, createPenaltyOpenChallenge, fetchPenaltyMatches } from "@/api/penalty";
 import { fetchFeatureFlags } from "@/api/featureFlags";
-import { searchUsers } from "@/api/profile";
+import { fetchMyProfile, searchUsers } from "@/api/profile";
 import { fetchCollection } from "@/api/collection";
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconFlagCheckered, IconPlay, IconUsers } from "@/components/icons";
+import { IconCoin, IconFlagCheckered, IconPlay, IconUsers } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
+import { openTelegramLink } from "@/lib/telegram";
 import type { PenaltyMatch, UserPublic } from "@/types";
 
 type Tab = "pending" | "active" | "history";
@@ -24,6 +25,12 @@ const STATUS_LABELS: Record<string, string> = {
   expired: "Истёк",
 };
 
+const OPPONENT_TYPE_LABELS: Record<string, string> = {
+  friend: "Против друга",
+  online: "Против соперника",
+  chat: "Вызов из чата",
+};
+
 export default function PenaltyMatchesPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -31,14 +38,17 @@ export default function PenaltyMatchesPage() {
   const [challengeSheetOpen, setChallengeSheetOpen] = useState(false);
   const [pickingOpponent, setPickingOpponent] = useState<UserPublic | null>(null);
   const [pickingForSearch, setPickingForSearch] = useState(false);
+  const [chatInviteSheetOpen, setChatInviteSheetOpen] = useState(false);
+  const [pickingForChatInvite, setPickingForChatInvite] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cardSearch, setCardSearch] = useState("");
 
+  const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
   const { data: matches, isLoading } = useQuery({ queryKey: ["penalty-matches"], queryFn: fetchPenaltyMatches });
   const { data: collection } = useQuery({
     queryKey: ["collection", "penalty-pvp", cardSearch],
     queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc", search: cardSearch || undefined }),
-    enabled: pickingOpponent !== null || pickingForSearch,
+    enabled: pickingOpponent !== null || pickingForSearch || pickingForChatInvite !== null,
   });
   const activeMatch = matches?.find((m) => m.status === "in_progress");
   // Refetches periodically so an admin's "kill switch" toggle takes effect
@@ -58,6 +68,24 @@ export default function PenaltyMatchesPage() {
       // card just doing nothing.
       setPickingOpponent(null);
       setError(formatGameError(err, "Не удалось отправить вызов"));
+    },
+  });
+  const chatInviteMutation = useMutation({
+    mutationFn: (cardId: number) => createPenaltyOpenChallenge(cardId, pickingForChatInvite ?? 0),
+    onSuccess: (match) => {
+      queryClient.invalidateQueries({ queryKey: ["game-limits"] });
+      if (profile?.telegram_bot_username) {
+        const deepLink = `https://t.me/${profile.telegram_bot_username}?start=penalty_open_${match.id}`;
+        const shareText = match.stake_coins > 0
+          ? `🥅 Вызываю на серию пенальти! Ставка: ${match.stake_coins} монет`
+          : "🥅 Вызываю на серию пенальти!";
+        openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(deepLink)}&text=${encodeURIComponent(shareText)}`);
+      }
+      navigate(`/play/penalty/matches/${match.id}`);
+    },
+    onError: (err) => {
+      setPickingForChatInvite(null);
+      setError(formatGameError(err, "Не удалось создать приглашение"));
     },
   });
 
@@ -103,12 +131,21 @@ export default function PenaltyMatchesPage() {
             </>
           )}
           <button
-            onClick={() => setChallengeSheetOpen(true)}
+            onClick={() => setChatInviteSheetOpen(true)}
             className="flex items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95"
           >
-            <IconUsers size={14} />
-            Вызвать друга
+            <IconCoin size={14} />
+            Вызвать соперника через чат
           </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setChallengeSheetOpen(true)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95"
+            >
+              <IconUsers size={14} />
+              Вызвать друга
+            </button>
+          </div>
         </>
       )}
 
@@ -148,6 +185,25 @@ export default function PenaltyMatchesPage() {
         />
       )}
 
+      {chatInviteSheetOpen && (
+        <ChatInviteSheet
+          onClose={() => setChatInviteSheetOpen(false)}
+          onCreate={(stake) => { setChatInviteSheetOpen(false); setPickingForChatInvite(stake); }}
+        />
+      )}
+
+      {pickingForChatInvite !== null && (
+        <CardPickerModal
+          open
+          title="Выбери карточку для вызова"
+          cards={collection?.items ?? []}
+          onSelect={(card) => chatInviteMutation.mutate(card.id)}
+          onClose={() => { setPickingForChatInvite(null); setCardSearch(""); }}
+          searchValue={cardSearch}
+          onSearchChange={setCardSearch}
+        />
+      )}
+
       {pickingForSearch && (
         <CardPickerModal
           open
@@ -178,9 +234,10 @@ function MatchRow({ match, onClick }: { match: PenaltyMatch; onClick: () => void
   return (
     <button onClick={onClick} className="flex items-center justify-between rounded-2xl bg-bg-surface p-4 text-left active:scale-[0.98]">
       <div>
-        <p className="font-display text-sm font-bold text-ink-chalk">{match.opponent_name}</p>
+        <p className="font-display text-sm font-bold text-ink-chalk">{match.opponent_name || "Открытый вызов"}</p>
         <p className="mt-0.5 text-[11px] text-ink-mist">
-          {match.opponent_type === "online" ? "Против соперника" : "Против друга"} · {STATUS_LABELS[match.status]}
+          {OPPONENT_TYPE_LABELS[match.opponent_type]} · {STATUS_LABELS[match.status]}
+          {match.stake_coins > 0 && ` · Ставка ${match.stake_coins}`}
         </p>
       </div>
       {match.status !== "pending_accept" && (
@@ -189,6 +246,42 @@ function MatchRow({ match, onClick }: { match: PenaltyMatch; onClick: () => void
         </span>
       )}
     </button>
+  );
+}
+
+function ChatInviteSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (stakeCoins: number) => void }) {
+  const [stake, setStake] = useState("0");
+  const stakeCoins = Math.max(0, Math.floor(Number(stake) || 0));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={onClose}>
+      <div className="w-full rounded-t-3xl bg-bg-base p-5" onClick={(e) => e.stopPropagation()}>
+        <p className="mb-3 font-display text-base font-bold text-ink-chalk">Вызвать соперника через чат</p>
+        <p className="mb-3 text-xs text-ink-mist">
+          Выбери ставку, затем карточку для удара — после этого откроется окно «Поделиться». Первый, кто примет вызов, станет соперником.
+        </p>
+        <label className="mb-1 block text-xs text-ink-mist-dim">Ставка, монеты (0 — без ставки)</label>
+        <input
+          type="number"
+          min={0}
+          inputMode="numeric"
+          value={stake}
+          onChange={(e) => setStake(e.target.value)}
+          className="mb-3 w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk outline-none"
+        />
+        {stakeCoins > 0 && (
+          <p className="mb-3 text-[11px] text-ink-mist-dim">
+            Победитель заберёт {stakeCoins * 2} монет — по {stakeCoins} с каждой стороны.
+          </p>
+        )}
+        <button
+          onClick={() => onCreate(stakeCoins)}
+          className="w-full rounded-xl bg-floodlight py-3 text-sm font-bold text-bg-base active:scale-95"
+        >
+          Выбрать карточку
+        </button>
+      </div>
+    </div>
   );
 }
 

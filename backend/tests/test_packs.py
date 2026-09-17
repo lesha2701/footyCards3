@@ -290,3 +290,144 @@ async def test_open_pack_idempotent_replay_preserves_rarity_order(client, db_ses
     first_ids = [c["card"]["id"] for c in first.json()["cards"]]
     second_ids = [c["card"]["id"] for c in second.json()["cards"]]
     assert first_ids == second_ids
+
+
+# ---------------------------------------------------------------------------
+# Bulk open (quantity)
+# ---------------------------------------------------------------------------
+
+async def test_open_pack_bulk_charges_total_and_grants_all_cards(client, db_session, bot_token):
+    for _ in range(5):
+        await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(db_session, "bulk_basic", price=100, card_count=3, probabilities={Rarity.common: 1.0})
+
+    user = await _register(client, db_session, 700200, bot_token)
+    user_id = user.id
+    headers = telegram_headers(700200, bot_token)
+
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open-bulk", headers=headers, json={"quantity": 5})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["quantity"] == 5
+    assert len(body["opening_ids"]) == 5
+    assert len(set(body["opening_ids"])) == 5  # each pack is its own real PackOpening row
+    assert len(body["cards"]) == 15  # 5 packs x 3 cards
+    assert body["total_price_paid"] == 500
+    assert body["new_balance"] == 500 - 500
+
+    db_session.expire_all()
+    cards = (await db_session.execute(select(UserCard).where(UserCard.owner_id == user_id))).scalars().all()
+    assert len(cards) == 15
+
+
+async def test_open_pack_bulk_rejects_quantity_out_of_range(client, db_session, bot_token):
+    await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(db_session, "bulk_range", price=10, card_count=1, probabilities={Rarity.common: 1.0})
+
+    await _register(client, db_session, 700201, bot_token)
+    headers = telegram_headers(700201, bot_token)
+
+    too_low = await client.post(f"/api/v1/packs/{pack.id}/open-bulk", headers=headers, json={"quantity": 0})
+    assert too_low.status_code == 422
+
+    too_high = await client.post(f"/api/v1/packs/{pack.id}/open-bulk", headers=headers, json={"quantity": 101})
+    assert too_high.status_code == 422
+
+
+async def test_open_pack_bulk_insufficient_balance_charges_nothing(client, db_session, bot_token):
+    await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(db_session, "bulk_expensive", price=200, card_count=2, probabilities={Rarity.common: 1.0})
+
+    await _register(client, db_session, 700202, bot_token)
+    headers = telegram_headers(700202, bot_token)
+
+    # 3 x 200 = 600 > the 500 starting balance.
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open-bulk", headers=headers, json={"quantity": 3})
+    assert resp.status_code == 400
+
+    user = await get_user_by_telegram_id(db_session, 700202)
+    assert user.balance == 500
+    cards = (await db_session.execute(select(UserCard).where(UserCard.owner_id == user.id))).scalars().all()
+    assert len(cards) == 0
+
+
+async def test_open_pack_bulk_idempotency_key_prevents_double_charge(client, db_session, bot_token):
+    for _ in range(5):
+        await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(db_session, "bulk_idem", price=50, card_count=2, probabilities={Rarity.common: 1.0})
+
+    await _register(client, db_session, 700203, bot_token)
+    headers = telegram_headers(700203, bot_token)
+
+    first = await client.post(f"/api/v1/packs/{pack.id}/open-bulk", headers=headers, json={"quantity": 4, "idempotency_key": "bulk-abc"})
+    second = await client.post(f"/api/v1/packs/{pack.id}/open-bulk", headers=headers, json={"quantity": 4, "idempotency_key": "bulk-abc"})
+
+    assert first.status_code == 200 and second.status_code == 200
+    assert first.json()["opening_ids"] == second.json()["opening_ids"]
+    assert first.json()["new_balance"] == second.json()["new_balance"] == 500 - 4 * 50
+
+    user = await get_user_by_telegram_id(db_session, 700203)
+    assert user.balance == 500 - 4 * 50
+    cards = (await db_session.execute(select(UserCard).where(UserCard.owner_id == user.id))).scalars().all()
+    assert len(cards) == 4 * 2  # not double-granted on the replay
+
+
+async def test_open_pack_bulk_respects_purchase_limit_per_user(client, db_session, bot_token):
+    for _ in range(5):
+        await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(
+        db_session, "bulk_limited", price=10, card_count=1, probabilities={Rarity.common: 1.0},
+        purchase_limit_per_user=5,
+    )
+
+    await _register(client, db_session, 700204, bot_token)
+    headers = telegram_headers(700204, bot_token)
+
+    first = await client.post(f"/api/v1/packs/{pack.id}/open-bulk", headers=headers, json={"quantity": 3})
+    assert first.status_code == 200
+
+    # 3 already opened + 3 more would be 6, over the limit of 5 — must be
+    # rejected outright, not silently truncated to a partial 2.
+    second = await client.post(f"/api/v1/packs/{pack.id}/open-bulk", headers=headers, json={"quantity": 3})
+    assert second.status_code == 409
+
+    user = await get_user_by_telegram_id(db_session, 700204)
+    assert user.balance == 500 - 30  # only the first batch of 3 went through
+
+    third = await client.post(f"/api/v1/packs/{pack.id}/open-bulk", headers=headers, json={"quantity": 2})
+    assert third.status_code == 200
+    await db_session.refresh(user)
+    assert user.balance == 500 - 50  # 3 + 2 = 5, exactly at the limit
+
+
+async def test_open_pack_bulk_rejects_stars_only_pack(client, db_session, bot_token):
+    await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(
+        db_session, "bulk_stars_only", price=0, card_count=1, probabilities={Rarity.common: 1.0},
+        stars_price=50,
+    )
+
+    await _register(client, db_session, 700205, bot_token)
+    headers = telegram_headers(700205, bot_token)
+
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open-bulk", headers=headers, json={"quantity": 2})
+    assert resp.status_code == 409
+
+
+async def test_open_pack_bulk_cards_sorted_by_rarity_ascending(client, db_session, bot_token):
+    for _ in range(10):
+        await create_player(db_session, rarity=Rarity.common)
+    for _ in range(10):
+        await create_player(db_session, rarity=Rarity.legendary, rating=95)
+    pack = await create_pack(
+        db_session, "bulk_sort_test", price=10, card_count=4,
+        probabilities={Rarity.common: 0.5, Rarity.legendary: 0.5},
+    )
+
+    await _register(client, db_session, 700206, bot_token)
+    headers = telegram_headers(700206, bot_token)
+
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open-bulk", headers=headers, json={"quantity": 5})
+    assert resp.status_code == 200
+    orders = [RARITY_ORDER[c["card"]["player"]["rarity"]] for c in resp.json()["cards"]]
+    assert orders == sorted(orders)

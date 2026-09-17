@@ -1,3 +1,4 @@
+from tests.factories import get_user_by_telegram_id
 from tests.utils import telegram_headers
 
 
@@ -49,6 +50,31 @@ async def test_admin_broadcast_reaches_all_users_and_updates_status(client, bot_
 
         status_resp = await client.get("/api/v1/updates/status", headers=headers)
         assert status_resp.json()["broadcast_at"] is not None
+
+
+async def test_admin_broadcast_skips_users_who_blocked_the_bot(client, db_session, bot_token):
+    """bot_blocked is set by the bot process (asyncpg) on TelegramForbiddenError
+    — simulated here by writing it directly, same as the bot would."""
+    auth = await _admin_auth(client, bot_token)
+
+    headers_blocked = telegram_headers(770105, bot_token)
+    headers_normal = telegram_headers(770106, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers_blocked)
+    await client.post("/api/v1/auth/session", headers=headers_normal)
+
+    blocked_user = await get_user_by_telegram_id(db_session, 770105)
+    blocked_user.bot_blocked = True
+    db_session.add(blocked_user)
+    await db_session.commit()
+
+    resp = await client.post("/api/v1/admin/broadcasts", headers=auth, json={"message": "Проверка bot_blocked"})
+    assert resp.status_code == 200
+
+    notifications_blocked = (await client.get("/api/v1/notifications", headers=headers_blocked)).json()
+    assert not any(n["body"] == "Проверка bot_blocked" for n in notifications_blocked)
+
+    notifications_normal = (await client.get("/api/v1/notifications", headers=headers_normal)).json()
+    assert any(n["body"] == "Проверка bot_blocked" for n in notifications_normal)
 
 
 async def test_broadcast_requires_non_empty_message(client, bot_token):

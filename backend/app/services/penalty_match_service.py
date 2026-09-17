@@ -11,15 +11,22 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.timeutil import ensure_aware
 from app.models.card import UserCard
-from app.models.enums import BingoGoalType, MatchResult, NotificationType, PenaltyMatchStatus, PenaltyOpponentType
+from app.models.enums import (
+    BingoGoalType,
+    MatchResult,
+    NotificationType,
+    PenaltyMatchStatus,
+    PenaltyOpponentType,
+    TransactionType,
+)
 from app.models.penalty import PenaltyMatch, PenaltyQueueEntry
 from app.models.user import User
-from app.schemas.penalty_match import PenaltyMatchOut, PenaltyRoundOut
+from app.schemas.penalty_match import PenaltyMatchOut, PenaltyOpenChallengePreviewOut, PenaltyRoundOut
 from app.services import bingo_service, league_service
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 from app.services.penalty_service import PENALTY_ZONES, _resolve_shot
-from app.services.wallet_service import lock_user_for_update
+from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 KICK_TIMEOUT_SECONDS = 10
 MATCH_TIMEOUT_SECONDS = 180
@@ -131,6 +138,117 @@ async def create_challenge(db: AsyncSession, sender: User, receiver_id: int, use
     return await _hydrate_match(db, match, sender)
 
 
+async def create_open_challenge(db: AsyncSession, sender: User, user_card_id: int, stake_coins: int) -> PenaltyMatchOut:
+    """Mirrors tactico_service.create_open_challenge — see that function's
+    docstring. No stake is moved until accept_open_challenge."""
+    if stake_coins < 0:
+        raise ConflictError("Stake cannot be negative")
+    config = await get_config(db)
+    if await _has_active_match(db, sender.id):
+        raise ConflictError("У тебя уже есть матч в Пенальти в процессе — заверши его, прежде чем начать новый")
+    await _load_owned_card(db, sender, user_card_id)
+    if stake_coins > 0 and sender.balance < stake_coins:
+        raise ConflictError("Не хватает монет для такой ставки")
+
+    sender = await _consume_hourly_slot(db, sender.id, config)
+
+    match = PenaltyMatch(
+        user_id=sender.id,
+        opponent_user_id=None,
+        opponent_name="",
+        opponent_type=PenaltyOpponentType.chat,
+        user_card_id=user_card_id,
+        status=PenaltyMatchStatus.pending_accept,
+        stake_coins=stake_coins,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=config.penalty_challenge_expiry_hours),
+        server_state={
+            "kicks_taken": 0, "kicker": "user", "rounds": [],
+            "user_score": 0, "opponent_score": 0,
+            "user_pending_zone": None, "opponent_pending_zone": None,
+            "kick_deadline": None, "match_deadline": None,
+        },
+    )
+    db.add(match)
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, sender)
+
+
+async def preview_open_challenge(db: AsyncSession, viewer: User, match_id: int) -> PenaltyOpenChallengePreviewOut:
+    match = await _get_match_or_404(db, match_id)
+    if match.opponent_type != PenaltyOpponentType.chat:
+        raise NotFoundError("Match not found")
+    creator = await db.get(User, match.user_id)
+    status = match.status
+    if status == PenaltyMatchStatus.pending_accept and match.expires_at and ensure_aware(match.expires_at) <= datetime.now(timezone.utc):
+        status = PenaltyMatchStatus.expired
+    return PenaltyOpenChallengePreviewOut(
+        id=match.id,
+        creator_name=creator.full_display_name() if creator else "Игрок",
+        stake_coins=match.stake_coins,
+        status=status,
+        is_own_challenge=match.user_id == viewer.id,
+    )
+
+
+async def accept_open_challenge(db: AsyncSession, user: User, match_id: int, user_card_id: int) -> PenaltyMatchOut:
+    match = await _lock_match(db, match_id)
+    if match.opponent_type != PenaltyOpponentType.chat:
+        raise NotFoundError("Match not found")
+    if match.status != PenaltyMatchStatus.pending_accept:
+        raise ConflictError("This challenge is no longer available")
+    if match.user_id == user.id:
+        raise ConflictError("You cannot accept your own challenge")
+    if match.expires_at and ensure_aware(match.expires_at) <= datetime.now(timezone.utc):
+        match.status = PenaltyMatchStatus.expired
+        match.resolved_at = datetime.now(timezone.utc)
+        db.add(match)
+        await db.commit()
+        raise ConflictError("This challenge has expired")
+
+    if await _has_active_match(db, user.id, exclude_match_id=match.id):
+        raise ConflictError("У тебя уже есть матч в Пенальти в процессе — заверши его, прежде чем принять вызов")
+
+    await _load_owned_card(db, user, user_card_id)
+
+    creator = await lock_user_for_update(db, match.user_id)
+    acceptor = await lock_user_for_update(db, user.id)
+    if match.stake_coins > 0:
+        if creator.balance < match.stake_coins:
+            raise ConflictError("У создателя вызова больше не хватает монет на ставку")
+        if acceptor.balance < match.stake_coins:
+            raise ConflictError("Не хватает монет для такой ставки")
+        await debit_coins(
+            db, creator, match.stake_coins, TransactionType.penalty_stake_lock,
+            "Ставка за вызов на пенальти", "penalty_match", match.id,
+        )
+        await debit_coins(
+            db, acceptor, match.stake_coins, TransactionType.penalty_stake_lock,
+            "Ставка за принятый вызов на пенальти", "penalty_match", match.id,
+        )
+
+    now = datetime.now(timezone.utc)
+    state = dict(match.server_state)
+    state["kick_deadline"] = (now + timedelta(seconds=KICK_TIMEOUT_SECONDS)).isoformat()
+    state["match_deadline"] = (now + timedelta(seconds=MATCH_TIMEOUT_SECONDS)).isoformat()
+    match.server_state = state
+    flag_modified(match, "server_state")
+    match.opponent_card_id = user_card_id
+    match.opponent_user_id = acceptor.id
+    match.opponent_name = acceptor.full_display_name()
+    match.status = PenaltyMatchStatus.in_progress
+    db.add(match)
+
+    await notify(
+        db, creator.id, NotificationType.penalty_challenge_accepted,
+        "Вызов принят", f"{acceptor.full_display_name()} принял(а) ваш вызов на пенальти.",
+        "penalty_match", match.id,
+    )
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, acceptor)
+
+
 async def accept_challenge(db: AsyncSession, user: User, match_id: int, user_card_id: int) -> PenaltyMatchOut:
     match = await _lock_match(db, match_id)
     if match.opponent_user_id != user.id:
@@ -216,6 +334,7 @@ async def _hydrate_match(db: AsyncSession, match: PenaltyMatch, viewer: User) ->
         viewer_score, other_score = match.user_score, match.opponent_score
         result_out = match.result
         rating_delta = match.rating_delta
+        reward_coins = state.get("user_reward_coins", 0)
     else:
         challenger = await db.get(User, match.user_id)
         opponent_name = challenger.full_display_name() if challenger else match.opponent_name
@@ -223,6 +342,7 @@ async def _hydrate_match(db: AsyncSession, match: PenaltyMatch, viewer: User) ->
         viewer_score, other_score = match.opponent_score, match.user_score
         result_out = _FLIP_RESULT[match.result] if match.result else None
         rating_delta = state.get("opponent_rating_delta", 0)
+        reward_coins = state.get("opponent_reward_coins", 0)
 
     rounds_out = [
         PenaltyRoundOut(
@@ -255,6 +375,8 @@ async def _hydrate_match(db: AsyncSession, match: PenaltyMatch, viewer: User) ->
         match_deadline=ensure_aware(datetime.fromisoformat(state["match_deadline"])) if state.get("match_deadline") else None,
         result=result_out,
         rating_delta=rating_delta,
+        stake_coins=match.stake_coins,
+        reward_coins=reward_coins,
         created_at=match.created_at,
         expires_at=match.expires_at,
         resolved_at=match.resolved_at,
@@ -393,6 +515,46 @@ async def _finish_match(db: AsyncSession, match: PenaltyMatch, state: dict, forc
     locked_opponent.penalty_rating = max(0, locked_opponent.penalty_rating + opponent_delta)
     db.add(locked_user)
     db.add(locked_opponent)
+
+    # Open (chat-invite) challenge stakes — see tactico_service._finish_match
+    # for the identical settlement rule this mirrors.
+    user_reward = 0
+    opponent_reward = 0
+    if match.stake_coins > 0:
+        pot = match.stake_coins * 2
+        if result == MatchResult.draw:
+            await credit_coins(
+                db, locked_user, match.stake_coins, TransactionType.penalty_stake_refund,
+                "Возврат ставки — ничья в пенальти", "penalty_match", match.id,
+            )
+            await credit_coins(
+                db, locked_opponent, match.stake_coins, TransactionType.penalty_stake_refund,
+                "Возврат ставки — ничья в пенальти", "penalty_match", match.id,
+            )
+            user_reward = match.stake_coins
+            opponent_reward = match.stake_coins
+        elif result == MatchResult.win:
+            await credit_coins(
+                db, locked_user, pot, TransactionType.penalty_stake_win,
+                "Выигрыш ставки в пенальти", "penalty_match", match.id,
+            )
+            user_reward = pot
+        else:
+            await credit_coins(
+                db, locked_opponent, pot, TransactionType.penalty_stake_win,
+                "Выигрыш ставки в пенальти", "penalty_match", match.id,
+            )
+            opponent_reward = pot
+    state["user_reward_coins"] = user_reward
+    state["opponent_reward_coins"] = opponent_reward
+    # Re-flag: the lock_user_for_update calls above already autoflushed the
+    # server_state write from earlier in this function (the
+    # opponent_rating_delta assignment), which silently clears SQLAlchemy's
+    # change-tracking for this attribute — without flagging again here, the
+    # stake-payout keys just added above would never make it into the
+    # commit below.
+    match.server_state = state
+    flag_modified(match, "server_state")
 
     if match.opponent_type != PenaltyOpponentType.friend:
         await league_service.sync_league_rewards_for_user(db, locked_user)

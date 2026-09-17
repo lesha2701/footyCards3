@@ -29,6 +29,7 @@ const OPPONENT_TYPE_LABELS: Record<string, string> = {
   bot: "Против бота",
   friend: "Против друга",
   online: "Против соперника",
+  chat: "Вызов из чата",
 };
 const PHASE_LABELS: Record<string, { label: string; emoji: string }> = {
   attack: { label: "Атакующий эпизод", emoji: "⚔️" },

@@ -87,6 +87,12 @@ class TransactionType(str, enum.Enum):
     premium_subscription_adjustment = "premium_subscription_adjustment"
     bingo_reward = "bingo_reward"
     club_tournament_match_reward = "club_tournament_match_reward"
+    tactico_stake_lock = "tactico_stake_lock"
+    tactico_stake_win = "tactico_stake_win"
+    tactico_stake_refund = "tactico_stake_refund"
+    penalty_stake_lock = "penalty_stake_lock"
+    penalty_stake_win = "penalty_stake_win"
+    penalty_stake_refund = "penalty_stake_refund"
 
 
 class GiftKind(str, enum.Enum):
@@ -233,11 +239,13 @@ class TacticoOpponentType(str, enum.Enum):
     bot = "bot"
     friend = "friend"
     online = "online"
+    chat = "chat"
 
 
 class PenaltyOpponentType(str, enum.Enum):
     friend = "friend"
     online = "online"
+    chat = "chat"
 
 
 class TacticoMatchStatus(str, enum.Enum):

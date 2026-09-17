@@ -54,7 +54,9 @@ async def _lock_queue_state(db: AsyncSession) -> TournamentQueueState:
 
 
 async def _has_full_starting_xi(db: AsyncSession, club_id: int) -> bool:
-    lineup = (await db.execute(select(ClubLineup).where(ClubLineup.club_id == club_id))).scalar_one_or_none()
+    lineup = (
+        await db.execute(select(ClubLineup).where(ClubLineup.club_id == club_id, ClubLineup.is_active.is_(True)))
+    ).scalar_one_or_none()
     if lineup is None:
         return False
     count = (

@@ -55,6 +55,9 @@ class ClubLineupSlotOut(BaseModel):
 
 
 class ClubLineupOut(BaseModel):
+    template_index: int
+    name: str
+    is_active: bool
     is_complete: bool
     team_strength: int | None
     formation: str
@@ -93,6 +96,10 @@ class ClubTacticsSetRequest(BaseModel):
     formation: str
     mentality: str
     playstyle: str
+
+
+class ClubLineupRenameRequest(BaseModel):
+    name: str
 
 
 class NextOpponentOut(BaseModel):

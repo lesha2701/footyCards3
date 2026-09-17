@@ -2,14 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { createTacticoBotMatch, createTacticoChallenge, fetchTacticoMatches } from "@/api/tactico";
+import { createTacticoBotMatch, createTacticoChallenge, createTacticoOpenChallenge, fetchTacticoMatches } from "@/api/tactico";
 import { fetchFeatureFlags } from "@/api/featureFlags";
+import { fetchMyProfile } from "@/api/profile";
 import { searchUsers } from "@/api/profile";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconFlagCheckered, IconHelp, IconPlay, IconShirt, IconUsers } from "@/components/icons";
+import { IconCoin, IconFlagCheckered, IconHelp, IconPlay, IconShirt, IconUsers } from "@/components/icons";
 import TacticoRulesModal from "@/components/tactico/TacticoRulesModal";
 import { formatGameError } from "@/lib/errors";
+import { openTelegramLink } from "@/lib/telegram";
 import type { MatchDifficulty, TacticoMatch, UserPublic } from "@/types";
 
 type Tab = "pending" | "active" | "history";
@@ -27,6 +29,7 @@ const OPPONENT_TYPE_LABELS: Record<string, string> = {
   bot: "Против бота",
   friend: "Против друга",
   online: "Против соперника",
+  chat: "Вызов из чата",
 };
 
 const DIFFICULTY_LABELS: { value: MatchDifficulty; label: string }[] = [
@@ -40,9 +43,11 @@ export default function TacticoMatchesPage() {
   const [tab, setTab] = useState<Tab>("active");
   const [botSheetOpen, setBotSheetOpen] = useState(false);
   const [challengeSheetOpen, setChallengeSheetOpen] = useState(false);
+  const [chatInviteSheetOpen, setChatInviteSheetOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
   const { data: matches, isLoading } = useQuery({ queryKey: ["tactico-matches"], queryFn: fetchTacticoMatches });
   const activeMatch = matches?.find((m) => m.status === "in_progress");
   // Refetches periodically so an admin's "kill switch" toggle takes effect
@@ -64,6 +69,21 @@ export default function TacticoMatchesPage() {
       navigate(`/play/tactico/matches/${match.id}`);
     },
     onError: (err) => setError(formatGameError(err, "Не удалось отправить вызов")),
+  });
+  const chatInviteMutation = useMutation({
+    mutationFn: (stakeCoins: number) => createTacticoOpenChallenge(stakeCoins),
+    onSuccess: (match) => {
+      queryClient.invalidateQueries({ queryKey: ["game-limits"] });
+      if (profile?.telegram_bot_username) {
+        const deepLink = `https://t.me/${profile.telegram_bot_username}?start=tactico_open_${match.id}`;
+        const shareText = match.stake_coins > 0
+          ? `⚔️ Вызываю на матч в Тактико! Ставка: ${match.stake_coins} монет`
+          : "⚔️ Вызываю на матч в Тактико!";
+        openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(deepLink)}&text=${encodeURIComponent(shareText)}`);
+      }
+      navigate(`/play/tactico/matches/${match.id}`);
+    },
+    onError: (err) => setError(formatGameError(err, "Не удалось создать приглашение")),
   });
 
   const filtered = (matches ?? []).filter((m) => {
@@ -142,6 +162,13 @@ export default function TacticoMatchesPage() {
               Вызвать друга
             </button>
           </div>
+          <button
+            onClick={() => setChatInviteSheetOpen(true)}
+            className="flex items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95"
+          >
+            <IconCoin size={14} />
+            Вызвать соперника через чат
+          </button>
         </>
       )}
 
@@ -185,6 +212,14 @@ export default function TacticoMatchesPage() {
         />
       )}
 
+      {chatInviteSheetOpen && (
+        <ChatInviteSheet
+          busy={chatInviteMutation.isPending}
+          onClose={() => setChatInviteSheetOpen(false)}
+          onCreate={(stake) => { setChatInviteSheetOpen(false); chatInviteMutation.mutate(stake); }}
+        />
+      )}
+
       <TacticoRulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} />
     </div>
   );
@@ -205,9 +240,10 @@ function MatchRow({ match, onClick }: { match: TacticoMatch; onClick: () => void
   return (
     <button onClick={onClick} className="flex items-center justify-between rounded-2xl bg-bg-surface p-4 text-left active:scale-[0.98]">
       <div>
-        <p className="font-display text-sm font-bold text-ink-chalk">{match.opponent_name}</p>
+        <p className="font-display text-sm font-bold text-ink-chalk">{match.opponent_name || "Открытый вызов"}</p>
         <p className="mt-0.5 text-[11px] text-ink-mist">
           {OPPONENT_TYPE_LABELS[match.opponent_type]} · {STATUS_LABELS[match.status]}
+          {match.stake_coins > 0 && ` · Ставка ${match.stake_coins}`}
         </p>
       </div>
       {match.status !== "pending_accept" && (
@@ -259,6 +295,40 @@ function ChallengeSheet({ onClose, onPick }: { onClose: () => void; onPick: (use
         ))}
         {query.length >= 2 && !results?.length && <p className="text-xs text-ink-mist-dim">Никого не найдено</p>}
       </div>
+    </Sheet>
+  );
+}
+
+function ChatInviteSheet({ busy, onClose, onCreate }: { busy: boolean; onClose: () => void; onCreate: (stakeCoins: number) => void }) {
+  const [stake, setStake] = useState("0");
+  const stakeCoins = Math.max(0, Math.floor(Number(stake) || 0));
+
+  return (
+    <Sheet title="Вызвать соперника через чат" onClose={onClose}>
+      <p className="mb-3 text-xs text-ink-mist">
+        Создадим вызов и откроем окно «Поделиться» — выбери чат, куда его отправить. Первый, кто примет вызов, станет твоим соперником.
+      </p>
+      <label className="mb-1 block text-xs text-ink-mist-dim">Ставка, монеты (0 — без ставки)</label>
+      <input
+        type="number"
+        min={0}
+        inputMode="numeric"
+        value={stake}
+        onChange={(e) => setStake(e.target.value)}
+        className="mb-3 w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk outline-none"
+      />
+      {stakeCoins > 0 && (
+        <p className="mb-3 text-[11px] text-ink-mist-dim">
+          Победитель заберёт {stakeCoins * 2} монет — по {stakeCoins} с каждой стороны.
+        </p>
+      )}
+      <button
+        onClick={() => onCreate(stakeCoins)}
+        disabled={busy}
+        className="w-full rounded-xl bg-floodlight py-3 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-50"
+      >
+        {busy ? "Создаём..." : "Создать и поделиться"}
+      </button>
     </Sheet>
   );
 }

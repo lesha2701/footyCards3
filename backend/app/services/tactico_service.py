@@ -26,14 +26,21 @@ from app.models.player import Player
 from app.models.tactico import TacticoMatch, TacticoQueueEntry, TacticoSquad, TacticoSquadCard
 from app.models.user import User
 from app.schemas.ranking import RankingMetric
-from app.schemas.tactico import TacticoCardOut, TacticoMatchOut, TacticoRoundOut, TacticoSquadOut, TacticoStatsOut
+from app.schemas.tactico import (
+    TacticoCardOut,
+    TacticoMatchOut,
+    TacticoOpenChallengePreviewOut,
+    TacticoRoundOut,
+    TacticoSquadOut,
+    TacticoStatsOut,
+)
 from app.services import bingo_service, league_service, ranking_service
 from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS
 from app.services.match_service import BOT_NAMES
 from app.services.notification_service import notify
 from app.services.player_stats_service import effective_card_stats
-from app.services.wallet_service import credit_coins, lock_user_for_update
+from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 SQUAD_SIZE = 11
 FRIEND_TURN_TIMEOUT_SECONDS = 15
@@ -49,19 +56,51 @@ _BASE_RATING_DELTA = {MatchResult.win: 3, MatchResult.loss: -1, MatchResult.draw
 # Squad
 # ---------------------------------------------------------------------------
 
-async def _get_or_create_squad(db: AsyncSession, user_id: int) -> TacticoSquad:
-    result = await db.execute(select(TacticoSquad).where(TacticoSquad.user_id == user_id))
-    squad = result.scalar_one_or_none()
-    if squad is None:
-        squad = TacticoSquad(user_id=user_id)
-        db.add(squad)
-        await db.flush()
-    return squad
+SQUAD_TEMPLATE_COUNT = 5
+DEFAULT_SQUAD_TEMPLATE_NAMES = {i: f"Шаблон {i}" for i in range(1, SQUAD_TEMPLATE_COUNT + 1)}
 
 
-async def get_squad(db: AsyncSession, user: User) -> TacticoSquadOut:
+def _squad_templates_query(user_id: int):
+    return select(TacticoSquad).where(TacticoSquad.user_id == user_id).order_by(TacticoSquad.template_index)
+
+
+async def _ensure_squad_templates(db: AsyncSession, user_id: int) -> list[TacticoSquad]:
+    """Lazily seeds any of the 5 fixed template slots that don't exist yet
+    for this user — same pattern as lineup_service._ensure_templates."""
+    result = await db.execute(_squad_templates_query(user_id))
+    templates = list(result.scalars().all())
+    existing_indexes = {t.template_index for t in templates}
+    missing = [i for i in range(1, SQUAD_TEMPLATE_COUNT + 1) if i not in existing_indexes]
+    if not missing:
+        return templates
+
+    has_active = any(t.is_active for t in templates)
+    try:
+        async with db.begin_nested():
+            for i in missing:
+                db.add(TacticoSquad(
+                    user_id=user_id, template_index=i, name=DEFAULT_SQUAD_TEMPLATE_NAMES[i],
+                    is_active=(i == 1 and not has_active),
+                ))
+            await db.flush()
+    except IntegrityError:
+        pass
+
+    result = await db.execute(_squad_templates_query(user_id))
+    return list(result.scalars().all())
+
+
+async def _get_squad_template_row(db: AsyncSession, user_id: int, template_index: int | None) -> TacticoSquad:
+    templates = await _ensure_squad_templates(db, user_id)
+    if template_index is None:
+        return next(t for t in templates if t.is_active)
+    if not 1 <= template_index <= SQUAD_TEMPLATE_COUNT:
+        raise NotFoundError(f"template_index must be between 1 and {SQUAD_TEMPLATE_COUNT}")
+    return next(t for t in templates if t.template_index == template_index)
+
+
+async def _serialize_squad(db: AsyncSession, squad: TacticoSquad) -> TacticoSquadOut:
     config = await get_config(db)
-    squad = await _get_or_create_squad(db, user.id)
     result = await db.execute(select(TacticoSquadCard).where(TacticoSquadCard.squad_id == squad.id))
     squad_cards = result.scalars().all()
     card_ids = [sc.user_card_id for sc in squad_cards]
@@ -76,15 +115,38 @@ async def get_squad(db: AsyncSession, user: User) -> TacticoSquadOut:
         # phantom card the frontend can neither render nor deselect —
         # is_complete correctly drops to False so the player can just pick
         # a replacement, rather than getting a raw 403 loop on every save.
-        cards = [c for c in cards_result.unique().scalars().all() if c.owner_id == user.id]
+        cards = [c for c in cards_result.unique().scalars().all() if c.owner_id == squad.user_id]
     return TacticoSquadOut(
+        template_index=squad.template_index, name=squad.name, is_active=squad.is_active,
         is_complete=len(cards) == SQUAD_SIZE, cards=cards,
         max_legendary=config.tactico_max_legendary_cards, max_epic=config.tactico_max_epic_cards,
         max_diamond=config.tactico_max_diamond_cards,
     )
 
 
-async def set_squad(db: AsyncSession, user: User, user_card_ids: list[int]) -> TacticoSquadOut:
+async def get_squad(db: AsyncSession, user: User, template_index: int | None = None) -> TacticoSquadOut:
+    squad = await _get_squad_template_row(db, user.id, template_index)
+    return await _serialize_squad(db, squad)
+
+
+async def list_squad_templates(db: AsyncSession, user: User) -> list[TacticoSquadOut]:
+    templates = await _ensure_squad_templates(db, user.id)
+    return [await _serialize_squad(db, t) for t in templates]
+
+
+async def rename_squad_template(db: AsyncSession, user: User, template_index: int, name: str) -> TacticoSquadOut:
+    if not name.strip():
+        raise ConflictError("Название не может быть пустым")
+    squad = await _get_squad_template_row(db, user.id, template_index)
+    squad.name = name.strip()[:64]
+    db.add(squad)
+    await db.commit()
+    return await get_squad(db, user, template_index)
+
+
+async def set_squad(
+    db: AsyncSession, user: User, user_card_ids: list[int], template_index: int | None = None
+) -> TacticoSquadOut:
     config = await get_config(db)
     unique_ids = list(dict.fromkeys(user_card_ids))
     if len(unique_ids) != SQUAD_SIZE:
@@ -114,11 +176,15 @@ async def set_squad(db: AsyncSession, user: User, user_card_ids: list[int]) -> T
     if diamond_count > config.tactico_max_diamond_cards:
         raise ConflictError(f"Максимум {config.tactico_max_diamond_cards} диамантовых карт в составе Тактико")
 
-    squad = await _get_or_create_squad(db, user.id)
+    squad = await _get_squad_template_row(db, user.id, template_index)
     old_result = await db.execute(select(TacticoSquadCard).where(TacticoSquadCard.squad_id == squad.id))
     old_squad_cards = old_result.scalars().all()
     old_card_ids = [sc.user_card_id for sc in old_squad_cards]
-    if old_card_ids:
+
+    # Trade/upgrade locking reflects only the ACTIVE template — editing a
+    # template that isn't currently active must never touch
+    # is_in_tactico_squad on any card.
+    if squad.is_active and old_card_ids:
         old_cards_result = await db.execute(select(UserCard).where(UserCard.id.in_(old_card_ids)))
         for c in old_cards_result.scalars().all():
             c.is_in_tactico_squad = False
@@ -127,12 +193,61 @@ async def set_squad(db: AsyncSession, user: User, user_card_ids: list[int]) -> T
         await db.delete(sc)
     await db.flush()
     for card_id in unique_ids:
-        cards_by_id[card_id].is_in_tactico_squad = True
-        db.add(cards_by_id[card_id])
+        if squad.is_active:
+            cards_by_id[card_id].is_in_tactico_squad = True
+            db.add(cards_by_id[card_id])
         db.add(TacticoSquadCard(squad_id=squad.id, user_card_id=card_id))
 
     await db.commit()
-    return await get_squad(db, user)
+    return await get_squad(db, user, squad.template_index)
+
+
+async def activate_squad_template(db: AsyncSession, user: User, template_index: int) -> TacticoSquadOut:
+    """Mirrors lineup_service.activate_template exactly, for TacticoSquad —
+    see that function's docstring for the shared-card/no-flicker reasoning."""
+    templates = await _ensure_squad_templates(db, user.id)
+    if not 1 <= template_index <= SQUAD_TEMPLATE_COUNT:
+        raise NotFoundError(f"template_index must be between 1 and {SQUAD_TEMPLATE_COUNT}")
+    new_active = next(t for t in templates if t.template_index == template_index)
+    old_active = next((t for t in templates if t.is_active), None)
+
+    if old_active is not None and old_active.id == new_active.id:
+        return await get_squad(db, user, template_index)
+
+    old_card_ids: set[int] = set()
+    if old_active is not None:
+        old_result = await db.execute(
+            select(TacticoSquadCard.user_card_id).where(TacticoSquadCard.squad_id == old_active.id)
+        )
+        old_card_ids = set(old_result.scalars().all())
+    new_result = await db.execute(
+        select(TacticoSquadCard.user_card_id).where(TacticoSquadCard.squad_id == new_active.id)
+    )
+    new_card_ids = set(new_result.scalars().all())
+
+    to_unlock = old_card_ids - new_card_ids
+    to_lock = new_card_ids - old_card_ids
+    touched_ids = to_unlock | to_lock
+    if touched_ids:
+        cards_result = await db.execute(select(UserCard).where(UserCard.id.in_(touched_ids)))
+        for card in cards_result.scalars().all():
+            card.is_in_tactico_squad = card.id in to_lock
+            db.add(card)
+
+    if old_active is not None:
+        old_active.is_active = False
+        db.add(old_active)
+        # Flushed separately from setting the new row active — see
+        # lineup_service.activate_template's identical comment for why
+        # (SQLAlchemy doesn't guarantee same-table UPDATE ordering matches
+        # db.add() call order, which can otherwise collide with the
+        # partial unique index uq_tactico_squad_one_active_per_user).
+        await db.flush()
+    new_active.is_active = True
+    db.add(new_active)
+
+    await db.commit()
+    return await get_squad(db, user, template_index)
 
 
 # ---------------------------------------------------------------------------
@@ -430,6 +545,134 @@ async def create_challenge(db: AsyncSession, sender: User, receiver_id: int) -> 
     return await _hydrate_match(db, match, sender)
 
 
+async def create_open_challenge(db: AsyncSession, sender: User, stake_coins: int) -> TacticoMatchOut:
+    """An "open" challenge has no pre-picked opponent — it's shared as a
+    link into a Telegram chat (see bot/handlers/user.py's tactico_open_
+    payload), and whoever accepts it first becomes the opponent (see
+    accept_open_challenge). No stake is moved yet at this point — only at
+    acceptance, once a real opponent has committed (see accept_open_challenge
+    and _finish_match) — so there's nothing to refund if this challenge is
+    cancelled or simply never shared/accepted."""
+    if stake_coins < 0:
+        raise ConflictError("Stake cannot be negative")
+    config = await get_config(db)
+    if await _has_active_match(db, sender.id):
+        raise ConflictError("У тебя уже есть матч в Тактико в процессе — заверши его или сдайся, прежде чем начать новый")
+    squad = await get_squad(db, sender)
+    if not squad.is_complete:
+        raise ConflictError(f"Build a full {SQUAD_SIZE}-card Tactico squad before challenging a friend")
+    if stake_coins > 0 and sender.balance < stake_coins:
+        raise ConflictError("Не хватает монет для такой ставки")
+
+    sender = await _consume_hourly_slot(db, sender.id, config)
+
+    state = {
+        "rounds": [],
+        "current_index": 0,
+        "current_phase": None,
+        "current_deadline": None,
+        "user_pool": [c.id for c in squad.cards],
+        "opponent_pool": None,
+        "user_pending_card_id": None,
+        "user_pending_snapshot": None,
+        "opponent_pending_card_id": None,
+        "opponent_pending_snapshot": None,
+    }
+    match = TacticoMatch(
+        user_id=sender.id,
+        opponent_user_id=None,
+        opponent_name="",
+        opponent_type=TacticoOpponentType.chat,
+        difficulty=None,
+        status=TacticoMatchStatus.pending_accept,
+        stake_coins=stake_coins,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=config.tactico_challenge_expiry_hours),
+        server_state=state,
+    )
+    db.add(match)
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, sender)
+
+
+async def preview_open_challenge(db: AsyncSession, viewer: User, match_id: int) -> TacticoOpenChallengePreviewOut:
+    match = await _get_match_or_404(db, match_id)
+    if match.opponent_type != TacticoOpponentType.chat:
+        raise NotFoundError("Match not found")
+    creator = await db.get(User, match.user_id)
+    status = match.status
+    if status == TacticoMatchStatus.pending_accept and ensure_aware(match.expires_at) <= datetime.now(timezone.utc):
+        status = TacticoMatchStatus.expired
+    return TacticoOpenChallengePreviewOut(
+        id=match.id,
+        creator_name=creator.full_display_name() if creator else "Игрок",
+        stake_coins=match.stake_coins,
+        status=status,
+        is_own_challenge=match.user_id == viewer.id,
+    )
+
+
+async def accept_open_challenge(db: AsyncSession, user: User, match_id: int) -> TacticoMatchOut:
+    match = await _lock_match(db, match_id)
+    if match.opponent_type != TacticoOpponentType.chat:
+        raise NotFoundError("Match not found")
+    if match.status != TacticoMatchStatus.pending_accept:
+        raise ConflictError("This challenge is no longer available")
+    if match.user_id == user.id:
+        raise ConflictError("You cannot accept your own challenge")
+    if ensure_aware(match.expires_at) <= datetime.now(timezone.utc):
+        match.status = TacticoMatchStatus.expired
+        match.resolved_at = datetime.now(timezone.utc)
+        db.add(match)
+        await db.commit()
+        raise ConflictError("This challenge has expired")
+
+    config = await get_config(db)
+    if await _has_active_match(db, user.id, exclude_match_id=match.id):
+        raise ConflictError("У тебя уже есть матч в Тактико в процессе — заверши его или сдайся, прежде чем принять вызов")
+    receiver_squad = await get_squad(db, user)
+    if not receiver_squad.is_complete:
+        raise ConflictError(f"Build a full {SQUAD_SIZE}-card Tactico squad before accepting")
+
+    creator = await lock_user_for_update(db, match.user_id)
+    acceptor = await lock_user_for_update(db, user.id)
+    if match.stake_coins > 0:
+        if creator.balance < match.stake_coins:
+            raise ConflictError("У создателя вызова больше не хватает монет на ставку")
+        if acceptor.balance < match.stake_coins:
+            raise ConflictError("Не хватает монет для такой ставки")
+        await debit_coins(
+            db, creator, match.stake_coins, TransactionType.tactico_stake_lock,
+            "Ставка за вызов в Тактико", "tactico_match", match.id,
+        )
+        await debit_coins(
+            db, acceptor, match.stake_coins, TransactionType.tactico_stake_lock,
+            "Ставка за принятый вызов в Тактико", "tactico_match", match.id,
+        )
+
+    state = dict(match.server_state)
+    state["opponent_pool"] = [c.id for c in receiver_squad.cards]
+    state["current_phase"] = _pick_phase()
+    state["current_deadline"] = (
+        datetime.now(timezone.utc) + timedelta(hours=config.tactico_round_timeout_hours)
+    ).isoformat()
+    match.server_state = state
+    flag_modified(match, "server_state")
+    match.opponent_user_id = acceptor.id
+    match.opponent_name = acceptor.full_display_name()
+    match.status = TacticoMatchStatus.in_progress
+    db.add(match)
+
+    await notify(
+        db, creator.id, NotificationType.tactico_challenge_accepted,
+        "Вызов принят", f"{acceptor.full_display_name()} принял(а) ваш вызов в Тактико.",
+        "tactico_match", match.id,
+    )
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, acceptor)
+
+
 async def _get_match_or_404(db: AsyncSession, match_id: int) -> TacticoMatch:
     match = await db.get(TacticoMatch, match_id)
     if not match:
@@ -508,11 +751,14 @@ async def cancel_challenge(db: AsyncSession, user: User, match_id: int) -> Tacti
     match.status = TacticoMatchStatus.cancelled
     match.resolved_at = datetime.now(timezone.utc)
     db.add(match)
-    await notify(
-        db, match.opponent_user_id, NotificationType.tactico_challenge_cancelled,
-        "Вызов отменён", f"{user.full_display_name()} отменил(а) вызов в Тактико.",
-        "tactico_match", match.id,
-    )
+    if match.opponent_user_id is not None:
+        # Open (chat-invite) challenges have no opponent yet when they're
+        # cancelled — nobody accepted, so nobody to notify.
+        await notify(
+            db, match.opponent_user_id, NotificationType.tactico_challenge_cancelled,
+            "Вызов отменён", f"{user.full_display_name()} отменил(а) вызов в Тактико.",
+            "tactico_match", match.id,
+        )
     await db.commit()
     await db.refresh(match)
     return await _hydrate_match(db, match, user)
@@ -682,6 +928,38 @@ async def _finish_match(
                 f"Награда за матч Тактико ({result.value})", "tactico_match", match.id,
             )
     match.reward_coins = reward
+
+    # Open (chat-invite) challenge stakes: both sides already paid
+    # stake_coins into the pot at accept time (see accept_open_challenge) —
+    # settle it here now that the result is known. A draw refunds each side
+    # their own stake; otherwise the winner takes the whole pot.
+    opponent_stake_payout = 0
+    if match.stake_coins > 0 and locked_opponent is not None:
+        pot = match.stake_coins * 2
+        if result == MatchResult.draw:
+            await credit_coins(
+                db, locked_user, match.stake_coins, TransactionType.tactico_stake_refund,
+                "Возврат ставки — ничья в Тактико", "tactico_match", match.id,
+            )
+            await credit_coins(
+                db, locked_opponent, match.stake_coins, TransactionType.tactico_stake_refund,
+                "Возврат ставки — ничья в Тактико", "tactico_match", match.id,
+            )
+            match.reward_coins = match.stake_coins
+            opponent_stake_payout = match.stake_coins
+        elif result == MatchResult.win:
+            await credit_coins(
+                db, locked_user, pot, TransactionType.tactico_stake_win,
+                "Выигрыш ставки в Тактико", "tactico_match", match.id,
+            )
+            match.reward_coins = pot
+        else:
+            await credit_coins(
+                db, locked_opponent, pot, TransactionType.tactico_stake_win,
+                "Выигрыш ставки в Тактико", "tactico_match", match.id,
+            )
+            opponent_stake_payout = pot
+    state["opponent_reward_coins"] = opponent_stake_payout
 
     if locked_opponent is not None:
         locked_opponent.tactics_rating = max(0, locked_opponent.tactics_rating + opponent_delta)
@@ -867,7 +1145,7 @@ async def _hydrate_match(db: AsyncSession, match: TacticoMatch, viewer: User) ->
     else:
         viewer_score, other_score = match.opponent_score, match.user_score
         result_out = _FLIP_RESULT[match.result] if match.result else None
-        reward_coins = 0
+        reward_coins = state.get("opponent_reward_coins", 0)
         rating_delta = state.get("opponent_rating_delta", 0)
 
     return TacticoMatchOut(
@@ -888,6 +1166,7 @@ async def _hydrate_match(db: AsyncSession, match: TacticoMatch, viewer: User) ->
         result=result_out,
         reward_coins=reward_coins,
         rating_delta=rating_delta,
+        stake_coins=match.stake_coins,
         created_at=match.created_at,
         expires_at=match.expires_at,
         resolved_at=match.resolved_at,
