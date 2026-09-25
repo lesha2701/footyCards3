@@ -16,3 +16,7 @@ class PlayerTournamentCurrentOut(BaseModel):
     queue_size: int = 16
     tournament_id: Optional[int] = None
     can_apply: bool = False
+
+
+class PlayerTournamentReminderResult(BaseModel):
+    users_notified: int

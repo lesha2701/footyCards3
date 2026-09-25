@@ -11,8 +11,16 @@ from app.schemas.stars import (
     StarsPreCheckoutValidateIn,
     StarsPreCheckoutValidateOut,
 )
+from app.schemas.player_tournament import PlayerTournamentReminderResult
 from app.schemas.tournament import LineupReminderResult, SimulateRoundResult
-from app.services import chat_pack_service, stars_payment_service, tournament_notification_service, tournament_simulation_service
+from app.services import (
+    chat_pack_service,
+    player_tournament_notification_service,
+    player_tournament_simulation_service,
+    stars_payment_service,
+    tournament_notification_service,
+    tournament_simulation_service,
+)
 
 router = APIRouter(prefix="/internal", tags=["internal"], dependencies=[Depends(verify_internal_secret)])
 
@@ -62,3 +70,17 @@ async def lineup_reminders(slot_key: str | None = None, db: AsyncSession = Depen
     for the slot_key-based dedup that makes a duplicate/late fire a no-op."""
     count = await tournament_notification_service.send_lineup_reminders(db, slot_key=slot_key)
     return LineupReminderResult(clubs_notified=count)
+
+
+@router.post("/player-tournaments/simulate-round", response_model=SimulateRoundResult)
+async def simulate_player_tournament_round(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Called by the bot's player-tournament scheduler at each daily slot.
+    Duplicate slot_key = no-op (see player_tournament_simulation_service)."""
+    matches = await player_tournament_simulation_service.simulate_next_round(db, slot_key=slot_key)
+    return SimulateRoundResult(matches_simulated=len(matches))
+
+
+@router.post("/player-tournaments/lineup-reminders", response_model=PlayerTournamentReminderResult)
+async def player_tournament_lineup_reminders(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
+    count = await player_tournament_notification_service.send_lineup_reminders(db, slot_key=slot_key)
+    return PlayerTournamentReminderResult(users_notified=count)
