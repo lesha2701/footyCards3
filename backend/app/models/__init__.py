@@ -24,6 +24,11 @@ from app.models.match import Match, MatchEvent
 from app.models.notification import Notification
 from app.models.pack import Pack, PackOpening, PackOpeningCard, PackRarityProbability, StarsInvoice
 from app.models.penalty import PenaltyMatch
+from app.models.personal_squad import PersonalSquad, PersonalSquadCard
+from app.models.player_tournament import (
+    PlayerTournament, PlayerTournamentMatch, PlayerTournamentParticipant, PlayerTournamentQueue,
+    PlayerTournamentQueueEntry, PlayerTournamentQueueState, PlayerTournamentResult, PlayerTournamentStanding,
+)
 from app.models.player import Player
 from app.models.task import TaskDefinition, UserTask
 from app.models.tournament_queue import TournamentQueue, TournamentQueueEntry, TournamentQueueState
@@ -84,6 +89,16 @@ __all__ = [
     "PackRarityProbability",
     "StarsInvoice",
     "PenaltyMatch",
+    "PersonalSquad",
+    "PersonalSquadCard",
+    "PlayerTournament",
+    "PlayerTournamentMatch",
+    "PlayerTournamentParticipant",
+    "PlayerTournamentQueue",
+    "PlayerTournamentQueueEntry",
+    "PlayerTournamentQueueState",
+    "PlayerTournamentResult",
+    "PlayerTournamentStanding",
     "Player",
     "TaskDefinition",
     "UserTask",

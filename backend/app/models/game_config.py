@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Integer, Numeric, String
+from sqlalchemy import JSON, Boolean, DateTime, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -236,3 +236,14 @@ class GameConfig(TimestampMixin, Base):
 
     bingo_reward_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     bingo_reward_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    ptour_match_reward_win: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    ptour_match_reward_draw: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    ptour_match_reward_loss: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    # Index 0 = 1st place ... index 15 = 16th place.
+    ptour_place_rewards: Mapped[list] = mapped_column(
+        JSON, default=lambda: [3000, 2000, 1500, 1000, 750, 500, 400, 300, 250, 200, 150, 100, 75, 50, 25, 0], nullable=False,
+    )
+    ptour_rating_by_place: Mapped[list] = mapped_column(
+        JSON, default=lambda: [5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, -1, -2, -3, -4, -5], nullable=False,
+    )
