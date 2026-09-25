@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -22,6 +23,8 @@ from app.services.lineup_service import FormationSlot
 from app.services.notification_service import notify
 from app.services.player_tournament_fixture_service import TOTAL_ROUNDS, generate_fixtures
 from app.services.player_tournament_standing_service import apply_match_result, rank_standings
+
+logger = logging.getLogger(__name__)
 
 SLOT_KIND = "player_tournament_round"
 
@@ -150,66 +153,82 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
 
     all_matches: list[PlayerTournamentMatch] = []
     for tournament_id, observed_rounds in candidates:
-        tournament = await _lock_tournament(db, tournament_id)
-        round_number = observed_rounds + 1
-        if tournament.status != TournamentStatus.active or tournament.rounds_simulated >= round_number:
+        try:
+            tournament = await _lock_tournament(db, tournament_id)
+            round_number = observed_rounds + 1
+            if tournament.status != TournamentStatus.active or tournament.rounds_simulated >= round_number:
+                continue
+
+            participants = (
+                await db.execute(
+                    select(PlayerTournamentParticipant)
+                    .where(PlayerTournamentParticipant.tournament_id == tournament.id)
+                    .order_by(PlayerTournamentParticipant.id)
+                )
+            ).scalars().all()
+            user_ids = [p.user_id for p in participants]
+            # Lock every participant in ascending id order up front: trade accept
+            # locks its two users sorted by id, so a per-match fixture-order lock
+            # could deadlock against a concurrent trade between participants.
+            users = (
+                await db.execute(
+                    select(User).where(User.id.in_(user_ids)).order_by(User.id)
+                    .with_for_update(of=User).execution_options(populate_existing=True)
+                )
+            ).scalars().all()
+            names = {u.id: u.full_display_name() for u in users}
+            standings = {
+                s.user_id: s for s in (
+                    await db.execute(select(PlayerTournamentStanding).where(PlayerTournamentStanding.tournament_id == tournament.id)
+                        .order_by(PlayerTournamentStanding.user_id))
+                ).scalars().all()
+            }
+
+            round_matches: list[PlayerTournamentMatch] = []
+            for _, user_a_id, user_b_id in (f for f in generate_fixtures(user_ids) if f[0] == round_number):
+                score_a, score_b, event_log = await _play_match(db, user_a_id, user_b_id, names, config)
+                match = PlayerTournamentMatch(
+                    tournament_id=tournament.id, round_number=round_number, user_a_id=user_a_id, user_b_id=user_b_id,
+                    score_a=score_a, score_b=score_b, event_log=event_log, simulated_at=datetime.now(timezone.utc),
+                )
+                db.add(match)
+                apply_match_result(standings[user_a_id], standings[user_b_id], score_a, score_b)
+
+                description = f"Матч {round_number}-го тура турнира"
+                for uid in sorted((user_a_id, user_b_id)):  # stable lock order
+                    own, opp = (score_a, score_b) if uid == user_a_id else (score_b, score_a)
+                    await _credit(
+                        db, uid, _reward_for(config, own, opp), TransactionType.player_tournament_match_reward,
+                        description, tournament.id,
+                    )
+                # No score in the notification: the app reveals the match step by
+                # step (TournamentMatchReplay); a push would spoil it.
+                for uid in (user_a_id, user_b_id):
+                    await notify(
+                        db, uid, NotificationType.player_tournament_match, "Матч сыгран",
+                        f"Сыгран матч {round_number}-го тура турнира — смотри результат в приложении",
+                        related_object_type="player_tournament", related_object_id=tournament.id,
+                    )
+                round_matches.append(match)
+
+            tournament.rounds_simulated = round_number
+            db.add(tournament)
+
+            if round_number == TOTAL_ROUNDS:
+                await db.flush()
+                season_matches = (
+                    await db.execute(select(PlayerTournamentMatch).where(PlayerTournamentMatch.tournament_id == tournament.id))
+                ).scalars().all()
+                await conclude_tournament(db, tournament, list(standings.values()), list(season_matches), config)
+
+            await db.commit()
+            all_matches.extend(round_matches)
+        except Exception:
+            await db.rollback()
+            logger.exception("Player tournament %s round simulation failed", tournament_id)
+            # rollback expired the session's objects; re-fetch before reuse.
+            config = await get_config(db)
             continue
-
-        participants = (
-            await db.execute(
-                select(PlayerTournamentParticipant)
-                .where(PlayerTournamentParticipant.tournament_id == tournament.id)
-                .order_by(PlayerTournamentParticipant.id)
-            )
-        ).scalars().all()
-        user_ids = [p.user_id for p in participants]
-        users = (await db.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()
-        names = {u.id: u.full_display_name() for u in users}
-        standings = {
-            s.user_id: s for s in (
-                await db.execute(select(PlayerTournamentStanding).where(PlayerTournamentStanding.tournament_id == tournament.id))
-            ).scalars().all()
-        }
-
-        round_matches: list[PlayerTournamentMatch] = []
-        for _, user_a_id, user_b_id in (f for f in generate_fixtures(user_ids) if f[0] == round_number):
-            score_a, score_b, event_log = await _play_match(db, user_a_id, user_b_id, names, config)
-            match = PlayerTournamentMatch(
-                tournament_id=tournament.id, round_number=round_number, user_a_id=user_a_id, user_b_id=user_b_id,
-                score_a=score_a, score_b=score_b, event_log=event_log, simulated_at=datetime.now(timezone.utc),
-            )
-            db.add(match)
-            apply_match_result(standings[user_a_id], standings[user_b_id], score_a, score_b)
-
-            description = f"Матч {round_number}-го тура турнира"
-            for uid in sorted((user_a_id, user_b_id)):  # stable lock order
-                own, opp = (score_a, score_b) if uid == user_a_id else (score_b, score_a)
-                await _credit(
-                    db, uid, _reward_for(config, own, opp), TransactionType.player_tournament_match_reward,
-                    description, tournament.id,
-                )
-            # No score in the notification: the app reveals the match step by
-            # step (TournamentMatchReplay); a push would spoil it.
-            for uid in (user_a_id, user_b_id):
-                await notify(
-                    db, uid, NotificationType.player_tournament_match, "Матч сыгран",
-                    f"Сыгран матч {round_number}-го тура турнира — смотри результат в приложении",
-                    related_object_type="player_tournament", related_object_id=tournament.id,
-                )
-            round_matches.append(match)
-
-        tournament.rounds_simulated = round_number
-        db.add(tournament)
-
-        if round_number == TOTAL_ROUNDS:
-            await db.flush()
-            season_matches = (
-                await db.execute(select(PlayerTournamentMatch).where(PlayerTournamentMatch.tournament_id == tournament.id))
-            ).scalars().all()
-            await conclude_tournament(db, tournament, list(standings.values()), list(season_matches), config)
-
-        await db.commit()
-        all_matches.extend(round_matches)
 
     return all_matches
 

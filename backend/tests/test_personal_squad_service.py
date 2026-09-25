@@ -144,3 +144,22 @@ async def test_formation_change_drops_cards_that_no_longer_fit_slot_category(cli
     by_code = {s.slot_code: s.user_card_id for s in out.slots}
     assert by_code["DEF1"] is None  # misfit removed
     assert by_code["DEF2"] is not None and by_code["GK"] is not None  # fitting cards stay
+
+
+async def test_serialized_squad_hides_cards_no_longer_owned(client, db_session, bot_token):
+    seller = await make_ready_user(client, db_session, bot_token, 841020)
+    buyer = await make_user(client, db_session, bot_token, 841021)
+    seller_id = seller.id
+    _squad, cards = await svc.resolve_active_squad(db_session, seller_id)
+    moved = cards[0][0]
+    moved_id, slot_code = moved.id, cards[0][1].code
+    moved.owner_id = buyer.id
+    db_session.add(moved)
+    await db_session.commit()
+    seller = await db_session.get(type(seller), seller_id)
+    squad = await svc.get_squad(db_session, seller)
+    assert squad.is_complete is False
+    slot = next(s for s in squad.slots if s.slot_code == slot_code)
+    assert slot.user_card_id is None and slot.player is None
+    assert all(s.user_card_id != moved_id for s in squad.slots)
+    assert await svc.is_squad_complete(db_session, seller_id) is False

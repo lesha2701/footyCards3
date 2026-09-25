@@ -54,7 +54,8 @@ async def get_tournament_detail(db: AsyncSession, tournament_id: int) -> PlayerT
         raise NotFoundError("Турнир не найден")
 
     standings = (
-        await db.execute(select(PlayerTournamentStanding).where(PlayerTournamentStanding.tournament_id == tournament_id))
+        await db.execute(select(PlayerTournamentStanding).where(PlayerTournamentStanding.tournament_id == tournament_id)
+            .order_by(PlayerTournamentStanding.user_id))
     ).scalars().all()
     matches = (
         await db.execute(
@@ -72,6 +73,8 @@ async def get_tournament_detail(db: AsyncSession, tournament_id: int) -> PlayerT
     }
 
     ranked = rank_standings(list(standings), list(matches))
+    if results:  # concluded: the persisted final_rank is authoritative
+        ranked = sorted(ranked, key=lambda st: results[st.user_id].final_rank if st.user_id in results else 10**6)
     rows = []
     for s in ranked:
         result = results.get(s.user_id)

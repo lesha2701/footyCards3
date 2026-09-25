@@ -120,3 +120,52 @@ def test_engine_card_carries_diamond_bonus_and_profile_attributes():
     assert adapted.player.rating == 95
     assert (adapted.player.rarity, adapted.player.club, adapted.player.country) == (Rarity.diamond, "C", "K")
     assert build_side([(adapted, slot)], "balanced", "possession") is not None
+
+
+async def test_failing_tournament_does_not_abort_others(client, db_session, bot_token, monkeypatch):
+    from app.models.player_tournament import PlayerTournamentParticipant
+    from app.services import player_tournament_simulation_service as sim
+
+    _u1, t1 = await _form_tournament(client, db_session, bot_token, 870000)
+    _u2, t2 = await _form_tournament(client, db_session, bot_token, 871000)
+    assert t1 != t2
+    bad_ids = set((await db_session.execute(
+        select(PlayerTournamentParticipant.user_id).where(PlayerTournamentParticipant.tournament_id == t1)
+    )).scalars().all())
+
+    real_play = sim._play_match
+
+    async def flaky(db, user_a_id, user_b_id, names, config):
+        if user_a_id in bad_ids:
+            raise ValueError("boom")
+        return await real_play(db, user_a_id, user_b_id, names, config)
+
+    monkeypatch.setattr(sim, "_play_match", flaky)
+    matches = await simulate_next_round(db_session)
+    assert len(matches) == 8
+
+    failed = await db_session.get(PlayerTournament, t1)
+    ok = await db_session.get(PlayerTournament, t2)
+    assert failed.rounds_simulated == 0 and ok.rounds_simulated == 1
+    count = lambda tid: select(func.count(PlayerTournamentMatch.id)).where(PlayerTournamentMatch.tournament_id == tid)
+    assert (await db_session.execute(count(t1))).scalar_one() == 0
+    assert (await db_session.execute(count(t2))).scalar_one() == 8
+    txs = (await db_session.execute(
+        select(CoinTransaction).where(CoinTransaction.type == TransactionType.player_tournament_match_reward)
+    )).scalars().all()
+    assert len(txs) == 16
+    assert all(t.user_id not in bad_ids for t in txs)
+    standings = (await db_session.execute(
+        select(PlayerTournamentStanding).where(PlayerTournamentStanding.tournament_id == t1)
+    )).scalars().all()
+    assert sum(s.points for s in standings) == 0
+
+
+async def test_completed_tournament_detail_is_ordered_by_final_rank(client, db_session, bot_token):
+    from app.services.player_tournament_query_service import get_tournament_detail
+
+    _users, tournament_id = await _form_tournament(client, db_session, bot_token, 872000)
+    for _ in range(30):
+        await simulate_next_round(db_session)
+    detail = await get_tournament_detail(db_session, tournament_id)
+    assert [r.final_rank for r in detail.standings] == list(range(1, 17))

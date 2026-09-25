@@ -100,7 +100,8 @@ def _slots_by_code(formation: str) -> dict[str, FormationSlot]:
 
 
 def _serialize(squad: PersonalSquad) -> PersonalSquadOut:
-    by_slot = {c.slot_code: c.user_card for c in squad.cards}
+    # Same ownership rule as resolve_active_squad: a traded-away card is not shown.
+    by_slot = {c.slot_code: c.user_card for c in squad.cards if c.user_card.owner_id == squad.user_id}
     slots = []
     for slot in get_formation_slots(squad.formation):
         card = by_slot.get(slot.code)
