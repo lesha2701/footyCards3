@@ -37,6 +37,7 @@ from app.routers import (
     broadcasts,
     card_collections,
     clubs,
+    player_tournaments,
     collection,
     daily_rewards,
     feature_flags,
@@ -127,6 +128,7 @@ app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(leaderboard.router, prefix=API_PREFIX)
 app.include_router(leagues.router, prefix=API_PREFIX)
 app.include_router(clubs.router, prefix=API_PREFIX)
+app.include_router(player_tournaments.router, prefix=API_PREFIX)
 app.include_router(notifications.router, prefix=API_PREFIX)
 app.include_router(admin_dashboard.router, prefix=API_PREFIX)
 app.include_router(admin_users.router, prefix=API_PREFIX)
