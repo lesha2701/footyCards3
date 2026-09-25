@@ -37,7 +37,22 @@ _MATCH_PATH_PREFIXES = {
 }
 
 
-def _keyboard_for(related_object_type: str | None, related_object_id: int | None):
+# notification `type` -> fixed Mini App path (no per-object id). Player
+# tournaments have a single hub page, and the lineup reminder carries no
+# related object at all, so these are keyed on the notification type.
+_TYPE_PATHS = {
+    "player_tournament_match": "/player-tournament",
+    "player_tournament_results_ready": "/player-tournament",
+    "player_tournament_reminder": "/player-tournament",
+}
+
+
+def _keyboard_for(
+    related_object_type: str | None, related_object_id: int | None, notification_type: str | None = None
+):
+    fixed_path = _TYPE_PATHS.get(notification_type) if notification_type else None
+    if fixed_path:
+        return open_app_keyboard(fixed_path, text="🎮 Перейти в игру")
     prefix = _MATCH_PATH_PREFIXES.get(related_object_type) if related_object_type else None
     if not prefix or related_object_id is None:
         return None
@@ -57,7 +72,7 @@ async def _deliver_one(bot: Bot, row, semaphore: asyncio.Semaphore, rate_limiter
     outer try/except is the backstop for anything beyond aiogram's own
     TelegramAPIError (e.g. a network-level error).
     """
-    keyboard = _keyboard_for(row["related_object_type"], row["related_object_id"])
+    keyboard = _keyboard_for(row["related_object_type"], row["related_object_id"], row["type"])
     text = f"<b>{row['title']}</b>\n{row['body']}"
     async with semaphore:
         await rate_limiter.acquire()

@@ -183,7 +183,7 @@ async def fetch_unsent_notifications(limit: int = 50) -> list[asyncpg.Record]:
     out of future batches."""
     pool = await get_pool()
     return await pool.fetch(
-        """SELECT n.id, n.user_id, n.title, n.body, n.related_object_type, n.related_object_id, u.telegram_id
+        """SELECT n.id, n.user_id, n.title, n.body, n.type, n.related_object_type, n.related_object_id, u.telegram_id
            FROM notifications n JOIN users u ON u.id = n.user_id
            WHERE n.telegram_sent = false AND u.bot_blocked = false
            ORDER BY n.id ASC LIMIT $1""",

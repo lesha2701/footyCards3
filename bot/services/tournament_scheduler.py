@@ -19,7 +19,10 @@ _TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 
 def _due_slots(
-    now: datetime, last_fired: dict[tuple[int, int], date], lead_minutes: int = 0
+    now: datetime,
+    last_fired: dict[tuple[int, int], date],
+    lead_minutes: int = 0,
+    slots: list[tuple[int, int]] | None = None,
 ) -> list[tuple[int, int]]:
     """Pure decision function — deliberately has no I/O so it's fast and
     deterministic to test in isolation. A slot is due once `now` has passed
@@ -29,7 +32,7 @@ def _due_slots(
     "due" — this is what keeps a bot restart or transient outage from
     silently skipping a whole day's slot."""
     due = []
-    for slot in SIMULATION_SLOTS:
+    for slot in (SIMULATION_SLOTS if slots is None else slots):
         fire_at = now.replace(hour=slot[0], minute=slot[1], second=0, microsecond=0)
         if lead_minutes:
             fire_at -= timedelta(minutes=lead_minutes)
