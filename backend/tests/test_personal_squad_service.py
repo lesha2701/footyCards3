@@ -111,3 +111,36 @@ async def test_card_no_longer_owned_is_excluded_from_resolve(client, db_session,
     _squad, cards = await svc.resolve_active_squad(db_session, seller.id)
     assert len(cards) == 10
     assert await svc.is_squad_complete(db_session, seller.id) is False
+
+
+async def test_formation_change_drops_cards_that_no_longer_fit_slot_category(client, db_session, bot_token):
+    # In every current CLUB_FORMATIONS entry a slot code encodes its category
+    # (DEF*/MID*/FWD*), so no surviving code changes category between real
+    # formations. Simulate a misfit row (as a future formation table or a
+    # legacy row could produce) by inserting it directly, bypassing validation.
+    from app.models.card import UserCard
+    from app.models.enums import CardSource
+    from app.models.personal_squad import PersonalSquadCard
+
+    user = await make_ready_user(client, db_session, bot_token, 841012)
+    striker = await create_player(db_session, position=Position.ST)
+    misfit = UserCard(owner_id=user.id, player_id=striker.id, source=CardSource.seed)
+    db_session.add(misfit)
+    await db_session.commit()
+    await db_session.refresh(misfit)
+    misfit_id = misfit.id
+
+    squad = await svc.get_squad(db_session, user)
+    def_slot = next(s for s in squad.slots if s.slot_code == "DEF1")
+    fitting_id = def_slot.user_card_id
+    row = (await db_session.execute(
+        select(PersonalSquadCard).where(PersonalSquadCard.user_card_id == fitting_id))).scalar_one()
+    row.user_card_id = misfit_id  # striker now sits in DEF1
+    db_session.add(row)
+    await db_session.commit()
+
+    out = await svc.set_tactics(db_session, user, PersonalSquadTacticsRequest(
+        formation="4-4-2", mentality="BALANCED", playstyle="WING_PLAY"))
+    by_code = {s.slot_code: s.user_card_id for s in out.slots}
+    assert by_code["DEF1"] is None  # misfit removed
+    assert by_code["DEF2"] is not None and by_code["GK"] is not None  # fitting cards stay

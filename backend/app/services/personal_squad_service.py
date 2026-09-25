@@ -66,8 +66,7 @@ async def _ensure_templates(db: AsyncSession, user_id: int) -> list[PersonalSqua
     return list(result.unique().scalars().all())
 
 
-async def _get_row(db: AsyncSession, user_id: int, template_index: int | None) -> PersonalSquad:
-    templates = await _ensure_templates(db, user_id)
+def _pick(templates: list[PersonalSquad], template_index: int | None) -> PersonalSquad:
     if template_index is None:
         return next(t for t in templates if t.is_active)
     if not 1 <= template_index <= TEMPLATE_COUNT:
@@ -75,12 +74,25 @@ async def _get_row(db: AsyncSession, user_id: int, template_index: int | None) -
     return next(t for t in templates if t.template_index == template_index)
 
 
+async def _get_row(db: AsyncSession, user_id: int, template_index: int | None) -> PersonalSquad:
+    return _pick(await _ensure_templates(db, user_id), template_index)
+
+
 async def _lock_row(db: AsyncSession, user_id: int, template_index: int | None) -> PersonalSquad:
-    squad = await _get_row(db, user_id, template_index)
+    # Rows must exist before they can be locked, so seed first. Then take the
+    # FOR UPDATE (populate_existing) BEFORE reading the squad's state: a plain
+    # read followed by a lock would validate against a stale formation/cards
+    # snapshot if a concurrent writer committed in between.
+    templates = await _ensure_templates(db, user_id)
+    target = _pick(templates, template_index)
     # of=PersonalSquad: user_coach_card is lazy="joined" (nullable outer join),
     # which Postgres refuses to FOR UPDATE (see lineup_service.set_lineup).
-    await db.execute(select(PersonalSquad).where(PersonalSquad.id == squad.id).with_for_update(of=PersonalSquad))
-    return squad
+    await db.execute(
+        select(PersonalSquad).where(PersonalSquad.id == target.id)
+        .with_for_update(of=PersonalSquad).execution_options(populate_existing=True)
+    )
+    # Re-read (populate_existing query) so everything downstream sees post-lock state.
+    return await _get_row(db, user_id, target.template_index)
 
 
 def _slots_by_code(formation: str) -> dict[str, FormationSlot]:
@@ -190,9 +202,12 @@ async def set_tactics(
 
     squad = await _lock_row(db, user.id, template_index)
     idx = squad.template_index
-    new_codes = set(_slots_by_code(payload.formation))
+    new_slots = _slots_by_code(payload.formation)
     for card in list(squad.cards):
-        if card.slot_code not in new_codes:
+        new_slot = new_slots.get(card.slot_code)
+        # Drop cards whose code vanished, or whose code survives but now
+        # belongs to a category the card's position doesn't fit.
+        if new_slot is None or card.user_card.player.position not in CATEGORY_POSITIONS[new_slot.category]:
             await db.delete(card)
     squad.formation = payload.formation
     squad.mentality = payload.mentality
@@ -227,15 +242,27 @@ async def rename_template(db: AsyncSession, user: User, template_index: int, nam
 
 
 async def activate_template(db: AsyncSession, user: User, template_index: int) -> PersonalSquadOut:
+    await _ensure_templates(db, user.id)
+    if not 1 <= template_index <= TEMPLATE_COUNT:
+        raise NotFoundError(f"template_index must be between 1 and {TEMPLATE_COUNT}")
+    # Lock ALL of the user's squad rows in one ordered statement (template_index
+    # order, so concurrent activations can't deadlock) BEFORE deciding which is
+    # active; otherwise two concurrent activations both flip a stale active row
+    # and trip uq_personal_squad_one_active_per_user.
+    await db.execute(
+        select(PersonalSquad).where(PersonalSquad.user_id == user.id)
+        .order_by(PersonalSquad.template_index)
+        .with_for_update(of=PersonalSquad).execution_options(populate_existing=True)
+    )
     templates = await _ensure_templates(db, user.id)
-    target = await _lock_row(db, user.id, template_index)
+    target = _pick(templates, template_index)
     if not target.is_active:
         for t in templates:
             if t.is_active:
                 t.is_active = False
                 db.add(t)
-        # Flush the deactivation first: uq_personal_squad_one_active_per_user
-        # would otherwise see two active rows mid-flush.
+        # Flush the deactivation first: the one-active unique index would
+        # otherwise see two active rows mid-flush.
         await db.flush()
         target.is_active = True
         db.add(target)
