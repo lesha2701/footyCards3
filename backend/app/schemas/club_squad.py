@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.schemas.coach import CoachBoostOut, CoachOut
 from app.schemas.player import PlayerOut
+from app.schemas.stadium import StadiumOut
 
 
 class ClubCardAvailabilityOut(BaseModel):
@@ -44,6 +45,16 @@ class ClubCoachCardOut(BaseModel):
     id: int
     serial_number: int
     coach: CoachOut
+    acquired_at: datetime
+
+
+class ClubStadiumCardOut(BaseModel):
+    """One club-owned stadium card — mirrors ClubCoachCardOut above
+    field-for-field, substituting `stadium: StadiumOut` for the coach field."""
+
+    id: int
+    serial_number: int
+    stadium: StadiumOut
     acquired_at: datetime
 
 

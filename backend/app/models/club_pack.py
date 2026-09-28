@@ -26,6 +26,9 @@ class ClubPack(TimestampMixin, Base):
     # 0.0 (default) means every existing pack stays player-only until an admin
     # opts it in.
     coach_drop_chance: Mapped[float] = mapped_column(Numeric(5, 4), default=0.0, nullable=False)
+    # Same independent-per-slot coin-flip mechanism as coach_drop_chance, but for
+    # stadiums — see club_pack_service.open_club_pack. Mirrors Pack.stadium_drop_chance.
+    stadium_drop_chance: Mapped[float] = mapped_column(Numeric(5, 4), default=0.0, nullable=False)
 
     rarity_probabilities: Mapped[list["ClubPackRarityProbability"]] = relationship(
         back_populates="pack", cascade="all, delete-orphan"

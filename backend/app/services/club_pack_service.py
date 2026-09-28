@@ -12,16 +12,23 @@ from app.models.club_card import ClubCard
 from app.models.club_coach_card import ClubCoachCard
 from app.models.club_pack import ClubPack
 from app.models.club_pack_opening import ClubPackOpening, ClubPackOpeningCard
+from app.models.club_stadium_card import ClubStadiumCard
 from app.models.coach import Coach
-from app.models.enums import ClubBudgetTransactionType, ClubCardSource, ClubCoachCardSource, Rarity
+from app.models.enums import (
+    ClubBudgetTransactionType,
+    ClubCardSource,
+    ClubCoachCardSource,
+    ClubStadiumCardSource,
+    Rarity,
+)
 from app.models.user import User
 from app.schemas.club_pack import ClubPackOut
 from app.schemas.club_pack_open import ClubPackOpenResult, OpenedClubPackItemOut
-from app.schemas.club_squad import ClubCardOut, ClubCoachCardOut
-from app.services.club_card_service import create_club_card, create_club_coach_card
+from app.schemas.club_squad import ClubCardOut, ClubCoachCardOut, ClubStadiumCardOut
+from app.services.club_card_service import create_club_card, create_club_coach_card, create_club_stadium_card
 from app.services.club_budget_service import debit_club_budget
 from app.services.club_service import _lock_club, _require_manager, _require_membership
-from app.services.pack_service import pick_random_coach, pick_random_player, roll_rarities
+from app.services.pack_service import pick_random_coach, pick_random_player, pick_random_stadium, roll_rarities
 
 
 async def list_club_packs(db: AsyncSession) -> list[ClubPackOut]:
@@ -43,6 +50,14 @@ def _coach_item(club_coach_card: ClubCoachCard, is_new: bool) -> OpenedClubPackI
     return OpenedClubPackItemOut(
         kind="coach",
         coach_card=ClubCoachCardOut(id=club_coach_card.id, serial_number=club_coach_card.serial_number, coach=club_coach_card.coach, acquired_at=club_coach_card.acquired_at),
+        is_new=is_new,
+    )
+
+
+def _stadium_item(club_stadium_card: ClubStadiumCard, is_new: bool) -> OpenedClubPackItemOut:
+    return OpenedClubPackItemOut(
+        kind="stadium",
+        stadium_card=ClubStadiumCardOut(id=club_stadium_card.id, serial_number=club_stadium_card.serial_number, stadium=club_stadium_card.stadium, acquired_at=club_stadium_card.acquired_at),
         is_new=is_new,
     )
 
@@ -71,12 +86,21 @@ async def _get_result_for_existing_opening(db: AsyncSession, opening: ClubPackOp
         else {}
     )
 
+    club_stadium_card_ids = [oc.club_stadium_card_id for oc in opening_cards if oc.club_stadium_card_id is not None]
+    club_stadium_cards = (
+        {c.id: c for c in (await db.execute(select(ClubStadiumCard).where(ClubStadiumCard.id.in_(club_stadium_card_ids)))).scalars().all()}
+        if club_stadium_card_ids
+        else {}
+    )
+
     items: list[OpenedClubPackItemOut] = []
     for oc in opening_cards:
         if oc.club_card_id is not None:
             items.append(_player_item(club_cards[oc.club_card_id], oc.is_new))
-        else:
+        elif oc.club_coach_card_id is not None:
             items.append(_coach_item(club_coach_cards[oc.club_coach_card_id], oc.is_new))
+        else:
+            items.append(_stadium_item(club_stadium_cards[oc.club_stadium_card_id], oc.is_new))
 
     club_row = await db.get(Club, opening.club_id)
     return ClubPackOpenResult(opening_id=opening.id, pack=ClubPackOut.model_validate(pack), cards=items, new_budget=club_row.budget)
@@ -119,27 +143,43 @@ async def open_club_pack(db: AsyncSession, user: User, club_pack_id: int, idempo
         existing_player_ids = set(existing_player_ids_result.scalars().all())
         existing_coach_ids_result = await db.execute(select(ClubCoachCard.coach_id).where(ClubCoachCard.club_id == club_id))
         existing_coach_ids = set(existing_coach_ids_result.scalars().all())
+        existing_stadium_ids_result = await db.execute(select(ClubStadiumCard.stadium_id).where(ClubStadiumCard.club_id == club_id))
+        existing_stadium_ids = set(existing_stadium_ids_result.scalars().all())
 
         rarities = roll_rarities(pack.rarity_probabilities, pack.card_count, pack.guaranteed_min_rarity)
         opened_cards: list[OpenedClubPackItemOut] = []
         coach_drop_chance = float(pack.coach_drop_chance)
+        stadium_drop_chance = float(pack.stadium_drop_chance)
         for rarity in rarities:
-            # Each slot is an independent coin flip against the pack's coach_drop_chance —
-            # not a fixed count of coach slots — so a coach_drop_chance of e.g. 0.3 means every
-            # slot has an independent 30% chance of resolving to a coach instead of a player.
-            if coach_drop_chance > 0 and rarity != Rarity.diamond and random.random() < coach_drop_chance:
+            # Each slot is an independent coin flip against the pack's coach_drop_chance
+            # and stadium_drop_chance — not a fixed count of coach/stadium slots — so e.g.
+            # coach_drop_chance=0.3 means every slot has an independent 30% chance of
+            # resolving to a coach instead of a player. The two chances share a single
+            # roll (checked coach first, then stadium) so coach_drop_chance=0.1,
+            # stadium_drop_chance=0.1 means "20% chance of a bonus, split evenly" rather
+            # than two independent draws that could both fire — mirrors
+            # pack_service.roll_and_create_cards exactly.
+            roll = random.random()
+            if coach_drop_chance > 0 and rarity != Rarity.diamond and roll < coach_drop_chance:
                 coach = await pick_random_coach(db, rarity)
                 is_new = coach.id not in existing_coach_ids
                 existing_coach_ids.add(coach.id)
                 club_coach_card = await create_club_coach_card(db, club_id, coach.id, ClubCoachCardSource.club_pack, opening.id)
-                db.add(ClubPackOpeningCard(opening_id=opening.id, club_card_id=None, club_coach_card_id=club_coach_card.id, is_new=is_new))
+                db.add(ClubPackOpeningCard(opening_id=opening.id, club_card_id=None, club_coach_card_id=club_coach_card.id, club_stadium_card_id=None, is_new=is_new))
                 opened_cards.append(_coach_item(club_coach_card, is_new))
+            elif stadium_drop_chance > 0 and rarity != Rarity.diamond and roll < coach_drop_chance + stadium_drop_chance:
+                stadium = await pick_random_stadium(db, rarity)
+                is_new = stadium.id not in existing_stadium_ids
+                existing_stadium_ids.add(stadium.id)
+                club_stadium_card = await create_club_stadium_card(db, club_id, stadium.id, ClubStadiumCardSource.club_pack, opening.id)
+                db.add(ClubPackOpeningCard(opening_id=opening.id, club_card_id=None, club_coach_card_id=None, club_stadium_card_id=club_stadium_card.id, is_new=is_new))
+                opened_cards.append(_stadium_item(club_stadium_card, is_new))
             else:
                 player = await pick_random_player(db, rarity)
                 is_new = player.id not in existing_player_ids
                 existing_player_ids.add(player.id)
                 club_card = await create_club_card(db, club_id, player.id, ClubCardSource.club_pack, opening.id)
-                db.add(ClubPackOpeningCard(opening_id=opening.id, club_card_id=club_card.id, club_coach_card_id=None, is_new=is_new))
+                db.add(ClubPackOpeningCard(opening_id=opening.id, club_card_id=club_card.id, club_coach_card_id=None, club_stadium_card_id=None, is_new=is_new))
                 opened_cards.append(_player_item(club_card, is_new))
 
         await db.commit()

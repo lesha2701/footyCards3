@@ -3,13 +3,14 @@ from typing import Literal, Optional
 from pydantic import BaseModel
 
 from app.schemas.club_pack import ClubPackOut
-from app.schemas.club_squad import ClubCardOut, ClubCoachCardOut
+from app.schemas.club_squad import ClubCardOut, ClubCoachCardOut, ClubStadiumCardOut
 
 
 class OpenedClubPackItemOut(BaseModel):
-    kind: Literal["player", "coach"]
+    kind: Literal["player", "coach", "stadium"]
     card: Optional[ClubCardOut] = None
     coach_card: Optional[ClubCoachCardOut] = None
+    stadium_card: Optional[ClubStadiumCardOut] = None
     is_new: bool
 
 

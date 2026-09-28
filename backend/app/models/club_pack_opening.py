@@ -29,20 +29,24 @@ class ClubPackOpeningCard(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     opening_id: Mapped[int] = mapped_column(ForeignKey("club_pack_openings.id", ondelete="CASCADE"), nullable=False, index=True)
-    # Exactly one of these two is set per row — a pack slot resolves to either
-    # a player or a coach (see open_club_pack's per-slot coach_drop_chance
-    # coin flip), never both, never neither. Portable boolean-expression CHECK
-    # (not Postgres's num_nonnulls()) so the SQLite test suite enforces it too.
+    # Exactly one of these three is set per row — a pack slot resolves to a
+    # player, a coach, OR a stadium (see open_club_pack's per-slot
+    # coach_drop_chance/stadium_drop_chance coin flip), never more than one,
+    # never neither. CASE-SUM CHECK (not Postgres's num_nonnulls()) so the
+    # SQLite test suite enforces it too — mirrors
+    # ck_pack_opening_card_exactly_one_kind exactly.
     club_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("club_cards.id", ondelete="CASCADE"), nullable=True)
     club_coach_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("club_coach_cards.id", ondelete="CASCADE"), nullable=True)
+    club_stadium_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("club_stadium_cards.id", ondelete="CASCADE"), nullable=True)
     is_new: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
     opening: Mapped["ClubPackOpening"] = relationship(back_populates="cards")
 
     __table_args__ = (
         CheckConstraint(
-            "(club_card_id IS NOT NULL AND club_coach_card_id IS NULL) OR "
-            "(club_card_id IS NULL AND club_coach_card_id IS NOT NULL)",
+            "(CASE WHEN club_card_id IS NOT NULL THEN 1 ELSE 0 END + "
+            "CASE WHEN club_coach_card_id IS NOT NULL THEN 1 ELSE 0 END + "
+            "CASE WHEN club_stadium_card_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
             name="ck_club_pack_opening_card_exactly_one_kind",
         ),
     )

@@ -7,6 +7,7 @@ from app.models.enums import Rarity
 from app.schemas.badge import BadgeOut
 from app.schemas.card import UserCardOut
 from app.schemas.coach import CoachOut
+from app.schemas.stadium import StadiumOut
 
 
 class PackRarityProbabilityOut(BaseModel):
@@ -107,6 +108,24 @@ class OpenedCoachCardOut(BaseModel):
     duplicate_count: int
 
 
+class UserStadiumCardOut(BaseModel):
+    """One personal user-owned stadium card — mirrors UserCoachCardOut above
+    field-for-field, substituting personal stadium models."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    serial_number: int
+    stadium: StadiumOut
+    acquired_at: datetime
+
+
+class OpenedStadiumCardOut(BaseModel):
+    card: UserStadiumCardOut
+    is_new: bool
+    duplicate_count: int
+
+
 class CollectionRewardGrantOut(BaseModel):
     collection_id: int
     collection_name: str
@@ -119,6 +138,7 @@ class PackOpenResult(BaseModel):
     pack: PackOut
     cards: list[OpenedCardOut]
     coach_cards: list[OpenedCoachCardOut] = []
+    stadium_cards: list[OpenedStadiumCardOut] = []
     new_balance: int
     referral_bonus_coins: Optional[int] = None
     collection_rewards: list[CollectionRewardGrantOut] = []
@@ -139,6 +159,7 @@ class PackBulkOpenResult(BaseModel):
     opening_ids: list[int]
     cards: list[OpenedCardOut]
     coach_cards: list[OpenedCoachCardOut] = []
+    stadium_cards: list[OpenedStadiumCardOut] = []
     new_balance: int
     total_price_paid: int
     referral_bonus_coins: Optional[int] = None

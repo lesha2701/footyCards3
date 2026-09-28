@@ -52,6 +52,10 @@ class Pack(TimestampMixin, Base):
     # exactly). 0.0 (default) means every existing pack stays player-only
     # until an admin opts it in.
     coach_drop_chance: Mapped[float] = mapped_column(Numeric(5, 4), default=0.0, nullable=False)
+    # Same independent-per-slot coin-flip mechanism as coach_drop_chance, but for
+    # stadiums — see pack_service.roll_and_create_cards. A slot can resolve to a
+    # player, a coach, OR a stadium, never more than one (checked in that order).
+    stadium_drop_chance: Mapped[float] = mapped_column(Numeric(5, 4), default=0.0, nullable=False)
 
     rarity_probabilities: Mapped[list["PackRarityProbability"]] = relationship(
         back_populates="pack", cascade="all, delete-orphan"
@@ -94,11 +98,11 @@ class PackOpeningCard(Base):
     opening_id: Mapped[int] = mapped_column(
         ForeignKey("pack_openings.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # Exactly one of these two is set per row — a pack slot resolves to
-    # either a player or a coach (see pack_service.roll_and_create_cards's
-    # per-slot coach_drop_chance coin flip), never both, never neither.
-    # Portable boolean-expression CHECK (no Postgres-only functions) so the
-    # SQLite test suite enforces it too — mirrors
+    # Exactly one of these three is set per row — a pack slot resolves to a
+    # player, a coach, OR a stadium (see pack_service.roll_and_create_cards's
+    # per-slot coach_drop_chance/stadium_drop_chance coin flip), never more
+    # than one, never neither. CASE-SUM CHECK (portable, no Postgres-only
+    # functions) so the SQLite test suite enforces it too — mirrors
     # ck_club_pack_opening_card_exactly_one_kind exactly.
     user_card_id: Mapped[int | None] = mapped_column(
         ForeignKey("user_cards.id", ondelete="CASCADE"), nullable=True, index=True
@@ -106,14 +110,18 @@ class PackOpeningCard(Base):
     user_coach_card_id: Mapped[int | None] = mapped_column(
         ForeignKey("user_coach_cards.id", ondelete="CASCADE"), nullable=True
     )
+    user_stadium_card_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_stadium_cards.id", ondelete="CASCADE"), nullable=True
+    )
     is_new: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     opening: Mapped["PackOpening"] = relationship(back_populates="cards")
 
     __table_args__ = (
         CheckConstraint(
-            "(user_card_id IS NOT NULL AND user_coach_card_id IS NULL) OR "
-            "(user_card_id IS NULL AND user_coach_card_id IS NOT NULL)",
+            "(CASE WHEN user_card_id IS NOT NULL THEN 1 ELSE 0 END + "
+            "CASE WHEN user_coach_card_id IS NOT NULL THEN 1 ELSE 0 END + "
+            "CASE WHEN user_stadium_card_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
             name="ck_pack_opening_card_exactly_one_kind",
         ),
     )
