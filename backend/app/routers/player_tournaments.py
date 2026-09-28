@@ -13,8 +13,11 @@ from app.schemas.player_tournament import (
     PlayerTournamentApplyResult, PlayerTournamentCurrentOut, PlayerTournamentDetailOut,
     PlayerTournamentMatchDetailOut,
 )
+from app.schemas.player_tournament_ranking import PlayerTournamentRankingMetric, PlayerTournamentRankingOut
+from app.schemas.player_tournament_stats import PlayerTournamentStatsOut
 from app.services import (
     personal_squad_service, player_tournament_query_service, player_tournament_queue_service,
+    player_tournament_ranking_service, player_tournament_stats_service,
 )
 from app.services.lineup_service import list_user_coach_cards
 
@@ -83,6 +86,18 @@ async def current(db: AsyncSession = Depends(get_db), user: User = Depends(get_c
 @router.get("/matches/{match_id}", response_model=PlayerTournamentMatchDetailOut)
 async def match_detail(match_id: int, db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
     return await player_tournament_query_service.get_match_detail(db, match_id)
+
+
+@router.get("/leaderboard", response_model=PlayerTournamentRankingOut)
+async def get_player_tournament_leaderboard(
+    metric: PlayerTournamentRankingMetric, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await player_tournament_ranking_service.get_player_tournament_ranking(db, metric, current_user_id=user.id)
+
+
+@router.get("/stats", response_model=PlayerTournamentStatsOut)
+async def get_player_tournament_stats_endpoint(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await player_tournament_stats_service.get_player_tournament_stats(db, user)
 
 
 @router.get("/{tournament_id}", response_model=PlayerTournamentDetailOut)

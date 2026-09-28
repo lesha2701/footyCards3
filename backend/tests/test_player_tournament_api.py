@@ -59,12 +59,24 @@ async def test_apply_without_squad_is_409(client, db_session, bot_token):
     assert resp.status_code == 409
 
 
-async def test_rating_leaderboard_sorted(client, db_session, bot_token):
+async def test_leaderboard_sorted_by_metric(client, db_session, bot_token):
+    from app.models.player_tournament import PlayerTournament, PlayerTournamentParticipant
+
     a = await make_ready_user(client, db_session, bot_token, 880400)
     b = await make_ready_user(client, db_session, bot_token, 880401)
-    a.tournament_rating, b.tournament_rating = 3, 8
+    # apply_to_tournament only queues a user until the shared queue reaches
+    # TOURNAMENT_SIZE (16) — create the participant rows the leaderboard
+    # filters on directly rather than spinning up 16 users here.
+    tournament = PlayerTournament()
+    db_session.add(tournament)
+    await db_session.flush()
+    db_session.add(PlayerTournamentParticipant(tournament_id=tournament.id, user_id=a.id))
+    db_session.add(PlayerTournamentParticipant(tournament_id=tournament.id, user_id=b.id))
+    a.tournament_stars_count, b.tournament_stars_count = 3, 8
     db_session.add_all([a, b])
     await db_session.commit()
-    resp = await client.get(f"{BASE}/rating", headers=telegram_headers(880400, bot_token))
-    rows = resp.json()
-    assert [r["tournament_rating"] for r in rows][:2] == [8, 3]
+    resp = await client.get(f"{BASE}/leaderboard", params={"metric": "stars"}, headers=telegram_headers(880400, bot_token))
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [e["value"] for e in body["top"]][:2] == [8, 3]
+    assert body["me"]["user_id"] == a.id
