@@ -1481,6 +1481,91 @@ export interface TournamentMatchDetail {
   event_log: MatchEvent[];
 }
 
+export interface PersonalSquadSlot {
+  slot_code: string;
+  category: string;
+  ideal_position: string;
+  user_card_id: number | null;
+  serial_number: number | null;
+  player: Player | null;
+}
+
+export interface PersonalSquad {
+  template_index: number;
+  name: string;
+  is_active: boolean;
+  is_complete: boolean;
+  formation: string;
+  mentality: string;
+  playstyle: string;
+  slots: PersonalSquadSlot[];
+  coach: EquippedCoach | null;
+}
+
+export type PlayerTournamentStatus = "not_queued" | "queued" | "active" | "completed";
+
+export interface PlayerTournamentApplyResult {
+  queued: boolean;
+  tournament_id: number | null;
+  queue_position: number | null;
+  queue_size: number;
+}
+
+export interface PlayerTournamentCurrent {
+  status: PlayerTournamentStatus;
+  queue_position: number | null;
+  queue_size: number;
+  tournament_id: number | null;
+  can_apply: boolean;
+}
+
+export interface PlayerTournamentStanding {
+  user_id: number;
+  display_name: string;
+  points: number;
+  goals_for: number;
+  goals_against: number;
+  final_rank: number | null;
+  coins_awarded: number | null;
+  rating_delta: number | null;
+}
+
+export interface PlayerTournamentMatchSummary {
+  id: number;
+  round_number: number;
+  user_a_id: number;
+  user_b_id: number;
+  score_a: number;
+  score_b: number;
+}
+
+export interface PlayerTournamentDetail {
+  id: number;
+  status: string;
+  rounds_simulated: number;
+  standings: PlayerTournamentStanding[];
+  matches: PlayerTournamentMatchSummary[];
+  next_round_seconds_remaining: number | null;
+}
+
+export interface PlayerTournamentMatchDetail {
+  id: number;
+  round_number: number;
+  user_a_id: number;
+  user_b_id: number;
+  user_a_name: string;
+  user_b_name: string;
+  score_a: number;
+  score_b: number;
+  event_log: MatchEvent[];
+}
+
+export interface TournamentRatingRow {
+  user_id: number;
+  display_name: string;
+  tournament_rating: number;
+}
+
 export type BingoGoalType =
   | "packs_opened"
   | "rare_drops"
