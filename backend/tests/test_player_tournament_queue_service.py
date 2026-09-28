@@ -3,7 +3,8 @@ from sqlalchemy import select
 
 from app.core.exceptions import ConflictError
 from app.models.player_tournament import (
-    PlayerTournament, PlayerTournamentParticipant, PlayerTournamentQueue, PlayerTournamentStanding,
+    PlayerTournament, PlayerTournamentParticipant, PlayerTournamentQueue, PlayerTournamentResult,
+    PlayerTournamentStanding,
 )
 from app.services.player_tournament_queue_service import apply_to_tournament, get_current
 from tests.player_tournament_helpers import make_ready_user, make_user
@@ -56,3 +57,24 @@ async def test_sixteenth_application_forms_tournament(client, db_session, bot_to
     # A new queue is open for the next 16.
     next_result = await apply_to_tournament(db_session, await make_ready_user(client, db_session, bot_token, 850200))
     assert next_result.queued is True and next_result.queue_position == 1
+
+
+async def test_get_current_reports_tournaments_played_stars_and_cups(client, db_session, bot_token):
+    user = await make_ready_user(client, db_session, bot_token, 850300)
+    current = await get_current(db_session, user)
+    assert current.tournaments_played == 0 and current.stars_count == 0 and current.cups_count == 0
+
+    tournament = PlayerTournament()
+    db_session.add(tournament)
+    await db_session.flush()
+    db_session.add(PlayerTournamentResult(
+        tournament_id=tournament.id, user_id=user.id, final_rank=1, coins_awarded=3000,
+        stars_delta=5, cup_awarded=True,
+    ))
+    user.tournament_stars_count = 4
+    user.tournament_cups_count = 1
+    db_session.add(user)
+    await db_session.commit()
+
+    current = await get_current(db_session, user)
+    assert current.tournaments_played == 1 and current.stars_count == 4 and current.cups_count == 1
