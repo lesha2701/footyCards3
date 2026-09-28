@@ -314,7 +314,14 @@ async def roll_and_create_cards(
     opened_coach_items: list[OpenedCoachCardOut] = []
     opened_stadium_items: list[OpenedStadiumCardOut] = []
     for rarity in rolled_rarities:
-        roll = random.random()
+        # Short-circuit: only burn a draw from Python's global, unseeded `random`
+        # module when either chance is actually configured — the overwhelming
+        # majority of packs have both at 0.0, and an unconditional draw here would
+        # shift downstream unseeded-random test behavior (e.g. statistical-
+        # threshold tests elsewhere in the same process) for every pack open, not
+        # just stadium/coach-enabled ones. A roll of 1.0 never satisfies either
+        # `roll < chance` comparison below, for any valid 0..1 chance value.
+        roll = random.random() if (coach_drop_chance > 0 or stadium_drop_chance > 0) else 1.0
         if coach_drop_chance > 0 and rarity != Rarity.diamond and roll < coach_drop_chance:
             coach = await pick_random_coach(db, rarity)
             is_new = coach_dup_counts.get(coach.id, 0) == 0 and coach.id not in seen_coaches_this_opening

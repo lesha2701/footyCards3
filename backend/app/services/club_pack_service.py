@@ -159,7 +159,15 @@ async def open_club_pack(db: AsyncSession, user: User, club_pack_id: int, idempo
             # stadium_drop_chance=0.1 means "20% chance of a bonus, split evenly" rather
             # than two independent draws that could both fire — mirrors
             # pack_service.roll_and_create_cards exactly.
-            roll = random.random()
+            #
+            # Short-circuit: only burn a draw from Python's global, unseeded
+            # `random` module when either chance is actually configured — the
+            # overwhelming majority of club packs have both at 0.0, and an
+            # unconditional draw here would shift downstream unseeded-random test
+            # behavior for every club pack open, not just stadium/coach-enabled
+            # ones. A roll of 1.0 never satisfies either `roll < chance`
+            # comparison below, for any valid 0..1 chance value.
+            roll = random.random() if (coach_drop_chance > 0 or stadium_drop_chance > 0) else 1.0
             if coach_drop_chance > 0 and rarity != Rarity.diamond and roll < coach_drop_chance:
                 coach = await pick_random_coach(db, rarity)
                 is_new = coach.id not in existing_coach_ids
