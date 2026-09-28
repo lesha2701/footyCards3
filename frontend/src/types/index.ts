@@ -1517,6 +1517,9 @@ export interface PlayerTournamentCurrent {
   queue_size: number;
   tournament_id: number | null;
   can_apply: boolean;
+  tournaments_played: number;
+  stars_count: number;
+  cups_count: number;
 }
 
 export interface PlayerTournamentStanding {
@@ -1527,7 +1530,8 @@ export interface PlayerTournamentStanding {
   goals_against: number;
   final_rank: number | null;
   coins_awarded: number | null;
-  rating_delta: number | null;
+  stars_delta: number | null;
+  cup_awarded: boolean | null;
 }
 
 export interface PlayerTournamentMatchSummary {
@@ -1560,10 +1564,33 @@ export interface PlayerTournamentMatchDetail {
   event_log: MatchEvent[];
 }
 
-export interface TournamentRatingRow {
+export type PlayerTournamentRankingMetric = "cups" | "stars";
+
+export interface PlayerTournamentRankingEntry {
+  rank: number;
   user_id: number;
   display_name: string;
-  tournament_rating: number;
+  value: number;
+}
+
+export interface PlayerTournamentRankingResult {
+  metric: PlayerTournamentRankingMetric;
+  top: PlayerTournamentRankingEntry[];
+  me: PlayerTournamentRankingEntry | null;
+}
+
+export interface PlayerTournamentStats {
+  matches_played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goals_scored: number;
+  goals_conceded: number;
+  win_rate_pct: number;
+  draw_rate_pct: number;
+  loss_rate_pct: number;
+  goals_scored_per_match: number;
+  goals_conceded_per_match: number;
 }
 
 export type BingoGoalType =

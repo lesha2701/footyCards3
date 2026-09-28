@@ -73,6 +73,7 @@ import RankingPage from "@/pages/RankingPage";
 import ClubLeaderboardPage from "@/pages/ClubLeaderboardPage";
 import PlayerTournamentPage from "@/pages/PlayerTournamentPage";
 import PlayerTournamentRatingPage from "@/pages/PlayerTournamentRatingPage";
+import PlayerTournamentStatsPage from "@/pages/PlayerTournamentStatsPage";
 import PlayerTournamentSquadPage from "@/pages/PlayerTournamentSquadPage";
 import PlayerTournamentDetailPage from "@/pages/PlayerTournamentDetailPage";
 import PlayerTournamentMatchPage from "@/pages/PlayerTournamentMatchPage";
@@ -242,6 +243,7 @@ export default function App() {
         <Route path="/player-tournament" element={<PlayerTournamentPage />} />
         <Route path="/player-tournament/rating" element={<PlayerTournamentRatingPage />} />
         <Route path="/player-tournament/squad" element={<PlayerTournamentSquadPage />} />
+        <Route path="/player-tournament/stats" element={<PlayerTournamentStatsPage />} />
         <Route path="/player-tournament/:id" element={<PlayerTournamentDetailPage />} />
         <Route path="/player-tournament/:id/matches/:matchId" element={<PlayerTournamentMatchPage />} />
         <Route path="/league" element={<LeaguePage />} />

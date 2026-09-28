@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { applyToPlayerTournament, fetchPlayerTournamentCurrent } from "@/api/personalTournament";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconChevronRight, IconClock, IconFlagCheckered, IconTrophy, IconUsers } from "@/components/icons";
+import { IconChevronRight, IconClock, IconFlagCheckered, IconStar, IconTrophy, IconUsers } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
 
 export default function PlayerTournamentPage() {
@@ -38,6 +38,23 @@ export default function PlayerTournamentPage() {
         16 игроков, 30 туров (2 круга) — свой состав, своя тактика. Тур симулируется 3 раза в день.
       </p>
 
+      {current && (
+        <div className="flex items-center gap-4 rounded-2xl bg-bg-surface px-4 py-3 text-xs text-ink-mist">
+          <span className="flex items-center gap-1.5">
+            <IconFlagCheckered size={13} />
+            {current.tournaments_played} турниров
+          </span>
+          <span className="flex items-center gap-1.5 font-mono font-bold text-accent-lime">
+            <IconTrophy size={13} />
+            {current.cups_count}
+          </span>
+          <span className="flex items-center gap-1.5 font-mono font-bold text-accent-cyan">
+            <IconStar size={13} />
+            {current.stars_count}
+          </span>
+        </div>
+      )}
+
       <button
         onClick={() => navigate("/player-tournament/squad")}
         className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
@@ -53,6 +70,15 @@ export default function PlayerTournamentPage() {
       >
         <IconTrophy size={16} className="text-accent-lime" />
         Рейтинг турнира
+        <IconChevronRight size={16} className="ml-auto text-ink-mist-dim" />
+      </button>
+
+      <button
+        onClick={() => navigate("/player-tournament/stats")}
+        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+      >
+        <IconFlagCheckered size={16} className="text-accent-lime" />
+        Статистика за всё время
         <IconChevronRight size={16} className="ml-auto text-ink-mist-dim" />
       </button>
 

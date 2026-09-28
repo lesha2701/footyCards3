@@ -5,7 +5,9 @@ import type {
   PlayerTournamentCurrent,
   PlayerTournamentDetail,
   PlayerTournamentMatchDetail,
-  TournamentRatingRow,
+  PlayerTournamentRankingMetric,
+  PlayerTournamentRankingResult,
+  PlayerTournamentStats,
   UserCoachCard,
 } from "@/types";
 
@@ -60,8 +62,13 @@ export async function fetchPlayerTournamentCurrent(): Promise<PlayerTournamentCu
   return data;
 }
 
-export async function fetchPlayerTournamentRating(): Promise<TournamentRatingRow[]> {
-  const { data } = await api.get<TournamentRatingRow[]>("/player-tournaments/rating");
+export async function fetchPlayerTournamentLeaderboard(metric: PlayerTournamentRankingMetric): Promise<PlayerTournamentRankingResult> {
+  const { data } = await api.get<PlayerTournamentRankingResult>("/player-tournaments/leaderboard", { params: { metric } });
+  return data;
+}
+
+export async function fetchPlayerTournamentStats(): Promise<PlayerTournamentStats> {
+  const { data } = await api.get<PlayerTournamentStats>("/player-tournaments/stats");
   return data;
 }
 

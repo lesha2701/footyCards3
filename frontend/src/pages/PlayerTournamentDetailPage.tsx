@@ -5,7 +5,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { fetchPlayerTournamentDetail } from "@/api/personalTournament";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconChevronLeft, IconCoin, IconTrophy } from "@/components/icons";
+import { IconChevronLeft, IconCoin, IconStar, IconTrophy } from "@/components/icons";
 import { formatCountdown } from "@/lib/format";
 import { useAuthStore } from "@/store/authStore";
 import type { PlayerTournamentMatchSummary, PlayerTournamentStanding } from "@/types";
@@ -150,12 +150,13 @@ export default function PlayerTournamentDetailPage() {
             <div key={s.user_id} className="flex items-center justify-between rounded-xl bg-bg-surface p-3 text-sm">
               <span className="text-ink-chalk">#{s.final_rank} {s.display_name}</span>
               <div className="flex items-center gap-3 font-mono text-xs">
-                {s.rating_delta !== null && (
+                {s.cup_awarded && <IconTrophy size={14} className="text-accent-lime" />}
+                {s.stars_delta !== null && (
                   <span className={`flex items-center gap-1 ${
-                    s.rating_delta > 0 ? "text-accent-lime" : s.rating_delta < 0 ? "text-red-400" : "text-ink-mist"
+                    s.stars_delta > 0 ? "text-accent-lime" : s.stars_delta < 0 ? "text-red-400" : "text-ink-mist"
                   }`}>
-                    <IconTrophy size={12} />
-                    {s.rating_delta > 0 ? `+${s.rating_delta}` : s.rating_delta}
+                    <IconStar size={12} />
+                    {s.stars_delta > 0 ? `+${s.stars_delta}` : s.stars_delta}
                   </span>
                 )}
                 {s.coins_awarded !== null && s.coins_awarded > 0 && (
