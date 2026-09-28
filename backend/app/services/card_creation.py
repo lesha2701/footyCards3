@@ -6,7 +6,9 @@ from app.models.card import UserCard
 from app.models.coach import Coach
 from app.models.enums import CardSource
 from app.models.player import Player
+from app.models.stadium import Stadium
 from app.models.user_coach_card import UserCoachCard
+from app.models.user_stadium_card import UserStadiumCard
 
 
 async def create_user_card(
@@ -60,6 +62,30 @@ async def create_user_coach_card(
     db.add(coach)
 
     card = UserCoachCard(user_id=owner_id, coach_id=coach_id, source=source, source_ref_id=source_ref_id, serial_number=serial_number)
+    db.add(card)
+    await db.flush()
+    return card
+
+
+async def create_user_stadium_card(
+    db: AsyncSession, owner_id: int, stadium_id: int, source: CardSource, source_ref_id: Optional[int] = None
+) -> UserStadiumCard:
+    """Mirrors create_user_coach_card exactly, but against
+    Stadium.next_serial_number (the personal-ownership counter — distinct
+    from next_club_serial_number, which club stadium acquisitions use) —
+    personal stadium acquisitions must never affect club-side serial-number
+    scarcity, and the counter must be read-and-incremented under a row lock
+    rather than a racy MAX(serial_number) + 1 scan, matching every other
+    serial-number allocation in this codebase."""
+    stadium = await db.get(Stadium, stadium_id)
+    await db.refresh(stadium, attribute_names=["next_serial_number"], with_for_update=True)
+    serial_number = stadium.next_serial_number
+    stadium.next_serial_number += 1
+    db.add(stadium)
+
+    card = UserStadiumCard(
+        user_id=owner_id, stadium_id=stadium_id, source=source, source_ref_id=source_ref_id, serial_number=serial_number,
+    )
     db.add(card)
     await db.flush()
     return card
