@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from app.schemas.lineup import EquippedCoachOut
+from app.schemas.lineup import EquippedCoachOut, EquippedStadiumOut
 from app.schemas.player import PlayerOut
 
 
@@ -21,6 +21,10 @@ class PersonalSquadTacticsRequest(BaseModel):
 
 class PersonalSquadCoachRequest(BaseModel):
     user_coach_card_id: int | None = None
+
+
+class PersonalSquadStadiumRequest(BaseModel):
+    user_stadium_card_id: int | None = None
 
 
 class PersonalSquadRenameRequest(BaseModel):
@@ -46,3 +50,4 @@ class PersonalSquadOut(BaseModel):
     playstyle: str
     slots: list[PersonalSquadSlotOut]
     coach: EquippedCoachOut | None = None
+    stadium: EquippedStadiumOut | None = None

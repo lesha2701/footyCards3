@@ -5,11 +5,12 @@ from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.lineup import (
-    LineupCoachSetRequest, LineupOut, LineupRenameRequest, LineupSetRequest, LineupTacticRequest, UserCoachCardOut,
+    LineupCoachSetRequest, LineupOut, LineupRenameRequest, LineupSetRequest, LineupStadiumSetRequest,
+    LineupTacticRequest, UserCoachCardOut, UserStadiumCardOut,
 )
 from app.services.lineup_service import (
-    activate_template, get_active_lineup, list_templates, list_user_coach_cards, rename_template,
-    set_lineup, set_lineup_coach, set_tactic,
+    activate_template, get_active_lineup, list_templates, list_user_coach_cards, list_user_stadium_cards,
+    rename_template, set_lineup, set_lineup_coach, set_lineup_stadium, set_tactic,
 )
 
 router = APIRouter(prefix="/lineups", tags=["lineups"])
@@ -23,6 +24,11 @@ async def read_active_lineup(db: AsyncSession = Depends(get_db), user: User = De
 @router.get("/coach-cards", response_model=list[UserCoachCardOut])
 async def read_user_coach_cards(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await list_user_coach_cards(db, user)
+
+
+@router.get("/stadium-cards", response_model=list[UserStadiumCardOut])
+async def read_user_stadium_cards(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await list_user_stadium_cards(db, user)
 
 
 @router.put("/active", response_model=LineupOut)
@@ -44,6 +50,13 @@ async def update_lineup_coach(
     payload: LineupCoachSetRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     return await set_lineup_coach(db, user, payload)
+
+
+@router.put("/stadium", response_model=LineupOut)
+async def update_lineup_stadium(
+    payload: LineupStadiumSetRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await set_lineup_stadium(db, user, payload)
 
 
 @router.get("/templates", response_model=list[LineupOut])
@@ -73,6 +86,14 @@ async def update_template_coach(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await set_lineup_coach(db, user, payload, template_index)
+
+
+@router.put("/templates/{template_index}/stadium", response_model=LineupOut)
+async def update_template_stadium(
+    template_index: int, payload: LineupStadiumSetRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await set_lineup_stadium(db, user, payload, template_index)
 
 
 @router.put("/templates/{template_index}/name", response_model=LineupOut)

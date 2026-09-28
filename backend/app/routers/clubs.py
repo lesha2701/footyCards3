@@ -54,6 +54,8 @@ from app.schemas.club_squad import (
     ClubLineupOut,
     ClubLineupRenameRequest,
     ClubLineupSetRequest,
+    ClubStadiumCardOut,
+    ClubStadiumSetRequest,
     ClubTacticsSetRequest,
     NextOpponentOut,
 )
@@ -239,6 +241,11 @@ async def set_club_coach(payload: ClubCoachSetRequest, db: AsyncSession = Depend
     return await club_squad_service.set_club_coach(db, user, payload)
 
 
+@router.put("/me/stadium", response_model=ClubLineupOut)
+async def set_club_stadium(payload: ClubStadiumSetRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_squad_service.set_club_stadium(db, user, payload)
+
+
 @router.post("/me/training", response_model=ClubLineupOut)
 async def activate_club_training(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_squad_service.activate_training(db, user)
@@ -273,6 +280,14 @@ async def update_club_coach_template(
     return await club_squad_service.set_club_coach(db, user, payload, template_index)
 
 
+@router.put("/me/stadium/templates/{template_index}", response_model=ClubLineupOut)
+async def update_club_stadium_template(
+    template_index: int, payload: ClubStadiumSetRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await club_squad_service.set_club_stadium(db, user, payload, template_index)
+
+
 @router.put("/me/lineup/templates/{template_index}/name", response_model=ClubLineupOut)
 async def rename_club_lineup_template_route(
     template_index: int, payload: ClubLineupRenameRequest,
@@ -296,6 +311,11 @@ async def list_club_cards(db: AsyncSession = Depends(get_db), user: User = Depen
 @router.get("/me/coach-cards", response_model=list[ClubCoachCardOut])
 async def list_club_coach_cards(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_squad_service.list_club_coach_cards(db, user)
+
+
+@router.get("/me/stadium-cards", response_model=list[ClubStadiumCardOut])
+async def list_club_stadium_cards(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_squad_service.list_club_stadium_cards(db, user)
 
 
 @router.post("/me/packs/{club_pack_id}/open", response_model=ClubPackOpenResult)

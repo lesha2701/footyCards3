@@ -23,9 +23,11 @@ class ClubLineup(Base):
     mentality: Mapped[str] = mapped_column(String(16), default="BALANCED", nullable=False, server_default="BALANCED")
     playstyle: Mapped[str] = mapped_column(String(16), default="CENTRAL_PLAY", nullable=False, server_default="CENTRAL_PLAY")
     club_coach_card_id: Mapped[int | None] = mapped_column(ForeignKey("club_coach_cards.id", ondelete="SET NULL"), nullable=True)
+    club_stadium_card_id: Mapped[int | None] = mapped_column(ForeignKey("club_stadium_cards.id", ondelete="SET NULL"), nullable=True)
 
     cards: Mapped[list["ClubLineupCard"]] = relationship(back_populates="lineup", cascade="all, delete-orphan")
     club_coach_card: Mapped["ClubCoachCard | None"] = relationship(lazy="joined")
+    club_stadium_card: Mapped["ClubStadiumCard | None"] = relationship(lazy="joined")
 
     __table_args__ = (
         UniqueConstraint("club_id", "template_index", name="uq_club_lineup_club_template"),

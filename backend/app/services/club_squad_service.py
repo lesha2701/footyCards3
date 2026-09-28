@@ -10,6 +10,7 @@ from app.models.club import Club
 from app.models.club_card import ClubCard
 from app.models.club_coach_card import ClubCoachCard
 from app.models.club_lineup import ClubLineup, ClubLineupCard
+from app.models.club_stadium_card import ClubStadiumCard
 from app.models.coach import Coach
 from app.models.enums import ClubCardSource, Position
 from app.models.player import Player
@@ -23,8 +24,11 @@ from app.schemas.club_squad import (
     ClubLineupOut,
     ClubLineupSetRequest,
     ClubLineupSlotOut,
+    ClubStadiumCardOut,
+    ClubStadiumSetRequest,
     ClubTacticsSetRequest,
     EquippedCoachOut,
+    EquippedStadiumOut,
     NextOpponentOut,
 )
 from app.schemas.player import PlayerOut
@@ -158,6 +162,7 @@ def _club_lineup_templates_query(club_id: int):
         .options(
             joinedload(ClubLineup.cards).joinedload(ClubLineupCard.club_card),
             joinedload(ClubLineup.club_coach_card).joinedload(ClubCoachCard.coach).joinedload(Coach.boosts),
+            joinedload(ClubLineup.club_stadium_card).joinedload(ClubStadiumCard.stadium),
         )
         .order_by(ClubLineup.template_index)
         .execution_options(populate_existing=True)
@@ -242,6 +247,7 @@ async def _get_or_none_lineup(db: AsyncSession, club_id: int) -> ClubLineup | No
         .options(
             joinedload(ClubLineup.cards).joinedload(ClubLineupCard.club_card),
             joinedload(ClubLineup.club_coach_card).joinedload(ClubCoachCard.coach).joinedload(Coach.boosts),
+            joinedload(ClubLineup.club_stadium_card).joinedload(ClubStadiumCard.stadium),
         )
         .execution_options(populate_existing=True)
     )
@@ -303,6 +309,22 @@ async def list_club_coach_cards(db: AsyncSession, user: User) -> list[ClubCoachC
     # ClubCoachCardOut has no from_attributes config — construct explicitly
     # rather than model_validate(orm_object), which would reject a raw ORM instance.
     return [ClubCoachCardOut(id=c.id, serial_number=c.serial_number, coach=c.coach, acquired_at=c.acquired_at) for c in cards]
+
+
+async def list_club_stadium_cards(db: AsyncSession, user: User) -> list[ClubStadiumCardOut]:
+    """GET /clubs/me/stadium-cards — mirrors list_club_coach_cards above exactly."""
+    from app.services.club_service import _require_membership
+
+    membership = await _require_membership(db, user.id)
+    cards = (
+        await db.execute(
+            select(ClubStadiumCard)
+            .where(ClubStadiumCard.club_id == membership.club_id)
+            .order_by(ClubStadiumCard.acquired_at)
+            .options(joinedload(ClubStadiumCard.stadium))
+        )
+    ).scalars().unique().all()
+    return [ClubStadiumCardOut(id=c.id, serial_number=c.serial_number, stadium=c.stadium, acquired_at=c.acquired_at) for c in cards]
 
 
 async def _training_state(db: AsyncSession, club_id: int, config) -> tuple[float, int, bool, bool]:
@@ -414,9 +436,13 @@ async def _lineup_to_out(db: AsyncSession, club_id: int, template_index: int | N
 
     config = await get_config(db)
     multiplier, training_uses_remaining, training_boost_active, in_active_tournament = await _training_state(db, club_id, config)
+    stadium_multiplier = 1.0 + float(lineup.club_stadium_card.stadium.boost_pct) if lineup and lineup.club_stadium_card else 1.0
 
-    team_strength = round(calculate_base_strength(cards_with_slots) * multiplier) if is_complete else None
-    profile = compute_profile(cards_with_slots, training_multiplier=multiplier) if cards_with_slots else None
+    team_strength = round(calculate_base_strength(cards_with_slots) * multiplier * stadium_multiplier) if is_complete else None
+    profile = (
+        compute_profile(cards_with_slots, training_multiplier=multiplier, stadium_multiplier=stadium_multiplier)
+        if cards_with_slots else None
+    )
     tactical_fit = compute_tactical_fit(cards_with_slots, profile, mentality, playstyle, config) if profile else 0
     tactical_fit_hint = _tactical_fit_hint(profile, playstyle) if profile else "Заполни состав, чтобы увидеть подсказку"
 
@@ -424,12 +450,17 @@ async def _lineup_to_out(db: AsyncSession, club_id: int, template_index: int | N
     if lineup and lineup.club_coach_card:
         coach_out = EquippedCoachOut.model_validate(lineup.club_coach_card.coach)
 
+    stadium_out = None
+    if lineup and lineup.club_stadium_card:
+        s = lineup.club_stadium_card.stadium
+        stadium_out = EquippedStadiumOut(id=s.id, display_name=s.display_name, rarity=s.rarity.value, image_path=s.image_path, boost_pct=float(s.boost_pct))
+
     attack, midfield, defence, goalkeeping = _category_line_stats(cards_with_slots)
     return ClubLineupOut(
         template_index=lineup.template_index, name=lineup.name, is_active=lineup.is_active,
         is_complete=is_complete, team_strength=team_strength, formation=formation, mentality=mentality,
         playstyle=playstyle, tactical_fit=tactical_fit, tactical_fit_hint=tactical_fit_hint, slots=slots,
-        coach=coach_out, training_uses_remaining=training_uses_remaining,
+        coach=coach_out, stadium=stadium_out, training_uses_remaining=training_uses_remaining,
         training_boost_active=training_boost_active, in_active_tournament=in_active_tournament,
         attack=attack, midfield=midfield, defence=defence, goalkeeping=goalkeeping,
     )
@@ -632,6 +663,30 @@ async def set_club_coach(
 
     lineup = await _lock_club_lineup_row(db, club_id, template_index)
     lineup.club_coach_card_id = payload.club_coach_card_id
+    db.add(lineup)
+    await db.commit()
+    return await _lineup_to_out(db, club_id, lineup.template_index)
+
+
+async def set_club_stadium(
+    db: AsyncSession, user: User, payload: ClubStadiumSetRequest, template_index: int | None = None
+) -> ClubLineupOut:
+    """PUT /clubs/me/stadium — mirrors set_club_coach's captain/assistant-only
+    gating and row-locking. A None club_stadium_card_id clears the equipped
+    stadium."""
+    from app.services.club_service import _require_manager, _require_membership
+
+    membership = await _require_membership(db, user.id)
+    _require_manager(membership)
+    club_id = membership.club_id
+
+    if payload.club_stadium_card_id is not None:
+        card = await db.get(ClubStadiumCard, payload.club_stadium_card_id)
+        if card is None or card.club_id != club_id:
+            raise ConflictError("Стадион не принадлежит этому клубу")
+
+    lineup = await _lock_club_lineup_row(db, club_id, template_index)
+    lineup.club_stadium_card_id = payload.club_stadium_card_id
     db.add(lineup)
     await db.commit()
     return await _lineup_to_out(db, club_id, lineup.template_index)

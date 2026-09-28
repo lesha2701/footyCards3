@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from app.schemas.coach import CoachBoostOut, CoachOut
+from app.schemas.lineup import EquippedStadiumOut
 from app.schemas.player import PlayerOut
 from app.schemas.stadium import StadiumOut
 
@@ -78,6 +79,7 @@ class ClubLineupOut(BaseModel):
     tactical_fit_hint: str
     slots: list[ClubLineupSlotOut]
     coach: EquippedCoachOut | None = None
+    stadium: EquippedStadiumOut | None = None
     training_uses_remaining: int = 0
     training_boost_active: bool = False
     in_active_tournament: bool = False
@@ -101,6 +103,10 @@ class ClubLineupSetRequest(BaseModel):
 
 class ClubCoachSetRequest(BaseModel):
     club_coach_card_id: int | None
+
+
+class ClubStadiumSetRequest(BaseModel):
+    club_stadium_card_id: int | None
 
 
 class ClubTacticsSetRequest(BaseModel):

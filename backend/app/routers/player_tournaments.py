@@ -4,10 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.pack import UserCoachCardOut
+from app.schemas.pack import UserCoachCardOut, UserStadiumCardOut
 from app.schemas.personal_squad import (
     PersonalSquadCoachRequest, PersonalSquadOut, PersonalSquadRenameRequest, PersonalSquadSetRequest,
-    PersonalSquadTacticsRequest,
+    PersonalSquadStadiumRequest, PersonalSquadTacticsRequest,
 )
 from app.schemas.player_tournament import (
     PlayerTournamentApplyResult, PlayerTournamentCurrentOut, PlayerTournamentDetailOut,
@@ -19,7 +19,7 @@ from app.services import (
     personal_squad_service, player_tournament_query_service, player_tournament_queue_service,
     player_tournament_ranking_service, player_tournament_stats_service,
 )
-from app.services.lineup_service import list_user_coach_cards
+from app.services.lineup_service import list_user_coach_cards, list_user_stadium_cards
 
 router = APIRouter(prefix="/player-tournaments", tags=["player-tournaments"])
 
@@ -32,6 +32,11 @@ async def read_squads(db: AsyncSession = Depends(get_db), user: User = Depends(g
 @router.get("/squads/coach-cards", response_model=list[UserCoachCardOut])
 async def read_coach_cards(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await list_user_coach_cards(db, user)
+
+
+@router.get("/squads/stadium-cards", response_model=list[UserStadiumCardOut])
+async def read_stadium_cards(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await list_user_stadium_cards(db, user)
 
 
 @router.put("/squads/{template_index}/cards", response_model=PersonalSquadOut)
@@ -56,6 +61,14 @@ async def update_squad_coach(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await personal_squad_service.set_coach(db, user, payload, template_index)
+
+
+@router.put("/squads/{template_index}/stadium", response_model=PersonalSquadOut)
+async def update_squad_stadium(
+    template_index: int, payload: PersonalSquadStadiumRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await personal_squad_service.set_stadium(db, user, payload, template_index)
 
 
 @router.put("/squads/{template_index}/name", response_model=PersonalSquadOut)

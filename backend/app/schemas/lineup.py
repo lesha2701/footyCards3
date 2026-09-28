@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.schemas.card import UserCardOut
 from app.schemas.coach import CoachBoostOut
-from app.schemas.pack import UserCoachCardOut
+from app.schemas.pack import UserCoachCardOut, UserStadiumCardOut
 
 
 class LineupSlotOut(BaseModel):
@@ -29,6 +29,18 @@ class EquippedCoachOut(BaseModel):
     boosts: list[CoachBoostOut]
 
 
+class EquippedStadiumOut(BaseModel):
+    """The stadium currently equipped on a squad — mirrors EquippedCoachOut's
+    shape (id/display_name/rarity/image_path), plus boost_pct since that's
+    the whole point of a stadium. Shared across all three squad Out schemas."""
+
+    id: int
+    display_name: str
+    rarity: str
+    image_path: str | None
+    boost_pct: float
+
+
 class LineupOut(BaseModel):
     id: Optional[int] = None
     template_index: int
@@ -40,6 +52,7 @@ class LineupOut(BaseModel):
     team_strength: Optional[int] = None
     max_diamond: int
     coach: Optional[EquippedCoachOut] = None
+    stadium: Optional[EquippedStadiumOut] = None
     slots: list[LineupSlotOut]
 
 
@@ -58,6 +71,10 @@ class LineupTacticRequest(BaseModel):
 
 class LineupCoachSetRequest(BaseModel):
     user_coach_card_id: Optional[int] = None
+
+
+class LineupStadiumSetRequest(BaseModel):
+    user_stadium_card_id: Optional[int] = None
 
 
 class LineupRenameRequest(BaseModel):

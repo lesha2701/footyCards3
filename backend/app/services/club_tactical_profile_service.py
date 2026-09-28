@@ -81,6 +81,7 @@ DEPTH_BONUS_CAP = 6.0
 
 def compute_profile(
     cards_with_slots: list[tuple[Any, FormationSlot]], coach: "Coach | None" = None, training_multiplier: float = 1.0,
+    stadium_multiplier: float = 1.0,
 ) -> TeamTacticalProfile:
     boosts = resolve_active_boosts(coach)
     depth_cap = depth_bonus_cap_for(DEPTH_BONUS_CAP, boosts)
@@ -102,10 +103,10 @@ def compute_profile(
             zone_values[zone] = 0.0
 
     zone_values = apply_zone_boosts(zone_values, boosts)
-    zone_values = {zone: round(min(99.0, value * training_multiplier), 1) for zone, value in zone_values.items()}
+    zone_values = {zone: round(min(99.0, value * training_multiplier * stadium_multiplier), 1) for zone, value in zone_values.items()}
 
     return TeamTacticalProfile(
-        team_strength=round(calculate_base_strength(cards_with_slots) * training_multiplier), **zone_values
+        team_strength=round(calculate_base_strength(cards_with_slots) * training_multiplier * stadium_multiplier), **zone_values
     )
 
 

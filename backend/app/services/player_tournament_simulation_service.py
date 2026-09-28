@@ -69,7 +69,8 @@ async def _build_side(db: AsyncSession, user_id: int) -> _Side | None:
         return None
     with_slots: list[tuple[_EngineCard, FormationSlot]] = [(_engine_card(c), slot) for c, slot in pairs]
     coach = squad.user_coach_card.coach if squad.user_coach_card else None
-    side = build_side(with_slots, squad.mentality, squad.playstyle, coach=coach)
+    stadium_multiplier = 1.0 + float(squad.user_stadium_card.stadium.boost_pct) if squad.user_stadium_card else 1.0
+    side = build_side(with_slots, squad.mentality, squad.playstyle, coach=coach, stadium_multiplier=stadium_multiplier)
     lineup = [
         {
             "club_card_id": c.id, "player_id": c.player_id, "name": c.player.display_name,

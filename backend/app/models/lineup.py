@@ -23,9 +23,13 @@ class Lineup(TimestampMixin, Base):
     user_coach_card_id: Mapped[int | None] = mapped_column(
         ForeignKey("user_coach_cards.id", ondelete="SET NULL"), nullable=True
     )
+    user_stadium_card_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_stadium_cards.id", ondelete="SET NULL"), nullable=True
+    )
 
     cards: Mapped[list["LineupCard"]] = relationship(back_populates="lineup", cascade="all, delete-orphan")
     user_coach_card: Mapped["UserCoachCard | None"] = relationship(lazy="joined")
+    user_stadium_card: Mapped["UserStadiumCard | None"] = relationship(lazy="joined")
 
     __table_args__ = (
         UniqueConstraint("user_id", "template_index", name="uq_lineup_user_template"),

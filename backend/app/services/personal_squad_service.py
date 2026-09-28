@@ -9,10 +9,11 @@ from app.models.coach import Coach
 from app.models.personal_squad import PersonalSquad, PersonalSquadCard
 from app.models.user import User
 from app.models.user_coach_card import UserCoachCard
-from app.schemas.lineup import EquippedCoachOut
+from app.models.user_stadium_card import UserStadiumCard
+from app.schemas.lineup import EquippedCoachOut, EquippedStadiumOut
 from app.schemas.personal_squad import (
     PersonalSquadCoachRequest, PersonalSquadOut, PersonalSquadSetRequest, PersonalSquadSlotOut,
-    PersonalSquadTacticsRequest,
+    PersonalSquadStadiumRequest, PersonalSquadTacticsRequest,
 )
 from app.services.club_formation_service import CLUB_FORMATIONS, get_formation_slots
 from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES
@@ -32,6 +33,7 @@ def _templates_query(user_id: int):
         .options(
             joinedload(PersonalSquad.cards).joinedload(PersonalSquadCard.user_card).joinedload(UserCard.player),
             joinedload(PersonalSquad.user_coach_card).joinedload(UserCoachCard.coach).selectinload(Coach.boosts),
+            joinedload(PersonalSquad.user_stadium_card).joinedload(UserStadiumCard.stadium),
         )
         .order_by(PersonalSquad.template_index)
         .execution_options(populate_existing=True)
@@ -119,11 +121,18 @@ def _serialize(squad: PersonalSquad) -> PersonalSquadOut:
             id=c.id, display_name=c.display_name, rarity=c.rarity.value,
             image_path=c.image_path, boosts=c.boosts,
         )
+    stadium = None
+    if squad.user_stadium_card is not None:
+        s = squad.user_stadium_card.stadium
+        stadium = EquippedStadiumOut(
+            id=s.id, display_name=s.display_name, rarity=s.rarity.value,
+            image_path=s.image_path, boost_pct=float(s.boost_pct),
+        )
     return PersonalSquadOut(
         template_index=squad.template_index, name=squad.name, is_active=squad.is_active,
         is_complete=all(s.user_card_id is not None for s in slots),
         formation=squad.formation, mentality=squad.mentality, playstyle=squad.playstyle,
-        slots=slots, coach=coach,
+        slots=slots, coach=coach, stadium=stadium,
     )
 
 
@@ -228,6 +237,21 @@ async def set_coach(
     squad = await _lock_row(db, user.id, template_index)
     idx = squad.template_index
     squad.user_coach_card_id = payload.user_coach_card_id
+    db.add(squad)
+    await db.commit()
+    return await _out(db, user.id, idx)
+
+
+async def set_stadium(
+    db: AsyncSession, user: User, payload: PersonalSquadStadiumRequest, template_index: int | None = None
+) -> PersonalSquadOut:
+    if payload.user_stadium_card_id is not None:
+        stadium_card = await db.get(UserStadiumCard, payload.user_stadium_card_id)
+        if stadium_card is None or stadium_card.user_id != user.id:
+            raise ConflictError("Стадион не принадлежит тебе")
+    squad = await _lock_row(db, user.id, template_index)
+    idx = squad.template_index
+    squad.user_stadium_card_id = payload.user_stadium_card_id
     db.add(squad)
     await db.commit()
     return await _out(db, user.id, idx)

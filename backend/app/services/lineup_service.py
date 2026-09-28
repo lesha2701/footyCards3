@@ -13,7 +13,11 @@ from app.models.enums import RARITY_ORDER, Position, Rarity
 from app.models.lineup import Lineup, LineupCard
 from app.models.user import User
 from app.models.user_coach_card import UserCoachCard
-from app.schemas.lineup import EquippedCoachOut, LineupCoachSetRequest, LineupOut, LineupSetRequest, LineupSlotOut, UserCoachCardOut
+from app.models.user_stadium_card import UserStadiumCard
+from app.schemas.lineup import (
+    EquippedCoachOut, EquippedStadiumOut, LineupCoachSetRequest, LineupOut, LineupSetRequest, LineupSlotOut,
+    LineupStadiumSetRequest, UserCoachCardOut, UserStadiumCardOut,
+)
 from app.services.coach_boost_service import arena_rarity_team_strength_bonus
 from app.services.game_config_service import get_config
 from app.services.player_stats_service import effective_card_stats
@@ -109,6 +113,7 @@ def _templates_query(user_id: int):
         .options(
             joinedload(Lineup.cards),
             joinedload(Lineup.user_coach_card).joinedload(UserCoachCard.coach).selectinload(Coach.boosts),
+            joinedload(Lineup.user_stadium_card).joinedload(UserStadiumCard.stadium),
         )
         .order_by(Lineup.template_index)
         .execution_options(populate_existing=True)
@@ -166,6 +171,7 @@ def calculate_base_strength(
     cards_with_slots: list[tuple[UserCard, FormationSlot]],
     coach: "Coach | None" = None,
     tactic: "str | None" = None,
+    stadium_multiplier: float = 1.0,
 ) -> int:
     if not cards_with_slots:
         return 0
@@ -205,7 +211,7 @@ def calculate_base_strength(
     total += chemistry_bonus
     total += arena_rarity_team_strength_bonus(coach)
 
-    return round(total)
+    return round(total * stadium_multiplier)
 
 
 def split_strength(strength: int, tactic: str) -> tuple[int, int]:
@@ -245,8 +251,17 @@ async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
 
     is_complete = len(cards_with_slots) == len(FORMATION_SLOTS)
     coach = lineup.user_coach_card.coach if lineup.user_coach_card else None
-    strength = calculate_base_strength(cards_with_slots, coach=coach, tactic=lineup.tactic) if is_complete else None
+    stadium_multiplier = 1.0 + float(lineup.user_stadium_card.stadium.boost_pct) if lineup.user_stadium_card else 1.0
+    strength = (
+        calculate_base_strength(cards_with_slots, coach=coach, tactic=lineup.tactic, stadium_multiplier=stadium_multiplier)
+        if is_complete else None
+    )
     config = await get_config(db)
+
+    stadium = None
+    if lineup.user_stadium_card is not None:
+        s = lineup.user_stadium_card.stadium
+        stadium = EquippedStadiumOut(id=s.id, display_name=s.display_name, rarity=s.rarity.value, image_path=s.image_path, boost_pct=float(s.boost_pct))
 
     return LineupOut(
         id=lineup.id, template_index=lineup.template_index, name=lineup.name, is_active=lineup.is_active,
@@ -256,6 +271,7 @@ async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
             id=coach.id, display_name=coach.display_name, rarity=coach.rarity.value,
             image_path=coach.image_path, boosts=coach.boosts,
         ) if coach else None,
+        stadium=stadium,
         slots=slots_out,
     )
 
@@ -301,6 +317,32 @@ async def set_lineup_coach(
         if card is None or card.user_id != user.id:
             raise ConflictError("Тренер не найден в вашей коллекции")
     lineup.user_coach_card_id = payload.user_coach_card_id
+    db.add(lineup)
+    await db.commit()
+    return await get_active_lineup(db, user, lineup.template_index)
+
+
+async def list_user_stadium_cards(db: AsyncSession, user: User) -> list[UserStadiumCardOut]:
+    """GET /lineups/stadium-cards — list all stadiums owned by the user, mirroring
+    list_user_coach_cards above exactly."""
+    result = await db.execute(
+        select(UserStadiumCard)
+        .where(UserStadiumCard.user_id == user.id)
+        .options(joinedload(UserStadiumCard.stadium))
+        .order_by(UserStadiumCard.id)
+    )
+    return result.unique().scalars().all()
+
+
+async def set_lineup_stadium(
+    db: AsyncSession, user: User, payload: LineupStadiumSetRequest, template_index: int | None = None
+) -> LineupOut:
+    lineup = await _get_template_row(db, user.id, template_index)
+    if payload.user_stadium_card_id is not None:
+        card = await db.get(UserStadiumCard, payload.user_stadium_card_id)
+        if card is None or card.user_id != user.id:
+            raise ConflictError("Стадион не найден в вашей коллекции")
+    lineup.user_stadium_card_id = payload.user_stadium_card_id
     db.add(lineup)
     await db.commit()
     return await get_active_lineup(db, user, lineup.template_index)
