@@ -72,6 +72,7 @@ import BingoPage from "@/pages/BingoPage";
 import RankingPage from "@/pages/RankingPage";
 import ClubLeaderboardPage from "@/pages/ClubLeaderboardPage";
 import PlayerTournamentPage from "@/pages/PlayerTournamentPage";
+import PlayerTournamentSquadPage from "@/pages/PlayerTournamentSquadPage";
 import LeaguePage from "@/pages/LeaguePage";
 import ProfilePage from "@/pages/ProfilePage";
 import GiftsPage from "@/pages/GiftsPage";
@@ -236,6 +237,7 @@ export default function App() {
         <Route path="/ranking" element={<RankingPage />} />
         <Route path="/clubs/leaderboard" element={<ClubLeaderboardPage />} />
         <Route path="/player-tournament" element={<PlayerTournamentPage />} />
+        <Route path="/player-tournament/squad" element={<PlayerTournamentSquadPage />} />
         <Route path="/league" element={<LeaguePage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/gifts" element={<GiftsPage />} />
