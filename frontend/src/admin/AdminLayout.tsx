@@ -8,6 +8,7 @@ const SECTIONS = [
   { to: "/admin/users", label: "Пользователи", icon: "👥" },
   { to: "/admin/players", label: "Футболисты", icon: "⚽" },
   { to: "/admin/coaches", label: "Тренеры", icon: "🧑‍🏫" },
+  { to: "/admin/stadiums", label: "Стадионы", icon: "🏟️" },
   { to: "/admin/packs", label: "Паки", icon: "📦" },
   { to: "/admin/club-packs", label: "Клубные паки", icon: "🏟️" },
   { to: "/admin/clubs", label: "Клубы", icon: "🛡️" },

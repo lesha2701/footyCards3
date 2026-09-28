@@ -17,6 +17,7 @@ import type {
   Page,
   Pack,
   Player,
+  Stadium,
   TournamentDetail,
   TradeOffer,
   TradeStatus,
@@ -232,6 +233,50 @@ export async function uploadCoachImage(id: number, file: File): Promise<Coach> {
 
 export async function deleteCoachImage(id: number): Promise<Coach> {
   const { data } = await api.delete<Coach>(`/admin/coaches/${id}/image`);
+  return data;
+}
+
+// --- Stadiums ---
+export async function fetchAdminStadiums(search: string, page: number): Promise<Page<Stadium>> {
+  const { data } = await api.get<Page<Stadium>>("/admin/stadiums", { params: { search: search || undefined, page, include_inactive: true } });
+  return data;
+}
+
+export async function createStadium(payload: Record<string, unknown>): Promise<Stadium> {
+  const { data } = await api.post<Stadium>("/admin/stadiums", payload);
+  return data;
+}
+
+export async function updateStadium(id: number, payload: Record<string, unknown>): Promise<Stadium> {
+  const { data } = await api.put<Stadium>(`/admin/stadiums/${id}`, payload);
+  return data;
+}
+
+export async function toggleStadiumActive(id: number): Promise<Stadium> {
+  const { data } = await api.post<Stadium>(`/admin/stadiums/${id}/toggle-active`);
+  return data;
+}
+
+export async function toggleStadiumPackDroppable(id: number): Promise<Stadium> {
+  const { data } = await api.post<Stadium>(`/admin/stadiums/${id}/toggle-pack-droppable`);
+  return data;
+}
+
+export async function deleteStadium(id: number) {
+  await api.delete(`/admin/stadiums/${id}`);
+}
+
+export async function uploadStadiumImage(id: number, file: File): Promise<Stadium> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<Stadium>(`/admin/stadiums/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function deleteStadiumImage(id: number): Promise<Stadium> {
+  const { data } = await api.delete<Stadium>(`/admin/stadiums/${id}/image`);
   return data;
 }
 

@@ -86,6 +86,17 @@ export interface Coach {
   boosts: CoachBoost[];
 }
 
+export interface Stadium {
+  id: number;
+  display_name: string;
+  rarity: Rarity;
+  image_path: string | null;
+  quick_sell_price: number;
+  is_active: boolean;
+  is_pack_droppable: boolean;
+  boost_pct: number;
+}
+
 export interface UserCard {
   id: number;
   serial_number: number;
@@ -212,6 +223,13 @@ export interface OpenedCoachCard {
   card: UserCoachCard;
   is_new: boolean;
   duplicate_count: number;
+}
+
+export interface UserStadiumCard {
+  id: number;
+  serial_number: number;
+  stadium: EquippedStadium;
+  acquired_at: string;
 }
 
 export interface CollectionRewardGrant {
@@ -437,6 +455,7 @@ export interface Lineup {
   team_strength: number | null;
   max_diamond: number;
   coach: EquippedCoach | null;
+  stadium: EquippedStadium | null;
   slots: LineupSlot[];
 }
 
@@ -1354,6 +1373,7 @@ export interface ClubLineup {
   tactical_fit: number;
   tactical_fit_hint: string;
   coach: EquippedCoach | null;
+  stadium: EquippedStadium | null;
   slots: ClubLineupSlot[];
   training_uses_remaining: number;
   training_boost_active: boolean;
@@ -1500,6 +1520,7 @@ export interface PersonalSquad {
   playstyle: string;
   slots: PersonalSquadSlot[];
   coach: EquippedCoach | null;
+  stadium: EquippedStadium | null;
 }
 
 export type PlayerTournamentStatus = "not_queued" | "queued" | "active" | "completed";
@@ -1659,6 +1680,21 @@ export interface ClubCoachCard {
   id: number;
   serial_number: number;
   coach: EquippedCoach;
+  acquired_at: string;
+}
+
+export interface EquippedStadium {
+  id: number;
+  display_name: string;
+  rarity: Rarity;
+  image_path: string | null;
+  boost_pct: number;
+}
+
+export interface ClubStadiumCard {
+  id: number;
+  serial_number: number;
+  stadium: EquippedStadium;
   acquired_at: string;
 }
 
