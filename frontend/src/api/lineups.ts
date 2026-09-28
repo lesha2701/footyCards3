@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { Lineup, LineupTactic, UserCoachCard } from "@/types";
+import type { Lineup, LineupTactic, UserCoachCard, UserStadiumCard } from "@/types";
 
 export async function fetchActiveLineup(): Promise<Lineup> {
   const { data } = await api.get<Lineup>("/lineups/active");
@@ -26,6 +26,16 @@ export async function fetchUserCoachCards(): Promise<UserCoachCard[]> {
   return data;
 }
 
+export async function setLineupStadium(userStadiumCardId: number | null): Promise<Lineup> {
+  const { data } = await api.put<Lineup>("/lineups/stadium", { user_stadium_card_id: userStadiumCardId });
+  return data;
+}
+
+export async function fetchUserStadiumCards(): Promise<UserStadiumCard[]> {
+  const { data } = await api.get<UserStadiumCard[]>("/lineups/stadium-cards");
+  return data;
+}
+
 export async function fetchLineupTemplates(): Promise<Lineup[]> {
   const { data } = await api.get<Lineup[]>("/lineups/templates");
   return data;
@@ -45,6 +55,11 @@ export async function setLineupTemplateTactic(templateIndex: number, tactic: Lin
 
 export async function setLineupTemplateCoach(templateIndex: number, userCoachCardId: number | null): Promise<Lineup> {
   const { data } = await api.put<Lineup>(`/lineups/templates/${templateIndex}/coach`, { user_coach_card_id: userCoachCardId });
+  return data;
+}
+
+export async function setLineupTemplateStadium(templateIndex: number, userStadiumCardId: number | null): Promise<Lineup> {
+  const { data } = await api.put<Lineup>(`/lineups/templates/${templateIndex}/stadium`, { user_stadium_card_id: userStadiumCardId });
   return data;
 }
 

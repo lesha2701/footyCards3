@@ -214,7 +214,9 @@ function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; on
           </div>
         )}
 
-        {result.pack_result && (result.pack_result.cards.length > 0 || result.pack_result.coach_cards.length > 0) && (
+        {result.pack_result && (
+          result.pack_result.cards.length > 0 || result.pack_result.coach_cards.length > 0 || result.pack_result.stadium_cards.length > 0
+        ) && (
           <div className="mt-3 grid grid-cols-3 gap-2">
             {result.pack_result.cards.map((c) => (
               <PlayerCard key={c.card.id} player={c.card.player} size="sm" />
@@ -230,6 +232,19 @@ function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; on
                 </span>
                 <p className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{c.card.coach.display_name}</p>
                 <p className="text-[10px] text-ink-mist">Тренер · {RARITY_LABELS[c.card.coach.rarity]}</p>
+              </div>
+            ))}
+            {result.pack_result.stadium_cards.map((c) => (
+              <div key={`stadium-${c.card.id}`} className="flex flex-col items-center gap-1.5 overflow-hidden rounded-2xl bg-rarity-epic/10 p-2">
+                <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-black/20">
+                  <img
+                    src={staticUrl(c.card.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                    alt={c.card.stadium.display_name}
+                    className="h-full w-full object-cover"
+                  />
+                </span>
+                <p className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{c.card.stadium.display_name}</p>
+                <p className="text-[10px] text-ink-mist">Стадион · +{Math.round(c.card.stadium.boost_pct * 100)}%</p>
               </div>
             ))}
           </div>

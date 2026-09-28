@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { RevealStage, STAGES, STAGE_DURATION_MS } from "@/components/cards/CardRevealStage";
 import { CoachRevealStage, COACH_STAGES, COACH_STAGE_DURATION_MS } from "@/components/cards/CoachRevealStage";
+import { StadiumRevealStage, STADIUM_STAGES, STADIUM_STAGE_DURATION_MS } from "@/components/cards/StadiumRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { IconCoin } from "@/components/icons";
@@ -13,9 +14,9 @@ import { haptic, hapticNotify } from "@/lib/telegram";
 import type { ClubPackOpenResult, OpenedClubPackItem } from "@/types";
 
 function stagesFor(item: OpenedClubPackItem) {
-  return item.kind === "coach"
-    ? { stages: COACH_STAGES as readonly string[], duration: COACH_STAGE_DURATION_MS }
-    : { stages: STAGES as readonly string[], duration: STAGE_DURATION_MS };
+  if (item.kind === "coach") return { stages: COACH_STAGES as readonly string[], duration: COACH_STAGE_DURATION_MS };
+  if (item.kind === "stadium") return { stages: STADIUM_STAGES as readonly string[], duration: STADIUM_STAGE_DURATION_MS };
+  return { stages: STAGES as readonly string[], duration: STAGE_DURATION_MS };
 }
 
 export default function ClubPackOpenPage() {
@@ -139,6 +140,15 @@ export default function ClubPackOpenPage() {
               total={result.cards.length}
               onTap={advance}
             />
+          ) : currentItem.kind === "stadium" ? (
+            <StadiumRevealStage
+              key={`${cardIndex}-${stageIndex}`}
+              opened={{ card: { stadium: currentItem.stadium_card!.stadium }, is_new: currentItem.is_new }}
+              stage={STADIUM_STAGES[stageIndex] ?? STADIUM_STAGES[STADIUM_STAGES.length - 1]}
+              index={cardIndex}
+              total={result.cards.length}
+              onTap={advance}
+            />
           ) : (
             <RevealStage
               key={`${cardIndex}-${stageIndex}`}
@@ -179,6 +189,20 @@ export default function ClubPackOpenPage() {
                   />
                   <span className="truncate text-[10px] font-semibold text-ink-chalk">{item.coach_card!.coach.display_name}</span>
                   <span className="text-[9px] font-bold text-accent-cyan">Тренер</span>
+                  {item.is_new && <span className="text-[9px] font-bold text-accent-green">Новый!</span>}
+                </div>
+              ) : item.kind === "stadium" ? (
+                <div
+                  key={`stadium-${item.stadium_card!.id}`}
+                  className={`flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2 ${result.cards.length === 1 ? "w-2/5" : ""}`}
+                >
+                  <img
+                    src={staticUrl(item.stadium_card!.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                    alt={item.stadium_card!.stadium.display_name}
+                    className="aspect-square w-full rounded-lg object-cover"
+                  />
+                  <span className="truncate text-[10px] font-semibold text-ink-chalk">{item.stadium_card!.stadium.display_name}</span>
+                  <span className="text-[9px] font-bold text-accent-cyan">Стадион · +{Math.round(item.stadium_card!.stadium.boost_pct * 100)}%</span>
                   {item.is_new && <span className="text-[9px] font-bold text-accent-green">Новый!</span>}
                 </div>
               ) : (

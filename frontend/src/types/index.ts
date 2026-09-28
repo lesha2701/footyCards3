@@ -232,6 +232,12 @@ export interface UserStadiumCard {
   acquired_at: string;
 }
 
+export interface OpenedStadiumCard {
+  card: UserStadiumCard;
+  is_new: boolean;
+  duplicate_count: number;
+}
+
 export interface CollectionRewardGrant {
   collection_id: number;
   collection_name: string;
@@ -244,6 +250,7 @@ export interface PackOpenResult {
   pack: Pack;
   cards: OpenedCard[];
   coach_cards: OpenedCoachCard[];
+  stadium_cards: OpenedStadiumCard[];
   new_balance: number;
   referral_bonus_coins: number | null;
   collection_rewards: CollectionRewardGrant[];
@@ -255,6 +262,7 @@ export interface PackBulkOpenResult {
   opening_ids: number[];
   cards: OpenedCard[];
   coach_cards: OpenedCoachCard[];
+  stadium_cards: OpenedStadiumCard[];
   new_balance: number;
   total_price_paid: number;
   referral_bonus_coins: number | null;
@@ -1405,9 +1413,10 @@ export interface ClubPack {
 }
 
 export interface OpenedClubPackItem {
-  kind: "player" | "coach";
+  kind: "player" | "coach" | "stadium";
   card: ClubCard | null;
   coach_card: ClubCoachCard | null;
+  stadium_card: ClubStadiumCard | null;
   is_new: boolean;
 }
 

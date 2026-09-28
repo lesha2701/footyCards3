@@ -9,6 +9,7 @@ import type {
   PlayerTournamentRankingResult,
   PlayerTournamentStats,
   UserCoachCard,
+  UserStadiumCard,
 } from "@/types";
 
 export async function fetchPersonalSquads(): Promise<PersonalSquad[]> {
@@ -18,6 +19,11 @@ export async function fetchPersonalSquads(): Promise<PersonalSquad[]> {
 
 export async function fetchPersonalSquadCoachCards(): Promise<UserCoachCard[]> {
   const { data } = await api.get<UserCoachCard[]>("/player-tournaments/squads/coach-cards");
+  return data;
+}
+
+export async function fetchPersonalSquadStadiumCards(): Promise<UserStadiumCard[]> {
+  const { data } = await api.get<UserStadiumCard[]>("/player-tournaments/squads/stadium-cards");
   return data;
 }
 
@@ -38,6 +44,13 @@ export async function setPersonalSquadTactics(
 export async function setPersonalSquadCoach(templateIndex: number, userCoachCardId: number | null): Promise<PersonalSquad> {
   const { data } = await api.put<PersonalSquad>(
     `/player-tournaments/squads/${templateIndex}/coach`, { user_coach_card_id: userCoachCardId },
+  );
+  return data;
+}
+
+export async function setPersonalSquadStadium(templateIndex: number, userStadiumCardId: number | null): Promise<PersonalSquad> {
+  const { data } = await api.put<PersonalSquad>(
+    `/player-tournaments/squads/${templateIndex}/stadium`, { user_stadium_card_id: userStadiumCardId },
   );
   return data;
 }

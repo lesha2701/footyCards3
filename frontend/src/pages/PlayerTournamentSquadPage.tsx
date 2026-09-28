@@ -4,12 +4,13 @@ import { useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
+import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPickerModal";
 import { IconCheck, IconChevronLeft, IconPlus } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
 import {
-  activatePersonalSquad, fetchPersonalSquadCoachCards, fetchPersonalSquads,
-  renamePersonalSquad, setPersonalSquadCards, setPersonalSquadCoach, setPersonalSquadTactics,
+  activatePersonalSquad, fetchPersonalSquadCoachCards, fetchPersonalSquads, fetchPersonalSquadStadiumCards,
+  renamePersonalSquad, setPersonalSquadCards, setPersonalSquadCoach, setPersonalSquadStadium, setPersonalSquadTactics,
 } from "@/api/personalTournament";
 import { staticUrl } from "@/lib/api";
 import { BOOST_TYPE_LABELS } from "@/lib/coaches";
@@ -33,9 +34,11 @@ export default function PlayerTournamentSquadPage() {
     queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc", search: pickerSearch || undefined }),
   });
   const { data: coachCards } = useQuery({ queryKey: ["player-tournament", "coach-cards"], queryFn: fetchPersonalSquadCoachCards });
+  const { data: stadiumCards } = useQuery({ queryKey: ["player-tournament", "stadium-cards"], queryFn: fetchPersonalSquadStadiumCards });
 
   const [pickerSlot, setPickerSlot] = useState<PersonalSquadSlot | null>(null);
   const [coachPickerOpen, setCoachPickerOpen] = useState(false);
+  const [stadiumPickerOpen, setStadiumPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const setCardsMutation = useMutation({
@@ -54,6 +57,12 @@ export default function PlayerTournamentSquadPage() {
     mutationFn: (userCoachCardId: number | null) => setPersonalSquadCoach(viewedIndex, userCoachCardId),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] }); setCoachPickerOpen(false); },
     onError: (err) => setError(formatGameError(err, "Не удалось назначить тренера")),
+  });
+
+  const setStadiumMutation = useMutation({
+    mutationFn: (userStadiumCardId: number | null) => setPersonalSquadStadium(viewedIndex, userStadiumCardId),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] }); setStadiumPickerOpen(false); },
+    onError: (err) => setError(formatGameError(err, "Не удалось назначить стадион")),
   });
 
   const activateMutation = useMutation({
@@ -232,6 +241,34 @@ export default function PlayerTournamentSquadPage() {
                   )}
                 </button>
               )}
+              {category === "GK" && (
+                <button
+                  onClick={() => setStadiumPickerOpen(true)}
+                  disabled={setStadiumMutation.isPending}
+                  className={`absolute right-0 top-0 flex min-w-0 max-w-[72px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 ${
+                    setStadiumMutation.isPending ? "opacity-60" : ""
+                  }`}
+                >
+                  {squad?.stadium ? (
+                    <>
+                      <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
+                        <img
+                          src={staticUrl(squad.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                          alt="" className="h-full w-full object-cover" loading="lazy"
+                        />
+                      </div>
+                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">
+                        +{Math.round(squad.stadium.boost_pct * 100)}%
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <IconPlus size={16} className="text-ink-mist-dim" />
+                      <span className="text-[8px] text-ink-mist-dim">Стадион</span>
+                    </>
+                  )}
+                </button>
+              )}
               {squad?.slots
                 .filter((slot) => slot.category === category)
                 .map((slot) => (
@@ -274,6 +311,12 @@ export default function PlayerTournamentSquadPage() {
             </p>
           </div>
         )}
+        {squad?.stadium && (
+          <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
+            <p className="text-xs font-semibold text-ink-chalk">{squad.stadium.display_name}</p>
+            <p className="mt-0.5 text-[11px] text-ink-mist">+{Math.round(squad.stadium.boost_pct * 100)}% к силе</p>
+          </div>
+        )}
       </section>
 
       {pickerSlot && (
@@ -294,6 +337,13 @@ export default function PlayerTournamentSquadPage() {
         cards={coachCards ?? []}
         onSelect={(card) => setCoachMutation.mutate(card ? card.id : null)}
         onClose={() => setCoachPickerOpen(false)}
+      />
+
+      <UserStadiumCardPickerModal
+        open={stadiumPickerOpen}
+        cards={stadiumCards ?? []}
+        onSelect={(card) => setStadiumMutation.mutate(card ? card.id : null)}
+        onClose={() => setStadiumPickerOpen(false)}
       />
     </div>
   );

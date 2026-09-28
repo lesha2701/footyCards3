@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { ClubCard, ClubCoachCard, ClubLineup } from "@/types";
+import type { ClubCard, ClubCoachCard, ClubLineup, ClubStadiumCard } from "@/types";
 
 export async function fetchClubLineup(): Promise<ClubLineup> {
   const { data } = await api.get<ClubLineup>("/clubs/me/lineup");
@@ -31,6 +31,16 @@ export async function setClubCoach(clubCoachCardId: number | null): Promise<Club
   return data;
 }
 
+export async function fetchClubStadiumCards(): Promise<ClubStadiumCard[]> {
+  const { data } = await api.get<ClubStadiumCard[]>("/clubs/me/stadium-cards");
+  return data;
+}
+
+export async function setClubStadium(clubStadiumCardId: number | null): Promise<ClubLineup> {
+  const { data } = await api.put<ClubLineup>("/clubs/me/stadium", { club_stadium_card_id: clubStadiumCardId });
+  return data;
+}
+
 export async function activateClubTraining(): Promise<ClubLineup> {
   const { data } = await api.post<ClubLineup>("/clubs/me/training");
   return data;
@@ -57,6 +67,11 @@ export async function setClubTacticsTemplate(
 
 export async function setClubCoachTemplate(templateIndex: number, clubCoachCardId: number | null): Promise<ClubLineup> {
   const { data } = await api.put<ClubLineup>(`/clubs/me/coach/templates/${templateIndex}`, { club_coach_card_id: clubCoachCardId });
+  return data;
+}
+
+export async function setClubStadiumTemplate(templateIndex: number, clubStadiumCardId: number | null): Promise<ClubLineup> {
+  const { data } = await api.put<ClubLineup>(`/clubs/me/stadium/templates/${templateIndex}`, { club_stadium_card_id: clubStadiumCardId });
   return data;
 }
 

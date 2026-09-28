@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { RevealStage, STAGES, STAGE_DURATION_MS } from "@/components/cards/CardRevealStage";
 import { CoachRevealStage, COACH_STAGES, COACH_STAGE_DURATION_MS } from "@/components/cards/CoachRevealStage";
+import { StadiumRevealStage, STADIUM_STAGES, STADIUM_STAGE_DURATION_MS } from "@/components/cards/StadiumRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { UserBadge } from "@/components/common/UserBadge";
@@ -14,18 +15,22 @@ import { ApiRequestError, staticUrl } from "@/lib/api";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { OpenedCard, OpenedCoachCard, PackBulkOpenResult, PackOpenResult } from "@/types";
+import type { OpenedCard, OpenedCoachCard, OpenedStadiumCard, PackBulkOpenResult, PackOpenResult } from "@/types";
 
-// Bulk reveal walks player cards and coach cards as one combined sequence
-// (backend keeps them as two separate arrays, same shape as a single pack's
-// result) — players first, then coaches, matching the order they already
-// appear in in BulkSummary's grid below.
-type BulkRevealItem = { kind: "player"; item: OpenedCard } | { kind: "coach"; item: OpenedCoachCard };
+// Bulk reveal walks player cards, coach cards and stadium cards as one
+// combined sequence (backend keeps them as three separate arrays, same
+// shape as a single pack's result) — players first, then coaches, then
+// stadiums, matching the order they already appear in in BulkSummary's grid
+// below.
+type BulkRevealItem =
+  | { kind: "player"; item: OpenedCard }
+  | { kind: "coach"; item: OpenedCoachCard }
+  | { kind: "stadium"; item: OpenedStadiumCard };
 
 function bulkStagesFor(entry: BulkRevealItem) {
-  return entry.kind === "coach"
-    ? { stages: COACH_STAGES as readonly string[], duration: COACH_STAGE_DURATION_MS }
-    : { stages: STAGES as readonly string[], duration: STAGE_DURATION_MS };
+  if (entry.kind === "coach") return { stages: COACH_STAGES as readonly string[], duration: COACH_STAGE_DURATION_MS };
+  if (entry.kind === "stadium") return { stages: STADIUM_STAGES as readonly string[], duration: STADIUM_STAGE_DURATION_MS };
+  return { stages: STAGES as readonly string[], duration: STAGE_DURATION_MS };
 }
 
 export default function PackOpenPage() {
@@ -135,6 +140,7 @@ function SinglePackOpenView() {
     if (
       result.cards.length === 1 &&
       result.coach_cards.length === 0 &&
+      result.stadium_cards.length === 0 &&
       !result.referral_bonus_coins &&
       result.collection_rewards.length === 0 &&
       !result.pack.bonus_coins &&
@@ -361,6 +367,7 @@ function BulkPackOpenView({ quantity }: { quantity: number }) {
     ? [
         ...result.cards.map((item): BulkRevealItem => ({ kind: "player", item })),
         ...result.coach_cards.map((item): BulkRevealItem => ({ kind: "coach", item })),
+        ...result.stadium_cards.map((item): BulkRevealItem => ({ kind: "stadium", item })),
       ]
     : [];
   const currentItem = revealItems[cardIndex] ?? null;
@@ -481,6 +488,15 @@ function BulkPackOpenView({ quantity }: { quantity: number }) {
             total={revealItems.length}
             onTap={advanceOnTap}
           />
+        ) : currentItem.kind === "stadium" ? (
+          <StadiumRevealStage
+            key={`${cardIndex}-${stageIndex}`}
+            opened={{ card: { stadium: currentItem.item.card.stadium }, is_new: currentItem.item.is_new }}
+            stage={(STADIUM_STAGES[stageIndex] ?? STADIUM_STAGES[STADIUM_STAGES.length - 1])}
+            index={cardIndex}
+            total={revealItems.length}
+            onTap={advanceOnTap}
+          />
         ) : (
           <RevealStage
             key={`${cardIndex}-${stageIndex}`}
@@ -516,7 +532,7 @@ function BulkSummary({
   onOpenAnother: () => void;
   canOpenAnother: boolean;
 }) {
-  const totalOpened = result.cards.length + result.coach_cards.length;
+  const totalOpened = result.cards.length + result.coach_cards.length + result.stadium_cards.length;
   return (
     <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
       <h2 className="text-center font-display text-2xl font-bold text-ink-chalk">
@@ -586,6 +602,32 @@ function BulkSummary({
               <div className="p-1.5 text-center">
                 <p className="truncate text-[11px] font-bold text-ink-chalk">{opened.card.coach.display_name}</p>
                 <p className="text-[9px] text-ink-mist">Тренер · {RARITY_LABELS[opened.card.coach.rarity]}</p>
+              </div>
+            </div>
+            {opened.is_new && (
+              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
+            )}
+            {opened.duplicate_count > 1 && (
+              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
+                ×{opened.duplicate_count}
+              </span>
+            )}
+          </div>
+        ))}
+        {result.stadium_cards.map((opened) => (
+          <div
+            key={`stadium-${opened.card.id}`}
+            className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.stadium.rarity]} p-[2px] ${RARITY_GLOW[opened.card.stadium.rarity]}`}
+          >
+            <div className="flex flex-col rounded-[14px] bg-bg-surface">
+              <img
+                src={staticUrl(opened.card.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                alt={opened.card.stadium.display_name}
+                className="aspect-square w-full object-cover"
+              />
+              <div className="p-1.5 text-center">
+                <p className="truncate text-[11px] font-bold text-ink-chalk">{opened.card.stadium.display_name}</p>
+                <p className="text-[9px] text-ink-mist">Стадион · +{Math.round(opened.card.stadium.boost_pct * 100)}%</p>
               </div>
             </div>
             {opened.is_new && (
@@ -679,11 +721,11 @@ function Summary({
   // go through that staged reveal (they only ever appear in this grid), so
   // any coach card always earns the recap — otherwise an all-coach pack
   // (result.cards.length === 0) would never show its coach card anywhere.
-  const showRecap = result.coach_cards.length > 0 || result.cards.length > 1;
+  const showRecap = result.coach_cards.length > 0 || result.stadium_cards.length > 0 || result.cards.length > 1;
   // grid-cols-2 leaves a lone card pinned to the left column instead of
   // centered — only matters when the recap shows exactly one card (e.g. a
   // pack that granted a single coach card and nothing else).
-  const totalOpened = result.cards.length + result.coach_cards.length;
+  const totalOpened = result.cards.length + result.coach_cards.length + result.stadium_cards.length;
   const singleCardWidthClass = totalOpened === 1 ? "w-2/5" : "";
   return (
     <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
@@ -771,6 +813,32 @@ function Summary({
                 <div className="p-2 text-center">
                   <p className="truncate text-xs font-bold text-ink-chalk">{opened.card.coach.display_name}</p>
                   <p className="text-[10px] text-ink-mist">Тренер · {RARITY_LABELS[opened.card.coach.rarity]}</p>
+                </div>
+              </div>
+              {opened.is_new && (
+                <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
+              )}
+              {opened.duplicate_count > 1 && (
+                <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
+                  ×{opened.duplicate_count}
+                </span>
+              )}
+            </div>
+          ))}
+          {result.stadium_cards.map((opened) => (
+            <div
+              key={`stadium-${opened.card.id}`}
+              className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.stadium.rarity]} p-[2px] ${RARITY_GLOW[opened.card.stadium.rarity]} ${singleCardWidthClass}`}
+            >
+              <div className="flex flex-col rounded-[14px] bg-bg-surface">
+                <img
+                  src={staticUrl(opened.card.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                  alt={opened.card.stadium.display_name}
+                  className="aspect-square w-full object-cover"
+                />
+                <div className="p-2 text-center">
+                  <p className="truncate text-xs font-bold text-ink-chalk">{opened.card.stadium.display_name}</p>
+                  <p className="text-[10px] text-ink-mist">Стадион · +{Math.round(opened.card.stadium.boost_pct * 100)}%</p>
                 </div>
               </div>
               {opened.is_new && (
