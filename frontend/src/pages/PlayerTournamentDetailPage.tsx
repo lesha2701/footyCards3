@@ -117,7 +117,7 @@ export default function PlayerTournamentDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((s) => (
+              {rows.map((s, index) => (
                 <tr
                   key={s.user_id}
                   onClick={() => navigate(`/users/${s.user_id}`)}
@@ -125,7 +125,7 @@ export default function PlayerTournamentDetailPage() {
                     s.user_id === myUserId ? "bg-accent-lime/10" : ""
                   }`}
                 >
-                  <td className="px-2 py-2 font-mono font-bold text-ink-mist-dim">{s.final_rank ?? "—"}</td>
+                  <td className="px-2 py-2 font-mono font-bold text-ink-mist-dim">{s.final_rank ?? index + 1}</td>
                   <td className={`px-2 py-2 font-semibold ${s.user_id === myUserId ? "text-accent-lime" : "text-ink-chalk"}`}>
                     {s.display_name}
                   </td>

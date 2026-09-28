@@ -40,13 +40,13 @@ export default function PlayerTournamentSquadPage() {
 
   const setCardsMutation = useMutation({
     mutationFn: (slots: { slot_code: string; user_card_id: number }[]) => setPersonalSquadCards(viewedIndex, slots),
-    onSuccess: () => { setError(null); queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] }); },
+    onSuccess: () => { setError(null); queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] }); queryClient.invalidateQueries({ queryKey: ["player-tournament", "current"] }); },
     onError: (err) => setError(formatGameError(err, "Не удалось обновить состав")),
   });
 
   const setTacticsMutation = useMutation({
     mutationFn: (payload: { formation: string; mentality: string; playstyle: string }) => setPersonalSquadTactics(viewedIndex, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] }); queryClient.invalidateQueries({ queryKey: ["player-tournament", "current"] }); },
     onError: (err) => setError(formatGameError(err, "Не удалось обновить тактику")),
   });
 
@@ -58,7 +58,7 @@ export default function PlayerTournamentSquadPage() {
 
   const activateMutation = useMutation({
     mutationFn: () => activatePersonalSquad(viewedIndex),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] }); queryClient.invalidateQueries({ queryKey: ["player-tournament", "current"] }); },
     onError: (err) => setError(formatGameError(err, "Не удалось переключить шаблон")),
   });
 

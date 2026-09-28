@@ -35,7 +35,7 @@ export default function PlayerTournamentRatingPage() {
           <div
             key={entry.user_id}
             className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-sm ${
-              entry.user_id === myUserId ? "bg-accent-lime/12" : "bg-bg-surface"
+              entry.user_id === myUserId ? "bg-accent-lime/10" : "bg-bg-surface"
             }`}
           >
             <div className="flex items-center gap-2">
