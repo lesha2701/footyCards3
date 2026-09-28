@@ -244,6 +244,6 @@ class GameConfig(TimestampMixin, Base):
     ptour_place_rewards: Mapped[list] = mapped_column(
         JSON, default=lambda: [3000, 2000, 1500, 1000, 750, 500, 400, 300, 250, 200, 150, 100, 75, 50, 25, 0], nullable=False,
     )
-    ptour_rating_by_place: Mapped[list] = mapped_column(
+    ptour_stars_by_place: Mapped[list] = mapped_column(
         JSON, default=lambda: [5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, -1, -2, -3, -4, -5], nullable=False,
     )

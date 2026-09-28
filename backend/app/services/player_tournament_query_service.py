@@ -13,7 +13,7 @@ from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLo
 from app.models.user import User
 from app.schemas.player_tournament import (
     PlayerTournamentDetailOut, PlayerTournamentMatchDetailOut, PlayerTournamentMatchSummaryOut,
-    PlayerTournamentStandingOut, TournamentRatingRowOut,
+    PlayerTournamentStandingOut,
 )
 from app.services.player_tournament_fixture_service import SIMULATION_SLOTS, TOTAL_ROUNDS
 from app.services.player_tournament_simulation_service import SLOT_KIND
@@ -83,7 +83,8 @@ async def get_tournament_detail(db: AsyncSession, tournament_id: int) -> PlayerT
             points=s.points, goals_for=s.goals_for, goals_against=s.goals_against,
             final_rank=result.final_rank if result else None,
             coins_awarded=result.coins_awarded if result else None,
-            rating_delta=result.rating_delta if result else None,
+            stars_delta=result.stars_delta if result else None,
+            cup_awarded=result.cup_awarded if result else None,
         ))
     return PlayerTournamentDetailOut(
         id=tournament.id, status=tournament.status.value, rounds_simulated=tournament.rounds_simulated,
@@ -107,18 +108,3 @@ async def get_match_detail(db: AsyncSession, match_id: int) -> PlayerTournamentM
         user_a_name=a.full_display_name(), user_b_name=b.full_display_name(),
         score_a=match.score_a, score_b=match.score_b, event_log=match.event_log,
     )
-
-
-async def get_rating_leaderboard(db: AsyncSession, limit: int = 50) -> list[TournamentRatingRowOut]:
-    users = (
-        await db.execute(
-            select(User).where(
-                User.tournament_rating != 0, User.is_banned.is_(False), User.is_admin.is_(False)
-            )
-            .order_by(User.tournament_rating.desc(), User.id).limit(limit)
-        )
-    ).scalars().all()
-    return [
-        TournamentRatingRowOut(user_id=u.id, display_name=u.full_display_name(), tournament_rating=u.tournament_rating)
-        for u in users
-    ]

@@ -16,13 +16,13 @@ async def test_config_defaults(db_session):
     config = await get_config(db_session)
     assert (config.ptour_match_reward_win, config.ptour_match_reward_draw, config.ptour_match_reward_loss) == (100, 40, 15)
     assert len(config.ptour_place_rewards) == 16
-    assert config.ptour_rating_by_place == [5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, -1, -2, -3, -4, -5]
-    assert sum(config.ptour_rating_by_place) == 0
+    assert config.ptour_stars_by_place == [5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, -1, -2, -3, -4, -5]
+    assert sum(config.ptour_stars_by_place) == 0
 
 
 async def test_user_rating_defaults_to_zero(client, db_session, bot_token):
     user = await make_user(client, db_session, bot_token, 840001)
-    assert user.tournament_rating == 0
+    assert user.tournament_stars_count == 0
 
 
 async def test_participant_unique_per_tournament(client, db_session, bot_token):

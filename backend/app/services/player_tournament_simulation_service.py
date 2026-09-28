@@ -242,19 +242,22 @@ async def conclude_tournament(
     for index, standing in enumerate(ranked):
         rank = index + 1
         coins = _at(config.ptour_place_rewards, index)
-        rating_delta = _at(config.ptour_rating_by_place, index)
+        stars_delta = _at(config.ptour_stars_by_place, index)
+        cup_awarded = rank == 1
 
         await _credit(
             db, standing.user_id, coins, TransactionType.player_tournament_place_reward,
             f"Награда за {rank}-е место в турнире #{tournament.id}", tournament.id,
         )
         user = await wallet_service.lock_user_for_update(db, standing.user_id)
-        user.tournament_rating += rating_delta
+        user.tournament_stars_count += stars_delta
+        if cup_awarded:
+            user.tournament_cups_count += 1
         db.add(user)
 
         result = PlayerTournamentResult(
             tournament_id=tournament.id, user_id=standing.user_id, final_rank=rank,
-            coins_awarded=coins, rating_delta=rating_delta,
+            coins_awarded=coins, stars_delta=stars_delta, cup_awarded=cup_awarded,
         )
         db.add(result)
         results.append(result)

@@ -16,6 +16,9 @@ class PlayerTournamentCurrentOut(BaseModel):
     queue_size: int = 16
     tournament_id: Optional[int] = None
     can_apply: bool = False
+    tournaments_played: int = 0
+    stars_count: int = 0
+    cups_count: int = 0
 
 
 class PlayerTournamentReminderResult(BaseModel):
@@ -30,7 +33,8 @@ class PlayerTournamentStandingOut(BaseModel):
     goals_against: int
     final_rank: Optional[int] = None
     coins_awarded: Optional[int] = None
-    rating_delta: Optional[int] = None
+    stars_delta: Optional[int] = None
+    cup_awarded: Optional[bool] = None
 
 
 class PlayerTournamentMatchSummaryOut(BaseModel):
@@ -61,9 +65,3 @@ class PlayerTournamentMatchDetailOut(BaseModel):
     score_a: int
     score_b: int
     event_log: list[dict]
-
-
-class TournamentRatingRowOut(BaseModel):
-    user_id: int
-    display_name: str
-    tournament_rating: int

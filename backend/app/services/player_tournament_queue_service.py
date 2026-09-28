@@ -1,11 +1,11 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError
 from app.models.enums import NotificationType, TournamentQueueStatus, TournamentStatus
 from app.models.player_tournament import (
     PlayerTournament, PlayerTournamentParticipant, PlayerTournamentQueue, PlayerTournamentQueueEntry,
-    PlayerTournamentQueueState, PlayerTournamentStanding,
+    PlayerTournamentQueueState, PlayerTournamentResult, PlayerTournamentStanding,
 )
 from app.models.user import User
 from app.schemas.player_tournament import PlayerTournamentApplyResult, PlayerTournamentCurrentOut
@@ -113,15 +113,25 @@ async def apply_to_tournament(db: AsyncSession, user: User) -> PlayerTournamentA
 
 
 async def get_current(db: AsyncSession, user: User) -> PlayerTournamentCurrentOut:
+    tournaments_played = (
+        await db.execute(
+            select(func.count(PlayerTournamentResult.id)).where(PlayerTournamentResult.user_id == user.id)
+        )
+    ).scalar_one()
+    summary = dict(
+        tournaments_played=tournaments_played, stars_count=user.tournament_stars_count,
+        cups_count=user.tournament_cups_count,
+    )
+
     active_id = await _active_tournament_id(db, user.id)
     if active_id is not None:
-        return PlayerTournamentCurrentOut(status="active", tournament_id=active_id, queue_size=TOURNAMENT_SIZE)
+        return PlayerTournamentCurrentOut(status="active", tournament_id=active_id, queue_size=TOURNAMENT_SIZE, **summary)
 
     # Plain read (no lock): the singleton is only lazily created by apply_to_tournament.
     state = await db.get(PlayerTournamentQueueState, 1)
     position = await _queue_position(db, user.id, state.current_queue_id) if state is not None else None
     if position is not None:
-        return PlayerTournamentCurrentOut(status="queued", queue_position=position, queue_size=TOURNAMENT_SIZE)
+        return PlayerTournamentCurrentOut(status="queued", queue_position=position, queue_size=TOURNAMENT_SIZE, **summary)
 
     last_completed = (
         await db.execute(
@@ -134,5 +144,5 @@ async def get_current(db: AsyncSession, user: User) -> PlayerTournamentCurrentOu
     can_apply = await personal_squad_service.is_squad_complete(db, user.id)
     return PlayerTournamentCurrentOut(
         status="completed" if last_completed is not None else "not_queued",
-        tournament_id=last_completed, queue_size=TOURNAMENT_SIZE, can_apply=can_apply,
+        tournament_id=last_completed, queue_size=TOURNAMENT_SIZE, can_apply=can_apply, **summary,
     )

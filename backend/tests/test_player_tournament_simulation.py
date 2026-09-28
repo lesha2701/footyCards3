@@ -64,12 +64,15 @@ async def test_full_season_concludes_with_places_rewards_and_rating(client, db_s
     )).scalars().all()
     assert [r.final_rank for r in results] == list(range(1, 17))
     for r in results:
-        assert r.rating_delta == config.ptour_rating_by_place[r.final_rank - 1]
+        assert r.stars_delta == config.ptour_stars_by_place[r.final_rank - 1]
         assert r.coins_awarded == config.ptour_place_rewards[r.final_rank - 1]
+        assert r.cup_awarded == (r.final_rank == 1)
         user = await db_session.get(User, r.user_id)
         await db_session.refresh(user)
-        assert user.tournament_rating == r.rating_delta
-    assert sum(r.rating_delta for r in results) == 0
+        assert user.tournament_stars_count == r.stars_delta
+        assert user.tournament_cups_count == (1 if r.final_rank == 1 else 0)
+    assert sum(r.stars_delta for r in results) == 0
+    assert sum(1 for r in results if r.cup_awarded) == 1
 
     place_txs = (await db_session.execute(
         select(CoinTransaction).where(CoinTransaction.type == TransactionType.player_tournament_place_reward)

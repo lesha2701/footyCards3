@@ -92,7 +92,8 @@ class User(TimestampMixin, Base):
     hangman_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     hangman_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     hangman_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    tournament_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    tournament_stars_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    tournament_cups_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     hangman_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Найди пару (card pairs memory match)

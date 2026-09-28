@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, Enum, ForeignKey, Integer, UniqueConstraint
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -73,7 +73,8 @@ class PlayerTournamentResult(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     final_rank: Mapped[int] = mapped_column(Integer, nullable=False)
     coins_awarded: Mapped[int] = mapped_column(Integer, nullable=False)
-    rating_delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    stars_delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    cup_awarded: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     __table_args__ = (UniqueConstraint("tournament_id", "user_id", name="uq_player_tournament_result_once"),)
 

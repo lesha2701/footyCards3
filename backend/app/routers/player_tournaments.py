@@ -11,7 +11,7 @@ from app.schemas.personal_squad import (
 )
 from app.schemas.player_tournament import (
     PlayerTournamentApplyResult, PlayerTournamentCurrentOut, PlayerTournamentDetailOut,
-    PlayerTournamentMatchDetailOut, TournamentRatingRowOut,
+    PlayerTournamentMatchDetailOut,
 )
 from app.services import (
     personal_squad_service, player_tournament_query_service, player_tournament_queue_service,
@@ -78,11 +78,6 @@ async def apply(db: AsyncSession = Depends(get_db), user: User = Depends(get_cur
 @router.get("/current", response_model=PlayerTournamentCurrentOut)
 async def current(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await player_tournament_queue_service.get_current(db, user)
-
-
-@router.get("/rating", response_model=list[TournamentRatingRowOut])
-async def rating(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
-    return await player_tournament_query_service.get_rating_leaderboard(db)
 
 
 @router.get("/matches/{match_id}", response_model=PlayerTournamentMatchDetailOut)
