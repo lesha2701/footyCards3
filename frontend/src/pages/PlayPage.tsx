@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { fetchGameLimits, fetchPenaltyStats } from "@/api/games";
 import { fetchArenaStats } from "@/api/matches";
+import { fetchPlayerTournamentCurrent } from "@/api/personalTournament";
 import { fetchTacticoStats } from "@/api/tactico";
 import {
   IconBall,
@@ -19,6 +20,19 @@ import {
 } from "@/components/icons";
 import { useAuthStore } from "@/store/authStore";
 
+function playerTournamentStatusLabel(status?: string, queuePosition?: number | null): string {
+  switch (status) {
+    case "queued":
+      return `В очереди — место ${queuePosition ?? "?"}`;
+    case "active":
+      return "Турнир идёт";
+    case "completed":
+      return "Турнир завершён";
+    default:
+      return "Собери состав и подай заявку";
+  }
+}
+
 export default function PlayPage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
@@ -26,6 +40,10 @@ export default function PlayPage() {
   const { data: tacticoStats } = useQuery({ queryKey: ["tactico-stats"], queryFn: fetchTacticoStats });
   const { data: penaltyStats } = useQuery({ queryKey: ["penalty-stats"], queryFn: fetchPenaltyStats });
   const { data: limits } = useQuery({ queryKey: ["game-limits"], queryFn: fetchGameLimits });
+  const { data: playerTournamentCurrent } = useQuery({
+    queryKey: ["player-tournament", "current"],
+    queryFn: fetchPlayerTournamentCurrent,
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -61,6 +79,16 @@ export default function PlayPage() {
           stat={`Рейтинг: ${tacticoStats?.tactics_rating ?? user?.tactics_rating ?? 0}`}
           remaining={limits?.tactico}
           limit={limits?.hourly_limit}
+        />
+
+        <GameCard
+          onClick={() => navigate("/player-tournament")}
+          Icon={IconFlagCheckered}
+          badgeClass="bg-accent-lime"
+          title="Личный турнир"
+          description="16 игроков, 30 туров — свой состав и тактика"
+          stat={playerTournamentStatusLabel(playerTournamentCurrent?.status, playerTournamentCurrent?.queue_position)}
+          rightLabel="16 игроков"
         />
 
         <GameCard
@@ -148,6 +176,7 @@ function GameCard({
   remaining,
   limit,
   noLimit,
+  rightLabel,
 }: {
   onClick: () => void;
   Icon: (props: IconProps) => JSX.Element;
@@ -158,6 +187,7 @@ function GameCard({
   remaining?: number;
   limit?: number;
   noLimit?: boolean;
+  rightLabel?: string;
 }) {
   return (
     <button onClick={onClick} className="flex items-center gap-3 rounded-2xl bg-bg-surface p-4 text-left active:scale-[0.98]">
@@ -170,7 +200,9 @@ function GameCard({
         {stat && <p className="mt-1 font-mono text-[10px] text-ink-mist">{stat}</p>}
       </div>
       <div className="shrink-0 text-right">
-        {remaining !== undefined && limit !== undefined ? (
+        {rightLabel !== undefined ? (
+          <p className="text-[10px] text-ink-mist-dim">{rightLabel}</p>
+        ) : remaining !== undefined && limit !== undefined ? (
           <>
             <p className={`font-mono text-sm font-bold ${remaining > 0 ? "text-ink-chalk" : "text-red-400"}`}>
               {remaining}/{limit}
