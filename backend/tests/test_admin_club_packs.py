@@ -76,6 +76,31 @@ async def test_create_and_update_club_pack(client, db_session, bot_token):
     assert delete_resp.status_code == 204
 
 
+async def test_club_pack_stadium_drop_chance_round_trips_through_create_and_update(client, db_session, bot_token):
+    # Regression: stadium_drop_chance existed on the DB column and the pack-
+    # opening coin flip already read it, but the admin schemas never exposed
+    # it, so Pydantic silently dropped it from every create/update payload
+    # and it could never be set above the migration default of 0.
+    auth = await _admin_auth(client, bot_token)
+    create_resp = await client.post(
+        "/api/v1/admin/club-packs", headers=auth,
+        json={
+            "slug": "club-stadium-drop", "name": "Клубный со стадионом", "price": 500, "card_count": 3,
+            "rarity_probabilities": [{"rarity": "common", "probability": 1.0}],
+            "stadium_drop_chance": 0.3,
+        },
+    )
+    assert create_resp.status_code == 200, create_resp.text
+    assert create_resp.json()["stadium_drop_chance"] == 0.3
+    pack_id = create_resp.json()["id"]
+
+    update_resp = await client.put(
+        f"/api/v1/admin/club-packs/{pack_id}", headers=auth, json={"stadium_drop_chance": 0.5},
+    )
+    assert update_resp.status_code == 200, update_resp.text
+    assert update_resp.json()["stadium_drop_chance"] == 0.5
+
+
 async def test_delete_club_pack_with_prior_opening_cascades():
     """Regression test for finding 5: club_pack_openings.club_pack_id previously had no
     ondelete on its FK, so deleting a club pack that had ever been opened raised an unhandled

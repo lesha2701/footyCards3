@@ -38,6 +38,7 @@ class PackOut(BaseModel):
     available_until: Optional[datetime]
     rarity_probabilities: list[PackRarityProbabilityOut]
     coach_drop_chance: float
+    stadium_drop_chance: float
     user_purchase_count: int = 0
     is_available_now: bool = True
 
@@ -64,6 +65,7 @@ class PackCreate(BaseModel):
     available_until: Optional[datetime] = None
     rarity_probabilities: list[PackRarityProbabilityIn]
     coach_drop_chance: float = Field(default=0.0, ge=0, le=1)
+    stadium_drop_chance: float = Field(default=0.0, ge=0, le=1)
 
 
 class PackUpdate(BaseModel):
@@ -82,6 +84,7 @@ class PackUpdate(BaseModel):
     available_until: Optional[datetime] = None
     rarity_probabilities: Optional[list[PackRarityProbabilityIn]] = None
     coach_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
+    stadium_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
 
 
 class UserCoachCardOut(BaseModel):

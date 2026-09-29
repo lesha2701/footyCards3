@@ -24,6 +24,7 @@ class ClubPackOut(BaseModel):
     is_active: bool
     sort_order: int
     coach_drop_chance: float
+    stadium_drop_chance: float
     rarity_probabilities: list[ClubPackRarityProbabilityOut]
 
 
@@ -43,6 +44,7 @@ class ClubPackCreate(BaseModel):
     is_active: bool = True
     sort_order: int = 0
     coach_drop_chance: float = Field(default=0.0, ge=0, le=1)
+    stadium_drop_chance: float = Field(default=0.0, ge=0, le=1)
 
 
 class ClubPackUpdate(BaseModel):
@@ -55,3 +57,4 @@ class ClubPackUpdate(BaseModel):
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
     coach_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
+    stadium_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)

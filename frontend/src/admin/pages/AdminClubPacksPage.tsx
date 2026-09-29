@@ -16,6 +16,7 @@ interface ClubPackForm {
   price: number;
   card_count: number;
   coach_drop_chance: number;
+  stadium_drop_chance: number;
   guaranteed_min_rarity: Rarity | "";
   probabilities: Record<Rarity, number>;
   is_active: boolean;
@@ -29,6 +30,7 @@ function packToForm(p?: ClubPack): ClubPackForm {
     slug: p?.slug ?? "", name: p?.name ?? "", description: p?.description ?? "",
     price: p?.price ?? 100, card_count: p?.card_count ?? 3,
     coach_drop_chance: (p?.coach_drop_chance ?? 0) * 100,
+    stadium_drop_chance: (p?.stadium_drop_chance ?? 0) * 100,
     guaranteed_min_rarity: (p?.guaranteed_min_rarity as Rarity) ?? "",
     probabilities, is_active: p?.is_active ?? true, image_path: p?.image_path ?? null,
   };
@@ -67,6 +69,7 @@ export default function AdminClubPacksPage() {
   const buildPayload = () => ({
     slug: form.slug, name: form.name, description: form.description, price: form.price, card_count: form.card_count,
     coach_drop_chance: form.coach_drop_chance / 100,
+    stadium_drop_chance: form.stadium_drop_chance / 100,
     guaranteed_min_rarity: form.guaranteed_min_rarity || null,
     rarity_probabilities: RARITIES.filter((r) => form.probabilities[r] > 0).map((r) => ({ rarity: r, probability: form.probabilities[r] / 100 })),
     is_active: form.is_active,
@@ -175,6 +178,14 @@ export default function AdminClubPacksPage() {
                 <input
                   type="number" min={0} max={100} value={form.coach_drop_chance}
                   onChange={(e) => setForm({ ...form, coach_drop_chance: Number(e.target.value) })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Шанс стадиона вместо игрока (%) — 0 = только игроки</span>
+                <input
+                  type="number" min={0} max={100} value={form.stadium_drop_chance}
+                  onChange={(e) => setForm({ ...form, stadium_drop_chance: Number(e.target.value) })}
                   className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
                 />
               </label>

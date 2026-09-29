@@ -544,3 +544,46 @@ async def test_stats_preview_packs_opened_counts_coach_only_real_opens(client, d
     assert stats.status_code == 200
     counts = {item["goal_type"]: item["trailing_7d_count"] for item in stats.json()}
     assert counts["packs_opened"] == 1  # the coach-only real open is not silently dropped
+
+
+async def test_stats_preview_packs_opened_counts_stadium_only_real_opens(client, db_session, bot_token):
+    from datetime import datetime, timezone
+
+    from app.models.enums import CardSource
+    from app.models.pack import Pack, PackOpening, PackOpeningCard
+    from app.models.stadium import Stadium
+    from app.models.user_stadium_card import UserStadiumCard
+
+    admin_headers = await _admin_auth(client, bot_token)
+    pack = Pack(slug="stadium-only-real-pack", name="Stadium Only Real", price=100, card_count=1)
+    db_session.add(pack)
+    stadium = Stadium(display_name="Stats Preview Stadium", rarity=Rarity.rare, boost_pct=0.05)
+    db_session.add(stadium)
+    await db_session.flush()
+
+    user = await _register(client, db_session, 960014, bot_token)
+
+    # A real pack open whose ONLY slot rolled a stadium card (roll_and_create_
+    # cards's per-slot stadium_drop_chance coin flip) — its single
+    # PackOpeningCard row has user_card_id=None, user_coach_card_id=None,
+    # user_stadium_card_id set, and the UserStadiumCard is stamped
+    # source=pack exactly like a real player-card open would be. It has no
+    # UserCard/UserCoachCard rows at all, so a join that doesn't also cover
+    # UserStadiumCard would silently drop it.
+    stadium_only_opening = PackOpening(
+        user_id=user.id, pack_id=pack.id, price_paid=100, created_at=datetime.now(timezone.utc)
+    )
+    db_session.add(stadium_only_opening)
+    await db_session.flush()
+    stadium_card = UserStadiumCard(user_id=user.id, stadium_id=stadium.id, serial_number=1, source=CardSource.pack)
+    db_session.add(stadium_card)
+    await db_session.flush()
+    db_session.add(
+        PackOpeningCard(opening_id=stadium_only_opening.id, user_card_id=None, user_coach_card_id=None, user_stadium_card_id=stadium_card.id, is_new=True)
+    )
+    await db_session.commit()
+
+    stats = await client.get("/api/v1/admin/bingo/stats-preview", headers=admin_headers)
+    assert stats.status_code == 200
+    counts = {item["goal_type"]: item["trailing_7d_count"] for item in stats.json()}
+    assert counts["packs_opened"] == 1  # the stadium-only real open is not silently dropped

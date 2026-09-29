@@ -47,6 +47,28 @@ async def test_update_pack_card_count_persists(client, db_session, bot_token):
     assert updated["card_count"] == 2
 
 
+async def test_stadium_drop_chance_round_trips_through_create_and_update(client, db_session, bot_token):
+    # Regression: stadium_drop_chance existed on the DB column and the pack-
+    # opening coin flip already read it, but the admin schemas never exposed
+    # it, so Pydantic silently dropped it from every create/update payload
+    # and it could never be set above the migration default of 0.
+    auth = await _admin_auth(client, bot_token)
+    create_resp = await client.post("/api/v1/admin/packs", headers=auth, json=_pack_payload(stadium_drop_chance=0.25))
+    assert create_resp.status_code == 200, create_resp.text
+    assert create_resp.json()["stadium_drop_chance"] == 0.25
+    pack_id = create_resp.json()["id"]
+
+    update_payload = _pack_payload(stadium_drop_chance=0.4)
+    del update_payload["slug"]
+    update_resp = await client.put(f"/api/v1/admin/packs/{pack_id}", headers=auth, json=update_payload)
+    assert update_resp.status_code == 200, update_resp.text
+    assert update_resp.json()["stadium_drop_chance"] == 0.4
+
+    list_resp = await client.get("/api/v1/admin/packs", headers=auth)
+    updated = next(p for p in list_resp.json() if p["id"] == pack_id)
+    assert updated["stadium_drop_chance"] == 0.4
+
+
 async def test_update_pack_can_be_saved_twice_in_a_row(client, db_session, bot_token):
     # Regression: a stale rarity_probabilities collection made the second save fail.
     auth = await _admin_auth(client, bot_token)

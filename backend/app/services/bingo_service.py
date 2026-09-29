@@ -27,6 +27,7 @@ from app.models.tactico import TacticoMatch
 from app.models.trade import TradeOffer
 from app.models.user import User
 from app.models.user_coach_card import UserCoachCard
+from app.models.user_stadium_card import UserStadiumCard
 from app.schemas.bingo import BingoClaimResult, BingoCurrentOut, BingoGoalOut, BingoStatsPreviewItem
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
@@ -355,25 +356,31 @@ async def get_stats_preview(db: AsyncSession) -> list[BingoStatsPreviewItem]:
     # path (bonus grants, task/collection/league rewards, gifts, the free
     # periodic pack, daily rewards, ...), but only pack_service.open_pack
     # both creates a PackOpening AND rolls cards with CardSource.pack AND
-    # fires the live bingo hook — so join through to UserCard/UserCoachCard
-    # and filter on that same source, matching the live counter exactly.
-    # Each PackOpeningCard row resolves to exactly one of UserCard or
-    # UserCoachCard (roll_and_create_cards's per-slot coach_drop_chance coin
-    # flip — see PackOpeningCard's own CHECK constraint), never both, never
-    # neither — so this must be an OUTER join to both sides plus an OR, not
-    # a plain inner join to UserCard alone: an opening whose every slot
-    # rolled a coach card has no UserCard rows at all, and an inner join
-    # would silently drop it even though it's a real, counter-incrementing
-    # open. DISTINCT because a single opening has one PackOpeningCard row
-    # per card slot.
+    # fires the live bingo hook — so join through to UserCard/UserCoachCard/
+    # UserStadiumCard and filter on that same source, matching the live
+    # counter exactly. Each PackOpeningCard row resolves to exactly one of
+    # UserCard, UserCoachCard, or UserStadiumCard (roll_and_create_cards's
+    # per-slot coach_drop_chance/stadium_drop_chance coin flip — see
+    # PackOpeningCard's own CHECK constraint), never more than one, never
+    # neither — so this must be an OUTER join to all three sides plus an OR,
+    # not a plain inner join to UserCard alone: an opening whose every slot
+    # rolled a coach or stadium card has no UserCard rows at all, and an
+    # inner join would silently drop it even though it's a real, counter-
+    # incrementing open. DISTINCT because a single opening has one
+    # PackOpeningCard row per card slot.
     packs_opened = await count(
         select(func.count(func.distinct(PackOpening.id)))
         .join(PackOpeningCard, PackOpeningCard.opening_id == PackOpening.id)
         .outerjoin(UserCard, UserCard.id == PackOpeningCard.user_card_id)
         .outerjoin(UserCoachCard, UserCoachCard.id == PackOpeningCard.user_coach_card_id)
+        .outerjoin(UserStadiumCard, UserStadiumCard.id == PackOpeningCard.user_stadium_card_id)
         .where(
             PackOpening.created_at >= since,
-            or_(UserCard.source == CardSource.pack, UserCoachCard.source == CardSource.pack),
+            or_(
+                UserCard.source == CardSource.pack,
+                UserCoachCard.source == CardSource.pack,
+                UserStadiumCard.source == CardSource.pack,
+            ),
         )
     )
 
