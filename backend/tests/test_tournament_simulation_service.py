@@ -137,6 +137,50 @@ async def test_simulate_next_round_updates_standings(db_session, eight_club_tour
     assert 8 <= total_points_awarded <= 12
 
 
+async def test_stadium_boost_only_applies_to_home_club(db_session, eight_club_tournament, monkeypatch):
+    from app.models.club_stadium_card import ClubStadiumCard
+    from app.models.enums import ClubStadiumCardSource
+    from app.models.stadium import Stadium
+    from app.services import tournament_simulation_service as sim
+    from app.services.club_squad_service import _get_or_none_lineup
+
+    _tournament, clubs_and_captains = eight_club_tournament
+    boosted_club = clubs_and_captains[0][0]
+
+    stadium = Stadium(display_name="Home Advantage Test Stadium", rarity=Rarity.epic, boost_pct=0.5)
+    db_session.add(stadium)
+    await db_session.flush()
+    stadium_card = ClubStadiumCard(
+        club_id=boosted_club.id, stadium_id=stadium.id, serial_number=1, source=ClubStadiumCardSource.club_pack,
+    )
+    db_session.add(stadium_card)
+    await db_session.flush()
+    lineup = await _get_or_none_lineup(db_session, boosted_club.id)
+    lineup.club_stadium_card_id = stadium_card.id
+    db_session.add(lineup)
+    await db_session.commit()
+
+    captured: list[tuple[set[int], float]] = []
+    real_build_side = sim.build_side
+
+    def spying_build_side(cards_with_slots, *args, **kwargs):
+        club_ids = {card.club_id for card, _slot in cards_with_slots}
+        captured.append((club_ids, kwargs["stadium_multiplier"]))
+        return real_build_side(cards_with_slots, *args, **kwargs)
+
+    monkeypatch.setattr(sim, "build_side", spying_build_side)
+    matches = await sim.simulate_next_round(db_session)
+    await db_session.commit()
+
+    boosted_match = next(m for m in matches if boosted_club.id in (m.club_a_id, m.club_b_id))
+    is_home = boosted_match.club_a_id == boosted_club.id
+    expected_multiplier = 1.5 if is_home else 1.0
+
+    (boosted_multiplier,) = [mult for club_ids, mult in captured if boosted_club.id in club_ids]
+    assert boosted_multiplier == expected_multiplier
+    assert all(mult == 1.0 for club_ids, mult in captured if boosted_club.id not in club_ids)
+
+
 async def test_simulate_next_round_auto_scores_withdrawn_club_as_loss(db_session, eight_club_tournament):
     tournament, _clubs_and_captains = eight_club_tournament
     participants = (

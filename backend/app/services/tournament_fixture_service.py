@@ -1,12 +1,14 @@
 def generate_fixtures(club_ids: list[int]) -> list[tuple[int, int, int]]:
     """Standard circle-method round-robin for exactly 8 clubs. Fixes club_ids[0],
     rotates the other 7 through 7 rounds of 4 matches each (leg 1, rounds 1-7,
-    every pair meets exactly once). Leg 2 (rounds 8-14) repeats the identical
-    7 pairings — round n and round n+7 always share the same pairings, and
-    since each club faces a distinct opponent in every one of the 7 leg-1
-    rounds, round 7's opponent is never the same as round 8's (= round 1's)
-    opponent, so no club ever faces the same opponent on two consecutive
-    rounds anywhere across the 14-round schedule."""
+    every pair meets exactly once). Leg 2 (rounds 8-14) repeats the same 7
+    pairings with home/away swapped — round n and round n+7 always share the
+    same pairing, and since each club faces a distinct opponent in every one
+    of the 7 leg-1 rounds, round 7's opponent is never the same as round 8's
+    (= round 1's) opponent, so no club ever faces the same opponent on two
+    consecutive rounds anywhere across the 14-round schedule. club_a_id is
+    the home side for that match row (see tournament_simulation_service's
+    stadium-bonus handling)."""
     if len(club_ids) != 8:
         raise ValueError("generate_fixtures requires exactly 8 clubs")
 
@@ -21,5 +23,5 @@ def generate_fixtures(club_ids: list[int]) -> list[tuple[int, int, int]]:
         leg_one.extend((round_number, a, b) for a, b in pairs)
         rotating = [rotating[-1]] + rotating[:-1]
 
-    leg_two = [(round_number + 7, a, b) for round_number, a, b in leg_one]
+    leg_two = [(round_number + 7, b, a) for round_number, a, b in leg_one]
     return leg_one + leg_two

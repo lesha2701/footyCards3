@@ -319,12 +319,14 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
             lineup_b, _had_sub_b, cards_with_slots_b, club_lineup_b = await resolve_match_lineup(db, club_b_id)
             coach_a = club_lineup_a.club_coach_card.coach if club_lineup_a.club_coach_card else None
             coach_b = club_lineup_b.club_coach_card.coach if club_lineup_b.club_coach_card else None
+            # club_a is always the home side for this fixture row (see
+            # tournament_fixture_service.generate_fixtures) — only the home
+            # club's stadium boosts strength; the away side gets no stadium
+            # bonus regardless of what stadium it owns.
             stadium_multiplier_a = (
                 1.0 + float(club_lineup_a.club_stadium_card.stadium.boost_pct) if club_lineup_a.club_stadium_card else 1.0
             )
-            stadium_multiplier_b = (
-                1.0 + float(club_lineup_b.club_stadium_card.stadium.boost_pct) if club_lineup_b.club_stadium_card else 1.0
-            )
+            stadium_multiplier_b = 1.0
 
             config_boost_pct = float(config.club_training_boost_pct)
             standing_a, standing_b = standings_by_club[club_a_id], standings_by_club[club_b_id]

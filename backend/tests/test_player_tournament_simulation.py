@@ -172,3 +172,29 @@ async def test_completed_tournament_detail_is_ordered_by_final_rank(client, db_s
         await simulate_next_round(db_session)
     detail = await get_tournament_detail(db_session, tournament_id)
     assert [r.final_rank for r in detail.standings] == list(range(1, 17))
+
+
+async def test_stadium_boost_only_applies_to_home_side(client, db_session, bot_token):
+    from app.models.enums import CardSource, Rarity
+    from app.models.stadium import Stadium
+    from app.models.user_stadium_card import UserStadiumCard
+    from app.services.personal_squad_service import resolve_active_squad
+    from app.services.player_tournament_simulation_service import _build_side
+
+    user = await make_ready_user(client, db_session, bot_token, 873000)
+    stadium = Stadium(display_name="Home Advantage Test Stadium", rarity=Rarity.epic, boost_pct=0.5)
+    db_session.add(stadium)
+    await db_session.flush()
+    card = UserStadiumCard(user_id=user.id, stadium_id=stadium.id, serial_number=1, source=CardSource.pack)
+    db_session.add(card)
+    await db_session.commit()
+
+    squad, _pairs = await resolve_active_squad(db_session, user.id)
+    squad.user_stadium_card_id = card.id
+    db_session.add(squad)
+    await db_session.commit()
+
+    home_side = await _build_side(db_session, user.id, is_home=True)
+    away_side = await _build_side(db_session, user.id, is_home=False)
+    assert home_side is not None and away_side is not None
+    assert home_side.side.profile.team_strength > away_side.side.profile.team_strength

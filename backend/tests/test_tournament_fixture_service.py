@@ -42,3 +42,15 @@ def test_leg_two_repeats_leg_one_pairings():
         by_round.setdefault(round_number, set()).add(frozenset((a, b)))
     for round_number in range(1, 8):
         assert by_round[round_number] == by_round[round_number + 7]
+
+
+def test_leg_two_swaps_home_and_away():
+    fixtures = generate_fixtures([1, 2, 3, 4, 5, 6, 7, 8])
+    home_by_round_and_pair: dict[int, dict[frozenset, int]] = {}
+    for round_number, a, b in fixtures:
+        home_by_round_and_pair.setdefault(round_number, {})[frozenset((a, b))] = a
+    for round_number in range(1, 8):
+        leg_one_homes = home_by_round_and_pair[round_number]
+        leg_two_homes = home_by_round_and_pair[round_number + 7]
+        for pair, leg_one_home_club in leg_one_homes.items():
+            assert leg_two_homes[pair] != leg_one_home_club

@@ -61,15 +61,20 @@ class _Side:
     lineup: list[dict]
 
 
-async def _build_side(db: AsyncSession, user_id: int) -> _Side | None:
+async def _build_side(db: AsyncSession, user_id: int, *, is_home: bool) -> _Side | None:
     """None when the player cannot field a full starting XI (cards sold or
-    traded away since applying)."""
+    traded away since applying). Stadium boost only applies to the home side
+    (see player_tournament_fixture_service.generate_fixtures: user_a_id is
+    always home for a given fixture row) — the away side gets no stadium
+    bonus regardless of what stadium it owns."""
     squad, pairs = await personal_squad_service.resolve_active_squad(db, user_id)
     if len(pairs) != len(get_formation_slots(squad.formation)):
         return None
     with_slots: list[tuple[_EngineCard, FormationSlot]] = [(_engine_card(c), slot) for c, slot in pairs]
     coach = squad.user_coach_card.coach if squad.user_coach_card else None
-    stadium_multiplier = 1.0 + float(squad.user_stadium_card.stadium.boost_pct) if squad.user_stadium_card else 1.0
+    stadium_multiplier = (
+        1.0 + float(squad.user_stadium_card.stadium.boost_pct) if is_home and squad.user_stadium_card else 1.0
+    )
     side = build_side(with_slots, squad.mentality, squad.playstyle, coach=coach, stadium_multiplier=stadium_multiplier)
     lineup = [
         {
@@ -116,8 +121,8 @@ def _at(values: list, index: int) -> int:
 async def _play_match(
     db: AsyncSession, user_a_id: int, user_b_id: int, names: dict[int, str], config,
 ) -> tuple[int, int, list]:
-    side_a = await _build_side(db, user_a_id)
-    side_b = await _build_side(db, user_b_id)
+    side_a = await _build_side(db, user_a_id, is_home=True)
+    side_b = await _build_side(db, user_b_id, is_home=False)
     if side_a is not None and side_b is not None:
         result = tournament_match_engine.simulate_match(
             side_a.side, side_b.side, side_a.lineup, side_b.lineup, config, names[user_a_id], names[user_b_id],
