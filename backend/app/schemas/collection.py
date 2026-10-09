@@ -24,6 +24,12 @@ class UserCardListItem(BaseModel):
     hidden_from_trade: bool
     duplicate_count: int = 1
     diamond_rating_bonus: int = 0
+    # This copy's own skill (null = none).
+    skill_code: Optional[str] = None
+    skill_level: Optional[int] = None
+    # Every skilled copy of this player the owner has — the list collapses
+    # duplicates into one representative, so the album badge needs these.
+    skilled_copies: List["SkilledCopyOut"] = []
 
     @model_validator(mode="before")
     @classmethod
@@ -48,7 +54,19 @@ class UserCardListItem(BaseModel):
             "is_in_tactico_squad": data.is_in_tactico_squad,
             "hidden_from_trade": data.hidden_from_trade,
             "diamond_rating_bonus": bonus,
+            "skill_code": getattr(data, "skill_code", None),
+            "skill_level": getattr(data, "skill_level", None),
         }
+
+
+class SkilledCopyOut(BaseModel):
+    id: int
+    serial_number: int
+    skill_code: str
+    skill_level: int
+
+
+UserCardListItem.model_rebuild()
 
 
 SortBy = Literal["rating", "rarity", "acquired_at"]
@@ -88,11 +106,15 @@ class SetCardHiddenRequest(BaseModel):
 class SellCardRequest(BaseModel):
     user_card_id: int
     confirm_last_copy: bool = False
+    # Must be true to sell a copy that has a skill (lost without token refund).
+    confirm_skill_loss: bool = False
 
 
 class BulkSellRequest(BaseModel):
     user_card_ids: List[int]
     confirm_last_copy: bool = False
+    # Must be true to sell a copy that has a skill (lost without token refund).
+    confirm_skill_loss: bool = False
 
 
 class SellResultOut(BaseModel):

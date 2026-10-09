@@ -50,6 +50,9 @@ class DiamondUpgradeTierUpdate(BaseModel):
 class FeedCardsRequest(BaseModel):
     diamond_card_id: int
     material_card_ids: list[int] = Field(min_length=1, max_length=MAX_MATERIAL_CARDS)
+    # Must be true to feed a copy that has a skill (destroyed, no token refund).
+    # The fed diamond card keeps its own skill: it stays the same card.
+    confirm_skill_loss: bool = False
 
 
 class FeedCardsResult(BaseModel):

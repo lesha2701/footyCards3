@@ -17,6 +17,8 @@ import type {
   Page,
   Pack,
   Player,
+  SkillCatalog,
+  SkillTokenBalance,
   Stadium,
   TournamentDetail,
   TradeOffer,
@@ -39,6 +41,7 @@ import type {
   DailyRewardOption,
   Dashboard,
   GameConfig,
+  AdminSkillLedgerEntry,
   PackPreview,
   StarsDonationSummary,
   StarsPackPurchase,
@@ -839,5 +842,41 @@ export async function fetchAdminTournaments(
 
 export async function fetchAdminTournamentDetail(id: number): Promise<TournamentDetail> {
   const { data } = await api.get<TournamentDetail>(`/admin/tournaments/${id}`);
+  return data;
+}
+
+// --- Card skills (backend: routers/admin_card_skills.py; economy lives on GameConfig) ---
+
+export async function fetchAdminSkillCatalog(): Promise<SkillCatalog> {
+  const { data } = await api.get<SkillCatalog>("/admin/card-skills");
+  return data;
+}
+
+export async function updateAdminSkill(
+  code: string,
+  payload: { is_enabled?: boolean; allowed_positions?: string[]; reset_positions?: boolean; sort_order?: number },
+): Promise<SkillCatalog> {
+  const { data } = await api.patch<SkillCatalog>(`/admin/card-skills/${code}`, payload);
+  return data;
+}
+
+export async function fetchAdminUserSkillTokens(userId: number): Promise<SkillTokenBalance[]> {
+  const { data } = await api.get<{ tokens: SkillTokenBalance[] }>(`/admin/card-skills/tokens/${userId}`);
+  return data.tokens;
+}
+
+export async function grantSkillTokens(payload: {
+  user_id: number;
+  skill_code: string;
+  quantity: number;
+  reason: string;
+  idempotency_key: string;
+}): Promise<SkillTokenBalance[]> {
+  const { data } = await api.post<{ tokens: SkillTokenBalance[] }>("/admin/card-skills/tokens/grant", payload);
+  return data.tokens;
+}
+
+export async function fetchSkillLedger(params: { user_id?: number; skill_code?: string; kind?: string; limit?: number }) {
+  const { data } = await api.get<AdminSkillLedgerEntry[]>("/admin/card-skills/ledger", { params });
   return data;
 }

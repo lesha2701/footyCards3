@@ -30,6 +30,7 @@ export default function CardUpgradeModal({ cards, onClose }: { cards: UserCard[]
 
   const fromRarity = cards[0].player.rarity;
   const cardCount = cards.length;
+  const skilledCards = cards.filter((c) => !!c.skill_code);
 
   const { data: rules } = useQuery({ queryKey: ["upgrade-rules"], queryFn: fetchUpgradeRules });
   const options = rules?.filter((r) => r.from_rarity === fromRarity && r.is_active) ?? [];
@@ -39,7 +40,10 @@ export default function CardUpgradeModal({ cards, onClose }: { cards: UserCard[]
   const canAfford = !selectedRule || balance >= totalCost;
 
   const upgradeMutation = useMutation({
-    mutationFn: () => upgradeCards(cards.map((c) => c.id), target!),
+    // The staked copies are destroyed either way; when one of them has a
+    // skill, the confirm step below spells that out before this runs, so the
+    // explicit confirmation is sent along with it.
+    mutationFn: () => upgradeCards(cards.map((c) => c.id), target!, undefined, skilledCards.length > 0),
     onSuccess: (data) => {
       updateBalance(data.new_balance);
       setResult(data);
@@ -163,6 +167,12 @@ export default function CardUpgradeModal({ cards, onClose }: { cards: UserCard[]
               Шанс успеха: <span className="text-accent-cyan">{Math.round(effectiveChance * 100)}%</span> → {RARITY_LABELS[selectedRule.to_rarity]}
             </p>
 
+            {skilledCards.length > 0 && (
+              <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                Среди ставок {skilledCards.length === 1 ? "есть карточка" : `есть ${skilledCards.length} карточки`} с навыком
+                (№ {skilledCards.map((c) => c.serial_number).join(", ")}) — навык будет потерян, жетоны не вернутся.
+              </p>
+            )}
             {!canAfford && (
               <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">
                 Не хватает монет: нужно {totalCost}, на балансе {balance}.

@@ -224,6 +224,43 @@ export interface GameConfig {
   wheel_duplicate_badge_coins: number;
   bingo_reward_coins: number;
   bingo_reward_pack_id: number | null;
+  card_skills_enabled: boolean;
+  card_skill_level_1_bonus_pp: number;
+  card_skill_level_2_bonus_pp: number;
+  card_skill_level_3_bonus_pp: number;
+  card_skill_event_bonus_cap_pp: number;
+  card_skill_probability_floor_pct: number;
+  card_skill_probability_ceiling_pct: number;
+  card_skill_assign_token_cost: number;
+  card_skill_assign_coin_cost: number;
+  card_skill_upgrade_2_token_cost: number;
+  card_skill_upgrade_2_coin_cost: number;
+  card_skill_upgrade_3_token_cost: number;
+  card_skill_upgrade_3_coin_cost: number;
+  card_skill_replace_token_cost: number;
+  card_skill_replace_coin_cost: number;
+  /** Player-tournament place rewards in skill tokens; index 0 = 1st place. */
+  ptour_place_skill_tokens: ({ skill_code: string; quantity: number } | null)[];
+}
+
+export interface AdminSkillLedgerEntry {
+  id: number;
+  user_id: number;
+  kind: string;
+  skill_code: string;
+  token_delta: number;
+  token_balance_after: number;
+  coins_spent: number;
+  user_card_id: number | null;
+  from_skill_code: string | null;
+  from_level: number | null;
+  to_skill_code: string | null;
+  to_level: number | null;
+  admin_id: number | null;
+  related_object_type: string | null;
+  related_object_id: number | null;
+  reason: string | null;
+  created_at: string;
 }
 
 export interface CardCollection {
@@ -270,6 +307,8 @@ export interface TaskDefinition {
   condition_params: Record<string, unknown> | null;
   reward_coins: number;
   reward_pack_id: number | null;
+  reward_skill_code: string | null;
+  reward_skill_tokens: number;
   channel_username: string | null;
   channel_chat_id: number | null;
   invite_link: string | null;

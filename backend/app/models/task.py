@@ -29,6 +29,12 @@ class TaskDefinition(TimestampMixin, Base):
     reward_pack_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("packs.id", ondelete="SET NULL"), nullable=True
     )
+    # Optional skill-token reward (services/card_skill_service.grant_tokens);
+    # both unset = no token reward, which is every task that predates it.
+    reward_skill_code: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("card_skills.code", ondelete="SET NULL"), nullable=True
+    )
+    reward_skill_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     channel_username: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     channel_chat_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     invite_link: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

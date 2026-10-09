@@ -1,9 +1,14 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import Rarity
+
+
+class PlaceSkillTokenReward(BaseModel):
+    skill_code: str
+    quantity: int = Field(ge=1, le=100)
 
 
 class DashboardChartPoint(BaseModel):
@@ -262,6 +267,22 @@ class GameConfigOut(BaseModel):
     wheel_duplicate_badge_coins: int
     bingo_reward_coins: int
     bingo_reward_pack_id: Optional[int] = None
+    card_skills_enabled: bool = True
+    card_skill_level_1_bonus_pp: int = 2
+    card_skill_level_2_bonus_pp: int = 4
+    card_skill_level_3_bonus_pp: int = 6
+    card_skill_event_bonus_cap_pp: int = 8
+    card_skill_probability_floor_pct: int = 2
+    card_skill_probability_ceiling_pct: int = 95
+    card_skill_assign_token_cost: int = 1
+    card_skill_assign_coin_cost: int = 0
+    card_skill_upgrade_2_token_cost: int = 2
+    card_skill_upgrade_2_coin_cost: int = 400
+    card_skill_upgrade_3_token_cost: int = 4
+    card_skill_upgrade_3_coin_cost: int = 1200
+    card_skill_replace_token_cost: int = 1
+    card_skill_replace_coin_cost: int = 300
+    ptour_place_skill_tokens: list[Optional[PlaceSkillTokenReward]] = []
 
 
 class GameConfigUpdate(BaseModel):
@@ -399,6 +420,36 @@ class GameConfigUpdate(BaseModel):
     wheel_duplicate_badge_coins: Optional[int] = Field(default=None, ge=0)
     bingo_reward_coins: Optional[int] = Field(default=None, ge=0)
     bingo_reward_pack_id: Optional[int] = Field(default=None)
+    card_skills_enabled: Optional[bool] = None
+    card_skill_level_1_bonus_pp: Optional[int] = Field(default=None, ge=0, le=20)
+    card_skill_level_2_bonus_pp: Optional[int] = Field(default=None, ge=0, le=20)
+    card_skill_level_3_bonus_pp: Optional[int] = Field(default=None, ge=0, le=20)
+    card_skill_event_bonus_cap_pp: Optional[int] = Field(default=None, ge=0, le=30)
+    card_skill_probability_floor_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    card_skill_probability_ceiling_pct: Optional[int] = Field(default=None, ge=50, le=100)
+    card_skill_assign_token_cost: Optional[int] = Field(default=None, ge=0, le=100)
+    card_skill_assign_coin_cost: Optional[int] = Field(default=None, ge=0)
+    card_skill_upgrade_2_token_cost: Optional[int] = Field(default=None, ge=0, le=100)
+    card_skill_upgrade_2_coin_cost: Optional[int] = Field(default=None, ge=0)
+    card_skill_upgrade_3_token_cost: Optional[int] = Field(default=None, ge=0, le=100)
+    card_skill_upgrade_3_coin_cost: Optional[int] = Field(default=None, ge=0)
+    card_skill_replace_token_cost: Optional[int] = Field(default=None, ge=0, le=100)
+    card_skill_replace_coin_cost: Optional[int] = Field(default=None, ge=0)
+    ptour_place_skill_tokens: Optional[list[Optional[PlaceSkillTokenReward]]] = Field(default=None, max_length=16)
+
+    @field_validator("ptour_place_skill_tokens")
+    @classmethod
+    def _engine_supported_skills_only(cls, value):
+        # Deferred import: services import schemas, not the other way round.
+        from app.services.card_skill_catalog import SKILL_DEFINITIONS
+
+        for entry in value or []:
+            if entry is None:
+                continue
+            definition = SKILL_DEFINITIONS.get(entry.skill_code)
+            if definition is None or not definition.engine_supported:
+                raise ValueError(f"skill '{entry.skill_code}' cannot be granted")
+        return value
 
 
 class SuspiciousMemorySessionOut(BaseModel):

@@ -110,6 +110,19 @@ export interface UserCard {
   hidden_from_trade: boolean;
   duplicate_count?: number;
   diamond_rating_bonus: number;
+  /** This copy's own skill (null = none). See CardSkillBadge / CardSkillPanel. */
+  skill_code?: string | null;
+  skill_level?: number | null;
+  /** Collection list only: every skilled copy of this player (the list
+   * collapses duplicates into one representative). */
+  skilled_copies?: SkilledCopy[];
+}
+
+export interface SkilledCopy {
+  id: number;
+  serial_number: number;
+  skill_code: string;
+  skill_level: number;
 }
 
 export interface DiamondUpgradeTier {
@@ -910,6 +923,8 @@ export interface Task {
   category: "regular" | "premium";
   reward_coins: number;
   reward_pack_name: string | null;
+  reward_skill_code?: string | null;
+  reward_skill_tokens?: number;
   channel_username: string | null;
   invite_link: string | null;
   progress: number;
@@ -927,6 +942,7 @@ export interface TaskClaimResult {
   reward_coins: number;
   new_balance: number;
   granted_pack: PackOpenResult | null;
+  granted_skill_tokens?: { skill_code: string; quantity: number } | null;
   refilled_task: Task | null;
 }
 
@@ -1519,6 +1535,8 @@ export interface PersonalSquadSlot {
   user_card_id: number | null;
   serial_number: number | null;
   player: Player | null;
+  skill_code?: string | null;
+  skill_level?: number | null;
 }
 
 export interface PersonalSquad {
@@ -1709,3 +1727,121 @@ export interface ClubStadiumCard {
   acquired_at: string;
 }
 
+
+// --- Card skills (backend: services/card_skill_service.py) ---
+
+export type SkillOperation = "assign" | "upgrade" | "replace";
+
+export interface SkillLevelEffect {
+  level: number;
+  level_label: string;
+  bonus_pp: number;
+}
+
+export interface SkillCatalogItem {
+  code: string;
+  name: string;
+  icon: string;
+  effect: string;
+  applies_in: string[];
+  not_affected: string;
+  positions: string[];
+  max_positions: string[];
+  levels: SkillLevelEffect[];
+  engine_supported: boolean;
+  is_enabled: boolean;
+  is_available: boolean;
+  unavailable_reason: string | null;
+  remaining_work: string[];
+  sort_order: number;
+}
+
+export interface SkillCost {
+  token_cost: number;
+  coin_cost: number;
+}
+
+export interface SkillCatalog {
+  rules: {
+    enabled: boolean;
+    max_level: number;
+    event_bonus_cap_pp: number;
+    probability_floor_pct: number;
+    probability_ceiling_pct: number;
+    costs: { assign: SkillCost; upgrade_to_2: SkillCost; upgrade_to_3: SkillCost; replace: SkillCost };
+  };
+  skills: SkillCatalogItem[];
+}
+
+export interface SkillTokenBalance {
+  skill_code: string;
+  quantity: number;
+}
+
+export interface CardSkillInfo {
+  code: string;
+  level: number;
+  level_label: string;
+  bonus_pp: number;
+  is_effective: boolean;
+}
+
+export interface SkillAction {
+  operation: SkillOperation;
+  skill_code: string;
+  target_level: number;
+  token_cost: number;
+  coin_cost: number;
+  tokens_owned: number;
+  allowed: boolean;
+  reason: string | null;
+}
+
+export interface CardCopy {
+  id: number;
+  serial_number: number;
+  skill_code: string | null;
+  skill_level: number | null;
+  is_locked_in_trade: boolean;
+  is_in_lineup: boolean;
+  is_in_tactico_squad: boolean;
+  is_locked_by_admin: boolean;
+}
+
+export interface CardSkillState {
+  card_id: number;
+  serial_number: number;
+  player_id: number;
+  player_name: string;
+  position: string;
+  skill: CardSkillInfo | null;
+  next_level_bonus_pp: number | null;
+  blocked_reason: string | null;
+  actions: SkillAction[];
+  copies: CardCopy[];
+}
+
+export interface SkillOperationResult {
+  operation: SkillOperation;
+  card_id: number;
+  skill_code: string;
+  skill_level: number;
+  previous_skill_code: string | null;
+  previous_level: number | null;
+  token_cost: number;
+  coin_cost: number;
+  tokens_left: number;
+  new_balance: number;
+  replayed: boolean;
+}
+
+/** One entry of a match event payload's `skills` list. */
+export interface MatchSkillNote {
+  code: string;
+  name: string;
+  level: number;
+  level_label: string;
+  bonus_pp: number;
+  player: string | null;
+  decisive: boolean;
+}

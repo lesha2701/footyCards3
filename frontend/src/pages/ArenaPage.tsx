@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
+import CardSkillBadge from "@/components/cards/CardSkillBadge";
+import MatchSkillNotes from "@/components/cards/MatchSkillNotes";
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
 import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPickerModal";
 import EmptyState from "@/components/common/EmptyState";
@@ -332,6 +334,7 @@ export default function ArenaPage() {
                             {slot.card.player.position}
                           </span>
                           <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.card.player.rating}</span>
+                          <CardSkillBadge code={slot.card.skill_code} level={slot.card.skill_level} />
                         </>
                       ) : (
                         <>
@@ -492,6 +495,7 @@ export default function ArenaPage() {
 
       {pickerSlot && (
         <CardPickerModal
+          showSkills
           open
           title={`Выбери на позицию ${CATEGORY_LABELS[pickerSlot.category]}`}
           cards={cardsForSlot(pickerSlot)}
@@ -693,6 +697,7 @@ function MatchSimulation({
         {revealed.map((e, i) => (
           <p key={i} className={e.team === "user" ? "text-accent-green" : "text-ink-mist"}>
             <span className="font-mono text-ink-mist-dim">{e.minute}&apos;</span> {e.description}
+            <MatchSkillNotes event={e} />
           </p>
         ))}
       </div>

@@ -1,6 +1,7 @@
 from app.models.admin_action import AdminAction
 from app.models.badge import Badge, UserBadge
 from app.models.card import UserCard
+from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
 from app.models.card_collection import CardCollection, UserCollectionReward
 from app.models.card_upgrade import CardUpgradeAttempt, CardUpgradeRule
 from app.models.club import Club, ClubJoinRequest, ClubMember
@@ -126,4 +127,7 @@ __all__ = [
     "Stadium",
     "UserStadiumCard",
     "ClubStadiumCard",
+    "CardSkill",
+    "CardSkillLedger",
+    "UserSkillToken",
 ]

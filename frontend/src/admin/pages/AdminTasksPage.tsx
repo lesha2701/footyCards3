@@ -6,6 +6,7 @@ import {
   createTask,
   deleteTask,
   fetchAdminPacks,
+  fetchAdminSkillCatalog,
   fetchAdminTasks,
   sendPremiumTaskBroadcast,
   toggleTaskActive,
@@ -30,6 +31,8 @@ interface TaskForm {
   max_rating: number;
   reward_coins: number;
   reward_pack_id: number | "";
+  reward_skill_code: string;
+  reward_skill_tokens: number;
   channel_username: string;
   channel_chat_id: string;
   invite_link: string;
@@ -49,6 +52,8 @@ function taskToForm(t?: TaskDefinition): TaskForm {
     max_rating: (t?.condition_params?.max_rating as number | undefined) ?? 70,
     reward_coins: t?.reward_coins ?? 0,
     reward_pack_id: t?.reward_pack_id ?? "",
+    reward_skill_code: t?.reward_skill_code ?? "",
+    reward_skill_tokens: t?.reward_skill_tokens ?? 0,
     channel_username: t?.channel_username ?? "",
     channel_chat_id: t?.channel_chat_id ? String(t.channel_chat_id) : "",
     invite_link: t?.invite_link ?? "",
@@ -60,6 +65,7 @@ export default function AdminTasksPage() {
   const queryClient = useQueryClient();
   const { data: tasks, isLoading } = useQuery({ queryKey: ["admin-tasks"], queryFn: fetchAdminTasks });
   const { data: packs } = useQuery({ queryKey: ["admin-packs"], queryFn: fetchAdminPacks });
+  const { data: skillCatalog } = useQuery({ queryKey: ["admin-card-skills"], queryFn: fetchAdminSkillCatalog });
   const [editing, setEditing] = useState<TaskDefinition | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<TaskForm>(taskToForm());
@@ -134,6 +140,10 @@ export default function AdminTasksPage() {
           : null,
     reward_coins: form.reward_coins,
     reward_pack_id: form.reward_pack_id || null,
+    // Premium tasks can't carry tokens (the bot's resubscribe sweep only
+    // claws back coins) — the backend rejects it, so don't send it at all.
+    reward_skill_code: form.category === "premium" ? null : form.reward_skill_code || null,
+    reward_skill_tokens: form.category === "premium" || !form.reward_skill_code ? 0 : form.reward_skill_tokens,
     channel_username: form.category === "premium" ? form.channel_username || null : null,
     channel_chat_id: form.category === "premium" && form.channel_chat_id ? Number(form.channel_chat_id) : null,
     invite_link: form.category === "premium" ? form.invite_link || null : null,
@@ -243,6 +253,7 @@ export default function AdminTasksPage() {
                     : "состав из одной страны"}
               {" · "}
               {t.reward_pack_id ? `пак #${t.reward_pack_id}` : `+${t.reward_coins} 🪙`}
+              {t.reward_skill_code && t.reward_skill_tokens ? ` · ${t.reward_skill_tokens}× жетон ${t.reward_skill_code}` : ""}
             </p>
             <p className="text-xs text-slate-500">{t.is_active ? "Активно" : "Отключено"}</p>
             <p className="mt-1 text-xs text-slate-500">
@@ -335,6 +346,29 @@ export default function AdminTasksPage() {
                   </select>
                 </label>
               </div>
+
+              {form.category !== "premium" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-slate-400">Награда: жетоны навыка</span>
+                    <select
+                      value={form.reward_skill_code}
+                      onChange={(e) => setForm({ ...form, reward_skill_code: e.target.value })}
+                      className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                    >
+                      <option value="">Нет</option>
+                      {skillCatalog?.skills.filter((s) => s.engine_supported).map((s) => (
+                        <option key={s.code} value={s.code}>{s.icon} {s.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <NumField
+                    label="Жетонов за выполнение"
+                    value={form.reward_skill_tokens}
+                    onChange={(v) => setForm({ ...form, reward_skill_tokens: v })}
+                  />
+                </div>
+              )}
 
               {form.category === "premium" && (
                 <>

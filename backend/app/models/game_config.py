@@ -247,3 +247,32 @@ class GameConfig(TimestampMixin, Base):
     ptour_stars_by_place: Mapped[list] = mapped_column(
         JSON, default=lambda: [5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, -1, -2, -3, -4, -5], nullable=False,
     )
+
+    # --- Card skills (services/card_skill_service.py, card_skill_effects.py) ---
+    # Global switch: off = no assign/upgrade/replace, and NEW matches snapshot
+    # no skill effects. Owned skills and tokens are untouched either way;
+    # matches already started keep the rules frozen in their own state.
+    card_skills_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Additive percentage points a skill adds to its one specific event.
+    card_skill_level_1_bonus_pp: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    card_skill_level_2_bonus_pp: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    card_skill_level_3_bonus_pp: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    # Ceiling on the SUMMED same-direction skill bonus applied to one roll.
+    card_skill_event_bonus_cap_pp: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    # Bounds a skill-adjusted probability is kept within (percent). Applied only
+    # when a skill actually moved the roll, and never pulls a base probability
+    # that already sits outside them back inside — so existing coach/stadium/
+    # rating curves are never clipped by this.
+    card_skill_probability_floor_pct: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    card_skill_probability_ceiling_pct: Mapped[int] = mapped_column(Integer, default=95, nullable=False)
+    card_skill_assign_token_cost: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    card_skill_assign_coin_cost: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    card_skill_upgrade_2_token_cost: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    card_skill_upgrade_2_coin_cost: Mapped[int] = mapped_column(Integer, default=400, nullable=False)
+    card_skill_upgrade_3_token_cost: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    card_skill_upgrade_3_coin_cost: Mapped[int] = mapped_column(Integer, default=1200, nullable=False)
+    card_skill_replace_token_cost: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    card_skill_replace_coin_cost: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
+    # Player-tournament place rewards in skill tokens: index 0 = 1st place;
+    # each entry is null or {"skill_code": str, "quantity": int}. Empty = none.
+    ptour_place_skill_tokens: Mapped[list] = mapped_column(JSON, default=list, nullable=False)

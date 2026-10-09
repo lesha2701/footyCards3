@@ -3,8 +3,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_admin
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.database import get_db
+from app.models.enums import TaskCategory
 from app.models.task import TaskDefinition, UserTask
 from app.models.user import User
 from app.schemas.broadcast import PremiumTaskBroadcastCreate, PremiumTaskBroadcastOut
@@ -17,9 +18,27 @@ from app.schemas.task import (
 )
 from app.services.admin_log_service import log_action
 from app.services.broadcast_service import send_premium_task_broadcast
+from app.services.card_skill_service import validate_grantable_skill
 from app.services.task_service import backfill_premium_task_coins
 
 router = APIRouter(prefix="/admin/tasks", tags=["admin"], dependencies=[Depends(get_current_admin)])
+
+
+def _validate_skill_reward(task: TaskDefinition) -> None:
+    """Token reward needs both a real, engine-supported skill and a positive
+    count; clearing the skill clears the count (and vice versa) so a task can
+    never advertise half a reward."""
+    if not task.reward_skill_code or not task.reward_skill_tokens:
+        task.reward_skill_code, task.reward_skill_tokens = None, 0
+        return
+    if task.category == TaskCategory.premium:
+        # The bot's subscription sweep (bot/db.py) claws back and re-opens
+        # premium tasks by coin snapshot only — tokens could be re-claimed
+        # after a resubscribe, so premium tasks can't carry them.
+        raise ConflictError(
+            "Жетоны навыков нельзя выдавать за премиум-задания", details={"reason": "premium_task_tokens"},
+        )
+    validate_grantable_skill(task.reward_skill_code)
 
 
 async def _get_task_or_404(db: AsyncSession, task_id: int) -> TaskDefinition:
@@ -56,6 +75,7 @@ async def list_all_tasks(db: AsyncSession = Depends(get_db)):
 @router.post("", response_model=TaskDefinitionOut)
 async def create_task(payload: TaskDefinitionCreate, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
     task = TaskDefinition(**payload.model_dump())
+    _validate_skill_reward(task)
     db.add(task)
     await db.flush()
     await log_action(db, admin.id, "create_task", "task_definition", task.id, new_value=payload.model_dump(mode="json"), ip_address=request.client.host if request.client else None)
@@ -72,6 +92,7 @@ async def update_task(task_id: int, payload: TaskDefinitionUpdate, request: Requ
     updates = payload.model_dump(exclude_unset=True)
     for key, value in updates.items():
         setattr(task, key, value)
+    _validate_skill_reward(task)
 
     db.add(task)
     await log_action(

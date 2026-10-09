@@ -36,6 +36,8 @@ class UpgradeCardRequest(BaseModel):
     user_card_ids: list[int] = Field(min_length=1, max_length=MAX_STAKED_CARDS)
     to_rarity: Rarity
     idempotency_key: Optional[str] = None
+    # Must be true to stake a copy that has a skill (destroyed, no token refund).
+    confirm_skill_loss: bool = False
 
 
 class CardUpgradeResultOut(BaseModel):

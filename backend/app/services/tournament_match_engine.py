@@ -72,6 +72,7 @@ def _describe_event(
 
 
 from app.services import club_tactical_matchup_service
+from app.services.card_skill_effects import effect_of, skill_roll
 
 # Maps a Chance's quality tier (club_tactical_matchup_service.Chance.quality)
 # onto the same units situation.bias used to nudge effective rating in the
@@ -103,13 +104,21 @@ def _clamp_rating(rating: float) -> int:
     return max(58, min(99, round(rating)))
 
 
-def _resolve_shot_continuation(missed: bool, shot_type: str, config, blocker_rating, keeper_rating) -> tuple[str, dict]:
+def _resolve_shot_continuation(
+    missed: bool, shot_type: str, config, blocker_rating, keeper_rating,
+    keeper: dict | None = None, notes: list | None = None,
+) -> tuple[str, dict]:
     blocked = False
     saved = False
     if not missed and shot_type == "long_range" and blocker_rating is not None:
         blocked = random.random() < _lerp_chance(blocker_rating, float(config.match_defender_block_chance_min), float(config.match_defender_block_chance_max))
     if not missed and not blocked:
-        saved = random.random() < _lerp_chance_positive(keeper_rating, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max))
+        saved, save_notes = skill_roll(
+            _lerp_chance_positive(keeper_rating, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
+            [_skill(keeper, "reflexes", 1)],
+        )
+        if notes is not None:
+            notes.extend(save_notes)
     outcome = "shot" if missed else "blocked" if blocked else "save" if saved else "goal"
     return outcome, {"missed": missed, "blocked": blocked}
 
@@ -123,7 +132,32 @@ class MatchResult:
     red_cards: list[tuple[int, int]] = field(default_factory=list)     # (club_card_id, rounds_remaining=1)
 
 
-def _resolve_shot_action(attacking_side: str, moment: dict, config, quality_bias: float = 0) -> tuple[dict, str]:
+def _skill(actor: dict | None, code: str, sign: int) -> tuple[dict | None, int, str | None]:
+    """(effect, sign, player) adjustment for card_skill_effects.skill_roll —
+    effect is None unless this exact actor carries this exact skill (only
+    player-tournament actors ever carry one; club cards never do)."""
+    if not actor:
+        return None, sign, None
+    return effect_of(actor.get("skill"), code), sign, actor.get("name")
+
+
+def _keeper_of(lineup: list[dict] | None) -> dict | None:
+    """The side's goalkeeper card (category GK) — whose "reflexes" skill
+    applies to that side's save rolls. The save's BASE strength still comes
+    from the duel defender's rating, exactly as before skills existed."""
+    return next((c for c in lineup or [] if c.get("category") == "GK"), None)
+
+
+def _with_skill_notes(payload: dict, notes: list) -> dict:
+    if notes:
+        payload["skills"] = notes
+    return payload
+
+
+def _resolve_shot_action(
+    attacking_side: str, moment: dict, config, quality_bias: float = 0,
+    keeper: dict | None = None, notes: list | None = None,
+) -> tuple[dict, str]:
     """Shoots when quality_bias is non-negative (a clear chance), passes
     otherwise — same shoot/pass split the old situation.bias-driven policy
     used, now driven by the tactical pipeline's resolved chance quality
@@ -133,32 +167,52 @@ def _resolve_shot_action(attacking_side: str, moment: dict, config, quality_bias
     defender = moment["actors"]["defender"]
     shot_type = moment["shot_type"]
 
+    notes = list(notes or [])
     action = "shoot" if quality_bias >= 0 else "pass"
     if action == "shoot":
         eff_rating = _clamp_rating(shooter["rating"] + quality_bias)
-        missed = random.random() < _lerp_chance(eff_rating, float(config.match_attack_shoot_miss_chance_min), float(config.match_attack_shoot_miss_chance_max))
+        missed, roll_notes = skill_roll(
+            _lerp_chance(eff_rating, float(config.match_attack_shoot_miss_chance_min), float(config.match_attack_shoot_miss_chance_max)),
+            [_skill(shooter, "sniper", -1)],
+        )
+        notes.extend(roll_notes)
         scorer = shooter
     else:
         eff_passer_rating = _clamp_rating(shooter["rating"] - quality_bias)
-        pass_failed = random.random() < _lerp_chance(eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max))
+        # One roll, two opposing skills: the passer's "playmaker" lowers the
+        # fail chance, the duel defender's "interceptor" raises it.
+        pass_failed, roll_notes = skill_roll(
+            _lerp_chance(eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max)),
+            [_skill(shooter, "playmaker", -1), _skill(defender, "interceptor", 1)],
+        )
+        notes.extend(roll_notes)
         if pass_failed:
             event = {
                 "minute": moment["minute"], "event_type": "pass_failed", "team": attacking_side,
-                "payload": {"shot_type": shot_type, "action": "pass", "passer": shooter["name"]},
+                "payload": _with_skill_notes({"shot_type": shot_type, "action": "pass", "passer": shooter["name"]}, notes),
             }
             return event, "none"
-        missed = random.random() < _lerp_chance(pass_target["rating"], float(config.match_receiver_shot_miss_chance_min), float(config.match_receiver_shot_miss_chance_max))
+        missed, roll_notes = skill_roll(
+            _lerp_chance(pass_target["rating"], float(config.match_receiver_shot_miss_chance_min), float(config.match_receiver_shot_miss_chance_max)),
+            [_skill(pass_target, "sniper", -1)],
+        )
+        notes.extend(roll_notes)
         scorer = pass_target
 
-    outcome, extra = _resolve_shot_continuation(missed, shot_type, config, blocker_rating=defender["rating"], keeper_rating=defender["rating"])
+    outcome, extra = _resolve_shot_continuation(
+        missed, shot_type, config, blocker_rating=defender["rating"], keeper_rating=defender["rating"],
+        keeper=keeper, notes=notes,
+    )
     event = {
         "minute": moment["minute"], "event_type": outcome, "team": attacking_side,
-        "payload": {"shot_type": shot_type, "action": action, "shooter": scorer["name"], **extra},
+        "payload": _with_skill_notes({"shot_type": shot_type, "action": action, "shooter": scorer["name"], **extra}, notes),
     }
     return event, (attacking_side if outcome == "goal" else "none")
 
 
-def _resolve_defense_tackle(defending_side: str, moment: dict, config) -> tuple[dict, str, tuple[int, str] | None]:
+def _resolve_defense_tackle(
+    defending_side: str, moment: dict, config, keeper: dict | None = None,
+) -> tuple[dict, str, tuple[int, str] | None]:
     """Default policy: defending side always attempts a tackle (same
     rating-driven foul/card rolls as a human picking 'tackle' today).
     Returns (event, scoring_side_or_none, (club_card_id, 'red'|'yellow')_or_none)."""
@@ -179,12 +233,18 @@ def _resolve_defense_tackle(defending_side: str, moment: dict, config) -> tuple[
 
     if is_box:
         eff_gk = _clamp_rating(defender["rating"] - config.match_penalty_gk_rating_penalty)
-        saved = random.random() < _lerp_chance_positive(eff_gk, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max))
+        saved, save_notes = skill_roll(
+            _lerp_chance_positive(eff_gk, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
+            [_skill(keeper, "reflexes", 1)],
+        )
         outcome = "save" if saved else "goal"
         attacking_side = "a" if defending_side == "b" else "b"
         event = {
             "minute": moment["minute"], "event_type": outcome, "team": attacking_side,
-            "payload": {"shot_type": shot_type, "action": "tackle", "defender": defender["name"], "card": card_kind, "is_penalty": True},
+            "payload": _with_skill_notes(
+                {"shot_type": shot_type, "action": "tackle", "defender": defender["name"], "card": card_kind, "is_penalty": True},
+                save_notes,
+            ),
         }
         return event, (attacking_side if outcome == "goal" else "none"), (defender["club_card_id"], card_kind)
 
@@ -195,12 +255,20 @@ def _resolve_defense_tackle(defending_side: str, moment: dict, config) -> tuple[
     return event, "none", (defender["club_card_id"], card_kind)
 
 
-def _resolve_breakaway(attacking_side: str, moment: dict, lineup: list[dict], config) -> tuple[dict, str]:
+def _resolve_breakaway(attacking_side: str, moment: dict, lineup: list[dict], config, notes: list | None = None) -> tuple[dict, str]:
     fwd_candidates = [c for c in lineup if c["category"] == "FWD"]
     fwd_rating = fwd_candidates[0]["rating"] if fwd_candidates else 70
-    missed = random.random() < _lerp_chance(fwd_rating, float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max))
+    notes = list(notes or [])
+    missed, roll_notes = skill_roll(
+        _lerp_chance(fwd_rating, float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)),
+        [_skill(fwd_candidates[0] if fwd_candidates else None, "sniper", -1)],
+    )
+    notes.extend(roll_notes)
     outcome = "shot" if missed else "goal"
-    event = {"minute": moment["minute"], "event_type": outcome, "team": attacking_side, "payload": {"shot_type": "empty_net", "missed": missed}}
+    event = {
+        "minute": moment["minute"], "event_type": outcome, "team": attacking_side,
+        "payload": _with_skill_notes({"shot_type": "empty_net", "missed": missed}, notes),
+    }
     return event, (attacking_side if outcome == "goal" else "none")
 
 
@@ -227,7 +295,7 @@ def simulate_match(
         if chance.shot_type == "empty_net":
             lineup = lineup_a if attacking_side == "a" else lineup_b
             moment = {"minute": chance.minute}
-            event, scorer = _resolve_breakaway(attacking_side, moment, lineup, config)
+            event, scorer = _resolve_breakaway(attacking_side, moment, lineup, config, notes=chance.skill_notes)
             result.event_log.append(event)
             event["description"] = _describe_event(
                 event["event_type"], event["team"], club_a_name, club_b_name,
@@ -242,7 +310,10 @@ def simulate_match(
             "actors": {"shooter": chance.shooter, "pass_target": chance.pass_target, "defender": chance.defender},
         }
         quality_bias = QUALITY_BIAS[chance.quality]
-        event, scorer = _resolve_shot_action(attacking_side, moment, config, quality_bias)
+        defending_keeper = _keeper_of(lineup_b if attacking_side == "a" else lineup_a)
+        event, scorer = _resolve_shot_action(
+            attacking_side, moment, config, quality_bias, keeper=defending_keeper, notes=chance.skill_notes,
+        )
         result.event_log.append(event)
         event["description"] = _describe_event(
             event["event_type"], event["team"], club_a_name, club_b_name,
@@ -259,7 +330,7 @@ def simulate_match(
         # defender's rating via _resolve_shot_continuation's blocker/keeper
         # roll, same as the personal engine.
         if event["event_type"] in ("blocked", "save") and random.random() < float(config.club_tactical_tackle_attempt_chance):
-            defense_event, defense_scorer, card = _resolve_defense_tackle(defending_side, moment, config)
+            defense_event, defense_scorer, card = _resolve_defense_tackle(defending_side, moment, config, keeper=defending_keeper)
             result.event_log.append(defense_event)
             defense_event["description"] = _describe_event(defense_event["event_type"], defense_event["team"], club_a_name, club_b_name)
             if defense_scorer != "none":

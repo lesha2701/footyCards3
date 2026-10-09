@@ -24,6 +24,7 @@ const SECTIONS = [
   { to: "/admin/games", label: "Игры", icon: "🎮" },
   { to: "/admin/upgrades", label: "Апгрейд", icon: "🎲" },
   { to: "/admin/diamond-upgrades", label: "Диамант", icon: "💎" },
+  { to: "/admin/card-skills", label: "Навыки карточек", icon: "✨" },
   { to: "/admin/bingo", label: "Бинго недели", icon: "🎱" },
   { to: "/admin/shop", label: "Магазин", icon: "🛒" },
   { to: "/admin/broadcasts", label: "Рассылка", icon: "📣" },

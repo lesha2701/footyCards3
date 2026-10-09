@@ -13,23 +13,30 @@ export function useCardActions(invalidateKeys: string[][]) {
   const updateBalance = useAuthStore((s) => s.updateBalance);
 
   const [detailCard, setDetailCard] = useState<UserCard | null>(null);
-  const [confirmSell, setConfirmSell] = useState<{ ids: number[]; lastCopy: boolean } | null>(null);
+  // skillLoss: at least one of these copies has a skill, which selling
+  // destroys without refunding tokens — the dialog must say so and the
+  // request must carry the explicit confirmation.
+  const [confirmSell, setConfirmSell] = useState<{ ids: number[]; lastCopy: boolean; skillLoss?: boolean } | null>(null);
   const [upgradeCard, setUpgradeCard] = useState<UserCard | null>(null);
 
   const invalidate = () => invalidateKeys.forEach((key) => queryClient.invalidateQueries({ queryKey: key }));
 
   const sellMutation = useMutation({
-    mutationFn: ({ ids, confirmLastCopy }: { ids: number[]; confirmLastCopy: boolean }) =>
-      ids.length === 1 ? sellCard(ids[0], confirmLastCopy) : bulkSellCards(ids, confirmLastCopy),
+    mutationFn: ({ ids, confirmLastCopy, confirmSkillLoss = false }: { ids: number[]; confirmLastCopy: boolean; confirmSkillLoss?: boolean }) =>
+      ids.length === 1 ? sellCard(ids[0], confirmLastCopy, confirmSkillLoss) : bulkSellCards(ids, confirmLastCopy, confirmSkillLoss),
     onSuccess: (data) => {
       updateBalance(data.new_balance);
       invalidate();
+      queryClient.invalidateQueries({ queryKey: ["card-skills"] });
       setDetailCard(null);
       setConfirmSell(null);
     },
     onError: (err: unknown) => {
       if (err instanceof ApiRequestError && err.details?.requires_confirmation) {
         setConfirmSell((prev) => (prev ? { ...prev, lastCopy: true } : null));
+      }
+      if (err instanceof ApiRequestError && err.details?.requires_skill_loss_confirmation) {
+        setConfirmSell((prev) => (prev ? { ...prev, skillLoss: true } : null));
       }
     },
   });

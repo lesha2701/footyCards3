@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { acceptTradeOffer, cancelTradeOffer, fetchTradeOffer, rejectTradeOffer } from "@/api/trades";
+import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import PlayerCard from "@/components/cards/PlayerCard";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { UserBadge } from "@/components/common/UserBadge";
@@ -161,7 +162,12 @@ function TradeSide({ title, cards, coins }: { title: string; cards: UserCard[]; 
       {cards.length > 0 ? (
         <div className="grid grid-cols-3 gap-2">
           {cards.map((c) => (
-            <PlayerCard key={c.id} player={c.player} size="sm" />
+            <PlayerCard
+              key={c.id}
+              player={c.player}
+              size="sm"
+              badge={<CardSkillBadge code={c.skill_code} level={c.skill_level} />}
+            />
           ))}
         </div>
       ) : (

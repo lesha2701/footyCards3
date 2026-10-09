@@ -1,6 +1,7 @@
 import { IconCoin, IconLock, IconTag, IconUpgrade } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { POSITION_LABELS, RARITY_GLOW, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
+import CardSkillPanel from "@/components/collection/CardSkillPanel";
 import type { UserCard } from "@/types";
 
 export default function CardDetailModal({
@@ -52,6 +53,7 @@ export default function CardDetailModal({
           <span className="text-ink-mist">Редкость: <b className="text-ink-chalk">{RARITY_LABELS[player.rarity]}</b></span>
           <span className="text-ink-mist">Страна: <b className="text-ink-chalk">{player.country}</b></span>
         </div>
+        <CardSkillPanel key={card.id} cardId={card.id} />
         {(card.is_locked_by_admin || card.is_locked_in_trade || card.is_in_lineup || card.is_in_tactico_squad) && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-mist">
             <IconLock size={13} />

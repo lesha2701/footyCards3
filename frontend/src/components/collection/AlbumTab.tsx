@@ -6,6 +6,8 @@ import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import CardDetailModal from "@/components/collection/CardDetailModal";
+import CardSkillBadge from "@/components/cards/CardSkillBadge";
+import { bestSkilledCopy } from "@/lib/cardSkills";
 import { useCardActions } from "@/components/collection/useCardActions";
 import { IconChevronLeft, IconChevronRight, IconCoin, IconCollection, IconSearch } from "@/components/icons";
 import { fetchAlbumCollectionDetail, fetchAlbumOverview } from "@/api/album";
@@ -199,7 +201,7 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
         <CardDetailModal
           card={detailCard}
           onClose={() => setDetailCard(null)}
-          onSell={() => setConfirmSell({ ids: [detailCard.id], lastCopy: false })}
+          onSell={() => setConfirmSell({ ids: [detailCard.id], lastCopy: false, skillLoss: !!detailCard.skill_code })}
           onToggleHidden={(hidden) => hideMutation.mutate({ id: detailCard.id, hidden })}
           hiddenPending={hideMutation.isPending}
           onUpgrade={
@@ -216,13 +218,16 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
         open={!!confirmSell}
         title={confirmSell?.lastCopy ? "Это последний экземпляр!" : "Продать карточку?"}
         description={
-          confirmSell?.lastCopy
+          (confirmSell?.lastCopy
             ? "Ты продашь единственный экземпляр этого футболиста — он снова станет пустым слотом в альбоме. Это действие нельзя отменить."
-            : "Монеты будут зачислены на баланс. Действие нельзя отменить."
+            : "Монеты будут зачислены на баланс. Действие нельзя отменить.")
+          + (confirmSell?.skillLoss ? " У карточки есть навык — он будет потерян, жетоны не вернутся." : "")
         }
         danger
         confirmLabel="Продать"
-        onConfirm={() => confirmSell && sellMutation.mutate({ ids: confirmSell.ids, confirmLastCopy: confirmSell.lastCopy })}
+        onConfirm={() => confirmSell && sellMutation.mutate({
+          ids: confirmSell.ids, confirmLastCopy: confirmSell.lastCopy, confirmSkillLoss: !!confirmSell.skillLoss,
+        })}
         onCancel={() => setConfirmSell(null)}
       />
     </div>
@@ -243,6 +248,7 @@ function AlbumSlot({ slot, onOpen }: { slot: AlbumPlayer; onOpen: () => void }) 
     );
   }
 
+  const best = bestSkilledCopy(slot.card.skilled_copies);
   return (
     <button
       onClick={onOpen}
@@ -254,8 +260,15 @@ function AlbumSlot({ slot, onOpen }: { slot: AlbumPlayer; onOpen: () => void }) 
         className="h-full w-full object-cover"
         loading="lazy"
       />
-      <span className="absolute left-1 top-1 rounded bg-black/60 px-1 py-0.5 font-mono text-[9px] font-bold text-white">
-        {slot.player.position}
+      {/* Skill badge sits in the top row next to the position chip — the
+          bottom of album art carries the player's name. */}
+      <span className="absolute left-1 top-1 flex items-center gap-0.5">
+        <span className="rounded bg-black/60 px-1 py-0.5 font-mono text-[9px] font-bold text-white">
+          {slot.player.position}
+        </span>
+        {best && (
+          <CardSkillBadge code={best.skill_code} level={best.skill_level} extraCount={(slot.card.skilled_copies?.length ?? 1) - 1} />
+        )}
       </span>
       <span className="absolute right-1 top-1 rounded bg-black/60 px-1 py-0.5 font-mono text-[9px] font-bold text-accent-lime">
         {slot.player.rating}

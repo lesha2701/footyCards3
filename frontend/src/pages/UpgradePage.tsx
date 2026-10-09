@@ -4,6 +4,7 @@ import { useState } from "react";
 import { fetchUpgradeableCards, fetchUpgradeRules } from "@/api/collection";
 import CardUpgradeModal from "@/components/cards/CardUpgradeModal";
 import DiamondFeedModal from "@/components/cards/DiamondFeedModal";
+import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import PlayerCard from "@/components/cards/PlayerCard";
 import EmptyState from "@/components/common/EmptyState";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
@@ -176,6 +177,7 @@ export default function UpgradePage() {
                   <PlayerCard
                     key={card.id}
                     player={card.player}
+                    badge={<CardSkillBadge code={card.skill_code} level={card.skill_level} />}
                     selected={selected.some((c) => c.id === card.id)}
                     onClick={() => toggleCard(card)}
                   />
@@ -206,6 +208,7 @@ export default function UpgradePage() {
               <PlayerCard
                 key={card.id}
                 player={card.player}
+                badge={<CardSkillBadge code={card.skill_code} level={card.skill_level} />}
                 selected={feedingCard?.id === card.id}
                 onClick={() => setFeedingCard(card)}
               />

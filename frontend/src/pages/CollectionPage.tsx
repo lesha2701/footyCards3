@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import AlbumTab from "@/components/collection/AlbumTab";
 import MyCardsTab from "@/components/collection/MyCardsTab";
+import SkillTokensStrip from "@/components/collection/SkillTokensStrip";
 
 export default function CollectionPage() {
   const [tab, setTab] = useState<"album" | "mine">("album");
@@ -28,6 +29,8 @@ export default function CollectionPage() {
           Мои карточки
         </button>
       </div>
+
+      <SkillTokensStrip />
 
       {tab === "album" ? <AlbumTab /> : <MyCardsTab />}
     </div>

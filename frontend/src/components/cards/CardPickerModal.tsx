@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import EmptyState from "@/components/common/EmptyState";
 import { IconCollection } from "@/components/icons";
+import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import PlayerCard from "@/components/cards/PlayerCard";
 import type { UserCard } from "@/types";
 
@@ -18,10 +19,13 @@ interface Props {
   // reachable instead of just being cut off.
   searchValue?: string;
   onSearchChange?: (value: string) => void;
+  /** Show each copy's skill badge — only where skills have a match effect
+   * (Card Arena lineup, tournament squads), never in unrelated mini-games. */
+  showSkills?: boolean;
 }
 
 export default function CardPickerModal({
-  open, title, cards, disabledCardIds = [], onSelect, onClose, searchValue, onSearchChange,
+  open, title, cards, disabledCardIds = [], onSelect, onClose, searchValue, onSearchChange, showSkills = false,
 }: Props) {
   return (
     <AnimatePresence>
@@ -62,6 +66,7 @@ export default function CardPickerModal({
                     key={card.id}
                     player={card.player}
                     size="sm"
+                    badge={showSkills ? <CardSkillBadge code={card.skill_code} level={card.skill_level} /> : undefined}
                     dimmed={disabledCardIds.includes(card.id)}
                     onClick={() => !disabledCardIds.includes(card.id) && onSelect(card)}
                   />

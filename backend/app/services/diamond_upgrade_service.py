@@ -13,6 +13,7 @@ from app.models.player import Player
 from app.models.user import User
 from app.schemas.card import UserCardOut
 from app.schemas.diamond_upgrade import DiamondMaterialCardsOut, FeedCardsResult
+from app.services.card_skill_service import require_skill_loss_confirmation
 from app.services.game_config_service import get_config
 from app.services.player_stats_service import effective_card_stats
 from app.services.wallet_service import lock_user_for_update
@@ -79,7 +80,7 @@ async def _tier_for_rating(db: AsyncSession, rating: int) -> Optional[DiamondUpg
 
 
 async def feed_cards(
-    db: AsyncSession, user: User, diamond_card_id: int, material_card_ids: list[int]
+    db: AsyncSession, user: User, diamond_card_id: int, material_card_ids: list[int], confirm_skill_loss: bool = False,
 ) -> FeedCardsResult:
     if diamond_card_id in material_card_ids:
         raise ConflictError("A diamond card cannot be fed to itself")
@@ -110,6 +111,9 @@ async def feed_cards(
             raise NotFoundError("Card not found")
         if card.is_locked():
             raise ConflictError("This card is locked and cannot be used as material")
+    # Materials are destroyed; only the fed diamond card (same row, same
+    # identity) keeps its skill.
+    require_skill_loss_confirmation(material_cards, confirm_skill_loss, "прокачка бриллиантовой карточки")
 
     material_rarity = material_cards[0].player.rarity
     if any(c.player.rarity != material_rarity for c in material_cards):

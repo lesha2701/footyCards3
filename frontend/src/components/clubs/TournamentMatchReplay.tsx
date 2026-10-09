@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import MatchSkillNotes from "@/components/cards/MatchSkillNotes";
 import type { MatchEvent } from "@/types";
 
 const EVENT_STEP_MS = 950;
@@ -97,6 +98,7 @@ export function TournamentMatchReplay({
         {revealed.map((e, i) => (
           <p key={i} className={e.team === "a" ? "text-accent-green" : "text-ink-mist"}>
             <span className="font-mono text-ink-mist-dim">{e.minute}&apos;</span> {e.description}
+            <MatchSkillNotes event={e} />
           </p>
         ))}
       </div>

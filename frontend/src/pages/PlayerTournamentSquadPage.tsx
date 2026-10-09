@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
+import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
 import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPickerModal";
 import { IconCheck, IconChevronLeft, IconPlus } from "@/components/icons";
@@ -290,6 +291,7 @@ export default function PlayerTournamentSquadPage() {
                           {slot.player.position}
                         </span>
                         <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.player.rating}</span>
+                        <CardSkillBadge code={slot.skill_code} level={slot.skill_level} />
                       </>
                     ) : (
                       <>
@@ -321,6 +323,7 @@ export default function PlayerTournamentSquadPage() {
 
       {pickerSlot && (
         <CardPickerModal
+          showSkills
           open
           title={`Выбери на позицию ${CATEGORY_LABELS[pickerSlot.category as FormationSlot["category"]]}`}
           cards={cardsForSlot(pickerSlot)}

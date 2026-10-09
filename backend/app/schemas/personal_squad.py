@@ -38,6 +38,8 @@ class PersonalSquadSlotOut(BaseModel):
     user_card_id: int | None = None
     serial_number: int | None = None
     player: PlayerOut | None = None
+    skill_code: str | None = None
+    skill_level: int | None = None
 
 
 class PersonalSquadOut(BaseModel):

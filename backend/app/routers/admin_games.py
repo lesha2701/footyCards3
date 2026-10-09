@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_admin
+from app.core.exceptions import ConflictError
 from app.database import get_db
 from app.models.enums import GameSessionStatus, GameType, MatchStatus
 from app.models.game import GameSession
@@ -27,6 +28,9 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
     updates = payload.model_dump(exclude_unset=True)
     for key, value in updates.items():
         setattr(config, key, value)
+    if config.card_skill_probability_floor_pct >= config.card_skill_probability_ceiling_pct:
+        await db.rollback()
+        raise ConflictError("Нижняя граница вероятности навыков должна быть меньше верхней")
     db.add(config)
     await log_action(db, admin.id, "update_game_config", "game_config", config.id, old_value=old_value, new_value=updates, ip_address=request.client.host if request.client else None)
     await db.commit()

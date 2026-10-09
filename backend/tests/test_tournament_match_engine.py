@@ -155,14 +155,14 @@ def test_simulate_match_records_red_card_and_injury_availability(monkeypatch):
 
     fake_chances = [Chance(attacking_side="a", minute=10, quality="NORMAL", shot_type="in_box", is_box=True)]
 
-    def fake_resolve_shot_action(attacking_side, moment, config, quality_bias=0):
+    def fake_resolve_shot_action(attacking_side, moment, config, quality_bias=0, **_skill_kwargs):
         event = {
             "minute": moment["minute"], "event_type": "blocked", "team": attacking_side,
             "payload": {"shot_type": moment["shot_type"], "action": "shoot", "shooter": "X", "missed": False, "blocked": True},
         }
         return event, "none"
 
-    def fake_resolve_defense_tackle(defending_side, moment, config):
+    def fake_resolve_defense_tackle(defending_side, moment, config, **_skill_kwargs):
         event = {
             "minute": moment["minute"], "event_type": "foul_stopped", "team": defending_side,
             "payload": {"shot_type": moment["shot_type"], "action": "tackle", "defender": "Y", "card": "red", "is_penalty": False},

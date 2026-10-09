@@ -95,6 +95,7 @@ class TransactionType(str, enum.Enum):
     penalty_stake_lock = "penalty_stake_lock"
     penalty_stake_win = "penalty_stake_win"
     penalty_stake_refund = "penalty_stake_refund"
+    card_skill_purchase = "card_skill_purchase"
 
 
 class GiftKind(str, enum.Enum):

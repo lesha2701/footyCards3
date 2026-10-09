@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.models.coach import Coach
+from app.services.card_skill_effects import effect_of, skill_choice
 from app.services.club_tactical_profile_service import TeamTacticalProfile, position_fit, zone_weight
 from app.services.coach_boost_service import (
     defensive_shift_for,
@@ -157,6 +158,22 @@ def resolve_stage1(ratio: float) -> str:
     return random.choices(["breakdown", "stall", "advance"], weights=[breakdown, stall, advance], k=1)[0]
 
 
+def _resolve_stage1_for(ratio: float, duelist: Any, skill_notes: list | None) -> str:
+    """Stage-1 duel with the attacking duelist's own "dribbler" skill (player
+    tournaments only — club cards never carry a `skill`). Without that skill
+    this is exactly resolve_stage1(ratio), same RNG draw."""
+    effect = effect_of(getattr(duelist, "skill", None), "dribbler")
+    if effect is None:
+        return resolve_stage1(ratio)
+    outcome, notes = skill_choice(
+        ["breakdown", "stall", "advance"], list(_band(ratio, STAGE1_BANDS)), "advance", effect,
+        player=duelist.player.display_name,
+    )
+    if skill_notes is not None:
+        skill_notes.extend(notes)
+    return outcome
+
+
 def resolve_quality(combined_advantage: float) -> str:
     low, normal, high, very_high = _band(combined_advantage, STAGE2_BANDS)
     return random.choices(["LOW", "NORMAL", "HIGH", "VERY_HIGH"], weights=[low, normal, high, very_high], k=1)[0]
@@ -257,7 +274,9 @@ def _first_pass_quality_factor(midfield_control: float) -> float:
     return max(0.7, min(1.15, 0.7 + (midfield_control - 58) / (99 - 58) * 0.45))
 
 
-def resolve_counter(attacking_side_label: str, y: ClubTacticalSide, x: ClubTacticalSide) -> tuple[str, float] | None:
+def resolve_counter(
+    attacking_side_label: str, y: ClubTacticalSide, x: ClubTacticalSide, skill_notes: list | None = None,
+) -> tuple[str, float] | None:
     """Spec §6.5: Y (the team that just won the Stage-1 duel) gets an
     immediate transition check against X's shrunk defensive pool (Task 7),
     resolved via the SAME picked-duelist mechanism as Stage 1/Stage 2 (Task
@@ -283,7 +302,7 @@ def resolve_counter(attacking_side_label: str, y: ClubTacticalSide, x: ClubTacti
     shifted = max(0.05, min(0.95, raw_ratio - defender_ratio_shift_for(x)))
     ratio = _amplify(shifted)
 
-    outcome = resolve_stage1(ratio)
+    outcome = _resolve_stage1_for(ratio, y_duelist, skill_notes)
     if outcome != "advance":
         return None
 
@@ -420,10 +439,15 @@ def _pick_shot_type(config) -> str:
 
 
 def _card_to_actor(card: Any) -> dict:
-    return {
+    actor = {
         "club_card_id": card.id, "player_id": card.player_id, "name": card.player.display_name,
         "rating": card.player.rating, "position": card.player.position.value,
     }
+    # Only player-tournament adapters (_EngineCard) ever carry a skill effect.
+    skill = getattr(card, "skill", None)
+    if skill:
+        actor["skill"] = skill
+    return actor
 
 
 @dataclass
@@ -436,6 +460,8 @@ class Chance:
     shooter: dict = field(default_factory=dict)
     pass_target: dict = field(default_factory=dict)
     defender: dict = field(default_factory=dict)
+    # Card-skill notes from the duel(s) that created this chance (dribbler).
+    skill_notes: list = field(default_factory=list)
 
 
 def build_side(
@@ -493,7 +519,8 @@ def _resolve_progression_and_duel(attacker: ClubTacticalSide, defender: ClubTact
     attacker_duelist = weighted_pick(attacker.cards, zone)
     defender_duelist = _pick_defender(defender, defence_zone)
     ratio_1 = zone_ratio(attacker_duelist, zone, defender_duelist, defence_zone, ratio_shift)
-    outcome_1 = resolve_stage1(ratio_1)
+    stage1_notes: list = []
+    outcome_1 = _resolve_stage1_for(ratio_1, attacker_duelist, stage1_notes)
 
     if (
         outcome_1 == "stall"
@@ -503,18 +530,24 @@ def _resolve_progression_and_duel(attacker: ClubTacticalSide, defender: ClubTact
         attacker_duelist = weighted_pick(attacker.cards, zone)
         defender_duelist = _pick_defender(defender, defence_zone)
         ratio_1 = zone_ratio(attacker_duelist, zone, defender_duelist, defence_zone, ratio_shift)
-        outcome_1 = resolve_stage1(ratio_1)
+        # Only the duel that actually decides the phase keeps its notes.
+        stage1_notes = []
+        outcome_1 = _resolve_stage1_for(ratio_1, attacker_duelist, stage1_notes)
 
     if outcome_1 == "stall":
         return None
     if outcome_1 == "breakdown":
         defending_side_label = "b" if attacking_side == "a" else "a"
-        result = resolve_counter(defending_side_label, defender, attacker)
+        counter_notes: list = []
+        result = resolve_counter(defending_side_label, defender, attacker, skill_notes=counter_notes)
         if result is None:
             return None
         quality, ratio = result
         if quality == "CLEAN_BREAKAWAY":
-            return Chance(attacking_side=defending_side_label, minute=minute, quality="VERY_HIGH", shot_type="empty_net", is_box=False)
+            return Chance(
+                attacking_side=defending_side_label, minute=minute, quality="VERY_HIGH", shot_type="empty_net", is_box=False,
+                skill_notes=counter_notes,
+            )
         counter_shot_type = _pick_shot_type(config)
         counter_shooter = weighted_pick(defender.cards, "central_attack")
         return Chance(
@@ -523,6 +556,7 @@ def _resolve_progression_and_duel(attacker: ClubTacticalSide, defender: ClubTact
             shooter=_card_to_actor(counter_shooter),
             pass_target=_card_to_actor(weighted_pick(defender.cards, "central_attack", exclude_ids=frozenset({counter_shooter.id}))),
             defender=_card_to_actor(weighted_pick(attacker.cards, "central_defence")),
+            skill_notes=counter_notes,
         )
 
     # advance -> Stage 2 (spec §6.3)
@@ -535,6 +569,7 @@ def _resolve_progression_and_duel(attacker: ClubTacticalSide, defender: ClubTact
     return Chance(
         attacking_side=attacking_side, minute=minute, quality=quality, shot_type=shot_type, is_box=(shot_type == "in_box"),
         shooter=_card_to_actor(attacker_duelist), pass_target=_card_to_actor(attacker_second), defender=_card_to_actor(defender_second),
+        skill_notes=stage1_notes,
     )
 
 

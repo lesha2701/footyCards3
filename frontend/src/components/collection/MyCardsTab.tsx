@@ -12,7 +12,8 @@ import { useCardActions } from "@/components/collection/useCardActions";
 import { fetchCollection, fetchCollectionStats, type CollectionFilters } from "@/api/collection";
 import { fetchCollections } from "@/api/collections";
 import { RARITY_LABELS, RARITY_ORDER } from "@/lib/rarity";
-import type { Rarity } from "@/types";
+import CardSkillBadge from "@/components/cards/CardSkillBadge";
+import type { Rarity, UserCard } from "@/types";
 
 const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
 
@@ -138,11 +139,7 @@ export default function MyCardsTab() {
           <PlayerCard
             key={card.id}
             player={card.player}
-            badge={
-              card.duplicate_count && card.duplicate_count > 1 ? (
-                <span className="rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">×{card.duplicate_count}</span>
-              ) : undefined
-            }
+            badge={<CardTileBadges card={card} />}
             selected={selectMode && selected.includes(card.id)}
             onClick={() => (selectMode ? toggleSelect(card.id) : setDetailCard(card))}
           />
@@ -179,7 +176,11 @@ export default function MyCardsTab() {
             <span className="font-mono text-accent-lime">{totalSellValue}</span>
           </span>
           <button
-            onClick={() => setConfirmSell({ ids: selected, lastCopy: false })}
+            onClick={() => setConfirmSell({
+              ids: selected,
+              lastCopy: false,
+              skillLoss: (page?.items ?? []).some((c) => selected.includes(c.id) && !!c.skill_code),
+            })}
             className="rounded-full bg-red-500 px-4 py-2 text-xs font-bold text-white active:scale-95"
           >
             Продать
@@ -191,7 +192,7 @@ export default function MyCardsTab() {
         <CardDetailModal
           card={detailCard}
           onClose={() => setDetailCard(null)}
-          onSell={() => setConfirmSell({ ids: [detailCard.id], lastCopy: false })}
+          onSell={() => setConfirmSell({ ids: [detailCard.id], lastCopy: false, skillLoss: !!detailCard.skill_code })}
           onToggleHidden={(hidden) => hideMutation.mutate({ id: detailCard.id, hidden })}
           hiddenPending={hideMutation.isPending}
           onUpgrade={
@@ -208,16 +209,34 @@ export default function MyCardsTab() {
         open={!!confirmSell}
         title={confirmSell?.lastCopy ? "Это последний экземпляр!" : "Продать карточки?"}
         description={
-          confirmSell?.lastCopy
+          (confirmSell?.lastCopy
             ? "Ты продашь единственный экземпляр этого футболиста. Это действие нельзя отменить."
-            : "Монеты будут зачислены на баланс. Действие нельзя отменить."
+            : "Монеты будут зачислены на баланс. Действие нельзя отменить.")
+          + (confirmSell?.skillLoss ? " У карточки есть навык — он будет потерян, жетоны не вернутся." : "")
         }
         danger
         confirmLabel="Продать"
-        onConfirm={() => confirmSell && sellMutation.mutate({ ids: confirmSell.ids, confirmLastCopy: confirmSell.lastCopy })}
+        onConfirm={() => confirmSell && sellMutation.mutate({
+          ids: confirmSell.ids, confirmLastCopy: confirmSell.lastCopy, confirmSkillLoss: !!confirmSell.skillLoss,
+        })}
         onCancel={() => setConfirmSell(null)}
       />
     </div>
+  );
+}
+
+/** A skilled copy is listed as its own tile (backend list_user_cards), so a
+ * tile's skill badge is that exact copy's skill; ×N still counts every copy. */
+function CardTileBadges({ card }: { card: UserCard }) {
+  const hasDuplicates = !!card.duplicate_count && card.duplicate_count > 1;
+  if (!card.skill_code && !hasDuplicates) return null;
+  return (
+    <span className="flex items-center gap-1">
+      {hasDuplicates && (
+        <span className="rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">×{card.duplicate_count}</span>
+      )}
+      <CardSkillBadge code={card.skill_code} level={card.skill_level} />
+    </span>
   );
 }
 

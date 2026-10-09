@@ -18,11 +18,13 @@ from app.schemas.collection import (
     AlbumOverviewOut,
     AlbumPlayerOut,
     CollectionFilterParams,
+    SkilledCopyOut,
     UserCardListItem,
 )
 from app.schemas.pack import CollectionRewardGrantOut
 from app.schemas.player import PlayerOut
 from app.services import notification_service
+from app.services.card_skill_service import require_skill_loss_confirmation
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
 OTHER_COLLECTION_ID = -1
@@ -35,6 +37,35 @@ async def _duplicate_counts(db: AsyncSession, user_id: int) -> dict[int, int]:
         .group_by(UserCard.player_id)
     )
     return {player_id: count for player_id, count in result.all()}
+
+
+async def _skilled_copies(db: AsyncSession, user_id: int, player_ids: Iterable[int]) -> dict[int, list[SkilledCopyOut]]:
+    ids = list(player_ids)
+    if not ids:
+        return {}
+    result = await db.execute(
+        select(UserCard)
+        .where(UserCard.owner_id == user_id, UserCard.player_id.in_(ids), UserCard.skill_code.is_not(None))
+        .order_by(UserCard.skill_level.desc(), UserCard.serial_number)
+    )
+    by_player: dict[int, list[SkilledCopyOut]] = {}
+    for card in result.scalars().all():
+        by_player.setdefault(card.player_id, []).append(SkilledCopyOut(
+            id=card.id, serial_number=card.serial_number, skill_code=card.skill_code, skill_level=card.skill_level,
+        ))
+    return by_player
+
+
+def _pick_representative(current: Optional[UserCard], card: UserCard) -> UserCard:
+    """First card in sort order, except that a copy WITHOUT a skill wins over
+    a skilled one: the list's quick actions (sell, select-to-sell) act on the
+    representative, so they should never silently pick the skilled copy
+    while a plain duplicate exists. Skilled copies are listed separately."""
+    if current is None:
+        return card
+    if current.skill_code and not card.skill_code:
+        return card
+    return current
 
 
 async def list_user_cards(
@@ -86,19 +117,26 @@ async def list_user_cards(
     # A user can own several copies of the same player (duplicates); the
     # collection list should show each player once, with duplicate_count
     # conveying how many copies are owned — not one row per physical card.
-    representative_by_player: dict[int, UserCard] = {}
+    # Exception: a copy WITH a skill is a distinct item of its own (keyed by
+    # its card id), because every picker built on this list (lineups,
+    # tournament squads, trades, sell) must be able to choose exactly that
+    # copy — plain duplicates stay collapsed behind one representative.
+    representative_by_key: dict[object, UserCard] = {}
     for card in all_cards:
-        representative_by_player.setdefault(card.player_id, card)
-    unique_cards = list(representative_by_player.values())
+        key = ("skilled", card.id) if card.skill_code else card.player_id
+        representative_by_key[key] = _pick_representative(representative_by_key.get(key), card)
+    unique_cards = list(representative_by_key.values())
 
     total = len(unique_cards)
     page_cards = unique_cards[params.offset : params.offset + params.page_size]
 
     dup_counts = await _duplicate_counts(db, user_id)
+    skilled = await _skilled_copies(db, user_id, (c.player_id for c in page_cards))
     items = []
     for card in page_cards:
         item = UserCardListItem.model_validate(card)
         item.duplicate_count = dup_counts.get(card.player_id, 1)
+        item.skilled_copies = skilled.get(card.player_id, [])
         items.append(item)
 
     return Page.build(items, total, params)
@@ -119,6 +157,7 @@ async def set_card_hidden(db: AsyncSession, user_id: int, user_card_id: int, hid
     dup_counts = await _duplicate_counts(db, user_id)
     item = UserCardListItem.model_validate(card)
     item.duplicate_count = dup_counts.get(card.player_id, 1)
+    item.skilled_copies = (await _skilled_copies(db, user_id, [card.player_id])).get(card.player_id, [])
     return item
 
 
@@ -165,7 +204,9 @@ async def _assert_sellable(db: AsyncSession, user_id: int, card: UserCard, confi
         )
 
 
-async def sell_cards(db: AsyncSession, user: User, user_card_ids: List[int], confirm_last_copy: bool) -> dict:
+async def sell_cards(
+    db: AsyncSession, user: User, user_card_ids: List[int], confirm_last_copy: bool, confirm_skill_loss: bool = False,
+) -> dict:
     locked_user = await lock_user_for_update(db, user.id)
 
     result = await db.execute(
@@ -179,6 +220,7 @@ async def sell_cards(db: AsyncSession, user: User, user_card_ids: List[int], con
     for card in cards:
         await _assert_sellable(db, user.id, card, confirm_last_copy)
         total_value += card.player.quick_sell_price
+    require_skill_loss_confirmation(list(cards), confirm_skill_loss, "продажа")
 
     for card in cards:
         await db.delete(card)
@@ -433,7 +475,8 @@ async def get_album_collection_detail(
         )
         for card in cards_result.unique().scalars().all():
             dup_counts[card.player_id] = dup_counts.get(card.player_id, 0) + 1
-            owned_cards.setdefault(card.player_id, card)
+            owned_cards[card.player_id] = _pick_representative(owned_cards.get(card.player_id), card)
+    skilled = await _skilled_copies(db, user_id, owned_cards.keys())
 
     slots: List[AlbumPlayerOut] = []
     for player in players:
@@ -442,6 +485,7 @@ async def get_album_collection_detail(
         if card is not None:
             card_item = UserCardListItem.model_validate(card)
             card_item.duplicate_count = dup_counts.get(player.id, 1)
+            card_item.skilled_copies = skilled.get(player.id, [])
         slots.append(
             AlbumPlayerOut(
                 player=PlayerOut.model_validate(player), owned=card is not None,

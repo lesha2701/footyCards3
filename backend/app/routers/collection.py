@@ -82,14 +82,14 @@ async def get_my_stats(db: AsyncSession = Depends(get_db), user: User = Depends(
 async def sell_one_card(
     payload: SellCardRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    return await sell_cards(db, user, [payload.user_card_id], payload.confirm_last_copy)
+    return await sell_cards(db, user, [payload.user_card_id], payload.confirm_last_copy, payload.confirm_skill_loss)
 
 
 @router.post("/cards/bulk-sell", response_model=SellResultOut)
 async def sell_many_cards(
     payload: BulkSellRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    return await sell_cards(db, user, payload.user_card_ids, payload.confirm_last_copy)
+    return await sell_cards(db, user, payload.user_card_ids, payload.confirm_last_copy, payload.confirm_skill_loss)
 
 
 @router.get("/upgrade-rules", response_model=list[CardUpgradeRuleOut])
@@ -110,7 +110,9 @@ async def upgrade_my_cards(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return await upgrade_card(db, user, payload.user_card_ids, payload.to_rarity, payload.idempotency_key)
+    return await upgrade_card(
+        db, user, payload.user_card_ids, payload.to_rarity, payload.idempotency_key, payload.confirm_skill_loss,
+    )
 
 
 @router.get("/diamond-upgrade-tiers", response_model=list[DiamondUpgradeTierOut])
@@ -136,4 +138,4 @@ async def feed_diamond_card(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return await feed_cards(db, user, payload.diamond_card_id, payload.material_card_ids)
+    return await feed_cards(db, user, payload.diamond_card_id, payload.material_card_ids, payload.confirm_skill_loss)

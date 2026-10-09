@@ -10,6 +10,7 @@ from app.routers import (
     admin_badges,
     admin_bingo,
     admin_card_collections,
+    admin_card_skills,
     admin_card_upgrades,
     admin_club_packs,
     admin_clubs,
@@ -37,6 +38,7 @@ from app.routers import (
     bingo,
     broadcasts,
     card_collections,
+    card_skills,
     clubs,
     player_tournaments,
     collection,
@@ -108,6 +110,7 @@ app.include_router(tasks.router, prefix=API_PREFIX)
 app.include_router(players.router, prefix=API_PREFIX)
 app.include_router(card_collections.router, prefix=API_PREFIX)
 app.include_router(collection.router, prefix=API_PREFIX)
+app.include_router(card_skills.router, prefix=API_PREFIX)
 app.include_router(bingo.router, prefix=API_PREFIX)
 app.include_router(packs.router, prefix=API_PREFIX)
 app.include_router(free_pack.router, prefix=API_PREFIX)
@@ -142,6 +145,7 @@ app.include_router(admin_badges.router, prefix=API_PREFIX)
 app.include_router(admin_coin_packages.router, prefix=API_PREFIX)
 app.include_router(admin_card_collections.router, prefix=API_PREFIX)
 app.include_router(admin_card_upgrades.router, prefix=API_PREFIX)
+app.include_router(admin_card_skills.router, prefix=API_PREFIX)
 app.include_router(admin_diamond_upgrades.router, prefix=API_PREFIX)
 app.include_router(admin_bingo.router, prefix=API_PREFIX)
 app.include_router(admin_club_packs.router, prefix=API_PREFIX)

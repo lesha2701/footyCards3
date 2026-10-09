@@ -112,6 +112,8 @@ def _serialize(squad: PersonalSquad) -> PersonalSquadOut:
             user_card_id=card.id if card else None,
             serial_number=card.serial_number if card else None,
             player=card.player if card else None,
+            skill_code=card.skill_code if card else None,
+            skill_level=card.skill_level if card else None,
         ))
     coach = None
     if squad.user_coach_card is not None:

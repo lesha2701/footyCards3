@@ -9,6 +9,7 @@ import {
   fetchUpgradeableCards,
 } from "@/api/collection";
 import { IconChevronRight, IconStar, IconUpgrade } from "@/components/icons";
+import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
 import { RARITY_LABELS } from "@/lib/rarity";
@@ -83,7 +84,8 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
   };
 
   const feedMutation = useMutation({
-    mutationFn: () => feedDiamondCard(card.id, selected.map((c) => c.id)),
+    // Skilled materials are flagged on the confirm step before this runs.
+    mutationFn: () => feedDiamondCard(card.id, selected.map((c) => c.id), selected.some((c) => !!c.skill_code)),
     onSuccess: (data) => {
       hapticNotify("success");
       setResult(data);
@@ -176,6 +178,11 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
                       alt={c.player.display_name}
                       className="h-14 w-full rounded-lg object-cover"
                     />
+                    {c.skill_code && (
+                      <span className="absolute bottom-0.5 left-0.5">
+                        <CardSkillBadge code={c.skill_code} level={c.skill_level} />
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -218,6 +225,12 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
               получишь <b className="text-rarity-diamond">+{gain}</b> к рейтингу ({currentRating} → {currentRating + gain}). Карты
               будут безвозвратно потрачены.
             </p>
+            {selected.some((c) => !!c.skill_code) && (
+              <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                Среди выбранных карт есть карточки с навыком — их навыки будут потеряны, жетоны не вернутся. Навык самой
+                бриллиантовой карточки сохраняется.
+              </p>
+            )}
             {feedError && <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{feedError}</p>}
             <div className="mt-4 flex gap-2">
               <button

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -21,6 +22,9 @@ class UserCardOut(BaseModel):
     is_in_tactico_squad: bool
     hidden_from_trade: bool
     diamond_rating_bonus: int = 0
+    # This copy's own skill (see services/card_skill_service.py); null = none.
+    skill_code: Optional[str] = None
+    skill_level: Optional[int] = None
 
     @property
     def is_locked(self) -> bool:
@@ -54,6 +58,8 @@ class UserCardOut(BaseModel):
             "is_in_tactico_squad": data.is_in_tactico_squad,
             "hidden_from_trade": data.hidden_from_trade,
             "diamond_rating_bonus": bonus,
+            "skill_code": getattr(data, "skill_code", None),
+            "skill_level": getattr(data, "skill_level", None),
         }
 
 

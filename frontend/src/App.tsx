@@ -24,6 +24,7 @@ import AdminWheelPage from "@/admin/pages/AdminWheelPage";
 import AdminGamesPage from "@/admin/pages/AdminGamesPage";
 import AdminUpgradesPage from "@/admin/pages/AdminUpgradesPage";
 import AdminDiamondUpgradesPage from "@/admin/pages/AdminDiamondUpgradesPage";
+import AdminCardSkillsPage from "@/admin/pages/AdminCardSkillsPage";
 import AdminBingoPage from "@/admin/pages/AdminBingoPage";
 import AdminShopPage from "@/admin/pages/AdminShopPage";
 import AdminBroadcastsPage from "@/admin/pages/AdminBroadcastsPage";
@@ -190,6 +191,7 @@ export default function App() {
         <Route path="games" element={<AdminGamesPage />} />
         <Route path="upgrades" element={<AdminUpgradesPage />} />
         <Route path="diamond-upgrades" element={<AdminDiamondUpgradesPage />} />
+        <Route path="card-skills" element={<AdminCardSkillsPage />} />
         <Route path="bingo" element={<AdminBingoPage />} />
         <Route path="shop" element={<AdminShopPage />} />
         <Route path="broadcasts" element={<AdminBroadcastsPage />} />

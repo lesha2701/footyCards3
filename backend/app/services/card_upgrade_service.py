@@ -15,6 +15,7 @@ from app.models.player import Player
 from app.models.user import User
 from app.schemas.card_upgrade import CardUpgradeResultOut, UserCardOut
 from app.services.card_creation import create_user_card
+from app.services.card_skill_service import require_skill_loss_confirmation
 from app.services.collection_service import grant_collection_rewards_for_new_cards
 from app.services.pack_service import pick_random_player
 from app.services.wallet_service import debit_coins, lock_user_for_update
@@ -115,6 +116,7 @@ async def upgrade_card(
     user_card_ids: list[int],
     target_rarity: Rarity,
     idempotency_key: Optional[str],
+    confirm_skill_loss: bool = False,
 ) -> CardUpgradeResultOut:
     existing = await _existing_attempt(db, user.id, idempotency_key)
     if existing is not None:
@@ -140,6 +142,9 @@ async def upgrade_card(
             raise NotFoundError("Card not found")
         if card.is_locked_by_admin or card.is_locked_in_trade or card.is_in_lineup or card.is_in_tactico_squad:
             raise ConflictError("This card is locked and cannot be upgraded")
+    # Staked copies are destroyed (the result is a new random card), so a
+    # staked copy's skill is lost — never silently.
+    require_skill_loss_confirmation(ordered_cards, confirm_skill_loss, "апгрейд редкости")
 
     from_rarity = ordered_cards[0].player.rarity
     if any(c.player.rarity != from_rarity for c in ordered_cards):

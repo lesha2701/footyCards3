@@ -6,6 +6,7 @@ import { claimTask, fetchTasks } from "@/api/tasks";
 import EmptyState from "@/components/common/EmptyState";
 import { IconChat, IconCheck, IconCoin, IconPack, IconParty, IconTarget, IconTrophy, IconWarning } from "@/components/icons";
 import { ApiRequestError } from "@/lib/api";
+import { skillByCode, useSkillCatalog } from "@/lib/cardSkills";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { Task } from "@/types";
@@ -30,6 +31,7 @@ export default function TasksPage() {
       setClaimError(null);
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["collection"] });
+      if (data.granted_skill_tokens) queryClient.invalidateQueries({ queryKey: ["card-skills"] });
       if (data.granted_pack) {
         // Reuses the same full packshot + per-card reveal animation as a
         // real pack purchase, instead of a bespoke "reward received" popup.
@@ -211,6 +213,7 @@ function TaskCard({
               </>
             )}
           </p>
+          {task.reward_skill_code && !!task.reward_skill_tokens && <TaskSkillReward code={task.reward_skill_code} quantity={task.reward_skill_tokens} />}
         </div>
       </div>
 
@@ -256,5 +259,15 @@ function TaskCard({
         </button>
       )}
     </div>
+  );
+}
+
+function TaskSkillReward({ code, quantity }: { code: string; quantity: number }) {
+  const { data: catalog } = useSkillCatalog();
+  const skill = skillByCode(catalog?.skills, code);
+  return (
+    <p className="mt-0.5 text-[11px] font-semibold text-accent-lime">
+      + {skill?.icon} жетон «{skill?.name ?? code}» × {quantity}
+    </p>
   );
 }

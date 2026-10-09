@@ -20,6 +20,8 @@ class TaskDefinitionOut(BaseModel):
     condition_params: Optional[dict]
     reward_coins: int
     reward_pack_id: Optional[int]
+    reward_skill_code: Optional[str] = None
+    reward_skill_tokens: int = 0
     channel_username: Optional[str]
     channel_chat_id: Optional[int]
     invite_link: Optional[str]
@@ -48,6 +50,8 @@ class TaskDefinitionCreate(BaseModel):
     condition_params: Optional[dict] = None
     reward_coins: int = Field(default=0, ge=0)
     reward_pack_id: Optional[int] = None
+    reward_skill_code: Optional[str] = None
+    reward_skill_tokens: int = Field(default=0, ge=0, le=100)
     channel_username: Optional[str] = None
     channel_chat_id: Optional[int] = None
     invite_link: Optional[str] = None
@@ -65,6 +69,8 @@ class TaskDefinitionUpdate(BaseModel):
     condition_params: Optional[dict] = None
     reward_coins: Optional[int] = Field(default=None, ge=0)
     reward_pack_id: Optional[int] = None
+    reward_skill_code: Optional[str] = None
+    reward_skill_tokens: Optional[int] = Field(default=None, ge=0, le=100)
     channel_username: Optional[str] = None
     channel_chat_id: Optional[int] = None
     invite_link: Optional[str] = None
@@ -80,6 +86,8 @@ class TaskOut(BaseModel):
     category: TaskCategory
     reward_coins: int
     reward_pack_name: Optional[str] = None
+    reward_skill_code: Optional[str] = None
+    reward_skill_tokens: int = 0
     channel_username: Optional[str] = None
     invite_link: Optional[str] = None
     progress: int
@@ -98,8 +106,14 @@ class PremiumCoinsBackfillOut(BaseModel):
     users_credited: int
 
 
+class GrantedSkillTokensOut(BaseModel):
+    skill_code: str
+    quantity: int
+
+
 class TaskClaimOut(BaseModel):
     reward_coins: int
     new_balance: int
+    granted_skill_tokens: Optional[GrantedSkillTokensOut] = None
     granted_pack: Optional[PackOpenResult] = None
     refilled_task: Optional[TaskOut] = None

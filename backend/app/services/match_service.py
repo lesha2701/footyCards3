@@ -23,6 +23,7 @@ from app.schemas.match import (
 from app.schemas.lineup import LineupOut
 from app.schemas.ranking import RankingMetric
 from app.services import bingo_service, league_service, ranking_service, task_service
+from app.services.card_skill_effects import SNAPSHOT_VERSION, effect_for_card, effect_of, skill_roll
 from app.services.game_config_service import get_config
 from app.services.lineup_service import TACTIC_MULTIPLIERS, get_active_lineup, split_strength
 from app.services.match_situations import (
@@ -304,7 +305,8 @@ def _apply_red_card_debuff(state: dict, config: GameConfig) -> None:
 
 
 def _resolve_shot_continuation(
-    missed: bool, shot_type: str, config: GameConfig, blocker_rating: Optional[int], keeper_rating: int
+    missed: bool, shot_type: str, config: GameConfig, blocker_rating: Optional[int], keeper_rating: int,
+    keeper_effect: Optional[dict] = None, notes: Optional[list] = None,
 ) -> tuple[str, dict]:
     blocked = False
     saved = False
@@ -313,11 +315,36 @@ def _resolve_shot_continuation(
             blocker_rating, float(config.match_defender_block_chance_min), float(config.match_defender_block_chance_max)
         )
     if not missed and not blocked:
-        saved = random.random() < _lerp_chance_positive(
-            keeper_rating, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)
+        saved, save_notes = skill_roll(
+            _lerp_chance_positive(
+                keeper_rating, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)
+            ),
+            [(keeper_effect, 1, keeper_effect.get("player") if keeper_effect else None)],
         )
+        if notes is not None:
+            notes.extend(save_notes)
     outcome = "shot" if missed else "blocked" if blocked else "save" if saved else "goal"
     return outcome, {"missed": missed, "blocked": blocked}
+
+
+def _skills(state: dict) -> dict:
+    # Absent/None for matches started before skills existed or while the
+    # mechanic was off — every lookup below then resolves to "no effect".
+    return state.get("skills") or {}
+
+
+def _card_effect(state: dict, actor: dict, code: str) -> Optional[dict]:
+    return effect_of(_skills(state).get("cards", {}).get(str(actor.get("user_card_id"))), code)
+
+
+def _keeper_effect(state: dict, side: str) -> Optional[dict]:
+    return effect_of(_skills(state).get(f"{side}_gk"), "reflexes")
+
+
+def _with_skill_notes(payload: dict, notes: list) -> dict:
+    if notes:
+        payload["skills"] = notes
+    return payload
 
 
 def _resolve_breakaway(moment: dict, ratings: dict, config: GameConfig, opponent_name: str) -> tuple[dict, Optional[str]]:
@@ -343,15 +370,21 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
     shooter = moment["actors"]["shooter"]
     pass_target = moment["actors"]["pass_target"]
 
+    notes: list = []
     if action == "shoot":
         eff_rating = _clamp_rating(shooter["rating"] + situation.bias)
-        missed = random.random() < _lerp_chance(
-            eff_rating, float(config.match_attack_shoot_miss_chance_min), float(config.match_attack_shoot_miss_chance_max)
+        missed, shot_notes = skill_roll(
+            _lerp_chance(
+                eff_rating, float(config.match_attack_shoot_miss_chance_min), float(config.match_attack_shoot_miss_chance_max)
+            ),
+            [(_card_effect(state, shooter, "sniper"), -1, shooter["name"])],
         )
+        notes.extend(shot_notes)
         outcome, extra = _resolve_shot_continuation(
-            missed, shot_type, config, blocker_rating=ratings["opponent_def"], keeper_rating=ratings["opponent_gk"]
+            missed, shot_type, config, blocker_rating=ratings["opponent_def"], keeper_rating=ratings["opponent_gk"],
+            keeper_effect=_keeper_effect(state, "opponent"), notes=notes,
         )
-        payload = {"shot_type": shot_type, "action": action, "shooter": shooter["name"], **extra}
+        payload = _with_skill_notes({"shot_type": shot_type, "action": action, "shooter": shooter["name"], **extra}, notes)
         event = {
             "minute": moment["minute"], "event_type": outcome, "team": "user",
             "description": _describe_event(outcome, "user", opponent_name), "payload": payload,
@@ -360,24 +393,34 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
 
     # action == "pass"
     eff_passer_rating = _clamp_rating(shooter["rating"] - situation.bias)
-    pass_failed = random.random() < _lerp_chance(
-        eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max)
+    pass_failed, pass_notes = skill_roll(
+        _lerp_chance(eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max)),
+        [(_card_effect(state, shooter, "playmaker"), -1, shooter["name"])],
     )
+    notes.extend(pass_notes)
     if pass_failed:
         event = {
             "minute": moment["minute"], "event_type": "pass_failed", "team": "user",
             "description": _describe_event("pass_failed", "user", opponent_name),
-            "payload": {"shot_type": shot_type, "action": action, "passer": shooter["name"]},
+            "payload": _with_skill_notes({"shot_type": shot_type, "action": action, "passer": shooter["name"]}, notes),
         }
         return event, None
 
-    missed = random.random() < _lerp_chance(
-        pass_target["rating"], float(config.match_receiver_shot_miss_chance_min), float(config.match_receiver_shot_miss_chance_max)
+    missed, shot_notes = skill_roll(
+        _lerp_chance(
+            pass_target["rating"], float(config.match_receiver_shot_miss_chance_min), float(config.match_receiver_shot_miss_chance_max)
+        ),
+        [(_card_effect(state, pass_target, "sniper"), -1, pass_target["name"])],
     )
+    notes.extend(shot_notes)
     outcome, extra = _resolve_shot_continuation(
-        missed, shot_type, config, blocker_rating=ratings["opponent_def"], keeper_rating=ratings["opponent_gk"]
+        missed, shot_type, config, blocker_rating=ratings["opponent_def"], keeper_rating=ratings["opponent_gk"],
+        keeper_effect=_keeper_effect(state, "opponent"), notes=notes,
     )
-    payload = {"shot_type": shot_type, "action": action, "shooter": pass_target["name"], "assisted_by": shooter["name"], **extra}
+    payload = _with_skill_notes(
+        {"shot_type": shot_type, "action": action, "shooter": pass_target["name"], "assisted_by": shooter["name"], **extra},
+        notes,
+    )
     event = {
         "minute": moment["minute"], "event_type": outcome, "team": "user",
         "description": _describe_event(outcome, "user", opponent_name), "payload": payload,
@@ -412,18 +455,20 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
 
         if "box" in situation.tags:
             eff_gk = _clamp_rating(ratings["user_gk"] - config.match_penalty_gk_rating_penalty)
-            saved = random.random() < _lerp_chance_positive(
-                eff_gk, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)
+            keeper = _keeper_effect(state, "user")
+            saved, save_notes = skill_roll(
+                _lerp_chance_positive(eff_gk, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
+                [(keeper, 1, keeper.get("player") if keeper else None)],
             )
             outcome = "save" if saved else "goal"
             prefix = "🟥 Красная карточка, пенальти! " if card == "red" else "🟨 Жёлтая карточка, пенальти! "
             event = {
                 "minute": moment["minute"], "event_type": outcome, "team": "opponent",
                 "description": prefix + _describe_event(outcome, "opponent", opponent_name),
-                "payload": {
+                "payload": _with_skill_notes({
                     "shot_type": shot_type, "action": action, "defender": defender["name"],
                     "card": card, "is_penalty": True,
-                },
+                }, save_notes),
             }
             return event, "opponent" if outcome == "goal" else None
 
@@ -452,13 +497,15 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
         missed = random.random() < _lerp_chance(
             ratings["opponent_fwd"], float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
         )
+        notes: list = []
         outcome, extra = _resolve_shot_continuation(
-            missed, shot_type, config, blocker_rating=None, keeper_rating=ratings["user_gk"]
+            missed, shot_type, config, blocker_rating=None, keeper_rating=ratings["user_gk"],
+            keeper_effect=_keeper_effect(state, "user"), notes=notes,
         )
         event = {
             "minute": moment["minute"], "event_type": outcome, "team": "opponent",
             "description": _describe_event(outcome, "opponent", opponent_name),
-            "payload": {"shot_type": shot_type, "action": action, "defender": defender["name"], **extra},
+            "payload": _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"], **extra}, notes),
         }
         return event, "opponent" if outcome == "goal" else None
 
@@ -466,13 +513,15 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
     missed = random.random() < _lerp_chance(
         ratings["opponent_fwd"], float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
     )
+    notes = []
     outcome, extra = _resolve_shot_continuation(
-        missed, shot_type, config, blocker_rating=None, keeper_rating=ratings["user_gk"]
+        missed, shot_type, config, blocker_rating=None, keeper_rating=ratings["user_gk"],
+        keeper_effect=_keeper_effect(state, "user"), notes=notes,
     )
     event = {
         "minute": moment["minute"], "event_type": outcome, "team": "opponent",
         "description": _describe_event(outcome, "opponent", opponent_name),
-        "payload": {"shot_type": shot_type, "action": action, "defender": defender["name"], **extra},
+        "payload": _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"], **extra}, notes),
     }
     return event, "opponent" if outcome == "goal" else None
 
@@ -614,6 +663,41 @@ async def _finalize_match(
     await bingo_service.increment_goal(db, BingoGoalType.arena_matches_played, 1)
 
 
+def _lineup_gk(lineup: LineupOut):
+    return next((s.card for s in lineup.slots if s.category == "GK" and s.card), None)
+
+
+def _card_skill_effect(card, config: GameConfig) -> Optional[dict]:
+    effect = effect_for_card(card.skill_code, card.skill_level, card.player.position, config)
+    if effect is not None:
+        effect["player"] = card.player.display_name
+    return effect
+
+
+def build_skill_snapshot(lineup: LineupOut, opponent_lineup: Optional[LineupOut], config: GameConfig) -> Optional[dict]:
+    """Frozen once at match start into Match.server_state["skills"], so later
+    card or GameConfig edits never reach this match. In Card Arena only the
+    user's own cards act individually (the opponent's shots/defending are
+    team aggregates), so the opponent's real goalkeeper is the only opponent
+    card that can carry an effect. None when the mechanic is off."""
+    if not config.card_skills_enabled:
+        return None
+    cards: dict[str, dict] = {}
+    for slot in lineup.slots:
+        if slot.card is not None:
+            effect = _card_skill_effect(slot.card, config)
+            if effect is not None:
+                cards[str(slot.card.id)] = effect
+    user_gk = _lineup_gk(lineup)
+    opponent_gk = _lineup_gk(opponent_lineup) if opponent_lineup is not None else None
+    return {
+        "version": SNAPSHOT_VERSION,
+        "cards": cards,
+        "user_gk": cards.get(str(user_gk.id)) if user_gk is not None else None,
+        "opponent_gk": _card_skill_effect(opponent_gk, config) if opponent_gk is not None else None,
+    }
+
+
 async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) -> MatchOut:
     config = await get_config(db)
     difficulty_multiplier = {
@@ -693,6 +777,7 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
         },
         "cards": {},
         "red_card_applied": False,
+        "skills": build_skill_snapshot(lineup, opponent_lineup, config),
     }
 
     match = Match(

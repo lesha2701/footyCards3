@@ -12,7 +12,7 @@ from app.models.task import TaskDefinition, UserTask
 from app.models.trade import TradeOffer
 from app.models.user import User
 from app.schemas.pack import PackOpenResult
-from app.schemas.task import TaskClaimOut, TaskListOut, TaskOut
+from app.schemas.task import GrantedSkillTokensOut, TaskClaimOut, TaskListOut, TaskOut
 from app.services.telegram_service import check_channel_membership
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
@@ -152,6 +152,8 @@ async def _to_task_out(db: AsyncSession, user_task: UserTask, definition: TaskDe
         category=definition.category,
         reward_coins=definition.reward_coins,
         reward_pack_name=await _pack_name(db, definition.reward_pack_id),
+        reward_skill_code=definition.reward_skill_code if definition.reward_skill_tokens > 0 else None,
+        reward_skill_tokens=definition.reward_skill_tokens if definition.reward_skill_code else 0,
         channel_username=definition.channel_username,
         invite_link=definition.invite_link,
         progress=user_task.progress,
@@ -380,6 +382,20 @@ async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> 
                 db, locked_user, [item.card.player.id for item in granted_pack.cards]
             )
 
+    granted_tokens: Optional[GrantedSkillTokensOut] = None
+    if definition.reward_skill_code and definition.reward_skill_tokens > 0 and not locked_user.game_rewards_blocked:
+        # Same transaction and same user_task row lock as the coin reward
+        # above, so a concurrent/retried claim cannot grant tokens twice.
+        from app.services.card_skill_service import grant_tokens
+
+        await grant_tokens(
+            db, locked_user, definition.reward_skill_code, definition.reward_skill_tokens, "grant_task",
+            related_object_type="user_task", related_object_id=user_task.id, reason=f"Задание «{definition.name}»",
+        )
+        granted_tokens = GrantedSkillTokensOut(
+            skill_code=definition.reward_skill_code, quantity=definition.reward_skill_tokens,
+        )
+
     user_task.reward_claimed = True
     refilled_task_out: Optional[TaskOut] = None
     if definition.category == TaskCategory.regular:
@@ -410,5 +426,6 @@ async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> 
         reward_coins=reward_coins,
         new_balance=locked_user.balance,
         granted_pack=granted_pack,
+        granted_skill_tokens=granted_tokens,
         refilled_task=refilled_task_out,
     )

@@ -41,18 +41,20 @@ export async function fetchCollectionStats(): Promise<CollectionStats> {
   return data;
 }
 
-export async function sellCard(userCardId: number, confirmLastCopy = false) {
+export async function sellCard(userCardId: number, confirmLastCopy = false, confirmSkillLoss = false) {
   const { data } = await api.post("/collection/cards/sell", {
     user_card_id: userCardId,
     confirm_last_copy: confirmLastCopy,
+    confirm_skill_loss: confirmSkillLoss,
   });
   return data as { sold_count: number; coins_earned: number; new_balance: number };
 }
 
-export async function bulkSellCards(userCardIds: number[], confirmLastCopy = false) {
+export async function bulkSellCards(userCardIds: number[], confirmLastCopy = false, confirmSkillLoss = false) {
   const { data } = await api.post("/collection/cards/bulk-sell", {
     user_card_ids: userCardIds,
     confirm_last_copy: confirmLastCopy,
+    confirm_skill_loss: confirmSkillLoss,
   });
   return data as { sold_count: number; coins_earned: number; new_balance: number };
 }
@@ -77,12 +79,14 @@ export async function fetchUpgradeableCards(rarity: Rarity): Promise<UserCard[]>
 export async function upgradeCards(
   userCardIds: number[],
   toRarity: Rarity,
-  idempotencyKey?: string
+  idempotencyKey?: string,
+  confirmSkillLoss = false
 ): Promise<CardUpgradeResult> {
   const { data } = await api.post<CardUpgradeResult>("/collection/upgrade", {
     user_card_ids: userCardIds,
     to_rarity: toRarity,
     idempotency_key: idempotencyKey,
+    confirm_skill_loss: confirmSkillLoss,
   });
   return data;
 }
@@ -104,10 +108,15 @@ export async function fetchDiamondMaterialCards(diamondCardId: number): Promise<
   return data;
 }
 
-export async function feedDiamondCard(diamondCardId: number, materialCardIds: number[]): Promise<FeedCardsResult> {
+export async function feedDiamondCard(
+  diamondCardId: number,
+  materialCardIds: number[],
+  confirmSkillLoss = false
+): Promise<FeedCardsResult> {
   const { data } = await api.post<FeedCardsResult>("/collection/diamond-upgrade/feed", {
     diamond_card_id: diamondCardId,
     material_card_ids: materialCardIds,
+    confirm_skill_loss: confirmSkillLoss,
   });
   return data;
 }

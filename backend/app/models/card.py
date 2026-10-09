@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -35,6 +35,15 @@ class UserCard(Base):
     # card, not Player.rating, so leveling one copy never affects other
     # users' copies of the same diamond player.
     diamond_rating_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Personal skill of THIS copy (see services/card_skill_service.py). Lives
+    # on the owned card row, like diamond_rating_bonus, so it travels with the
+    # card on a trade (owner_id changes, the row doesn't) and two copies of
+    # the same player are fully independent. NULL/NULL = no skill (every card
+    # that existed before the feature).
+    skill_code: Mapped[Optional[str]] = mapped_column(
+        String(32), ForeignKey("card_skills.code", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    skill_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     owner: Mapped["User"] = relationship(back_populates="cards")
     player: Mapped["Player"] = relationship(back_populates="cards")
@@ -44,4 +53,9 @@ class UserCard(Base):
 
     __table_args__ = (
         UniqueConstraint("player_id", "serial_number", name="uq_user_cards_player_serial"),
+        CheckConstraint(
+            "(skill_code IS NULL AND skill_level IS NULL) OR "
+            "(skill_code IS NOT NULL AND skill_level IS NOT NULL AND skill_level BETWEEN 1 AND 3)",
+            name="ck_user_cards_skill_level",
+        ),
     )

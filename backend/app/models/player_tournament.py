@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -59,6 +60,9 @@ class PlayerTournamentMatch(Base):
     score_b: Mapped[int] = mapped_column(Integer, nullable=False)
     event_log: Mapped[list] = mapped_column(JSON, nullable=False)
     simulated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Card-skill effects frozen for this match ({"a": {card_id: effect}, "b": ...});
+    # NULL for matches without any skill effect, including every pre-skill match.
+    skill_snapshot: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (
         CheckConstraint("round_number >= 1 AND round_number <= 30", name="ck_player_tournament_matches_round_range"),
