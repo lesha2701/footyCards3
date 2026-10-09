@@ -63,6 +63,9 @@ services:
     environment:
       VITE_API_URL: ${VITE_API_URL:-/api/v1}
       VITE_STATIC_URL: ${VITE_STATIC_URL:-/static}
+      # Bind-mounted sources don't emit file events on Windows/macOS Docker
+      # Desktop; polling makes the dev server hot-reload after edits.
+      VITE_WATCH_POLLING: ${VITE_WATCH_POLLING:-true}
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import AdminToastContainer from "@/admin/AdminToastContainer";
@@ -84,7 +84,9 @@ export default function AdminLayout() {
           </nav>
         )}
         <main className="min-w-0 max-w-full overflow-x-hidden p-4 md:p-6">
-          <Outlet />
+          <Suspense fallback={<p className="text-sm text-slate-400">Загрузка...</p>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       <AdminToastContainer />

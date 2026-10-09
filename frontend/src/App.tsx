@@ -1,88 +1,8 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import AppLayout from "@/components/layout/AppLayout";
-import AdminGuard from "@/admin/AdminGuard";
-import AdminLayout from "@/admin/AdminLayout";
-import AdminDashboardPage from "@/admin/pages/AdminDashboardPage";
-import AdminUsersPage from "@/admin/pages/AdminUsersPage";
-import AdminPlayersPage from "@/admin/pages/AdminPlayersPage";
-import AdminCoachesPage from "@/admin/pages/AdminCoachesPage";
-import AdminStadiumsPage from "@/admin/pages/AdminStadiumsPage";
-import AdminPacksPage from "@/admin/pages/AdminPacksPage";
-import AdminClubPacksPage from "@/admin/pages/AdminClubPacksPage";
-import AdminClubsPage from "@/admin/pages/AdminClubsPage";
-import AdminTournamentsPage from "@/admin/pages/AdminTournamentsPage";
-import AdminCardCollectionsPage from "@/admin/pages/AdminCardCollectionsPage";
-import AdminTasksPage from "@/admin/pages/AdminTasksPage";
-import AdminTradesPage from "@/admin/pages/AdminTradesPage";
-import AdminTrophiesPage from "@/admin/pages/AdminTrophiesPage";
-import AdminLeaguesPage from "@/admin/pages/AdminLeaguesPage";
-import AdminGiftsPage from "@/admin/pages/AdminGiftsPage";
-import AdminDailyRewardsPage from "@/admin/pages/AdminDailyRewardsPage";
-import AdminWheelPage from "@/admin/pages/AdminWheelPage";
-import AdminGamesPage from "@/admin/pages/AdminGamesPage";
-import AdminUpgradesPage from "@/admin/pages/AdminUpgradesPage";
-import AdminDiamondUpgradesPage from "@/admin/pages/AdminDiamondUpgradesPage";
-import AdminCardSkillsPage from "@/admin/pages/AdminCardSkillsPage";
-import AdminBingoPage from "@/admin/pages/AdminBingoPage";
-import AdminShopPage from "@/admin/pages/AdminShopPage";
-import AdminBroadcastsPage from "@/admin/pages/AdminBroadcastsPage";
-import AdminLogPage from "@/admin/pages/AdminLogPage";
 import HomePage from "@/pages/HomePage";
-import WheelPage from "@/pages/WheelPage";
-import PacksPage from "@/pages/PacksPage";
-import PackOpenPage from "@/pages/PackOpenPage";
-import PlayPage from "@/pages/PlayPage";
-import MemoryGamePage from "@/pages/MemoryGamePage";
-import ArenaPage from "@/pages/ArenaPage";
-import TacticoMatchesPage from "@/pages/TacticoMatchesPage";
-import TacticoMatchPage from "@/pages/TacticoMatchPage";
-import TacticoOpenChallengePage from "@/pages/TacticoOpenChallengePage";
-import TacticoSearchPage from "@/pages/TacticoSearchPage";
-import TacticoSquadPage from "@/pages/TacticoSquadPage";
-import SaboteurGamePage from "@/pages/SaboteurGamePage";
-import PenaltyGamePage from "@/pages/PenaltyGamePage";
-import PenaltyMatchesPage from "@/pages/PenaltyMatchesPage";
-import PenaltyMatchPage from "@/pages/PenaltyMatchPage";
-import PenaltyOpenChallengePage from "@/pages/PenaltyOpenChallengePage";
-import PenaltySearchPage from "@/pages/PenaltySearchPage";
-import FreeKickGamePage from "@/pages/FreeKickGamePage";
-import HangmanGamePage from "@/pages/HangmanGamePage";
-import PairsGamePage from "@/pages/PairsGamePage";
-import FutDraftGamePage from "@/pages/FutDraftGamePage";
-import ClubCreatePage from "@/pages/ClubCreatePage";
-import ClubGamePage from "@/pages/ClubGamePage";
-import ClubGamesPage from "@/pages/ClubGamesPage";
-import ClubPenaltyPage from "@/pages/ClubPenaltyPage";
-import ClubPositionMatchGamePage from "@/pages/ClubPositionMatchGamePage";
-import ClubsPage from "@/pages/ClubsPage";
-import TournamentMatchPage from "@/pages/TournamentMatchPage";
-import TournamentPage from "@/pages/TournamentPage";
-import ClubActivityPage from "@/pages/ClubActivityPage";
-import ClubStatsPage from "@/pages/ClubStatsPage";
-import ClubSquadPage from "@/pages/ClubSquadPage";
-import ClubPacksPage from "@/pages/ClubPacksPage";
-import ClubPackOpenPage from "@/pages/ClubPackOpenPage";
-import CollectionPage from "@/pages/CollectionPage";
-import TradesPage from "@/pages/TradesPage";
-import NewTradePage from "@/pages/NewTradePage";
-import TradeDetailPage from "@/pages/TradeDetailPage";
-import TasksPage from "@/pages/TasksPage";
-import UpgradePage from "@/pages/UpgradePage";
-import BingoPage from "@/pages/BingoPage";
-import RankingPage from "@/pages/RankingPage";
-import ClubLeaderboardPage from "@/pages/ClubLeaderboardPage";
-import PlayerTournamentPage from "@/pages/PlayerTournamentPage";
-import PlayerTournamentRatingPage from "@/pages/PlayerTournamentRatingPage";
-import PlayerTournamentStatsPage from "@/pages/PlayerTournamentStatsPage";
-import PlayerTournamentSquadPage from "@/pages/PlayerTournamentSquadPage";
-import PlayerTournamentDetailPage from "@/pages/PlayerTournamentDetailPage";
-import PlayerTournamentMatchPage from "@/pages/PlayerTournamentMatchPage";
-import LeaguePage from "@/pages/LeaguePage";
-import ProfilePage from "@/pages/ProfilePage";
-import GiftsPage from "@/pages/GiftsPage";
-import PublicProfilePage from "@/pages/PublicProfilePage";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import OnboardingScreen from "@/components/common/OnboardingScreen";
@@ -93,6 +13,90 @@ import { useUiStore } from "@/store/uiStore";
 import { getTelegramColorScheme, initTelegramApp, isInsideTelegram } from "@/lib/telegram";
 import { ApiRequestError } from "@/lib/api";
 import { hasSeenOnboarding, markOnboardingSeen } from "@/lib/onboarding";
+
+// Every screen except the landing page is split into its own chunk and
+// fetched on first visit — players never download the admin panel, and the
+// first load in Telegram only pays for what the home screen needs.
+const AdminGuard = lazy(() => import("@/admin/AdminGuard"));
+const AdminLayout = lazy(() => import("@/admin/AdminLayout"));
+const AdminDashboardPage = lazy(() => import("@/admin/pages/AdminDashboardPage"));
+const AdminUsersPage = lazy(() => import("@/admin/pages/AdminUsersPage"));
+const AdminPlayersPage = lazy(() => import("@/admin/pages/AdminPlayersPage"));
+const AdminCoachesPage = lazy(() => import("@/admin/pages/AdminCoachesPage"));
+const AdminStadiumsPage = lazy(() => import("@/admin/pages/AdminStadiumsPage"));
+const AdminPacksPage = lazy(() => import("@/admin/pages/AdminPacksPage"));
+const AdminClubPacksPage = lazy(() => import("@/admin/pages/AdminClubPacksPage"));
+const AdminClubsPage = lazy(() => import("@/admin/pages/AdminClubsPage"));
+const AdminTournamentsPage = lazy(() => import("@/admin/pages/AdminTournamentsPage"));
+const AdminCardCollectionsPage = lazy(() => import("@/admin/pages/AdminCardCollectionsPage"));
+const AdminTasksPage = lazy(() => import("@/admin/pages/AdminTasksPage"));
+const AdminTradesPage = lazy(() => import("@/admin/pages/AdminTradesPage"));
+const AdminTrophiesPage = lazy(() => import("@/admin/pages/AdminTrophiesPage"));
+const AdminLeaguesPage = lazy(() => import("@/admin/pages/AdminLeaguesPage"));
+const AdminGiftsPage = lazy(() => import("@/admin/pages/AdminGiftsPage"));
+const AdminDailyRewardsPage = lazy(() => import("@/admin/pages/AdminDailyRewardsPage"));
+const AdminWheelPage = lazy(() => import("@/admin/pages/AdminWheelPage"));
+const AdminGamesPage = lazy(() => import("@/admin/pages/AdminGamesPage"));
+const AdminUpgradesPage = lazy(() => import("@/admin/pages/AdminUpgradesPage"));
+const AdminDiamondUpgradesPage = lazy(() => import("@/admin/pages/AdminDiamondUpgradesPage"));
+const AdminCardSkillsPage = lazy(() => import("@/admin/pages/AdminCardSkillsPage"));
+const AdminBingoPage = lazy(() => import("@/admin/pages/AdminBingoPage"));
+const AdminShopPage = lazy(() => import("@/admin/pages/AdminShopPage"));
+const AdminBroadcastsPage = lazy(() => import("@/admin/pages/AdminBroadcastsPage"));
+const AdminLogPage = lazy(() => import("@/admin/pages/AdminLogPage"));
+const WheelPage = lazy(() => import("@/pages/WheelPage"));
+const PacksPage = lazy(() => import("@/pages/PacksPage"));
+const PackOpenPage = lazy(() => import("@/pages/PackOpenPage"));
+const PlayPage = lazy(() => import("@/pages/PlayPage"));
+const MemoryGamePage = lazy(() => import("@/pages/MemoryGamePage"));
+const ArenaPage = lazy(() => import("@/pages/ArenaPage"));
+const TacticoMatchesPage = lazy(() => import("@/pages/TacticoMatchesPage"));
+const TacticoMatchPage = lazy(() => import("@/pages/TacticoMatchPage"));
+const TacticoOpenChallengePage = lazy(() => import("@/pages/TacticoOpenChallengePage"));
+const TacticoSearchPage = lazy(() => import("@/pages/TacticoSearchPage"));
+const TacticoSquadPage = lazy(() => import("@/pages/TacticoSquadPage"));
+const SaboteurGamePage = lazy(() => import("@/pages/SaboteurGamePage"));
+const PenaltyGamePage = lazy(() => import("@/pages/PenaltyGamePage"));
+const PenaltyMatchesPage = lazy(() => import("@/pages/PenaltyMatchesPage"));
+const PenaltyMatchPage = lazy(() => import("@/pages/PenaltyMatchPage"));
+const PenaltyOpenChallengePage = lazy(() => import("@/pages/PenaltyOpenChallengePage"));
+const PenaltySearchPage = lazy(() => import("@/pages/PenaltySearchPage"));
+const FreeKickGamePage = lazy(() => import("@/pages/FreeKickGamePage"));
+const HangmanGamePage = lazy(() => import("@/pages/HangmanGamePage"));
+const PairsGamePage = lazy(() => import("@/pages/PairsGamePage"));
+const FutDraftGamePage = lazy(() => import("@/pages/FutDraftGamePage"));
+const ClubCreatePage = lazy(() => import("@/pages/ClubCreatePage"));
+const ClubGamePage = lazy(() => import("@/pages/ClubGamePage"));
+const ClubGamesPage = lazy(() => import("@/pages/ClubGamesPage"));
+const ClubPenaltyPage = lazy(() => import("@/pages/ClubPenaltyPage"));
+const ClubPositionMatchGamePage = lazy(() => import("@/pages/ClubPositionMatchGamePage"));
+const ClubsPage = lazy(() => import("@/pages/ClubsPage"));
+const TournamentMatchPage = lazy(() => import("@/pages/TournamentMatchPage"));
+const TournamentPage = lazy(() => import("@/pages/TournamentPage"));
+const ClubActivityPage = lazy(() => import("@/pages/ClubActivityPage"));
+const ClubStatsPage = lazy(() => import("@/pages/ClubStatsPage"));
+const ClubSquadPage = lazy(() => import("@/pages/ClubSquadPage"));
+const ClubPacksPage = lazy(() => import("@/pages/ClubPacksPage"));
+const ClubPackOpenPage = lazy(() => import("@/pages/ClubPackOpenPage"));
+const CollectionPage = lazy(() => import("@/pages/CollectionPage"));
+const TradesPage = lazy(() => import("@/pages/TradesPage"));
+const NewTradePage = lazy(() => import("@/pages/NewTradePage"));
+const TradeDetailPage = lazy(() => import("@/pages/TradeDetailPage"));
+const TasksPage = lazy(() => import("@/pages/TasksPage"));
+const UpgradePage = lazy(() => import("@/pages/UpgradePage"));
+const BingoPage = lazy(() => import("@/pages/BingoPage"));
+const RankingPage = lazy(() => import("@/pages/RankingPage"));
+const ClubLeaderboardPage = lazy(() => import("@/pages/ClubLeaderboardPage"));
+const PlayerTournamentPage = lazy(() => import("@/pages/PlayerTournamentPage"));
+const PlayerTournamentRatingPage = lazy(() => import("@/pages/PlayerTournamentRatingPage"));
+const PlayerTournamentStatsPage = lazy(() => import("@/pages/PlayerTournamentStatsPage"));
+const PlayerTournamentSquadPage = lazy(() => import("@/pages/PlayerTournamentSquadPage"));
+const PlayerTournamentDetailPage = lazy(() => import("@/pages/PlayerTournamentDetailPage"));
+const PlayerTournamentMatchPage = lazy(() => import("@/pages/PlayerTournamentMatchPage"));
+const LeaguePage = lazy(() => import("@/pages/LeaguePage"));
+const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
+const GiftsPage = lazy(() => import("@/pages/GiftsPage"));
+const PublicProfilePage = lazy(() => import("@/pages/PublicProfilePage"));
 
 function PenaltySearchRoute() {
   const location = useLocation();
@@ -169,6 +173,7 @@ export default function App() {
   }
 
   return (
+    <Suspense fallback={<LoadingScreen />}>
     <Routes>
       <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
         <Route index element={<AdminDashboardPage />} />
@@ -258,5 +263,6 @@ export default function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   );
 }

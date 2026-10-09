@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 
 import LeaveConfirmDialog from "@/components/common/LeaveConfirmDialog";
+import { ListSkeleton } from "@/components/common/Skeleton";
 import AnnouncementBanner from "@/components/layout/AnnouncementBanner";
 import BottomNav from "@/components/layout/BottomNav";
 import MaintenanceBanner from "@/components/layout/MaintenanceBanner";
@@ -52,7 +53,11 @@ export default function AppLayout() {
       <UpdateBanner />
       <AnnouncementBanner />
       <main className="flex-1 px-4 pb-24 pt-3">
-        <Outlet />
+        {/* Lazy pages load inside the layout, so the top bar and bottom
+            navigation stay put while a screen's chunk downloads. */}
+        <Suspense fallback={<ListSkeleton count={4} />}>
+          <Outlet />
+        </Suspense>
       </main>
       <BottomNav />
       <LeaveConfirmDialog />
