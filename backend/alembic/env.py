@@ -36,7 +36,14 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection):
-    context.configure(connection=connection, target_metadata=target_metadata)
+    # One transaction per migration: Postgres rejects using an enum value
+    # added by ALTER TYPE ... ADD VALUE (e.g. 0083's 'diamond') until it is
+    # committed, so a fresh `upgrade head` in a single transaction fails.
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        transaction_per_migration=True,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
