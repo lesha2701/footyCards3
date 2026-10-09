@@ -7,7 +7,7 @@ import EmptyState from "@/components/common/EmptyState";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import CardDetailModal from "@/components/collection/CardDetailModal";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
-import { bestSkilledCopy } from "@/lib/cardSkills";
+import { bestSkilledCopy, useSkillUpgradeCheck } from "@/lib/cardSkills";
 import { useCardActions } from "@/components/collection/useCardActions";
 import { IconChevronLeft, IconChevronRight, IconCoin, IconCollection, IconSearch } from "@/components/icons";
 import { fetchAlbumCollectionDetail, fetchAlbumOverview } from "@/api/album";
@@ -235,6 +235,7 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
 }
 
 function AlbumSlot({ slot, onOpen }: { slot: AlbumPlayer; onOpen: () => void }) {
+  const canUpgrade = useSkillUpgradeCheck();
   if (!slot.owned || !slot.card) {
     return (
       <div className="flex aspect-[3/4] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/15 bg-black/10 p-2 text-center">
@@ -267,7 +268,12 @@ function AlbumSlot({ slot, onOpen }: { slot: AlbumPlayer; onOpen: () => void }) 
           {slot.player.position}
         </span>
         {best && (
-          <CardSkillBadge code={best.skill_code} level={best.skill_level} extraCount={(slot.card.skilled_copies?.length ?? 1) - 1} />
+          <CardSkillBadge
+            code={best.skill_code}
+            level={best.skill_level}
+            extraCount={(slot.card.skilled_copies?.length ?? 1) - 1}
+            upgradable={(slot.card.skilled_copies ?? []).some((c) => canUpgrade(c.skill_code, c.skill_level))}
+          />
         )}
       </span>
       <span className="absolute right-1 top-1 rounded bg-black/60 px-1 py-0.5 font-mono text-[9px] font-bold text-accent-lime">

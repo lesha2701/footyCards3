@@ -86,6 +86,7 @@ class CollectionFilterParams:
         search: Optional[str] = None,
         sort_by: SortBy = "acquired_at",
         sort_dir: SortDir = "desc",
+        has_skill: Optional[bool] = None,
     ):
         self.rarity = rarity
         self.country = country
@@ -97,6 +98,8 @@ class CollectionFilterParams:
         self.search = search
         self.sort_by = sort_by
         self.sort_dir = sort_dir
+        # True = only copies with a skill, False = only copies without one.
+        self.has_skill = has_skill
 
 
 class SetCardHiddenRequest(BaseModel):

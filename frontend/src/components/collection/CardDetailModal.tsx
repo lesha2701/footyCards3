@@ -22,23 +22,27 @@ export default function CardDetailModal({
   const player = card.player;
   const isDiamond = player.rarity === "diamond";
   return (
-    // overflow-y-auto + m-auto (instead of items-center) keeps the modal
-    // centered when it fits, but lets it scroll when it's taller than the
-    // screen — e.g. with the skill picker expanded on a phone.
-    <div className="fixed inset-0 z-50 flex overflow-y-auto bg-black/70 p-6 backdrop-blur-sm" onClick={onClose}>
+    // Bottom sheet on phones (same pattern as the app's confirm/help sheets),
+    // centered card on wider screens; the sheet itself scrolls when its
+    // content (e.g. an expanded skill picker) is taller than the screen.
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-6"
+      onClick={onClose}
+    >
       <div
-        className={
+        className={`max-h-[92vh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl sm:max-w-xs sm:rounded-3xl ${
           isDiamond
-            ? `m-auto w-full max-w-xs rounded-3xl bg-gradient-to-b ${RARITY_GRADIENTS.diamond} p-[3px] ${RARITY_GLOW.diamond}`
-            : "m-auto w-full max-w-xs rounded-3xl border border-white/10 bg-bg-surface p-5"
-        }
+            ? `bg-gradient-to-b ${RARITY_GRADIENTS.diamond} p-[3px] ${RARITY_GLOW.diamond}`
+            : "border border-white/10 bg-bg-surface"
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
-      <div className={isDiamond ? "rounded-[21px] bg-bg-surface p-5" : ""}>
+      <div className={`p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] ${isDiamond ? "rounded-t-[21px] bg-bg-surface sm:rounded-[21px]" : ""}`}>
+        <div className="mx-auto -mt-1 mb-3 h-1 w-10 rounded-full bg-white/15 sm:hidden" aria-hidden />
         <img
           src={staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
           alt={player.display_name}
-          className="aspect-square w-full rounded-2xl object-cover"
+          className="mx-auto aspect-square w-full max-w-[260px] rounded-2xl object-cover"
         />
         <p className="mt-3 font-display text-lg font-bold text-ink-chalk">{player.display_name}</p>
         <p className="text-sm text-ink-mist">{POSITION_LABELS[player.position]} · {player.club}</p>

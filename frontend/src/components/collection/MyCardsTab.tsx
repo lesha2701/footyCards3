@@ -13,6 +13,7 @@ import { fetchCollection, fetchCollectionStats, type CollectionFilters } from "@
 import { fetchCollections } from "@/api/collections";
 import { RARITY_LABELS, RARITY_ORDER } from "@/lib/rarity";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
+import { useSkillUpgradeCheck } from "@/lib/cardSkills";
 import type { Rarity, UserCard } from "@/types";
 
 const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
@@ -24,6 +25,7 @@ export default function MyCardsTab() {
   const [collectionId, setCollectionId] = useState<number | undefined>(undefined);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<CollectionFilters["sort_by"]>("acquired_at");
+  const [onlySkilled, setOnlySkilled] = useState(false);
   const [pageNum, setPageNum] = useState(1);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
@@ -38,7 +40,7 @@ export default function MyCardsTab() {
   // "Карточек не найдено" result after narrowing the filters.
   useEffect(() => {
     setPageNum(1);
-  }, [rarity, collectionId, search, sortBy]);
+  }, [rarity, collectionId, search, sortBy, onlySkilled]);
 
   const filters: CollectionFilters = {
     rarity: rarity ?? undefined,
@@ -46,6 +48,7 @@ export default function MyCardsTab() {
     search: search || undefined,
     sort_by: sortBy,
     sort_dir: "desc",
+    has_skill: onlySkilled || undefined,
     page: pageNum,
     page_size: PAGE_SIZE,
   };
@@ -106,6 +109,7 @@ export default function MyCardsTab() {
         {RARITIES.map((r) => (
           <FilterChip key={r} active={rarity === r} label={RARITY_LABELS[r]} onClick={() => setRarity(r)} />
         ))}
+        <FilterChip active={onlySkilled} label="С навыком" onClick={() => setOnlySkilled((v) => !v)} />
       </div>
 
       <select
@@ -228,6 +232,7 @@ export default function MyCardsTab() {
 /** A skilled copy is listed as its own tile (backend list_user_cards), so a
  * tile's skill badge is that exact copy's skill; ×N still counts every copy. */
 function CardTileBadges({ card }: { card: UserCard }) {
+  const canUpgrade = useSkillUpgradeCheck();
   const hasDuplicates = !!card.duplicate_count && card.duplicate_count > 1;
   if (!card.skill_code && !hasDuplicates) return null;
   return (
@@ -235,7 +240,7 @@ function CardTileBadges({ card }: { card: UserCard }) {
       {hasDuplicates && (
         <span className="rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">×{card.duplicate_count}</span>
       )}
-      <CardSkillBadge code={card.skill_code} level={card.skill_level} />
+      <CardSkillBadge code={card.skill_code} level={card.skill_level} upgradable={canUpgrade(card.skill_code, card.skill_level)} />
     </span>
   );
 }

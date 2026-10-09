@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
+import { skillByCode, skillInactiveReason, useSkillCatalog } from "@/lib/cardSkills";
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
 import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPickerModal";
 import { IconCheck, IconChevronLeft, IconPlus } from "@/components/icons";
@@ -28,6 +29,11 @@ export default function PlayerTournamentSquadPage() {
   const activeIndex = templates?.find((t) => t.is_active)?.template_index ?? 1;
   const viewedIndex = selectedIndex ?? activeIndex;
   const squad = templates?.find((t) => t.template_index === viewedIndex);
+  const { data: skillCatalog } = useSkillCatalog();
+  const skillInactive = (code?: string | null, position?: string) =>
+    skillInactiveReason(skillByCode(skillCatalog?.skills, code), "tournament", position, skillCatalog?.rules.enabled ?? true);
+  const squadSkills = (squad?.slots ?? []).filter((s) => s.skill_code);
+  const activeSquadSkills = squadSkills.filter((s) => !skillInactive(s.skill_code, s.player?.position));
 
   const [pickerSearch, setPickerSearch] = useState("");
   const { data: collectionPage } = useQuery({
@@ -180,7 +186,14 @@ export default function PlayerTournamentSquadPage() {
 
       <section className="rounded-2xl bg-bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
-          <p className="font-display text-base font-bold text-ink-chalk">Состав {squad?.formation}</p>
+          <div>
+            <p className="font-display text-base font-bold text-ink-chalk">Состав {squad?.formation}</p>
+            {squadSkills.length > 0 && (
+              <p className="text-[11px] text-ink-mist">
+                Навыки: действуют {activeSquadSkills.length} из {squadSkills.length}
+              </p>
+            )}
+          </div>
           {squad?.is_complete && (
             <span className="flex items-center gap-1 font-mono text-xs font-bold text-accent-cyan">
               <IconCheck size={14} />
@@ -291,7 +304,11 @@ export default function PlayerTournamentSquadPage() {
                           {slot.player.position}
                         </span>
                         <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.player.rating}</span>
-                        <CardSkillBadge code={slot.skill_code} level={slot.skill_level} />
+                        <CardSkillBadge
+                          code={slot.skill_code}
+                          level={slot.skill_level}
+                          inactiveReason={skillInactive(slot.skill_code, slot.player.position)}
+                        />
                       </>
                     ) : (
                       <>

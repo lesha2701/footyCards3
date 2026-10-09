@@ -1252,3 +1252,34 @@ async def test_arena_new_skills_apply_only_in_their_situations(db_session, monke
     event, _ = match_service._resolve_attack(flank, "pass", state, config, "Соперник")
     assert event["event_type"] != "pass_failed"
     assert event["payload"]["skills"][0]["code"] == "crosser" and event["payload"]["skills"][0]["decisive"]
+
+
+# --- UI helpers: engines, position flag, has_skill filter ----------------------------------
+
+
+async def test_catalog_exposes_engines_and_plain_bonus_phrase(client, db_session, bot_token):
+    await _register(client, db_session, 820090, bot_token)
+    skills = (await client.get(f"{API}/card-skills/catalog", headers=telegram_headers(820090, bot_token))).json()["skills"]
+    by_code = {s["code"]: s for s in skills}
+    assert by_code["dribbler"]["engines"] == ["tournament"]
+    assert by_code["sniper"]["engines"] == ["arena", "tournament"]
+    assert all(s["bonus_phrase"] for s in skills)
+
+
+async def test_actions_flag_position_compatibility(client, db_session, bot_token):
+    user, _ = await _register(client, db_session, 820091, bot_token)
+    card = await _card(db_session, user.id, Position.GK)
+    state = (await client.get(f"{API}/card-skills/cards/{card.id}", headers=telegram_headers(820091, bot_token))).json()
+    compatible = {a["skill_code"] for a in state["actions"] if a["position_compatible"]}
+    assert compatible == {"reflexes", "one_on_one"}
+
+
+async def test_collection_has_skill_filter(client, db_session, bot_token):
+    user, _ = await _register(client, db_session, 820092, bot_token)
+    skilled = await _card(db_session, user.id, Position.ST, skill_code="sniper", skill_level=1)
+    plain = await _card(db_session, user.id, Position.CB)
+    headers = telegram_headers(820092, bot_token)
+    only_skilled = (await client.get(f"{API}/collection/cards?has_skill=true", headers=headers)).json()["items"]
+    without = (await client.get(f"{API}/collection/cards?has_skill=false", headers=headers)).json()["items"]
+    assert [c["id"] for c in only_skilled] == [skilled.id]
+    assert [c["id"] for c in without] == [plain.id]

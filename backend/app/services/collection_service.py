@@ -96,6 +96,10 @@ async def list_user_cards(
     if filters.search:
         pattern = f"%{filters.search.lower()}%"
         query = query.where(func.lower(Player.display_name).like(pattern))
+    if getattr(filters, "has_skill", None) is True:
+        query = query.where(UserCard.skill_code.is_not(None))
+    elif getattr(filters, "has_skill", None) is False:
+        query = query.where(UserCard.skill_code.is_(None))
 
     if filters.sort_by == "rating":
         order_col = Player.rating

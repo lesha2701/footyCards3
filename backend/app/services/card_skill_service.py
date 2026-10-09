@@ -148,6 +148,7 @@ async def get_catalog(db: AsyncSession) -> SkillCatalogOut:
         skills.append(SkillCatalogItemOut(
             code=code, name=definition.name, icon=definition.icon, effect=definition.effect,
             applies_in=list(definition.applies_in), not_affected=definition.not_affected,
+            bonus_phrase=definition.bonus_phrase, engines=list(definition.engines),
             positions=allowed_positions(definition, row), max_positions=list(definition.positions),
             levels=[
                 SkillLevelEffectOut(level=lvl, level_label=roman(lvl), bonus_pp=_capped_bonus(config, lvl))
@@ -332,7 +333,9 @@ def _plan_actions(
     position = card.player.position
     actions: list[SkillActionOut] = []
 
-    def action(operation: str, code: str, target_level: int, extra_reason: Optional[str]) -> SkillActionOut:
+    def action(
+        operation: str, code: str, target_level: int, extra_reason: Optional[str], position_ok: bool = True,
+    ) -> SkillActionOut:
         cost = _operation_cost(config, operation, target_level)
         owned = balances.get(code, 0)
         reason = blocked or extra_reason
@@ -343,6 +346,7 @@ def _plan_actions(
         return SkillActionOut(
             operation=operation, skill_code=code, target_level=target_level, token_cost=cost.token_cost,
             coin_cost=cost.coin_cost, tokens_owned=owned, allowed=reason is None, reason=reason,
+            position_compatible=position_ok,
         )
 
     def target_reason(code: str) -> Optional[str]:
@@ -353,9 +357,12 @@ def _plan_actions(
             reason = "Не подходит позиции карточки"
         return reason
 
+    def fits(code: str) -> bool:
+        return position in allowed_positions(SKILL_DEFINITIONS[code], rows.get(code))
+
     if not card.skill_code:
         for code in SKILL_ORDER:
-            actions.append(action("assign", code, 1, target_reason(code)))
+            actions.append(action("assign", code, 1, target_reason(code), fits(code)))
         return actions
 
     if card.skill_level < MAX_SKILL_LEVEL:
@@ -371,7 +378,7 @@ def _plan_actions(
         actions.append(action("upgrade", current, card.skill_level + 1, reason))
     for code in SKILL_ORDER:
         if code != card.skill_code:
-            actions.append(action("replace", code, 1, target_reason(code)))
+            actions.append(action("replace", code, 1, target_reason(code), fits(code)))
     return actions
 
 

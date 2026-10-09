@@ -1753,6 +1753,10 @@ export interface SkillCatalogItem {
   positions: string[];
   max_positions: string[];
   levels: SkillLevelEffect[];
+  /** Plain-language tail for "+N% …", e.g. "к точности удара". */
+  bonus_phrase: string;
+  /** Match engines the skill acts in: "arena" (Card Arena), "tournament". */
+  engines: string[];
   engine_supported: boolean;
   is_enabled: boolean;
   is_available: boolean;
@@ -1802,6 +1806,8 @@ export interface SkillAction {
   tokens_owned: number;
   allowed: boolean;
   reason: string | null;
+  /** False when the skill can never go on this card's position. */
+  position_compatible: boolean;
 }
 
 export interface CardCopy {

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import MatchSkillNotes from "@/components/cards/MatchSkillNotes";
+import MatchSkillSummary from "@/components/cards/MatchSkillSummary";
+import { skillByCode, skillInactiveReason, useSkillCatalog } from "@/lib/cardSkills";
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
 import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPickerModal";
 import EmptyState from "@/components/common/EmptyState";
@@ -54,6 +56,11 @@ export default function ArenaPage() {
   const activeIndex = templates?.find((t) => t.is_active)?.template_index ?? 1;
   const viewedIndex = selectedIndex ?? activeIndex;
   const lineup = templates?.find((t) => t.template_index === viewedIndex);
+  const { data: skillCatalog } = useSkillCatalog();
+  const skillInactive = (code?: string | null, position?: string) =>
+    skillInactiveReason(skillByCode(skillCatalog?.skills, code), "arena", position, skillCatalog?.rules.enabled ?? true);
+  const lineupSkills = (lineup?.slots ?? []).filter((s) => s.card?.skill_code);
+  const activeLineupSkills = lineupSkills.filter((s) => !skillInactive(s.card?.skill_code, s.card?.player.position));
   const [pickerSearch, setPickerSearch] = useState("");
   const { data: collectionPage } = useQuery({
     queryKey: ["collection-for-lineup", pickerSearch],
@@ -274,7 +281,15 @@ export default function ArenaPage() {
 
       <section className="rounded-2xl bg-bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
-          <p className="font-display text-base font-bold text-ink-chalk">Состав 4-3-3</p>
+          <div>
+            <p className="font-display text-base font-bold text-ink-chalk">Состав 4-3-3</p>
+            {lineupSkills.length > 0 && (
+              <p className="text-[11px] text-ink-mist">
+                Навыки: действуют {activeLineupSkills.length} из {lineupSkills.length}
+                {activeLineupSkills.length < lineupSkills.length && " (зачёркнутые здесь не работают)"}
+              </p>
+            )}
+          </div>
           {lineup?.is_complete && (
             <button
               onClick={() => setStrengthHintOpen((v) => !v)}
@@ -334,7 +349,11 @@ export default function ArenaPage() {
                             {slot.card.player.position}
                           </span>
                           <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.card.player.rating}</span>
-                          <CardSkillBadge code={slot.card.skill_code} level={slot.card.skill_level} />
+                          <CardSkillBadge
+                            code={slot.card.skill_code}
+                            level={slot.card.skill_level}
+                            inactiveReason={skillInactive(slot.card.skill_code, slot.card.player.position)}
+                          />
                         </>
                       ) : (
                         <>
@@ -692,6 +711,7 @@ function MatchSimulation({
           <IconCoin size={13} />
         </p>
       )}
+      {caughtUp && isFinished && <MatchSkillSummary events={match.events} />}
 
       <div ref={logRef} className="mt-3 max-h-48 space-y-1 overflow-y-auto text-xs">
         {revealed.map((e, i) => (

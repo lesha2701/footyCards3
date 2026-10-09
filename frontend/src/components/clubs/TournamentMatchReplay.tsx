@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import MatchSkillNotes from "@/components/cards/MatchSkillNotes";
+import MatchSkillSummary from "@/components/cards/MatchSkillSummary";
 import type { MatchEvent } from "@/types";
 
 const EVENT_STEP_MS = 950;
@@ -100,6 +101,7 @@ export function TournamentMatchReplay({
           <span className="w-6 text-left">{scoreB}</span>
         </div>
       )}
+      {caughtUp && <MatchSkillSummary events={events} />}
 
       <div ref={logRef} className="mt-3 max-h-64 space-y-1 overflow-y-auto text-xs">
         {revealed.map((e, i) => (

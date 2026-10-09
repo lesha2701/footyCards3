@@ -24,6 +24,8 @@ class SkillCatalogItemOut(BaseModel):
     positions: list[Position]
     max_positions: list[Position]
     levels: list[SkillLevelEffectOut]
+    bonus_phrase: str = ""
+    engines: list[str] = []
     engine_supported: bool
     is_enabled: bool
     # True only when a NEW skill of this kind can be obtained right now
@@ -93,6 +95,9 @@ class SkillActionOut(BaseModel):
     tokens_owned: int
     allowed: bool
     reason: Optional[str] = None
+    # False when the skill can never go on this card's position — the UI
+    # tucks those away instead of listing them as just "not affordable".
+    position_compatible: bool = True
 
 
 class CardCopyOut(BaseModel):

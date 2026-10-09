@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { RevealStage, STAGES, STAGE_DURATION_MS } from "@/components/cards/CardRevealStage";
 import { CoachRevealStage, COACH_STAGES, COACH_STAGE_DURATION_MS } from "@/components/cards/CoachRevealStage";
+import { SkillTokenRevealStage, TOKEN_STAGES, TOKEN_STAGE_DURATION_MS } from "@/components/cards/SkillTokenRevealStage";
 import SkillTokenTile from "@/components/cards/SkillTokenTile";
 import { StadiumRevealStage, STADIUM_STAGES, STADIUM_STAGE_DURATION_MS } from "@/components/cards/StadiumRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
@@ -26,9 +27,11 @@ import type { OpenedCard, OpenedCoachCard, OpenedStadiumCard, PackBulkOpenResult
 type BulkRevealItem =
   | { kind: "player"; item: OpenedCard }
   | { kind: "coach"; item: OpenedCoachCard }
-  | { kind: "stadium"; item: OpenedStadiumCard };
+  | { kind: "stadium"; item: OpenedStadiumCard }
+  | { kind: "token"; item: { skill_code: string; quantity: number } };
 
 function bulkStagesFor(entry: BulkRevealItem) {
+  if (entry.kind === "token") return { stages: TOKEN_STAGES as readonly string[], duration: TOKEN_STAGE_DURATION_MS };
   if (entry.kind === "coach") return { stages: COACH_STAGES as readonly string[], duration: COACH_STAGE_DURATION_MS };
   if (entry.kind === "stadium") return { stages: STADIUM_STAGES as readonly string[], duration: STADIUM_STAGE_DURATION_MS };
   return { stages: STAGES as readonly string[], duration: STAGE_DURATION_MS };
@@ -54,8 +57,10 @@ function SinglePackOpenView() {
   // Present when arriving with an already-claimed result (e.g. the free pack) so we skip re-opening it.
   const prefetchedResult = (location.state as { result?: PackOpenResult } | null)?.result ?? null;
 
-  const [phase, setPhase] = useState<"packshot" | "revealing" | "summary">("packshot");
+  const [phase, setPhase] = useState<"packshot" | "revealing" | "tokens" | "summary">("packshot");
   const [cardIndex, setCardIndex] = useState(0);
+  const [tokenIndex, setTokenIndex] = useState(0);
+  const [tokenRevealed, setTokenRevealed] = useState(false);
   const [stageIndex, setStageIndex] = useState(0);
   // Set when a single-card, no-bonus pack finishes its reveal — that path
   // normally skips straight to "/packs" (see the comment in nextCard below),
@@ -151,6 +156,35 @@ function SinglePackOpenView() {
       setSingleCardDone(true);
       return;
     }
+    goToTokensOrSummary();
+  };
+
+  // Skill-token slots get their own short reveal after the cards (they only
+  // used to show up in the summary grid).
+  const goToTokensOrSummary = () => {
+    if (result && (result.skill_tokens ?? []).length > 0) {
+      setTokenIndex(0);
+      setTokenRevealed(false);
+      setPhase("tokens");
+      return;
+    }
+    setPhase("summary");
+  };
+
+  const nextToken = () => {
+    if (!result) return;
+    haptic("light");
+    const tokens = result.skill_tokens ?? [];
+    if (!tokenRevealed) {
+      setTokenRevealed(true);
+      return;
+    }
+    if (tokenIndex < tokens.length - 1) {
+      setTokenIndex((i) => i + 1);
+      setTokenRevealed(false);
+      return;
+    }
+    hapticNotify("success");
     setPhase("summary");
   };
 
@@ -197,6 +231,12 @@ function SinglePackOpenView() {
     if (isStarsPack) buyStarsPackAgain();
     else reopenCoinPack();
   };
+
+  useEffect(() => {
+    if (phase !== "tokens" || tokenRevealed) return;
+    const timer = setTimeout(() => setTokenRevealed(true), TOKEN_STAGE_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [phase, tokenIndex, tokenRevealed]);
 
   useEffect(() => {
     if (phase !== "revealing" || stageIndex >= STAGES.length - 1) return;
@@ -258,12 +298,35 @@ function SinglePackOpenView() {
             // entirely rather than rendering RevealStage with an undefined card.
             if (result.cards.length === 0) {
               hapticNotify("success");
-              setPhase("summary");
+              goToTokensOrSummary();
               return;
             }
             setPhase("revealing");
           }}
         />
+      )}
+
+      {phase === "tokens" && (result.skill_tokens ?? [])[tokenIndex] && (
+        <div className="flex flex-1 flex-col">
+          <SkillTokenRevealStage
+            key={`token-${tokenIndex}-${tokenRevealed}`}
+            token={(result.skill_tokens ?? [])[tokenIndex]}
+            stage={tokenRevealed ? "reveal" : "glow"}
+            index={tokenIndex}
+            total={(result.skill_tokens ?? []).length}
+            onTap={nextToken}
+          />
+          {tokenRevealed && (
+            <div className="safe-bottom px-6 pb-6 pt-2">
+              <button
+                onClick={nextToken}
+                className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95"
+              >
+                {tokenIndex < (result.skill_tokens ?? []).length - 1 ? "Следующий жетон" : "Готово"}
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {phase === "revealing" && (
@@ -370,6 +433,7 @@ function BulkPackOpenView({ quantity }: { quantity: number }) {
         ...result.cards.map((item): BulkRevealItem => ({ kind: "player", item })),
         ...result.coach_cards.map((item): BulkRevealItem => ({ kind: "coach", item })),
         ...result.stadium_cards.map((item): BulkRevealItem => ({ kind: "stadium", item })),
+        ...(result.skill_tokens ?? []).map((item): BulkRevealItem => ({ kind: "token", item })),
       ]
     : [];
   const currentItem = revealItems[cardIndex] ?? null;
@@ -481,7 +545,16 @@ function BulkPackOpenView({ quantity }: { quantity: number }) {
       )}
 
       {phase === "revealing" && currentItem && currentStages && (
-        currentItem.kind === "coach" ? (
+        currentItem.kind === "token" ? (
+          <SkillTokenRevealStage
+            key={`${cardIndex}-${stageIndex}`}
+            token={currentItem.item}
+            stage={(TOKEN_STAGES[stageIndex] ?? TOKEN_STAGES[TOKEN_STAGES.length - 1])}
+            index={cardIndex}
+            total={revealItems.length}
+            onTap={advanceOnTap}
+          />
+        ) : currentItem.kind === "coach" ? (
           <CoachRevealStage
             key={`${cardIndex}-${stageIndex}`}
             opened={{ card: { coach: currentItem.item.card.coach }, is_new: currentItem.item.is_new }}

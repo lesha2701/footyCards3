@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { changeCardSkill, fetchCardSkillState } from "@/api/cardSkills";
-import { IconCoin, IconUpgrade, IconWarning } from "@/components/icons";
+import CardSkillBadge from "@/components/cards/CardSkillBadge";
+import SkillHelpModal from "@/components/collection/SkillHelpModal";
+import { IconCoin, IconHelp, IconUpgrade, IconWarning } from "@/components/icons";
 import { SkillIcon } from "@/components/icons/skills";
 import { ApiRequestError } from "@/lib/api";
 import { SKILL_LEVEL_LABELS, invalidateAfterSkillChange, skillByCode, useSkillCatalog } from "@/lib/cardSkills";
@@ -22,6 +24,7 @@ export default function CardSkillPanel({ cardId }: { cardId: number }) {
   const [picker, setPicker] = useState<"assign" | "replace" | null>(null);
   const [pending, setPending] = useState<{ action: SkillAction; key: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const queryClient = useQueryClient();
   const updateBalance = useAuthStore((s) => s.updateBalance);
   const { data: catalog } = useSkillCatalog();
@@ -83,23 +86,40 @@ export default function CardSkillPanel({ cardId }: { cardId: number }) {
     <div className="mt-3 rounded-xl bg-black/20 p-3">
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-mist">Навык</p>
-        {state.copies.length > 1 && (
-          <select
-            value={selectedId}
-            onChange={(e) => { setSelectedId(Number(e.target.value)); setPicker(null); setError(null); }}
-            className="rounded-lg bg-bg-raised px-2 py-1 text-[11px] text-ink-chalk outline-none"
-          >
-            {state.copies.map((c) => {
-              const s = skillByCode(skills, c.skill_code);
-              return (
-                <option key={c.id} value={c.id}>
-                  № {c.serial_number}{s && c.skill_level ? ` · ${s.name} ${SKILL_LEVEL_LABELS[c.skill_level]}` : ""}
-                </option>
-              );
-            })}
-          </select>
-        )}
+        <button
+          onClick={() => setHelpOpen(true)}
+          aria-label="Как работают навыки"
+          className="flex h-6 w-6 items-center justify-center rounded-full bg-white/5 text-ink-mist"
+        >
+          <IconHelp size={13} />
+        </button>
       </div>
+
+      {state.copies.length > 1 && (
+        // Each copy has its own skill — tiles instead of a native select so
+        // the choice is visible and thumb-sized.
+        <div className="-mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1 pb-1">
+          {state.copies.map((c) => {
+            const active = c.id === selectedId;
+            return (
+              <button
+                key={c.id}
+                onClick={() => { setSelectedId(c.id); setPicker(null); setError(null); }}
+                className={`flex shrink-0 flex-col items-center gap-1 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold ${
+                  active ? "bg-accent-lime/15 text-accent-lime ring-1 ring-accent-lime/60" : "bg-bg-raised text-ink-mist"
+                }`}
+              >
+                № {c.serial_number}
+                {c.skill_code && c.skill_level ? (
+                  <CardSkillBadge code={c.skill_code} level={c.skill_level} />
+                ) : (
+                  <span className="text-[9px] text-ink-mist-dim">без навыка</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {state.skill && current ? (
         <div className="mt-2">
@@ -107,13 +127,15 @@ export default function CardSkillPanel({ cardId }: { cardId: number }) {
             <SkillIcon code={current.code} size={16} className="text-accent-lime" aria-hidden />
             {current.name} {state.skill.level_label}
           </p>
-          <p className="mt-1 text-xs text-ink-mist">
-            {current.effect} — на <b className="text-accent-lime">{state.skill.bonus_pp} п.п.</b>
+          <p className="mt-1 text-sm font-semibold text-accent-lime">
+            +{state.skill.bonus_pp}% {current.bonus_phrase}
           </p>
+          <p className="mt-0.5 text-[11px] text-ink-mist">{current.effect}</p>
+          <EngineChips skill={current} />
           <SkillScope skill={current} />
           {state.next_level_bonus_pp !== null && (
             <p className="mt-1 text-[11px] text-ink-mist-dim">
-              Уровень {SKILL_LEVEL_LABELS[state.skill.level + 1]}: {state.next_level_bonus_pp} п.п.
+              На уровне {SKILL_LEVEL_LABELS[state.skill.level + 1]}: +{state.next_level_bonus_pp}% {current.bonus_phrase}
             </p>
           )}
           {state.skill.level >= 3 && <p className="mt-1 text-[11px] text-ink-mist-dim">Максимальный уровень.</p>}
@@ -181,6 +203,8 @@ export default function CardSkillPanel({ cardId }: { cardId: number }) {
 
       {error && <p className="mt-2 rounded-lg bg-red-500/10 px-2 py-1.5 text-[11px] text-red-400">{error}</p>}
 
+      <SkillHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+
       {pending && (
         <SkillConfirmSheet
           state={state}
@@ -191,6 +215,30 @@ export default function CardSkillPanel({ cardId }: { cardId: number }) {
           onConfirm={() => !mutation.isPending && mutation.mutate(pending)}
         />
       )}
+    </div>
+  );
+}
+
+const ENGINE_LABELS: Record<string, string> = { arena: "Card Arena", tournament: "Турниры" };
+
+/** Where the skill actually acts — so e.g. Dribbler in a Card Arena lineup
+ * doesn't look like it should be doing something. */
+function EngineChips({ skill }: { skill: SkillCatalogItem }) {
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {Object.entries(ENGINE_LABELS).map(([engine, label]) => {
+        const active = skill.engines.includes(engine);
+        return (
+          <span
+            key={engine}
+            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+              active ? "bg-accent-lime/15 text-accent-lime" : "bg-white/5 text-ink-mist-dim line-through"
+            }`}
+          >
+            {label}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -210,15 +258,21 @@ function SkillScope({ skill }: { skill: SkillCatalogItem }) {
 function SkillPicker({
   actions, skills, onPick,
 }: { actions: SkillAction[]; skills: SkillCatalogItem[]; onPick: (a: SkillAction) => void }) {
-  // Skills this card can actually take first, then the rest with their reasons.
+  const [showOthers, setShowOthers] = useState(false);
+  // Only skills that fit this position are worth listing; available ones
+  // first. The rest are tucked behind one line instead of a wall of greyed
+  // "doesn't fit this position" rows.
   const ordered = [...actions].sort(
     (a, b) =>
       Number(b.allowed) - Number(a.allowed)
       || skills.findIndex((s) => s.code === a.skill_code) - skills.findIndex((s) => s.code === b.skill_code),
   );
+  const fitting = ordered.filter((a) => a.position_compatible);
+  const others = ordered.filter((a) => !a.position_compatible);
   return (
     <div className="mt-2 flex flex-col gap-1.5">
-      {ordered.map((action) => {
+      {fitting.length === 0 && <p className="text-[11px] text-ink-mist">Для этой позиции навыков нет.</p>}
+      {[...fitting, ...(showOthers ? others : [])].map((action) => {
         const skill = skillByCode(skills, action.skill_code);
         return (
           <button
@@ -237,11 +291,20 @@ function SkillPicker({
                 {action.coin_cost > 0 && (<> · <IconCoin size={10} />{action.coin_cost}</>)}
               </span>
             </div>
-            {skill && <p className="mt-0.5 text-[10px] text-ink-mist-dim">{skill.effect}</p>}
+            {skill && (
+              <p className="mt-0.5 text-[10px] text-ink-mist-dim">
+                +{skill.levels[0]?.bonus_pp ?? 0}% {skill.bonus_phrase} · {skill.engines.map((e) => ENGINE_LABELS[e]).join(", ")}
+              </p>
+            )}
             {!action.allowed && action.reason && <p className="mt-0.5 text-[10px] text-amber-300">{action.reason}</p>}
           </button>
         );
       })}
+      {others.length > 0 && (
+        <button onClick={() => setShowOthers((v) => !v)} className="py-1 text-[11px] text-ink-mist-dim underline">
+          {showOthers ? "Скрыть неподходящие" : `Ещё ${others.length} не подходят этой позиции`}
+        </button>
+      )}
     </div>
   );
 }

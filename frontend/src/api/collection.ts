@@ -20,6 +20,8 @@ export interface CollectionFilters {
   max_rating?: number;
   collection_id?: number;
   search?: string;
+  /** true = only copies with a skill, false = only without. */
+  has_skill?: boolean;
   sort_by?: "rating" | "rarity" | "acquired_at";
   sort_dir?: "asc" | "desc";
   page?: number;

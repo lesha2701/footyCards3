@@ -31,6 +31,12 @@ class SkillDefinition:
     # What the skill explicitly does NOT do (shown to players to avoid
     # implying a general strength boost).
     not_affected: str
+    # Plain-language tail for "+N% ..." in the Mini App, and which match
+    # engines the skill acts in ("arena" = Card Arena, "tournament" = player
+    # tournaments) — shown so a player can see e.g. that Dribbler does
+    # nothing in a Card Arena lineup.
+    bonus_phrase: str = ""
+    engines: tuple[str, ...] = ("arena", "tournament")
     engine_supported: bool = True
     unavailable_reason: str | None = None
     remaining_work: tuple[str, ...] = field(default_factory=tuple)
@@ -39,6 +45,7 @@ class SkillDefinition:
 SKILL_DEFINITIONS: dict[str, SkillDefinition] = {
     "sniper": SkillDefinition(
         code="sniper", name="Снайпер", icon="🎯",
+        bonus_phrase="к точности удара",
         positions=(Position.ST, *_WINGERS, Position.CAM),
         effect="Снижает вероятность промаха, когда бьёт этот игрок",
         applies_in=(
@@ -49,6 +56,7 @@ SKILL_DEFINITIONS: dict[str, SkillDefinition] = {
     ),
     "dribbler": SkillDefinition(
         code="dribbler", name="Дриблёр", icon="🌀",
+        bonus_phrase="к шансу обыграть защитника", engines=("tournament",),
         positions=(*_WINGERS, Position.ST, Position.CAM),
         effect="Повышает вероятность успешного обыгрыша в единоборстве «атакующий против защитника»",
         applies_in=(
@@ -58,6 +66,7 @@ SKILL_DEFINITIONS: dict[str, SkillDefinition] = {
     ),
     "playmaker": SkillDefinition(
         code="playmaker", name="Диспетчер", icon="🧭",
+        bonus_phrase="к точности передачи под удар",
         positions=(Position.CM, Position.CAM, Position.CDM),
         effect="Снижает вероятность неудачной передачи этого игрока, открывающей момент партнёру",
         applies_in=(
@@ -68,6 +77,7 @@ SKILL_DEFINITIONS: dict[str, SkillDefinition] = {
     ),
     "interceptor": SkillDefinition(
         code="interceptor", name="Перехватчик", icon="🛡️",
+        bonus_phrase="к шансу перехватить передачу", engines=("tournament",),
         positions=(Position.CB, Position.LB, Position.RB, Position.CDM),
         effect="Повышает вероятность прервать передачу соперника, когда этот игрок — выбранный защитник эпизода",
         applies_in=(
@@ -77,6 +87,7 @@ SKILL_DEFINITIONS: dict[str, SkillDefinition] = {
     ),
     "aerial_master": SkillDefinition(
         code="aerial_master", name="Воздушный король", icon="🦅",
+        bonus_phrase="к шансу выиграть борьбу в воздухе",
         positions=(Position.CB, Position.ST),
         effect="Повышает вероятность выиграть верховое единоборство на навесе",
         applies_in=(
@@ -88,6 +99,7 @@ SKILL_DEFINITIONS: dict[str, SkillDefinition] = {
     ),
     "crosser": SkillDefinition(
         code="crosser", name="Мастер навесов", icon="📐",
+        bonus_phrase="к шансу опасного навеса",
         positions=(Position.LW, Position.RW, Position.LM, Position.RM, Position.LB, Position.RB),
         effect="Повышает долю опасных моментов (высокого качества) в атаках через фланг",
         applies_in=(
@@ -98,6 +110,7 @@ SKILL_DEFINITIONS: dict[str, SkillDefinition] = {
     ),
     "last_line": SkillDefinition(
         code="last_line", name="Последний рубеж", icon="🧱",
+        bonus_phrase="к шансу остановить прорыв",
         positions=(Position.CB,),
         effect="Повышает шанс остановить опасный прорыв, когда этот игрок — последний защитник",
         applies_in=(
@@ -108,6 +121,7 @@ SKILL_DEFINITIONS: dict[str, SkillDefinition] = {
     ),
     "one_on_one": SkillDefinition(
         code="one_on_one", name="Один на один", icon="🥅",
+        bonus_phrase="к шансу сейва один на один",
         positions=(Position.GK,),
         effect="Повышает вероятность сейва, когда соперник выходит один на один",
         applies_in=(
@@ -118,6 +132,7 @@ SKILL_DEFINITIONS: dict[str, SkillDefinition] = {
     ),
     "reflexes": SkillDefinition(
         code="reflexes", name="Реакция", icon="🧤",
+        bonus_phrase="к шансу сейва",
         positions=(Position.GK,),
         effect="Повышает вероятность сейва вратаря",
         applies_in=(
