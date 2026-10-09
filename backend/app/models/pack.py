@@ -56,6 +56,11 @@ class Pack(TimestampMixin, Base):
     # stadiums — see pack_service.roll_and_create_cards. A slot can resolve to a
     # player, a coach, OR a stadium, never more than one (checked in that order).
     stadium_drop_chance: Mapped[float] = mapped_column(Numeric(5, 4), default=0.0, nullable=False)
+    # Same per-slot coin flip again, for card-skill tokens (checked after coach
+    # and stadium on the same roll). Which skill and how many tokens comes from
+    # the card_skills drop table (pack_drop_weight / pack_drop_quantity). 1.0
+    # turns every slot into tokens — a dedicated "skill pack".
+    skill_token_drop_chance: Mapped[float] = mapped_column(Numeric(5, 4), default=0.0, nullable=False)
 
     rarity_probabilities: Mapped[list["PackRarityProbability"]] = relationship(
         back_populates="pack", cascade="all, delete-orphan"
@@ -113,6 +118,12 @@ class PackOpeningCard(Base):
     user_stadium_card_id: Mapped[int | None] = mapped_column(
         ForeignKey("user_stadium_cards.id", ondelete="CASCADE"), nullable=True
     )
+    # A slot that rolled skill tokens: which skill and how many were granted
+    # (the grant itself is a card_skill_ledger row, kind "grant_pack").
+    skill_code: Mapped[str | None] = mapped_column(
+        String(32), ForeignKey("card_skills.code", ondelete="RESTRICT"), nullable=True
+    )
+    skill_token_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_new: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     opening: Mapped["PackOpening"] = relationship(back_populates="cards")
@@ -121,8 +132,14 @@ class PackOpeningCard(Base):
         CheckConstraint(
             "(CASE WHEN user_card_id IS NOT NULL THEN 1 ELSE 0 END + "
             "CASE WHEN user_coach_card_id IS NOT NULL THEN 1 ELSE 0 END + "
-            "CASE WHEN user_stadium_card_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
+            "CASE WHEN user_stadium_card_id IS NOT NULL THEN 1 ELSE 0 END + "
+            "CASE WHEN skill_code IS NOT NULL THEN 1 ELSE 0 END) = 1",
             name="ck_pack_opening_card_exactly_one_kind",
+        ),
+        CheckConstraint(
+            "(skill_code IS NULL AND skill_token_quantity IS NULL) OR "
+            "(skill_code IS NOT NULL AND skill_token_quantity IS NOT NULL AND skill_token_quantity >= 1)",
+            name="ck_pack_opening_card_skill_tokens",
         ),
     )
 

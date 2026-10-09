@@ -191,6 +191,8 @@ export default function AdminCardSkillsPage() {
         </div>
       </section>
 
+      <PackDropSection skills={catalog.skills} busy={skillMutation.isPending} onUpdate={(code, payload) => skillMutation.mutate({ code, payload })} />
+
       <GrantTokensSection skills={grantable} />
       <LedgerSection />
     </div>
@@ -374,5 +376,88 @@ function LedgerSection() {
         </table>
       </div>
     </section>
+  );
+}
+
+function PackDropSection({
+  skills, busy, onUpdate,
+}: {
+  skills: SkillCatalogItem[];
+  busy: boolean;
+  onUpdate: (code: string, payload: Parameters<typeof updateAdminSkill>[1]) => void;
+}) {
+  const totalWeight = skills.filter((s) => s.is_available).reduce((sum, s) => sum + s.pack_drop_weight, 0);
+  return (
+    <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+      <p className="mb-1 font-display text-base font-bold">Жетоны в паках</p>
+      <p className="mb-3 text-xs text-slate-400">
+        Как у стадионов: в «Паки» у каждого пака задаётся «Шанс жетона навыка» на слот (100% — пак навыков).
+        Если слот выпал жетоном, навык выбирается по весам ниже, количество — из колонки «Жетонов за слот».
+        Вес 0 — навык не выпадает. Закрытые для получения навыки не выпадают.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs">
+          <thead className="text-slate-500">
+            <tr>
+              <th className="py-1 pr-3">Навык</th>
+              <th className="py-1 pr-3">Вес</th>
+              <th className="py-1 pr-3">Доля</th>
+              <th className="py-1 pr-3">Жетонов за слот</th>
+            </tr>
+          </thead>
+          <tbody>
+            {skills.map((skill) => (
+              <PackDropRow key={skill.code} skill={skill} totalWeight={totalWeight} busy={busy} onUpdate={onUpdate} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function PackDropRow({
+  skill, totalWeight, busy, onUpdate,
+}: {
+  skill: SkillCatalogItem;
+  totalWeight: number;
+  busy: boolean;
+  onUpdate: (code: string, payload: Parameters<typeof updateAdminSkill>[1]) => void;
+}) {
+  const [weight, setWeight] = useState(skill.pack_drop_weight);
+  const [quantity, setQuantity] = useState(skill.pack_drop_quantity);
+  useEffect(() => { setWeight(skill.pack_drop_weight); setQuantity(skill.pack_drop_quantity); }, [skill.pack_drop_weight, skill.pack_drop_quantity]);
+  const dirty = weight !== skill.pack_drop_weight || quantity !== skill.pack_drop_quantity;
+  const share = skill.is_available && totalWeight > 0 ? Math.round((skill.pack_drop_weight / totalWeight) * 100) : 0;
+  return (
+    <tr className="border-t border-white/5">
+      <td className="py-1.5 pr-3">{skill.icon} {skill.name}{!skill.is_available && <span className="text-slate-500"> (закрыт)</span>}</td>
+      <td className="py-1.5 pr-3">
+        <input
+          type="number" min={0} value={weight} disabled={!skill.engine_supported}
+          onChange={(e) => setWeight(Math.max(0, Number(e.target.value)))}
+          className="w-20 rounded-lg bg-bg-base px-2 py-1 outline-none disabled:opacity-40"
+        />
+      </td>
+      <td className="py-1.5 pr-3 font-mono text-slate-400">{share}%</td>
+      <td className="py-1.5 pr-3">
+        <div className="flex items-center gap-2">
+          <input
+            type="number" min={1} value={quantity} disabled={!skill.engine_supported}
+            onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
+            className="w-20 rounded-lg bg-bg-base px-2 py-1 outline-none disabled:opacity-40"
+          />
+          {dirty && (
+            <button
+              onClick={() => onUpdate(skill.code, { pack_drop_weight: weight, pack_drop_quantity: quantity })}
+              disabled={busy}
+              className="rounded-lg bg-floodlight px-2 py-1 font-bold text-bg-base disabled:opacity-40"
+            >
+              Сохранить
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
   );
 }

@@ -915,3 +915,90 @@ async def test_player_tournament_match_snapshots_and_applies_squad_skills(client
     )
     assert snapshot_off is None
     assert not any((e.get("payload") or {}).get("skills") for e in events_off)
+
+
+# --- skill tokens from packs (same per-slot mechanism as stadiums) --------------------------
+
+
+async def _token_pack(db_session, chance: float, card_count: int = 3):
+    from tests.factories import create_pack
+
+    await create_player(db_session, rarity=Rarity.common)
+    return await create_pack(
+        db_session, f"skills-{uuid.uuid4().hex[:6]}", price=10, card_count=card_count,
+        probabilities={Rarity.common: 1.0}, skill_token_drop_chance=chance,
+    )
+
+
+async def _set_drop(db_session, code: str, weight: int, quantity: int = 1, enabled: bool = True):
+    rows = await card_skill_service.ensure_catalog(db_session)
+    for row in rows.values():
+        if row.code == code:
+            row.pack_drop_weight, row.pack_drop_quantity, row.is_enabled = weight, quantity, enabled
+        elif code != "*":
+            row.pack_drop_weight = 0
+    await db_session.commit()
+
+
+async def test_skill_pack_rolls_tokens_and_replays_without_double_grant(client, db_session, bot_token):
+    user, _ = await _register(client, db_session, 820080, bot_token)
+    pack = await _token_pack(db_session, chance=1.0)
+    await _set_drop(db_session, "reflexes", weight=5, quantity=2)
+    headers = telegram_headers(820080, bot_token)
+
+    body = {"idempotency_key": "skill-pack-1"}
+    first = await client.post(f"{API}/packs/{pack.id}/open", headers=headers, json=body)
+    assert first.status_code == 200, first.text
+    result = first.json()
+    assert result["cards"] == [] and result["skill_tokens"] == [{"skill_code": "reflexes", "quantity": 2}] * 3
+    assert (await _tokens(db_session, user.id))["reflexes"] == 6
+
+    replay = await client.post(f"{API}/packs/{pack.id}/open", headers=headers, json=body)
+    assert replay.status_code == 200
+    assert replay.json()["skill_tokens"] == result["skill_tokens"]
+    assert (await _tokens(db_session, user.id))["reflexes"] == 6
+    kinds = (await db_session.execute(select(CardSkillLedger.kind))).scalars().all()
+    assert kinds == ["grant_pack"] * 3
+
+
+async def test_pack_without_token_chance_or_droppable_skills_keeps_giving_players(client, db_session, bot_token):
+    user, _ = await _register(client, db_session, 820081, bot_token)
+    headers = telegram_headers(820081, bot_token)
+    plain = await _token_pack(db_session, chance=0.0)
+    resp = await client.post(f"{API}/packs/{plain.id}/open", headers=headers, json={"idempotency_key": "p-1"})
+    assert len(resp.json()["cards"]) == 3 and resp.json()["skill_tokens"] == []
+
+    # Chance set, but every skill is either weight 0 or closed by the admin.
+    tokened = await _token_pack(db_session, chance=1.0)
+    await _set_drop(db_session, "sniper", weight=3, enabled=False)
+    resp = await client.post(f"{API}/packs/{tokened.id}/open", headers=headers, json={"idempotency_key": "p-2"})
+    assert len(resp.json()["cards"]) == 3 and resp.json()["skill_tokens"] == []
+    assert await _tokens(db_session, user.id) == {}
+
+
+async def test_partial_token_chance_splits_slots(client, db_session, bot_token, monkeypatch):
+    from app.services import pack_service
+
+    await _register(client, db_session, 820082, bot_token)
+    pack = await _token_pack(db_session, chance=0.5, card_count=2)
+    await _set_drop(db_session, "sniper", weight=1)
+    draws = iter([0.2, 0.9])  # slot 1 < 0.5 -> tokens, slot 2 -> player
+    monkeypatch.setattr(pack_service.random, "random", lambda: next(draws))
+    resp = await client.post(
+        f"{API}/packs/{pack.id}/open", headers=telegram_headers(820082, bot_token), json={"idempotency_key": "s-1"},
+    )
+    body = resp.json()
+    assert len(body["cards"]) == 1 and body["skill_tokens"] == [{"skill_code": "sniper", "quantity": 1}]
+
+
+async def test_admin_edits_pack_drop_table_within_rules(client, db_session, bot_token):
+    _admin, session = await _register(client, db_session, 999000001, bot_token)
+    headers = {"Authorization": f"Bearer {session['admin_token']}"}
+    resp = await client.patch(
+        f"{API}/admin/card-skills/sniper", headers=headers, json={"pack_drop_weight": 7, "pack_drop_quantity": 3},
+    )
+    assert resp.status_code == 200
+    sniper = next(s for s in resp.json()["skills"] if s["code"] == "sniper")
+    assert (sniper["pack_drop_weight"], sniper["pack_drop_quantity"]) == (7, 3)
+    resp = await client.patch(f"{API}/admin/card-skills/aerial_master", headers=headers, json={"pack_drop_weight": 1})
+    assert resp.status_code == 409

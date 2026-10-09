@@ -13,6 +13,7 @@ import {
 } from "@/api/gifts";
 import { searchUsers } from "@/api/profile";
 import PlayerCard from "@/components/cards/PlayerCard";
+import SkillTokenTile from "@/components/cards/SkillTokenTile";
 import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconCoin, IconGift, IconInboxEmpty, IconSearch, IconTrophy } from "@/components/icons";
@@ -216,6 +217,7 @@ function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; on
 
         {result.pack_result && (
           result.pack_result.cards.length > 0 || result.pack_result.coach_cards.length > 0 || result.pack_result.stadium_cards.length > 0
+          || (result.pack_result.skill_tokens ?? []).length > 0
         ) && (
           <div className="mt-3 grid grid-cols-3 gap-2">
             {result.pack_result.cards.map((c) => (
@@ -233,6 +235,9 @@ function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; on
                 <p className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{c.card.coach.display_name}</p>
                 <p className="text-[10px] text-ink-mist">Тренер · {RARITY_LABELS[c.card.coach.rarity]}</p>
               </div>
+            ))}
+            {(result.pack_result.skill_tokens ?? []).map((token, i) => (
+              <SkillTokenTile key={`token-${i}`} skillCode={token.skill_code} quantity={token.quantity} />
             ))}
             {result.pack_result.stadium_cards.map((c) => (
               <div key={`stadium-${c.card.id}`} className="flex flex-col items-center gap-1.5 overflow-hidden rounded-2xl bg-rarity-epic/10 p-2">

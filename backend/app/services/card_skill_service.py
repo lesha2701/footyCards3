@@ -24,6 +24,7 @@ Admin switches:
     has it keeps it, keeps its match effect, and may still REPLACE it with
     another, enabled skill. Tokens of it can still be granted/held.
 """
+import random
 from typing import Optional
 
 from sqlalchemy import select
@@ -57,7 +58,7 @@ from app.services.card_skill_effects import is_position_compatible, level_bonus_
 from app.services.game_config_service import get_config
 from app.services.wallet_service import debit_coins, lock_user_for_update
 
-GRANT_KINDS = {"grant_task", "grant_tournament", "grant_admin", "revoke_admin"}
+GRANT_KINDS = {"grant_task", "grant_tournament", "grant_pack", "grant_admin", "revoke_admin"}
 
 
 # --- Catalog -----------------------------------------------------------------
@@ -76,8 +77,10 @@ async def ensure_catalog(db: AsyncSession, commit: bool = True) -> dict[str, Car
     for index, code in enumerate(SKILL_ORDER):
         if code in missing:
             # A skill the engine cannot model starts closed (and can't be opened).
+            supported = SKILL_DEFINITIONS[code].engine_supported
             row = CardSkill(
-                code=code, is_enabled=SKILL_DEFINITIONS[code].engine_supported, allowed_positions=None, sort_order=index,
+                code=code, is_enabled=supported, allowed_positions=None, sort_order=index,
+                pack_drop_weight=1 if supported else 0, pack_drop_quantity=1,
             )
             db.add(row)
             rows[code] = row
@@ -155,6 +158,8 @@ async def get_catalog(db: AsyncSession) -> SkillCatalogOut:
             is_available=reason is None, unavailable_reason=reason,
             remaining_work=list(definition.remaining_work),
             sort_order=row.sort_order if row is not None else 0,
+            pack_drop_weight=row.pack_drop_weight if row is not None else 0,
+            pack_drop_quantity=row.pack_drop_quantity if row is not None else 1,
         ))
     skills.sort(key=lambda s: s.sort_order)
     return SkillCatalogOut(
@@ -247,6 +252,28 @@ async def grant_tokens(
     )
     db.add(entry)
     return entry
+
+
+async def pack_token_drop_table(db: AsyncSession) -> list[tuple[str, int, int]]:
+    """(skill_code, weight, quantity) for every skill a pack slot can roll
+    tokens of: weight > 0, quantity >= 1, open for acquisition (admin-enabled,
+    engine-supported). Mirrors a stadium's is_pack_droppable. Called mid-
+    transaction from pack_service.roll_and_create_cards, so it never commits."""
+    rows = await ensure_catalog(db, commit=False)
+    table = []
+    for code in SKILL_ORDER:
+        row = rows.get(code)
+        definition = SKILL_DEFINITIONS[code]
+        if row is None or not row.is_enabled or not definition.engine_supported:
+            continue
+        if row.pack_drop_weight > 0 and row.pack_drop_quantity >= 1:
+            table.append((code, row.pack_drop_weight, row.pack_drop_quantity))
+    return table
+
+
+def pick_pack_token(table: list[tuple[str, int, int]]) -> tuple[str, int]:
+    code, _weight, quantity = random.choices(table, weights=[w for _c, w, _q in table], k=1)[0]
+    return code, quantity
 
 
 async def grant_place_tokens(db: AsyncSession, locked_user: User, tournament_id: int, rank: int, config: GameConfig) -> None:

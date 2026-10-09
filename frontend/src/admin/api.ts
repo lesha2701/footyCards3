@@ -854,7 +854,14 @@ export async function fetchAdminSkillCatalog(): Promise<SkillCatalog> {
 
 export async function updateAdminSkill(
   code: string,
-  payload: { is_enabled?: boolean; allowed_positions?: string[]; reset_positions?: boolean; sort_order?: number },
+  payload: {
+    is_enabled?: boolean;
+    allowed_positions?: string[];
+    reset_positions?: boolean;
+    sort_order?: number;
+    pack_drop_weight?: number;
+    pack_drop_quantity?: number;
+  },
 ): Promise<SkillCatalog> {
   const { data } = await api.patch<SkillCatalog>(`/admin/card-skills/${code}`, payload);
   return data;

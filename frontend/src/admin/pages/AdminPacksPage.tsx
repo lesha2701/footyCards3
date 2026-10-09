@@ -27,6 +27,7 @@ interface PackForm {
   card_count: number;
   coach_drop_chance: number;
   stadium_drop_chance: number;
+  skill_token_drop_chance: number;
   guaranteed_min_rarity: Rarity | "";
   is_active: boolean;
   image_path: string | null;
@@ -47,6 +48,7 @@ function packToForm(p?: Pack): PackForm {
     card_count: p?.card_count ?? 3,
     coach_drop_chance: (p?.coach_drop_chance ?? 0) * 100,
     stadium_drop_chance: (p?.stadium_drop_chance ?? 0) * 100,
+    skill_token_drop_chance: (p?.skill_token_drop_chance ?? 0) * 100,
     guaranteed_min_rarity: p?.guaranteed_min_rarity ?? "",
     is_active: p?.is_active ?? true,
     image_path: p?.image_path ?? null,
@@ -89,6 +91,7 @@ export default function AdminPacksPage() {
     card_count: form.card_count,
     coach_drop_chance: form.coach_drop_chance / 100,
     stadium_drop_chance: form.stadium_drop_chance / 100,
+    skill_token_drop_chance: form.skill_token_drop_chance / 100,
     guaranteed_min_rarity: form.guaranteed_min_rarity || null,
     is_active: form.is_active,
     image_path: form.image_path,
@@ -182,6 +185,10 @@ export default function AdminPacksPage() {
               </div>
               <NumField label="Шанс тренера вместо игрока (%) — 0 = только игроки" value={form.coach_drop_chance} min={0} max={100} onChange={(v) => setForm({ ...form, coach_drop_chance: v })} />
               <NumField label="Шанс стадиона вместо игрока (%) — 0 = только игроки" value={form.stadium_drop_chance} min={0} max={100} onChange={(v) => setForm({ ...form, stadium_drop_chance: v })} />
+              <NumField label="Шанс жетона навыка вместо игрока (%) — 100 = пак навыков; что выпадает — в «Навыки карточек»" value={form.skill_token_drop_chance} min={0} max={100} onChange={(v) => setForm({ ...form, skill_token_drop_chance: v })} />
+              {form.coach_drop_chance + form.stadium_drop_chance + form.skill_token_drop_chance > 100 && (
+                <p className="text-xs text-amber-300">Сумма шансов тренера, стадиона и жетона больше 100% — один бросок на слот, жетоны получат только остаток.</p>
+              )}
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Цена в звёздах ⭐ (если указано — пак покупается ТОЛЬКО за звёзды, цена в монетах игнорируется)</span>
                 <input

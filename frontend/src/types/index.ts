@@ -216,6 +216,7 @@ export interface Pack {
   rarity_probabilities: PackRarityProbability[];
   coach_drop_chance: number;
   stadium_drop_chance: number;
+  skill_token_drop_chance?: number;
   user_purchase_count: number;
   is_available_now: boolean;
 }
@@ -265,6 +266,8 @@ export interface PackOpenResult {
   cards: OpenedCard[];
   coach_cards: OpenedCoachCard[];
   stadium_cards: OpenedStadiumCard[];
+  /** Pack slots that rolled card-skill tokens instead of a card. */
+  skill_tokens?: { skill_code: string; quantity: number }[];
   new_balance: number;
   referral_bonus_coins: number | null;
   collection_rewards: CollectionRewardGrant[];
@@ -277,6 +280,8 @@ export interface PackBulkOpenResult {
   cards: OpenedCard[];
   coach_cards: OpenedCoachCard[];
   stadium_cards: OpenedStadiumCard[];
+  /** Pack slots that rolled card-skill tokens instead of a card. */
+  skill_tokens?: { skill_code: string; quantity: number }[];
   new_balance: number;
   total_price_paid: number;
   referral_bonus_coins: number | null;
@@ -1754,6 +1759,8 @@ export interface SkillCatalogItem {
   unavailable_reason: string | null;
   remaining_work: string[];
   sort_order: number;
+  pack_drop_weight: number;
+  pack_drop_quantity: number;
 }
 
 export interface SkillCost {

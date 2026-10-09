@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -380,6 +380,9 @@ async def get_stats_preview(db: AsyncSession) -> list[BingoStatsPreviewItem]:
                 UserCard.source == CardSource.pack,
                 UserCoachCard.source == CardSource.pack,
                 UserStadiumCard.source == CardSource.pack,
+                # Skill-token slots carry no card source; a paid opening is
+                # the closest equivalent of a real pack purchase.
+                and_(PackOpeningCard.skill_code.is_not(None), PackOpening.price_paid > 0),
             ),
         )
     )

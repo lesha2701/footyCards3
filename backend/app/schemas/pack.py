@@ -39,6 +39,7 @@ class PackOut(BaseModel):
     rarity_probabilities: list[PackRarityProbabilityOut]
     coach_drop_chance: float
     stadium_drop_chance: float
+    skill_token_drop_chance: float = 0.0
     user_purchase_count: int = 0
     is_available_now: bool = True
 
@@ -66,6 +67,7 @@ class PackCreate(BaseModel):
     rarity_probabilities: list[PackRarityProbabilityIn]
     coach_drop_chance: float = Field(default=0.0, ge=0, le=1)
     stadium_drop_chance: float = Field(default=0.0, ge=0, le=1)
+    skill_token_drop_chance: float = Field(default=0.0, ge=0, le=1)
 
 
 class PackUpdate(BaseModel):
@@ -85,6 +87,7 @@ class PackUpdate(BaseModel):
     rarity_probabilities: Optional[list[PackRarityProbabilityIn]] = None
     coach_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
     stadium_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
+    skill_token_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
 
 
 class UserCoachCardOut(BaseModel):
@@ -129,6 +132,13 @@ class OpenedStadiumCardOut(BaseModel):
     duplicate_count: int
 
 
+class OpenedSkillTokenOut(BaseModel):
+    """One pack slot that rolled card-skill tokens instead of a card."""
+
+    skill_code: str
+    quantity: int
+
+
 class CollectionRewardGrantOut(BaseModel):
     collection_id: int
     collection_name: str
@@ -142,6 +152,7 @@ class PackOpenResult(BaseModel):
     cards: list[OpenedCardOut]
     coach_cards: list[OpenedCoachCardOut] = []
     stadium_cards: list[OpenedStadiumCardOut] = []
+    skill_tokens: list[OpenedSkillTokenOut] = []
     new_balance: int
     referral_bonus_coins: Optional[int] = None
     collection_rewards: list[CollectionRewardGrantOut] = []
@@ -163,6 +174,7 @@ class PackBulkOpenResult(BaseModel):
     cards: list[OpenedCardOut]
     coach_cards: list[OpenedCoachCardOut] = []
     stadium_cards: list[OpenedStadiumCardOut] = []
+    skill_tokens: list[OpenedSkillTokenOut] = []
     new_balance: int
     total_price_paid: int
     referral_bonus_coins: Optional[int] = None

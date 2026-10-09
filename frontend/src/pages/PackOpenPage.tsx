@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { RevealStage, STAGES, STAGE_DURATION_MS } from "@/components/cards/CardRevealStage";
 import { CoachRevealStage, COACH_STAGES, COACH_STAGE_DURATION_MS } from "@/components/cards/CoachRevealStage";
+import SkillTokenTile from "@/components/cards/SkillTokenTile";
 import { StadiumRevealStage, STADIUM_STAGES, STADIUM_STAGE_DURATION_MS } from "@/components/cards/StadiumRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
@@ -141,6 +142,7 @@ function SinglePackOpenView() {
       result.cards.length === 1 &&
       result.coach_cards.length === 0 &&
       result.stadium_cards.length === 0 &&
+      (result.skill_tokens ?? []).length === 0 &&
       !result.referral_bonus_coins &&
       result.collection_rewards.length === 0 &&
       !result.pack.bonus_coins &&
@@ -532,7 +534,8 @@ function BulkSummary({
   onOpenAnother: () => void;
   canOpenAnother: boolean;
 }) {
-  const totalOpened = result.cards.length + result.coach_cards.length + result.stadium_cards.length;
+  const totalOpened =
+    result.cards.length + result.coach_cards.length + result.stadium_cards.length + (result.skill_tokens ?? []).length;
   return (
     <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
       <h2 className="text-center font-display text-2xl font-bold text-ink-chalk">
@@ -613,6 +616,9 @@ function BulkSummary({
               </span>
             )}
           </div>
+        ))}
+        {(result.skill_tokens ?? []).map((token, i) => (
+          <SkillTokenTile key={`token-${i}`} skillCode={token.skill_code} quantity={token.quantity} />
         ))}
         {result.stadium_cards.map((opened) => (
           <div
@@ -721,11 +727,13 @@ function Summary({
   // go through that staged reveal (they only ever appear in this grid), so
   // any coach card always earns the recap — otherwise an all-coach pack
   // (result.cards.length === 0) would never show its coach card anywhere.
-  const showRecap = result.coach_cards.length > 0 || result.stadium_cards.length > 0 || result.cards.length > 1;
+  const showRecap =
+    result.coach_cards.length > 0 || result.stadium_cards.length > 0 || (result.skill_tokens ?? []).length > 0 || result.cards.length > 1;
   // grid-cols-2 leaves a lone card pinned to the left column instead of
   // centered — only matters when the recap shows exactly one card (e.g. a
   // pack that granted a single coach card and nothing else).
-  const totalOpened = result.cards.length + result.coach_cards.length + result.stadium_cards.length;
+  const totalOpened =
+    result.cards.length + result.coach_cards.length + result.stadium_cards.length + (result.skill_tokens ?? []).length;
   const singleCardWidthClass = totalOpened === 1 ? "w-2/5" : "";
   return (
     <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
@@ -823,6 +831,11 @@ function Summary({
                   ×{opened.duplicate_count}
                 </span>
               )}
+            </div>
+          ))}
+          {(result.skill_tokens ?? []).map((token, i) => (
+            <div key={`token-${i}`} className={singleCardWidthClass}>
+              <SkillTokenTile skillCode={token.skill_code} quantity={token.quantity} />
             </div>
           ))}
           {result.stadium_cards.map((opened) => (

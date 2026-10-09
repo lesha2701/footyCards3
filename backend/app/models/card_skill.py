@@ -25,6 +25,11 @@ class CardSkill(TimestampMixin, Base):
     # (validated against the catalog on write, never widened past it).
     allowed_positions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Pack drop table for tokens of this skill (used by any pack whose
+    # skill_token_drop_chance > 0): relative weight among skills (0 = never
+    # drops) and how many tokens one dropped slot gives.
+    pack_drop_weight: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    pack_drop_quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
 
 class UserSkillToken(Base):

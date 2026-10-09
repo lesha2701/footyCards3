@@ -32,6 +32,10 @@ class SkillCatalogItemOut(BaseModel):
     unavailable_reason: Optional[str] = None
     remaining_work: list[str] = []
     sort_order: int = 0
+    # Pack drop table (see Pack.skill_token_drop_chance): relative weight
+    # among skills (0 = never drops from packs) and tokens per dropped slot.
+    pack_drop_weight: int = 0
+    pack_drop_quantity: int = 1
 
 
 class SkillCostOut(BaseModel):
@@ -153,6 +157,8 @@ class AdminSkillUpdate(BaseModel):
     allowed_positions: Optional[list[Position]] = None
     reset_positions: bool = False
     sort_order: Optional[int] = None
+    pack_drop_weight: Optional[int] = Field(default=None, ge=0, le=10000)
+    pack_drop_quantity: Optional[int] = Field(default=None, ge=1, le=100)
 
 
 class AdminTokenGrantRequest(BaseModel):

@@ -49,7 +49,10 @@ async def update_skill(
         raise NotFoundError("Unknown skill")
     rows = await card_skill_service.ensure_catalog(db)
     row = rows[code]
-    old_value = {"is_enabled": row.is_enabled, "allowed_positions": row.allowed_positions, "sort_order": row.sort_order}
+    old_value = {
+        "is_enabled": row.is_enabled, "allowed_positions": row.allowed_positions, "sort_order": row.sort_order,
+        "pack_drop_weight": row.pack_drop_weight, "pack_drop_quantity": row.pack_drop_quantity,
+    }
 
     if payload.is_enabled is not None:
         if payload.is_enabled and not definition.engine_supported:
@@ -73,6 +76,15 @@ async def update_skill(
         row.allowed_positions = [p.value for p in requested]
     if payload.sort_order is not None:
         row.sort_order = payload.sort_order
+    if payload.pack_drop_weight is not None:
+        if payload.pack_drop_weight > 0 and not definition.engine_supported:
+            raise ConflictError(
+                definition.unavailable_reason or "Навык не поддерживается движком",
+                details={"reason": "skill_unsupported"},
+            )
+        row.pack_drop_weight = payload.pack_drop_weight
+    if payload.pack_drop_quantity is not None:
+        row.pack_drop_quantity = payload.pack_drop_quantity
     db.add(row)
     await log_action(
         db, admin.id, "update_card_skill", "card_skill", None, old_value=old_value,

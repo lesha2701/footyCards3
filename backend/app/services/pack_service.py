@@ -21,12 +21,13 @@ from app.models.user_stadium_card import UserStadiumCard
 from app.schemas.pack import (
     OpenedCardOut,
     OpenedCoachCardOut,
+    OpenedSkillTokenOut,
     OpenedStadiumCardOut,
     PackBulkOpenResult,
     PackOpenResult,
     PackOut,
 )
-from app.services import bingo_service, collection_service, notification_service, task_service
+from app.services import bingo_service, card_skill_service, collection_service, notification_service, task_service
 from app.services.card_creation import create_user_card, create_user_coach_card, create_user_stadium_card
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
@@ -231,6 +232,8 @@ async def get_opening_result(db: AsyncSession, user: User, opening: PackOpening)
                     duplicate_count=dup_counts.get(card.player_id, 1),
                 )
             )
+        elif oc.skill_code is not None:
+            continue  # token slots are listed separately below
         elif oc.user_coach_card_id is not None:
             coach_card = coach_cards_by_id[oc.user_coach_card_id]
             coach_items.append(
@@ -252,9 +255,13 @@ async def get_opening_result(db: AsyncSession, user: User, opening: PackOpening)
     items.sort(key=lambda item: RARITY_ORDER[item.card.player.rarity])
     coach_items.sort(key=lambda item: RARITY_ORDER[item.card.coach.rarity])
     stadium_items.sort(key=lambda item: RARITY_ORDER[item.card.stadium.rarity])
+    token_items = [
+        OpenedSkillTokenOut(skill_code=oc.skill_code, quantity=oc.skill_token_quantity)
+        for oc in opening_cards if oc.skill_code is not None
+    ]
     return PackOpenResult(
         opening_id=opening.id, pack=PackOut.model_validate(pack), cards=items, coach_cards=coach_items,
-        stadium_cards=stadium_items,
+        stadium_cards=stadium_items, skill_tokens=token_items,
         new_balance=user.balance,
     )
 
@@ -291,7 +298,7 @@ async def roll_and_create_cards(
     opening: PackOpening,
     dup_counts: dict[int, int],
     source: CardSource,
-) -> tuple[list[OpenedCardOut], list[OpenedCoachCardOut], list[OpenedStadiumCardOut]]:
+) -> tuple[list[OpenedCardOut], list[OpenedCoachCardOut], list[OpenedStadiumCardOut], list[OpenedSkillTokenOut]]:
     seen_this_opening: set[int] = set()
     seen_coaches_this_opening: set[int] = set()
     seen_stadiums_this_opening: set[int] = set()
@@ -307,12 +314,20 @@ async def roll_and_create_cards(
     # card, split evenly" rather than two independent draws that could both fire.
     coach_drop_chance = float(pack.coach_drop_chance)
     stadium_drop_chance = float(pack.stadium_drop_chance)
+    # Card-skill tokens join the same single roll, checked last: with
+    # coach=0.1, stadium=0.1, tokens=0.1 a slot is 10/10/10% bonus, 70% player.
+    # No droppable skill configured (or tokens unsupported) -> player slot.
+    token_drop_chance = float(pack.skill_token_drop_chance or 0)
+    token_table = await card_skill_service.pack_token_drop_table(db) if token_drop_chance > 0 else []
+    if not token_table:
+        token_drop_chance = 0.0
     coach_dup_counts = await _duplicate_coach_counts_snapshot(db, user.id) if coach_drop_chance > 0 else {}
     stadium_dup_counts = await _duplicate_stadium_counts_snapshot(db, user.id) if stadium_drop_chance > 0 else {}
 
     opened_items: list[OpenedCardOut] = []
     opened_coach_items: list[OpenedCoachCardOut] = []
     opened_stadium_items: list[OpenedStadiumCardOut] = []
+    opened_token_items: list[OpenedSkillTokenOut] = []
     for rarity in rolled_rarities:
         # Short-circuit: only burn a draw from Python's global, unseeded `random`
         # module when either chance is actually configured — the overwhelming
@@ -321,7 +336,7 @@ async def roll_and_create_cards(
         # threshold tests elsewhere in the same process) for every pack open, not
         # just stadium/coach-enabled ones. A roll of 1.0 never satisfies either
         # `roll < chance` comparison below, for any valid 0..1 chance value.
-        roll = random.random() if (coach_drop_chance > 0 or stadium_drop_chance > 0) else 1.0
+        roll = random.random() if (coach_drop_chance > 0 or stadium_drop_chance > 0 or token_drop_chance > 0) else 1.0
         if coach_drop_chance > 0 and rarity != Rarity.diamond and roll < coach_drop_chance:
             coach = await pick_random_coach(db, rarity)
             is_new = coach_dup_counts.get(coach.id, 0) == 0 and coach.id not in seen_coaches_this_opening
@@ -354,6 +369,20 @@ async def roll_and_create_cards(
             opened_stadium_items.append(
                 OpenedStadiumCardOut(card=user_stadium_card, is_new=is_new, duplicate_count=stadium_dup_counts[stadium.id])
             )
+        elif (
+            token_drop_chance > 0 and rarity != Rarity.diamond
+            and roll < coach_drop_chance + stadium_drop_chance + token_drop_chance
+        ):
+            skill_code, quantity = card_skill_service.pick_pack_token(token_table)
+            await card_skill_service.grant_tokens(
+                db, user, skill_code, quantity, "grant_pack",
+                related_object_type="pack_opening", related_object_id=opening.id, reason=f"Пак «{pack.name}»",
+            )
+            db.add(PackOpeningCard(
+                opening_id=opening.id, user_card_id=None, user_coach_card_id=None, user_stadium_card_id=None,
+                skill_code=skill_code, skill_token_quantity=quantity, is_new=False,
+            ))
+            opened_token_items.append(OpenedSkillTokenOut(skill_code=skill_code, quantity=quantity))
         else:
             player = await pick_random_player(db, rarity)
             is_new = dup_counts.get(player.id, 0) == 0 and player.id not in seen_this_opening
@@ -374,7 +403,7 @@ async def roll_and_create_cards(
     opened_items.sort(key=lambda item: RARITY_ORDER[item.card.player.rarity])
     opened_coach_items.sort(key=lambda item: RARITY_ORDER[item.card.coach.rarity])
     opened_stadium_items.sort(key=lambda item: RARITY_ORDER[item.card.stadium.rarity])
-    return opened_items, opened_coach_items, opened_stadium_items
+    return opened_items, opened_coach_items, opened_stadium_items, opened_token_items
 
 
 async def track_pack_opened_tasks(db: AsyncSession, user: User, dup_counts: dict[int, int]) -> None:
@@ -467,12 +496,14 @@ async def grant_bonus_pack_opening(
     await db.flush()
 
     dup_counts = await _duplicate_counts_snapshot(db, user.id)
-    opened_items, opened_coach_items, opened_stadium_items = await roll_and_create_cards(db, user, pack, opening, dup_counts, source)
+    opened_items, opened_coach_items, opened_stadium_items, opened_token_items = await roll_and_create_cards(
+        db, user, pack, opening, dup_counts, source,
+    )
     referral_bonus_coins = await maybe_grant_referral_bonus_for_locked_user(db, user)
 
     return PackOpenResult(
         opening_id=opening.id, pack=PackOut.model_validate(pack), cards=opened_items, coach_cards=opened_coach_items,
-        stadium_cards=opened_stadium_items,
+        stadium_cards=opened_stadium_items, skill_tokens=opened_token_items,
         new_balance=user.balance, referral_bonus_coins=referral_bonus_coins,
     )
 
@@ -540,7 +571,9 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
     await db.flush()
 
     dup_counts = await _duplicate_counts_snapshot(db, locked_user.id)
-    opened_items, opened_coach_items, opened_stadium_items = await roll_and_create_cards(db, locked_user, pack, opening, dup_counts, CardSource.pack)
+    opened_items, opened_coach_items, opened_stadium_items, opened_token_items = await roll_and_create_cards(
+        db, locked_user, pack, opening, dup_counts, CardSource.pack,
+    )
     await track_pack_opened_tasks(db, locked_user, dup_counts)
     collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(
         db, locked_user, [item.card.player.id for item in opened_items]
@@ -597,6 +630,7 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
         cards=opened_items,
         coach_cards=opened_coach_items,
         stadium_cards=opened_stadium_items,
+        skill_tokens=opened_token_items,
         new_balance=locked_user.balance,
         referral_bonus_coins=referral_bonus_coins,
         collection_rewards=collection_rewards,
@@ -631,18 +665,21 @@ async def _get_bulk_opening_result(
     all_items: list[OpenedCardOut] = []
     all_coach_items: list[OpenedCoachCardOut] = []
     all_stadium_items: list[OpenedStadiumCardOut] = []
+    all_token_items: list[OpenedSkillTokenOut] = []
     for opening in ordered:
         single = await get_opening_result(db, user, opening)
         all_items.extend(single.cards)
         all_coach_items.extend(single.coach_cards)
         all_stadium_items.extend(single.stadium_cards)
+        all_token_items.extend(single.skill_tokens)
     all_items.sort(key=lambda item: RARITY_ORDER[item.card.player.rarity])
     all_coach_items.sort(key=lambda item: RARITY_ORDER[item.card.coach.rarity])
     all_stadium_items.sort(key=lambda item: RARITY_ORDER[item.card.stadium.rarity])
 
     return PackBulkOpenResult(
         pack=PackOut.model_validate(pack), quantity=quantity, opening_ids=[o.id for o in ordered],
-        cards=all_items, coach_cards=all_coach_items, stadium_cards=all_stadium_items, new_balance=user.balance,
+        cards=all_items, coach_cards=all_coach_items, stadium_cards=all_stadium_items, skill_tokens=all_token_items,
+        new_balance=user.balance,
         total_price_paid=sum(o.price_paid for o in ordered),
     )
 
@@ -704,6 +741,7 @@ async def open_pack_bulk(
     all_opened_items: list[OpenedCardOut] = []
     all_opened_coach_items: list[OpenedCoachCardOut] = []
     all_opened_stadium_items: list[OpenedStadiumCardOut] = []
+    all_opened_token_items: list[OpenedSkillTokenOut] = []
     for i in range(quantity):
         opening = PackOpening(
             user_id=locked_user.id, pack_id=pack.id, price_paid=pack.price,
@@ -712,11 +750,14 @@ async def open_pack_bulk(
         )
         db.add(opening)
         await db.flush()
-        opened_items, opened_coach_items, opened_stadium_items = await roll_and_create_cards(db, locked_user, pack, opening, dup_counts, CardSource.pack)
+        opened_items, opened_coach_items, opened_stadium_items, opened_token_items = await roll_and_create_cards(
+            db, locked_user, pack, opening, dup_counts, CardSource.pack,
+        )
         opening_ids.append(opening.id)
         all_opened_items.extend(opened_items)
         all_opened_coach_items.extend(opened_coach_items)
         all_opened_stadium_items.extend(opened_stadium_items)
+        all_opened_token_items.extend(opened_token_items)
 
     await track_pack_opened_tasks(db, locked_user, dup_counts)
     collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(
@@ -769,6 +810,7 @@ async def open_pack_bulk(
         cards=all_opened_items,
         coach_cards=all_opened_coach_items,
         stadium_cards=all_opened_stadium_items,
+        skill_tokens=all_opened_token_items,
         new_balance=locked_user.balance,
         total_price_paid=total_price,
         referral_bonus_coins=referral_bonus_coins,
