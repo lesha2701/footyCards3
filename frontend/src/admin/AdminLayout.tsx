@@ -2,33 +2,61 @@ import { Suspense, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import AdminToastContainer from "@/admin/AdminToastContainer";
+import {
+  IconBall,
+  IconBrain,
+  IconCard,
+  IconChart,
+  IconChat,
+  IconClock,
+  IconCoin,
+  IconCollection,
+  IconFlag,
+  IconFlagCheckered,
+  IconGift,
+  IconGlobe,
+  IconMenu,
+  IconPack,
+  IconPlay,
+  IconScroll,
+  IconShirt,
+  IconStadium,
+  IconStar,
+  IconSwap,
+  IconTag,
+  IconTarget,
+  IconTrophy,
+  IconUpgrade,
+  IconUsers,
+  type IconProps,
+} from "@/components/icons";
 
-const SECTIONS = [
-  { to: "/admin", label: "Дашборд", icon: "📊", end: true },
-  { to: "/admin/users", label: "Пользователи", icon: "👥" },
-  { to: "/admin/players", label: "Футболисты", icon: "⚽" },
-  { to: "/admin/coaches", label: "Тренеры", icon: "🧑‍🏫" },
-  { to: "/admin/stadiums", label: "Стадионы", icon: "🏟️" },
-  { to: "/admin/packs", label: "Паки", icon: "📦" },
-  { to: "/admin/club-packs", label: "Клубные паки", icon: "🏟️" },
-  { to: "/admin/clubs", label: "Клубы", icon: "🛡️" },
-  { to: "/admin/tournaments", label: "Турниры", icon: "🏆" },
-  { to: "/admin/card-collections", label: "Коллекции", icon: "🗃️" },
-  { to: "/admin/tasks", label: "Задания", icon: "🎯" },
-  { to: "/admin/trades", label: "Обмены", icon: "🔄" },
-  { to: "/admin/trophies", label: "Трофеи", icon: "🏆" },
-  { to: "/admin/leagues", label: "Лиги", icon: "🏅" },
-  { to: "/admin/gifts", label: "Подарки", icon: "🎁" },
-  { to: "/admin/wheel", label: "Колесо фортуны", icon: "🎡" },
-  { to: "/admin/daily-rewards", label: "Ежедневные награды", icon: "🗓️" },
-  { to: "/admin/games", label: "Игры", icon: "🎮" },
-  { to: "/admin/upgrades", label: "Апгрейд", icon: "🎲" },
-  { to: "/admin/diamond-upgrades", label: "Диамант", icon: "💎" },
-  { to: "/admin/card-skills", label: "Навыки карточек", icon: "✨" },
-  { to: "/admin/bingo", label: "Бинго недели", icon: "🎱" },
-  { to: "/admin/shop", label: "Магазин", icon: "🛒" },
-  { to: "/admin/broadcasts", label: "Рассылка", icon: "📣" },
-  { to: "/admin/log", label: "Журнал", icon: "📜" },
+const SECTIONS: { to: string; label: string; Icon: (props: IconProps) => JSX.Element; end?: boolean }[] = [
+  { to: "/admin", label: "Дашборд", Icon: IconChart, end: true },
+  { to: "/admin/users", label: "Пользователи", Icon: IconUsers },
+  { to: "/admin/players", label: "Футболисты", Icon: IconBall },
+  { to: "/admin/coaches", label: "Тренеры", Icon: IconShirt },
+  { to: "/admin/stadiums", label: "Стадионы", Icon: IconStadium },
+  { to: "/admin/packs", label: "Паки", Icon: IconPack },
+  { to: "/admin/club-packs", label: "Клубные паки", Icon: IconPack },
+  { to: "/admin/clubs", label: "Клубы", Icon: IconFlag },
+  { to: "/admin/tournaments", label: "Турниры", Icon: IconTrophy },
+  { to: "/admin/card-collections", label: "Коллекции", Icon: IconCollection },
+  { to: "/admin/tasks", label: "Задания", Icon: IconTarget },
+  { to: "/admin/trades", label: "Обмены", Icon: IconSwap },
+  { to: "/admin/trophies", label: "Трофеи", Icon: IconStar },
+  { to: "/admin/leagues", label: "Лиги", Icon: IconFlagCheckered },
+  { to: "/admin/gifts", label: "Подарки", Icon: IconGift },
+  { to: "/admin/wheel", label: "Колесо фортуны", Icon: IconGlobe },
+  { to: "/admin/daily-rewards", label: "Ежедневные награды", Icon: IconClock },
+  { to: "/admin/games", label: "Игры", Icon: IconPlay },
+  { to: "/admin/upgrades", label: "Апгрейд", Icon: IconUpgrade },
+  { to: "/admin/diamond-upgrades", label: "Диамант", Icon: IconCard },
+  { to: "/admin/card-skills", label: "Навыки карточек", Icon: IconBrain },
+  { to: "/admin/bingo", label: "Бинго недели", Icon: IconTag },
+  { to: "/admin/shop", label: "Магазин", Icon: IconCoin },
+  { to: "/admin/broadcasts", label: "Рассылка", Icon: IconChat },
+  { to: "/admin/log", label: "Журнал", Icon: IconScroll },
 ];
 
 export default function AdminLayout() {
@@ -38,7 +66,7 @@ export default function AdminLayout() {
   return (
     <div className="flex min-h-screen w-full max-w-full overflow-x-hidden bg-bg-base text-slate-100">
       <aside className="hidden w-56 shrink-0 flex-col border-r border-white/5 bg-bg-surface p-4 md:flex">
-        <p className="mb-6 font-display text-lg font-bold">🛠 Админка</p>
+        <p className="mb-6 font-display text-lg font-bold">Админка</p>
         <nav className="flex flex-col gap-1">
           {SECTIONS.map((s) => (
             <NavLink
@@ -49,19 +77,19 @@ export default function AdminLayout() {
                 `flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium ${isActive ? "bg-accent text-bg-base" : "text-slate-300 hover:bg-white/5"}`
               }
             >
-              <span>{s.icon}</span> {s.label}
+              <s.Icon size={16} /> {s.label}
             </NavLink>
           ))}
         </nav>
         <button onClick={() => navigate("/")} className="mt-auto rounded-xl bg-white/5 px-3 py-2 text-sm text-slate-300">
-          ← Вернуться в приложение
+          Вернуться в приложение
         </button>
       </aside>
 
       <div className="min-w-0 flex-1">
         <header className="safe-top flex items-center justify-between border-b border-white/5 bg-bg-surface px-4 py-3 md:hidden">
-          <p className="font-display text-base font-bold">🛠 Админка</p>
-          <button onClick={() => setMenuOpen((v) => !v)} className="rounded-lg bg-white/5 px-3 py-1.5 text-sm">☰</button>
+          <p className="font-display text-base font-bold">Админка</p>
+          <button onClick={() => setMenuOpen((v) => !v)} className="rounded-lg bg-white/5 px-3 py-1.5 text-sm" aria-label="Меню"><IconMenu size={16} /></button>
         </header>
         {menuOpen && (
           <nav className="flex flex-col gap-1 border-b border-white/5 bg-bg-surface p-3 md:hidden">
@@ -75,11 +103,11 @@ export default function AdminLayout() {
                   `flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium ${isActive ? "bg-accent text-bg-base" : "text-slate-300"}`
                 }
               >
-                <span>{s.icon}</span> {s.label}
+                <s.Icon size={16} /> {s.label}
               </NavLink>
             ))}
             <button onClick={() => navigate("/")} className="rounded-xl bg-white/5 px-3 py-2 text-left text-sm text-slate-300">
-              ← Вернуться в приложение
+              Вернуться в приложение
             </button>
           </nav>
         )}

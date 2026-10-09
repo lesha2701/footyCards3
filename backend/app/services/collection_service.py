@@ -8,7 +8,7 @@ from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.pagination import Page, PageParams
 from app.models.card import UserCard
 from app.models.card_collection import CardCollection, UserCollectionReward
-from app.models.enums import RARITY_ORDER, CardSource, NotificationType, TransactionType
+from app.models.enums import RARITY_ORDER, CardSource, NotificationType, Rarity, TransactionType
 from app.models.pack import Pack
 from app.models.player import Player
 from app.models.user import User
@@ -239,6 +239,52 @@ async def sell_cards(
     await db.commit()
     await db.refresh(locked_user)
     return {"sold_count": len(cards), "coins_earned": total_value, "new_balance": locked_user.balance}
+
+
+def _locked(card: UserCard) -> bool:
+    return card.is_locked_by_admin or card.is_locked_in_trade or card.is_in_lineup or card.is_in_tactico_squad
+
+
+async def duplicate_sale_plan(db: AsyncSession, user_id: int, include_diamond: bool = False) -> list[UserCard]:
+    """Copies "Продать дубликаты" would sell: for every player owned more than
+    once, one copy is always kept (a locked / in-squad / skilled copy if there
+    is one, otherwise the best diamond-bonus, lowest-numbered copy), and only
+    plain, unlocked, skill-less spare copies are sold. Diamond cards are
+    left alone unless asked (they are diamond-upgrade material)."""
+    result = await db.execute(
+        select(UserCard).where(UserCard.owner_id == user_id).options(joinedload(UserCard.player))
+    )
+    by_player: dict[int, list[UserCard]] = {}
+    for card in result.unique().scalars().all():
+        by_player.setdefault(card.player_id, []).append(card)
+    to_sell: list[UserCard] = []
+    for copies in by_player.values():
+        if len(copies) < 2:
+            continue
+        protected = [c for c in copies if _locked(c) or c.skill_code]
+        if not protected:
+            keeper = sorted(copies, key=lambda c: (-(c.diamond_rating_bonus or 0), c.serial_number or 0))[0]
+            protected = [keeper]
+        for card in copies:
+            if card in protected or _locked(card) or card.skill_code:
+                continue
+            if card.player.rarity == Rarity.diamond and not include_diamond:
+                continue
+            to_sell.append(card)
+    return to_sell
+
+
+async def sell_duplicates(db: AsyncSession, user: User, preview: bool, include_diamond: bool = False) -> dict:
+    plan = await duplicate_sale_plan(db, user.id, include_diamond)
+    coins = sum(c.player.quick_sell_price for c in plan)
+    by_rarity: dict[str, int] = {}
+    for card in plan:
+        by_rarity[card.player.rarity.value] = by_rarity.get(card.player.rarity.value, 0) + 1
+    if preview or not plan:
+        return {"sold_count": len(plan), "coins_earned": coins, "by_rarity": by_rarity, "new_balance": user.balance, "preview": True}
+    # sell_cards re-checks ownership/locks under the user lock and is atomic.
+    result = await sell_cards(db, user, [c.id for c in plan], confirm_last_copy=False)
+    return {**result, "by_rarity": by_rarity, "preview": False}
 
 
 async def _collection_progress(db: AsyncSession, user_id: int, collection_id: Optional[int]) -> tuple[int, int]:

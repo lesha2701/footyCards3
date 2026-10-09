@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
+from app.services import auto_squad_service
 from app.schemas.lineup import (
     LineupCoachSetRequest, LineupOut, LineupRenameRequest, LineupSetRequest, LineupStadiumSetRequest,
     LineupTacticRequest, UserCoachCardOut, UserStadiumCardOut,
@@ -70,6 +71,14 @@ async def update_template(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await set_lineup(db, user, payload, template_index)
+
+
+@router.post("/templates/{template_index}/auto", response_model=LineupOut)
+async def auto_fill_template(
+    template_index: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """Fills the template with the best fitting cards in one tap."""
+    return await auto_squad_service.auto_arena_lineup(db, user, template_index)
 
 
 @router.post("/templates/{template_index}/tactic", response_model=LineupOut)

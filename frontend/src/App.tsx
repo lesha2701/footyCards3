@@ -13,6 +13,7 @@ import { useUiStore } from "@/store/uiStore";
 import { getTelegramColorScheme, initTelegramApp, isInsideTelegram } from "@/lib/telegram";
 import { ApiRequestError } from "@/lib/api";
 import { hasSeenOnboarding, markOnboardingSeen } from "@/lib/onboarding";
+import { useTelegramBackButton } from "@/lib/useTelegramBackButton";
 
 // Every screen except the landing page is split into its own chunk and
 // fetched on first visit — players never download the admin panel, and the
@@ -174,6 +175,7 @@ export default function App() {
 
   return (
     <Suspense fallback={<LoadingScreen />}>
+    <TelegramBackButton />
     <Routes>
       <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
         <Route index element={<AdminDashboardPage />} />
@@ -265,4 +267,9 @@ export default function App() {
     </Routes>
     </Suspense>
   );
+}
+
+function TelegramBackButton() {
+  useTelegramBackButton();
+  return null;
 }

@@ -16,6 +16,8 @@ from app.schemas.collection import (
     BulkSellRequest,
     CollectionFilterParams,
     SellCardRequest,
+    SellDuplicatesOut,
+    SellDuplicatesRequest,
     SellResultOut,
     SetCardHiddenRequest,
     UserCardListItem,
@@ -34,6 +36,7 @@ from app.services.collection_service import (
     get_album_overview,
     list_user_cards,
     sell_cards,
+    sell_duplicates,
     set_card_hidden,
 )
 from app.services.diamond_upgrade_service import feed_cards, get_effective_rating_cap, get_material_cards, list_tiers
@@ -83,6 +86,13 @@ async def sell_one_card(
     payload: SellCardRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     return await sell_cards(db, user, [payload.user_card_id], payload.confirm_last_copy, payload.confirm_skill_loss)
+
+
+@router.post("/cards/sell-duplicates", response_model=SellDuplicatesOut)
+async def sell_duplicate_cards(
+    payload: SellDuplicatesRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await sell_duplicates(db, user, payload.preview, payload.include_diamond)
 
 
 @router.post("/cards/bulk-sell", response_model=SellResultOut)

@@ -12,6 +12,7 @@ import { IconChevronRight, IconCoin, IconStar, IconUpgrade } from "@/components/
 import { effectiveUpgradeChance } from "@/lib/cardUpgrade";
 import { RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import type { Rarity, UserCard } from "@/types";
+import CardsSectionTabs from "@/components/layout/CardsSectionTabs";
 
 const RARITY_SEQUENCE: Rarity[] = ["common", "rare", "epic", "legendary"];
 
@@ -72,6 +73,7 @@ export default function UpgradePage() {
 
   return (
     <div className="flex flex-col gap-5">
+      <CardsSectionTabs />
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500/25 via-orange-600/10 to-bg-surface p-5">
         <ForgeSparks />
         <div className="relative flex items-center gap-3">

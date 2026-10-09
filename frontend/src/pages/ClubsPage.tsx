@@ -254,7 +254,7 @@ function ClubHome({ club }: { club: Club }) {
           </p>
           {club.personal_match_earnings != null && (
             <p className="text-xs text-ink-mist-dim">
-              Твой заработок от матчей клуба: <span className="font-mono font-bold text-accent-lime">{club.personal_match_earnings}</span> 🪙
+              Твой заработок от матчей клуба: <span className="font-mono font-bold text-accent-lime">{club.personal_match_earnings}</span> <IconCoin size={12} className="inline align-[-2px] text-accent-lime" />
             </p>
           )}
         </div>

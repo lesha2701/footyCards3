@@ -122,3 +122,19 @@ export async function feedDiamondCard(
   });
   return data;
 }
+
+export interface SellDuplicatesResult {
+  sold_count: number;
+  coins_earned: number;
+  new_balance: number;
+  by_rarity: Record<string, number>;
+  preview: boolean;
+}
+
+/** Sells every spare copy (one of each player is always kept; skilled,
+ * in-squad, traded and diamond copies are never touched). preview=true only
+ * counts them for the confirmation dialog. */
+export async function sellDuplicates(preview: boolean): Promise<SellDuplicatesResult> {
+  const { data } = await api.post<SellDuplicatesResult>("/collection/cards/sell-duplicates", { preview });
+  return data;
+}

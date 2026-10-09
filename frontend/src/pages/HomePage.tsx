@@ -1,24 +1,21 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { fetchCurrentBingo } from "@/api/bingo";
-import { fetchDailyRewardCalendar } from "@/api/dailyRewards";
 import { fetchFeatureFlags } from "@/api/featureFlags";
-import { claimFreePack, fetchFreePackStatus } from "@/api/freePack";
 import { fetchLeagueStatus } from "@/api/leagues";
 import { fetchPacks } from "@/api/packs";
 import { fetchMyProfile } from "@/api/profile";
 import { fetchTasks } from "@/api/tasks";
 import { fetchWheelStatus } from "@/api/wheel";
 import { Skeleton } from "@/components/common/Skeleton";
+import TodayCard from "@/components/home/TodayCard";
 import { sortPacksByPrice } from "@/lib/packs";
 import {
   IconChat,
   IconChevronRight,
-  IconClock,
   IconCoin,
   IconCollection,
-  IconGift,
   IconHandshake,
   IconPlay,
   IconTarget,
@@ -29,7 +26,7 @@ import {
 } from "@/components/icons";
 import type { BingoCurrent } from "@/types";
 import { staticUrl } from "@/lib/api";
-import { haptic, hapticNotify, openTelegramLink } from "@/lib/telegram";
+import { haptic, openTelegramLink } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 
 const CHAT_INVITE_LINK = "https://t.me/+42EZisiOi8w1ZmMy";
@@ -42,35 +39,16 @@ function chunkPairs<T>(items: T[]): T[][] {
 
 export default function HomePage() {
   const user = useAuthStore((s) => s.user);
-  const updateBalance = useAuthStore((s) => s.updateBalance);
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
-  const { data: calendar } = useQuery({ queryKey: ["daily-reward-calendar"], queryFn: fetchDailyRewardCalendar });
   const { data: packs, isLoading: packsLoading } = useQuery({ queryKey: ["packs"], queryFn: fetchPacks });
   const coinPacks = packs?.filter((p) => p.stars_price == null);
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
   const { data: taskList } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
-  const { data: freePackStatus } = useQuery({
-    queryKey: ["free-pack-status"],
-    queryFn: fetchFreePackStatus,
-    refetchInterval: 30000,
-  });
   const { data: wheelStatus } = useQuery({ queryKey: ["wheel-status"], queryFn: fetchWheelStatus });
   const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags, refetchInterval: 30000 });
   const { data: leagueStatus } = useQuery({ queryKey: ["league-status"], queryFn: fetchLeagueStatus });
   const { data: bingo } = useQuery({ queryKey: ["bingo-current"], queryFn: fetchCurrentBingo });
-
-  const claimFreePackMutation = useMutation({
-    mutationFn: claimFreePack,
-    onSuccess: (data) => {
-      updateBalance(data.new_balance);
-      hapticNotify("success");
-      queryClient.invalidateQueries({ queryKey: ["free-pack-status"] });
-      queryClient.invalidateQueries({ queryKey: ["collection"] });
-      navigate(`/packs/${data.pack.id}/open`, { state: { result: data } });
-    },
-  });
 
   const claimableTaskCount = [...(taskList?.regular ?? []), ...(taskList?.premium ?? [])].filter(
     (t) => t.is_completed && !t.is_claimed
@@ -100,6 +78,8 @@ export default function HomePage() {
           <QuickAction Icon={IconTarget} label="Задания" onClick={() => navigate("/tasks")} badge={claimableTaskCount || undefined} />
         </div>
       </section>
+
+      <TodayCard wheel={flags?.wheel_enabled !== false ? wheelStatus : null} />
 
       {leagueStatus && leagueIconTier && flags?.leagues_enabled !== false && (
         <button
@@ -188,44 +168,6 @@ export default function HomePage() {
           />
         )}
 
-        {calendar && !calendar.already_claimed_today && (
-          <NoticeCard
-            Icon={IconGift}
-            title="Ежедневная награда готова"
-            subtitle={`День ${calendar.current_streak} — забери в профиле`}
-            onClick={() => navigate("/profile")}
-          />
-        )}
-
-        {freePackStatus && (
-          <NoticeCard
-            Icon={IconGift}
-            title="Бесплатный пак"
-            subtitle={
-              freePackStatus.available
-                ? claimFreePackMutation.isPending
-                  ? "Получаем..."
-                  : "Готов к получению!"
-                : `Появится в ${new Date(freePackStatus.available_at!).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`
-            }
-            onClick={() => freePackStatus.available && claimFreePackMutation.mutate()}
-            disabled={!freePackStatus.available || claimFreePackMutation.isPending}
-            trailingIcon={freePackStatus.available ? undefined : IconClock}
-          />
-        )}
-
-        {wheelStatus && flags?.wheel_enabled !== false && (
-          <NoticeCard
-            Icon={IconGift}
-            title="Колесо фортуны"
-            subtitle={
-              wheelStatus.free_spins_remaining > 0
-                ? `Осталось ${wheelStatus.free_spins_remaining} бесплатных прокруток сегодня`
-                : "Бесплатные прокрутки закончились — крути за монеты или ⭐"
-            }
-            onClick={() => navigate("/wheel")}
-          />
-        )}
       </div>
 
       {(packsLoading || !!coinPacks?.length) && (

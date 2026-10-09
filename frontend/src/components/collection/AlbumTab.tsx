@@ -9,7 +9,7 @@ import CardDetailModal from "@/components/collection/CardDetailModal";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import { bestSkilledCopy, useSkillUpgradeCheck } from "@/lib/cardSkills";
 import { useCardActions } from "@/components/collection/useCardActions";
-import { IconChevronLeft, IconChevronRight, IconCoin, IconCollection, IconSearch } from "@/components/icons";
+import { IconChevronLeft, IconChevronRight, IconCoin, IconCollection, IconParty, IconSearch } from "@/components/icons";
 import { fetchAlbumCollectionDetail, fetchAlbumOverview } from "@/api/album";
 import { staticUrl } from "@/lib/api";
 import { POSITION_LABELS, RARITY_ORDER } from "@/lib/rarity";
@@ -172,7 +172,7 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
       )}
       {data?.is_complete && (
         <div className="rounded-xl bg-accent-lime/10 px-3 py-2.5 text-center text-xs font-semibold text-accent-lime">
-          🎉 Коллекция собрана{data.reward_coins > 0 ? ` — получено ${data.reward_coins} монет` : ""}!
+          <IconParty size={14} className="mr-1 inline align-[-2px]" />Коллекция собрана{data.reward_coins > 0 ? ` — получено ${data.reward_coins} монет` : ""}!
         </div>
       )}
 

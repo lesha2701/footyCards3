@@ -72,3 +72,9 @@ export async function activateLineupTemplate(templateIndex: number): Promise<Lin
   const { data } = await api.post<Lineup>(`/lineups/templates/${templateIndex}/activate`);
   return data;
 }
+
+/** One tap: best fitting cards for every slot of this template. */
+export async function autoFillLineupTemplate(templateIndex: number): Promise<Lineup> {
+  const { data } = await api.post<Lineup>(`/lineups/templates/${templateIndex}/auto`);
+  return data;
+}

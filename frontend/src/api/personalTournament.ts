@@ -94,3 +94,12 @@ export async function fetchPlayerTournamentMatch(matchId: number): Promise<Playe
   const { data } = await api.get<PlayerTournamentMatchDetail>(`/player-tournaments/matches/${matchId}`);
   return data;
 }
+
+/** One tap: best cards for every slot; copyFromArena starts from the active
+ * Card Arena lineup's cards and fills the gaps. */
+export async function autoFillPersonalSquad(templateIndex: number, copyFromArena = false): Promise<PersonalSquad> {
+  const { data } = await api.post<PersonalSquad>(`/player-tournaments/squads/${templateIndex}/auto`, null, {
+    params: { copy_from_arena: copyFromArena },
+  });
+  return data;
+}

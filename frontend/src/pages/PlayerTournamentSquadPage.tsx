@@ -11,7 +11,7 @@ import { IconCheck, IconChevronLeft, IconPlus } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
 import {
-  activatePersonalSquad, fetchPersonalSquadCoachCards, fetchPersonalSquads, fetchPersonalSquadStadiumCards,
+  activatePersonalSquad, autoFillPersonalSquad, fetchPersonalSquadCoachCards, fetchPersonalSquads, fetchPersonalSquadStadiumCards,
   renamePersonalSquad, setPersonalSquadCards, setPersonalSquadCoach, setPersonalSquadStadium, setPersonalSquadTactics,
 } from "@/api/personalTournament";
 import { staticUrl } from "@/lib/api";
@@ -19,6 +19,7 @@ import { BOOST_TYPE_LABELS } from "@/lib/coaches";
 import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
 import { formatGameError } from "@/lib/errors";
+import { haptic } from "@/lib/telegram";
 import type { PersonalSquadSlot, UserCard } from "@/types";
 
 export default function PlayerTournamentSquadPage() {
@@ -47,6 +48,17 @@ export default function PlayerTournamentSquadPage() {
   const [coachPickerOpen, setCoachPickerOpen] = useState(false);
   const [stadiumPickerOpen, setStadiumPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const autoFillMutation = useMutation({
+    mutationFn: (copyFromArena: boolean) => autoFillPersonalSquad(viewedIndex, copyFromArena),
+    onSuccess: () => {
+      haptic("medium");
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] });
+      queryClient.invalidateQueries({ queryKey: ["player-tournament", "current"] });
+    },
+    onError: (err) => setError(formatGameError(err, "Не удалось собрать состав")),
+  });
 
   const setCardsMutation = useMutation({
     mutationFn: (slots: { slot_code: string; user_card_id: number }[]) => setPersonalSquadCards(viewedIndex, slots),
@@ -193,6 +205,22 @@ export default function PlayerTournamentSquadPage() {
                 Навыки: действуют {activeSquadSkills.length} из {squadSkills.length}
               </p>
             )}
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              <button
+                onClick={() => autoFillMutation.mutate(false)}
+                disabled={autoFillMutation.isPending}
+                className="rounded-full bg-accent-lime/15 px-2.5 py-1 text-[11px] font-semibold text-accent-lime disabled:opacity-50"
+              >
+                Собрать лучший
+              </button>
+              <button
+                onClick={() => autoFillMutation.mutate(true)}
+                disabled={autoFillMutation.isPending}
+                className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-ink-mist disabled:opacity-50"
+              >
+                Из Card Arena
+              </button>
+            </div>
           </div>
           {squad?.is_complete && (
             <span className="flex items-center gap-1 font-mono text-xs font-bold text-accent-cyan">

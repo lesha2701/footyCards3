@@ -18,12 +18,14 @@ import {
   IconPlus,
   IconSwap,
   IconUsers,
+  IconWarning,
   type IconProps,
 } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
 import {
-  activateLineupTemplate, fetchLineupTemplates, fetchUserCoachCards, fetchUserStadiumCards,
+  activateLineupTemplate,
+  autoFillLineupTemplate, fetchLineupTemplates, fetchUserCoachCards, fetchUserStadiumCards,
   renameLineupTemplate, setLineupTemplate, setLineupTemplateCoach, setLineupTemplateStadium, setLineupTemplateTactic,
 } from "@/api/lineups";
 import { actMatch, fetchArenaStats, fetchMatchHistory, forfeitMatch, playMatch } from "@/api/matches";
@@ -101,6 +103,12 @@ export default function ArenaPage() {
     mutationFn: (userStadiumCardId: number | null) => setLineupTemplateStadium(viewedIndex, userStadiumCardId),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["lineup-templates"] }); setStadiumPickerOpen(false); },
     onError: (err) => setLineupError(formatGameError(err, "Не удалось назначить стадион")),
+  });
+
+  const autoFillMutation = useMutation({
+    mutationFn: () => autoFillLineupTemplate(viewedIndex),
+    onSuccess: () => { haptic("medium"); setLineupError(null); queryClient.invalidateQueries({ queryKey: ["lineup-templates"] }); },
+    onError: (err) => setLineupError(formatGameError(err, "Не удалось собрать состав")),
   });
 
   const activateMutation = useMutation({
@@ -289,6 +297,13 @@ export default function ArenaPage() {
                 {activeLineupSkills.length < lineupSkills.length && " (зачёркнутые здесь не работают)"}
               </p>
             )}
+            <button
+              onClick={() => autoFillMutation.mutate()}
+              disabled={autoFillMutation.isPending}
+              className="mt-1 rounded-full bg-accent-lime/15 px-2.5 py-1 text-[11px] font-semibold text-accent-lime disabled:opacity-50"
+            >
+              {autoFillMutation.isPending ? "Собираем..." : "Собрать лучший состав"}
+            </button>
           </div>
           {lineup?.is_complete && (
             <button
@@ -725,7 +740,7 @@ function MatchSimulation({
       {isBreakawayNext && !autoSkip && (
         <div className="mt-4 flex flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
           <p className="text-sm font-semibold text-ink-chalk">
-            😰 Соперник выходит один на один с твоим вратарём!
+            <span className="inline-flex items-center gap-1.5"><IconWarning size={15} className="shrink-0 text-amber-300" />Соперник выходит один на один с твоим вратарём!</span>
           </p>
           <button
             onClick={ackBreakaway}

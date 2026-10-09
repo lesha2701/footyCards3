@@ -3,13 +3,16 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { UserBadge } from "@/components/common/UserBadge";
-import { IconChevronLeft } from "@/components/icons";
+import { IconChevronLeft, IconSwap } from "@/components/icons";
 import { fetchPublicProfile } from "@/api/profile";
 import { staticUrl } from "@/lib/api";
+import { useAuthStore } from "@/store/authStore";
+import type { UserPublic } from "@/types";
 
 export default function PublicProfilePage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
+  const me = useAuthStore((s) => s.user);
   const { data: profile, isLoading } = useQuery({
     queryKey: ["public-profile", userId],
     queryFn: () => fetchPublicProfile(Number(userId)),
@@ -37,6 +40,22 @@ export default function PublicProfilePage() {
         </p>
         {profile.username && <p className="text-sm text-ink-mist">@{profile.username}</p>}
         <p className="text-xs text-ink-mist-dim">С нами с {new Date(profile.created_at).toLocaleDateString("ru-RU")}</p>
+        {me?.id !== profile.id && (
+          <button
+            onClick={() => {
+              const target: UserPublic = {
+                id: profile.id, username: profile.username, first_name: profile.first_name,
+                last_name: profile.last_name, avatar_url: profile.avatar_url, level: profile.level,
+                arena_rating: profile.arena_rating, created_at: profile.created_at, active_badge: profile.active_badge,
+              };
+              navigate("/trades/new", { state: { target } });
+            }}
+            className="mt-2 flex items-center gap-1.5 rounded-full bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95"
+          >
+            <IconSwap size={14} />
+            Предложить обмен
+          </button>
+        )}
       </section>
 
       <section className="rounded-2xl bg-bg-surface p-4">

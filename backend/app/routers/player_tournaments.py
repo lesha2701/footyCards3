@@ -16,6 +16,7 @@ from app.schemas.player_tournament import (
 from app.schemas.player_tournament_ranking import PlayerTournamentRankingMetric, PlayerTournamentRankingOut
 from app.schemas.player_tournament_stats import PlayerTournamentStatsOut
 from app.services import (
+    auto_squad_service,
     personal_squad_service, player_tournament_query_service, player_tournament_queue_service,
     player_tournament_ranking_service, player_tournament_stats_service,
 )
@@ -45,6 +46,16 @@ async def update_squad_cards(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await personal_squad_service.set_squad_cards(db, user, payload, template_index)
+
+
+@router.post("/squads/{template_index}/auto", response_model=PersonalSquadOut)
+async def auto_fill_squad(
+    template_index: int, copy_from_arena: bool = False,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """Best cards for every slot in one tap; copy_from_arena=true starts from
+    the active Card Arena lineup's cards and fills the gaps."""
+    return await auto_squad_service.auto_personal_squad(db, user, template_index, copy_from_arena=copy_from_arena)
 
 
 @router.put("/squads/{template_index}/tactics", response_model=PersonalSquadOut)

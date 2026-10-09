@@ -126,6 +126,17 @@ class SellResultOut(BaseModel):
     new_balance: int
 
 
+class SellDuplicatesRequest(BaseModel):
+    # true = only count what would be sold (for the confirmation dialog).
+    preview: bool = True
+    include_diamond: bool = False
+
+
+class SellDuplicatesOut(SellResultOut):
+    by_rarity: dict[str, int] = {}
+    preview: bool
+
+
 class AlbumCollectionSummaryOut(BaseModel):
     id: int  # -1 for the synthetic "Other players" bucket
     name: str

@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
@@ -18,9 +18,12 @@ const MAX_TRADE_CARDS_PER_SIDE = 3;
 
 export default function NewTradePage() {
   const navigate = useNavigate();
+  // "Предложить обмен" on a public profile opens this page with the
+  // receiver already picked.
+  const prefilled = (useLocation().state as { target?: UserPublic } | null)?.target ?? null;
 
   const [query, setQuery] = useState("");
-  const [target, setTarget] = useState<UserPublic | null>(null);
+  const [target, setTarget] = useState<UserPublic | null>(prefilled);
   const [offeredIds, setOfferedIds] = useState<number[]>([]);
   const [requestedIds, setRequestedIds] = useState<number[]>([]);
   const [senderCoins, setSenderCoins] = useState(0);

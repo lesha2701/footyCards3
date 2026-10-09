@@ -31,6 +31,7 @@ import {
   IconSwap,
   IconTrophy,
   IconUsers,
+  IconWarning,
   type IconProps,
 } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
@@ -925,7 +926,7 @@ function CardArenaRoundPlayer({
 
       {isBreakawayNext && !autoSkip && (
         <div className="mt-1 flex flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
-          <p className="text-sm font-semibold text-ink-chalk">😰 Соперник выходит один на один с твоим вратарём!</p>
+          <p className="text-sm font-semibold text-ink-chalk"><span className="inline-flex items-center gap-1.5"><IconWarning size={15} className="shrink-0 text-amber-300" />Соперник выходит один на один с твоим вратарём!</span></p>
           <button
             onClick={ackBreakaway}
             className="rounded-2xl bg-white/10 px-8 py-3 font-display text-base font-bold text-ink-chalk active:scale-95"

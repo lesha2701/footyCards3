@@ -11,6 +11,7 @@ import { staticUrl } from "@/lib/api";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { TradeOffer } from "@/types";
+import CardsSectionTabs from "@/components/layout/CardsSectionTabs";
 
 type Tab = "incoming" | "outgoing" | "history";
 
@@ -53,6 +54,8 @@ export default function TradesPage() {
           Новый
         </button>
       </div>
+
+      <CardsSectionTabs />
 
       <div className="flex gap-2">
         <TabButton active={tab === "incoming"} label="Входящие" onClick={() => setTab("incoming")} />

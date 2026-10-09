@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import ConfirmDialog from "@/components/common/ConfirmDialog";
@@ -9,11 +9,17 @@ import CardUpgradeModal from "@/components/cards/CardUpgradeModal";
 import PlayerCard from "@/components/cards/PlayerCard";
 import CardDetailModal from "@/components/collection/CardDetailModal";
 import { useCardActions } from "@/components/collection/useCardActions";
-import { fetchCollection, fetchCollectionStats, type CollectionFilters } from "@/api/collection";
+import {
+  fetchCollection, fetchCollectionStats, sellDuplicates, type CollectionFilters, type SellDuplicatesResult,
+} from "@/api/collection";
 import { fetchCollections } from "@/api/collections";
 import { RARITY_LABELS, RARITY_ORDER } from "@/lib/rarity";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import { useSkillUpgradeCheck } from "@/lib/cardSkills";
+import { formatGameError } from "@/lib/errors";
+import { usePersistentState } from "@/lib/usePersistentState";
+import { haptic } from "@/lib/telegram";
+import { useAuthStore } from "@/store/authStore";
 import type { Rarity, UserCard } from "@/types";
 
 const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
@@ -21,11 +27,16 @@ const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
 const PAGE_SIZE = 60;
 
 export default function MyCardsTab() {
-  const [rarity, setRarity] = useState<Rarity | null>(null);
+  // Filters and sort survive leaving the tab (and an app restart).
+  const [rarity, setRarity] = usePersistentState<Rarity | null>("collection.rarity", null);
   const [collectionId, setCollectionId] = useState<number | undefined>(undefined);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<CollectionFilters["sort_by"]>("acquired_at");
-  const [onlySkilled, setOnlySkilled] = useState(false);
+  const [sortBy, setSortBy] = usePersistentState<CollectionFilters["sort_by"]>("collection.sort", "acquired_at");
+  const [onlySkilled, setOnlySkilled] = usePersistentState("collection.skilled", false);
+  const [dupPreview, setDupPreview] = useState<SellDuplicatesResult | null>(null);
+  const [dupMessage, setDupMessage] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const updateBalance = useAuthStore((s) => s.updateBalance);
   const [pageNum, setPageNum] = useState(1);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
@@ -65,6 +76,25 @@ export default function MyCardsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sellMutation.isSuccess]);
 
+  const duplicatesMutation = useMutation({
+    mutationFn: sellDuplicates,
+    onSuccess: (data) => {
+      if (data.preview) {
+        if (data.sold_count === 0) setDupMessage("Лишних дубликатов нет — продавать нечего");
+        else { setDupMessage(null); setDupPreview(data); }
+        return;
+      }
+      haptic("medium");
+      setDupPreview(null);
+      setDupMessage(`Продано ${data.sold_count} шт. · +${data.coins_earned} монет`);
+      updateBalance(data.new_balance);
+      for (const key of [["collection"], ["collection-stats"], ["card-skills"], ["album-overview"], ["album-detail"]]) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
+    },
+    onError: (err) => { setDupPreview(null); setDupMessage(formatGameError(err, "Не удалось продать дубликаты")); },
+  });
+
   const toggleSelect = (id: number) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
@@ -75,7 +105,14 @@ export default function MyCardsTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <button
+          onClick={() => duplicatesMutation.mutate(true)}
+          disabled={duplicatesMutation.isPending}
+          className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-ink-mist disabled:opacity-50"
+        >
+          Продать дубликаты
+        </button>
         <button
           onClick={() => { setSelectMode((v) => !v); setSelected([]); }}
           className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-ink-mist"
@@ -83,6 +120,10 @@ export default function MyCardsTab() {
           {selectMode ? "Отмена" : "Выбрать"}
         </button>
       </div>
+
+      {dupMessage && (
+        <p className="rounded-xl bg-bg-surface px-3 py-2 text-xs text-ink-mist" role="status">{dupMessage}</p>
+      )}
 
       {stats && (
         <div className="grid grid-cols-2 gap-x-3 rounded-2xl bg-bg-surface p-4">
@@ -208,6 +249,18 @@ export default function MyCardsTab() {
       )}
 
       {upgradeCard && <CardUpgradeModal cards={[upgradeCard]} onClose={() => setUpgradeCard(null)} />}
+
+      <ConfirmDialog
+        open={!!dupPreview}
+        title={`Продать ${dupPreview?.sold_count ?? 0} дубликатов?`}
+        description={
+          `Получишь ${dupPreview?.coins_earned ?? 0} монет. По одной карточке каждого игрока остаётся; `
+          + "карточки с навыком, в составах, в обменах и бриллиантовые не продаются."
+        }
+        confirmLabel="Продать"
+        onConfirm={() => duplicatesMutation.mutate(false)}
+        onCancel={() => setDupPreview(null)}
+      />
 
       <ConfirmDialog
         open={!!confirmSell}

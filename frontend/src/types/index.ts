@@ -567,6 +567,8 @@ export interface GameLimits {
   hangman: number;
   tactico: number;
   pairs: number;
+  /** Exhausted games only: when the hourly cap frees up again. */
+  resets_at?: Partial<Record<string, string>>;
 }
 
 export interface ArenaLeaderboardEntry {
