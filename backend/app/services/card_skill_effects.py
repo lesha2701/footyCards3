@@ -137,3 +137,48 @@ def skill_choice(
     pick = outcomes[bisect(list(accumulate(new_weights)), r * sum(new_weights), 0, len(outcomes) - 1)]
     decisive = pick != base_pick and pick == boosted
     return pick, [_note(effect, player, decisive)]
+
+
+# --- Aerial duel on a cross ("aerial_master") ---------------------------------
+# A cross into the box resolves the existing shot-miss probability `m` in two
+# steps: first the header duel (the defending centre-back wins it with
+# probability d = alpha * m — that's "the ball never reached the target"),
+# then the header itself, which misses with m2 = m * (1 - alpha) / (1 - d).
+# Algebraically (d) + (1 - d) * m2 == m for any alpha, so without skills the
+# miss probability is exactly what the engine used before — the duel only
+# re-attributes part of those misses to the centre-back. alpha (how much of a
+# cross's failure is the aerial duel) leans on the two duelists' ratings.
+AERIAL_ALPHA_MIN, AERIAL_ALPHA_MAX = 0.25, 0.75
+
+
+def aerial_alpha(target_rating: int, defender_rating: int) -> float:
+    return max(AERIAL_ALPHA_MIN, min(AERIAL_ALPHA_MAX, 0.5 + (defender_rating - target_rating) / 80))
+
+
+def aerial_shot_roll(
+    miss: float, alpha: float,
+    duel_adjustments: list[tuple[Optional[dict], int, Any]],
+    shot_adjustments: list[tuple[Optional[dict], int, Any]],
+) -> tuple[bool, bool, list[dict]]:
+    """(missed, defender_won_duel, notes). duel_adjustments act on the
+    defender-wins-duel probability (+1 = defender's aerial_master, -1 = the
+    target's); shot_adjustments act on the header's own miss roll (sniper).
+    Uses two draws; `decisive` is set against the full no-skill counterfactual
+    of the SAME two draws, so the log only claims an outcome the engine can
+    actually attribute."""
+    d = alpha * miss
+    m2 = miss * (1 - alpha) / (1 - d) if d < 1 else 0.0
+    duel_active = [(e, s, p) for e, s, p in duel_adjustments if e]
+    shot_active = [(e, s, p) for e, s, p in shot_adjustments if e]
+    r1, r2 = random.random(), random.random()
+    base_missed = r1 < d or r2 < m2
+    lost = r1 < (_adjusted(d, duel_active) if duel_active else d)
+    missed = lost or r2 < (_adjusted(m2, shot_active) if shot_active else m2)
+    flipped = missed != base_missed
+    notes = []
+    for effect, sign, player in duel_active:
+        favors_miss = sign > 0
+        notes.append(_note(effect, player, flipped and missed == favors_miss))
+    for effect, sign, player in shot_active:
+        notes.append(_note(effect, player, flipped and missed == (sign > 0)))
+    return missed, lost, notes

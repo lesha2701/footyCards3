@@ -484,14 +484,21 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
         return event, None
 
     if action == "block":
-        fail = random.random() < _lerp_chance(
-            defender["rating"], float(config.match_block_fail_chance_min), float(config.match_block_fail_chance_max)
+        # On a cross / corner ("aerial" situations) the block IS the defender's
+        # aerial duel — the defender's own aerial_master lowers the fail chance.
+        aerial = _card_effect(state, defender, "aerial_master") if "aerial" in situation.tags else None
+        fail, block_notes = skill_roll(
+            _lerp_chance(defender["rating"], float(config.match_block_fail_chance_min), float(config.match_block_fail_chance_max)),
+            [(aerial, -1, defender["name"])],
         )
         if not fail:
             event = {
                 "minute": moment["minute"], "event_type": "blocked", "team": "opponent",
                 "description": _describe_event("blocked", "opponent", opponent_name),
-                "payload": {"shot_type": shot_type, "action": action, "defender": defender["name"], "missed": False, "blocked": True},
+                "payload": _with_skill_notes(
+                    {"shot_type": shot_type, "action": action, "defender": defender["name"], "missed": False, "blocked": True},
+                    block_notes,
+                ),
             }
             return event, None
         missed = random.random() < _lerp_chance(

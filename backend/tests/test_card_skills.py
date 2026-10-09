@@ -113,7 +113,21 @@ async def _reload(db_session, model, pk):
 # --- catalog ---------------------------------------------------------------------
 
 
-async def test_catalog_lists_six_skills_and_marks_aerial_unavailable(client, db_session, bot_token):
+@pytest.fixture
+def unsupported_aerial(monkeypatch):
+    """No v1 skill is engine-unsupported any more; the guard is still kept
+    (and tested) by marking one skill unsupported for the test."""
+    from dataclasses import replace
+
+    from app.services.card_skill_catalog import SKILL_DEFINITIONS
+
+    monkeypatch.setitem(SKILL_DEFINITIONS, "aerial_master", replace(
+        SKILL_DEFINITIONS["aerial_master"], engine_supported=False,
+        unavailable_reason="нет модели", remaining_work=("сделать модель",),
+    ))
+
+
+async def test_catalog_lists_six_available_skills(client, db_session, bot_token):
     await _register(client, db_session, 820001, bot_token)
     resp = await client.get(f"{API}/card-skills/catalog", headers=telegram_headers(820001, bot_token))
     assert resp.status_code == 200
@@ -121,9 +135,8 @@ async def test_catalog_lists_six_skills_and_marks_aerial_unavailable(client, db_
     codes = [s["code"] for s in body["skills"]]
     assert codes == ["sniper", "dribbler", "playmaker", "interceptor", "aerial_master", "reflexes"]
     by_code = {s["code"]: s for s in body["skills"]}
-    assert by_code["aerial_master"]["is_available"] is False
-    assert by_code["aerial_master"]["engine_supported"] is False
-    assert by_code["aerial_master"]["remaining_work"]
+    assert all(s["is_available"] and s["engine_supported"] for s in body["skills"])
+    assert by_code["aerial_master"]["positions"] == ["CB", "ST"]
     assert by_code["reflexes"]["positions"] == ["GK"]
     assert [lvl["bonus_pp"] for lvl in by_code["sniper"]["levels"]] == [2, 4, 6]
     assert body["rules"]["costs"]["upgrade_to_3"] == {"token_cost": 4, "coin_cost": 1200}
@@ -485,7 +498,9 @@ async def test_disabled_skill_blocks_assign_and_upgrade_but_allows_replacing_awa
     assert resp.status_code == 200, resp.text
 
 
-async def test_admin_cannot_enable_or_grant_unsupported_skill_and_positions_stay_within_catalog(client, db_session, bot_token):
+async def test_admin_cannot_enable_or_grant_unsupported_skill_and_positions_stay_within_catalog(
+    client, db_session, bot_token, unsupported_aerial,
+):
     admin, session = await _register(client, db_session, 999000001, bot_token)
     admin_headers = {"Authorization": f"Bearer {session['admin_token']}"}
     resp = await client.patch(f"{API}/admin/card-skills/aerial_master", headers=admin_headers, json={"is_enabled": True})
@@ -644,7 +659,8 @@ async def test_effect_requires_compatible_position_and_uses_config_levels(db_ses
     config.card_skill_level_2_bonus_pp = 5
     assert effect_for_card("sniper", 2, Position.ST, config)["bonus_pp"] == 5
     assert effect_for_card("sniper", 2, Position.GK, config) is None  # e.g. position edited by admin
-    assert effect_for_card("aerial_master", 3, Position.CB, config) is None  # engine has no aerial duel
+    assert effect_for_card("aerial_master", 3, Position.CB, config)["bonus_pp"] == 6
+    assert effect_for_card("aerial_master", 3, Position.LB, config) is None
     config.card_skill_event_bonus_cap_pp = 3
     assert effect_for_card("reflexes", 3, Position.GK, config)["bonus_pp"] == 3
 
@@ -1000,5 +1016,118 @@ async def test_admin_edits_pack_drop_table_within_rules(client, db_session, bot_
     assert resp.status_code == 200
     sniper = next(s for s in resp.json()["skills"] if s["code"] == "sniper")
     assert (sniper["pack_drop_weight"], sniper["pack_drop_quantity"]) == (7, 3)
-    resp = await client.patch(f"{API}/admin/card-skills/aerial_master", headers=headers, json={"pack_drop_weight": 1})
-    assert resp.status_code == 409
+    resp = await client.patch(f"{API}/admin/card-skills/aerial_master", headers=headers, json={"pack_drop_weight": 2})
+    assert resp.status_code == 200
+
+
+async def test_unsupported_skill_is_shown_closed_with_remaining_work(client, db_session, bot_token, unsupported_aerial):
+    await _register(client, db_session, 820002, bot_token)
+    resp = await client.get(f"{API}/card-skills/catalog", headers=telegram_headers(820002, bot_token))
+    aerial = next(s for s in resp.json()["skills"] if s["code"] == "aerial_master")
+    assert aerial["is_available"] is False and aerial["engine_supported"] is False
+    assert aerial["unavailable_reason"] == "нет модели" and aerial["remaining_work"] == ["сделать модель"]
+
+
+async def test_unsupported_skill_never_drops_from_packs(db_session, unsupported_aerial):
+    await card_skill_service.ensure_catalog(db_session)
+    table = await card_skill_service.pack_token_drop_table(db_session)
+    assert "aerial_master" not in {code for code, _w, _q in table}
+
+
+# --- aerial_master ------------------------------------------------------------------------
+
+
+def test_aerial_split_preserves_the_original_miss_probability():
+    # Without skills, P(duel lost) + P(duel won) * P(header miss) == the old miss chance.
+    for miss in (0.05, 0.18, 0.32):
+        for alpha in (0.25, 0.5, 0.75):
+            d = alpha * miss
+            m2 = miss * (1 - alpha) / (1 - d)
+            assert d + (1 - d) * m2 == pytest.approx(miss)
+    random.seed(5)
+    trials = 40000
+    misses = sum(fx.aerial_shot_roll(0.2, 0.5, [], [])[0] for _ in range(trials))
+    assert misses / trials == pytest.approx(0.2, abs=0.01)
+
+
+def test_aerial_alpha_leans_on_ratings_and_is_bounded():
+    assert fx.aerial_alpha(80, 80) == pytest.approx(0.5)
+    assert fx.aerial_alpha(60, 99) == fx.AERIAL_ALPHA_MAX
+    assert fx.aerial_alpha(99, 60) == fx.AERIAL_ALPHA_MIN
+
+
+def test_aerial_defender_skill_wins_the_duel_and_is_marked_decisive(monkeypatch):
+    # miss .2, alpha .5 -> base defender-wins-duel .10; CB aerial III (+6) -> .16
+    draws = iter([0.13, 0.99])
+    monkeypatch.setattr(fx.random, "random", lambda: next(draws))
+    missed, lost, notes = fx.aerial_shot_roll(0.2, 0.5, [(_effect("aerial_master"), 1, "ЦЗ")], [])
+    assert missed and lost
+    assert notes[0]["code"] == "aerial_master" and notes[0]["decisive"] is True
+
+
+def test_aerial_attacker_skill_only_affects_the_duel_not_the_header(monkeypatch):
+    # The target's aerial III lowers the duel loss .10 -> .04; the header's own
+    # miss chance is untouched — no extra bonus on the shot after the duel.
+    draws = iter([0.07, 0.0])
+    monkeypatch.setattr(fx.random, "random", lambda: next(draws))
+    missed, lost, notes = fx.aerial_shot_roll(0.2, 0.5, [(_effect("aerial_master"), -1, "ЦФ")], [])
+    assert not lost and missed  # won the duel, then missed the header anyway
+    assert notes[0]["decisive"] is False
+
+
+def _cross_moment(defender_skill=None, target_skill=None):
+    shooter = {"club_card_id": 1, "player_id": 1, "name": "Вингер", "rating": 70, "position": "LW"}
+    moment = {
+        "minute": 10, "shot_type": "in_box", "is_box": True, "is_cross": True,
+        "actors": {"shooter": shooter, "pass_target": _actor("П"), "defender": _actor("З")},
+    }
+    aerial = {
+        "attack_target": {**_actor("Форвард", skill=target_skill), "position": "ST", "category": "FWD"},
+        "defender": {**_actor("Центрбек", skill=defender_skill), "position": "CB", "category": "DEF"},
+    }
+    return moment, aerial
+
+
+def test_tournament_cross_uses_aerial_duel_only_when_a_duelist_has_the_skill(monkeypatch):
+    monkeypatch.setattr(fx.random, "random", lambda: 0.999)
+    monkeypatch.setattr(tournament_match_engine.random, "random", lambda: 0.999)
+    moment, aerial = _cross_moment(defender_skill=_effect("aerial_master"))
+    event, _ = tournament_match_engine._resolve_shot_action("a", moment, _Cfg(), keeper=None, aerial=aerial)
+    assert event["payload"]["aerial_duel"] == {"target": "Форвард", "defender": "Центрбек", "won_by": "attacker"}
+    assert event["payload"]["skills"][0]["code"] == "aerial_master"
+
+    moment, aerial = _cross_moment()  # nobody has the skill -> the old single roll, no duel in the log
+    event, _ = tournament_match_engine._resolve_shot_action("a", moment, _Cfg(), keeper=None, aerial=aerial)
+    assert "aerial_duel" not in event["payload"] and "skills" not in event["payload"]
+
+
+def test_tournament_aerial_pick_prefers_the_skilled_player():
+    lineup = [
+        {"position": "CB", "name": "CB1"}, {"position": "CB", "name": "CB2", "skill": _effect("aerial_master")},
+        {"position": "ST", "name": "ST1"},
+    ]
+    assert tournament_match_engine._aerial_pick(lineup, "CB")["name"] == "CB2"
+    assert tournament_match_engine._aerial_pick(lineup, "ST")["name"] == "ST1"
+    assert tournament_match_engine._aerial_pick([], "CB") is None
+
+
+async def test_arena_aerial_block_only_in_aerial_situations(db_session, monkeypatch):
+    config = await _config(db_session)
+    defender = {"user_card_id": 7, "player_id": 7, "name": "Центрбек", "rating": 70, "position": "CB"}
+    state = {
+        "ratings": {"user_gk": 70, "user_def": 70, "opponent_fwd": 70}, "cards": {}, "red_card_applied": False,
+        "skills": {"cards": {"7": {**_effect("aerial_master"), "player": "Центрбек"}}, "user_gk": None, "opponent_gk": None},
+    }
+    fail_p = match_service._lerp_chance(70, float(config.match_block_fail_chance_min), float(config.match_block_fail_chance_max))
+    # One shared random module: a draw just under the base fail chance fails
+    # without the skill and succeeds with aerial III (-6 p.p.).
+    monkeypatch.setattr(fx.random, "random", lambda: fail_p - 0.01)
+
+    aerial_moment = {"minute": 5, "situation_id": "def_box_corner_scramble", "shot_type": "in_box", "actors": {"defender": defender}}
+    event, _ = match_service._resolve_defense(aerial_moment, "block", state, config, "Соперник")
+    assert event["event_type"] == "blocked"
+    assert event["payload"]["skills"][0]["code"] == "aerial_master" and event["payload"]["skills"][0]["decisive"]
+
+    plain_moment = {"minute": 6, "situation_id": "def_box_one_on_one", "shot_type": "in_box", "actors": {"defender": defender}}
+    event, _ = match_service._resolve_defense(plain_moment, "block", state, config, "Соперник")
+    assert "skills" not in event["payload"]

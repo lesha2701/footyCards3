@@ -72,7 +72,7 @@ def _describe_event(
 
 
 from app.services import club_tactical_matchup_service
-from app.services.card_skill_effects import effect_of, skill_roll
+from app.services.card_skill_effects import aerial_alpha, aerial_shot_roll, effect_of, skill_roll
 
 # Maps a Chance's quality tier (club_tactical_matchup_service.Chance.quality)
 # onto the same units situation.bias used to nudge effective rating in the
@@ -148,6 +148,40 @@ def _keeper_of(lineup: list[dict] | None) -> dict | None:
     return next((c for c in lineup or [] if c.get("category") == "GK"), None)
 
 
+def _aerial_pick(lineup: list[dict] | None, position: str) -> dict | None:
+    """Deterministic (no RNG) pick of a side's aerial duelist by position —
+    the one carrying aerial_master if any, else the first in the lineup."""
+    candidates = [c for c in lineup or [] if c.get("position") == position]
+    skilled = [c for c in candidates if effect_of(c.get("skill"), "aerial_master")]
+    return (skilled or candidates or [None])[0]
+
+
+def _shot_miss_roll(
+    miss: float, scorer: dict, moment: dict, aerial: dict | None,
+) -> tuple[bool, list[dict], dict | None]:
+    """The scorer's miss roll (sniper), or — on a cross whose header duel
+    involves an aerial_master — the same probability split into header duel
+    + header (card_skill_effects.aerial_shot_roll). Without an aerial effect
+    this is exactly the old single roll."""
+    if aerial and moment.get("is_cross"):
+        target = scorer if scorer.get("position") in ("ST", "CB") else (aerial.get("attack_target") or scorer)
+        defender = aerial.get("defender")
+        att_eff = effect_of(target.get("skill"), "aerial_master")
+        def_eff = effect_of(defender.get("skill"), "aerial_master") if defender else None
+        if att_eff or def_eff:
+            alpha = aerial_alpha(target["rating"], defender["rating"] if defender else target["rating"])
+            missed, lost, notes = aerial_shot_roll(
+                miss, alpha,
+                [(def_eff, 1, defender.get("name") if defender else None), (att_eff, -1, target.get("name"))],
+                [_skill(scorer, "sniper", -1)],
+            )
+            info = {"target": target.get("name"), "defender": defender.get("name") if defender else None,
+                    "won_by": "defender" if lost else "attacker"}
+            return missed, notes, info
+    missed, notes = skill_roll(miss, [_skill(scorer, "sniper", -1)])
+    return missed, notes, None
+
+
 def _with_skill_notes(payload: dict, notes: list) -> dict:
     if notes:
         payload["skills"] = notes
@@ -156,7 +190,7 @@ def _with_skill_notes(payload: dict, notes: list) -> dict:
 
 def _resolve_shot_action(
     attacking_side: str, moment: dict, config, quality_bias: float = 0,
-    keeper: dict | None = None, notes: list | None = None,
+    keeper: dict | None = None, notes: list | None = None, aerial: dict | None = None,
 ) -> tuple[dict, str]:
     """Shoots when quality_bias is non-negative (a clear chance), passes
     otherwise — same shoot/pass split the old situation.bias-driven policy
@@ -171,9 +205,9 @@ def _resolve_shot_action(
     action = "shoot" if quality_bias >= 0 else "pass"
     if action == "shoot":
         eff_rating = _clamp_rating(shooter["rating"] + quality_bias)
-        missed, roll_notes = skill_roll(
+        missed, roll_notes, aerial_info = _shot_miss_roll(
             _lerp_chance(eff_rating, float(config.match_attack_shoot_miss_chance_min), float(config.match_attack_shoot_miss_chance_max)),
-            [_skill(shooter, "sniper", -1)],
+            shooter, moment, aerial,
         )
         notes.extend(roll_notes)
         scorer = shooter
@@ -192,9 +226,9 @@ def _resolve_shot_action(
                 "payload": _with_skill_notes({"shot_type": shot_type, "action": "pass", "passer": shooter["name"]}, notes),
             }
             return event, "none"
-        missed, roll_notes = skill_roll(
+        missed, roll_notes, aerial_info = _shot_miss_roll(
             _lerp_chance(pass_target["rating"], float(config.match_receiver_shot_miss_chance_min), float(config.match_receiver_shot_miss_chance_max)),
-            [_skill(pass_target, "sniper", -1)],
+            pass_target, moment, aerial,
         )
         notes.extend(roll_notes)
         scorer = pass_target
@@ -207,6 +241,8 @@ def _resolve_shot_action(
         "minute": moment["minute"], "event_type": outcome, "team": attacking_side,
         "payload": _with_skill_notes({"shot_type": shot_type, "action": action, "shooter": scorer["name"], **extra}, notes),
     }
+    if aerial_info:
+        event["payload"]["aerial_duel"] = aerial_info
     return event, (attacking_side if outcome == "goal" else "none")
 
 
@@ -308,11 +344,20 @@ def simulate_match(
         moment = {
             "minute": chance.minute, "shot_type": chance.shot_type, "is_box": chance.is_box,
             "actors": {"shooter": chance.shooter, "pass_target": chance.pass_target, "defender": chance.defender},
+            # A flank attack finished inside the box = a cross (aerial duel).
+            "is_cross": getattr(chance, "zone", None) == "wing_attack" and chance.shot_type == "in_box",
         }
         quality_bias = QUALITY_BIAS[chance.quality]
         defending_keeper = _keeper_of(lineup_b if attacking_side == "a" else lineup_a)
+        aerial = None
+        if moment["is_cross"]:
+            aerial = {
+                "attack_target": _aerial_pick(lineup_a if attacking_side == "a" else lineup_b, "ST"),
+                "defender": _aerial_pick(lineup_b if attacking_side == "a" else lineup_a, "CB"),
+            }
         event, scorer = _resolve_shot_action(
             attacking_side, moment, config, quality_bias, keeper=defending_keeper, notes=chance.skill_notes,
+            **({"aerial": aerial} if aerial else {}),
         )
         result.event_log.append(event)
         event["description"] = _describe_event(

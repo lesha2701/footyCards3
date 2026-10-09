@@ -462,6 +462,9 @@ class Chance:
     defender: dict = field(default_factory=dict)
     # Card-skill notes from the duel(s) that created this chance (dribbler).
     skill_notes: list = field(default_factory=list)
+    # Progression zone of a normal (non-counter) chance; "wing_attack" + an
+    # in-box shot is what the engine treats as a cross (aerial duel).
+    zone: str | None = None
 
 
 def build_side(
@@ -569,7 +572,7 @@ def _resolve_progression_and_duel(attacker: ClubTacticalSide, defender: ClubTact
     return Chance(
         attacking_side=attacking_side, minute=minute, quality=quality, shot_type=shot_type, is_box=(shot_type == "in_box"),
         shooter=_card_to_actor(attacker_duelist), pass_target=_card_to_actor(attacker_second), defender=_card_to_actor(defender_second),
-        skill_notes=stage1_notes,
+        skill_notes=stage1_notes, zone=zone,
     )
 
 

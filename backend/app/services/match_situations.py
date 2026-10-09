@@ -31,7 +31,10 @@ class DefenseSituation:
     shot_type: str  # "in_box" | "long_range"
     defender_category: str  # "DEF" | "MID"
     defender_positions: tuple[Position, ...]
-    tags: tuple[str, ...]  # "box" -> a foul here can escalate to a penalty-style continuation
+    # "box" -> a foul here can escalate to a penalty-style continuation;
+    # "aerial" -> a cross/corner where "block" is the defender's aerial duel
+    # (card skill aerial_master applies to that roll).
+    tags: tuple[str, ...]
     template: str  # "{defender}", "{them}"
 
 
@@ -156,7 +159,7 @@ DEFENSE_SITUATIONS: list[DefenseSituation] = [
     DefenseSituation(
         id="def_box_far_post_cross", shot_type="in_box",
         defender_category="DEF", defender_positions=_DEF_ANY,
-        tags=("box",),
+        tags=("box", "aerial"),
         template="Прострел летит на дальнюю штангу, туда набегает нападающий {them}. {defender} должен успеть первым.",
     ),
     DefenseSituation(
@@ -186,7 +189,7 @@ DEFENSE_SITUATIONS: list[DefenseSituation] = [
     DefenseSituation(
         id="def_box_corner_scramble", shot_type="in_box",
         defender_category="DEF", defender_positions=(Position.CB,),
-        tags=("box",),
+        tags=("box", "aerial"),
         template="После подачи с углового в штрафной начинается свалка, мяч подкатывается к {them}. {defender} рядом и готов вмешаться.",
     ),
     DefenseSituation(
