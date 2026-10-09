@@ -199,7 +199,7 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
 
         {tab === "collection" && (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {collection?.items?.map((c: any) => (
+            {collection?.items?.map((c) => (
               <div key={c.id} className="rounded-xl bg-bg-surface p-2 text-center">
                 <img src={staticUrl(c.player.image_path) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="aspect-square w-full rounded-lg object-cover" />
                 <p className="mt-1 truncate text-[11px]">{c.player.display_name}</p>
@@ -214,7 +214,7 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
 
         {tab === "transactions" && (
           <div className="flex flex-col gap-2">
-            {transactions?.items?.map((t: any) => (
+            {transactions?.items?.map((t) => (
               <div key={t.id} className="flex items-center justify-between rounded-lg bg-bg-surface px-3 py-2 text-xs">
                 <span>{t.description || t.type}</span>
                 <span className={t.amount >= 0 ? "text-emerald-400" : "text-red-400"}>{t.amount}</span>

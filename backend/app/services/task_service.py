@@ -97,17 +97,26 @@ async def _ensure_slots_filled(
             if definition.condition_type == TaskConditionType.metric_counter
             else None
         )
+        # A counter task with a zero target has nothing left to do — it's
+        # complete the moment it's handed out (progress is only ever
+        # re-evaluated when the metric grows, which may never happen).
+        completed_at = (
+            datetime.now(timezone.utc)
+            if definition.condition_type == TaskConditionType.metric_counter and definition.target_value <= 0
+            else None
+        )
         existing_row = rows_by_definition.get(definition.id)
         if existing_row is not None:
             existing_row.slot_index = slot_index
             existing_row.progress = 0
-            existing_row.completed_at = None
+            existing_row.completed_at = completed_at
             existing_row.reward_claimed = False
             existing_row.metric_baseline = baseline
             db.add(existing_row)
         else:
             new_row = UserTask(
                 user_id=user.id, task_definition_id=definition.id, slot_index=slot_index, metric_baseline=baseline,
+                completed_at=completed_at,
             )
             db.add(new_row)
             rows_by_definition[definition.id] = new_row

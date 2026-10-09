@@ -78,7 +78,11 @@ export function TournamentMatchReplay({
         )}
       </div>
 
-      <div className="mt-1 flex items-center justify-center gap-2 font-mono text-lg font-bold text-ink-chalk">
+      <div
+        role="status"
+        aria-label={`Счёт ${liveScoreA} : ${liveScoreB}`}
+        className="mt-1 flex items-center justify-center gap-2 font-mono text-lg font-bold text-ink-chalk"
+      >
         <span className="w-8 text-right">{liveScoreA}</span>
         <span>:</span>
         <span className="w-8 text-left">{liveScoreB}</span>
@@ -86,7 +90,10 @@ export function TournamentMatchReplay({
       <p className="text-center text-sm text-ink-mist">{clubAName} vs {clubBName}</p>
 
       {caughtUp && (
-        <div className="mt-1 flex items-center justify-center gap-2 font-display text-sm font-bold text-ink-chalk">
+        <div
+          aria-label={`Итоговый счёт ${scoreA} : ${scoreB}`}
+          className="mt-1 flex items-center justify-center gap-2 font-display text-sm font-bold text-ink-chalk"
+        >
           <span>Итоговый счёт:</span>
           <span className="w-6 text-right">{scoreA}</span>
           <span>:</span>

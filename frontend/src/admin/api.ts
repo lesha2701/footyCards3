@@ -6,6 +6,7 @@ import type {
   BingoState,
   BingoStatsPreviewItem,
   CardUpgradeRule,
+  CoinTransaction,
   Coach,
   ClubPack,
   CoinPackage,
@@ -24,6 +25,7 @@ import type {
   TradeOffer,
   TradeStatus,
   TrophyDefinition,
+  UserCard,
   UserTrophy,
 } from "@/types";
 import type {
@@ -89,13 +91,13 @@ export async function fetchAdminUser(id: number): Promise<AdminUser> {
   return data;
 }
 
-export async function fetchAdminUserCollection(id: number, page = 1) {
-  const { data } = await api.get(`/admin/users/${id}/collection`, { params: { page } });
+export async function fetchAdminUserCollection(id: number, page = 1): Promise<Page<UserCard>> {
+  const { data } = await api.get<Page<UserCard>>(`/admin/users/${id}/collection`, { params: { page } });
   return data;
 }
 
-export async function fetchAdminUserTransactions(id: number, page = 1) {
-  const { data } = await api.get(`/admin/users/${id}/transactions`, { params: { page } });
+export async function fetchAdminUserTransactions(id: number, page = 1): Promise<Page<CoinTransaction>> {
+  const { data } = await api.get<Page<CoinTransaction>>(`/admin/users/${id}/transactions`, { params: { page } });
   return data;
 }
 
