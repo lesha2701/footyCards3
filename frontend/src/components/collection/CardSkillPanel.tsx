@@ -209,8 +209,11 @@ function SkillScope({ skill }: { skill: SkillCatalogItem }) {
 function SkillPicker({
   actions, skills, onPick,
 }: { actions: SkillAction[]; skills: SkillCatalogItem[]; onPick: (a: SkillAction) => void }) {
+  // Skills this card can actually take first, then the rest with their reasons.
   const ordered = [...actions].sort(
-    (a, b) => (skills.findIndex((s) => s.code === a.skill_code)) - (skills.findIndex((s) => s.code === b.skill_code)),
+    (a, b) =>
+      Number(b.allowed) - Number(a.allowed)
+      || skills.findIndex((s) => s.code === a.skill_code) - skills.findIndex((s) => s.code === b.skill_code),
   );
   return (
     <div className="mt-2 flex flex-col gap-1.5">

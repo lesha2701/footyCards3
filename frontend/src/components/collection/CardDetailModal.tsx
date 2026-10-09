@@ -22,12 +22,15 @@ export default function CardDetailModal({
   const player = card.player;
   const isDiamond = player.rarity === "diamond";
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm" onClick={onClose}>
+    // overflow-y-auto + m-auto (instead of items-center) keeps the modal
+    // centered when it fits, but lets it scroll when it's taller than the
+    // screen — e.g. with the skill picker expanded on a phone.
+    <div className="fixed inset-0 z-50 flex overflow-y-auto bg-black/70 p-6 backdrop-blur-sm" onClick={onClose}>
       <div
         className={
           isDiamond
-            ? `w-full max-w-xs rounded-3xl bg-gradient-to-b ${RARITY_GRADIENTS.diamond} p-[3px] ${RARITY_GLOW.diamond}`
-            : "w-full max-w-xs rounded-3xl border border-white/10 bg-bg-surface p-5"
+            ? `m-auto w-full max-w-xs rounded-3xl bg-gradient-to-b ${RARITY_GRADIENTS.diamond} p-[3px] ${RARITY_GLOW.diamond}`
+            : "m-auto w-full max-w-xs rounded-3xl border border-white/10 bg-bg-surface p-5"
         }
         onClick={(e) => e.stopPropagation()}
       >
