@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.models.coach import Coach
-from app.services.card_skill_effects import effect_of, skill_choice
+from app.services.card_skill_effects import effect_of, skill_choice, skill_choice_sets
 from app.services.club_tactical_profile_service import TeamTacticalProfile, position_fit, zone_weight
 from app.services.coach_boost_service import (
     defensive_shift_for,
@@ -158,11 +158,23 @@ def resolve_stage1(ratio: float) -> str:
     return random.choices(["breakdown", "stall", "advance"], weights=[breakdown, stall, advance], k=1)[0]
 
 
-def _resolve_stage1_for(ratio: float, duelist: Any, skill_notes: list | None) -> str:
-    """Stage-1 duel with the attacking duelist's own "dribbler" skill (player
-    tournaments only — club cards never carry a `skill`). Without that skill
-    this is exactly resolve_stage1(ratio), same RNG draw."""
+def _resolve_stage1_for(ratio: float, duelist: Any, skill_notes: list | None, defender: Any = None) -> str:
+    """Stage-1 duel with the attacking duelist's own "dribbler" skill and —
+    on a transition (counter-attack) only, where `defender` is passed — the
+    covering defender's "last_line" skill (player tournaments only; club
+    cards never carry a `skill`). Without either skill this is exactly
+    resolve_stage1(ratio), same RNG draw."""
     effect = effect_of(getattr(duelist, "skill", None), "dribbler")
+    last_line = effect_of(getattr(defender, "skill", None), "last_line") if defender is not None else None
+    if last_line is not None:
+        outcome, notes = skill_choice_sets(
+            ["breakdown", "stall", "advance"], list(_band(ratio, STAGE1_BANDS)),
+            [(effect, {"advance"}, duelist.player.display_name),
+             (last_line, {"breakdown", "stall"}, defender.player.display_name)],
+        )
+        if skill_notes is not None:
+            skill_notes.extend(notes)
+        return outcome
     if effect is None:
         return resolve_stage1(ratio)
     outcome, notes = skill_choice(
@@ -177,6 +189,28 @@ def _resolve_stage1_for(ratio: float, duelist: Any, skill_notes: list | None) ->
 def resolve_quality(combined_advantage: float) -> str:
     low, normal, high, very_high = _band(combined_advantage, STAGE2_BANDS)
     return random.choices(["LOW", "NORMAL", "HIGH", "VERY_HIGH"], weights=[low, normal, high, very_high], k=1)[0]
+
+
+def _resolve_quality_for(combined_advantage: float, zone: str, attackers: list[Any], skill_notes: list | None) -> str:
+    """Stage-2 chance quality. On a flank attack ("wing_attack") the
+    "crosser" skill of either attacking duelist (the better one counts once)
+    raises the share of dangerous chances (HIGH + VERY_HIGH). Anywhere else,
+    or without the skill, this is exactly resolve_quality(), same RNG draw."""
+    effect, player = None, None
+    if zone == "wing_attack":
+        for card in attackers:
+            candidate = effect_of(getattr(card, "skill", None), "crosser")
+            if candidate and (effect is None or candidate["bonus_pp"] > effect["bonus_pp"]):
+                effect, player = candidate, card.player.display_name
+    if effect is None:
+        return resolve_quality(combined_advantage)
+    quality, notes = skill_choice_sets(
+        ["LOW", "NORMAL", "HIGH", "VERY_HIGH"], list(_band(combined_advantage, STAGE2_BANDS)),
+        [(effect, {"HIGH", "VERY_HIGH"}, player)],
+    )
+    if skill_notes is not None:
+        skill_notes.extend(notes)
+    return quality
 
 
 # --- Fix for STATUS problem 1 ("mentality is backwards" — the pool shrinks
@@ -302,7 +336,7 @@ def resolve_counter(
     shifted = max(0.05, min(0.95, raw_ratio - defender_ratio_shift_for(x)))
     ratio = _amplify(shifted)
 
-    outcome = _resolve_stage1_for(ratio, y_duelist, skill_notes)
+    outcome = _resolve_stage1_for(ratio, y_duelist, skill_notes, defender=x_duelist)
     if outcome != "advance":
         return None
 
@@ -567,7 +601,7 @@ def _resolve_progression_and_duel(attacker: ClubTacticalSide, defender: ClubTact
     defender_second = _pick_defender(defender, defence_zone, exclude_ids=frozenset({defender_duelist.id}))
     ratio_2 = zone_ratio(attacker_second, zone, defender_second, defence_zone, ratio_shift)
     combined_advantage = (ratio_1 + ratio_2) / 2
-    quality = resolve_quality(combined_advantage)
+    quality = _resolve_quality_for(combined_advantage, zone, [attacker_duelist, attacker_second], stage1_notes)
     shot_type = _pick_shot_type(config)
     return Chance(
         attacking_side=attacking_side, minute=minute, quality=quality, shot_type=shot_type, is_box=(shot_type == "in_box"),

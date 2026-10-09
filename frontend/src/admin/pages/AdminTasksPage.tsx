@@ -358,7 +358,7 @@ export default function AdminTasksPage() {
                     >
                       <option value="">Нет</option>
                       {skillCatalog?.skills.filter((s) => s.engine_supported).map((s) => (
-                        <option key={s.code} value={s.code}>{s.icon} {s.name}</option>
+                        <option key={s.code} value={s.code}>{s.name}</option>
                       ))}
                     </select>
                   </label>

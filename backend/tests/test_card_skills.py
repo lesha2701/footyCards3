@@ -127,15 +127,21 @@ def unsupported_aerial(monkeypatch):
     ))
 
 
-async def test_catalog_lists_six_available_skills(client, db_session, bot_token):
+async def test_catalog_lists_all_available_skills(client, db_session, bot_token):
     await _register(client, db_session, 820001, bot_token)
     resp = await client.get(f"{API}/card-skills/catalog", headers=telegram_headers(820001, bot_token))
     assert resp.status_code == 200
     body = resp.json()
     codes = [s["code"] for s in body["skills"]]
-    assert codes == ["sniper", "dribbler", "playmaker", "interceptor", "aerial_master", "reflexes"]
+    assert codes == [
+        "sniper", "dribbler", "playmaker", "interceptor", "aerial_master", "reflexes",
+        "crosser", "last_line", "one_on_one",
+    ]
     by_code = {s["code"]: s for s in body["skills"]}
     assert all(s["is_available"] and s["engine_supported"] for s in body["skills"])
+    assert by_code["crosser"]["positions"] == ["LW", "RW", "LM", "RM", "LB", "RB"]
+    assert by_code["last_line"]["positions"] == ["CB"]
+    assert by_code["one_on_one"]["positions"] == ["GK"]
     assert by_code["aerial_master"]["positions"] == ["CB", "ST"]
     assert by_code["reflexes"]["positions"] == ["GK"]
     assert [lvl["bonus_pp"] for lvl in by_code["sniper"]["levels"]] == [2, 4, 6]
@@ -1131,3 +1137,118 @@ async def test_arena_aerial_block_only_in_aerial_situations(db_session, monkeypa
     plain_moment = {"minute": 6, "situation_id": "def_box_one_on_one", "shot_type": "in_box", "actors": {"defender": defender}}
     event, _ = match_service._resolve_defense(plain_moment, "block", state, config, "Соперник")
     assert "skills" not in event["payload"]
+
+
+# --- crosser / last_line / one_on_one -----------------------------------------------------
+
+
+def test_skill_choice_sets_matches_random_choices_without_effects():
+    random.seed(13)
+    expected = [random.choices(["L", "N", "H", "V"], weights=[0.25, 0.5, 0.22, 0.03], k=1)[0] for _ in range(60)]
+    random.seed(13)
+    got = [fx.skill_choice_sets(["L", "N", "H", "V"], [0.25, 0.5, 0.22, 0.03], [(None, {"H", "V"}, None)])[0] for _ in range(60)]
+    assert got == expected
+
+
+def test_skill_choice_sets_raises_the_favored_group_share(monkeypatch):
+    # L .25 N .50 | H .22 V .03 ; r=0.73 lands in N (cum .75). +6 p.p. to {H, V}:
+    # group .25 -> .31, others scaled by .69/.75 -> cum N .69 -> r=.73 lands in H.
+    monkeypatch.setattr(fx.random, "random", lambda: 0.73)
+    pick, notes = fx.skill_choice_sets(
+        ["LOW", "NORMAL", "HIGH", "VERY_HIGH"], [0.25, 0.50, 0.22, 0.03], [(_effect("crosser"), {"HIGH", "VERY_HIGH"}, "Вингер")],
+    )
+    assert pick == "HIGH" and notes[0]["decisive"] is True
+
+
+def _duelist(name, position, skill=None):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(id=hash(name) % 1000, player=SimpleNamespace(display_name=name, position=position), skill=skill)
+
+
+def test_crosser_only_counts_on_flank_attacks(monkeypatch):
+    from app.services import club_tactical_matchup_service as svc
+
+    monkeypatch.setattr(fx.random, "random", lambda: 0.73)
+    winger = _duelist("Вингер", Position.LW, _effect("crosser"))
+    other = _duelist("Партнёр", Position.LM)
+    notes: list = []
+    flank = svc._resolve_quality_for(0.5, "wing_attack", [winger, other], notes)
+    # band for 0.5: LOW .25 NORMAL .50 HIGH .22 VERY_HIGH .03
+    assert flank == "HIGH" and notes and notes[0]["code"] == "crosser"
+    # Central attack: exactly the old resolve_quality path, no notes.
+    monkeypatch.setattr(svc, "resolve_quality", lambda advantage: "UNCHANGED")
+    central_notes: list = []
+    assert svc._resolve_quality_for(0.5, "central_attack", [winger, other], central_notes) == "UNCHANGED"
+    assert central_notes == []
+
+
+def test_last_line_defends_the_counter_attack_duel(monkeypatch):
+    from app.services import club_tactical_matchup_service as svc
+
+    # ratio .5 -> breakdown .30 stall .45 advance .25 ; r=0.76 -> advance without skills.
+    monkeypatch.setattr(fx.random, "random", lambda: 0.76)
+    attacker = _duelist("Форвард", Position.ST)
+    cb = _duelist("Центрбек", Position.CB, _effect("last_line"))
+    notes: list = []
+    assert svc._resolve_stage1_for(0.5, attacker, notes, defender=cb) == "stall"
+    assert notes[0]["code"] == "last_line" and notes[0]["decisive"] is True
+    # Not passed as defender (normal positional attack) -> the old resolve_stage1 path.
+    monkeypatch.setattr(svc, "resolve_stage1", lambda ratio: "UNCHANGED")
+    assert svc._resolve_stage1_for(0.5, attacker, [], defender=None) == "UNCHANGED"
+
+
+def test_tournament_one_on_one_only_on_top_quality_chances(monkeypatch):
+    save_p = tournament_match_engine._lerp_chance_positive(70, _Cfg.match_keeper_save_chance_min, _Cfg.match_keeper_save_chance_max)
+    draws = iter([0.99, save_p + 0.03, 0.99, save_p + 0.03])
+    monkeypatch.setattr(fx.random, "random", lambda: next(draws))
+    keeper = {"category": "GK", "name": "Вратарь", "skill": _effect("one_on_one")}
+    base = {"minute": 5, "shot_type": "in_box", "is_box": True,
+            "actors": {"shooter": _actor("Ф"), "pass_target": _actor("П"), "defender": _actor("З", rating=70)}}
+    event, _ = tournament_match_engine._resolve_shot_action("a", {**base, "is_one_on_one": True}, _Cfg(), keeper=keeper)
+    assert event["event_type"] == "save" and event["payload"]["skills"][0]["code"] == "one_on_one"
+    event, _ = tournament_match_engine._resolve_shot_action("a", {**base, "is_one_on_one": False}, _Cfg(), keeper=keeper)
+    assert event["event_type"] == "goal" and "skills" not in event["payload"]
+
+
+async def test_arena_new_skills_apply_only_in_their_situations(db_session, monkeypatch):
+    config = await _config(db_session)
+    cb = {"user_card_id": 7, "player_id": 7, "name": "Центрбек", "rating": 70, "position": "CB"}
+    state = {
+        "ratings": {"user_gk": 70, "user_def": 70, "opponent_fwd": 70, "opponent_def": 70, "opponent_gk": 70},
+        "cards": {}, "red_card_applied": False,
+        "skills": {
+            "cards": {"7": {**_effect("last_line"), "player": "Центрбек"}, "8": {**_effect("crosser"), "player": "Вингер"}},
+            "user_gk": {**_effect("one_on_one"), "player": "Вратарь"},
+            "opponent_gk": None,
+        },
+    }
+    foul_p = match_service._lerp_chance(70, float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max))
+    monkeypatch.setattr(fx.random, "random", lambda: foul_p - 0.01)
+    breakaway = {"minute": 5, "situation_id": "def_counter_attack", "shot_type": "long_range", "actors": {"defender": cb}}
+    event, _ = match_service._resolve_defense(breakaway, "tackle", state, config, "Соперник")
+    assert event["event_type"] == "tackle_won" and event["payload"]["skills"][0]["code"] == "last_line"
+    positional = {"minute": 6, "situation_id": "def_long_range_rebound", "shot_type": "long_range", "actors": {"defender": cb}}
+    event, _ = match_service._resolve_defense(positional, "tackle", state, config, "Соперник")
+    assert "skills" not in event["payload"]
+
+    # one_on_one: the user's keeper on "keeper" in the one-on-one situation only.
+    save_p = match_service._lerp_chance_positive(70, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max))
+    draws = iter([0.99, save_p + 0.03])
+    monkeypatch.setattr(fx.random, "random", lambda: next(draws))
+    one_on_one = {"minute": 7, "situation_id": "def_box_one_on_one", "shot_type": "in_box", "actors": {"defender": cb}}
+    event, _ = match_service._resolve_defense(one_on_one, "keeper", state, config, "Соперник")
+    assert event["event_type"] == "save" and event["payload"]["skills"][0]["code"] == "one_on_one"
+
+    # crosser: the winger's "Pass" in a flank situation.
+    winger = {"user_card_id": 8, "player_id": 8, "name": "Вингер", "rating": 70, "position": "LW"}
+    target = {"user_card_id": 9, "player_id": 9, "name": "Форвард", "rating": 70, "position": "ST"}
+    situation = next(s for s in ATTACK_SITUATIONS if s.id == "att_box_cutback")
+    pass_fail = match_service._lerp_chance(
+        match_service._clamp_rating(70 - situation.bias), float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max),
+    )
+    monkeypatch.setattr(fx.random, "random", lambda: pass_fail - 0.01)
+    flank = {"minute": 8, "situation_id": "att_box_cutback", "shot_type": "in_box", "actors": {"shooter": winger, "pass_target": target}}
+    event, _ = match_service._resolve_attack(flank, "pass", state, config, "Соперник")
+    assert event["event_type"] != "pass_failed"
+    assert event["payload"]["skills"][0]["code"] == "crosser" and event["payload"]["skills"][0]["decisive"]

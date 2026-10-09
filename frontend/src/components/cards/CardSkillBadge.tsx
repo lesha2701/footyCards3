@@ -1,3 +1,4 @@
+import { SkillIcon } from "@/components/icons/skills";
 import { SKILL_LEVEL_LABELS, skillByCode, useSkillCatalog } from "@/lib/cardSkills";
 
 /** Small "icon + I/II/III" chip for a card copy's skill. Sits in a card's
@@ -23,7 +24,7 @@ export default function CardSkillBadge({
       title={skill ? `${skill.name} ${SKILL_LEVEL_LABELS[level]}` : undefined}
       className={`inline-flex items-center gap-0.5 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold leading-none text-accent-lime ${className}`}
     >
-      <span aria-hidden>{skill?.icon ?? "✨"}</span>
+      <SkillIcon code={code} size={10} strokeWidth={2.4} aria-hidden />
       {SKILL_LEVEL_LABELS[level]}
       {extraCount > 0 && <span className="text-ink-mist">+{extraCount}</span>}
     </span>

@@ -306,7 +306,7 @@ def _apply_red_card_debuff(state: dict, config: GameConfig) -> None:
 
 def _resolve_shot_continuation(
     missed: bool, shot_type: str, config: GameConfig, blocker_rating: Optional[int], keeper_rating: int,
-    keeper_effect: Optional[dict] = None, notes: Optional[list] = None,
+    keeper_effect: Optional[dict] | list = None, notes: Optional[list] = None,
 ) -> tuple[str, dict]:
     blocked = False
     saved = False
@@ -319,7 +319,7 @@ def _resolve_shot_continuation(
             _lerp_chance_positive(
                 keeper_rating, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)
             ),
-            [(keeper_effect, 1, keeper_effect.get("player") if keeper_effect else None)],
+            [(e, 1, e.get("player")) for e in (keeper_effect if isinstance(keeper_effect, list) else [keeper_effect]) if e],
         )
         if notes is not None:
             notes.extend(save_notes)
@@ -337,8 +337,16 @@ def _card_effect(state: dict, actor: dict, code: str) -> Optional[dict]:
     return effect_of(_skills(state).get("cards", {}).get(str(actor.get("user_card_id"))), code)
 
 
-def _keeper_effect(state: dict, side: str) -> Optional[dict]:
-    return effect_of(_skills(state).get(f"{side}_gk"), "reflexes")
+def _keeper_effect(state: dict, side: str, code: str = "reflexes") -> Optional[dict]:
+    return effect_of(_skills(state).get(f"{side}_gk"), code)
+
+
+def _keeper_effects(state: dict, side: str, one_on_one: bool) -> list:
+    """Save-roll adjustments for a side's keeper: reflexes always, plus
+    one_on_one when the attacker is clean through. A keeper holds a single
+    skill, so at most one of these is ever active."""
+    codes = ["reflexes"] + (["one_on_one"] if one_on_one else [])
+    return [effect for code in codes if (effect := _keeper_effect(state, side, code))]
 
 
 def _with_skill_notes(payload: dict, notes: list) -> dict:
@@ -382,7 +390,7 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
         notes.extend(shot_notes)
         outcome, extra = _resolve_shot_continuation(
             missed, shot_type, config, blocker_rating=ratings["opponent_def"], keeper_rating=ratings["opponent_gk"],
-            keeper_effect=_keeper_effect(state, "opponent"), notes=notes,
+            keeper_effect=_keeper_effects(state, "opponent", "one_on_one" in situation.tags), notes=notes,
         )
         payload = _with_skill_notes({"shot_type": shot_type, "action": action, "shooter": shooter["name"], **extra}, notes)
         event = {
@@ -395,7 +403,10 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
     eff_passer_rating = _clamp_rating(shooter["rating"] - situation.bias)
     pass_failed, pass_notes = skill_roll(
         _lerp_chance(eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max)),
-        [(_card_effect(state, shooter, "playmaker"), -1, shooter["name"])],
+        # A passer has one skill: playmaker on any pass, or crosser when the
+        # pass is a cross/cut-back from the flank.
+        [(_card_effect(state, shooter, "playmaker"), -1, shooter["name"])]
+        + ([(_card_effect(state, shooter, "crosser"), -1, shooter["name"])] if "flank" in situation.tags else []),
     )
     notes.extend(pass_notes)
     if pass_failed:
@@ -415,7 +426,7 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
     notes.extend(shot_notes)
     outcome, extra = _resolve_shot_continuation(
         missed, shot_type, config, blocker_rating=ratings["opponent_def"], keeper_rating=ratings["opponent_gk"],
-        keeper_effect=_keeper_effect(state, "opponent"), notes=notes,
+        keeper_effect=_keeper_effects(state, "opponent", "one_on_one" in situation.tags), notes=notes,
     )
     payload = _with_skill_notes(
         {"shot_type": shot_type, "action": action, "shooter": pass_target["name"], "assisted_by": shooter["name"], **extra},
@@ -434,15 +445,17 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
     shot_type = moment["shot_type"]
     defender = moment["actors"]["defender"]
 
+    last_line = _card_effect(state, defender, "last_line") if "breakaway" in situation.tags else None
     if action == "tackle":
-        foul = random.random() < _lerp_chance(
-            defender["rating"], float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max)
+        foul, tackle_notes = skill_roll(
+            _lerp_chance(defender["rating"], float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max)),
+            [(last_line, -1, defender["name"])],
         )
         if not foul:
             event = {
                 "minute": moment["minute"], "event_type": "tackle_won", "team": "opponent",
                 "description": _describe_event("tackle_won", "opponent", opponent_name),
-                "payload": {"shot_type": shot_type, "action": action, "defender": defender["name"]},
+                "payload": _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"]}, tackle_notes),
             }
             return event, None
 
@@ -489,7 +502,9 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
         aerial = _card_effect(state, defender, "aerial_master") if "aerial" in situation.tags else None
         fail, block_notes = skill_roll(
             _lerp_chance(defender["rating"], float(config.match_block_fail_chance_min), float(config.match_block_fail_chance_max)),
-            [(aerial, -1, defender["name"])],
+            # A defender has one skill: aerial_master on crosses, last_line
+            # when he's the last man against a breakaway.
+            [(aerial, -1, defender["name"]), (last_line, -1, defender["name"])],
         )
         if not fail:
             event = {
@@ -507,7 +522,7 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
         notes: list = []
         outcome, extra = _resolve_shot_continuation(
             missed, shot_type, config, blocker_rating=None, keeper_rating=ratings["user_gk"],
-            keeper_effect=_keeper_effect(state, "user"), notes=notes,
+            keeper_effect=_keeper_effects(state, "user", "one_on_one" in situation.tags), notes=notes,
         )
         event = {
             "minute": moment["minute"], "event_type": outcome, "team": "opponent",
@@ -523,7 +538,7 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
     notes = []
     outcome, extra = _resolve_shot_continuation(
         missed, shot_type, config, blocker_rating=None, keeper_rating=ratings["user_gk"],
-        keeper_effect=_keeper_effect(state, "user"), notes=notes,
+        keeper_effect=_keeper_effects(state, "user", "one_on_one" in situation.tags), notes=notes,
     )
     event = {
         "minute": moment["minute"], "event_type": outcome, "team": "opponent",

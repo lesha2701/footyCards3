@@ -23,6 +23,10 @@ class AttackSituation:
     pass_target_positions: tuple[Position, ...]
     bias: float  # positive favors Shoot, negative favors Pass
     template: str  # "{shooter}", "{pass_target}"
+    # "flank" -> the shooter is on the wing and "Pass" is a cross/cut-back
+    # (card skill crosser); "one_on_one" -> clean through on the keeper
+    # (opponent keeper's one_on_one skill applies to the save).
+    tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -33,7 +37,10 @@ class DefenseSituation:
     defender_positions: tuple[Position, ...]
     # "box" -> a foul here can escalate to a penalty-style continuation;
     # "aerial" -> a cross/corner where "block" is the defender's aerial duel
-    # (card skill aerial_master applies to that roll).
+    # (card skill aerial_master applies to that roll); "breakaway" -> the
+    # defender is the last man against a dangerous run (last_line applies to
+    # tackle and block); "one_on_one" -> the attacker is clean through on
+    # goal (the user's keeper's one_on_one applies to the "keeper" save).
     tags: tuple[str, ...]
     template: str  # "{defender}", "{them}"
 
@@ -45,6 +52,7 @@ ATTACK_SITUATIONS: list[AttackSituation] = [
         pass_target_category="FWD", pass_target_positions=(Position.ST,),
         bias=-7,
         template="{shooter} врывается в штрафную под острым углом. В центре набегает {pass_target} — путь до ворот свободнее.",
+        tags=("flank",),
     ),
     AttackSituation(
         id="att_box_through_ball", shot_type="in_box",
@@ -59,6 +67,7 @@ ATTACK_SITUATIONS: list[AttackSituation] = [
         pass_target_category="FWD", pass_target_positions=_FWD_ANY,
         bias=9,
         template="{shooter} проходит по флангу и оказывается у лицевой линии с мячом. {pass_target} влетает на дальнюю штангу совсем один!",
+        tags=("flank",),
     ),
     AttackSituation(
         id="att_long_range_edge_box", shot_type="long_range",
@@ -80,6 +89,7 @@ ATTACK_SITUATIONS: list[AttackSituation] = [
         pass_target_category="FWD", pass_target_positions=_FWD_WIDE,
         bias=10,
         template="Вратарь уже выбежал навстречу — {shooter} один на один! {pass_target} набегает сбоку, но угол там хуже.",
+        tags=("one_on_one",),
     ),
     AttackSituation(
         id="att_box_crowded", shot_type="in_box",
@@ -101,6 +111,7 @@ ATTACK_SITUATIONS: list[AttackSituation] = [
         pass_target_category="FWD", pass_target_positions=(Position.ST,),
         bias=7,
         template="Прострел находит {shooter} на дальней штанге. {pass_target} тоже свободен в центре, но чуть дальше от ворот.",
+        tags=("flank",),
     ),
     AttackSituation(
         id="att_long_range_counter", shot_type="long_range",
@@ -115,6 +126,7 @@ ATTACK_SITUATIONS: list[AttackSituation] = [
         pass_target_category="MID", pass_target_positions=(Position.CAM,),
         bias=9,
         template="Вратарь соперника слишком далеко вышел из ворот! {shooter} готов пробить над ним. {pass_target} просит пас низом.",
+        tags=("one_on_one",),
     ),
     AttackSituation(
         id="att_long_range_open_lane", shot_type="long_range",
@@ -129,7 +141,7 @@ DEFENSE_SITUATIONS: list[DefenseSituation] = [
     DefenseSituation(
         id="def_box_cutback_run", shot_type="in_box",
         defender_category="DEF", defender_positions=(Position.CB,),
-        tags=("box",),
+        tags=("box", "breakaway"),
         template="Нападающий {them} врывается в штрафную на большой скорости. {defender} — последний, кто может его остановить.",
     ),
     DefenseSituation(
@@ -153,7 +165,7 @@ DEFENSE_SITUATIONS: list[DefenseSituation] = [
     DefenseSituation(
         id="def_counter_attack", shot_type="long_range",
         defender_category="DEF", defender_positions=(Position.CB,),
-        tags=(),
+        tags=("breakaway",),
         template="{them} убегает в контратаку по центру поля. {defender} — единственный защитник, оставшийся позади.",
     ),
     DefenseSituation(
@@ -171,7 +183,7 @@ DEFENSE_SITUATIONS: list[DefenseSituation] = [
     DefenseSituation(
         id="def_box_one_on_one", shot_type="in_box",
         defender_category="DEF", defender_positions=(Position.CB,),
-        tags=("box",),
+        tags=("box", "breakaway", "one_on_one"),
         template="{them} вырывается один на один с твоим вратарём. {defender} — последняя надежда обороны.",
     ),
     DefenseSituation(

@@ -106,7 +106,7 @@ def _clamp_rating(rating: float) -> int:
 
 def _resolve_shot_continuation(
     missed: bool, shot_type: str, config, blocker_rating, keeper_rating,
-    keeper: dict | None = None, notes: list | None = None,
+    keeper: dict | None = None, notes: list | None = None, one_on_one: bool = False,
 ) -> tuple[str, dict]:
     blocked = False
     saved = False
@@ -115,7 +115,8 @@ def _resolve_shot_continuation(
     if not missed and not blocked:
         saved, save_notes = skill_roll(
             _lerp_chance_positive(keeper_rating, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
-            [_skill(keeper, "reflexes", 1)],
+            # A keeper has one skill, so at most one of these is ever active.
+            [_skill(keeper, "reflexes", 1)] + ([_skill(keeper, "one_on_one", 1)] if one_on_one else []),
         )
         if notes is not None:
             notes.extend(save_notes)
@@ -235,7 +236,7 @@ def _resolve_shot_action(
 
     outcome, extra = _resolve_shot_continuation(
         missed, shot_type, config, blocker_rating=defender["rating"], keeper_rating=defender["rating"],
-        keeper=keeper, notes=notes,
+        keeper=keeper, notes=notes, one_on_one=bool(moment.get("is_one_on_one")),
     )
     event = {
         "minute": moment["minute"], "event_type": outcome, "team": attacking_side,
@@ -346,6 +347,9 @@ def simulate_match(
             "actors": {"shooter": chance.shooter, "pass_target": chance.pass_target, "defender": chance.defender},
             # A flank attack finished inside the box = a cross (aerial duel).
             "is_cross": getattr(chance, "zone", None) == "wing_attack" and chance.shot_type == "in_box",
+            # The top chance tier is the engine's "clean through on goal"
+            # (keeper's one_on_one skill applies to that save).
+            "is_one_on_one": chance.quality == "VERY_HIGH",
         }
         quality_bias = QUALITY_BIAS[chance.quality]
         defending_keeper = _keeper_of(lineup_b if attacking_side == "a" else lineup_a)

@@ -86,6 +86,36 @@ SKILL_DEFINITIONS: dict[str, SkillDefinition] = {
         ),
         not_affected="Не даёт бонуса к самому удару головой после выигранной дуэли",
     ),
+    "crosser": SkillDefinition(
+        code="crosser", name="Мастер навесов", icon="📐",
+        positions=(Position.LW, Position.RW, Position.LM, Position.RM, Position.LB, Position.RB),
+        effect="Повышает долю опасных моментов (высокого качества) в атаках через фланг",
+        applies_in=(
+            "Card Arena: действие «Пас» этого игрока в эпизоде на фланге (навес / прострел)",
+            "Турниры игроков: качество момента в атаке через фланг, когда этот игрок — один из атакующих дуэлянтов",
+        ),
+        not_affected="Не влияет на сам удар и на атаки через центр",
+    ),
+    "last_line": SkillDefinition(
+        code="last_line", name="Последний рубеж", icon="🧱",
+        positions=(Position.CB,),
+        effect="Повышает шанс остановить опасный прорыв, когда этот игрок — последний защитник",
+        applies_in=(
+            "Card Arena: «Отбор» и «Блок» в эпизодах прорыва (контратака, выход к воротам, прорыв в штрафную)",
+            "Турниры игроков: дуэль на контратаке соперника, когда этот игрок прикрывает",
+        ),
+        not_affected="Не влияет на обычные позиционные атаки и на сейв",
+    ),
+    "one_on_one": SkillDefinition(
+        code="one_on_one", name="Один на один", icon="🥅",
+        positions=(Position.GK,),
+        effect="Повышает вероятность сейва, когда соперник выходит один на один",
+        applies_in=(
+            "Card Arena: сейв в эпизодах «один на один» и «вратарь вышел из ворот» (свой вратарь и вратарь соперника)",
+            "Турниры игроков: сейв в моментах наивысшего качества (выход один на один)",
+        ),
+        not_affected="Не влияет на сейвы в остальных эпизодах — для них есть «Реакция»",
+    ),
     "reflexes": SkillDefinition(
         code="reflexes", name="Реакция", icon="🧤",
         positions=(Position.GK,),
@@ -101,7 +131,13 @@ SKILL_DEFINITIONS: dict[str, SkillDefinition] = {
     ),
 }
 
-SKILL_ORDER: tuple[str, ...] = tuple(SKILL_DEFINITIONS.keys())
+# Display / seed order: the v1 six first, then skills added later — matches the
+# sort_order values the migrations seeded on existing databases.
+SKILL_ORDER: tuple[str, ...] = (
+    "sniper", "dribbler", "playmaker", "interceptor", "aerial_master", "reflexes",
+    "crosser", "last_line", "one_on_one",
+)
+assert set(SKILL_ORDER) == set(SKILL_DEFINITIONS)
 
 
 def get_definition(code: str) -> SkillDefinition | None:

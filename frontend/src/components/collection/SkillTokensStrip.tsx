@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchSkillTokens } from "@/api/cardSkills";
+import { SkillTokenIcon } from "@/components/icons/skills";
 import { skillByCode, useSkillCatalog } from "@/lib/cardSkills";
 
 /** Owned skill tokens, one chip per skill with a non-zero balance. Hidden
@@ -20,8 +21,9 @@ export default function SkillTokensStrip() {
         {owned.map((t) => {
           const skill = skillByCode(catalog?.skills, t.skill_code);
           return (
-            <span key={t.skill_code} className="rounded-full bg-black/30 px-2 py-1 text-[11px] font-semibold text-ink-chalk">
-              {skill?.icon} {skill?.name ?? t.skill_code} × <span className="font-mono text-accent-lime">{t.quantity}</span>
+            <span key={t.skill_code} className="inline-flex items-center gap-1 rounded-full bg-black/30 px-2 py-1 text-[11px] font-semibold text-ink-chalk">
+              <SkillTokenIcon code={t.skill_code} size={15} className="text-accent-lime" aria-hidden />
+              {skill?.name ?? t.skill_code} × <span className="font-mono text-accent-lime">{t.quantity}</span>
             </span>
           );
         })}

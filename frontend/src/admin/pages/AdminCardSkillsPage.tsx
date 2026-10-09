@@ -11,6 +11,7 @@ import {
   updateGameConfig,
 } from "@/admin/api";
 import type { GameConfig } from "@/admin/types";
+import { SkillIcon, SkillTokenIcon } from "@/components/icons/skills";
 import { ApiRequestError } from "@/lib/api";
 import type { SkillCatalogItem } from "@/types";
 
@@ -141,7 +142,7 @@ export default function AdminCardSkillsPage() {
                 className="flex-1 rounded-lg bg-bg-base px-2 py-1.5 outline-none"
               >
                 <option value="">Нет</option>
-                {grantable.map((s) => <option key={s.code} value={s.code}>{s.icon} {s.name}</option>)}
+                {grantable.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
               </select>
               <input
                 type="number"
@@ -205,7 +206,7 @@ function SkillRow({
   return (
     <div className="rounded-xl bg-bg-base p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="font-semibold">{skill.icon} {skill.name} <span className="font-mono text-xs text-slate-500">{skill.code}</span></p>
+        <p className="flex items-center gap-1.5 font-semibold"><SkillIcon code={skill.code} size={16} /> {skill.name} <span className="font-mono text-xs text-slate-500">{skill.code}</span></p>
         <label className="flex items-center gap-2 text-xs">
           <input
             type="checkbox"
@@ -296,7 +297,7 @@ function GrantTokensSection({ skills }: { skills: SkillCatalogItem[] }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="ID пользователя" className="rounded-lg bg-bg-base px-3 py-2 outline-none" />
         <select value={skillCode} onChange={(e) => setSkillCode(e.target.value)} className="rounded-lg bg-bg-base px-3 py-2 outline-none">
-          {skills.map((s) => <option key={s.code} value={s.code}>{s.icon} {s.name}</option>)}
+          {skills.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
         </select>
         <input type="number" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} className="rounded-lg bg-bg-base px-3 py-2 outline-none" />
         <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Причина" className="rounded-lg bg-bg-base px-3 py-2 outline-none" />
@@ -431,7 +432,7 @@ function PackDropRow({
   const share = skill.is_available && totalWeight > 0 ? Math.round((skill.pack_drop_weight / totalWeight) * 100) : 0;
   return (
     <tr className="border-t border-white/5">
-      <td className="py-1.5 pr-3">{skill.icon} {skill.name}{!skill.is_available && <span className="text-slate-500"> (закрыт)</span>}</td>
+      <td className="py-1.5 pr-3"><SkillTokenIcon code={skill.code} size={14} className="mr-1 inline-block align-[-2px]" />{skill.name}{!skill.is_available && <span className="text-slate-500"> (закрыт)</span>}</td>
       <td className="py-1.5 pr-3">
         <input
           type="number" min={0} value={weight} disabled={!skill.engine_supported}

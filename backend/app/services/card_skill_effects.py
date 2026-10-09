@@ -182,3 +182,32 @@ def aerial_shot_roll(
     for effect, sign, player in shot_active:
         notes.append(_note(effect, player, flipped and missed == (sign > 0)))
     return missed, lost, notes
+
+
+def skill_choice_sets(
+    outcomes: list[str], weights: list[float], adjustments: list[tuple[Optional[dict], set, Any]],
+) -> tuple[str, list[dict]]:
+    """Weighted pick over several outcomes where each skill raises the total
+    share of its own SET of outcomes (e.g. the attacker's "advance" vs the
+    covering defender's {"breakdown", "stall"}) by bonus_pp, capped/bounded
+    like skill_roll; the other outcomes shrink proportionally. Matches
+    random.choices draw-for-draw when no adjustment carries an effect, and
+    marks a note decisive only if the same draw changed the pick into that
+    skill's own set."""
+    active = [(e, favored, p) for e, favored, p in adjustments if e]
+    if not active:
+        return random.choices(outcomes, weights=weights, k=1)[0], []
+    total = float(sum(weights))
+    shares = [w / total for w in weights]
+    for effect, favored, _player in active:
+        inside = sum(s for o, s in zip(outcomes, shares) if o in favored)
+        outside = 1.0 - inside
+        new_inside = _adjusted(inside, [(effect, 1, None)])
+        scale_in = new_inside / inside if inside > 0 else 0.0
+        scale_out = (1.0 - new_inside) / outside if outside > 0 else 0.0
+        shares = [s * (scale_in if o in favored else scale_out) for o, s in zip(outcomes, shares)]
+    r = random.random()
+    base_pick = outcomes[bisect(list(accumulate(weights)), r * total, 0, len(outcomes) - 1)]
+    pick = outcomes[bisect(list(accumulate(shares)), r * sum(shares), 0, len(outcomes) - 1)]
+    notes = [_note(e, p, pick != base_pick and pick in favored) for e, favored, p in active]
+    return pick, notes

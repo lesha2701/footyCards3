@@ -1,3 +1,4 @@
+import { SkillIcon } from "@/components/icons/skills";
 import type { MatchEvent, MatchSkillNote } from "@/types";
 
 /** Skill lines under one match-log event. The server only attaches a note
@@ -12,7 +13,8 @@ export default function MatchSkillNotes({ event }: { event: MatchEvent }) {
     <>
       {notes.map((note, i) => (
         <span key={i} className="mt-0.5 block pl-6 text-[10px] text-accent-lime/80">
-          ✨ {note.name} {note.level_label}
+          <SkillIcon code={note.code} size={11} className="mr-1 inline-block align-[-1px]" aria-hidden />
+          {note.name} {note.level_label}
           {note.player ? ` (${note.player})` : ""}
           {note.decisive ? " — решил исход эпизода" : ` учтён: ${note.bonus_pp} п.п.`}
         </span>

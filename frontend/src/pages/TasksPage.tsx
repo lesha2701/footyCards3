@@ -6,6 +6,7 @@ import { claimTask, fetchTasks } from "@/api/tasks";
 import EmptyState from "@/components/common/EmptyState";
 import { IconChat, IconCheck, IconCoin, IconPack, IconParty, IconTarget, IconTrophy, IconWarning } from "@/components/icons";
 import { ApiRequestError } from "@/lib/api";
+import { SkillTokenIcon } from "@/components/icons/skills";
 import { skillByCode, useSkillCatalog } from "@/lib/cardSkills";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -267,7 +268,7 @@ function TaskSkillReward({ code, quantity }: { code: string; quantity: number })
   const skill = skillByCode(catalog?.skills, code);
   return (
     <p className="mt-0.5 text-[11px] font-semibold text-accent-lime">
-      + {skill?.icon} жетон «{skill?.name ?? code}» × {quantity}
+      + <SkillTokenIcon code={code} size={13} className="inline-block align-[-2px]" aria-hidden /> жетон «{skill?.name ?? code}» × {quantity}
     </p>
   );
 }

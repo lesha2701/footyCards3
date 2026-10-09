@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { changeCardSkill, fetchCardSkillState } from "@/api/cardSkills";
 import { IconCoin, IconUpgrade, IconWarning } from "@/components/icons";
+import { SkillIcon } from "@/components/icons/skills";
 import { ApiRequestError } from "@/lib/api";
 import { SKILL_LEVEL_LABELS, invalidateAfterSkillChange, skillByCode, useSkillCatalog } from "@/lib/cardSkills";
 import { formatGameError } from "@/lib/errors";
@@ -92,7 +93,7 @@ export default function CardSkillPanel({ cardId }: { cardId: number }) {
               const s = skillByCode(skills, c.skill_code);
               return (
                 <option key={c.id} value={c.id}>
-                  № {c.serial_number}{s && c.skill_level ? ` · ${s.icon} ${SKILL_LEVEL_LABELS[c.skill_level]}` : ""}
+                  № {c.serial_number}{s && c.skill_level ? ` · ${s.name} ${SKILL_LEVEL_LABELS[c.skill_level]}` : ""}
                 </option>
               );
             })}
@@ -103,7 +104,7 @@ export default function CardSkillPanel({ cardId }: { cardId: number }) {
       {state.skill && current ? (
         <div className="mt-2">
           <p className="flex items-center gap-1.5 text-sm font-semibold text-ink-chalk">
-            <span aria-hidden>{current.icon}</span>
+            <SkillIcon code={current.code} size={16} className="text-accent-lime" aria-hidden />
             {current.name} {state.skill.level_label}
           </p>
           <p className="mt-1 text-xs text-ink-mist">
@@ -228,7 +229,8 @@ function SkillPicker({
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-ink-chalk">
-                {skill?.icon} {skill?.name ?? action.skill_code}
+                <SkillIcon code={action.skill_code} size={14} className="mr-1 inline-block align-[-2px] text-accent-lime" aria-hidden />
+                {skill?.name ?? action.skill_code}
               </span>
               <span className="flex items-center gap-1 font-mono text-[10px] text-ink-mist">
                 жетоны {action.tokens_owned}/{action.token_cost}
@@ -272,13 +274,23 @@ function SkillConfirmSheet({
           <div className="rounded-xl bg-black/20 p-2">
             <p className="text-ink-mist-dim">Сейчас</p>
             <p className="mt-0.5 font-semibold text-ink-chalk">
-              {state.skill && current ? `${current.icon} ${current.name} ${state.skill.level_label}` : "Нет навыка"}
+              {state.skill && current ? (
+                <span className="inline-flex items-center gap-1">
+                  <SkillIcon code={current.code} size={13} aria-hidden />
+                  {current.name} {state.skill.level_label}
+                </span>
+              ) : "Нет навыка"}
             </p>
           </div>
           <div className="rounded-xl bg-black/20 p-2">
             <p className="text-ink-mist-dim">Станет</p>
             <p className="mt-0.5 font-semibold text-accent-lime">
-              {target ? `${target.icon} ${target.name} ${SKILL_LEVEL_LABELS[action.target_level]}` : action.skill_code}
+              {target ? (
+                <span className="inline-flex items-center gap-1">
+                  <SkillIcon code={target.code} size={13} aria-hidden />
+                  {target.name} {SKILL_LEVEL_LABELS[action.target_level]}
+                </span>
+              ) : action.skill_code}
             </p>
             {targetBonus !== undefined && <p className="text-[10px] text-ink-mist">{targetBonus} п.п.</p>}
           </div>
