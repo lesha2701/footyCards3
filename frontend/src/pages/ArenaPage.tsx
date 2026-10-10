@@ -9,6 +9,8 @@ import { skillByCode, skillInactiveReason, useSkillCatalog } from "@/lib/cardSki
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
 import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPickerModal";
 import EmptyState from "@/components/common/EmptyState";
+import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
+import BenchUpgradeHints from "@/components/squad/BenchUpgradeHints";
 import {
   IconBall,
   IconBoot,
@@ -25,8 +27,10 @@ import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
 import {
   activateLineupTemplate,
-  autoFillLineupTemplate, fetchLineupTemplates, fetchUserCoachCards, fetchUserStadiumCards,
+  autoFillLineupTemplate,
+  fetchLineupBenchUpgrades, fetchLineupTemplates, fetchUserCoachCards, fetchUserStadiumCards,
   renameLineupTemplate, setLineupTemplate, setLineupTemplateCoach, setLineupTemplateStadium, setLineupTemplateTactic,
+  type BenchUpgrade,
 } from "@/api/lineups";
 import { actMatch, fetchArenaStats, fetchMatchHistory, forfeitMatch, playMatch } from "@/api/matches";
 import { staticUrl } from "@/lib/api";
@@ -169,8 +173,28 @@ export default function ArenaPage() {
       useMatchGuardStore.getState().deactivate();
     }
     return () => useMatchGuardStore.getState().deactivate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [simulating, match?.status, match?.id]);
+
+  const { data: benchUpgrades } = useQuery({
+    queryKey: ["lineup-templates", "bench", viewedIndex],
+    queryFn: () => fetchLineupBenchUpgrades(viewedIndex),
+    enabled: !!lineup,
+  });
+  const applyBenchUpgrade = (hint: BenchUpgrade) => {
+    const slots = (lineup?.slots ?? [])
+      .filter((s) => s.card && s.slot_code !== hint.slot_code)
+      .map((s) => ({ slot_code: s.slot_code, user_card_id: s.card!.id }));
+    slots.push({ slot_code: hint.slot_code, user_card_id: hint.suggested_card_id });
+    setLineupMutation.mutate(slots);
+  };
+
+  const nativePlayButton = useTelegramMainButton({
+    text: "Играть матч",
+    onClick: () => playMutation.mutate(),
+    visible: !simulating && match?.status !== "in_progress",
+    enabled: !!lineup?.is_complete,
+    loading: playMutation.isPending,
+  });
 
   if (lineupLoading) return <ListSkeleton />;
 
@@ -326,6 +350,9 @@ export default function ArenaPage() {
             <p className="mt-1 text-ink-mist-dim">Поэтому простая замена на игрока с более высоким рейтингом не всегда увеличивает силу — важна ещё позиция, химия и тактика.</p>
           </div>
         )}
+        <div className="mb-3">
+          <BenchUpgradeHints hints={benchUpgrades} onApply={applyBenchUpgrade} busy={setLineupMutation.isPending} />
+        </div>
         <p className="mb-3 text-[11px] font-semibold">
           <span className={`rounded-full px-2.5 py-1 ${diamondCount >= maxDiamond ? "bg-rarity-diamond/20 text-rarity-diamond" : "bg-white/5 text-ink-mist"}`}>
             Диамантовых: {diamondCount}/{maxDiamond}
@@ -471,7 +498,7 @@ export default function ArenaPage() {
 
       {matchError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{matchError}</p>}
 
-      <section className="flex flex-col gap-3">
+      <section className={`flex flex-col gap-3 ${nativePlayButton ? "hidden" : ""}`}>
         <button
           onClick={() => playMutation.mutate()}
           disabled={!lineup?.is_complete || playMutation.isPending || simulating}

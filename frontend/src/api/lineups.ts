@@ -78,3 +78,20 @@ export async function autoFillLineupTemplate(templateIndex: number): Promise<Lin
   const { data } = await api.post<Lineup>(`/lineups/templates/${templateIndex}/auto`);
   return data;
 }
+
+export interface BenchUpgrade {
+  slot_code: string;
+  current_card_id: number | null;
+  current_name: string | null;
+  current_rating: number | null;
+  suggested_card_id: number;
+  suggested_name: string;
+  suggested_rating: number;
+  gain: number;
+}
+
+/** Stronger owned cards on the bench — one single-swap hint per slot. */
+export async function fetchLineupBenchUpgrades(templateIndex: number): Promise<BenchUpgrade[]> {
+  const { data } = await api.get<BenchUpgrade[]>(`/lineups/templates/${templateIndex}/bench-upgrades`);
+  return data;
+}

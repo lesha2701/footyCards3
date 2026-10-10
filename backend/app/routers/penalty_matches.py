@@ -25,7 +25,7 @@ router = APIRouter(prefix="/games/penalty", tags=["penalty"])
 async def create_challenge(
     payload: PenaltyChallengeRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    check_rate_limit(f"penalty_challenge:{user.id}", max_calls=10, window_seconds=60)
+    await check_rate_limit(f"penalty_challenge:{user.id}", max_calls=10, window_seconds=60)
     return await penalty_match_service.create_challenge(db, user, payload.opponent_user_id, payload.user_card_id)
 
 
@@ -33,7 +33,7 @@ async def create_challenge(
 async def create_open_challenge(
     payload: PenaltyOpenChallengeRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    check_rate_limit(f"penalty_open_challenge:{user.id}", max_calls=10, window_seconds=60)
+    await check_rate_limit(f"penalty_open_challenge:{user.id}", max_calls=10, window_seconds=60)
     return await penalty_match_service.create_open_challenge(db, user, payload.user_card_id, payload.stake_coins)
 
 
@@ -95,7 +95,7 @@ async def get_match(match_id: int, db: AsyncSession = Depends(get_db), user: Use
 async def start_search(
     payload: PenaltySearchRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    check_rate_limit(f"penalty_search:{user.id}", max_calls=10, window_seconds=60)
+    await check_rate_limit(f"penalty_search:{user.id}", max_calls=10, window_seconds=60)
     entry = await penalty_match_service.start_search(db, user, payload.user_card_id)
     return PenaltySearchStatusOut(status="searching", match_id=None, created_at=entry.created_at)
 

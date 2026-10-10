@@ -5,12 +5,33 @@ import { useNavigate } from "react-router-dom";
 import { claimDailyReward } from "@/api/dailyRewards";
 import { claimFreePack } from "@/api/freePack";
 import { claimTask } from "@/api/tasks";
+import { Skeleton } from "@/components/common/Skeleton";
 import { IconCheck, IconClock, IconGift, IconPack, IconTarget, type IconProps } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
 import { hapticNotify } from "@/lib/telegram";
 import { formatClock, useTodayState } from "@/lib/today";
 import { useAuthStore } from "@/store/authStore";
-import type { Task, WheelStatus } from "@/types";
+import type { DailyRewardCalendar, PackOpenResult, Task, WheelStatus } from "@/types";
+
+function dayRewardLabel(day: DailyRewardCalendar["days"][number] | undefined): string | null {
+  if (!day) return null;
+  if (day.free_pack_name) return `пак «${day.free_pack_name}»`;
+  if (day.grants_random_card) return `${day.coins} монет + карточка`;
+  return `${day.coins} монет`;
+}
+
+/** "День 3 из 7 · завтра: пак «Эпик»" — the streak is the reason to come
+ * back tomorrow, so it is shown where the reward is collected. */
+function streakLine(calendar: DailyRewardCalendar, readyToday: boolean): string {
+  const total = calendar.days.length;
+  const todayIdx = calendar.days.findIndex((d) => d.is_today);
+  const today = todayIdx >= 0 ? calendar.days[todayIdx] : undefined;
+  const tomorrow = todayIdx >= 0 ? calendar.days[(todayIdx + 1) % Math.max(total, 1)] : undefined;
+  const progress = today && total ? `День ${today.day} из ${total}` : `День ${calendar.current_streak}`;
+  const reward = readyToday ? dayRewardLabel(today) : dayRewardLabel(tomorrow);
+  if (!reward) return readyToday ? progress : "Уже забрано · завтра новая";
+  return readyToday ? `${progress} · сегодня: ${reward}` : `Забрано · завтра: ${reward}`;
+}
 
 /** Everything the player can collect today in one place: daily reward,
  * finished tasks, free pack and wheel spins — with one "Забрать всё" button
@@ -23,10 +44,6 @@ export default function TodayCard({ wheel }: { wheel?: WheelStatus | null }) {
   const [summary, setSummary] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // A task that rewards a pack plays the pack-opening screen, so claim-all
-  // only takes the instant ones and leaves the pack tasks one tap away.
-  const instantTasks = claimableTasks.filter((t) => !t.reward_pack_name);
-  const packTasks = claimableTasks.filter((t) => t.reward_pack_name);
 
   const refresh = () => {
     for (const key of [["daily-reward-calendar"], ["tasks"], ["collection"], ["card-skills"]]) {
@@ -39,6 +56,7 @@ export default function TodayCard({ wheel }: { wheel?: WheelStatus | null }) {
       let coins = 0;
       let balance: number | null = null;
       const extras: string[] = [];
+      const packs: PackOpenResult[] = [];
       if (daily) {
         const r = await claimDailyReward();
         coins += r.coins_awarded;
@@ -51,15 +69,20 @@ export default function TodayCard({ wheel }: { wheel?: WheelStatus | null }) {
         coins += r.reward_coins;
         balance = r.new_balance;
         if (r.granted_skill_tokens) extras.push(`жетоны ×${r.granted_skill_tokens.quantity}`);
+        if (r.granted_pack) packs.push(r.granted_pack);
       }
-      return { coins, balance, extras };
+      return { coins, balance, extras, packs };
     },
-    onSuccess: ({ coins, balance, extras }) => {
+    onSuccess: ({ coins, balance, extras, packs }) => {
       if (balance !== null) updateBalance(balance);
       hapticNotify("success");
       setError(null);
       setSummary(["Забрано", coins ? `+${coins} монет` : null, ...extras].filter(Boolean).join(" · "));
       refresh();
+      // Pack rewards play their opening animation one after another.
+      if (packs.length) {
+        navigate(`/packs/${packs[0].pack.id}/open`, { state: { result: packs[0], queue: packs.slice(1) } });
+      }
     },
     onError: (err) => {
       setError(formatGameError(err, "Не удалось забрать награды"));
@@ -79,9 +102,24 @@ export default function TodayCard({ wheel }: { wheel?: WheelStatus | null }) {
     onError: (err) => setError(formatGameError(err, "Не удалось получить пак")),
   });
 
-  if (!calendar && !taskList && !freePack) return null;
+  if (!calendar && !taskList && !freePack) {
+    return (
+      <section className="flex flex-col gap-3 rounded-3xl bg-bg-surface p-4" aria-busy="true">
+        <Skeleton className="h-5 w-24" />
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex items-center gap-3">
+            <Skeleton className="h-9 w-9 rounded-full" />
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Skeleton className="h-3.5 w-1/2" />
+              <Skeleton className="h-3 w-3/4" />
+            </div>
+          </div>
+        ))}
+      </section>
+    );
+  }
 
-  const instantReady = dailyReady || instantTasks.length > 0;
+  const instantReady = dailyReady || claimableTasks.length > 0;
   const tasksInProgress = [...(taskList?.regular ?? []), ...(taskList?.premium ?? [])].filter((t) => !t.is_completed).length;
   const busy = claimAll.isPending || freePackMutation.isPending;
 
@@ -91,7 +129,7 @@ export default function TodayCard({ wheel }: { wheel?: WheelStatus | null }) {
         <h2 className="font-display text-base font-bold text-ink-chalk">Сегодня</h2>
         {instantReady && (
           <button
-            onClick={() => claimAll.mutate({ daily: dailyReady, tasks: instantTasks })}
+            onClick={() => claimAll.mutate({ daily: dailyReady, tasks: claimableTasks })}
             disabled={busy}
             className="rounded-full bg-accent-lime px-3 py-1.5 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-60"
           >
@@ -105,7 +143,7 @@ export default function TodayCard({ wheel }: { wheel?: WheelStatus | null }) {
           <TodayRow
             Icon={IconGift}
             title="Ежедневная награда"
-            subtitle={dailyReady ? `День ${calendar.current_streak} серии` : "Уже забрано · завтра новая"}
+            subtitle={streakLine(calendar, dailyReady)}
             ready={dailyReady}
             done={!dailyReady}
             onClick={() => (dailyReady ? claimAll.mutate({ daily: true, tasks: [] }) : navigate("/profile"))}
@@ -118,18 +156,17 @@ export default function TodayCard({ wheel }: { wheel?: WheelStatus | null }) {
             title="Задания"
             subtitle={
               claimableTasks.length
-                ? `Готово к получению: ${claimableTasks.length}${packTasks.length ? ` (паки — в заданиях)` : ""}`
+                ? `Готово к получению: ${claimableTasks.length}`
                 : tasksInProgress
                   ? `В процессе: ${tasksInProgress}`
                   : "Все выполнены"
             }
-            ready={instantTasks.length > 0}
+            ready={claimableTasks.length > 0}
             done={!claimableTasks.length && !tasksInProgress}
             onClick={() =>
-              instantTasks.length ? claimAll.mutate({ daily: false, tasks: instantTasks }) : navigate("/tasks")
+              claimableTasks.length ? claimAll.mutate({ daily: false, tasks: claimableTasks }) : navigate("/tasks")
             }
             disabled={busy}
-            badge={packTasks.length || undefined}
           />
         )}
         {freePack && (

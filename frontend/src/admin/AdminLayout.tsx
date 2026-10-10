@@ -33,6 +33,7 @@ import {
 
 const SECTIONS: { to: string; label: string; Icon: (props: IconProps) => JSX.Element; end?: boolean }[] = [
   { to: "/admin", label: "Дашборд", Icon: IconChart, end: true },
+  { to: "/admin/economy", label: "Экономика", Icon: IconCoin },
   { to: "/admin/users", label: "Пользователи", Icon: IconUsers },
   { to: "/admin/players", label: "Футболисты", Icon: IconBall },
   { to: "/admin/coaches", label: "Тренеры", Icon: IconShirt },

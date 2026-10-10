@@ -116,3 +116,78 @@ async def auto_personal_squad(db: AsyncSession, user: User, template_index: int,
         slots=[PersonalSquadSlotIn(slot_code=code, user_card_id=c.id) for code, c in chosen.items()],
     )
     return await personal_squad_service.set_squad_cards(db, user, payload, template_index)
+
+
+def _effective(card: UserCard) -> int:
+    return min(99, card.player.rating + (card.diamond_rating_bonus or 0))
+
+
+def bench_upgrades(
+    slots: list[SlotSpec], current: dict[str, Optional[int]], cards: Iterable[UserCard],
+    max_diamonds: Optional[int] = None,
+) -> list[dict]:
+    """Per slot: the strongest owned card NOT already in the squad that fits
+    the slot and beats what is there now (or fills an empty slot). Unlike
+    the auto-fill it never reshuffles other slots, so every hint reads as a
+    single swap: "поставь Y вместо X, +N"."""
+    by_id = {c.id: c for c in cards}
+    pool = [c for c in by_id.values() if not c.is_locked_by_admin and not c.is_locked_in_trade]
+    in_squad = {cid for cid in current.values() if cid}
+    used_players = {by_id[cid].player_id for cid in in_squad if cid in by_id}
+    diamonds = sum(1 for cid in in_squad if cid in by_id and by_id[cid].player.rarity == Rarity.diamond)
+    hints: list[dict] = []
+    for slot in sorted(slots, key=lambda s: 0 if s.category == "GK" else 1):
+        now = by_id.get(current.get(slot.code) or -1)
+        now_rating = _effective(now) if now else 0
+        best = None
+        for card in pool:
+            if card.id in in_squad or card.player_id in used_players:
+                continue
+            if card.player.position not in CATEGORY_POSITIONS[slot.category]:
+                continue
+            is_diamond = card.player.rarity == Rarity.diamond
+            swaps_out_diamond = now is not None and now.player.rarity == Rarity.diamond
+            if is_diamond and max_diamonds is not None and diamonds - swaps_out_diamond >= max_diamonds:
+                continue
+            if _effective(card) <= now_rating:
+                continue
+            if best is None or (_effective(card), -card.id) > (_effective(best), -best.id):
+                best = card
+        if best is None:
+            continue
+        used_players.add(best.player_id)
+        in_squad.add(best.id)
+        if best.player.rarity == Rarity.diamond:
+            diamonds += 1
+        hints.append({
+            "slot_code": slot.code,
+            "current_card_id": now.id if now else None,
+            "current_name": now.player.display_name if now else None,
+            "current_rating": now_rating if now else None,
+            "suggested_card_id": best.id,
+            "suggested_name": best.player.display_name,
+            "suggested_rating": _effective(best),
+            "gain": _effective(best) - now_rating,
+        })
+    return hints
+
+
+async def arena_bench_upgrades(db: AsyncSession, user: User, template_index: int) -> list[dict]:
+    from app.services import lineup_service
+    from app.services.game_config_service import get_config
+
+    lineup = await lineup_service.get_active_lineup(db, user, template_index)
+    config = await get_config(db)
+    slots = [SlotSpec(s.code, s.category, s.ideal_position) for s in lineup_service.FORMATION_SLOTS]
+    current = {s.slot_code: (s.card.id if s.card else None) for s in lineup.slots}
+    return bench_upgrades(slots, current, await owned_cards(db, user.id), max_diamonds=config.match_max_diamond_cards)
+
+
+async def personal_bench_upgrades(db: AsyncSession, user: User, template_index: int) -> list[dict]:
+    from app.services import personal_squad_service
+    from app.services.club_formation_service import get_formation_slots
+
+    squad = await personal_squad_service.get_squad(db, user, template_index)
+    slots = [SlotSpec(s.code, s.category, s.ideal_position) for s in get_formation_slots(squad.formation)]
+    current = {s.slot_code: s.user_card_id for s in squad.slots}
+    return bench_upgrades(slots, current, await owned_cards(db, user.id))

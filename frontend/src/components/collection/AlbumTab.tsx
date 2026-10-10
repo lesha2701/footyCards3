@@ -52,6 +52,8 @@ function AlbumOverview({ onOpen }: { onOpen: (id: number) => void }) {
         </div>
       )}
 
+      {!search && <NextGoal collections={data?.collections} onOpen={onOpen} />}
+
       <div className="flex items-center gap-2 rounded-xl bg-bg-surface px-3 py-2.5">
         <IconSearch size={15} className="shrink-0 text-ink-mist-dim" />
         <input
@@ -73,6 +75,41 @@ function AlbumOverview({ onOpen }: { onOpen: (id: number) => void }) {
         ))}
       </div>
     </div>
+  );
+}
+
+/** The incomplete collection with a reward that is closest to done — a
+ * concrete "почти собрал" target instead of a flat list of progress bars. */
+function NextGoal({
+  collections,
+  onOpen,
+}: {
+  collections: AlbumCollectionSummary[] | undefined;
+  onOpen: (id: number) => void;
+}) {
+  const goal = (collections ?? [])
+    .filter((c) => c.id > 0 && !c.is_complete && c.owned_count > 0 && (c.reward_coins > 0 || c.reward_pack_name))
+    .sort((a, b) => (a.total_count - a.owned_count) - (b.total_count - b.owned_count))[0];
+  if (!goal) return null;
+  const left = goal.total_count - goal.owned_count;
+  return (
+    <button
+      onClick={() => onOpen(goal.id)}
+      className="flex items-center gap-3 rounded-2xl border border-accent-lime/25 bg-accent-lime/5 p-3 text-left active:scale-[0.98]"
+    >
+      <IconCollection size={20} className="shrink-0 text-accent-lime" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[10px] font-semibold uppercase tracking-wider text-accent-lime">Почти собрано</span>
+        <span className="block truncate text-sm font-semibold text-ink-chalk">
+          «{goal.name}»: осталось {left} {left === 1 ? "карточка" : left < 5 ? "карточки" : "карточек"}
+        </span>
+        <span className="flex items-center gap-1 text-[11px] text-ink-mist">
+          Награда: {goal.reward_coins > 0 && <>{goal.reward_coins} <IconCoin size={10} className="text-accent-lime" /></>}
+          {goal.reward_pack_name && ` пак «${goal.reward_pack_name}»`}
+        </span>
+      </span>
+      <IconChevronRight size={16} className="shrink-0 text-ink-mist-dim" />
+    </button>
   );
 }
 

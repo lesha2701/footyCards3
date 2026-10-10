@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     # bot's own settings.
     internal_api_secret: str = "dev_only_internal_secret"
     dev_mode: bool = False
+    # Optional: share rate-limit windows across backend replicas (see
+    # app/core/rate_limit.py). Empty = per-process in-memory limiter.
+    rate_limit_redis_url: str = ""
     dev_user_telegram_id: int = 999000001
     environment: str = "development"
     cors_origins: str = "http://localhost:5173"

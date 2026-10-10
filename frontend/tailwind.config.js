@@ -16,10 +16,13 @@ export default {
           // lives in the animated diamond-holo gradient/glow below.
           diamond: "#67e8f9",
         },
+        // Theme-dependent surfaces and text are CSS variables (RGB channels,
+        // so opacity modifiers like bg-bg-surface/95 keep working); values
+        // for dark and light live in src/index.css.
         bg: {
-          base: "#07090a",
-          surface: "#10140f",
-          raised: "#161c15",
+          base: "rgb(var(--c-bg-base) / <alpha-value>)",
+          surface: "rgb(var(--c-bg-surface) / <alpha-value>)",
+          raised: "rgb(var(--c-bg-raised) / <alpha-value>)",
         },
         accent: {
           DEFAULT: "#3ed17e",
@@ -29,9 +32,9 @@ export default {
           soft: "#8fe3b8",
         },
         ink: {
-          chalk: "#f3f6f2",
-          mist: "#8a968e",
-          "mist-dim": "#5b655e",
+          chalk: "rgb(var(--c-ink-chalk) / <alpha-value>)",
+          mist: "rgb(var(--c-ink-mist) / <alpha-value>)",
+          "mist-dim": "rgb(var(--c-ink-mist-dim) / <alpha-value>)",
         },
       },
       fontFamily: {

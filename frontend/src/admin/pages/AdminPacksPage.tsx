@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
-import { createPack, deletePack, fetchAdminBadges, fetchAdminPacks, previewPack, togglePackActive, updatePack, uploadPackImage } from "@/admin/api";
+import { createPack, deletePack, fetchAdminBadges, fetchAdminPacks, fetchPackExpectedValue, previewPack, togglePackActive, updatePack, uploadPackImage } from "@/admin/api";
 import type { PackPreview } from "@/admin/types";
 import NumberInput from "@/components/common/NumberInput";
 import { ApiRequestError, staticUrl } from "@/lib/api";
@@ -67,7 +67,10 @@ export default function AdminPacksPage() {
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-packs"] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin-packs"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-pack-ev"] });
+  };
   const toggleMutation = useMutation({ mutationFn: togglePackActive, onSuccess: invalidate });
   const deleteMutation = useMutation({
     mutationFn: deletePack,
@@ -252,6 +255,7 @@ export default function AdminPacksPage() {
                 </div>
               ))}
               <p className="text-[11px] text-slate-500">Можно указывать доли процента, например 0.05%</p>
+              {editing && <PackValueHint packId={editing.id} />}
               {Math.abs(probabilitySum - 1) > 0.02 && (
                 <p className="text-xs text-amber-400">Сумма шансов должна быть ≈ 100%, иначе сохранить нельзя</p>
               )}
@@ -349,5 +353,24 @@ function NumField({ label, value, onChange, min, max }: { label: string; value: 
       <span className="text-xs text-slate-400">{label}</span>
       <NumberInput value={value} onChange={onChange} min={min} max={max} />
     </label>
+  );
+}
+
+/** Expected quick-sell value of the SAVED pack vs. its price — re-check after
+ * saving new odds. Below 1.0 means a pack is worth less than it costs if
+ * every card is quick-sold (normal for a coin sink). */
+function PackValueHint({ packId }: { packId: number }) {
+  const { data } = useQuery({ queryKey: ["admin-pack-ev", packId], queryFn: () => fetchPackExpectedValue(packId) });
+  if (!data) return null;
+  return (
+    <div className="rounded-lg bg-white/5 px-3 py-2 text-xs text-slate-300">
+      <p>
+        Средняя ценность пака (быстрая продажа): <b>{data.expected_quick_sell_value}</b> монет при цене {data.price}
+        {data.value_to_price != null && <> — <b>{Math.round(data.value_to_price * 100)}%</b> цены</>}
+      </p>
+      <p className="mt-0.5 text-[11px] text-slate-500">
+        По сохранённым шансам; бонусы (тренер, стадион, жетон) и гарантия редкости не учтены.
+      </p>
+    </div>
   );
 }

@@ -182,7 +182,7 @@ async def get_club_stats(db: AsyncSession = Depends(get_db), user: User = Depend
 
 @router.post("/me/members/{user_id}/remind", status_code=status.HTTP_204_NO_CONTENT)
 async def remind_member(user_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"club_remind:{user.id}", max_calls=20, window_seconds=3600)
+    await check_rate_limit(f"club_remind:{user.id}", max_calls=20, window_seconds=3600)
     await club_activity_service.remind_member(db, user, user_id)
 
 
@@ -320,13 +320,13 @@ async def list_club_stadium_cards(db: AsyncSession = Depends(get_db), user: User
 
 @router.post("/me/packs/{club_pack_id}/open", response_model=ClubPackOpenResult)
 async def open_club_pack(club_pack_id: int, payload: OpenClubPackRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"open_club_pack:{user.id}", max_calls=10, window_seconds=60)
+    await check_rate_limit(f"open_club_pack:{user.id}", max_calls=10, window_seconds=60)
     return await club_pack_service.open_club_pack(db, user, club_pack_id, payload.idempotency_key)
 
 
 @router.post("/me/game/start", response_model=ClubGameStartOut)
 async def start_club_game(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"club_game_start:{user.id}", max_calls=20, window_seconds=60)
+    await check_rate_limit(f"club_game_start:{user.id}", max_calls=20, window_seconds=60)
     return await club_game_service.start_session(db, user)
 
 
@@ -351,7 +351,7 @@ async def claim_club_game_reward(session_id: int, db: AsyncSession = Depends(get
 async def start_club_penalty(
     payload: ClubPenaltyStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    check_rate_limit(f"club_penalty_start:{user.id}", max_calls=20, window_seconds=60)
+    await check_rate_limit(f"club_penalty_start:{user.id}", max_calls=20, window_seconds=60)
     return await club_penalty_service.start_session(db, user, payload.club_card_id)
 
 
@@ -374,7 +374,7 @@ async def forfeit_club_penalty(session_id: int, db: AsyncSession = Depends(get_d
 
 @router.post("/me/position-match/start", response_model=ClubPositionMatchStartOut)
 async def start_club_position_match(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"club_position_match_start:{user.id}", max_calls=20, window_seconds=60)
+    await check_rate_limit(f"club_position_match_start:{user.id}", max_calls=20, window_seconds=60)
     return await club_position_match_service.start_session(db, user)
 
 

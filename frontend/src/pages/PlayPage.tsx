@@ -19,6 +19,7 @@ import {
   IconTrophy,
   type IconProps,
 } from "@/components/icons";
+import { Skeleton } from "@/components/common/Skeleton";
 import { formatClock } from "@/lib/today";
 import { usePersistentState } from "@/lib/usePersistentState";
 import { useAuthStore } from "@/store/authStore";
@@ -221,7 +222,7 @@ function GameCard({
         ) : game.noLimit ? (
           <p className="text-[10px] text-ink-mist-dim">Платный вход</p>
         ) : (
-          <p className="text-[10px] text-ink-mist-dim">...</p>
+          <Skeleton className="h-8 w-12" />
         )}
       </div>
     </button>

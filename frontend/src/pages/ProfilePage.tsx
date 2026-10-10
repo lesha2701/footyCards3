@@ -10,6 +10,7 @@ import { fetchMyGifts } from "@/api/gifts";
 import { fetchMyBadges, fetchMyProfile, fetchMyTransactions, fetchMyTrophies, updateMySettings } from "@/api/profile";
 import { createCoinInvoice, fetchCoinInvoiceStatus, fetchCoinPackages } from "@/api/wallet";
 import { UserBadge } from "@/components/common/UserBadge";
+import ThemeSetting from "@/components/profile/ThemeSetting";
 import {
   IconChevronRight,
   IconCoin,
@@ -28,27 +29,10 @@ import {
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from "@/lib/legalLinks";
 import { RARITY_GLOW, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
+import { TX_TYPE_LABELS } from "@/lib/transactionLabels";
 import { hapticNotify, openLink, openTelegramInvoice } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { CoinPackage, DailyRewardClaimResult, UserTrophy } from "@/types";
-
-const TX_TYPE_LABELS: Record<string, string> = {
-  starting_balance: "Стартовый бонус",
-  daily_reward: "Ежедневная награда",
-  pack_purchase: "Покупка пака",
-  card_sale: "Продажа карточки",
-  game_reward: "Награда за игру",
-  match_reward: "Награда за матч",
-  achievement_reward: "Достижение",
-  task_reward: "Задание",
-  trade_coins_sent: "Обмен: отправлено",
-  trade_coins_received: "Обмен: получено",
-  admin_adjustment: "Корректировка администратором",
-  referral_reward: "Реферальная награда",
-  stars_coin_purchase: "Покупка монет за ⭐",
-  stars_pack_bonus_coins: "Бонус монет за пак",
-  premium_subscription_adjustment: "Проверка подписки на канал",
-};
 
 function dayStreakLabel(days: number): string {
   const mod10 = days % 10;
@@ -377,6 +361,8 @@ export default function ProfilePage() {
           Если отключено, тебя не будет видно в поиске игроков и тебе не смогут предложить обмен. Сам ты по-прежнему сможешь предлагать обмены.
         </p>
       </section>
+
+      <ThemeSetting />
 
       <section>
         <button onClick={() => setShowTx((v) => !v)} className="w-full rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-mist">

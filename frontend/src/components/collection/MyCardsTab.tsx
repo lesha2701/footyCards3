@@ -73,7 +73,6 @@ export default function MyCardsTab() {
       setSelected([]);
       setSelectMode(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sellMutation.isSuccess]);
 
   const duplicatesMutation = useMutation({

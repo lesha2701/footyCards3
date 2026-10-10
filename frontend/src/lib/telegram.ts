@@ -18,6 +18,17 @@ interface TelegramWebApp {
     notificationOccurred: (type: "error" | "success" | "warning") => void;
     selectionChanged: () => void;
   };
+  MainButton?: {
+    setText: (text: string) => void;
+    show: () => void;
+    hide: () => void;
+    enable: () => void;
+    disable: () => void;
+    showProgress: (leaveActive?: boolean) => void;
+    hideProgress: () => void;
+    onClick: (cb: () => void) => void;
+    offClick: (cb: () => void) => void;
+  };
   BackButton?: {
     show: () => void;
     hide: () => void;

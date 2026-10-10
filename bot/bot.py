@@ -12,6 +12,7 @@ from handlers import admin as admin_handlers
 from handlers import chat_pack as chat_pack_handlers
 from handlers import payments as payments_handlers
 from handlers import user as user_handlers
+from services.daily_reminder import run_daily_reward_reminder
 from services.free_pack_notifier import run_free_pack_notifier
 from services.notifier import run_notification_dispatcher
 from services.premium_subscription_check import run_premium_subscription_check
@@ -48,8 +49,9 @@ async def run_polling() -> None:
     await db.get_pool()
     background_tasks = [
         asyncio.create_task(run_notification_dispatcher(bot)),
-        # Daily reward reminder disabled — see run_webhook() below.
+        # Daily digest is opt-in from the admin panel — see run_webhook() below.
         asyncio.create_task(run_free_pack_notifier(bot)),
+        asyncio.create_task(run_daily_reward_reminder(bot)),
         asyncio.create_task(run_premium_subscription_check(bot)),
         asyncio.create_task(run_simulation_loop()),
         asyncio.create_task(run_lineup_reminder_loop()),
@@ -77,8 +79,10 @@ async def run_webhook() -> None:
 
     await db.get_pool()
     asyncio.create_task(run_notification_dispatcher(bot))
-    # Daily reward reminder disabled by request.
+    # Daily digest: off by default (the old reminder was disabled by request);
+    # only runs once an admin enables it in Игры → Напоминание ботом.
     asyncio.create_task(run_free_pack_notifier(bot))
+    asyncio.create_task(run_daily_reward_reminder(bot))
     asyncio.create_task(run_premium_subscription_check(bot))
     asyncio.create_task(run_simulation_loop())
     asyncio.create_task(run_lineup_reminder_loop())

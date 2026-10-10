@@ -2,13 +2,12 @@ import { motion } from "framer-motion";
 
 import { SkillTokenIcon } from "@/components/icons/skills";
 import { skillByCode, useSkillCatalog } from "@/lib/cardSkills";
+import { type TokenStage } from "@/components/cards/revealStages";
+export type { TokenStage } from "@/components/cards/revealStages";
 
 // Reveal for a pack slot that rolled card-skill tokens — same two-beat
 // rhythm as the coach/stadium reveals (glow, then the reveal), sized to
 // sit in the same full-screen pack-opening flow.
-export type TokenStage = "glow" | "reveal";
-export const TOKEN_STAGES: TokenStage[] = ["glow", "reveal"];
-export const TOKEN_STAGE_DURATION_MS = 800;
 
 export function SkillTokenRevealStage({
   token,

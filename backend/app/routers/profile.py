@@ -8,9 +8,10 @@ from app.database import get_db
 from app.models.transaction import CoinTransaction
 from app.models.user import User
 from app.schemas.badge import OwnedBadgeOut
-from app.schemas.profile import ProfilePrivateOut, ProfileSettingsUpdate
+from app.schemas.profile import AttentionOut, ProfilePrivateOut, ProfileSettingsUpdate
 from app.schemas.transaction import CoinTransactionOut
 from app.schemas.trophy import UserTrophyOut
+from app.services.attention_service import get_attention
 from app.services.profile_service import get_private_profile, list_owned_badges, list_owned_trophies, update_settings
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -56,3 +57,9 @@ async def read_my_transactions(
     )
     items = [CoinTransactionOut.model_validate(t) for t in result.scalars().all()]
     return Page.build(items, total, params)
+
+
+@router.get("/me/attention", response_model=AttentionOut)
+async def read_my_attention(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Badge counts for the bottom navigation."""
+    return await get_attention(db, user)

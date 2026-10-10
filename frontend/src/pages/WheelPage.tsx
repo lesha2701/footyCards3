@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { createWheelStarsInvoice, fetchWheelStarsInvoiceStatus, fetchWheelStatus, spinFree } from "@/api/wheel";
-import { RevealStage, STAGES, STAGE_DURATION_MS } from "@/components/cards/CardRevealStage";
+import { STAGES, STAGE_DURATION_MS } from "@/components/cards/revealStages";
+import { RevealStage } from "@/components/cards/CardRevealStage";
 import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconCard, IconCoin, IconInboxEmpty, IconPack, IconTag, IconTarget } from "@/components/icons";

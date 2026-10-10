@@ -32,7 +32,10 @@ export default function AdminGamesPage() {
     </label>
   );
 
-  const toggle = (key: "matchmaking_enabled" | "wheel_enabled" | "leagues_enabled" | "diamond_rating_cap_enabled", label: string) => (
+  const toggle = (
+    key: "matchmaking_enabled" | "wheel_enabled" | "leagues_enabled" | "diamond_rating_cap_enabled" | "bot_daily_digest_enabled",
+    label: string,
+  ) => (
     <label className="flex items-center gap-2 text-sm">
       <input
         type="checkbox"
@@ -224,6 +227,18 @@ export default function AdminGamesPage() {
               className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
             />
           </label>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Напоминание ботом</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Раз в день: «ждут награда дня и N выполненных заданий». Только тем, у кого что-то не забрано.
+          Обмены, вызовы, «твой ход» и бесплатный пак бот присылает и так.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("bot_daily_digest_enabled", "Включено")}
+          {field("bot_daily_digest_hour", "Час отправки (0–23, часовой пояс бота)")}
         </div>
       </section>
 

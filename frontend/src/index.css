@@ -25,7 +25,47 @@
 
 :root {
   color-scheme: dark;
+  --c-bg-base: 7 9 10;
+  --c-bg-surface: 16 20 15;
+  --c-bg-raised: 22 28 21;
+  --c-ink-chalk: 243 246 242;
+  --c-ink-mist: 138 150 142;
+  --c-ink-mist-dim: 91 101 94;
 }
+
+/* Light theme (Telegram light mode, or chosen in Профиль → Тема). The app's
+   palette is built for a dark pitch, so a few utilities that only make sense
+   on dark are remapped here instead of touching every component. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --c-bg-base: 238 242 236;
+  --c-bg-surface: 255 255 255;
+  --c-bg-raised: 228 234 225;
+  --c-ink-chalk: 16 23 18;
+  --c-ink-mist: 86 99 91;
+  --c-ink-mist-dim: 134 146 138;
+}
+/* "text-bg-base" is always dark text on a bright fill (lime/floodlight). */
+:root[data-theme="light"] .text-bg-base { color: rgb(7 9 10); }
+/* Lime text is unreadable on white — a deeper olive of the same hue. */
+:root[data-theme="light"] .text-accent-lime { color: rgb(95 122 0); }
+:root[data-theme="light"] .text-accent-cyan { color: rgb(13 148 136); }
+:root[data-theme="light"] .text-accent-green { color: rgb(21 128 61); }
+/* Translucent white overlays/borders become translucent black. */
+:root[data-theme="light"] .bg-white\/5 { background-color: rgb(0 0 0 / 0.04); }
+:root[data-theme="light"] .bg-white\/10 { background-color: rgb(0 0 0 / 0.07); }
+:root[data-theme="light"] .border-white\/5 { border-color: rgb(0 0 0 / 0.06); }
+:root[data-theme="light"] .border-white\/10 { border-color: rgb(0 0 0 / 0.1); }
+:root[data-theme="light"] .divide-white\/5 > * + * { border-color: rgb(0 0 0 / 0.06); }
+/* Light insets (bg-black/20–30 = "a bit darker than the surface" on dark);
+   modal backdrops (bg-black/60+) stay as they are. */
+:root[data-theme="light"] .bg-black\/20 { background-color: rgb(0 0 0 / 0.05); }
+:root[data-theme="light"] .bg-black\/30 { background-color: rgb(0 0 0 / 0.07); }
+:root[data-theme="light"] .text-slate-100,
+:root[data-theme="light"] .text-slate-200 { color: rgb(var(--c-ink-chalk)); }
+:root[data-theme="light"] .text-slate-300 { color: rgb(51 65 85); }
+:root[data-theme="light"] .text-slate-400 { color: rgb(var(--c-ink-mist)); }
+:root[data-theme="light"] .text-slate-500 { color: rgb(var(--c-ink-mist-dim)); }
 
 html,
 body,
@@ -41,7 +81,7 @@ body {
 }
 
 :root[data-theme="light"] body {
-  @apply bg-slate-50 text-slate-900;
+  @apply text-ink-chalk;
 }
 
 * {

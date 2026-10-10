@@ -72,7 +72,7 @@ async def activate_squad_template_route(
 async def create_bot_match(
     payload: TacticoBotMatchRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    check_rate_limit(f"tactico_bot_match:{user.id}", max_calls=15, window_seconds=60)
+    await check_rate_limit(f"tactico_bot_match:{user.id}", max_calls=15, window_seconds=60)
     return await tactico_service.create_bot_match(db, user, payload.difficulty)
 
 
@@ -80,7 +80,7 @@ async def create_bot_match(
 async def create_challenge(
     payload: TacticoChallengeRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    check_rate_limit(f"tactico_challenge:{user.id}", max_calls=10, window_seconds=60)
+    await check_rate_limit(f"tactico_challenge:{user.id}", max_calls=10, window_seconds=60)
     return await tactico_service.create_challenge(db, user, payload.receiver_id)
 
 
@@ -88,7 +88,7 @@ async def create_challenge(
 async def create_open_challenge(
     payload: TacticoOpenChallengeRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    check_rate_limit(f"tactico_open_challenge:{user.id}", max_calls=10, window_seconds=60)
+    await check_rate_limit(f"tactico_open_challenge:{user.id}", max_calls=10, window_seconds=60)
     return await tactico_service.create_open_challenge(db, user, payload.stake_coins)
 
 
@@ -144,7 +144,7 @@ async def get_match(match_id: int, db: AsyncSession = Depends(get_db), user: Use
 
 @router.post("/matchmaking/search", response_model=TacticoSearchStatusOut)
 async def start_search(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"tactico_search:{user.id}", max_calls=10, window_seconds=60)
+    await check_rate_limit(f"tactico_search:{user.id}", max_calls=10, window_seconds=60)
     entry = await tactico_service.start_search(db, user)
     return TacticoSearchStatusOut(status="searching", match_id=None, created_at=entry.created_at)
 

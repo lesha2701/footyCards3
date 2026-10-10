@@ -5,10 +5,9 @@ import { IconGlobe, IconHelp, IconStadium, IconTag } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import type { Player } from "@/types";
+import { STAGES, type Stage } from "@/components/cards/revealStages";
+export type { Stage } from "@/components/cards/revealStages";
 
-export type Stage = "position" | "rarity" | "country" | "club" | "silhouette" | "reveal";
-export const STAGES: Stage[] = ["position", "rarity", "country", "club", "silhouette", "reveal"];
-export const STAGE_DURATION_MS = 900;
 
 // Structural rather than `OpenedCard` directly — reused by ClubPackOpenPage.tsx for
 // OpenedClubPackItem, whose `card` wrapper (ClubCard) carries different bookkeeping fields

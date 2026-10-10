@@ -121,7 +121,6 @@ export default function TacticoMatchPage() {
       useMatchGuardStore.getState().deactivate();
     }
     return () => useMatchGuardStore.getState().deactivate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match?.status, id]);
 
   // Shows a brief battle-result animation whenever a new round resolves —
@@ -160,6 +159,9 @@ export default function TacticoMatchPage() {
       const updateBalance = useAuthStore.getState().updateBalance;
       updateBalance((useAuthStore.getState().user?.balance ?? 0) + match.reward_coins);
     }
+    // Keyed on the narrow field on purpose: re-running on every poll's new
+    // `match` object would re-trigger this transition logic.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match?.status, match?.reward_coins]);
 
   if (isLoading || !match) {

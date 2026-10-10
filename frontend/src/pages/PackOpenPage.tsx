@@ -2,11 +2,21 @@ import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
-import { RevealStage, STAGES, STAGE_DURATION_MS } from "@/components/cards/CardRevealStage";
-import { CoachRevealStage, COACH_STAGES, COACH_STAGE_DURATION_MS } from "@/components/cards/CoachRevealStage";
-import { SkillTokenRevealStage, TOKEN_STAGES, TOKEN_STAGE_DURATION_MS } from "@/components/cards/SkillTokenRevealStage";
+import {
+  COACH_STAGES,
+  COACH_STAGE_DURATION_MS,
+  STADIUM_STAGES,
+  STADIUM_STAGE_DURATION_MS,
+  STAGES,
+  STAGE_DURATION_MS,
+  TOKEN_STAGES,
+  TOKEN_STAGE_DURATION_MS,
+} from "@/components/cards/revealStages";
+import { RevealStage } from "@/components/cards/CardRevealStage";
+import { CoachRevealStage } from "@/components/cards/CoachRevealStage";
+import { SkillTokenRevealStage } from "@/components/cards/SkillTokenRevealStage";
 import SkillTokenTile from "@/components/cards/SkillTokenTile";
-import { StadiumRevealStage, STADIUM_STAGES, STADIUM_STAGE_DURATION_MS } from "@/components/cards/StadiumRevealStage";
+import { StadiumRevealStage } from "@/components/cards/StadiumRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { UserBadge } from "@/components/common/UserBadge";
@@ -45,7 +55,9 @@ export default function PackOpenPage() {
   // below is never touched by the bulk path.
   const quantity = (location.state as { quantity?: number } | null)?.quantity ?? 1;
   if (quantity > 1) return <BulkPackOpenView quantity={quantity} />;
-  return <SinglePackOpenView />;
+  // Keyed by the history entry so a queued next pack (see `finish` below)
+  // starts from a fresh packshot instead of inheriting this one's phase.
+  return <SinglePackOpenView key={location.key} />;
 }
 
 function SinglePackOpenView() {
@@ -56,6 +68,16 @@ function SinglePackOpenView() {
   const balance = useAuthStore((s) => s.user?.balance ?? 0);
   // Present when arriving with an already-claimed result (e.g. the free pack) so we skip re-opening it.
   const prefetchedResult = (location.state as { result?: PackOpenResult } | null)?.result ?? null;
+  // Several already-granted packs at once (e.g. "Забрать всё" on home claimed
+  // tasks that each reward a pack): play them back to back.
+  const queue = (location.state as { queue?: PackOpenResult[] } | null)?.queue ?? [];
+  const finish = () => {
+    if (queue.length) {
+      navigate(`/packs/${queue[0].pack.id}/open`, { replace: true, state: { result: queue[0], queue: queue.slice(1) } });
+    } else {
+      navigate("/packs");
+    }
+  };
 
   const [phase, setPhase] = useState<"packshot" | "revealing" | "tokens" | "summary">("packshot");
   const [cardIndex, setCardIndex] = useState(0);
@@ -343,7 +365,7 @@ function SinglePackOpenView() {
             <div className="safe-bottom px-6 pb-6 pt-2">
               {singleCardDone ? (
                 <ReopenActions
-                  onDone={() => navigate("/packs")}
+                  onDone={finish}
                   onOpenAnother={handleOpenAnother}
                   canOpenAnother={canAffordAgain}
                   busy={isStarsPack && buyingStarsPackAgain}
@@ -365,7 +387,7 @@ function SinglePackOpenView() {
       {phase === "summary" && (
         <Summary
           result={result}
-          onDone={() => navigate("/packs")}
+          onDone={finish}
           onOpenAnother={handleOpenAnother}
           canOpenAnother={canAffordAgain}
           busy={isStarsPack && buyingStarsPackAgain}

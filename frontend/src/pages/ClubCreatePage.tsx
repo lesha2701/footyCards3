@@ -2,7 +2,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { CLUB_LOGO_COLORS, CLUB_LOGO_SHAPES, ClubLogo } from "@/components/clubs/ClubLogo";
+import { ClubLogo } from "@/components/clubs/ClubLogo";
+import { CLUB_LOGO_COLORS, CLUB_LOGO_SHAPES } from "@/components/clubs/clubLogoOptions";
 import { IconChevronLeft, IconCoin } from "@/components/icons";
 import { createClub, fetchClubCreationCost } from "@/api/clubs";
 import { ApiRequestError } from "@/lib/api";

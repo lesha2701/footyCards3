@@ -15,7 +15,7 @@ router = APIRouter(prefix="/matches", tags=["matches"])
 async def play_match(
     payload: StartMatchRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    check_rate_limit(f"play_match:{user.id}", max_calls=15, window_seconds=60)
+    await check_rate_limit(f"play_match:{user.id}", max_calls=15, window_seconds=60)
     return await match_service.start_match(db, user, payload)
 
 

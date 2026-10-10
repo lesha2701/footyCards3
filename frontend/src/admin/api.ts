@@ -58,6 +58,39 @@ export async function fetchDashboard(): Promise<Dashboard> {
   return data;
 }
 
+// --- Economy analytics ---
+export interface EconomyReport {
+  days: number;
+  total_inflow: number;
+  total_outflow: number;
+  net: number;
+  by_type: { type: string; inflow: number; outflow: number; count: number }[];
+  daily: { date: string; inflow: number; outflow: number }[];
+  packs_opened: number;
+  skill_tokens_granted: number;
+  skill_tokens_spent: number;
+  skill_coins_spent: number;
+}
+
+export async function fetchEconomyReport(days: number): Promise<EconomyReport> {
+  const { data } = await api.get<EconomyReport>("/admin/dashboard/economy", { params: { days } });
+  return data;
+}
+
+export interface PackExpectedValue {
+  pack_id: number;
+  price: number;
+  card_count: number;
+  expected_quick_sell_value: number;
+  value_to_price: number | null;
+  rarities: { rarity: string; probability: number; avg_quick_sell: number; pool_size: number }[];
+}
+
+export async function fetchPackExpectedValue(packId: number): Promise<PackExpectedValue> {
+  const { data } = await api.get<PackExpectedValue>(`/admin/dashboard/packs/${packId}/expected-value`);
+  return data;
+}
+
 // --- Maintenance banner ---
 export async function startMaintenanceBanner(): Promise<MaintenanceStatus> {
   const { data } = await api.post<MaintenanceStatus>("/admin/maintenance/start");

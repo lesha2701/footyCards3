@@ -239,6 +239,31 @@ async def fetch_users_missing_daily_reward(today: date) -> list[asyncpg.Record]:
     )
 
 
+async def fetch_daily_digest_settings() -> Optional[asyncpg.Record]:
+    pool = await get_pool()
+    return await pool.fetchrow(
+        "SELECT bot_daily_digest_enabled, bot_daily_digest_hour FROM game_config WHERE id = 1"
+    )
+
+
+async def fetch_daily_digest_recipients(today: date) -> list[asyncpg.Record]:
+    """Players with something waiting: today's daily reward not claimed
+    and/or tasks finished but not claimed. Blocked/banned users skipped."""
+    pool = await get_pool()
+    return await pool.fetch(
+        """SELECT u.id, u.telegram_id,
+                  NOT EXISTS (
+                      SELECT 1 FROM daily_rewards dr WHERE dr.user_id = u.id AND dr.reward_date = $1
+                  ) AS daily_ready,
+                  (SELECT count(*) FROM user_tasks ut
+                    WHERE ut.user_id = u.id AND ut.completed_at IS NOT NULL AND ut.reward_claimed = false
+                  ) AS tasks_ready
+           FROM users u
+           WHERE u.is_banned = false AND u.bot_blocked = false""",
+        today,
+    )
+
+
 async def create_notification(user_id: int, type_: str, title: str, body: str) -> None:
     pool = await get_pool()
     await pool.execute(

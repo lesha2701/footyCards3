@@ -77,7 +77,7 @@ async def get_game_limits(db: AsyncSession = Depends(get_db), user: User = Depen
 
 @router.post("/memory/start", response_model=MemoryStartOut)
 async def memory_start(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"memory_start:{user.id}", max_calls=20, window_seconds=60)
+    await check_rate_limit(f"memory_start:{user.id}", max_calls=20, window_seconds=60)
     return await memory_game_service.start_session(db, user)
 
 
@@ -110,7 +110,7 @@ async def memory_leaderboard(db: AsyncSession = Depends(get_db), _user: User = D
 
 @router.post("/saboteur/start", response_model=SaboteurStartOut)
 async def saboteur_start(payload: SaboteurStartRequest = SaboteurStartRequest(), db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"saboteur_start:{user.id}", max_calls=20, window_seconds=60)
+    await check_rate_limit(f"saboteur_start:{user.id}", max_calls=20, window_seconds=60)
     return await saboteur_service.start_session(db, user, payload.steward_count)
 
 
@@ -138,7 +138,7 @@ async def penalty_stats(db: AsyncSession = Depends(get_db), user: User = Depends
 
 @router.post("/penalty/start", response_model=PenaltyStartOut)
 async def penalty_start(payload: PenaltyStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"penalty_start:{user.id}", max_calls=20, window_seconds=60)
+    await check_rate_limit(f"penalty_start:{user.id}", max_calls=20, window_seconds=60)
     return await penalty_service.start_session(db, user, payload.user_card_id)
 
 
@@ -161,7 +161,7 @@ async def penalty_forfeit(session_id: int, db: AsyncSession = Depends(get_db), u
 
 @router.post("/free-kick/start", response_model=FreeKickStartOut)
 async def free_kick_start(payload: FreeKickStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"free_kick_start:{user.id}", max_calls=20, window_seconds=60)
+    await check_rate_limit(f"free_kick_start:{user.id}", max_calls=20, window_seconds=60)
     return await free_kick_service.start_session(db, user, payload.user_card_id)
 
 
@@ -179,7 +179,7 @@ async def free_kick_claim(session_id: int, db: AsyncSession = Depends(get_db), u
 
 @router.post("/hangman/start", response_model=HangmanStartOut)
 async def hangman_start(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"hangman_start:{user.id}", max_calls=20, window_seconds=60)
+    await check_rate_limit(f"hangman_start:{user.id}", max_calls=20, window_seconds=60)
     return await hangman_service.start_session(db, user)
 
 
@@ -197,7 +197,7 @@ async def hangman_claim(session_id: int, db: AsyncSession = Depends(get_db), use
 
 @router.post("/pairs/start", response_model=PairsStartOut)
 async def pairs_start(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"pairs_start:{user.id}", max_calls=20, window_seconds=60)
+    await check_rate_limit(f"pairs_start:{user.id}", max_calls=20, window_seconds=60)
     return await pairs_service.start_session(db, user)
 
 
@@ -225,7 +225,7 @@ async def fut_draft_leaderboard(db: AsyncSession = Depends(get_db), _user: User 
 
 @router.post("/fut-draft/start", response_model=FutDraftStartOut)
 async def fut_draft_start(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"fut_draft_start:{user.id}", max_calls=20, window_seconds=60)
+    await check_rate_limit(f"fut_draft_start:{user.id}", max_calls=20, window_seconds=60)
     return await fut_draft_service.start_draft(db, user)
 
 

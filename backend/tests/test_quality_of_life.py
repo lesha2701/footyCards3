@@ -152,3 +152,39 @@ async def test_game_limits_report_when_an_exhausted_game_frees_up(client, db_ses
     assert set(body["resets_at"]) == {"arena"}
     resets = datetime.fromisoformat(body["resets_at"]["arena"].replace("Z", "+00:00"))
     assert abs((resets - (started + timedelta(hours=1))).total_seconds()) < 2
+
+
+async def test_bench_upgrades_suggest_single_swaps(client, db_session, bot_token):
+    user = await _register(client, db_session, 830007, bot_token)
+    headers = telegram_headers(830007, bot_token)
+    slot = FORMATION_SLOTS[0]
+    weak = await _card(db_session, user.id, await create_player(db_session, rating=60, position=slot.ideal_position))
+    strong = await _card(db_session, user.id, await create_player(db_session, rating=84, position=slot.ideal_position))
+    resp = await client.put(f"{API}/lineups/active", headers=headers,
+                            json={"slots": [{"slot_code": slot.code, "user_card_id": weak.id}]})
+    assert resp.status_code == 200, resp.text
+
+    hints = (await client.get(f"{API}/lineups/templates/1/bench-upgrades", headers=headers)).json()
+    hint = next(h for h in hints if h["slot_code"] == slot.code)
+    assert hint["current_card_id"] == weak.id and hint["suggested_card_id"] == strong.id
+    assert hint["gain"] == 24
+    # The strong card is now suggested for its slot only — never twice.
+    assert sum(h["suggested_card_id"] == strong.id for h in hints) == 1
+
+
+async def test_attention_counts_incoming_trades(client, db_session, bot_token):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.enums import TradeStatus
+    from app.models.trade import TradeOffer
+
+    receiver = await _register(client, db_session, 830008, bot_token)
+    sender = await _register(client, db_session, 830009, bot_token)
+    db_session.add(TradeOffer(sender_id=sender.id, receiver_id=receiver.id, status=TradeStatus.pending,
+                              expires_at=datetime.now(timezone.utc) + timedelta(days=1)))
+    db_session.add(TradeOffer(sender_id=sender.id, receiver_id=receiver.id, status=TradeStatus.pending,
+                              expires_at=datetime.now(timezone.utc) - timedelta(days=1)))
+    await db_session.commit()
+    body = (await client.get(f"{API}/profile/me/attention", headers=telegram_headers(830008, bot_token))).json()
+    assert body["incoming_trades"] == 1
+    assert body["match_challenges"] == 0 and body["active_friend_matches"] == 0

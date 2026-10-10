@@ -10,8 +10,10 @@ import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPicker
 import { IconCheck, IconChevronLeft, IconPlus } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
+import type { BenchUpgrade } from "@/api/lineups";
+import BenchUpgradeHints from "@/components/squad/BenchUpgradeHints";
 import {
-  activatePersonalSquad, autoFillPersonalSquad, fetchPersonalSquadCoachCards, fetchPersonalSquads, fetchPersonalSquadStadiumCards,
+  activatePersonalSquad, autoFillPersonalSquad, fetchPersonalSquadBenchUpgrades, fetchPersonalSquadCoachCards, fetchPersonalSquads, fetchPersonalSquadStadiumCards,
   renamePersonalSquad, setPersonalSquadCards, setPersonalSquadCoach, setPersonalSquadStadium, setPersonalSquadTactics,
 } from "@/api/personalTournament";
 import { staticUrl } from "@/lib/api";
@@ -100,6 +102,19 @@ export default function PlayerTournamentSquadPage() {
   const updateTactics = (patch: Partial<{ formation: string; mentality: string; playstyle: string }>) => {
     if (!squad) return;
     setTacticsMutation.mutate({ formation: squad.formation, mentality: squad.mentality, playstyle: squad.playstyle, ...patch });
+  };
+
+  const { data: benchUpgrades } = useQuery({
+    queryKey: ["player-tournament", "squads", "bench", viewedIndex],
+    queryFn: () => fetchPersonalSquadBenchUpgrades(viewedIndex),
+    enabled: !!squad,
+  });
+  const applyBenchUpgrade = (hint: BenchUpgrade) => {
+    const slots = (squad?.slots ?? [])
+      .filter((s) => s.user_card_id != null && s.slot_code !== hint.slot_code)
+      .map((s) => ({ slot_code: s.slot_code, user_card_id: s.user_card_id! }));
+    slots.push({ slot_code: hint.slot_code, user_card_id: hint.suggested_card_id });
+    setCardsMutation.mutate(slots);
   };
 
   if (isLoading) return <ListSkeleton />;
@@ -228,6 +243,10 @@ export default function PlayerTournamentSquadPage() {
               Заполнен
             </span>
           )}
+        </div>
+
+        <div className="mb-3">
+          <BenchUpgradeHints hints={benchUpgrades} onApply={applyBenchUpgrade} busy={setCardsMutation.isPending} />
         </div>
 
         <div className="mb-3 flex flex-col gap-1.5">

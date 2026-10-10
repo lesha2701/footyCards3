@@ -2,9 +2,17 @@ import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { RevealStage, STAGES, STAGE_DURATION_MS } from "@/components/cards/CardRevealStage";
-import { CoachRevealStage, COACH_STAGES, COACH_STAGE_DURATION_MS } from "@/components/cards/CoachRevealStage";
-import { StadiumRevealStage, STADIUM_STAGES, STADIUM_STAGE_DURATION_MS } from "@/components/cards/StadiumRevealStage";
+import {
+  COACH_STAGES,
+  COACH_STAGE_DURATION_MS,
+  STADIUM_STAGES,
+  STADIUM_STAGE_DURATION_MS,
+  STAGES,
+  STAGE_DURATION_MS,
+} from "@/components/cards/revealStages";
+import { RevealStage } from "@/components/cards/CardRevealStage";
+import { CoachRevealStage } from "@/components/cards/CoachRevealStage";
+import { StadiumRevealStage } from "@/components/cards/StadiumRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { IconCoin } from "@/components/icons";

@@ -113,6 +113,9 @@ export default function PenaltyMatchPage() {
       setPickedZone(null);
     }, 900);
     return () => clearTimeout(timer);
+    // Keyed on the narrow field on purpose: re-running on every poll's new
+    // `match` object would re-trigger this transition logic.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match?.rounds.length]);
 
   const invalidate = () => {
@@ -161,7 +164,6 @@ export default function PenaltyMatchPage() {
       useMatchGuardStore.getState().deactivate();
     }
     return () => useMatchGuardStore.getState().deactivate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match?.status, id]);
 
   if (isLoading || !match) {

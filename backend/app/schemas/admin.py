@@ -233,6 +233,8 @@ class GameConfigOut(BaseModel):
     wheel_enabled: bool
     leagues_enabled: bool
     free_pack_interval_hours: int
+    bot_daily_digest_enabled: bool = False
+    bot_daily_digest_hour: int = 18
     free_pack_pack_slug: str
     chat_pack_interval_hours: int
     referral_referred_reward: int
@@ -386,6 +388,8 @@ class GameConfigUpdate(BaseModel):
     wheel_enabled: Optional[bool] = None
     leagues_enabled: Optional[bool] = None
     free_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
+    bot_daily_digest_enabled: Optional[bool] = None
+    bot_daily_digest_hour: Optional[int] = Field(default=None, ge=0, le=23)
     free_pack_pack_slug: Optional[str] = None
     chat_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     referral_referred_reward: Optional[int] = Field(default=None, ge=0)
@@ -475,3 +479,45 @@ class CsvImportResultOut(BaseModel):
     created: int
     updated: int
     errors: list[dict]
+
+
+class EconomyTypeRow(BaseModel):
+    type: str
+    inflow: int
+    outflow: int
+    count: int
+
+
+class EconomyDayRow(BaseModel):
+    date: str
+    inflow: int
+    outflow: int
+
+
+class EconomyReportOut(BaseModel):
+    days: int
+    total_inflow: int
+    total_outflow: int
+    net: int
+    by_type: list[EconomyTypeRow]
+    daily: list[EconomyDayRow]
+    packs_opened: int
+    skill_tokens_granted: int
+    skill_tokens_spent: int
+    skill_coins_spent: int
+
+
+class PackRarityValueRow(BaseModel):
+    rarity: str
+    probability: float
+    avg_quick_sell: float
+    pool_size: int
+
+
+class PackExpectedValueOut(BaseModel):
+    pack_id: int
+    price: int
+    card_count: int
+    expected_quick_sell_value: float
+    value_to_price: Optional[float] = None
+    rarities: list[PackRarityValueRow]

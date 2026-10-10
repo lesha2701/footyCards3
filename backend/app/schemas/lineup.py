@@ -79,3 +79,15 @@ class LineupStadiumSetRequest(BaseModel):
 
 class LineupRenameRequest(BaseModel):
     name: str
+
+
+class BenchUpgradeOut(BaseModel):
+    """A single-swap squad improvement hint (auto_squad_service.bench_upgrades)."""
+    slot_code: str
+    current_card_id: Optional[int] = None
+    current_name: Optional[str] = None
+    current_rating: Optional[int] = None
+    suggested_card_id: int
+    suggested_name: str
+    suggested_rating: int
+    gain: int

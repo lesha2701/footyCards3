@@ -28,7 +28,7 @@ async def list_trade_offers(
 async def create_trade_offer(
     payload: TradeCreateRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    check_rate_limit(f"create_trade:{user.id}", max_calls=10, window_seconds=60)
+    await check_rate_limit(f"create_trade:{user.id}", max_calls=10, window_seconds=60)
     return await trade_service.create_offer(db, user, payload)
 
 
@@ -44,7 +44,7 @@ async def cancel_trade_offer(offer_id: int, db: AsyncSession = Depends(get_db), 
 
 @router.post("/offers/{offer_id}/accept", response_model=TradeAcceptOut)
 async def accept_trade_offer(offer_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    check_rate_limit(f"accept_trade:{user.id}", max_calls=20, window_seconds=60)
+    await check_rate_limit(f"accept_trade:{user.id}", max_calls=20, window_seconds=60)
     return await trade_service.accept_offer(db, user, offer_id)
 
 

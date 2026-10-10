@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models.user import User
 from app.services import auto_squad_service
 from app.schemas.lineup import (
+    BenchUpgradeOut,
     LineupCoachSetRequest, LineupOut, LineupRenameRequest, LineupSetRequest, LineupStadiumSetRequest,
     LineupTacticRequest, UserCoachCardOut, UserStadiumCardOut,
 )
@@ -71,6 +72,14 @@ async def update_template(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await set_lineup(db, user, payload, template_index)
+
+
+@router.get("/templates/{template_index}/bench-upgrades", response_model=list[BenchUpgradeOut])
+async def template_bench_upgrades(
+    template_index: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """Stronger cards sitting on the bench, one swap per slot."""
+    return await auto_squad_service.arena_bench_upgrades(db, user, template_index)
 
 
 @router.post("/templates/{template_index}/auto", response_model=LineupOut)

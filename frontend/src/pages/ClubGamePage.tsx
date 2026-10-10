@@ -133,7 +133,6 @@ export default function ClubGamePage() {
       cancelled = true;
       clearTimeout(startTimer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, session]);
 
   const submitAnswer = (answer: string[]) => {

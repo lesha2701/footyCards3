@@ -55,3 +55,10 @@ class ProfileSettingsUpdate(BaseModel):
     accept_trades: Optional[bool] = None
     # Which owned badge to display next to the player's name; null unequips.
     active_badge_id: Optional[int] = None
+
+
+class AttentionOut(BaseModel):
+    incoming_trades: int = 0
+    match_challenges: int = 0
+    active_friend_matches: int = 0
+    league_unseen_rewards: int = 0

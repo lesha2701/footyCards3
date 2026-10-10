@@ -44,3 +44,16 @@ export async function searchUsers(query: string): Promise<UserPublic[]> {
   const { data } = await api.get<UserPublic[]>("/users/search", { params: { q: query } });
   return data;
 }
+
+export interface Attention {
+  incoming_trades: number;
+  match_challenges: number;
+  active_friend_matches: number;
+  league_unseen_rewards: number;
+}
+
+/** Badge counts for the bottom navigation (one cheap request). */
+export async function fetchMyAttention(): Promise<Attention> {
+  const { data } = await api.get<Attention>("/profile/me/attention");
+  return data;
+}

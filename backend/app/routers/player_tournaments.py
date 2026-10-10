@@ -5,6 +5,7 @@ from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.pack import UserCoachCardOut, UserStadiumCardOut
+from app.schemas.lineup import BenchUpgradeOut
 from app.schemas.personal_squad import (
     PersonalSquadCoachRequest, PersonalSquadOut, PersonalSquadRenameRequest, PersonalSquadSetRequest,
     PersonalSquadStadiumRequest, PersonalSquadTacticsRequest,
@@ -46,6 +47,14 @@ async def update_squad_cards(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await personal_squad_service.set_squad_cards(db, user, payload, template_index)
+
+
+@router.get("/squads/{template_index}/bench-upgrades", response_model=list[BenchUpgradeOut])
+async def squad_bench_upgrades(
+    template_index: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """Stronger cards sitting on the bench, one swap per slot."""
+    return await auto_squad_service.personal_bench_upgrades(db, user, template_index)
 
 
 @router.post("/squads/{template_index}/auto", response_model=PersonalSquadOut)

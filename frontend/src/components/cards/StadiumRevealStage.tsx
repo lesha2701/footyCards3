@@ -3,15 +3,14 @@ import { motion } from "framer-motion";
 import { staticUrl } from "@/lib/api";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import type { EquippedStadium } from "@/types";
+import { STADIUM_STAGES, type StadiumStage } from "@/components/cards/revealStages";
+export type { StadiumStage } from "@/components/cards/revealStages";
 
 // A stadium-appropriate reveal, mirroring CoachRevealStage.tsx exactly but
 // substituting boost_pct display for the coach's boosts list — kept as its
 // own component for the same reason CoachRevealStage isn't folded into
 // CardRevealStage.tsx: the stage set (position/country/club) there assumes
 // Player-shaped data neither a Coach nor a Stadium has.
-export type StadiumStage = "rarity" | "silhouette" | "reveal";
-export const STADIUM_STAGES: StadiumStage[] = ["rarity", "silhouette", "reveal"];
-export const STADIUM_STAGE_DURATION_MS = 900;
 
 export interface RevealableOpenedStadiumCard {
   card: { stadium: EquippedStadium };

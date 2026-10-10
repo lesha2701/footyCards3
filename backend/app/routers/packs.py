@@ -25,7 +25,7 @@ async def open_pack_endpoint(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    check_rate_limit(f"open_pack:{user.id}", max_calls=10, window_seconds=60)
+    await check_rate_limit(f"open_pack:{user.id}", max_calls=10, window_seconds=60)
     return await open_pack(db, user, pack_id, payload.idempotency_key)
 
 
@@ -36,7 +36,7 @@ async def open_pack_bulk_endpoint(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    check_rate_limit(f"open_pack_bulk:{user.id}", max_calls=5, window_seconds=60)
+    await check_rate_limit(f"open_pack_bulk:{user.id}", max_calls=5, window_seconds=60)
     return await open_pack_bulk(db, user, pack_id, payload.quantity, payload.idempotency_key)
 
 
@@ -44,7 +44,7 @@ async def open_pack_bulk_endpoint(
 async def create_stars_invoice(
     pack_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
-    check_rate_limit(f"stars_invoice:{user.id}", max_calls=10, window_seconds=60)
+    await check_rate_limit(f"stars_invoice:{user.id}", max_calls=10, window_seconds=60)
     return await stars_payment_service.create_invoice(db, user, pack_id)
 
 

@@ -4,14 +4,13 @@ import { staticUrl } from "@/lib/api";
 import { BOOST_TYPE_LABELS } from "@/lib/coaches";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import type { EquippedCoach } from "@/types";
+import { COACH_STAGES, type CoachStage } from "@/components/cards/revealStages";
+export type { CoachStage } from "@/components/cards/revealStages";
 
 // A simpler, coach-appropriate reveal — NOT a modification of the shared
 // CardRevealStage.tsx, whose stage set (position/country/club) assumes
 // Player-shaped data a Coach doesn't have. Keeping this separate avoids
 // touching a component the two existing player-pack flows already depend on.
-export type CoachStage = "rarity" | "silhouette" | "reveal";
-export const COACH_STAGES: CoachStage[] = ["rarity", "silhouette", "reveal"];
-export const COACH_STAGE_DURATION_MS = 900;
 
 export interface RevealableOpenedCoachCard {
   card: { coach: EquippedCoach };

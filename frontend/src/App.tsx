@@ -10,7 +10,7 @@ import { createSession } from "@/api/auth";
 import { joinByInvite } from "@/api/clubs";
 import { useAuthStore } from "@/store/authStore";
 import { useUiStore } from "@/store/uiStore";
-import { getTelegramColorScheme, initTelegramApp, isInsideTelegram } from "@/lib/telegram";
+import { getTelegramWebApp, initTelegramApp } from "@/lib/telegram";
 import { ApiRequestError } from "@/lib/api";
 import { hasSeenOnboarding, markOnboardingSeen } from "@/lib/onboarding";
 import { useTelegramBackButton } from "@/lib/useTelegramBackButton";
@@ -38,6 +38,7 @@ const AdminGiftsPage = lazy(() => import("@/admin/pages/AdminGiftsPage"));
 const AdminDailyRewardsPage = lazy(() => import("@/admin/pages/AdminDailyRewardsPage"));
 const AdminWheelPage = lazy(() => import("@/admin/pages/AdminWheelPage"));
 const AdminGamesPage = lazy(() => import("@/admin/pages/AdminGamesPage"));
+const AdminEconomyPage = lazy(() => import("@/admin/pages/AdminEconomyPage"));
 const AdminUpgradesPage = lazy(() => import("@/admin/pages/AdminUpgradesPage"));
 const AdminDiamondUpgradesPage = lazy(() => import("@/admin/pages/AdminDiamondUpgradesPage"));
 const AdminCardSkillsPage = lazy(() => import("@/admin/pages/AdminCardSkillsPage"));
@@ -108,21 +109,19 @@ function PenaltySearchRoute() {
 
 export default function App() {
   const { user, setUser, setAdminToken, setReady, isReady } = useAuthStore();
-  const setTheme = useUiStore((s) => s.setTheme);
-  const theme = useUiStore((s) => s.theme);
+  const syncTheme = useUiStore((s) => s.syncTheme);
   const [error, setError] = useState<string | null>(null);
   const [onboardingSeen, setOnboardingSeen] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     initTelegramApp();
-    if (isInsideTelegram()) {
-      setTheme(getTelegramColorScheme());
-    } else {
-      setTheme(theme);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // "Авто" follows Telegram's light/dark switch live, no reload needed.
+    syncTheme();
+    const webApp = getTelegramWebApp();
+    webApp?.onEvent("themeChanged", syncTheme);
+    return () => webApp?.offEvent("themeChanged", syncTheme);
+  }, [syncTheme]);
 
   useEffect(() => {
     let cancelled = false;
@@ -196,6 +195,7 @@ export default function App() {
         <Route path="wheel" element={<AdminWheelPage />} />
         <Route path="daily-rewards" element={<AdminDailyRewardsPage />} />
         <Route path="games" element={<AdminGamesPage />} />
+        <Route path="economy" element={<AdminEconomyPage />} />
         <Route path="upgrades" element={<AdminUpgradesPage />} />
         <Route path="diamond-upgrades" element={<AdminDiamondUpgradesPage />} />
         <Route path="card-skills" element={<AdminCardSkillsPage />} />

@@ -9,25 +9,20 @@ import { fetchMyProfile } from "@/api/profile";
 import { fetchTasks } from "@/api/tasks";
 import { fetchWheelStatus } from "@/api/wheel";
 import { Skeleton } from "@/components/common/Skeleton";
+import HomeHero from "@/components/home/HomeHero";
 import TodayCard from "@/components/home/TodayCard";
 import { sortPacksByPrice } from "@/lib/packs";
 import {
   IconChat,
   IconChevronRight,
   IconCoin,
-  IconCollection,
   IconHandshake,
-  IconPlay,
-  IconTarget,
-  IconTrophy,
-  IconUpgrade,
   IconUsers,
   type IconProps,
 } from "@/components/icons";
 import type { BingoCurrent } from "@/types";
 import { staticUrl } from "@/lib/api";
 import { haptic, openTelegramLink } from "@/lib/telegram";
-import { useAuthStore } from "@/store/authStore";
 
 const CHAT_INVITE_LINK = "https://t.me/+42EZisiOi8w1ZmMy";
 
@@ -38,7 +33,6 @@ function chunkPairs<T>(items: T[]): T[][] {
 }
 
 export default function HomePage() {
-  const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
 
   const { data: packs, isLoading: packsLoading } = useQuery({ queryKey: ["packs"], queryFn: fetchPacks });
@@ -54,94 +48,19 @@ export default function HomePage() {
     (t) => t.is_completed && !t.is_claimed
   ).length;
 
-  // The banner is the only entry point to /league, so it must also render for
-  // players below the lowest tier's min_rating (current_league === null) —
-  // otherwise a brand-new player can never reach the screen. Falls back to the
-  // next tier's icon (dimmed) until the first tier is actually reached.
-  const leagueIconTier = leagueStatus?.current_league ?? leagueStatus?.next_league ?? null;
-  const leagueProgressFloor = leagueStatus?.current_league?.min_rating ?? 0;
+  // The league row in HomeHero is the entry point to /league — it also
+  // renders below the lowest tier so a new player can still reach it.
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="relative overflow-hidden rounded-3xl bg-bg-surface p-5">
-        <ChalkTexture />
-        <div className="relative flex items-center gap-2">
-          <img src="/brand/victor-fc-crest.jpg" alt="" className="h-7 w-7 rounded-full ring-1 ring-white/10" />
-          <p className="font-mono text-[10px] uppercase tracking-wider text-ink-mist">
-            С возвращением, {user?.first_name ?? user?.username ?? "игрок"}
-          </p>
-        </div>
-        <div className="relative mt-4 grid grid-cols-4 gap-2">
-          <QuickAction Icon={IconPlay} label="Играть" onClick={() => navigate("/play")} />
-          <QuickAction Icon={IconCollection} label="Карточки" onClick={() => navigate("/collection")} />
-          <QuickAction Icon={IconUpgrade} label="Апгрейд" onClick={() => navigate("/upgrade")} />
-          <QuickAction Icon={IconTarget} label="Задания" onClick={() => navigate("/tasks")} badge={claimableTaskCount || undefined} />
-        </div>
-      </section>
+      <HomeHero
+        profile={profile}
+        league={leagueStatus}
+        leaguesEnabled={flags?.leagues_enabled !== false}
+        claimableTasks={claimableTaskCount}
+      />
 
       <TodayCard wheel={flags?.wheel_enabled !== false ? wheelStatus : null} />
-
-      {leagueStatus && leagueIconTier && flags?.leagues_enabled !== false && (
-        <button
-          onClick={() => navigate("/league")}
-          className="flex items-center gap-3 rounded-2xl bg-bg-surface px-4 py-3 text-left active:scale-[0.98]"
-        >
-          <span
-            className={`relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-bg-raised ${
-              leagueStatus.current_league ? "" : "opacity-40"
-            }`}
-          >
-            {leagueIconTier.image_path ? (
-              <img src={staticUrl(leagueIconTier.image_path) ?? undefined} className="h-full w-full object-cover" />
-            ) : (
-              <IconTrophy size={22} style={{ color: leagueIconTier.color }} />
-            )}
-            {leagueStatus.unseen_rewards.length > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent-lime text-[10px] font-bold text-bg-base">
-                {leagueStatus.unseen_rewards.length}
-              </span>
-            )}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="font-display text-sm font-bold text-ink-chalk">
-              {leagueStatus.current_league ? leagueStatus.current_league.name : "Пока вне лиги"}
-            </p>
-            {leagueStatus.current_league_percent !== null && (
-              <p className="mt-0.5 text-[11px] text-ink-mist-dim">
-                {leagueStatus.current_league_percent}% игроков в этой лиге
-              </p>
-            )}
-            {leagueStatus.next_league ? (
-              <>
-                <p className="mt-0.5 text-[11px] text-ink-mist">
-                  Ещё {leagueStatus.points_to_next} очков до «{leagueStatus.next_league.name}»
-                </p>
-                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
-                  <div
-                    className="h-full rounded-full bg-accent-lime"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        Math.max(
-                          0,
-                          Math.round(
-                            ((leagueStatus.total_rating - leagueProgressFloor) /
-                              (leagueStatus.next_league.min_rating - leagueProgressFloor)) *
-                              100
-                          )
-                        )
-                      )}%`,
-                    }}
-                  />
-                </div>
-              </>
-            ) : (
-              <p className="mt-0.5 text-[11px] text-accent-lime">Высшая лига!</p>
-            )}
-          </div>
-          <IconChevronRight size={16} className="shrink-0 text-ink-mist-dim" />
-        </button>
-      )}
 
       <button
         onClick={() => navigate("/clubs")}
@@ -286,20 +205,6 @@ function BingoBanner({ bingo, onClick }: { bingo: BingoCurrent; onClick: () => v
   );
 }
 
-function ChalkTexture() {
-  return (
-    <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.06]" viewBox="0 0 320 160" fill="none">
-      <line x1="20" y1="14" x2="60" y2="42" stroke="currentColor" strokeWidth="1" />
-      <polyline points="54,36 60,42 55,48" stroke="currentColor" strokeWidth="1" fill="none" />
-      <circle cx="270" cy="22" r="9" stroke="currentColor" strokeWidth="1" />
-      <path d="M160 8 Q195 32 170 72" stroke="currentColor" strokeWidth="1" fill="none" />
-      <circle cx="50" cy="100" r="5" stroke="currentColor" strokeWidth="1" />
-      <line x1="290" y1="96" x2="300" y2="106" stroke="currentColor" strokeWidth="1" />
-      <line x1="300" y1="96" x2="290" y2="106" stroke="currentColor" strokeWidth="1" />
-    </svg>
-  );
-}
-
 function NoticeCard({
   Icon,
   title,
@@ -331,32 +236,6 @@ function NoticeCard({
       <span className="text-ink-mist-dim">
         {TrailingIcon ? <TrailingIcon size={16} /> : <IconChevronRight size={16} />}
       </span>
-    </button>
-  );
-}
-
-function QuickAction({
-  Icon,
-  label,
-  onClick,
-  badge,
-}: {
-  Icon: (props: IconProps) => JSX.Element;
-  label: string;
-  onClick: () => void;
-  badge?: number;
-}) {
-  return (
-    <button onClick={onClick} className="flex flex-col items-center gap-2 active:scale-95">
-      <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-bg-raised text-ink-chalk">
-        <Icon size={20} />
-        {!!badge && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-[9px] font-bold text-bg-base">
-            {badge}
-          </span>
-        )}
-      </span>
-      <span className="text-xs text-ink-mist">{label}</span>
     </button>
   );
 }

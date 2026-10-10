@@ -1,3 +1,4 @@
+import type { BenchUpgrade } from "@/api/lineups";
 import { api } from "@/lib/api";
 import type {
   PersonalSquad,
@@ -101,5 +102,10 @@ export async function autoFillPersonalSquad(templateIndex: number, copyFromArena
   const { data } = await api.post<PersonalSquad>(`/player-tournaments/squads/${templateIndex}/auto`, null, {
     params: { copy_from_arena: copyFromArena },
   });
+  return data;
+}
+
+export async function fetchPersonalSquadBenchUpgrades(templateIndex: number): Promise<BenchUpgrade[]> {
+  const { data } = await api.get<BenchUpgrade[]>(`/player-tournaments/squads/${templateIndex}/bench-upgrades`);
   return data;
 }

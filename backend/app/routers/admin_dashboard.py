@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +11,14 @@ from app.models.card import UserCard
 from app.models.pack import PackOpening
 from app.models.trade import TradeOffer
 from app.models.user import User
-from app.schemas.admin import DashboardChartPoint, DashboardOut, RecentAdminActionOut
+from app.schemas.admin import (
+    DashboardChartPoint,
+    DashboardOut,
+    EconomyReportOut,
+    PackExpectedValueOut,
+    RecentAdminActionOut,
+)
+from app.services import admin_economy_service
 
 router = APIRouter(prefix="/admin/dashboard", tags=["admin"], dependencies=[Depends(get_current_admin)])
 
@@ -66,3 +73,15 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         pack_openings_by_day=pack_openings_by_day,
         recent_actions=[RecentAdminActionOut.model_validate(a) for a in recent_actions_rows],
     )
+
+
+@router.get("/economy", response_model=EconomyReportOut)
+async def get_economy(days: int = Query(7, ge=1, le=90), db: AsyncSession = Depends(get_db)):
+    """Coin inflow/outflow by source and by day, pack and skill-token flow."""
+    return await admin_economy_service.economy_report(db, days)
+
+
+@router.get("/packs/{pack_id}/expected-value", response_model=PackExpectedValueOut)
+async def get_pack_expected_value(pack_id: int, db: AsyncSession = Depends(get_db)):
+    """Expected quick-sell value of one pack vs. its price."""
+    return await admin_economy_service.pack_expected_value(db, pack_id)

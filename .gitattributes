@@ -1,2 +1,19 @@
+# Normalize text to LF in the repository and in working copies on every OS,
+# so Windows checkouts stop warning "LF will be replaced by CRLF" and diffs
+# never contain line-ending noise. (The index is already LF everywhere.)
+* text=auto eol=lf
+
 # Shell scripts run inside Linux containers and break with CRLF line endings.
 *.sh text eol=lf
+
+# Binary assets: never touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.pdf binary
