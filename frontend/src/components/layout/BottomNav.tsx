@@ -3,9 +3,9 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   IconCollection,
   IconHome,
-  IconPack,
   IconPlay,
   IconProfile,
+  IconShop,
   type IconProps,
 } from "@/components/icons";
 import { useNavBadges } from "@/lib/navBadges";
@@ -13,7 +13,7 @@ import { useMatchGuardStore } from "@/store/matchGuardStore";
 
 const TABS: { to: string; label: string; Icon: (props: IconProps) => JSX.Element }[] = [
   { to: "/", label: "Главная", Icon: IconHome },
-  { to: "/packs", label: "Паки", Icon: IconPack },
+  { to: "/packs", label: "Магазин", Icon: IconShop },
   { to: "/play", label: "Играть", Icon: IconPlay },
   // Обмены and Апгрейд live inside "Карточки" (CardsSectionTabs).
   { to: "/collection", label: "Карточки", Icon: IconCollection },

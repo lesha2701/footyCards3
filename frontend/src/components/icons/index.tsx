@@ -22,6 +22,15 @@ export function IconCoin(props: IconProps) {
   );
 }
 
+export function IconShop(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8Z" />
+      <path d="M9 10V7a3 3 0 0 1 6 0v3" />
+    </IconBase>
+  );
+}
+
 export function IconPack(props: IconProps) {
   return (
     <IconBase {...props}>

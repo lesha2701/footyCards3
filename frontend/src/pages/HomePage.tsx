@@ -62,17 +62,6 @@ export default function HomePage() {
 
       <TodayCard wheel={flags?.wheel_enabled !== false ? wheelStatus : null} />
 
-      <button
-        onClick={() => navigate("/clubs")}
-        className="flex w-full items-center gap-3 rounded-2xl bg-bg-surface p-3 text-left active:scale-[0.99]"
-      >
-        <IconUsers size={22} className="text-accent-lime" />
-        <div>
-          <p className="font-display text-sm font-bold text-ink-chalk">Клубы</p>
-          <p className="text-xs text-ink-mist-dim">Собери команду и соревнуйся в турнирах</p>
-        </div>
-      </button>
-
       <ChatInviteCard />
 
       {bingo?.is_enabled && <BingoBanner bingo={bingo} onClick={() => navigate("/bingo")} />}

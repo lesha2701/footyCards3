@@ -171,7 +171,7 @@ export default function GiftsPage() {
           </div>
         )
       ) : (
-        <ShopTab />
+        <GiftShop />
       )}
 
       {claimResult && <GiftClaimResultModal result={claimResult} onClose={() => setClaimResult(null)} />}
@@ -367,7 +367,9 @@ function RecipientPicker({ target, onSelect }: { target: UserPublic | null; onSe
   );
 }
 
-function ShopTab() {
+/** Gift shop (bundles + collectibles) — also embedded as the "Подарки" tab of
+ * the main shop (PacksPage). */
+export function GiftShop() {
   const { data: giftSets } = useQuery({ queryKey: ["gift-sets"], queryFn: fetchGiftSets });
   const [selectedSet, setSelectedSet] = useState<GiftSet | null>(null);
 

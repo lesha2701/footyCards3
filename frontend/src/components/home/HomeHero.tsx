@@ -1,16 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
-import { fetchMyAttention } from "@/api/profile";
 import { Skeleton } from "@/components/common/Skeleton";
 import { UserBadge } from "@/components/common/UserBadge";
 import {
   IconChevronRight,
   IconFire,
   IconPlay,
-  IconSwap,
   IconTarget,
   IconTrophy,
+  IconUsers,
   type IconProps,
 } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
@@ -30,9 +28,9 @@ const GAME_TITLES: Record<string, string> = {
   "/play/pairs": "Пары",
 };
 
-/** The top of the home screen: who you are and where you stand (level,
+/** The top of the home screen: who you are and where you stand (avatar,
  * streak, league progress, rating) plus the four shortcuts that are NOT
- * already in the bottom nav — the last game, trades, tasks and the
+ * already in the bottom nav — the last game, clubs, tasks and the
  * leaderboard. The league row replaces the separate league banner. */
 export default function HomeHero({
   profile,
@@ -47,7 +45,6 @@ export default function HomeHero({
 }) {
   const navigate = useNavigate();
   const [lastGame] = usePersistentState<string | null>("play.last", null);
-  const { data: attention } = useQuery({ queryKey: ["attention"], queryFn: fetchMyAttention, refetchInterval: 60000 });
 
   if (!profile) {
     return (
@@ -86,9 +83,6 @@ export default function HomeHero({
             alt=""
             className="h-14 w-14 rounded-full object-cover ring-2 ring-accent-lime/60"
           />
-          <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-accent-lime px-1.5 font-mono text-[9px] font-bold leading-4 text-bg-base ring-2 ring-bg-surface">
-            ур. {profile.level}
-          </span>
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-mono text-[10px] uppercase tracking-wider text-ink-mist">С возвращением</p>
@@ -160,7 +154,7 @@ export default function HomeHero({
           onClick={() => navigate(lastGame && continueTitle ? lastGame : "/play")}
           accent
         />
-        <QuickAction Icon={IconSwap} label="Обмены" onClick={() => navigate("/trades")} badge={attention?.incoming_trades} />
+        <QuickAction Icon={IconUsers} label="Клубы" onClick={() => navigate("/clubs")} />
         <QuickAction Icon={IconTarget} label="Задания" onClick={() => navigate("/tasks")} badge={claimableTasks} />
         <QuickAction Icon={IconTrophy} label="Рейтинг" onClick={() => navigate("/ranking")} />
       </div>

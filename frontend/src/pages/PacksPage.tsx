@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { lazy, Suspense, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import EmptyState from "@/components/common/EmptyState";
 import { IconChevronUp, IconCoin, IconPack } from "@/components/icons";
-import { CardGridSkeleton } from "@/components/common/Skeleton";
+import { CardGridSkeleton, ListSkeleton } from "@/components/common/Skeleton";
+import { CoinPackagesPanel } from "@/components/shop/CoinPackages";
 import { fetchPacks } from "@/api/packs";
 import { useStarsPackPurchase } from "@/hooks/useStarsPackPurchase";
 import { staticUrl } from "@/lib/api";
@@ -22,6 +23,18 @@ import type { Pack, PackOpenResult } from "@/types";
 const MAX_BULK_PACK_QUANTITY = 100;
 const BULK_QUANTITY_PRESETS = [5, 10, 100];
 
+// The gift shop lives in GiftsPage (inventory + shop); loaded only when the
+// "Подарки" tab is opened.
+const GiftShop = lazy(() => import("@/pages/GiftsPage").then((m) => ({ default: m.GiftShop })));
+
+type ShopTab = "coins" | "stars" | "buy-coins" | "gifts";
+const SHOP_TABS: { id: ShopTab; label: string }[] = [
+  { id: "coins", label: "Паки" },
+  { id: "stars", label: "За ⭐" },
+  { id: "buy-coins", label: "Монеты" },
+  { id: "gifts", label: "Подарки" },
+];
+
 export default function PacksPage() {
   const { data: packs, isLoading } = useQuery({ queryKey: ["packs"], queryFn: fetchPacks });
   const balance = useAuthStore((s) => s.user?.balance ?? 0);
@@ -30,7 +43,12 @@ export default function PacksPage() {
   const setSortDirection = usePacksUiStore((s) => s.setCoinSortDirection);
   const starsSortDirection = usePacksUiStore((s) => s.starsSortDirection);
   const setStarsSortDirection = usePacksUiStore((s) => s.setStarsSortDirection);
-  const [tab, setTab] = useState<"coins" | "stars">("coins");
+  // One "Магазин" section: packs for coins or Stars, coins for Stars and
+  // gifts. The tab is in the URL (?tab=) so links can open it directly.
+  const [params, setParams] = useSearchParams();
+  const tab: ShopTab = SHOP_TABS.some((t) => t.id === params.get("tab")) ? (params.get("tab") as ShopTab) : "coins";
+  const setTab = (next: ShopTab) => setParams(next === "coins" ? {} : { tab: next }, { replace: true });
+  const updateBalance = useAuthStore((s) => s.updateBalance);
   const [openingPack, setOpeningPack] = useState<Pack | null>(null);
 
   const coinPacks = packs?.filter((p) => p.stars_price == null);
@@ -40,30 +58,42 @@ export default function PacksPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="font-display text-xl font-bold text-ink-chalk">Паки</h1>
+      <h1 className="font-display text-xl font-bold text-ink-chalk">Магазин</h1>
 
-      <div className="grid grid-cols-2 gap-2 rounded-2xl bg-bg-surface p-1">
-        <button
-          onClick={() => setTab("coins")}
-          className={`rounded-xl py-2 text-sm font-semibold transition ${
-            tab === "coins" ? "bg-floodlight text-bg-base" : "text-ink-mist"
-          }`}
-        >
-          За монеты
-        </button>
-        <button
-          onClick={() => setTab("stars")}
-          className={`rounded-xl py-2 text-sm font-semibold transition ${
-            tab === "stars" ? "bg-amber-400 text-bg-base" : "text-ink-mist"
-          }`}
-        >
-          ⭐ За звёзды
-        </button>
+      <div className="grid grid-cols-4 gap-1 rounded-2xl bg-bg-surface p-1" role="tablist" aria-label="Разделы магазина">
+        {SHOP_TABS.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={`rounded-xl py-2 text-xs font-semibold transition ${
+              tab === t.id ? (t.id === "stars" || t.id === "buy-coins" ? "bg-amber-400 text-bg-base" : "bg-floodlight text-bg-base") : "text-ink-mist"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {isLoading && <CardGridSkeleton count={3} />}
+      {isLoading && (tab === "coins" || tab === "stars") && <CardGridSkeleton count={3} />}
 
-      {tab === "coins" ? (
+      {tab === "buy-coins" ? (
+        <section className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-4">
+          <div>
+            <p className="font-display text-base font-bold text-ink-chalk">Монеты за Telegram Stars</p>
+            <p className="mt-1 text-xs text-ink-mist">Монеты сразу зачисляются на баланс и тратятся на паки, навыки и всё остальное.</p>
+          </div>
+          <CoinPackagesPanel onPurchased={updateBalance} />
+        </section>
+      ) : tab === "gifts" ? (
+        <Suspense fallback={<ListSkeleton count={3} />}>
+          <button onClick={() => navigate("/gifts")} className="self-end text-xs font-semibold text-accent-lime">
+            Мои подарки →
+          </button>
+          <GiftShop />
+        </Suspense>
+      ) : tab === "coins" ? (
         <>
           {!isLoading && !coinPacks?.length && <EmptyState icon={IconPack} title="Паков пока нет" description="Загляни позже" />}
           {!!coinPacks?.length && (
