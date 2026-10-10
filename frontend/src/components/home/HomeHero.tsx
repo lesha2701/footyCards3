@@ -29,7 +29,7 @@ const GAME_TITLES: Record<string, string> = {
 };
 
 /** The top of the home screen: who you are and where you stand (avatar,
- * streak, league progress, rating) plus the four shortcuts that are NOT
+ * streak, league progress) plus the four shortcuts that are NOT
  * already in the bottom nav — the last game, clubs, tasks and the
  * leaderboard. The league row replaces the separate league banner. */
 export default function HomeHero({
@@ -140,12 +140,6 @@ export default function HomeHero({
         </button>
       )}
 
-      <div className="relative mt-3 grid grid-cols-3 divide-x divide-white/5 rounded-2xl bg-bg-raised/40 py-2 text-center">
-        <Stat label="Рейтинг Arena" value={profile.arena_rating} />
-        <Stat label="Место" value={`#${profile.arena_rank}`} />
-        <Stat label="Уникальных" value={profile.unique_cards} />
-      </div>
-
       <div className="relative mt-4 grid grid-cols-4 gap-2">
         <QuickAction
           Icon={IconPlay}
@@ -159,15 +153,6 @@ export default function HomeHero({
         <QuickAction Icon={IconTrophy} label="Рейтинг" onClick={() => navigate("/ranking")} />
       </div>
     </section>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="px-1">
-      <p className="font-display text-base font-bold text-ink-chalk">{value}</p>
-      <p className="text-[10px] text-ink-mist">{label}</p>
-    </div>
   );
 }
 

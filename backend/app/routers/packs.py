@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -5,10 +7,18 @@ from app.core.dependencies import get_current_user
 from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.user import User
-from app.schemas.pack import OpenPackBulkRequest, OpenPackRequest, PackBulkOpenResult, PackOpenResult, PackOut
+from app.schemas.pack import (
+    DailyOfferOut,
+    OpenPackBulkRequest,
+    OpenPackRequest,
+    PackBulkOpenResult,
+    PackHistoryItemOut,
+    PackOpenResult,
+    PackOut,
+)
 from app.schemas.stars import StarsInvoiceCreateOut, StarsInvoiceStatusOut
-from app.services import stars_payment_service
-from app.services.pack_service import list_available_packs, open_pack, open_pack_bulk
+from app.services import shop_offer_service, stars_payment_service
+from app.services.pack_service import list_available_packs, open_pack, open_pack_bulk, recent_purchases
 
 router = APIRouter(prefix="/packs", tags=["packs"])
 
@@ -16,6 +26,18 @@ router = APIRouter(prefix="/packs", tags=["packs"])
 @router.get("", response_model=list[PackOut])
 async def get_packs(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await list_available_packs(db, user.id)
+
+
+@router.get("/daily-offer", response_model=Optional[DailyOfferOut])
+async def get_daily_offer(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Today's discounted pack, or null when the offer is switched off."""
+    return await shop_offer_service.get_offer(db, user)
+
+
+@router.get("/history", response_model=list[PackHistoryItemOut])
+async def get_pack_history(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Recently opened packs (distinct, newest first) for one-tap re-buys."""
+    return await recent_purchases(db, user.id)
 
 
 @router.post("/{pack_id}/open", response_model=PackOpenResult)
@@ -26,7 +48,7 @@ async def open_pack_endpoint(
     user: User = Depends(get_current_user),
 ):
     await check_rate_limit(f"open_pack:{user.id}", max_calls=10, window_seconds=60)
-    return await open_pack(db, user, pack_id, payload.idempotency_key)
+    return await open_pack(db, user, pack_id, payload.idempotency_key, daily_offer=payload.daily_offer)
 
 
 @router.post("/{pack_id}/open-bulk", response_model=PackBulkOpenResult)

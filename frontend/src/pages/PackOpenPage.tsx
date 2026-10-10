@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -49,6 +50,10 @@ function bulkStagesFor(entry: BulkRevealItem) {
 
 export default function PackOpenPage() {
   const location = useLocation();
+  const queryClient = useQueryClient();
+  // Leaving the opening screen refreshes the shop: purchase counts/limits,
+  // "Предложение дня" (bought) and "Недавние покупки".
+  useEffect(() => () => void queryClient.invalidateQueries({ queryKey: ["packs"] }), [queryClient]);
   // A quantity > 1 comes only from PacksPage's quantity sheet (never from
   // the Stars-purchase flow, which stays single-pack-only) — routed to its
   // own view entirely so the delicate staged single-card reveal animation
@@ -71,6 +76,8 @@ function SinglePackOpenView() {
   // Several already-granted packs at once (e.g. "Забрать всё" on home claimed
   // tasks that each reward a pack): play them back to back.
   const queue = (location.state as { queue?: PackOpenResult[] } | null)?.queue ?? [];
+  // Bought from the shop's "Предложение дня" — the server applies the discount.
+  const dailyOffer = !!(location.state as { dailyOffer?: boolean } | null)?.dailyOffer;
   const finish = () => {
     if (queue.length) {
       navigate(`/packs/${queue[0].pack.id}/open`, { replace: true, state: { result: queue[0], queue: queue.slice(1) } });
@@ -123,7 +130,7 @@ function SinglePackOpenView() {
     if (hasStartedRef.current) return;
     hasStartedRef.current = true;
 
-    openPack(Number(packId), idempotencyKey)
+    openPack(Number(packId), idempotencyKey, dailyOffer)
       .then((data) => {
         updateBalance(data.new_balance);
         setRequestState({ status: "success", data });

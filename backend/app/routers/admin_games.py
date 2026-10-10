@@ -28,6 +28,8 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
     updates = payload.model_dump(exclude_unset=True)
     for key, value in updates.items():
         setattr(config, key, value)
+    if config.shop_daily_offer_pack_id == 0:
+        config.shop_daily_offer_pack_id = None  # 0 from the admin form = rotate by date
     if config.card_skill_probability_floor_pct >= config.card_skill_probability_ceiling_pct:
         await db.rollback()
         raise ConflictError("Нижняя граница вероятности навыков должна быть меньше верхней")

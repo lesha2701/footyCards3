@@ -235,6 +235,9 @@ class GameConfigOut(BaseModel):
     free_pack_interval_hours: int
     bot_daily_digest_enabled: bool = False
     bot_daily_digest_hour: int = 18
+    shop_daily_offer_enabled: bool = False
+    shop_daily_offer_discount_pct: int = 25
+    shop_daily_offer_pack_id: Optional[int] = None
     free_pack_pack_slug: str
     chat_pack_interval_hours: int
     referral_referred_reward: int
@@ -390,6 +393,10 @@ class GameConfigUpdate(BaseModel):
     free_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     bot_daily_digest_enabled: Optional[bool] = None
     bot_daily_digest_hour: Optional[int] = Field(default=None, ge=0, le=23)
+    shop_daily_offer_enabled: Optional[bool] = None
+    shop_daily_offer_discount_pct: Optional[int] = Field(default=None, ge=1, le=90)
+    # 0 = rotate through active coin packs by date (stored as NULL).
+    shop_daily_offer_pack_id: Optional[int] = Field(default=None, ge=0)
     free_pack_pack_slug: Optional[str] = None
     chat_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     referral_referred_reward: Optional[int] = Field(default=None, ge=0)

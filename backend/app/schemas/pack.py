@@ -42,6 +42,9 @@ class PackOut(BaseModel):
     skill_token_drop_chance: float = 0.0
     user_purchase_count: int = 0
     is_available_now: bool = True
+    # Average quick-sell value of the cards inside (pack_value_service);
+    # filled for the shop listing only.
+    expected_value: Optional[float] = None
 
 
 class PackRarityProbabilityIn(BaseModel):
@@ -160,6 +163,22 @@ class PackOpenResult(BaseModel):
 
 class OpenPackRequest(BaseModel):
     idempotency_key: Optional[str] = None
+    # Buy today's shop offer at its discount (validated server-side).
+    daily_offer: bool = False
+
+
+class DailyOfferOut(BaseModel):
+    pack: PackOut
+    discount_pct: int
+    price: int
+    claimed_today: bool
+    ends_at: datetime
+
+
+class PackHistoryItemOut(BaseModel):
+    pack: PackOut
+    opened_at: datetime
+    times_opened: int
 
 
 class OpenPackBulkRequest(BaseModel):

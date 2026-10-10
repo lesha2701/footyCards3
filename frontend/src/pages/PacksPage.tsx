@@ -6,6 +6,8 @@ import EmptyState from "@/components/common/EmptyState";
 import { IconChevronUp, IconCoin, IconPack } from "@/components/icons";
 import { CardGridSkeleton, ListSkeleton } from "@/components/common/Skeleton";
 import { CoinPackagesPanel } from "@/components/shop/CoinPackages";
+import DailyOfferCard from "@/components/shop/DailyOfferCard";
+import RecentPurchases from "@/components/shop/RecentPurchases";
 import { fetchPacks } from "@/api/packs";
 import { useStarsPackPurchase } from "@/hooks/useStarsPackPurchase";
 import { staticUrl } from "@/lib/api";
@@ -95,6 +97,11 @@ export default function PacksPage() {
         </Suspense>
       ) : tab === "coins" ? (
         <>
+          <DailyOfferCard />
+          <RecentPurchases
+            availablePacks={packs}
+            onRebuy={(pack) => (pack.stars_price != null ? setTab("stars") : setOpeningPack(pack))}
+          />
           {!isLoading && !coinPacks?.length && <EmptyState icon={IconPack} title="Паков пока нет" description="Загляни позже" />}
           {!!coinPacks?.length && (
             <div className="flex items-center justify-end">
@@ -109,7 +116,14 @@ export default function PacksPage() {
           )}
           <div className="grid grid-cols-1 gap-4">
             {sortedCoinPacks?.map((pack) => (
-              <PackCard key={pack.id} pack={pack} canAfford={balance >= pack.price} onOpen={() => setOpeningPack(pack)} />
+              <PackCard
+                key={pack.id}
+                pack={pack}
+                balance={balance}
+                onOpen={() => setOpeningPack(pack)}
+                onBuyCoins={() => setTab("buy-coins")}
+                onSellDuplicates={() => navigate("/collection?tab=mine")}
+              />
             ))}
           </div>
         </>
@@ -244,7 +258,16 @@ function QuantitySheet({
   );
 }
 
-function PackCard({ pack, canAfford, onOpen }: { pack: Pack; canAfford: boolean; onOpen: () => void }) {
+function PackCard({
+  pack, balance, onOpen, onBuyCoins, onSellDuplicates,
+}: {
+  pack: Pack;
+  balance: number;
+  onOpen: () => void;
+  onBuyCoins: () => void;
+  onSellDuplicates: () => void;
+}) {
+  const canAfford = balance >= pack.price;
   const disabled = !pack.is_available_now || (pack.purchase_limit_per_user !== null && pack.user_purchase_count >= pack.purchase_limit_per_user);
 
   return (
@@ -263,6 +286,11 @@ function PackCard({ pack, canAfford, onOpen }: { pack: Pack; canAfford: boolean;
               ))}
             </div>
           </div>
+          {pack.expected_value != null && pack.expected_value > 0 && (
+            <p className="mt-2 text-[10px] text-ink-mist" title="Средняя цена быстрой продажи карточек из пака">
+              В среднем ~{Math.round(pack.expected_value)} монет ценности
+            </p>
+          )}
           <div className="mt-2 flex items-center justify-between">
             <span className="flex items-center gap-1.5 font-mono text-sm font-semibold text-accent-lime">
               <IconCoin size={15} />
@@ -273,9 +301,19 @@ function PackCard({ pack, canAfford, onOpen }: { pack: Pack; canAfford: boolean;
               disabled={disabled || !canAfford}
               className="rounded-full bg-floodlight px-4 py-2 text-xs font-bold text-bg-base disabled:opacity-40 disabled:grayscale active:scale-95"
             >
-              {disabled ? "Недоступно" : canAfford ? "Открыть" : "Не хватает монет"}
+              {disabled ? "Недоступно" : canAfford ? "Открыть" : `Не хватает ${pack.price - balance}`}
             </button>
           </div>
+          {!disabled && !canAfford && (
+            <div className="mt-2 flex gap-1.5">
+              <button onClick={onBuyCoins} className="flex-1 rounded-full bg-amber-400/15 py-1.5 text-[11px] font-semibold text-amber-300">
+                Купить монеты
+              </button>
+              <button onClick={onSellDuplicates} className="flex-1 rounded-full bg-white/5 py-1.5 text-[11px] font-semibold text-ink-mist">
+                Продать дубли
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

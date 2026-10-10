@@ -219,6 +219,8 @@ export interface Pack {
   skill_token_drop_chance?: number;
   user_purchase_count: number;
   is_available_now: boolean;
+  /** Average quick-sell value of the cards inside (shop listing only). */
+  expected_value?: number | null;
 }
 
 export interface OpenedCard {

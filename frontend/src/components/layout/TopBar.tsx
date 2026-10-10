@@ -33,10 +33,16 @@ export default function TopBar() {
           >
             <IconHelp size={17} />
           </button>
-          <div className="flex items-center gap-1.5 rounded-full border border-white/5 bg-bg-raised px-3 py-1.5">
+          {/* The balance opens the shop's "Монеты" tab — the obvious place to tap
+              when it runs low. */}
+          <button
+            onClick={() => (guardActive ? requestNavigate("/packs?tab=buy-coins") : navigate("/packs?tab=buy-coins"))}
+            aria-label="Баланс — купить монеты"
+            className="flex items-center gap-1.5 rounded-full border border-white/5 bg-bg-raised px-3 py-1.5 active:scale-95"
+          >
             <IconCoin size={15} className="text-accent-lime" />
             <span className="font-mono text-[13px] font-semibold text-ink-chalk">{user?.balance ?? 0}</span>
-          </div>
+          </button>
         </div>
       </div>
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />

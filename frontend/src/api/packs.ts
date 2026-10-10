@@ -6,8 +6,36 @@ export async function fetchPacks(): Promise<Pack[]> {
   return data;
 }
 
-export async function openPack(packId: number, idempotencyKey: string): Promise<PackOpenResult> {
-  const { data } = await api.post<PackOpenResult>(`/packs/${packId}/open`, { idempotency_key: idempotencyKey });
+export async function openPack(packId: number, idempotencyKey: string, dailyOffer = false): Promise<PackOpenResult> {
+  const { data } = await api.post<PackOpenResult>(`/packs/${packId}/open`, {
+    idempotency_key: idempotencyKey,
+    daily_offer: dailyOffer,
+  });
+  return data;
+}
+
+export interface DailyOffer {
+  pack: Pack;
+  discount_pct: number;
+  price: number;
+  claimed_today: boolean;
+  ends_at: string;
+}
+
+/** Today's discounted pack (null when the offer is off). */
+export async function fetchDailyOffer(): Promise<DailyOffer | null> {
+  const { data } = await api.get<DailyOffer | null>("/packs/daily-offer");
+  return data;
+}
+
+export interface PackHistoryItem {
+  pack: Pack;
+  opened_at: string;
+  times_opened: number;
+}
+
+export async function fetchPackHistory(): Promise<PackHistoryItem[]> {
+  const { data } = await api.get<PackHistoryItem[]>("/packs/history");
   return data;
 }
 

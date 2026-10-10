@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, String, DateTime
+from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, Integer, String, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -131,6 +131,9 @@ class User(TimestampMixin, Base):
     # Free pack (every N hours)
     free_pack_available_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     free_pack_notified: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Shop "предложение дня": the local date the discounted pack was last
+    # bought (one discounted purchase per player per day, shop_offer_service).
+    daily_offer_claimed_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Chat mode promo pack ("вкарта" command in group chats, every N hours) —
     # a separate cooldown from free_pack_available_at so the two mechanics

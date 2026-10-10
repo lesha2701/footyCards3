@@ -508,7 +508,9 @@ async def grant_bonus_pack_opening(
     )
 
 
-async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key: Optional[str]) -> PackOpenResult:
+async def open_pack(
+    db: AsyncSession, user: User, pack_id: int, idempotency_key: Optional[str], daily_offer: bool = False,
+) -> PackOpenResult:
     if idempotency_key:
         existing = (
             await db.execute(
@@ -550,12 +552,20 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
         locked_user = await lock_user_for_update(db, user.id)
         pre_locked_referrer = None
 
+    price = pack.price
+    if daily_offer:
+        # Discount and once-a-day rule are enforced server-side, under the
+        # user row lock, in the same transaction as the debit.
+        from app.services import shop_offer_service
+
+        price = await shop_offer_service.claim_offer_price(db, locked_user, pack)
+
     await debit_coins(
         db,
         locked_user,
-        pack.price,
+        price,
         TransactionType.pack_purchase,
-        f"Открытие пака «{pack.name}»",
+        f"Открытие пака «{pack.name}»" + (" (предложение дня)" if daily_offer else ""),
         related_object_type="pack",
         related_object_id=pack.id,
     )
@@ -563,7 +573,7 @@ async def open_pack(db: AsyncSession, user: User, pack_id: int, idempotency_key:
     opening = PackOpening(
         user_id=locked_user.id,
         pack_id=pack.id,
-        price_paid=pack.price,
+        price_paid=price,
         idempotency_key=idempotency_key,
         created_at=datetime.now(timezone.utc),
     )
@@ -824,6 +834,9 @@ async def list_available_packs(db: AsyncSession, user_id: Optional[int] = None) 
         select(Pack).where(Pack.is_active.is_(True)).options(joinedload(Pack.rarity_probabilities)).order_by(Pack.sort_order)
     )
     packs = result.unique().scalars().all()
+    from app.services.pack_value_service import pack_rarity_breakdown, rarity_quick_sell_averages
+
+    averages = await rarity_quick_sell_averages(db)
     out = []
     for pack in packs:
         purchase_count = 0
@@ -843,5 +856,30 @@ async def list_available_packs(db: AsyncSession, user_id: Optional[int] = None) 
         item = PackOut.model_validate(pack)
         item.user_purchase_count = purchase_count
         item.is_available_now = is_available_now
+        item.expected_value = pack_rarity_breakdown(pack, averages)[0]
         out.append(item)
     return out
+
+
+async def recent_purchases(db: AsyncSession, user_id: int, limit: int = 8) -> list[dict]:
+    """The player's most recently opened distinct packs (newest first) for
+    the shop's "Недавние покупки" — one row per pack, so repeat buys of the
+    same pack don't push everything else out."""
+    rows = (await db.execute(
+        select(PackOpening.pack_id, func.max(PackOpening.created_at), func.count(PackOpening.id))
+        .where(PackOpening.user_id == user_id)
+        .group_by(PackOpening.pack_id)
+        .order_by(func.max(PackOpening.created_at).desc())
+        .limit(limit)
+    )).all()
+    if not rows:
+        return []
+    packs = {
+        p.id: p for p in (await db.execute(
+            select(Pack).where(Pack.id.in_([r[0] for r in rows])).options(joinedload(Pack.rarity_probabilities))
+        )).unique().scalars().all()
+    }
+    return [
+        {"pack": PackOut.model_validate(packs[pid]), "opened_at": last, "times_opened": count}
+        for pid, last, count in rows if pid in packs
+    ]

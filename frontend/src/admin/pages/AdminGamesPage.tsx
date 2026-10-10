@@ -33,7 +33,13 @@ export default function AdminGamesPage() {
   );
 
   const toggle = (
-    key: "matchmaking_enabled" | "wheel_enabled" | "leagues_enabled" | "diamond_rating_cap_enabled" | "bot_daily_digest_enabled",
+    key:
+      | "matchmaking_enabled"
+      | "wheel_enabled"
+      | "leagues_enabled"
+      | "diamond_rating_cap_enabled"
+      | "bot_daily_digest_enabled"
+      | "shop_daily_offer_enabled",
     label: string,
   ) => (
     <label className="flex items-center gap-2 text-sm">
@@ -224,6 +230,28 @@ export default function AdminGamesPage() {
             <input
               value={form.free_pack_pack_slug}
               onChange={(e) => setForm({ ...form, free_pack_pack_slug: e.target.value })}
+              className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Магазин: предложение дня</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Один пак за монеты в день со скидкой, не больше одной покупки на игрока в сутки. Цену считает сервер.
+          ID пака 0 — каждый день другой пак из активных паков за монеты.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("shop_daily_offer_enabled", "Включено")}
+          {field("shop_daily_offer_discount_pct", "Скидка, % (1–90)")}
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-400">ID пака (0 = ротация)</span>
+            <input
+              type="number"
+              min={0}
+              value={form.shop_daily_offer_pack_id ?? 0}
+              onChange={(e) => setForm({ ...form, shop_daily_offer_pack_id: Number(e.target.value) })}
               className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
             />
           </label>

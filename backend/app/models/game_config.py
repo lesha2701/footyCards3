@@ -185,6 +185,12 @@ class GameConfig(TimestampMixin, Base):
     # tasks, sent after this hour in the bot's timezone. Off by default.
     bot_daily_digest_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     bot_daily_digest_hour: Mapped[int] = mapped_column(Integer, default=18, nullable=False)
+    # Shop "предложение дня" (services/shop_offer_service.py): one coin pack a
+    # day at a discount, once per player per day. pack_id = None rotates
+    # through the active coin packs by date. Off by default.
+    shop_daily_offer_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    shop_daily_offer_discount_pct: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    shop_daily_offer_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     free_pack_pack_slug: Mapped[str] = mapped_column(String, default="basic", nullable=False)
 
     # "вкарта" command in group chats — reuses free_pack_pack_slug's pack but

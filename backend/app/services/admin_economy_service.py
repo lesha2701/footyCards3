@@ -8,12 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import NotFoundError
-from app.models.card_collection import CardCollection
 from app.models.card_skill import CardSkillLedger
-from app.models.enums import Rarity
 from app.models.pack import Pack, PackOpening
-from app.models.player import Player
 from app.models.transaction import CoinTransaction
+from app.services.pack_value_service import pack_rarity_breakdown, rarity_quick_sell_averages
 
 
 async def economy_report(db: AsyncSession, days: int) -> dict:
@@ -65,42 +63,19 @@ async def economy_report(db: AsyncSession, days: int) -> dict:
 
 
 async def pack_expected_value(db: AsyncSession, pack_id: int) -> dict:
-    """Expected quick-sell value of one pack = card_count × Σ P(rarity) ×
-    average quick_sell_price of the players that rarity can drop (same pool
-    as pack_service.pick_random_player). Ignores the guaranteed-minimum
-    reroll and coach/stadium/token bonus drops, so it is a slight
-    underestimate — good enough to compare price vs. value."""
+    """Expected quick-sell value of one pack vs. its price (see
+    pack_value_service for what the estimate does and does not include)."""
     pack = (await db.execute(
         select(Pack).where(Pack.id == pack_id).options(selectinload(Pack.rarity_probabilities))
     )).scalar_one_or_none()
     if pack is None:
         raise NotFoundError("Пак не найден")
-
-    avg_rows = (await db.execute(
-        select(Player.rarity, func.avg(Player.quick_sell_price), func.count(Player.id))
-        .outerjoin(CardCollection, Player.collection_id == CardCollection.id)
-        .where(
-            Player.is_active.is_(True), Player.is_pack_droppable.is_(True),
-            (Player.collection_id.is_(None)) | (CardCollection.is_active.is_(True)),
-        )
-        .group_by(Player.rarity)
-    )).all()
-    avg_by_rarity = {r: (float(a or 0), int(n)) for r, a, n in avg_rows}
-
-    total_p = sum(float(rp.probability) for rp in pack.rarity_probabilities) or 1.0
-    rarities = []
-    per_card = 0.0
-    for rp in sorted(pack.rarity_probabilities, key=lambda x: list(Rarity).index(x.rarity)):
-        p = float(rp.probability) / total_p
-        avg, pool = avg_by_rarity.get(rp.rarity, (0.0, 0))
-        per_card += p * avg
-        rarities.append({"rarity": rp.rarity.value, "probability": round(p, 4), "avg_quick_sell": round(avg, 1), "pool_size": pool})
-    expected = per_card * pack.card_count
+    expected, rarities = pack_rarity_breakdown(pack, await rarity_quick_sell_averages(db))
     return {
         "pack_id": pack.id,
         "price": pack.price,
         "card_count": pack.card_count,
-        "expected_quick_sell_value": round(expected, 1),
+        "expected_quick_sell_value": expected,
         "value_to_price": round(expected / pack.price, 3) if pack.price else None,
         "rarities": rarities,
     }

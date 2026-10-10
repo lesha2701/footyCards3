@@ -192,6 +192,9 @@ export interface GameConfig {
   free_pack_interval_hours: number;
   bot_daily_digest_enabled: boolean;
   bot_daily_digest_hour: number;
+  shop_daily_offer_enabled: boolean;
+  shop_daily_offer_discount_pct: number;
+  shop_daily_offer_pack_id: number | null;
   free_pack_pack_slug: string;
   chat_pack_interval_hours: number;
   referral_referred_reward: number;
