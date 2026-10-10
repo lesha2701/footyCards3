@@ -47,6 +47,7 @@ _TYPE_PATHS = {
     "career_invite": "/play/career",
     "career_round_result": "/play/career",
     "career_season_finished": "/play/career",
+    "career_reminder": "/play/career",
     "friend_request": "/friends",
     "friend_accepted": "/friends",
 }

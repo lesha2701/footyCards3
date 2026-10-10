@@ -59,7 +59,8 @@ export default function AdminGamesPage() {
       | "diamond_rating_cap_enabled"
       | "bot_daily_digest_enabled"
       | "shop_daily_offer_enabled"
-      | "career_enabled",
+      | "career_enabled"
+      | "career_reminders_enabled",
     label: string,
   ) => (
     <label className="flex items-center gap-2 text-sm">
@@ -274,6 +275,11 @@ export default function AdminGamesPage() {
           {field("career_fatigue_recovery", "Восстановление за тур отдыха, %")}
           {field("career_fatigue_penalty_pct", "Штраф рейтинга при 100% усталости, %")}
           {field("career_injury_chance_pct", "Шанс травмы за матч, %")}
+          {field("career_yellow_chance_pct", "Шанс жёлтой за матч, %")}
+          {field("career_red_chance_pct", "Шанс красной за матч, %")}
+          {field("career_yellows_for_ban", "Жёлтых до дисквалификации")}
+          {field("career_form_max", "Форма после победы, до +N рейтинга")}
+          {toggle("career_reminders_enabled", "Напоминание ботом за 30 мин до тура")}
         </div>
       </section>
 

@@ -90,6 +90,12 @@ def double_round_robin(teams: int = TEAMS) -> list[list[list[int]]]:
     return first_half + [[[b, a] for a, b in pairs] for pairs in first_half]
 
 
+def _todays_slot_times() -> list[datetime]:
+    tz = app_timezone()
+    today = datetime.now(tz).date()
+    return [datetime.combine(today, time(h, m), tzinfo=tz) for h, m in CAREER_SLOTS]
+
+
 def _round_at(season: CareerSeason, index: int) -> Optional[datetime]:
     schedule = (season.state or {}).get("schedule") or []
     return datetime.fromisoformat(schedule[index]) if index < len(schedule) else None
@@ -129,12 +135,17 @@ def pick_squad(cards: list[UserCard], formation: str = "4-3-3") -> list[int]:
     return chosen[:SQUAD_SIZE]
 
 
+_FRESH = {"fatigue": 0, "injured_until": 0, "suspended_until": 0, "yellows": 0, "form": 0}
+
+
 def _condition(part: CareerParticipant, card_id: int) -> dict:
-    return (part.condition or {}).get(str(card_id), {"fatigue": 0, "injured_until": 0})
+    return {**_FRESH, **(part.condition or {}).get(str(card_id), {})}
 
 
-def _is_injured(part: CareerParticipant, card_id: int, round_index: int) -> bool:
-    return _condition(part, card_id).get("injured_until", 0) > round_index
+def _is_out(part: CareerParticipant, card_id: int, round_index: int) -> bool:
+    """Injured or suspended for `round_index`."""
+    cond = _condition(part, card_id)
+    return cond["injured_until"] > round_index or cond["suspended_until"] > round_index
 
 
 def resolve_lineup(
@@ -146,7 +157,7 @@ def resolve_lineup(
     from the rest of the player's own collection."""
     slots = get_formation_slots(part.formation)
     squad = [cards_by_id[cid] for cid in part.squad_card_ids if cid in cards_by_id]
-    available = [c for c in squad if _usable(c) and not _is_injured(part, c.id, round_index)]
+    available = [c for c in squad if _usable(c) and not _is_out(part, c.id, round_index)]
     by_id = {c.id: c for c in available}
     chosen: dict[str, UserCard] = {}
     used_players: set[int] = set()
@@ -177,9 +188,11 @@ def _human_side(part: CareerParticipant, pairs: list, config):
     with_slots = []
     for card, slot in pairs:
         engine_card = _engine_card(card, config)
-        fatigue = _condition(part, card.id).get("fatigue", 0)
-        penalty = fatigue / 100 * config.career_fatigue_penalty_pct / 100
-        engine_card.player.rating = max(1, round(engine_card.player.rating * (1 - penalty)))
+        cond = _condition(part, card.id)
+        penalty = cond["fatigue"] / 100 * config.career_fatigue_penalty_pct / 100
+        # Form from the previous match: +up to career_form_max / -1 rating.
+        rating = engine_card.player.rating * (1 - penalty) + cond["form"]
+        engine_card.player.rating = max(1, min(99, round(rating)))
         with_slots.append((engine_card, slot))
     side = build_side(with_slots, part.mentality, part.playstyle)
     lineup = [
@@ -502,34 +515,25 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
     state["results"].append(results)
 
     rng = random.Random(season.id * 104729 + round_index)
+    reports = state.setdefault("reports", {}).setdefault(str(round_index), {})
     for team_index, part in humans.items():
         if part.status != "accepted":
             continue
-        condition = dict(part.condition or {})
-        for card_id in part.squad_card_ids:
-            entry = dict(condition.get(str(card_id), {"fatigue": 0, "injured_until": 0}))
-            if card_id in played.get(team_index, set()):
-                tired = entry["fatigue"] > 70
-                entry["fatigue"] = min(100, entry["fatigue"] + config.career_fatigue_per_match)
-                chance = config.career_injury_chance_pct * (2 if tired else 1)
-                if rng.random() * 100 < chance:
-                    entry["injured_until"] = round_index + 1 + rng.randint(1, 2)
-            else:
-                entry["fatigue"] = max(0, entry["fatigue"] - config.career_fatigue_recovery)
-            condition[str(card_id)] = entry
-        part.condition = condition
-        flag_modified(part, "condition")
-
         match = next(m for m in results if team_index in (m["home"], m["away"]))
         is_home = match["home"] == team_index
         own, opp = (match["hs"], match["as"]) if is_home else (match["as"], match["hs"])
         opponent = teams[match["away"] if is_home else match["home"]]["name"]
+        names = {c.id: c.player.display_name for c in cards_cache.get(part.user_id, [])}
+        report = _after_match(part, played.get(team_index, set()), own, opp, round_index, config, rng, names)
+        reports[str(team_index)] = report
+        flag_modified(part, "condition")
+
         reward = config.career_match_reward_win if own > opp else config.career_match_reward_draw if own == opp else 0
         part.coins_earned += await _credit(db, part.user_id, reward, f"Карьера: тур {round_index + 1}", season.id)
         outcome = "Победа" if own > opp else "Ничья" if own == opp else "Поражение"
         await notify(
             db, part.user_id, NotificationType.career_round_result, f"Карьера, тур {round_index + 1}: {outcome}",
-            f"{own}:{opp} против «{opponent}»" + (f" · +{reward} монет" if reward else ""),
+            f"{own}:{opp} против «{opponent}»" + (f" · +{reward} монет" if reward else "") + _report_line(report),
             related_object_type="career_season", related_object_id=season.id,
         )
 
@@ -538,6 +542,66 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
     season.rounds_played = round_index + 1
     if season.rounds_played >= ROUNDS:
         await _finish(db, season, config)
+
+
+def _after_match(
+    part: CareerParticipant, played_ids: set[int], own: int, opp: int, round_index: int, config,
+    rng: random.Random, names: dict[int, str],
+) -> dict:
+    """Fatigue, injuries, yellow/red cards and form for one human squad after
+    a round. Returns the round report (player names per event) shown in the
+    calendar and the result notification."""
+    report: dict[str, list[str]] = {"yellow": [], "red": [], "suspended": [], "injured": [], "form_up": [], "form_down": []}
+    condition = dict(part.condition or {})
+    for card_id in part.squad_card_ids:
+        entry = {**_FRESH, **condition.get(str(card_id), {})}
+        name = names.get(card_id, "Игрок")
+        if card_id in played_ids:
+            tired = entry["fatigue"] > 70
+            entry["fatigue"] = min(100, entry["fatigue"] + config.career_fatigue_per_match)
+            if rng.random() * 100 < config.career_injury_chance_pct * (2 if tired else 1):
+                entry["injured_until"] = round_index + 1 + rng.randint(1, 2)
+                report["injured"].append(name)
+            # Discipline: a straight red, or the Nth yellow, = one round out.
+            if rng.random() * 100 < config.career_red_chance_pct:
+                entry["suspended_until"] = round_index + 2
+                report["red"].append(name)
+            elif rng.random() * 100 < config.career_yellow_chance_pct:
+                entry["yellows"] += 1
+                report["yellow"].append(name)
+                if entry["yellows"] >= config.career_yellows_for_ban:
+                    entry["yellows"] = 0
+                    entry["suspended_until"] = round_index + 2
+                    report["suspended"].append(name)
+            # Form for the next match: a win lifts, a defeat can drag down.
+            roll = rng.random()
+            if own > opp and roll < 0.5:
+                entry["form"] = config.career_form_max if roll < 0.15 else 1
+            elif own < opp and roll < 0.4:
+                entry["form"] = -1
+            else:
+                entry["form"] = 0
+            if entry["form"] > 0:
+                report["form_up"].append(name)
+            elif entry["form"] < 0:
+                report["form_down"].append(name)
+        else:
+            entry["fatigue"] = max(0, entry["fatigue"] - config.career_fatigue_recovery)
+            entry["form"] = 0
+        condition[str(card_id)] = entry
+    part.condition = condition
+    return report
+
+
+def _report_line(report: dict) -> str:
+    parts = []
+    if report["red"]:
+        parts.append("красная: " + ", ".join(report["red"]))
+    if report["suspended"]:
+        parts.append("перебор жёлтых: " + ", ".join(report["suspended"]))
+    if report["injured"]:
+        parts.append("травма: " + ", ".join(report["injured"]))
+    return ("\n" + "; ".join(parts).capitalize()) if parts else ""
 
 
 async def _finish(db: AsyncSession, season: CareerSeason, config) -> None:
@@ -592,6 +656,48 @@ async def resolve_due(db: AsyncSession, season_id: int, now: Optional[datetime] 
     return played
 
 
+REMINDER_WINDOW = timedelta(minutes=60)
+
+
+async def send_reminders(db: AsyncSession, now: Optional[datetime] = None) -> int:
+    """"Скоро тур — проверь состав": one notification per human per round,
+    for rounds starting within REMINDER_WINDOW. The bot calls this ~30 min
+    before each slot; state["reminded"] keeps it to one per round."""
+    now = now or datetime.now(timezone.utc)
+    config = await get_config(db)
+    if not config.career_reminders_enabled:
+        return 0
+    ids = (await db.execute(select(CareerSeason.id).where(CareerSeason.status == "active"))).scalars().all()
+    sent = 0
+    for season_id in ids:
+        season = await _lock_season(db, season_id)
+        index = season.rounds_played
+        at = _round_at(season, index) if season.status == "active" else None
+        reminded = list((season.state or {}).get("reminded") or [])
+        if at is None or index in reminded or not (now < at <= now + REMINDER_WINDOW):
+            await db.commit()
+            continue
+        teams = season.state["teams"]
+        minutes = max(1, round((at - now).total_seconds() / 60))
+        for part in season.participants:
+            if part.status != "accepted":
+                continue
+            match = next(m for m in season.state["fixtures"][index] if part.team_index in m)
+            opponent = teams[match[1] if match[0] == part.team_index else match[0]]["name"]
+            await notify(
+                db, part.user_id, NotificationType.career_reminder, f"Карьера: тур {index + 1} через {minutes} мин",
+                f"Соперник — «{opponent}». Проверь состав: усталость, травмы и дисквалификации.",
+                related_object_type="career_season", related_object_id=season.id,
+            )
+            sent += 1
+        state = copy.deepcopy(season.state)
+        state["reminded"] = reminded + [index]
+        season.state = state
+        flag_modified(season, "state")
+        await db.commit()
+    return sent
+
+
 async def resolve_all_due(db: AsyncSession, now: Optional[datetime] = None) -> int:
     now = now or datetime.now(timezone.utc)
     ids = (await db.execute(
@@ -622,7 +728,10 @@ async def get_view(db: AsyncSession, user: User) -> dict:
     base = {"enabled": config.career_enabled, "difficulties": [
         {"code": d, "label": DIFFICULTY_LABELS[d], "reward_pct": (config.career_difficulty_reward_pct or [100, 150, 200])[i]}
         for i, d in enumerate(DIFFICULTIES)
-    ], "place_rewards": config.career_place_rewards, "slots": [f"{h:02d}:{m:02d}" for h, m in CAREER_SLOTS]}
+    ], "place_rewards": config.career_place_rewards, "slots": [f"{h:02d}:{m:02d}" for h, m in CAREER_SLOTS],
+        # The same slots as today's absolute times, so the client can show them
+        # in the player's own time zone (the calendar does the same).
+        "slot_times": _todays_slot_times()}
     if part is None:
         return {**base, "season": None}
     season = await db.get(CareerSeason, part.season_id)
@@ -674,6 +783,8 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
                  "has_events": bool(played and played[i].get("events"))}
                 for i, (h, a) in enumerate(fixtures)
             ],
+            # Viewer's own after-match report: cards, injuries, form.
+            "report": ((state.get("reports") or {}).get(str(r)) or {}).get(str(me.team_index)),
         })
     if me.status == "accepted":
         cards = await owned_cards(db, me.user_id)
@@ -691,8 +802,11 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
             out["squad"].append({
                 "card": UserCardOut.model_validate(card) if card else None,
                 "card_id": card_id,
-                "fatigue": cond.get("fatigue", 0),
-                "injured_rounds": max(0, cond.get("injured_until", 0) - next_round),
+                "fatigue": cond["fatigue"],
+                "injured_rounds": max(0, cond["injured_until"] - next_round),
+                "suspended_rounds": max(0, cond["suspended_until"] - next_round),
+                "yellows": cond["yellows"],
+                "form": cond["form"],
                 "owned": card is not None,
             })
     return out

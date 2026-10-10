@@ -196,3 +196,71 @@ async def test_friends_requests_relation_and_feed(client, db_session, bot_token)
 
     assert (await client.delete(f"{API}/friends/{b_id}", headers=a_headers)).status_code == 204
     assert (await client.get(f"{API}/friends", headers=b_headers)).json()["friends"] == []
+
+
+class _FixedRng:
+    """random.Random stand-in: random() always returns `value`."""
+
+    def __init__(self, value: float):
+        self.value = value
+
+    def random(self) -> float:
+        return self.value
+
+    def randint(self, a: int, b: int) -> int:
+        return a
+
+
+def _cfg(**kw):
+    from types import SimpleNamespace
+
+    base = dict(
+        career_fatigue_per_match=35, career_fatigue_recovery=40, career_injury_chance_pct=0,
+        career_yellow_chance_pct=0, career_red_chance_pct=0, career_yellows_for_ban=3, career_form_max=2,
+    )
+    base.update(kw)
+    return SimpleNamespace(**base)
+
+
+def test_yellows_add_up_to_a_ban_and_a_red_is_one_round_out():
+    part = CareerParticipant(squad_card_ids=[1, 2], condition={})
+    cfg = _cfg(career_yellow_chance_pct=100)
+    for r in range(3):
+        report = career_service._after_match(part, {1}, 1, 1, r, cfg, _FixedRng(0.5), {1: "Иванов"})
+    assert report["suspended"] == ["Иванов"]
+    cond = career_service._condition(part, 1)
+    assert cond["yellows"] == 0 and cond["suspended_until"] == 4
+    assert career_service._is_out(part, 1, 3) and not career_service._is_out(part, 1, 4)
+    assert career_service._condition(part, 2)["yellows"] == 0  # card 2 never played
+
+    part = CareerParticipant(squad_card_ids=[1], condition={})
+    report = career_service._after_match(part, {1}, 0, 1, 5, _cfg(career_red_chance_pct=100), _FixedRng(0.5), {1: "Петров"})
+    assert report["red"] == ["Петров"]
+    assert career_service._is_out(part, 1, 6) and not career_service._is_out(part, 1, 7)
+
+
+def test_form_after_win_and_defeat_affects_next_match_only():
+    part = CareerParticipant(squad_card_ids=[1, 2], condition={})
+    report = career_service._after_match(part, {1}, 2, 0, 0, _cfg(), _FixedRng(0.1), {1: "A"})
+    assert report["form_up"] == ["A"] and career_service._condition(part, 1)["form"] == 2
+    assert career_service._condition(part, 2)["form"] == 0  # bench: no form
+    career_service._after_match(part, {1}, 0, 2, 1, _cfg(), _FixedRng(0.1), {1: "A"})
+    assert career_service._condition(part, 1)["form"] == -1
+    career_service._after_match(part, set(), 0, 2, 2, _cfg(), _FixedRng(0.1), {1: "A"})
+    assert career_service._condition(part, 1)["form"] == 0  # rested: form fades
+
+
+async def test_round_report_and_reminder_once_per_round(client, db_session, bot_token):
+    user_id, headers = await _player_with_cards(client, db_session, bot_token, 860020)
+    season = (await client.post(f"{API}/career/seasons", headers=headers, json={})).json()["season"]
+    first = datetime.fromisoformat(season["schedule"][0])
+
+    assert await career_service.send_reminders(db_session, now=first - timedelta(hours=3)) == 0  # too early
+    assert await career_service.send_reminders(db_session, now=first - timedelta(minutes=30)) == 1
+    assert await career_service.send_reminders(db_session, now=first - timedelta(minutes=20)) == 0  # once per round
+
+    await career_service.resolve_due(db_session, season["id"], now=first)
+    view = (await client.get(f"{API}/career", headers=headers)).json()["season"]
+    report = view["rounds"][0]["report"]
+    assert report is not None and set(report) >= {"yellow", "red", "injured", "form_up", "form_down"}
+    assert all("yellows" in s and "suspended_rounds" in s and "form" in s for s in view["squad"])

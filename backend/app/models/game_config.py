@@ -212,6 +212,14 @@ class GameConfig(TimestampMixin, Base):
     career_fatigue_recovery: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
     career_fatigue_penalty_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     career_injury_chance_pct: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Discipline per match played: a yellow (N yellows = one round out) or a
+    # straight red (one round out). Form: after a win a player may get
+    # +1..+max rating for the next match, after a defeat -1.
+    career_yellow_chance_pct: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    career_red_chance_pct: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    career_yellows_for_ban: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    career_form_max: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    career_reminders_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     free_pack_pack_slug: Mapped[str] = mapped_column(String, default="basic", nullable=False)
 
     # "вкарта" command in group chats — reuses free_pack_pack_slug's pack but

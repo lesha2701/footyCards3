@@ -206,6 +206,11 @@ export interface GameConfig {
   career_fatigue_recovery: number;
   career_fatigue_penalty_pct: number;
   career_injury_chance_pct: number;
+  career_yellow_chance_pct: number;
+  career_red_chance_pct: number;
+  career_yellows_for_ban: number;
+  career_form_max: number;
+  career_reminders_enabled: boolean;
   free_pack_pack_slug: string;
   chat_pack_interval_hours: number;
   referral_referred_reward: number;

@@ -321,6 +321,7 @@ class NotificationType(str, enum.Enum):
     career_invite = "career_invite"
     career_round_result = "career_round_result"
     career_season_finished = "career_season_finished"
+    career_reminder = "career_reminder"
 
 
 class TradeCardSide(str, enum.Enum):

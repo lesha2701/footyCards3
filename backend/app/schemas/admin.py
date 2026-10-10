@@ -249,6 +249,11 @@ class GameConfigOut(BaseModel):
     career_fatigue_recovery: int = 40
     career_fatigue_penalty_pct: int = 15
     career_injury_chance_pct: int = 3
+    career_yellow_chance_pct: int = 8
+    career_red_chance_pct: int = 1
+    career_yellows_for_ban: int = 3
+    career_form_max: int = 2
+    career_reminders_enabled: bool = True
     free_pack_pack_slug: str
     chat_pack_interval_hours: int
     referral_referred_reward: int
@@ -420,6 +425,11 @@ class GameConfigUpdate(BaseModel):
     career_fatigue_recovery: Optional[int] = Field(default=None, ge=0, le=100)
     career_fatigue_penalty_pct: Optional[int] = Field(default=None, ge=0, le=60)
     career_injury_chance_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    career_yellow_chance_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    career_red_chance_pct: Optional[int] = Field(default=None, ge=0, le=20)
+    career_yellows_for_ban: Optional[int] = Field(default=None, ge=1, le=10)
+    career_form_max: Optional[int] = Field(default=None, ge=0, le=5)
+    career_reminders_enabled: Optional[bool] = None
     free_pack_pack_slug: Optional[str] = None
     chat_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     referral_referred_reward: Optional[int] = Field(default=None, ge=0)

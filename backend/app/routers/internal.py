@@ -89,6 +89,12 @@ async def resolve_career_rounds(slot_key: str | None = None, db: AsyncSession = 
     return SimulateRoundResult(matches_simulated=await career_service.resolve_all_due(db))
 
 
+@router.post("/career/reminders", response_model=PlayerTournamentReminderResult)
+async def career_reminders(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Called by the bot ~30 min before each career slot: "скоро тур"."""
+    return PlayerTournamentReminderResult(users_notified=await career_service.send_reminders(db))
+
+
 @router.post("/player-tournaments/lineup-reminders", response_model=PlayerTournamentReminderResult)
 async def player_tournament_lineup_reminders(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
     count = await player_tournament_notification_service.send_lineup_reminders(db, slot_key=slot_key)

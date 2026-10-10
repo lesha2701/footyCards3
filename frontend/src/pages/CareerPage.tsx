@@ -12,6 +12,7 @@ import {
   type CareerSeason,
   type CareerSlot,
   type CareerSquadCard,
+  type CareerRoundReport,
   type CareerView,
 } from "@/api/career";
 import { fetchFriends } from "@/api/friends";
@@ -24,6 +25,13 @@ import { CATEGORY_POSITIONS } from "@/lib/formation";
 import { haptic } from "@/lib/telegram";
 
 type Tab = "squad" | "table" | "calendar";
+
+/** Round times in the viewer's own time zone (the server schedules them in
+ * its own one, e.g. 12:00/19:00 Moscow). */
+function localSlots(view: CareerView): string[] {
+  if (!view.slot_times?.length) return view.slots;
+  return view.slot_times.map((t) => new Date(t).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }));
+}
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "";
@@ -102,7 +110,7 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
       <div className="text-sm text-ink-mist">
         <p className="font-display text-base font-bold text-ink-chalk">Сезон на неделю</p>
         <p className="mt-1">
-          8 команд, 14 туров — по два в день, в {view.slots.join(" и ")}. Играешь своими карточками: заявка из 16
+          8 команд, 14 туров — по два в день, в {localSlots(view).join(" и ")}. Играешь своими карточками: заявка из 16
           игроков, следи за усталостью и травмами. Вход бесплатный.
         </p>
       </div>
@@ -352,6 +360,7 @@ function Calendar({ season }: { season: CareerSeason }) {
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm text-ink-chalk">{home ? "vs" : "@"} {opp.name}</span>
               <span className="block text-[10px] text-ink-mist-dim">{formatWhen(round.at)}</span>
+              {round.report && <RoundReport report={round.report} />}
             </span>
             <span className={`font-mono text-sm font-bold ${tone}`}>{played ? `${own}:${theirs}` : "—"}</span>
             {m.has_events && <IconChevronRight size={14} className="text-ink-mist-dim" />}
@@ -359,6 +368,23 @@ function Calendar({ season }: { season: CareerSeason }) {
         );
       })}
     </section>
+  );
+}
+
+function RoundReport({ report }: { report: CareerRoundReport }) {
+  const parts: { text: string; tone: string }[] = [];
+  if (report.red.length) parts.push({ text: `красная: ${report.red.join(", ")}`, tone: "text-red-400" });
+  if (report.suspended.length) parts.push({ text: `дисквал.: ${report.suspended.join(", ")}`, tone: "text-red-400" });
+  if (report.yellow.length) parts.push({ text: `жёлтые: ${report.yellow.join(", ")}`, tone: "text-yellow-300" });
+  if (report.injured.length) parts.push({ text: `травма: ${report.injured.join(", ")}`, tone: "text-red-400" });
+  if (report.form_up.length) parts.push({ text: `в форме: ${report.form_up.join(", ")}`, tone: "text-accent-lime" });
+  if (!parts.length) return null;
+  return (
+    <span className="mt-0.5 block text-[10px] leading-snug">
+      {parts.map((p, i) => (
+        <span key={i} className={`${p.tone} block truncate`}>{p.text}</span>
+      ))}
+    </span>
   );
 }
 
@@ -376,7 +402,10 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
   const [mentality, setMentality] = useState(season.mentality);
   const [playstyle, setPlaystyle] = useState(season.playstyle);
   const [picking, setPicking] = useState<CareerSlot | null>(null);
-  useEffect(() => setSlots(season.lineup), [season.lineup]);
+  // Reset the local edit only when the saved lineup itself changes — not on
+  // every background refetch, which would wipe unsaved changes each minute.
+  const savedKey = JSON.stringify(season.lineup);
+  useEffect(() => setSlots(JSON.parse(savedKey)), [savedKey]);
   const byId = useMemo(() => new Map(season.squad.map((s) => [s.card_id, s])), [season.squad]);
   const save = useMutation({
     mutationFn: (payload: { formation?: string; slots?: Record<string, number> }) =>
@@ -398,7 +427,8 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
         <Select value={playstyle} options={PLAYSTYLES} onChange={setPlaystyle} />
       </div>
       <p className="text-[11px] text-ink-mist">
-        Пустые места и травмированных автоматически заменит лучший свежий игрок заявки. Усталость снижает рейтинг в матче.
+        Пустые места, травмированных и дисквалифицированных автоматически заменит лучший свежий игрок заявки.
+        Усталость снижает рейтинг, форма ▲ после победы добавляет. Три жёлтые или красная — пропуск тура.
       </p>
       <div className="flex flex-col divide-y divide-white/5">
         {season.slots.map((slot) => (
@@ -462,7 +492,26 @@ function SquadRow({ label, entry, onClick }: { label: string; entry?: CareerSqua
         </span>
         {card && <span className="text-[10px] text-ink-mist">{card.player.position} · {card.player.rating}</span>}
       </span>
-      {entry && entry.injured_rounds > 0 ? (
+      {entry && entry.form !== 0 && entry.injured_rounds === 0 && entry.suspended_rounds === 0 && (
+        <span
+          className={`font-mono text-[10px] font-bold ${entry.form > 0 ? "text-accent-lime" : "text-red-400"}`}
+          title="Форма на следующий матч"
+        >
+          {entry.form > 0 ? `▲+${entry.form}` : `▼${entry.form}`}
+        </span>
+      )}
+      {entry && entry.yellows > 0 && entry.suspended_rounds === 0 && (
+        <span className="flex items-center gap-0.5" title={`Жёлтых карточек: ${entry.yellows}`}>
+          {Array.from({ length: entry.yellows }).map((_, i) => (
+            <span key={i} className="h-3 w-2 rounded-[2px] bg-yellow-400" />
+          ))}
+        </span>
+      )}
+      {entry && entry.suspended_rounds > 0 ? (
+        <span className="flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
+          <span className="h-3 w-2 rounded-[2px] bg-red-500" /> дисквал. · {entry.suspended_rounds} т.
+        </span>
+      ) : entry && entry.injured_rounds > 0 ? (
         <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
           травма · {entry.injured_rounds} т.
         </span>

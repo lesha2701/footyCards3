@@ -60,10 +60,20 @@ class CareerMatchOut(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class CareerRoundReportOut(BaseModel):
+    yellow: list[str] = []
+    red: list[str] = []
+    suspended: list[str] = []
+    injured: list[str] = []
+    form_up: list[str] = []
+    form_down: list[str] = []
+
+
 class CareerRoundOut(BaseModel):
     index: int
     at: Optional[datetime] = None
     matches: list[CareerMatchOut]
+    report: Optional[CareerRoundReportOut] = None
 
 
 class CareerParticipantOut(BaseModel):
@@ -78,6 +88,9 @@ class CareerSquadCardOut(BaseModel):
     card_id: int
     fatigue: int
     injured_rounds: int
+    suspended_rounds: int = 0
+    yellows: int = 0
+    form: int = 0
     owned: bool
 
 
@@ -126,6 +139,7 @@ class CareerViewOut(BaseModel):
     difficulties: list[CareerDifficultyOut]
     place_rewards: list[int]
     slots: list[str]
+    slot_times: list[datetime] = []
     season: Optional[CareerSeasonOut] = None
     invite: Optional[CareerInviteOut] = None
 

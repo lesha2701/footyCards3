@@ -28,10 +28,21 @@ export interface CareerMatch {
   has_events: boolean;
 }
 
+export interface CareerRoundReport {
+  yellow: string[];
+  red: string[];
+  suspended: string[];
+  injured: string[];
+  form_up: string[];
+  form_down: string[];
+}
+
 export interface CareerRound {
   index: number;
   at: string | null;
   matches: CareerMatch[];
+  /** My team's after-match report (cards, injuries, form); null if not played. */
+  report: CareerRoundReport | null;
 }
 
 export interface CareerSquadCard {
@@ -39,6 +50,10 @@ export interface CareerSquadCard {
   card_id: number;
   fatigue: number;
   injured_rounds: number;
+  suspended_rounds: number;
+  yellows: number;
+  /** Rating change for the next match from the last one (+1..+2 / -1). */
+  form: number;
   owned: boolean;
 }
 
@@ -80,6 +95,8 @@ export interface CareerView {
   difficulties: { code: string; label: string; reward_pct: number }[];
   place_rewards: number[];
   slots: string[];
+  /** Today's round times as absolute instants — format in local time. */
+  slot_times: string[];
   season: CareerSeason | null;
   invite: { season_id: number; difficulty_label: string; from_name: string; expires_at: string | null } | null;
 }

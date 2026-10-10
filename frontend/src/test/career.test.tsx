@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -18,6 +18,7 @@ const baseView: CareerView = {
   ],
   place_rewards: [1500, 1000, 700, 500, 350, 250, 150, 100],
   slots: ["12:00", "19:00"],
+  slot_times: [],
   season: null,
   invite: null,
 };
@@ -34,8 +35,11 @@ const activeSeason: CareerSeason = {
   teams,
   table: teams.map((t) => ({ team_index: t.index, played: 1, won: t.index === 0 ? 1 : 0, drawn: 0, lost: t.index === 0 ? 0 : 1, gf: 1, ga: 0, points: t.index === 0 ? 3 : 0 })),
   rounds: [
-    { index: 0, at: null, matches: [{ home: 0, away: 1, hs: 2, as: 1, has_events: true }] },
-    { index: 1, at: null, matches: [{ home: 2, away: 0, hs: null, as: null, has_events: false }] },
+    {
+      index: 0, at: null, matches: [{ home: 0, away: 1, hs: 2, as: 1, has_events: true }],
+      report: { yellow: ["Иванов"], red: [], suspended: [], injured: [], form_up: [], form_down: [] },
+    },
+    { index: 1, at: null, matches: [{ home: 2, away: 0, hs: null, as: null, has_events: false }], report: null },
   ],
   squad: [], lineup: {}, slots: [], formation: "4-3-3", mentality: "BALANCED", playstyle: "CENTRAL_PLAY",
 };
@@ -70,6 +74,13 @@ describe("CareerPage", () => {
     expect(screen.getByText(/тур 2 из 14/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Таблица" })).toBeInTheDocument();
     expect(screen.getByText("1 место")).toBeInTheDocument();
+  });
+
+  it("shows the after-match report (cards) in the calendar", async () => {
+    fetchCareer.mockResolvedValue({ ...baseView, season: activeSeason });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Календарь" }));
+    expect(screen.getByText("жёлтые: Иванов")).toBeInTheDocument();
   });
 
   it("lets an invited friend accept or decline", async () => {
