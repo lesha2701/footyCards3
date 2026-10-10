@@ -7,7 +7,9 @@ import { claimDailyReward, fetchDailyRewardCalendar } from "@/api/dailyRewards";
 import { fetchFeatureFlags } from "@/api/featureFlags";
 import { fetchLeagueStatus } from "@/api/leagues";
 import { fetchMyGifts } from "@/api/gifts";
-import { fetchMyBadges, fetchMyProfile, fetchMyTransactions, fetchMyTrophies, updateMySettings } from "@/api/profile";
+import {
+  fetchMyAttention, fetchMyBadges, fetchMyProfile, fetchMyTransactions, fetchMyTrophies, updateMySettings,
+} from "@/api/profile";
 import { UserBadge } from "@/components/common/UserBadge";
 import ThemeSetting from "@/components/profile/ThemeSetting";
 import { BuyCoinsModal } from "@/components/shop/CoinPackages";
@@ -55,6 +57,7 @@ export default function ProfilePage() {
   const [showDocuments, setShowDocuments] = useState(false);
 
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
+  const { data: attention } = useQuery({ queryKey: ["attention"], queryFn: fetchMyAttention, refetchInterval: 60000 });
   const { data: leagueStatus } = useQuery({ queryKey: ["league-status"], queryFn: fetchLeagueStatus });
   const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags });
   const { data: badges } = useQuery({ queryKey: ["profile", "badges"], queryFn: fetchMyBadges });
@@ -204,6 +207,24 @@ export default function ProfilePage() {
           </div>
         </section>
       )}
+
+      <button
+        onClick={() => navigate("/friends")}
+        className="flex items-center justify-between rounded-2xl bg-bg-surface p-4 text-left active:scale-[0.99]"
+      >
+        <span className="flex items-center gap-1.5 font-display text-base font-bold text-ink-chalk">
+          <IconUsers size={16} className="text-accent-lime" />
+          Друзья
+        </span>
+        <span className="flex items-center gap-2">
+          {!!attention?.friend_requests && (
+            <span className="rounded-full bg-accent-lime px-2 py-0.5 font-mono text-[10px] font-bold text-bg-base">
+              {attention.friend_requests} новых
+            </span>
+          )}
+          <IconChevronRight size={16} className="text-ink-mist-dim" />
+        </span>
+      </button>
 
       <button
         onClick={() => navigate("/gifts")}

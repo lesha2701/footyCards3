@@ -14,6 +14,7 @@ from app.schemas.stars import (
 from app.schemas.player_tournament import PlayerTournamentReminderResult
 from app.schemas.tournament import LineupReminderResult, SimulateRoundResult
 from app.services import (
+    career_service,
     chat_pack_service,
     player_tournament_notification_service,
     player_tournament_simulation_service,
@@ -78,6 +79,14 @@ async def simulate_player_tournament_round(slot_key: str | None = None, db: Asyn
     Duplicate slot_key = no-op (see player_tournament_simulation_service)."""
     matches = await player_tournament_simulation_service.simulate_next_round(db, slot_key=slot_key)
     return SimulateRoundResult(matches_simulated=len(matches))
+
+
+@router.post("/career/resolve-due", response_model=SimulateRoundResult)
+async def resolve_career_rounds(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Called by the bot's career scheduler at CAREER_SLOTS: plays every
+    career round whose time has come. Idempotent — each season row is
+    locked and a round is only played once (rounds_played advances)."""
+    return SimulateRoundResult(matches_simulated=await career_service.resolve_all_due(db))
 
 
 @router.post("/player-tournaments/lineup-reminders", response_model=PlayerTournamentReminderResult)

@@ -50,6 +50,8 @@ export interface Attention {
   match_challenges: number;
   active_friend_matches: number;
   league_unseen_rewards: number;
+  friend_requests: number;
+  career_invites: number;
 }
 
 /** Badge counts for the bottom navigation (one cheap request). */

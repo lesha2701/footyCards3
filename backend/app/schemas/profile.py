@@ -62,3 +62,5 @@ class AttentionOut(BaseModel):
     match_challenges: int = 0
     active_friend_matches: int = 0
     league_unseen_rewards: int = 0
+    friend_requests: int = 0
+    career_invites: int = 0

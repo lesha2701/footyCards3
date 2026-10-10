@@ -11,6 +11,7 @@ from app.models.tactico import TacticoMatch
 from app.models.trade import TradeOffer
 from app.models.user import User
 from app.schemas.profile import AttentionOut
+from app.services import career_service, friend_service
 
 
 async def _count(db: AsyncSession, stmt) -> int:
@@ -43,4 +44,6 @@ async def get_attention(db: AsyncSession, user: User) -> AttentionOut:
         match_challenges=challenges,
         active_friend_matches=active,
         league_unseen_rewards=len(await _unseen_rewards(db, user)),
+        friend_requests=await friend_service.incoming_count(db, user.id),
+        career_invites=await career_service.invited_count(db, user.id),
     )

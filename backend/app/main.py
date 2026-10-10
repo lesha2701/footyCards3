@@ -39,12 +39,14 @@ from app.routers import (
     broadcasts,
     card_collections,
     card_skills,
+    career,
     clubs,
     player_tournaments,
     collection,
     daily_rewards,
     feature_flags,
     free_pack,
+    friends,
     games,
     gifts,
     internal,
@@ -118,6 +120,8 @@ app.include_router(games.router, prefix=API_PREFIX)
 app.include_router(feature_flags.router, prefix=API_PREFIX)
 app.include_router(gifts.router, prefix=API_PREFIX)
 app.include_router(lineups.router, prefix=API_PREFIX)
+app.include_router(career.router, prefix=API_PREFIX)
+app.include_router(friends.router, prefix=API_PREFIX)
 app.include_router(maintenance.router, prefix=API_PREFIX)
 app.include_router(broadcasts.router, prefix=API_PREFIX)
 app.include_router(announcement.router, prefix=API_PREFIX)

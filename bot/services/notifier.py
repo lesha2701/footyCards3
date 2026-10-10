@@ -44,6 +44,11 @@ _TYPE_PATHS = {
     "player_tournament_match": "/player-tournament",
     "player_tournament_results_ready": "/player-tournament",
     "player_tournament_reminder": "/player-tournament",
+    "career_invite": "/play/career",
+    "career_round_result": "/play/career",
+    "career_season_finished": "/play/career",
+    "friend_request": "/friends",
+    "friend_accepted": "/friends",
 }
 
 

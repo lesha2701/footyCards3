@@ -77,6 +77,11 @@ export default function PlayPage() {
       stat: `Рейтинг: ${tacticoStats?.tactics_rating ?? user?.tactics_rating ?? 0}`, limitKey: "tactico",
     },
     {
+      path: "/play/career", Icon: IconTrophy, badgeClass: "bg-accent-cyan", title: "Карьера тренера",
+      description: "Сезон на неделю: 8 команд, 14 туров, свои карточки — один или с другом",
+      rightLabel: "2 тура в день",
+    },
+    {
       path: "/player-tournament", Icon: IconFlagCheckered, badgeClass: "bg-accent-lime", title: "Личный турнир",
       description: "16 игроков, 30 туров — свой состав и тактика",
       stat: playerTournamentStatusLabel(playerTournamentCurrent?.status, playerTournamentCurrent?.queue_position),

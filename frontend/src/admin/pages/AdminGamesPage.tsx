@@ -32,6 +32,25 @@ export default function AdminGamesPage() {
     </label>
   );
 
+  const listField = (
+    key: "career_place_rewards" | "career_difficulty_reward_pct" | "career_difficulty_rating_offset",
+    label: string,
+  ) => (
+    <label className="col-span-2 flex flex-col gap-1">
+      <span className="text-xs text-slate-400">{label}</span>
+      <input
+        defaultValue={(form[key] ?? []).join(", ")}
+        onBlur={(e) =>
+          setForm({
+            ...form,
+            [key]: e.target.value.split(",").map((v) => Number(v.trim())).filter((v) => Number.isFinite(v)),
+          })
+        }
+        className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+      />
+    </label>
+  );
+
   const toggle = (
     key:
       | "matchmaking_enabled"
@@ -39,7 +58,8 @@ export default function AdminGamesPage() {
       | "leagues_enabled"
       | "diamond_rating_cap_enabled"
       | "bot_daily_digest_enabled"
-      | "shop_daily_offer_enabled",
+      | "shop_daily_offer_enabled"
+      | "career_enabled",
     label: string,
   ) => (
     <label className="flex items-center gap-2 text-sm">
@@ -233,6 +253,27 @@ export default function AdminGamesPage() {
               className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
             />
           </label>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Карьера тренера</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Сезон на неделю: 8 команд, 14 туров (12:00 и 19:00), вход бесплатный. Списки — через запятую:
+          награды за места 1→8, и по сложностям Любитель, Профи, Легенда.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("career_enabled", "Режим включён")}
+          {listField("career_place_rewards", "Награда за места 1–8, монеты")}
+          {listField("career_difficulty_reward_pct", "Множитель награды по сложности, %")}
+          {listField("career_difficulty_rating_offset", "Сила ботов относительно заявки, ±рейтинг")}
+          {field("career_match_reward_win", "За победу в туре")}
+          {field("career_match_reward_draw", "За ничью в туре")}
+          {field("career_bot_growth_tenths", "Рост ботов за тур, десятые рейтинга")}
+          {field("career_fatigue_per_match", "Усталость за матч, %")}
+          {field("career_fatigue_recovery", "Восстановление за тур отдыха, %")}
+          {field("career_fatigue_penalty_pct", "Штраф рейтинга при 100% усталости, %")}
+          {field("career_injury_chance_pct", "Шанс травмы за матч, %")}
         </div>
       </section>
 

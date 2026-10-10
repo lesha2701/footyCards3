@@ -14,8 +14,9 @@ export function useNavBadges(): Record<string, number> {
   });
   return {
     "/": claimableCount,
-    "/play": (attention?.match_challenges ?? 0) + (attention?.active_friend_matches ?? 0),
+    "/play":
+      (attention?.match_challenges ?? 0) + (attention?.active_friend_matches ?? 0) + (attention?.career_invites ?? 0),
     "/collection": attention?.incoming_trades ?? 0,
-    "/profile": attention?.league_unseen_rewards ?? 0,
+    "/profile": (attention?.league_unseen_rewards ?? 0) + (attention?.friend_requests ?? 0),
   };
 }

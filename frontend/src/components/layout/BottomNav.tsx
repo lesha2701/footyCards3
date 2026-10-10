@@ -22,9 +22,9 @@ const TABS: { to: string; label: string; Icon: (props: IconProps) => JSX.Element
 
 const BADGE_LABELS: Record<string, string> = {
   "/": "Можно забрать",
-  "/play": "Вызовы и матчи с друзьями",
+  "/play": "Вызовы, матчи с друзьями и приглашения в карьеру",
   "/collection": "Входящие обмены",
-  "/profile": "Новые награды лиги",
+  "/profile": "Заявки в друзья и награды лиги",
 };
 
 export default function BottomNav() {

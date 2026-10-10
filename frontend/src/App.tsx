@@ -99,6 +99,9 @@ const LeaguePage = lazy(() => import("@/pages/LeaguePage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const GiftsPage = lazy(() => import("@/pages/GiftsPage"));
 const PublicProfilePage = lazy(() => import("@/pages/PublicProfilePage"));
+const CareerPage = lazy(() => import("@/pages/CareerPage"));
+const CareerMatchPage = lazy(() => import("@/pages/CareerMatchPage"));
+const FriendsPage = lazy(() => import("@/pages/FriendsPage"));
 
 function PenaltySearchRoute() {
   const location = useLocation();
@@ -214,6 +217,9 @@ export default function App() {
         <Route path="/play/memory" element={<MemoryGamePage />} />
         <Route path="/play/arena" element={<ArenaPage />} />
         <Route path="/play/tactico" element={<TacticoMatchesPage />} />
+        <Route path="/play/career" element={<CareerPage />} />
+        <Route path="/play/career/seasons/:seasonId/rounds/:round/matches/:match" element={<CareerMatchPage />} />
+        <Route path="/friends" element={<FriendsPage />} />
         <Route path="/play/tactico/squad" element={<TacticoSquadPage />} />
         <Route path="/play/tactico/search" element={<TacticoSearchPage />} />
         <Route path="/play/tactico/matches/:matchId" element={<TacticoMatchPage />} />

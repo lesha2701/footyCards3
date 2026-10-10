@@ -238,6 +238,17 @@ class GameConfigOut(BaseModel):
     shop_daily_offer_enabled: bool = False
     shop_daily_offer_discount_pct: int = 25
     shop_daily_offer_pack_id: Optional[int] = None
+    career_enabled: bool = True
+    career_place_rewards: list[int] = []
+    career_difficulty_reward_pct: list[int] = []
+    career_difficulty_rating_offset: list[int] = []
+    career_match_reward_win: int = 30
+    career_match_reward_draw: int = 10
+    career_bot_growth_tenths: int = 3
+    career_fatigue_per_match: int = 35
+    career_fatigue_recovery: int = 40
+    career_fatigue_penalty_pct: int = 15
+    career_injury_chance_pct: int = 3
     free_pack_pack_slug: str
     chat_pack_interval_hours: int
     referral_referred_reward: int
@@ -397,6 +408,18 @@ class GameConfigUpdate(BaseModel):
     shop_daily_offer_discount_pct: Optional[int] = Field(default=None, ge=1, le=90)
     # 0 = rotate through active coin packs by date (stored as NULL).
     shop_daily_offer_pack_id: Optional[int] = Field(default=None, ge=0)
+    career_enabled: Optional[bool] = None
+    # 8 places; 3 difficulties (Любитель, Профи, Легенда).
+    career_place_rewards: Optional[list[int]] = Field(default=None, min_length=8, max_length=8)
+    career_difficulty_reward_pct: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    career_difficulty_rating_offset: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    career_match_reward_win: Optional[int] = Field(default=None, ge=0)
+    career_match_reward_draw: Optional[int] = Field(default=None, ge=0)
+    career_bot_growth_tenths: Optional[int] = Field(default=None, ge=0, le=30)
+    career_fatigue_per_match: Optional[int] = Field(default=None, ge=0, le=100)
+    career_fatigue_recovery: Optional[int] = Field(default=None, ge=0, le=100)
+    career_fatigue_penalty_pct: Optional[int] = Field(default=None, ge=0, le=60)
+    career_injury_chance_pct: Optional[int] = Field(default=None, ge=0, le=50)
     free_pack_pack_slug: Optional[str] = None
     chat_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     referral_referred_reward: Optional[int] = Field(default=None, ge=0)

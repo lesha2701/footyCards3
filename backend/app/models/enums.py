@@ -96,6 +96,7 @@ class TransactionType(str, enum.Enum):
     penalty_stake_win = "penalty_stake_win"
     penalty_stake_refund = "penalty_stake_refund"
     card_skill_purchase = "card_skill_purchase"
+    career_reward = "career_reward"
 
 
 class GiftKind(str, enum.Enum):
@@ -315,6 +316,11 @@ class NotificationType(str, enum.Enum):
     premium_task_coins_withdrawn = "premium_task_coins_withdrawn"
     premium_task_coins_restored = "premium_task_coins_restored"
     club_activity_reminder = "club_activity_reminder"
+    friend_request = "friend_request"
+    friend_accepted = "friend_accepted"
+    career_invite = "career_invite"
+    career_round_result = "career_round_result"
+    career_season_finished = "career_season_finished"
 
 
 class TradeCardSide(str, enum.Enum):

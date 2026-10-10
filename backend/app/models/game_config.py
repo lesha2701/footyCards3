@@ -191,6 +191,27 @@ class GameConfig(TimestampMixin, Base):
     shop_daily_offer_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     shop_daily_offer_discount_pct: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
     shop_daily_offer_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # --- "Карьера тренера" (services/career_service.py) ---
+    career_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Coins by final place, index 0 = 1st ... 7 = 8th; x the difficulty %.
+    career_place_rewards: Mapped[list] = mapped_column(
+        JSON, default=lambda: [1500, 1000, 700, 500, 350, 250, 150, 100], nullable=False,
+    )
+    # [amateur, pro, legend]: reward multiplier (%) and bot rating offset vs. the squad.
+    career_difficulty_reward_pct: Mapped[list] = mapped_column(JSON, default=lambda: [100, 150, 200], nullable=False)
+    career_difficulty_rating_offset: Mapped[list] = mapped_column(JSON, default=lambda: [-6, 0, 4], nullable=False)
+    career_match_reward_win: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    career_match_reward_draw: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Bots get stronger through the season: +N tenths of a rating point per round.
+    career_bot_growth_tenths: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Fatigue (0-100): +per match played, -per round rested; at 100 a player
+    # plays at -penalty% rating. Injury chance per match played (doubled
+    # above 70 fatigue) rules the card out for 1-2 rounds.
+    career_fatigue_per_match: Mapped[int] = mapped_column(Integer, default=35, nullable=False)
+    career_fatigue_recovery: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    career_fatigue_penalty_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    career_injury_chance_pct: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     free_pack_pack_slug: Mapped[str] = mapped_column(String, default="basic", nullable=False)
 
     # "вкарта" command in group chats — reuses free_pack_pack_slug's pack but

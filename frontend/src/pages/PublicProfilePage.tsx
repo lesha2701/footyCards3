@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { UserBadge } from "@/components/common/UserBadge";
+import FriendButton from "@/components/profile/FriendButton";
 import { IconChevronLeft, IconSwap } from "@/components/icons";
 import { fetchPublicProfile } from "@/api/profile";
 import { staticUrl } from "@/lib/api";
@@ -56,6 +57,7 @@ export default function PublicProfilePage() {
             Предложить обмен
           </button>
         )}
+        {me?.id !== profile.id && <FriendButton userId={profile.id} />}
       </section>
 
       <section className="rounded-2xl bg-bg-surface p-4">

@@ -195,6 +195,17 @@ export interface GameConfig {
   shop_daily_offer_enabled: boolean;
   shop_daily_offer_discount_pct: number;
   shop_daily_offer_pack_id: number | null;
+  career_enabled: boolean;
+  career_place_rewards: number[];
+  career_difficulty_reward_pct: number[];
+  career_difficulty_rating_offset: number[];
+  career_match_reward_win: number;
+  career_match_reward_draw: number;
+  career_bot_growth_tenths: number;
+  career_fatigue_per_match: number;
+  career_fatigue_recovery: number;
+  career_fatigue_penalty_pct: number;
+  career_injury_chance_pct: number;
   free_pack_pack_slug: string;
   chat_pack_interval_hours: number;
   referral_referred_reward: number;
