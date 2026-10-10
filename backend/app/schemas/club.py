@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from app.models.enums import ClubJoinRequestStatus, ClubLogoShape, ClubRole, ClubType
 

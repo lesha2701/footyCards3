@@ -12,7 +12,7 @@ from app.models.club import Club, ClubJoinRequest, ClubMember
 from app.models.club_daily_claim import ClubDailyClaim
 from app.models.enums import ClubBudgetTransactionType, ClubJoinRequestStatus, ClubRole, ClubType, NotificationType, TransactionType
 from app.models.user import User
-from app.schemas.club import ClubCreate, ClubDetailOut, ClubJoinRequestOut, ClubMemberOut, ClubSummaryOut, ClubUpdate
+from app.schemas.club import ClubCreate, ClubDetailOut, ClubJoinRequestOut, ClubMemberOut, ClubSummaryOut
 from app.services.club_budget_service import credit_club_budget
 from app.services.club_squad_service import seed_starting_squad
 from app.services.game_config_service import get_config

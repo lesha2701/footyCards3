@@ -277,7 +277,6 @@ async def accept_challenge(db: AsyncSession, user: User, match_id: int, user_car
     match.status = PenaltyMatchStatus.in_progress
     db.add(match)
 
-    challenger = await db.get(User, match.user_id)
     await notify(
         db, match.user_id, NotificationType.penalty_challenge_accepted,
         "Вызов принят", f"{user.full_display_name()} принял(а) ваш вызов на пенальти.",

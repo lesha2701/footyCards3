@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_admin
 from app.core.exceptions import ConflictError
 from app.database import get_db
-from app.models.enums import GameSessionStatus, GameType, MatchStatus
+from app.models.enums import GameType, MatchStatus
 from app.models.game import GameSession
 from app.models.match import Match
 from app.models.user import User

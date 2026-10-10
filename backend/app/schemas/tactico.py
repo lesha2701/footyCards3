@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from app.models.enums import MatchDifficulty, MatchResult, TacticoMatchStatus, TacticoOpponentType
 from app.schemas.card import UserCardOut

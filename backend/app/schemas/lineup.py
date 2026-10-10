@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.schemas.card import UserCardOut
 from app.schemas.coach import CoachBoostOut
-from app.schemas.pack import UserCoachCardOut, UserStadiumCardOut
+from app.schemas.pack import UserCoachCardOut, UserStadiumCardOut  # noqa: F401 - re-exported (lineup_service)
 
 
 class LineupSlotOut(BaseModel):

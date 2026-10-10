@@ -7,13 +7,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import ConflictError
 from app.core.timeutil import local_today
 from app.models.card import UserCard
 from app.models.daily_reward import DailyReward, DailyRewardOption
 from app.models.enums import CardSource, Rarity, TransactionType
 from app.models.pack import Pack, PackOpening, PackOpeningCard
-from app.models.player import Player
 from app.models.user import User
 from app.schemas.card import UserCardOut
 from app.schemas.daily_reward import DailyRewardCalendarOut, DailyRewardClaimOut, DailyRewardDayOut

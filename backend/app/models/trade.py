@@ -6,7 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.enums import TradeCardSide, TradeStatus
 from app.database import Base
-from app.models.mixins import TimestampMixin, utcnow
+from app.models.mixins import TimestampMixin
 
 
 class TradeOffer(TimestampMixin, Base):

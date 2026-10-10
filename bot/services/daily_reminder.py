@@ -32,14 +32,17 @@ def digest_text(daily_ready: bool, tasks_ready: int) -> str | None:
     return "🎁 Тебя ждут в VICTOR FC: " + " и ".join(parts) + ".\nЗабери всё одной кнопкой на главной."
 
 
-async def _send(bot: Bot, user, text: str, rate_limiter: RateLimiter) -> None:
+async def _send(bot: Bot, user, text: str, rate_limiter: RateLimiter, retry: bool = True) -> None:
     await rate_limiter.acquire()
     try:
         await bot.send_message(user["telegram_id"], text, reply_markup=open_app_keyboard())
     except TelegramForbiddenError:
         await db.mark_bot_blocked(user["id"])
     except TelegramRetryAfter as exc:
+        # Flood control: wait as told, then try this user once more.
         await asyncio.sleep(exc.retry_after)
+        if retry:
+            await _send(bot, user, text, rate_limiter, retry=False)
     except TelegramAPIError as exc:
         logger.warning("Failed to send digest to %s: %s", user["telegram_id"], exc)
 
