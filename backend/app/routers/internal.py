@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import verify_internal_secret
 from app.database import get_db
 from app.schemas.chat_pack import ChatPackOpenIn
+from app.schemas.club_league import ClubLeagueSettleResult
 from app.schemas.pack import PackOpenResult
 from app.schemas.stars import (
     StarsInvoiceStatusOut,
@@ -16,6 +17,7 @@ from app.schemas.tournament import LineupReminderResult, SimulateRoundResult
 from app.services import (
     career_service,
     chat_pack_service,
+    club_league_service,
     player_tournament_notification_service,
     player_tournament_simulation_service,
     stars_payment_service,
@@ -91,6 +93,13 @@ async def resolve_career_rounds(slot_key: str | None = None, db: AsyncSession = 
 
     total = await career_service.resolve_all_due(db) + await player_career_service.resolve_all_due(db)
     return SimulateRoundResult(matches_simulated=total)
+
+
+@router.post("/clubs/league/settle", response_model=ClubLeagueSettleResult)
+async def settle_club_league(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Called by the bot at its career slots: pays out last week's «Лига
+    клубов» once. Repeated calls are no-ops (club_league_weeks primary key)."""
+    return ClubLeagueSettleResult(clubs_rewarded=await club_league_service.settle_due(db))
 
 
 @router.post("/career/reminders", response_model=PlayerTournamentReminderResult)

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
-import { claimDailyReward, fetchMyClub, fetchNextOpponent, fetchTournamentCurrent } from "@/api/clubs";
+import { claimDailyReward, fetchClubLeague, fetchMyClub, fetchNextOpponent, fetchTournamentCurrent } from "@/api/clubs";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import { IconChevronRight, IconTrophy } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
@@ -27,6 +27,7 @@ export default function ClubHomeCard() {
     enabled: !!club && tournament?.status === "active",
     retry: false,
   });
+  const { data: league } = useQuery({ queryKey: ["clubs", "league"], queryFn: fetchClubLeague, enabled: !!club });
   const claim = useMutation({
     mutationFn: claimDailyReward,
     onSuccess: () => {
@@ -37,6 +38,7 @@ export default function ClubHomeCard() {
 
   if (!club) return null;
   const rewardReady = club.daily_reward_seconds_remaining === null;
+  const leagueRow = league?.enabled ? league.my_row : null;
 
   return (
     <section className="rounded-3xl bg-bg-surface p-4">
@@ -57,8 +59,14 @@ export default function ClubHomeCard() {
         <IconChevronRight size={16} className="shrink-0 text-ink-mist-dim" />
       </button>
 
-      {(nextOpponent || rewardReady) && (
+      {(nextOpponent || rewardReady || leagueRow) && (
         <div className="mt-3 flex flex-col gap-2 border-t border-white/5 pt-3">
+          {leagueRow && (
+            <button onClick={() => navigate("/clubs/league")} className="flex items-center gap-1.5 text-left text-xs text-ink-mist">
+              <IconTrophy size={12} className="text-accent-lime" />
+              Лига клубов: <span className="font-semibold text-ink-chalk">{leagueRow.rank} место</span> · {leagueRow.points} очк.
+            </button>
+          )}
           {nextOpponent && (
             <p className="text-xs text-ink-mist">
               Тур {nextOpponent.round_number}: следующий соперник —{" "}

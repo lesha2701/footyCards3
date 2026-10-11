@@ -1,7 +1,7 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_admin
@@ -17,6 +17,7 @@ from app.models.tournament_standing import TournamentClubStanding
 from app.models.user import User
 from app.schemas.admin import BalanceAdjustRequest
 from app.schemas.admin_clubs import (
+    AdminClubBudgetPageOut,
     AdminClubBudgetTransactionOut,
     AdminClubDetailOut,
     AdminClubMemberOut,
@@ -106,9 +107,15 @@ async def adjust_club_budget(
     old_budget = locked_club.budget
 
     if payload.amount >= 0:
-        await credit_club_budget(db, locked_club, payload.amount, ClubBudgetTransactionType.admin_adjustment, payload.description)
+        await credit_club_budget(
+            db, locked_club, payload.amount, ClubBudgetTransactionType.admin_adjustment, payload.description,
+            actor_user_id=admin.id,
+        )
     else:
-        await debit_club_budget(db, locked_club, -payload.amount, ClubBudgetTransactionType.admin_adjustment, payload.description)
+        await debit_club_budget(
+            db, locked_club, -payload.amount, ClubBudgetTransactionType.admin_adjustment, payload.description,
+            actor_user_id=admin.id,
+        )
 
     await log_action(
         db, admin.id, "adjust_club_budget", "club", club_id,
@@ -143,21 +150,55 @@ async def get_club_members(club_id: int, db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/{club_id}/budget-transactions", response_model=Page[AdminClubBudgetTransactionOut])
-async def get_club_budget_transactions(club_id: int, params: PageParams = Depends(), db: AsyncSession = Depends(get_db)):
+@router.get("/{club_id}/budget-transactions", response_model=AdminClubBudgetPageOut)
+async def get_club_budget_transactions(
+    club_id: int,
+    direction: Optional[Literal["spend", "income"]] = None,
+    type: Optional[ClubBudgetTransactionType] = None,
+    params: PageParams = Depends(),
+    db: AsyncSession = Depends(get_db),
+):
+    """Club budget history, newest first: where the club's money came from
+    and where it went (direction=spend → only debits), with who did it."""
     await _get_club_or_404(db, club_id)
-    total = (
-        await db.execute(select(func.count(ClubBudgetTransaction.id)).where(ClubBudgetTransaction.club_id == club_id))
-    ).scalar_one()
-    result = await db.execute(
-        select(ClubBudgetTransaction)
-        .where(ClubBudgetTransaction.club_id == club_id)
-        .order_by(ClubBudgetTransaction.created_at.desc(), ClubBudgetTransaction.id.desc())
-        .offset(params.offset)
-        .limit(params.page_size)
-    )
-    items = [AdminClubBudgetTransactionOut.model_validate(t) for t in result.scalars().all()]
-    return Page.build(items, total, params)
+    # Spent/received totals follow the type filter but not the direction one,
+    # so the admin always sees both sides of the club's money.
+    base = [ClubBudgetTransaction.club_id == club_id]
+    if type is not None:
+        base.append(ClubBudgetTransaction.type == type)
+    filters = list(base)
+    if direction == "spend":
+        filters.append(ClubBudgetTransaction.amount < 0)
+    elif direction == "income":
+        filters.append(ClubBudgetTransaction.amount >= 0)
+
+    spent, income = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(case((ClubBudgetTransaction.amount < 0, -ClubBudgetTransaction.amount), else_=0)), 0),
+                func.coalesce(func.sum(case((ClubBudgetTransaction.amount > 0, ClubBudgetTransaction.amount), else_=0)), 0),
+            ).where(*base)
+        )
+    ).one()
+    total = (await db.execute(select(func.count(ClubBudgetTransaction.id)).where(*filters))).scalar_one()
+    rows = (
+        await db.execute(
+            select(ClubBudgetTransaction, User)
+            .outerjoin(User, User.id == ClubBudgetTransaction.user_id)
+            .where(*filters)
+            .order_by(ClubBudgetTransaction.created_at.desc(), ClubBudgetTransaction.id.desc())
+            .offset(params.offset)
+            .limit(params.page_size)
+        )
+    ).all()
+    items = [
+        AdminClubBudgetTransactionOut.model_validate(t).model_copy(
+            update={"user_name": (u.username or u.first_name or f"#{u.id}") if u else None}
+        )
+        for t, u in rows
+    ]
+    page = Page.build(items, total, params)
+    return AdminClubBudgetPageOut(**page.model_dump(), total_spent=int(spent), total_income=int(income))
 
 
 @router.get("/{club_id}/tournaments", response_model=list[AdminClubTournamentOut])

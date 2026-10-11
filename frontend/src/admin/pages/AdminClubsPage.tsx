@@ -10,7 +10,7 @@ import {
   fetchAdminClubTournaments,
 } from "@/admin/api";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
-import type { AdminClub, AdminClubMember } from "@/admin/types";
+import type { AdminClub, AdminClubBudgetTransactionType, AdminClubMember } from "@/admin/types";
 import { useAuthStore } from "@/store/authStore";
 
 const ROLE_LABELS: Record<AdminClubMember["role"], string> = { captain: "Капитан", assistant: "Ассистент", member: "Участник" };
@@ -103,11 +103,6 @@ function ClubDetailModal({ clubId, onClose }: { clubId: number; onClose: () => v
     queryKey: ["admin-club-members", clubId],
     queryFn: () => fetchAdminClubMembers(clubId),
     enabled: tab === "members",
-  });
-  const { data: budgetTransactions } = useQuery({
-    queryKey: ["admin-club-budget", clubId],
-    queryFn: () => fetchAdminClubBudgetTransactions(clubId),
-    enabled: tab === "budget",
   });
   const { data: tournaments } = useQuery({
     queryKey: ["admin-club-tournaments", clubId],
@@ -202,20 +197,7 @@ function ClubDetailModal({ clubId, onClose }: { clubId: number; onClose: () => v
           </div>
         )}
 
-        {tab === "budget" && (
-          <div className="flex flex-col gap-2">
-            {budgetTransactions?.items.map((t) => (
-              <div key={t.id} className="flex items-center justify-between rounded-lg bg-bg-surface px-3 py-2 text-xs">
-                <div>
-                  <p>{t.description || t.type}</p>
-                  <p className="text-slate-500">{new Date(t.created_at).toLocaleString("ru-RU")} · {t.balance_before} → {t.balance_after}</p>
-                </div>
-                <span className={t.amount >= 0 ? "text-emerald-400" : "text-red-400"}>{t.amount}</span>
-              </div>
-            ))}
-            {!budgetTransactions?.items.length && <p className="text-sm text-slate-500">Нет транзакций</p>}
-          </div>
-        )}
+        {tab === "budget" && <ClubBudgetHistory clubId={clubId} />}
 
         {tab === "tournaments" && (
           <div className="flex flex-col gap-2">
@@ -246,6 +228,96 @@ function Info({ label, value }: { label: string; value: string | number }) {
     <div className="rounded-xl bg-bg-surface px-3 py-2">
       <p className="text-[11px] text-slate-400">{label}</p>
       <p className="font-semibold text-slate-100">{value}</p>
+    </div>
+  );
+}
+
+const BUDGET_TYPE_LABELS: Record<AdminClubBudgetTransactionType, string> = {
+  daily_claim: "Ежедневная награда",
+  pack_purchase: "Покупка клубного пака",
+  tournament_reward: "Награда за турнир",
+  tournament_match_reward: "Матч турнира",
+  club_game_reward: "Клубная игра «Повтори порядок»",
+  club_missing_item_reward: "Клубная игра «Что исчезло?»",
+  club_penalty_reward: "Клубные пенальти",
+  club_position_match_reward: "Клубная игра «Своя позиция»",
+  coach_pack_purchase: "Пак тренеров",
+  admin_adjustment: "Корректировка админом",
+  league_reward: "Лига клубов",
+};
+
+/** Paged club budget history (20 per page): every income and spending with
+ * who caused it, filterable to spending only or to one type. */
+function ClubBudgetHistory({ clubId }: { clubId: number }) {
+  const [page, setPage] = useState(1);
+  const [direction, setDirection] = useState<"spend" | "income" | undefined>("spend");
+  const [type, setType] = useState<AdminClubBudgetTransactionType | undefined>(undefined);
+  const { data, isFetching } = useQuery({
+    queryKey: ["admin-club-budget", clubId, page, direction, type],
+    queryFn: () => fetchAdminClubBudgetTransactions(clubId, page, { direction, type }),
+    placeholderData: (prev) => prev,
+  });
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {([["spend", "Траты"], ["income", "Доходы"], [undefined, "Все"]] as const).map(([value, label]) => (
+          <button
+            key={label}
+            onClick={() => { setDirection(value); setPage(1); }}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${direction === value ? "bg-accent text-bg-base" : "bg-white/5 text-slate-300"}`}
+          >
+            {label}
+          </button>
+        ))}
+        <select
+          value={type ?? ""}
+          onChange={(e) => { setType((e.target.value || undefined) as AdminClubBudgetTransactionType | undefined); setPage(1); }}
+          className="ml-auto rounded-lg bg-white/5 px-2 py-1.5 text-xs outline-none"
+        >
+          <option value="">Все типы</option>
+          {Object.entries(BUDGET_TYPE_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+      </div>
+
+      {data && (
+        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+          <Info label="Операций в списке" value={data.total} />
+          <Info label="Потрачено" value={`🪙${data.total_spent}`} />
+          <Info label="Получено" value={`🪙${data.total_income}`} />
+        </div>
+      )}
+
+      <div className={`flex flex-col gap-2 ${isFetching ? "opacity-60" : ""}`}>
+        {data?.items.map((t) => (
+          <div key={t.id} className="flex items-center justify-between gap-3 rounded-lg bg-bg-surface px-3 py-2 text-xs">
+            <div className="min-w-0">
+              <p className="truncate">{t.description || BUDGET_TYPE_LABELS[t.type] || t.type}</p>
+              <p className="text-slate-500">
+                {BUDGET_TYPE_LABELS[t.type] ?? t.type} · {t.user_name ?? "система"}
+                {t.user_id != null && ` (ID ${t.user_id})`}
+              </p>
+              <p className="text-slate-500">
+                {new Date(t.created_at).toLocaleString("ru-RU")} · {t.balance_before} → {t.balance_after}
+              </p>
+            </div>
+            <span className={`shrink-0 font-mono font-bold ${t.amount >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              {t.amount > 0 ? `+${t.amount}` : t.amount}
+            </span>
+          </div>
+        ))}
+        {data && !data.items.length && <p className="text-sm text-slate-500">Нет операций</p>}
+      </div>
+
+      {data && data.pages > 1 && (
+        <div className="flex items-center justify-center gap-3">
+          <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-lg bg-white/5 px-3 py-1.5 text-sm disabled:opacity-30">←</button>
+          <span className="text-sm text-slate-400">{page} / {data.pages}</span>
+          <button disabled={page >= data.pages} onClick={() => setPage((p) => p + 1)} className="rounded-lg bg-white/5 px-3 py-1.5 text-sm disabled:opacity-30">→</button>
+        </div>
+      )}
     </div>
   );
 }

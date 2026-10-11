@@ -49,7 +49,8 @@ export default function AdminGamesPage() {
       | "career_difficulty_reward_pct"
       | "career_difficulty_rating_offset"
       | "my_player_tier_thresholds"
-      | "player_career_place_rewards",
+      | "player_career_place_rewards"
+      | "club_league_rewards",
     label: string,
   ) => (
     <label className="col-span-2 flex flex-col gap-1">
@@ -75,6 +76,7 @@ export default function AdminGamesPage() {
       | "diamond_rating_cap_enabled"
       | "bot_daily_digest_enabled"
       | "shop_daily_offer_enabled"
+      | "club_league_enabled"
       | "career_enabled"
       | "career_reminders_enabled"
       | "my_player_enabled"
@@ -272,6 +274,23 @@ export default function AdminGamesPage() {
               className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
             />
           </label>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Лига клубов</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Неделя с понедельника по воскресенье. Очки клубу приносят участники: сыгранные игры и матчи, паки,
+          купленные за монеты или звёзды, выполненные задания (только после вступления в клуб). Итоги — в
+          понедельник, награды за места (через запятую, 1-е место первым) идут в бюджет клуба.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("club_league_enabled", "Лига включена")}
+          {field("club_league_member_weekly_cap", "Максимум очков с игрока за неделю")}
+          {field("club_league_points_game", "Очки за игру / матч")}
+          {field("club_league_points_pack", "Очки за покупку пака")}
+          {field("club_league_points_task", "Очки за задание")}
+          {listField("club_league_rewards", "Награды за места, монеты в бюджет клуба")}
         </div>
       </section>
 

@@ -123,7 +123,9 @@ async def open_club_pack(db: AsyncSession, user: User, club_pack_id: int, idempo
         raise NotFoundError("Клубный пак не найден")
 
     club = await _lock_club(db, membership.club_id)
-    await debit_club_budget(db, club, pack.price, ClubBudgetTransactionType.pack_purchase, f"Открытие пака «{pack.name}»", "club_pack", pack.id)
+    await debit_club_budget(db, club, pack.price, ClubBudgetTransactionType.pack_purchase, f"Открытие пака «{pack.name}»", "club_pack", pack.id,
+        actor_user_id=user.id,
+    )
 
     # Captured as a plain int (not a `club.id` attribute access) for reuse in the
     # `except IntegrityError` fallback below — `await db.rollback()` there expires every ORM

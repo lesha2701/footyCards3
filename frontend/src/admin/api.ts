@@ -33,6 +33,7 @@ import type {
   AdminActionLog,
   AdminClub,
   AdminClubBudgetTransaction,
+  AdminClubBudgetTransactionType,
   AdminClubDetail,
   AdminClubMember,
   AdminClubTournament,
@@ -852,8 +853,16 @@ export async function fetchAdminClubMembers(id: number): Promise<AdminClubMember
   return data;
 }
 
-export async function fetchAdminClubBudgetTransactions(id: number, page = 1): Promise<Page<AdminClubBudgetTransaction>> {
-  const { data } = await api.get<Page<AdminClubBudgetTransaction>>(`/admin/clubs/${id}/budget-transactions`, { params: { page } });
+export type AdminClubBudgetPage = Page<AdminClubBudgetTransaction> & { total_spent: number; total_income: number };
+
+export async function fetchAdminClubBudgetTransactions(
+  id: number,
+  page = 1,
+  filters: { direction?: "spend" | "income"; type?: AdminClubBudgetTransactionType } = {},
+): Promise<AdminClubBudgetPage> {
+  const { data } = await api.get<AdminClubBudgetPage>(`/admin/clubs/${id}/budget-transactions`, {
+    params: { page, page_size: 20, ...filters },
+  });
   return data;
 }
 

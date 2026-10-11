@@ -28,6 +28,7 @@ from app.schemas.club import (
     TransferCaptainIn,
 )
 from app.schemas.club_activity import ClubMemberActivityOut
+from app.schemas.club_league import ClubLeagueOut
 from app.schemas.club_ranking import ClubRankingMetric, ClubRankingOut
 from app.schemas.club_stats import ClubStatsOut
 from app.schemas.club_game import ClubGameClaimOut, ClubGameStartOut, ClubGameSubmitOut, ClubGameSubmitRequest
@@ -70,6 +71,7 @@ from app.schemas.tournament import (
 from app.services import (
     club_activity_service,
     club_game_service,
+    club_league_service,
     club_pack_service,
     club_penalty_service,
     club_position_match_service,
@@ -103,6 +105,13 @@ async def get_club_leaderboard(
     metric: ClubRankingMetric, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     return await club_ranking_service.get_club_ranking(db, metric, current_user_id=user.id)
+
+
+@router.get("/league", response_model=ClubLeagueOut)
+async def get_club_league(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Лига клубов»: this week's table, the caller's club and its members'
+    contributions, last week's podium. Settles last week on first read."""
+    return await club_league_service.get_league(db, user)
 
 
 @router.get("/creation-cost", response_model=ClubCreationCostOut)

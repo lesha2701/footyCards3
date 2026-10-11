@@ -192,6 +192,19 @@ class GameConfig(TimestampMixin, Base):
     shop_daily_offer_discount_pct: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
     shop_daily_offer_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
+    # --- "Лига клубов" (services/club_league_service.py) ---
+    # Weekly table: members' activity (finished games/matches, coin pack
+    # purchases, completed tasks) earns their club points, capped per member
+    # per week; places get club_league_rewards[i] into the club budget.
+    club_league_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    club_league_points_game: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    club_league_points_pack: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    club_league_points_task: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    club_league_member_weekly_cap: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    club_league_rewards: Mapped[list] = mapped_column(
+        JSON, default=lambda: [1500, 1000, 750, 500, 400, 300, 200, 150, 100, 100], nullable=False,
+    )
+
     # --- "Карьера тренера" (services/career_service.py) ---
     career_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Coins by final place, index 0 = 1st ... 7 = 8th; x the difficulty %.

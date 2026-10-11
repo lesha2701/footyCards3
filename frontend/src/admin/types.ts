@@ -195,6 +195,12 @@ export interface GameConfig {
   shop_daily_offer_enabled: boolean;
   shop_daily_offer_discount_pct: number;
   shop_daily_offer_pack_id: number | null;
+  club_league_enabled: boolean;
+  club_league_points_game: number;
+  club_league_points_pack: number;
+  club_league_points_task: number;
+  club_league_member_weekly_cap: number;
+  club_league_rewards: number[];
   career_enabled: boolean;
   career_place_rewards: number[];
   career_difficulty_reward_pct: number[];
@@ -420,10 +426,25 @@ export interface AdminClubBudgetTransaction {
   amount: number;
   balance_before: number;
   balance_after: number;
-  type: "daily_claim" | "pack_purchase" | "tournament_reward" | "club_game_reward" | "club_missing_item_reward" | "club_penalty_reward";
+  type: AdminClubBudgetTransactionType;
   description: string;
   created_at: string;
+  user_id: number | null;
+  user_name: string | null;
 }
+
+export type AdminClubBudgetTransactionType =
+  | "daily_claim"
+  | "pack_purchase"
+  | "tournament_reward"
+  | "tournament_match_reward"
+  | "club_game_reward"
+  | "club_missing_item_reward"
+  | "club_penalty_reward"
+  | "club_position_match_reward"
+  | "coach_pack_purchase"
+  | "admin_adjustment"
+  | "league_reward";
 
 export interface AdminClubTournament {
   tournament_id: number;

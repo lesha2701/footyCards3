@@ -44,3 +44,10 @@ async def run_career_round_loop() -> None:
     round is only played once, so duplicate or late fires are harmless; the
     Mini App also catches up lazily when a player opens the career screen."""
     await _run("/career/resolve-due", "Career rounds", 0)
+
+
+async def run_club_league_loop() -> None:
+    """Pays out last week's «Лига клубов» at the career slots. The backend
+    settles a week at most once (and the Mini App settles lazily too), so
+    every fire after the first one on a Monday is a no-op."""
+    await _run("/clubs/league/settle", "Club league", 0)

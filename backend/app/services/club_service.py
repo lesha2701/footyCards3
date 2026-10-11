@@ -592,7 +592,7 @@ async def claim_daily_reward(db: AsyncSession, user: User) -> ClubDetailOut:
     config = await get_config(db)
     await credit_club_budget(
         db, club, config.club_daily_reward_coins, ClubBudgetTransactionType.daily_claim,
-        f"Ежедневная награда от {user.username or user.first_name or f'#{user.id}'}",
+        f"Ежедневная награда от {user.username or user.first_name or f'#{user.id}'}", actor_user_id=user.id,
     )
 
     # Captured as a plain int (not a `club.id` attribute access) for reuse after a possible

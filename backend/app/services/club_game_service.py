@@ -170,7 +170,7 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> ClubGam
             await credit_club_budget(
                 db, club, reward, ClubBudgetTransactionType.club_game_reward,
                 f"Повтори порядок: {user.username or user.first_name or f'#{user.id}'}",
-                related_object_type="game_session", related_object_id=session.id,
+                related_object_type="game_session", related_object_id=session.id, actor_user_id=user.id,
             )
             new_budget = club.budget
         else:

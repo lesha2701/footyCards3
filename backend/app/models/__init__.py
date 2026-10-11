@@ -14,6 +14,7 @@ from app.models.club_card import ClubCard
 from app.models.club_card_availability import ClubCardAvailability
 from app.models.club_coach_card import ClubCoachCard
 from app.models.club_daily_claim import ClubDailyClaim
+from app.models.club_league import ClubLeagueResult, ClubLeagueWeek
 from app.models.club_lineup import ClubLineup, ClubLineupCard
 from app.models.club_pack import ClubPack, ClubPackRarityProbability
 from app.models.club_pack_opening import ClubPackOpening, ClubPackOpeningCard
@@ -69,6 +70,8 @@ __all__ = [
     "ClubCardAvailability",
     "ClubCoachCard",
     "ClubDailyClaim",
+    "ClubLeagueResult",
+    "ClubLeagueWeek",
     "ClubLineup",
     "ClubLineupCard",
     "ClubPack",

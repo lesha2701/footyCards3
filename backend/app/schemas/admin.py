@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -238,6 +238,12 @@ class GameConfigOut(BaseModel):
     shop_daily_offer_enabled: bool = False
     shop_daily_offer_discount_pct: int = 25
     shop_daily_offer_pack_id: Optional[int] = None
+    club_league_enabled: bool = True
+    club_league_points_game: int = 2
+    club_league_points_pack: int = 5
+    club_league_points_task: int = 3
+    club_league_member_weekly_cap: int = 200
+    club_league_rewards: list[int] = []
     career_enabled: bool = True
     career_place_rewards: list[int] = []
     career_difficulty_reward_pct: list[int] = []
@@ -441,6 +447,13 @@ class GameConfigUpdate(BaseModel):
     shop_daily_offer_discount_pct: Optional[int] = Field(default=None, ge=1, le=90)
     # 0 = rotate through active coin packs by date (stored as NULL).
     shop_daily_offer_pack_id: Optional[int] = Field(default=None, ge=0)
+    club_league_enabled: Optional[bool] = None
+    club_league_points_game: Optional[int] = Field(default=None, ge=0, le=1000)
+    club_league_points_pack: Optional[int] = Field(default=None, ge=0, le=1000)
+    club_league_points_task: Optional[int] = Field(default=None, ge=0, le=1000)
+    club_league_member_weekly_cap: Optional[int] = Field(default=None, ge=1)
+    # Club budget coins by weekly place (index 0 = 1st); places past the list get nothing.
+    club_league_rewards: Optional[list[Annotated[int, Field(ge=0)]]] = Field(default=None, min_length=1, max_length=50)
     career_enabled: Optional[bool] = None
     # 8 places; 3 difficulties (Любитель, Профи, Легенда).
     career_place_rewards: Optional[list[int]] = Field(default=None, min_length=8, max_length=8)

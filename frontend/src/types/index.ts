@@ -1310,6 +1310,41 @@ export interface ClubMember {
   personal_reward_enabled: boolean;
 }
 
+export interface ClubLeagueRow {
+  rank: number;
+  club_id: number;
+  name: string;
+  logo_shape: ClubLogoShape;
+  logo_color: string;
+  points: number;
+  reward: number;
+}
+
+export interface ClubLeagueMember {
+  user_id: number;
+  name: string;
+  games: number;
+  packs: number;
+  tasks: number;
+  points: number;
+}
+
+export interface ClubLeague {
+  enabled: boolean;
+  week_start: string;
+  ends_at: string;
+  points_game: number;
+  points_pack: number;
+  points_task: number;
+  member_weekly_cap: number;
+  rewards: number[];
+  clubs_count: number;
+  table: ClubLeagueRow[];
+  my_row: ClubLeagueRow | null;
+  members: ClubLeagueMember[];
+  last_week: { week_start: string; podium: ClubLeagueRow[]; my_row: ClubLeagueRow | null } | null;
+}
+
 export interface ClubMemberActivity {
   user_id: number;
   username: string | null;

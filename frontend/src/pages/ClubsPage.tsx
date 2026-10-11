@@ -14,6 +14,7 @@ import {
   applyToTournament,
   claimDailyReward,
   createJoinRequest,
+  fetchClubLeague,
   fetchClubs,
   fetchMyClub,
   fetchMyJoinRequests,
@@ -160,6 +161,7 @@ function ClubHome({ club }: { club: Club }) {
     enabled: tournamentCurrent?.status === "active",
     retry: false,
   });
+  const { data: league } = useQuery({ queryKey: ["clubs", "league"], queryFn: fetchClubLeague });
   const [applyError, setApplyError] = useState<string | null>(null);
   const applyMutation = useMutation({
     mutationFn: applyToTournament,
@@ -393,6 +395,24 @@ function ClubHome({ club }: { club: Club }) {
         <IconGoal size={16} className="text-accent-lime" />
         {isManager ? "Управление составом" : "Состав клуба"}
       </button>
+
+      {league?.enabled && (
+        <button
+          onClick={() => navigate("/clubs/league")}
+          className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-accent-lime/15 to-bg-surface p-3 text-left active:scale-[0.99]"
+        >
+          <IconTrophy size={18} className="shrink-0 text-accent-lime" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-ink-chalk">Лига клубов</span>
+            <span className="block text-[11px] text-ink-mist">
+              {league.my_row
+                ? `${league.my_row.rank} место · ${league.my_row.points} очк.${league.my_row.reward > 0 ? ` · приз ${league.my_row.reward}` : ""}`
+                : "Играйте, открывайте паки и выполняйте задания — клуб получит очки"}
+            </span>
+          </span>
+          <IconChevronRight size={16} className="shrink-0 text-ink-mist-dim" />
+        </button>
+      )}
 
       <button
         onClick={() => navigate("/clubs/activity")}

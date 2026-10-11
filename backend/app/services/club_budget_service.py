@@ -16,6 +16,7 @@ async def credit_club_budget(
     description: str = "",
     related_object_type: Optional[str] = None,
     related_object_id: Optional[int] = None,
+    actor_user_id: Optional[int] = None,
 ) -> ClubBudgetTransaction:
     if amount < 0:
         raise ValueError("credit_club_budget amount must be >= 0")
@@ -24,6 +25,7 @@ async def credit_club_budget(
     tx = ClubBudgetTransaction(
         club_id=club.id, amount=amount, balance_before=balance_before, balance_after=club.budget,
         type=tx_type, description=description, related_object_type=related_object_type, related_object_id=related_object_id,
+        user_id=actor_user_id,
     )
     db.add(tx)
     db.add(club)
@@ -38,6 +40,7 @@ async def debit_club_budget(
     description: str = "",
     related_object_type: Optional[str] = None,
     related_object_id: Optional[int] = None,
+    actor_user_id: Optional[int] = None,
 ) -> ClubBudgetTransaction:
     if amount < 0:
         raise ValueError("debit_club_budget amount must be >= 0")
@@ -48,6 +51,7 @@ async def debit_club_budget(
     tx = ClubBudgetTransaction(
         club_id=club.id, amount=-amount, balance_before=balance_before, balance_after=club.budget,
         type=tx_type, description=description, related_object_type=related_object_type, related_object_id=related_object_id,
+        user_id=actor_user_id,
     )
     db.add(tx)
     db.add(club)

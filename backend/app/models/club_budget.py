@@ -23,4 +23,7 @@ class ClubBudgetTransaction(Base):
     description: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     related_object_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     related_object_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Who caused the movement (the member who opened a pack / claimed / played,
+    # or the admin); NULL for system rewards and for rows older than 0134.
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)

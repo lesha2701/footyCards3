@@ -141,6 +141,7 @@ class ClubBudgetTransactionType(str, enum.Enum):
     coach_pack_purchase = "coach_pack_purchase"
     admin_adjustment = "admin_adjustment"
     club_position_match_reward = "club_position_match_reward"
+    league_reward = "league_reward"
 
 
 class TournamentQueueStatus(str, enum.Enum):
@@ -328,6 +329,7 @@ class NotificationType(str, enum.Enum):
     career_reminder = "career_reminder"
     player_career_round_result = "player_career_round_result"
     player_career_season_finished = "player_career_season_finished"
+    club_league_reward = "club_league_reward"
 
 
 class TradeCardSide(str, enum.Enum):

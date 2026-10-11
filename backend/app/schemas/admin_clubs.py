@@ -3,6 +3,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
+from app.core.pagination import Page
+
 from app.models.enums import ClubBudgetTransactionType, ClubLogoShape, ClubRole, ClubType, TournamentStatus
 
 
@@ -45,6 +47,15 @@ class AdminClubBudgetTransactionOut(BaseModel):
     type: ClubBudgetTransactionType
     description: str
     created_at: datetime
+    # Who caused it (member / admin); None for system rewards and old rows.
+    user_id: Optional[int] = None
+    user_name: Optional[str] = None
+
+
+class AdminClubBudgetPageOut(Page[AdminClubBudgetTransactionOut]):
+    # Over the whole history (type filter applies, spend/income does not).
+    total_spent: int
+    total_income: int
 
 
 class AdminClubTournamentOut(BaseModel):

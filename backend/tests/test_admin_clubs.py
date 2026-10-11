@@ -241,3 +241,47 @@ async def test_get_club_tournaments_shows_null_rewards_before_completion_and_rea
     assert done_body[0]["status"] == "completed"
     assert done_body[0]["budget_awarded"] is not None
     assert done_body[0]["final_rank"] is not None
+
+
+async def test_budget_history_pages_filters_spending_and_names_who(client, db_session, bot_token):
+    auth = await _budget_admin_auth(client, bot_token)
+    club = await _make_club(client, db_session, bot_token, 870031, "Клуб трат")
+    captain = await get_user_by_telegram_id(db_session, 870031)
+    balance = 0
+    for i in range(25):
+        db_session.add(
+            ClubBudgetTransaction(
+                club_id=club.id, amount=100, balance_before=balance, balance_after=balance + 100,
+                type=ClubBudgetTransactionType.daily_claim, description=f"Награда {i}", user_id=captain.id,
+            )
+        )
+        balance += 100
+    db_session.add(
+        ClubBudgetTransaction(
+            club_id=club.id, amount=-300, balance_before=balance, balance_after=balance - 300,
+            type=ClubBudgetTransactionType.pack_purchase, description="Открытие пака «Золото»", user_id=captain.id,
+        )
+    )
+    await db_session.commit()
+
+    url = f"/api/v1/admin/clubs/{club.id}/budget-transactions"
+    page1 = (await client.get(url, headers=auth)).json()
+    assert page1["total"] == 26 and page1["pages"] == 2 and len(page1["items"]) == 20
+    assert page1["total_spent"] == 300 and page1["total_income"] == 2500
+    page2 = (await client.get(url, params={"page": 2}, headers=auth)).json()
+    assert len(page2["items"]) == 6
+
+    spend = (await client.get(url, params={"direction": "spend"}, headers=auth)).json()
+    assert spend["total"] == 1
+    assert spend["items"][0]["amount"] == -300
+    assert spend["items"][0]["user_id"] == captain.id
+    assert spend["items"][0]["user_name"]
+
+    by_type = (await client.get(url, params={"type": "daily_claim"}, headers=auth)).json()
+    assert by_type["total"] == 25
+
+    await client.post(f"{url[:-len('/budget-transactions')]}/budget", headers=auth, json={"amount": 100, "description": "Бонус"})
+    admin_tx = (await client.get(url, params={"type": "admin_adjustment"}, headers=auth)).json()["items"][0]
+    assert admin_tx["user_name"] is not None
+    # Totals cover both directions whatever the spend/income filter says.
+    assert spend["total_income"] == 2500 and spend["total_spent"] == 300
