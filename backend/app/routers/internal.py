@@ -86,7 +86,11 @@ async def resolve_career_rounds(slot_key: str | None = None, db: AsyncSession = 
     """Called by the bot's career scheduler at CAREER_SLOTS: plays every
     career round whose time has come. Idempotent — each season row is
     locked and a round is only played once (rounds_played advances)."""
-    return SimulateRoundResult(matches_simulated=await career_service.resolve_all_due(db))
+    # «Карьера игрока» shares the career slots (player_career_service).
+    from app.services import player_career_service
+
+    total = await career_service.resolve_all_due(db) + await player_career_service.resolve_all_due(db)
+    return SimulateRoundResult(matches_simulated=total)
 
 
 @router.post("/career/reminders", response_model=PlayerTournamentReminderResult)

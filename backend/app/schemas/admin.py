@@ -254,6 +254,34 @@ class GameConfigOut(BaseModel):
     career_yellows_for_ban: int = 3
     career_form_max: int = 2
     career_reminders_enabled: bool = True
+    my_player_enabled: bool = True
+    my_player_xp_per_reward: int = 10
+    my_player_xp_daily_cap: int = 200
+    my_player_xp_career_match: int = 15
+    my_player_xp_level_base: int = 100
+    my_player_xp_level_step: int = 20
+    my_player_points_per_level: int = 2
+    my_player_rating_cap: int = 88
+    my_player_tier_thresholds: list[int] = []
+    my_player_training_xp_base: int = 20
+    my_player_training_xp_per_hit: int = 15
+    my_player_cosmetic_prices: dict[str, int] = {}
+    my_player_extra_trainings_max: int = 3
+    my_player_extra_training_coins: int = 300
+    my_player_extra_training_stars: int = 15
+    player_career_enabled: bool = True
+    player_career_min_club_cards: int = 5
+    player_career_rating_margin: int = 5
+    player_career_rep_per_club_rating: int = 4
+    player_career_rep_per_goal: int = 3
+    player_career_rep_per_assist: int = 2
+    player_career_rep_per_win: int = 2
+    player_career_rep_title: int = 30
+    player_career_match_reward_win: int = 25
+    player_career_match_reward_draw: int = 10
+    player_career_goal_reward: int = 10
+    player_career_match_xp: int = 15
+    player_career_place_rewards: list[int] = []
     free_pack_pack_slug: str
     chat_pack_interval_hours: int
     referral_referred_reward: int
@@ -430,6 +458,36 @@ class GameConfigUpdate(BaseModel):
     career_yellows_for_ban: Optional[int] = Field(default=None, ge=1, le=10)
     career_form_max: Optional[int] = Field(default=None, ge=0, le=5)
     career_reminders_enabled: Optional[bool] = None
+    my_player_enabled: Optional[bool] = None
+    my_player_xp_per_reward: Optional[int] = Field(default=None, ge=0, le=1000)
+    my_player_xp_daily_cap: Optional[int] = Field(default=None, ge=0, le=100000)
+    my_player_xp_career_match: Optional[int] = Field(default=None, ge=0, le=1000)
+    my_player_xp_level_base: Optional[int] = Field(default=None, ge=1, le=100000)
+    my_player_xp_level_step: Optional[int] = Field(default=None, ge=0, le=10000)
+    my_player_points_per_level: Optional[int] = Field(default=None, ge=1, le=20)
+    my_player_rating_cap: Optional[int] = Field(default=None, ge=50, le=99)
+    # [silver, gold, legend] rating thresholds.
+    my_player_tier_thresholds: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    my_player_training_xp_base: Optional[int] = Field(default=None, ge=0, le=10000)
+    my_player_training_xp_per_hit: Optional[int] = Field(default=None, ge=0, le=10000)
+    my_player_cosmetic_prices: Optional[dict[str, int]] = None
+    my_player_extra_trainings_max: Optional[int] = Field(default=None, ge=0, le=20)
+    my_player_extra_training_coins: Optional[int] = Field(default=None, ge=0)
+    my_player_extra_training_stars: Optional[int] = Field(default=None, ge=0, le=10000)
+    player_career_enabled: Optional[bool] = None
+    player_career_min_club_cards: Optional[int] = Field(default=None, ge=1, le=11)
+    player_career_rating_margin: Optional[int] = Field(default=None, ge=0, le=30)
+    player_career_rep_per_club_rating: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_rep_per_goal: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_rep_per_assist: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_rep_per_win: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_rep_title: Optional[int] = Field(default=None, ge=0, le=1000)
+    player_career_match_reward_win: Optional[int] = Field(default=None, ge=0)
+    player_career_match_reward_draw: Optional[int] = Field(default=None, ge=0)
+    player_career_goal_reward: Optional[int] = Field(default=None, ge=0)
+    player_career_match_xp: Optional[int] = Field(default=None, ge=0, le=1000)
+    # 8 places.
+    player_career_place_rewards: Optional[list[int]] = Field(default=None, min_length=8, max_length=8)
     free_pack_pack_slug: Optional[str] = None
     chat_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     referral_referred_reward: Optional[int] = Field(default=None, ge=0)

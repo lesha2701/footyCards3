@@ -36,4 +36,8 @@ export const TX_TYPE_LABELS: Record<string, string> = {
   penalty_stake_win: "Пенальти: выигрыш ставки",
   penalty_stake_refund: "Пенальти: возврат ставки",
   card_skill_purchase: "Навык карточки",
+  career_reward: "Карьера тренера",
+  my_player_cosmetic: "Мой игрок: стиль",
+  my_player_extra_training: "Мой игрок: доп. тренировка",
+  lifestyle_purchase: "Имущество",
 };

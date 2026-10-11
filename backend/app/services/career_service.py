@@ -29,7 +29,7 @@ from app.models.enums import NotificationType, Position, Rarity, TransactionType
 from app.models.player import Player
 from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.user import User
-from app.services import tournament_match_engine, wallet_service
+from app.services import my_player_service, tournament_match_engine, wallet_service
 from app.services.auto_squad_service import SlotSpec, owned_cards, pick_cards
 from app.services.club_formation_service import CLUB_FORMATIONS, get_formation_slots
 from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES, build_side
@@ -111,6 +111,25 @@ def _usable(card: UserCard) -> bool:
     return not card.is_locked_by_admin and not card.is_locked_in_trade
 
 
+async def _career_cards(db: AsyncSession, user_id: int, config=None) -> list:
+    """Own cards plus «Мой игрок» (a duck-typed stand-in card, if created)."""
+    cards: list = await owned_cards(db, user_id)
+    mine = await my_player_service.engine_card(db, user_id, config)
+    if mine is not None:
+        cards.append(mine)
+    return cards
+
+
+def _squad_ids(part: CareerParticipant, cards_by_id: dict) -> list[int]:
+    """The squad plus «Мой игрок», who is always in it (also for seasons
+    started before the player was created)."""
+    ids = list(part.squad_card_ids)
+    mine = my_player_service.card_id_for(part.user_id)
+    if mine in cards_by_id and mine not in ids:
+        ids.append(mine)
+    return ids
+
+
 def pick_squad(cards: list[UserCard], formation: str = "4-3-3") -> list[int]:
     """Best XI for the formation plus a 5-card bench (one per line + the best
     remaining), distinct players only."""
@@ -156,7 +175,8 @@ def resolve_lineup(
     squad (fresh players first), then — if the squad can't cover a slot —
     from the rest of the player's own collection."""
     slots = get_formation_slots(part.formation)
-    squad = [cards_by_id[cid] for cid in part.squad_card_ids if cid in cards_by_id]
+    squad_ids = _squad_ids(part, cards_by_id)
+    squad = [cards_by_id[cid] for cid in squad_ids if cid in cards_by_id]
     available = [c for c in squad if _usable(c) and not _is_out(part, c.id, round_index)]
     by_id = {c.id: c for c in available}
     chosen: dict[str, UserCard] = {}
@@ -175,7 +195,7 @@ def resolve_lineup(
             used_players.add(card.player_id)
     missing = [SlotSpec(s.code, s.category, s.ideal_position) for s in slots if s.code not in chosen]
     if missing:
-        pool = [c for c in extra_cards if c.player_id not in used_players and c.id not in part.squad_card_ids]
+        pool = [c for c in extra_cards if c.player_id not in used_players and c.id not in squad_ids]
         chosen.update(pick_cards(missing, pool, "tournament"))
     return [(chosen[s.code], s) for s in slots if s.code in chosen]
 
@@ -299,7 +319,7 @@ async def _activate(db: AsyncSession, season: CareerSeason, now: datetime, confi
     teams: list[dict] = [None] * TEAMS  # type: ignore[list-item]
     for part in humans:
         user = await db.get(User, part.user_id)
-        cards = {c.id: c for c in await owned_cards(db, part.user_id)}
+        cards = {c.id: c for c in await _career_cards(db, part.user_id, config)}
         xi = resolve_lineup(part, cards, 0, [])
         human_ratings.extend(_effective(c) for c, _ in xi)
         teams[part.team_index] = {"index": part.team_index, "name": _team_name(user), "user_id": part.user_id}
@@ -322,7 +342,7 @@ async def create_season(db: AsyncSession, user: User, difficulty: str, friend_id
     await wallet_service.lock_user_for_update(db, user.id)  # serializes "one season at a time"
     if await _current_participation(db, user.id):
         raise ConflictError("У тебя уже идёт сезон карьеры")
-    squad = pick_squad(await owned_cards(db, user.id))
+    squad = pick_squad(await _career_cards(db, user.id, config))
 
     friend: Optional[User] = None
     if friend_id is not None:
@@ -373,7 +393,7 @@ async def respond_invite(db: AsyncSession, user: User, season_id: int, accept: b
     if accept:
         if (other := await _current_participation(db, user.id)) and other.season_id != season.id:
             raise ConflictError("У тебя уже идёт другой сезон карьеры")
-        part.squad_card_ids = pick_squad(await owned_cards(db, user.id))
+        part.squad_card_ids = pick_squad(await _career_cards(db, user.id, config))
         part.status = "accepted"
     else:
         part.status = "declined"
@@ -425,12 +445,13 @@ async def set_lineup(
     if mentality not in MENTALITIES or playstyle not in PLAYSTYLES:
         raise ConflictError("Неизвестная тактика")
     slot_defs = {s.code: s for s in get_formation_slots(formation)}
-    cards = {c.id: c for c in await owned_cards(db, user.id)}
+    cards = {c.id: c for c in await _career_cards(db, user.id)}
+    squad_ids = _squad_ids(part, cards)
     used_players: set[int] = set()
     clean: dict[str, int] = {}
     for code, card_id in slots.items():
         slot, card = slot_defs.get(code), cards.get(card_id)
-        if slot is None or card is None or card_id not in part.squad_card_ids:
+        if slot is None or card is None or card_id not in squad_ids:
             raise ConflictError("В составе можно использовать только карточки заявки")
         if card.player.position not in CATEGORY_POSITIONS[slot.category] or card.player_id in used_players:
             raise ConflictError(f"{card.player.display_name} не подходит на позицию {code}")
@@ -490,7 +511,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         if part is None or part.status != "accepted":
             return None  # left the season / declined: technical defeat
         if part.user_id not in cards_cache:
-            cards_cache[part.user_id] = await owned_cards(db, part.user_id)
+            cards_cache[part.user_id] = await _career_cards(db, part.user_id, config)
         cards = cards_cache[part.user_id]
         pairs = resolve_lineup(part, {c.id: c for c in cards}, round_index, [c for c in cards if _usable(c)])
         played[team_index] = {c.id for c, _ in pairs}
@@ -523,13 +544,19 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         is_home = match["home"] == team_index
         own, opp = (match["hs"], match["as"]) if is_home else (match["as"], match["hs"])
         opponent = teams[match["away"] if is_home else match["home"]]["name"]
-        names = {c.id: c.player.display_name for c in cards_cache.get(part.user_id, [])}
-        report = _after_match(part, played.get(team_index, set()), own, opp, round_index, config, rng, names)
+        own_cards = {c.id: c for c in cards_cache.get(part.user_id, [])}
+        names = {cid: c.player.display_name for cid, c in own_cards.items()}
+        report = _after_match(
+            part, played.get(team_index, set()), own, opp, round_index, config, rng, names, _squad_ids(part, own_cards),
+        )
         reports[str(team_index)] = report
         flag_modified(part, "condition")
 
         reward = config.career_match_reward_win if own > opp else config.career_match_reward_draw if own == opp else 0
         part.coins_earned += await _credit(db, part.user_id, reward, f"Карьера: тур {round_index + 1}", season.id)
+        if my_player_service.card_id_for(part.user_id) in played.get(team_index, set()):
+            locked = await wallet_service.lock_user_for_update(db, part.user_id)
+            my_player_service.add_xp(locked, config.my_player_xp_career_match, config)
         outcome = "Победа" if own > opp else "Ничья" if own == opp else "Поражение"
         await notify(
             db, part.user_id, NotificationType.career_round_result, f"Карьера, тур {round_index + 1}: {outcome}",
@@ -546,14 +573,14 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
 
 def _after_match(
     part: CareerParticipant, played_ids: set[int], own: int, opp: int, round_index: int, config,
-    rng: random.Random, names: dict[int, str],
+    rng: random.Random, names: dict[int, str], squad_ids: Optional[list[int]] = None,
 ) -> dict:
     """Fatigue, injuries, yellow/red cards and form for one human squad after
     a round. Returns the round report (player names per event) shown in the
     calendar and the result notification."""
     report: dict[str, list[str]] = {"yellow": [], "red": [], "suspended": [], "injured": [], "form_up": [], "form_down": []}
     condition = dict(part.condition or {})
-    for card_id in part.squad_card_ids:
+    for card_id in (squad_ids if squad_ids is not None else part.squad_card_ids):
         entry = {**_FRESH, **condition.get(str(card_id), {})}
         name = names.get(card_id, "Игрок")
         if card_id in played_ids:
@@ -787,7 +814,7 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
             "report": ((state.get("reports") or {}).get(str(r)) or {}).get(str(me.team_index)),
         })
     if me.status == "accepted":
-        cards = await owned_cards(db, me.user_id)
+        cards = await _career_cards(db, me.user_id)
         by_id = {c.id: c for c in cards}
         next_round = min(season.rounds_played, ROUNDS - 1)
         xi = resolve_lineup(me, by_id, next_round, [c for c in cards if _usable(c)])
@@ -796,11 +823,16 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
                         for s in get_formation_slots(me.formation)]
         from app.schemas.card import UserCardOut
 
-        for card_id in me.squad_card_ids:
+        for card_id in _squad_ids(me, by_id):
             card = by_id.get(card_id)
             cond = _condition(me, card_id)
+            mine = getattr(card, "is_my_player", False)
             out["squad"].append({
-                "card": UserCardOut.model_validate(card) if card else None,
+                "card": UserCardOut.model_validate(card) if card and not mine else None,
+                "my_player": (
+                    {"name": card.player.display_name, "position": card.player.position.value, "rating": card.player.rating}
+                    if mine else None
+                ),
                 "card_id": card_id,
                 "fatigue": cond["fatigue"],
                 "injured_rounds": max(0, cond["injured_until"] - next_round),

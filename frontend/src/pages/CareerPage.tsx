@@ -459,7 +459,10 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
           >
             <p className="mb-2 font-display text-base font-bold text-ink-chalk">Позиция {picking.code}</p>
             {season.squad
-              .filter((s) => s.card && CATEGORY_POSITIONS[picking.category].includes(s.card.player.position))
+              .filter((s) => {
+                const position = s.card?.player.position ?? s.my_player?.position;
+                return !!position && CATEGORY_POSITIONS[picking.category].includes(position);
+              })
               .map((entry) => (
                 <SquadRow
                   key={entry.card_id}
@@ -483,14 +486,20 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
 
 function SquadRow({ label, entry, onClick }: { label: string; entry?: CareerSquadCard; onClick?: () => void }) {
   const card = entry?.card;
+  const mine = entry?.my_player;
   return (
     <button onClick={onClick} disabled={!onClick} className="flex w-full items-center gap-3 py-2 text-left">
       <span className="w-10 shrink-0 font-mono text-[10px] text-ink-mist">{label}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm text-ink-chalk">
-          {card ? card.player.display_name : entry ? "Карточка продана" : "Авто"}
+          {mine ? (
+            <>
+              {mine.name} <span className="rounded bg-accent-lime/15 px-1 text-[9px] font-bold text-accent-lime">МОЙ ИГРОК</span>
+            </>
+          ) : card ? card.player.display_name : entry ? "Карточка продана" : "Авто"}
         </span>
         {card && <span className="text-[10px] text-ink-mist">{card.player.position} · {card.player.rating}</span>}
+        {mine && <span className="text-[10px] text-ink-mist">{mine.position} · {mine.rating}</span>}
       </span>
       {entry && entry.form !== 0 && entry.injured_rounds === 0 && entry.suspended_rounds === 0 && (
         <span

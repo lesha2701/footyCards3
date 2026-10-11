@@ -29,6 +29,7 @@ import type {
   UserTrophy,
 } from "@/types";
 import type {
+  AdminLifestyleItem,
   AdminActionLog,
   AdminClub,
   AdminClubBudgetTransaction,
@@ -920,5 +921,40 @@ export async function grantSkillTokens(payload: {
 
 export async function fetchSkillLedger(params: { user_id?: number; skill_code?: string; kind?: string; limit?: number }) {
   const { data } = await api.get<AdminSkillLedgerEntry[]>("/admin/card-skills/ledger", { params });
+  return data;
+}
+
+export async function fetchAdminLifestyleItems(): Promise<AdminLifestyleItem[]> {
+  const { data } = await api.get<AdminLifestyleItem[]>("/admin/lifestyle");
+  return data;
+}
+
+export async function createLifestyleItem(payload: Omit<AdminLifestyleItem, "id" | "image_path" | "sold_count">): Promise<AdminLifestyleItem> {
+  const { data } = await api.post<AdminLifestyleItem>("/admin/lifestyle", payload);
+  return data;
+}
+
+export async function updateLifestyleItem(
+  id: number, payload: Partial<Omit<AdminLifestyleItem, "id" | "image_path" | "sold_count">>,
+): Promise<AdminLifestyleItem> {
+  const { data } = await api.put<AdminLifestyleItem>(`/admin/lifestyle/${id}`, payload);
+  return data;
+}
+
+export async function deleteLifestyleItem(id: number): Promise<void> {
+  await api.delete(`/admin/lifestyle/${id}`);
+}
+
+export async function uploadLifestyleItemImage(id: number, file: File): Promise<AdminLifestyleItem> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<AdminLifestyleItem>(`/admin/lifestyle/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function deleteLifestyleItemImage(id: number): Promise<AdminLifestyleItem> {
+  const { data } = await api.delete<AdminLifestyleItem>(`/admin/lifestyle/${id}/image`);
   return data;
 }

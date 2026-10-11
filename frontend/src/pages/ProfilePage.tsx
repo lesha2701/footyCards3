@@ -11,6 +11,7 @@ import {
   fetchMyAttention, fetchMyBadges, fetchMyProfile, fetchMyTransactions, fetchMyTrophies, updateMySettings,
 } from "@/api/profile";
 import { UserBadge } from "@/components/common/UserBadge";
+import { MyPlayerEntry } from "@/components/myPlayer/MyPlayerEntry";
 import ThemeSetting from "@/components/profile/ThemeSetting";
 import { BuyCoinsModal } from "@/components/shop/CoinPackages";
 import {
@@ -207,6 +208,8 @@ export default function ProfilePage() {
           </div>
         </section>
       )}
+
+      <MyPlayerEntry />
 
       <button
         onClick={() => navigate("/friends")}

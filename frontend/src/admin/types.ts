@@ -211,6 +211,34 @@ export interface GameConfig {
   career_yellows_for_ban: number;
   career_form_max: number;
   career_reminders_enabled: boolean;
+  my_player_enabled: boolean;
+  my_player_xp_per_reward: number;
+  my_player_xp_daily_cap: number;
+  my_player_xp_career_match: number;
+  my_player_xp_level_base: number;
+  my_player_xp_level_step: number;
+  my_player_points_per_level: number;
+  my_player_rating_cap: number;
+  my_player_tier_thresholds: number[];
+  my_player_training_xp_base: number;
+  my_player_training_xp_per_hit: number;
+  my_player_extra_trainings_max: number;
+  my_player_extra_training_coins: number;
+  my_player_extra_training_stars: number;
+  player_career_enabled: boolean;
+  player_career_min_club_cards: number;
+  player_career_rating_margin: number;
+  player_career_rep_per_club_rating: number;
+  player_career_rep_per_goal: number;
+  player_career_rep_per_assist: number;
+  player_career_rep_per_win: number;
+  player_career_rep_title: number;
+  player_career_match_reward_win: number;
+  player_career_match_reward_draw: number;
+  player_career_goal_reward: number;
+  player_career_match_xp: number;
+  player_career_place_rewards: number[];
+  my_player_cosmetic_prices: Record<string, number>;
   free_pack_pack_slug: string;
   chat_pack_interval_hours: number;
   referral_referred_reward: number;
@@ -426,3 +454,19 @@ export interface AdminTournamentStats {
 }
 
 export type { Page, Pack, PackRarityProbability, Player, TradeOffer, TradeStatus };
+
+export interface AdminLifestyleItem {
+  id: number;
+  name: string;
+  description: string;
+  category: string;
+  emoji: string;
+  image_path: string | null;
+  coins_price: number;
+  stars_price: number;
+  prestige: number;
+  max_supply: number | null;
+  sold_count: number;
+  is_active: boolean;
+  sort_order: number;
+}

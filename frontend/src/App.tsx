@@ -35,6 +35,7 @@ const AdminTradesPage = lazy(() => import("@/admin/pages/AdminTradesPage"));
 const AdminTrophiesPage = lazy(() => import("@/admin/pages/AdminTrophiesPage"));
 const AdminLeaguesPage = lazy(() => import("@/admin/pages/AdminLeaguesPage"));
 const AdminGiftsPage = lazy(() => import("@/admin/pages/AdminGiftsPage"));
+const AdminLifestylePage = lazy(() => import("@/admin/pages/AdminLifestylePage"));
 const AdminDailyRewardsPage = lazy(() => import("@/admin/pages/AdminDailyRewardsPage"));
 const AdminWheelPage = lazy(() => import("@/admin/pages/AdminWheelPage"));
 const AdminGamesPage = lazy(() => import("@/admin/pages/AdminGamesPage"));
@@ -102,6 +103,8 @@ const PublicProfilePage = lazy(() => import("@/pages/PublicProfilePage"));
 const CareerPage = lazy(() => import("@/pages/CareerPage"));
 const CareerMatchPage = lazy(() => import("@/pages/CareerMatchPage"));
 const FriendsPage = lazy(() => import("@/pages/FriendsPage"));
+const MyPlayerPage = lazy(() => import("@/pages/MyPlayerPage"));
+const PlayerCareerPage = lazy(() => import("@/pages/PlayerCareerPage"));
 
 function PenaltySearchRoute() {
   const location = useLocation();
@@ -195,6 +198,7 @@ export default function App() {
         <Route path="trophies" element={<AdminTrophiesPage />} />
         <Route path="leagues" element={<AdminLeaguesPage />} />
         <Route path="gifts" element={<AdminGiftsPage />} />
+        <Route path="lifestyle" element={<AdminLifestylePage />} />
         <Route path="wheel" element={<AdminWheelPage />} />
         <Route path="daily-rewards" element={<AdminDailyRewardsPage />} />
         <Route path="games" element={<AdminGamesPage />} />
@@ -220,6 +224,8 @@ export default function App() {
         <Route path="/play/career" element={<CareerPage />} />
         <Route path="/play/career/seasons/:seasonId/rounds/:round/matches/:match" element={<CareerMatchPage />} />
         <Route path="/friends" element={<FriendsPage />} />
+        <Route path="/my-player" element={<MyPlayerPage />} />
+        <Route path="/play/player-career" element={<PlayerCareerPage />} />
         <Route path="/play/tactico/squad" element={<TacticoSquadPage />} />
         <Route path="/play/tactico/search" element={<TacticoSearchPage />} />
         <Route path="/play/tactico/matches/:matchId" element={<TacticoMatchPage />} />

@@ -47,6 +47,8 @@ export interface CareerRound {
 
 export interface CareerSquadCard {
   card: UserCard | null;
+  /** «Мой игрок» entry (card is null for it). */
+  my_player?: { name: string; position: string; rating: number } | null;
   card_id: number;
   fatigue: number;
   injured_rounds: number;

@@ -220,6 +220,59 @@ class GameConfig(TimestampMixin, Base):
     career_yellows_for_ban: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     career_form_max: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     career_reminders_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # --- "Мой игрок" (services/my_player_service.py) ---
+    my_player_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # XP for every rewarded game action (any credit of a game/match/daily/task
+    # reward, see wallet_service.credit_coins), capped per day.
+    my_player_xp_per_reward: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    my_player_xp_daily_cap: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    # Bonus when the player's own card took part in a "Карьера тренера" match.
+    my_player_xp_career_match: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    # Level L -> L+1 costs base + step * (L - 1) XP.
+    my_player_xp_level_base: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    my_player_xp_level_step: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    my_player_points_per_level: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # Overall rating ceiling, so the own card never outclasses top pack cards.
+    my_player_rating_cap: Mapped[int] = mapped_column(Integer, default=88, nullable=False)
+    # Frame tiers by rating: [silver, gold, legend] thresholds (below = bronze).
+    my_player_tier_thresholds: Mapped[list] = mapped_column(JSON, default=lambda: [65, 75, 85], nullable=False)
+    # Daily training mini-game: XP = base + per_hit x hits (0-3), once a day,
+    # on top of the daily XP cap.
+    my_player_training_xp_base: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    my_player_training_xp_per_hit: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    # Extra trainings on top of the free daily one: max bought per day and
+    # the price of one (coins / Telegram Stars; 0 = not sold for that currency).
+    my_player_extra_trainings_max: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    my_player_extra_training_coins: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
+    my_player_extra_training_stars: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    # --- «Карьера игрока» (services/player_career_service.py) ---
+    player_career_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # A real club (Player.club) joins the catalog with at least this many active cards.
+    player_career_min_club_cards: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # A club is open if its rating <= player rating + margin and the
+    # player's reputation >= (club rating - 60) x rep_per_club_rating.
+    player_career_rating_margin: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    player_career_rep_per_club_rating: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    player_career_rep_per_goal: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    player_career_rep_per_assist: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    player_career_rep_per_win: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    player_career_rep_title: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    player_career_match_reward_win: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    player_career_match_reward_draw: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    player_career_goal_reward: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    player_career_match_xp: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    player_career_place_rewards: Mapped[list] = mapped_column(
+        JSON, default=lambda: [1000, 700, 500, 350, 250, 180, 120, 80], nullable=False,
+    )
+    # Cosmetics shop: {code: price in coins}; a code missing here (or 0) is not for sale.
+    my_player_cosmetic_prices: Mapped[dict] = mapped_column(
+        JSON, nullable=False,
+        default=lambda: {
+            "headband": 300, "earring": 400, "chain": 600, "goggles": 800,
+            "bg_sunset": 500, "bg_neon": 700, "bg_gold": 1200,
+        },
+    )
     free_pack_pack_slug: Mapped[str] = mapped_column(String, default="basic", nullable=False)
 
     # "вкарта" command in group chats — reuses free_pack_pack_slug's pack but

@@ -83,8 +83,16 @@ class CareerParticipantOut(BaseModel):
     team_index: int
 
 
+class CareerMyPlayerOut(BaseModel):
+    name: str
+    position: str
+    rating: int
+
+
 class CareerSquadCardOut(BaseModel):
     card: Optional[UserCardOut] = None
+    # «Мой игрок» (card is None for this entry).
+    my_player: Optional[CareerMyPlayerOut] = None
     card_id: int
     fatigue: int
     injured_rounds: int

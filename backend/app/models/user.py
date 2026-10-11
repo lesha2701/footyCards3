@@ -134,6 +134,12 @@ class User(TimestampMixin, Base):
     # Shop "предложение дня": the local date the discounted pack was last
     # bought (one discounted purchase per player per day, shop_offer_service).
     daily_offer_claimed_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # "Мой игрок" XP (services/my_player_service.py). Lives on the user row so
+    # wallet_service.credit_coins can grant it under the same row lock; it
+    # accrues even before the player is created. today/day = daily cap window.
+    my_player_xp: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    my_player_xp_today: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    my_player_xp_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Chat mode promo pack ("вкарта" command in group chats, every N hours) —
     # a separate cooldown from free_pack_available_at so the two mechanics

@@ -97,6 +97,10 @@ class TransactionType(str, enum.Enum):
     penalty_stake_refund = "penalty_stake_refund"
     card_skill_purchase = "card_skill_purchase"
     career_reward = "career_reward"
+    my_player_cosmetic = "my_player_cosmetic"
+    my_player_extra_training = "my_player_extra_training"
+    lifestyle_purchase = "lifestyle_purchase"
+    player_career_reward = "player_career_reward"
 
 
 class GiftKind(str, enum.Enum):
@@ -322,6 +326,8 @@ class NotificationType(str, enum.Enum):
     career_round_result = "career_round_result"
     career_season_finished = "career_season_finished"
     career_reminder = "career_reminder"
+    player_career_round_result = "player_career_round_result"
+    player_career_season_finished = "player_career_season_finished"
 
 
 class TradeCardSide(str, enum.Enum):

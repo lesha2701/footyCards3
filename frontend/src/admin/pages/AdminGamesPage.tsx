@@ -4,6 +4,17 @@ import { useEffect, useState } from "react";
 import { fetchGameConfig, fetchSuspiciousMatches, fetchSuspiciousMemorySessions, updateGameConfig } from "@/admin/api";
 import type { GameConfig } from "@/admin/types";
 
+// Codes from backend my_player_service.COSMETICS.
+const MY_PLAYER_COSMETICS: [string, string][] = [
+  ["headband", "Повязка на голову"],
+  ["earring", "Серьга"],
+  ["chain", "Цепочка"],
+  ["goggles", "Спортивные очки"],
+  ["bg_sunset", "Фон «Закат»"],
+  ["bg_neon", "Фон «Неон»"],
+  ["bg_gold", "Фон «Золотой стадион»"],
+];
+
 export default function AdminGamesPage() {
   const queryClient = useQueryClient();
   const { data: config } = useQuery({ queryKey: ["admin-game-config"], queryFn: fetchGameConfig });
@@ -33,7 +44,12 @@ export default function AdminGamesPage() {
   );
 
   const listField = (
-    key: "career_place_rewards" | "career_difficulty_reward_pct" | "career_difficulty_rating_offset",
+    key:
+      | "career_place_rewards"
+      | "career_difficulty_reward_pct"
+      | "career_difficulty_rating_offset"
+      | "my_player_tier_thresholds"
+      | "player_career_place_rewards",
     label: string,
   ) => (
     <label className="col-span-2 flex flex-col gap-1">
@@ -60,7 +76,9 @@ export default function AdminGamesPage() {
       | "bot_daily_digest_enabled"
       | "shop_daily_offer_enabled"
       | "career_enabled"
-      | "career_reminders_enabled",
+      | "career_reminders_enabled"
+      | "my_player_enabled"
+      | "player_career_enabled",
     label: string,
   ) => (
     <label className="flex items-center gap-2 text-sm">
@@ -280,6 +298,73 @@ export default function AdminGamesPage() {
           {field("career_yellows_for_ban", "Жёлтых до дисквалификации")}
           {field("career_form_max", "Форма после победы, до +N рейтинга")}
           {toggle("career_reminders_enabled", "Напоминание ботом за 30 мин до тура")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Мой игрок</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Своя карточка игрока: опыт за любые награды в играх (с дневным лимитом), уровни дают очки характеристик.
+          Переход L→L+1 стоит «база + шаг × (L−1)» опыта. Рамки — пороги рейтинга для Серебра, Золота и Легенды.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("my_player_enabled", "Режим включён")}
+          {field("my_player_xp_per_reward", "Опыт за награду в игре")}
+          {field("my_player_xp_daily_cap", "Лимит опыта в день")}
+          {field("my_player_xp_career_match", "Бонус за матч в Карьере")}
+          {field("my_player_xp_level_base", "Опыт на уровень: база")}
+          {field("my_player_xp_level_step", "Опыт на уровень: шаг")}
+          {field("my_player_points_per_level", "Очков за уровень")}
+          {field("my_player_rating_cap", "Потолок рейтинга")}
+          {listField("my_player_tier_thresholds", "Пороги рамок: Серебро, Золото, Легенда")}
+          {field("my_player_training_xp_base", "Тренировка: опыт за участие")}
+          {field("my_player_training_xp_per_hit", "Тренировка: опыт за попадание")}
+          {field("my_player_extra_trainings_max", "Доп. тренировок в день (макс.)")}
+          {field("my_player_extra_training_coins", "Доп. тренировка, монеты (0 — нет)")}
+          {field("my_player_extra_training_stars", "Доп. тренировка, звёзды ⭐ (0 — нет)")}
+        </div>
+        <p className="mb-2 mt-4 text-xs text-slate-400">Цены косметики, монеты (0 — не продаётся)</p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {MY_PLAYER_COSMETICS.map(([code, label]) => (
+            <label key={code} className="flex flex-col gap-1">
+              <span className="text-xs text-slate-400">{label}</span>
+              <input
+                type="number"
+                min={0}
+                value={form.my_player_cosmetic_prices?.[code] ?? 0}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    my_player_cosmetic_prices: { ...form.my_player_cosmetic_prices, [code]: Number(e.target.value) },
+                  })
+                }
+                className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+              />
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Карьера игрока</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Клубы собираются из карточек (поле «клуб»). Клуб открыт, если его рейтинг ≤ рейтинг игрока + запас и репутация ≥
+          (рейтинг клуба − 60) × «репутации за пункт». Сезон — 8 клубов, 14 туров в слоты «Карьеры тренера».
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("player_career_enabled", "Режим включён")}
+          {field("player_career_min_club_cards", "Мин. карточек у клуба")}
+          {field("player_career_rating_margin", "Запас рейтинга для клуба")}
+          {field("player_career_rep_per_club_rating", "Репутации за пункт рейтинга клуба")}
+          {field("player_career_rep_per_goal", "Репутация за гол")}
+          {field("player_career_rep_per_assist", "Репутация за передачу")}
+          {field("player_career_rep_per_win", "Репутация за победу")}
+          {field("player_career_rep_title", "Репутация за титул")}
+          {field("player_career_match_reward_win", "Монеты за победу")}
+          {field("player_career_match_reward_draw", "Монеты за ничью")}
+          {field("player_career_goal_reward", "Монеты за гол игрока")}
+          {field("player_career_match_xp", "Опыт за матч")}
+          {listField("player_career_place_rewards", "Награда за места 1–8, монеты")}
         </div>
       </section>
 

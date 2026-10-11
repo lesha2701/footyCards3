@@ -187,4 +187,8 @@ class StarsInvoice(TimestampMixin, Base):
     # once the WheelSpin row exists — mirrors pack_opening_id/gift_id above.
     is_wheel_spin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     wheel_spin_id: Mapped[Optional[int]] = mapped_column(ForeignKey("wheel_spins.id", ondelete="SET NULL"), nullable=True)
+    # «Мой игрок» Stars purchase (never with the fields above): "training"
+    # (one extra training) or "item:<lifestyle_item_id>". Delivered by
+    # my_player_service.deliver_stars_purchase.
+    my_player_purchase: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

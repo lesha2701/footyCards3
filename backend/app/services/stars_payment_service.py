@@ -111,6 +111,9 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
         gift = await db.get(Gift, invoice.gift_id)
         return StarsInvoiceStatusOut(status="completed", gift_result=GiftOut.model_validate(gift))
 
+    if invoice.my_player_purchase:
+        return StarsInvoiceStatusOut(status="completed", my_player_result={"kind": invoice.my_player_purchase.split(":")[0]})
+
     user = await db.get(User, invoice.user_id)
     return StarsInvoiceStatusOut(
         status="completed",
@@ -266,6 +269,10 @@ async def validate_pre_checkout(db: AsyncSession, payload_token: str, total_amou
         gift_set = await db.get(GiftSet, invoice.gift_set_id)
         if gift_set is None or not gift_set.is_active or gift_set.stars_price != total_amount:
             return False, "This gift set is no longer available"
+    elif invoice.my_player_purchase:
+        from app.services import my_player_service
+
+        return await my_player_service.validate_stars_purchase(db, invoice)
     return True, ""
 
 
@@ -358,6 +365,12 @@ async def deliver_payment(
         db.add(gift)
         await db.flush()
         invoice.gift_id = gift.id
+    elif invoice.my_player_purchase:
+        from app.services import my_player_service
+
+        if invoice.stars_amount != total_amount:
+            raise ConflictError("Stars amount does not match the invoice")
+        my_player_result = await my_player_service.deliver_stars_purchase(db, user, invoice)
     elif invoice.is_wheel_spin:
         # Imported here rather than at module level: wheel_service itself
         # imports _request_telegram_invoice_link from this module at import
@@ -420,6 +433,8 @@ async def deliver_payment(
     if invoice.gift_set_id is not None:
         await db.refresh(gift)
         return StarsInvoiceStatusOut(status="completed", gift_result=GiftOut.model_validate(gift))
+    if invoice.my_player_purchase:
+        return StarsInvoiceStatusOut(status="completed", my_player_result=my_player_result)
     return StarsInvoiceStatusOut(
         status="completed",
         coin_result=StarsCoinResultOut(coins_credited=invoice.coins_amount, new_balance=user.balance),

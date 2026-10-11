@@ -1,8 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { fetchMyPlayer } from "@/api/myPlayer";
 import HelpModal from "@/components/common/HelpModal";
-import { IconCoin, IconHelp } from "@/components/icons";
+import { IconCoin, IconHelp, IconProfile } from "@/components/icons";
+import PlayerAvatar from "@/components/myPlayer/PlayerAvatar";
 import { useAuthStore } from "@/store/authStore";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
 
@@ -12,6 +15,8 @@ export default function TopBar() {
   const [helpOpen, setHelpOpen] = useState(false);
   const guardActive = useMatchGuardStore((s) => s.active);
   const requestNavigate = useMatchGuardStore((s) => s.requestNavigate);
+  const { data: myPlayer } = useQuery({ queryKey: ["my-player"], queryFn: fetchMyPlayer, enabled: !!user, staleTime: 60_000 });
+  const mine = myPlayer?.player;
 
   return (
     <header className="safe-top sticky top-0 z-30 border-b border-white/5 bg-bg-base/85 backdrop-blur">
@@ -26,6 +31,22 @@ export default function TopBar() {
           </span>
         </button>
         <div className="flex items-center gap-2">
+          {myPlayer?.enabled && (
+            <button
+              onClick={() => (guardActive ? requestNavigate("/my-player") : navigate("/my-player"))}
+              aria-label="Мой игрок"
+              className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-white/5 text-ink-mist ring-1 ring-white/10"
+            >
+              {mine ? (
+                <PlayerAvatar appearance={mine.appearance} accessory={mine.accessory} backdrop={mine.background} className="h-full w-full" />
+              ) : (
+                <IconProfile size={17} />
+              )}
+              {(!mine || myPlayer.points_available > 0) && (
+                <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-accent-lime ring-2 ring-bg-base" />
+              )}
+            </button>
+          )}
           <button
             onClick={() => setHelpOpen(true)}
             aria-label="Помощь"

@@ -238,9 +238,16 @@ def _resolve_shot_action(
         missed, shot_type, config, blocker_rating=defender["rating"], keeper_rating=defender["rating"],
         keeper=keeper, notes=notes, one_on_one=bool(moment.get("is_one_on_one")),
     )
+    # shooter_id / assist (+_id): who scored / set it up — read by «Карьера
+    # игрока» for personal stats (names alone can repeat across teams).
+    credit = {"shooter_id": scorer.get("club_card_id")}
+    if action == "pass":
+        credit.update({"assist": shooter["name"], "assist_id": shooter.get("club_card_id")})
     event = {
         "minute": moment["minute"], "event_type": outcome, "team": attacking_side,
-        "payload": _with_skill_notes({"shot_type": shot_type, "action": action, "shooter": scorer["name"], **extra}, notes),
+        "payload": _with_skill_notes(
+            {"shot_type": shot_type, "action": action, "shooter": scorer["name"], **credit, **extra}, notes,
+        ),
     }
     if aerial_info:
         event["payload"]["aerial_duel"] = aerial_info
@@ -302,9 +309,11 @@ def _resolve_breakaway(attacking_side: str, moment: dict, lineup: list[dict], co
     )
     notes.extend(roll_notes)
     outcome = "shot" if missed else "goal"
+    finisher = fwd_candidates[0] if fwd_candidates else None
+    credit = {"shooter": finisher["name"], "shooter_id": finisher.get("club_card_id")} if finisher else {}
     event = {
         "minute": moment["minute"], "event_type": outcome, "team": attacking_side,
-        "payload": _with_skill_notes({"shot_type": "empty_net", "missed": missed}, notes),
+        "payload": _with_skill_notes({"shot_type": "empty_net", "missed": missed, **credit}, notes),
     }
     return event, (attacking_side if outcome == "goal" else "none")
 

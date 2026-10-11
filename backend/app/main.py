@@ -22,6 +22,7 @@ from app.routers import (
     admin_games,
     admin_gifts,
     admin_leagues,
+    admin_lifestyle,
     admin_log,
     admin_packs,
     admin_players,
@@ -54,7 +55,10 @@ from app.routers import (
     leagues,
     lineups,
     maintenance,
+    lifestyle,
     matches,
+    my_player,
+    player_career,
     notifications,
     packs,
     penalty_matches,
@@ -122,6 +126,9 @@ app.include_router(gifts.router, prefix=API_PREFIX)
 app.include_router(lineups.router, prefix=API_PREFIX)
 app.include_router(career.router, prefix=API_PREFIX)
 app.include_router(friends.router, prefix=API_PREFIX)
+app.include_router(my_player.router, prefix=API_PREFIX)
+app.include_router(lifestyle.router, prefix=API_PREFIX)
+app.include_router(player_career.router, prefix=API_PREFIX)
 app.include_router(maintenance.router, prefix=API_PREFIX)
 app.include_router(broadcasts.router, prefix=API_PREFIX)
 app.include_router(announcement.router, prefix=API_PREFIX)
@@ -160,6 +167,7 @@ app.include_router(admin_trades.router, prefix=API_PREFIX)
 app.include_router(admin_trophies.router, prefix=API_PREFIX)
 app.include_router(admin_gifts.router, prefix=API_PREFIX)
 app.include_router(admin_leagues.router, prefix=API_PREFIX)
+app.include_router(admin_lifestyle.router, prefix=API_PREFIX)
 app.include_router(admin_wheel.router, prefix=API_PREFIX)
 app.include_router(admin_games.router, prefix=API_PREFIX)
 app.include_router(admin_log.router, prefix=API_PREFIX)

@@ -3,6 +3,9 @@ from app.models.badge import Badge, UserBadge
 from app.models.card import UserCard
 from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
 from app.models.career import CareerParticipant, CareerSeason, Friendship
+from app.models.lifestyle import LifestyleItem, UserLifestyleItem
+from app.models.my_player import MyPlayer
+from app.models.player_career import PlayerCareerSeason
 from app.models.card_collection import CardCollection, UserCollectionReward
 from app.models.card_upgrade import CardUpgradeAttempt, CardUpgradeRule
 from app.models.club import Club, ClubJoinRequest, ClubMember
@@ -134,4 +137,8 @@ __all__ = [
     "CareerSeason",
     "CareerParticipant",
     "Friendship",
+    "MyPlayer",
+    "LifestyleItem",
+    "UserLifestyleItem",
+    "PlayerCareerSeason",
 ]

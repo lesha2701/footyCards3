@@ -60,6 +60,10 @@ async def credit_coins(
     )
     db.add(tx)
     db.add(user)
+    # «Мой игрок»: a rewarded game action also gives XP (same locked row).
+    from app.services.my_player_service import grant_reward_xp
+
+    await grant_reward_xp(db, user, tx_type, amount)
     return tx
 
 

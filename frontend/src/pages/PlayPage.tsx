@@ -82,6 +82,11 @@ export default function PlayPage() {
       rightLabel: "2 тура в день",
     },
     {
+      path: "/play/player-career", Icon: IconStar, badgeClass: "bg-accent-lime", title: "Карьера игрока",
+      description: "Твой игрок в клубе из реальных карточек: голы, оценки, трансферы в клубы сильнее",
+      rightLabel: "Мой игрок",
+    },
+    {
       path: "/player-tournament", Icon: IconFlagCheckered, badgeClass: "bg-accent-lime", title: "Личный турнир",
       description: "16 игроков, 30 туров — свой состав и тактика",
       stat: playerTournamentStatusLabel(playerTournamentCurrent?.status, playerTournamentCurrent?.queue_position),

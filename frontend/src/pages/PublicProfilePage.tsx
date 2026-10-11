@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { UserBadge } from "@/components/common/UserBadge";
+import { PublicMyPlayer } from "@/components/myPlayer/MyPlayerEntry";
 import FriendButton from "@/components/profile/FriendButton";
 import { IconChevronLeft, IconSwap } from "@/components/icons";
 import { fetchPublicProfile } from "@/api/profile";
@@ -69,6 +70,8 @@ export default function PublicProfilePage() {
           <Stat label="Матчи П/Н/П" value={`${profile.matches_won}/${profile.matches_drawn}/${profile.matches_lost}`} />
         </div>
       </section>
+
+      <PublicMyPlayer userId={profile.id} />
 
       {profile.rarest_card && (
         <section className="flex items-center gap-3 rounded-2xl bg-rarity-legendary/10 p-4">
