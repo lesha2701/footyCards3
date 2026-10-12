@@ -836,19 +836,19 @@ async def test_open_challenge_hides_creator_layout_until_and_after_accept(client
 
 def test_default_8x8_lakes_block_movement_and_speedster_runs():
     lakes = engine.default_lakes(8)
-    assert sorted(map(tuple, lakes)) == [(3, 1), (3, 2), (3, 5), (3, 6), (4, 1), (4, 2), (4, 5), (4, 6)]
+    assert sorted(map(tuple, lakes)) == [(3, 2), (3, 5), (4, 2), (4, 5)]  # lanes: cols 0-1, 3-4, 6-7
     assert engine.default_lakes(6) == []
     s = _state([
-        _piece(1, "user", "regular", 5, 1, power=60), _piece(2, "user", "speedster", 6, 2, power=60),
+        _piece(1, "user", "regular", 5, 5, power=60), _piece(2, "user", "speedster", 6, 2, power=60),
         _piece(3, "user", "speedster", 7, 0, power=60), _piece(9, "opponent", "regular", 0, 7, power=10),
     ], board_size=8)
     s["lakes"] = lakes
     targets = {(m[0], m[3], m[4]) for m in engine.legal_moves(s, "user")}
-    assert (1, 4, 1) not in targets  # cannot step into a puddle
+    assert (1, 4, 5) not in targets  # cannot step into a puddle
     assert (2, 5, 2) in targets and (2, 4, 2) not in targets and (2, 2, 2) not in targets  # run stops at the lake
     assert (3, 0, 0) in targets  # open lane along the edge
     with pytest.raises(engine.EngineError):
-        engine.apply_move(s, "user", 5, 1, 4, 1)
+        engine.apply_move(s, "user", 5, 5, 4, 5)
 
 
 def test_default_8x8_slots_and_auto_layout_fill_both_home_rows():
@@ -881,7 +881,7 @@ async def test_default_8x8_bot_match_has_16_pieces_and_lakes(client, db_session,
     assert roles["speedster_1"] in ("LW", "RW", "LM", "RM")
 
     body = (await client.post(f"{API}/matches/bot", headers=headers)).json()
-    assert body["board_size"] == 8 and body["move_limit"] == 120 and len(body["lakes"]) == 8
+    assert body["board_size"] == 8 and body["move_limit"] == 120 and len(body["lakes"]) == 4
     mine = [p for p in body["pieces"] if p["mine"]]
     assert len(mine) == 16
     if body["ply"] == 0:

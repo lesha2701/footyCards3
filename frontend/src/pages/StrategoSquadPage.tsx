@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchStrategoSquad, saveStrategoSquad } from "@/api/stratego";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronLeft } from "@/components/icons";
+import { CELL_LINES, GRASS_STYLE } from "@/components/stratego/boardStyle";
 import { ROLE_META, autoLayout, roleOfSlot, slotLabel } from "@/components/stratego/strategoMeta";
 import { formatGameError } from "@/lib/errors";
 import type { StrategoCard, StrategoSquad } from "@/types";
@@ -135,8 +136,8 @@ export default function StrategoSquadPage() {
           Верхний ряд — ближний к сопернику. Нажми фишку, потом клетку — фишки поменяются местами.
         </p>
         <div
-          className={`grid w-full rounded-2xl bg-accent-green/15 p-1 ${size >= 8 ? "gap-0.5" : "gap-1"}`}
-          style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
+          className="grid w-full overflow-hidden rounded-2xl border-2 border-white/25 shadow-lg"
+          style={{ ...GRASS_STYLE, gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
         >
           {[0, 1].flatMap((r) =>
             Array.from({ length: size }, (_, c) => {
@@ -147,12 +148,12 @@ export default function StrategoSquadPage() {
                 <button
                   key={`${r}:${c}`}
                   onClick={() => onCell(r, c)}
-                  className={`flex aspect-square flex-col items-center justify-center rounded-lg leading-none ${
-                    (r + c) % 2 === 0 ? "bg-accent-green/25" : "bg-accent-green/15"
-                  } ${slot && slot === selectedSlot ? "ring-2 ring-accent-lime" : ""}`}
+                  className={`flex aspect-square flex-col items-center justify-center leading-none ${CELL_LINES} ${
+                    slot && slot === selectedSlot ? "bg-accent-lime/20 ring-2 ring-inset ring-accent-lime" : ""
+                  }`}
                 >
                   {role && (
-                    <span className="flex h-[88%] w-[88%] flex-col items-center justify-center rounded-md bg-accent-cyan text-bg-base">
+                    <span className="flex h-[88%] w-[88%] flex-col items-center justify-center rounded-md bg-sky-100 text-slate-900 shadow-md ring-1 ring-sky-900/20">
                       <span className="text-sm leading-none">{ROLE_META[role].glyph}</span>
                       {card && <span className="mt-0.5 font-mono text-[9px] font-bold">{card.rating}</span>}
                     </span>

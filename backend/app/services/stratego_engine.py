@@ -22,9 +22,10 @@ tie removes both pieces.
 Layouts are expressed relative to their owner: row 0 = front row, row 1 =
 back row, column 0 = owner's left.
 
-Lakes (лужи): on boards of 8×8 and larger, two 2×2 impassable puddles sit
-in the two middle rows (see default_lakes) — nobody can stand on or pass
-through them, which funnels play into three lanes like classic Stratego.
+Lakes (лужи): on boards of 8×8 and larger, two 1-wide × 2-tall impassable
+puddles sit in the two middle rows (see default_lakes) — nobody can stand
+on or pass through them. On 8×8 that leaves three two-square lanes: both
+edges and the centre.
 
 Piece counts come in as a dict {"wall", "tackler", "speedster", "regular"};
 star, provocateur and cup are always exactly one.
@@ -72,12 +73,13 @@ def piece_total(counts: dict) -> int:
 
 
 def default_lakes(board_size: int) -> list[list[int]]:
-    """Two 2×2 puddles in the middle rows, mirrored so both sides face the
-    same terrain. Only on boards of 8×8+ — smaller boards stay open."""
+    """Two 1×2 puddles in the middle rows flanking a two-square centre lane,
+    mirrored so both sides face the same terrain (8×8: columns 2 and 5).
+    Only on boards of 8×8+ — smaller boards stay open."""
     if board_size < 8:
         return []
     rows = (board_size // 2 - 1, board_size // 2)
-    cols = (1, 2, board_size - 3, board_size - 2)
+    cols = (board_size // 2 - 2, board_size // 2 + 1)
     return [[r, c] for r in rows for c in cols]
 
 
