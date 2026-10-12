@@ -46,8 +46,10 @@ class StrategoSquadOut(BaseModel):
     cards_needed: int
     # max_legendary / max_diamond / min_rare / min_common for the UI counters.
     rarity_limits: dict[str, int] = {}
-    # Highest rarity allowed on a Подкатчик slot.
+    # Highest rarity allowed on a Подкатчик slot (kept for older clients).
     tackler_max_rarity: str = "diamond"
+    # Highest rarity per capped role (tackler / provocateur / speedster).
+    role_max_rarity: dict[str, str] = {}
     # Rarity rules the current picks break (empty = valid); blocks play.
     violations: list[str] = []
     options: list[StrategoCardOut]
@@ -79,6 +81,7 @@ class StrategoInfoOut(BaseModel):
     min_common: int = 0
     my_player_xp: int = 0
     tackler_max_rarity: str = "diamond"
+    role_max_rarity: dict[str, str] = {}
     easy_reward_pct: int = 100
     live_move_seconds: int = 60
     skill_bonus_per_level: int = 0

@@ -1273,3 +1273,47 @@ async def test_tutorial_needs_no_cards_and_does_not_block_play(client, db_sessio
     assert (await client.post(f"{API}/matches/bot", headers=headers)).status_code == 200
     headers_new = await _register(client, bot_token, 970122)  # a brand-new player with no cards
     assert (await client.post(f"{API}/tutorial/start", headers=headers_new)).status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Провокатор / Подкатчик / Скорость: at most epic
+# ---------------------------------------------------------------------------
+
+async def test_special_roles_capped_at_epic(client, db_session, bot_token):
+    headers = await _register(client, bot_token, 970130)
+    user = await get_user_by_telegram_id(db_session, 970130)
+    ids = await _give_cards(db_session, user.id, spec=[
+        (95, Position.ST, Rarity.diamond),
+        (90, Position.LW, Rarity.legendary), (89, Position.CM, Rarity.legendary), (88, Position.CB, Rarity.legendary),
+        (70, Position.RW, Rarity.epic), (69, Position.CAM, Rarity.rare), (68, Position.RB, Rarity.common),
+        (60, Position.GK),
+    ])
+    squad = (await client.get(f"{API}/squad", headers=headers)).json()
+    assert squad["role_max_rarity"] == {"tackler": "epic", "provocateur": "epic", "speedster": "epic"}
+    picked = {s["slot"]: s["card"] for s in squad["card_slots"]}
+    for slot in ("tackler", "provocateur", "speedster"):
+        assert picked[slot]["rarity"] in ("common", "rare", "epic"), slot
+    assert picked["speedster"]["user_card_id"] == ids[4]
+    assert picked["provocateur"]["user_card_id"] == ids[5]
+    assert picked["tackler"]["user_card_id"] == ids[6]
+
+    layout = squad["layout"]
+    for slot, legendary in (("speedster", ids[1]), ("provocateur", ids[2])):
+        cards = {"star": ids[0], "tackler": ids[6], "speedster": ids[4], "provocateur": ids[5], "regular_1": ids[7]}
+        cards[slot] = legendary
+        resp = await client.put(f"{API}/squad", headers=headers, json={"cards": cards, "layout": layout})
+        assert resp.status_code == 409
+        assert ("Скорость" if slot == "speedster" else "Провокатор") in resp.json()["error"]["message"]
+
+    info = (await client.get(f"{API}/info", headers=headers)).json()
+    assert info["role_max_rarity"]["provocateur"] == "epic"
+
+
+async def test_admin_sets_role_caps(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    resp = await client.put("/api/v1/admin/games/config", headers=auth, json={
+        "stratego_provocateur_max_rarity": "legendary", "stratego_speedster_max_rarity": "rare",
+    })
+    assert resp.status_code == 200
+    assert resp.json()["stratego_provocateur_max_rarity"] == "legendary"
+    assert resp.json()["stratego_speedster_max_rarity"] == "rare"

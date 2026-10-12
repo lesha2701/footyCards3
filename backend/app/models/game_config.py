@@ -325,9 +325,12 @@ class GameConfig(TimestampMixin, Base):
     stratego_max_diamond_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     stratego_min_rare_cards: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     stratego_min_common_cards: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
-    # Highest card rarity allowed on a Подкатчик (tackler) slot — a
-    # legendary wall-breaker trivialises walls. common/rare/epic/legendary/diamond.
+    # Highest card rarity allowed on the special-ability roles — a legendary
+    # wall-breaker / star-killer / long-range scout makes those abilities
+    # trivial. common/rare/epic/legendary/diamond.
     stratego_tackler_max_rarity: Mapped[str] = mapped_column(String(16), default="epic", nullable=False)
+    stratego_provocateur_max_rarity: Mapped[str] = mapped_column(String(16), default="epic", nullable=False)
+    stratego_speedster_max_rarity: Mapped[str] = mapped_column(String(16), default="epic", nullable=False)
     # Easy bot pays this % of the normal rewards (and a win is capped at +1 rating).
     stratego_bot_easy_reward_pct: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
     # Matchmaking ("online") matches are played live: seconds per move.

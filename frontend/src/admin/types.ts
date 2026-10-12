@@ -281,6 +281,8 @@ export interface GameConfig {
   stratego_skill_bonus_per_level: number;
   stratego_puzzle_reward: number;
   stratego_tackler_max_rarity: "common" | "rare" | "epic" | "legendary" | "diamond";
+  stratego_provocateur_max_rarity: "common" | "rare" | "epic" | "legendary" | "diamond";
+  stratego_speedster_max_rarity: "common" | "rare" | "epic" | "legendary" | "diamond";
   stratego_tackler_count: number;
   stratego_speedster_count: number;
   stratego_wall_count: number;

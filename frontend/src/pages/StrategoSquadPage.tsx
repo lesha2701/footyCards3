@@ -64,11 +64,13 @@ export default function StrategoSquadPage() {
     { label: "Обычных", value: count("common"), ok: count("common") >= lim.min_common, hint: `≥${lim.min_common}` },
   ];
   const full = picked.length === squad.cards_needed;
-  const tooRareTackler = Object.entries(cards).some(([slot, id]) => {
+  const caps = squad.role_max_rarity ?? {};
+  const tooRareRoles = [...new Set(Object.entries(cards).flatMap(([slot, id]) => {
     const c = cardById.get(id);
-    return roleOfSlot(slot) === "tackler" && !!c && RARITY_ORDER[c.rarity] > RARITY_ORDER[squad.tackler_max_rarity];
-  });
-  const valid = full && rules.every((r) => r.ok) && !tooRareTackler;
+    const cap = caps[roleOfSlot(slot)];
+    return c && cap && RARITY_ORDER[c.rarity] > RARITY_ORDER[cap] ? [ROLE_META[roleOfSlot(slot)].label] : [];
+  }))];
+  const valid = full && rules.every((r) => r.ok) && tooRareRoles.length === 0;
 
   const size = squad.board_size;
   const slotAt = (r: number, c: number) => Object.keys(layout).find((s) => layout[s][0] === r && layout[s][1] === c);
@@ -132,12 +134,16 @@ export default function StrategoSquadPage() {
           </div>
         ))}
       </div>
-      <p className="-mt-2 text-[11px] text-ink-mist-dim">
-        Подкатчик — не выше: {RARITY_LABELS[squad.tackler_max_rarity].toLowerCase()} карточка.
-      </p>
-      {tooRareTackler && (
+      {Object.keys(caps).length > 0 && (
+        <p className="-mt-2 text-[11px] text-ink-mist-dim">
+          {(Object.entries(caps) as [keyof typeof ROLE_META, keyof typeof RARITY_LABELS][])
+            .map(([role, cap]) => `${ROLE_META[role].label} — не выше: ${RARITY_LABELS[cap].toLowerCase()}`)
+            .join(" · ")}
+        </p>
+      )}
+      {tooRareRoles.length > 0 && (
         <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">
-          Подкатчиком может быть карточка не выше «{RARITY_LABELS[squad.tackler_max_rarity]}» — замени его.
+          Слишком редкая карточка на роли: {tooRareRoles.join(", ")} — замени её.
         </p>
       )}
       {!dirty && squad.violations.length > 0 && (
@@ -254,8 +260,8 @@ function CardPicker({
   const def = squad.card_slots.find((s) => s.slot === slot)!;
   const eligible = def.eligible_positions;
   const fits = (c: StrategoCard) => !eligible || eligible.includes(c.position);
-  const allowed = (c: StrategoCard) =>
-    def.role !== "tackler" || RARITY_ORDER[c.rarity] <= RARITY_ORDER[squad.tackler_max_rarity];
+  const cap = squad.role_max_rarity?.[def.role];
+  const allowed = (c: StrategoCard) => !cap || RARITY_ORDER[c.rarity] <= RARITY_ORDER[cap];
   const sorted = [...squad.options].sort(
     (a, b) => Number(allowed(b)) - Number(allowed(a)) || Number(fits(b)) - Number(fits(a)) || b.rating - a.rating,
   );
@@ -267,7 +273,7 @@ function CardPicker({
           {ROLE_META[def.role].hint}
           {eligible && ` · Позиции: ${eligible.join(", ")}`}
           {def.role === "star" && " · Должна быть самой сильной картой состава"}
-          {def.role === "tackler" && ` · Не выше: ${RARITY_LABELS[squad.tackler_max_rarity].toLowerCase()}`}
+          {cap && ` · Не выше: ${RARITY_LABELS[cap].toLowerCase()}`}
         </p>
         <div className="flex flex-col gap-1.5">
           {sorted.map((c) => (

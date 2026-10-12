@@ -163,7 +163,15 @@ def _rarity_rules(config: GameConfig) -> dict:
         "max": {"legendary": config.stratego_max_legendary_cards, "diamond": config.stratego_max_diamond_cards},
         "min": {"rare": config.stratego_min_rare_cards, "common": config.stratego_min_common_cards},
         # Hard per-role ceiling on card rarity (role -> highest allowed rarity).
-        "role_max": {"tackler": config.stratego_tackler_max_rarity},
+        "role_max": _role_caps(config),
+    }
+
+
+def _role_caps(config: GameConfig) -> dict[str, str]:
+    return {
+        "tackler": config.stratego_tackler_max_rarity,
+        "provocateur": config.stratego_provocateur_max_rarity,
+        "speedster": config.stratego_speedster_max_rarity,
     }
 
 
@@ -376,6 +384,7 @@ async def get_squad(db: AsyncSession, user: User) -> StrategoSquadOut:
             "min_rare": config.stratego_min_rare_cards, "min_common": config.stratego_min_common_cards,
         },
         tackler_max_rarity=config.stratego_tackler_max_rarity,
+        role_max_rarity=_role_caps(config),
         violations=violations,
         options=[_card_out(i) for i in sorted(infos, key=_sort_key)],
     )
@@ -452,6 +461,7 @@ async def get_info(db: AsyncSession, user: User) -> StrategoInfoOut:
         min_rare=config.stratego_min_rare_cards, min_common=config.stratego_min_common_cards,
         my_player_xp=config.stratego_my_player_xp,
         tackler_max_rarity=config.stratego_tackler_max_rarity,
+        role_max_rarity=_role_caps(config),
         easy_reward_pct=config.stratego_bot_easy_reward_pct,
         live_move_seconds=config.stratego_live_move_seconds,
         skill_bonus_per_level=config.stratego_skill_bonus_per_level,

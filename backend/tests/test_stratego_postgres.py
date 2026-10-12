@@ -52,10 +52,19 @@ async def _user_with_cards(pg) -> int:
         user = User(telegram_id=int(uuid.uuid4().int % 10**12), first_name="PG", balance=0)
         s.add(user)
         await s.flush()
-        for rating, pos in ((90, Position.ST), (70, Position.CB), (65, Position.LW), (60, Position.CM), (55, Position.GK)):
+        # A full default (8×8, 13 card pieces) squad that meets the rarity
+        # rules: 4 rare + 2 common minimum, roles at most epic.
+        spec = [
+            (90, Position.ST, Rarity.epic), (80, Position.CB, Rarity.epic), (79, Position.LB, Rarity.rare),
+            (78, Position.RB, Rarity.rare), (77, Position.LW, Rarity.epic), (76, Position.RW, Rarity.rare),
+            (75, Position.CM, Rarity.rare), (70, Position.CAM, Rarity.epic), (69, Position.GK, Rarity.common),
+            (68, Position.CDM, Rarity.common), (67, Position.LM, Rarity.epic), (66, Position.RM, Rarity.epic),
+            (65, Position.ST, Rarity.epic),
+        ]
+        for rating, pos, rarity in spec:
             tag = uuid.uuid4().hex[:6]
             player = Player(
-                first_name="S", last_name=tag, display_name=f"S {tag}", rating=rating, rarity=Rarity.common,
+                first_name="S", last_name=tag, display_name=f"S {tag}", rating=rating, rarity=rarity,
                 country="X", club="Y", position=pos, quick_sell_price=1, is_active=True,
             )
             s.add(player)

@@ -117,13 +117,13 @@ def upgrade() -> None:
 
     for name, default in CONFIG_INT_COLUMNS:
         op.add_column("game_config", sa.Column(name, sa.Integer(), nullable=False, server_default=default))
-    op.add_column(
-        "game_config", sa.Column("stratego_tackler_max_rarity", sa.String(16), nullable=False, server_default="epic"),
-    )
+    for name in ("stratego_tackler_max_rarity", "stratego_provocateur_max_rarity", "stratego_speedster_max_rarity"):
+        op.add_column("game_config", sa.Column(name, sa.String(16), nullable=False, server_default="epic"))
 
 
 def downgrade() -> None:
-    op.drop_column("game_config", "stratego_tackler_max_rarity")
+    for name in ("stratego_speedster_max_rarity", "stratego_provocateur_max_rarity", "stratego_tackler_max_rarity"):
+        op.drop_column("game_config", name)
     for name, _ in reversed(CONFIG_INT_COLUMNS):
         op.drop_column("game_config", name)
     for name in (
