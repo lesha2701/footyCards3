@@ -320,6 +320,11 @@ class GameConfig(TimestampMixin, Base):
     # Total plies (both sides' moves together); reaching it ends the match on
     # remaining strength (sum of power of surviving mobile pieces).
     stratego_move_limit: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
+    # Squad composition rules over the card pieces (see stratego_service.rarity_violations).
+    stratego_max_legendary_cards: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    stratego_max_diamond_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    stratego_min_rare_cards: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    stratego_min_common_cards: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     stratego_challenge_expiry_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
     stratego_move_timeout_hours: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
     # Consecutive timed-out moves auto-played for one side before that side

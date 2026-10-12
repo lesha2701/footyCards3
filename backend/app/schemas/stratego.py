@@ -38,6 +38,10 @@ class StrategoSquadOut(BaseModel):
     layout: dict[str, list[int]]
     is_complete: bool
     cards_needed: int
+    # max_legendary / max_diamond / min_rare / min_common for the UI counters.
+    rarity_limits: dict[str, int] = {}
+    # Rarity rules the current picks break (empty = valid); blocks play.
+    violations: list[str] = []
     options: list[StrategoCardOut]
 
 

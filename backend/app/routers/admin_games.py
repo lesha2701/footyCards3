@@ -37,6 +37,10 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
         3 + config.stratego_wall_count + config.stratego_tackler_count  # cup + star + provocateur
         + config.stratego_speedster_count + config.stratego_regular_count
     )
+    stratego_card_pieces = stratego_pieces - 1 - config.stratego_wall_count
+    if config.stratego_min_rare_cards + config.stratego_min_common_cards > stratego_card_pieces:
+        await db.rollback()
+        raise ConflictError("Стратего: минимум редких + обычных больше, чем фишек-карт в составе")
     if stratego_pieces > 2 * config.stratego_board_size:
         await db.rollback()
         raise ConflictError("Стратего: все фишки должны помещаться в два ряда поля")

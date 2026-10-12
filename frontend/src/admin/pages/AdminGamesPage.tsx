@@ -590,6 +590,10 @@ export default function AdminGamesPage() {
           {field("stratego_speedster_count", "Скоростей")}
           {field("stratego_regular_count", "Обычных игроков")}
           {field("stratego_move_limit", "Лимит ходов (обоих)")}
+          {field("stratego_max_legendary_cards", "Макс. легендарных в составе")}
+          {field("stratego_max_diamond_cards", "Макс. диамантовых в составе")}
+          {field("stratego_min_rare_cards", "Мин. редких в составе")}
+          {field("stratego_min_common_cards", "Мин. обычных в составе")}
           {field("stratego_challenge_expiry_hours", "Срок жизни вызова, часы")}
           {field("stratego_move_timeout_hours", "Тайм-аут на ход, часы")}
           {field("stratego_max_auto_moves", "Автоходов подряд до поражения")}

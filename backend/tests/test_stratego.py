@@ -45,6 +45,9 @@ async def _small_board(request, db_session):
         config.stratego_speedster_count = 1
         config.stratego_regular_count = 1
         config.stratego_move_limit = 40
+        # Rarity rules have their own tests; the factory makes common cards.
+        config.stratego_min_rare_cards = 0
+        config.stratego_min_common_cards = 0
         await db_session.commit()
     yield
 
@@ -313,9 +316,11 @@ SQUAD_SPEC = [(90, Position.ST), (70, Position.CB), (65, Position.LW), (60, Posi
 
 async def _give_cards(db_session, user_id: int, spec=SQUAD_SPEC, prefix="Card") -> list[int]:
     ids = []
-    for rating, position in spec:
+    for rating, position, *rest in spec:
+        rarity = rest[0] if rest else Rarity.common
         player = await create_player(
-            db_session, rating=rating, position=position, display_name=f"{prefix} {position.value} {rating}",
+            db_session, rating=rating, position=position, rarity=rarity,
+            display_name=f"{prefix} {position.value} {rating}",
         )
         card = await create_user_card(db_session, user_id, player.id, CardSource.seed)
         await db_session.commit()
@@ -862,10 +867,12 @@ def test_default_8x8_slots_and_auto_layout_fill_both_home_rows():
         assert len({tuple(v) for v in layout.values()}) == 16
 
 
+R = Rarity
 EIGHT_SPEC = [
-    (95, Position.ST), (80, Position.CB), (79, Position.LB), (78, Position.LW), (77, Position.RW), (76, Position.CM),
-    (70, Position.GK), (69, Position.RB), (68, Position.CDM), (67, Position.CAM), (66, Position.LM), (65, Position.RM),
-    (64, Position.ST),
+    (95, Position.ST, R.diamond), (80, Position.CB, R.legendary), (79, Position.LB, R.legendary),
+    (78, Position.LW, R.epic), (77, Position.RW, R.epic), (76, Position.CM, R.epic),
+    (70, Position.GK, R.rare), (69, Position.RB, R.rare), (68, Position.CDM, R.rare), (67, Position.CAM, R.rare),
+    (66, Position.LM), (65, Position.RM), (64, Position.ST),
 ]
 
 
@@ -897,3 +904,89 @@ async def test_default_8x8_requires_13_cards(client, db_session, bot_token):
     assert squad["is_complete"] is False and squad["cards_needed"] == 13
     resp = await client.post(f"{API}/matches/bot", headers=headers)
     assert resp.status_code == 409 and "13" in resp.json()["error"]["message"]
+
+
+# ---------------------------------------------------------------------------
+# Rarity rules: max 3 legendary, max 1 diamond, min 4 rare, min 2 common
+# ---------------------------------------------------------------------------
+
+DEFAULT_RULES = {"max": {"legendary": 3, "diamond": 1}, "min": {"rare": 4, "common": 2}}
+
+
+def _info(pid, power, position, rarity):
+    return {"power": power, "rarity_rank": 0, "card": {
+        "user_card_id": pid, "player_id": pid, "display_name": f"P{pid}", "position": position,
+        "image_path": None, "rarity": rarity, "rating": power,
+    }}
+
+
+def test_default_8x8_auto_assign_respects_rarity_rules():
+    infos = (
+        [_info(i, 95 - i, "CB" if i % 2 else "ST", "legendary") for i in range(1, 8)]
+        + [_info(10 + i, 97 - i, "LW", "diamond") for i in range(3)]
+        + [_info(20 + i, 70 - i, "CM", "rare") for i in range(6)]
+        + [_info(30 + i, 60 - i, "GK", "common") for i in range(4)]
+        + [_info(40 + i, 75 - i, "RB", "epic") for i in range(4)]
+    )
+    slots = engine.card_slots({"tackler": 3, "speedster": 2, "regular": 6})
+    chosen = stratego_service._auto_assign(infos, slots, rules=DEFAULT_RULES)
+    assert len(chosen) == 13
+    rarities = [c["card"]["rarity"] for c in chosen.values()]
+    assert rarities.count("legendary") <= 3 and rarities.count("diamond") <= 1
+    assert rarities.count("rare") >= 4 and rarities.count("common") >= 2
+    assert stratego_service.rarity_violations(list(chosen.values()), DEFAULT_RULES) == []
+    assert chosen["star"]["card"]["rarity"] == "diamond"  # still the strongest card
+
+
+def test_default_8x8_rarity_violations_messages():
+    picked = [_info(i, 80, "ST", "legendary") for i in range(4)] + [_info(9, 90, "ST", "diamond")] * 2
+    problems = stratego_service.rarity_violations(picked, DEFAULT_RULES)
+    assert any("легендарных" in p for p in problems) and any("диамантовых" in p for p in problems)
+    assert any("редких" in p for p in problems) and any("обычных" in p for p in problems)
+
+
+async def test_set_squad_enforces_rarity_rules(client, db_session, bot_token):
+    await _set_config(db_session, stratego_max_legendary_cards=1, stratego_min_rare_cards=1, stratego_min_common_cards=1)
+    headers = await _register(client, bot_token, 970080)
+    user = await get_user_by_telegram_id(db_session, 970080)
+    ids = await _give_cards(db_session, user.id, spec=[
+        (90, Position.ST, Rarity.legendary), (70, Position.CB, Rarity.legendary), (65, Position.LW, Rarity.rare),
+        (60, Position.CM), (55, Position.GK),
+    ])
+    squad = (await client.get(f"{API}/squad", headers=headers)).json()
+    # Only five cards and two are legendary: the cap can't be met.
+    assert squad["is_complete"] is False and any("легендарных" in v for v in squad["violations"])
+    assert squad["rarity_limits"] == {"max_legendary": 1, "max_diamond": 1, "min_rare": 1, "min_common": 1}
+    cards = {"star": ids[0], "tackler": ids[1], "speedster": ids[2], "provocateur": ids[3], "regular_1": ids[4]}
+    resp = await client.put(f"{API}/squad", headers=headers, json={"cards": cards, "layout": squad["layout"]})
+    assert resp.status_code == 409 and "легендарных" in resp.json()["error"]["message"]
+    assert (await client.post(f"{API}/matches/bot", headers=headers)).status_code == 409
+
+    # A sixth, non-legendary defender makes a legal squad possible.
+    extra = await _give_cards(db_session, user.id, spec=[(68, Position.RB, Rarity.epic)], prefix="Extra")
+    squad = (await client.get(f"{API}/squad", headers=headers)).json()
+    assert squad["is_complete"] is True and squad["violations"] == []
+    picked = {s["card"]["user_card_id"] for s in squad["card_slots"]}
+    assert extra[0] in picked and len(picked & {ids[0], ids[1]}) == 1
+    assert (await client.post(f"{API}/matches/bot", headers=headers)).status_code == 200
+
+
+async def test_default_8x8_bot_squad_follows_rarity_rules(client, db_session, bot_token):
+    headers = await _register(client, bot_token, 970081)
+    user = await get_user_by_telegram_id(db_session, 970081)
+    await _give_cards(db_session, user.id, spec=EIGHT_SPEC)
+    for i in range(6):  # extra rare/common players the bot can draw from
+        await create_player(db_session, rating=70, position=Position.CM, rarity=Rarity.rare, display_name=f"BR{i}")
+        await create_player(db_session, rating=60, position=Position.CB, rarity=Rarity.common, display_name=f"BC{i}")
+    body = (await client.post(f"{API}/matches/bot", headers=headers)).json()
+    match = await _load_match(db_session, body["id"])
+    bot = [p["card"]["rarity"] for p in match.server_state["pieces"] if p["side"] == "opponent" and p["card"]]
+    assert len(bot) == 13
+    assert bot.count("legendary") <= 3 and bot.count("diamond") <= 1
+    assert bot.count("rare") >= 4 and bot.count("common") >= 2
+
+
+async def test_admin_rejects_impossible_rarity_minimums(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    resp = await client.put("/api/v1/admin/games/config", headers=auth, json={"stratego_min_rare_cards": 4, "stratego_min_common_cards": 3})
+    assert resp.status_code == 409  # small test board has only 5 card pieces

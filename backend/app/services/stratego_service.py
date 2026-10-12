@@ -15,6 +15,7 @@ Hidden information: the full layout exists only in server_state.
 strips every unrevealed enemy piece down to id / position / moved.
 """
 import random
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -32,6 +33,7 @@ from app.models.enums import (
     MatchResult,
     NotificationType,
     Position,
+    Rarity,
     StrategoMatchStatus,
     StrategoOpponentType,
     TransactionType,
@@ -108,29 +110,69 @@ def _fits(role: str, info: dict) -> bool:
     return allowed is None or Position(info["card"]["position"]) in allowed
 
 
-def _auto_assign(infos: list[dict], slots: list[str], fixed: Optional[dict[str, dict]] = None) -> dict[str, dict]:
-    """Fills every card slot not in `fixed` with the strongest still-unused
-    card that fits the role (falling back to the strongest unused card when
-    nothing fits), then makes sure the star is the strongest card picked."""
-    chosen = dict(fixed or {})
+RARITY_LABELS = {"common": "обычных", "rare": "редких", "epic": "эпических", "legendary": "легендарных", "diamond": "диамантовых"}
+
+
+def _rarity_rules(config: GameConfig) -> dict:
+    return {
+        "max": {"legendary": config.stratego_max_legendary_cards, "diamond": config.stratego_max_diamond_cards},
+        "min": {"rare": config.stratego_min_rare_cards, "common": config.stratego_min_common_cards},
+    }
+
+
+def _rarity(info: dict) -> str:
+    return info["card"]["rarity"]
+
+
+def rarity_violations(picked: list[dict], rules: dict) -> list[str]:
+    """Human-readable squad composition problems (empty list = valid)."""
+    counts = Counter(_rarity(i) for i in picked)
+    problems = [
+        f"Максимум {cap} {RARITY_LABELS[r]} карт (сейчас {counts[r]})"
+        for r, cap in rules["max"].items() if counts[r] > cap
+    ]
+    problems += [
+        f"Нужно минимум {need} {RARITY_LABELS[r]} карт (сейчас {counts[r]})"
+        for r, need in rules["min"].items() if counts[r] < need
+    ]
+    return problems
+
+
+_NO_RULES = {"max": {}, "min": {}}
+
+
+def _assign_once(infos: list[dict], slots: list[str], fixed: dict[str, dict], rules: dict) -> dict[str, dict]:
+    chosen = dict(fixed)
     used = {id(i) for i in chosen.values()}
     pool = sorted(infos, key=_sort_key)
 
-    def best(role: str) -> Optional[dict]:
+    def feasible(cand: dict, slots_left_after: int) -> bool:
+        counts = Counter(_rarity(i) for i in chosen.values())
+        counts[_rarity(cand)] += 1
+        if any(counts[r] > cap for r, cap in rules["max"].items()):
+            return False
+        need = {r: max(0, n - counts[r]) for r, n in rules["min"].items()}
+        if sum(need.values()) > slots_left_after:
+            return False
+        taken = used | {id(cand)}
+        return all(sum(1 for i in pool if id(i) not in taken and _rarity(i) == r) >= n for r, n in need.items())
+
+    def best(role: str, slots_left_after: int) -> Optional[dict]:
         free = [i for i in pool if id(i) not in used]
-        fitting = [i for i in free if _fits(role, i)]
-        return (fitting or free or [None])[0]
+        for cand in [i for i in free if _fits(role, i)] + [i for i in free if not _fits(role, i)]:
+            if feasible(cand, slots_left_after):
+                return cand
+        return None
 
     # Star first (strongest card), then the scarcest position-bound roles.
     priority = {"star": 0, "tackler": 1, "speedster": 2, "provocateur": 3, "regular": 4}
-    order = sorted(slots, key=lambda s: (priority[engine.role_of(s)], s))
-    for slot in order:
-        if slot not in chosen:
-            pick = best(engine.role_of(slot))
-            if pick is None:
-                break
-            chosen[slot] = pick
-            used.add(id(pick))
+    order = [s for s in sorted(slots, key=lambda s: (priority[engine.role_of(s)], s)) if s not in chosen]
+    for n, slot in enumerate(order):
+        pick = best(engine.role_of(slot), len(order) - n - 1)
+        if pick is None:
+            break
+        chosen[slot] = pick
+        used.add(id(pick))
 
     if "star" in chosen:
         strongest_slot = min(chosen, key=lambda s: _sort_key(chosen[s]))
@@ -142,9 +184,27 @@ def _auto_assign(infos: list[dict], slots: list[str], fixed: Optional[dict[str, 
             else:
                 del chosen[strongest_slot]
                 used = {id(i) for i in chosen.values()}
-                pick = best(engine.role_of(strongest_slot))
+                pick = best(engine.role_of(strongest_slot), 0)
                 if pick is not None:
                     chosen[strongest_slot] = pick
+    return chosen
+
+
+def _auto_assign(
+    infos: list[dict], slots: list[str], fixed: Optional[dict[str, dict]] = None, rules: Optional[dict] = None,
+) -> dict[str, dict]:
+    """Fills every card slot not in `fixed` with the strongest still-unused
+    card that fits the role (falling back to the strongest unused card when
+    nothing fits) while keeping the rarity rules satisfiable, then makes sure
+    the star is the strongest card picked. If the collection simply can't
+    meet the minimums, the squad is still filled (caps kept, then dropped) so
+    the player sees what's missing instead of an empty screen — the
+    violations are reported separately and block play."""
+    rules = rules or _NO_RULES
+    for attempt in (rules, {"max": rules["max"], "min": {}}, _NO_RULES):
+        chosen = _assign_once(infos, slots, dict(fixed or {}), attempt)
+        if len(chosen) == len(slots):
+            return chosen
     return chosen
 
 
@@ -175,7 +235,7 @@ def _layout_rng(user_id: int) -> random.Random:
 
 
 async def _resolve_squad(
-    db: AsyncSession, user: User, board_size: int, counts: dict,
+    db: AsyncSession, user: User, board_size: int, counts: dict, rules: dict,
 ) -> tuple[dict[str, dict], dict[str, list[int]], list[dict]]:
     slots = engine.all_slots(counts)
     cslots = engine.card_slots(counts)
@@ -188,7 +248,9 @@ async def _resolve_squad(
         info = by_card_id.get(card_id)
         if slot in cslots and info is not None and all(info is not v for v in fixed.values()):
             fixed[slot] = info
-    cards = _auto_assign(infos, cslots, fixed)
+    if any(v.startswith("Максимум") for v in rarity_violations(list(fixed.values()), rules)):
+        fixed = {}  # saved picks break a cap (e.g. the admin lowered it) — re-pick
+    cards = _auto_assign(infos, cslots, fixed, rules)
     layout = engine.repair_layout(saved.get("layout"), slots, board_size, _layout_rng(user.id))
     return cards, layout, infos
 
@@ -200,8 +262,10 @@ def _card_out(info: dict) -> StrategoCardOut:
 async def get_squad(db: AsyncSession, user: User) -> StrategoSquadOut:
     config = await get_config(db)
     board_size, counts = _slot_counts(config)
-    cards, layout, infos = await _resolve_squad(db, user, board_size, counts)
+    rules = _rarity_rules(config)
+    cards, layout, infos = await _resolve_squad(db, user, board_size, counts, rules)
     cslots = engine.card_slots(counts)
+    violations = rarity_violations(list(cards.values()), rules) if len(cards) == len(cslots) else []
     return StrategoSquadOut(
         board_size=board_size,
         slots=engine.all_slots(counts),
@@ -215,8 +279,13 @@ async def get_squad(db: AsyncSession, user: User) -> StrategoSquadOut:
             for s in cslots
         ],
         layout=layout,
-        is_complete=len(cards) == len(cslots),
+        is_complete=len(cards) == len(cslots) and not violations,
         cards_needed=len(cslots),
+        rarity_limits={
+            "max_legendary": config.stratego_max_legendary_cards, "max_diamond": config.stratego_max_diamond_cards,
+            "min_rare": config.stratego_min_rare_cards, "min_common": config.stratego_min_common_cards,
+        },
+        violations=violations,
         options=[_card_out(i) for i in sorted(infos, key=_sort_key)],
     )
 
@@ -250,6 +319,9 @@ async def set_squad(db: AsyncSession, user: User, cards: dict[str, int], layout:
                 raise ConflictError(
                     f"Для роли «{ROLE_LABELS[role]}» нужна позиция {', '.join(sorted(p.value for p in ROLE_POSITIONS[role]))}"
                 )
+    problems = rarity_violations(list(chosen.values()), _rarity_rules(config))
+    if problems:
+        raise ConflictError("; ".join(problems))
     star_key = _sort_key(chosen["star"])[:2]
     if any(_sort_key(i)[:2] < star_key for i in chosen.values()):
         raise ConflictError("Звездой должна быть самая сильная карточка состава")
@@ -301,6 +373,7 @@ def _new_state(config: GameConfig) -> dict:
     random.shuffle(ids)
     return {
         "board_size": board_size, "counts": counts, "lakes": engine.default_lakes(board_size),
+        "rarity_rules": _rarity_rules(config),
         "move_limit": config.stratego_move_limit, "max_auto_moves": config.stratego_max_auto_moves,
         "pieces": [], "ids": {"user": ids[: len(slots)], "opponent": ids[len(slots):]},
         "turn": None, "ply": 0, "history": [], "deadline": None,
@@ -310,11 +383,15 @@ def _new_state(config: GameConfig) -> dict:
 
 
 async def _add_human_side(db: AsyncSession, state: dict, side: str, user: User) -> None:
-    cards, layout, _ = await _resolve_squad(db, user, state["board_size"], state["counts"])
+    rules = state.get("rarity_rules", _NO_RULES)
+    cards, layout, _ = await _resolve_squad(db, user, state["board_size"], state["counts"], rules)
     slots = engine.all_slots(state["counts"])
     needed = len(engine.card_slots(state["counts"]))
     if len(cards) < needed:
         raise ConflictError(f"Для Стратего нужно минимум {needed} карточек в коллекции")
+    problems = rarity_violations(list(cards.values()), rules)
+    if problems:
+        raise ConflictError("Состав Стратего не подходит: " + "; ".join(problems))
     state["pieces"].extend(engine.build_pieces(side, slots, cards, layout, state["board_size"], state["ids"][side]))
 
 
@@ -331,12 +408,24 @@ async def _bot_cards(db: AsyncSession, target_power: int, count: int) -> list[di
         players = list(result.scalars().all())
     if len(players) < count:
         raise ConflictError("Not enough players available to generate a bot squad")
+    # The bot plays under the same rarity minimums — top up the pool with the
+    # closest-rated rare and common players so those are always reachable.
+    seen = {p.id for p in players}
+    for rarity in (Rarity.rare, Rarity.common):
+        extra = await db.execute(
+            select(Player)
+            .where(Player.is_active.is_(True), Player.rarity == rarity, Player.id.not_in(seen or {0}))
+            .order_by(func.abs(Player.rating - target_power)).limit(count)
+        )
+        for p in extra.scalars().all():
+            players.append(p)
+            seen.add(p.id)
     return [_player_info(p) for p in players]
 
 
 def _add_bot_side(state: dict, infos: list[dict], rng: random.Random) -> None:
     slots = engine.all_slots(state["counts"])
-    cards = _auto_assign(infos, engine.card_slots(state["counts"]))
+    cards = _auto_assign(infos, engine.card_slots(state["counts"]), rules=state.get("rarity_rules"))
     layout = engine.auto_layout(slots, state["board_size"], rng)
     state["pieces"].extend(
         engine.build_pieces("opponent", slots, cards, layout, state["board_size"], state["ids"]["opponent"])

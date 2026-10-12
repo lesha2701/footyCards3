@@ -271,6 +271,10 @@ export interface GameConfig {
   tactico_max_epic_cards: number;
   tactico_max_diamond_cards: number;
   stratego_board_size: number;
+  stratego_max_legendary_cards: number;
+  stratego_max_diamond_cards: number;
+  stratego_min_rare_cards: number;
+  stratego_min_common_cards: number;
   stratego_tackler_count: number;
   stratego_speedster_count: number;
   stratego_wall_count: number;

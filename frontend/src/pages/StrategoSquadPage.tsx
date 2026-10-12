@@ -49,6 +49,20 @@ export default function StrategoSquadPage() {
 
   if (isLoading || !squad) return <ListSkeleton />;
 
+  // Live rarity counters over the current (possibly unsaved) picks; the
+  // server re-checks the same rules on save and at match start.
+  const picked = Object.values(cards).map((id) => cardById.get(id)).filter(Boolean) as StrategoCard[];
+  const count = (r: string) => picked.filter((c) => c.rarity === r).length;
+  const lim = squad.rarity_limits;
+  const rules = [
+    { label: "Легендарных", value: count("legendary"), ok: count("legendary") <= lim.max_legendary, hint: `≤${lim.max_legendary}` },
+    { label: "Диамантов", value: count("diamond"), ok: count("diamond") <= lim.max_diamond, hint: `≤${lim.max_diamond}` },
+    { label: "Редких", value: count("rare"), ok: count("rare") >= lim.min_rare, hint: `≥${lim.min_rare}` },
+    { label: "Обычных", value: count("common"), ok: count("common") >= lim.min_common, hint: `≥${lim.min_common}` },
+  ];
+  const full = picked.length === squad.cards_needed;
+  const valid = full && rules.every((r) => r.ok);
+
   const size = squad.board_size;
   const slotAt = (r: number, c: number) => Object.keys(layout).find((s) => layout[s][0] === r && layout[s][1] === c);
 
@@ -95,9 +109,25 @@ export default function StrategoSquadPage() {
         <h1 className="font-display text-xl font-bold text-ink-chalk">Подготовка</h1>
       </div>
 
-      {!squad.is_complete && (
+      {squad.options.length < squad.cards_needed && (
         <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">
           Нужно минимум {squad.cards_needed} карточек в коллекции, чтобы собрать состав.
+        </p>
+      )}
+
+      <div className="grid grid-cols-4 gap-1.5">
+        {rules.map((r) => (
+          <div key={r.label} className={`rounded-xl px-2 py-1.5 text-center ${r.ok ? "bg-bg-surface" : "bg-red-500/15"}`}>
+            <p className={`font-mono text-sm font-bold ${r.ok ? "text-ink-chalk" : "text-red-400"}`}>
+              {r.value}<span className="text-[10px] font-normal text-ink-mist"> {r.hint}</span>
+            </p>
+            <p className="text-[9px] text-ink-mist">{r.label}</p>
+          </div>
+        ))}
+      </div>
+      {!dirty && squad.violations.length > 0 && (
+        <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">
+          Из твоей коллекции не собрать состав по правилам: {squad.violations.join("; ")}.
         </p>
       )}
 
@@ -173,7 +203,7 @@ export default function StrategoSquadPage() {
 
       <button
         onClick={() => save.mutate()}
-        disabled={save.isPending || !squad.is_complete}
+        disabled={save.isPending || !valid}
         className="rounded-2xl bg-floodlight py-4 text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
       >
         {save.isPending ? "Сохраняем..." : "Сохранить подготовку"}

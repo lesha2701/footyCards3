@@ -1929,6 +1929,9 @@ export interface StrategoSquad {
   layout: Record<string, [number, number]>;
   is_complete: boolean;
   cards_needed: number;
+  rarity_limits: { max_legendary: number; max_diamond: number; min_rare: number; min_common: number };
+  /** Rarity rules the current picks break; empty = valid. */
+  violations: string[];
   options: StrategoCard[];
 }
 
