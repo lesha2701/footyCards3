@@ -52,12 +52,15 @@ from app.schemas.stratego import (
     StrategoMoveOut,
     StrategoOpenChallengePreviewOut,
     StrategoPieceOut,
+    StrategoPuzzleBriefOut,
+    StrategoPuzzleOut,
     StrategoSquadOut,
     StrategoSquadSlotOut,
     StrategoStatsOut,
 )
 from app.services import my_player_service, ranking_service
 from app.services import stratego_engine as engine
+from app.services import stratego_puzzles
 from app.services.game_config_service import get_config
 from app.services.match_service import BOT_NAMES
 from app.services.notification_service import notify
@@ -97,8 +100,30 @@ def _player_info(player: Player, user_card_id: Optional[int] = None, diamond_bon
     }
 
 
-def _card_info(card: UserCard) -> dict:
-    return _player_info(card.player, card.id, card.diamond_rating_bonus)
+ATTACK_SKILLS = frozenset({"sniper", "dribbler", "playmaker", "crosser", "one_on_one"})
+DEFENCE_SKILLS = frozenset({"interceptor", "last_line", "reflexes", "aerial_master"})
+
+
+def _with_skill(info: dict, code: Optional[str], level: Optional[int], per_level: int) -> dict:
+    """Card skills carry into Stratego as a flat fight bonus: attacking
+    skills when the piece attacks, defending ones when it is attacked."""
+    if not code or not level or per_level <= 0 or code not in (ATTACK_SKILLS | DEFENCE_SKILLS):
+        return info
+    from app.services.card_skill_catalog import SKILL_DEFINITIONS
+
+    kind = "atk" if code in ATTACK_SKILLS else "def"
+    bonus = level * per_level
+    info["atk_bonus" if kind == "atk" else "def_bonus"] = bonus
+    info["card"].update({
+        "skill_name": SKILL_DEFINITIONS[code].name if code in SKILL_DEFINITIONS else code,
+        "skill_level": level, "skill_kind": kind, "skill_bonus": bonus,
+    })
+    return info
+
+
+def _card_info(card: UserCard, per_level: int = 0) -> dict:
+    info = _player_info(card.player, card.id, card.diamond_rating_bonus)
+    return _with_skill(info, getattr(card, "skill_code", None), getattr(card, "skill_level", None), per_level)
 
 
 def _my_player_info(card) -> dict:
@@ -279,10 +304,11 @@ async def _usable_cards(db: AsyncSession, user_id: int) -> list[UserCard]:
 
 async def _usable_infos(db: AsyncSession, user_id: int) -> list[dict]:
     """The user's cards plus «Мой игрок» (when created and the feature is on)."""
-    infos = [_card_info(c) for c in await _usable_cards(db, user_id)]
+    per_level = (await get_config(db)).stratego_skill_bonus_per_level
+    infos = [_card_info(c, per_level) for c in await _usable_cards(db, user_id)]
     mine = await my_player_service.engine_card(db, user_id)
     if mine is not None:
-        infos.append(_my_player_info(mine))
+        infos.append(_with_skill(_my_player_info(mine), mine.skill_code, mine.skill_level, per_level))
     return infos
 
 
@@ -426,6 +452,10 @@ async def get_info(db: AsyncSession, user: User) -> StrategoInfoOut:
         min_rare=config.stratego_min_rare_cards, min_common=config.stratego_min_common_cards,
         my_player_xp=config.stratego_my_player_xp,
         tackler_max_rarity=config.stratego_tackler_max_rarity,
+        easy_reward_pct=config.stratego_bot_easy_reward_pct,
+        live_move_seconds=config.stratego_live_move_seconds,
+        skill_bonus_per_level=config.stratego_skill_bonus_per_level,
+        puzzle_reward=config.stratego_puzzle_reward,
     )
 
 
@@ -501,15 +531,23 @@ def _add_bot_side(state: dict, infos: list[dict], rng: random.Random) -> None:
     )
 
 
-def _start_play(state: dict, config: GameConfig, is_bot: bool) -> None:
+def _move_timeout(state: dict, config: GameConfig) -> timedelta:
+    if state.get("live"):
+        return timedelta(seconds=config.stratego_live_move_seconds)
+    return timedelta(hours=config.stratego_move_timeout_hours)
+
+
+def _start_play(state: dict, config: GameConfig, is_bot: bool, live: bool = False) -> None:
     state["turn"] = random.choice(engine.SIDES)
     state.pop("ids", None)
+    if live:
+        state["live"] = True
     if not is_bot:
-        state["deadline"] = (datetime.now(timezone.utc) + timedelta(hours=config.stratego_move_timeout_hours)).isoformat()
+        state["deadline"] = (datetime.now(timezone.utc) + _move_timeout(state, config)).isoformat()
 
 
-def _bot_rng(match_id: int, ply: int) -> random.Random:
-    return random.Random(f"stratego-bot:{match_id}:{ply}")
+def _bot_rng(seed: object, ply: int) -> random.Random:
+    return random.Random(f"stratego-bot:{seed}:{ply}")
 
 
 # ---------------------------------------------------------------------------
@@ -557,6 +595,7 @@ async def _has_active_match(db: AsyncSession, user_id: int, exclude_match_id: Op
     conditions = [
         or_(StrategoMatch.user_id == user_id, StrategoMatch.opponent_user_id == user_id),
         StrategoMatch.status.in_(ACTIVE_STATUSES),
+        StrategoMatch.mode == "normal",
     ]
     if exclude_match_id is not None:
         conditions.append(StrategoMatch.id != exclude_match_id)
@@ -581,7 +620,7 @@ async def _random_bot_name(db: AsyncSession, exclude_user_id: int) -> str:
     return candidate.full_display_name() if candidate else random.choice(BOT_NAMES)
 
 
-async def create_bot_match(db: AsyncSession, user: User) -> StrategoMatchOut:
+async def create_bot_match(db: AsyncSession, user: User, difficulty: str = "hard") -> StrategoMatchOut:
     config = await get_config(db)
     if await _has_active_match(db, user.id):
         raise ConflictError(_ACTIVE_MATCH_MSG)
@@ -593,6 +632,7 @@ async def create_bot_match(db: AsyncSession, user: User) -> StrategoMatchOut:
     target = round(sum(p["power"] for p in user_pieces) / len(user_pieces))
     infos = await _bot_cards(db, target, len(engine.card_slots(state["counts"])))
     _add_bot_side(state, infos, random.Random())
+    state["difficulty"] = difficulty
     _start_play(state, config, is_bot=True)
 
     match = StrategoMatch(
@@ -835,7 +875,8 @@ async def cancel_challenge(db: AsyncSession, user: User, match_id: int) -> Strat
 # ---------------------------------------------------------------------------
 
 def _play_bot_turn(match: StrategoMatch, state: dict) -> Optional[dict]:
-    move = engine.bot_choose_move(state, "opponent", _bot_rng(match.id, state["ply"]))
+    rng = _bot_rng(state.get("seed_key") or match.id, state["ply"])
+    move = engine.bot_choose_move(state, "opponent", rng, state.get("difficulty", "normal"))
     if move is None:  # the bot side has no legal move left: it loses
         return {"winner": "user", "reason": "no_moves"}
     _, fr, fc, tr, tc = move
@@ -871,7 +912,7 @@ async def submit_move(
     if outcome is None and match.opponent_type == StrategoOpponentType.bot:
         outcome = _play_bot_turn(match, state)
     if outcome is None and match.opponent_type != StrategoOpponentType.bot:
-        state["deadline"] = (now + timedelta(hours=config.stratego_move_timeout_hours)).isoformat()
+        state["deadline"] = (now + _move_timeout(state, config)).isoformat()
 
     match.server_state = state
     flag_modified(match, "server_state")
@@ -882,6 +923,30 @@ async def submit_move(
         await db.commit()
     await db.refresh(match)
     return await _hydrate_match(db, match, user)
+
+
+async def _finish_special(
+    db: AsyncSession, match: StrategoMatch, state: dict, config: GameConfig, winner: str, reason: str,
+) -> None:
+    """Puzzle / tutorial end: a solved daily puzzle pays once a day; nothing
+    else (no rating, no regular rewards, no «Мой игрок» XP)."""
+    if match.mode == "puzzle" and winner == "user" and reason == "cup_captured":
+        user = await lock_user_for_update(db, match.user_id)
+        state["puzzle_solved"] = True
+        if user.stratego_puzzle_day != local_today():
+            user.stratego_puzzle_day = local_today()
+            user.stratego_puzzles_solved += 1
+            reward = 0 if user.game_rewards_blocked else config.stratego_puzzle_reward
+            if reward > 0:
+                await credit_coins(
+                    db, user, reward, TransactionType.stratego_reward, "Задача дня в Стратего", "stratego_match", match.id,
+                )
+            match.user_reward_coins = reward
+        db.add(user)
+    match.server_state = state
+    flag_modified(match, "server_state")
+    db.add(match)
+    await db.commit()
 
 
 async def forfeit_match(db: AsyncSession, user: User, match_id: int) -> StrategoMatchOut:
@@ -905,12 +970,14 @@ def _reward_for(result: MatchResult, config: GameConfig) -> int:
     }[result]
 
 
-async def _grant_reward(db: AsyncSession, user: User, result: MatchResult, config: GameConfig, match_id: int) -> int:
+async def _grant_reward(
+    db: AsyncSession, user: User, result: MatchResult, config: GameConfig, match_id: int, pct: int = 100,
+) -> int:
     _ensure_daily_reset(user)
     if user.game_rewards_blocked or user.stratego_rewarded_attempts_today >= config.stratego_daily_limit:
         db.add(user)
         return 0
-    reward = _reward_for(result, config)
+    reward = round(_reward_for(result, config) * pct / 100)
     user.stratego_rewarded_attempts_today += 1
     if reward > 0:
         await credit_coins(
@@ -937,6 +1004,10 @@ async def _finish_match(
     state["turn"] = None
     state["final_strength"] = {s: engine.strength(state, s) for s in engine.SIDES}
 
+    if match.mode != "normal":
+        await _finish_special(db, match, state, config, winner, reason)
+        return
+
     human_ids = [match.user_id] + ([match.opponent_user_id] if match.opponent_user_id else [])
     locked: dict[int, User] = {}
     for uid in sorted(human_ids):
@@ -951,7 +1022,8 @@ async def _finish_match(
         if loser_quit and side != winner:
             reward = 0
         else:
-            reward = await _grant_reward(db, locked[uid], side_result[side], config, match.id)
+            pct = config.stratego_bot_easy_reward_pct if state.get("difficulty") == "easy" else 100
+            reward = await _grant_reward(db, locked[uid], side_result[side], config, match.id, pct)
         if side == "user":
             match.user_reward_coins = reward
         else:
@@ -986,6 +1058,8 @@ async def _finish_match(
         if uid is None or (side == "opponent" and match.opponent_type == StrategoOpponentType.bot):
             continue
         delta = _BASE_RATING_DELTA[side_result[side]] * multiplier
+        if state.get("difficulty") == "easy" and delta > 1:
+            delta = 1  # the easy bot is no rating farm (same rule as Tactico)
         locked[uid].stratego_rating = max(0, locked[uid].stratego_rating + delta)
         db.add(locked[uid])
         if side == "user":
@@ -1051,7 +1125,7 @@ async def _sweep(db: AsyncSession) -> int:
             continue
 
         state = dict(match.server_state or {})
-        timeout = timedelta(hours=config.stratego_move_timeout_hours)
+        timeout = _move_timeout(state, config)
         if match.opponent_type == StrategoOpponentType.bot:
             last = state.get("last_activity_at")
             if last and ensure_aware(datetime.fromisoformat(last)) + timeout <= now:
@@ -1158,7 +1232,21 @@ async def _hydrate_match(db: AsyncSession, match: StrategoMatch, viewer_user: Us
     final = state.get("final_strength") or {}
     result = match.result if viewer == "user" or match.result is None else _FLIP[match.result]
 
+    blocked_move = None
+    if in_play and state.get("turn") == viewer:
+        blocked = engine.repeat_blocked(state, viewer)
+        piece = next((p for p in state.get("pieces", []) if blocked and p["id"] == blocked[0] and p["alive"]), None)
+        if blocked and piece is not None:
+            here = (piece["row"], piece["col"])
+            other = next(sq for sq in blocked[1] if sq != here) if len(blocked[1]) == 2 else here
+            blocked_move = [list(engine.to_viewer(viewer, *here, n)), list(engine.to_viewer(viewer, *other, n))]
+    puzzle = state.get("puzzle")
+
     return StrategoMatchOut(
+        mode=match.mode, difficulty=state.get("difficulty"), live=bool(state.get("live")),
+        notes={int(k): v for k, v in ((state.get("notes") or {}).get(viewer) or {}).items()},
+        blocked_move=blocked_move,
+        puzzle=StrategoPuzzleBriefOut(**puzzle) if puzzle else None,
         id=match.id, opponent_type=match.opponent_type, opponent_name=opponent_name,
         opponent_user_id=opponent_user_id, status=match.status, viewer_side=viewer,
         board_size=n, move_limit=state.get("move_limit", 0), ply=state.get("ply", 0),
@@ -1183,7 +1271,10 @@ async def list_matches(db: AsyncSession, user: User) -> list[StrategoMatchOut]:
     await _sweep(db)
     result = await db.execute(
         select(StrategoMatch)
-        .where(or_(StrategoMatch.user_id == user.id, StrategoMatch.opponent_user_id == user.id))
+        .where(
+            or_(StrategoMatch.user_id == user.id, StrategoMatch.opponent_user_id == user.id),
+            StrategoMatch.mode == "normal",
+        )
         .order_by(StrategoMatch.created_at.desc()).limit(30)
     )
     return [await _hydrate_match(db, m, user) for m in result.scalars().all()]
@@ -1306,7 +1397,8 @@ async def get_search_status(db: AsyncSession, user: User) -> tuple[str, Optional
     them.stratego_hourly_attempts += 1
     db.add(me)
     db.add(them)
-    _start_play(state, config, is_bot=False)
+    # Both players were searching a moment ago — play it live.
+    _start_play(state, config, is_bot=False, live=True)
     match = StrategoMatch(
         user_id=me.id, opponent_user_id=them.id, opponent_name=them.full_display_name(),
         opponent_type=StrategoOpponentType.online, status=StrategoMatchStatus.in_progress, server_state=state,
@@ -1336,3 +1428,122 @@ async def cancel_search(db: AsyncSession, user: User) -> None:
         raise ConflictError("Соперник уже найден — матч начинается")
     await db.delete(entry)
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# «Задача дня» and the beginner tutorial (mode != "normal": no hourly slot,
+# no regular rewards/rating, never blocks a real match)
+# ---------------------------------------------------------------------------
+
+async def _close_unfinished(db: AsyncSession, user_id: int, mode: str) -> None:
+    result = await db.execute(
+        select(StrategoMatch).where(
+            StrategoMatch.user_id == user_id, StrategoMatch.mode == mode,
+            StrategoMatch.status == StrategoMatchStatus.in_progress,
+        )
+    )
+    for old in result.scalars().all():
+        old.status = StrategoMatchStatus.cancelled
+        old.resolved_at = datetime.now(timezone.utc)
+        db.add(old)
+
+
+async def _active_mode_match_id(db: AsyncSession, user_id: int, mode: str) -> Optional[int]:
+    result = await db.execute(
+        select(StrategoMatch.id).where(
+            StrategoMatch.user_id == user_id, StrategoMatch.mode == mode,
+            StrategoMatch.status == StrategoMatchStatus.in_progress,
+        ).order_by(StrategoMatch.id.desc()).limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_puzzle(db: AsyncSession, user: User) -> StrategoPuzzleOut:
+    config = await get_config(db)
+    puzzle = stratego_puzzles.daily_puzzle(local_today())
+    return StrategoPuzzleOut(
+        code=puzzle["code"], title=puzzle["title"], description=puzzle["description"], moves=puzzle["moves"],
+        reward=config.stratego_puzzle_reward, solved_today=user.stratego_puzzle_day == local_today(),
+        solved_total=user.stratego_puzzles_solved, active_match_id=await _active_mode_match_id(db, user.id, "puzzle"),
+    )
+
+
+async def start_puzzle(db: AsyncSession, user: User) -> StrategoMatchOut:
+    puzzle = stratego_puzzles.daily_puzzle(local_today())
+    await _close_unfinished(db, user.id, "puzzle")
+    state = stratego_puzzles.build_state(puzzle)
+    state.update({
+        "puzzle": {k: puzzle[k] for k in ("code", "title", "description", "moves")},
+        "auto_moves": {"user": 0, "opponent": 0}, "max_auto_moves": 0, "deadline": None,
+        "last_activity_at": datetime.now(timezone.utc).isoformat(),
+    })
+    match = StrategoMatch(
+        user_id=user.id, opponent_user_id=None, opponent_name="Задача дня", mode="puzzle",
+        opponent_type=StrategoOpponentType.bot, status=StrategoMatchStatus.in_progress, server_state=state,
+    )
+    db.add(match)
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, user)
+
+
+# Tutorial: a small open board and fixed, card-free pieces so a newcomer can
+# learn before owning 13 cards; the bot plays on "easy".
+_TUTORIAL_COUNTS = {"wall": 2, "tackler": 1, "speedster": 1, "regular": 1}
+_TUTORIAL_POWER = {
+    "user": {"star": 80, "tackler": 60, "provocateur": 50, "speedster": 55, "regular_1": 65},
+    "opponent": {"star": 76, "tackler": 56, "provocateur": 46, "speedster": 52, "regular_1": 58},
+}
+
+
+async def start_tutorial(db: AsyncSession, user: User) -> StrategoMatchOut:
+    await _close_unfinished(db, user.id, "tutorial")
+    board = 6
+    slots = engine.all_slots(_TUTORIAL_COUNTS)
+    ids = list(range(1, 2 * len(slots) + 1))
+    random.shuffle(ids)
+    rng = random.Random()
+    pieces = []
+    for side, side_ids in (("user", ids[: len(slots)]), ("opponent", ids[len(slots):])):
+        cards = {slot: {"power": power, "rarity_rank": 0, "card": None} for slot, power in _TUTORIAL_POWER[side].items()}
+        pieces += engine.build_pieces(side, slots, cards, engine.auto_layout(slots, board, rng), board, side_ids)
+    state = {
+        "board_size": board, "counts": _TUTORIAL_COUNTS, "lakes": [], "move_limit": 80, "max_auto_moves": 0,
+        "pieces": pieces, "turn": "user", "ply": 0, "history": [], "deadline": None,
+        "auto_moves": {"user": 0, "opponent": 0}, "difficulty": "easy",
+        "last_activity_at": datetime.now(timezone.utc).isoformat(),
+    }
+    match = StrategoMatch(
+        user_id=user.id, opponent_user_id=None, opponent_name="Тренер", mode="tutorial",
+        opponent_type=StrategoOpponentType.bot, status=StrategoMatchStatus.in_progress, server_state=state,
+    )
+    db.add(match)
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, user)
+
+
+async def set_note(db: AsyncSession, user: User, match_id: int, piece_id: int, tag: Optional[str]) -> StrategoMatchOut:
+    """Private mark on an opponent piece ("думаю, это стенка") — only the
+    marking player ever sees it."""
+    match = await _lock_match(db, match_id)
+    if user.id not in (match.user_id, match.opponent_user_id):
+        raise ForbiddenError("You are not part of this match")
+    side = "user" if user.id == match.user_id else "opponent"
+    state = dict(match.server_state)
+    piece = next((p for p in state["pieces"] if p["id"] == piece_id), None)
+    if piece is None or piece["side"] == side or not piece["alive"]:
+        raise ConflictError("Пометить можно только фишку соперника на поле")
+    notes = {s: dict(v) for s, v in (state.get("notes") or {}).items()}
+    mine = notes.setdefault(side, {})
+    if tag is None:
+        mine.pop(str(piece_id), None)
+    else:
+        mine[str(piece_id)] = tag
+    state["notes"] = notes
+    match.server_state = state
+    flag_modified(match, "server_state")
+    db.add(match)
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, user)

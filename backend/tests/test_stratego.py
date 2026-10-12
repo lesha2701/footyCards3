@@ -1132,3 +1132,144 @@ async def test_admin_sets_tackler_max_rarity(client, db_session, bot_token):
     assert ok.status_code == 200 and ok.json()["stratego_tackler_max_rarity"] == "legendary"
     bad = await client.put("/api/v1/admin/games/config", headers=auth, json={"stratego_tackler_max_rarity": "mythic"})
     assert bad.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Repetition rule, card skills, bot levels, live mode, notes
+# ---------------------------------------------------------------------------
+
+def test_two_square_rule_blocks_fourth_shuttle():
+    s = _state([_piece(1, "user", "regular", 4, 0, power=60), _piece(2, "user", "regular", 5, 5, power=60),
+                _piece(9, "opponent", "regular", 0, 5, power=10), _piece(8, "opponent", "regular", 0, 3, power=10)])
+    shuttle = [(4, 0, 3, 0), (3, 0, 4, 0), (4, 0, 3, 0)]
+    for i, (fr, fc, tr, tc) in enumerate(shuttle):
+        engine.apply_move(s, "user", fr, fc, tr, tc)
+        engine.apply_move(s, "opponent", 0, 5 if i % 2 == 0 else 4, 0, 4 if i % 2 == 0 else 5)
+    assert engine.repeat_blocked(s, "user") == (1, frozenset({(3, 0), (4, 0)}))
+    assert (1, 3, 0, 4, 0) not in engine.legal_moves(s, "user")
+    with pytest.raises(engine.EngineError):
+        engine.apply_move(s, "user", 3, 0, 4, 0)
+    engine.apply_move(s, "user", 3, 0, 2, 0)  # moving elsewhere is fine
+
+
+def test_card_skill_bonus_decides_a_close_fight():
+    attacker = {**_piece(1, "user", "regular", 3, 0, power=70), "atk_bonus": 4}
+    defender = _piece(2, "opponent", "regular", 2, 0, power=72)
+    assert engine.resolve_combat(attacker, defender) == "attacker"
+    guarded = {**defender, "def_bonus": 4}
+    assert engine.resolve_combat(attacker, guarded) == "defender"
+    # an attacking skill does nothing on defence
+    assert engine.resolve_combat(defender, attacker) == "attacker"
+
+
+def test_skill_snapshot_on_card_info():
+    info = stratego_service._with_skill(_info(1, 70, "ST", "rare"), "sniper", 2, 2)
+    assert info["atk_bonus"] == 4 and info["card"]["skill_kind"] == "atk" and info["card"]["skill_bonus"] == 4
+    info = stratego_service._with_skill(_info(2, 70, "CB", "rare"), "last_line", 3, 2)
+    assert info["def_bonus"] == 6 and info["card"]["skill_kind"] == "def"
+
+
+def test_bot_levels_are_deterministic_and_hard_hunts_the_star():
+    s = _state([
+        _piece(1, "opponent", "provocateur", 1, 4, power=40), _piece(2, "opponent", "regular", 1, 0, power=40),
+        _piece(5, "opponent", "cup", 0, 7),
+        _piece(3, "user", "star", 4, 4, power=95, revealed=True), _piece(4, "user", "cup", 7, 0),
+    ], turn="opponent", board_size=8)
+    for level in engine.BOT_DIFFICULTIES:
+        first = engine.bot_choose_move(s, "opponent", random.Random(1), level)
+        assert first == engine.bot_choose_move(s, "opponent", random.Random(1), level)
+    move = engine.bot_choose_move(s, "opponent", random.Random(1), "hard")
+    assert move[0] == 1 and move[3:] == (2, 4)  # provocateur heads for the revealed star
+
+
+async def test_easy_bot_pays_less_and_caps_rating(client, db_session, bot_token):
+    await _set_config(db_session, stratego_reward_win=100, stratego_bot_easy_reward_pct=60)
+    headers, _, _ = await _player(client, db_session, bot_token, 970110)
+    body = (await client.post(f"{API}/matches/bot", headers=headers, json={"difficulty": "easy"})).json()
+    assert body["difficulty"] == "easy"
+    end = await _win_by_cup(client, db_session, headers, body["id"])
+    assert end["reward_coins"] == 60 and end["rating_delta"] == 1
+    hard = (await client.post(f"{API}/matches/bot", headers=headers)).json()
+    assert hard["difficulty"] == "hard"
+    end = await _win_by_cup(client, db_session, headers, hard["id"])
+    assert end["reward_coins"] == 100 and end["rating_delta"] == 3
+
+
+async def test_matchmaking_match_is_live_with_short_deadline(client, db_session, bot_token):
+    await _set_config(db_session, stratego_live_move_seconds=60)
+    headers_a, _, _ = await _player(client, db_session, bot_token, 970111, prefix="LiveA")
+    headers_b, _, _ = await _player(client, db_session, bot_token, 970112, prefix="LiveB")
+    await client.post(f"{API}/matchmaking/search", headers=headers_a)
+    await client.post(f"{API}/matchmaking/search", headers=headers_b)
+    match_id = (await client.get(f"{API}/matchmaking/status", headers=headers_b)).json()["match_id"]
+    body = (await client.get(f"{API}/matches/{match_id}", headers=headers_a)).json()
+    assert body["live"] is True
+    left = datetime.fromisoformat(body["deadline"].replace("Z", "+00:00")) - datetime.now(timezone.utc)
+    assert timedelta(seconds=0) < left <= timedelta(seconds=61)
+
+
+async def test_notes_are_private_and_only_on_opponent_pieces(client, db_session, bot_token):
+    headers_a, headers_b, _, _, created = await _friend_match(client, db_session, bot_token, 970113, 970114)
+    await client.post(f"{API}/matches/{created['id']}/accept", headers=headers_b)
+    body_a = (await client.get(f"{API}/matches/{created['id']}", headers=headers_a)).json()
+    enemy = next(p for p in body_a["pieces"] if not p["mine"])
+    mine = next(p for p in body_a["pieces"] if p["mine"])
+    url = f"{API}/matches/{created['id']}/notes"
+    resp = await client.post(url, headers=headers_a, json={"piece_id": enemy["id"], "tag": "wall"})
+    assert resp.status_code == 200 and resp.json()["notes"] == {str(enemy["id"]): "wall"}
+    assert (await client.post(url, headers=headers_a, json={"piece_id": mine["id"], "tag": "wall"})).status_code == 409
+    body_b = (await client.get(f"{API}/matches/{created['id']}", headers=headers_b)).json()
+    assert body_b["notes"] == {}
+    cleared = await client.post(url, headers=headers_a, json={"piece_id": enemy["id"], "tag": None})
+    assert cleared.json()["notes"] == {}
+
+
+# ---------------------------------------------------------------------------
+# «Задача дня» and the tutorial
+# ---------------------------------------------------------------------------
+
+def test_every_puzzle_is_solvable_and_not_shorter():
+    from app.services import stratego_puzzles
+
+    for puzzle in stratego_puzzles.PUZZLES:
+        assert stratego_puzzles.solve(puzzle) is not None, puzzle["code"]
+        assert stratego_puzzles.solve(puzzle, puzzle["moves"] - 1) is None, puzzle["code"]
+
+
+async def test_daily_puzzle_solve_pays_once_a_day(client, db_session, bot_token):
+    from app.core.timeutil import local_today
+    from app.services import stratego_puzzles
+
+    await _set_config(db_session, stratego_puzzle_reward=50)
+    headers = await _register(client, bot_token, 970120)  # no cards needed
+    info = (await client.get(f"{API}/puzzle", headers=headers)).json()
+    assert info["solved_today"] is False and info["reward"] == 50
+    puzzle = stratego_puzzles.daily_puzzle(local_today())
+    solution = stratego_puzzles.solve(puzzle)
+
+    rewards = []
+    for _ in range(2):
+        body = (await client.post(f"{API}/puzzle/start", headers=headers)).json()
+        assert body["mode"] == "puzzle" and body["puzzle"]["code"] == puzzle["code"]
+        assert all(not p["hidden"] for p in body["pieces"])  # it's a puzzle: everything is shown
+        for _, fr, fc, tr, tc in solution:
+            body = (await client.post(f"{API}/matches/{body['id']}/move", headers=headers, json={
+                "from_row": fr, "from_col": fc, "to_row": tr, "to_col": tc,
+            })).json()
+        assert body["status"] == "finished" and body["result"] == "win" and body["win_reason"] == "cup_captured"
+        rewards.append(body["reward_coins"])
+    assert rewards == [50, 0]
+    info = (await client.get(f"{API}/puzzle", headers=headers)).json()
+    assert info["solved_today"] is True and info["solved_total"] == 1
+    # puzzles never show up among real matches nor block one
+    assert (await client.get(f"{API}/matches", headers=headers)).json() == []
+
+
+async def test_tutorial_needs_no_cards_and_does_not_block_play(client, db_session, bot_token):
+    headers, _, _ = await _player(client, db_session, bot_token, 970121)
+    tut = (await client.post(f"{API}/tutorial/start", headers=headers)).json()
+    assert tut["mode"] == "tutorial" and tut["board_size"] == 6 and tut["difficulty"] == "easy"
+    assert len([p for p in tut["pieces"] if p["mine"]]) == 8
+    assert (await client.post(f"{API}/matches/bot", headers=headers)).status_code == 200
+    headers_new = await _register(client, bot_token, 970122)  # a brand-new player with no cards
+    assert (await client.post(f"{API}/tutorial/start", headers=headers_new)).status_code == 200

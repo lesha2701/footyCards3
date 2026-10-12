@@ -33,6 +33,10 @@ class StrategoMatch(Base):
         default=StrategoMatchStatus.pending_accept, nullable=False, index=True,
     )
     result: Mapped[Optional[MatchResult]] = mapped_column(Enum(MatchResult, name="match_result_enum"), nullable=True)
+    # normal = a real match (limits, rewards, rating); puzzle = «Задача дня»;
+    # tutorial = the beginner's practice match. Only normal matches count
+    # toward "one active match" and pay the regular rewards.
+    mode: Mapped[str] = mapped_column(String(16), default="normal", nullable=False)
     # cup_captured / no_moves / move_limit / forfeit / timeout
     win_reason: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     user_reward_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -328,6 +328,15 @@ class GameConfig(TimestampMixin, Base):
     # Highest card rarity allowed on a Подкатчик (tackler) slot — a
     # legendary wall-breaker trivialises walls. common/rare/epic/legendary/diamond.
     stratego_tackler_max_rarity: Mapped[str] = mapped_column(String(16), default="epic", nullable=False)
+    # Easy bot pays this % of the normal rewards (and a win is capped at +1 rating).
+    stratego_bot_easy_reward_pct: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    # Matchmaking ("online") matches are played live: seconds per move.
+    stratego_live_move_seconds: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    # Card skill level × this = power bonus in a fight (attacking skills when
+    # the piece attacks, defending skills when it is attacked).
+    stratego_skill_bonus_per_level: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # «Задача дня» reward, paid once per local day.
+    stratego_puzzle_reward: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
     # XP for «Мой игрок» per finished match it was fielded in (daily XP cap applies).
     stratego_my_player_xp: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     stratego_challenge_expiry_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)

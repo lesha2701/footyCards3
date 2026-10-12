@@ -20,6 +20,11 @@ class StrategoCardOut(BaseModel):
     rarity: str
     rating: int
     is_my_player: bool = False
+    # Card skill that counts in Stratego fights (attack or defence bonus).
+    skill_name: Optional[str] = None
+    skill_level: Optional[int] = None
+    skill_kind: Optional[Literal["atk", "def"]] = None
+    skill_bonus: int = 0
 
 
 class StrategoSquadSlotOut(BaseModel):
@@ -74,6 +79,10 @@ class StrategoInfoOut(BaseModel):
     min_common: int = 0
     my_player_xp: int = 0
     tackler_max_rarity: str = "diamond"
+    easy_reward_pct: int = 100
+    live_move_seconds: int = 60
+    skill_bonus_per_level: int = 0
+    puzzle_reward: int = 0
 
 
 class StrategoPieceOut(BaseModel):
@@ -116,8 +125,24 @@ class StrategoMoveOut(BaseModel):
     combat: Optional[StrategoCombatOut] = None
 
 
+class StrategoPuzzleBriefOut(BaseModel):
+    code: str
+    title: str
+    description: str
+    moves: int
+
+
 class StrategoMatchOut(BaseModel):
     id: int
+    mode: Literal["normal", "puzzle", "tutorial"] = "normal"
+    difficulty: Optional[Literal["easy", "normal", "hard"]] = None
+    # Matchmaking matches are played live (seconds per move, not hours).
+    live: bool = False
+    # Viewer's private marks on opponent pieces: piece_id -> tag.
+    notes: dict[int, str] = {}
+    # Two-square rule: the [from, to] pair the viewer may not play next.
+    blocked_move: Optional[list[list[int]]] = None
+    puzzle: Optional[StrategoPuzzleBriefOut] = None
     opponent_type: StrategoOpponentType
     opponent_name: str
     opponent_user_id: Optional[int] = None
@@ -150,6 +175,27 @@ class StrategoMatchOut(BaseModel):
     created_at: datetime
     expires_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
+
+
+class StrategoBotMatchRequest(BaseModel):
+    difficulty: Literal["easy", "hard"] = "hard"
+
+
+class StrategoNoteRequest(BaseModel):
+    piece_id: int
+    # None clears the mark.
+    tag: Optional[Literal["cup", "wall", "star", "strong", "weak", "speedster"]] = None
+
+
+class StrategoPuzzleOut(BaseModel):
+    code: str
+    title: str
+    description: str
+    moves: int
+    reward: int
+    solved_today: bool
+    solved_total: int
+    active_match_id: Optional[int] = None
 
 
 class StrategoMoveRequest(BaseModel):

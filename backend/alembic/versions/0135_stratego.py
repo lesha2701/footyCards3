@@ -41,6 +41,10 @@ CONFIG_INT_COLUMNS = (
     ("stratego_min_rare_cards", "4"),
     ("stratego_min_common_cards", "2"),
     ("stratego_my_player_xp", "15"),
+    ("stratego_bot_easy_reward_pct", "60"),
+    ("stratego_live_move_seconds", "60"),
+    ("stratego_skill_bonus_per_level", "2"),
+    ("stratego_puzzle_reward", "50"),
     ("stratego_challenge_expiry_hours", "24"),
     ("stratego_move_timeout_hours", "12"),
     ("stratego_max_auto_moves", "3"),
@@ -73,6 +77,7 @@ def upgrade() -> None:
         sa.Column("opponent_type", stratego_opponent_type_enum, nullable=False),
         sa.Column("status", stratego_match_status_enum, nullable=False, server_default="pending_accept"),
         sa.Column("result", match_result_enum, nullable=True),
+        sa.Column("mode", sa.String(16), nullable=False, server_default="normal"),
         sa.Column("win_reason", sa.String(32), nullable=True),
         sa.Column("user_reward_coins", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("opponent_reward_coins", sa.Integer(), nullable=False, server_default="0"),
@@ -102,6 +107,8 @@ def upgrade() -> None:
     op.create_index("ix_stratego_queue_entries_user_id", "stratego_queue_entries", ["user_id"], unique=True)
 
     op.add_column("users", sa.Column("stratego_rating", sa.Integer(), nullable=False, server_default="0"))
+    op.add_column("users", sa.Column("stratego_puzzle_day", sa.Date(), nullable=True))
+    op.add_column("users", sa.Column("stratego_puzzles_solved", sa.Integer(), nullable=False, server_default="0"))
     op.add_column("users", sa.Column("stratego_rewarded_attempts_today", sa.Integer(), nullable=False, server_default="0"))
     op.add_column("users", sa.Column("stratego_attempts_reset_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column("users", sa.Column("stratego_hourly_attempts", sa.Integer(), nullable=False, server_default="0"))
@@ -122,6 +129,7 @@ def downgrade() -> None:
     for name in (
         "stratego_squad", "stratego_hour_started_at", "stratego_hourly_attempts",
         "stratego_attempts_reset_at", "stratego_rewarded_attempts_today", "stratego_rating",
+        "stratego_puzzle_day", "stratego_puzzles_solved",
     ):
         op.drop_column("users", name)
     op.drop_index("ix_stratego_queue_entries_user_id", table_name="stratego_queue_entries")

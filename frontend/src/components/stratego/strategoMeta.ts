@@ -1,4 +1,4 @@
-import type { StrategoPiece, StrategoRole } from "@/types";
+import type { StrategoNoteTag, StrategoPiece, StrategoRole } from "@/types";
 
 export const ROLE_META: Record<StrategoRole, { label: string; hint: string }> = {
   cup: { label: "Кубок", hint: "Не ходит. Захватят — матч проигран" },
@@ -80,3 +80,7 @@ export function autoLayout(slots: string[], size: number): Record<string, [numbe
   }
   return layout;
 }
+
+export const NOTE_LABELS: Record<StrategoNoteTag, string> = {
+  cup: "Кубок?", wall: "Стенка?", star: "Звезда?", speedster: "Скорость?", strong: "Сильная", weak: "Слабая",
+};

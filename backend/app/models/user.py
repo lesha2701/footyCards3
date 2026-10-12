@@ -104,6 +104,9 @@ class User(TimestampMixin, Base):
 
     # Футбольное Стратего
     stratego_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Задача дня»: local day last solved (reward once a day) and lifetime count.
+    stratego_puzzle_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    stratego_puzzles_solved: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     stratego_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     stratego_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     stratego_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -595,6 +595,7 @@ export type RankingMetric =
   | "tactics_rating"
   | "penalty_rating"
   | "stratego_rating"
+  | "stratego_puzzles"
   | "league_rating";
 
 export interface RankingEntry {
@@ -1913,6 +1914,27 @@ export interface StrategoCard {
   rarity: Rarity;
   rating: number;
   is_my_player?: boolean;
+  skill_name?: string | null;
+  skill_level?: number | null;
+  skill_kind?: "atk" | "def" | null;
+  skill_bonus?: number;
+}
+
+export type StrategoNoteTag = "cup" | "wall" | "star" | "strong" | "weak" | "speedster";
+export type StrategoDifficulty = "easy" | "normal" | "hard";
+
+export interface StrategoPuzzleBrief {
+  code: string;
+  title: string;
+  description: string;
+  moves: number;
+}
+
+export interface StrategoPuzzle extends StrategoPuzzleBrief {
+  reward: number;
+  solved_today: boolean;
+  solved_total: number;
+  active_match_id: number | null;
 }
 
 export interface StrategoSquadSlot {
@@ -1959,6 +1981,10 @@ export interface StrategoInfo {
   min_common: number;
   my_player_xp: number;
   tackler_max_rarity: Rarity;
+  easy_reward_pct?: number;
+  live_move_seconds?: number;
+  skill_bonus_per_level?: number;
+  puzzle_reward?: number;
 }
 
 export interface StrategoPiece {
@@ -1996,6 +2022,12 @@ export type StrategoMatchStatus = "pending_accept" | "in_progress" | "finished" 
 
 export interface StrategoMatch {
   id: number;
+  mode: "normal" | "puzzle" | "tutorial";
+  difficulty: StrategoDifficulty | null;
+  live: boolean;
+  notes: Record<string, StrategoNoteTag>;
+  blocked_move: [[number, number], [number, number]] | null;
+  puzzle: StrategoPuzzleBrief | null;
   opponent_type: "bot" | "friend" | "online" | "chat";
   opponent_name: string;
   opponent_user_id: number | null;

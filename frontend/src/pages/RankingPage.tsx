@@ -13,6 +13,7 @@ const METRICS: { value: RankingMetric; label: string; Icon: (props: IconProps) =
   { value: "tactics_rating", label: "Рейтинг Тактико", Icon: IconFlagCheckered },
   { value: "penalty_rating", label: "Рейтинг Пенальти", Icon: IconGoal },
   { value: "stratego_rating", label: "Рейтинг Стратего", Icon: IconFlag },
+  { value: "stratego_puzzles", label: "Задачи Стратего", Icon: IconFlag },
   { value: "matches_won", label: "Победы", Icon: IconTrophy },
   { value: "cards_count", label: "Карт в коллекции", Icon: IconCollection },
   { value: "unique_players", label: "Уникальных игроков", Icon: IconUsers },

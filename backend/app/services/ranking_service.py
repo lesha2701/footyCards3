@@ -16,6 +16,7 @@ _DIRECT_COLUMNS = {
     RankingMetric.tactics_rating: User.tactics_rating,
     RankingMetric.penalty_rating: User.penalty_rating,
     RankingMetric.stratego_rating: User.stratego_rating,
+    RankingMetric.stratego_puzzles: User.stratego_puzzles_solved,
     RankingMetric.league_rating: _LEAGUE_RATING_EXPR,
 }
 

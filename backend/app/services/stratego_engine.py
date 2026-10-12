@@ -196,6 +196,8 @@ def build_pieces(
             "power": info["power"] if info else 0,
             "rarity_rank": info["rarity_rank"] if info else 0,
             "card": info["card"] if info else None,
+            "atk_bonus": info.get("atk_bonus", 0) if info else 0,
+            "def_bonus": info.get("def_bonus", 0) if info else 0,
             "row": row, "col": col, "alive": True, "revealed": False, "moved": False,
         })
     return pieces
@@ -205,6 +207,12 @@ def build_pieces(
 # Combat & moves
 # ---------------------------------------------------------------------------
 
+def combat_power(piece: dict, attacking: bool) -> int:
+    """Rating plus the card-skill bonus that applies to this side of the
+    duel (attacking skills like Снайпер, defending ones like Последний рубеж)."""
+    return piece["power"] + piece.get("atk_bonus" if attacking else "def_bonus", 0)
+
+
 def resolve_combat(attacker: dict, defender: dict) -> str:
     """'attacker' | 'defender' | 'both' — who survives the attack."""
     if defender["role"] == "cup":
@@ -213,8 +221,8 @@ def resolve_combat(attacker: dict, defender: dict) -> str:
         return "attacker" if attacker["role"] == "tackler" else "defender"
     if attacker["role"] == "provocateur" and defender["role"] == "star":
         return "attacker"
-    a = (attacker["power"], attacker["rarity_rank"])
-    d = (defender["power"], defender["rarity_rank"])
+    a = (combat_power(attacker, attacking=True), attacker["rarity_rank"])
+    d = (combat_power(defender, attacking=False), defender["rarity_rank"])
     if a > d:
         return "attacker"
     if d > a:
@@ -233,8 +241,36 @@ def _occupancy(state: dict) -> dict[tuple[int, int], dict]:
     return {(p["row"], p["col"]): p for p in state["pieces"] if p["alive"]}
 
 
+REPEAT_LIMIT = 3
+
+
+def repeat_blocked(state: dict, side: str) -> Optional[tuple[int, frozenset]]:
+    """Two-square rule: after a piece shuttled between the same two squares
+    REPEAT_LIMIT times in a row (that side's own consecutive moves, no
+    fights), a fourth such move is illegal. Returns (piece_id, {sq_a, sq_b})
+    that is currently blocked, or None. Stops stalling for the move limit."""
+    own = [h for h in state.get("history", []) if h["side"] == side][-REPEAT_LIMIT:]
+    if len(own) < REPEAT_LIMIT or any(h.get("combat") for h in own):
+        return None
+    pid = own[0]["piece_id"]
+    pair = frozenset({tuple(own[0]["from"]), tuple(own[0]["to"])})
+    for h in own:
+        if h["piece_id"] != pid or frozenset({tuple(h["from"]), tuple(h["to"])}) != pair:
+            return None
+    return pid, pair
+
+
 def legal_moves(state: dict, side: str) -> list[tuple[int, int, int, int, int]]:
     """(piece_id, from_row, from_col, to_row, to_col) for every legal move."""
+    blocked = repeat_blocked(state, side)
+    moves = _raw_moves(state, side)
+    if blocked is None:
+        return moves
+    pid, pair = blocked
+    return [m for m in moves if not (m[0] == pid and frozenset({(m[1], m[2]), (m[3], m[4])}) == pair)]
+
+
+def _raw_moves(state: dict, side: str) -> list[tuple[int, int, int, int, int]]:
     n = state["board_size"]
     occ = _occupancy(state)
     lakes = {(r, c) for r, c in state.get("lakes", [])}
@@ -345,10 +381,47 @@ def _threatened(state: dict, piece: dict, row: int, col: int, ignore_id: Optiona
     return False
 
 
-def _score_move(state: dict, side: str, move: tuple[int, int, int, int, int]) -> float:
+def _dist(a: tuple[int, int], b: tuple[int, int]) -> int:
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+
+def _hard_bonus(state: dict, side: str, piece: dict, fr: int, fc: int, tr: int, tc: int) -> float:
+    """Extra intent for the strong bot, still from public info only: hunt a
+    revealed Star with the Provocateur, close in on threats to its own Cup,
+    and send cheap Speedsters / Tacklers at never-moved pieces (where the
+    walls and cup must be)."""
+    bonus = 0.0
+    enemies = [p for p in state["pieces"] if p["alive"] and p["side"] != side]
+    if piece["role"] == "provocateur":
+        star = next((p for p in enemies if p["revealed"] and p["role"] == "star"), None)
+        if star is not None:
+            bonus += 30 * (_dist((fr, fc), (star["row"], star["col"])) - _dist((tr, tc), (star["row"], star["col"])))
+    cup = next((p for p in state["pieces"] if p["alive"] and p["side"] == side and p["role"] == "cup"), None)
+    if cup is not None:
+        for e in enemies:
+            if e["revealed"] and e["role"] not in IMMOBILE_ROLES and _dist((e["row"], e["col"]), (cup["row"], cup["col"])) <= 2:
+                if resolve_combat(piece, e) == "attacker":
+                    bonus += 25 * (_dist((fr, fc), (e["row"], e["col"])) - _dist((tr, tc), (e["row"], e["col"])))
+    if piece["role"] in ("tackler", "speedster"):
+        unmoved = [(p["row"], p["col"]) for p in enemies if not p["revealed"] and not p["moved"]]
+        if unmoved:
+            before = min(_dist((fr, fc), u) for u in unmoved)
+            after = min(_dist((tr, tc), u) for u in unmoved)
+            bonus += 6 * (before - after)
+    return bonus
+
+
+def _score_move(state: dict, side: str, move: tuple[int, int, int, int, int], difficulty: str = "normal") -> float:
     pid, fr, fc, tr, tc = move
     piece = next(p for p in state["pieces"] if p["id"] == pid)
     target = piece_at(state, tr, tc)
+    extra = _hard_bonus(state, side, piece, fr, fc, tr, tc) if difficulty == "hard" else 0.0
+    if difficulty == "hard" and target is not None and not _known(target) and piece["role"] == "speedster":
+        extra += 25  # a speedster is the cheapest scout
+    return _base_score(state, side, piece, target, fr, fc, tr, tc) + extra
+
+
+def _base_score(state: dict, side: str, piece: dict, target: Optional[dict], fr: int, fc: int, tr: int, tc: int) -> float:
     if target is not None:
         if _known(target):
             outcome = resolve_combat(piece, target)
@@ -379,15 +452,30 @@ def _score_move(state: dict, side: str, move: tuple[int, int, int, int, int]) ->
     return score
 
 
-def bot_choose_move(state: dict, side: str, rng: random.Random) -> Optional[tuple[int, int, int, int, int]]:
-    """Greedy one-ply AI. Uses only information the bot's human opponent
-    would have about *its* pieces: an enemy piece's role/power is consulted
-    only once revealed (plus the public "has moved" flag), so the bot never
-    cheats with the hidden layout. Ties are broken with `rng` over a sorted
-    list, so a seeded rng makes it fully deterministic."""
+BOT_DIFFICULTIES = ("easy", "normal", "hard")
+
+
+def bot_choose_move(
+    state: dict, side: str, rng: random.Random, difficulty: str = "normal",
+) -> Optional[tuple[int, int, int, int, int]]:
+    """One-ply AI. Uses only information the bot's human opponent would have
+    about *its* pieces: an enemy piece's role/power is consulted only once
+    revealed (plus the public "has moved" flag), so the bot never cheats
+    with the hidden layout. "easy" picks among its three best ideas at
+    random, "normal" plays the greedy best, "hard" adds intent on top (see
+    _hard_bonus). Ties are broken with `rng` over a sorted list, so a seeded
+    rng makes every level fully deterministic."""
     moves = legal_moves(state, side)
     if not moves:
         return None
-    scored = sorted(((round(_score_move(state, side, m), 6), m) for m in moves), key=lambda x: (-x[0], x[1]))
+    scored = sorted(
+        ((round(_score_move(state, side, m, difficulty), 6), m) for m in moves), key=lambda x: (-x[0], x[1]),
+    )
+    if difficulty == "easy":
+        # Never throws away a known win or walks into a known loss on purpose.
+        if scored[0][0] >= 1000:
+            return scored[0][1]
+        safe = [m for s, m in scored if s > -100][:3] or [scored[0][1]]
+        return rng.choice(safe)
     best = scored[0][0]
     return rng.choice([m for s, m in scored if s == best])

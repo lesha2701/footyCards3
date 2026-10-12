@@ -2,7 +2,10 @@ import { api } from "@/lib/api";
 import type {
   StrategoInfo,
   StrategoMatch,
+  StrategoDifficulty,
+  StrategoNoteTag,
   StrategoOpenChallengePreview,
+  StrategoPuzzle,
   StrategoSearchStatus,
   StrategoSquad,
   StrategoStats,
@@ -46,8 +49,28 @@ export async function saveStrategoSquad(
   return data;
 }
 
-export async function createStrategoBotMatch(): Promise<StrategoMatch> {
-  const { data } = await api.post<StrategoMatch>("/stratego/matches/bot");
+export async function createStrategoBotMatch(difficulty: Exclude<StrategoDifficulty, "normal"> = "hard"): Promise<StrategoMatch> {
+  const { data } = await api.post<StrategoMatch>("/stratego/matches/bot", { difficulty });
+  return data;
+}
+
+export async function fetchStrategoPuzzle(): Promise<StrategoPuzzle> {
+  const { data } = await api.get<StrategoPuzzle>("/stratego/puzzle");
+  return data;
+}
+
+export async function startStrategoPuzzle(): Promise<StrategoMatch> {
+  const { data } = await api.post<StrategoMatch>("/stratego/puzzle/start");
+  return data;
+}
+
+export async function startStrategoTutorial(): Promise<StrategoMatch> {
+  const { data } = await api.post<StrategoMatch>("/stratego/tutorial/start");
+  return data;
+}
+
+export async function setStrategoNote(id: number, pieceId: number, tag: StrategoNoteTag | null): Promise<StrategoMatch> {
+  const { data } = await api.post<StrategoMatch>(`/stratego/matches/${id}/notes`, { piece_id: pieceId, tag });
   return data;
 }
 

@@ -595,6 +595,10 @@ export default function AdminGamesPage() {
           {field("stratego_min_rare_cards", "Мин. редких в составе")}
           {field("stratego_min_common_cards", "Мин. обычных в составе")}
           {field("stratego_my_player_xp", "Опыт «Моему игроку» за матч")}
+          {field("stratego_bot_easy_reward_pct", "Лёгкий бот: % от награды")}
+          {field("stratego_live_move_seconds", "Онлайн: секунд на ход")}
+          {field("stratego_skill_bonus_per_level", "Навык карты: +сила за уровень")}
+          {field("stratego_puzzle_reward", "Награда за «Задачу дня»")}
           <label className="flex flex-col gap-1">
             <span className="text-xs text-slate-400">Макс. редкость Подкатчика</span>
             <select

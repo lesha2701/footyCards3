@@ -1,10 +1,11 @@
+import { LayoutGroup, motion } from "framer-motion";
 import { useId } from "react";
 
-import type { StrategoPiece } from "@/types";
+import type { StrategoNoteTag, StrategoPiece } from "@/types";
 
 import { CELL_LINES, GRASS_STYLE } from "./boardStyle";
 import RoleIcon from "./RoleIcon";
-import { ROLE_META } from "./strategoMeta";
+import { NOTE_LABELS, ROLE_META } from "./strategoMeta";
 
 interface Props {
   size: number;
@@ -16,6 +17,10 @@ interface Props {
   /** Rows to tint as the viewer's home rows (placement editor). */
   homeRows?: number[];
   lakes?: [number, number][];
+  /** Viewer's private marks on opponent pieces (piece id -> tag). */
+  notes?: Record<string, StrategoNoteTag>;
+  /** Colours the last-move arrow: cyan for the viewer's move, red for the opponent's. */
+  lastMoveMine?: boolean;
 }
 
 type Rect = { r: number; c: number; h: number; w: number };
@@ -38,7 +43,9 @@ function lakeRects(lakes: [number, number][]): Rect[] {
 
 /** Square N×N pitch sized to the container width — ~45px cells on a 375px
  *  phone for the default 8×8 board. Own pieces are always at the bottom. */
-export default function StrategoBoard({ size, pieces, selectedId, targets = [], lastMove, onCellClick, homeRows = [], lakes = [] }: Props) {
+export default function StrategoBoard({
+  size, pieces, selectedId, targets = [], lastMove, onCellClick, homeRows = [], lakes = [], notes = {}, lastMoveMine,
+}: Props) {
   const water = new Set(lakes.map(([r, c]) => `${r}:${c}`));
   const byCell = new Map(pieces.map((p) => [`${p.row}:${p.col}`, p]));
   const isTarget = (r: number, c: number) => targets.some(([tr, tc]) => tr === r && tc === c);
@@ -47,6 +54,7 @@ export default function StrategoBoard({ size, pieces, selectedId, targets = [], 
 
   return (
     <div className="w-full overflow-hidden rounded-2xl border border-white/10 p-1 shadow-glow" style={GRASS_STYLE}>
+      <LayoutGroup>
       <div className="relative grid w-full rounded-xl" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}>
         <PitchMarkings size={size} />
         {Array.from({ length: size * size }, (_, i) => {
@@ -68,7 +76,21 @@ export default function StrategoBoard({ size, pieces, selectedId, targets = [], 
                 target ? "bg-accent-lime/20 ring-2 ring-inset ring-accent-lime" : "",
               ].join(" ")}
             >
-              {piece && <PieceChip piece={piece} selected={piece.id === selectedId} attackable={target && !piece.mine} />}
+              {piece && (
+                // layoutId lets a piece glide from its old cell to the new one.
+                <motion.span
+                  layoutId={`stratego-piece-${piece.id}`}
+                  transition={{ type: "spring", stiffness: 520, damping: 40 }}
+                  className="flex h-full w-full items-center justify-center"
+                >
+                  <PieceChip
+                    piece={piece}
+                    selected={piece.id === selectedId}
+                    attackable={target && !piece.mine}
+                    note={piece.mine ? undefined : notes[String(piece.id)]}
+                  />
+                </motion.span>
+              )}
               {!piece && target && <span className="h-2 w-2 rounded-full bg-accent-lime shadow" />}
             </button>
           );
@@ -85,8 +107,34 @@ export default function StrategoBoard({ size, pieces, selectedId, targets = [], 
             <Puddle w={rect.w} h={rect.h} />
           </div>
         ))}
+        {lastMove && <MoveArrow size={size} from={lastMove.from} to={lastMove.to} mine={!!lastMoveMine} />}
       </div>
+      </LayoutGroup>
     </div>
+  );
+}
+
+/** Thin arrow from the last move's origin to its destination. */
+function MoveArrow({ size, from, to, mine }: { size: number; from: [number, number]; to: [number, number]; mine: boolean }) {
+  const uid = useId().replace(/:/g, "");
+  const cell = 100 / size;
+  const x1 = (from[1] + 0.5) * cell, y1 = (from[0] + 0.5) * cell;
+  const x2 = (to[1] + 0.5) * cell, y2 = (to[0] + 0.5) * cell;
+  const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+  const pad = cell * 0.42; // stop at the piece edge, not its centre
+  const sx = x1 + ((x2 - x1) / len) * pad * 0.6, sy = y1 + ((y2 - y1) / len) * pad * 0.6;
+  const ex = x2 - ((x2 - x1) / len) * pad, ey = y2 - ((y2 - y1) / len) * pad;
+  const color = mine ? "#22d3c4" : "#f87171";
+  return (
+    <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" aria-hidden>
+      <defs>
+        <marker id={`ah-${uid}`} viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill={color} />
+        </marker>
+      </defs>
+      <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={color} strokeWidth="1.3" strokeLinecap="round" opacity="0.9"
+        markerEnd={`url(#ah-${uid})`} strokeDasharray="2.2 1.6" />
+    </svg>
   );
 }
 
@@ -175,26 +223,37 @@ function PitchMarkings({ size }: { size: number }) {
   );
 }
 
-/** VICTOR FC crest mark (the gradient pill + ball from /brand/victor-fc-crest)
- *  drawn as vector so it stays crisp on a 40px token — the card back of every
- *  unrevealed opponent piece. */
+/** The VICTOR FC «V» (the pill + ball of the crest) as the card back of
+ *  every unrevealed opponent piece — in a warm rose-to-coral tone so it
+ *  belongs to the red opponent chip instead of fighting it. */
 function BrandMark({ className }: { className?: string }) {
   const uid = useId().replace(/:/g, "");
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden>
       <defs>
         <linearGradient id={`vfc-${uid}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#22d3e6" />
-          <stop offset="55%" stopColor="#5fd38a" />
-          <stop offset="100%" stopColor="#d4e01a" />
+          <stop offset="0%" stopColor="#ffe4dc" />
+          <stop offset="100%" stopColor="#f59584" />
         </linearGradient>
       </defs>
-      <circle cx="12" cy="12" r="10.6" fill="#0b0d0f" stroke={`url(#vfc-${uid})`} strokeWidth="1.5" />
-      <line x1="8.6" y1="8.4" x2="11.9" y2="15.4" stroke={`url(#vfc-${uid})`} strokeWidth="3.6" strokeLinecap="round" />
-      <circle cx="15.3" cy="8.9" r="2" fill={`url(#vfc-${uid})`} />
+      <line x1="7" y1="6.4" x2="12.2" y2="17.4" stroke={`url(#vfc-${uid})`} strokeWidth="5" strokeLinecap="round" />
+      <circle cx="17.3" cy="7.2" r="2.8" fill={`url(#vfc-${uid})`} />
     </svg>
   );
 }
+
+function NoteBadge({ tag }: { tag: StrategoNoteTag }) {
+  const role = tag === "strong" || tag === "weak" ? null : tag;
+  return (
+    <span
+      className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-300 px-0.5 text-[9px] font-bold leading-none text-bg-base ring-1 ring-bg-base"
+      title={`Твоя пометка: ${NOTE_LABELS[tag]}`}
+    >
+      {role ? <RoleIcon role={role} size={9} strokeWidth={2.6} /> : tag === "strong" ? "+" : "−"}
+    </span>
+  );
+}
+
 
 const RARITY_BORDER: Record<string, string> = {
   common: "border-rarity-common",
@@ -207,7 +266,9 @@ const RARITY_BORDER: Record<string, string> = {
 /** One piece token. Own pieces: dark chip framed in the card's rarity colour
  *  with a lime role icon (same language as the app's cards); the cup and
  *  walls get a floodlight frame. Opponent: deep red chip, "?" until revealed. */
-export function PieceChip({ piece, selected, attackable }: { piece: StrategoPiece; selected?: boolean; attackable?: boolean }) {
+export function PieceChip({
+  piece, selected, attackable, note,
+}: { piece: StrategoPiece; selected?: boolean; attackable?: boolean; note?: StrategoNoteTag }) {
   const base =
     "relative flex h-[86%] w-[86%] flex-col items-center justify-center gap-px rounded-lg leading-none shadow-[0_2px_4px_rgba(0,0,0,0.45)] transition-transform";
   const focus = `${selected ? "scale-110 ring-2 ring-accent-lime shadow-glow" : ""} ${attackable ? "ring-2 ring-accent-lime animate-pulse" : ""}`;
@@ -215,8 +276,9 @@ export function PieceChip({ piece, selected, attackable }: { piece: StrategoPiec
   if (piece.hidden || !piece.role) {
     return (
       <span className={`${base} ${enemyTone} ${focus}`} title={piece.moved ? "Фишка уже ходила" : "Неизвестная фишка"}>
-        <BrandMark className="h-[74%] w-[74%] drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
+        <BrandMark className="h-[62%] w-[62%] drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]" />
         {piece.moved && <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-red-200/80" />}
+        {note && <NoteBadge tag={note} />}
       </span>
     );
   }

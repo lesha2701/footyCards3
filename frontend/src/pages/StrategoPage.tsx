@@ -11,7 +11,10 @@ import {
   fetchStrategoInfo,
   fetchStrategoMatches,
   fetchStrategoSquad,
+  fetchStrategoPuzzle,
   fetchStrategoStats,
+  startStrategoPuzzle,
+  startStrategoTutorial,
 } from "@/api/stratego";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
@@ -43,6 +46,7 @@ export default function StrategoPage() {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [challengeOpen, setChallengeOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [botOpen, setBotOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data: info } = useQuery({ queryKey: ["stratego-info"], queryFn: fetchStrategoInfo });
@@ -58,8 +62,19 @@ export default function StrategoPage() {
     queryClient.invalidateQueries({ queryKey: ["stratego-matches"] });
     navigate(`/play/stratego/matches/${match.id}`);
   };
+  const { data: puzzle } = useQuery({ queryKey: ["stratego-puzzle"], queryFn: fetchStrategoPuzzle });
+  const startPuzzle = useMutation({
+    mutationFn: startStrategoPuzzle,
+    onSuccess: (m) => navigate(`/play/stratego/matches/${m.id}`),
+    onError: (err) => setError(formatGameError(err, "Не удалось открыть задачу")),
+  });
+  const tutorial = useMutation({
+    mutationFn: startStrategoTutorial,
+    onSuccess: (m) => navigate(`/play/stratego/matches/${m.id}`),
+    onError: (err) => setError(formatGameError(err, "Не удалось начать обучение")),
+  });
   const bot = useMutation({
-    mutationFn: createStrategoBotMatch,
+    mutationFn: (difficulty: "easy" | "hard") => createStrategoBotMatch(difficulty),
     onSuccess: onCreated,
     onError: (err) => setError(formatGameError(err, "Не удалось начать матч")),
   });
@@ -160,7 +175,7 @@ export default function StrategoPage() {
           )}
           <div className="flex gap-2">
             <button
-              onClick={() => bot.mutate()}
+              onClick={() => setBotOpen(true)}
               disabled={bot.isPending}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95 disabled:opacity-50"
             >
@@ -187,6 +202,37 @@ export default function StrategoPage() {
           </p>
         </>
       )}
+
+      {puzzle && (
+        <button
+          onClick={() => (puzzle.active_match_id ? navigate(`/play/stratego/matches/${puzzle.active_match_id}`) : startPuzzle.mutate())}
+          disabled={startPuzzle.isPending}
+          className="flex items-center gap-3 rounded-2xl border border-accent-lime/25 bg-gradient-to-r from-accent-lime/10 to-accent-cyan/5 p-3 text-left active:scale-[0.98]"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-floodlight text-bg-base">
+            <IconTrophy size={20} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-mono text-[10px] uppercase tracking-wider text-accent-lime">Задача дня</span>
+            <span className="block font-display text-sm font-bold text-ink-chalk">{puzzle.title}</span>
+            <span className="block text-[11px] text-ink-mist">
+              Захвати Кубок за {puzzle.moves} хода ·{" "}
+              {puzzle.solved_today ? "решена сегодня ✓" : `+${puzzle.reward} монет`} · решено всего: {puzzle.solved_total}
+            </span>
+          </span>
+        </button>
+      )}
+      <button
+        onClick={() => tutorial.mutate()}
+        disabled={tutorial.isPending}
+        className="flex items-center justify-between rounded-2xl bg-bg-surface px-4 py-3 text-left active:scale-[0.98]"
+      >
+        <span>
+          <span className="block text-sm font-semibold text-ink-chalk">Обучение</span>
+          <span className="block text-[11px] text-ink-mist">Маленькое поле, подсказки, карточки не нужны</span>
+        </span>
+        <IconPlay size={16} className="text-accent-lime" />
+      </button>
 
       <div className="flex gap-2">
         {(["pending", "active", "history"] as Tab[]).map((t) => (
@@ -229,6 +275,33 @@ export default function StrategoPage() {
           onClose={() => setChallengeOpen(false)}
           onPick={(u) => { setChallengeOpen(false); challenge.mutate(u.id); }}
         />
+      )}
+      {botOpen && (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={() => setBotOpen(false)}>
+          <div className="safe-bottom w-full rounded-t-3xl bg-bg-base p-5" onClick={(e) => e.stopPropagation()}>
+            <p className="mb-3 font-display text-base font-bold text-ink-chalk">Выбери соперника</p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => { setBotOpen(false); bot.mutate("easy"); }}
+                className="rounded-2xl bg-white/5 p-3 text-left active:scale-[0.98]"
+              >
+                <span className="block text-sm font-bold text-ink-chalk">Лёгкий бот</span>
+                <span className="block text-[11px] text-ink-mist">
+                  Иногда ошибается · {info ? `${Math.round((info.reward_win * (info.easy_reward_pct ?? 60)) / 100)} монет за победу · ` : ""}рейтинг максимум +1
+                </span>
+              </button>
+              <button
+                onClick={() => { setBotOpen(false); bot.mutate("hard"); }}
+                className="rounded-2xl border border-accent-lime/30 bg-accent-lime/10 p-3 text-left active:scale-[0.98]"
+              >
+                <span className="block text-sm font-bold text-ink-chalk">Сильный бот</span>
+                <span className="block text-[11px] text-ink-mist">
+                  Охотится Провокатором за Звездой, бережёт Кубок · {info ? `${info.reward_win} монет за победу` : "полная награда"}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {chatOpen && (
         <ChatInviteSheet
