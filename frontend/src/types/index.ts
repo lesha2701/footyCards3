@@ -521,6 +521,10 @@ export interface PlayerChemistry {
 export interface ChemistryOut {
   enabled: boolean;
   strength_bonus: number | null;
+  /** Rules come from a tournament that is already running (frozen at its start), not from live settings. */
+  frozen?: boolean;
+  /** Whether the mechanic is switched on in the live settings right now. */
+  live_enabled?: boolean;
   formation: string | null;
   team: number;
   team_max: number;
@@ -1496,6 +1500,7 @@ export interface ClubLineup {
   midfield: number;
   defence: number;
   goalkeeping: number;
+  chemistry?: ChemistryOut;
 }
 
 export interface ClubPackRarityProbability {

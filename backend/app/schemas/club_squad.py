@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.schemas.coach import CoachBoostOut, CoachOut
 from app.schemas.lineup import EquippedStadiumOut
+from app.schemas.chemistry import ChemistryOut
 from app.schemas.player import PlayerOut
 from app.schemas.stadium import StadiumOut
 
@@ -90,6 +91,10 @@ class ClubLineupOut(BaseModel):
     midfield: int = 0
     defence: int = 0
     goalkeeping: int = 0
+    # Neighbour-link chemistry (services/chemistry_service.py) with the rules
+    # the next match will be played with — frozen=True while a running
+    # tournament keeps the rules it started with.
+    chemistry: ChemistryOut = ChemistryOut()
 
 
 class ClubLineupSlotIn(BaseModel):

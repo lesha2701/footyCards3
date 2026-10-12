@@ -36,6 +36,11 @@ class ChemistryOut(BaseModel):
 
     enabled: bool = False
     strength_bonus: Optional[int] = None
+    # True when the rules come from a tournament that is already running
+    # (frozen at its start), not from the live GameConfig — the editor then
+    # says so; live_enabled is whether the mechanic is on in GameConfig now.
+    frozen: bool = False
+    live_enabled: bool = False
     formation: Optional[str] = None
     team: int = 0
     team_max: int = 0

@@ -32,6 +32,7 @@ club/country bonus is NOT added when the new chemistry is on.
 """
 
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any, Iterable
 
 LINK_NONE = "none"
@@ -237,16 +238,54 @@ def boosted_rating(rating: int | float, bonus: int) -> int | float:
     return max(1, min(MAX_RATING, rating + bonus))
 
 
-def to_out(result: ChemistryResult | None, rules: ChemistryRules | None, strength_bonus: int | None = None) -> dict:
+def with_match_ratings(cards_with_slots: Iterable[tuple[Any, Any]], chemistry: ChemistryResult | None) -> list[tuple[Any, Any]]:
+    """The same (card, slot) pairs with each card's chemistry bonus folded
+    into player.rating, for engines that read the rating straight off the
+    card (club_tactical_profile_service / club_tactical_matchup_service).
+    A card whose bonus is 0 — every card while the mechanic is off — is
+    passed through untouched; otherwise a light stand-in keeps id/player_id
+    (the engine reports red cards and injuries by card id) and the player
+    fields the engine reads. ClubCards have no diamond bonus, so the
+    stand-in carries none either."""
+    pairs = list(cards_with_slots)
+    if chemistry is None:
+        return pairs
+    out = []
+    for card, slot in pairs:
+        bonus = chemistry.rating_bonus(slot.code)
+        if not bonus:
+            out.append((card, slot))
+            continue
+        p = card.player
+        out.append((SimpleNamespace(
+            id=card.id, player_id=card.player_id,
+            player=SimpleNamespace(
+                display_name=p.display_name, position=p.position, rating=boosted_rating(p.rating, bonus),
+                rarity=p.rarity, club=p.club, country=p.country,
+                attack_rating=getattr(p, "attack_rating", None), defense_rating=getattr(p, "defense_rating", None),
+            ),
+        ), slot))
+    return out
+
+
+def to_out(
+    result: ChemistryResult | None, rules: ChemistryRules | None, strength_bonus: int | None = None,
+    frozen: bool = False, live_enabled: bool | None = None,
+) -> dict:
     """Serialized form shared by every lineup response (schemas.chemistry.ChemistryOut).
     strength_bonus: how much the chemistry adds to the team strength shown
     for this lineup (None where the mode has no single strength number);
-    with the mechanic off it is the old flat club/country bonus."""
+    with the mechanic off it is the old flat club/country bonus.
+    frozen: the rules are the ones a RUNNING tournament froze at its start
+    (not the live GameConfig); live_enabled: whether GameConfig has the
+    mechanic on right now (defaults to `rules is not None`)."""
+    meta = {"frozen": frozen, "live_enabled": (rules is not None) if live_enabled is None else live_enabled}
     if result is None or rules is None:
-        return {"enabled": False, "strength_bonus": strength_bonus}
+        return {"enabled": False, "strength_bonus": strength_bonus, **meta}
     return {
         "enabled": True,
         "strength_bonus": strength_bonus,
+        **meta,
         "formation": result.formation,
         "team": result.team,
         "team_max": result.team_max,

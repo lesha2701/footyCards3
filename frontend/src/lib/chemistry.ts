@@ -157,3 +157,16 @@ export function chemistrySwapHints(
   }
   return [...best.values()].sort((a, b) => b.gain - a.gain || a.slotCode.localeCompare(b.slotCode)).slice(0, limit);
 }
+
+/** Notice for an editor whose tournament is already running with frozen rules
+ * (backend ChemistryOut.frozen); null when there is nothing to say. */
+export function chemistryFrozenText(chemistry: ChemistryOut | undefined): string | null {
+  if (!chemistry?.frozen) return null;
+  if (chemistry.enabled) {
+    return "Идущий турнир играет по правилам химии, зафиксированным на его старте. Новые настройки начнут действовать со следующего турнира.";
+  }
+  if (chemistry.live_enabled) {
+    return "В идущем турнире химия связей не действует — он начался до её включения. Она заработает со следующего турнира.";
+  }
+  return null;
+}

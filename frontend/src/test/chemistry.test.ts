@@ -1,5 +1,5 @@
 import cases from "./chemistryCases.json";
-import { chemistryGain, chemistrySwapHints, computeChemistry, linkLevel, playerPoints } from "@/lib/chemistry";
+import { chemistryFrozenText, chemistryGain, chemistrySwapHints, computeChemistry, linkLevel, playerPoints } from "@/lib/chemistry";
 import type { ChemistryOut, ChemistryRules } from "@/types";
 
 interface Case {
@@ -69,5 +69,22 @@ describe("chemistry helpers", () => {
       { slotCode: "DEF3", cardId: 9, name: "C", currentName: null, gain: 4 },
     ]);
     expect(chemistryGain({ ...chemistry, enabled: false }, slots, "DEF3", candidate)).toBeNull();
+  });
+});
+
+describe("chemistryFrozenText", () => {
+  const base: ChemistryOut = {
+    enabled: false, strength_bonus: null, formation: null, team: 0, team_max: 0, links: [], players: [], adjacency: [], rules: null,
+  };
+
+  it("says nothing outside a running tournament", () => {
+    expect(chemistryFrozenText(undefined)).toBeNull();
+    expect(chemistryFrozenText({ ...base, enabled: true, live_enabled: true })).toBeNull();
+  });
+
+  it("explains frozen rules and a tournament that started before the switch", () => {
+    expect(chemistryFrozenText({ ...base, enabled: true, frozen: true })).toMatch(/зафиксированным/);
+    expect(chemistryFrozenText({ ...base, frozen: true, live_enabled: true })).toMatch(/не действует/);
+    expect(chemistryFrozenText({ ...base, frozen: true, live_enabled: false })).toBeNull();
   });
 });

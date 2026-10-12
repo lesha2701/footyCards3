@@ -104,7 +104,9 @@ def _slots_by_code(formation: str) -> dict[str, FormationSlot]:
     return {s.code: s for s in get_formation_slots(formation)}
 
 
-def _serialize(squad: PersonalSquad, rules: ChemistryRules | None = None) -> PersonalSquadOut:
+def _serialize(
+    squad: PersonalSquad, rules: ChemistryRules | None = None, frozen: bool = False, live_enabled: bool | None = None,
+) -> PersonalSquadOut:
     # Same ownership rule as resolve_active_squad: a traded-away card is not shown.
     by_slot = {c.slot_code: c.user_card for c in squad.cards if c.user_card.owner_id == squad.user_id}
     slots = []
@@ -146,26 +148,45 @@ def _serialize(squad: PersonalSquad, rules: ChemistryRules | None = None) -> Per
                 [(by_slot[s.code], s) for s in formation_slots if s.code in by_slot], squad.formation, rules,
                 slot_count=len(formation_slots),
             ) if rules is not None else None,
-            rules,
+            rules, frozen=frozen, live_enabled=live_enabled,
         ),
     )
 
 
-async def _rules(db: AsyncSession) -> ChemistryRules | None:
-    return chemistry_service.active_rules(await get_config(db))
+async def chemistry_context(db: AsyncSession, user_id: int) -> tuple[ChemistryRules | None, bool, bool]:
+    """(rules, frozen, live_enabled): the chemistry the player's NEXT
+    tournament match will actually be played with. While they are in an
+    active player tournament that is its frozen rules
+    (PlayerTournament.chemistry_rules, None = off for that tournament) and
+    frozen=True; otherwise the live GameConfig."""
+    from app.models.enums import TournamentStatus
+    from app.models.player_tournament import PlayerTournament, PlayerTournamentParticipant
+
+    config = await get_config(db)
+    live_enabled = bool(config.chemistry_enabled)
+    row = (
+        await db.execute(
+            select(PlayerTournament.chemistry_rules)
+            .join(PlayerTournamentParticipant, PlayerTournamentParticipant.tournament_id == PlayerTournament.id)
+            .where(PlayerTournamentParticipant.user_id == user_id, PlayerTournament.status == TournamentStatus.active)
+        )
+    ).first()
+    if row is not None:
+        return chemistry_service.rules_from_dict(row[0]), True, live_enabled
+    return chemistry_service.active_rules(config), False, live_enabled
 
 
 async def _out(db: AsyncSession, user_id: int, template_index: int) -> PersonalSquadOut:
-    return _serialize(await _get_row(db, user_id, template_index), await _rules(db))
+    return _serialize(await _get_row(db, user_id, template_index), *await chemistry_context(db, user_id))
 
 
 async def list_templates(db: AsyncSession, user: User) -> list[PersonalSquadOut]:
-    rules = await _rules(db)
-    return [_serialize(t, rules) for t in await _ensure_templates(db, user.id)]
+    context = await chemistry_context(db, user.id)
+    return [_serialize(t, *context) for t in await _ensure_templates(db, user.id)]
 
 
 async def get_squad(db: AsyncSession, user: User, template_index: int | None = None) -> PersonalSquadOut:
-    return _serialize(await _get_row(db, user.id, template_index), await _rules(db))
+    return _serialize(await _get_row(db, user.id, template_index), *await chemistry_context(db, user.id))
 
 
 async def set_squad_cards(

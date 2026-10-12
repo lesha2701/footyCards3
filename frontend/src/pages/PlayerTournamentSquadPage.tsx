@@ -12,7 +12,7 @@ import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
 import type { BenchUpgrade } from "@/api/lineups";
 import BenchUpgradeHints from "@/components/squad/BenchUpgradeHints";
-import { ChemistryDiamonds, ChemistryHints, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
+import { ChemistryDiamonds, ChemistryFrozenNote, ChemistryHints, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
 import { chemistryGain, chemistrySwapHints, type ChemistrySwapHint } from "@/lib/chemistry";
 import {
   activatePersonalSquad, autoFillPersonalSquad, fetchPersonalSquadBenchUpgrades, fetchPersonalSquadCoachCards, fetchPersonalSquads, fetchPersonalSquadStadiumCards,
@@ -281,6 +281,7 @@ export default function PlayerTournamentSquadPage() {
         <div className="mb-3">
           <BenchUpgradeHints hints={benchUpgrades} onApply={applyBenchUpgrade} busy={setCardsMutation.isPending} />
         </div>
+        <ChemistryFrozenNote chemistry={chemistry} />
         <ChemistrySummary chemistry={chemistry} />
         <ChemistryHints hints={chemistryHints} onApply={applyChemistryHint} busy={setCardsMutation.isPending} />
 

@@ -32,6 +32,8 @@ from app.schemas.club_squad import (
     NextOpponentOut,
 )
 from app.schemas.player import PlayerOut
+from app.services import chemistry_service
+from app.services.chemistry_service import ChemistryResult, ChemistryRules
 from app.services.club_card_service import create_club_card
 from app.services.club_formation_service import CLUB_FORMATIONS, DEFAULT_FORMATION, get_formation_slots, get_slots_by_code
 from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES
@@ -388,6 +390,25 @@ async def activate_training(db: AsyncSession, user: User) -> ClubLineupOut:
     return await _lineup_to_out(db, club_id)
 
 
+async def club_chemistry_rules(db: AsyncSession, club_id: int, config) -> tuple[ChemistryRules | None, bool]:
+    """(rules, frozen): the chemistry the club's NEXT tournament match will
+    actually be played with. While the club is in an active tournament that
+    is the tournament's own frozen rules (Tournament.chemistry_rules, None =
+    off for that tournament) and frozen=True; otherwise the live GameConfig."""
+    from app.models.enums import TournamentStatus
+
+    row = (
+        await db.execute(
+            select(Tournament.chemistry_rules)
+            .join(TournamentClub, TournamentClub.tournament_id == Tournament.id)
+            .where(TournamentClub.club_id == club_id, Tournament.status == TournamentStatus.active)
+        )
+    ).first()
+    if row is not None:
+        return chemistry_service.rules_from_dict(row[0]), True
+    return chemistry_service.active_rules(config), False
+
+
 def _category_line_stats(cards_with_slots: list) -> tuple[int, int, int, int]:
     """Plain average rating of the players actually fielded in each line —
     attack (FWD), midfield (MID), defence (DEF), goalkeeping (GK) — shown for
@@ -438,12 +459,30 @@ async def _lineup_to_out(db: AsyncSession, club_id: int, template_index: int | N
     multiplier, training_uses_remaining, training_boost_active, in_active_tournament = await _training_state(db, club_id, config)
     stadium_multiplier = 1.0 + float(lineup.club_stadium_card.stadium.boost_pct) if lineup and lineup.club_stadium_card else 1.0
 
-    team_strength = round(calculate_base_strength(cards_with_slots) * multiplier * stadium_multiplier) if is_complete else None
+    # Neighbour-link chemistry with the rules the next match will really use
+    # (a running tournament's frozen ones, else GameConfig); None = off, and
+    # everything below is computed exactly as before.
+    rules, rules_frozen = await club_chemistry_rules(db, club_id, config)
+    formation_slot_count = len(get_formation_slots(formation))
+    chemistry = (
+        chemistry_service.compute_chemistry(cards_with_slots, formation, rules, slot_count=formation_slot_count)
+        if rules is not None else None
+    )
+    match_pairs = chemistry_service.with_match_ratings(cards_with_slots, chemistry)
+
+    team_strength = None
+    strength_bonus = None
+    if is_complete:
+        team_strength = round(calculate_base_strength(cards_with_slots, chemistry=chemistry) * multiplier * stadium_multiplier)
+        # Same formula with chemistry zeroed out (no per-card bonus, no flat bonus).
+        strength_bonus = team_strength - round(
+            calculate_base_strength(cards_with_slots, chemistry=ChemistryResult(formation=formation)) * multiplier * stadium_multiplier
+        )
     profile = (
-        compute_profile(cards_with_slots, training_multiplier=multiplier, stadium_multiplier=stadium_multiplier)
+        compute_profile(match_pairs, training_multiplier=multiplier, stadium_multiplier=stadium_multiplier)
         if cards_with_slots else None
     )
-    tactical_fit = compute_tactical_fit(cards_with_slots, profile, mentality, playstyle, config) if profile else 0
+    tactical_fit = compute_tactical_fit(match_pairs, profile, mentality, playstyle, config) if profile else 0
     tactical_fit_hint = _tactical_fit_hint(profile, playstyle) if profile else "Заполни состав, чтобы увидеть подсказку"
 
     coach_out = None
@@ -463,6 +502,9 @@ async def _lineup_to_out(db: AsyncSession, club_id: int, template_index: int | N
         coach=coach_out, stadium=stadium_out, training_uses_remaining=training_uses_remaining,
         training_boost_active=training_boost_active, in_active_tournament=in_active_tournament,
         attack=attack, midfield=midfield, defence=defence, goalkeeping=goalkeeping,
+        chemistry=chemistry_service.to_out(
+            chemistry, rules, strength_bonus, frozen=rules_frozen, live_enabled=bool(config.chemistry_enabled),
+        ),
     )
 
 

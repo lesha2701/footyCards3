@@ -1,6 +1,6 @@
 import { useLayoutEffect, useState, type RefObject } from "react";
 
-import type { ChemistrySwapHint } from "@/lib/chemistry";
+import { chemistryFrozenText, type ChemistrySwapHint } from "@/lib/chemistry";
 import type { ChemistryLinkLevel, ChemistryOut } from "@/types";
 
 const LINK_STROKE: Record<ChemistryLinkLevel, string> = {
@@ -132,6 +132,15 @@ export function ChemistrySummary({ chemistry }: { chemistry: ChemistryOut | unde
       )}
     </div>
   );
+}
+
+/** Tells the player that the running tournament keeps the chemistry rules it
+ * started with (backend freezes them per tournament), so a settings change —
+ * including switching the mechanic on — only applies from the next one. */
+export function ChemistryFrozenNote({ chemistry }: { chemistry: ChemistryOut | undefined }) {
+  const text = chemistryFrozenText(chemistry);
+  if (!text) return null;
+  return <p className="mb-3 rounded-xl bg-white/5 px-3 py-2 text-[11px] leading-relaxed text-ink-mist">{text}</p>;
 }
 
 /** "Поставь X на DEF2 — +N к химии" one-tap swaps. */

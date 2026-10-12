@@ -429,9 +429,10 @@ class GameConfig(TimestampMixin, Base):
 
     # --- «Химия карточек» (services/chemistry_service.py) ---
     # Off = every mode keeps the old flat club/country bonus byte-for-byte.
-    # On = Card Arena lineups and player-tournament squads use neighbour
+    # On = Card Arena lineups, player-tournament squads and club squads use neighbour
     # links instead (FUT Draft always keeps its own formula). Only NEW
-    # matches/rounds read it: an Arena match freezes its strengths at start.
+    # matches/rounds read it: an Arena match freezes its strengths at start,
+    # player and club tournaments freeze the rules at their own start.
     chemistry_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Link value between two adjacent slots: same club AND country / one of them.
     chemistry_link_strong: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
