@@ -373,6 +373,8 @@ class GameConfigOut(BaseModel):
     chemistry_player_floor: int = 0
     chemistry_rating_per_point: int = 1
     chemistry_off_position_penalty: int = 0
+    chemistry_coach_country_points: int = 1
+    chemistry_stadium_club_points: int = 1
 
 
 class GameConfigUpdate(BaseModel):
@@ -621,6 +623,8 @@ class GameConfigUpdate(BaseModel):
     chemistry_player_floor: Optional[int] = Field(default=None, ge=0, le=3)
     chemistry_rating_per_point: Optional[int] = Field(default=None, ge=0, le=10)
     chemistry_off_position_penalty: Optional[int] = Field(default=None, ge=0, le=20)
+    chemistry_coach_country_points: Optional[int] = Field(default=None, ge=0, le=3)
+    chemistry_stadium_club_points: Optional[int] = Field(default=None, ge=0, le=3)
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod

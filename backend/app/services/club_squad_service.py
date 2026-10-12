@@ -465,7 +465,16 @@ async def _lineup_to_out(db: AsyncSession, club_id: int, template_index: int | N
     rules, rules_frozen = await club_chemistry_rules(db, club_id, config)
     formation_slot_count = len(get_formation_slots(formation))
     chemistry = (
-        chemistry_service.compute_chemistry(cards_with_slots, formation, rules, slot_count=formation_slot_count)
+        chemistry_service.compute_chemistry(
+            cards_with_slots, formation, rules, slot_count=formation_slot_count,
+            coach_country=chemistry_service.coach_country_of(
+                lineup.club_coach_card.coach if lineup and lineup.club_coach_card else None
+            ),
+            # Shown as a home match, like team_strength's stadium multiplier.
+            stadium_club=chemistry_service.stadium_club_of(
+                lineup.club_stadium_card.stadium if lineup and lineup.club_stadium_card else None
+            ),
+        )
         if rules is not None else None
     )
     match_pairs = chemistry_service.with_match_ratings(cards_with_slots, chemistry)
@@ -492,7 +501,7 @@ async def _lineup_to_out(db: AsyncSession, club_id: int, template_index: int | N
     stadium_out = None
     if lineup and lineup.club_stadium_card:
         s = lineup.club_stadium_card.stadium
-        stadium_out = EquippedStadiumOut(id=s.id, display_name=s.display_name, rarity=s.rarity.value, image_path=s.image_path, boost_pct=float(s.boost_pct))
+        stadium_out = EquippedStadiumOut(id=s.id, display_name=s.display_name, rarity=s.rarity.value, image_path=s.image_path, boost_pct=float(s.boost_pct), club=s.club)
 
     attack, midfield, defence, goalkeeping = _category_line_stats(cards_with_slots)
     return ClubLineupOut(

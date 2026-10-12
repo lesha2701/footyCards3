@@ -449,3 +449,8 @@ class GameConfig(TimestampMixin, Base):
     # Extra match-rating penalty off the slot's ideal position (on top of the
     # existing 0.9/0.75 position fit, so 0 = no double penalty by default).
     chemistry_off_position_penalty: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Extra chemistry points (capped at chemistry_player_max) for an
+    # on-position player whose country = the coach's (Coach.country) and
+    # whose club = the stadium's (Stadium.club; home matches only).
+    chemistry_coach_country_points: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    chemistry_stadium_club_points: Mapped[int] = mapped_column(Integer, default=1, nullable=False)

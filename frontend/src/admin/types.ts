@@ -331,6 +331,8 @@ export interface GameConfig {
   chemistry_player_floor: number;
   chemistry_rating_per_point: number;
   chemistry_off_position_penalty: number;
+  chemistry_coach_country_points: number;
+  chemistry_stadium_club_points: number;
 }
 
 export interface AdminSkillLedgerEntry {

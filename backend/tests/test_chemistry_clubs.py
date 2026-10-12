@@ -326,3 +326,126 @@ async def test_auto_arena_lineup_flag_on_picks_for_chemistry(client, db_session,
     body = (await client.post(f"{API}/lineups/templates/1/auto", headers=headers)).json()
     assert next(s for s in body["slots"] if s["slot_code"] == "FWD2")["card"]["id"] == linked_id
     assert body["chemistry"]["team"] == body["chemistry"]["team_max"] == 33
+
+
+# --- «тренер-земляк» / «домашний стадион» -----------------------------------------------------
+
+
+def test_coach_and_stadium_extras_on_position_only_and_capped():
+    pairs = [
+        (_card(1, Position.GK, club="Real", country="Spain"), FORMATION_SLOTS[0]),
+        (_card(2, Position.ST, club="Real", country="Spain"), FORMATION_SLOTS[2]),  # off position at DEF2
+        (_card(3, Position.CB, club="Milan", country="Italy"), FORMATION_SLOTS[3]),
+    ]
+    rules = ChemistryRules(coach_country_points=1, stadium_club_points=2)
+    plain = compute_chemistry(pairs, "4-3-3", rules)
+    extra = compute_chemistry(pairs, "4-3-3", rules, coach_country=" Spain ", stadium_club="Real")
+    gk_plain, gk = plain.players["GK"], extra.players["GK"]
+    assert (gk.coach_bonus, gk.stadium_bonus) == (1, 2)
+    assert gk.points == min(3, gk_plain.points + 3)
+    assert extra.players["DEF2"].points == 0 and extra.players["DEF2"].coach_bonus == 0  # off position
+    assert extra.players["DEF3"] == plain.players["DEF3"]  # Milan/Italy: nothing
+    assert extra.coach_country == "Spain"
+
+    # Rules frozen before the extras existed carry none of them.
+    old = {k: v for k, v in rules.as_dict().items() if k not in ("coach_country_points", "stadium_club_points")}
+    frozen = chemistry_service.rules_from_dict(old)
+    assert (frozen.coach_country_points, frozen.stadium_club_points) == (0, 0)
+
+
+async def _equip_personal_coach_and_stadium(db_session, user, *, country, club):
+    from app.models.coach import Coach, CoachBoost
+    from app.models.enums import CoachBoostType
+    from app.models.stadium import Stadium
+    from app.models.user_coach_card import UserCoachCard
+    from app.models.user_stadium_card import UserStadiumCard
+    from app.services import personal_squad_service
+
+    coach = Coach(display_name="Земляк", rarity=Rarity.common, country=country)
+    coach.boosts = [CoachBoost(boost_type=CoachBoostType.ATTACK_CENTRAL, magnitude=1)]
+    stadium = Stadium(display_name="Домашний", rarity=Rarity.common, boost_pct=0.0, club=club)
+    db_session.add_all([coach, stadium])
+    await db_session.flush()
+    coach_card = UserCoachCard(user_id=user.id, coach_id=coach.id, serial_number=1, source=CardSource.pack)
+    stadium_card = UserStadiumCard(user_id=user.id, stadium_id=stadium.id, serial_number=1, source=CardSource.pack)
+    db_session.add_all([coach_card, stadium_card])
+    await db_session.flush()
+    squad = await personal_squad_service._get_row(db_session, user.id, None)
+    squad.user_coach_card_id, squad.user_stadium_card_id = coach_card.id, stadium_card.id
+    await db_session.commit()
+
+
+async def test_player_tournament_stadium_extra_only_at_home(client, db_session, bot_token):
+    from app.services import player_tournament_simulation_service as psim
+    from app.services import personal_squad_service
+    from tests.player_tournament_helpers import make_ready_user
+
+    user = await make_ready_user(client, db_session, bot_token, 891001)
+    _squad, pairs = await personal_squad_service.resolve_active_squad(db_session, user.id)
+    gk_card = next(c for c, s in pairs if s.code == "GK")
+    await _equip_personal_coach_and_stadium(db_session, user, country="Тестландия", club=gk_card.player.club)
+    config = await _config(db_session)
+    rules = ChemistryRules(coach_country_points=1, stadium_club_points=1, thresholds=(9, 10, 11))  # links alone give 0
+
+    home = await psim._build_side(db_session, user.id, is_home=True, config=config, chemistry_rules=rules)
+    away = await psim._build_side(db_session, user.id, is_home=False, config=config, chemistry_rules=rules)
+    # Factory players share the coach's country: everyone gets the coach point.
+    assert all(points == 1 for cid, points in away.chemistry["cards"].items())
+    assert home.chemistry["cards"][str(gk_card.id)] == 2
+    assert home.chemistry["team"] == away.chemistry["team"] + 1
+
+    # The squad editor shows the home view and names coach country / stadium club.
+    headers = telegram_headers(891001, bot_token)
+    config.chemistry_enabled = True
+    await db_session.commit()
+    squads = (await client.get(f"{API}/player-tournaments/squads", headers=headers)).json()
+    chem = next(s for s in squads if s["is_active"])["chemistry"]
+    assert chem["coach_country"] == "Тестландия" and chem["stadium_club"] == gk_card.player.club
+    gk = next(p for p in chem["players"] if p["slot_code"] == "GK")
+    assert gk["coach_bonus"] == 1 and gk["stadium_bonus"] == 1
+
+
+async def test_club_stadium_extra_only_for_home_side(client, db_session, bot_token):
+    from app.models.club_stadium_card import ClubStadiumCard
+    from app.models.enums import ClubStadiumCardSource
+    from app.models.stadium import Stadium
+    from app.services.club_squad_service import _get_or_none_lineup
+
+    club, _captain, _headers = await _club(client, db_session, bot_token, 892001, "Химия стадион")
+    _lineup, _sub, pairs, club_lineup = await sim.resolve_match_lineup(db_session, club.id)
+    gk_card = next(c for c, s in pairs if s.code == "GK")
+    stadium = Stadium(display_name="Клубный дом", rarity=Rarity.common, boost_pct=0.0, club=gk_card.player.club)
+    db_session.add(stadium)
+    await db_session.flush()
+    card = ClubStadiumCard(club_id=club.id, stadium_id=stadium.id, serial_number=1, source=ClubStadiumCardSource.club_pack)
+    db_session.add(card)
+    await db_session.flush()
+    row = await _get_or_none_lineup(db_session, club.id)
+    row.club_stadium_card_id = card.id
+    await db_session.commit()
+
+    lineup, _sub, pairs, club_lineup = await sim.resolve_match_lineup(db_session, club.id)
+    rules = ChemistryRules(stadium_club_points=1, thresholds=(9, 10, 11), rating_per_point=2)
+    home, _ = sim.apply_chemistry(lineup, pairs, club_lineup, rules, is_home=True)
+    away, _ = sim.apply_chemistry(lineup, pairs, club_lineup, rules, is_home=False)
+    gk_home = next(a for a in home if a["club_card_id"] == gk_card.id)
+    gk_away = next(a for a in away if a["club_card_id"] == gk_card.id)
+    assert gk_home["rating"] == gk_away["rating"] + 2
+
+
+async def test_admin_sets_and_clears_coach_country_and_stadium_club(client, db_session, bot_token):
+    resp = await client.post(f"{API}/auth/session", headers=telegram_headers(999000001, bot_token))
+    auth = {"Authorization": f"Bearer {resp.json()['admin_token']}"}
+    created = await client.post(f"{API}/admin/coaches", headers=auth, json={
+        "display_name": "Луис", "rarity": "common", "country": "  Испания ", "boosts": [{"boost_type": "attack_central"}],
+    })
+    assert created.status_code == 200, created.text
+    assert created.json()["country"] == "Испания"
+    cleared = await client.put(f"{API}/admin/coaches/{created.json()['id']}", headers=auth, json={"country": ""})
+    assert cleared.status_code == 200 and cleared.json()["country"] is None
+
+    stadium = await client.post(f"{API}/admin/stadiums", headers=auth, json={
+        "display_name": "Бернабеу", "rarity": "rare", "boost_pct": 0.05, "club": "Реал Мадрид",
+    })
+    assert stadium.status_code == 200, stadium.text
+    assert stadium.json()["club"] == "Реал Мадрид"

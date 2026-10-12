@@ -7,6 +7,8 @@ interface Case {
   formation: string;
   rules: ChemistryRules;
   slot_count: number;
+  coach_country?: string | null;
+  stadium_club?: string | null;
   adjacency: [string, string][];
   players: { slot: string; club: string; country: string; position: string }[];
   expected: { team: number; team_max: number; links: unknown[]; players: Record<string, unknown> };
@@ -24,13 +26,16 @@ describe("chemistry parity with the backend", () => {
     it(c.name, () => {
       const result = computeChemistry(
         c.players.map((p) => ({ ...p, idealPosition: IDEAL[c.formation][p.slot] })),
-        c.adjacency, c.rules, c.slot_count,
+        c.adjacency, c.rules, c.slot_count, { coachCountry: c.coach_country, stadiumClub: c.stadium_club },
       );
       expect(result.team).toBe(c.expected.team);
       expect(result.teamMax).toBe(c.expected.team_max);
       expect(result.links).toEqual(c.expected.links);
       const players = Object.fromEntries(
-        Object.entries(result.players).map(([k, v]) => [k, { points: v.points, link_sum: v.link_sum, on_position: v.on_position, rating_bonus: v.rating_bonus }]),
+        Object.entries(result.players).map(([k, v]) => [k, {
+          points: v.points, link_sum: v.link_sum, on_position: v.on_position, rating_bonus: v.rating_bonus,
+          coach_bonus: v.coach_bonus, stadium_bonus: v.stadium_bonus,
+        }]),
       );
       expect(players).toEqual(c.expected.players);
     });

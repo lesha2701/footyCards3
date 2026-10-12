@@ -54,12 +54,22 @@ export function playerPoints(linkSum: number, onPosition: boolean, rules: Chemis
   return Math.min(cap, Math.max(Math.min(rules.player_floor, cap), reached));
 }
 
+/** Equipped coach's country / stadium's club for the «тренер-земляк» /
+ * «домашний стадион» extras (backend sends them as ChemistryOut.coach_country /
+ * stadium_club). */
+export interface ChemistryExtras {
+  coachCountry?: string | null;
+  stadiumClub?: string | null;
+}
+
 export function computeChemistry(
   players: ChemistryPlayerInput[],
   adjacency: [string, string][],
   rules: ChemistryRules,
   slotCount?: number,
+  extras: ChemistryExtras = {},
 ): ChemistryResult {
+  const coachCountry = groupKey(extras.coachCountry), stadiumClub = groupKey(extras.stadiumClub);
   const bySlot = new Map(players.map((p) => [p.slot, p]));
   const linkSums = new Map(players.map((p) => [p.slot, 0]));
   const links: ChemistryLink[] = [];
@@ -76,10 +86,15 @@ export function computeChemistry(
   for (const p of players) {
     const onPosition = p.position === p.idealPosition;
     const linkSum = linkSums.get(p.slot) ?? 0;
-    const points = playerPoints(linkSum, onPosition, rules);
+    const base = playerPoints(linkSum, onPosition, rules);
+    // Extras after the thresholds, on-position only, capped at player_max (chemistry_service.compute_chemistry).
+    const coachBonus = onPosition && coachCountry !== null && groupKey(p.country) === coachCountry ? Math.max(0, rules.coach_country_points ?? 0) : 0;
+    const stadiumBonus = onPosition && stadiumClub !== null && groupKey(p.club) === stadiumClub ? Math.max(0, rules.stadium_club_points ?? 0) : 0;
+    const points = coachBonus || stadiumBonus ? Math.min(Math.max(0, rules.player_max), base + coachBonus + stadiumBonus) : base;
     result[p.slot] = {
       slot_code: p.slot, points, link_sum: linkSum, on_position: onPosition,
       rating_bonus: points * rules.rating_per_point - (onPosition ? 0 : rules.off_position_penalty),
+      coach_bonus: coachBonus, stadium_bonus: stadiumBonus,
     };
   }
   const team = Object.values(result).reduce((sum, p) => sum + p.points, 0);
@@ -123,13 +138,14 @@ export function chemistryGain(
   if (!chemistry?.enabled || !chemistry.rules) return null;
   const target = slots.find((s) => s.slot_code === slotCode);
   if (!target) return null;
-  const before = computeChemistry(inputsOf(slots), chemistry.adjacency, chemistry.rules, slots.length).team;
+  const extras = { coachCountry: chemistry.coach_country, stadiumClub: chemistry.stadium_club };
+  const before = computeChemistry(inputsOf(slots), chemistry.adjacency, chemistry.rules, slots.length, extras).team;
   const after = computeChemistry(
     [
       ...inputsOf(slots.filter((s) => s.slot_code !== slotCode)),
       { slot: slotCode, club: candidate.club, country: candidate.country, position: candidate.position, idealPosition: target.ideal_position },
     ],
-    chemistry.adjacency, chemistry.rules, slots.length,
+    chemistry.adjacency, chemistry.rules, slots.length, extras,
   ).team;
   return after - before;
 }

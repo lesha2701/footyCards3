@@ -246,6 +246,8 @@ export default function AdminGamesPage() {
           {field("chemistry_player_floor", "Пол химии для игрока на своей позиции")}
           {field("chemistry_rating_per_point", "+ рейтинга в матче за очко химии")}
           {field("chemistry_off_position_penalty", "Штраф рейтинга не на своей позиции")}
+          {field("chemistry_coach_country_points", "+ химии игроку из страны тренера")}
+          {field("chemistry_stadium_club_points", "+ химии игроку клуба стадиона (дома)")}
         </div>
         <p className="mt-2 text-[11px] text-slate-500">
           Подбор значений: <code>python -m scripts.compare_chemistry --synthetic 2000</code> в backend сравнивает силу

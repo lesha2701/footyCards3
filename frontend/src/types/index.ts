@@ -80,6 +80,8 @@ export interface Coach {
   display_name: string;
   rarity: Rarity;
   image_path: string | null;
+  /** «Тренер-земляк»: players of this country get extra chemistry. */
+  country?: string | null;
   quick_sell_price: number;
   is_active: boolean;
   is_pack_droppable: boolean;
@@ -91,6 +93,8 @@ export interface Stadium {
   display_name: string;
   rarity: Rarity;
   image_path: string | null;
+  /** «Домашний стадион»: players of this club get extra chemistry at home. */
+  club?: string | null;
   quick_sell_price: number;
   is_active: boolean;
   is_pack_droppable: boolean;
@@ -499,6 +503,8 @@ export interface ChemistryRules {
   player_floor: number;
   rating_per_point: number;
   off_position_penalty: number;
+  coach_country_points?: number;
+  stadium_club_points?: number;
 }
 
 export interface ChemistryLink {
@@ -514,6 +520,9 @@ export interface PlayerChemistry {
   link_sum: number;
   on_position: boolean;
   rating_bonus: number;
+  /** Extra points from «тренер-земляк» / «домашний стадион» (before the cap). */
+  coach_bonus?: number;
+  stadium_bonus?: number;
 }
 
 /** Neighbour-link chemistry of a lineup (backend services/chemistry_service.py).
@@ -526,6 +535,8 @@ export interface ChemistryOut {
   /** Whether the mechanic is switched on in the live settings right now. */
   live_enabled?: boolean;
   formation: string | null;
+  coach_country?: string | null;
+  stadium_club?: string | null;
   team: number;
   team_max: number;
   links: ChemistryLink[];
@@ -1797,6 +1808,7 @@ export interface EquippedCoach {
   display_name: string;
   rarity: Rarity;
   image_path: string | null;
+  country?: string | null;
   boosts: CoachBoost[];
 }
 
@@ -1812,6 +1824,7 @@ export interface EquippedStadium {
   display_name: string;
   rarity: Rarity;
   image_path: string | null;
+  club?: string | null;
   boost_pct: number;
 }
 

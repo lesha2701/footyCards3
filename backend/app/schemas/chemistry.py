@@ -16,6 +16,9 @@ class PlayerChemistryOut(BaseModel):
     link_sum: int
     on_position: bool
     rating_bonus: int
+    # Extra points from «тренер-земляк» / «домашний стадион» (before the cap).
+    coach_bonus: int = 0
+    stadium_bonus: int = 0
 
 
 class ChemistryRulesOut(BaseModel):
@@ -26,6 +29,8 @@ class ChemistryRulesOut(BaseModel):
     player_floor: int
     rating_per_point: int
     off_position_penalty: int
+    coach_country_points: int = 0
+    stadium_club_points: int = 0
 
 
 class ChemistryOut(BaseModel):
@@ -42,6 +47,9 @@ class ChemistryOut(BaseModel):
     frozen: bool = False
     live_enabled: bool = False
     formation: Optional[str] = None
+    # Equipped coach's country / stadium's club the extras were computed with.
+    coach_country: Optional[str] = None
+    stadium_club: Optional[str] = None
     team: int = 0
     team_max: int = 0
     links: list[ChemistryLinkOut] = []

@@ -93,15 +93,22 @@ async def _build_side(
     formation_slots = get_formation_slots(squad.formation)
     # chemistry_rules = the tournament's own frozen rules (PlayerTournament
     # .chemistry_rules), never the live GameConfig — see _play_match.
+    coach = squad.user_coach_card.coach if squad.user_coach_card else None
     chemistry = (
-        chemistry_service.compute_chemistry(pairs, squad.formation, chemistry_rules, slot_count=len(formation_slots))
+        chemistry_service.compute_chemistry(
+            pairs, squad.formation, chemistry_rules, slot_count=len(formation_slots),
+            coach_country=chemistry_service.coach_country_of(coach),
+            # «Домашний стадион» — like the stadium boost, home side only.
+            stadium_club=chemistry_service.stadium_club_of(
+                squad.user_stadium_card.stadium if is_home and squad.user_stadium_card else None
+            ),
+        )
         if chemistry_rules is not None else None
     )
     with_slots: list[tuple[_EngineCard, FormationSlot]] = [
         (_engine_card(c, config, chemistry.rating_bonus(slot.code) if chemistry is not None else 0), slot)
         for c, slot in pairs
     ]
-    coach = squad.user_coach_card.coach if squad.user_coach_card else None
     stadium_multiplier = (
         1.0 + float(squad.user_stadium_card.stadium.boost_pct) if is_home and squad.user_stadium_card else 1.0
     )

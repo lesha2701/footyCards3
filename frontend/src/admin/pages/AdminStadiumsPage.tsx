@@ -12,7 +12,7 @@ import type { Rarity, Stadium } from "@/types";
 const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary"];
 
 const emptyForm = {
-  display_name: "", rarity: "common" as Rarity, quick_sell_price: 10, is_active: true, is_pack_droppable: true,
+  display_name: "", rarity: "common" as Rarity, club: "", quick_sell_price: 10, is_active: true, is_pack_droppable: true,
   boost_pct: 0,
 };
 
@@ -54,7 +54,7 @@ export default function AdminStadiumsPage() {
   const openEdit = (s: Stadium) => {
     setEditing(s);
     setForm({
-      display_name: s.display_name, rarity: s.rarity, quick_sell_price: s.quick_sell_price,
+      display_name: s.display_name, rarity: s.rarity, club: s.club ?? "", quick_sell_price: s.quick_sell_price,
       is_active: s.is_active, is_pack_droppable: s.is_pack_droppable,
       boost_pct: s.boost_pct,
     });
@@ -136,6 +136,14 @@ export default function AdminStadiumsPage() {
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Имя</span>
                 <input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} className="rounded-lg bg-bg-surface px-3 py-2 outline-none" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Клуб (домашний стадион: + химии игрокам клуба в домашних матчах)</span>
+                <input
+                  value={form.club} maxLength={64} placeholder="как у игроков, например «Реал Мадрид»"
+                  onChange={(e) => setForm({ ...form, club: e.target.value })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                />
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Редкость</span>

@@ -127,14 +127,14 @@ def _serialize(
         # Same construction as lineup_service._serialize_lineup.
         coach = EquippedCoachOut(
             id=c.id, display_name=c.display_name, rarity=c.rarity.value,
-            image_path=c.image_path, boosts=c.boosts,
+            image_path=c.image_path, boosts=c.boosts, country=c.country,
         )
     stadium = None
     if squad.user_stadium_card is not None:
         s = squad.user_stadium_card.stadium
         stadium = EquippedStadiumOut(
             id=s.id, display_name=s.display_name, rarity=s.rarity.value,
-            image_path=s.image_path, boost_pct=float(s.boost_pct),
+            image_path=s.image_path, boost_pct=float(s.boost_pct), club=s.club,
         )
     return PersonalSquadOut(
         template_index=squad.template_index, name=squad.name, is_active=squad.is_active,
@@ -147,6 +147,9 @@ def _serialize(
             chemistry_service.compute_chemistry(
                 [(by_slot[s.code], s) for s in formation_slots if s.code in by_slot], squad.formation, rules,
                 slot_count=len(formation_slots),
+                # Shown as a home match: the stadium extra only applies at home.
+                coach_country=chemistry_service.coach_country_of(squad.user_coach_card.coach if squad.user_coach_card else None),
+                stadium_club=chemistry_service.stadium_club_of(squad.user_stadium_card.stadium if squad.user_stadium_card else None),
             ) if rules is not None else None,
             rules, frozen=frozen, live_enabled=live_enabled,
         ),

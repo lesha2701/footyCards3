@@ -87,14 +87,19 @@ CHEM_TOP_LINKED = 10
 CHEM_MAX_ROUNDS = 25
 
 
-def _squad_score(chosen: dict[str, UserCard], slots_by_code: dict[str, SlotSpec], formation: str, rules: ChemistryRules) -> tuple:
+def _squad_score(
+    chosen: dict[str, UserCard], slots_by_code: dict[str, SlotSpec], formation: str, rules: ChemistryRules,
+    coach_country: Optional[str] = None, stadium_club: Optional[str] = None,
+) -> tuple:
     """(players on their ideal position, match strength with chemistry) — the
     same priority pick_cards has (ideal position first), then the Card Arena
     strength formula (lineup_service.calculate_base_strength) with each
     card's chemistry bonus; for tournament squads it is a proxy of the
     engine's per-card match ratings, which are rating + chemistry too."""
     pairs = [(card, slots_by_code[code]) for code, card in chosen.items()]
-    chemistry = chemistry_service.compute_chemistry(pairs, formation, rules, slot_count=len(slots_by_code))
+    chemistry = chemistry_service.compute_chemistry(
+        pairs, formation, rules, slot_count=len(slots_by_code), coach_country=coach_country, stadium_club=stadium_club,
+    )
     on_position = sum(1 for card, slot in pairs if card.player.position == slot.ideal_position)
     return on_position, calculate_base_strength(pairs, chemistry=chemistry)
 
@@ -109,6 +114,7 @@ def _group_key(value) -> Optional[str]:
 def improve_for_chemistry(
     chosen: dict[str, UserCard], slots: list[SlotSpec], cards: Iterable[UserCard], formation: str,
     rules: ChemistryRules, max_diamonds: Optional[int] = None, fixed_ids: frozenset[int] = frozenset(),
+    coach_country: Optional[str] = None, stadium_club: Optional[str] = None,
 ) -> dict[str, UserCard]:
     """Steepest-ascent local search over pick_cards' result: each round tries
     (a) replacing one slot's card with a bench card — the best-rated ones
@@ -117,7 +123,11 @@ def improve_for_chemistry(
     applies the single best strict improvement of _squad_score. Same hard
     rules as pick_cards (slot category, one copy per player, locks, diamond
     limit); slots holding a fixed_ids card (copied from another squad) are
-    never touched. Deterministic: ties keep the earlier/lower-id choice."""
+    never touched. coach_country / stadium_club: the equipped coach's
+    country and stadium's club («тренер-земляк» / «домашний стадион»
+    extras; cards matching them are candidates too). Deterministic: ties
+    keep the earlier/lower-id choice."""
+    coach_country, stadium_club = _group_key(coach_country), _group_key(stadium_club)
     slots_by_code = {s.code: s for s in slots}
     pool = [c for c in cards if not c.is_locked_by_admin and not c.is_locked_in_trade]
     neighbours: dict[str, list[str]] = {s.code: [] for s in slots}
@@ -141,8 +151,8 @@ def improve_for_chemistry(
             eligible, key=lambda c: (c.player.position == slot.ideal_position, _effective(c), -c.id), reverse=True,
         )
         near = [others[n].player for n in neighbours[slot.code] if n in others]
-        clubs = {_group_key(p.club) for p in near} - {None}
-        countries = {_group_key(p.country) for p in near} - {None}
+        clubs = ({_group_key(p.club) for p in near} | {stadium_club}) - {None}
+        countries = ({_group_key(p.country) for p in near} | {coach_country}) - {None}
         linked = [c for c in by_rating if _group_key(c.player.club) in clubs or _group_key(c.player.country) in countries]
         seen: set[int] = set()
         out = []
@@ -153,7 +163,7 @@ def improve_for_chemistry(
         return out
 
     current = dict(chosen)
-    best_score = _squad_score(current, slots_by_code, formation, rules)
+    best_score = _squad_score(current, slots_by_code, formation, rules, coach_country, stadium_club)
     movable = [s for s in slots if current.get(s.code) is None or current[s.code].id not in fixed_ids]
     for _ in range(CHEM_MAX_ROUNDS):
         best_trial = None
@@ -162,7 +172,7 @@ def improve_for_chemistry(
                 trial = {**current, slot.code: card}
                 if not diamonds_ok(trial):
                     continue
-                score = _squad_score(trial, slots_by_code, formation, rules)
+                score = _squad_score(trial, slots_by_code, formation, rules, coach_country, stadium_club)
                 if score > best_score:
                     best_score, best_trial = score, trial
         for i, slot_a in enumerate(movable):
@@ -171,7 +181,7 @@ def improve_for_chemistry(
                 if card_a is None or card_b is None or not fits(card_a, slot_b) or not fits(card_b, slot_a):
                     continue
                 trial = {**current, slot_a.code: card_b, slot_b.code: card_a}
-                score = _squad_score(trial, slots_by_code, formation, rules)
+                score = _squad_score(trial, slots_by_code, formation, rules, coach_country, stadium_club)
                 if score > best_score:
                     best_score, best_trial = score, trial
         if best_trial is None:
@@ -204,8 +214,11 @@ async def auto_arena_lineup(db: AsyncSession, user: User, template_index: int):
     require_any(chosen)
     rules = chemistry_service.active_rules(config)
     if rules is not None:
+        current = await lineup_service.get_active_lineup(db, user, template_index)
         chosen = improve_for_chemistry(
             chosen, slots, cards, lineup_service.ARENA_FORMATION, rules, max_diamonds=config.match_max_diamond_cards,
+            coach_country=current.coach.country if current.coach else None,
+            stadium_club=current.stadium.club if current.stadium else None,
         )
     payload = LineupSetRequest(slots=[LineupSlotIn(slot_code=code, user_card_id=c.id) for code, c in chosen.items()])
     return await lineup_service.set_lineup(db, user, payload, template_index)
@@ -231,7 +244,11 @@ async def auto_personal_squad(db: AsyncSession, user: User, template_index: int,
     # tournament's frozen ones, else GameConfig).
     rules, _frozen, _live = await personal_squad_service.chemistry_context(db, user.id)
     if rules is not None:
-        chosen = improve_for_chemistry(chosen, slots, cards, squad.formation, rules, fixed_ids=preferred)
+        chosen = improve_for_chemistry(
+            chosen, slots, cards, squad.formation, rules, fixed_ids=preferred,
+            coach_country=squad.coach.country if squad.coach else None,
+            stadium_club=squad.stadium.club if squad.stadium else None,
+        )
     payload = PersonalSquadSetRequest(
         slots=[PersonalSquadSlotIn(slot_code=code, user_card_id=c.id) for code, c in chosen.items()],
     )

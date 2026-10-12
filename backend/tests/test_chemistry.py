@@ -130,7 +130,7 @@ def test_rules_round_trip_through_config_and_dict():
     config = GameConfig(
         chemistry_link_strong=3, chemistry_link_medium=1, chemistry_threshold_1=5, chemistry_threshold_2=1,
         chemistry_threshold_3=3, chemistry_player_max=3, chemistry_player_floor=1, chemistry_rating_per_point=2,
-        chemistry_off_position_penalty=1,
+        chemistry_off_position_penalty=1, chemistry_coach_country_points=2, chemistry_stadium_club_points=0,
     )
     rules = rules_from_config(config)
     assert rules.thresholds == (1, 3, 5)
@@ -155,13 +155,17 @@ def test_shared_fixture_matches_python_implementation():
         ]
         assert [tuple(e) for e in case["adjacency"]] == list(chemistry_service.FORMATION_LINKS[case["formation"]])
         rules = rules_from_dict(case["rules"])
-        result = compute_chemistry(pairs, case["formation"], rules, slot_count=case["slot_count"])
+        result = compute_chemistry(
+            pairs, case["formation"], rules, slot_count=case["slot_count"],
+            coach_country=case.get("coach_country"), stadium_club=case.get("stadium_club"),
+        )
         expected = case["expected"]
         assert result.team == expected["team"], case["name"]
         assert result.team_max == expected["team_max"], case["name"]
         assert [{"a": l.a, "b": l.b, "level": l.level, "points": l.points} for l in result.links] == expected["links"]
         assert {
-            code: {"points": p.points, "link_sum": p.link_sum, "on_position": p.on_position, "rating_bonus": p.rating_bonus}
+            code: {"points": p.points, "link_sum": p.link_sum, "on_position": p.on_position, "rating_bonus": p.rating_bonus,
+                   "coach_bonus": p.coach_bonus, "stadium_bonus": p.stadium_bonus}
             for code, p in result.players.items()
         } == expected["players"], case["name"]
 

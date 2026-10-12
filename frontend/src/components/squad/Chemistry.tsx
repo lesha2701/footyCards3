@@ -127,6 +127,12 @@ export function ChemistrySummary({ chemistry }: { chemistry: ChemistryOut | unde
           <p>· Линия между соседями: <span className="text-accent-green">зелёная</span> — один клуб и одна страна, <span className="text-yellow-400">жёлтая</span> — клуб или страна, <span className="text-red-400">красная</span> — ничего общего</p>
           <p>· Химия игрока 0–{rules.player_max} растёт от связей с соседями; не на своей позиции — 0</p>
           <p>· Каждое очко химии: +{rules.rating_per_point} к рейтингу игрока в матче{rules.off_position_penalty > 0 ? `, не на своей позиции −${rules.off_position_penalty}` : ""}</p>
+          {chemistry.coach_country && (rules.coach_country_points ?? 0) > 0 && (
+            <p>· Тренер-земляк ({chemistry.coach_country}): +{rules.coach_country_points} к химии игроков этой страны</p>
+          )}
+          {chemistry.stadium_club && (rules.stadium_club_points ?? 0) > 0 && (
+            <p>· Домашний стадион ({chemistry.stadium_club}): +{rules.stadium_club_points} к химии игроков клуба — только в домашних матчах</p>
+          )}
           <p className="mt-1 text-ink-mist-dim">Рейтинг на самой карточке не меняется.</p>
         </div>
       )}

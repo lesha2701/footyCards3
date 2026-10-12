@@ -15,6 +15,9 @@ class Stadium(TimestampMixin, Base):
     display_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     rarity: Mapped[Rarity] = mapped_column(Enum(Rarity, name="rarity_enum"), nullable=False, index=True)
     image_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # «Домашний стадион»: players of this club get extra chemistry in home
+    # matches (chemistry_service); NULL = no club, no extra.
+    club: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     quick_sell_price: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_pack_droppable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

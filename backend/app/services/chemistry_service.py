@@ -21,6 +21,13 @@ Rules:
     card's match rating only (the displayed card rating never changes), and
     the result is kept within 1..99.
   * Team chemistry = sum of player chemistry, out of player_max × slots.
+  * Extras for an on-position player, added after the thresholds and
+    capped at player_max: + rules.coach_country_points when his country
+    equals the equipped coach's (Coach.country, «тренер-земляк»), and
+    + rules.stadium_club_points when his club equals the equipped
+    stadium's (Stadium.club, «домашний стадион») — the stadium extra only
+    where the stadium itself applies (tournaments: the home side only;
+    callers pass stadium_club=None for the away side).
 
 Application order (see lineup_service.calculate_base_strength and
 player_tournament_simulation_service._build_side): card rating + diamond
@@ -91,6 +98,8 @@ class ChemistryRules:
     player_floor: int = 0
     rating_per_point: int = 1
     off_position_penalty: int = 0
+    coach_country_points: int = 1
+    stadium_club_points: int = 1
 
     def as_dict(self) -> dict:
         return {
@@ -98,6 +107,7 @@ class ChemistryRules:
             "thresholds": list(self.thresholds), "player_max": self.player_max,
             "player_floor": self.player_floor, "rating_per_point": self.rating_per_point,
             "off_position_penalty": self.off_position_penalty,
+            "coach_country_points": self.coach_country_points, "stadium_club_points": self.stadium_club_points,
         }
 
 
@@ -112,6 +122,8 @@ def rules_from_config(config) -> ChemistryRules:
         player_floor=int(config.chemistry_player_floor),
         rating_per_point=int(config.chemistry_rating_per_point),
         off_position_penalty=int(config.chemistry_off_position_penalty),
+        coach_country_points=int(config.chemistry_coach_country_points),
+        stadium_club_points=int(config.chemistry_stadium_club_points),
     )
 
 
@@ -124,6 +136,9 @@ def rules_from_dict(data: dict | None) -> ChemistryRules | None:
         thresholds=tuple(sorted(int(t) for t in data["thresholds"])), player_max=int(data["player_max"]),
         player_floor=int(data["player_floor"]), rating_per_point=int(data["rating_per_point"]),
         off_position_penalty=int(data["off_position_penalty"]),
+        # Rules frozen before the coach/stadium extras existed had none.
+        coach_country_points=int(data.get("coach_country_points", 0)),
+        stadium_club_points=int(data.get("stadium_club_points", 0)),
     )
 
 
@@ -176,11 +191,15 @@ class PlayerChemistry:
     link_sum: int
     on_position: bool
     rating_bonus: int
+    coach_bonus: int = 0
+    stadium_bonus: int = 0
 
 
 @dataclass
 class ChemistryResult:
     formation: str
+    coach_country: str | None = None
+    stadium_club: str | None = None
     links: list[ChemistryLink] = field(default_factory=list)
     players: dict[str, PlayerChemistry] = field(default_factory=dict)
     team: int = 0
@@ -199,17 +218,29 @@ def player_points(link_sum: int, on_position: bool, rules: ChemistryRules) -> in
     return min(cap, max(min(rules.player_floor, cap), reached))
 
 
+def coach_country_of(coach) -> str | None:
+    return _group_key(getattr(coach, "country", None)) if coach is not None else None
+
+
+def stadium_club_of(stadium) -> str | None:
+    return _group_key(getattr(stadium, "club", None)) if stadium is not None else None
+
+
 def compute_chemistry(
     cards_with_slots: Iterable[tuple[Any, Any]], formation: str, rules: ChemistryRules, slot_count: int | None = None,
+    coach_country: str | None = None, stadium_club: str | None = None,
 ) -> ChemistryResult:
     """cards_with_slots: (card-like with .player.{club,country,position},
     FormationSlot) pairs — UserCard, the tournament _EngineCard adapter and
     SimpleNamespace stand-ins all work. Empty slots simply have no links.
     slot_count: the formation's total slot count for team_max (defaults to
-    the number of filled slots)."""
+    the number of filled slots). coach_country / stadium_club: the equipped
+    coach's country and stadium's club (coach_country_of / stadium_club_of;
+    None = no such extra)."""
     pairs = list(cards_with_slots)
     by_code = {slot.code: card for card, slot in pairs}
-    result = ChemistryResult(formation=formation)
+    coach_country, stadium_club = _group_key(coach_country), _group_key(stadium_club)
+    result = ChemistryResult(formation=formation, coach_country=coach_country, stadium_club=stadium_club)
     link_sums = {code: 0 for code in by_code}
     for a, b in FORMATION_LINKS.get(formation, ()):
         if a in by_code and b in by_code:
@@ -220,10 +251,18 @@ def compute_chemistry(
             link_sums[b] += pts
     for card, slot in pairs:
         on_position = card.player.position == slot.ideal_position
-        pts = player_points(link_sums[slot.code], on_position, rules)
+        base = player_points(link_sums[slot.code], on_position, rules)
+        coach_extra = stadium_extra = 0
+        if on_position:
+            if coach_country is not None and _group_key(card.player.country) == coach_country:
+                coach_extra = max(0, rules.coach_country_points)
+            if stadium_club is not None and _group_key(card.player.club) == stadium_club:
+                stadium_extra = max(0, rules.stadium_club_points)
+        pts = min(max(0, rules.player_max), base + coach_extra + stadium_extra) if (coach_extra or stadium_extra) else base
         bonus = pts * rules.rating_per_point - (0 if on_position else rules.off_position_penalty)
         result.players[slot.code] = PlayerChemistry(
             slot_code=slot.code, points=pts, link_sum=link_sums[slot.code], on_position=on_position, rating_bonus=bonus,
+            coach_bonus=coach_extra, stadium_bonus=stadium_extra,
         )
     result.team = sum(p.points for p in result.players.values())
     result.team_max = max(0, rules.player_max) * (slot_count if slot_count is not None else len(pairs))
@@ -287,12 +326,14 @@ def to_out(
         "strength_bonus": strength_bonus,
         **meta,
         "formation": result.formation,
+        "coach_country": result.coach_country,
+        "stadium_club": result.stadium_club,
         "team": result.team,
         "team_max": result.team_max,
         "links": [{"a": l.a, "b": l.b, "level": l.level, "points": l.points} for l in result.links],
         "players": [
             {"slot_code": p.slot_code, "points": p.points, "link_sum": p.link_sum, "on_position": p.on_position,
-             "rating_bonus": p.rating_bonus}
+             "rating_bonus": p.rating_bonus, "coach_bonus": p.coach_bonus, "stadium_bonus": p.stadium_bonus}
             for p in result.players.values()
         ],
         "adjacency": [list(edge) for edge in FORMATION_LINKS.get(result.formation, ())],

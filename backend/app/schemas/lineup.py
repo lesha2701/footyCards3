@@ -27,6 +27,7 @@ class EquippedCoachOut(BaseModel):
     display_name: str
     rarity: str
     image_path: Optional[str]
+    country: Optional[str] = None
     boosts: list[CoachBoostOut]
 
 
@@ -39,6 +40,7 @@ class EquippedStadiumOut(BaseModel):
     display_name: str
     rarity: str
     image_path: str | None
+    club: Optional[str] = None
     boost_pct: float
 
 

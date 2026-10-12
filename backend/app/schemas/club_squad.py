@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -34,6 +35,7 @@ class EquippedCoachOut(BaseModel):
     display_name: str
     rarity: str
     image_path: str | None
+    country: Optional[str] = None
     boosts: list[CoachBoostOut]
 
 

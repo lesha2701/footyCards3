@@ -281,7 +281,15 @@ async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
     config = await get_config(db)
     rules = chemistry_service.active_rules(config)
     chemistry = (
-        chemistry_service.compute_chemistry(cards_with_slots, ARENA_FORMATION, rules, slot_count=len(FORMATION_SLOTS))
+        chemistry_service.compute_chemistry(
+            cards_with_slots, ARENA_FORMATION, rules, slot_count=len(FORMATION_SLOTS),
+            coach_country=chemistry_service.coach_country_of(coach),
+            # Arena has no home/away: the stadium's strength boost always
+            # applies, so its «домашний стадион» extra does too.
+            stadium_club=chemistry_service.stadium_club_of(
+                lineup.user_stadium_card.stadium if lineup.user_stadium_card else None
+            ),
+        )
         if rules is not None else None
     )
     strength = (
@@ -303,7 +311,7 @@ async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
     stadium = None
     if lineup.user_stadium_card is not None:
         s = lineup.user_stadium_card.stadium
-        stadium = EquippedStadiumOut(id=s.id, display_name=s.display_name, rarity=s.rarity.value, image_path=s.image_path, boost_pct=float(s.boost_pct))
+        stadium = EquippedStadiumOut(id=s.id, display_name=s.display_name, rarity=s.rarity.value, image_path=s.image_path, boost_pct=float(s.boost_pct), club=s.club)
 
     return LineupOut(
         id=lineup.id, template_index=lineup.template_index, name=lineup.name, is_active=lineup.is_active,
@@ -311,7 +319,7 @@ async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
         team_strength=strength, max_diamond=config.match_max_diamond_cards,
         coach=EquippedCoachOut(
             id=coach.id, display_name=coach.display_name, rarity=coach.rarity.value,
-            image_path=coach.image_path, boosts=coach.boosts,
+            image_path=coach.image_path, boosts=coach.boosts, country=coach.country,
         ) if coach else None,
         stadium=stadium,
         slots=slots_out,
