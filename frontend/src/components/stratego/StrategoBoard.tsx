@@ -175,6 +175,27 @@ function PitchMarkings({ size }: { size: number }) {
   );
 }
 
+/** VICTOR FC crest mark (the gradient pill + ball from /brand/victor-fc-crest)
+ *  drawn as vector so it stays crisp on a 40px token — the card back of every
+ *  unrevealed opponent piece. */
+function BrandMark({ className }: { className?: string }) {
+  const uid = useId().replace(/:/g, "");
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden>
+      <defs>
+        <linearGradient id={`vfc-${uid}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#22d3e6" />
+          <stop offset="55%" stopColor="#5fd38a" />
+          <stop offset="100%" stopColor="#d4e01a" />
+        </linearGradient>
+      </defs>
+      <circle cx="12" cy="12" r="10.6" fill="#0b0d0f" stroke={`url(#vfc-${uid})`} strokeWidth="1.5" />
+      <line x1="8.6" y1="8.4" x2="11.9" y2="15.4" stroke={`url(#vfc-${uid})`} strokeWidth="3.6" strokeLinecap="round" />
+      <circle cx="15.3" cy="8.9" r="2" fill={`url(#vfc-${uid})`} />
+    </svg>
+  );
+}
+
 const RARITY_BORDER: Record<string, string> = {
   common: "border-rarity-common",
   rare: "border-rarity-rare",
@@ -194,7 +215,7 @@ export function PieceChip({ piece, selected, attackable }: { piece: StrategoPiec
   if (piece.hidden || !piece.role) {
     return (
       <span className={`${base} ${enemyTone} ${focus}`} title={piece.moved ? "Фишка уже ходила" : "Неизвестная фишка"}>
-        <span className="font-display text-sm font-bold text-red-200/90">?</span>
+        <BrandMark className="h-[74%] w-[74%] drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
         {piece.moved && <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-red-200/80" />}
       </span>
     );
