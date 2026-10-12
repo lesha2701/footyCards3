@@ -73,7 +73,7 @@ XP_TX_TYPES = frozenset({
     TransactionType.daily_reward, TransactionType.game_reward, TransactionType.match_reward,
     TransactionType.tactico_reward, TransactionType.career_reward, TransactionType.task_reward,
     TransactionType.bingo_reward, TransactionType.player_tournament_match_reward,
-    TransactionType.club_tournament_match_reward,
+    TransactionType.club_tournament_match_reward, TransactionType.stratego_reward,
 })
 
 # Cosmetics catalog (what exists and where it is drawn); prices live in
@@ -338,6 +338,7 @@ async def get_view(db: AsyncSession, user: User) -> dict:
         "xp_today": today_xp or 0, "xp_daily_cap": config.my_player_xp_daily_cap,
         "xp_per_reward": config.my_player_xp_per_reward,
         "xp_career_match": config.my_player_xp_career_match,
+        "xp_stratego_match": config.stratego_my_player_xp,
         "points_available": points_available(mp, xp, config),
         "points_per_level": config.my_player_points_per_level,
         "rating_cap": config.my_player_rating_cap,

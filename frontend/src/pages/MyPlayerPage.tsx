@@ -16,7 +16,7 @@ import {
 } from "@/api/myPlayer";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconChevronRight, IconEdit, IconFlagCheckered, IconProfile, IconStar } from "@/components/icons";
+import { IconChevronRight, IconEdit, IconFlag, IconFlagCheckered, IconProfile, IconStar } from "@/components/icons";
 import LifestyleTab from "@/components/myPlayer/LifestyleTab";
 import MyPlayerCard from "@/components/myPlayer/MyPlayerCard";
 import MyPlayerLeaderboard from "@/components/myPlayer/MyPlayerLeaderboard";
@@ -143,7 +143,8 @@ function Overview({
             </div>
             <p className="mt-2 text-xs text-ink-mist">
               Сегодня: <b className="text-ink-chalk">{view.xp_today}</b> / {view.xp_daily_cap} опыта. +{view.xp_per_reward} за каждую
-              награду в мини-играх, Тактико и заданиях, +{view.xp_career_match} за матч в «Карьере тренера». Каждый уровень — {view.points_per_level} очка характеристик.
+              награду в мини-играх, Тактико, Стратего и заданиях, +{view.xp_career_match} за матч в «Карьере тренера»,
+              +{view.xp_stratego_match} за матч в «Футбольном Стратего», если он в составе. Каждый уровень — {view.points_per_level} очка характеристик.
             </p>
             {nextTierIndex >= 0 && (
               <p className="mt-1 text-xs text-ink-mist">
@@ -236,6 +237,21 @@ function Overview({
               </span>
               <IconChevronRight size={16} className="text-ink-mist-dim" />
             </button>
+            <button
+              onClick={() => navigate("/play/stratego/squad")}
+              className="mt-2 flex w-full items-center justify-between rounded-xl bg-bg-raised p-3 text-left active:scale-[0.99]"
+            >
+              <span className="flex items-center gap-2">
+                <IconFlag size={18} className="text-accent-lime" />
+                <span>
+                  <span className="block text-sm font-semibold text-ink-chalk">Футбольное Стратего</span>
+                  <span className="block text-[11px] text-ink-mist">
+                    Поставь его на любую роль в «Подготовке» — редкость по рамке «{player.tier_label}»
+                  </span>
+                </span>
+              </span>
+              <IconChevronRight size={16} className="text-ink-mist-dim" />
+            </button>
             <p className="mt-2 text-[11px] text-ink-mist-dim">Карточку нельзя продать или обменять — она только твоя. Её видят друзья в твоём профиле.</p>
           </section>
         </>
@@ -317,7 +333,7 @@ function Constructor({
       <h1 className="font-display text-xl font-bold text-ink-chalk">{existing ? "Изменить игрока" : "Создай своего игрока"}</h1>
       {!existing && (
         <p className="-mt-2 text-sm text-ink-mist">
-          Собери внешность, выбери позицию — и прокачивай его, играя в любые режимы. Он будет выходить за твою команду в «Карьере тренера».
+          Собери внешность, выбери позицию — и прокачивай его, играя в любые режимы. Он будет выходить за твою команду в «Карьере тренера» и в «Футбольном Стратего».
         </p>
       )}
 

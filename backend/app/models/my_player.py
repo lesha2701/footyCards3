@@ -15,7 +15,8 @@ class MyPlayer(Base):
     Deliberately NOT a Player/UserCard row: it can't be sold, traded, fed to
     upgrades or dropped from packs, and never shows up in albums or bot
     squads. Game modes field it through a duck-typed engine card (see
-    my_player_service.engine_card); only "Карьера тренера" does so for now."""
+    my_player_service.engine_card): "Карьера тренера" and «Футбольное
+    Стратего» (any role in the pre-match squad, see stratego_service)."""
 
     __tablename__ = "my_players"
 

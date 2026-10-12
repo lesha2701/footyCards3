@@ -3,6 +3,7 @@ import { useId } from "react";
 import type { StrategoPiece } from "@/types";
 
 import { CELL_LINES, GRASS_STYLE } from "./boardStyle";
+import RoleIcon from "./RoleIcon";
 import { ROLE_META } from "./strategoMeta";
 
 interface Props {
@@ -45,8 +46,9 @@ export default function StrategoBoard({ size, pieces, selectedId, targets = [], 
     !!lastMove && ((lastMove.from[0] === r && lastMove.from[1] === c) || (lastMove.to[0] === r && lastMove.to[1] === c));
 
   return (
-    <div className="w-full overflow-hidden rounded-2xl border-2 border-white/25 shadow-lg" style={GRASS_STYLE}>
-      <div className="relative grid w-full" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}>
+    <div className="w-full overflow-hidden rounded-2xl border border-white/10 p-1 shadow-glow" style={GRASS_STYLE}>
+      <div className="relative grid w-full rounded-xl" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}>
+        <PitchMarkings size={size} />
         {Array.from({ length: size * size }, (_, i) => {
           const r = Math.floor(i / size);
           const c = i % size;
@@ -154,26 +156,71 @@ export function Puddle({ w, h }: { w: number; h: number }) {
   );
 }
 
+/** Chalk markings under the pieces: touchlines, halfway line, centre circle
+ *  and spot, and a penalty box in front of each home zone. */
+function PitchMarkings({ size }: { size: number }) {
+  const cell = 100 / size;
+  const box = { w: cell * 4, h: cell * 1.5 };
+  return (
+    <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+      <g fill="none" stroke="#fff" strokeOpacity="0.32" strokeWidth="0.45" vectorEffect="non-scaling-stroke">
+        <rect x="0.6" y="0.6" width="98.8" height="98.8" rx="1.5" />
+        <line x1="0" y1="50" x2="100" y2="50" />
+        <circle cx="50" cy="50" r={cell * 0.85} />
+        <rect x={50 - box.w / 2} y="0.6" width={box.w} height={box.h} />
+        <rect x={50 - box.w / 2} y={99.4 - box.h} width={box.w} height={box.h} />
+      </g>
+      <circle cx="50" cy="50" r="0.9" fill="#fff" fillOpacity="0.45" />
+    </svg>
+  );
+}
+
+const RARITY_BORDER: Record<string, string> = {
+  common: "border-rarity-common",
+  rare: "border-rarity-rare",
+  epic: "border-rarity-epic",
+  legendary: "border-rarity-legendary",
+  diamond: "border-rarity-diamond",
+};
+
+/** One piece token. Own pieces: dark chip framed in the card's rarity colour
+ *  with a lime role icon (same language as the app's cards); the cup and
+ *  walls get a floodlight frame. Opponent: deep red chip, "?" until revealed. */
 export function PieceChip({ piece, selected, attackable }: { piece: StrategoPiece; selected?: boolean; attackable?: boolean }) {
-  const base = "flex h-[84%] w-[84%] flex-col items-center justify-center rounded-md leading-none shadow-md";
+  const base =
+    "relative flex h-[86%] w-[86%] flex-col items-center justify-center gap-px rounded-lg leading-none shadow-[0_2px_4px_rgba(0,0,0,0.45)] transition-transform";
+  const focus = `${selected ? "scale-110 ring-2 ring-accent-lime shadow-glow" : ""} ${attackable ? "ring-2 ring-accent-lime animate-pulse" : ""}`;
+  const enemyTone = "border border-red-400/50 bg-gradient-to-b from-[#7a1f26] to-[#3d0d12] text-red-100";
   if (piece.hidden || !piece.role) {
     return (
-      <span className={`${base} bg-red-600/90 text-white ring-1 ring-black/20 ${attackable ? "ring-2 ring-accent-lime" : ""}`}>
-        <span className="text-sm font-bold">?</span>
-        {piece.moved && <span className="mt-0.5 text-[8px] opacity-80">ходил</span>}
+      <span className={`${base} ${enemyTone} ${focus}`} title={piece.moved ? "Фишка уже ходила" : "Неизвестная фишка"}>
+        <span className="font-display text-sm font-bold text-red-200/90">?</span>
+        {piece.moved && <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-red-200/80" />}
       </span>
     );
   }
   const meta = ROLE_META[piece.role];
-  const tone = piece.mine ? "bg-sky-100 text-slate-900 ring-1 ring-sky-900/20" : "bg-red-600/90 text-white ring-1 ring-black/20";
+  const rarity = piece.card?.rarity;
+  const mineTone = rarity
+    ? `border-[1.5px] ${RARITY_BORDER[rarity] ?? "border-white/30"} bg-gradient-to-b from-bg-raised to-bg-base text-accent-lime`
+    : "border-[1.5px] border-accent-lime/70 bg-gradient-to-b from-bg-raised to-bg-base text-accent-lime";
   return (
     <span
-      className={`relative ${base} ${tone} ${selected ? "scale-105 ring-2 ring-accent-lime" : ""} ${attackable ? "ring-2 ring-accent-lime" : ""}`}
+      className={`${base} ${piece.mine ? mineTone : enemyTone} ${focus}`}
       title={piece.card ? `${meta.label}: ${piece.card.display_name}` : meta.label}
     >
-      <span className="text-sm leading-none">{meta.glyph}</span>
-      {piece.power ? <span className="mt-0.5 font-mono text-[9px] font-bold">{piece.power}</span> : null}
-      {piece.mine && piece.revealed && <span className="absolute right-0.5 top-0.5 text-[8px]">👁</span>}
+      <RoleIcon role={piece.role} size={15} strokeWidth={2} />
+      {piece.power ? (
+        <span className={`font-mono text-[9px] font-bold ${piece.mine ? "text-ink-chalk" : "text-red-50"}`}>{piece.power}</span>
+      ) : null}
+      {piece.mine && piece.revealed && (
+        <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-red-400 ring-1 ring-bg-base" title="Соперник знает эту фишку" />
+      )}
+      {piece.card?.is_my_player && (
+        <span className="absolute -left-0.5 -top-0.5 rounded-full bg-accent-lime p-[1px] text-bg-base" title="Мой игрок">
+          <RoleIcon role="star" size={7} strokeWidth={3} />
+        </span>
+      )}
     </span>
   );
 }

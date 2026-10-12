@@ -19,6 +19,7 @@ class StrategoCardOut(BaseModel):
     image_path: Optional[str] = None
     rarity: str
     rating: int
+    is_my_player: bool = False
 
 
 class StrategoSquadSlotOut(BaseModel):
@@ -65,6 +66,11 @@ class StrategoInfoOut(BaseModel):
     reward_loss: int
     daily_limit: int
     rewarded_today: int
+    max_legendary: int = 0
+    max_diamond: int = 0
+    min_rare: int = 0
+    min_common: int = 0
+    my_player_xp: int = 0
 
 
 class StrategoPieceOut(BaseModel):
@@ -132,6 +138,8 @@ class StrategoMatchOut(BaseModel):
     reward_coins: int = 0
     rating_delta: int = 0
     stake_coins: int = 0
+    # XP «Мой игрок» earned in this match (0 if not fielded).
+    my_player_xp: int = 0
     # Only filled in once the match is over — mid-match it would leak the
     # total power of the opponent's hidden pieces.
     my_strength: Optional[int] = None

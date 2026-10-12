@@ -1912,6 +1912,7 @@ export interface StrategoCard {
   image_path: string | null;
   rarity: Rarity;
   rating: number;
+  is_my_player?: boolean;
 }
 
 export interface StrategoSquadSlot {
@@ -1950,6 +1951,11 @@ export interface StrategoInfo {
   reward_loss: number;
   daily_limit: number;
   rewarded_today: number;
+  max_legendary: number;
+  max_diamond: number;
+  min_rare: number;
+  min_common: number;
+  my_player_xp: number;
 }
 
 export interface StrategoPiece {
@@ -2010,6 +2016,7 @@ export interface StrategoMatch {
   reward_coins: number;
   rating_delta: number;
   stake_coins: number;
+  my_player_xp: number;
   my_strength: number | null;
   opponent_strength: number | null;
   created_at: string;

@@ -888,7 +888,7 @@ async def test_default_8x8_bot_match_has_16_pieces_and_lakes(client, db_session,
     assert roles["speedster_1"] in ("LW", "RW", "LM", "RM")
 
     body = (await client.post(f"{API}/matches/bot", headers=headers)).json()
-    assert body["board_size"] == 8 and body["move_limit"] == 120 and len(body["lakes"]) == 4
+    assert body["board_size"] == 8 and body["move_limit"] == 300 and len(body["lakes"]) == 4
     mine = [p for p in body["pieces"] if p["mine"]]
     assert len(mine) == 16
     if body["ply"] == 0:
@@ -990,3 +990,99 @@ async def test_admin_rejects_impossible_rarity_minimums(client, db_session, bot_
     auth = await _admin_auth(client, bot_token)
     resp = await client.put("/api/v1/admin/games/config", headers=auth, json={"stratego_min_rare_cards": 4, "stratego_min_common_cards": 3})
     assert resp.status_code == 409  # small test board has only 5 card pieces
+
+
+# ---------------------------------------------------------------------------
+# «Мой игрок» in Stratego
+# ---------------------------------------------------------------------------
+
+MY_LOOK = {"skin": 1, "hair": 2, "hair_color": 3, "beard": 0, "eye_color": 1, "kit": 4, "kit_pattern": 1}
+
+
+async def _with_my_player(client, db_session, bot_token, telegram_id):
+    headers, user, ids = await _player(client, db_session, bot_token, telegram_id)
+    created = await client.post("/api/v1/my-player", headers=headers, json={
+        "name": "Виктор Ж.", "number": 9, "position": "ST", "appearance": MY_LOOK,
+    })
+    assert created.status_code == 200, created.text
+    return headers, user, ids
+
+
+async def test_my_player_can_take_a_role_and_earns_xp(client, db_session, bot_token):
+    from app.services.my_player_service import card_id_for
+
+    await _set_config(db_session, stratego_my_player_xp=15)
+    headers, user, ids = await _with_my_player(client, db_session, bot_token, 970090)
+    mine_id = card_id_for(user.id)
+    squad = (await client.get(f"{API}/squad", headers=headers)).json()
+    option = next(o for o in squad["options"] if o["is_my_player"])
+    assert option["user_card_id"] == mine_id and option["rarity"] == "common"  # bronze frame
+
+    cards = {"star": ids[0], "tackler": ids[1], "speedster": ids[2], "provocateur": ids[3], "regular_1": mine_id}
+    saved = await client.put(f"{API}/squad", headers=headers, json={"cards": cards, "layout": squad["layout"]})
+    assert saved.status_code == 200, saved.text
+    assert next(s for s in saved.json()["card_slots"] if s["slot"] == "regular_1")["card"]["is_my_player"] is True
+
+    xp_before = (await get_user_by_telegram_id(db_session, 970090)).my_player_xp or 0
+    body = (await client.post(f"{API}/matches/bot", headers=headers)).json()
+    assert any(p["mine"] and p["card"] and p["card"].get("is_my_player") for p in body["pieces"])
+    end = await _win_by_cup(client, db_session, headers, body["id"])
+    assert end["result"] == "win" and end["my_player_xp"] == 15
+    db_session.expire_all()
+    xp_after = (await get_user_by_telegram_id(db_session, 970090)).my_player_xp
+    assert xp_after >= xp_before + 15  # + the usual per-reward XP for the coin reward
+
+    view = (await client.get("/api/v1/my-player", headers=headers)).json()
+    assert view["xp_stratego_match"] == 15
+
+
+async def test_my_player_gets_no_xp_when_owner_forfeits_or_not_fielded(client, db_session, bot_token):
+    headers, user, ids = await _with_my_player(client, db_session, bot_token, 970091)
+    user_id = user.id
+    # Auto squad: five stronger cards fill the five slots, the 52-rated
+    # bronze player stays on the bench.
+    body = (await client.post(f"{API}/matches/bot", headers=headers)).json()
+    assert not any(p["mine"] and p["card"] and p["card"].get("is_my_player") for p in body["pieces"])
+    end = await _win_by_cup(client, db_session, headers, body["id"])
+    assert end["my_player_xp"] == 0
+
+    from app.services.my_player_service import card_id_for
+    squad = (await client.get(f"{API}/squad", headers=headers)).json()
+    cards = {"star": ids[0], "tackler": ids[1], "speedster": ids[2], "provocateur": ids[3], "regular_1": card_id_for(user_id)}
+    await client.put(f"{API}/squad", headers=headers, json={"cards": cards, "layout": squad["layout"]})
+    second = (await client.post(f"{API}/matches/bot", headers=headers)).json()
+    quit_ = (await client.post(f"{API}/matches/{second['id']}/forfeit", headers=headers)).json()
+    assert quit_["my_player_xp"] == 0
+
+
+async def test_my_player_hidden_from_opponent_like_any_piece(client, db_session, bot_token):
+    headers_a, user_a, ids_a = await _with_my_player(client, db_session, bot_token, 970092)
+    from app.services.my_player_service import card_id_for
+    squad = (await client.get(f"{API}/squad", headers=headers_a)).json()
+    cards = {"star": ids_a[0], "tackler": ids_a[1], "speedster": ids_a[2], "provocateur": ids_a[3], "regular_1": card_id_for(user_a.id)}
+    await client.put(f"{API}/squad", headers=headers_a, json={"cards": cards, "layout": squad["layout"]})
+    headers_b, user_b, _ = await _player(client, db_session, bot_token, 970093, prefix="Bravo")
+    created = (await client.post(f"{API}/matches/challenge", headers=headers_a, json={"receiver_id": user_b.id})).json()
+    await client.post(f"{API}/matches/{created['id']}/accept", headers=headers_b)
+    body_b = (await client.get(f"{API}/matches/{created['id']}", headers=headers_b)).text
+    assert "Виктор" not in body_b and "is_my_player\":true" not in body_b.replace(" ", "")
+
+
+async def test_saved_squad_breaking_new_rarity_rules_is_repicked(client, db_session, bot_token):
+    headers = await _register(client, bot_token, 970095)
+    user = await get_user_by_telegram_id(db_session, 970095)
+    ids = await _give_cards(db_session, user.id, spec=[
+        (90, Position.ST, Rarity.epic), (70, Position.CB, Rarity.epic), (65, Position.LW, Rarity.epic),
+        (60, Position.CM, Rarity.epic), (55, Position.GK, Rarity.epic),
+        (50, Position.RB, Rarity.rare), (49, Position.ST, Rarity.common),
+    ])
+    squad = (await client.get(f"{API}/squad", headers=headers)).json()
+    cards = {"star": ids[0], "tackler": ids[1], "speedster": ids[2], "provocateur": ids[3], "regular_1": ids[4]}
+    assert (await client.put(f"{API}/squad", headers=headers, json={"cards": cards, "layout": squad["layout"]})).status_code == 200
+    # The admin now demands a rare and a common card: the saved all-epic squad
+    # is re-picked instead of leaving the player stuck.
+    await _set_config(db_session, stratego_min_rare_cards=1, stratego_min_common_cards=1)
+    squad = (await client.get(f"{API}/squad", headers=headers)).json()
+    assert squad["is_complete"] is True and squad["violations"] == []
+    picked = {s["card"]["user_card_id"] for s in squad["card_slots"]}
+    assert ids[5] in picked and ids[6] in picked

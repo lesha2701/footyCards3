@@ -6,6 +6,8 @@ import { fetchStrategoSquad, saveStrategoSquad } from "@/api/stratego";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronLeft } from "@/components/icons";
 import { CELL_LINES, GRASS_STYLE } from "@/components/stratego/boardStyle";
+import RoleIcon from "@/components/stratego/RoleIcon";
+import { PieceChip } from "@/components/stratego/StrategoBoard";
 import { ROLE_META, autoLayout, roleOfSlot, slotLabel } from "@/components/stratego/strategoMeta";
 import { formatGameError } from "@/lib/errors";
 import type { StrategoCard, StrategoSquad } from "@/types";
@@ -142,11 +144,13 @@ export default function StrategoSquadPage() {
               onClick={() => setPickerSlot(s.slot)}
               className="flex items-center gap-3 rounded-2xl bg-bg-surface p-3 text-left active:scale-[0.98]"
             >
-              <span className="text-xl">{meta.glyph}</span>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-bg-raised text-accent-lime">
+                <RoleIcon role={s.role} size={20} />
+              </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold text-ink-chalk">{slotLabel(s.slot)}</span>
+                <span className="block text-sm font-bold text-ink-chalk" title={meta.hint}>{slotLabel(s.slot)}</span>
                 <span className="block truncate text-[11px] text-ink-mist">
-                  {card ? `${card.display_name} · ${card.position}` : "Не выбрана"}
+                  {card ? `${card.is_my_player ? "Мой игрок: " : ""}${card.display_name} · ${card.position}` : "Не выбрана"}
                 </span>
               </span>
               {card && <span className="font-mono text-sm font-bold text-ink-chalk">{card.rating}</span>}
@@ -159,14 +163,14 @@ export default function StrategoSquadPage() {
         <div className="flex items-center justify-between">
           <h2 className="font-mono text-[11px] uppercase tracking-wider text-ink-mist">Расстановка</h2>
           <button onClick={onAuto} className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-accent-lime active:scale-95">
-            🎲 Авто
+            Авто
           </button>
         </div>
         <p className="text-[11px] text-ink-mist-dim">
           Верхний ряд — ближний к сопернику. Нажми фишку, потом клетку — фишки поменяются местами.
         </p>
         <div
-          className="grid w-full overflow-hidden rounded-2xl border-2 border-white/25 shadow-lg"
+          className="grid w-full overflow-hidden rounded-2xl border border-white/10 p-1 shadow-glow"
           style={{ ...GRASS_STYLE, gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
         >
           {[0, 1].flatMap((r) =>
@@ -183,10 +187,13 @@ export default function StrategoSquadPage() {
                   }`}
                 >
                   {role && (
-                    <span className="flex h-[88%] w-[88%] flex-col items-center justify-center rounded-md bg-sky-100 text-slate-900 shadow-md ring-1 ring-sky-900/20">
-                      <span className="text-sm leading-none">{ROLE_META[role].glyph}</span>
-                      {card && <span className="mt-0.5 font-mono text-[9px] font-bold">{card.rating}</span>}
-                    </span>
+                    <PieceChip
+                      selected={slot === selectedSlot}
+                      piece={{
+                        id: r * size + c, mine: true, row: r, col: c, hidden: false, revealed: false, moved: false,
+                        role, power: card?.rating ?? null, card: card ?? null,
+                      }}
+                    />
                   )}
                 </button>
               );
@@ -253,7 +260,10 @@ function CardPicker({
                 c.user_card_id === currentId ? "bg-accent-green/20" : "bg-white/5"
               } ${fits(c) ? "text-ink-chalk" : "text-ink-mist-dim"}`}
             >
-              <span className="truncate">{c.display_name} · {c.position}</span>
+              <span className="truncate">
+                {c.is_my_player && <span className="mr-1 rounded bg-accent-lime px-1 text-[10px] font-bold text-bg-base">Мой игрок</span>}
+                {c.display_name} · {c.position}
+              </span>
               <span className="font-mono font-bold">{c.rating}</span>
             </button>
           ))}

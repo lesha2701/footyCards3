@@ -19,7 +19,7 @@ const GRASS_BLADES = svgUrl(
 
 /** One uniform turf colour with texture, plus a soft floodlight vignette. */
 export const GRASS_STYLE: CSSProperties = {
-  backgroundColor: "#3b8a3e",
+  backgroundColor: "#2f7a3c",
   backgroundImage: [
     GRASS_BLADES,
     GRASS_NOISE,
@@ -28,4 +28,4 @@ export const GRASS_STYLE: CSSProperties = {
 };
 
 /** Chalk-line grid cell border shared by the match board and the placement editor. */
-export const CELL_LINES = "border-[0.5px] border-white/15";
+export const CELL_LINES = "border-[0.5px] border-white/[0.07]";

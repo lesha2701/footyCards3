@@ -29,7 +29,7 @@ const player: MyPlayer = {
 
 const baseView: MyPlayerView = {
   enabled: true, balance: 5000, player: null, xp: 0, level: 1, xp_into_level: 0, xp_for_next: 100, xp_today: 0,
-  xp_daily_cap: 200, xp_per_reward: 10, xp_career_match: 15, points_available: 0, points_per_level: 4,
+  xp_daily_cap: 200, xp_per_reward: 10, xp_career_match: 15, xp_stratego_match: 15, points_available: 0, points_per_level: 4,
   rating_cap: 88, at_rating_cap: false, tier_thresholds: [65, 75, 85],
   appearance_options: { skin: 6, hair: 14, hair_color: 7, beard: 5, eye_color: 6, kit: 10, kit_pattern: 4 },
   attr_labels: { atk: "Атака", def: "Защита" },

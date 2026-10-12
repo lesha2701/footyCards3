@@ -56,7 +56,7 @@ from app.schemas.stratego import (
     StrategoSquadSlotOut,
     StrategoStatsOut,
 )
-from app.services import ranking_service
+from app.services import my_player_service, ranking_service
 from app.services import stratego_engine as engine
 from app.services.game_config_service import get_config
 from app.services.match_service import BOT_NAMES
@@ -99,6 +99,22 @@ def _player_info(player: Player, user_card_id: Optional[int] = None, diamond_bon
 
 def _card_info(card: UserCard) -> dict:
     return _player_info(card.player, card.id, card.diamond_rating_bonus)
+
+
+def _my_player_info(card) -> dict:
+    """«Мой игрок» as a Stratego piece: power = its rating, rarity = its frame
+    (bronze→common … legend→legendary, my_player_service.TIER_RARITY), so it
+    counts toward the squad rarity rules like any card."""
+    player = card.player
+    return {
+        "power": player.rating,
+        "rarity_rank": RARITY_ORDER[player.rarity],
+        "card": {
+            "user_card_id": card.id, "player_id": card.player_id, "display_name": player.display_name,
+            "position": player.position.value, "image_path": None, "rarity": player.rarity.value,
+            "rating": player.rating, "is_my_player": True,
+        },
+    }
 
 
 def _sort_key(info: dict) -> tuple:
@@ -228,6 +244,15 @@ async def _usable_cards(db: AsyncSession, user_id: int) -> list[UserCard]:
     return list(result.unique().scalars().all())
 
 
+async def _usable_infos(db: AsyncSession, user_id: int) -> list[dict]:
+    """The user's cards plus «Мой игрок» (when created and the feature is on)."""
+    infos = [_card_info(c) for c in await _usable_cards(db, user_id)]
+    mine = await my_player_service.engine_card(db, user_id)
+    if mine is not None:
+        infos.append(_my_player_info(mine))
+    return infos
+
+
 def _layout_rng(user_id: int) -> random.Random:
     # Deterministic per user so repeated GETs of a not-yet-saved layout show
     # the same auto placement instead of reshuffling on every refetch.
@@ -239,7 +264,7 @@ async def _resolve_squad(
 ) -> tuple[dict[str, dict], dict[str, list[int]], list[dict]]:
     slots = engine.all_slots(counts)
     cslots = engine.card_slots(counts)
-    infos = [_card_info(c) for c in await _usable_cards(db, user.id)]
+    infos = await _usable_infos(db, user.id)
     by_card_id = {i["card"]["user_card_id"]: i for i in infos}
 
     saved = user.stratego_squad or {}
@@ -251,6 +276,12 @@ async def _resolve_squad(
     if any(v.startswith("Максимум") for v in rarity_violations(list(fixed.values()), rules)):
         fixed = {}  # saved picks break a cap (e.g. the admin lowered it) — re-pick
     cards = _auto_assign(infos, cslots, fixed, rules)
+    if fixed and rarity_violations(list(cards.values()), rules):
+        # Saved picks predate the rules (or the collection changed): prefer a
+        # fresh pick that satisfies them over keeping an unplayable squad.
+        fresh = _auto_assign(infos, cslots, None, rules)
+        if len(fresh) == len(cslots) and not rarity_violations(list(fresh.values()), rules):
+            cards = fresh
     layout = engine.repair_layout(saved.get("layout"), slots, board_size, _layout_rng(user.id))
     return cards, layout, infos
 
@@ -300,7 +331,7 @@ async def set_squad(db: AsyncSession, user: User, cards: dict[str, int], layout:
         raise ConflictError("Выбери карточку для каждой роли")
     if len(set(cards.values())) != len(cslots):
         raise ConflictError("Одна карточка не может играть две роли")
-    infos = [_card_info(c) for c in await _usable_cards(db, user.id)]
+    infos = await _usable_infos(db, user.id)
     by_card_id = {i["card"]["user_card_id"]: i for i in infos}
     chosen: dict[str, dict] = {}
     for slot, card_id in cards.items():
@@ -357,6 +388,9 @@ async def get_info(db: AsyncSession, user: User) -> StrategoInfoOut:
         reward_win=config.stratego_reward_win, reward_draw=config.stratego_reward_draw,
         reward_loss=config.stratego_reward_loss, daily_limit=config.stratego_daily_limit,
         rewarded_today=user.stratego_rewarded_attempts_today if reset_day == local_today() else 0,
+        max_legendary=config.stratego_max_legendary_cards, max_diamond=config.stratego_max_diamond_cards,
+        min_rare=config.stratego_min_rare_cards, min_common=config.stratego_min_common_cards,
+        my_player_xp=config.stratego_my_player_xp,
     )
 
 
@@ -888,6 +922,24 @@ async def _finish_match(
         else:
             match.opponent_reward_coins = reward
 
+    # «Мой игрок» earns XP for every finished match it was fielded in (not
+    # when its owner quit), within the usual daily XP cap.
+    my_player_xp = {"user": 0, "opponent": 0}
+    for side in engine.SIDES:
+        uid = side_uid[side]
+        if uid is None or (side == "opponent" and match.opponent_type == StrategoOpponentType.bot):
+            continue
+        if loser_quit and side != winner:
+            continue
+        mine_id = my_player_service.card_id_for(uid)
+        fielded = any(
+            p["side"] == side and p.get("card") and p["card"].get("user_card_id") == mine_id for p in state["pieces"]
+        )
+        if fielded:
+            my_player_xp[side] = my_player_service.add_xp(locked[uid], config.stratego_my_player_xp, config)
+            db.add(locked[uid])
+    state["my_player_xp"] = my_player_xp
+
     # Rating: friend matches move nothing (alt-account farming), online
     # matchmaking counts double, bot and chat challenges count as is.
     multiplier = {
@@ -1084,6 +1136,7 @@ async def _hydrate_match(db: AsyncSession, match: StrategoMatch, viewer_user: Us
         history=history, result=result, win_reason=match.win_reason,
         reward_coins=match.user_reward_coins if viewer == "user" else match.opponent_reward_coins,
         rating_delta=match.user_rating_delta if viewer == "user" else match.opponent_rating_delta,
+        my_player_xp=(state.get("my_player_xp") or {}).get(viewer, 0),
         stake_coins=match.stake_coins,
         my_strength=final.get(viewer) if finished else None,
         opponent_strength=final.get(engine.other_side(viewer)) if finished else None,

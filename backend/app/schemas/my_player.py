@@ -82,6 +82,7 @@ class MyPlayerViewOut(BaseModel):
     xp_daily_cap: int
     xp_per_reward: int
     xp_career_match: int
+    xp_stratego_match: int = 0
     points_available: int
     points_per_level: int
     rating_cap: int

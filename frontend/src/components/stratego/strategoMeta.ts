@@ -1,13 +1,13 @@
 import type { StrategoPiece, StrategoRole } from "@/types";
 
-export const ROLE_META: Record<StrategoRole, { label: string; glyph: string; hint: string }> = {
-  cup: { label: "Кубок", glyph: "🏆", hint: "Не ходит. Захватят — матч проигран" },
-  wall: { label: "Стенка", glyph: "🧱", hint: "Не ходит. Сносит любого атакующего, кроме Подкатчика" },
-  star: { label: "Звезда", glyph: "⭐", hint: "Самая сильная карта. Уязвима только для атаки Провокатора" },
-  tackler: { label: "Подкатчик", glyph: "🦵", hint: "Единственный, кто разбивает Стенку" },
-  provocateur: { label: "Провокатор", glyph: "🎭", hint: "Атакуя, выбивает Звезду" },
-  speedster: { label: "Скорость", glyph: "⚡", hint: "Бежит на любое расстояние по прямой" },
-  regular: { label: "Игрок", glyph: "👟", hint: "Бьётся рейтингом" },
+export const ROLE_META: Record<StrategoRole, { label: string; hint: string }> = {
+  cup: { label: "Кубок", hint: "Не ходит. Захватят — матч проигран" },
+  wall: { label: "Стенка", hint: "Не ходит. Атаковавший её выбывает — кроме Подкатчика, который её сносит" },
+  star: { label: "Звезда", hint: "Самая сильная карта состава. Проигрывает только атаке Провокатора" },
+  tackler: { label: "Подкатчик", hint: "Единственный, кто разбивает Стенку; в остальном бьётся рейтингом" },
+  provocateur: { label: "Провокатор", hint: "Если сам атакует Звезду — выбивает её; в остальном бьётся рейтингом" },
+  speedster: { label: "Скорость", hint: "Ходит на любое число свободных клеток по прямой и может атаковать в конце хода" },
+  regular: { label: "Игрок", hint: "Ходит на одну клетку, бьётся рейтингом" },
 };
 
 export function roleOfSlot(slot: string): StrategoRole {

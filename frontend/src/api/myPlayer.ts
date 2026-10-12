@@ -92,6 +92,7 @@ export interface MyPlayerView {
   xp_daily_cap: number;
   xp_per_reward: number;
   xp_career_match: number;
+  xp_stratego_match: number;
   points_available: number;
   points_per_level: number;
   rating_cap: number;

@@ -14,6 +14,7 @@ import ConfirmDialog from "@/components/common/ConfirmDialog";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { IconChevronLeft, IconCoin } from "@/components/icons";
+import RoleIcon from "@/components/stratego/RoleIcon";
 import StrategoBoard from "@/components/stratego/StrategoBoard";
 import { ROLE_META, WIN_REASON_LABELS, legalTargets } from "@/components/stratego/strategoMeta";
 import { formatGameError } from "@/lib/errors";
@@ -134,7 +135,8 @@ export default function StrategoMatchPage() {
 
       {selected?.card && (
         <p className="text-center text-[11px] text-ink-mist">
-          {ROLE_META[selected.role!].glyph} {ROLE_META[selected.role!].label}: {selected.card.display_name} ({selected.card.position}, {selected.power})
+          <RoleIcon role={selected.role!} size={12} className="mr-1 inline align-[-2px] text-accent-lime" />
+          {ROLE_META[selected.role!].label}: {selected.card.display_name} ({selected.card.position}, {selected.power})
           {" · "}{ROLE_META[selected.role!].hint}
         </p>
       )}
@@ -164,7 +166,7 @@ export default function StrategoMatchPage() {
 }
 
 function pieceName(p: StrategoCombatPiece) {
-  return `${ROLE_META[p.role].glyph} ${ROLE_META[p.role].label}${p.card ? ` ${p.card.display_name} (${p.power})` : ""}`;
+  return `${ROLE_META[p.role].label}${p.card ? ` ${p.card.display_name} (${p.power})` : ""}`;
 }
 
 function CombatBanner({ move }: { move: StrategoMove }) {
@@ -241,6 +243,7 @@ function ResultPanel({ match }: { match: StrategoMatch }) {
         )}
       </p>
       {match.stake_coins > 0 && <p className="text-[11px] text-ink-mist-dim">Ставка: {match.stake_coins} с каждой стороны</p>}
+      {match.my_player_xp > 0 && <p className="text-[11px] text-accent-lime">Мой игрок: +{match.my_player_xp} опыта</p>}
       <p className="text-[11px] text-ink-mist-dim">Все фишки соперника раскрыты</p>
     </div>
   );

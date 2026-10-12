@@ -319,20 +319,22 @@ class GameConfig(TimestampMixin, Base):
     stratego_regular_count: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
     # Total plies (both sides' moves together); reaching it ends the match on
     # remaining strength (sum of power of surviving mobile pieces).
-    stratego_move_limit: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
+    stratego_move_limit: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
     # Squad composition rules over the card pieces (see stratego_service.rarity_violations).
     stratego_max_legendary_cards: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     stratego_max_diamond_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     stratego_min_rare_cards: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     stratego_min_common_cards: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # XP for «Мой игрок» per finished match it was fielded in (daily XP cap applies).
+    stratego_my_player_xp: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     stratego_challenge_expiry_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
     stratego_move_timeout_hours: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
     # Consecutive timed-out moves auto-played for one side before that side
     # forfeits — keeps an absent player from being carried by the autopilot.
     stratego_max_auto_moves: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
-    stratego_reward_win: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
-    stratego_reward_draw: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
-    stratego_reward_loss: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    stratego_reward_win: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    stratego_reward_draw: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    stratego_reward_loss: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
     stratego_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
 
     match_max_diamond_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
