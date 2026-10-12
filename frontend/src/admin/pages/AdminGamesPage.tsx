@@ -80,7 +80,8 @@ export default function AdminGamesPage() {
       | "career_enabled"
       | "career_reminders_enabled"
       | "my_player_enabled"
-      | "player_career_enabled",
+      | "player_career_enabled"
+      | "chemistry_enabled",
     label: string,
   ) => (
     <label className="flex items-center gap-2 text-sm">
@@ -224,6 +225,32 @@ export default function AdminGamesPage() {
           {field("club_position_match_reward_min", "Минимальная награда")}
           {field("club_position_match_penalty_per_mistake", "Штраф за ошибку")}
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Химия карточек</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Связи между соседями в схеме Card Arena и турниров игроков: один клуб и страна — сильная связь, клуб или
+          страна — средняя. Выключено — старая формула (бонус за самый частый клуб/страну) без изменений. Уже начатые
+          матчи Арены и турниры игроков доигрываются по правилам, действовавшим на их старте. FUT Draft всегда считает
+          химию по-своему (настройки в блоке FUT Draft).
+        </p>
+        <div className="mb-3">{toggle("chemistry_enabled", "Включить химию связей")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("chemistry_link_strong", "Сильная связь, очков")}
+          {field("chemistry_link_medium", "Средняя связь, очков")}
+          {field("chemistry_threshold_1", "Порог 1-го очка (сумма связей)")}
+          {field("chemistry_threshold_2", "Порог 2-го очка")}
+          {field("chemistry_threshold_3", "Порог 3-го очка")}
+          {field("chemistry_player_max", "Максимум химии игрока (0–3)")}
+          {field("chemistry_player_floor", "Пол химии для игрока на своей позиции")}
+          {field("chemistry_rating_per_point", "+ рейтинга в матче за очко химии")}
+          {field("chemistry_off_position_penalty", "Штраф рейтинга не на своей позиции")}
+        </div>
+        <p className="mt-2 text-[11px] text-slate-500">
+          Подбор значений: <code>python -m scripts.compare_chemistry --synthetic 2000</code> в backend сравнивает силу
+          существующих составов по старой и новой формуле.
+        </p>
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">

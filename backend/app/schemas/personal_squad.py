@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+from app.schemas.chemistry import ChemistryOut
 from app.schemas.lineup import EquippedCoachOut, EquippedStadiumOut
 from app.schemas.player import PlayerOut
 
@@ -53,3 +54,4 @@ class PersonalSquadOut(BaseModel):
     slots: list[PersonalSquadSlotOut]
     coach: EquippedCoachOut | None = None
     stadium: EquippedStadiumOut | None = None
+    chemistry: ChemistryOut = ChemistryOut()

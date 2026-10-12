@@ -363,6 +363,16 @@ class GameConfigOut(BaseModel):
     card_skill_replace_token_cost: int = 1
     card_skill_replace_coin_cost: int = 300
     ptour_place_skill_tokens: list[Optional[PlaceSkillTokenReward]] = []
+    chemistry_enabled: bool = False
+    chemistry_link_strong: int = 2
+    chemistry_link_medium: int = 1
+    chemistry_threshold_1: int = 1
+    chemistry_threshold_2: int = 2
+    chemistry_threshold_3: int = 4
+    chemistry_player_max: int = 3
+    chemistry_player_floor: int = 0
+    chemistry_rating_per_point: int = 1
+    chemistry_off_position_penalty: int = 0
 
 
 class GameConfigUpdate(BaseModel):
@@ -601,6 +611,16 @@ class GameConfigUpdate(BaseModel):
     card_skill_replace_token_cost: Optional[int] = Field(default=None, ge=0, le=100)
     card_skill_replace_coin_cost: Optional[int] = Field(default=None, ge=0)
     ptour_place_skill_tokens: Optional[list[Optional[PlaceSkillTokenReward]]] = Field(default=None, max_length=16)
+    chemistry_enabled: Optional[bool] = None
+    chemistry_link_strong: Optional[int] = Field(default=None, ge=0, le=10)
+    chemistry_link_medium: Optional[int] = Field(default=None, ge=0, le=10)
+    chemistry_threshold_1: Optional[int] = Field(default=None, ge=0, le=40)
+    chemistry_threshold_2: Optional[int] = Field(default=None, ge=0, le=40)
+    chemistry_threshold_3: Optional[int] = Field(default=None, ge=0, le=40)
+    chemistry_player_max: Optional[int] = Field(default=None, ge=0, le=3)
+    chemistry_player_floor: Optional[int] = Field(default=None, ge=0, le=3)
+    chemistry_rating_per_point: Optional[int] = Field(default=None, ge=0, le=10)
+    chemistry_off_position_penalty: Optional[int] = Field(default=None, ge=0, le=20)
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod

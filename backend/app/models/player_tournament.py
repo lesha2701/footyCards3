@@ -19,6 +19,10 @@ class PlayerTournament(Base):
     )
     rounds_simulated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    # ChemistryRules.as_dict() frozen when the tournament starts; NULL = the
+    # neighbour-link chemistry was off then (incl. every tournament that
+    # predates it), and stays off for this tournament's whole run.
+    chemistry_rules: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (
         CheckConstraint("rounds_simulated >= 0 AND rounds_simulated <= 30", name="ck_player_tournaments_rounds_range"),

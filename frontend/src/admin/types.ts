@@ -321,6 +321,16 @@ export interface GameConfig {
   card_skill_replace_coin_cost: number;
   /** Player-tournament place rewards in skill tokens; index 0 = 1st place. */
   ptour_place_skill_tokens: ({ skill_code: string; quantity: number } | null)[];
+  chemistry_enabled: boolean;
+  chemistry_link_strong: number;
+  chemistry_link_medium: number;
+  chemistry_threshold_1: number;
+  chemistry_threshold_2: number;
+  chemistry_threshold_3: number;
+  chemistry_player_max: number;
+  chemistry_player_floor: number;
+  chemistry_rating_per_point: number;
+  chemistry_off_position_penalty: number;
 }
 
 export interface AdminSkillLedgerEntry {

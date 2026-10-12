@@ -138,10 +138,10 @@ async def test_failing_tournament_does_not_abort_others(client, db_session, bot_
 
     real_play = sim._play_match
 
-    async def flaky(db, user_a_id, user_b_id, names, config):
+    async def flaky(db, user_a_id, user_b_id, names, config, **kwargs):
         if user_a_id in bad_ids:
             raise ValueError("boom")
-        return await real_play(db, user_a_id, user_b_id, names, config)
+        return await real_play(db, user_a_id, user_b_id, names, config, **kwargs)
 
     monkeypatch.setattr(sim, "_play_match", flaky)
     matches = await simulate_next_round(db_session)

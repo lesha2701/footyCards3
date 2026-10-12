@@ -486,6 +486,48 @@ export interface Lineup {
   coach: EquippedCoach | null;
   stadium: EquippedStadium | null;
   slots: LineupSlot[];
+  chemistry?: ChemistryOut;
+}
+
+export type ChemistryLinkLevel = "strong" | "medium" | "none";
+
+export interface ChemistryRules {
+  link_strong: number;
+  link_medium: number;
+  thresholds: number[];
+  player_max: number;
+  player_floor: number;
+  rating_per_point: number;
+  off_position_penalty: number;
+}
+
+export interface ChemistryLink {
+  a: string;
+  b: string;
+  level: ChemistryLinkLevel;
+  points: number;
+}
+
+export interface PlayerChemistry {
+  slot_code: string;
+  points: number;
+  link_sum: number;
+  on_position: boolean;
+  rating_bonus: number;
+}
+
+/** Neighbour-link chemistry of a lineup (backend services/chemistry_service.py).
+ * enabled=false: the mechanic is off, only strength_bonus (old flat bonus) is set. */
+export interface ChemistryOut {
+  enabled: boolean;
+  strength_bonus: number | null;
+  formation: string | null;
+  team: number;
+  team_max: number;
+  links: ChemistryLink[];
+  players: PlayerChemistry[];
+  adjacency: [string, string][];
+  rules: ChemistryRules | null;
 }
 
 export interface MatchEvent {
@@ -1597,6 +1639,7 @@ export interface PersonalSquad {
   slots: PersonalSquadSlot[];
   coach: EquippedCoach | null;
   stadium: EquippedStadium | null;
+  chemistry?: ChemistryOut;
 }
 
 export type PlayerTournamentStatus = "not_queued" | "queued" | "active" | "completed";

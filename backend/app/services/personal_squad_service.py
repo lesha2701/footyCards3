@@ -15,8 +15,11 @@ from app.schemas.personal_squad import (
     PersonalSquadCoachRequest, PersonalSquadOut, PersonalSquadSetRequest, PersonalSquadSlotOut,
     PersonalSquadStadiumRequest, PersonalSquadTacticsRequest,
 )
+from app.services import chemistry_service
+from app.services.chemistry_service import ChemistryRules
 from app.services.club_formation_service import CLUB_FORMATIONS, get_formation_slots
 from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES
+from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot
 
 TEMPLATE_COUNT = 5
@@ -101,11 +104,12 @@ def _slots_by_code(formation: str) -> dict[str, FormationSlot]:
     return {s.code: s for s in get_formation_slots(formation)}
 
 
-def _serialize(squad: PersonalSquad) -> PersonalSquadOut:
+def _serialize(squad: PersonalSquad, rules: ChemistryRules | None = None) -> PersonalSquadOut:
     # Same ownership rule as resolve_active_squad: a traded-away card is not shown.
     by_slot = {c.slot_code: c.user_card for c in squad.cards if c.user_card.owner_id == squad.user_id}
     slots = []
-    for slot in get_formation_slots(squad.formation):
+    formation_slots = get_formation_slots(squad.formation)
+    for slot in formation_slots:
         card = by_slot.get(slot.code)
         slots.append(PersonalSquadSlotOut(
             slot_code=slot.code, category=slot.category, ideal_position=slot.ideal_position.value,
@@ -135,19 +139,33 @@ def _serialize(squad: PersonalSquad) -> PersonalSquadOut:
         is_complete=all(s.user_card_id is not None for s in slots),
         formation=squad.formation, mentality=squad.mentality, playstyle=squad.playstyle,
         slots=slots, coach=coach, stadium=stadium,
+        # No single team-strength number in this mode (the tournament engine
+        # works on per-card ratings and zones), so no strength_bonus either.
+        chemistry=chemistry_service.to_out(
+            chemistry_service.compute_chemistry(
+                [(by_slot[s.code], s) for s in formation_slots if s.code in by_slot], squad.formation, rules,
+                slot_count=len(formation_slots),
+            ) if rules is not None else None,
+            rules,
+        ),
     )
 
 
+async def _rules(db: AsyncSession) -> ChemistryRules | None:
+    return chemistry_service.active_rules(await get_config(db))
+
+
 async def _out(db: AsyncSession, user_id: int, template_index: int) -> PersonalSquadOut:
-    return _serialize(await _get_row(db, user_id, template_index))
+    return _serialize(await _get_row(db, user_id, template_index), await _rules(db))
 
 
 async def list_templates(db: AsyncSession, user: User) -> list[PersonalSquadOut]:
-    return [_serialize(t) for t in await _ensure_templates(db, user.id)]
+    rules = await _rules(db)
+    return [_serialize(t, rules) for t in await _ensure_templates(db, user.id)]
 
 
 async def get_squad(db: AsyncSession, user: User, template_index: int | None = None) -> PersonalSquadOut:
-    return _serialize(await _get_row(db, user.id, template_index))
+    return _serialize(await _get_row(db, user.id, template_index), await _rules(db))
 
 
 async def set_squad_cards(

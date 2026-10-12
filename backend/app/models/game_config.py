@@ -426,3 +426,25 @@ class GameConfig(TimestampMixin, Base):
     # Player-tournament place rewards in skill tokens: index 0 = 1st place;
     # each entry is null or {"skill_code": str, "quantity": int}. Empty = none.
     ptour_place_skill_tokens: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+
+    # --- «Химия карточек» (services/chemistry_service.py) ---
+    # Off = every mode keeps the old flat club/country bonus byte-for-byte.
+    # On = Card Arena lineups and player-tournament squads use neighbour
+    # links instead (FUT Draft always keeps its own formula). Only NEW
+    # matches/rounds read it: an Arena match freezes its strengths at start.
+    chemistry_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Link value between two adjacent slots: same club AND country / one of them.
+    chemistry_link_strong: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    chemistry_link_medium: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # A player's link sum reaching each threshold = +1 chemistry point.
+    chemistry_threshold_1: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    chemistry_threshold_2: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    chemistry_threshold_3: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    chemistry_player_max: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Minimum chemistry of an on-position player («пол для новичков»).
+    chemistry_player_floor: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Match-rating points per chemistry point (the card's shown rating is untouched).
+    chemistry_rating_per_point: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Extra match-rating penalty off the slot's ideal position (on top of the
+    # existing 0.9/0.75 position fit, so 0 = no double penalty by default).
+    chemistry_off_position_penalty: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

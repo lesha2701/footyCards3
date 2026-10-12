@@ -3,6 +3,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 from app.schemas.card import UserCardOut
+from app.schemas.chemistry import ChemistryOut
 from app.schemas.coach import CoachBoostOut
 from app.schemas.pack import UserCoachCardOut, UserStadiumCardOut  # noqa: F401 - re-exported (lineup_service)
 
@@ -54,6 +55,7 @@ class LineupOut(BaseModel):
     coach: Optional[EquippedCoachOut] = None
     stadium: Optional[EquippedStadiumOut] = None
     slots: list[LineupSlotOut]
+    chemistry: ChemistryOut = ChemistryOut()
 
 
 class LineupSlotIn(BaseModel):

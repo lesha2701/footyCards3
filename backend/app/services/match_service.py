@@ -22,7 +22,7 @@ from app.schemas.match import (
 )
 from app.schemas.lineup import LineupOut
 from app.schemas.ranking import RankingMetric
-from app.services import bingo_service, league_service, ranking_service, task_service
+from app.services import bingo_service, chemistry_service, league_service, ranking_service, task_service
 from app.services.card_skill_effects import SNAPSHOT_VERSION, effect_for_card, effect_of, skill_roll
 from app.services.game_config_service import get_config
 from app.services.lineup_service import TACTIC_MULTIPLIERS, get_active_lineup, split_strength
@@ -76,7 +76,17 @@ def _with_jitter(strength: int) -> int:
 
 
 def _category_avg(lineup: LineupOut, category: str) -> int:
-    ratings = [slot.card.player.rating for slot in lineup.slots if slot.category == category and slot.card]
+    # Neighbour-link chemistry (only present while GameConfig.chemistry_enabled
+    # is on) adds each card's own bonus to its match rating here as well, so
+    # the moment rolls see the same chemistry the team strength does; the
+    # result is frozen into server_state["ratings"] at kickoff. getattr: FUT
+    # Draft passes its own lineup stand-in (no chemistry, no slot_code).
+    chemistry = getattr(lineup, "chemistry", None)
+    bonus = {p.slot_code: p.rating_bonus for p in chemistry.players} if chemistry is not None and chemistry.enabled else {}
+    ratings = [
+        chemistry_service.boosted_rating(slot.card.player.rating, bonus.get(slot.slot_code, 0) if bonus else 0)
+        for slot in lineup.slots if slot.category == category and slot.card
+    ]
     return round(sum(ratings) / len(ratings)) if ratings else 70
 
 
@@ -800,6 +810,13 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
         "cards": {},
         "red_card_applied": False,
         "skills": build_skill_snapshot(lineup, opponent_lineup, config),
+        # Audit only: the chemistry already sits inside the frozen strengths
+        # and ratings above, nothing re-reads it mid-match.
+        "chemistry": {
+            "user": lineup.chemistry.team if lineup.chemistry.enabled else None,
+            "opponent": opponent_lineup.chemistry.team if opponent_lineup is not None and opponent_lineup.chemistry.enabled else None,
+            "max": lineup.chemistry.team_max if lineup.chemistry.enabled else None,
+        },
     }
 
     match = Match(

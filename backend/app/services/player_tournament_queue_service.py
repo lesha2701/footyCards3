@@ -9,7 +9,8 @@ from app.models.player_tournament import (
 )
 from app.models.user import User
 from app.schemas.player_tournament import PlayerTournamentApplyResult, PlayerTournamentCurrentOut
-from app.services import personal_squad_service
+from app.services import chemistry_service, personal_squad_service
+from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 from app.services.player_tournament_fixture_service import TOURNAMENT_SIZE
 
@@ -88,7 +89,10 @@ async def apply_to_tournament(db: AsyncSession, user: User) -> PlayerTournamentA
         await db.commit()
         return PlayerTournamentApplyResult(queued=True, queue_position=len(entries), queue_size=TOURNAMENT_SIZE)
 
-    tournament = PlayerTournament()
+    # Chemistry rules are frozen for the tournament's whole run: toggling or
+    # retuning GameConfig later only affects tournaments that start after it.
+    rules = chemistry_service.active_rules(await get_config(db))
+    tournament = PlayerTournament(chemistry_rules=rules.as_dict() if rules is not None else None)
     db.add(tournament)
     await db.flush()
     for entry in entries:

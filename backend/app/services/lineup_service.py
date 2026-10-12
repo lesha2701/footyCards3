@@ -14,10 +14,13 @@ from app.models.lineup import Lineup, LineupCard
 from app.models.user import User
 from app.models.user_coach_card import UserCoachCard
 from app.models.user_stadium_card import UserStadiumCard
+from app.schemas.chemistry import ChemistryOut, ChemistryPreviewRequest
 from app.schemas.lineup import (
     EquippedCoachOut, EquippedStadiumOut, LineupCoachSetRequest, LineupOut, LineupSetRequest, LineupSlotOut,
     LineupStadiumSetRequest, UserCoachCardOut, UserStadiumCardOut,
 )
+from app.services import chemistry_service
+from app.services.chemistry_service import ChemistryResult
 from app.services.coach_boost_service import arena_rarity_team_strength_bonus
 from app.services.game_config_service import get_config
 from app.services.player_stats_service import effective_card_stats
@@ -66,6 +69,10 @@ FORMATION_SLOTS: list[FormationSlot] = [
     FormationSlot("FWD3", "FWD", Position.RW),
 ]
 SLOTS_BY_CODE = {s.code: s for s in FORMATION_SLOTS}
+# Card Arena lineups only ever use FORMATION_SLOTS (Lineup.formation is always
+# "4-3-3"); its codes match club_formation_service's 4-3-3, which is what
+# chemistry_service.FORMATION_LINKS is keyed by.
+ARENA_FORMATION = "4-3-3"
 
 # tactic -> (attack_multiplier, defense_multiplier)
 TACTIC_MULTIPLIERS: dict[str, tuple[float, float]] = {
@@ -167,12 +174,31 @@ async def _get_template_row(db: AsyncSession, user_id: int, template_index: int 
     return next(t for t in templates if t.template_index == template_index)
 
 
+def legacy_chemistry_bonus(cards_with_slots: list[tuple[UserCard, FormationSlot]]) -> int:
+    """The old whole-squad chemistry: (most common club − 1) × 2 + (most
+    common country − 1) × 1. Still what every mode uses while
+    GameConfig.chemistry_enabled is off, and always what FUT Draft uses
+    (its hints show this number too, see fut_draft_service._chemistry_hints)."""
+    if not cards_with_slots:
+        return 0
+    clubs = Counter(clean_group_key(c.player.club) for c, _ in cards_with_slots)
+    countries = Counter(clean_group_key(c.player.country) for c, _ in cards_with_slots)
+    return (clubs.most_common(1)[0][1] - 1) * 2 + (countries.most_common(1)[0][1] - 1) * 1
+
+
 def calculate_base_strength(
     cards_with_slots: list[tuple[UserCard, FormationSlot]],
     coach: "Coach | None" = None,
     tactic: "str | None" = None,
     stadium_multiplier: float = 1.0,
+    chemistry: "ChemistryResult | None" = None,
 ) -> int:
+    """chemistry=None (the default, and what every caller passes while
+    GameConfig.chemistry_enabled is off) keeps the old flat club/country
+    bonus byte-for-byte. A ChemistryResult instead adds each card's own
+    neighbour-link bonus to its rating BEFORE the fit/rarity/tactic
+    multipliers, and the flat bonus is not added at all — so chemistry is
+    never counted twice (order: chemistry_service module docstring)."""
     if not cards_with_slots:
         return 0
 
@@ -202,13 +228,13 @@ def calculate_base_strength(
         # keeps this function correct for both instead of forcing an
         # unrelated column onto ClubCard.
         rating, _, _ = effective_card_stats(player, getattr(card, "diamond_rating_bonus", 0))
+        if chemistry is not None:
+            rating = chemistry_service.boosted_rating(rating, chemistry.rating_bonus(slot.code))
         category_mult = category_multipliers.get(slot.category, 1.0)
         total += rating * fit * (1 + 0.03 * RARITY_ORDER[player.rarity]) * category_mult
 
-    clubs = Counter(clean_group_key(c.player.club) for c, _ in cards_with_slots)
-    countries = Counter(clean_group_key(c.player.country) for c, _ in cards_with_slots)
-    chemistry_bonus = (clubs.most_common(1)[0][1] - 1) * 2 + (countries.most_common(1)[0][1] - 1) * 1
-    total += chemistry_bonus
+    if chemistry is None:
+        total += legacy_chemistry_bonus(cards_with_slots)
     total += arena_rarity_team_strength_bonus(coach)
 
     return round(total * stadium_multiplier)
@@ -252,11 +278,27 @@ async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
     is_complete = len(cards_with_slots) == len(FORMATION_SLOTS)
     coach = lineup.user_coach_card.coach if lineup.user_coach_card else None
     stadium_multiplier = 1.0 + float(lineup.user_stadium_card.stadium.boost_pct) if lineup.user_stadium_card else 1.0
+    config = await get_config(db)
+    rules = chemistry_service.active_rules(config)
+    chemistry = (
+        chemistry_service.compute_chemistry(cards_with_slots, ARENA_FORMATION, rules, slot_count=len(FORMATION_SLOTS))
+        if rules is not None else None
+    )
     strength = (
-        calculate_base_strength(cards_with_slots, coach=coach, tactic=lineup.tactic, stadium_multiplier=stadium_multiplier)
+        calculate_base_strength(
+            cards_with_slots, coach=coach, tactic=lineup.tactic, stadium_multiplier=stadium_multiplier, chemistry=chemistry,
+        )
         if is_complete else None
     )
-    config = await get_config(db)
+    strength_bonus = None
+    if strength is not None:
+        # What the chemistry adds to the shown strength: the same formula with
+        # chemistry zeroed out (an empty result = no per-card bonus and no flat
+        # bonus either).
+        strength_bonus = strength - calculate_base_strength(
+            cards_with_slots, coach=coach, tactic=lineup.tactic, stadium_multiplier=stadium_multiplier,
+            chemistry=ChemistryResult(formation=ARENA_FORMATION),
+        )
 
     stadium = None
     if lineup.user_stadium_card is not None:
@@ -273,6 +315,7 @@ async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
         ) if coach else None,
         stadium=stadium,
         slots=slots_out,
+        chemistry=chemistry_service.to_out(chemistry, rules, strength_bonus),
     )
 
 
@@ -503,3 +546,40 @@ async def activate_template(db: AsyncSession, user: User, template_index: int) -
 
     await db.commit()
     return await get_active_lineup(db, user, template_index)
+
+
+async def preview_chemistry(db: AsyncSession, user: User, payload: ChemistryPreviewRequest) -> ChemistryOut:
+    """POST /lineups/chemistry/preview — chemistry of a HYPOTHETICAL
+    arrangement (drag-and-drop, "what if I put X here") without saving it.
+    Same validation as set_lineup/personal_squad_service.set_squad_cards
+    minus the persistence: own cards only, known slot codes, one slot per
+    card. formation is any of club_formation_service.CLUB_FORMATIONS (Card
+    Arena = "4-3-3"). Nothing is written and nothing is locked."""
+    from app.services.club_formation_service import get_slots_by_code
+
+    slots_by_code = get_slots_by_code(payload.formation)
+    seen_slots: set[str] = set()
+    seen_cards: set[int] = set()
+    for slot_in in payload.slots:
+        if slot_in.slot_code not in slots_by_code:
+            raise ConflictError(f"Unknown formation slot: {slot_in.slot_code}")
+        if slot_in.slot_code in seen_slots or slot_in.user_card_id in seen_cards:
+            raise ConflictError("Each slot and each card can appear only once")
+        seen_slots.add(slot_in.slot_code)
+        seen_cards.add(slot_in.user_card_id)
+
+    cards_by_id: dict[int, UserCard] = {}
+    if seen_cards:
+        result = await db.execute(
+            select(UserCard).where(UserCard.id.in_(seen_cards)).options(joinedload(UserCard.player))
+        )
+        cards_by_id = {c.id: c for c in result.unique().scalars().all()}
+    if len(cards_by_id) != len(seen_cards) or any(c.owner_id != user.id for c in cards_by_id.values()):
+        raise NotFoundError("One or more cards not found")
+
+    rules = chemistry_service.active_rules(await get_config(db))
+    if rules is None:
+        return ChemistryOut()
+    pairs = [(cards_by_id[s.user_card_id], slots_by_code[s.slot_code]) for s in payload.slots]
+    result = chemistry_service.compute_chemistry(pairs, payload.formation, rules, slot_count=len(slots_by_code))
+    return ChemistryOut.model_validate(chemistry_service.to_out(result, rules))

@@ -1,0 +1,1178 @@
+[
+ {
+  "name": "4-3-3 mixed full squad",
+  "formation": "4-3-3",
+  "rules": {
+   "link_strong": 2,
+   "link_medium": 1,
+   "thresholds": [
+    1,
+    2,
+    4
+   ],
+   "player_max": 3,
+   "player_floor": 0,
+   "rating_per_point": 1,
+   "off_position_penalty": 0
+  },
+  "slot_count": 11,
+  "adjacency": [
+   [
+    "GK",
+    "DEF2"
+   ],
+   [
+    "GK",
+    "DEF3"
+   ],
+   [
+    "DEF1",
+    "DEF2"
+   ],
+   [
+    "DEF2",
+    "DEF3"
+   ],
+   [
+    "DEF3",
+    "DEF4"
+   ],
+   [
+    "DEF1",
+    "MID1"
+   ],
+   [
+    "DEF2",
+    "MID2"
+   ],
+   [
+    "DEF3",
+    "MID2"
+   ],
+   [
+    "DEF4",
+    "MID3"
+   ],
+   [
+    "MID1",
+    "MID2"
+   ],
+   [
+    "MID2",
+    "MID3"
+   ],
+   [
+    "MID1",
+    "FWD1"
+   ],
+   [
+    "MID2",
+    "FWD2"
+   ],
+   [
+    "MID3",
+    "FWD3"
+   ],
+   [
+    "FWD1",
+    "FWD2"
+   ],
+   [
+    "FWD2",
+    "FWD3"
+   ]
+  ],
+  "players": [
+   {
+    "slot": "GK",
+    "club": "Real",
+    "country": "Spain",
+    "position": "GK"
+   },
+   {
+    "slot": "DEF1",
+    "club": "Barca",
+    "country": "Spain",
+    "position": "LB"
+   },
+   {
+    "slot": "DEF2",
+    "club": "Real",
+    "country": "Spain",
+    "position": "CB"
+   },
+   {
+    "slot": "DEF3",
+    "club": "Real",
+    "country": "France",
+    "position": "CB"
+   },
+   {
+    "slot": "DEF4",
+    "club": "Bayern",
+    "country": "Germany",
+    "position": "RB"
+   },
+   {
+    "slot": "MID1",
+    "club": "Barca",
+    "country": "Spain",
+    "position": "CDM"
+   },
+   {
+    "slot": "MID2",
+    "club": "Real",
+    "country": "Spain",
+    "position": "CM"
+   },
+   {
+    "slot": "MID3",
+    "club": "Bayern",
+    "country": "Germany",
+    "position": "CAM"
+   },
+   {
+    "slot": "FWD1",
+    "club": "Barca",
+    "country": "Brazil",
+    "position": "LW"
+   },
+   {
+    "slot": "FWD2",
+    "club": "Real",
+    "country": "France",
+    "position": "ST"
+   },
+   {
+    "slot": "FWD3",
+    "club": "Bayern ",
+    "country": "Germany",
+    "position": "RW"
+   }
+  ],
+  "expected": {
+   "team": 24,
+   "team_max": 33,
+   "links": [
+    {
+     "a": "GK",
+     "b": "DEF2",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "GK",
+     "b": "DEF3",
+     "level": "medium",
+     "points": 1
+    },
+    {
+     "a": "DEF1",
+     "b": "DEF2",
+     "level": "medium",
+     "points": 1
+    },
+    {
+     "a": "DEF2",
+     "b": "DEF3",
+     "level": "medium",
+     "points": 1
+    },
+    {
+     "a": "DEF3",
+     "b": "DEF4",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "DEF1",
+     "b": "MID1",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "DEF2",
+     "b": "MID2",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "DEF3",
+     "b": "MID2",
+     "level": "medium",
+     "points": 1
+    },
+    {
+     "a": "DEF4",
+     "b": "MID3",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "MID1",
+     "b": "MID2",
+     "level": "medium",
+     "points": 1
+    },
+    {
+     "a": "MID2",
+     "b": "MID3",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "MID1",
+     "b": "FWD1",
+     "level": "medium",
+     "points": 1
+    },
+    {
+     "a": "MID2",
+     "b": "FWD2",
+     "level": "medium",
+     "points": 1
+    },
+    {
+     "a": "MID3",
+     "b": "FWD3",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "FWD1",
+     "b": "FWD2",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "FWD2",
+     "b": "FWD3",
+     "level": "none",
+     "points": 0
+    }
+   ],
+   "players": {
+    "GK": {
+     "points": 2,
+     "link_sum": 3,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "DEF1": {
+     "points": 2,
+     "link_sum": 3,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "DEF2": {
+     "points": 3,
+     "link_sum": 6,
+     "on_position": true,
+     "rating_bonus": 3
+    },
+    "DEF3": {
+     "points": 2,
+     "link_sum": 3,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "DEF4": {
+     "points": 2,
+     "link_sum": 2,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "MID1": {
+     "points": 3,
+     "link_sum": 4,
+     "on_position": true,
+     "rating_bonus": 3
+    },
+    "MID2": {
+     "points": 3,
+     "link_sum": 5,
+     "on_position": true,
+     "rating_bonus": 3
+    },
+    "MID3": {
+     "points": 3,
+     "link_sum": 4,
+     "on_position": true,
+     "rating_bonus": 3
+    },
+    "FWD1": {
+     "points": 1,
+     "link_sum": 1,
+     "on_position": true,
+     "rating_bonus": 1
+    },
+    "FWD2": {
+     "points": 1,
+     "link_sum": 1,
+     "on_position": true,
+     "rating_bonus": 1
+    },
+    "FWD3": {
+     "points": 2,
+     "link_sum": 2,
+     "on_position": true,
+     "rating_bonus": 2
+    }
+   }
+  }
+ },
+ {
+  "name": "4-3-3 partial, floor and off-position",
+  "formation": "4-3-3",
+  "rules": {
+   "link_strong": 2,
+   "link_medium": 1,
+   "thresholds": [
+    1,
+    2,
+    4
+   ],
+   "player_max": 3,
+   "player_floor": 1,
+   "rating_per_point": 2,
+   "off_position_penalty": 2
+  },
+  "slot_count": 11,
+  "adjacency": [
+   [
+    "GK",
+    "DEF2"
+   ],
+   [
+    "GK",
+    "DEF3"
+   ],
+   [
+    "DEF1",
+    "DEF2"
+   ],
+   [
+    "DEF2",
+    "DEF3"
+   ],
+   [
+    "DEF3",
+    "DEF4"
+   ],
+   [
+    "DEF1",
+    "MID1"
+   ],
+   [
+    "DEF2",
+    "MID2"
+   ],
+   [
+    "DEF3",
+    "MID2"
+   ],
+   [
+    "DEF4",
+    "MID3"
+   ],
+   [
+    "MID1",
+    "MID2"
+   ],
+   [
+    "MID2",
+    "MID3"
+   ],
+   [
+    "MID1",
+    "FWD1"
+   ],
+   [
+    "MID2",
+    "FWD2"
+   ],
+   [
+    "MID3",
+    "FWD3"
+   ],
+   [
+    "FWD1",
+    "FWD2"
+   ],
+   [
+    "FWD2",
+    "FWD3"
+   ]
+  ],
+  "players": [
+   {
+    "slot": "GK",
+    "club": "A",
+    "country": "X",
+    "position": "GK"
+   },
+   {
+    "slot": "DEF2",
+    "club": "B",
+    "country": "Y",
+    "position": "CB"
+   },
+   {
+    "slot": "DEF3",
+    "club": "C",
+    "country": "Z",
+    "position": "LB"
+   },
+   {
+    "slot": "MID2",
+    "club": "C",
+    "country": "Z",
+    "position": "CM"
+   },
+   {
+    "slot": "FWD2",
+    "club": "D",
+    "country": "W",
+    "position": "LW"
+   }
+  ],
+  "expected": {
+   "team": 4,
+   "team_max": 33,
+   "links": [
+    {
+     "a": "GK",
+     "b": "DEF2",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "GK",
+     "b": "DEF3",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "DEF2",
+     "b": "DEF3",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "DEF2",
+     "b": "MID2",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "DEF3",
+     "b": "MID2",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "MID2",
+     "b": "FWD2",
+     "level": "none",
+     "points": 0
+    }
+   ],
+   "players": {
+    "GK": {
+     "points": 1,
+     "link_sum": 0,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "DEF2": {
+     "points": 1,
+     "link_sum": 0,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "DEF3": {
+     "points": 0,
+     "link_sum": 2,
+     "on_position": false,
+     "rating_bonus": -2
+    },
+    "MID2": {
+     "points": 2,
+     "link_sum": 2,
+     "on_position": true,
+     "rating_bonus": 4
+    },
+    "FWD2": {
+     "points": 0,
+     "link_sum": 0,
+     "on_position": false,
+     "rating_bonus": -2
+    }
+   }
+  }
+ },
+ {
+  "name": "4-4-2 all one club and country",
+  "formation": "4-4-2",
+  "rules": {
+   "link_strong": 2,
+   "link_medium": 1,
+   "thresholds": [
+    1,
+    2,
+    4
+   ],
+   "player_max": 3,
+   "player_floor": 0,
+   "rating_per_point": 1,
+   "off_position_penalty": 0
+  },
+  "slot_count": 11,
+  "adjacency": [
+   [
+    "GK",
+    "DEF2"
+   ],
+   [
+    "GK",
+    "DEF3"
+   ],
+   [
+    "DEF1",
+    "DEF2"
+   ],
+   [
+    "DEF2",
+    "DEF3"
+   ],
+   [
+    "DEF3",
+    "DEF4"
+   ],
+   [
+    "DEF1",
+    "MID1"
+   ],
+   [
+    "DEF2",
+    "MID2"
+   ],
+   [
+    "DEF3",
+    "MID3"
+   ],
+   [
+    "DEF4",
+    "MID4"
+   ],
+   [
+    "MID1",
+    "MID2"
+   ],
+   [
+    "MID2",
+    "MID3"
+   ],
+   [
+    "MID3",
+    "MID4"
+   ],
+   [
+    "MID1",
+    "FWD1"
+   ],
+   [
+    "MID2",
+    "FWD1"
+   ],
+   [
+    "MID3",
+    "FWD2"
+   ],
+   [
+    "MID4",
+    "FWD2"
+   ],
+   [
+    "FWD1",
+    "FWD2"
+   ]
+  ],
+  "players": [
+   {
+    "slot": "GK",
+    "club": "Milan",
+    "country": "Italy",
+    "position": "GK"
+   },
+   {
+    "slot": "DEF1",
+    "club": "Milan",
+    "country": "Italy",
+    "position": "LB"
+   },
+   {
+    "slot": "DEF2",
+    "club": "Milan",
+    "country": "Italy",
+    "position": "CB"
+   },
+   {
+    "slot": "DEF3",
+    "club": "Milan",
+    "country": "Italy",
+    "position": "CB"
+   },
+   {
+    "slot": "DEF4",
+    "club": "Milan",
+    "country": "Italy",
+    "position": "RB"
+   },
+   {
+    "slot": "MID1",
+    "club": "Milan",
+    "country": "Italy",
+    "position": "LM"
+   },
+   {
+    "slot": "MID2",
+    "club": "Milan",
+    "country": "Italy",
+    "position": "CM"
+   },
+   {
+    "slot": "MID3",
+    "club": "Milan",
+    "country": "Italy",
+    "position": "CM"
+   },
+   {
+    "slot": "MID4",
+    "club": "Milan",
+    "country": "Italy",
+    "position": "RM"
+   },
+   {
+    "slot": "FWD1",
+    "club": "Milan",
+    "country": "Italy",
+    "position": "ST"
+   },
+   {
+    "slot": "FWD2",
+    "club": "Milan",
+    "country": "Italy",
+    "position": "ST"
+   }
+  ],
+  "expected": {
+   "team": 33,
+   "team_max": 33,
+   "links": [
+    {
+     "a": "GK",
+     "b": "DEF2",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "GK",
+     "b": "DEF3",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "DEF1",
+     "b": "DEF2",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "DEF2",
+     "b": "DEF3",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "DEF3",
+     "b": "DEF4",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "DEF1",
+     "b": "MID1",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "DEF2",
+     "b": "MID2",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "DEF3",
+     "b": "MID3",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "DEF4",
+     "b": "MID4",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "MID1",
+     "b": "MID2",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "MID2",
+     "b": "MID3",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "MID3",
+     "b": "MID4",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "MID1",
+     "b": "FWD1",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "MID2",
+     "b": "FWD1",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "MID3",
+     "b": "FWD2",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "MID4",
+     "b": "FWD2",
+     "level": "strong",
+     "points": 2
+    },
+    {
+     "a": "FWD1",
+     "b": "FWD2",
+     "level": "strong",
+     "points": 2
+    }
+   ],
+   "players": {
+    "GK": {
+     "points": 3,
+     "link_sum": 4,
+     "on_position": true,
+     "rating_bonus": 3
+    },
+    "DEF1": {
+     "points": 3,
+     "link_sum": 4,
+     "on_position": true,
+     "rating_bonus": 3
+    },
+    "DEF2": {
+     "points": 3,
+     "link_sum": 8,
+     "on_position": true,
+     "rating_bonus": 3
+    },
+    "DEF3": {
+     "points": 3,
+     "link_sum": 8,
+     "on_position": true,
+     "rating_bonus": 3
+    },
+    "DEF4": {
+     "points": 3,
+     "link_sum": 4,
+     "on_position": true,
+     "rating_bonus": 3
+    },
+    "MID1": {
+     "points": 3,
+     "link_sum": 6,
+     "on_position": true,
+     "rating_bonus": 3
+    },
+    "MID2": {
+     "points": 3,
+     "link_sum": 8,
+     "on_position": true,
+     "rating_bonus": 3
+    },
+    "MID3": {
+     "points": 3,
+     "link_sum": 8,
+     "on_position": true,
+     "rating_bonus": 3
+    },
+    "MID4": {
+     "points": 3,
+     "link_sum": 6,
+     "on_position": true,
+     "rating_bonus": 3
+    },
+    "FWD1": {
+     "points": 3,
+     "link_sum": 6,
+     "on_position": true,
+     "rating_bonus": 3
+    },
+    "FWD2": {
+     "points": 3,
+     "link_sum": 6,
+     "on_position": true,
+     "rating_bonus": 3
+    }
+   }
+  }
+ },
+ {
+  "name": "4-4-2 nothing in common, blank clubs",
+  "formation": "4-4-2",
+  "rules": {
+   "link_strong": 2,
+   "link_medium": 1,
+   "thresholds": [
+    2,
+    3,
+    5
+   ],
+   "player_max": 2,
+   "player_floor": 2,
+   "rating_per_point": 1,
+   "off_position_penalty": 0
+  },
+  "slot_count": 11,
+  "adjacency": [
+   [
+    "GK",
+    "DEF2"
+   ],
+   [
+    "GK",
+    "DEF3"
+   ],
+   [
+    "DEF1",
+    "DEF2"
+   ],
+   [
+    "DEF2",
+    "DEF3"
+   ],
+   [
+    "DEF3",
+    "DEF4"
+   ],
+   [
+    "DEF1",
+    "MID1"
+   ],
+   [
+    "DEF2",
+    "MID2"
+   ],
+   [
+    "DEF3",
+    "MID3"
+   ],
+   [
+    "DEF4",
+    "MID4"
+   ],
+   [
+    "MID1",
+    "MID2"
+   ],
+   [
+    "MID2",
+    "MID3"
+   ],
+   [
+    "MID3",
+    "MID4"
+   ],
+   [
+    "MID1",
+    "FWD1"
+   ],
+   [
+    "MID2",
+    "FWD1"
+   ],
+   [
+    "MID3",
+    "FWD2"
+   ],
+   [
+    "MID4",
+    "FWD2"
+   ],
+   [
+    "FWD1",
+    "FWD2"
+   ]
+  ],
+  "players": [
+   {
+    "slot": "GK",
+    "club": "",
+    "country": "C0",
+    "position": "GK"
+   },
+   {
+    "slot": "DEF1",
+    "club": "",
+    "country": "C1",
+    "position": "LB"
+   },
+   {
+    "slot": "DEF2",
+    "club": "",
+    "country": "C2",
+    "position": "CB"
+   },
+   {
+    "slot": "DEF3",
+    "club": "",
+    "country": "C3",
+    "position": "CB"
+   },
+   {
+    "slot": "DEF4",
+    "club": "",
+    "country": "C4",
+    "position": "RB"
+   },
+   {
+    "slot": "MID1",
+    "club": "",
+    "country": "C5",
+    "position": "LM"
+   },
+   {
+    "slot": "MID2",
+    "club": "",
+    "country": "C6",
+    "position": "CM"
+   },
+   {
+    "slot": "MID3",
+    "club": "",
+    "country": "C7",
+    "position": "CM"
+   },
+   {
+    "slot": "MID4",
+    "club": "",
+    "country": "C8",
+    "position": "RM"
+   },
+   {
+    "slot": "FWD1",
+    "club": "",
+    "country": "C9",
+    "position": "ST"
+   },
+   {
+    "slot": "FWD2",
+    "club": "",
+    "country": "C10",
+    "position": "ST"
+   }
+  ],
+  "expected": {
+   "team": 22,
+   "team_max": 22,
+   "links": [
+    {
+     "a": "GK",
+     "b": "DEF2",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "GK",
+     "b": "DEF3",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "DEF1",
+     "b": "DEF2",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "DEF2",
+     "b": "DEF3",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "DEF3",
+     "b": "DEF4",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "DEF1",
+     "b": "MID1",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "DEF2",
+     "b": "MID2",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "DEF3",
+     "b": "MID3",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "DEF4",
+     "b": "MID4",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "MID1",
+     "b": "MID2",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "MID2",
+     "b": "MID3",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "MID3",
+     "b": "MID4",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "MID1",
+     "b": "FWD1",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "MID2",
+     "b": "FWD1",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "MID3",
+     "b": "FWD2",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "MID4",
+     "b": "FWD2",
+     "level": "none",
+     "points": 0
+    },
+    {
+     "a": "FWD1",
+     "b": "FWD2",
+     "level": "none",
+     "points": 0
+    }
+   ],
+   "players": {
+    "GK": {
+     "points": 2,
+     "link_sum": 0,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "DEF1": {
+     "points": 2,
+     "link_sum": 0,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "DEF2": {
+     "points": 2,
+     "link_sum": 0,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "DEF3": {
+     "points": 2,
+     "link_sum": 0,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "DEF4": {
+     "points": 2,
+     "link_sum": 0,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "MID1": {
+     "points": 2,
+     "link_sum": 0,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "MID2": {
+     "points": 2,
+     "link_sum": 0,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "MID3": {
+     "points": 2,
+     "link_sum": 0,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "MID4": {
+     "points": 2,
+     "link_sum": 0,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "FWD1": {
+     "points": 2,
+     "link_sum": 0,
+     "on_position": true,
+     "rating_bonus": 2
+    },
+    "FWD2": {
+     "points": 2,
+     "link_sum": 0,
+     "on_position": true,
+     "rating_bonus": 2
+    }
+   }
+  }
+ }
+]
