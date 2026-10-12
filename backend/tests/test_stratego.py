@@ -713,3 +713,95 @@ async def test_info_endpoint_reports_config(client, db_session, bot_token):
     headers, _, _ = await _player(client, db_session, bot_token, 970043)
     info = (await client.get(f"{API}/info", headers=headers)).json()
     assert info["reward_win"] == 99 and info["board_size"] == 6 and info["rewarded_today"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Rating
+# ---------------------------------------------------------------------------
+
+async def _win_by_cup(client, db_session, headers, match_id):
+    await _cup_capture_setup(db_session, match_id)
+    return (await client.post(f"{API}/matches/{match_id}/move", headers=headers, json={
+        "from_row": 3, "from_col": 0, "to_row": 2, "to_col": 0,
+    })).json()
+
+
+async def test_bot_matches_move_stratego_rating(client, db_session, bot_token):
+    headers, _, _ = await _player(client, db_session, bot_token, 970050)
+    body = (await client.post(f"{API}/matches/bot", headers=headers)).json()
+    end = await _win_by_cup(client, db_session, headers, body["id"])
+    assert end["rating_delta"] == 3
+    second = (await client.post(f"{API}/matches/bot", headers=headers)).json()
+    lost = (await client.post(f"{API}/matches/{second['id']}/forfeit", headers=headers)).json()
+    assert lost["rating_delta"] == -1
+    stats = (await client.get(f"{API}/stats", headers=headers)).json()
+    assert stats["stratego_rating"] == 2 and stats["stratego_rank"] == 1
+    ranking = (await client.get("/api/v1/leaderboard/ranking?metric=stratego_rating", headers=headers))
+    assert ranking.status_code == 200 and ranking.json()["top"][0]["value"] == 2
+
+
+async def test_friend_matches_do_not_move_rating(client, db_session, bot_token):
+    headers_a, headers_b, _, _, created = await _friend_match(client, db_session, bot_token, 970051, 970052)
+    await client.post(f"{API}/matches/{created['id']}/accept", headers=headers_b)
+    end = await _win_by_cup(client, db_session, headers_a, created["id"])
+    assert end["result"] == "win" and end["rating_delta"] == 0
+    assert (await client.get(f"{API}/stats", headers=headers_a)).json()["stratego_rating"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Open (chat-link) challenges with stakes
+# ---------------------------------------------------------------------------
+
+async def test_open_challenge_with_stake_pays_the_pot(client, db_session, bot_token):
+    await _set_config(db_session, stratego_reward_win=10, stratego_reward_loss=0)
+    headers_a, user_a, _ = await _player(client, db_session, bot_token, 970060, prefix="Open A")
+    headers_b, user_b, _ = await _player(client, db_session, bot_token, 970061, prefix="Open B")
+    start_a, start_b = user_a.balance, user_b.balance
+
+    created = await client.post(f"{API}/matches/open-challenge", headers=headers_a, json={"stake_coins": 100})
+    assert created.status_code == 200
+    match = created.json()
+    assert match["opponent_type"] == "chat" and match["stake_coins"] == 100 and match["status"] == "pending_accept"
+
+    preview = (await client.get(f"{API}/matches/open/{match['id']}", headers=headers_b)).json()
+    assert preview["stake_coins"] == 100 and preview["is_own_challenge"] is False and preview["status"] == "pending_accept"
+    assert (await client.post(f"{API}/matches/open/{match['id']}/accept", headers=headers_a)).status_code == 409
+
+    accepted = await client.post(f"{API}/matches/open/{match['id']}/accept", headers=headers_b)
+    assert accepted.status_code == 200 and accepted.json()["status"] == "in_progress"
+    db_session.expire_all()
+    assert (await get_user_by_telegram_id(db_session, 970060)).balance == start_a - 100
+    assert (await get_user_by_telegram_id(db_session, 970061)).balance == start_b - 100
+
+    headers_c, _, _ = await _player(client, db_session, bot_token, 970062, prefix="Open C")
+    assert (await client.post(f"{API}/matches/open/{match['id']}/accept", headers=headers_c)).status_code == 409
+
+    end = await _win_by_cup(client, db_session, headers_a, match["id"])
+    assert end["result"] == "win" and end["reward_coins"] == 10 + 200 and end["rating_delta"] == 3
+    db_session.expire_all()
+    assert (await get_user_by_telegram_id(db_session, 970060)).balance == start_a - 100 + 200 + 10
+    assert (await get_user_by_telegram_id(db_session, 970061)).balance == start_b - 100
+    loser_view = (await client.get(f"{API}/matches/{match['id']}", headers=headers_b)).json()
+    assert loser_view["result"] == "loss" and loser_view["rating_delta"] == -1
+
+
+async def test_open_challenge_rejects_unaffordable_stake_and_can_be_cancelled(client, db_session, bot_token):
+    headers, user, _ = await _player(client, db_session, bot_token, 970063)
+    too_much = await client.post(f"{API}/matches/open-challenge", headers=headers, json={"stake_coins": user.balance + 1})
+    assert too_much.status_code == 409
+    created = (await client.post(f"{API}/matches/open-challenge", headers=headers, json={"stake_coins": 0})).json()
+    assert (await client.post(f"{API}/matches/{created['id']}/cancel", headers=headers)).json()["status"] == "cancelled"
+    preview = (await client.get(f"{API}/matches/open/{created['id']}", headers=headers)).json()
+    assert preview["status"] == "cancelled" and preview["is_own_challenge"] is True
+
+
+async def test_open_challenge_hides_creator_layout_until_and_after_accept(client, db_session, bot_token):
+    headers_a, _, _ = await _player(client, db_session, bot_token, 970064, prefix="Hide A")
+    headers_b, _, _ = await _player(client, db_session, bot_token, 970065, prefix="Hide B")
+    created = (await client.post(f"{API}/matches/open-challenge", headers=headers_a, json={"stake_coins": 0})).json()
+    preview = (await client.get(f"{API}/matches/open/{created['id']}", headers=headers_b)).text
+    assert "Hide A" not in preview
+    await client.post(f"{API}/matches/open/{created['id']}/accept", headers=headers_b)
+    body = (await client.get(f"{API}/matches/{created['id']}", headers=headers_b)).json()
+    match = await _load_match(db_session, created["id"])
+    _assert_no_leak(body, match, "opponent")

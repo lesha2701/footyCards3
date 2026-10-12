@@ -594,6 +594,7 @@ export type RankingMetric =
   | "referral_count"
   | "tactics_rating"
   | "penalty_rating"
+  | "stratego_rating"
   | "league_rating";
 
 export interface RankingEntry {
@@ -1981,7 +1982,7 @@ export type StrategoMatchStatus = "pending_accept" | "in_progress" | "finished" 
 
 export interface StrategoMatch {
   id: number;
-  opponent_type: "bot" | "friend" | "online";
+  opponent_type: "bot" | "friend" | "online" | "chat";
   opponent_name: string;
   opponent_user_id: number | null;
   status: StrategoMatchStatus;
@@ -2000,11 +2001,26 @@ export interface StrategoMatch {
   result: MatchResult | null;
   win_reason: "cup_captured" | "no_moves" | "move_limit" | "forfeit" | "timeout" | null;
   reward_coins: number;
+  rating_delta: number;
+  stake_coins: number;
   my_strength: number | null;
   opponent_strength: number | null;
   created_at: string;
   expires_at: string | null;
   resolved_at: string | null;
+}
+
+export interface StrategoStats {
+  stratego_rating: number;
+  stratego_rank: number | null;
+}
+
+export interface StrategoOpenChallengePreview {
+  id: number;
+  creator_name: string;
+  stake_coins: number;
+  status: StrategoMatchStatus;
+  is_own_challenge: boolean;
 }
 
 export interface StrategoSearchStatus {

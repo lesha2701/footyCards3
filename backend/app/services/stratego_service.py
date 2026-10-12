@@ -40,6 +40,7 @@ from app.models.game_config import GameConfig
 from app.models.player import Player
 from app.models.stratego import StrategoMatch, StrategoQueueEntry
 from app.models.user import User
+from app.schemas.ranking import RankingMetric
 from app.schemas.stratego import (
     StrategoCardOut,
     StrategoCombatOut,
@@ -47,16 +48,19 @@ from app.schemas.stratego import (
     StrategoInfoOut,
     StrategoMatchOut,
     StrategoMoveOut,
+    StrategoOpenChallengePreviewOut,
     StrategoPieceOut,
     StrategoSquadOut,
     StrategoSquadSlotOut,
+    StrategoStatsOut,
 )
+from app.services import ranking_service
 from app.services import stratego_engine as engine
 from app.services.game_config_service import get_config
 from app.services.match_service import BOT_NAMES
 from app.services.notification_service import notify
 from app.services.player_stats_service import effective_card_stats
-from app.services.wallet_service import credit_coins, lock_user_for_update
+from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 MATCHMAKING_TIMEOUT_SECONDS = 60
 HISTORY_IN_RESPONSE = 20
@@ -70,6 +74,8 @@ ROLE_POSITIONS: dict[str, frozenset[Position]] = {
 }
 
 _FLIP = {MatchResult.win: MatchResult.loss, MatchResult.loss: MatchResult.win, MatchResult.draw: MatchResult.draw}
+# Same base deltas as Tactico (tactico_service._BASE_RATING_DELTA).
+_BASE_RATING_DELTA = {MatchResult.win: 3, MatchResult.loss: -1, MatchResult.draw: 1}
 
 
 # ---------------------------------------------------------------------------
@@ -479,6 +485,107 @@ async def create_challenge(db: AsyncSession, sender: User, receiver_id: int) -> 
     return await _hydrate_match(db, match, sender)
 
 
+async def create_open_challenge(db: AsyncSession, sender: User, stake_coins: int) -> StrategoMatchOut:
+    """A challenge with no pre-picked opponent, shared as a bot deep link
+    (`stratego_open_<id>`) into a Telegram chat; whoever accepts first
+    plays. Stakes move only at acceptance (see accept_open_challenge), so a
+    never-accepted or cancelled challenge has nothing to refund."""
+    if stake_coins < 0:
+        raise ConflictError("Stake cannot be negative")
+    config = await get_config(db)
+    if await _has_active_match(db, sender.id):
+        raise ConflictError(_ACTIVE_MATCH_MSG)
+    if stake_coins > 0 and sender.balance < stake_coins:
+        raise ConflictError("Не хватает монет для такой ставки")
+    state = _new_state(config)
+    await _add_human_side(db, state, "user", sender)
+    sender = await _consume_hourly_slot(db, sender.id, config)
+    match = StrategoMatch(
+        user_id=sender.id, opponent_user_id=None, opponent_name="",
+        opponent_type=StrategoOpponentType.chat, status=StrategoMatchStatus.pending_accept,
+        stake_coins=stake_coins,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=config.stratego_challenge_expiry_hours),
+        server_state=state,
+    )
+    db.add(match)
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, sender)
+
+
+async def preview_open_challenge(db: AsyncSession, viewer: User, match_id: int) -> StrategoOpenChallengePreviewOut:
+    match = await _get_match_or_404(db, match_id)
+    if match.opponent_type != StrategoOpponentType.chat:
+        raise NotFoundError("Match not found")
+    creator = await db.get(User, match.user_id)
+    status = match.status
+    if status == StrategoMatchStatus.pending_accept and ensure_aware(match.expires_at) <= datetime.now(timezone.utc):
+        status = StrategoMatchStatus.expired
+    return StrategoOpenChallengePreviewOut(
+        id=match.id, creator_name=creator.full_display_name() if creator else "Игрок",
+        stake_coins=match.stake_coins, status=status, is_own_challenge=match.user_id == viewer.id,
+    )
+
+
+async def accept_open_challenge(db: AsyncSession, user: User, match_id: int) -> StrategoMatchOut:
+    match = await _lock_match(db, match_id)
+    if match.opponent_type != StrategoOpponentType.chat:
+        raise NotFoundError("Match not found")
+    if match.status != StrategoMatchStatus.pending_accept:
+        raise ConflictError("Этот вызов уже недоступен")
+    if match.user_id == user.id:
+        raise ConflictError("You cannot accept your own challenge")
+    if ensure_aware(match.expires_at) <= datetime.now(timezone.utc):
+        match.status = StrategoMatchStatus.expired
+        match.resolved_at = datetime.now(timezone.utc)
+        db.add(match)
+        await db.commit()
+        raise ConflictError("This challenge has expired")
+    config = await get_config(db)
+    if await _has_active_match(db, match.user_id, exclude_match_id=match.id):
+        raise ConflictError("Автор вызова сейчас играет другой матч в Стратего — попробуй позже")
+
+    state = dict(match.server_state)
+    state["pieces"] = list(state["pieces"])
+    await _add_human_side(db, state, "opponent", user)
+
+    # Both rows locked in id order (deadlock-safe); the acceptor's hourly
+    # slot and active-match check then run under that lock.
+    first_id, second_id = sorted([match.user_id, user.id])
+    first = await lock_user_for_update(db, first_id)
+    second = await lock_user_for_update(db, second_id)
+    creator = first if first.id == match.user_id else second
+    acceptor = await _consume_hourly_slot(db, user.id, config)
+    if match.stake_coins > 0:
+        if creator.balance < match.stake_coins:
+            raise ConflictError("У автора вызова больше не хватает монет на ставку")
+        if acceptor.balance < match.stake_coins:
+            raise ConflictError("Не хватает монет для такой ставки")
+        for payer, text in ((creator, "Ставка за вызов в Стратего"), (acceptor, "Ставка за принятый вызов в Стратего")):
+            await debit_coins(db, payer, match.stake_coins, TransactionType.stratego_stake_lock, text, "stratego_match", match.id)
+
+    _start_play(state, config, is_bot=False)
+    match.server_state = state
+    flag_modified(match, "server_state")
+    match.opponent_user_id = acceptor.id
+    match.opponent_name = acceptor.full_display_name()
+    match.status = StrategoMatchStatus.in_progress
+    db.add(match)
+    await notify(
+        db, creator.id, NotificationType.stratego_challenge_accepted,
+        "Вызов принят", f"{acceptor.full_display_name()} принял(а) твой вызов в Стратего.",
+        "stratego_match", match.id,
+    )
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, acceptor)
+
+
+async def get_stats(db: AsyncSession, user: User) -> StrategoStatsOut:
+    ranking = await ranking_service.get_ranking(db, RankingMetric.stratego_rating, user)
+    return StrategoStatsOut(stratego_rating=user.stratego_rating, stratego_rank=ranking.me.rank if ranking.me else None)
+
+
 async def _get_match_or_404(db: AsyncSession, match_id: int) -> StrategoMatch:
     match = await db.get(StrategoMatch, match_id)
     if not match:
@@ -688,6 +795,40 @@ async def _finish_match(
         else:
             match.opponent_reward_coins = reward
 
+    # Rating: friend matches move nothing (alt-account farming), online
+    # matchmaking counts double, bot and chat challenges count as is.
+    multiplier = {
+        StrategoOpponentType.friend: 0, StrategoOpponentType.online: 2,
+        StrategoOpponentType.bot: 1, StrategoOpponentType.chat: 1,
+    }[match.opponent_type]
+    for side in engine.SIDES:
+        uid = side_uid[side]
+        if uid is None or (side == "opponent" and match.opponent_type == StrategoOpponentType.bot):
+            continue
+        delta = _BASE_RATING_DELTA[side_result[side]] * multiplier
+        locked[uid].stratego_rating = max(0, locked[uid].stratego_rating + delta)
+        db.add(locked[uid])
+        if side == "user":
+            match.user_rating_delta = delta
+        else:
+            match.opponent_rating_delta = delta
+
+    # Open-challenge stakes were paid into the pot at accept time: a draw
+    # refunds each side, otherwise the winner takes both stakes.
+    if match.stake_coins > 0 and match.opponent_user_id:
+        pot_payout = {"user": 0, "opponent": 0}
+        if winner == "draw":
+            pot_payout = {"user": match.stake_coins, "opponent": match.stake_coins}
+            tx_type, text = TransactionType.stratego_stake_refund, "Возврат ставки — ничья в Стратего"
+        else:
+            pot_payout[winner] = match.stake_coins * 2
+            tx_type, text = TransactionType.stratego_stake_win, "Выигрыш ставки в Стратего"
+        for side, amount in pot_payout.items():
+            if amount:
+                await credit_coins(db, locked[side_uid[side]], amount, tx_type, text, "stratego_match", match.id)
+        match.user_reward_coins += pot_payout["user"]
+        match.opponent_reward_coins += pot_payout["opponent"]
+
     if match.opponent_type != StrategoOpponentType.bot and match.opponent_user_id:
         labels = {MatchResult.win: "победа", MatchResult.draw: "ничья", MatchResult.loss: "поражение"}
         for side in engine.SIDES:
@@ -848,6 +989,8 @@ async def _hydrate_match(db: AsyncSession, match: StrategoMatch, viewer_user: Us
         lost_opponent=[_combat_piece(p, viewer) for p in dead if p["side"] != viewer],
         history=history, result=result, win_reason=match.win_reason,
         reward_coins=match.user_reward_coins if viewer == "user" else match.opponent_reward_coins,
+        rating_delta=match.user_rating_delta if viewer == "user" else match.opponent_rating_delta,
+        stake_coins=match.stake_coins,
         my_strength=final.get(viewer) if finished else None,
         opponent_strength=final.get(engine.other_side(viewer)) if finished else None,
         created_at=match.created_at, expires_at=match.expires_at, resolved_at=match.resolved_at,

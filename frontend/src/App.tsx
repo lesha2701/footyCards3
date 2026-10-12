@@ -62,6 +62,7 @@ const StrategoPage = lazy(() => import("@/pages/StrategoPage"));
 const StrategoSquadPage = lazy(() => import("@/pages/StrategoSquadPage"));
 const StrategoSearchPage = lazy(() => import("@/pages/StrategoSearchPage"));
 const StrategoMatchPage = lazy(() => import("@/pages/StrategoMatchPage"));
+const StrategoOpenChallengePage = lazy(() => import("@/pages/StrategoOpenChallengePage"));
 const SaboteurGamePage = lazy(() => import("@/pages/SaboteurGamePage"));
 const PenaltyGamePage = lazy(() => import("@/pages/PenaltyGamePage"));
 const PenaltyMatchesPage = lazy(() => import("@/pages/PenaltyMatchesPage"));
@@ -239,6 +240,7 @@ export default function App() {
         <Route path="/play/stratego/squad" element={<StrategoSquadPage />} />
         <Route path="/play/stratego/search" element={<StrategoSearchPage />} />
         <Route path="/play/stratego/matches/:matchId" element={<StrategoMatchPage />} />
+        <Route path="/play/stratego/open/:matchId" element={<StrategoOpenChallengePage />} />
         <Route path="/play/saboteur" element={<SaboteurGamePage />} />
         <Route path="/play/penalty" element={<PenaltyGamePage />} />
         <Route path="/play/penalty/matches" element={<PenaltyMatchesPage />} />

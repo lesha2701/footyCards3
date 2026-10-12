@@ -102,6 +102,9 @@ class TransactionType(str, enum.Enum):
     lifestyle_purchase = "lifestyle_purchase"
     player_career_reward = "player_career_reward"
     stratego_reward = "stratego_reward"
+    stratego_stake_lock = "stratego_stake_lock"
+    stratego_stake_win = "stratego_stake_win"
+    stratego_stake_refund = "stratego_stake_refund"
 
 
 class GiftKind(str, enum.Enum):
@@ -275,6 +278,7 @@ class StrategoOpponentType(str, enum.Enum):
     bot = "bot"
     friend = "friend"
     online = "online"
+    chat = "chat"
 
 
 class StrategoMatchStatus(str, enum.Enum):

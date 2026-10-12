@@ -3,13 +3,22 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchFeatureFlags } from "@/api/featureFlags";
-import { searchUsers } from "@/api/profile";
-import { createStrategoBotMatch, createStrategoChallenge, fetchStrategoInfo, fetchStrategoMatches, fetchStrategoSquad } from "@/api/stratego";
+import { fetchMyProfile, searchUsers } from "@/api/profile";
+import {
+  createStrategoBotMatch,
+  createStrategoChallenge,
+  createStrategoOpenChallenge,
+  fetchStrategoInfo,
+  fetchStrategoMatches,
+  fetchStrategoSquad,
+  fetchStrategoStats,
+} from "@/api/stratego";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconFlag, IconHelp, IconPlay, IconShirt, IconUsers } from "@/components/icons";
+import { IconChat, IconCoin, IconFlag, IconHelp, IconPlay, IconShirt, IconTrophy, IconUsers } from "@/components/icons";
 import StrategoRulesModal from "@/components/stratego/StrategoRulesModal";
 import { formatGameError } from "@/lib/errors";
+import { openTelegramLink } from "@/lib/telegram";
 import type { StrategoMatch, UserPublic } from "@/types";
 
 type Tab = "pending" | "active" | "history";
@@ -22,7 +31,9 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Отменён",
   expired: "Истёк",
 };
-const OPPONENT_LABELS: Record<string, string> = { bot: "Против бота", friend: "Против друга", online: "Онлайн" };
+const OPPONENT_LABELS: Record<string, string> = {
+  bot: "Против бота", friend: "Против друга", online: "Онлайн", chat: "Вызов из чата",
+};
 const RESULT_LABELS: Record<string, string> = { win: "Победа", draw: "Ничья", loss: "Поражение" };
 
 export default function StrategoPage() {
@@ -31,9 +42,12 @@ export default function StrategoPage() {
   const [tab, setTab] = useState<Tab>("active");
   const [rulesOpen, setRulesOpen] = useState(false);
   const [challengeOpen, setChallengeOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data: info } = useQuery({ queryKey: ["stratego-info"], queryFn: fetchStrategoInfo });
+  const { data: stats } = useQuery({ queryKey: ["stratego-stats"], queryFn: fetchStrategoStats });
+  const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
   const { data: squad } = useQuery({ queryKey: ["stratego-squad"], queryFn: fetchStrategoSquad });
   const { data: matches, isLoading } = useQuery({ queryKey: ["stratego-matches"], queryFn: fetchStrategoMatches });
   const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags, refetchInterval: 30000 });
@@ -53,6 +67,21 @@ export default function StrategoPage() {
     mutationFn: (receiverId: number) => createStrategoChallenge(receiverId),
     onSuccess: onCreated,
     onError: (err) => setError(formatGameError(err, "Не удалось отправить вызов")),
+  });
+
+  const chatInvite = useMutation({
+    mutationFn: (stakeCoins: number) => createStrategoOpenChallenge(stakeCoins),
+    onSuccess: (match) => {
+      if (profile?.telegram_bot_username) {
+        const deepLink = `https://t.me/${profile.telegram_bot_username}?start=stratego_open_${match.id}`;
+        const shareText = match.stake_coins > 0
+          ? `🏆 Вызываю на «Футбольное Стратего»! Ставка: ${match.stake_coins} монет`
+          : "🏆 Вызываю на «Футбольное Стратего»!";
+        openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(deepLink)}&text=${encodeURIComponent(shareText)}`);
+      }
+      onCreated(match);
+    },
+    onError: (err) => setError(formatGameError(err, "Не удалось создать приглашение")),
   });
 
   const filtered = (matches ?? []).filter((m) => {
@@ -88,6 +117,21 @@ export default function StrategoPage() {
         <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">
           Для игры нужно минимум {squad.cards_needed} карточек в коллекции.
         </p>
+      )}
+      {stats && (
+        <button
+          onClick={() => navigate("/ranking")}
+          className="flex items-center justify-between rounded-2xl bg-bg-surface px-4 py-3 text-left active:scale-[0.98]"
+        >
+          <span className="flex items-center gap-2 text-xs text-ink-mist">
+            <IconTrophy size={14} className="text-accent-lime" />
+            Рейтинг Стратего
+          </span>
+          <span className="font-mono text-sm font-bold text-ink-chalk">
+            {stats.stratego_rating}
+            {stats.stratego_rank ? <span className="ml-1.5 text-[11px] font-normal text-ink-mist">#{stats.stratego_rank}</span> : null}
+          </span>
+        </button>
       )}
       {info && (
         <p className="text-[11px] text-ink-mist-dim">
@@ -131,8 +175,15 @@ export default function StrategoPage() {
               Вызвать друга
             </button>
           </div>
-          <p className="-mt-2 text-center text-[11px] text-ink-mist-dim">
-            Матч стартует по твоей сохранённой расстановке — поменять её можно в «Подготовке»
+          <button
+            onClick={() => setChatOpen(true)}
+            className="flex items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95"
+          >
+            <IconChat size={14} />
+            Вызвать соперника через чат
+          </button>
+          <p className="-mt-1 text-center text-[11px] text-ink-mist-dim">
+            Онлайн-матч даёт рейтинг ×2, матч с другом — без рейтинга. Матч стартует по твоей сохранённой расстановке — поменять её можно в «Подготовке»
           </p>
         </>
       )}
@@ -161,10 +212,11 @@ export default function StrategoPage() {
             className="flex items-center justify-between rounded-2xl bg-bg-surface p-4 text-left active:scale-[0.98]"
           >
             <div className="min-w-0">
-              <p className="truncate font-display text-sm font-bold text-ink-chalk">{m.opponent_name}</p>
+              <p className="truncate font-display text-sm font-bold text-ink-chalk">{m.opponent_name || "Открытый вызов"}</p>
               <p className="mt-0.5 text-[11px] text-ink-mist">
                 {OPPONENT_LABELS[m.opponent_type]} · {STATUS_LABELS[m.status]}
                 {m.status === "in_progress" && (m.my_turn ? " · твой ход" : " · ход соперника")}
+                {m.stake_coins > 0 && ` · ставка ${m.stake_coins}`}
               </p>
             </div>
             {m.result && <span className="text-xs font-bold text-ink-chalk">{RESULT_LABELS[m.result]}</span>}
@@ -176,6 +228,13 @@ export default function StrategoPage() {
         <ChallengeSheet
           onClose={() => setChallengeOpen(false)}
           onPick={(u) => { setChallengeOpen(false); challenge.mutate(u.id); }}
+        />
+      )}
+      {chatOpen && (
+        <ChatInviteSheet
+          busy={chatInvite.isPending}
+          onClose={() => setChatOpen(false)}
+          onCreate={(stake) => { setChatOpen(false); chatInvite.mutate(stake); }}
         />
       )}
       <StrategoRulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} info={info} />
@@ -213,6 +272,42 @@ function ChallengeSheet({ onClose, onPick }: { onClose: () => void; onPick: (use
           ))}
           {query.length >= 2 && !results?.length && <p className="text-xs text-ink-mist-dim">Никого не найдено</p>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ChatInviteSheet({ busy, onClose, onCreate }: { busy: boolean; onClose: () => void; onCreate: (stakeCoins: number) => void }) {
+  const [stake, setStake] = useState("0");
+  const stakeCoins = Math.max(0, Math.floor(Number(stake) || 0));
+  return (
+    <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={onClose}>
+      <div className="safe-bottom w-full rounded-t-3xl bg-bg-base p-5" onClick={(e) => e.stopPropagation()}>
+        <p className="mb-2 font-display text-base font-bold text-ink-chalk">Вызов через чат</p>
+        <p className="mb-3 text-xs text-ink-mist">
+          Создадим вызов и откроем «Поделиться» — выбери чат. Первый, кто примет вызов, станет твоим соперником.
+        </p>
+        <label className="mb-1 block text-xs text-ink-mist-dim">Ставка, монеты (0 — без ставки)</label>
+        <input
+          type="number"
+          min={0}
+          inputMode="numeric"
+          value={stake}
+          onChange={(e) => setStake(e.target.value)}
+          className="mb-3 w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk outline-none"
+        />
+        {stakeCoins > 0 && (
+          <p className="mb-3 flex items-center gap-1 text-[11px] text-ink-mist-dim">
+            Победитель заберёт {stakeCoins * 2} <IconCoin size={11} /> — по {stakeCoins} с каждой стороны, ничья вернёт ставки.
+          </p>
+        )}
+        <button
+          onClick={() => onCreate(stakeCoins)}
+          disabled={busy}
+          className="w-full rounded-xl bg-floodlight py-3 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-50"
+        >
+          {busy ? "Создаём..." : "Создать и поделиться"}
+        </button>
       </div>
     </div>
   );

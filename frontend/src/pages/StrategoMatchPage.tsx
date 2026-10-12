@@ -46,7 +46,10 @@ export default function StrategoMatchPage() {
   const setMatch = (m: StrategoMatch) => {
     queryClient.setQueryData(["stratego-match", id], m);
     queryClient.invalidateQueries({ queryKey: ["stratego-matches"] });
-    if (m.status === "finished") queryClient.invalidateQueries({ queryKey: ["stratego-info"] });
+    if (m.status === "finished") {
+      queryClient.invalidateQueries({ queryKey: ["stratego-info"] });
+      queryClient.invalidateQueries({ queryKey: ["stratego-stats"] });
+    }
   };
   const move = useMutation({
     mutationFn: ({ from, to }: { from: [number, number]; to: [number, number] }) => submitStrategoMove(id, from, to),
@@ -85,7 +88,7 @@ export default function StrategoMatchPage() {
           <IconChevronLeft size={16} />
         </button>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-display text-base font-bold text-ink-chalk">vs {match.opponent_name}</p>
+          <p className="truncate font-display text-base font-bold text-ink-chalk">vs {match.opponent_name || "…"}</p>
           <p className="text-[11px] text-ink-mist">
             Ход {match.ply}/{match.move_limit}
             {match.deadline && match.status === "in_progress" && ` · до ${new Date(match.deadline).toLocaleString("ru-RU", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}`}
@@ -191,8 +194,13 @@ function PendingPanel({ match, busy, onAction }: { match: StrategoMatch; busy: b
   return (
     <div className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4 text-center">
       <p className="text-sm text-ink-chalk">
-        {incoming ? `${match.opponent_name} вызывает тебя на Стратего` : "Ждём, пока соперник примет вызов"}
+        {incoming
+          ? `${match.opponent_name} вызывает тебя на Стратего`
+          : match.opponent_type === "chat"
+            ? "Открытый вызов отправлен в чат — ждём первого, кто его примет"
+            : "Ждём, пока соперник примет вызов"}
       </p>
+      {match.stake_coins > 0 && <p className="text-[11px] text-ink-mist">Ставка: {match.stake_coins} монет с каждой стороны</p>}
       {incoming && <p className="text-[11px] text-ink-mist">Твои фишки встанут по сохранённой расстановке из «Подготовки».</p>}
       <div className="flex gap-2">
         {incoming ? (
@@ -223,9 +231,15 @@ function ResultPanel({ match }: { match: StrategoMatch }) {
       {match.my_strength !== null && (
         <p className="font-mono text-xs text-ink-mist">Сила фишек: {match.my_strength} — {match.opponent_strength}</p>
       )}
-      <p className="mt-1 flex items-center gap-1 text-sm font-bold text-ink-chalk">
-        <IconCoin size={14} /> +{match.reward_coins}
+      <p className="mt-1 flex items-center gap-3 text-sm font-bold text-ink-chalk">
+        <span className="flex items-center gap-1"><IconCoin size={14} /> +{match.reward_coins}</span>
+        {match.opponent_type !== "friend" && (
+          <span className={match.rating_delta >= 0 ? "text-accent-green" : "text-red-400"}>
+            Рейтинг {match.rating_delta >= 0 ? "+" : ""}{match.rating_delta}
+          </span>
+        )}
       </p>
+      {match.stake_coins > 0 && <p className="text-[11px] text-ink-mist-dim">Ставка: {match.stake_coins} с каждой стороны</p>}
       <p className="text-[11px] text-ink-mist-dim">Все фишки соперника раскрыты</p>
     </div>
   );

@@ -122,6 +122,8 @@ class StrategoMatchOut(BaseModel):
     result: Optional[MatchResult] = None
     win_reason: Optional[str] = None
     reward_coins: int = 0
+    rating_delta: int = 0
+    stake_coins: int = 0
     # Only filled in once the match is over — mid-match it would leak the
     # total power of the opponent's hidden pieces.
     my_strength: Optional[int] = None
@@ -140,6 +142,23 @@ class StrategoMoveRequest(BaseModel):
 
 class StrategoChallengeRequest(BaseModel):
     receiver_id: int
+
+
+class StrategoOpenChallengeRequest(BaseModel):
+    stake_coins: int = 0
+
+
+class StrategoOpenChallengePreviewOut(BaseModel):
+    id: int
+    creator_name: str
+    stake_coins: int
+    status: StrategoMatchStatus
+    is_own_challenge: bool
+
+
+class StrategoStatsOut(BaseModel):
+    stratego_rating: int
+    stratego_rank: Optional[int] = None
 
 
 class StrategoSearchStatusOut(BaseModel):

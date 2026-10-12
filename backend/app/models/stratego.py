@@ -37,6 +37,12 @@ class StrategoMatch(Base):
     win_reason: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     user_reward_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     opponent_reward_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    user_rating_delta: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    opponent_rating_delta: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Open (chat-link) challenges only: coins each side puts up, debited from
+    # both at accept time and paid out as a pot at finish — same scheme as
+    # TacticoMatch.stake_coins. Always 0 for other opponent types.
+    stake_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     server_state: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)

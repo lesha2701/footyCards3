@@ -103,6 +103,7 @@ class User(TimestampMixin, Base):
     pairs_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Футбольное Стратего
+    stratego_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     stratego_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     stratego_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     stratego_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -62,6 +62,16 @@ async def cmd_start(message: Message) -> None:
         keyboard = (
             open_app_keyboard(path=f"/play/tactico/open/{match_id}") if match_id.isdigit() else open_app_keyboard()
         )
+    elif payload and payload.startswith("stratego_open_"):
+        match_id = payload[len("stratego_open_"):]
+        text = (
+            f"Привет, {message.from_user.first_name}! 👋\n\n"
+            "🏆 Тебя вызвали на матч в «Футбольном Стратего»!\n\n"
+            "Нажми кнопку ниже, чтобы посмотреть детали вызова и принять его 👇"
+        )
+        keyboard = (
+            open_app_keyboard(path=f"/play/stratego/open/{match_id}") if match_id.isdigit() else open_app_keyboard()
+        )
     elif payload and payload.startswith("penalty_open_"):
         match_id = payload[len("penalty_open_"):]
         text = (

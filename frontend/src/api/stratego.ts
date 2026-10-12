@@ -1,8 +1,35 @@
 import { api } from "@/lib/api";
-import type { StrategoInfo, StrategoMatch, StrategoSearchStatus, StrategoSquad } from "@/types";
+import type {
+  StrategoInfo,
+  StrategoMatch,
+  StrategoOpenChallengePreview,
+  StrategoSearchStatus,
+  StrategoSquad,
+  StrategoStats,
+} from "@/types";
 
 export async function fetchStrategoInfo(): Promise<StrategoInfo> {
   const { data } = await api.get<StrategoInfo>("/stratego/info");
+  return data;
+}
+
+export async function fetchStrategoStats(): Promise<StrategoStats> {
+  const { data } = await api.get<StrategoStats>("/stratego/stats");
+  return data;
+}
+
+export async function createStrategoOpenChallenge(stakeCoins: number): Promise<StrategoMatch> {
+  const { data } = await api.post<StrategoMatch>("/stratego/matches/open-challenge", { stake_coins: stakeCoins });
+  return data;
+}
+
+export async function fetchStrategoOpenChallenge(id: number): Promise<StrategoOpenChallengePreview> {
+  const { data } = await api.get<StrategoOpenChallengePreview>(`/stratego/matches/open/${id}`);
+  return data;
+}
+
+export async function acceptStrategoOpenChallenge(id: number): Promise<StrategoMatch> {
+  const { data } = await api.post<StrategoMatch>(`/stratego/matches/open/${id}/accept`);
   return data;
 }
 

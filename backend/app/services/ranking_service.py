@@ -15,6 +15,7 @@ _DIRECT_COLUMNS = {
     RankingMetric.referral_count: User.referral_count,
     RankingMetric.tactics_rating: User.tactics_rating,
     RankingMetric.penalty_rating: User.penalty_rating,
+    RankingMetric.stratego_rating: User.stratego_rating,
     RankingMetric.league_rating: _LEAGUE_RATING_EXPR,
 }
 

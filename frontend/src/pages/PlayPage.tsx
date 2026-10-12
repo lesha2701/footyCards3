@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchGameLimits, fetchPenaltyStats } from "@/api/games";
 import { fetchArenaStats } from "@/api/matches";
 import { fetchPlayerTournamentCurrent } from "@/api/personalTournament";
+import { fetchStrategoStats } from "@/api/stratego";
 import { fetchTacticoStats } from "@/api/tactico";
 import {
   IconBall,
@@ -59,6 +60,7 @@ export default function PlayPage() {
   const [lastGame, setLastGame] = usePersistentState<string | null>("play.last", null);
   const { data: arenaStats } = useQuery({ queryKey: ["arena-stats"], queryFn: fetchArenaStats });
   const { data: tacticoStats } = useQuery({ queryKey: ["tactico-stats"], queryFn: fetchTacticoStats });
+  const { data: strategoStats } = useQuery({ queryKey: ["stratego-stats"], queryFn: fetchStrategoStats });
   const { data: penaltyStats } = useQuery({ queryKey: ["penalty-stats"], queryFn: fetchPenaltyStats });
   const { data: limits } = useQuery({ queryKey: ["game-limits"], queryFn: fetchGameLimits });
   const { data: playerTournamentCurrent } = useQuery({
@@ -79,7 +81,8 @@ export default function PlayPage() {
     },
     {
       path: "/play/stratego", Icon: IconFlag, badgeClass: "bg-accent-green", title: "Футбольное Стратего",
-      description: "Скрытая расстановка твоих карточек: найди и захвати Кубок соперника", limitKey: "stratego",
+      description: "Скрытая расстановка твоих карточек: найди и захвати Кубок соперника",
+      stat: `Рейтинг: ${strategoStats?.stratego_rating ?? 0}`, limitKey: "stratego",
     },
     {
       path: "/play/career", Icon: IconTrophy, badgeClass: "bg-accent-cyan", title: "Карьера тренера",

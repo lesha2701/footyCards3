@@ -10,9 +10,12 @@ from app.schemas.stratego import (
     StrategoInfoOut,
     StrategoMatchOut,
     StrategoMoveRequest,
+    StrategoOpenChallengePreviewOut,
+    StrategoOpenChallengeRequest,
     StrategoSearchStatusOut,
     StrategoSquadOut,
     StrategoSquadSetRequest,
+    StrategoStatsOut,
 )
 from app.services import stratego_service
 
@@ -22,6 +25,11 @@ router = APIRouter(prefix="/stratego", tags=["stratego"])
 @router.get("/info", response_model=StrategoInfoOut)
 async def get_info(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await stratego_service.get_info(db, user)
+
+
+@router.get("/stats", response_model=StrategoStatsOut)
+async def get_stats(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await stratego_service.get_stats(db, user)
 
 
 @router.get("/squad", response_model=StrategoSquadOut)
@@ -48,6 +56,24 @@ async def create_challenge(
 ):
     await check_rate_limit(f"stratego_challenge:{user.id}", max_calls=10, window_seconds=60)
     return await stratego_service.create_challenge(db, user, payload.receiver_id)
+
+
+@router.post("/matches/open-challenge", response_model=StrategoMatchOut)
+async def create_open_challenge(
+    payload: StrategoOpenChallengeRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    await check_rate_limit(f"stratego_open_challenge:{user.id}", max_calls=10, window_seconds=60)
+    return await stratego_service.create_open_challenge(db, user, payload.stake_coins)
+
+
+@router.get("/matches/open/{match_id}", response_model=StrategoOpenChallengePreviewOut)
+async def preview_open_challenge(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await stratego_service.preview_open_challenge(db, user, match_id)
+
+
+@router.post("/matches/open/{match_id}/accept", response_model=StrategoMatchOut)
+async def accept_open_challenge(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await stratego_service.accept_open_challenge(db, user, match_id)
 
 
 @router.post("/matches/{match_id}/accept", response_model=StrategoMatchOut)

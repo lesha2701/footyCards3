@@ -19,7 +19,7 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 stratego_opponent_type_enum = postgresql.ENUM(
-    "bot", "friend", "online", name="stratego_opponent_type_enum", create_type=False,
+    "bot", "friend", "online", "chat", name="stratego_opponent_type_enum", create_type=False,
 )
 stratego_match_status_enum = postgresql.ENUM(
     "pending_accept", "in_progress", "finished", "declined", "cancelled", "expired",
@@ -45,7 +45,8 @@ CONFIG_INT_COLUMNS = (
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS 'stratego_reward'")
+    for value in ("stratego_reward", "stratego_stake_lock", "stratego_stake_win", "stratego_stake_refund"):
+        op.execute(f"ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS '{value}'")
     for value in (
         "stratego_challenge_received", "stratego_challenge_accepted",
         "stratego_your_turn", "stratego_match_finished",
@@ -68,6 +69,9 @@ def upgrade() -> None:
         sa.Column("win_reason", sa.String(32), nullable=True),
         sa.Column("user_reward_coins", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("opponent_reward_coins", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("user_rating_delta", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("opponent_rating_delta", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("stake_coins", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("server_state", sa.JSON(), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
@@ -90,6 +94,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_stratego_queue_entries_user_id", "stratego_queue_entries", ["user_id"], unique=True)
 
+    op.add_column("users", sa.Column("stratego_rating", sa.Integer(), nullable=False, server_default="0"))
     op.add_column("users", sa.Column("stratego_rewarded_attempts_today", sa.Integer(), nullable=False, server_default="0"))
     op.add_column("users", sa.Column("stratego_attempts_reset_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column("users", sa.Column("stratego_hourly_attempts", sa.Integer(), nullable=False, server_default="0"))
@@ -105,7 +110,7 @@ def downgrade() -> None:
         op.drop_column("game_config", name)
     for name in (
         "stratego_squad", "stratego_hour_started_at", "stratego_hourly_attempts",
-        "stratego_attempts_reset_at", "stratego_rewarded_attempts_today",
+        "stratego_attempts_reset_at", "stratego_rewarded_attempts_today", "stratego_rating",
     ):
         op.drop_column("users", name)
     op.drop_index("ix_stratego_queue_entries_user_id", table_name="stratego_queue_entries")
