@@ -114,6 +114,9 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
     if invoice.my_player_purchase:
         return StarsInvoiceStatusOut(status="completed", my_player_result={"kind": invoice.my_player_purchase.split(":")[0]})
 
+    if invoice.is_blackjack_entry:
+        return StarsInvoiceStatusOut(status="completed", blackjack_result={"kind": "entry"})
+
     user = await db.get(User, invoice.user_id)
     return StarsInvoiceStatusOut(
         status="completed",
@@ -273,6 +276,10 @@ async def validate_pre_checkout(db: AsyncSession, payload_token: str, total_amou
         from app.services import my_player_service
 
         return await my_player_service.validate_stars_purchase(db, invoice)
+    elif invoice.is_blackjack_entry:
+        from app.services import blackjack_service
+
+        return await blackjack_service.validate_stars_entry(db, invoice)
     return True, ""
 
 
@@ -371,6 +378,14 @@ async def deliver_payment(
         if invoice.stars_amount != total_amount:
             raise ConflictError("Stars amount does not match the invoice")
         my_player_result = await my_player_service.deliver_stars_purchase(db, user, invoice)
+    elif invoice.is_blackjack_entry:
+        # Local import: blackjack_service imports _request_telegram_invoice_link
+        # from this module (same circularity as the wheel branch below).
+        from app.services import blackjack_service
+
+        if invoice.stars_amount != total_amount:
+            raise ConflictError("Stars amount does not match the invoice")
+        blackjack_result = await blackjack_service.deliver_stars_entry(db, user)
     elif invoice.is_wheel_spin:
         # Imported here rather than at module level: wheel_service itself
         # imports _request_telegram_invoice_link from this module at import
@@ -435,6 +450,8 @@ async def deliver_payment(
         return StarsInvoiceStatusOut(status="completed", gift_result=GiftOut.model_validate(gift))
     if invoice.my_player_purchase:
         return StarsInvoiceStatusOut(status="completed", my_player_result=my_player_result)
+    if invoice.is_blackjack_entry:
+        return StarsInvoiceStatusOut(status="completed", blackjack_result=blackjack_result)
     return StarsInvoiceStatusOut(
         status="completed",
         coin_result=StarsCoinResultOut(coins_credited=invoice.coins_amount, new_balance=user.balance),

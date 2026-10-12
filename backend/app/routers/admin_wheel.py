@@ -6,11 +6,15 @@ from sqlalchemy.orm import joinedload
 from app.core.dependencies import get_current_admin
 from app.core.exceptions import ConflictError, NotFoundError
 from app.database import get_db
-from app.models.enums import WheelPrizeType
+from app.models.enums import Rarity, WheelPrizePool, WheelPrizeType
 from app.models.pack import Pack
 from app.models.user import User
 from app.models.wheel import WheelPrize
-from app.schemas.wheel import WheelPrizeCreate, WheelPrizeOut, WheelPrizeUpdate
+from app.schemas.wheel import (
+    WheelPoolPrizeValueOut, WheelPoolsSummaryOut, WheelPoolSummaryOut, WheelPrizeCreate, WheelPrizeOut, WheelPrizeUpdate,
+)
+from app.services import blackjack_service, pack_value_service
+from app.services.game_config_service import get_config
 from app.services.admin_log_service import log_action
 
 router = APIRouter(prefix="/admin/wheel", tags=["admin"], dependencies=[Depends(get_current_admin)])
@@ -56,9 +60,67 @@ async def _get_prize_or_404(db: AsyncSession, prize_id: int) -> WheelPrize:
 
 
 @router.get("/prizes", response_model=list[WheelPrizeOut])
-async def list_prizes(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(WheelPrize).order_by(WheelPrize.sort_order).options(_PACK_PROBABILITIES))
+async def list_prizes(pool: WheelPrizePool | None = None, db: AsyncSession = Depends(get_db)):
+    query = select(WheelPrize).order_by(WheelPrize.sort_order).options(_PACK_PROBABILITIES)
+    if pool is not None:
+        query = query.where(WheelPrize.pool == pool)
+    result = await db.execute(query)
     return result.unique().scalars().all()
+
+
+@router.get("/pools-summary", response_model=WheelPoolsSummaryOut)
+async def pools_summary(db: AsyncSession = Depends(get_db)):
+    """Expected coin-equivalent value of one spin of each pool (active prizes
+    only) plus the resulting value of one paid «21» entry. Cards/packs are
+    valued at quick-sell — a floor, players value cards higher."""
+    config = await get_config(db)
+    averages = await pack_value_service.rarity_quick_sell_averages(db)
+    result = await db.execute(select(WheelPrize).where(WheelPrize.is_active.is_(True)).options(_PACK_PROBABILITIES))
+    prizes = result.unique().scalars().all()
+
+    def value(prize: WheelPrize) -> float:
+        if prize.prize_type == WheelPrizeType.coins:
+            return float(prize.coins_amount or 0)
+        if prize.prize_type == WheelPrizeType.card_rarity:
+            return averages.get(prize.card_rarity or Rarity.common, (0.0, 0))[0]
+        if prize.prize_type == WheelPrizeType.pack and prize.pack is not None:
+            return pack_value_service.pack_rarity_breakdown(prize.pack, averages)[0]
+        if prize.prize_type == WheelPrizeType.badge:
+            return float(config.wheel_duplicate_badge_coins)
+        return 0.0
+
+    summaries: dict[WheelPrizePool, WheelPoolSummaryOut] = {}
+    for pool in WheelPrizePool:
+        in_pool = [p for p in prizes if p.pool == pool]
+        total = sum(p.weight for p in in_pool)
+        rows = [
+            WheelPoolPrizeValueOut(prize_id=p.id, probability=round(p.weight / total, 4), value_coins=round(value(p), 1))
+            for p in in_pool
+        ] if total else []
+        summaries[pool] = WheelPoolSummaryOut(
+            pool=pool, active_prizes=len(in_pool), total_weight=total,
+            expected_value_coins=round(sum(r.probability * r.value_coins for r in rows), 1), prizes=rows,
+        )
+
+    # Mirrors blackjack_service._REWARD_POOLS' fallback for an empty pool.
+    def pool_ev(*chain: WheelPrizePool) -> float:
+        for pool in chain:
+            if summaries[pool].active_prizes:
+                return summaries[pool].expected_value_coins
+        return 0.0
+
+    est = blackjack_service.OUTCOME_ESTIMATE
+    game_ev = (
+        est["jackpot"] * pool_ev(WheelPrizePool.jackpot, WheelPrizePool.golden, WheelPrizePool.regular)
+        + est["golden"] * pool_ev(WheelPrizePool.golden, WheelPrizePool.regular)
+        + est["loss"] * config.blackjack_consolation_coins
+    )
+    return WheelPoolsSummaryOut(
+        pools=list(summaries.values()), regular_spin_cost_coins=config.wheel_spin_cost_coins,
+        blackjack_p_jackpot=est["jackpot"], blackjack_p_golden=est["golden"], blackjack_p_loss=est["loss"],
+        blackjack_consolation_coins=config.blackjack_consolation_coins,
+        blackjack_expected_value_coins=round(game_ev, 1),
+    )
 
 
 @router.post("/prizes", response_model=WheelPrizeOut)

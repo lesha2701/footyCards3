@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
+import { fetchBlackjackStatus } from "@/api/blackjack";
 import { fetchGameLimits, fetchPenaltyStats } from "@/api/games";
 import { fetchArenaStats } from "@/api/matches";
 import { fetchPlayerTournamentCurrent } from "@/api/personalTournament";
@@ -63,6 +64,7 @@ export default function PlayPage() {
   const { data: strategoStats } = useQuery({ queryKey: ["stratego-stats"], queryFn: fetchStrategoStats });
   const { data: penaltyStats } = useQuery({ queryKey: ["penalty-stats"], queryFn: fetchPenaltyStats });
   const { data: limits } = useQuery({ queryKey: ["game-limits"], queryFn: fetchGameLimits });
+  const { data: blackjack } = useQuery({ queryKey: ["blackjack-status"], queryFn: fetchBlackjackStatus });
   const { data: playerTournamentCurrent } = useQuery({
     queryKey: ["player-tournament", "current"],
     queryFn: fetchPlayerTournamentCurrent,
@@ -110,7 +112,16 @@ export default function PlayPage() {
       description: "Временный состав из случайных карт и серия матчей", noLimit: true,
     },
   ];
+  const blackjackEntries = blackjack ? blackjack.free_remaining + blackjack.replay_entries + blackjack.paid_entries : 0;
   const miniGames: GameDef[] = [
+    ...(blackjack?.enabled
+      ? [{
+        path: "/play/blackjack", Icon: IconCard, badgeClass: "bg-amber-400", title: "21: Добавленное время",
+        description: "Блэкджек против Тренера соперника — победа крутит Золотое колесо",
+        stat: blackjack.active_match ? "Партия идёт" : `Попыток: ${blackjackEntries}`,
+        rightLabel: blackjack.free_remaining > 0 ? "бесплатно сегодня" : `⭐ ${blackjack.stars_cost}`,
+      }]
+      : []),
     {
       path: "/play/memory", Icon: IconBrain, badgeClass: "bg-accent-cyan", title: "Memory Sequence",
       description: "Запомни и повтори последовательность символов",

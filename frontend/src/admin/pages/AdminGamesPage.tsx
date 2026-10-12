@@ -72,6 +72,7 @@ export default function AdminGamesPage() {
     key:
       | "matchmaking_enabled"
       | "wheel_enabled"
+      | "blackjack_enabled"
       | "leagues_enabled"
       | "diamond_rating_cap_enabled"
       | "bot_daily_digest_enabled"
@@ -106,6 +107,7 @@ export default function AdminGamesPage() {
         <div className="flex flex-col gap-2">
           {toggle("matchmaking_enabled", "Показывать кнопку «Играть» (подбор соперника) в Тактико и Пенальти")}
           {toggle("wheel_enabled", "Показывать раздел «Колесо фортуны» на главном экране")}
+          {toggle("blackjack_enabled", "Игра «21: Добавленное время» (новые партии и покупка попыток)")}
           {toggle("leagues_enabled", "Показывать баннер лиг на главном экране и в профиле")}
         </div>
       </section>
@@ -428,6 +430,20 @@ export default function AdminGamesPage() {
           {field("wheel_spin_cost_coins", "Платная прокрутка, монеты")}
           {field("wheel_spin_cost_stars", "Платная прокрутка, ⭐")}
           {field("wheel_duplicate_badge_coins", "Компенсация за повтор значка")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">«21: Добавленное время»</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Призы победы и «Хет-трика» — Золотое и Джекпот-колесо на странице «Колесо фортуны». Лимит платных 0 = только
+          бесплатные партии.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("blackjack_free_per_day", "Бесплатных партий в день")}
+          {field("blackjack_stars_cost", "Платная попытка, ⭐")}
+          {field("blackjack_paid_daily_limit", "Платных попыток в день (покупок)")}
+          {field("blackjack_consolation_coins", "Утешительный приз за поражение, монеты")}
         </div>
       </section>
 

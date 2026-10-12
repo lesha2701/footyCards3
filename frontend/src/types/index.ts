@@ -307,18 +307,22 @@ export interface StarsInvoiceStatus {
   coin_result: StarsCoinResult | null;
   gift_result: Gift | null;
   wheel_result: WheelSpinResult | null;
+  blackjack_result?: { kind: "entry"; paid_entries?: number } | null;
 }
+
+export type WheelPrizePool = "regular" | "golden" | "jackpot";
 
 export interface WheelPrize {
   id: number;
   prize_type: "coins" | "pack" | "card_rarity" | "badge";
+  pool: WheelPrizePool;
   weight: number;
   is_active: boolean;
   sort_order: number;
   coins_amount: number | null;
   pack_id: number | null;
   pack: Pack | null;
-  card_rarity: "common" | "rare" | "epic" | "legendary" | null;
+  card_rarity: Rarity | null;
   badge_id: number | null;
   badge: Badge | null;
 }
@@ -330,6 +334,54 @@ export interface WheelStatus {
   spin_cost_coins: number;
   spin_cost_stars: number;
   prizes: WheelPrize[];
+}
+
+export interface BlackjackCard {
+  hidden: boolean;
+  rank: string | null;
+  suit: "gk" | "df" | "mf" | "fw" | null;
+}
+
+export type BlackjackOutcome = "hat_trick" | "win" | "push" | "loss";
+
+export interface BlackjackMatch {
+  id: number;
+  status: "in_progress" | "finished";
+  entry_source: "free" | "paid" | "replay";
+  player_cards: BlackjackCard[];
+  player_total: number;
+  player_soft: boolean;
+  dealer_cards: BlackjackCard[];
+  dealer_total: number;
+  outcome: BlackjackOutcome | null;
+  outcome_reason: string | null;
+  reward_pool: WheelPrizePool | null;
+  prize: WheelPrize | null;
+  consolation_coins: number;
+  created_at: string;
+  finished_at: string | null;
+}
+
+export interface BlackjackAction {
+  match: BlackjackMatch;
+  new_balance: number;
+  spin_result: WheelSpinResult | null;
+}
+
+export interface BlackjackStatus {
+  enabled: boolean;
+  free_per_day: number;
+  free_remaining: number;
+  paid_entries: number;
+  replay_entries: number;
+  paid_bought_today: number;
+  paid_daily_limit: number;
+  stars_cost: number;
+  consolation_coins: number;
+  next_reset_at: string;
+  active_match: BlackjackMatch | null;
+  golden_prizes: WheelPrize[];
+  jackpot_prizes: WheelPrize[];
 }
 
 export interface WheelSpinResult {

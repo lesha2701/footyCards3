@@ -48,6 +48,7 @@ const AdminShopPage = lazy(() => import("@/admin/pages/AdminShopPage"));
 const AdminBroadcastsPage = lazy(() => import("@/admin/pages/AdminBroadcastsPage"));
 const AdminLogPage = lazy(() => import("@/admin/pages/AdminLogPage"));
 const WheelPage = lazy(() => import("@/pages/WheelPage"));
+const BlackjackPage = lazy(() => import("@/pages/BlackjackPage"));
 const PacksPage = lazy(() => import("@/pages/PacksPage"));
 const PackOpenPage = lazy(() => import("@/pages/PackOpenPage"));
 const PlayPage = lazy(() => import("@/pages/PlayPage"));
@@ -249,6 +250,7 @@ export default function App() {
         <Route path="/play/penalty/open/:matchId" element={<PenaltyOpenChallengePage />} />
         <Route path="/play/free-kick" element={<FreeKickGamePage />} />
         <Route path="/play/hangman" element={<HangmanGamePage />} />
+        <Route path="/play/blackjack" element={<BlackjackPage />} />
         <Route path="/play/pairs" element={<PairsGamePage />} />
         <Route path="/play/fut-draft" element={<FutDraftGamePage />} />
         <Route path="/collection" element={<CollectionPage />} />

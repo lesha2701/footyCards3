@@ -40,7 +40,9 @@ import type {
   AdminTournamentStats,
   AdminTournamentSummary,
   AdminUser,
+  AdminWheelPoolsSummary,
   AdminWheelPrize,
+  AdminWheelPrizePool,
   CardCollection,
   DailyRewardOption,
   Dashboard,
@@ -475,8 +477,8 @@ export async function backfillPremiumTaskCoins(): Promise<{ definitions_updated:
 }
 
 // --- Wheel of Fortune ---
-export async function fetchAdminWheelPrizes(): Promise<AdminWheelPrize[]> {
-  const { data } = await api.get<AdminWheelPrize[]>("/admin/wheel/prizes");
+export async function fetchAdminWheelPrizes(pool?: AdminWheelPrizePool): Promise<AdminWheelPrize[]> {
+  const { data } = await api.get<AdminWheelPrize[]>("/admin/wheel/prizes", { params: pool ? { pool } : undefined });
   return data;
 }
 export async function createWheelPrize(payload: Record<string, unknown>): Promise<AdminWheelPrize> {
@@ -489,6 +491,10 @@ export async function updateWheelPrize(id: number, payload: Record<string, unkno
 }
 export async function deleteWheelPrize(id: number): Promise<void> {
   await api.delete(`/admin/wheel/prizes/${id}`);
+}
+export async function fetchAdminWheelPoolsSummary(): Promise<AdminWheelPoolsSummary> {
+  const { data } = await api.get<AdminWheelPoolsSummary>("/admin/wheel/pools-summary");
+  return data;
 }
 export async function toggleWheelPrizeActive(id: number): Promise<AdminWheelPrize> {
   const { data } = await api.post<AdminWheelPrize>(`/admin/wheel/prizes/${id}/toggle-active`);
