@@ -311,12 +311,15 @@ class GameConfig(TimestampMixin, Base):
     # Футбольное Стратего (see stratego_engine.py for the rules these drive).
     # board_size / move_limit / piece counts are snapshotted into each
     # match's server_state at creation, so edits never break a live match.
-    stratego_board_size: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    # 8×8+ boards also get two 2×2 lakes in the middle (stratego_engine.default_lakes).
+    stratego_board_size: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     stratego_wall_count: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
-    stratego_regular_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    stratego_tackler_count: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    stratego_speedster_count: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    stratego_regular_count: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
     # Total plies (both sides' moves together); reaching it ends the match on
     # remaining strength (sum of power of surviving mobile pieces).
-    stratego_move_limit: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    stratego_move_limit: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
     stratego_challenge_expiry_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
     stratego_move_timeout_hours: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
     # Consecutive timed-out moves auto-played for one side before that side

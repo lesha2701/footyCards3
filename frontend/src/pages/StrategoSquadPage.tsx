@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchStrategoSquad, saveStrategoSquad } from "@/api/stratego";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronLeft } from "@/components/icons";
-import { ROLE_META, autoLayout, roleOfSlot } from "@/components/stratego/strategoMeta";
+import { ROLE_META, autoLayout, roleOfSlot, slotLabel } from "@/components/stratego/strategoMeta";
 import { formatGameError } from "@/lib/errors";
 import type { StrategoCard, StrategoSquad } from "@/types";
 
@@ -113,7 +113,7 @@ export default function StrategoSquadPage() {
             >
               <span className="text-xl">{meta.glyph}</span>
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold text-ink-chalk">{meta.label}</span>
+                <span className="block text-sm font-bold text-ink-chalk">{slotLabel(s.slot)}</span>
                 <span className="block truncate text-[11px] text-ink-mist">
                   {card ? `${card.display_name} · ${card.position}` : "Не выбрана"}
                 </span>
@@ -135,7 +135,7 @@ export default function StrategoSquadPage() {
           Верхний ряд — ближний к сопернику. Нажми фишку, потом клетку — фишки поменяются местами.
         </p>
         <div
-          className="grid w-full gap-1 rounded-2xl bg-accent-green/15 p-1.5"
+          className={`grid w-full rounded-2xl bg-accent-green/15 p-1 ${size >= 8 ? "gap-0.5" : "gap-1"}`}
           style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
         >
           {[0, 1].flatMap((r) =>
@@ -153,7 +153,7 @@ export default function StrategoSquadPage() {
                 >
                   {role && (
                     <span className="flex h-[88%] w-[88%] flex-col items-center justify-center rounded-md bg-accent-cyan text-bg-base">
-                      <span className="text-base">{ROLE_META[role].glyph}</span>
+                      <span className="text-sm leading-none">{ROLE_META[role].glyph}</span>
                       {card && <span className="mt-0.5 font-mono text-[9px] font-bold">{card.rating}</span>}
                     </span>
                   )}
@@ -207,7 +207,7 @@ function CardPicker({
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={onClose}>
       <div className="safe-bottom max-h-[75vh] w-full overflow-y-auto rounded-t-3xl bg-bg-base p-5" onClick={(e) => e.stopPropagation()}>
-        <p className="font-display text-base font-bold text-ink-chalk">{ROLE_META[def.role].label}</p>
+        <p className="font-display text-base font-bold text-ink-chalk">{slotLabel(slot)}</p>
         <p className="mb-3 text-[11px] text-ink-mist">
           {ROLE_META[def.role].hint}
           {eligible && ` · Позиции: ${eligible.join(", ")}`}

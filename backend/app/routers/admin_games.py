@@ -33,7 +33,11 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
     if config.card_skill_probability_floor_pct >= config.card_skill_probability_ceiling_pct:
         await db.rollback()
         raise ConflictError("Нижняя граница вероятности навыков должна быть меньше верхней")
-    if 1 + config.stratego_wall_count + 4 + config.stratego_regular_count > 2 * config.stratego_board_size:
+    stratego_pieces = (
+        3 + config.stratego_wall_count + config.stratego_tackler_count  # cup + star + provocateur
+        + config.stratego_speedster_count + config.stratego_regular_count
+    )
+    if stratego_pieces > 2 * config.stratego_board_size:
         await db.rollback()
         raise ConflictError("Стратего: все фишки должны помещаться в два ряда поля")
     db.add(config)

@@ -1936,6 +1936,8 @@ export interface StrategoInfo {
   board_size: number;
   wall_count: number;
   regular_count: number;
+  tackler_count: number;
+  speedster_count: number;
   move_limit: number;
   move_timeout_hours: number;
   challenge_expiry_hours: number;
@@ -1988,6 +1990,8 @@ export interface StrategoMatch {
   status: StrategoMatchStatus;
   viewer_side: "user" | "opponent";
   board_size: number;
+  /** Impassable puddle cells, viewer coordinates. */
+  lakes: [number, number][];
   move_limit: number;
   ply: number;
   my_turn: boolean;

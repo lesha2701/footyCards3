@@ -50,6 +50,8 @@ class StrategoInfoOut(BaseModel):
     board_size: int
     wall_count: int
     regular_count: int
+    tackler_count: int
+    speedster_count: int
     move_limit: int
     move_timeout_hours: int
     challenge_expiry_hours: int
@@ -109,6 +111,8 @@ class StrategoMatchOut(BaseModel):
     status: StrategoMatchStatus
     viewer_side: Literal["user", "opponent"]
     board_size: int
+    # Impassable puddle cells, in the viewer's coordinates.
+    lakes: list[list[int]] = []
     move_limit: int
     ply: int
     my_turn: bool

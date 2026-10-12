@@ -21,6 +21,13 @@ tie removes both pieces.
 
 Layouts are expressed relative to their owner: row 0 = front row, row 1 =
 back row, column 0 = owner's left.
+
+Lakes (лужи): on boards of 8×8 and larger, two 2×2 impassable puddles sit
+in the two middle rows (see default_lakes) — nobody can stand on or pass
+through them, which funnels play into three lanes like classic Stratego.
+
+Piece counts come in as a dict {"wall", "tackler", "speedster", "regular"};
+star, provocateur and cup are always exactly one.
 """
 from __future__ import annotations
 
@@ -41,12 +48,37 @@ class EngineError(ValueError):
 # Slots & layouts
 # ---------------------------------------------------------------------------
 
-def card_slots(regular_count: int) -> list[str]:
-    return [*CARD_ROLES, *(f"regular_{i}" for i in range(1, regular_count + 1))]
+def _numbered(role: str, count: int) -> list[str]:
+    # A single tackler/speedster keeps the bare role name as its slot key.
+    return [role] if count == 1 else [f"{role}_{i}" for i in range(1, count + 1)]
 
 
-def all_slots(wall_count: int, regular_count: int) -> list[str]:
-    return ["cup", *(f"wall_{i}" for i in range(1, wall_count + 1)), *card_slots(regular_count)]
+def card_slots(counts: dict) -> list[str]:
+    return [
+        "star",
+        *_numbered("tackler", counts.get("tackler", 1)),
+        "provocateur",
+        *_numbered("speedster", counts.get("speedster", 1)),
+        *(f"regular_{i}" for i in range(1, counts.get("regular", 0) + 1)),
+    ]
+
+
+def all_slots(counts: dict) -> list[str]:
+    return ["cup", *(f"wall_{i}" for i in range(1, counts.get("wall", 0) + 1)), *card_slots(counts)]
+
+
+def piece_total(counts: dict) -> int:
+    return len(all_slots(counts))
+
+
+def default_lakes(board_size: int) -> list[list[int]]:
+    """Two 2×2 puddles in the middle rows, mirrored so both sides face the
+    same terrain. Only on boards of 8×8+ — smaller boards stay open."""
+    if board_size < 8:
+        return []
+    rows = (board_size // 2 - 1, board_size // 2)
+    cols = (1, 2, board_size - 3, board_size - 2)
+    return [[r, c] for r in rows for c in cols]
 
 
 def role_of(slot: str) -> str:
@@ -203,6 +235,7 @@ def legal_moves(state: dict, side: str) -> list[tuple[int, int, int, int, int]]:
     """(piece_id, from_row, from_col, to_row, to_col) for every legal move."""
     n = state["board_size"]
     occ = _occupancy(state)
+    lakes = {(r, c) for r, c in state.get("lakes", [])}
     moves = []
     for p in sorted((p for p in state["pieces"] if p["alive"] and p["side"] == side), key=lambda p: p["id"]):
         if p["role"] in IMMOBILE_ROLES:
@@ -212,7 +245,7 @@ def legal_moves(state: dict, side: str) -> list[tuple[int, int, int, int, int]]:
             r, c = p["row"], p["col"]
             for _ in range(max_steps):
                 r, c = r + dr, c + dc
-                if not (0 <= r < n and 0 <= c < n):
+                if not (0 <= r < n and 0 <= c < n) or (r, c) in lakes:
                     break
                 occupant = occ.get((r, c))
                 if occupant is not None:

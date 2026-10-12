@@ -314,6 +314,8 @@ class GameConfigOut(BaseModel):
     tactico_max_epic_cards: int
     tactico_max_diamond_cards: int
     stratego_board_size: int
+    stratego_tackler_count: int
+    stratego_speedster_count: int
     stratego_wall_count: int
     stratego_regular_count: int
     stratego_move_limit: int
@@ -537,9 +539,11 @@ class GameConfigUpdate(BaseModel):
     tactico_max_legendary_cards: Optional[int] = Field(default=None, ge=0, le=11)
     tactico_max_epic_cards: Optional[int] = Field(default=None, ge=0, le=11)
     tactico_max_diamond_cards: Optional[int] = Field(default=None, ge=0, le=11)
-    stratego_board_size: Optional[int] = Field(default=None, ge=5, le=8)
+    stratego_board_size: Optional[int] = Field(default=None, ge=5, le=10)
+    stratego_tackler_count: Optional[int] = Field(default=None, ge=1, le=6)
+    stratego_speedster_count: Optional[int] = Field(default=None, ge=0, le=6)
     stratego_wall_count: Optional[int] = Field(default=None, ge=0, le=4)
-    stratego_regular_count: Optional[int] = Field(default=None, ge=0, le=4)
+    stratego_regular_count: Optional[int] = Field(default=None, ge=0, le=12)
     stratego_move_limit: Optional[int] = Field(default=None, ge=4, le=400)
     stratego_challenge_expiry_hours: Optional[int] = Field(default=None, ge=1)
     stratego_move_timeout_hours: Optional[int] = Field(default=None, ge=1)

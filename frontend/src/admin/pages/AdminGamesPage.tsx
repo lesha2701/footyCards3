@@ -578,14 +578,16 @@ export default function AdminGamesPage() {
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-1 font-display text-base font-bold">Футбольное Стратего</p>
         <p className="mb-3 text-xs text-slate-500">
-          Фишки: Кубок + стенки + Звезда, Подкатчик, Провокатор, Скорость + обычные игроки — все должны помещаться в два
-          ряда поля. Размер поля, состав и лимит ходов применяются к новым матчам; идущие матчи доигрываются по старым
+          Фишки: Кубок + стенки + Звезда + Провокатор + подкатчики + скорости + обычные игроки — все должны помещаться в
+          два ряда поля. На поле 8×8 и больше в центре две лужи 2×2. Размер поля, состав и лимит ходов применяются к новым матчам; идущие матчи доигрываются по старым
           настройкам. Награда (и с ботом, и с соперником) — в пределах дневного лимита каждого игрока; сдавшийся или
           пропустивший ходы получает 0.
         </p>
         <div className="grid grid-cols-2 gap-3">
-          {field("stratego_board_size", "Размер поля (5-8)")}
+          {field("stratego_board_size", "Размер поля (5-10; лужи с 8)")}
           {field("stratego_wall_count", "Число стенок")}
+          {field("stratego_tackler_count", "Подкатчиков")}
+          {field("stratego_speedster_count", "Скоростей")}
           {field("stratego_regular_count", "Обычных игроков")}
           {field("stratego_move_limit", "Лимит ходов (обоих)")}
           {field("stratego_challenge_expiry_hours", "Срок жизни вызова, часы")}

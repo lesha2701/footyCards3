@@ -30,10 +30,12 @@ match_result_enum = postgresql.ENUM("win", "draw", "loss", name="match_result_en
 NEW_ENUMS = [stratego_opponent_type_enum, stratego_match_status_enum]
 
 CONFIG_INT_COLUMNS = (
-    ("stratego_board_size", "6"),
+    ("stratego_board_size", "8"),
     ("stratego_wall_count", "2"),
-    ("stratego_regular_count", "1"),
-    ("stratego_move_limit", "40"),
+    ("stratego_tackler_count", "3"),
+    ("stratego_speedster_count", "2"),
+    ("stratego_regular_count", "6"),
+    ("stratego_move_limit", "120"),
     ("stratego_challenge_expiry_hours", "24"),
     ("stratego_move_timeout_hours", "12"),
     ("stratego_max_auto_moves", "3"),

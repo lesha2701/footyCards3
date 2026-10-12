@@ -68,7 +68,7 @@ export default function StrategoMatchPage() {
 
   const size = match.board_size;
   const selected = match.pieces.find((p) => p.id === selectedId) ?? null;
-  const targets = selected && match.my_turn ? legalTargets(match.pieces, selected, size) : [];
+  const targets = selected && match.my_turn ? legalTargets(match.pieces, selected, size, match.lakes) : [];
   const last = match.history[match.history.length - 1];
 
   const onCell = (r: number, c: number) => {
@@ -127,6 +127,7 @@ export default function StrategoMatchPage() {
           selectedId={selectedId}
           targets={targets}
           lastMove={last ? { from: last.from_cell, to: last.to_cell } : null}
+          lakes={match.lakes}
           onCellClick={onCell}
         />
       )}

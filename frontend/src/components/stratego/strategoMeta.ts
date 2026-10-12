@@ -14,6 +14,12 @@ export function roleOfSlot(slot: string): StrategoRole {
   return slot.split("_")[0] as StrategoRole;
 }
 
+/** "tackler_2" -> "Подкатчик 2"; single-instance slots keep the bare label. */
+export function slotLabel(slot: string): string {
+  const [, n] = slot.split("_");
+  return n ? `${ROLE_META[roleOfSlot(slot)].label} ${n}` : ROLE_META[roleOfSlot(slot)].label;
+}
+
 export const WIN_REASON_LABELS: Record<string, string> = {
   cup_captured: "Кубок захвачен",
   no_moves: "Не осталось ходов",
@@ -24,9 +30,12 @@ export const WIN_REASON_LABELS: Record<string, string> = {
 
 /** UX-only mirror of stratego_engine.legal_moves for highlighting; the
  *  server re-validates every move. */
-export function legalTargets(pieces: StrategoPiece[], piece: StrategoPiece, size: number): [number, number][] {
+export function legalTargets(
+  pieces: StrategoPiece[], piece: StrategoPiece, size: number, lakes: [number, number][] = [],
+): [number, number][] {
   if (!piece.mine || piece.role === "cup" || piece.role === "wall") return [];
   const occ = new Map(pieces.map((p) => [`${p.row}:${p.col}`, p]));
+  const water = new Set(lakes.map(([r, c]) => `${r}:${c}`));
   const maxSteps = piece.role === "speedster" ? size : 1;
   const out: [number, number][] = [];
   for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
@@ -35,7 +44,7 @@ export function legalTargets(pieces: StrategoPiece[], piece: StrategoPiece, size
     for (let i = 0; i < maxSteps; i++) {
       r += dr;
       c += dc;
-      if (r < 0 || c < 0 || r >= size || c >= size) break;
+      if (r < 0 || c < 0 || r >= size || c >= size || water.has(`${r}:${c}`)) break;
       const occupant = occ.get(`${r}:${c}`);
       if (occupant) {
         if (!occupant.mine) out.push([r, c]);

@@ -122,9 +122,10 @@ def _auto_assign(infos: list[dict], slots: list[str], fixed: Optional[dict[str, 
         return (fitting or free or [None])[0]
 
     # Star first (strongest card), then the scarcest position-bound roles.
-    order = ["star", "tackler", "speedster", "provocateur", *[s for s in slots if engine.role_of(s) == "regular"]]
+    priority = {"star": 0, "tackler": 1, "speedster": 2, "provocateur": 3, "regular": 4}
+    order = sorted(slots, key=lambda s: (priority[engine.role_of(s)], s))
     for slot in order:
-        if slot in slots and slot not in chosen:
+        if slot not in chosen:
             pick = best(engine.role_of(slot))
             if pick is None:
                 break
@@ -151,8 +152,11 @@ def _auto_assign(infos: list[dict], slots: list[str], fixed: Optional[dict[str, 
 # Squad & layout (pre-match preparation)
 # ---------------------------------------------------------------------------
 
-def _slot_counts(config: GameConfig) -> tuple[int, int, int]:
-    return config.stratego_board_size, config.stratego_wall_count, config.stratego_regular_count
+def _slot_counts(config: GameConfig) -> tuple[int, dict]:
+    return config.stratego_board_size, {
+        "wall": config.stratego_wall_count, "tackler": config.stratego_tackler_count,
+        "speedster": config.stratego_speedster_count, "regular": config.stratego_regular_count,
+    }
 
 
 async def _usable_cards(db: AsyncSession, user_id: int) -> list[UserCard]:
@@ -171,10 +175,10 @@ def _layout_rng(user_id: int) -> random.Random:
 
 
 async def _resolve_squad(
-    db: AsyncSession, user: User, board_size: int, wall_count: int, regular_count: int,
+    db: AsyncSession, user: User, board_size: int, counts: dict,
 ) -> tuple[dict[str, dict], dict[str, list[int]], list[dict]]:
-    slots = engine.all_slots(wall_count, regular_count)
-    cslots = engine.card_slots(regular_count)
+    slots = engine.all_slots(counts)
+    cslots = engine.card_slots(counts)
     infos = [_card_info(c) for c in await _usable_cards(db, user.id)]
     by_card_id = {i["card"]["user_card_id"]: i for i in infos}
 
@@ -195,12 +199,12 @@ def _card_out(info: dict) -> StrategoCardOut:
 
 async def get_squad(db: AsyncSession, user: User) -> StrategoSquadOut:
     config = await get_config(db)
-    board_size, wall_count, regular_count = _slot_counts(config)
-    cards, layout, infos = await _resolve_squad(db, user, board_size, wall_count, regular_count)
-    cslots = engine.card_slots(regular_count)
+    board_size, counts = _slot_counts(config)
+    cards, layout, infos = await _resolve_squad(db, user, board_size, counts)
+    cslots = engine.card_slots(counts)
     return StrategoSquadOut(
         board_size=board_size,
-        slots=engine.all_slots(wall_count, regular_count),
+        slots=engine.all_slots(counts),
         card_slots=[
             StrategoSquadSlotOut(
                 slot=s, role=engine.role_of(s),
@@ -219,9 +223,9 @@ async def get_squad(db: AsyncSession, user: User) -> StrategoSquadOut:
 
 async def set_squad(db: AsyncSession, user: User, cards: dict[str, int], layout: dict) -> StrategoSquadOut:
     config = await get_config(db)
-    board_size, wall_count, regular_count = _slot_counts(config)
-    slots = engine.all_slots(wall_count, regular_count)
-    cslots = engine.card_slots(regular_count)
+    board_size, counts = _slot_counts(config)
+    slots = engine.all_slots(counts)
+    cslots = engine.card_slots(counts)
 
     if set(cards) != set(cslots):
         raise ConflictError("Выбери карточку для каждой роли")
@@ -273,7 +277,8 @@ async def get_info(db: AsyncSession, user: User) -> StrategoInfoOut:
     reset_day = local_today(user.stratego_attempts_reset_at) if user.stratego_attempts_reset_at else None
     return StrategoInfoOut(
         board_size=config.stratego_board_size, wall_count=config.stratego_wall_count,
-        regular_count=config.stratego_regular_count, move_limit=config.stratego_move_limit,
+        regular_count=config.stratego_regular_count, tackler_count=config.stratego_tackler_count,
+        speedster_count=config.stratego_speedster_count, move_limit=config.stratego_move_limit,
         move_timeout_hours=config.stratego_move_timeout_hours,
         challenge_expiry_hours=config.stratego_challenge_expiry_hours,
         max_auto_moves=config.stratego_max_auto_moves,
@@ -288,14 +293,14 @@ async def get_info(db: AsyncSession, user: User) -> StrategoInfoOut:
 # ---------------------------------------------------------------------------
 
 def _new_state(config: GameConfig) -> dict:
-    board_size, wall_count, regular_count = _slot_counts(config)
-    slots = engine.all_slots(wall_count, regular_count)
+    board_size, counts = _slot_counts(config)
+    slots = engine.all_slots(counts)
     if len(slots) > 2 * board_size:
         raise ConflictError("Настройки Стратего: фишек больше, чем клеток в двух рядах")
     ids = list(range(1, 2 * len(slots) + 1))
     random.shuffle(ids)
     return {
-        "board_size": board_size, "wall_count": wall_count, "regular_count": regular_count,
+        "board_size": board_size, "counts": counts, "lakes": engine.default_lakes(board_size),
         "move_limit": config.stratego_move_limit, "max_auto_moves": config.stratego_max_auto_moves,
         "pieces": [], "ids": {"user": ids[: len(slots)], "opponent": ids[len(slots):]},
         "turn": None, "ply": 0, "history": [], "deadline": None,
@@ -305,12 +310,11 @@ def _new_state(config: GameConfig) -> dict:
 
 
 async def _add_human_side(db: AsyncSession, state: dict, side: str, user: User) -> None:
-    cards, layout, _ = await _resolve_squad(db, user, state["board_size"], state["wall_count"], state["regular_count"])
-    slots = engine.all_slots(state["wall_count"], state["regular_count"])
-    if len(cards) < len(engine.card_slots(state["regular_count"])):
-        raise ConflictError(
-            f"Для Стратего нужно минимум {len(engine.card_slots(state['regular_count']))} карточек в коллекции"
-        )
+    cards, layout, _ = await _resolve_squad(db, user, state["board_size"], state["counts"])
+    slots = engine.all_slots(state["counts"])
+    needed = len(engine.card_slots(state["counts"]))
+    if len(cards) < needed:
+        raise ConflictError(f"Для Стратего нужно минимум {needed} карточек в коллекции")
     state["pieces"].extend(engine.build_pieces(side, slots, cards, layout, state["board_size"], state["ids"][side]))
 
 
@@ -331,8 +335,8 @@ async def _bot_cards(db: AsyncSession, target_power: int, count: int) -> list[di
 
 
 def _add_bot_side(state: dict, infos: list[dict], rng: random.Random) -> None:
-    slots = engine.all_slots(state["wall_count"], state["regular_count"])
-    cards = _auto_assign(infos, engine.card_slots(state["regular_count"]))
+    slots = engine.all_slots(state["counts"])
+    cards = _auto_assign(infos, engine.card_slots(state["counts"]))
     layout = engine.auto_layout(slots, state["board_size"], rng)
     state["pieces"].extend(
         engine.build_pieces("opponent", slots, cards, layout, state["board_size"], state["ids"]["opponent"])
@@ -429,7 +433,7 @@ async def create_bot_match(db: AsyncSession, user: User) -> StrategoMatchOut:
 
     user_pieces = [p for p in state["pieces"] if p["role"] not in engine.IMMOBILE_ROLES]
     target = round(sum(p["power"] for p in user_pieces) / len(user_pieces))
-    infos = await _bot_cards(db, target, len(engine.card_slots(state["regular_count"])))
+    infos = await _bot_cards(db, target, len(engine.card_slots(state["counts"])))
     _add_bot_side(state, infos, random.Random())
     _start_play(state, config, is_bot=True)
 
@@ -982,6 +986,7 @@ async def _hydrate_match(db: AsyncSession, match: StrategoMatch, viewer_user: Us
         id=match.id, opponent_type=match.opponent_type, opponent_name=opponent_name,
         opponent_user_id=opponent_user_id, status=match.status, viewer_side=viewer,
         board_size=n, move_limit=state.get("move_limit", 0), ply=state.get("ply", 0),
+        lakes=[list(engine.to_viewer(viewer, r, c, n)) for r, c in state.get("lakes", [])],
         my_turn=in_play and state.get("turn") == viewer, deadline=deadline,
         my_auto_moves=(state.get("auto_moves") or {}).get(viewer, 0), max_auto_moves=state.get("max_auto_moves", 0),
         pieces=pieces,

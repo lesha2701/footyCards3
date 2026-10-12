@@ -26,6 +26,29 @@ def _reset_rate_limits():
     yield
 
 
+SMALL_COUNTS = {"wall": 2, "tackler": 1, "speedster": 1, "regular": 1}
+
+
+@pytest.fixture(autouse=True)
+async def _small_board(request, db_session):
+    """Most scenarios below are written for a compact 6×6 board with 8
+    pieces (coordinates in the tests assume it); the shipped 8×8 default is
+    covered by the tests whose name contains "default_8x8"."""
+    if "default_8x8" not in request.node.name:
+        config = await db_session.get(GameConfig, 1)
+        if config is None:
+            config = GameConfig(id=1)
+            db_session.add(config)
+        config.stratego_board_size = 6
+        config.stratego_wall_count = 2
+        config.stratego_tackler_count = 1
+        config.stratego_speedster_count = 1
+        config.stratego_regular_count = 1
+        config.stratego_move_limit = 40
+        await db_session.commit()
+    yield
+
+
 # ---------------------------------------------------------------------------
 # Engine helpers
 # ---------------------------------------------------------------------------
@@ -173,7 +196,7 @@ def test_side_left_without_moves_loses():
 # ---------------------------------------------------------------------------
 
 def test_auto_layout_fills_home_rows_with_cup_on_back_row():
-    slots = engine.all_slots(2, 1)
+    slots = engine.all_slots(SMALL_COUNTS)
     for seed in range(30):
         layout = engine.auto_layout(slots, 6, random.Random(seed))
         assert set(layout) == set(slots)
@@ -185,7 +208,7 @@ def test_auto_layout_fills_home_rows_with_cup_on_back_row():
 
 
 def test_validate_layout_rejects_bad_placements():
-    slots = engine.all_slots(2, 1)
+    slots = engine.all_slots(SMALL_COUNTS)
     good = engine.auto_layout(slots, 6, random.Random(1))
     with pytest.raises(engine.EngineError):
         engine.validate_layout({**good, "cup": [2, 0]}, slots, 6)
@@ -247,8 +270,8 @@ def test_bot_does_not_use_hidden_information():
 
 
 def test_bot_is_deterministic_for_a_seed():
-    slots = engine.all_slots(2, 1)
-    cards = {s: {"power": 60 + i, "rarity_rank": 0, "card": None} for i, s in enumerate(engine.card_slots(1))}
+    slots = engine.all_slots(SMALL_COUNTS)
+    cards = {s: {"power": 60 + i, "rarity_rank": 0, "card": None} for i, s in enumerate(engine.card_slots(SMALL_COUNTS))}
     state = _state([], turn="opponent")
     state["pieces"] = (
         engine.build_pieces("user", slots, cards, engine.auto_layout(slots, 6, random.Random(1)), 6, list(range(1, 9)))
@@ -267,7 +290,7 @@ def test_auto_assign_puts_strongest_card_on_star_and_respects_positions():
         }}
 
     infos = [info(1, 90, "CB"), info(2, 70, "CB"), info(3, 65, "LW"), info(4, 60, "CM"), info(5, 50, "GK")]
-    chosen = stratego_service._auto_assign(infos, engine.card_slots(1))
+    chosen = stratego_service._auto_assign(infos, engine.card_slots(SMALL_COUNTS))
     assert chosen["star"]["card"]["user_card_id"] == 1
     assert chosen["tackler"]["card"]["user_card_id"] == 2
     assert chosen["speedster"]["card"]["user_card_id"] == 3
@@ -701,10 +724,10 @@ async def test_matchmaking_timeout_falls_back_to_bot(client, db_session, bot_tok
 async def test_admin_can_edit_stratego_config(client, db_session, bot_token):
     auth = await _admin_auth(client, bot_token)
     body = (await client.get("/api/v1/admin/games/config", headers=auth)).json()
-    assert body["stratego_board_size"] == 6 and body["stratego_move_limit"] == 40
+    assert body["stratego_board_size"] == 6 and body["stratego_tackler_count"] == 1
     resp = await client.put("/api/v1/admin/games/config", headers=auth, json={"stratego_move_limit": 60})
     assert resp.status_code == 200 and resp.json()["stratego_move_limit"] == 60
-    too_many = await client.put("/api/v1/admin/games/config", headers=auth, json={"stratego_wall_count": 4, "stratego_regular_count": 4, "stratego_board_size": 5})
+    too_many = await client.put("/api/v1/admin/games/config", headers=auth, json={"stratego_wall_count": 4, "stratego_regular_count": 4, "stratego_board_size": 5, "stratego_speedster_count": 2})
     assert too_many.status_code == 409
 
 
@@ -805,3 +828,72 @@ async def test_open_challenge_hides_creator_layout_until_and_after_accept(client
     body = (await client.get(f"{API}/matches/{created['id']}", headers=headers_b)).json()
     match = await _load_match(db_session, created["id"])
     _assert_no_leak(body, match, "opponent")
+
+
+# ---------------------------------------------------------------------------
+# Shipped default: 8×8 board, two lakes, 16 pieces a side
+# ---------------------------------------------------------------------------
+
+def test_default_8x8_lakes_block_movement_and_speedster_runs():
+    lakes = engine.default_lakes(8)
+    assert sorted(map(tuple, lakes)) == [(3, 1), (3, 2), (3, 5), (3, 6), (4, 1), (4, 2), (4, 5), (4, 6)]
+    assert engine.default_lakes(6) == []
+    s = _state([
+        _piece(1, "user", "regular", 5, 1, power=60), _piece(2, "user", "speedster", 6, 2, power=60),
+        _piece(3, "user", "speedster", 7, 0, power=60), _piece(9, "opponent", "regular", 0, 7, power=10),
+    ], board_size=8)
+    s["lakes"] = lakes
+    targets = {(m[0], m[3], m[4]) for m in engine.legal_moves(s, "user")}
+    assert (1, 4, 1) not in targets  # cannot step into a puddle
+    assert (2, 5, 2) in targets and (2, 4, 2) not in targets and (2, 2, 2) not in targets  # run stops at the lake
+    assert (3, 0, 0) in targets  # open lane along the edge
+    with pytest.raises(engine.EngineError):
+        engine.apply_move(s, "user", 5, 1, 4, 1)
+
+
+def test_default_8x8_slots_and_auto_layout_fill_both_home_rows():
+    counts = {"wall": 2, "tackler": 3, "speedster": 2, "regular": 6}
+    slots = engine.all_slots(counts)
+    assert len(slots) == 16 and slots.count("cup") == 1
+    assert sum(engine.role_of(x) == "wall" for x in slots) == 2
+    assert {"tackler_1", "tackler_2", "tackler_3", "speedster_1", "speedster_2", "star", "provocateur"} <= set(slots)
+    for seed in range(10):
+        layout = engine.auto_layout(slots, 8, random.Random(seed))
+        assert len({tuple(v) for v in layout.values()}) == 16
+
+
+EIGHT_SPEC = [
+    (95, Position.ST), (80, Position.CB), (79, Position.LB), (78, Position.LW), (77, Position.RW), (76, Position.CM),
+    (70, Position.GK), (69, Position.RB), (68, Position.CDM), (67, Position.CAM), (66, Position.LM), (65, Position.RM),
+    (64, Position.ST),
+]
+
+
+async def test_default_8x8_bot_match_has_16_pieces_and_lakes(client, db_session, bot_token):
+    headers = await _register(client, bot_token, 970070)
+    user = await get_user_by_telegram_id(db_session, 970070)
+    await _give_cards(db_session, user.id, spec=EIGHT_SPEC)
+    squad = (await client.get(f"{API}/squad", headers=headers)).json()
+    assert squad["board_size"] == 8 and squad["is_complete"] and squad["cards_needed"] == 13
+    assert len(squad["slots"]) == 16 and len(squad["layout"]) == 16
+    roles = {s["slot"]: s["card"]["position"] for s in squad["card_slots"]}
+    assert all(roles[f"tackler_{i}"] in ("CB", "LB", "RB", "CDM") for i in (1, 2, 3))
+    assert roles["speedster_1"] in ("LW", "RW", "LM", "RM")
+
+    body = (await client.post(f"{API}/matches/bot", headers=headers)).json()
+    assert body["board_size"] == 8 and body["move_limit"] == 120 and len(body["lakes"]) == 8
+    mine = [p for p in body["pieces"] if p["mine"]]
+    assert len(mine) == 16
+    if body["ply"] == 0:
+        assert all(p["row"] in (6, 7) for p in mine)
+        assert sum(1 for p in body["pieces"] if not p["mine"]) == 16
+    match = await _load_match(db_session, body["id"])
+    _assert_no_leak(body, match, "user")
+
+
+async def test_default_8x8_requires_13_cards(client, db_session, bot_token):
+    headers, _, _ = await _player(client, db_session, bot_token, 970071)  # only 5 cards
+    squad = (await client.get(f"{API}/squad", headers=headers)).json()
+    assert squad["is_complete"] is False and squad["cards_needed"] == 13
+    resp = await client.post(f"{API}/matches/bot", headers=headers)
+    assert resp.status_code == 409 and "13" in resp.json()["error"]["message"]

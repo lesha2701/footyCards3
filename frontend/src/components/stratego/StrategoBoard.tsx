@@ -11,11 +11,13 @@ interface Props {
   onCellClick?: (row: number, col: number) => void;
   /** Rows to tint as the viewer's home rows (placement editor). */
   homeRows?: number[];
+  lakes?: [number, number][];
 }
 
-/** Square N×N pitch sized to the container width — fits 375px phones with
- *  ~52px cells on the default 6×6 board. Own pieces are always at the bottom. */
-export default function StrategoBoard({ size, pieces, selectedId, targets = [], lastMove, onCellClick, homeRows = [] }: Props) {
+/** Square N×N pitch sized to the container width — ~42px cells on a 375px
+ *  phone for the default 8×8 board. Own pieces are always at the bottom. */
+export default function StrategoBoard({ size, pieces, selectedId, targets = [], lastMove, onCellClick, homeRows = [], lakes = [] }: Props) {
+  const water = new Set(lakes.map(([r, c]) => `${r}:${c}`));
   const byCell = new Map(pieces.map((p) => [`${p.row}:${p.col}`, p]));
   const isTarget = (r: number, c: number) => targets.some(([tr, tc]) => tr === r && tc === c);
   const isLast = (r: number, c: number) =>
@@ -23,7 +25,7 @@ export default function StrategoBoard({ size, pieces, selectedId, targets = [], 
 
   return (
     <div
-      className="grid w-full gap-1 rounded-2xl bg-accent-green/15 p-1.5"
+      className={`grid w-full rounded-2xl bg-accent-green/15 p-1 ${size >= 8 ? "gap-0.5" : "gap-1"}`}
       style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
     >
       {Array.from({ length: size * size }, (_, i) => {
@@ -32,6 +34,17 @@ export default function StrategoBoard({ size, pieces, selectedId, targets = [], 
         const piece = byCell.get(`${r}:${c}`);
         const target = isTarget(r, c);
         const home = homeRows.includes(r);
+        if (water.has(`${r}:${c}`)) {
+          return (
+            <div
+              key={i}
+              aria-label="Лужа"
+              className="flex aspect-square items-center justify-center rounded-lg bg-sky-500/35 text-xs"
+            >
+              💧
+            </div>
+          );
+        }
         return (
           <button
             key={i}
@@ -71,7 +84,7 @@ export function PieceChip({ piece, selected, attackable }: { piece: StrategoPiec
       className={`${base} ${tone} ${selected ? "ring-2 ring-accent-lime scale-105" : ""} ${attackable ? "ring-2 ring-accent-lime" : ""}`}
       title={piece.card ? `${meta.label}: ${piece.card.display_name}` : meta.label}
     >
-      <span className="text-base">{meta.glyph}</span>
+      <span className="text-sm leading-none">{meta.glyph}</span>
       {piece.power ? <span className="mt-0.5 font-mono text-[9px] font-bold">{piece.power}</span> : null}
       {piece.mine && piece.revealed && <span className="absolute right-0.5 top-0.5 text-[8px]">👁</span>}
     </span>
