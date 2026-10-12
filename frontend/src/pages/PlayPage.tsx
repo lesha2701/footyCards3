@@ -10,6 +10,7 @@ import {
   IconBrain,
   IconCard,
   IconChevronRight,
+  IconFlag,
   IconFlagCheckered,
   IconGoal,
   IconHelp,
@@ -75,6 +76,10 @@ export default function PlayPage() {
       path: "/play/tactico", Icon: IconFlagCheckered, badgeClass: "bg-rarity-rare", title: "Тактико",
       description: "Состав из 11 карт против соперника, раунд за раундом",
       stat: `Рейтинг: ${tacticoStats?.tactics_rating ?? user?.tactics_rating ?? 0}`, limitKey: "tactico",
+    },
+    {
+      path: "/play/stratego", Icon: IconFlag, badgeClass: "bg-accent-green", title: "Футбольное Стратего",
+      description: "Скрытая расстановка твоих карточек: найди и захвати Кубок соперника", limitKey: "stratego",
     },
     {
       path: "/play/career", Icon: IconTrophy, badgeClass: "bg-accent-cyan", title: "Карьера тренера",

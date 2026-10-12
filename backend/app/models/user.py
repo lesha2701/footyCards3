@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, Integer, String, DateTime
+from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, Integer, JSON, String, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -101,6 +101,18 @@ class User(TimestampMixin, Base):
     pairs_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     pairs_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     pairs_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Футбольное Стратего
+    stratego_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    stratego_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    stratego_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    stratego_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Pre-match preparation: {"cards": {slot: user_card_id}, "layout": {slot:
+    # [row, col]}} (see stratego_service.get_squad). Placement is done here,
+    # before any challenge, so a match starts straight in play — both sides
+    # "placed simultaneously" because each prepared privately beforehand.
+    # Stale/missing entries are auto-filled lazily; None = fully auto.
+    stratego_squad: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Shared hourly pool across every club-scoped mini-game (Повтори порядок,
     # Пенальти, Своя позиция) — a member gets club_games_hourly_limit plays

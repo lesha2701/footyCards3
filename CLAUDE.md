@@ -12,7 +12,11 @@ Main features:
 - game currency, daily rewards and a free periodic pack;
 - seven mini-games: Memory Sequence, Card Arena, Саботёр (Saboteur), Пенальти,
   Штрафной удар (Free Kick), Футбольные буквы (a football-themed word-guessing
-  game), and Тактико (Tactico — turn-based squad-vs-squad, bot or friend);
+  game), Тактико (Tactico — turn-based squad-vs-squad, bot or friend) and
+  Футбольное Стратего (hidden-information board game on cards, bot or
+  friend — `stratego_engine.py` holds the pure rules, `stratego_service.py`
+  the DB/limits/rewards; only `_hydrate_match` may serialize a match, and
+  it strips unrevealed enemy pieces);
 - player-to-player card exchanges;
 - tasks/achievements, referrals, leaderboards and profile;
 - Telegram bot (notifications/reminders) and a React-based administrative panel.
@@ -66,7 +70,7 @@ Main features:
   `CoinTransaction` row; the caller still has to `db.add`/`db.commit`. Any
   coins/cards/packs/exchange mutation should go through this pattern.
 - **Mini-game hourly/daily limits**: each mini-game (memory, arena/match,
-  saboteur, penalty, free_kick, hangman, tactico) has two independent
+  saboteur, penalty, free_kick, hangman, tactico, pairs, stratego) has two independent
   counters on `User`: `<game>_hourly_attempts` / `<game>_hour_started_at`
   (a shared cap, `config.hourly_game_limit`, resets on a rolling 1h window —
   see `game_limits_service.py`) and `<game>_rewarded_attempts_today` /

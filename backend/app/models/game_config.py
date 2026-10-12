@@ -308,6 +308,25 @@ class GameConfig(TimestampMixin, Base):
     tactico_max_epic_cards: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     tactico_max_diamond_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
+    # Футбольное Стратего (see stratego_engine.py for the rules these drive).
+    # board_size / move_limit / piece counts are snapshotted into each
+    # match's server_state at creation, so edits never break a live match.
+    stratego_board_size: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    stratego_wall_count: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    stratego_regular_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Total plies (both sides' moves together); reaching it ends the match on
+    # remaining strength (sum of power of surviving mobile pieces).
+    stratego_move_limit: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    stratego_challenge_expiry_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
+    stratego_move_timeout_hours: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
+    # Consecutive timed-out moves auto-played for one side before that side
+    # forfeits — keeps an absent player from being carried by the autopilot.
+    stratego_max_auto_moves: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    stratego_reward_win: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    stratego_reward_draw: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    stratego_reward_loss: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    stratego_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+
     match_max_diamond_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     # Soft ceiling on diamond card leveling (feed_cards never lets a card's

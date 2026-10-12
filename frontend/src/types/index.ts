@@ -569,6 +569,7 @@ export interface GameLimits {
   hangman: number;
   tactico: number;
   pairs: number;
+  stratego: number;
   /** Exhausted games only: when the hourly cap frees up again. */
   resets_at?: Partial<Record<string, string>>;
 }
@@ -1896,4 +1897,118 @@ export interface MatchSkillNote {
   bonus_pp: number;
   player: string | null;
   decisive: boolean;
+}
+
+// --- Футбольное Стратего ---
+
+export type StrategoRole = "cup" | "wall" | "star" | "tackler" | "provocateur" | "speedster" | "regular";
+
+export interface StrategoCard {
+  user_card_id: number | null;
+  player_id: number;
+  display_name: string;
+  position: string;
+  image_path: string | null;
+  rarity: Rarity;
+  rating: number;
+}
+
+export interface StrategoSquadSlot {
+  slot: string;
+  role: StrategoRole;
+  card: StrategoCard | null;
+  eligible_positions: string[] | null;
+}
+
+export interface StrategoSquad {
+  board_size: number;
+  slots: string[];
+  card_slots: StrategoSquadSlot[];
+  /** slot -> [row, col]; row 0 = front row, row 1 = back row. */
+  layout: Record<string, [number, number]>;
+  is_complete: boolean;
+  cards_needed: number;
+  options: StrategoCard[];
+}
+
+export interface StrategoInfo {
+  board_size: number;
+  wall_count: number;
+  regular_count: number;
+  move_limit: number;
+  move_timeout_hours: number;
+  challenge_expiry_hours: number;
+  max_auto_moves: number;
+  reward_win: number;
+  reward_draw: number;
+  reward_loss: number;
+  daily_limit: number;
+  rewarded_today: number;
+}
+
+export interface StrategoPiece {
+  id: number;
+  mine: boolean;
+  row: number;
+  col: number;
+  hidden: boolean;
+  revealed: boolean;
+  moved: boolean;
+  role: StrategoRole | null;
+  power: number | null;
+  card: StrategoCard | null;
+}
+
+export interface StrategoCombatPiece {
+  id: number;
+  mine: boolean;
+  role: StrategoRole;
+  power: number;
+  card: StrategoCard | null;
+}
+
+export interface StrategoMove {
+  ply: number;
+  mine: boolean;
+  piece_id: number;
+  from_cell: [number, number];
+  to_cell: [number, number];
+  auto: boolean;
+  combat: { attacker: StrategoCombatPiece; defender: StrategoCombatPiece; survivor: "attacker" | "defender" | "both" } | null;
+}
+
+export type StrategoMatchStatus = "pending_accept" | "in_progress" | "finished" | "declined" | "cancelled" | "expired";
+
+export interface StrategoMatch {
+  id: number;
+  opponent_type: "bot" | "friend" | "online";
+  opponent_name: string;
+  opponent_user_id: number | null;
+  status: StrategoMatchStatus;
+  viewer_side: "user" | "opponent";
+  board_size: number;
+  move_limit: number;
+  ply: number;
+  my_turn: boolean;
+  deadline: string | null;
+  my_auto_moves: number;
+  max_auto_moves: number;
+  pieces: StrategoPiece[];
+  lost_mine: StrategoCombatPiece[];
+  lost_opponent: StrategoCombatPiece[];
+  history: StrategoMove[];
+  result: MatchResult | null;
+  win_reason: "cup_captured" | "no_moves" | "move_limit" | "forfeit" | "timeout" | null;
+  reward_coins: number;
+  my_strength: number | null;
+  opponent_strength: number | null;
+  created_at: string;
+  expires_at: string | null;
+  resolved_at: string | null;
+}
+
+export interface StrategoSearchStatus {
+  status: "not_searching" | "searching" | "matched" | "timeout";
+  match_id: number | null;
+  created_at: string | null;
 }

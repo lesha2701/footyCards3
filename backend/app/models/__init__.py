@@ -36,6 +36,7 @@ from app.models.player_tournament import (
     PlayerTournamentQueueEntry, PlayerTournamentQueueState, PlayerTournamentResult, PlayerTournamentStanding,
 )
 from app.models.player import Player
+from app.models.stratego import StrategoMatch, StrategoQueueEntry
 from app.models.task import TaskDefinition, UserTask
 from app.models.tournament_queue import TournamentQueue, TournamentQueueEntry, TournamentQueueState
 from app.models.tournament import Tournament, TournamentClub
@@ -55,6 +56,8 @@ from app.models.club_stadium_card import ClubStadiumCard
 
 __all__ = [
     "AdminAction",
+    "StrategoMatch",
+    "StrategoQueueEntry",
     "Badge",
     "UserBadge",
     "UserCard",

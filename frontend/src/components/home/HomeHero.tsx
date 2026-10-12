@@ -18,6 +18,7 @@ import type { LeagueStatus, ProfilePrivate } from "@/types";
 const GAME_TITLES: Record<string, string> = {
   "/play/arena": "Card Arena",
   "/play/tactico": "Тактико",
+  "/play/stratego": "Стратего",
   "/player-tournament": "Турнир",
   "/play/career": "Карьера",
   "/play/penalty": "Пенальти",

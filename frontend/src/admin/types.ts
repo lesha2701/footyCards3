@@ -270,6 +270,17 @@ export interface GameConfig {
   tactico_max_legendary_cards: number;
   tactico_max_epic_cards: number;
   tactico_max_diamond_cards: number;
+  stratego_board_size: number;
+  stratego_wall_count: number;
+  stratego_regular_count: number;
+  stratego_move_limit: number;
+  stratego_challenge_expiry_hours: number;
+  stratego_move_timeout_hours: number;
+  stratego_max_auto_moves: number;
+  stratego_reward_win: number;
+  stratego_reward_draw: number;
+  stratego_reward_loss: number;
+  stratego_daily_limit: number;
   match_max_diamond_cards: number;
   diamond_rating_cap: number;
   diamond_rating_cap_enabled: boolean;

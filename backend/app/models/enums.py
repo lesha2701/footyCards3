@@ -101,6 +101,7 @@ class TransactionType(str, enum.Enum):
     my_player_extra_training = "my_player_extra_training"
     lifestyle_purchase = "lifestyle_purchase"
     player_career_reward = "player_career_reward"
+    stratego_reward = "stratego_reward"
 
 
 class GiftKind(str, enum.Enum):
@@ -270,6 +271,21 @@ class TacticoMatchStatus(str, enum.Enum):
     expired = "expired"
 
 
+class StrategoOpponentType(str, enum.Enum):
+    bot = "bot"
+    friend = "friend"
+    online = "online"
+
+
+class StrategoMatchStatus(str, enum.Enum):
+    pending_accept = "pending_accept"
+    in_progress = "in_progress"
+    finished = "finished"
+    declined = "declined"
+    cancelled = "cancelled"
+    expired = "expired"
+
+
 class PenaltyMatchStatus(str, enum.Enum):
     pending_accept = "pending_accept"
     in_progress = "in_progress"
@@ -330,6 +346,10 @@ class NotificationType(str, enum.Enum):
     player_career_round_result = "player_career_round_result"
     player_career_season_finished = "player_career_season_finished"
     club_league_reward = "club_league_reward"
+    stratego_challenge_received = "stratego_challenge_received"
+    stratego_challenge_accepted = "stratego_challenge_accepted"
+    stratego_your_turn = "stratego_your_turn"
+    stratego_match_finished = "stratego_match_finished"
 
 
 class TradeCardSide(str, enum.Enum):

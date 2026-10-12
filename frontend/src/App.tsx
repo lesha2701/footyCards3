@@ -58,6 +58,10 @@ const TacticoMatchPage = lazy(() => import("@/pages/TacticoMatchPage"));
 const TacticoOpenChallengePage = lazy(() => import("@/pages/TacticoOpenChallengePage"));
 const TacticoSearchPage = lazy(() => import("@/pages/TacticoSearchPage"));
 const TacticoSquadPage = lazy(() => import("@/pages/TacticoSquadPage"));
+const StrategoPage = lazy(() => import("@/pages/StrategoPage"));
+const StrategoSquadPage = lazy(() => import("@/pages/StrategoSquadPage"));
+const StrategoSearchPage = lazy(() => import("@/pages/StrategoSearchPage"));
+const StrategoMatchPage = lazy(() => import("@/pages/StrategoMatchPage"));
 const SaboteurGamePage = lazy(() => import("@/pages/SaboteurGamePage"));
 const PenaltyGamePage = lazy(() => import("@/pages/PenaltyGamePage"));
 const PenaltyMatchesPage = lazy(() => import("@/pages/PenaltyMatchesPage"));
@@ -231,6 +235,10 @@ export default function App() {
         <Route path="/play/tactico/search" element={<TacticoSearchPage />} />
         <Route path="/play/tactico/matches/:matchId" element={<TacticoMatchPage />} />
         <Route path="/play/tactico/open/:matchId" element={<TacticoOpenChallengePage />} />
+        <Route path="/play/stratego" element={<StrategoPage />} />
+        <Route path="/play/stratego/squad" element={<StrategoSquadPage />} />
+        <Route path="/play/stratego/search" element={<StrategoSearchPage />} />
+        <Route path="/play/stratego/matches/:matchId" element={<StrategoMatchPage />} />
         <Route path="/play/saboteur" element={<SaboteurGamePage />} />
         <Route path="/play/penalty" element={<PenaltyGamePage />} />
         <Route path="/play/penalty/matches" element={<PenaltyMatchesPage />} />
