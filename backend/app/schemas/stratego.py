@@ -41,6 +41,8 @@ class StrategoSquadOut(BaseModel):
     cards_needed: int
     # max_legendary / max_diamond / min_rare / min_common for the UI counters.
     rarity_limits: dict[str, int] = {}
+    # Highest rarity allowed on a Подкатчик slot.
+    tackler_max_rarity: str = "diamond"
     # Rarity rules the current picks break (empty = valid); blocks play.
     violations: list[str] = []
     options: list[StrategoCardOut]
@@ -71,6 +73,7 @@ class StrategoInfoOut(BaseModel):
     min_rare: int = 0
     min_common: int = 0
     my_player_xp: int = 0
+    tackler_max_rarity: str = "diamond"
 
 
 class StrategoPieceOut(BaseModel):

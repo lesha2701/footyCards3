@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -319,6 +319,7 @@ class GameConfigOut(BaseModel):
     stratego_min_rare_cards: int
     stratego_min_common_cards: int
     stratego_my_player_xp: int
+    stratego_tackler_max_rarity: str
     stratego_tackler_count: int
     stratego_speedster_count: int
     stratego_wall_count: int
@@ -550,6 +551,7 @@ class GameConfigUpdate(BaseModel):
     stratego_min_rare_cards: Optional[int] = Field(default=None, ge=0, le=20)
     stratego_min_common_cards: Optional[int] = Field(default=None, ge=0, le=20)
     stratego_my_player_xp: Optional[int] = Field(default=None, ge=0, le=1000)
+    stratego_tackler_max_rarity: Optional[Literal["common", "rare", "epic", "legendary", "diamond"]] = None
     stratego_tackler_count: Optional[int] = Field(default=None, ge=1, le=6)
     stratego_speedster_count: Optional[int] = Field(default=None, ge=0, le=6)
     stratego_wall_count: Optional[int] = Field(default=None, ge=0, le=4)

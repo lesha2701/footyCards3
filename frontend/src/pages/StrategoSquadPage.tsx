@@ -10,6 +10,7 @@ import RoleIcon from "@/components/stratego/RoleIcon";
 import { PieceChip } from "@/components/stratego/StrategoBoard";
 import { ROLE_META, autoLayout, roleOfSlot, slotLabel } from "@/components/stratego/strategoMeta";
 import { formatGameError } from "@/lib/errors";
+import { RARITY_LABELS, RARITY_ORDER } from "@/lib/rarity";
 import type { StrategoCard, StrategoSquad } from "@/types";
 
 type Layout = Record<string, [number, number]>;
@@ -63,7 +64,11 @@ export default function StrategoSquadPage() {
     { label: "Обычных", value: count("common"), ok: count("common") >= lim.min_common, hint: `≥${lim.min_common}` },
   ];
   const full = picked.length === squad.cards_needed;
-  const valid = full && rules.every((r) => r.ok);
+  const tooRareTackler = Object.entries(cards).some(([slot, id]) => {
+    const c = cardById.get(id);
+    return roleOfSlot(slot) === "tackler" && !!c && RARITY_ORDER[c.rarity] > RARITY_ORDER[squad.tackler_max_rarity];
+  });
+  const valid = full && rules.every((r) => r.ok) && !tooRareTackler;
 
   const size = squad.board_size;
   const slotAt = (r: number, c: number) => Object.keys(layout).find((s) => layout[s][0] === r && layout[s][1] === c);
@@ -127,6 +132,14 @@ export default function StrategoSquadPage() {
           </div>
         ))}
       </div>
+      <p className="-mt-2 text-[11px] text-ink-mist-dim">
+        Подкатчик — не выше: {RARITY_LABELS[squad.tackler_max_rarity].toLowerCase()} карточка.
+      </p>
+      {tooRareTackler && (
+        <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">
+          Подкатчиком может быть карточка не выше «{RARITY_LABELS[squad.tackler_max_rarity]}» — замени его.
+        </p>
+      )}
       {!dirty && squad.violations.length > 0 && (
         <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">
           Из твоей коллекции не собрать состав по правилам: {squad.violations.join("; ")}.
@@ -241,7 +254,11 @@ function CardPicker({
   const def = squad.card_slots.find((s) => s.slot === slot)!;
   const eligible = def.eligible_positions;
   const fits = (c: StrategoCard) => !eligible || eligible.includes(c.position);
-  const sorted = [...squad.options].sort((a, b) => Number(fits(b)) - Number(fits(a)) || b.rating - a.rating);
+  const allowed = (c: StrategoCard) =>
+    def.role !== "tackler" || RARITY_ORDER[c.rarity] <= RARITY_ORDER[squad.tackler_max_rarity];
+  const sorted = [...squad.options].sort(
+    (a, b) => Number(allowed(b)) - Number(allowed(a)) || Number(fits(b)) - Number(fits(a)) || b.rating - a.rating,
+  );
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={onClose}>
       <div className="safe-bottom max-h-[75vh] w-full overflow-y-auto rounded-t-3xl bg-bg-base p-5" onClick={(e) => e.stopPropagation()}>
@@ -250,13 +267,15 @@ function CardPicker({
           {ROLE_META[def.role].hint}
           {eligible && ` · Позиции: ${eligible.join(", ")}`}
           {def.role === "star" && " · Должна быть самой сильной картой состава"}
+          {def.role === "tackler" && ` · Не выше: ${RARITY_LABELS[squad.tackler_max_rarity].toLowerCase()}`}
         </p>
         <div className="flex flex-col gap-1.5">
           {sorted.map((c) => (
             <button
               key={c.user_card_id}
-              onClick={() => onPick(c)}
-              className={`flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm active:scale-[0.98] ${
+              onClick={() => allowed(c) && onPick(c)}
+              disabled={!allowed(c)}
+              className={`flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm active:scale-[0.98] disabled:opacity-35 ${
                 c.user_card_id === currentId ? "bg-accent-green/20" : "bg-white/5"
               } ${fits(c) ? "text-ink-chalk" : "text-ink-mist-dim"}`}
             >

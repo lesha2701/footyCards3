@@ -325,6 +325,9 @@ class GameConfig(TimestampMixin, Base):
     stratego_max_diamond_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     stratego_min_rare_cards: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     stratego_min_common_cards: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # Highest card rarity allowed on a Подкатчик (tackler) slot — a
+    # legendary wall-breaker trivialises walls. common/rare/epic/legendary/diamond.
+    stratego_tackler_max_rarity: Mapped[str] = mapped_column(String(16), default="epic", nullable=False)
     # XP for «Мой игрок» per finished match it was fielded in (daily XP cap applies).
     stratego_my_player_xp: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     stratego_challenge_expiry_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)

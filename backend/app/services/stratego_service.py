@@ -129,11 +129,38 @@ def _fits(role: str, info: dict) -> bool:
 RARITY_LABELS = {"common": "обычных", "rare": "редких", "epic": "эпических", "legendary": "легендарных", "diamond": "диамантовых"}
 
 
+RARITY_ADJ = {"common": "обычной", "rare": "редкой", "epic": "эпической", "legendary": "легендарной", "diamond": "диамантовой"}
+_RANK = {r.value: RARITY_ORDER[r] for r in Rarity}
+
+
 def _rarity_rules(config: GameConfig) -> dict:
     return {
         "max": {"legendary": config.stratego_max_legendary_cards, "diamond": config.stratego_max_diamond_cards},
         "min": {"rare": config.stratego_min_rare_cards, "common": config.stratego_min_common_cards},
+        # Hard per-role ceiling on card rarity (role -> highest allowed rarity).
+        "role_max": {"tackler": config.stratego_tackler_max_rarity},
     }
+
+
+def _role_allows(role: str, info: dict, rules: dict) -> bool:
+    cap = (rules.get("role_max") or {}).get(role)
+    return cap is None or _RANK[_rarity(info)] <= _RANK[cap]
+
+
+def role_violations(chosen: dict[str, dict], rules: dict) -> list[str]:
+    problems = []
+    for slot, info in chosen.items():
+        role = engine.role_of(slot)
+        if not _role_allows(role, info, rules):
+            cap = rules["role_max"][role]
+            problems.append(
+                f"{ROLE_LABELS[role]} — не выше {RARITY_ADJ[cap]} карты ({info['card']['display_name']} слишком редкий)"
+            )
+    return problems
+
+
+def squad_violations(chosen: dict[str, dict], rules: dict) -> list[str]:
+    return role_violations(chosen, rules) + rarity_violations(list(chosen.values()), rules)
 
 
 def _rarity(info: dict) -> str:
@@ -174,7 +201,7 @@ def _assign_once(infos: list[dict], slots: list[str], fixed: dict[str, dict], ru
         return all(sum(1 for i in pool if id(i) not in taken and _rarity(i) == r) >= n for r, n in need.items())
 
     def best(role: str, slots_left_after: int) -> Optional[dict]:
-        free = [i for i in pool if id(i) not in used]
+        free = [i for i in pool if id(i) not in used and _role_allows(role, i, rules)]
         for cand in [i for i in free if _fits(role, i)] + [i for i in free if not _fits(role, i)]:
             if feasible(cand, slots_left_after):
                 return cand
@@ -217,7 +244,13 @@ def _auto_assign(
     the player sees what's missing instead of an empty screen — the
     violations are reported separately and block play."""
     rules = rules or _NO_RULES
-    for attempt in (rules, {"max": rules["max"], "min": {}}, _NO_RULES):
+    role_max = rules.get("role_max", {})
+    for attempt in (
+        rules,
+        {"max": rules["max"], "min": {}, "role_max": role_max},
+        {"max": {}, "min": {}, "role_max": role_max},
+        _NO_RULES,
+    ):
         chosen = _assign_once(infos, slots, dict(fixed or {}), attempt)
         if len(chosen) == len(slots):
             return chosen
@@ -273,14 +306,14 @@ async def _resolve_squad(
         info = by_card_id.get(card_id)
         if slot in cslots and info is not None and all(info is not v for v in fixed.values()):
             fixed[slot] = info
-    if any(v.startswith("Максимум") for v in rarity_violations(list(fixed.values()), rules)):
+    if role_violations(fixed, rules) or any(v.startswith("Максимум") for v in rarity_violations(list(fixed.values()), rules)):
         fixed = {}  # saved picks break a cap (e.g. the admin lowered it) — re-pick
     cards = _auto_assign(infos, cslots, fixed, rules)
-    if fixed and rarity_violations(list(cards.values()), rules):
+    if fixed and squad_violations(cards, rules):
         # Saved picks predate the rules (or the collection changed): prefer a
         # fresh pick that satisfies them over keeping an unplayable squad.
         fresh = _auto_assign(infos, cslots, None, rules)
-        if len(fresh) == len(cslots) and not rarity_violations(list(fresh.values()), rules):
+        if len(fresh) == len(cslots) and not squad_violations(fresh, rules):
             cards = fresh
     layout = engine.repair_layout(saved.get("layout"), slots, board_size, _layout_rng(user.id))
     return cards, layout, infos
@@ -296,7 +329,7 @@ async def get_squad(db: AsyncSession, user: User) -> StrategoSquadOut:
     rules = _rarity_rules(config)
     cards, layout, infos = await _resolve_squad(db, user, board_size, counts, rules)
     cslots = engine.card_slots(counts)
-    violations = rarity_violations(list(cards.values()), rules) if len(cards) == len(cslots) else []
+    violations = squad_violations(cards, rules) if len(cards) == len(cslots) else []
     return StrategoSquadOut(
         board_size=board_size,
         slots=engine.all_slots(counts),
@@ -316,6 +349,7 @@ async def get_squad(db: AsyncSession, user: User) -> StrategoSquadOut:
             "max_legendary": config.stratego_max_legendary_cards, "max_diamond": config.stratego_max_diamond_cards,
             "min_rare": config.stratego_min_rare_cards, "min_common": config.stratego_min_common_cards,
         },
+        tackler_max_rarity=config.stratego_tackler_max_rarity,
         violations=violations,
         options=[_card_out(i) for i in sorted(infos, key=_sort_key)],
     )
@@ -350,7 +384,7 @@ async def set_squad(db: AsyncSession, user: User, cards: dict[str, int], layout:
                 raise ConflictError(
                     f"Для роли «{ROLE_LABELS[role]}» нужна позиция {', '.join(sorted(p.value for p in ROLE_POSITIONS[role]))}"
                 )
-    problems = rarity_violations(list(chosen.values()), _rarity_rules(config))
+    problems = squad_violations(chosen, _rarity_rules(config))
     if problems:
         raise ConflictError("; ".join(problems))
     star_key = _sort_key(chosen["star"])[:2]
@@ -391,6 +425,7 @@ async def get_info(db: AsyncSession, user: User) -> StrategoInfoOut:
         max_legendary=config.stratego_max_legendary_cards, max_diamond=config.stratego_max_diamond_cards,
         min_rare=config.stratego_min_rare_cards, min_common=config.stratego_min_common_cards,
         my_player_xp=config.stratego_my_player_xp,
+        tackler_max_rarity=config.stratego_tackler_max_rarity,
     )
 
 
@@ -423,7 +458,7 @@ async def _add_human_side(db: AsyncSession, state: dict, side: str, user: User) 
     needed = len(engine.card_slots(state["counts"]))
     if len(cards) < needed:
         raise ConflictError(f"Для Стратего нужно минимум {needed} карточек в коллекции")
-    problems = rarity_violations(list(cards.values()), rules)
+    problems = squad_violations(cards, rules)
     if problems:
         raise ConflictError("Состав Стратего не подходит: " + "; ".join(problems))
     state["pieces"].extend(engine.build_pieces(side, slots, cards, layout, state["board_size"], state["ids"][side]))

@@ -595,6 +595,20 @@ export default function AdminGamesPage() {
           {field("stratego_min_rare_cards", "Мин. редких в составе")}
           {field("stratego_min_common_cards", "Мин. обычных в составе")}
           {field("stratego_my_player_xp", "Опыт «Моему игроку» за матч")}
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-400">Макс. редкость Подкатчика</span>
+            <select
+              value={form.stratego_tackler_max_rarity}
+              onChange={(e) => setForm({ ...form, stratego_tackler_max_rarity: e.target.value as GameConfig["stratego_tackler_max_rarity"] })}
+              className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+            >
+              <option value="common">Обычная</option>
+              <option value="rare">Редкая</option>
+              <option value="epic">Эпическая</option>
+              <option value="legendary">Легендарная</option>
+              <option value="diamond">Диамантовая (без ограничения)</option>
+            </select>
+          </label>
           {field("stratego_challenge_expiry_hours", "Срок жизни вызова, часы")}
           {field("stratego_move_timeout_hours", "Тайм-аут на ход, часы")}
           {field("stratego_max_auto_moves", "Автоходов подряд до поражения")}

@@ -276,6 +276,7 @@ export interface GameConfig {
   stratego_min_rare_cards: number;
   stratego_min_common_cards: number;
   stratego_my_player_xp: number;
+  stratego_tackler_max_rarity: "common" | "rare" | "epic" | "legendary" | "diamond";
   stratego_tackler_count: number;
   stratego_speedster_count: number;
   stratego_wall_count: number;

@@ -869,8 +869,8 @@ def test_default_8x8_slots_and_auto_layout_fill_both_home_rows():
 
 R = Rarity
 EIGHT_SPEC = [
-    (95, Position.ST, R.diamond), (80, Position.CB, R.legendary), (79, Position.LB, R.legendary),
-    (78, Position.LW, R.epic), (77, Position.RW, R.epic), (76, Position.CM, R.epic),
+    (95, Position.ST, R.diamond), (80, Position.CB, R.epic), (79, Position.LB, R.epic),
+    (78, Position.LW, R.legendary), (77, Position.RW, R.legendary), (76, Position.CM, R.epic),
     (70, Position.GK, R.rare), (69, Position.RB, R.rare), (68, Position.CDM, R.rare), (67, Position.CAM, R.rare),
     (66, Position.LM), (65, Position.RM), (64, Position.ST),
 ]
@@ -1086,3 +1086,49 @@ async def test_saved_squad_breaking_new_rarity_rules_is_repicked(client, db_sess
     assert squad["is_complete"] is True and squad["violations"] == []
     picked = {s["card"]["user_card_id"] for s in squad["card_slots"]}
     assert ids[5] in picked and ids[6] in picked
+
+
+
+# ---------------------------------------------------------------------------
+# Подкатчик: at most epic (GameConfig.stratego_tackler_max_rarity)
+# ---------------------------------------------------------------------------
+
+def test_default_8x8_auto_assign_never_puts_rare_cards_above_cap_on_tackler():
+    rules = {**DEFAULT_RULES, "role_max": {"tackler": "epic"}}
+    infos = (
+        [_info(i, 90 - i, "CB", "legendary") for i in range(1, 4)]  # best defenders are all legendary
+        + [_info(10 + i, 70 - i, "RB", "rare") for i in range(4)]
+        + [_info(20 + i, 60 - i, "GK", "common") for i in range(3)]
+        + [_info(30 + i, 75 - i, "LW", "epic") for i in range(4)]
+    )
+    slots = engine.card_slots({"tackler": 3, "speedster": 2, "regular": 6})
+    chosen = stratego_service._auto_assign(infos, slots, rules=rules)
+    assert len(chosen) == 13
+    for slot, info in chosen.items():
+        if engine.role_of(slot) == "tackler":
+            assert info["card"]["rarity"] in ("common", "rare", "epic")
+    assert stratego_service.squad_violations(chosen, rules) == []
+
+
+async def test_legendary_tackler_is_rejected(client, db_session, bot_token):
+    headers = await _register(client, bot_token, 970100)
+    user = await get_user_by_telegram_id(db_session, 970100)
+    ids = await _give_cards(db_session, user.id, spec=[
+        (90, Position.ST), (80, Position.CB, Rarity.legendary), (65, Position.LW), (60, Position.CM), (55, Position.GK),
+        (50, Position.RB),
+    ])
+    squad = (await client.get(f"{API}/squad", headers=headers)).json()
+    assert squad["tackler_max_rarity"] == "epic"
+    tackler = next(s for s in squad["card_slots"] if s["slot"] == "tackler")
+    assert tackler["card"]["user_card_id"] == ids[5]  # the common RB, not the legendary CB
+    cards = {"star": ids[0], "tackler": ids[1], "speedster": ids[2], "provocateur": ids[3], "regular_1": ids[4]}
+    resp = await client.put(f"{API}/squad", headers=headers, json={"cards": cards, "layout": squad["layout"]})
+    assert resp.status_code == 409 and "Подкатчик" in resp.json()["error"]["message"]
+
+
+async def test_admin_sets_tackler_max_rarity(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    ok = await client.put("/api/v1/admin/games/config", headers=auth, json={"stratego_tackler_max_rarity": "legendary"})
+    assert ok.status_code == 200 and ok.json()["stratego_tackler_max_rarity"] == "legendary"
+    bad = await client.put("/api/v1/admin/games/config", headers=auth, json={"stratego_tackler_max_rarity": "mythic"})
+    assert bad.status_code == 422

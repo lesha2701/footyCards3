@@ -12,6 +12,10 @@ interface Props {
   info?: StrategoInfo;
 }
 
+const RARITY_ADJ: Record<string, string> = {
+  common: "обычной", rare: "редкой", epic: "эпической", legendary: "легендарной", diamond: "диамантовой",
+};
+
 const ROLE_ORDER: StrategoRole[] = ["cup", "wall", "star", "provocateur", "tackler", "speedster", "regular"];
 
 /** Every number below comes from /stratego/info (GameConfig), so admin edits
@@ -60,7 +64,8 @@ export default function StrategoRulesModal({ open, onClose, info }: Props) {
             Подкатчик — защитник или опорник (LB, CB, RB, CDM), Скорость — фланговый (LW, RW, LM, RM), Провокатор —
             полузащитник (CM, CAM, CDM, LM, RM); Звезда — самая сильная карточка состава. В составе не больше{" "}
             {q(info?.max_legendary)} легендарных и {q(info?.max_diamond)} диамантовой, не меньше {q(info?.min_rare)} редких и{" "}
-            {q(info?.min_common)} обычных карточек.
+            {q(info?.min_common)} обычных карточек. Подкатчиком может быть карточка не выше{" "}
+            {info ? RARITY_ADJ[info.tackler_max_rarity] : "—"} — иначе стенки слишком легко сносить.
           </p>
         </div>
       ),

@@ -1931,6 +1931,8 @@ export interface StrategoSquad {
   is_complete: boolean;
   cards_needed: number;
   rarity_limits: { max_legendary: number; max_diamond: number; min_rare: number; min_common: number };
+  /** Highest rarity allowed on a Подкатчик slot. */
+  tackler_max_rarity: Rarity;
   /** Rarity rules the current picks break; empty = valid. */
   violations: string[];
   options: StrategoCard[];
@@ -1956,6 +1958,7 @@ export interface StrategoInfo {
   min_rare: number;
   min_common: number;
   my_player_xp: number;
+  tackler_max_rarity: Rarity;
 }
 
 export interface StrategoPiece {
