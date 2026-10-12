@@ -37,6 +37,7 @@ from app.models.player_tournament import (
 )
 from app.models.player import Player
 from app.models.stratego import StrategoMatch, StrategoQueueEntry
+from app.models.magnate import MagnateMatch, MagnateSeat
 from app.models.task import TaskDefinition, UserTask
 from app.models.tournament_queue import TournamentQueue, TournamentQueueEntry, TournamentQueueState
 from app.models.tournament import Tournament, TournamentClub

@@ -10,13 +10,16 @@ Main features:
 - packs with staged opening animation, including themed card collections with completion rewards;
 - card collection (album + "my cards"), filtering and selling;
 - game currency, daily rewards and a free periodic pack;
-- seven mini-games: Memory Sequence, Card Arena, Саботёр (Saboteur), Пенальти,
+- mini-games: Memory Sequence, Card Arena, Саботёр (Saboteur), Пенальти,
   Штрафной удар (Free Kick), Футбольные буквы (a football-themed word-guessing
-  game), Тактико (Tactico — turn-based squad-vs-squad, bot or friend) and
+  game), Тактико (Tactico — turn-based squad-vs-squad, bot or friend),
   Футбольное Стратего (hidden-information board game on cards, bot or
   friend — `stratego_engine.py` holds the pure rules, `stratego_service.py`
   the DB/limits/rewards; only `_hydrate_match` may serialize a match, and
-  it strips unrevealed enemy pieces);
+  it strips unrevealed enemy pieces) and Футбольный магнат (a short
+  4-seat economic board game — `magnate_engine.py` is the pure, seeded
+  rules engine + bot, `magnate_service.py` the lobbies/rooms, turn timers,
+  limits and rewards; see "Turn-based game state" below);
 - player-to-player card exchanges;
 - tasks/achievements, referrals, leaderboards and profile;
 - Telegram bot (notifications/reminders) and a React-based administrative panel.
@@ -70,7 +73,7 @@ Main features:
   `CoinTransaction` row; the caller still has to `db.add`/`db.commit`. Any
   coins/cards/packs/exchange mutation should go through this pattern.
 - **Mini-game hourly/daily limits**: each mini-game (memory, arena/match,
-  saboteur, penalty, free_kick, hangman, tactico, pairs, stratego) has two independent
+  saboteur, penalty, free_kick, hangman, tactico, pairs, stratego, magnate) has two independent
   counters on `User`: `<game>_hourly_attempts` / `<game>_hour_started_at`
   (a shared cap, `config.hourly_game_limit`, resets on a rolling 1h window —
   see `game_limits_service.py`) and `<game>_rewarded_attempts_today` /
@@ -87,7 +90,13 @@ Main features:
   function (`_auto_play_overdue_rounds`) that runs opportunistically whenever
   either player's client calls `GET /tactico/matches` or `GET .../{id}`, and
   the frontend polls (`refetchInterval`) while waiting on the other side
-  specifically to keep that sweep running promptly.
+  specifically to keep that sweep running promptly. «Футбольный магнат»
+  is the exception with ~30 s turns: besides the lazy sweep on reads, the
+  bot calls `POST /internal/magnate/sweep` every 10 s
+  (`bot/services/magnate_scheduler.py`); each match is taken with
+  `FOR UPDATE SKIP LOCKED` and its `next_deadline_at` re-checked under the
+  lock, so both paths can run at once without double-processing, and
+  client actions carry the match `version` (stale → 409).
 - **Idempotency**: deduplication is enforced via DB unique constraints
   (`pack_openings.(user_id, idempotency_key)`, `daily_rewards.(user_id,
   reward_date)`), not an in-memory cache — this is what makes it safe under

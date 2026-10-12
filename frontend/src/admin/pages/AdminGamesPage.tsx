@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { fetchGameConfig, fetchSuspiciousMatches, fetchSuspiciousMemorySessions, updateGameConfig } from "@/admin/api";
+import AdminMagnateBoardEditor from "@/admin/pages/AdminMagnateBoardEditor";
 import type { GameConfig } from "@/admin/types";
 
 // Codes from backend my_player_service.COSMETICS.
@@ -50,7 +51,9 @@ export default function AdminGamesPage() {
       | "career_difficulty_rating_offset"
       | "my_player_tier_thresholds"
       | "player_career_place_rewards"
-      | "club_league_rewards",
+      | "club_league_rewards"
+      | "magnate_place_rewards"
+      | "magnate_stadium_rents",
     label: string,
   ) => (
     <label className="col-span-2 flex flex-col gap-1">
@@ -629,6 +632,41 @@ export default function AdminGamesPage() {
           {field("stratego_reward_loss", "Награда за поражение")}
           {field("stratego_daily_limit", "Лимит наградных матчей/день")}
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Футбольный магнат</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Деньги партии («М») — отдельная валюта, не монеты. Правила, поле и карточки фиксируются в партии при её старте —
+          идущие партии доигрываются по старым настройкам; награды и лимиты считаются при завершении. Круг — каждый игрок
+          ходит по разу. Партия с одним человеком (против ботов или лобби, куда никто не пришёл) платит указанный %
+          от наград. Ушедший или замененный ботом игрок награды не получает.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("magnate_start_money", "Стартовый бюджет, М")}
+          {field("magnate_pass_start_bonus", "За проход старта, М")}
+          {field("magnate_fine_amount", "Штраф федерации, М")}
+          {field("magnate_jail_fine", "Штраф за выход из дисквалификации, М")}
+          {field("magnate_max_jail_turns", "Бросков в дисквалификации до штрафа")}
+          {field("magnate_building_sell_pct", "Возврат за постройку при долге, %")}
+          {field("magnate_max_rounds", "Кругов в партии")}
+          {field("magnate_time_limit_minutes", "Лимит времени партии, мин")}
+          {field("magnate_turn_seconds", "Время на решение, с")}
+          {field("magnate_max_missed_turns", "Пропусков подряд до замены ботом")}
+          {field("magnate_lobby_wait_seconds", "Ожидание лобби до ботов, с")}
+          {field("magnate_room_wait_minutes", "Ожидание комнаты друзей, мин")}
+          {field("magnate_bot_buy_reserve", "Бот покупает, если остаётся ≥ М")}
+          {field("magnate_bot_build_reserve", "Бот строит, если остаётся ≥ М")}
+          {field("magnate_bot_reward_pct", "Награда за стол с ботами, %")}
+          {field("magnate_daily_limit", "Лимит наградных партий/день")}
+          {listField("magnate_place_rewards", "Монеты по месту (1-е, 2-е, 3-е, 4-е)")}
+          {listField("magnate_stadium_rents", "Аренда стадиона при 1, 2, 3, 4 стадионах, М")}
+        </div>
+        <AdminMagnateBoardEditor
+          board={form.magnate_board}
+          cards={form.magnate_cards}
+          onChange={(board, cards) => setForm({ ...form, magnate_board: board, magnate_cards: cards })}
+        />
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">

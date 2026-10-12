@@ -338,6 +338,27 @@ class GameConfigOut(BaseModel):
     stratego_reward_draw: int
     stratego_reward_loss: int
     stratego_daily_limit: int
+    magnate_start_money: int
+    magnate_pass_start_bonus: int
+    magnate_jail_fine: int
+    magnate_max_jail_turns: int
+    magnate_fine_amount: int
+    magnate_building_sell_pct: int
+    magnate_max_rounds: int
+    magnate_time_limit_minutes: int
+    magnate_turn_seconds: int
+    magnate_max_missed_turns: int
+    magnate_lobby_wait_seconds: int
+    magnate_room_wait_minutes: int
+    magnate_bot_buy_reserve: int
+    magnate_bot_build_reserve: int
+    magnate_bot_reward_pct: int
+    magnate_daily_limit: int
+    magnate_place_rewards: list[int] = []
+    magnate_stadium_rents: list[int] = []
+    # NULL = built-in default board / cards (GET /admin/games/magnate-defaults).
+    magnate_board: Optional[dict] = None
+    magnate_cards: Optional[dict] = None
     match_max_diamond_cards: int
     diamond_rating_cap: int
     diamond_rating_cap_enabled: bool
@@ -576,6 +597,27 @@ class GameConfigUpdate(BaseModel):
     stratego_reward_draw: Optional[int] = Field(default=None, ge=0)
     stratego_reward_loss: Optional[int] = Field(default=None, ge=0)
     stratego_daily_limit: Optional[int] = Field(default=None, ge=0)
+    magnate_start_money: Optional[int] = Field(default=None, ge=100, le=100000)
+    magnate_pass_start_bonus: Optional[int] = Field(default=None, ge=0, le=10000)
+    magnate_jail_fine: Optional[int] = Field(default=None, ge=0, le=10000)
+    magnate_max_jail_turns: Optional[int] = Field(default=None, ge=1, le=5)
+    magnate_fine_amount: Optional[int] = Field(default=None, ge=0, le=10000)
+    magnate_building_sell_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    magnate_max_rounds: Optional[int] = Field(default=None, ge=3, le=60)
+    magnate_time_limit_minutes: Optional[int] = Field(default=None, ge=5, le=120)
+    magnate_turn_seconds: Optional[int] = Field(default=None, ge=10, le=300)
+    magnate_max_missed_turns: Optional[int] = Field(default=None, ge=1, le=10)
+    magnate_lobby_wait_seconds: Optional[int] = Field(default=None, ge=10, le=600)
+    magnate_room_wait_minutes: Optional[int] = Field(default=None, ge=1, le=120)
+    magnate_bot_buy_reserve: Optional[int] = Field(default=None, ge=0)
+    magnate_bot_build_reserve: Optional[int] = Field(default=None, ge=0)
+    magnate_bot_reward_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    magnate_daily_limit: Optional[int] = Field(default=None, ge=0)
+    magnate_place_rewards: Optional[list[Annotated[int, Field(ge=0)]]] = Field(default=None, min_length=1, max_length=4)
+    magnate_stadium_rents: Optional[list[Annotated[int, Field(ge=0)]]] = Field(default=None, min_length=4, max_length=4)
+    # Validated by magnate_engine.validate_board / validate_cards in the router.
+    magnate_board: Optional[dict] = None
+    magnate_cards: Optional[dict] = None
     match_max_diamond_cards: Optional[int] = Field(default=None, ge=0, le=11)
     diamond_rating_cap: Optional[int] = Field(default=None, ge=1, le=99)
     diamond_rating_cap_enabled: Optional[bool] = None

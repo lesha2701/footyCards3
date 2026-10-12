@@ -16,6 +16,7 @@ export const TX_TYPE_LABELS: Record<string, string> = {
   referral_reward: "Реферальная награда",
   collection_reward: "Награда за коллекцию",
   tactico_reward: "Тактико",
+  magnate_reward: "Футбольный магнат",
   stars_coin_purchase: "Покупка монет за ⭐",
   stars_pack_bonus_coins: "Бонус монет за пак",
   gift_coins: "Подарок",

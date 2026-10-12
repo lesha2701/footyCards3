@@ -16,6 +16,7 @@ import {
   IconGoal,
   IconHelp,
   IconProfile,
+  IconStadium,
   IconStar,
   IconTarget,
   IconTrophy,
@@ -83,6 +84,11 @@ export default function PlayPage() {
       path: "/play/stratego", Icon: IconFlag, badgeClass: "bg-accent-green", title: "Футбольное Стратего",
       description: "Скрытая расстановка твоих карточек: найди и захвати Кубок соперника",
       stat: `Рейтинг: ${strategoStats?.stratego_rating ?? 0}`, limitKey: "stratego",
+    },
+    {
+      path: "/play/magnate", Icon: IconStadium, badgeClass: "bg-accent-cyan", title: "Футбольный магнат",
+      description: "Покупай клубы и стадионы, строй Арены и собирай аренду — 4 игрока, онлайн или с ботами",
+      limitKey: "magnate",
     },
     {
       path: "/play/career", Icon: IconTrophy, badgeClass: "bg-accent-cyan", title: "Карьера тренера",

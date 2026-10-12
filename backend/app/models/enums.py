@@ -105,6 +105,7 @@ class TransactionType(str, enum.Enum):
     stratego_stake_lock = "stratego_stake_lock"
     stratego_stake_win = "stratego_stake_win"
     stratego_stake_refund = "stratego_stake_refund"
+    magnate_reward = "magnate_reward"
 
 
 class GiftKind(str, enum.Enum):

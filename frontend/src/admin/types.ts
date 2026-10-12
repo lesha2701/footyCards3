@@ -295,6 +295,27 @@ export interface GameConfig {
   stratego_reward_draw: number;
   stratego_reward_loss: number;
   stratego_daily_limit: number;
+  magnate_start_money: number;
+  magnate_pass_start_bonus: number;
+  magnate_jail_fine: number;
+  magnate_max_jail_turns: number;
+  magnate_fine_amount: number;
+  magnate_building_sell_pct: number;
+  magnate_max_rounds: number;
+  magnate_time_limit_minutes: number;
+  magnate_turn_seconds: number;
+  magnate_max_missed_turns: number;
+  magnate_lobby_wait_seconds: number;
+  magnate_room_wait_minutes: number;
+  magnate_bot_buy_reserve: number;
+  magnate_bot_build_reserve: number;
+  magnate_bot_reward_pct: number;
+  magnate_daily_limit: number;
+  magnate_place_rewards: number[];
+  magnate_stadium_rents: number[];
+  /** null = built-in default (GET /admin/games/magnate-defaults). */
+  magnate_board: MagnateBoardConfig | null;
+  magnate_cards: Record<string, unknown> | null;
   match_max_diamond_cards: number;
   diamond_rating_cap: number;
   diamond_rating_cap_enabled: boolean;
@@ -515,4 +536,18 @@ export interface AdminLifestyleItem {
   sold_count: number;
   is_active: boolean;
   sort_order: number;
+}
+
+export interface MagnateBoardCellConfig {
+  type: string;
+  name: string;
+  group?: number;
+  price?: number;
+  rent?: number[];
+  build_cost?: number;
+}
+
+export interface MagnateBoardConfig {
+  groups: { name: string; color: string }[];
+  cells: MagnateBoardCellConfig[];
 }

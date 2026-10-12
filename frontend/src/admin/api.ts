@@ -43,6 +43,7 @@ import type {
   AdminWheelPrize,
   CardCollection,
   DailyRewardOption,
+  MagnateBoardConfig,
   Dashboard,
   GameConfig,
   AdminSkillLedgerEntry,
@@ -521,6 +522,11 @@ export async function forceCancelTrade(id: number): Promise<TradeOffer> {
 // --- Games ---
 export async function fetchGameConfig(): Promise<GameConfig> {
   const { data } = await api.get<GameConfig>("/admin/games/config");
+  return data;
+}
+
+export async function fetchMagnateDefaults(): Promise<{ board: MagnateBoardConfig; cards: Record<string, unknown> }> {
+  const { data } = await api.get<{ board: MagnateBoardConfig; cards: Record<string, unknown> }>("/admin/games/magnate-defaults");
   return data;
 }
 

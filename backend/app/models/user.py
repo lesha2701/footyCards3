@@ -118,6 +118,13 @@ class User(TimestampMixin, Base):
     # Stale/missing entries are auto-filled lazily; None = fully auto.
     stratego_squad: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
+    # Футбольный магнат
+    magnate_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    magnate_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    magnate_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    magnate_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    magnate_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Shared hourly pool across every club-scoped mini-game (Повтори порядок,
     # Пенальти, Своя позиция) — a member gets club_games_hourly_limit plays
     # per hour TOTAL, spendable on any mix of these games, not N plays of

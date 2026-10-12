@@ -352,6 +352,44 @@ class GameConfig(TimestampMixin, Base):
     stratego_reward_loss: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
     stratego_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
 
+    # «Футбольный магнат» (rules in magnate_engine.py). Money here is the
+    # in-match budget, not coins. Everything below except the rewards/limits
+    # is snapshotted into a match at its start.
+    magnate_start_money: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
+    magnate_pass_start_bonus: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    magnate_jail_fine: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    # Failed doubles attempts before the fine is forced and the player moves.
+    magnate_max_jail_turns: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    magnate_fine_amount: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    # % of a building's cost the bank pays back when it is sold to cover a debt.
+    magnate_building_sell_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    # Rounds (every player moves once) and wall-clock minutes; whichever ends
+    # first decides the winner by capital (cash + property + buildings).
+    magnate_max_rounds: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
+    magnate_time_limit_minutes: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    # Per decision; on timeout the autopilot plays the turn, and after this
+    # many timed-out turns in a row a bot takes the seat for good.
+    magnate_turn_seconds: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    magnate_max_missed_turns: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # Public lobby: empty seats are filled with bots after this wait.
+    magnate_lobby_wait_seconds: Mapped[int] = mapped_column(Integer, default=45, nullable=False)
+    # Private room: starts with bots in the empty seats after this many
+    # minutes if a friend joined, otherwise it is cancelled.
+    magnate_room_wait_minutes: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Bot policy: buys when it keeps at least this much cash, builds likewise.
+    magnate_bot_buy_reserve: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    magnate_bot_build_reserve: Mapped[int] = mapped_column(Integer, default=250, nullable=False)
+    # Coins by final place (index 0 = 1st), within magnate_daily_limit
+    # rewarded matches per day; the vs-bots mode pays magnate_bot_reward_pct %.
+    magnate_place_rewards: Mapped[list] = mapped_column(JSON, default=lambda: [150, 75, 35, 10], nullable=False)
+    magnate_bot_reward_pct: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
+    magnate_daily_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # Rent for owning 1..4 stadiums.
+    magnate_stadium_rents: Mapped[list] = mapped_column(JSON, default=lambda: [25, 50, 100, 200], nullable=False)
+    # NULL = magnate_engine.DEFAULT_BOARD / DEFAULT_CARDS.
+    magnate_board: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    magnate_cards: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
     match_max_diamond_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     # Soft ceiling on diamond card leveling (feed_cards never lets a card's

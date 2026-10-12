@@ -56,6 +56,7 @@ from app.routers import (
     lineups,
     maintenance,
     lifestyle,
+    magnate,
     matches,
     my_player,
     player_career,
@@ -137,6 +138,7 @@ app.include_router(matches.router, prefix=API_PREFIX)
 app.include_router(penalty_matches.router, prefix=API_PREFIX)
 app.include_router(tactico.router, prefix=API_PREFIX)
 app.include_router(stratego.router, prefix=API_PREFIX)
+app.include_router(magnate.router, prefix=API_PREFIX)
 app.include_router(trades.router, prefix=API_PREFIX)
 app.include_router(daily_rewards.router, prefix=API_PREFIX)
 app.include_router(wheel.router, prefix=API_PREFIX)
