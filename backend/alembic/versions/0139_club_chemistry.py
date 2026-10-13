@@ -1,8 +1,8 @@
 """«Химия карточек», этап 2: the rules each CLUB tournament froze at its start
-(NULL = off), mirroring player_tournaments.chemistry_rules from 0136.
+(NULL = off), mirroring player_tournaments.chemistry_rules from 0138.
 
-Revision ID: 0137
-Revises: 0136
+Revision ID: 0139
+Revises: 0138
 Create Date: 2026-10-12
 
 """
@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0137"
-down_revision: Union[str, None] = "0136"
+revision: str = "0139"
+down_revision: Union[str, None] = "0138"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
