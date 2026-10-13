@@ -297,6 +297,30 @@ class ClubTacticalSide:
     mentality: str
     playstyle: str
     coach: "Coach | None" = None
+    # «Карьера тренера» only (career_tactics_service.style_edge_for): opponent
+    # playstyle -> bounded ratio-point bonus in every duel this side plays
+    # against that style (its counter-styles). None everywhere else, so clubs
+    # and tournaments are unaffected.
+    style_edge: "dict[str, float] | None" = None
+
+
+def style_edge_shift(attacker: ClubTacticalSide, defender: ClubTacticalSide) -> float:
+    """Extra ratio shift (positive favors the defender, same convention as
+    defender_ratio_shift_for) from a playstyle counter: the defender's edge
+    over the attacker's style minus the attacker's edge over the defender's.
+    0.0 unless a side carries a style_edge (career matches)."""
+    defending = (defender.style_edge or {}).get(attacker.playstyle, 0.0)
+    attacking = (attacker.style_edge or {}).get(defender.playstyle, 0.0)
+    return defending - attacking
+
+
+def _track(tracker: dict | None, side: str, key: str) -> None:
+    """Optional per-side counters of what the phase pipeline actually did
+    (career match analysis). Never touches the RNG, so passing a tracker
+    can't change a simulated result."""
+    if tracker is not None:
+        bucket = tracker.setdefault(side, {})
+        bucket[key] = bucket.get(key, 0) + 1
 
 
 def _first_pass_quality_factor(midfield_control: float) -> float:
@@ -310,6 +334,7 @@ def _first_pass_quality_factor(midfield_control: float) -> float:
 
 def resolve_counter(
     attacking_side_label: str, y: ClubTacticalSide, x: ClubTacticalSide, skill_notes: list | None = None,
+    tracker: dict | None = None,
 ) -> tuple[str, float] | None:
     """Spec §6.5: Y (the team that just won the Stage-1 duel) gets an
     immediate transition check against X's shrunk defensive pool (Task 7),
@@ -333,12 +358,14 @@ def resolve_counter(
     eff_x = x_duelist.player.rating * position_fit(x_duelist.player.position, defence_zone)
     total = eff_y + eff_x
     raw_ratio = eff_y / total if total else 0.5
-    shifted = max(0.05, min(0.95, raw_ratio - defender_ratio_shift_for(x)))
+    shifted = max(0.05, min(0.95, raw_ratio - (defender_ratio_shift_for(x) + style_edge_shift(y, x))))
     ratio = _amplify(shifted)
 
     outcome = _resolve_stage1_for(ratio, y_duelist, skill_notes, defender=x_duelist)
+    _track(tracker, attacking_side_label, "counters")
     if outcome != "advance":
         return None
+    _track(tracker, attacking_side_label, "counter_chances")
 
     quality = resolve_quality(ratio)
     if quality == "VERY_HIGH" and len(pool) == 1:
@@ -499,6 +526,9 @@ class Chance:
     # Progression zone of a normal (non-counter) chance; "wing_attack" + an
     # in-box shot is what the engine treats as a cross (aerial duel).
     zone: str | None = None
+    # "build_up" (a won Stage-1/Stage-2 duel) or "counter" (a transition
+    # after winning the ball from a broken-down attack).
+    origin: str = "build_up"
 
 
 def build_side(
@@ -538,15 +568,21 @@ def _pick_defender(defender: ClubTacticalSide, defence_zone: str, exclude_ids: f
     return weighted_pick(pool, defence_zone, exclude_ids=exclude_ids)
 
 
-def _resolve_progression_and_duel(attacker: ClubTacticalSide, defender: ClubTacticalSide, attacking_side: str, minute: int, config) -> Chance | None:
+def _resolve_progression_and_duel(
+    attacker: ClubTacticalSide, defender: ClubTacticalSide, attacking_side: str, minute: int, config,
+    tracker: dict | None = None,
+) -> Chance | None:
     zone = pick_progression_zone(attacker.playstyle)
     if zone is None:
+        _track(tracker, attacking_side, "recycled")
         return None
     if attacker.playstyle == "POSSESSION" and not possession_buildup_survives(attacker.profile.midfield_control):
+        _track(tracker, attacking_side, "recycled")
         return None
 
+    _track(tracker, attacking_side, zone)
     defence_zone = "wing_defence" if zone == "wing_attack" else "central_defence"
-    ratio_shift = defender_ratio_shift_for(defender)
+    ratio_shift = defender_ratio_shift_for(defender) + style_edge_shift(attacker, defender)
 
     # Up to 2 attempts: the second is POSSESSION's problem-2 fix (see
     # possession_retry_chance) — a strong-midfield POSSESSION team that
@@ -571,19 +607,20 @@ def _resolve_progression_and_duel(attacker: ClubTacticalSide, defender: ClubTact
         stage1_notes = []
         outcome_1 = _resolve_stage1_for(ratio_1, attacker_duelist, stage1_notes)
 
+    _track(tracker, attacking_side, outcome_1)
     if outcome_1 == "stall":
         return None
     if outcome_1 == "breakdown":
         defending_side_label = "b" if attacking_side == "a" else "a"
         counter_notes: list = []
-        result = resolve_counter(defending_side_label, defender, attacker, skill_notes=counter_notes)
+        result = resolve_counter(defending_side_label, defender, attacker, skill_notes=counter_notes, tracker=tracker)
         if result is None:
             return None
         quality, ratio = result
         if quality == "CLEAN_BREAKAWAY":
             return Chance(
                 attacking_side=defending_side_label, minute=minute, quality="VERY_HIGH", shot_type="empty_net", is_box=False,
-                skill_notes=counter_notes,
+                skill_notes=counter_notes, origin="counter",
             )
         counter_shot_type = _pick_shot_type(config)
         counter_shooter = weighted_pick(defender.cards, "central_attack")
@@ -593,7 +630,7 @@ def _resolve_progression_and_duel(attacker: ClubTacticalSide, defender: ClubTact
             shooter=_card_to_actor(counter_shooter),
             pass_target=_card_to_actor(weighted_pick(defender.cards, "central_attack", exclude_ids=frozenset({counter_shooter.id}))),
             defender=_card_to_actor(weighted_pick(attacker.cards, "central_defence")),
-            skill_notes=counter_notes,
+            skill_notes=counter_notes, origin="counter",
         )
 
     # advance -> Stage 2 (spec §6.3)
@@ -610,11 +647,15 @@ def _resolve_progression_and_duel(attacker: ClubTacticalSide, defender: ClubTact
     )
 
 
-def simulate_phase(minute: int, side_a: ClubTacticalSide, side_b: ClubTacticalSide, config) -> Chance | None:
+def simulate_phase(
+    minute: int, side_a: ClubTacticalSide, side_b: ClubTacticalSide, config, tracker: dict | None = None,
+) -> Chance | None:
     p_a_initiative = initiative_probability(side_a, side_b)
     if random.random() < p_a_initiative:
-        return _resolve_progression_and_duel(side_a, side_b, "a", minute, config)
-    return _resolve_progression_and_duel(side_b, side_a, "b", minute, config)
+        _track(tracker, "a", "attacks")
+        return _resolve_progression_and_duel(side_a, side_b, "a", minute, config, tracker)
+    _track(tracker, "b", "attacks")
+    return _resolve_progression_and_duel(side_b, side_a, "b", minute, config, tracker)
 
 
 def simulate_match_phases(side_a: ClubTacticalSide, side_b: ClubTacticalSide, config) -> list[Chance]:

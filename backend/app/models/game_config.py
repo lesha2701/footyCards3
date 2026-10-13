@@ -233,6 +233,34 @@ class GameConfig(TimestampMixin, Base):
     career_yellows_for_ban: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     career_form_max: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     career_reminders_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Tactics (career_tactics_service; seasons created after migration 0138):
+    # a playstyle that counters the opponent's gets this many thousandths of
+    # duel ratio in its favor (0 = counters off); familiarity grows by step
+    # tenths of a % rating per match with the same formation + playstyle up
+    # to max, a changed formation / playstyle keeps keep_pct of it each.
+    career_style_counter_permille: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    career_familiarity_step_tenths: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    career_familiarity_max_tenths: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
+    career_familiarity_keep_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    # Match plan limits: conditional instructions and substitutions per match.
+    career_max_plan_rules: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    career_max_substitutions: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # [amateur, pro, legend]: chance (%) a bot plays a counter to the human
+    # opponent's last played style.
+    career_bot_counter_chance_pct: Mapped[list] = mapped_column(JSON, default=lambda: [0, 60, 85], nullable=False)
+    # Divisions (career_service): a new player starts in the lowest one; the
+    # top N places go up, the bottom N go down (leaving a season = down).
+    # Lists are per division, index 0 = the top division: bot rating offset
+    # vs. the squad, reward multiplier (%) and bot level
+    # (amateur / pro / legend — counter-picking and in-match instructions).
+    career_division_count: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    career_division_promote: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    career_division_relegate: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    career_division_rating_offset: Mapped[list] = mapped_column(JSON, default=lambda: [6, 3, 0, -3, -6], nullable=False)
+    career_division_reward_pct: Mapped[list] = mapped_column(JSON, default=lambda: [250, 200, 150, 125, 100], nullable=False)
+    career_division_bot_level: Mapped[list] = mapped_column(
+        JSON, default=lambda: ["legend", "legend", "pro", "pro", "amateur"], nullable=False,
+    )
 
     # --- "Мой игрок" (services/my_player_service.py) ---
     my_player_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

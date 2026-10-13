@@ -48,6 +48,9 @@ export default function AdminGamesPage() {
       | "career_place_rewards"
       | "career_difficulty_reward_pct"
       | "career_difficulty_rating_offset"
+      | "career_bot_counter_chance_pct"
+      | "career_division_rating_offset"
+      | "career_division_reward_pct"
       | "my_player_tier_thresholds"
       | "player_career_place_rewards"
       | "club_league_rewards",
@@ -62,6 +65,19 @@ export default function AdminGamesPage() {
             ...form,
             [key]: e.target.value.split(",").map((v) => Number(v.trim())).filter((v) => Number.isFinite(v)),
           })
+        }
+        className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+      />
+    </label>
+  );
+
+  const textListField = (key: "career_division_bot_level", label: string) => (
+    <label className="col-span-2 flex flex-col gap-1">
+      <span className="text-xs text-slate-400">{label}</span>
+      <input
+        defaultValue={(form[key] ?? []).join(", ")}
+        onBlur={(e) =>
+          setForm({ ...form, [key]: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })
         }
         className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
       />
@@ -303,8 +319,8 @@ export default function AdminGamesPage() {
         <div className="grid grid-cols-2 items-end gap-3">
           {toggle("career_enabled", "Режим включён")}
           {listField("career_place_rewards", "Награда за места 1–8, монеты")}
-          {listField("career_difficulty_reward_pct", "Множитель награды по сложности, %")}
-          {listField("career_difficulty_rating_offset", "Сила ботов относительно заявки, ±рейтинг")}
+          {listField("career_difficulty_reward_pct", "Множитель награды по сложности, % (сезоны до дивизионов)")}
+          {listField("career_difficulty_rating_offset", "Сила ботов по сложности, ±рейтинг (сезоны до дивизионов)")}
           {field("career_match_reward_win", "За победу в туре")}
           {field("career_match_reward_draw", "За ничью в туре")}
           {field("career_bot_growth_tenths", "Рост ботов за тур, десятые рейтинга")}
@@ -317,6 +333,26 @@ export default function AdminGamesPage() {
           {field("career_yellows_for_ban", "Жёлтых до дисквалификации")}
           {field("career_form_max", "Форма после победы, до +N рейтинга")}
           {toggle("career_reminders_enabled", "Напоминание ботом за 30 мин до тура")}
+          <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">
+            Дивизионы (новые сезоны; списки — от высшего дивизиона к низшему)
+          </p>
+          {field("career_division_count", "Число дивизионов")}
+          {field("career_division_promote", "Мест на повышение")}
+          {field("career_division_relegate", "Мест на вылет")}
+          {listField("career_division_rating_offset", "Сила ботов по дивизионам, ±рейтинг")}
+          {listField("career_division_reward_pct", "Множитель награды по дивизионам, %")}
+          {textListField("career_division_bot_level", "Уровень ботов по дивизионам (amateur / pro / legend)")}
+          <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">
+            Тактика (новые сезоны). После изменения силы контр-стиля перегенерируй таблицу матчапов скриптом
+            simulate_career_tactics.py — по ней строятся подсказки и решения ботов.
+          </p>
+          {field("career_style_counter_permille", "Перевес контр-стиля в дуэлях, ‰")}
+          {field("career_familiarity_step_tenths", "Сыгранность за матч, десятые %")}
+          {field("career_familiarity_max_tenths", "Потолок сыгранности, десятые %")}
+          {field("career_familiarity_keep_pct", "Сохраняется при смене схемы/стиля, %")}
+          {field("career_max_plan_rules", "Указаний на матч")}
+          {field("career_max_substitutions", "Замен на матч")}
+          {listField("career_bot_counter_chance_pct", "Шанс контр-стиля у ботов (Любитель, Профи, Легенда), %")}
         </div>
       </section>
 

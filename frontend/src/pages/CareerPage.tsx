@@ -13,9 +13,11 @@ import {
   type CareerSlot,
   type CareerSquadCard,
   type CareerRoundReport,
+  type CareerDivision,
   type CareerView,
 } from "@/api/career";
 import { fetchFriends } from "@/api/friends";
+import { PlanEditor, ScoutingCard, TacticsCard } from "@/components/career/CareerTactics";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconTrophy, IconUsers } from "@/components/icons";
@@ -24,7 +26,7 @@ import { formatGameError } from "@/lib/errors";
 import { CATEGORY_POSITIONS } from "@/lib/formation";
 import { haptic } from "@/lib/telegram";
 
-type Tab = "squad" | "table" | "calendar";
+type Tab = "prep" | "squad" | "table" | "calendar";
 
 /** Round times in the viewer's own time zone (the server schedules them in
  * its own one, e.g. 12:00/19:00 Moscow). */
@@ -91,12 +93,11 @@ type Handlers = { onView: (v: CareerView) => void; onError: (e: unknown) => void
 function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
   const [params] = useSearchParams();
   const presetFriend = Number(params.get("friend")) || null;
-  const [difficulty, setDifficulty] = useState("pro");
   const [withFriend, setWithFriend] = useState<boolean>(!!presetFriend);
   const [friendId, setFriendId] = useState<number | null>(presetFriend);
   const { data: friends } = useQuery({ queryKey: ["friends"], queryFn: fetchFriends, enabled: withFriend });
   const create = useMutation({
-    mutationFn: () => createCareerSeason(difficulty, withFriend ? friendId ?? undefined : undefined),
+    mutationFn: () => createCareerSeason(withFriend ? friendId ?? undefined : undefined),
     onSuccess: (v) => { haptic("medium"); onView(v); },
     onError,
   });
@@ -104,7 +105,8 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
   if (!view.enabled) {
     return <p className="rounded-2xl bg-bg-surface p-4 text-sm text-ink-mist">Карьера сейчас недоступна — загляни позже.</p>;
   }
-  const pct = view.difficulties.find((d) => d.code === difficulty)?.reward_pct ?? 100;
+  const division = view.division;
+  const pct = division?.reward_pct ?? 100;
   return (
     <section className="flex flex-col gap-4 rounded-3xl bg-bg-surface p-4">
       <div className="text-sm text-ink-mist">
@@ -116,18 +118,7 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
       </div>
 
       <div>
-        <p className="mb-1.5 text-xs font-semibold text-ink-mist">Сложность</p>
-        <div className="grid grid-cols-3 gap-1 rounded-xl bg-bg-raised p-1">
-          {view.difficulties.map((d) => (
-            <button
-              key={d.code}
-              onClick={() => setDifficulty(d.code)}
-              className={`rounded-lg py-2 text-xs font-semibold ${difficulty === d.code ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
+        {division && <DivisionCard division={division} divisions={view.divisions ?? []} />}
         <p className="mt-1.5 flex items-center gap-1 text-[11px] text-ink-mist">
           Чемпиону: {Math.round(((view.place_rewards[0] ?? 0) * pct) / 100)} <IconCoin size={11} className="text-accent-lime" /> и трофей
         </p>
@@ -167,6 +158,32 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
   );
 }
 
+function DivisionCard({ division, divisions }: { division: CareerDivision; divisions: CareerDivision[] }) {
+  return (
+    <div className="rounded-2xl bg-bg-raised p-3">
+      <p className="text-[10px] uppercase tracking-wider text-ink-mist">Твой дивизион</p>
+      <p className="font-display text-base font-bold text-ink-chalk">{division.name}</p>
+      <p className="mt-1 text-[11px] text-ink-mist">
+        Соперники: {division.bot_level_label} · награды ×{division.reward_pct / 100}.
+        {division.promote > 0 && division.division > 1 && ` Места 1–${division.promote} — повышение.`}
+        {division.relegate > 0 && division.division < division.count && ` Последние ${division.relegate} — вылет.`}
+        {" "}Сложность растёт вместе с дивизионом.
+      </p>
+      {divisions.length > 1 && (
+        <div className="mt-2 flex gap-1" aria-label="Лестница дивизионов">
+          {[...divisions].reverse().map((d) => (
+            <span
+              key={d.division}
+              title={d.name}
+              className={`h-1.5 flex-1 rounded-full ${d.division === division.division ? "bg-accent-lime" : d.division > division.division ? "bg-white/25" : "bg-white/10"}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function InviteCard({ view, onView, onError }: { view: CareerView } & Handlers) {
   const invite = view.invite!;
   const respond = useMutation({ mutationFn: (accept: boolean) => respondCareerInvite(invite.season_id, accept), onSuccess: onView, onError });
@@ -174,7 +191,7 @@ function InviteCard({ view, onView, onError }: { view: CareerView } & Handlers) 
     <section className="rounded-3xl bg-accent-lime/10 p-4 ring-1 ring-accent-lime/30">
       <p className="font-display text-base font-bold text-ink-chalk">{invite.from_name} зовёт в общий сезон</p>
       <p className="mt-1 text-xs text-ink-mist">
-        Сложность: {invite.difficulty_label}. Ответить до {formatWhen(invite.expires_at)}.
+        {invite.difficulty_label}. Ответить до {formatWhen(invite.expires_at)}.
       </p>
       <div className="mt-3 flex gap-2">
         <button onClick={() => respond.mutate(true)} disabled={respond.isPending} className="flex-1 rounded-xl bg-floodlight py-2.5 text-sm font-bold text-bg-base disabled:opacity-50">
@@ -231,13 +248,25 @@ function FinishedCard({ season }: { season: CareerSeason }) {
           </p>
         </div>
       </div>
+      {season.next_division && season.division && <DivisionMove from={season.division} to={season.next_division} />}
       <StandingsTable season={season} />
     </section>
   );
 }
 
+function DivisionMove({ from, to }: { from: CareerDivision; to: CareerDivision }) {
+  const up = to.division < from.division;
+  const down = to.division > from.division;
+  const tone = up ? "bg-accent-lime/15 text-accent-lime" : down ? "bg-red-500/10 text-red-400" : "bg-white/5 text-ink-mist";
+  const text = up ? `Повышение! Следующий сезон — ${to.name}`
+    : down ? `Вылет. Следующий сезон — ${to.name}`
+      : `Остаёшься в дивизионе «${from.name}»`;
+  return <p className={`rounded-xl px-3 py-2 text-sm font-semibold ${tone}`}>{text}</p>;
+}
+
 function ActiveSeason({ season, onView, onError }: { season: CareerSeason } & Handlers) {
-  const [tab, setTab] = useState<Tab>("squad");
+  const hasTactics = (season.tactics_version ?? 0) > 0;
+  const [tab, setTab] = useState<Tab>(season.scouting ? "prep" : "squad");
   const [confirmLeave, setConfirmLeave] = useState(false);
   const queryClient = useQueryClient();
   const leave = useMutation({
@@ -254,7 +283,7 @@ function ActiveSeason({ season, onView, onError }: { season: CareerSeason } & Ha
     <>
       <section className="rounded-3xl bg-bg-surface p-4">
         <div className="flex items-center justify-between text-xs text-ink-mist">
-          <span>{season.difficulty_label} · тур {Math.min(season.rounds_played + 1, season.total_rounds)} из {season.total_rounds}</span>
+          <span>{season.division?.name ?? season.difficulty_label} · тур {Math.min(season.rounds_played + 1, season.total_rounds)} из {season.total_rounds}</span>
           <span>{myRow >= 0 ? `${myRow + 1} место` : ""}</span>
         </div>
         {opponent && myMatch && (
@@ -272,8 +301,11 @@ function ActiveSeason({ season, onView, onError }: { season: CareerSeason } & Ha
         )}
       </section>
 
-      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-bg-surface p-1">
-        {([["squad", "Состав"], ["table", "Таблица"], ["calendar", "Календарь"]] as [Tab, string][]).map(([id, label]) => (
+      <div className={`grid gap-1 rounded-2xl bg-bg-surface p-1 ${season.scouting ? "grid-cols-4" : "grid-cols-3"}`}>
+        {([
+          ...(season.scouting ? [["prep", "Подготовка"]] : []),
+          ["squad", "Состав"], ["table", "Таблица"], ["calendar", "Календарь"],
+        ] as [Tab, string][]).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
@@ -284,6 +316,21 @@ function ActiveSeason({ season, onView, onError }: { season: CareerSeason } & Ha
         ))}
       </div>
 
+      {tab === "prep" && season.scouting && (
+        <>
+          <ScoutingCard scouting={season.scouting} difficultyLabel={season.difficulty_label} />
+          {hasTactics ? (
+            <>
+              <TacticsCard season={season} onView={onView} onError={onError} />
+              <PlanEditor season={season} onView={onView} onError={onError} />
+            </>
+          ) : (
+            <p className="rounded-2xl bg-bg-surface p-4 text-xs text-ink-mist">
+              Сыгранность и план на матч появятся в следующем сезоне — этот доигрывается по прежним правилам.
+            </p>
+          )}
+        </>
+      )}
       {tab === "squad" && <LineupEditor season={season} onView={onView} onError={onError} />}
       {tab === "table" && <section className="rounded-3xl bg-bg-surface p-4"><StandingsTable season={season} /></section>}
       {tab === "calendar" && <Calendar season={season} />}
@@ -320,9 +367,12 @@ function StandingsTable({ season }: { season: CareerSeason }) {
         {season.table.map((row, i) => {
           const team = season.teams[row.team_index];
           const me = row.team_index === season.my_team_index;
+          const div = season.division;
+          const zone = !div ? "" : i < div.promote && div.division > 1 ? "border-l-2 border-accent-lime"
+            : i >= season.table.length - div.relegate && div.division < div.count ? "border-l-2 border-red-400" : "";
           return (
             <tr key={row.team_index} className={me ? "font-bold text-accent-lime" : !team.is_bot ? "text-accent-cyan" : "text-ink-chalk"}>
-              <td className="py-1">{i + 1}</td>
+              <td className={`py-1 pl-1 ${zone}`}>{i + 1}</td>
               <td className="max-w-[10rem] truncate py-1">{team.name}</td>
               <td className="py-1 text-right font-mono">{row.played}</td>
               <td className="py-1 text-right font-mono">{row.gf - row.ga > 0 ? "+" : ""}{row.gf - row.ga}</td>
@@ -411,6 +461,7 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
     mutationFn: (payload: { formation?: string; slots?: Record<string, number> }) =>
       setCareerLineup({
         slots: payload.slots ?? slots, formation: payload.formation ?? season.formation, mentality, playstyle,
+        round_index: season.rounds_played,
       }),
     onSuccess: (v) => { haptic("light"); onView(v); },
     onError,

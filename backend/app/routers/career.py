@@ -10,6 +10,7 @@ from app.schemas.career import (
     CareerInviteResponseIn,
     CareerLineupIn,
     CareerMatchEventsOut,
+    CareerPlanIn,
     CareerViewOut,
 )
 from app.services import career_service
@@ -53,7 +54,17 @@ async def start_without_friend(season_id: int, db: AsyncSession = Depends(get_db
 
 @router.put("/lineup", response_model=CareerViewOut)
 async def set_lineup(payload: CareerLineupIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    await career_service.set_lineup(db, user, payload.slots, payload.formation, payload.mentality, payload.playstyle)
+    await career_service.set_lineup(
+        db, user, payload.slots, payload.formation, payload.mentality, payload.playstyle, payload.round_index,
+    )
+    return await _view(db, user)
+
+
+@router.put("/plan", response_model=CareerViewOut)
+async def set_plan(payload: CareerPlanIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Match plan for the coming rounds: up to N conditional instructions
+    (score + minute -> mentality/style) and N substitutions."""
+    await career_service.set_plan(db, user, payload.rules, payload.subs, payload.round_index)
     return await _view(db, user)
 
 

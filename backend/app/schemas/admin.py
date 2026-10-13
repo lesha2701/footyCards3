@@ -260,6 +260,19 @@ class GameConfigOut(BaseModel):
     career_yellows_for_ban: int = 3
     career_form_max: int = 2
     career_reminders_enabled: bool = True
+    career_style_counter_permille: int = 60
+    career_familiarity_step_tenths: int = 20
+    career_familiarity_max_tenths: int = 90
+    career_familiarity_keep_pct: int = 50
+    career_max_plan_rules: int = 3
+    career_max_substitutions: int = 3
+    career_bot_counter_chance_pct: list[int] = []
+    career_division_count: int = 5
+    career_division_promote: int = 2
+    career_division_relegate: int = 2
+    career_division_rating_offset: list[int] = []
+    career_division_reward_pct: list[int] = []
+    career_division_bot_level: list[str] = []
     my_player_enabled: bool = True
     my_player_xp_per_reward: int = 10
     my_player_xp_daily_cap: int = 200
@@ -496,6 +509,19 @@ class GameConfigUpdate(BaseModel):
     career_yellows_for_ban: Optional[int] = Field(default=None, ge=1, le=10)
     career_form_max: Optional[int] = Field(default=None, ge=0, le=5)
     career_reminders_enabled: Optional[bool] = None
+    career_style_counter_permille: Optional[int] = Field(default=None, ge=0, le=150)
+    career_familiarity_step_tenths: Optional[int] = Field(default=None, ge=0, le=50)
+    career_familiarity_max_tenths: Optional[int] = Field(default=None, ge=0, le=150)
+    career_familiarity_keep_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    career_max_plan_rules: Optional[int] = Field(default=None, ge=0, le=5)
+    career_max_substitutions: Optional[int] = Field(default=None, ge=0, le=5)
+    career_bot_counter_chance_pct: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    career_division_count: Optional[int] = Field(default=None, ge=1, le=10)
+    career_division_promote: Optional[int] = Field(default=None, ge=0, le=4)
+    career_division_relegate: Optional[int] = Field(default=None, ge=0, le=4)
+    career_division_rating_offset: Optional[list[int]] = Field(default=None, min_length=1, max_length=10)
+    career_division_reward_pct: Optional[list[int]] = Field(default=None, min_length=1, max_length=10)
+    career_division_bot_level: Optional[list[str]] = Field(default=None, min_length=1, max_length=10)
     my_player_enabled: Optional[bool] = None
     my_player_xp_per_reward: Optional[int] = Field(default=None, ge=0, le=1000)
     my_player_xp_daily_cap: Optional[int] = Field(default=None, ge=0, le=100000)

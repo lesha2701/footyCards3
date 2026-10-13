@@ -8,7 +8,9 @@ from app.schemas.user import UserPublicOut
 
 
 class CareerCreateIn(BaseModel):
-    difficulty: str = "pro"
+    # Ignored since divisions (the division sets the difficulty); kept so
+    # older clients still work.
+    difficulty: Optional[str] = None
     # An accepted friend to play the season together with (optional).
     friend_id: Optional[int] = None
 
@@ -22,12 +24,90 @@ class CareerLineupIn(BaseModel):
     formation: str = "4-3-3"
     mentality: str = "BALANCED"
     playstyle: str = "CENTRAL_PLAY"
+    # The round the client is preparing for: refused once that round has
+    # started (the change would otherwise silently apply to the next one).
+    round_index: Optional[int] = None
+
+
+class CareerPlanIn(BaseModel):
+    """Conditional instructions + substitutions; validated server-side
+    (career_tactics_service.clean_plan)."""
+    rules: list[dict] = Field(default_factory=list)
+    subs: list[dict] = Field(default_factory=list)
+    round_index: Optional[int] = None
+
+
+class CareerPlanRuleOut(BaseModel):
+    score: str
+    margin: int = 0
+    from_minute: int
+    mentality: Optional[str] = None
+    playstyle: Optional[str] = None
+
+
+class CareerPlanSubOut(BaseModel):
+    minute: int
+    slot: Optional[str] = None
+    card_id: Optional[int] = None
+    min_fatigue: int = 0
+
+
+class CareerPlanOut(BaseModel):
+    rules: list[CareerPlanRuleOut] = []
+    subs: list[CareerPlanSubOut] = []
+
+
+class CareerFamiliarityOut(BaseModel):
+    # % rating bonus: accumulated (for the last played tactic), what the
+    # currently saved formation + style would get, and the cap.
+    stored_pct: float
+    current_pct: float
+    max_pct: float
+    step_pct: float
+    keep_pct: int
+    last_formation: Optional[str] = None
+    last_playstyle: Optional[str] = None
+
+
+class CareerScoutingOut(BaseModel):
+    round_index: int
+    opponent_index: int
+    opponent_name: str
+    is_bot: bool
+    strength: Optional[int] = None
+    formation: Optional[str] = None
+    mentality: Optional[str] = None
+    playstyle: Optional[str] = None
+    # "last_match" (what they actually played last) or "season_start".
+    source: str
+    form: list[str] = []
+    # My saved playstyle vs theirs: advantage / neutral / disadvantage
+    # (None for seasons started before the tactics update).
+    hint: Optional[str] = None
+    win_pct: Optional[float] = None
+    counters: list[str] = []
+    beats: list[str] = []
+    # Pro/legend bots may answer my LAST PLAYED style with one of these.
+    adaptive: bool = False
+    my_last_playstyle: Optional[str] = None
+    threat_styles: list[str] = []
 
 
 class CareerDifficultyOut(BaseModel):
     code: str
     label: str
     reward_pct: int
+
+
+class CareerDivisionOut(BaseModel):
+    division: int
+    name: str
+    count: int
+    reward_pct: int
+    bot_level: str
+    bot_level_label: str
+    promote: int
+    relegate: int
 
 
 class CareerTeamOut(BaseModel):
@@ -113,6 +193,9 @@ class CareerSeasonOut(BaseModel):
     status: str
     difficulty: str
     difficulty_label: str
+    division: Optional[CareerDivisionOut] = None
+    # Set once the season is finished (or left): where the next one is played.
+    next_division: Optional[CareerDivisionOut] = None
     rounds_played: int
     total_rounds: int
     schedule: list[datetime]
@@ -133,6 +216,11 @@ class CareerSeasonOut(BaseModel):
     formation: str
     mentality: str
     playstyle: str
+    tactics_version: int = 0
+    scouting: Optional[CareerScoutingOut] = None
+    familiarity: Optional[CareerFamiliarityOut] = None
+    match_plan: Optional[CareerPlanOut] = None
+    plan_limits: dict[str, int] = {}
 
 
 class CareerInviteOut(BaseModel):
@@ -148,6 +236,8 @@ class CareerViewOut(BaseModel):
     place_rewards: list[int]
     slots: list[str]
     slot_times: list[datetime] = []
+    division: Optional[CareerDivisionOut] = None
+    divisions: list[CareerDivisionOut] = []
     season: Optional[CareerSeasonOut] = None
     invite: Optional[CareerInviteOut] = None
 
@@ -158,6 +248,10 @@ class CareerMatchEventsOut(BaseModel):
     home_score: int
     away_score: int
     events: list[dict]
+    # Viewer's own tactical analysis (tactics_version >= 1 seasons only) and
+    # which engine side ("a" = home, "b" = away) the viewer was.
+    analysis: Optional[dict] = None
+    my_side: Optional[str] = None
 
 
 # --- friends ---------------------------------------------------------------------

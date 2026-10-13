@@ -334,44 +334,32 @@ def simulate_match(
 
     result = MatchResult(score_a=0, score_b=0)
     for chance in chances:
-        attacking_side = chance.attacking_side
-        defending_side = "b" if attacking_side == "a" else "a"
-        attacking_playstyle = side_a.playstyle if attacking_side == "a" else side_b.playstyle
+        _resolve_chance(result, chance, side_a, side_b, lineup_a, lineup_b, config, club_a_name, club_b_name)
+    return result
 
-        if chance.shot_type == "empty_net":
-            lineup = lineup_a if attacking_side == "a" else lineup_b
-            moment = {"minute": chance.minute}
-            event, scorer = _resolve_breakaway(attacking_side, moment, lineup, config, notes=chance.skill_notes)
-            result.event_log.append(event)
-            event["description"] = _describe_event(
-                event["event_type"], event["team"], club_a_name, club_b_name,
-                playstyle=attacking_playstyle, quality=chance.quality,
-            )
-            if scorer != "none":
-                setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
-            continue
 
-        moment = {
-            "minute": chance.minute, "shot_type": chance.shot_type, "is_box": chance.is_box,
-            "actors": {"shooter": chance.shooter, "pass_target": chance.pass_target, "defender": chance.defender},
-            # A flank attack finished inside the box = a cross (aerial duel).
-            "is_cross": getattr(chance, "zone", None) == "wing_attack" and chance.shot_type == "in_box",
-            # The top chance tier is the engine's "clean through on goal"
-            # (keeper's one_on_one skill applies to that save).
-            "is_one_on_one": chance.quality == "VERY_HIGH",
-        }
-        quality_bias = QUALITY_BIAS[chance.quality]
-        defending_keeper = _keeper_of(lineup_b if attacking_side == "a" else lineup_a)
-        aerial = None
-        if moment["is_cross"]:
-            aerial = {
-                "attack_target": _aerial_pick(lineup_a if attacking_side == "a" else lineup_b, "ST"),
-                "defender": _aerial_pick(lineup_b if attacking_side == "a" else lineup_a, "CB"),
-            }
-        event, scorer = _resolve_shot_action(
-            attacking_side, moment, config, quality_bias, keeper=defending_keeper, notes=chance.skill_notes,
-            **({"aerial": aerial} if aerial else {}),
-        )
+def _resolve_chance(
+    result: MatchResult, chance, side_a, side_b, lineup_a: list[dict], lineup_b: list[dict], config,
+    club_a_name: str, club_b_name: str, tag_origin: bool = False,
+) -> None:
+    """Resolves one tactical Chance into event(s) and score on `result`.
+    `tag_origin` (career matches) also records the chance's origin/zone in
+    the event payload — read by the career tactical match analysis."""
+    attacking_side = chance.attacking_side
+    defending_side = "b" if attacking_side == "a" else "a"
+    attacking_playstyle = side_a.playstyle if attacking_side == "a" else side_b.playstyle
+
+    def tag(event: dict) -> None:
+        if tag_origin:
+            event.setdefault("payload", {})["origin"] = getattr(chance, "origin", "build_up")
+            if getattr(chance, "zone", None):
+                event["payload"]["zone"] = chance.zone
+
+    if chance.shot_type == "empty_net":
+        lineup = lineup_a if attacking_side == "a" else lineup_b
+        moment = {"minute": chance.minute}
+        event, scorer = _resolve_breakaway(attacking_side, moment, lineup, config, notes=chance.skill_notes)
+        tag(event)
         result.event_log.append(event)
         event["description"] = _describe_event(
             event["event_type"], event["team"], club_a_name, club_b_name,
@@ -379,25 +367,93 @@ def simulate_match(
         )
         if scorer != "none":
             setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
+        return
 
-        # Defense is attempted only when a blocked/saved shot has a further
-        # (config.club_tactical_tackle_attempt_chance) chance the defender
-        # committed a foul in the process — mirrors match_service's "tackle
-        # can stop an attack before it becomes a shot" flow for the box/foul
-        # path; everywhere else, shoot/pass resolves directly against the
-        # defender's rating via _resolve_shot_continuation's blocker/keeper
-        # roll, same as the personal engine.
-        if event["event_type"] in ("blocked", "save") and random.random() < float(config.club_tactical_tackle_attempt_chance):
-            defense_event, defense_scorer, card = _resolve_defense_tackle(defending_side, moment, config, keeper=defending_keeper)
-            result.event_log.append(defense_event)
-            defense_event["description"] = _describe_event(defense_event["event_type"], defense_event["team"], club_a_name, club_b_name)
-            if defense_scorer != "none":
-                setattr(result, f"score_{defense_scorer}", getattr(result, f"score_{defense_scorer}") + 1)
-            if card is not None:
-                club_card_id, card_kind = card
-                if card_kind == "red":
-                    result.red_cards.append((club_card_id, 1))
-                    if random.random() < float(config.club_tactical_injury_chance):
-                        result.injuries.append((club_card_id, random.randint(1, 3)))
+    moment = {
+        "minute": chance.minute, "shot_type": chance.shot_type, "is_box": chance.is_box,
+        "actors": {"shooter": chance.shooter, "pass_target": chance.pass_target, "defender": chance.defender},
+        # A flank attack finished inside the box = a cross (aerial duel).
+        "is_cross": getattr(chance, "zone", None) == "wing_attack" and chance.shot_type == "in_box",
+        # The top chance tier is the engine's "clean through on goal"
+        # (keeper's one_on_one skill applies to that save).
+        "is_one_on_one": chance.quality == "VERY_HIGH",
+    }
+    quality_bias = QUALITY_BIAS[chance.quality]
+    defending_keeper = _keeper_of(lineup_b if attacking_side == "a" else lineup_a)
+    aerial = None
+    if moment["is_cross"]:
+        aerial = {
+            "attack_target": _aerial_pick(lineup_a if attacking_side == "a" else lineup_b, "ST"),
+            "defender": _aerial_pick(lineup_b if attacking_side == "a" else lineup_a, "CB"),
+        }
+    event, scorer = _resolve_shot_action(
+        attacking_side, moment, config, quality_bias, keeper=defending_keeper, notes=chance.skill_notes,
+        **({"aerial": aerial} if aerial else {}),
+    )
+    tag(event)
+    result.event_log.append(event)
+    event["description"] = _describe_event(
+        event["event_type"], event["team"], club_a_name, club_b_name,
+        playstyle=attacking_playstyle, quality=chance.quality,
+    )
+    if scorer != "none":
+        setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
 
+    # Defense is attempted only when a blocked/saved shot has a further
+    # (config.club_tactical_tackle_attempt_chance) chance the defender
+    # committed a foul in the process — mirrors match_service's "tackle
+    # can stop an attack before it becomes a shot" flow for the box/foul
+    # path; everywhere else, shoot/pass resolves directly against the
+    # defender's rating via _resolve_shot_continuation's blocker/keeper
+    # roll, same as the personal engine.
+    if event["event_type"] in ("blocked", "save") and random.random() < float(config.club_tactical_tackle_attempt_chance):
+        defense_event, defense_scorer, card = _resolve_defense_tackle(defending_side, moment, config, keeper=defending_keeper)
+        result.event_log.append(defense_event)
+        defense_event["description"] = _describe_event(defense_event["event_type"], defense_event["team"], club_a_name, club_b_name)
+        if defense_scorer != "none":
+            setattr(result, f"score_{defense_scorer}", getattr(result, f"score_{defense_scorer}") + 1)
+        if card is not None:
+            club_card_id, card_kind = card
+            if card_kind == "red":
+                result.red_cards.append((club_card_id, 1))
+                if random.random() < float(config.club_tactical_injury_chance):
+                    result.injuries.append((club_card_id, random.randint(1, 3)))
+
+
+class MatchController:
+    """Hook for simulate_match_controlled: called before every phase with
+    the minute and the live score; returns the sides/lineups to play that
+    phase with plus any events to log first (tactic changes, substitutions).
+    See career_tactics_service.CareerMatchController."""
+
+    def before_phase(self, minute: int, score_a: int, score_b: int) -> tuple:  # pragma: no cover - interface
+        raise NotImplementedError
+
+
+def simulate_match_controlled(
+    controller: MatchController, config, club_a_name: str = "Клуб A", club_b_name: str = "Клуб B",
+    tracker: dict | None = None,
+) -> MatchResult:
+    """Phase-by-phase variant of simulate_match for «Карьера тренера»: each
+    chance is resolved as soon as it happens, so the controller sees the real
+    score and minute before the next phase (conditional instructions,
+    substitutions, in-match fatigue). Same phase count, minute draw and chance
+    ceiling as simulate_match_phases; `tracker` collects the per-side phase
+    statistics the post-match analysis reports."""
+    num_phases = random.randint(config.club_tactical_phases_per_match_min, config.club_tactical_phases_per_match_max)
+    minutes = sorted(random.sample(range(1, 90), min(num_phases, 89)))
+    max_chances = config.club_tactical_promoted_chance_target_max
+
+    result = MatchResult(score_a=0, score_b=0)
+    chances = 0
+    for minute in minutes:
+        side_a, side_b, lineup_a, lineup_b, events = controller.before_phase(minute, result.score_a, result.score_b)
+        result.event_log.extend(events)
+        if chances >= max_chances:
+            continue
+        chance = club_tactical_matchup_service.simulate_phase(minute, side_a, side_b, config, tracker)
+        if chance is None:
+            continue
+        chances += 1
+        _resolve_chance(result, chance, side_a, side_b, lineup_a, lineup_b, config, club_a_name, club_b_name, tag_origin=True)
     return result

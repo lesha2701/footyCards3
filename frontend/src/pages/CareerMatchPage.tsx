@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 
 import { fetchCareerMatch } from "@/api/career";
+import CareerMatchAnalysis from "@/components/career/CareerMatchAnalysis";
 import { TournamentMatchReplay } from "@/components/clubs/TournamentMatchReplay";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
@@ -27,6 +28,7 @@ export default function CareerMatchPage() {
         scoreA={data.home_score}
         scoreB={data.away_score}
       />
+      {data.analysis && <CareerMatchAnalysis analysis={data.analysis} />}
     </div>
   );
 }

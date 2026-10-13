@@ -21,6 +21,10 @@ class CareerSeason(Base):
     # pending (waiting for an invited friend) | active | finished | cancelled
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
     difficulty: Mapped[str] = mapped_column(String(16), nullable=False, default="pro")
+    # Division (1 = top) the league is played in; sets bot strength, bot
+    # level (difficulty above) and rewards. None = season from before
+    # divisions (difficulty was picked by hand).
+    division: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     creator_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     invite_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -54,6 +58,21 @@ class CareerParticipant(Base):
     mentality: Mapped[str] = mapped_column(String(16), nullable=False, default="BALANCED")
     playstyle: Mapped[str] = mapped_column(String(16), nullable=False, default="CENTRAL_PLAY")
     condition: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Сыгранность (tactics_version >= 1 seasons, career_tactics_service):
+    # tenths of a % rating bonus for familiar_formation + familiar_playstyle,
+    # the tactic played in the last match. match_plan = conditional
+    # instructions + substitutions for the coming rounds (snapshotted into
+    # the match result at kick-off).
+    familiarity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    familiar_formation: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    familiar_playstyle: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    match_plan: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # The participant's own division when the season started and where the
+    # final place sends them (promotion / relegation), set at the finish or
+    # on leaving. A friend may play in the creator's division, but moves up
+    # or down from their own.
+    division: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    next_division: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     final_place: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     coins_earned: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
