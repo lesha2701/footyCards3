@@ -23,6 +23,11 @@ class MagnateCellOut(BaseModel):
     # base, 1–3 «Трибуны», «Арена» (clubs only)
     rent: Optional[list[int]] = None
     build_cost: Optional[int] = None
+    # Club crest: 2–4 letter abbreviation and [primary, secondary] colours.
+    short: Optional[str] = None
+    colors: Optional[list[str]] = None
+    # Fine cells with their own amount (otherwise GameConfig.magnate_fine_amount).
+    amount: Optional[int] = None
     owner_seat: Optional[int] = None
     level: int = 0
     # What landing here costs right now (0 when nobody owns it).
@@ -82,6 +87,7 @@ class MagnateMatchOut(BaseModel):
     can_pay_bail: bool = False
     can_use_card: bool = False
     jail_fine: int = 0
+    stadium_rents: list[int] = []
     round: int = 0
     max_rounds: int = 0
     turn_seconds: int = 0

@@ -25,7 +25,8 @@ SETTINGS = {
     "bot_buy_reserve": 150, "bot_build_reserve": 250,
 }
 
-# Default board landmarks used below.
+# Landmarks of engine.BOARD_24, the compact board the engine tests use (the
+# shipped 32-cell default is covered by its own tests below).
 AMSTERDAM, ROTTERDAM, STADIUM_N, PORTO, LISBON, JAIL = 1, 2, 3, 4, 5, 6
 MARSEILLE, VAR, LYON, STADIUM_E, PARIS = 7, 8, 9, 10, 11
 TRANSFER, GO_TO_JAIL, FINE, MANCHESTER = 15, 18, 20, 23
@@ -39,7 +40,7 @@ def _reset_rate_limits():
 
 def _state(n: int = 4, seed: str = "t", bots: bool = False, **settings) -> dict:
     s = engine.new_state(
-        engine.DEFAULT_BOARD, engine.DEFAULT_CARDS, {**SETTINGS, **settings},
+        engine.BOARD_24, engine.DEFAULT_CARDS, {**SETTINGS, **settings},
         [{"name": f"P{i}", "is_bot": bots} for i in range(n)], seed,
     )
     s["turn"] = s["first_seat"] = 0
@@ -57,14 +58,43 @@ def _turn_back(s: dict, seat: int = 0) -> None:
 
 def test_default_board_and_cards_are_valid():
     board = engine.validate_board(engine.DEFAULT_BOARD)
-    assert len(board["cells"]) == engine.BOARD_CELLS == 24
-    types = [c["type"] for c in board["cells"]]
-    assert types.count("stadium") == 4 and types.count("club") == 13
-    assert {"var", "transfer", "fine", "jail", "go_to_jail", "start"} <= set(types)
-    groups = {c["group"] for c in board["cells"] if c["type"] == "club"}
-    assert len(groups) == 6
-    assert all(2 <= sum(1 for c in board["cells"] if c.get("group") == g) <= 3 for g in groups)
+    cells = board["cells"]
+    assert len(cells) == engine.BOARD_CELLS == 32
+    types = [c["type"] for c in cells]
+    assert types.count("stadium") == 4 and types.count("club") == 18
+    assert [cells[i]["type"] for i in (0, 8, 16, 24)] == ["start", "jail", "break", "go_to_jail"]
+    assert {"var", "transfer", "fine"} <= set(types)
+    groups = {c["group"] for c in cells if c["type"] == "club"}
+    assert len(groups) == 8
+    assert all(2 <= sum(1 for c in cells if c.get("group") == g) <= 3 for g in groups)
+    names = {c["name"] for c in cells}
+    assert {"Челси", "Арсенал", "Барселона", "Реал"} <= names
+    clubs = [c for c in cells if c["type"] == "club"]
+    assert max(clubs, key=lambda c: c["price"])["name"] == "Реал"
+    assert {c["name"] for c in clubs if c["group"] == clubs[-1]["group"]} == {"Барселона", "Реал"}
+    assert all(c.get("short") and c.get("colors") for c in clubs)
+    engine.validate_board(engine.BOARD_24)
     engine.validate_cards(engine.DEFAULT_CARDS)
+
+
+def test_default_board_plays_through_and_uses_cell_fine_amounts():
+    s = engine.new_state(
+        engine.DEFAULT_BOARD, engine.DEFAULT_CARDS, SETTINGS,
+        [{"name": f"P{i}", "is_bot": False} for i in range(4)], "big",
+    )
+    s["turn"] = s["first_seat"] = 0
+    s["players"][0]["pos"] = 7
+    engine.apply_action(s, 0, "roll", dice=[1, 2])  # «Налог на зарплаты» 150
+    assert s["players"][0]["pos"] == 10 and s["players"][0]["cash"] == 1500 - 150
+    s["players"][1]["pos"] = 27
+    engine.apply_action(s, 1, "roll", dice=[1, 2])  # «Штраф федерации» — settings amount
+    assert s["players"][1]["cash"] == 1500 - SETTINGS["fine_amount"]
+    bots = engine.new_state(
+        engine.DEFAULT_BOARD, engine.DEFAULT_CARDS, SETTINGS,
+        [{"name": f"B{i}", "is_bot": True} for i in range(4)], "big-bots",
+    )
+    engine.run_bots(bots)
+    assert bots["finished"]
 
 
 def test_roll_moves_and_offers_purchase():

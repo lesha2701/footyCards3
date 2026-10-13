@@ -618,7 +618,8 @@ def _cells_out(board_cells: list[dict], state: Optional[dict]) -> list[MagnateCe
         owner = state["owner"][i] if state else None
         out.append(MagnateCellOut(
             index=i, type=c["type"], name=c["name"], group=c.get("group"), price=c.get("price"),
-            rent=c.get("rent"), build_cost=c.get("build_cost"), owner_seat=owner,
+            rent=c.get("rent"), build_cost=c.get("build_cost"), short=c.get("short"), colors=c.get("colors"),
+            amount=c.get("amount"), owner_seat=owner,
             level=state["level"][i] if state else 0,
             current_rent=engine.rent_for(state, i) if state and owner is not None else 0,
         ))
@@ -679,7 +680,7 @@ async def _hydrate(db: AsyncSession, match: MagnateMatch, viewer: User) -> Magna
         build_options=engine.build_options(state, mine.seat) if my_turn and state["phase"] in ("roll", "end") else [],
         can_pay_bail=my_turn and state["phase"] == "roll" and me["in_jail"] and me["cash"] >= state["settings"]["jail_fine"],
         can_use_card=my_turn and state["phase"] == "roll" and me["in_jail"] and me["jail_cards"] > 0,
-        jail_fine=state["settings"]["jail_fine"],
+        jail_fine=state["settings"]["jail_fine"], stadium_rents=list(state["settings"].get("stadium_rents") or []),
         round=state["round"], max_rounds=state["settings"]["max_rounds"], turn_seconds=state.get("turn_seconds", 0),
         deadline=_iso(state.get("deadline")) if in_play else None, ends_at=_iso(state.get("ends_at")),
         last_roll=MagnateRollOut(**last_roll) if last_roll else None,

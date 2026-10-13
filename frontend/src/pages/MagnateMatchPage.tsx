@@ -16,15 +16,15 @@ import ConfirmDialog from "@/components/common/ConfirmDialog";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { IconChevronLeft, IconClock, IconCoin, IconChat, IconTrophy } from "@/components/icons";
+import { ClubCrest } from "@/components/magnate/MagnateArt";
 import MagnateBoard from "@/components/magnate/MagnateBoard";
+import MagnateClubCard from "@/components/magnate/MagnateClubCard";
 import MagnateDice from "@/components/magnate/MagnateDice";
 import {
-  CELL_TYPE_LABELS,
   FINISH_REASON_LABELS,
   MODE_LABELS,
   SEAT_COLORS,
   formatMoney,
-  levelLabel,
   secondsLeft,
 } from "@/components/magnate/magnateMeta";
 import { ApiRequestError } from "@/lib/api";
@@ -140,7 +140,8 @@ export default function MagnateMatchPage() {
   };
 
   return (
-    <div className="flex flex-col gap-3 pb-4">
+    <div className="relative flex flex-col gap-3 pb-4">
+      <div className="pointer-events-none absolute -inset-x-4 -top-4 -z-10 h-[520px] bg-[radial-gradient(ellipse_at_top,rgba(62,209,126,0.18),transparent_65%)]" />
       <div className="flex items-center gap-2">
         <button onClick={() => navigate("/play/magnate")} className="rounded-full bg-white/5 p-2 text-ink-mist active:scale-95" aria-label="Назад">
           <IconChevronLeft size={16} />
@@ -189,16 +190,19 @@ export default function MagnateMatchPage() {
           >
             <MagnateDice dice={match.last_roll?.dice ?? null} rollN={match.last_roll?.n ?? null} />
             {inPlay && current && (
-              <p className="text-center text-[11px] font-semibold" style={{ color: SEAT_COLORS[current.seat] }}>
+              <p className="flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1 text-center text-[11px] font-bold text-white backdrop-blur-sm">
+                <span className="h-2 w-2 rounded-full" style={{ background: SEAT_COLORS[current.seat] }} />
                 {match.my_turn ? "Твой ход" : `Ходит ${current.name}`}
                 {turnLeft !== null && !current.is_bot && (
-                  <span className={`ml-1 font-mono ${turnLeft <= 5 ? "text-red-400" : "text-ink-mist"}`}>· {turnLeft} с</span>
+                  <span className={`font-mono ${turnLeft <= 5 ? "text-red-300" : "text-white/70"}`}>· {turnLeft} с</span>
                 )}
               </p>
             )}
-            <div className="flex w-full flex-col gap-0.5">
-              {match.log.slice(-3).map((e) => (
-                <p key={e.n} className="truncate text-center text-[9px] leading-tight text-ink-mist">{e.text}</p>
+            <div className="flex w-full flex-col gap-0.5 rounded-lg bg-black/35 px-2 py-1 backdrop-blur-sm">
+              {match.log.slice(-3).map((e, i, arr) => (
+                <p key={e.n} className={`truncate text-center text-[9px] leading-tight ${i === arr.length - 1 ? "font-semibold text-white" : "text-white/65"}`}>
+                  {e.text}
+                </p>
               ))}
             </div>
           </MagnateBoard>
@@ -291,19 +295,18 @@ function ActionPanel({
       </div>
 
       {match.phase === "buy" && pendingCell && (
-        <>
-          <p className="text-sm text-ink-chalk">
-            <span className="font-semibold">«{pendingCell.name}»</span> свободен —{" "}
-            {pendingCell.type === "stadium" ? "стадион" : `клуб, группа «${match.groups[pendingCell.group ?? 0]?.name}»`}.
-            {pendingCell.rent && <span className="text-ink-mist"> Аренда от {pendingCell.rent[0]} М.</span>}
-          </p>
+        <MagnateClubCard
+          cell={pendingCell}
+          group={pendingCell.group !== null ? match.groups[pendingCell.group] : null}
+          stadiumRents={match.stadium_rents}
+        >
           <div className="flex gap-2">
             <button disabled={busy} onClick={() => onAct("skip")} className={secondary}>Не покупать</button>
             <button disabled={busy} onClick={() => onAct("buy")} className={primary}>
               Купить за {formatMoney(pendingCell.price ?? 0)}
             </button>
           </div>
-        </>
+        </MagnateClubCard>
       )}
 
       {match.phase === "roll" && (
@@ -337,7 +340,8 @@ function ActionPanel({
               onClick={() => onAct("build", c.index)}
               className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2 text-left text-xs active:scale-[0.98] disabled:opacity-50"
             >
-              <span className="text-ink-chalk">
+              <span className="flex items-center gap-2 text-ink-chalk">
+                <ClubCrest short={c.short} colors={c.colors} size={16} />
                 {c.name} · {c.level >= 3 ? "Арена" : `Трибуна №${c.level + 1}`}
                 {c.rent && <span className="text-ink-mist"> → аренда {c.rent[Math.min(c.level + 1, 4)]} М</span>}
               </span>
@@ -355,51 +359,21 @@ function ActionPanel({
 }
 
 function CellInfo({ cell, match, onClose }: { cell: MagnateCell; match: MagnateMatch; onClose: () => void }) {
-  const owner = cell.owner_seat !== null ? match.players[cell.owner_seat] : null;
-  const group = cell.group !== null ? match.groups[cell.group] : null;
-  const rentRows = cell.rent
-    ? [["База (вся группа — ×2)", cell.rent[0]], ["Трибуны ×1", cell.rent[1]], ["Трибуны ×2", cell.rent[2]], ["Трибуны ×3", cell.rent[3]], ["Арена", cell.rent[4]]]
-    : [];
   return (
-    <div className="rounded-2xl bg-bg-surface p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          {group && <span className="mb-1 block h-1 w-10 rounded-full" style={{ background: group.color }} />}
-          <p className="font-display text-sm font-bold text-ink-chalk">{cell.name}</p>
-          <p className="text-[11px] text-ink-mist">
-            {cell.type === "club" && group ? `Клуб · ${group.name}` : CELL_TYPE_LABELS[cell.type]}
-            {cell.price !== null && ` · цена ${formatMoney(cell.price)}`}
-          </p>
-        </div>
-        <button onClick={onClose} className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-ink-mist">Закрыть</button>
-      </div>
-      {cell.price !== null && (
-        <p className="mt-2 text-xs text-ink-chalk">
-          {owner ? (
-            <>
-              Владелец: <span style={{ color: SEAT_COLORS[owner.seat] }}>{owner.name}</span>
-              {cell.level > 0 && ` · ${levelLabel(cell.level)}`} · аренда сейчас {formatMoney(cell.current_rent)}
-            </>
-          ) : (
-            "Свободен"
-          )}
-        </p>
-      )}
-      {rentRows.length > 0 && (
-        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
-          {rentRows.map(([label, value]) => (
-            <div key={label} className="contents">
-              <span className="text-ink-mist">{label}</span>
-              <span className="text-right font-mono text-ink-chalk">{value} М</span>
-            </div>
-          ))}
-          <span className="text-ink-mist">Постройка</span>
-          <span className="text-right font-mono text-ink-chalk">{cell.build_cost} М</span>
-        </div>
-      )}
-      {cell.type === "stadium" && (
-        <p className="mt-2 text-[11px] text-ink-mist">Аренда растёт с числом стадионов у владельца.</p>
-      )}
+    <div className="relative">
+      <MagnateClubCard
+        cell={cell}
+        group={cell.group !== null ? match.groups[cell.group] : null}
+        owner={cell.owner_seat !== null ? match.players[cell.owner_seat] : null}
+        stadiumRents={cell.type === "stadium" ? match.stadium_rents : undefined}
+      />
+      <button
+        onClick={onClose}
+        aria-label="Закрыть"
+        className="absolute right-2 top-2 z-10 rounded-full bg-black/40 px-2 py-0.5 text-[11px] text-white"
+      >
+        ✕
+      </button>
     </div>
   );
 }

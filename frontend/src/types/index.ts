@@ -2107,6 +2107,11 @@ export interface MagnateCell {
   /** base, 1–3 «Трибуны», «Арена» — clubs only */
   rent: number[] | null;
   build_cost: number | null;
+  /** Crest abbreviation and [primary, secondary] colours (clubs). */
+  short: string | null;
+  colors: string[] | null;
+  /** Fine cells with their own amount. */
+  amount: number | null;
   owner_seat: number | null;
   level: number;
   current_rent: number;
@@ -2156,6 +2161,7 @@ export interface MagnateMatch {
   can_pay_bail: boolean;
   can_use_card: boolean;
   jail_fine: number;
+  stadium_rents: number[];
   round: number;
   max_rounds: number;
   turn_seconds: number;

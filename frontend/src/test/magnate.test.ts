@@ -1,33 +1,33 @@
 import { describe, expect, it } from "vitest";
 
-import { BOARD_SIDE, cellCoord, formatMoney, levelLabel, secondsLeft } from "@/components/magnate/magnateMeta";
+import { boardSide, cellCoord, formatMoney, isCorner, levelLabel, secondsLeft } from "@/components/magnate/magnateMeta";
 
 describe("magnate board geometry", () => {
-  it("puts the 24 cells on distinct perimeter squares of the 7×7 grid", () => {
-    const coords = Array.from({ length: 24 }, (_, i) => cellCoord(i));
-    const keys = new Set(coords.map(({ row, col }) => `${row}:${col}`));
-    expect(keys.size).toBe(24);
-    for (const { row, col } of coords) {
-      expect(row === 1 || row === BOARD_SIDE || col === 1 || col === BOARD_SIDE).toBe(true);
-    }
-  });
+  for (const total of [24, 32]) {
+    const side = boardSide(total);
+    it(`puts ${total} cells on distinct perimeter squares of the ${side}×${side} grid`, () => {
+      const coords = Array.from({ length: total }, (_, i) => cellCoord(i, total));
+      expect(new Set(coords.map(({ row, col }) => `${row}:${col}`)).size).toBe(total);
+      for (const { row, col } of coords) {
+        expect(row === 1 || row === side || col === 1 || col === side).toBe(true);
+      }
+      for (let i = 0; i < total; i++) {
+        const a = cellCoord(i, total);
+        const b = cellCoord(i + 1, total);
+        expect(Math.abs(a.row - b.row) + Math.abs(a.col - b.col)).toBe(1);
+      }
+    });
+  }
 
-  it("starts bottom-right and runs counter-clockwise through the corners", () => {
-    expect(cellCoord(0)).toEqual({ row: 7, col: 7 });
-    expect(cellCoord(1)).toEqual({ row: 7, col: 6 });
-    expect(cellCoord(6)).toEqual({ row: 7, col: 1 });
-    expect(cellCoord(12)).toEqual({ row: 1, col: 1 });
-    expect(cellCoord(18)).toEqual({ row: 1, col: 7 });
-    expect(cellCoord(23)).toEqual({ row: 6, col: 7 });
-    expect(cellCoord(24)).toEqual(cellCoord(0));
-  });
-
-  it("neighbouring cells are adjacent squares", () => {
-    for (let i = 0; i < 24; i++) {
-      const a = cellCoord(i);
-      const b = cellCoord(i + 1);
-      expect(Math.abs(a.row - b.row) + Math.abs(a.col - b.col)).toBe(1);
-    }
+  it("starts bottom-right and runs through the corners", () => {
+    expect(cellCoord(0, 32)).toEqual({ row: 9, col: 9 });
+    expect(cellCoord(8, 32)).toEqual({ row: 9, col: 1 });
+    expect(cellCoord(16, 32)).toEqual({ row: 1, col: 1 });
+    expect(cellCoord(24, 32)).toEqual({ row: 1, col: 9 });
+    expect(cellCoord(31, 32)).toEqual({ row: 8, col: 9 });
+    expect([0, 8, 16, 24].every((i) => isCorner(i, 32))).toBe(true);
+    expect(isCorner(4, 32)).toBe(false);
+    expect(cellCoord(6, 24)).toEqual({ row: 7, col: 1 });
   });
 });
 

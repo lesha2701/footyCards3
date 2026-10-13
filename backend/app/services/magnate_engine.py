@@ -19,7 +19,8 @@ import copy
 import random
 from typing import Callable, Optional
 
-BOARD_CELLS = 24
+BOARD_CELLS = 32  # default board; admin boards may use any multiple of 4 in 20–40
+MIN_CELLS, MAX_CELLS = 20, 40
 MAX_LEVEL = 4  # 1–3 = «Трибуны», 4 = «Арена»
 LOG_KEEP = 60
 PROPERTY_TYPES = frozenset({"club", "stadium"})
@@ -38,15 +39,75 @@ class EngineError(Exception):
 # Default board & cards (used while GameConfig.magnate_board / _cards is NULL)
 # ---------------------------------------------------------------------------
 
-def _club(name: str, group: int, price: int, rent: list[int], build_cost: int) -> dict:
-    return {"type": "club", "name": name, "group": group, "price": price, "rent": rent, "build_cost": build_cost}
+def _club(
+    name: str, group: int, price: int, rent: list[int], build_cost: int,
+    short: Optional[str] = None, colors: Optional[list[str]] = None,
+) -> dict:
+    cell = {"type": "club", "name": name, "group": group, "price": price, "rent": rent, "build_cost": build_cost}
+    if short:
+        cell["short"] = short
+    if colors:
+        cell["colors"] = colors
+    return cell
 
 
 def _stadium(name: str, price: int = 200) -> dict:
     return {"type": "stadium", "name": name, "price": price}
 
 
+# 32 cells on the perimeter of a 9×9 grid (8 per side): corners at 0 / 8 /
+# 16 / 24, a stadium in the middle of every side, eight country groups from
+# the Netherlands (cheapest) to Spain (Барселона, Реал — the most expensive).
 DEFAULT_BOARD: dict = {
+    "groups": [
+        {"name": "Нидерланды", "color": "#f97316"},
+        {"name": "Португалия", "color": "#16a34a"},
+        {"name": "Франция", "color": "#2563eb"},
+        {"name": "Италия", "color": "#0ea5e9"},
+        {"name": "Германия", "color": "#eab308"},
+        {"name": "Лондон", "color": "#dc2626"},
+        {"name": "Манчестер", "color": "#a855f7"},
+        {"name": "Испания", "color": "#f59e0b"},
+    ],
+    "cells": [
+        {"type": "start", "name": "Стартовый свисток"},
+        _club("Фейеноорд", 0, 60, [4, 20, 60, 180, 320], 50, "ФЕЙ", ["#e11d48", "#ffffff"]),
+        {"type": "transfer", "name": "Трансферное окно"},
+        _club("Аякс", 0, 70, [5, 25, 75, 210, 350], 50, "АЯК", ["#ffffff", "#dc2626"]),
+        _stadium("Стадион «Север»"),
+        _club("Порту", 1, 100, [6, 30, 90, 270, 450], 50, "ПОР", ["#1d4ed8", "#ffffff"]),
+        {"type": "var", "name": "VAR"},
+        _club("Бенфика", 1, 120, [8, 40, 100, 300, 500], 50, "БЕН", ["#dc2626", "#ffffff"]),
+        {"type": "jail", "name": "Дисквалификация"},
+        _club("Марсель", 2, 140, [10, 50, 150, 450, 700], 100, "МАР", ["#38bdf8", "#ffffff"]),
+        {"type": "fine", "name": "Налог на зарплаты", "amount": 150},
+        _club("ПСЖ", 2, 160, [12, 60, 180, 500, 800], 100, "ПСЖ", ["#1e3a8a", "#dc2626"]),
+        _stadium("Стадион «Восток»"),
+        _club("Ювентус", 3, 180, [14, 70, 200, 550, 900], 100, "ЮВЕ", ["#111827", "#ffffff"]),
+        _club("Интер", 3, 180, [14, 70, 200, 550, 900], 100, "ИНТ", ["#1d4ed8", "#111827"]),
+        _club("Милан", 3, 200, [16, 80, 220, 600, 1000], 100, "МИЛ", ["#dc2626", "#111827"]),
+        {"type": "break", "name": "Перерыв"},
+        _club("Боруссия", 4, 220, [18, 90, 250, 700, 1050], 150, "БВБ", ["#facc15", "#111827"]),
+        {"type": "var", "name": "VAR"},
+        _club("Бавария", 4, 240, [20, 100, 300, 750, 1100], 150, "БАВ", ["#dc2626", "#ffffff"]),
+        _stadium("Стадион «Юг»"),
+        _club("Челси", 5, 260, [22, 110, 330, 800, 1150], 150, "ЧЕЛ", ["#1d4ed8", "#ffffff"]),
+        _club("Арсенал", 5, 260, [22, 110, 330, 800, 1150], 150, "АРС", ["#dc2626", "#ffffff"]),
+        _club("Ливерпуль", 5, 280, [24, 120, 360, 850, 1200], 150, "ЛИВ", ["#b91c1c", "#facc15"]),
+        {"type": "go_to_jail", "name": "Красная карточка"},
+        _club("Ман Юнайтед", 6, 300, [26, 130, 390, 900, 1275], 200, "МЮ", ["#dc2626", "#facc15"]),
+        _club("Ман Сити", 6, 320, [28, 150, 450, 1000, 1400], 200, "МС", ["#7dd3fc", "#ffffff"]),
+        {"type": "transfer", "name": "Трансферное окно"},
+        _stadium("Стадион «Запад»"),
+        _club("Барселона", 7, 350, [35, 175, 500, 1100, 1500], 200, "БАР", ["#1e3a8a", "#b91c1c"]),
+        {"type": "fine", "name": "Штраф федерации"},
+        _club("Реал", 7, 400, [50, 200, 600, 1400, 2000], 200, "РЕА", ["#ffffff", "#a78bfa"]),
+    ],
+}
+
+# The original 24-cell (7×7) board — still a valid admin-saved layout and
+# the board the engine unit tests are written against.
+BOARD_24: dict = {
     "groups": [
         {"name": "Нидерланды", "color": "#f97316"},
         {"name": "Португалия", "color": "#22c55e"},
@@ -83,6 +144,7 @@ DEFAULT_BOARD: dict = {
     ],
 }
 
+
 DEFAULT_CARDS: dict = {
     "var": [
         {"text": "VAR засчитал гол! Беги на «Стартовый свисток»", "kind": "move_to", "cell": 0},
@@ -93,6 +155,7 @@ DEFAULT_CARDS: dict = {
         {"text": "Выездной матч — на ближайший стадион", "kind": "nearest_stadium"},
         {"text": "Судья ошибся в твою пользу", "kind": "money", "amount": 100},
         {"text": "Штраф за симуляцию", "kind": "money", "amount": -50},
+        {"text": "Эль Класико! Отправляйся на «Барселону»", "kind": "move_to", "cell": 29},
     ],
     "transfer": [
         {"text": "Продал запасного форварда", "kind": "money", "amount": 150},
@@ -103,6 +166,7 @@ DEFAULT_CARDS: dict = {
         {"text": "Продажа клубных маек", "kind": "money", "amount": 100},
         {"text": "Медкомиссия", "kind": "money", "amount": -50},
         {"text": "Призовые за кубок", "kind": "money", "amount": 200},
+        {"text": "Новый спонсор на футболках", "kind": "money", "amount": 150},
     ],
 }
 
@@ -124,8 +188,8 @@ def validate_board(board: dict) -> dict:
     groups, cells = board.get("groups"), board.get("cells")
     if not isinstance(groups, list) or not groups:
         raise EngineError("Нужна хотя бы одна группа клубов")
-    if not isinstance(cells, list) or len(cells) != BOARD_CELLS:
-        raise EngineError(f"На поле должно быть ровно {BOARD_CELLS} клеток")
+    if not isinstance(cells, list) or not MIN_CELLS <= len(cells) <= MAX_CELLS or len(cells) % 4:
+        raise EngineError(f"Клеток на поле должно быть кратно 4, от {MIN_CELLS} до {MAX_CELLS}")
     clean_groups = []
     for i, g in enumerate(groups):
         if not isinstance(g, dict) or not str(g.get("name", "")).strip():
@@ -139,6 +203,12 @@ def validate_board(board: dict) -> dict:
         if not name:
             raise EngineError(f"Клетка {i}: нужно название")
         out = {"type": c["type"], "name": name[:32]}
+        if c.get("short"):
+            out["short"] = str(c["short"]).strip()[:4]
+        if isinstance(c.get("colors"), list) and c["colors"]:
+            out["colors"] = [str(x)[:16] for x in c["colors"][:2]]
+        if c["type"] == "fine" and c.get("amount") is not None:
+            out["amount"] = _non_negative_int(c.get("amount"), f"Клетка {i} «{name}», сумма")
         if c["type"] in PROPERTY_TYPES:
             out["price"] = _non_negative_int(c.get("price"), f"Клетка {i} «{name}», цена")
             if out["price"] <= 0:
@@ -188,12 +258,12 @@ def validate_cards(cards: dict) -> dict:
                 c["amount"] = card["amount"]
             elif kind == "move_to":
                 cell = card.get("cell")
-                if not isinstance(cell, int) or not 0 <= cell < BOARD_CELLS:
-                    raise EngineError(f"Колода «{deck}», карточка {i + 1}: cell — номер клетки 0–{BOARD_CELLS - 1}")
+                if not isinstance(cell, int) or not 0 <= cell < MAX_CELLS:
+                    raise EngineError(f"Колода «{deck}», карточка {i + 1}: cell — номер клетки")
                 c["cell"] = cell
             elif kind == "move_by":
                 steps = card.get("steps")
-                if not isinstance(steps, int) or steps == 0 or abs(steps) >= BOARD_CELLS:
+                if not isinstance(steps, int) or steps == 0 or abs(steps) >= MIN_CELLS:
                     raise EngineError(f"Колода «{deck}», карточка {i + 1}: steps — ненулевое число клеток")
                 c["steps"] = steps
             elif kind in ("collect_each", "pay_each"):
@@ -437,7 +507,7 @@ def _land(state: dict, seat: int, depth: int = 0) -> None:
         if depth < 3:
             _draw_card(state, seat, t, depth)
     elif t == "fine":
-        pay(state, seat, state["settings"]["fine_amount"], None, "штраф федерации")
+        pay(state, seat, cell.get("amount", state["settings"]["fine_amount"]), None, cell["name"].lower())
     elif t == "go_to_jail":
         _send_to_jail(state, seat)
 
@@ -457,7 +527,7 @@ def _draw_card(state: dict, seat: int, deck: str, depth: int) -> None:
         else:
             pay(state, seat, -card["amount"], None, title)
     elif kind == "move_to":
-        _move_to(state, seat, card["cell"], depth + 1)
+        _move_to(state, seat, card["cell"] % len(state["cells"]), depth + 1)
     elif kind == "move_by":
         _move_by(state, seat, card["steps"], depth + 1)
     elif kind == "nearest_stadium":

@@ -1,34 +1,31 @@
 import type { MagnateCellType } from "@/types";
 
-/** Cells per side of the square board (24 cells on the perimeter of a 7×7 grid). */
-export const BOARD_SIDE = 7;
+/** Grid squares per side for a board of `total` perimeter cells
+ *  (24 → 7×7, 32 → 9×9). */
+export function boardSide(total: number): number {
+  return total / 4 + 1;
+}
 
-/** Grid position (1-based row/column, for CSS grid) of perimeter cell `index`.
- *  0 = «Стартовый свисток» in the bottom-right corner, then counter-clockwise:
- *  bottom row right→left, left column bottom→top, top row left→right, right
- *  column top→bottom. */
-export function cellCoord(index: number, side = BOARD_SIDE): { row: number; col: number } {
-  const edge = side - 1; // cells per side between corners, plus one corner
-  const i = ((index % (edge * 4)) + edge * 4) % (edge * 4);
+/** Grid position (1-based row/column, for CSS grid) of perimeter cell `index`
+ *  on a board of `total` cells. 0 = «Стартовый свисток» in the bottom-right
+ *  corner, then clockwise for the eye: bottom row right→left, left column
+ *  bottom→top, top row left→right, right column top→bottom. */
+export function cellCoord(index: number, total = 32): { row: number; col: number } {
+  const side = boardSide(total);
+  const edge = side - 1;
+  const i = ((index % total) + total) % total;
   if (i <= edge) return { row: side, col: side - i };
   if (i <= edge * 2) return { row: side - (i - edge), col: 1 };
   if (i <= edge * 3) return { row: 1, col: 1 + (i - edge * 2) };
   return { row: 1 + (i - edge * 3), col: side };
 }
 
+export function isCorner(index: number, total: number): boolean {
+  return index % (total / 4) === 0;
+}
+
 /** Token colours by seat — distinct from the club group colours. */
 export const SEAT_COLORS = ["#3ed17e", "#38bdf8", "#f472b6", "#facc15"];
-
-export const CELL_BADGE: Partial<Record<MagnateCellType, string>> = {
-  start: "▶",
-  var: "VAR",
-  transfer: "⇄",
-  fine: "₣",
-  jail: "⛔",
-  break: "☕",
-  go_to_jail: "🟥",
-  stadium: "🏟",
-};
 
 export const CELL_TYPE_LABELS: Record<MagnateCellType, string> = {
   start: "Стартовый свисток",
