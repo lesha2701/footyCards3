@@ -48,6 +48,7 @@ const AdminShopPage = lazy(() => import("@/admin/pages/AdminShopPage"));
 const AdminBroadcastsPage = lazy(() => import("@/admin/pages/AdminBroadcastsPage"));
 const AdminLogPage = lazy(() => import("@/admin/pages/AdminLogPage"));
 const WheelPage = lazy(() => import("@/pages/WheelPage"));
+const BlackjackPage = lazy(() => import("@/pages/BlackjackPage"));
 const PacksPage = lazy(() => import("@/pages/PacksPage"));
 const PackOpenPage = lazy(() => import("@/pages/PackOpenPage"));
 const PlayPage = lazy(() => import("@/pages/PlayPage"));
@@ -62,6 +63,9 @@ const StrategoPage = lazy(() => import("@/pages/StrategoPage"));
 const StrategoSquadPage = lazy(() => import("@/pages/StrategoSquadPage"));
 const StrategoSearchPage = lazy(() => import("@/pages/StrategoSearchPage"));
 const StrategoMatchPage = lazy(() => import("@/pages/StrategoMatchPage"));
+const MagnatePage = lazy(() => import("@/pages/MagnatePage"));
+const MagnateMatchPage = lazy(() => import("@/pages/MagnateMatchPage"));
+const MagnateRoomPage = lazy(() => import("@/pages/MagnateRoomPage"));
 const StrategoOpenChallengePage = lazy(() => import("@/pages/StrategoOpenChallengePage"));
 const SaboteurGamePage = lazy(() => import("@/pages/SaboteurGamePage"));
 const PenaltyGamePage = lazy(() => import("@/pages/PenaltyGamePage"));
@@ -240,6 +244,9 @@ export default function App() {
         <Route path="/play/stratego/squad" element={<StrategoSquadPage />} />
         <Route path="/play/stratego/search" element={<StrategoSearchPage />} />
         <Route path="/play/stratego/matches/:matchId" element={<StrategoMatchPage />} />
+        <Route path="/play/magnate" element={<MagnatePage />} />
+        <Route path="/play/magnate/matches/:matchId" element={<MagnateMatchPage />} />
+        <Route path="/play/magnate/room/:code" element={<MagnateRoomPage />} />
         <Route path="/play/stratego/open/:matchId" element={<StrategoOpenChallengePage />} />
         <Route path="/play/saboteur" element={<SaboteurGamePage />} />
         <Route path="/play/penalty" element={<PenaltyGamePage />} />
@@ -249,6 +256,7 @@ export default function App() {
         <Route path="/play/penalty/open/:matchId" element={<PenaltyOpenChallengePage />} />
         <Route path="/play/free-kick" element={<FreeKickGamePage />} />
         <Route path="/play/hangman" element={<HangmanGamePage />} />
+        <Route path="/play/blackjack" element={<BlackjackPage />} />
         <Route path="/play/pairs" element={<PairsGamePage />} />
         <Route path="/play/fut-draft" element={<FutDraftGamePage />} />
         <Route path="/collection" element={<CollectionPage />} />

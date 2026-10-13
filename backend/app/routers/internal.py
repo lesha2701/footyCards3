@@ -5,6 +5,7 @@ from app.core.dependencies import verify_internal_secret
 from app.database import get_db
 from app.schemas.chat_pack import ChatPackOpenIn
 from app.schemas.club_league import ClubLeagueSettleResult
+from app.schemas.magnate import MagnateSweepResult
 from app.schemas.pack import PackOpenResult
 from app.schemas.stars import (
     StarsInvoiceStatusOut,
@@ -18,6 +19,7 @@ from app.services import (
     career_service,
     chat_pack_service,
     club_league_service,
+    magnate_service,
     player_tournament_notification_service,
     player_tournament_simulation_service,
     stars_payment_service,
@@ -112,3 +114,13 @@ async def career_reminders(slot_key: str | None = None, db: AsyncSession = Depen
 async def player_tournament_lineup_reminders(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
     count = await player_tournament_notification_service.send_lineup_reminders(db, slot_key=slot_key)
     return PlayerTournamentReminderResult(users_notified=count)
+
+
+@router.post("/magnate/sweep", response_model=MagnateSweepResult)
+async def magnate_sweep(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Called by the bot every few seconds: starts lobbies whose wait ran
+    out and auto-plays expired turns, so «Футбольный магнат» tables keep
+    moving even when every player has closed the app. Safe alongside the
+    lazy sweep on reads — each match is taken with SKIP LOCKED and its
+    deadline re-checked under the lock."""
+    return MagnateSweepResult(advanced=await magnate_service.sweep_due(db))

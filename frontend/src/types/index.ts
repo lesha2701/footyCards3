@@ -311,18 +311,22 @@ export interface StarsInvoiceStatus {
   coin_result: StarsCoinResult | null;
   gift_result: Gift | null;
   wheel_result: WheelSpinResult | null;
+  blackjack_result?: { kind: "entry"; paid_entries?: number } | null;
 }
+
+export type WheelPrizePool = "regular" | "golden" | "jackpot";
 
 export interface WheelPrize {
   id: number;
   prize_type: "coins" | "pack" | "card_rarity" | "badge";
+  pool: WheelPrizePool;
   weight: number;
   is_active: boolean;
   sort_order: number;
   coins_amount: number | null;
   pack_id: number | null;
   pack: Pack | null;
-  card_rarity: "common" | "rare" | "epic" | "legendary" | null;
+  card_rarity: Rarity | null;
   badge_id: number | null;
   badge: Badge | null;
 }
@@ -334,6 +338,54 @@ export interface WheelStatus {
   spin_cost_coins: number;
   spin_cost_stars: number;
   prizes: WheelPrize[];
+}
+
+export interface BlackjackCard {
+  hidden: boolean;
+  rank: string | null;
+  suit: "gk" | "df" | "mf" | "fw" | null;
+}
+
+export type BlackjackOutcome = "hat_trick" | "win" | "push" | "loss";
+
+export interface BlackjackMatch {
+  id: number;
+  status: "in_progress" | "finished";
+  entry_source: "free" | "paid" | "replay";
+  player_cards: BlackjackCard[];
+  player_total: number;
+  player_soft: boolean;
+  dealer_cards: BlackjackCard[];
+  dealer_total: number;
+  outcome: BlackjackOutcome | null;
+  outcome_reason: string | null;
+  reward_pool: WheelPrizePool | null;
+  prize: WheelPrize | null;
+  consolation_coins: number;
+  created_at: string;
+  finished_at: string | null;
+}
+
+export interface BlackjackAction {
+  match: BlackjackMatch;
+  new_balance: number;
+  spin_result: WheelSpinResult | null;
+}
+
+export interface BlackjackStatus {
+  enabled: boolean;
+  free_per_day: number;
+  free_remaining: number;
+  paid_entries: number;
+  replay_entries: number;
+  paid_bought_today: number;
+  paid_daily_limit: number;
+  stars_cost: number;
+  consolation_coins: number;
+  next_reset_at: string;
+  active_match: BlackjackMatch | null;
+  golden_prizes: WheelPrize[];
+  jackpot_prizes: WheelPrize[];
 }
 
 export interface WheelSpinResult {
@@ -627,6 +679,7 @@ export interface GameLimits {
   tactico: number;
   pairs: number;
   stratego: number;
+  magnate: number;
   /** Exhausted games only: when the hourly cap frees up again. */
   resets_at?: Partial<Record<string, string>>;
 }
@@ -2140,4 +2193,143 @@ export interface StrategoSearchStatus {
   status: "not_searching" | "searching" | "matched" | "timeout";
   match_id: number | null;
   created_at: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// «Футбольный магнат» (backend app/schemas/magnate.py)
+// ---------------------------------------------------------------------------
+
+export type MagnateMode = "bot" | "public" | "private";
+export type MagnateStatus = "lobby" | "in_progress" | "finished" | "cancelled";
+export type MagnatePhase = "roll" | "buy" | "end" | "moving" | "finished";
+export type MagnateAction = "roll" | "buy" | "skip" | "build" | "end" | "pay_bail" | "use_card";
+export type MagnateCellType =
+  | "start" | "club" | "stadium" | "var" | "transfer" | "fine" | "jail" | "break" | "go_to_jail" | "chance" | "red_card";
+
+export interface MagnateGroup {
+  name: string;
+  color: string;
+}
+
+export interface MagnateCell {
+  index: number;
+  type: MagnateCellType;
+  name: string;
+  group: number | null;
+  price: number | null;
+  /** base, 1–3 «Трибуны», «Арена» — clubs only */
+  rent: number[] | null;
+  build_cost: number | null;
+  /** Crest abbreviation and [primary, secondary] colours (clubs). */
+  short: string | null;
+  colors: string[] | null;
+  /** Fine cells with their own amount. */
+  amount: number | null;
+  owner_seat: number | null;
+  level: number;
+  current_rent: number;
+}
+
+export interface MagnatePlayer {
+  seat: number;
+  name: string;
+  is_bot: boolean;
+  is_me: boolean;
+  left: boolean;
+  cash: number;
+  pos: number;
+  in_jail: boolean;
+  jail_cards: number;
+  skip_turns: number;
+  bankrupt: boolean;
+  capital: number;
+  missed: number;
+  place: number | null;
+  reward_coins: number;
+}
+
+export interface MagnateLogEntry {
+  n: number;
+  seat: number | null;
+  text: string;
+  kind: string;
+}
+
+export interface MagnateMatch {
+  id: number;
+  mode: MagnateMode;
+  status: MagnateStatus;
+  version: number;
+  invite_code: string | null;
+  is_creator: boolean;
+  my_seat: number | null;
+  seats_total: number;
+  players: MagnatePlayer[];
+  groups: MagnateGroup[];
+  cells: MagnateCell[];
+  turn: number | null;
+  phase: MagnatePhase | null;
+  my_turn: boolean;
+  pending_cell: number | null;
+  build_options: number[];
+  can_pay_bail: boolean;
+  can_use_card: boolean;
+  jail_fine: number;
+  stadium_rents: number[];
+  round: number;
+  max_rounds: number;
+  turn_seconds: number;
+  deadline: string | null;
+  ends_at: string | null;
+  lobby_deadline: string | null;
+  server_now: string;
+  last_roll: { seat: number; dice: number[]; n: number } | null;
+  log: MagnateLogEntry[];
+  finish_reason: string | null;
+  my_place: number | null;
+  my_reward: number;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface MagnateMatchBrief {
+  id: number;
+  mode: MagnateMode;
+  status: MagnateStatus;
+  players: number;
+  my_place: number | null;
+  reward_coins: number;
+  left: boolean;
+  created_at: string;
+  finished_at: string | null;
+}
+
+export interface MagnateInfo {
+  start_money: number;
+  pass_start_bonus: number;
+  jail_fine: number;
+  fine_amount: number;
+  max_rounds: number;
+  time_limit_minutes: number;
+  turn_seconds: number;
+  max_missed_turns: number;
+  lobby_wait_seconds: number;
+  room_wait_minutes: number;
+  place_rewards: number[];
+  bot_reward_pct: number;
+  daily_limit: number;
+  rewarded_today: number;
+  wins: number;
+  active_match_id: number | null;
+}
+
+export interface MagnateRoomPreview {
+  id: number;
+  invite_code: string;
+  creator_name: string;
+  status: MagnateStatus;
+  players: string[];
+  seats_total: number;
+  is_member: boolean;
 }

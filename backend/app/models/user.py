@@ -118,6 +118,13 @@ class User(TimestampMixin, Base):
     # Stale/missing entries are auto-filled lazily; None = fully auto.
     stratego_squad: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
+    # Футбольный магнат
+    magnate_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    magnate_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    magnate_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    magnate_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    magnate_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Shared hourly pool across every club-scoped mini-game (Повтори порядок,
     # Пенальти, Своя позиция) — a member gets club_games_hourly_limit plays
     # per hour TOTAL, spendable on any mix of these games, not N plays of
@@ -169,6 +176,16 @@ class User(TimestampMixin, Base):
 
     wheel_free_spins_used_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     wheel_spins_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # «21: Добавленное время» (see blackjack_service.py). The *_today pair
+    # resets at local midnight (blackjack_day_reset_at); the two entry
+    # banks don't expire — paid ones were bought with Stars, replay ones
+    # were earned by a draw.
+    blackjack_free_used_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    blackjack_paid_bought_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    blackjack_day_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    blackjack_paid_entries: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    blackjack_replay_entries: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Referrals
     referred_by_id: Mapped[Optional[int]] = mapped_column(

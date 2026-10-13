@@ -191,4 +191,7 @@ class StarsInvoice(TimestampMixin, Base):
     # (one extra training) or "item:<lifestyle_item_id>". Delivered by
     # my_player_service.deliver_stars_purchase.
     my_player_purchase: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # «21: Добавленное время» entry (never with the fields above): delivery
+    # banks one paid entry — blackjack_service.deliver_stars_entry.
+    is_blackjack_entry: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
