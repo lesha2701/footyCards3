@@ -233,15 +233,19 @@ class GameConfig(TimestampMixin, Base):
     career_yellows_for_ban: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     career_form_max: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     career_reminders_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    # Tactics (career_tactics_service; seasons created after migration 0138):
-    # a playstyle that counters the opponent's gets this many thousandths of
-    # duel ratio in its favor (0 = counters off); familiarity grows by step
-    # tenths of a % rating per match with the same formation + playstyle up
-    # to max, a changed formation / playstyle keeps keep_pct of it each.
-    career_style_counter_permille: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    # Tactics (career_tactics_service; seasons created after migration 0138).
+    # Axis levers and interaction strengths: overrides on top of
+    # career_tactics_service.DEFAULT_TUNING (empty = defaults).
+    career_tactics_tuning: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # Familiarity grows by step tenths of a % rating per match with the same
+    # formation + tactic up to max; a new formation keeps keep_pct of it,
+    # each changed tactical axis keeps axis_keep_pct.
     career_familiarity_step_tenths: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
     career_familiarity_max_tenths: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
     career_familiarity_keep_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    career_familiarity_axis_keep_pct: Mapped[int] = mapped_column(Integer, default=80, nullable=False)
+    # Season squad (заявка) size for new seasons.
+    career_squad_size: Mapped[int] = mapped_column(Integer, default=22, nullable=False)
     # Match plan limits: conditional instructions and substitutions per match.
     career_max_plan_rules: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     career_max_substitutions: Mapped[int] = mapped_column(Integer, default=3, nullable=False)

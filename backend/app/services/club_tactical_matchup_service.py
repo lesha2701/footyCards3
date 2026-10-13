@@ -73,6 +73,10 @@ def _amplify(ratio: float, k: float | None = None) -> float:
 def initiative_probability(side_a: "ClubTacticalSide", side_b: "ClubTacticalSide") -> float:
     mult_a = initiative_mult_for(INITIATIVE_MULT[side_a.mentality], resolve_active_boosts(side_a.coach))
     mult_b = initiative_mult_for(INITIATIVE_MULT[side_b.mentality], resolve_active_boosts(side_b.coach))
+    if side_a.career is not None:
+        mult_a *= side_a.career.initiative_mult()
+    if side_b.career is not None:
+        mult_b *= side_b.career.initiative_mult()
     score_a = side_a.profile.midfield_control * mult_a
     score_b = side_b.profile.midfield_control * mult_b
     total = score_a + score_b
@@ -153,12 +157,26 @@ def _band(value: float, bands: list[tuple[float, tuple]]) -> tuple:
     return bands[-1][1]
 
 
-def resolve_stage1(ratio: float) -> str:
+def _stage1_weights(ratio: float, bias: float = 0.0) -> list[float]:
+    """Stage-1 band weights; `bias` (career axis interactions, see
+    career_shift) tilts them toward advance (> 0) or breakdown (< 0) —
+    a duel's band is coarse, so a small ratio nudge between two equal
+    sides would otherwise never change anything. bias 0 = the band as is."""
     breakdown, stall, advance = _band(ratio, STAGE1_BANDS)
+    if bias:
+        breakdown *= max(0.05, 1 - bias)
+        advance *= max(0.05, 1 + bias)
+    return [breakdown, stall, advance]
+
+
+def resolve_stage1(ratio: float, bias: float = 0.0) -> str:
+    breakdown, stall, advance = _stage1_weights(ratio, bias)
     return random.choices(["breakdown", "stall", "advance"], weights=[breakdown, stall, advance], k=1)[0]
 
 
-def _resolve_stage1_for(ratio: float, duelist: Any, skill_notes: list | None, defender: Any = None) -> str:
+def _resolve_stage1_for(
+    ratio: float, duelist: Any, skill_notes: list | None, defender: Any = None, bias: float = 0.0,
+) -> str:
     """Stage-1 duel with the attacking duelist's own "dribbler" skill and —
     on a transition (counter-attack) only, where `defender` is passed — the
     covering defender's "last_line" skill (player tournaments only; club
@@ -168,7 +186,7 @@ def _resolve_stage1_for(ratio: float, duelist: Any, skill_notes: list | None, de
     last_line = effect_of(getattr(defender, "skill", None), "last_line") if defender is not None else None
     if last_line is not None:
         outcome, notes = skill_choice_sets(
-            ["breakdown", "stall", "advance"], list(_band(ratio, STAGE1_BANDS)),
+            ["breakdown", "stall", "advance"], _stage1_weights(ratio, bias),
             [(effect, {"advance"}, duelist.player.display_name),
              (last_line, {"breakdown", "stall"}, defender.player.display_name)],
         )
@@ -176,9 +194,9 @@ def _resolve_stage1_for(ratio: float, duelist: Any, skill_notes: list | None, de
             skill_notes.extend(notes)
         return outcome
     if effect is None:
-        return resolve_stage1(ratio)
+        return resolve_stage1(ratio, bias) if bias else resolve_stage1(ratio)
     outcome, notes = skill_choice(
-        ["breakdown", "stall", "advance"], list(_band(ratio, STAGE1_BANDS)), "advance", effect,
+        ["breakdown", "stall", "advance"], _stage1_weights(ratio, bias), "advance", effect,
         player=duelist.player.display_name,
     )
     if skill_notes is not None:
@@ -262,7 +280,7 @@ _POOL_STRATEGIES: dict[str, Any] = {"uniform": _pool_uniform, "soft_bias": _pool
 DEFENSIVE_POOL_STRATEGY = "soft_bias"
 
 
-def defensive_pool(cards: list[Any], mentality: str, playstyle: str) -> list[Any]:
+def defensive_pool(cards: list[Any], mentality: str, playstyle: str, fraction_mult: float = 1.0) -> list[Any]:
     """Spec §6.4: a transition moment's defensive duelist is drawn from a
     mentality-sized SUBSET of the team's real defensive-zone contributors,
     re-rolled fresh every call — never from a rating-adjusted version of the
@@ -277,7 +295,7 @@ def defensive_pool(cards: list[Any], mentality: str, playstyle: str) -> list[Any
     if not contributors:
         return []
 
-    fraction = SAMPLE_FRACTION[mentality]
+    fraction = SAMPLE_FRACTION[mentality] * fraction_mult
     if playstyle == "HIGH_PRESS":
         fraction *= HIGH_PRESS_POOL_MULT
 
@@ -297,21 +315,29 @@ class ClubTacticalSide:
     mentality: str
     playstyle: str
     coach: "Coach | None" = None
-    # «Карьера тренера» only (career_tactics_service.style_edge_for): opponent
-    # playstyle -> bounded ratio-point bonus in every duel this side plays
-    # against that style (its counter-styles). None everywhere else, so clubs
-    # and tournaments are unaffected.
-    style_edge: "dict[str, float] | None" = None
+    # «Карьера тренера» only: the team's tactical axes
+    # (career_tactics_service.TacticAxes — attack direction, build-up, on
+    # losing / winning the ball, block). When set, it replaces every
+    # playstyle-specific lever (zone mix, possession retry, transition bonus,
+    # pressing pool) and adds its axis interactions to each duel; such sides
+    # carry playstyle CAREER_PLAYSTYLE so no playstyle branch fires. None
+    # everywhere else, so clubs and tournaments are unaffected.
+    career: Any = None
 
 
-def style_edge_shift(attacker: ClubTacticalSide, defender: ClubTacticalSide) -> float:
-    """Extra ratio shift (positive favors the defender, same convention as
-    defender_ratio_shift_for) from a playstyle counter: the defender's edge
-    over the attacker's style minus the attacker's edge over the defender's.
-    0.0 unless a side carries a style_edge (career matches)."""
-    defending = (defender.style_edge or {}).get(attacker.playstyle, 0.0)
-    attacking = (attacker.style_edge or {}).get(defender.playstyle, 0.0)
-    return defending - attacking
+CAREER_PLAYSTYLE = "CAREER"
+
+
+def career_shift(attacker: ClubTacticalSide, defender: ClubTacticalSide, kind: str, zone: str) -> tuple[float, tuple]:
+    """(Stage-1 bias toward the attacker, interaction ids applied) from the
+    two sides' career axes for one duel; (0.0, ()) outside career matches."""
+    if attacker.career is None or defender.career is None:
+        return 0.0, ()
+    return attacker.career.duel_shift(defender.career, kind, zone)
+
+
+def _pool_mult(side: ClubTacticalSide, after_losing_ball: bool = False) -> float:
+    return side.career.pool_mult(after_losing_ball) if side.career is not None else 1.0
 
 
 def _track(tracker: dict | None, side: str, key: str) -> None:
@@ -321,6 +347,17 @@ def _track(tracker: dict | None, side: str, key: str) -> None:
     if tracker is not None:
         bucket = tracker.setdefault(side, {})
         bucket[key] = bucket.get(key, 0) + 1
+
+
+def _track_interactions(tracker: dict | None, side: str, ids: tuple, won: bool) -> None:
+    """Per attacking side: for each career axis interaction, how many duels
+    it applied to and how many of them the attacker won."""
+    if tracker is None or not ids:
+        return
+    bucket = tracker.setdefault(side, {}).setdefault("interactions", {})
+    for ix in ids:
+        applied, wins = bucket.get(ix, (0, 0))
+        bucket[ix] = (applied + 1, wins + (1 if won else 0))
 
 
 def _first_pass_quality_factor(midfield_control: float) -> float:
@@ -348,21 +385,24 @@ def resolve_counter(
     defence_zone = "wing_defence" if zone == "wing_attack" else "central_defence"
 
     y_duelist = weighted_pick(y.cards, zone)
-    pool = defensive_pool(x.cards, x.mentality, x.playstyle)
+    pool = defensive_pool(x.cards, x.mentality, x.playstyle, _pool_mult(x, after_losing_ball=True))
     x_duelist = weighted_pick(pool, defence_zone)
 
     y_boosts = resolve_active_boosts(y.coach)
-    transition_bonus = transition_bonus_for(y.playstyle, TRANSITION_BONUS[y.playstyle], y_boosts)
+    base_bonus = y.career.transition_bonus() if y.career is not None else TRANSITION_BONUS[y.playstyle]
+    transition_bonus = transition_bonus_for(y.playstyle, base_bonus, y_boosts)
     midfield_for_pass = y.profile.midfield_control + first_pass_input_bonus(y_boosts)
     eff_y = y_duelist.player.rating * position_fit(y_duelist.player.position, zone) * transition_bonus * _first_pass_quality_factor(midfield_for_pass)
     eff_x = x_duelist.player.rating * position_fit(x_duelist.player.position, defence_zone)
     total = eff_y + eff_x
     raw_ratio = eff_y / total if total else 0.5
-    shifted = max(0.05, min(0.95, raw_ratio - (defender_ratio_shift_for(x) + style_edge_shift(y, x))))
+    axis_bias, axis_ids = career_shift(y, x, "counter", zone)
+    shifted = max(0.05, min(0.95, raw_ratio - defender_ratio_shift_for(x)))
     ratio = _amplify(shifted)
 
-    outcome = _resolve_stage1_for(ratio, y_duelist, skill_notes, defender=x_duelist)
+    outcome = _resolve_stage1_for(ratio, y_duelist, skill_notes, defender=x_duelist, bias=axis_bias)
     _track(tracker, attacking_side_label, "counters")
+    _track_interactions(tracker, attacking_side_label, axis_ids, outcome == "advance")
     if outcome != "advance":
         return None
     _track(tracker, attacking_side_label, "counter_chances")
@@ -564,7 +604,7 @@ POOL_APPLIES_TO_NORMAL_DEFENSE = True
 def _pick_defender(defender: ClubTacticalSide, defence_zone: str, exclude_ids: frozenset = frozenset()) -> Any:
     if not POOL_APPLIES_TO_NORMAL_DEFENSE:
         return weighted_pick(defender.cards, defence_zone, exclude_ids=exclude_ids)
-    pool = defensive_pool(defender.cards, defender.mentality, defender.playstyle)
+    pool = defensive_pool(defender.cards, defender.mentality, defender.playstyle, _pool_mult(defender))
     return weighted_pick(pool, defence_zone, exclude_ids=exclude_ids)
 
 
@@ -572,7 +612,12 @@ def _resolve_progression_and_duel(
     attacker: ClubTacticalSide, defender: ClubTacticalSide, attacking_side: str, minute: int, config,
     tracker: dict | None = None,
 ) -> Chance | None:
-    zone = pick_progression_zone(attacker.playstyle)
+    if attacker.career is not None:
+        weights = attacker.career.zone_weights()
+        picked = random.choices(list(weights), weights=list(weights.values()), k=1)[0]
+        zone = None if picked == "none" else picked
+    else:
+        zone = pick_progression_zone(attacker.playstyle)
     if zone is None:
         _track(tracker, attacking_side, "recycled")
         return None
@@ -582,7 +627,8 @@ def _resolve_progression_and_duel(
 
     _track(tracker, attacking_side, zone)
     defence_zone = "wing_defence" if zone == "wing_attack" else "central_defence"
-    ratio_shift = defender_ratio_shift_for(defender) + style_edge_shift(attacker, defender)
+    axis_bias, axis_ids = career_shift(attacker, defender, "build_up", zone)
+    ratio_shift = defender_ratio_shift_for(defender)
 
     # Up to 2 attempts: the second is POSSESSION's problem-2 fix (see
     # possession_retry_chance) — a strong-midfield POSSESSION team that
@@ -593,21 +639,26 @@ def _resolve_progression_and_duel(
     defender_duelist = _pick_defender(defender, defence_zone)
     ratio_1 = zone_ratio(attacker_duelist, zone, defender_duelist, defence_zone, ratio_shift)
     stage1_notes: list = []
-    outcome_1 = _resolve_stage1_for(ratio_1, attacker_duelist, stage1_notes)
+    outcome_1 = _resolve_stage1_for(ratio_1, attacker_duelist, stage1_notes, bias=axis_bias)
 
-    if (
-        outcome_1 == "stall"
-        and attacker.playstyle == "POSSESSION"
-        and random.random() < possession_retry_chance(attacker.profile.midfield_control)
-    ):
+    if attacker.career is not None:
+        retry = outcome_1 == "stall" and random.random() < attacker.career.retry_chance(attacker.profile.midfield_control)
+    else:  # unchanged club/tournament path (same RNG draws)
+        retry = (
+            outcome_1 == "stall"
+            and attacker.playstyle == "POSSESSION"
+            and random.random() < possession_retry_chance(attacker.profile.midfield_control)
+        )
+    if retry:
         attacker_duelist = weighted_pick(attacker.cards, zone)
         defender_duelist = _pick_defender(defender, defence_zone)
         ratio_1 = zone_ratio(attacker_duelist, zone, defender_duelist, defence_zone, ratio_shift)
         # Only the duel that actually decides the phase keeps its notes.
         stage1_notes = []
-        outcome_1 = _resolve_stage1_for(ratio_1, attacker_duelist, stage1_notes)
+        outcome_1 = _resolve_stage1_for(ratio_1, attacker_duelist, stage1_notes, bias=axis_bias)
 
     _track(tracker, attacking_side, outcome_1)
+    _track_interactions(tracker, attacking_side, axis_ids, outcome_1 == "advance")
     if outcome_1 == "stall":
         return None
     if outcome_1 == "breakdown":

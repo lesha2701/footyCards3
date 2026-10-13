@@ -217,7 +217,9 @@ export interface GameConfig {
   career_yellows_for_ban: number;
   career_form_max: number;
   career_reminders_enabled: boolean;
-  career_style_counter_permille: number;
+  career_tactics_tuning: Record<string, unknown>;
+  career_familiarity_axis_keep_pct: number;
+  career_squad_size: number;
   career_familiarity_step_tenths: number;
   career_familiarity_max_tenths: number;
   career_familiarity_keep_pct: number;

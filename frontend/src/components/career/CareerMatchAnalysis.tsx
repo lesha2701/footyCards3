@@ -1,6 +1,9 @@
-import type { CareerAnalysis, CareerGoalsByOrigin } from "@/api/career";
-import { HINT_TEXT, tacticLabel } from "@/lib/careerTactics";
-import { MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
+import type { ReactNode } from "react";
+
+import type { CareerAnalysis, CareerGoalsByOrigin, TacticsCatalog } from "@/api/career";
+import { MatchupList, TacticTags } from "@/components/career/CareerTactics";
+import { HINT_TEXT, axisValueLabel, presetOf, tacticLabel } from "@/lib/careerTactics";
+import { MENTALITIES } from "@/lib/clubTactics";
 
 function goalsText(g: CareerGoalsByOrigin): string {
   const parts = [
@@ -12,64 +15,110 @@ function goalsText(g: CareerGoalsByOrigin): string {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-3 py-1 text-xs">
+    <div className="flex justify-between gap-3 py-1.5 text-xs">
       <span className="text-ink-mist">{label}</span>
       <span className="text-right text-ink-chalk">{value}</span>
     </div>
   );
 }
 
-/** Tactical analysis of my career match — only counts the engine recorded
- * (phases, won balls, counters, goal origins, instructions, substitutions). */
-export default function CareerMatchAnalysis({ analysis }: { analysis: CareerAnalysis }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div>
+      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-accent-cyan">{title}</p>
+      {children}
+    </div>
+  );
+}
+
+/** Tactical analysis of my career match — only what the engine recorded:
+ * phase counts, won balls, counters, goal origins, which tactical
+ * interactions applied in duels and how they went, instructions and subs. */
+export default function CareerMatchAnalysis({ analysis, catalog }: { analysis: CareerAnalysis; catalog: TacticsCatalog | null }) {
   const { mine, theirs } = analysis;
-  const hint = HINT_TEXT[analysis.matchup];
+  const hint = HINT_TEXT[analysis.matchup.hint];
   const planSubs = analysis.plan?.subs ?? [];
   const doneSubs = new Set(analysis.substitutions.map((s) => s.sub));
+  const myPreset = presetOf(catalog, analysis.tactic);
+  const theirPreset = presetOf(catalog, analysis.opponent_tactic);
 
   return (
-    <section className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-4">
-      <p className="font-display text-base font-bold text-ink-chalk">Тактический разбор</p>
-
-      <div className="divide-y divide-white/5">
-        <Row label="Тактика" value={`${analysis.formation} · ${tacticLabel(MENTALITIES, analysis.mentality)} · ${tacticLabel(PLAYSTYLES, analysis.playstyle)}`} />
-        <Row label="Стиль соперника" value={tacticLabel(PLAYSTYLES, analysis.opponent_playstyle)} />
-        <div className="flex items-center justify-between py-1 text-xs">
-          <span className="text-ink-mist">Стиль против стиля</span>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${hint.tone}`}>{hint.label}</span>
-        </div>
-        {analysis.familiarity_pct > 0 && <Row label="Сыгранность" value={`+${analysis.familiarity_pct}% к рейтингу`} />}
+    <section className="flex flex-col gap-4 rounded-3xl bg-bg-surface p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-display text-base font-bold text-ink-chalk">Тактический разбор</p>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${hint.tone}`}>{hint.label}</span>
       </div>
 
-      <div>
-        <p className="mb-1 text-xs font-semibold text-ink-mist">Атаки</p>
+      {catalog && (
+        <div className="grid gap-2">
+          <div className="rounded-2xl bg-bg-raised p-3">
+            <p className="mb-1.5 text-[11px] text-ink-mist">
+              Вы: {analysis.formation} · {tacticLabel(MENTALITIES, analysis.mentality)}
+              {myPreset && <> · <span className="text-ink-chalk">{myPreset}</span></>}
+              {analysis.familiarity_pct > 0 && <> · сыгранность +{analysis.familiarity_pct}%</>}
+            </p>
+            <TacticTags catalog={catalog} tactic={analysis.tactic} />
+          </div>
+          <div className="rounded-2xl bg-bg-raised p-3">
+            <p className="mb-1.5 text-[11px] text-ink-mist">Соперник{theirPreset && <> · <span className="text-ink-chalk">{theirPreset}</span></>}</p>
+            <TacticTags catalog={catalog} tactic={analysis.opponent_tactic} />
+          </div>
+        </div>
+      )}
+
+      <Section title="Расклад до матча">
+        <MatchupList report={analysis.matchup} />
+      </Section>
+
+      {analysis.duels.length > 0 && (
+        <Section title="Что сработало в матче">
+          <ul className="flex flex-col gap-2">
+            {analysis.duels.map((d) => {
+              const share = d.applied ? Math.round((d.attacker_won / d.applied) * 100) : 0;
+              return (
+                <li key={`${d.id}-${d.attacker}`} className="rounded-2xl bg-bg-raised p-2.5">
+                  <p className="text-[11px] text-ink-chalk">{d.label}</p>
+                  <p className="mt-0.5 text-[10px] text-ink-mist">
+                    {d.attacker === "me" ? "Ваши атаки" : "Атаки соперника"}: {d.applied} дуэлей, прорыв в {d.attacker_won}
+                  </p>
+                  <span className="mt-1 block h-1 overflow-hidden rounded-full bg-white/10">
+                    <span className={`block h-full ${d.attacker === "me" ? "bg-accent-lime" : "bg-red-400"}`} style={{ width: `${share}%` }} />
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Section>
+      )}
+
+      <Section title="Атаки">
         <div className="divide-y divide-white/5">
           <Row label="Владели инициативой" value={`${mine.attacks} : ${theirs.attacks}`} />
-          <Row label="Ваши атаки" value={`фланги ${mine.wing_attack}, центр ${mine.central_attack}, без продвижения ${mine.recycled}`} />
+          <Row label="Ваши атаки" value={`фланги ${mine.wing_attack}, центр ${mine.central_attack}, перекат ${mine.recycled}`} />
           <Row label="Прорыв первой линии" value={`${mine.advance} из ${mine.wing_attack + mine.central_attack}`} />
-          <Row label="Потеряли мяч в атаке" value={`${mine.breakdown}, из них моментов у соперника с контратаки ${theirs.counter_chances}`} />
-          <Row label="Отобрали мяч у соперника" value={`${theirs.breakdown}, из них ваших моментов с контратаки ${mine.counter_chances}`} />
+          <Row label="Потеряли мяч в атаке" value={`${mine.breakdown} · моментов у соперника с контратак ${theirs.counter_chances}`} />
+          <Row label="Отобрали мяч" value={`${theirs.breakdown} · ваших моментов с контратак ${mine.counter_chances}`} />
         </div>
-      </div>
+      </Section>
 
-      <div>
-        <p className="mb-1 text-xs font-semibold text-ink-mist">Голы</p>
+      <Section title="Голы">
         <div className="divide-y divide-white/5">
           <Row label="Ваши" value={goalsText(analysis.goals_mine)} />
           <Row label="Соперника" value={goalsText(analysis.goals_theirs)} />
         </div>
-      </div>
+      </Section>
 
       {(analysis.instructions.length > 0 || planSubs.length > 0 || (analysis.plan?.rules.length ?? 0) > 0) && (
-        <div>
-          <p className="mb-1 text-xs font-semibold text-ink-mist">План на матч</p>
+        <Section title="План на матч">
           <ul className="flex flex-col gap-1 text-xs text-ink-chalk">
             {analysis.instructions.map((r, i) => (
               <li key={`r${i}`}>
                 <span className="font-mono text-ink-mist-dim">{r.minute}&apos;</span>{" "}
                 {r.rule === null
                   ? "условие больше не выполняется — базовая тактика"
-                  : `указание ${r.rule + 1}: ${tacticLabel(MENTALITIES, r.mentality)} · ${tacticLabel(PLAYSTYLES, r.playstyle)}`}
+                  : `указание ${r.rule + 1}: ${tacticLabel(MENTALITIES, r.mentality)}${
+                    catalog ? catalog.axes.filter((a) => r.tactic[a.key] !== analysis.tactic[a.key])
+                      .map((a) => ` · ${axisValueLabel(catalog, a.key, r.tactic[a.key]).toLowerCase()}`).join("") : ""}`}
               </li>
             ))}
             {analysis.plan && analysis.plan.rules.length > 0 && analysis.instructions.length === 0 && (
@@ -87,7 +136,7 @@ export default function CareerMatchAnalysis({ analysis }: { analysis: CareerAnal
               <li key={`u${i}`} className="text-ink-mist">Замена {i + 1}: условие не наступило</li>
             ))}
           </ul>
-        </div>
+        </Section>
       )}
     </section>
   );

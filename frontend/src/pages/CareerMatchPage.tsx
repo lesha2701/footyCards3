@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 
-import { fetchCareerMatch } from "@/api/career";
+import { fetchCareer, fetchCareerMatch } from "@/api/career";
 import CareerMatchAnalysis from "@/components/career/CareerMatchAnalysis";
 import { TournamentMatchReplay } from "@/components/clubs/TournamentMatchReplay";
 import EmptyState from "@/components/common/EmptyState";
@@ -14,6 +14,9 @@ export default function CareerMatchPage() {
     queryKey: ["career", "match", seasonId, round, match],
     queryFn: () => fetchCareerMatch(Number(seasonId), Number(round), Number(match)),
   });
+
+  // The tactics catalog (axis labels) comes with the career view.
+  const { data: view } = useQuery({ queryKey: ["career"], queryFn: fetchCareer, staleTime: 60_000 });
 
   if (isLoading) return <ListSkeleton count={4} />;
   if (isError || !data) return <EmptyState icon={IconFlagCheckered} title="Матч не найден" description="Он ещё не сыгран или недоступен" />;
@@ -28,7 +31,7 @@ export default function CareerMatchPage() {
         scoreA={data.home_score}
         scoreB={data.away_score}
       />
-      {data.analysis && <CareerMatchAnalysis analysis={data.analysis} />}
+      {data.analysis && <CareerMatchAnalysis analysis={data.analysis} catalog={view?.tactics_catalog ?? null} />}
     </div>
   );
 }

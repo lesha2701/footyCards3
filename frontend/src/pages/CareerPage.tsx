@@ -15,9 +15,10 @@ import {
   type CareerRoundReport,
   type CareerDivision,
   type CareerView,
+  type TacticsCatalog,
 } from "@/api/career";
 import { fetchFriends } from "@/api/friends";
-import { PlanEditor, ScoutingCard, TacticsCard } from "@/components/career/CareerTactics";
+import { PlanEditor, ScoutingCard, TacticsBoard } from "@/components/career/CareerTactics";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconTrophy, IconUsers } from "@/components/icons";
@@ -82,7 +83,7 @@ export default function CareerPage() {
       ) : data.season.status === "pending" ? (
         <PendingCard season={data.season} onView={onView} onError={onError} />
       ) : (
-        <ActiveSeason season={data.season} onView={onView} onError={onError} />
+        <ActiveSeason season={data.season} catalog={data.tactics_catalog ?? null} onView={onView} onError={onError} />
       )}
     </div>
   );
@@ -112,7 +113,7 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
       <div className="text-sm text-ink-mist">
         <p className="font-display text-base font-bold text-ink-chalk">Сезон на неделю</p>
         <p className="mt-1">
-          8 команд, 14 туров — по два в день, в {localSlots(view).join(" и ")}. Играешь своими карточками: заявка из 16
+          8 команд, 14 туров — по два в день, в {localSlots(view).join(" и ")}. Играешь своими карточками: заявка из 22
           игроков, следи за усталостью и травмами. Вход бесплатный.
         </p>
       </div>
@@ -264,7 +265,7 @@ function DivisionMove({ from, to }: { from: CareerDivision; to: CareerDivision }
   return <p className={`rounded-xl px-3 py-2 text-sm font-semibold ${tone}`}>{text}</p>;
 }
 
-function ActiveSeason({ season, onView, onError }: { season: CareerSeason } & Handlers) {
+function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeason; catalog: TacticsCatalog | null } & Handlers) {
   const hasTactics = (season.tactics_version ?? 0) > 0;
   const [tab, setTab] = useState<Tab>(season.scouting ? "prep" : "squad");
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -318,11 +319,11 @@ function ActiveSeason({ season, onView, onError }: { season: CareerSeason } & Ha
 
       {tab === "prep" && season.scouting && (
         <>
-          <ScoutingCard scouting={season.scouting} difficultyLabel={season.difficulty_label} />
-          {hasTactics ? (
+          <ScoutingCard scouting={season.scouting} catalog={catalog} difficultyLabel={season.difficulty_label} />
+          {hasTactics && catalog ? (
             <>
-              <TacticsCard season={season} onView={onView} onError={onError} />
-              <PlanEditor season={season} onView={onView} onError={onError} />
+              <TacticsBoard season={season} catalog={catalog} onView={onView} onError={onError} />
+              <PlanEditor season={season} catalog={catalog} onView={onView} onError={onError} />
             </>
           ) : (
             <p className="rounded-2xl bg-bg-surface p-4 text-xs text-ink-mist">
@@ -452,6 +453,9 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
   const [mentality, setMentality] = useState(season.mentality);
   const [playstyle, setPlaystyle] = useState(season.playstyle);
   const [picking, setPicking] = useState<CareerSlot | null>(null);
+  // Tactics seasons edit formation/mentality/tactic on the prep tab; here
+  // the saved tactic is just sent back unchanged with the players.
+  const tacticsSeason = (season.tactics_version ?? 0) > 0;
   // Reset the local edit only when the saved lineup itself changes — not on
   // every background refetch, which would wipe unsaved changes each minute.
   const savedKey = JSON.stringify(season.lineup);
@@ -462,6 +466,7 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
       setCareerLineup({
         slots: payload.slots ?? slots, formation: payload.formation ?? season.formation, mentality, playstyle,
         round_index: season.rounds_played,
+        ...(tacticsSeason && season.tactic ? { tactic: season.tactic } : {}),
       }),
     onSuccess: (v) => { haptic("light"); onView(v); },
     onError,
@@ -472,11 +477,18 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
 
   return (
     <section className="flex flex-col gap-3 rounded-3xl bg-bg-surface p-4">
-      <div className="grid grid-cols-3 gap-2">
-        <Select value={season.formation} options={FORMATIONS} onChange={(f) => save.mutate({ formation: f, slots: {} })} />
-        <Select value={mentality} options={MENTALITIES} onChange={setMentality} />
-        <Select value={playstyle} options={PLAYSTYLES} onChange={setPlaystyle} />
-      </div>
+      {tacticsSeason ? (
+        <div className="flex items-center justify-between gap-2 text-xs">
+          <span className="text-ink-mist">Схема {season.formation} · заявка {season.squad.length} игроков</span>
+          <span className="text-[11px] text-ink-mist-dim">тактика — во вкладке «Подготовка»</span>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          <Select value={season.formation} options={FORMATIONS} onChange={(f) => save.mutate({ formation: f, slots: {} })} />
+          <Select value={mentality} options={MENTALITIES} onChange={setMentality} />
+          <Select value={playstyle} options={PLAYSTYLES} onChange={setPlaystyle} />
+        </div>
+      )}
       <p className="text-[11px] text-ink-mist">
         Пустые места, травмированных и дисквалифицированных автоматически заменит лучший свежий игрок заявки.
         Усталость снижает рейтинг, форма ▲ после победы добавляет. Три жёлтые или красная — пропуск тура.

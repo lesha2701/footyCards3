@@ -41,7 +41,7 @@ from app.services.player_tournament_simulation_service import _EngineCard, _engi
 
 TEAMS = 8
 ROUNDS = 14
-SQUAD_SIZE = 16
+SQUAD_SIZE = 16  # seasons from before GameConfig.career_squad_size
 # Local times of the two daily rounds. Keep in sync with bot/services/career_scheduler.py.
 # 12:00 and 19:00 avoid the club (20:00) and player-tournament (10/15/21) slots.
 CAREER_SLOTS: tuple[tuple[int, int], ...] = ((12, 0), (19, 0))
@@ -190,7 +190,7 @@ def _squad_ids(part: CareerParticipant, cards_by_id: dict) -> list[int]:
     return ids
 
 
-def pick_squad(cards: list[UserCard], formation: str = "4-3-3") -> list[int]:
+def pick_squad(cards: list[UserCard], formation: str = "4-3-3", size: int = SQUAD_SIZE) -> list[int]:
     """Best XI for the formation plus a 5-card bench (one per line + the best
     remaining), distinct players only."""
     slots = [SlotSpec(s.code, s.category, s.ideal_position) for s in get_formation_slots(formation)]
@@ -203,7 +203,12 @@ def pick_squad(cards: list[UserCard], formation: str = "4-3-3") -> list[int]:
         (c for c in cards if _usable(c) and c.id not in chosen and c.player_id not in used_players),
         key=lambda c: (-_effective(c), c.id),
     )
-    for need in ("GK", "DEF", "MID", "FWD", None):
+    # Bench: a backup per line first (keeper, then outfield lines twice),
+    # then the best of the rest.
+    needs = ["GK", "DEF", "MID", "FWD", "DEF", "MID", "FWD"] + [None] * max(0, size)
+    for need in needs:
+        if len(chosen) >= size:
+            break
         for card in pool:
             if card.player_id in used_players:
                 continue
@@ -211,7 +216,7 @@ def pick_squad(cards: list[UserCard], formation: str = "4-3-3") -> list[int]:
                 chosen.append(card.id)
                 used_players.add(card.player_id)
                 break
-    return chosen[:SQUAD_SIZE]
+    return chosen[:size]
 
 
 _FRESH = {"fatigue": 0, "injured_until": 0, "suspended_until": 0, "yellows": 0, "form": 0}
@@ -349,7 +354,7 @@ async def _build_bots(db: AsyncSession, season: CareerSeason, bot_indexes: list[
         teams.append({
             "index": index, "name": names[n], "user_id": None, "formation": formation,
             "mentality": rng.choice([m for m in MENTALITIES if m != "PARK_THE_BUS"]),
-            "playstyle": rng.choice(PLAYSTYLES), "players": roster,
+            "playstyle": (preset := rng.choice(PLAYSTYLES)), "tactic": dict(tactics.PRESETS[preset]), "players": roster,
         })
     return teams
 
@@ -418,7 +423,7 @@ async def create_season(
     await wallet_service.lock_user_for_update(db, user.id)  # serializes "one season at a time"
     if await _current_participation(db, user.id):
         raise ConflictError("У тебя уже идёт сезон карьеры")
-    squad = pick_squad(await _career_cards(db, user.id, config))
+    squad = pick_squad(await _career_cards(db, user.id, config), size=config.career_squad_size)
 
     friend: Optional[User] = None
     if friend_id is not None:
@@ -474,7 +479,7 @@ async def respond_invite(db: AsyncSession, user: User, season_id: int, accept: b
     if accept:
         if (other := await _current_participation(db, user.id)) and other.season_id != season.id:
             raise ConflictError("У тебя уже идёт другой сезон карьеры")
-        part.squad_card_ids = pick_squad(await _career_cards(db, user.id, config))
+        part.squad_card_ids = pick_squad(await _career_cards(db, user.id, config), size=config.career_squad_size)
         part.status = "accepted"
         if season.division is not None:
             # Plays in the creator's league, moves up/down from their own.
@@ -547,13 +552,28 @@ async def _editable_participation(db: AsyncSession, user: User, round_index: Opt
 
 async def set_lineup(
     db: AsyncSession, user: User, slots: dict[str, int], formation: str, mentality: str, playstyle: str,
-    round_index: Optional[int] = None,
+    round_index: Optional[int] = None, tactic: Optional[dict] = None,
 ) -> None:
+    """`tactic` (axes) for tactics seasons; without it a preset `playstyle`
+    is taken as that preset's axes (older clients)."""
     part = await _editable_participation(db, user, round_index)
     if formation not in CLUB_FORMATIONS:
         raise ConflictError("Неизвестная схема")
-    if mentality not in MENTALITIES or playstyle not in PLAYSTYLES:
+    if mentality not in MENTALITIES:
         raise ConflictError("Неизвестная тактика")
+    if tactic is not None:
+        try:
+            tactic = tactics.clean_tactic(tactic)
+        except tactics.TacticError as exc:
+            raise ConflictError(str(exc)) from exc
+        playstyle = tactics.preset_of(tactic)
+        season = await db.get(CareerSeason, part.season_id)
+        if playstyle == tactics.CUSTOM and _tactics_version(season.state) < tactics.TACTICS_VERSION:
+            raise ConflictError("В этом сезоне доступны только готовые стили — своя тактика появится в следующем")
+    elif playstyle not in PLAYSTYLES:
+        raise ConflictError("Неизвестная тактика")
+    else:
+        tactic = dict(tactics.PRESETS[playstyle])
     slot_defs = {s.code: s for s in get_formation_slots(formation)}
     cards = {c.id: c for c in await _career_cards(db, user.id)}
     squad_ids = _squad_ids(part, cards)
@@ -567,7 +587,7 @@ async def set_lineup(
             raise ConflictError(f"{card.player.display_name} не подходит на позицию {code}")
         used_players.add(card.player_id)
         clean[code] = card_id
-    part.formation, part.mentality, part.playstyle = formation, mentality, playstyle
+    part.formation, part.mentality, part.playstyle, part.tactic = formation, mentality, playstyle, tactic
     part.lineup = clean or None
     part.match_plan = tactics.drop_stale_subs(part.match_plan, set(slot_defs))
     await db.commit()
@@ -626,6 +646,10 @@ async def _credit(db: AsyncSession, user_id: int, amount: int, description: str,
     return amount
 
 
+def _my_tactic(part: CareerParticipant) -> dict:
+    return tactics.tactic_for(part.tactic, part.playstyle)
+
+
 def _tactics_version(state: dict) -> int:
     return int((state or {}).get("tactics_version") or 0)
 
@@ -643,6 +667,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
     history: dict = state.setdefault("played_tactics", {}) if v1 else {}
     bot_states: dict = state.setdefault("bot_tactics", {}) if v1 else {}
     minutes_by_team: dict[int, dict[int, int]] = {}
+    gains_by_team: dict[int, dict[int, int]] = {}
     used_familiarity: dict[int, int] = {}
 
     async def human_cards(part: CareerParticipant) -> list:
@@ -672,14 +697,14 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                 bot_states.get(str(team_index), {}), config, roll,
             )
             bot_states[str(team_index)] = {
-                "playstyle": choice["playstyle"], "adapted": choice["adapted"],
+                "tactic": choice["tactic"], "adapted": choice["adapted"],
                 "familiarity": tactics.familiarity_after_match(choice["familiarity"], config)
                 if season.difficulty == "legend" else 0,
             }
             on_pitch = [tactics.LivePlayer(card=c, base_rating=c.player.rating, pre_fatigue=0, slot=slot)
                         for c, slot in _bot_cards(team, round_index, config)]
             return tactics.CareerSideRunner(
-                label, team["name"], team["formation"], team["mentality"], choice["playstyle"], on_pitch, [], config,
+                label, team["name"], team["formation"], team["mentality"], choice["tactic"], on_pitch, [], config,
                 familiarity=choice["familiarity"], plan=choice["plan"],
             )
         part = humans.get(team_index)
@@ -703,11 +728,11 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                                       pre_fatigue=cond["fatigue"], form=cond["form"], slot=slot)
 
         familiarity = tactics.familiarity_for(
-            part.familiarity, part.familiar_formation, part.familiar_playstyle, part.formation, part.playstyle, config,
+            part.familiarity, part.familiar_formation, part.familiar_tactic, part.formation, _my_tactic(part), config,
         )
         used_familiarity[team_index] = familiarity
         return tactics.CareerSideRunner(
-            label, team["name"], part.formation, part.mentality, part.playstyle,
+            label, team["name"], part.formation, part.mentality, _my_tactic(part),
             [live(c, slot) for c, slot in pairs], [live(c) for c in bench], config,
             familiarity=familiarity, plan=copy.deepcopy(part.match_plan),
         )
@@ -729,16 +754,17 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                 extra["tactics"] = {}
                 for index, runner in ((home, run_h), (away, run_a)):
                     played_tactic = {"formation": runner.formation, "mentality": runner.mentality,
-                                     "playstyle": runner.playstyle}
+                                     "tactic": runner.tactic, "preset": tactics.preset_of(runner.tactic)}
                     extra["tactics"][str(index)] = played_tactic
                     history.setdefault(str(index), []).append({"round": round_index, **played_tactic})
                     minutes_by_team[index] = runner.minutes_played()
+                    gains_by_team[index] = runner.fatigue_gained()
                     if index in played:
                         played[index] = {cid for cid, mins in minutes_by_team[index].items() if mins > 0}
                 if with_human:
                     events = match.event_log
                     extra["analysis"] = {
-                        str(index): tactics.build_analysis(match.event_log, tracker, label, runner, other.playstyle)
+                        str(index): tactics.build_analysis(match.event_log, tracker, label, runner, other)
                         for index, label, runner, other in ((home, "a", run_h, run_a), (away, "b", run_a, run_h))
                         if teams[index].get("user_id")
                     }
@@ -775,13 +801,13 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         names = {cid: c.player.display_name for cid, c in own_cards.items()}
         report = _after_match(
             part, played.get(team_index, set()), own, opp, round_index, config, rng, names, _squad_ids(part, own_cards),
-            minutes=minutes_by_team.get(team_index),
+            gains=gains_by_team.get(team_index),
         )
         reports[str(team_index)] = report
         flag_modified(part, "condition")
         if team_index in used_familiarity and team_index in minutes_by_team:
             part.familiarity = tactics.familiarity_after_match(used_familiarity[team_index], config)
-            part.familiar_formation, part.familiar_playstyle = part.formation, part.playstyle
+            part.familiar_formation, part.familiar_tactic = part.formation, _my_tactic(part)
 
         reward = config.career_match_reward_win if own > opp else config.career_match_reward_draw if own == opp else 0
         part.coins_earned += await _credit(db, part.user_id, reward, f"Карьера: тур {round_index + 1}", season.id)
@@ -805,13 +831,13 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
 def _after_match(
     part: CareerParticipant, played_ids: set[int], own: int, opp: int, round_index: int, config,
     rng: random.Random, names: dict[int, str], squad_ids: Optional[list[int]] = None,
-    minutes: Optional[dict[int, int]] = None,
+    gains: Optional[dict[int, int]] = None,
 ) -> dict:
     """Fatigue, injuries, yellow/red cards and form for one human squad after
     a round. Returns the round report (player names per event) shown in the
-    calendar and the result notification. `minutes` (tactics seasons: card
-    id -> minutes on the pitch) scales the fatigue gained, so a player
-    substituted early tires less and one coming on late a little."""
+    calendar and the result notification. `gains` (tactics seasons: card id
+    -> fatigue built up in the match, by minutes played and the tactic's
+    pressing load) replaces the flat career_fatigue_per_match."""
     report: dict[str, list[str]] = {"yellow": [], "red": [], "suspended": [], "injured": [], "form_up": [], "form_down": []}
     condition = dict(part.condition or {})
     for card_id in (squad_ids if squad_ids is not None else part.squad_card_ids):
@@ -820,8 +846,8 @@ def _after_match(
         if card_id in played_ids:
             tired = entry["fatigue"] > 70
             gain = config.career_fatigue_per_match
-            if minutes is not None:
-                gain = round(gain * minutes.get(card_id, 90) / 90)
+            if gains is not None:
+                gain = gains.get(card_id, gain)
             entry["fatigue"] = min(100, entry["fatigue"] + gain)
             if rng.random() * 100 < config.career_injury_chance_pct * (2 if tired else 1):
                 entry["injured_until"] = round_index + 1 + rng.randint(1, 2)
@@ -1010,7 +1036,8 @@ async def get_view(db: AsyncSession, user: User) -> dict:
         "slot_times": _todays_slot_times(),
         # Where the next season would be played (no manual difficulty).
         "division": _division_info(await current_division(db, user.id, config), config),
-        "divisions": [_division_info(d, config) for d in range(1, division_count(config) + 1)]}
+        "divisions": [_division_info(d, config) for d in range(1, division_count(config) + 1)],
+        "tactics_catalog": tactics_catalog(config)}
     if part is None:
         return {**base, "season": None}
     season = await db.get(CareerSeason, part.season_id)
@@ -1051,6 +1078,7 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         "rounds": [],
         "squad": [], "lineup": {}, "slots": [],
         "formation": me.formation, "mentality": me.mentality, "playstyle": me.playstyle,
+        "tactic": _my_tactic(me), "squad_size": len(me.squad_card_ids or []),
         "tactics_version": _tactics_version(state),
         "scouting": None, "familiarity": None, "match_plan": me.match_plan, "plan_limits": {},
     }
@@ -1080,12 +1108,13 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
             out["familiarity"] = {
                 "stored_pct": me.familiarity / 10,
                 "current_pct": tactics.familiarity_for(
-                    me.familiarity, me.familiar_formation, me.familiar_playstyle, me.formation, me.playstyle, config,
+                    me.familiarity, me.familiar_formation, me.familiar_tactic, me.formation, _my_tactic(me), config,
                 ) / 10,
                 "max_pct": config.career_familiarity_max_tenths / 10,
                 "step_pct": config.career_familiarity_step_tenths / 10,
                 "keep_pct": config.career_familiarity_keep_pct,
-                "last_formation": me.familiar_formation, "last_playstyle": me.familiar_playstyle,
+                "axis_keep_pct": config.career_familiarity_axis_keep_pct,
+                "last_formation": me.familiar_formation, "last_tactic": me.familiar_tactic,
             }
             out["plan_limits"] = {"rules": config.career_max_plan_rules, "subs": config.career_max_substitutions}
     if me.status == "accepted":
@@ -1153,30 +1182,66 @@ def _scouting(season: CareerSeason, me: CareerParticipant, config) -> Optional[d
     history = (state.get("played_tactics") or {}).get(str(opp_index)) or []
     v1 = _tactics_version(state) >= tactics.TACTICS_VERSION
     if history:
-        tactic, source = history[-1], "last_match"
+        seen, source = history[-1], "last_match"
     elif is_bot:
-        tactic, source = team, "season_start"
+        seen, source = team, "season_start"
     else:
-        tactic, source = {}, "season_start"
-    playstyle = tactic.get("playstyle")
+        seen, source = {}, "season_start"
+    their = tactics.tactic_for(seen.get("tactic"), seen.get("playstyle")) if seen else None
     my_history = (state.get("played_tactics") or {}).get(str(me.team_index)) or []
-    my_last = my_history[-1]["playstyle"] if my_history else None
+    my_last = tactics.tactic_for(my_history[-1].get("tactic"), my_history[-1].get("playstyle")) if my_history else None
     adaptive = v1 and is_bot and season.difficulty in ("pro", "legend")
-    hint = win = None
-    if v1 and playstyle and tactics.counter_shift(config) > 0:
-        hint = tactics.matchup_hint(me.playstyle, playstyle)
-        win = tactics.win_pct(me.playstyle, playstyle)
+    mine = _my_tactic(me)
+    threat = None
+    if adaptive and my_last:
+        # What a counter-picking bot would choose against my last played tactic.
+        code = max(tactics.PRESETS, key=lambda c: tactics.matchup_report(tactics.PRESETS[c], my_last, config)["score"])
+        threat = {"preset": code, "tactic": tactics.PRESETS[code]}
     return {
         "round_index": round_index, "opponent_index": opp_index, "opponent_name": team["name"], "is_bot": is_bot,
         "strength": round(sum(p["rating"] for p in team["players"]) / len(team["players"])) if team.get("players") else None,
-        "formation": tactic.get("formation"), "mentality": tactic.get("mentality"), "playstyle": playstyle,
+        "formation": seen.get("formation"), "mentality": seen.get("mentality"),
+        "tactic": their if v1 else None, "preset": tactics.preset_of(their) if v1 and their else None,
+        "playstyle": seen.get("playstyle"),
         "source": source, "form": _team_form(state, opp_index),
-        "hint": hint, "win_pct": win,
-        "counters": tactics.counters_of(playstyle) if v1 and playstyle else [],
-        # Styles their style counters (for a client-side preview before saving).
-        "beats": list(tactics.COUNTERS[playstyle]) if v1 and playstyle else [],
-        "adaptive": adaptive, "my_last_playstyle": my_last,
-        "threat_styles": tactics.counters_of(my_last) if adaptive and my_last else [],
+        "matchup": tactics.matchup_report(mine, their, config) if v1 and their else None,
+        "win_pct": tactics.preset_win_pct(tactics.preset_of(mine), tactics.preset_of(their)) if v1 and their else None,
+        "adaptive": adaptive, "my_last_tactic": my_last if adaptive else None, "threat": threat,
+    }
+
+
+def matchup_preview(season: CareerSeason, me: CareerParticipant, tactic: dict, config) -> Optional[dict]:
+    """Matchup report for a tactic the player is still choosing (not saved
+    yet) against the next opponent's known tactic."""
+    scouting = _scouting(season, me, config)
+    if not scouting or not scouting.get("tactic"):
+        return None
+    return tactics.matchup_report(tactic, scouting["tactic"], config)
+
+
+async def preview(db: AsyncSession, user: User, tactic: dict) -> Optional[dict]:
+    part = await _current_participation(db, user.id)
+    if part is None or part.status != "accepted":
+        raise NotFoundError("Нет активного сезона")
+    try:
+        tactic = tactics.clean_tactic(tactic)
+    except tactics.TacticError as exc:
+        raise ConflictError(str(exc)) from exc
+    season = await db.get(CareerSeason, part.season_id)
+    return matchup_preview(season, part, tactic, await get_config(db))
+
+
+def tactics_catalog(config) -> dict:
+    """Axes, values, presets and interactions for the tactics UI — the
+    client never keeps its own copy of these tables."""
+    return {
+        "axes": [{"key": axis, "label": tactics.AXIS_LABELS[axis],
+                  "values": [{"value": v, "label": tactics.VALUE_LABELS[axis][v], "hint": tactics.VALUE_HINTS[axis][v]}
+                             for v in values]}
+                 for axis, values in tactics.AXES.items()],
+        "presets": [{"code": code, "label": tactics.PRESET_LABELS[code], "tactic": axes}
+                    for code, axes in tactics.PRESETS.items()],
+        "interactions": [{"id": ix["id"], "label": ix["label"], "base": bool(ix.get("base"))} for ix in tactics.INTERACTIONS],
     }
 
 

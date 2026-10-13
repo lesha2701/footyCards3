@@ -23,7 +23,8 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 CONFIG_INT_COLUMNS = (
-    ("career_style_counter_permille", "60"),
+    ("career_familiarity_axis_keep_pct", "80"),
+    ("career_squad_size", "22"),
     ("career_familiarity_step_tenths", "20"),
     ("career_familiarity_max_tenths", "90"),
     ("career_familiarity_keep_pct", "50"),
@@ -34,6 +35,7 @@ CONFIG_INT_COLUMNS = (
     ("career_division_relegate", "2"),
 )
 CONFIG_JSON_COLUMNS = (
+    ("career_tactics_tuning", "{}"),
     ("career_bot_counter_chance_pct", "[0, 60, 85]"),
     ("career_division_rating_offset", "[6, 3, 0, -3, -6]"),
     ("career_division_reward_pct", "[250, 200, 150, 125, 100]"),
@@ -44,7 +46,8 @@ CONFIG_JSON_COLUMNS = (
 def upgrade() -> None:
     op.add_column("career_participants", sa.Column("familiarity", sa.Integer(), nullable=False, server_default="0"))
     op.add_column("career_participants", sa.Column("familiar_formation", sa.String(16), nullable=True))
-    op.add_column("career_participants", sa.Column("familiar_playstyle", sa.String(16), nullable=True))
+    op.add_column("career_participants", sa.Column("familiar_tactic", sa.JSON(), nullable=True))
+    op.add_column("career_participants", sa.Column("tactic", sa.JSON(), nullable=True))
     op.add_column("career_participants", sa.Column("match_plan", sa.JSON(), nullable=True))
     op.add_column("career_participants", sa.Column("division", sa.Integer(), nullable=True))
     op.add_column("career_participants", sa.Column("next_division", sa.Integer(), nullable=True))
@@ -61,5 +64,5 @@ def downgrade() -> None:
     for name, _ in reversed(CONFIG_INT_COLUMNS):
         op.drop_column("game_config", name)
     op.drop_column("career_seasons", "division")
-    for column in ("next_division", "division", "match_plan", "familiar_playstyle", "familiar_formation", "familiarity"):
+    for column in ("next_division", "division", "match_plan", "tactic", "familiar_tactic", "familiar_formation", "familiarity"):
         op.drop_column("career_participants", column)

@@ -27,6 +27,12 @@ class CareerLineupIn(BaseModel):
     # The round the client is preparing for: refused once that round has
     # started (the change would otherwise silently apply to the next one).
     round_index: Optional[int] = None
+    # Tactical axes (career_tactics_service.AXES); overrides playstyle.
+    tactic: Optional[dict[str, str]] = None
+
+
+class CareerTacticPreviewIn(BaseModel):
+    tactic: dict[str, str]
 
 
 class CareerPlanIn(BaseModel):
@@ -42,7 +48,7 @@ class CareerPlanRuleOut(BaseModel):
     margin: int = 0
     from_minute: int
     mentality: Optional[str] = None
-    playstyle: Optional[str] = None
+    tactic: dict[str, str] = {}
 
 
 class CareerPlanSubOut(BaseModel):
@@ -65,8 +71,9 @@ class CareerFamiliarityOut(BaseModel):
     max_pct: float
     step_pct: float
     keep_pct: int
+    axis_keep_pct: int = 100
     last_formation: Optional[str] = None
-    last_playstyle: Optional[str] = None
+    last_tactic: Optional[dict[str, str]] = None
 
 
 class CareerScoutingOut(BaseModel):
@@ -77,20 +84,21 @@ class CareerScoutingOut(BaseModel):
     strength: Optional[int] = None
     formation: Optional[str] = None
     mentality: Optional[str] = None
+    # Their tactic (axes) and its preset code / CUSTOM; None for seasons from
+    # before the tactics update (playstyle only) or a friend not yet seen.
+    tactic: Optional[dict[str, str]] = None
+    preset: Optional[str] = None
     playstyle: Optional[str] = None
     # "last_match" (what they actually played last) or "season_start".
     source: str
     form: list[str] = []
-    # My saved playstyle vs theirs: advantage / neutral / disadvantage
-    # (None for seasons started before the tactics update).
-    hint: Optional[str] = None
+    # My saved tactic vs theirs (career_tactics_service.matchup_report).
+    matchup: Optional[dict] = None
     win_pct: Optional[float] = None
-    counters: list[str] = []
-    beats: list[str] = []
-    # Pro/legend bots may answer my LAST PLAYED style with one of these.
+    # Pro/legend bots may answer my LAST PLAYED tactic: what they'd pick.
     adaptive: bool = False
-    my_last_playstyle: Optional[str] = None
-    threat_styles: list[str] = []
+    my_last_tactic: Optional[dict[str, str]] = None
+    threat: Optional[dict] = None
 
 
 class CareerDifficultyOut(BaseModel):
@@ -217,6 +225,8 @@ class CareerSeasonOut(BaseModel):
     mentality: str
     playstyle: str
     tactics_version: int = 0
+    tactic: Optional[dict[str, str]] = None
+    squad_size: int = 0
     scouting: Optional[CareerScoutingOut] = None
     familiarity: Optional[CareerFamiliarityOut] = None
     match_plan: Optional[CareerPlanOut] = None
@@ -238,6 +248,7 @@ class CareerViewOut(BaseModel):
     slot_times: list[datetime] = []
     division: Optional[CareerDivisionOut] = None
     divisions: list[CareerDivisionOut] = []
+    tactics_catalog: Optional[dict] = None
     season: Optional[CareerSeasonOut] = None
     invite: Optional[CareerInviteOut] = None
 

@@ -1,19 +1,44 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CareerAnalysis, CareerDivision, CareerSeason, CareerView } from "@/api/career";
+import type { CareerAnalysis, CareerDivision, CareerSeason, CareerView, Tactic, TacticsCatalog } from "@/api/career";
 import CareerMatchAnalysis from "@/components/career/CareerMatchAnalysis";
 import CareerPage from "@/pages/CareerPage";
 
 const fetchCareer = vi.fn<() => Promise<CareerView>>();
 const setCareerPlan = vi.fn();
+const setCareerLineup = vi.fn();
+const previewCareerTactic = vi.fn();
 vi.mock("@/api/career", async (orig) => ({
   ...(await orig<typeof import("@/api/career")>()),
   fetchCareer: () => fetchCareer(),
   setCareerPlan: (plan: unknown) => setCareerPlan(plan),
+  setCareerLineup: (payload: unknown) => setCareerLineup(payload),
+  previewCareerTactic: (tactic: unknown) => previewCareerTactic(tactic),
 }));
+
+const axis = (key: string, label: string, values: [string, string][]) => ({
+  key, label, values: values.map(([value, l]) => ({ value, label: l, hint: `подсказка ${l}` })),
+});
+const catalog: TacticsCatalog = {
+  axes: [
+    axis("direction", "Направление атаки", [["wings", "Фланги"], ["mixed", "Смешанно"], ["center", "Центр"]]),
+    axis("buildup", "Построение атаки", [["short", "Короткий пас"], ["mixed", "Смешанно"], ["direct", "Прямой пас"]]),
+    axis("on_loss", "После потери мяча", [["counterpress", "Контрпрессинг"], ["drop", "Отход в блок"]]),
+    axis("on_win", "После отбора", [["fast", "Быстрая атака"], ["keep", "Сохранить мяч"]]),
+    axis("block", "Линия обороны и прессинга", [["high", "Высокий прессинг"], ["mid", "Средний блок"], ["low", "Низкий блок"]]),
+  ],
+  presets: [
+    { code: "POSSESSION", label: "Контроль мяча", tactic: { direction: "mixed", buildup: "short", on_loss: "counterpress", on_win: "keep", block: "mid" } },
+    { code: "HIGH_PRESS", label: "Прессинг", tactic: { direction: "mixed", buildup: "direct", on_loss: "counterpress", on_win: "fast", block: "high" } },
+    { code: "COUNTER_ATTACK", label: "Контратаки", tactic: { direction: "mixed", buildup: "direct", on_loss: "drop", on_win: "fast", block: "low" } },
+  ],
+  interactions: [],
+};
+const POSSESSION: Tactic = catalog.presets[0].tactic;
+const PRESS: Tactic = catalog.presets[1].tactic;
 
 const division = (n: number): CareerDivision => ({
   division: n, name: ["Высшая лига", "Первая лига", "Вторая лига", "Третья лига", "Любительская лига"][n - 1], count: 5,
@@ -32,6 +57,7 @@ const baseView: CareerView = {
   slot_times: [],
   division: division(3),
   divisions: [1, 2, 3, 4, 5].map(division),
+  tactics_catalog: catalog,
   season: null,
   invite: null,
 };
@@ -62,15 +88,20 @@ const tacticsSeason: CareerSeason = {
   difficulty: "pro",
   division: division(3),
   tactics_version: 1,
+  tactic: POSSESSION,
+  playstyle: "POSSESSION",
   scouting: {
     round_index: 1, opponent_index: 2, opponent_name: "Бот 2", is_bot: true, strength: 72,
-    formation: "4-4-2", mentality: "DEFENSIVE", playstyle: "POSSESSION", source: "last_match", form: ["W"],
-    hint: "advantage", win_pct: 51.9, counters: ["HIGH_PRESS", "CENTRAL_PLAY"], beats: ["COUNTER_ATTACK", "WING_PLAY"],
-    adaptive: true, my_last_playstyle: "CENTRAL_PLAY", threat_styles: ["HIGH_PRESS", "WING_PLAY"],
+    formation: "4-4-2", mentality: "DEFENSIVE", tactic: PRESS, preset: "HIGH_PRESS", source: "last_match", form: ["W"],
+    matchup: {
+      score: -0.08, hint: "disadvantage",
+      items: [{ id: "press_vs_short", label: "Высокий прессинг перехватывает короткий розыгрыш", attacker: "me", favours: "them", value: -0.08 }],
+    },
+    win_pct: null, adaptive: true, my_last_tactic: POSSESSION, threat: { preset: "HIGH_PRESS", tactic: PRESS },
   },
   familiarity: {
-    stored_pct: 4, current_pct: 4, max_pct: 10, step_pct: 2, keep_pct: 50,
-    last_formation: "4-3-3", last_playstyle: "CENTRAL_PLAY",
+    stored_pct: 4, current_pct: 4, max_pct: 9, step_pct: 2, keep_pct: 50, axis_keep_pct: 80,
+    last_formation: "4-3-3", last_tactic: POSSESSION,
   },
   match_plan: null,
   plan_limits: { rules: 3, subs: 3 },
@@ -111,25 +142,45 @@ describe("CareerPage", () => {
     expect(await screen.findByText("Повышение! Следующий сезон — Первая лига")).toBeInTheDocument();
   });
 
-  it("prepares the round: scouting, matchup preview, familiarity and a match plan", async () => {
+  it("prepares the round: scouting, tactical axes with a live matchup preview, familiarity and a plan", async () => {
     setCareerPlan.mockResolvedValue({ ...baseView, season: tacticsSeason });
+    setCareerLineup.mockResolvedValue({ ...baseView, season: tacticsSeason });
+    previewCareerTactic.mockResolvedValue({
+      score: 0.1, hint: "advantage",
+      items: [{ id: "direct_behind_line", label: "Прямой пас за спину высокой линии", attacker: "me", favours: "me", value: 0.1 }],
+    });
     fetchCareer.mockResolvedValue({ ...baseView, season: tacticsSeason });
     renderPage();
-    expect(await screen.findByText("Разведка: Бот 2")).toBeInTheDocument();
-    expect(screen.getByText(/В прошлом туре играл/)).toBeInTheDocument();
-    expect(screen.getByText(/Опасные для неё стили: Высокий прессинг, Игра флангами/)).toBeInTheDocument();
-    // CENTRAL_PLAY vs POSSESSION: CENTRAL counters it.
-    expect(screen.getAllByText("Преимущество").length).toBeGreaterThan(0);
-    fireEvent.change(screen.getByLabelText("Стиль"), { target: { value: "WING_PLAY" } });
+    expect(await screen.findByText("Бот 2")).toBeInTheDocument();
+    expect(screen.getByText(/В прошлом туре/)).toBeInTheDocument();
+    // The opponent may read my last played tactic, and with what.
+    expect(screen.getByText(/скорее всего выберет «Прессинг»/)).toBeInTheDocument();
+    // Saved tactic vs the scouted one: from the server's report.
     expect(screen.getAllByText("Невыгодно").length).toBeGreaterThan(0);
-    // Switching style keeps 50% of the 4% familiarity.
-    expect(screen.getByText("+2.0% / 10%")).toBeInTheDocument();
+    expect(screen.getByText("Высокий прессинг перехватывает короткий розыгрыш")).toBeInTheDocument();
+    expect(screen.getByText("+4.0%")).toBeInTheDocument();
+
+    // Change one axis: the preview comes from the server, familiarity keeps 80%.
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Построение атаки" })).getByRole("radio", { name: "Прямой пас" }));
+    expect(screen.getByText("Своя тактика")).toBeInTheDocument();
+    expect(await screen.findByText("Прямой пас за спину высокой линии")).toBeInTheDocument();
+    expect(previewCareerTactic).toHaveBeenCalledWith({ ...POSSESSION, buildup: "direct" });
+    expect(screen.getByText("+3.2%")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить тактику" }));
+    await vi.waitFor(() => expect(setCareerLineup).toHaveBeenCalled());
+    expect(setCareerLineup.mock.calls[0][0]).toMatchObject({ tactic: { ...POSSESSION, buildup: "direct" }, round_index: 1 });
+
+    // A preset chip sets every axis at once.
+    fireEvent.click(screen.getByRole("radio", { name: "Контратаки" }));
+    expect(within(screen.getByRole("radiogroup", { name: "Линия обороны и прессинга" })).getByRole("radio", { name: "Низкий блок" }))
+      .toHaveAttribute("aria-checked", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "+ Указание" }));
+    fireEvent.change(within(screen.getByLabelText("Указание 1")).getByLabelText("Линия обороны и прессинга"), { target: { value: "high" } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить план" }));
     await vi.waitFor(() => expect(setCareerPlan).toHaveBeenCalled());
     expect(setCareerPlan.mock.calls[0][0]).toMatchObject({
-      rules: [{ score: "behind", margin: 1, from_minute: 60, mentality: "ATTACKING", playstyle: null }],
+      rules: [{ score: "behind", margin: 1, from_minute: 60, mentality: "ATTACKING", tactic: { block: "high" } }],
       subs: [],
       round_index: 1,
     });
@@ -165,17 +216,22 @@ describe("CareerPage", () => {
 describe("CareerMatchAnalysis", () => {
   const stats = { attacks: 30, wing_attack: 12, central_attack: 10, recycled: 8, advance: 9, stall: 7, breakdown: 6, counters: 4, counter_chances: 2 };
   const analysis: CareerAnalysis = {
-    playstyle: "HIGH_PRESS", mentality: "BALANCED", formation: "4-3-3", opponent_playstyle: "POSSESSION",
-    matchup: "advantage", familiarity_pct: 6,
+    formation: "4-3-3", mentality: "BALANCED", tactic: PRESS, preset: "HIGH_PRESS", opponent_tactic: POSSESSION,
+    matchup: {
+      score: 0.08, hint: "advantage",
+      items: [{ id: "press_vs_short", label: "Высокий прессинг перехватывает короткий розыгрыш", attacker: "them", favours: "me", value: 0.08 }],
+    },
+    familiarity_pct: 6,
     mine: stats, theirs: { ...stats, breakdown: 4 },
     goals_mine: { wing: 1, central: 0, counter: 1, penalty: 0 }, goals_theirs: { wing: 0, central: 1, counter: 0, penalty: 0 },
-    instructions: [{ kind: "rule", minute: 63, rule: 0, mentality: "ATTACKING", playstyle: "HIGH_PRESS" }],
+    duels: [{ id: "press_vs_short", label: "Высокий прессинг перехватывает короткий розыгрыш", attacker: "them", applied: 9, attacker_won: 2 }],
+    instructions: [{ kind: "rule", minute: 63, rule: 0, mentality: "ATTACKING", tactic: { ...PRESS, block: "low" } }],
     substitutions: [
       { kind: "sub", minute: 70, sub: 0, in: "Петров", out: "Иванов", fatigue: 72 },
       { kind: "sub_skipped", minute: 75, sub: 1 },
     ],
     plan: {
-      rules: [{ score: "behind", margin: 1, from_minute: 60, mentality: "ATTACKING", playstyle: null }],
+      rules: [{ score: "behind", margin: 1, from_minute: 60, mentality: "ATTACKING", tactic: { block: "low" } }],
       subs: [
         { minute: 70, slot: null, card_id: null, min_fatigue: 70 },
         { minute: 75, slot: "GK", card_id: null, min_fatigue: 0 },
@@ -185,13 +241,14 @@ describe("CareerMatchAnalysis", () => {
   };
 
   it("lists only engine-recorded facts: goals by origin, instructions and substitutions", () => {
-    render(<CareerMatchAnalysis analysis={analysis} />);
+    render(<CareerMatchAnalysis analysis={analysis} catalog={catalog} />);
     expect(screen.getByText("Тактический разбор")).toBeInTheDocument();
     expect(screen.getByText("с флангов 1, с контратак 1")).toBeInTheDocument();
-    expect(screen.getByText(/указание 1: Атакующий · Высокий прессинг/)).toBeInTheDocument();
+    expect(screen.getByText(/указание 1: Атакующий · низкий блок/)).toBeInTheDocument();
+    expect(screen.getByText(/Атаки соперника: 9 дуэлей, прорыв в 2/)).toBeInTheDocument();
     expect(screen.getByText(/замена: Петров вместо Иванов \(усталость 72%\)/)).toBeInTheDocument();
     expect(screen.getByText(/замена 2 не проведена/)).toBeInTheDocument();
     expect(screen.getByText("Замена 3: условие не наступило")).toBeInTheDocument();
-    expect(screen.getByText("+6% к рейтингу")).toBeInTheDocument();
+    expect(screen.getByText(/сыгранность \+6%/)).toBeInTheDocument();
   });
 });

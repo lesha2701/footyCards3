@@ -80,6 +80,31 @@ export interface CareerDivision {
 
 export type MatchupHint = "advantage" | "neutral" | "disadvantage";
 
+/** Tactical axes: direction / buildup / on_loss / on_win / block -> value. */
+export type Tactic = Record<string, string>;
+
+export interface TacticsCatalog {
+  axes: { key: string; label: string; values: { value: string; label: string; hint: string }[] }[];
+  presets: { code: string; label: string; tactic: Tactic }[];
+  interactions: { id: string; label: string; base: boolean }[];
+}
+
+export interface MatchupItem {
+  id: string;
+  label: string;
+  /** Whose attack it is about, and who it helps. */
+  attacker: "me" | "them";
+  favours: "me" | "them";
+  /** Weighted effect from my point of view (> 0 helps me). */
+  value: number;
+}
+
+export interface MatchupReport {
+  score: number;
+  hint: MatchupHint;
+  items: MatchupItem[];
+}
+
 export interface CareerScouting {
   round_index: number;
   opponent_index: number;
@@ -88,21 +113,21 @@ export interface CareerScouting {
   strength: number | null;
   formation: string | null;
   mentality: string | null;
-  playstyle: string | null;
+  /** Their tactic and its preset code (or CUSTOM); null for old seasons / an unseen friend. */
+  tactic: Tactic | null;
+  preset: string | null;
+  playstyle?: string | null;
   /** "last_match" = what they actually played last; "season_start" = their set-up before round 1. */
   source: "last_match" | "season_start";
   /** Oldest first: W / D / L. */
   form: string[];
-  /** My saved style against theirs; null for seasons from before the tactics update. */
-  hint: MatchupHint | null;
+  /** My saved tactic vs theirs. */
+  matchup: MatchupReport | null;
   win_pct: number | null;
-  /** Styles that counter theirs / styles theirs counters. */
-  counters: string[];
-  beats: string[];
-  /** Pro/legend bot: may answer my last PLAYED style with one of threat_styles. */
+  /** Pro/legend bot: may answer my last PLAYED tactic — and with what. */
   adaptive: boolean;
-  my_last_playstyle: string | null;
-  threat_styles: string[];
+  my_last_tactic: Tactic | null;
+  threat: { preset: string; tactic: Tactic } | null;
 }
 
 export interface CareerFamiliarity {
@@ -110,9 +135,11 @@ export interface CareerFamiliarity {
   current_pct: number;
   max_pct: number;
   step_pct: number;
+  /** Kept on a formation change / per changed tactical axis. */
   keep_pct: number;
+  axis_keep_pct: number;
   last_formation: string | null;
-  last_playstyle: string | null;
+  last_tactic: Tactic | null;
 }
 
 export type ScoreState = "behind" | "level" | "ahead";
@@ -122,7 +149,8 @@ export interface CareerPlanRule {
   margin: number;
   from_minute: number;
   mentality: string | null;
-  playstyle: string | null;
+  /** Only the axes this instruction changes. */
+  tactic: Tactic;
 }
 
 export interface CareerPlanSub {
@@ -169,6 +197,8 @@ export interface CareerSeason {
   next_division?: CareerDivision | null;
   /** 0 = season from before the tactics update (no plan/familiarity). */
   tactics_version?: number;
+  tactic?: Tactic | null;
+  squad_size?: number;
   scouting?: CareerScouting | null;
   familiarity?: CareerFamiliarity | null;
   match_plan?: CareerPlan | null;
@@ -185,6 +215,7 @@ export interface CareerView {
   /** Division the next season would be played in (no manual difficulty). */
   division?: CareerDivision | null;
   divisions?: CareerDivision[];
+  tactics_catalog?: TacticsCatalog | null;
   season: CareerSeason | null;
   invite: { season_id: number; difficulty_label: string; from_name: string; expires_at: string | null } | null;
 }
@@ -216,9 +247,15 @@ export async function setCareerLineup(payload: {
   playstyle: string;
   /** The round being prepared: refused (409) once it has kicked off. */
   round_index?: number;
+  tactic?: Tactic;
 }): Promise<CareerView> {
   const { data } = await api.put<CareerView>("/career/lineup", payload);
   return data;
+}
+
+export async function previewCareerTactic(tactic: Tactic): Promise<MatchupReport | null> {
+  const { data } = await api.post<{ matchup: MatchupReport | null }>("/career/tactics/preview", { tactic });
+  return data.matchup;
 }
 
 export async function setCareerPlan(plan: CareerPlan & { round_index?: number }): Promise<CareerView> {
@@ -262,17 +299,20 @@ export interface CareerGoalsByOrigin {
 }
 
 export interface CareerAnalysis {
-  playstyle: string;
-  mentality: string;
   formation: string;
-  opponent_playstyle: string;
-  matchup: MatchupHint;
+  mentality: string;
+  tactic: Tactic;
+  preset: string;
+  opponent_tactic: Tactic;
+  matchup: MatchupReport;
   familiarity_pct: number;
   mine: CareerPhaseStats;
   theirs: CareerPhaseStats;
   goals_mine: CareerGoalsByOrigin;
   goals_theirs: CareerGoalsByOrigin;
-  instructions: { kind: "rule"; minute: number; rule: number | null; mentality: string; playstyle: string }[];
+  /** Axis interactions that applied in duels: whose attack, how many, how many the attacker won. */
+  duels: { id: string; label: string; attacker: "me" | "them"; applied: number; attacker_won: number }[];
+  instructions: { kind: "rule"; minute: number; rule: number | null; mentality: string; tactic: Tactic }[];
   substitutions: { kind: "sub" | "sub_skipped"; minute: number; sub: number; in?: string; out?: string; fatigue?: number }[];
   plan: CareerPlan | null;
 }

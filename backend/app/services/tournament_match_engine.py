@@ -456,4 +456,6 @@ def simulate_match_controlled(
             continue
         chances += 1
         _resolve_chance(result, chance, side_a, side_b, lineup_a, lineup_b, config, club_a_name, club_b_name, tag_origin=True)
+    if hasattr(controller, "finish"):
+        controller.finish()
     return result

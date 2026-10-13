@@ -343,13 +343,32 @@ export default function AdminGamesPage() {
           {listField("career_division_reward_pct", "Множитель награды по дивизионам, %")}
           {textListField("career_division_bot_level", "Уровень ботов по дивизионам (amateur / pro / legend)")}
           <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">
-            Тактика (новые сезоны). После изменения силы контр-стиля перегенерируй таблицу матчапов скриптом
-            simulate_career_tactics.py — по ней строятся подсказки и решения ботов.
+            Тактика (новые сезоны): оси «направление / построение / после потери / после отбора / линия».
           </p>
-          {field("career_style_counter_permille", "Перевес контр-стиля в дуэлях, ‰")}
+          {field("career_squad_size", "Размер заявки на сезон")}
           {field("career_familiarity_step_tenths", "Сыгранность за матч, десятые %")}
           {field("career_familiarity_max_tenths", "Потолок сыгранности, десятые %")}
-          {field("career_familiarity_keep_pct", "Сохраняется при смене схемы/стиля, %")}
+          {field("career_familiarity_keep_pct", "Сохраняется при смене схемы, %")}
+          {field("career_familiarity_axis_keep_pct", "Сохраняется за каждую изменённую ось, %")}
+          <label className="col-span-2 flex flex-col gap-1">
+            <span className="text-xs text-slate-400">
+              Рычаги тактики, JSON поверх значений по умолчанию (пусто = по умолчанию). Например
+              {" "}{'{"shift": {"press_vs_short": 0.2}}'}. После изменения силы взаимодействий перегенерируй таблицу
+              скриптом simulate_career_tactics.py --write.
+            </span>
+            <textarea
+              rows={3}
+              defaultValue={JSON.stringify(form.career_tactics_tuning ?? {})}
+              onBlur={(e) => {
+                try {
+                  setForm({ ...form, career_tactics_tuning: JSON.parse(e.target.value || "{}") });
+                } catch {
+                  e.target.classList.add("ring-1", "ring-red-500");
+                }
+              }}
+              className="rounded-lg bg-bg-surface px-3 py-2 font-mono text-xs outline-none"
+            />
+          </label>
           {field("career_max_plan_rules", "Указаний на матч")}
           {field("career_max_substitutions", "Замен на матч")}
           {listField("career_bot_counter_chance_pct", "Шанс контр-стиля у ботов (Любитель, Профи, Легенда), %")}

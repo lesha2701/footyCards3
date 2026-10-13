@@ -260,7 +260,9 @@ class GameConfigOut(BaseModel):
     career_yellows_for_ban: int = 3
     career_form_max: int = 2
     career_reminders_enabled: bool = True
-    career_style_counter_permille: int = 60
+    career_tactics_tuning: dict = {}
+    career_familiarity_axis_keep_pct: int = 80
+    career_squad_size: int = 22
     career_familiarity_step_tenths: int = 20
     career_familiarity_max_tenths: int = 90
     career_familiarity_keep_pct: int = 50
@@ -509,7 +511,9 @@ class GameConfigUpdate(BaseModel):
     career_yellows_for_ban: Optional[int] = Field(default=None, ge=1, le=10)
     career_form_max: Optional[int] = Field(default=None, ge=0, le=5)
     career_reminders_enabled: Optional[bool] = None
-    career_style_counter_permille: Optional[int] = Field(default=None, ge=0, le=150)
+    career_tactics_tuning: Optional[dict] = None
+    career_familiarity_axis_keep_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    career_squad_size: Optional[int] = Field(default=None, ge=16, le=30)
     career_familiarity_step_tenths: Optional[int] = Field(default=None, ge=0, le=50)
     career_familiarity_max_tenths: Optional[int] = Field(default=None, ge=0, le=150)
     career_familiarity_keep_pct: Optional[int] = Field(default=None, ge=0, le=100)

@@ -59,13 +59,16 @@ class CareerParticipant(Base):
     playstyle: Mapped[str] = mapped_column(String(16), nullable=False, default="CENTRAL_PLAY")
     condition: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     # Сыгранность (tactics_version >= 1 seasons, career_tactics_service):
-    # tenths of a % rating bonus for familiar_formation + familiar_playstyle,
+    # tenths of a % rating bonus for familiar_formation + familiar_tactic,
     # the tactic played in the last match. match_plan = conditional
     # instructions + substitutions for the coming rounds (snapshotted into
     # the match result at kick-off).
     familiarity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     familiar_formation: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
-    familiar_playstyle: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    familiar_tactic: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Tactical axes (career_tactics_service.AXES) for tactics seasons;
+    # `playstyle` then holds the matching preset code or CUSTOM.
+    tactic: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     match_plan: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # The participant's own division when the season started and where the
     # final place sends them (promotion / relegation), set at the finish or

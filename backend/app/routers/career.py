@@ -11,6 +11,7 @@ from app.schemas.career import (
     CareerLineupIn,
     CareerMatchEventsOut,
     CareerPlanIn,
+    CareerTacticPreviewIn,
     CareerViewOut,
 )
 from app.services import career_service
@@ -56,6 +57,7 @@ async def start_without_friend(season_id: int, db: AsyncSession = Depends(get_db
 async def set_lineup(payload: CareerLineupIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await career_service.set_lineup(
         db, user, payload.slots, payload.formation, payload.mentality, payload.playstyle, payload.round_index,
+        payload.tactic,
     )
     return await _view(db, user)
 
@@ -66,6 +68,15 @@ async def set_plan(payload: CareerPlanIn, db: AsyncSession = Depends(get_db), us
     (score + minute -> mentality/style) and N substitutions."""
     await career_service.set_plan(db, user, payload.rules, payload.subs, payload.round_index)
     return await _view(db, user)
+
+
+@router.post("/tactics/preview")
+async def preview_tactic(
+    payload: CareerTacticPreviewIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """Matchup report for a tactic being chosen (not saved) vs the next
+    opponent — the same interaction table the engine applies."""
+    return {"matchup": await career_service.preview(db, user, payload.tactic)}
 
 
 @router.post("/leave", status_code=status.HTTP_204_NO_CONTENT)
