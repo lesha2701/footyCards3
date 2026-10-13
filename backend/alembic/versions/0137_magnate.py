@@ -1,8 +1,8 @@
 """«Футбольный магнат»: match + seat tables, per-user limit counters and
 wins, GameConfig settings, magnate_reward transaction type.
 
-Revision ID: 0136
-Revises: 0135
+Revision ID: 0137
+Revises: 0136
 Create Date: 2026-10-12
 
 """
@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0136"
-down_revision: Union[str, None] = "0135"
+revision: str = "0137"
+down_revision: Union[str, None] = "0136"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

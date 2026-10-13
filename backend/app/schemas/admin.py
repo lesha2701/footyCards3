@@ -366,6 +366,11 @@ class GameConfigOut(BaseModel):
     wheel_spin_cost_coins: int
     wheel_spin_cost_stars: int
     wheel_duplicate_badge_coins: int
+    blackjack_enabled: bool = True
+    blackjack_free_per_day: int = 1
+    blackjack_stars_cost: int = 10
+    blackjack_paid_daily_limit: int = 10
+    blackjack_consolation_coins: int = 25
     bingo_reward_coins: int
     bingo_reward_pack_id: Optional[int] = None
     card_skills_enabled: bool = True
@@ -625,6 +630,11 @@ class GameConfigUpdate(BaseModel):
     wheel_spin_cost_coins: Optional[int] = Field(default=None, ge=0)
     wheel_spin_cost_stars: Optional[int] = Field(default=None, ge=0)
     wheel_duplicate_badge_coins: Optional[int] = Field(default=None, ge=0)
+    blackjack_enabled: Optional[bool] = None
+    blackjack_free_per_day: Optional[int] = Field(default=None, ge=0, le=20)
+    blackjack_stars_cost: Optional[int] = Field(default=None, ge=1, le=10000)
+    blackjack_paid_daily_limit: Optional[int] = Field(default=None, ge=0, le=100)
+    blackjack_consolation_coins: Optional[int] = Field(default=None, ge=0)
     bingo_reward_coins: Optional[int] = Field(default=None, ge=0)
     bingo_reward_pack_id: Optional[int] = Field(default=None)
     card_skills_enabled: Optional[bool] = None

@@ -105,6 +105,7 @@ class TransactionType(str, enum.Enum):
     stratego_stake_lock = "stratego_stake_lock"
     stratego_stake_win = "stratego_stake_win"
     stratego_stake_refund = "stratego_stake_refund"
+    blackjack_consolation = "blackjack_consolation"
     magnate_reward = "magnate_reward"
 
 
@@ -373,6 +374,18 @@ class WheelSpinSource(str, enum.Enum):
     free = "free"
     coins = "coins"
     stars = "stars"
+    # Reward spin won in «21: Добавленное время» (golden/jackpot pools).
+    blackjack = "blackjack"
+
+
+class WheelPrizePool(str, enum.Enum):
+    """Which wheel a WheelPrize belongs to. regular = the classic «Колесо
+    фортуны» (WheelPage); golden/jackpot = the reward wheels of «21» (a win
+    / a natural «Хет-трик»)."""
+
+    regular = "regular"
+    golden = "golden"
+    jackpot = "jackpot"
 
 
 class BingoGoalType(str, enum.Enum):

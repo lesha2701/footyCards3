@@ -422,6 +422,15 @@ class GameConfig(TimestampMixin, Base):
     wheel_spin_cost_stars: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     wheel_duplicate_badge_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
 
+    # «21: Добавленное время» (blackjack_service.py). Rewards themselves are
+    # the golden/jackpot WheelPrize pools (admin «Колесо фортуны» page).
+    # blackjack_paid_daily_limit = 0 turns paid entries off (free-only).
+    blackjack_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    blackjack_free_per_day: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    blackjack_stars_cost: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    blackjack_paid_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    blackjack_consolation_coins: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+
     bingo_reward_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     bingo_reward_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 

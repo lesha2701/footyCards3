@@ -26,6 +26,8 @@ class StarsInvoiceStatusOut(BaseModel):
     wheel_result: Optional[WheelSpinResultOut] = None
     # «Мой игрок» purchase: {"kind": "training" | "item", "name": ...}.
     my_player_result: Optional[dict] = None
+    # «21» entry purchase: {"kind": "entry", "paid_entries": n}.
+    blackjack_result: Optional[dict] = None
 
 
 class StarsCoinInvoiceCreate(BaseModel):

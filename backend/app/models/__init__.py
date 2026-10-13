@@ -1,5 +1,6 @@
 from app.models.admin_action import AdminAction
 from app.models.badge import Badge, UserBadge
+from app.models.blackjack import BlackjackMatch
 from app.models.card import UserCard
 from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
 from app.models.career import CareerParticipant, CareerSeason, Friendship
@@ -57,6 +58,7 @@ from app.models.club_stadium_card import ClubStadiumCard
 
 __all__ = [
     "AdminAction",
+    "BlackjackMatch",
     "StrategoMatch",
     "StrategoQueueEntry",
     "Badge",

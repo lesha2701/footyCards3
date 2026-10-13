@@ -323,6 +323,11 @@ export interface GameConfig {
   wheel_spin_cost_coins: number;
   wheel_spin_cost_stars: number;
   wheel_duplicate_badge_coins: number;
+  blackjack_enabled: boolean;
+  blackjack_free_per_day: number;
+  blackjack_stars_cost: number;
+  blackjack_paid_daily_limit: number;
+  blackjack_consolation_coins: number;
   bingo_reward_coins: number;
   bingo_reward_pack_id: number | null;
   card_skills_enabled: boolean;
@@ -375,9 +380,12 @@ export interface CardCollection {
   reward_pack_id: number | null;
 }
 
+export type AdminWheelPrizePool = "regular" | "golden" | "jackpot";
+
 export interface AdminWheelPrize {
   id: number;
   prize_type: "coins" | "pack" | "card_rarity" | "badge";
+  pool: AdminWheelPrizePool;
   weight: number;
   is_active: boolean;
   sort_order: number;
@@ -385,6 +393,24 @@ export interface AdminWheelPrize {
   pack_id: number | null;
   card_rarity: "common" | "rare" | "epic" | "legendary" | null;
   badge_id: number | null;
+}
+
+export interface AdminWheelPoolSummary {
+  pool: AdminWheelPrizePool;
+  active_prizes: number;
+  total_weight: number;
+  expected_value_coins: number;
+  prizes: { prize_id: number; probability: number; value_coins: number }[];
+}
+
+export interface AdminWheelPoolsSummary {
+  pools: AdminWheelPoolSummary[];
+  regular_spin_cost_coins: number;
+  blackjack_p_jackpot: number;
+  blackjack_p_golden: number;
+  blackjack_p_loss: number;
+  blackjack_consolation_coins: number;
+  blackjack_expected_value_coins: number;
 }
 
 export interface DailyRewardOption {

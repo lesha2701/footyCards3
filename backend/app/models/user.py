@@ -177,6 +177,16 @@ class User(TimestampMixin, Base):
     wheel_free_spins_used_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     wheel_spins_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # «21: Добавленное время» (see blackjack_service.py). The *_today pair
+    # resets at local midnight (blackjack_day_reset_at); the two entry
+    # banks don't expire — paid ones were bought with Stars, replay ones
+    # were earned by a draw.
+    blackjack_free_used_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    blackjack_paid_bought_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    blackjack_day_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    blackjack_paid_entries: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    blackjack_replay_entries: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
     # Referrals
     referred_by_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
