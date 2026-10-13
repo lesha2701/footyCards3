@@ -62,8 +62,8 @@ def test_default_board_and_cards_are_valid():
     assert len(cells) == engine.BOARD_CELLS == 32
     types = [c["type"] for c in cells]
     assert types.count("stadium") == 4 and types.count("club") == 18
-    assert [cells[i]["type"] for i in (0, 8, 16, 24)] == ["start", "jail", "break", "go_to_jail"]
-    assert {"var", "transfer", "fine"} <= set(types)
+    assert [cells[i]["type"] for i in (0, 8, 16, 24)] == ["start", "chance", "break", "jail"]
+    assert cells[24]["arrest"] and {"var", "transfer", "fine"} <= set(types)
     groups = {c["group"] for c in cells if c["type"] == "club"}
     assert len(groups) == 8
     assert all(2 <= sum(1 for c in cells if c.get("group") == g) <= 3 for g in groups)
@@ -75,6 +75,83 @@ def test_default_board_and_cards_are_valid():
     assert all(c.get("short") and c.get("colors") for c in clubs)
     engine.validate_board(engine.BOARD_24)
     engine.validate_cards(engine.DEFAULT_CARDS)
+
+
+def _big_state(seed: str = "big") -> dict:
+    s = engine.new_state(
+        engine.DEFAULT_BOARD, engine.DEFAULT_CARDS, SETTINGS,
+        [{"name": f"P{i}", "is_bot": False} for i in range(4)], seed,
+    )
+    s["turn"] = s["first_seat"] = 0
+    return s
+
+
+def _penalty_outcome(seed: str) -> tuple[dict, bool]:
+    s = _big_state(seed)
+    s["players"][0]["pos"] = 5
+    engine.apply_action(s, 0, "roll", dice=[1, 2])  # lands on «Пенальти» (8)
+    return s, s["last_penalty"]["scored"]
+
+
+def test_penalty_cell_is_a_fair_coin_between_good_and_bad_cards():
+    outcomes = [_penalty_outcome(f"pen-{i}")[1] for i in range(200)]
+    assert 70 < sum(outcomes) < 130  # roughly half scored
+    s, scored = next(_penalty_outcome(f"pen-{i}") for i in range(200) if _penalty_outcome(f"pen-{i}")[1])
+    goal_log = [e for e in s["log"] if e["kind"] == "penalty_goal"]
+    assert goal_log and "ГОЛ" in goal_log[-1]["text"]
+    # Same seed → same outcome (server RNG is reproducible).
+    assert _penalty_outcome("pen-7")[1] == _penalty_outcome("pen-7")[1]
+
+
+def test_disqualification_corner_arrests_and_releases_on_a_double():
+    s = _big_state()
+    s["players"][0]["pos"] = 21
+    engine.apply_action(s, 0, "roll", dice=[1, 2])  # «Дисквалификация» (24)
+    p = s["players"][0]
+    assert p["in_jail"] and p["pos"] == 24 and s["turn"] == 1
+    s["turn"], s["phase"] = 0, "roll"
+    engine.apply_action(s, 0, "roll", dice=[1, 2])
+    assert p["in_jail"] and p["jail_turns"] == 1  # no double: still out
+    s["turn"], s["phase"] = 0, "roll"
+    engine.apply_action(s, 0, "roll", dice=[2, 2])
+    assert not p["in_jail"] and p["pos"] == 28
+
+
+def test_three_doubles_send_to_the_disqualification_corner():
+    s = _big_state()
+    s["players"][0]["pos"] = 1  # 1 → 3 (Аякс) → 7 (Бенфика): no event cards on the way
+    for dice in ([1, 1], [2, 2]):
+        engine.apply_action(s, 0, "roll", dice=dice)
+        if s["phase"] == "buy":
+            engine.apply_action(s, 0, "skip")
+    engine.apply_action(s, 0, "roll", dice=[3, 3])
+    assert s["players"][0]["in_jail"] and s["players"][0]["pos"] == 24 and s["turn"] == 1
+
+
+def test_red_card_kind_skips_a_turn_on_boards_without_disqualification():
+    board = copy.deepcopy(engine.DEFAULT_BOARD)
+    board["cells"][24] = {"type": "break", "name": "Перерыв 2"}
+    s = engine.new_state(board, engine.DEFAULT_CARDS, SETTINGS, [{"name": f"P{i}"} for i in range(4)], "rc")
+    s["turn"] = s["first_seat"] = 0
+    s["players"][0]["pos"] = 1
+    for dice in ([1, 1], [2, 2]):
+        engine.apply_action(s, 0, "roll", dice=dice)
+        if s["phase"] == "buy":
+            engine.apply_action(s, 0, "skip")
+    engine.apply_action(s, 0, "roll", dice=[3, 3])  # third double, no jail on this board
+    assert s["players"][0]["skip_turns"] == 1 and s["turn"] == 1
+    for seat in (1, 2, 3):
+        s["players"][seat]["pos"] = 15
+        engine.apply_action(s, seat, "roll", dice=[1, 3])
+        engine.apply_action(s, seat, "skip")
+    assert s["turn"] == 1 and s["players"][0]["skip_turns"] == 0
+
+
+def test_chance_deck_needs_good_and_bad_cards():
+    cards = copy.deepcopy(engine.DEFAULT_CARDS)
+    cards["chance"] = [c for c in cards["chance"] if c["good"]]
+    with pytest.raises(engine.EngineError):
+        engine.validate_cards(cards)
 
 
 def test_default_board_plays_through_and_uses_cell_fine_amounts():
@@ -526,7 +603,8 @@ async def test_bot_match_starts_on_my_decision(client, bot_token, db_session):
     r = await client.post(f"{API}/matches/{m['id']}/action", headers=headers, json={"action": "roll", "version": m["version"]})
     assert r.status_code == 200, r.text
     after = r.json()
-    assert after["version"] > m["version"] and after["last_roll"]["seat"] == 0
+    # Bots may already have rolled after us — look for our roll in the feed.
+    assert after["version"] > m["version"] and any(e["seat"] == 0 and e["kind"] == "roll" for e in after["log"])
 
 
 async def test_stale_version_and_duplicate_submit_are_rejected(client, bot_token):

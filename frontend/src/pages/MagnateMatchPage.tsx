@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -218,6 +220,17 @@ export default function MagnateMatchPage() {
             />
           )}
 
+          {inPlay && match.my_turn && match.phase === "buy" && pendingCell && me && (
+            <BuyDialog
+              match={match}
+              cell={pendingCell}
+              cash={me.cash}
+              busy={busy}
+              turnLeft={turnLeft}
+              onAct={(action) => act.mutate({ action })}
+            />
+          )}
+
           {selectedCell && <CellInfo cell={selectedCell} match={match} onClose={() => setSelected(null)} />}
 
           <EventFeed match={match} />
@@ -295,18 +308,7 @@ function ActionPanel({
       </div>
 
       {match.phase === "buy" && pendingCell && (
-        <MagnateClubCard
-          cell={pendingCell}
-          group={pendingCell.group !== null ? match.groups[pendingCell.group] : null}
-          stadiumRents={match.stadium_rents}
-        >
-          <div className="flex gap-2">
-            <button disabled={busy} onClick={() => onAct("skip")} className={secondary}>Не покупать</button>
-            <button disabled={busy} onClick={() => onAct("buy")} className={primary}>
-              Купить за {formatMoney(pendingCell.price ?? 0)}
-            </button>
-          </div>
-        </MagnateClubCard>
+        <p className="text-xs text-ink-mist">«{pendingCell.name}» свободен — реши в окне, купить его или нет.</p>
       )}
 
       {match.phase === "roll" && (
@@ -394,7 +396,15 @@ function EventFeed({ match }: { match: MagnateMatch }) {
               className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full"
               style={{ background: e.seat !== null ? SEAT_COLORS[e.seat] : "rgba(255,255,255,0.3)" }}
             />
-            <span className={e.kind === "finish" || e.kind === "bankrupt" ? "font-semibold text-ink-chalk" : ""}>{e.text}</span>
+            <span
+              className={
+                e.kind === "penalty_goal" ? "font-semibold text-accent-lime"
+                  : e.kind === "penalty_miss" ? "font-semibold text-red-400"
+                    : e.kind === "finish" || e.kind === "bankrupt" ? "font-semibold text-ink-chalk" : ""
+              }
+            >
+              {e.text}
+            </span>
           </p>
         ))}
       </div>
@@ -511,5 +521,60 @@ function LobbyView({
         </button>
       )}
     </div>
+  );
+}
+
+function BuyDialog({
+  match, cell, cash, busy, turnLeft, onAct,
+}: {
+  match: MagnateMatch;
+  cell: MagnateCell;
+  cash: number;
+  busy: boolean;
+  turnLeft: number | null;
+  onAct: (action: MagnateAction) => void;
+}) {
+  const price = cell.price ?? 0;
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-[2px]">
+      <motion.div
+        initial={{ scale: 0.85, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        transition={{ type: "spring", damping: 22, stiffness: 320 }}
+        className="max-h-[92vh] w-full max-w-sm overflow-y-auto rounded-2xl"
+      >
+        <MagnateClubCard
+          cell={cell}
+          group={cell.group !== null ? match.groups[cell.group] : null}
+          stadiumRents={match.stadium_rents}
+        >
+          <div className="mb-2 flex items-center justify-between text-[11px] text-ink-mist">
+            <span>У тебя {formatMoney(cash)} → останется {formatMoney(cash - price)}</span>
+            {turnLeft !== null && (
+              <span className={`flex items-center gap-1 font-mono ${turnLeft <= 5 ? "text-red-400" : ""}`}>
+                <IconClock size={11} /> {turnLeft} с
+              </span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button
+              disabled={busy}
+              onClick={() => onAct("skip")}
+              className="flex-1 rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-mist active:scale-95 disabled:opacity-50"
+            >
+              Пропустить
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => onAct("buy")}
+              className="flex-[1.4] rounded-2xl bg-floodlight py-3 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-50"
+            >
+              Купить за {formatMoney(price)}
+            </button>
+          </div>
+        </MagnateClubCard>
+      </motion.div>
+    </div>,
+    document.body,
   );
 }

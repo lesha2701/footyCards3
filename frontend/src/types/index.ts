@@ -2091,7 +2091,7 @@ export type MagnateStatus = "lobby" | "in_progress" | "finished" | "cancelled";
 export type MagnatePhase = "roll" | "buy" | "end" | "moving" | "finished";
 export type MagnateAction = "roll" | "buy" | "skip" | "build" | "end" | "pay_bail" | "use_card";
 export type MagnateCellType =
-  | "start" | "club" | "stadium" | "var" | "transfer" | "fine" | "jail" | "break" | "go_to_jail";
+  | "start" | "club" | "stadium" | "var" | "transfer" | "fine" | "jail" | "break" | "go_to_jail" | "chance" | "red_card";
 
 export interface MagnateGroup {
   name: string;
@@ -2127,6 +2127,7 @@ export interface MagnatePlayer {
   pos: number;
   in_jail: boolean;
   jail_cards: number;
+  skip_turns: number;
   bankrupt: boolean;
   capital: number;
   missed: number;

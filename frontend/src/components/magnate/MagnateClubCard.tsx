@@ -54,7 +54,7 @@ export default function MagnateClubCard({
             <p className="mb-1.5 text-[11px] text-ink-mist">
               {owner
                 ? `${cell.level > 0 ? `${levelLabel(cell.level)} · ` : ""}аренда сейчас ${formatMoney(cell.current_rent)}`
-                : "Свободен — купи, когда встанешь на эту клетку"}
+                : "Свободен — можно купить"}
             </p>
           )}
           {cell.type === "fine" && cell.amount !== null && <p className="text-[11px] text-ink-mist">Платёж: {formatMoney(cell.amount)}</p>}

@@ -45,6 +45,8 @@ class MagnatePlayerOut(BaseModel):
     pos: int = 0
     in_jail: bool = False
     jail_cards: int = 0
+    # Red cards still to serve: the player's next turn(s) are skipped.
+    skip_turns: int = 0
     bankrupt: bool = False
     capital: int = 0
     missed: int = 0

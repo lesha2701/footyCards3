@@ -19,7 +19,7 @@ interface Props {
 
 const SHORT_LABELS: Partial<Record<MagnateCell["type"], string>> = {
   start: "Старт", jail: "Дисквал.", break: "Перерыв", go_to_jail: "Красная", var: "VAR",
-  transfer: "Трансфер", fine: "Налог",
+  transfer: "Трансфер", fine: "Налог", chance: "Пенальти", red_card: "Красная",
 };
 
 /** Square board around a football pitch. Clubs show a drawn crest in their

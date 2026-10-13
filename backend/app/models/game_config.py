@@ -365,8 +365,8 @@ class GameConfig(TimestampMixin, Base):
     magnate_building_sell_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
     # Rounds (every player moves once) and wall-clock minutes; whichever ends
     # first decides the winner by capital (cash + property + buildings).
-    magnate_max_rounds: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
-    magnate_time_limit_minutes: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    magnate_max_rounds: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    magnate_time_limit_minutes: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     # Per decision; on timeout the autopilot plays the turn, and after this
     # many timed-out turns in a row a bot takes the seat for good.
     magnate_turn_seconds: Mapped[int] = mapped_column(Integer, default=30, nullable=False)

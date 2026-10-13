@@ -80,6 +80,16 @@ export function CellIcon({ type, size = 16 }: { type: MagnateCellType; size?: nu
           <path d="M8.5 3.5 V20.5 M12 3.5 V20.5 M15.5 3.5 V20.5" />
         </svg>
       );
+    case "chance": // ball on the penalty spot in front of a goal
+      return (
+        <svg {...common} stroke="#f8fafc">
+          <path d="M3 13 V5 H21 V13" />
+          <path d="M3 9 H21 M8 5 V13 M13 5 V13 M18 5 V13" strokeWidth="0.8" opacity="0.5" />
+          <circle cx="12" cy="18" r="3.4" fill="#f8fafc" stroke="#0f172a" strokeWidth="1" />
+          <path d="M12 16.2 L13.6 17.4 L13 19.3 H11 L10.4 17.4 Z" fill="#0f172a" stroke="none" />
+        </svg>
+      );
+    case "red_card":
     case "go_to_jail": // red card
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>

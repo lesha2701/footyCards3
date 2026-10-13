@@ -7,6 +7,7 @@ import type { MagnateBoardConfig, MagnateBoardCellConfig } from "@/admin/types";
 const TYPE_LABELS: Record<string, string> = {
   start: "Старт", club: "Клуб", stadium: "Стадион", var: "VAR", transfer: "Трансферное окно",
   fine: "Штраф", jail: "Дисквалификация", break: "Перерыв", go_to_jail: "Красная карточка",
+  chance: "Пенальти 50/50", red_card: "Пропуск хода",
 };
 
 interface Props {

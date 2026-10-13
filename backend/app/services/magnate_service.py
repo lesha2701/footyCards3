@@ -666,6 +666,7 @@ async def _hydrate(db: AsyncSession, match: MagnateMatch, viewer: User) -> Magna
         players.append(MagnatePlayerOut(
             seat=p["seat"], name=p["name"], is_bot=p["is_bot"], is_me=p["seat"] == mine.seat, left=p["left"],
             cash=p["cash"], pos=p["pos"], in_jail=p["in_jail"], jail_cards=p["jail_cards"],
+            skip_turns=p.get("skip_turns", 0),
             bankrupt=p["bankrupt"], capital=engine.capital(state, p["seat"]), missed=p["missed"],
             place=row.place if row else None, reward_coins=row.reward_coins if row else 0,
         ))

@@ -37,6 +37,8 @@ export const CELL_TYPE_LABELS: Record<MagnateCellType, string> = {
   jail: "Дисквалификация",
   break: "Перерыв",
   go_to_jail: "Красная карточка",
+  chance: "Пенальти — 50/50: гол или промах",
+  red_card: "Красная карточка — пропуск хода",
 };
 
 export const FINISH_REASON_LABELS: Record<string, string> = {

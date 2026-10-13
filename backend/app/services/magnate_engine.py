@@ -24,10 +24,13 @@ MIN_CELLS, MAX_CELLS = 20, 40
 MAX_LEVEL = 4  # 1–3 = «Трибуны», 4 = «Арена»
 LOG_KEEP = 60
 PROPERTY_TYPES = frozenset({"club", "stadium"})
-CELL_TYPES = frozenset({"start", "club", "stadium", "var", "transfer", "fine", "jail", "break", "go_to_jail"})
+CELL_TYPES = frozenset({
+    "start", "club", "stadium", "var", "transfer", "fine", "jail", "break", "go_to_jail", "chance", "red_card",
+})
 DECKS = ("var", "transfer")
+CHANCE_DECK = "chance"  # 50/50: a coin flip picks a "good" or a "bad" card
 CARD_KINDS = frozenset({
-    "money", "move_to", "move_by", "nearest_stadium", "jail", "jail_card", "collect_each", "pay_each", "repairs",
+    "red_card", "money", "move_to", "move_by", "nearest_stadium", "jail", "jail_card", "collect_each", "pay_each", "repairs",
 })
 
 
@@ -78,7 +81,7 @@ DEFAULT_BOARD: dict = {
         _club("Порту", 1, 100, [6, 30, 90, 270, 450], 50, "ПОР", ["#1d4ed8", "#ffffff"]),
         {"type": "var", "name": "VAR"},
         _club("Бенфика", 1, 120, [8, 40, 100, 300, 500], 50, "БЕН", ["#dc2626", "#ffffff"]),
-        {"type": "jail", "name": "Дисквалификация"},
+        {"type": "chance", "name": "Пенальти"},
         _club("Марсель", 2, 140, [10, 50, 150, 450, 700], 100, "МАР", ["#38bdf8", "#ffffff"]),
         {"type": "fine", "name": "Налог на зарплаты", "amount": 150},
         _club("ПСЖ", 2, 160, [12, 60, 180, 500, 800], 100, "ПСЖ", ["#1e3a8a", "#dc2626"]),
@@ -94,7 +97,8 @@ DEFAULT_BOARD: dict = {
         _club("Челси", 5, 260, [22, 110, 330, 800, 1150], 150, "ЧЕЛ", ["#1d4ed8", "#ffffff"]),
         _club("Арсенал", 5, 260, [22, 110, 330, 800, 1150], 150, "АРС", ["#dc2626", "#ffffff"]),
         _club("Ливерпуль", 5, 280, [24, 120, 360, 850, 1200], 150, "ЛИВ", ["#b91c1c", "#facc15"]),
-        {"type": "go_to_jail", "name": "Красная карточка"},
+        # Landing here *is* the red card: "arrest" disqualifies on the spot.
+        {"type": "jail", "name": "Дисквалификация", "arrest": True},
         _club("Ман Юнайтед", 6, 300, [26, 130, 390, 900, 1275], 200, "МЮ", ["#dc2626", "#facc15"]),
         _club("Ман Сити", 6, 320, [28, 150, 450, 1000, 1400], 200, "МС", ["#7dd3fc", "#ffffff"]),
         {"type": "transfer", "name": "Трансферное окно"},
@@ -168,6 +172,18 @@ DEFAULT_CARDS: dict = {
         {"text": "Призовые за кубок", "kind": "money", "amount": 200},
         {"text": "Новый спонсор на футболках", "kind": "money", "amount": 150},
     ],
+    # «Пенальти»: a fair coin decides scored (good) or missed (bad), then a
+    # card of that kind is drawn at random.
+    "chance": [
+        {"text": "Гол! Премия от спонсора", "kind": "money", "amount": 150, "good": True},
+        {"text": "Гол в девятку — права на повтор проданы", "kind": "money", "amount": 100, "good": True},
+        {"text": "Гол! Каждый соперник платит тебе за билет", "kind": "collect_each", "amount": 30, "good": True},
+        {"text": "Гол! Болельщики несут тебя вперёд на 3 клетки", "kind": "move_by", "steps": 3, "good": True},
+        {"text": "Промах выше ворот — штраф", "kind": "money", "amount": -100, "good": False},
+        {"text": "Вратарь отбил — назад на 3 клетки", "kind": "move_by", "steps": -3, "good": False},
+        {"text": "Удар в штангу — ремонт стадионов", "kind": "repairs", "per_tribune": 25, "per_arena": 100, "good": False},
+        {"text": "Симуляция при ударе — красная карточка и дисквалификация", "kind": "jail", "good": False},
+    ],
 }
 
 
@@ -207,6 +223,8 @@ def validate_board(board: dict) -> dict:
             out["short"] = str(c["short"]).strip()[:4]
         if isinstance(c.get("colors"), list) and c["colors"]:
             out["colors"] = [str(x)[:16] for x in c["colors"][:2]]
+        if c["type"] == "jail" and c.get("arrest"):
+            out["arrest"] = True
         if c["type"] == "fine" and c.get("amount") is not None:
             out["amount"] = _non_negative_int(c.get("amount"), f"Клетка {i} «{name}», сумма")
         if c["type"] in PROPERTY_TYPES:
@@ -227,8 +245,10 @@ def validate_board(board: dict) -> dict:
     types = [c["type"] for c in clean_cells]
     if clean_cells[0]["type"] != "start" or types.count("start") != 1:
         raise EngineError("«Стартовый свисток» должен быть одной клеткой с индексом 0")
-    if types.count("jail") != 1:
-        raise EngineError("На поле должна быть ровно одна клетка «Дисквалификация»")
+    if types.count("jail") > 1:
+        raise EngineError("Клетка «Дисквалификация» может быть только одна")
+    if "go_to_jail" in types and "jail" not in types:
+        raise EngineError("Клетка «В дисквалификацию» требует клетку «Дисквалификация»")
     for gi, g in enumerate(clean_groups):
         if not any(c["type"] == "club" and c["group"] == gi for c in clean_cells):
             raise EngineError(f"В группе «{g['name']}» нет ни одного клуба")
@@ -239,7 +259,7 @@ def validate_cards(cards: dict) -> dict:
     if not isinstance(cards, dict):
         raise EngineError("Карточки должны быть объектом с колодами var и transfer")
     out = {}
-    for deck in DECKS:
+    for deck in (*DECKS, CHANCE_DECK):
         items = cards.get(deck)
         if not isinstance(items, list) or not items:
             raise EngineError(f"Колода «{deck}» пуста")
@@ -271,7 +291,11 @@ def validate_cards(cards: dict) -> dict:
             elif kind == "repairs":
                 c["per_tribune"] = _non_negative_int(card.get("per_tribune"), f"Колода «{deck}», карточка {i + 1}")
                 c["per_arena"] = _non_negative_int(card.get("per_arena"), f"Колода «{deck}», карточка {i + 1}")
+            if deck == CHANCE_DECK:
+                c["good"] = bool(card.get("good"))
             clean.append(c)
+        if deck == CHANCE_DECK and len({c["good"] for c in clean}) < 2:
+            raise EngineError("В колоде «Пенальти» нужны и удачные (good: true), и неудачные карточки")
         out[deck] = clean
     return out
 
@@ -296,12 +320,13 @@ def new_state(board: dict, cards: dict, settings: dict, players: list[dict], see
     cells = copy.deepcopy(board["cells"])
     state = {
         "cells": cells, "groups": copy.deepcopy(board["groups"]), "settings": dict(settings),
-        "cards": copy.deepcopy(cards), "seed": seed, "rng_n": 0,
+        "cards": {**copy.deepcopy(cards), CHANCE_DECK: copy.deepcopy(cards.get(CHANCE_DECK) or DEFAULT_CARDS[CHANCE_DECK])},
+        "seed": seed, "rng_n": 0,
         "players": [
             {
                 "seat": i, "name": p["name"], "is_bot": bool(p.get("is_bot")), "user_id": p.get("user_id"),
                 "cash": settings["start_money"], "pos": 0, "in_jail": False, "jail_turns": 0, "jail_cards": 0,
-                "bankrupt": False, "bankrupt_order": None, "missed": 0, "left": False,
+                "bankrupt": False, "bankrupt_order": None, "missed": 0, "left": False, "skip_turns": 0,
             }
             for i, p in enumerate(players)
         ],
@@ -470,6 +495,24 @@ def _send_to_jail(state: dict, seat: int) -> None:
     log(state, seat, f"{p['name']} дисквалифицирован", "jail")
 
 
+def _red_card(state: dict, seat: int) -> None:
+    """Skip the next turn (the board may have no «Дисквалификация» at all)."""
+    p = state["players"][seat]
+    p["skip_turns"] = p.get("skip_turns", 0) + 1
+    state["extra_turn"] = False
+    state["doubles"] = 0
+    log(state, seat, f"{p['name']} получает красную карточку — пропустит следующий ход", "jail")
+
+
+def _punish(state: dict, seat: int) -> None:
+    """Three doubles / a red-card event: disqualification if the board has
+    one, otherwise a skipped turn."""
+    if any(c["type"] == "jail" for c in state["cells"]):
+        _send_to_jail(state, seat)
+    else:
+        _red_card(state, seat)
+
+
 def _move_by(state: dict, seat: int, steps: int, depth: int = 0) -> None:
     p = state["players"][seat]
     n = len(state["cells"])
@@ -506,9 +549,14 @@ def _land(state: dict, seat: int, depth: int = 0) -> None:
     elif t in DECKS:
         if depth < 3:
             _draw_card(state, seat, t, depth)
+    elif t == "chance":
+        if depth < 3:
+            _penalty_kick(state, seat, depth)
+    elif t == "red_card":
+        _red_card(state, seat)
     elif t == "fine":
         pay(state, seat, cell.get("amount", state["settings"]["fine_amount"]), None, cell["name"].lower())
-    elif t == "go_to_jail":
+    elif t == "go_to_jail" or (t == "jail" and cell.get("arrest") and not p["in_jail"]):
         _send_to_jail(state, seat)
 
 
@@ -517,9 +565,29 @@ def _draw_card(state: dict, seat: int, deck: str, depth: int) -> None:
     idx = order[state["deck_pos"][deck] % len(order)]
     state["deck_pos"][deck] += 1
     card = state["cards"][deck][idx]
-    p = state["players"][seat]
     title = "VAR" if deck == "var" else "Трансферное окно"
     log(state, seat, f"{title}: {card['text']}", "card")
+    _apply_card(state, seat, card, title, depth)
+
+
+def _penalty_kick(state: dict, seat: int, depth: int) -> None:
+    """«Пенальти»: a fair coin — scored (a "good" card) or missed (a "bad"
+    one) — then a random card of that kind. Server RNG only."""
+    rng = _rng(state)
+    scored = rng.random() < 0.5
+    pool = [c for c in state["cards"][CHANCE_DECK] if bool(c.get("good")) == scored]
+    p = state["players"][seat]
+    if not pool:
+        log(state, seat, f"{p['name']} бьёт пенальти — {'гол' if scored else 'мимо'}", "card")
+        return
+    card = pool[rng.randrange(len(pool))]
+    state["last_penalty"] = {"seat": seat, "scored": scored, "n": state.get("roll_n", 0)}
+    log(state, seat, f"Пенальти — {'ГОЛ' if scored else 'ПРОМАХ'}! {card['text']}", "penalty_goal" if scored else "penalty_miss")
+    _apply_card(state, seat, card, "Пенальти", depth)
+
+
+def _apply_card(state: dict, seat: int, card: dict, title: str, depth: int) -> None:
+    p = state["players"][seat]
     kind = card["kind"]
     if kind == "money":
         if card["amount"] >= 0:
@@ -538,7 +606,9 @@ def _draw_card(state: dict, seat: int, deck: str, depth: int) -> None:
                 _move_to(state, seat, target, depth + 1)
                 break
     elif kind == "jail":
-        _send_to_jail(state, seat)
+        _punish(state, seat)
+    elif kind == "red_card":
+        _red_card(state, seat)
     elif kind == "jail_card":
         p["jail_cards"] += 1
     elif kind == "collect_each":
@@ -600,6 +670,11 @@ def _next_turn(state: dict) -> None:
     state["turn"] = nxt
     state["phase"] = "roll"
     state["turn_n"] += 1
+    skipper = state["players"][nxt]
+    if skipper.get("skip_turns", 0) > 0:
+        skipper["skip_turns"] -= 1
+        log(state, nxt, f"{skipper['name']} пропускает ход — красная карточка", "jail")
+        _next_turn(state)
 
 
 def _continue(state: dict, seat: int) -> None:
@@ -662,7 +737,7 @@ def _do_roll(state: dict, seat: int, dice: Optional[list[int]]) -> None:
         state["doubles"] += 1
         if state["doubles"] >= 3:
             log(state, seat, "Третий дубль подряд!", "jail")
-            _send_to_jail(state, seat)
+            _punish(state, seat)
             _next_turn(state)
             return
     state["extra_turn"] = is_double
