@@ -234,6 +234,7 @@ export default function App() {
         <Route path="/play/career" element={<CareerPage />} />
         <Route path="/play/career/seasons/:seasonId/rounds/:round/matches/:match" element={<CareerMatchPage />} />
         <Route path="/play/career/seasons/:seasonId/cup/:cupRound/:tie" element={<CareerMatchPage />} />
+        <Route path="/play/career/seasons/:seasonId/friendly" element={<CareerMatchPage />} />
         <Route path="/friends" element={<FriendsPage />} />
         <Route path="/my-player" element={<MyPlayerPage />} />
         <Route path="/play/player-career" element={<PlayerCareerPage />} />

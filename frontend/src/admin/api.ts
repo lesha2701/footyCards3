@@ -526,6 +526,41 @@ export async function forceCancelTrade(id: number): Promise<TradeOffer> {
 }
 
 // --- Games ---
+export interface CareerClubAdmin {
+  id?: number;
+  name: string;
+  division: number;
+  source?: string;
+  pool_club?: string | null;
+  pool_players?: number;
+  rating_offset: number;
+  formation?: string | null;
+  preset?: string | null;
+  is_active: boolean;
+}
+
+export async function fetchCareerClubs(): Promise<{ clubs: CareerClubAdmin[] }> {
+  const { data } = await api.get<{ clubs: CareerClubAdmin[] }>("/admin/career/clubs");
+  return data;
+}
+
+export async function buildCareerClubs(replace: boolean): Promise<{ clubs: CareerClubAdmin[] }> {
+  const { data } = await api.post<{ clubs: CareerClubAdmin[] }>("/admin/career/clubs/build", { replace });
+  return data;
+}
+
+export async function createCareerClub(club: CareerClubAdmin): Promise<{ clubs: CareerClubAdmin[] }> {
+  const { data } = await api.post<{ clubs: CareerClubAdmin[] }>("/admin/career/clubs", club);
+  return data;
+}
+
+export async function updateCareerClub(club: CareerClubAdmin): Promise<{ clubs: CareerClubAdmin[] }> {
+  const { id, name, division, pool_club, rating_offset, formation, preset, is_active } = club;
+  const { data } = await api.put<{ clubs: CareerClubAdmin[] }>(`/admin/career/clubs/${id}`,
+    { name, division, pool_club, rating_offset, formation, preset, is_active });
+  return data;
+}
+
 export async function fetchGameConfig(): Promise<GameConfig> {
   const { data } = await api.get<GameConfig>("/admin/games/config");
   return data;

@@ -95,6 +95,11 @@ export function ScoutingCard({ scouting, catalog, difficultyLabel }: {
         )}
       </div>
 
+      {scouting.head_to_head && scouting.head_to_head.meetings > 0 && (
+        <p className="text-[11px] text-ink-mist">
+          Личные встречи: {scouting.head_to_head.meetings + 1}-я встреча · В{scouting.head_to_head.w} Н{scouting.head_to_head.d} П{scouting.head_to_head.l}
+        </p>
+      )}
       {scouting.tactic && catalog ? (
         <div className="rounded-2xl bg-bg-raised p-3">
           <p className="mb-1.5 text-[11px] text-ink-mist">

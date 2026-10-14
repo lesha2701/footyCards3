@@ -23,6 +23,7 @@ import { PlanEditor, ScoutingCard, TacticsBoard } from "@/components/career/Care
 import { SetPiecesCard, SquadWarnings } from "@/components/career/SetPiecesCard";
 import { CoachProfileCard, ObjectiveCard, TrainingCard } from "@/components/career/CareerManagement";
 import CupCard from "@/components/career/CupCard";
+import { OffseasonPanel, SeasonSummaryView } from "@/components/career/Offseason";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconTrophy, IconUsers } from "@/components/icons";
@@ -79,7 +80,7 @@ export default function CareerPage() {
 
       {!data.season || data.season.status === "finished" || data.season.my_status === "left" ? (
         <>
-          {data.season?.status === "finished" && <FinishedCard season={data.season} />}
+          {data.season?.status === "finished" && <FinishedCard season={data.season} catalog={data.tactics_catalog ?? null} />}
           {data.season?.my_status === "left" && data.season.status !== "finished" && (
             <p className="rounded-2xl bg-bg-surface p-4 text-sm text-ink-mist">Ты покинул сезон. Можно начать новый.</p>
           )}
@@ -240,7 +241,7 @@ function PendingCard({ season, onView, onError }: { season: CareerSeason } & Han
   );
 }
 
-function FinishedCard({ season }: { season: CareerSeason }) {
+function FinishedCard({ season, catalog }: { season: CareerSeason; catalog: TacticsCatalog | null }) {
   return (
     <section className="flex flex-col gap-3 rounded-3xl bg-bg-surface p-4">
       <div className="flex items-center gap-3">
@@ -255,6 +256,7 @@ function FinishedCard({ season }: { season: CareerSeason }) {
         </div>
       </div>
       {season.next_division && season.division && <DivisionMove from={season.division} to={season.next_division} />}
+      {season.summary && <SeasonSummaryView summary={season.summary} catalog={catalog} />}
       <StandingsTable season={season} />
     </section>
   );
@@ -325,6 +327,7 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
 
       {tab === "prep" && season.scouting && (
         <>
+          <OffseasonPanel season={season} catalog={catalog} onView={onView} onError={onError} />
           <SquadWarnings warnings={season.squad_warnings} />
           {hasTactics && <ObjectiveCard season={season} onView={onView} onError={onError} />}
           <ScoutingCard scouting={season.scouting} catalog={catalog} difficultyLabel={season.difficulty_label} />

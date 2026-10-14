@@ -150,6 +150,38 @@ export interface CareerCup {
   rep_winner: number;
 }
 
+export interface CareerSeasonSummary {
+  tactics: { preset: string; played: number; points: number; tactic: Tactic | null }[];
+  duels: { id: string; label: string; attacker: "me" | "them"; applied: number; attacker_won: number }[];
+  top_scorer: { name: string; goals: number } | null;
+  most_minutes: { name: string; minutes: number } | null;
+  most_missed: { name: string; rounds: number } | null;
+}
+
+export interface CareerOffseason {
+  prev_season_id: number | null;
+  prev_place: number | null;
+  prev_division: CareerDivision | null;
+  prev_coins: number;
+  summary: CareerSeasonSummary | null;
+  core_count: number;
+  core_min: number;
+  carried_pct: number;
+  keep_pct: number;
+  prev_formation: string | null;
+  camp: string | null;
+  camps: { code: string; label: string; hint: string }[];
+  friendly: { opponent: string; home_score: number; away_score: number } | null;
+  starts_at: string | null;
+}
+
+export interface CareerCollectionCard {
+  card_id: number;
+  in_squad: boolean;
+  card: UserCard | null;
+  my_player: { name: string; position: string; rating: number; club?: string; country?: string } | null;
+}
+
 export interface CareerSquadWarning {
   /** critical = someone plays out of his line; thin = no cover left in a line. */
   level: "critical" | "thin";
@@ -192,6 +224,8 @@ export interface CareerScouting {
   /** My saved tactic vs theirs. */
   matchup: MatchupReport | null;
   win_pct: number | null;
+  /** Past meetings with this club (living league). */
+  head_to_head?: { w: number; d: number; l: number; meetings: number } | null;
   /** Pro/legend bot: may answer my last PLAYED tactic — and with what. */
   adaptive: boolean;
   my_last_tactic: Tactic | null;
@@ -279,6 +313,8 @@ export interface CareerSeason {
   training?: string | null;
   trainings?: { code: string; label: string; hint: string }[];
   cup?: CareerCup | null;
+  offseason?: CareerOffseason | null;
+  summary?: CareerSeasonSummary | null;
   plan_limits?: { rules?: number; subs?: number };
 }
 
@@ -338,6 +374,31 @@ export async function setCareerAmbition(ambition: string): Promise<CareerView> {
 
 export async function setCareerTraining(training: string | null, roundIndex?: number): Promise<CareerView> {
   const { data } = await api.put<CareerView>("/career/training", { training, round_index: roundIndex ?? null });
+  return data;
+}
+
+export async function setCareerSquad(cardIds: number[]): Promise<CareerView> {
+  const { data } = await api.put<CareerView>("/career/squad", { card_ids: cardIds });
+  return data;
+}
+
+export async function setCareerCamp(camp: string | null): Promise<CareerView> {
+  const { data } = await api.put<CareerView>("/career/camp", { camp });
+  return data;
+}
+
+export async function playCareerFriendly(): Promise<CareerView> {
+  const { data } = await api.post<CareerView>("/career/friendly");
+  return data;
+}
+
+export async function fetchCareerCollection(): Promise<{ squad_size: number; cards: CareerCollectionCard[] }> {
+  const { data } = await api.get<{ squad_size: number; cards: CareerCollectionCard[] }>("/career/collection");
+  return data;
+}
+
+export async function fetchCareerFriendly(seasonId: number): Promise<CareerMatchEvents> {
+  const { data } = await api.get<CareerMatchEvents>(`/career/seasons/${seasonId}/friendly`);
   return data;
 }
 

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import AdminCareerClubs from "@/admin/pages/AdminCareerClubs";
 
 import { fetchGameConfig, fetchSuspiciousMatches, fetchSuspiciousMemorySessions, updateGameConfig } from "@/admin/api";
 import AdminMagnateBoardEditor from "@/admin/pages/AdminMagnateBoardEditor";
@@ -56,6 +57,7 @@ export default function AdminGamesPage() {
       | "career_ambition_rep_success"
       | "career_ambition_rep_fail"
       | "career_rep_levels"
+      | "career_cup_rewards"
       | "my_player_tier_thresholds"
       | "player_career_place_rewards"
       | "club_league_rewards"
@@ -103,6 +105,8 @@ export default function AdminGamesPage() {
       | "club_league_enabled"
       | "career_enabled"
       | "career_reminders_enabled"
+      | "career_cup_enabled"
+      | "career_offseason_auto"
       | "my_player_enabled"
       | "player_career_enabled"
       | "chemistry_enabled",
@@ -394,6 +398,21 @@ export default function AdminGamesPage() {
           {field("career_rep_promotion", "Репутация за повышение")}
           {field("career_rep_relegation", "Репутация за вылет (отрицательная)")}
           {listField("career_rep_levels", "Пороги уровней репутации")}
+          <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">Кубок</p>
+          {toggle("career_cup_enabled", "Кубок в новых сезонах")}
+          {listField("career_cup_rewards", "Призы кубка: победа, финал, полуфинал")}
+          {field("career_rep_cup", "Репутация за кубок")}
+          <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">Межсезонье и живая лига</p>
+          {toggle("career_offseason_auto", "Новый сезон автоматически на следующий день")}
+          {field("career_inactive_days", "Неактивен дней — без продления и вниз")}
+          {field("career_core_min", "Ядро: минимум игроков")}
+          {field("career_core_keep_pct", "Ядро: переносится сыгранности, %")}
+          {field("career_camp_physical_pct", "Сборы «Физика»: меньше усталости, %")}
+          {field("career_camp_physical_rounds", "Сборы «Физика»: туров")}
+          {field("career_camp_tactical_tenths", "Сборы «Тактика»: сыгранность, десятые %")}
+          {field("career_tenure_minutes_per_point", "Клубный стаж: минут за +1")}
+          {field("career_tenure_max", "Клубный стаж: максимум")}
+          {field("career_division_club_count", "Клубов в каталоге на дивизион")}
           {field("career_familiarity_step_tenths", "Сыгранность за матч, десятые %")}
           {field("career_familiarity_max_tenths", "Потолок сыгранности, десятые %")}
           {field("career_familiarity_keep_pct", "Сохраняется при смене схемы, %")}
@@ -422,6 +441,8 @@ export default function AdminGamesPage() {
           {listField("career_bot_counter_chance_pct", "Шанс контр-стиля у ботов (Любитель, Профи, Легенда), %")}
         </div>
       </section>
+
+      <AdminCareerClubs divisions={form.career_division_count ?? 5} />
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-1 font-display text-base font-bold">Мой игрок</p>

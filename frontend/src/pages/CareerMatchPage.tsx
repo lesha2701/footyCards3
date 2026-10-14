@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 
-import { fetchCareer, fetchCareerCupMatch, fetchCareerMatch } from "@/api/career";
+import { fetchCareer, fetchCareerCupMatch, fetchCareerFriendly, fetchCareerMatch } from "@/api/career";
 import CareerMatchAnalysis from "@/components/career/CareerMatchAnalysis";
 import { TournamentMatchReplay } from "@/components/clubs/TournamentMatchReplay";
 import EmptyState from "@/components/common/EmptyState";
@@ -13,11 +13,14 @@ export default function CareerMatchPage() {
     seasonId: string; round: string; match: string; cupRound: string; tie: string;
   }>();
   const isCup = cupRound !== undefined;
+  const isFriendly = !isCup && round === undefined;
   const { data, isLoading, isError } = useQuery({
     queryKey: ["career", "match", seasonId, round, match, cupRound, tie],
-    queryFn: () => isCup
-      ? fetchCareerCupMatch(Number(seasonId), Number(cupRound), Number(tie))
-      : fetchCareerMatch(Number(seasonId), Number(round), Number(match)),
+    queryFn: () => isFriendly
+      ? fetchCareerFriendly(Number(seasonId))
+      : isCup
+        ? fetchCareerCupMatch(Number(seasonId), Number(cupRound), Number(tie))
+        : fetchCareerMatch(Number(seasonId), Number(round), Number(match)),
   });
 
   // The tactics catalog (axis labels) comes with the career view.
@@ -29,7 +32,7 @@ export default function CareerMatchPage() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="font-display text-xl font-bold text-ink-chalk">
-        {isCup ? `Кубок · ${["1/8 финала", "1/4 финала", "1/2 финала", "Финал"][Number(cupRound)] ?? ""}` : `Карьера · тур ${Number(round) + 1}`}
+        {isFriendly ? "Товарищеский матч" : isCup ? `Кубок · ${["1/8 финала", "1/4 финала", "1/2 финала", "Финал"][Number(cupRound)] ?? ""}` : `Карьера · тур ${Number(round) + 1}`}
       </h1>
       <TournamentMatchReplay
         events={data.events}
