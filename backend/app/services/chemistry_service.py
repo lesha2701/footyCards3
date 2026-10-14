@@ -76,6 +76,22 @@ FORMATION_LINKS: dict[str, tuple[tuple[str, str], ...]] = {
         ("MID1", "FWD1"), ("MID2", "FWD1"), ("MID4", "FWD2"), ("MID5", "FWD2"),
         ("FWD1", "FWD2"),
     ),
+    "4-3-3H": (
+        ("GK", "DEF2"), ("GK", "DEF3"),
+        ("DEF1", "DEF2"), ("DEF2", "DEF3"), ("DEF3", "DEF4"),
+        ("DEF1", "MID1"), ("DEF2", "MID2"), ("DEF3", "MID2"), ("DEF4", "MID3"),
+        ("MID1", "MID2"), ("MID2", "MID3"),
+        ("MID1", "FWD1"), ("MID1", "FWD2"), ("MID3", "FWD2"), ("MID3", "FWD3"),
+        ("FWD1", "FWD2"), ("FWD2", "FWD3"),
+    ),
+    "4-2-3-1": (
+        ("GK", "DEF2"), ("GK", "DEF3"),
+        ("DEF1", "DEF2"), ("DEF2", "DEF3"), ("DEF3", "DEF4"),
+        ("DEF1", "MID3"), ("DEF2", "MID1"), ("DEF3", "MID2"), ("DEF4", "MID5"),
+        ("MID1", "MID2"), ("MID1", "MID4"), ("MID2", "MID4"),
+        ("MID3", "MID4"), ("MID4", "MID5"),
+        ("MID3", "FWD1"), ("MID4", "FWD1"), ("MID5", "FWD1"),
+    ),
     "5-3-2": (
         ("GK", "DEF2"), ("GK", "DEF3"), ("GK", "DEF4"),
         ("DEF1", "DEF2"), ("DEF2", "DEF3"), ("DEF3", "DEF4"), ("DEF4", "DEF5"),

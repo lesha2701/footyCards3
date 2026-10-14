@@ -50,7 +50,7 @@ START_LEAD = timedelta(hours=1)  # time to set a lineup before round 1
 INVITE_TTL = timedelta(hours=24)
 DIFFICULTIES = ("amateur", "pro", "legend")
 DIFFICULTY_LABELS = {"amateur": "Любитель", "pro": "Профи", "legend": "Легенда"}
-BOT_FORMATIONS = ("4-3-3", "4-4-2", "3-5-2")
+BOT_FORMATIONS = ("4-3-3", "4-4-2", "3-5-2", "4-3-3H", "4-2-3-1")
 BOT_CLUB_NAMES = [
     "Северный Ветер", "Портовые Волки", "Динамо Рассвет", "Торпедо Восток", "Атлетик Лесной",
     "Горняк", "Спартак Заречье", "Метеор", "Звезда Юга", "Речники", "Сокол", "Буревестник",

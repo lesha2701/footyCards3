@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { formationLabel, inRow, pitchRows } from "@/lib/formationLayout";
 
 import {
   chooseFutDraftFormation,
@@ -655,11 +656,10 @@ function Pitch({
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
-      <p className="text-center font-mono text-[10px] uppercase tracking-wide text-ink-mist-dim">{formation}</p>
-      {(["FWD", "MID", "DEF", "GK"] as const).map((category) => (
-        <div key={category} className="flex justify-center gap-2">
-          {slots
-            .filter((s) => s.category === category)
+      <p className="text-center font-mono text-[10px] uppercase tracking-wide text-ink-mist-dim">{formationLabel(formation)}</p>
+      {pitchRows(formation, slots.map((s) => s.slot_code)).map((row) => (
+        <div key={row.key} className="flex justify-center gap-2">
+          {inRow(row, slots)
             .map((slot) => (
               <button
                 key={slot.slot_code}

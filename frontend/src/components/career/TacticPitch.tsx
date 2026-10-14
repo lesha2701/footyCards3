@@ -1,4 +1,7 @@
 import type { Tactic } from "@/api/career";
+import { pitchRows } from "@/lib/formationLayout";
+
+const FORMATION_CODES = ["GK", "DEF1", "DEF2", "DEF3", "DEF4", "DEF5", "MID1", "MID2", "MID3", "MID4", "MID5", "FWD1", "FWD2", "FWD3"];
 
 // Vertical pitch, our goal at the bottom. Line heights by block.
 const LINE_Y: Record<string, Record<"DEF" | "MID" | "FWD", number>> = {
@@ -20,8 +23,12 @@ function spread(count: number): number[] {
 export default function TacticPitch({ formation, tactic }: { formation: string; tactic: Tactic }) {
   const block = tactic.block ?? "mid";
   const y = LINE_Y[block] ?? LINE_Y.mid;
-  const [def = 4, mid = 3, fwd = 3] = formation.split("-").map(Number);
-  const lines = ([["DEF", def], ["MID", mid], ["FWD", fwd]] as const).map(([cat, n]) => ({ cat, n }));
+  // Outfield rows (top = attack) from the shared pitch layout, spread
+  // between the forward and defensive line heights of this block.
+  const outfield = pitchRows(formation, FORMATION_CODES).filter((r) => r.category !== "GK");
+  const rowsY = outfield.map((r, i) => ({
+    ...r, y: outfield.length > 1 ? y.FWD + ((y.DEF - y.FWD) * i) / (outfield.length - 1) : y.MID,
+  }));
   const wings = tactic.direction === "wings" || tactic.direction === "mixed";
   const center = tactic.direction === "center" || tactic.direction === "mixed";
   const strong = (on: boolean) => (tactic.direction === "mixed" ? 1.6 : on ? 2.4 : 0);
@@ -74,9 +81,10 @@ export default function TacticPitch({ formation, tactic }: { formation: string; 
 
       {/* players */}
       <circle cx="50" cy="128" r="3.2" fill="#e5e7eb" stroke="#0d2f20" strokeWidth="0.8" />
-      {lines.map(({ cat, n }) =>
-        spread(n).map((x, i) => (
-          <circle key={`${cat}${i}`} cx={x} cy={y[cat]} r="3.2" fill={cat === "FWD" ? "#c6e63a" : cat === "MID" ? "#3ed17e" : "#22d3c4"}
+      {rowsY.map((row) =>
+        spread(row.codes.length).map((x, i) => (
+          <circle key={`${row.key}${i}`} cx={x} cy={row.y} r="3.2"
+            fill={row.category === "FWD" ? "#c6e63a" : row.category === "MID" ? "#3ed17e" : "#22d3c4"}
             stroke="#0d2f20" strokeWidth="0.8" />
         )),
       )}

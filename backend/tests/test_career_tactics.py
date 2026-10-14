@@ -566,7 +566,9 @@ async def test_divisions_set_difficulty_and_move_between_seasons(client, db_sess
     assert view["season"]["next_division"]["division"] == expected
     assert {a["key"] for a in view["tactics_catalog"]["axes"]} == set(tactics.AXES)
 
-    part.next_division = count - 1
+    profile = (await db_session.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))).scalar_one()
+    assert profile.division == expected
+    profile.division = count - 1  # force a promotion to check the next season
     await db_session.commit()
     second = (await client.post(f"{API}/career/seasons", headers=headers, json={"difficulty": "amateur"})).json()["season"]
     assert second["division"]["division"] == count - 1

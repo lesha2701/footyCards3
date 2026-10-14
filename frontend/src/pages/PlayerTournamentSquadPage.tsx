@@ -22,6 +22,7 @@ import { staticUrl } from "@/lib/api";
 import { BOOST_TYPE_LABELS } from "@/lib/coaches";
 import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
+import { inRow, pitchRows } from "@/lib/formationLayout";
 import { formatGameError } from "@/lib/errors";
 import { haptic } from "@/lib/telegram";
 import type { PersonalSquadSlot, UserCard } from "@/types";
@@ -311,8 +312,8 @@ export default function PlayerTournamentSquadPage() {
 
         <div ref={pitchRef} className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
           <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
-          {(["FWD", "MID", "DEF", "GK"] as const).map((category) => (
-            <div key={category} className="relative flex justify-evenly gap-2">
+          {pitchRows(squad?.formation, (squad?.slots ?? []).map((s) => s.slot_code)).map((row) => { const category = row.category; return (
+            <div key={row.key} className="relative flex justify-evenly gap-2">
               {category === "GK" && (
                 <button
                   onClick={() => setCoachPickerOpen(true)}
@@ -367,8 +368,7 @@ export default function PlayerTournamentSquadPage() {
                   )}
                 </button>
               )}
-              {squad?.slots
-                .filter((slot) => slot.category === category)
+              {inRow(row, squad?.slots ?? [])
                 .map((slot) => (
                   <button
                     key={slot.slot_code}
@@ -411,7 +411,7 @@ export default function PlayerTournamentSquadPage() {
                   </button>
                 ))}
             </div>
-          ))}
+          ); })}
         </div>
 
         {squad?.coach && (

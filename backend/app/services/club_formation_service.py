@@ -36,6 +36,26 @@ CLUB_FORMATIONS: dict[str, list[FormationSlot]] = {
         FormationSlot("MID5", "MID", Position.RM),
         FormationSlot("FWD1", "FWD", Position.ST), FormationSlot("FWD2", "FWD", Position.ST),
     ],
+    # 4-3-3 with a single holding midfielder between two central midfielders.
+    "4-3-3H": [
+        FormationSlot("GK", "GK", Position.GK),
+        FormationSlot("DEF1", "DEF", Position.LB), FormationSlot("DEF2", "DEF", Position.CB),
+        FormationSlot("DEF3", "DEF", Position.CB), FormationSlot("DEF4", "DEF", Position.RB),
+        FormationSlot("MID1", "MID", Position.CM), FormationSlot("MID2", "MID", Position.CDM),
+        FormationSlot("MID3", "MID", Position.CM),
+        FormationSlot("FWD1", "FWD", Position.LW), FormationSlot("FWD2", "FWD", Position.ST),
+        FormationSlot("FWD3", "FWD", Position.RW),
+    ],
+    # Double pivot, three attacking midfielders behind a lone striker.
+    "4-2-3-1": [
+        FormationSlot("GK", "GK", Position.GK),
+        FormationSlot("DEF1", "DEF", Position.LB), FormationSlot("DEF2", "DEF", Position.CB),
+        FormationSlot("DEF3", "DEF", Position.CB), FormationSlot("DEF4", "DEF", Position.RB),
+        FormationSlot("MID1", "MID", Position.CDM), FormationSlot("MID2", "MID", Position.CDM),
+        FormationSlot("MID3", "MID", Position.LM), FormationSlot("MID4", "MID", Position.CAM),
+        FormationSlot("MID5", "MID", Position.RM),
+        FormationSlot("FWD1", "FWD", Position.ST),
+    ],
     "5-3-2": [
         FormationSlot("GK", "GK", Position.GK),
         FormationSlot("DEF1", "DEF", Position.LB), FormationSlot("DEF2", "DEF", Position.CB),
