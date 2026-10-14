@@ -49,6 +49,7 @@ _TYPE_PATHS = {
     "career_round_result": "/play/career",
     "career_season_finished": "/play/career",
     "career_reminder": "/play/career",
+    "career_digest": "/play/career",
     "player_career_round_result": "/play/player-career",
     "player_career_season_finished": "/play/player-career",
     "club_league_reward": "/clubs/league",

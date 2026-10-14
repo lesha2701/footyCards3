@@ -107,6 +107,8 @@ export default function AdminGamesPage() {
       | "career_reminders_enabled"
       | "career_cup_enabled"
       | "career_offseason_auto"
+      | "career_live_enabled"
+      | "career_digest_enabled"
       | "my_player_enabled"
       | "player_career_enabled"
       | "chemistry_enabled",
@@ -413,6 +415,11 @@ export default function AdminGamesPage() {
           {field("career_tenure_minutes_per_point", "Клубный стаж: минут за +1")}
           {field("career_tenure_max", "Клубный стаж: максимум")}
           {field("career_division_club_count", "Клубов в каталоге на дивизион")}
+          <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">Live-матч, достижения, дайджест</p>
+          {toggle("career_live_enabled", "Live-матч: перерыв для указаний")}
+          {field("career_halftime_minutes", "Перерыв: минут до второго тайма")}
+          {field("career_achievement_reward", "Награда за достижение, монет")}
+          {toggle("career_digest_enabled", "Недельный дайджест в Telegram")}
           {field("career_familiarity_step_tenths", "Сыгранность за матч, десятые %")}
           {field("career_familiarity_max_tenths", "Потолок сыгранности, десятые %")}
           {field("career_familiarity_keep_pct", "Сохраняется при смене схемы, %")}

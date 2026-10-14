@@ -283,6 +283,10 @@ class GameConfigOut(BaseModel):
     career_tenure_minutes_per_point: int = 900
     career_tenure_max: int = 2
     career_division_club_count: int = 10
+    career_live_enabled: bool = True
+    career_halftime_minutes: int = 10
+    career_achievement_reward: int = 150
+    career_digest_enabled: bool = True
     career_familiarity_step_tenths: int = 20
     career_familiarity_max_tenths: int = 90
     career_familiarity_keep_pct: int = 50
@@ -592,6 +596,10 @@ class GameConfigUpdate(BaseModel):
     career_tenure_minutes_per_point: Optional[int] = Field(default=None, ge=90, le=100000)
     career_tenure_max: Optional[int] = Field(default=None, ge=0, le=10)
     career_division_club_count: Optional[int] = Field(default=None, ge=7, le=40)
+    career_live_enabled: Optional[bool] = None
+    career_halftime_minutes: Optional[int] = Field(default=None, ge=3, le=120)
+    career_achievement_reward: Optional[int] = Field(default=None, ge=0, le=100000)
+    career_digest_enabled: Optional[bool] = None
     career_familiarity_step_tenths: Optional[int] = Field(default=None, ge=0, le=50)
     career_familiarity_max_tenths: Optional[int] = Field(default=None, ge=0, le=150)
     career_familiarity_keep_pct: Optional[int] = Field(default=None, ge=0, le=100)

@@ -97,6 +97,13 @@ async def resolve_career_rounds(slot_key: str | None = None, db: AsyncSession = 
     return SimulateRoundResult(matches_simulated=total)
 
 
+@router.post("/career/digest", response_model=PlayerTournamentReminderResult)
+async def career_digest(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Called by the bot at the career slots: the weekly «итоги недели»,
+    at most once per ISO week per coach (later fires are no-ops)."""
+    return PlayerTournamentReminderResult(users_notified=await career_service.send_weekly_digests(db))
+
+
 @router.post("/clubs/league/settle", response_model=ClubLeagueSettleResult)
 async def settle_club_league(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
     """Called by the bot at its career slots: pays out last week's «Лига

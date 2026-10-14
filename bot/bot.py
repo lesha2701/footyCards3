@@ -12,7 +12,13 @@ from handlers import admin as admin_handlers
 from handlers import chat_pack as chat_pack_handlers
 from handlers import payments as payments_handlers
 from handlers import user as user_handlers
-from services.career_scheduler import run_career_reminder_loop, run_career_round_loop, run_club_league_loop
+from services.career_scheduler import (
+    run_career_digest_loop,
+    run_career_live_loop,
+    run_career_reminder_loop,
+    run_career_round_loop,
+    run_club_league_loop,
+)
 from services.daily_reminder import run_daily_reward_reminder
 from services.free_pack_notifier import run_free_pack_notifier
 from services.magnate_scheduler import run_magnate_sweep_loop
@@ -61,6 +67,8 @@ async def run_polling() -> None:
         asyncio.create_task(run_player_tournament_reminder_loop()),
         asyncio.create_task(run_career_round_loop()),
         asyncio.create_task(run_career_reminder_loop()),
+        asyncio.create_task(run_career_live_loop()),
+        asyncio.create_task(run_career_digest_loop()),
         asyncio.create_task(run_club_league_loop()),
         asyncio.create_task(run_magnate_sweep_loop()),
     ]
@@ -96,6 +104,8 @@ async def run_webhook() -> None:
     asyncio.create_task(run_player_tournament_reminder_loop())
     asyncio.create_task(run_career_round_loop())
     asyncio.create_task(run_career_reminder_loop())
+    asyncio.create_task(run_career_live_loop())
+    asyncio.create_task(run_career_digest_loop())
     asyncio.create_task(run_club_league_loop())
     asyncio.create_task(run_magnate_sweep_loop())
 

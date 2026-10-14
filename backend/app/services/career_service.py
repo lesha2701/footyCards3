@@ -10,13 +10,14 @@ round is never played twice. Matches use the player-tournament engine
 (tournament_match_engine + club_tactical_matchup_service), including card
 skills. All economy numbers come from GameConfig.career_*.
 """
+import contextlib
 import copy
 import random
 from datetime import datetime, time, timedelta, timezone
 from types import SimpleNamespace
 from typing import Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
@@ -29,6 +30,7 @@ from app.models.enums import NotificationType, Position, Rarity, TransactionType
 from app.models.player import Player
 from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.user import User
+from app.services import career_achievements_service as achievements
 from app.services import career_league_service as league_service
 from app.services import career_tactics_service as tactics
 from app.services import chemistry_service
@@ -166,6 +168,7 @@ def _profile_out(profile: CareerProfile, config) -> dict:
         "division": profile.division, "reputation": profile.reputation, **{f"rep_{k}": v for k, v in reputation_level(profile.reputation, config).items()},
         "seasons_played": profile.seasons_played, "titles": profile.titles, "promotions": profile.promotions,
         "objectives_met": profile.objectives_met,
+        "achievements": achievements.achievements_out(profile),
     }
 
 
@@ -690,13 +693,33 @@ def camp_options(config) -> list[dict]:
     return [{"code": code, "label": label, "hint": hint} for code, (label, hint) in CAMPS.items()]
 
 
+def _offseason_of(state: dict, team_index: int) -> dict:
+    """This team's off-season record: per team since friend leagues carry
+    over (state["offseason"]["teams"]), the whole record before that."""
+    off = state.get("offseason") or {}
+    if not off:
+        return {}
+    teams = off.get("teams")
+    if teams is None:
+        return off
+    mine = teams.get(str(team_index))
+    return {**{k: v for k, v in off.items() if k != "teams"}, **mine} if mine else {}
+
+
+def _friendly_of(state: dict, team_index: int) -> Optional[dict]:
+    friendlies = state.get("friendlies")
+    if friendlies is not None:
+        return friendlies.get(str(team_index))
+    return state.get("friendly") if team_index == 0 else None
+
+
 def _offseason_familiarity(part: CareerParticipant, state: dict, config) -> None:
     """Familiarity at the start of a season that follows another: the core
     (cards kept from last season's squad) carries core_keep_pct of last
     season's familiarity if the formation is kept — with a «Сплочение» camp
     even when the core is smaller than core_min — plus the tactical camp's
     bonus."""
-    off = state.get("offseason") or {}
+    off = _offseason_of(state, part.team_index)
     if not off:
         return
     core = len(set(off.get("prev_squad") or []) & set(part.squad_card_ids or []))
@@ -728,61 +751,79 @@ def _next_squad(prev: list[int], cards: list, formation: str, size: int) -> list
     return kept
 
 
-async def _create_next_season(db: AsyncSession, part: CareerParticipant, prev: CareerSeason, config, now: datetime) -> None:
+async def _create_next_season(
+    db: AsyncSession, parts: list[CareerParticipant], prev: CareerSeason, config, now: datetime,
+) -> None:
     """Right after a season ends: the next one, first round the next day.
     A coach who hasn't opened the career for career_inactive_days isn't
-    renewed and drops a division instead."""
+    renewed and drops a division instead. Two friends who played together
+    keep their league when both are active and land in the same division;
+    otherwise each gets a season of their own."""
     if not config.career_offseason_auto or not config.career_enabled:
         return
-    profile = await get_profile(db, part.user_id, config)
     cutoff = now - timedelta(days=int(config.career_inactive_days))
-    if profile.last_active_at is None or ensure_aware(profile.last_active_at) < cutoff:
-        profile.division = min(division_count(config), profile.division + 1)
-        await notify(
-            db, part.user_id, NotificationType.career_season_finished, "Карьера на паузе",
-            f"Тебя давно не было — новый сезон не начат, клуб опустился в дивизион «{division_name(profile.division, config)}». "
-            "Загляни в карьеру, чтобы начать снова.",
-            related_object_type="career_season", related_object_id=prev.id,
+    ready = []
+    for part in sorted(parts, key=lambda p: p.team_index):
+        profile = await get_profile(db, part.user_id, config)
+        if profile.last_active_at is None or ensure_aware(profile.last_active_at) < cutoff:
+            profile.division = min(division_count(config), profile.division + 1)
+            await notify(
+                db, part.user_id, NotificationType.career_season_finished, "Карьера на паузе",
+                f"Тебя давно не было — новый сезон не начат, клуб опустился в дивизион «{division_name(profile.division, config)}». "
+                "Загляни в карьеру, чтобы начать снова.",
+                related_object_type="career_season", related_object_id=prev.id,
+            )
+            continue
+        if await _current_participation(db, part.user_id):
+            continue
+        cards = await _career_cards(db, part.user_id, config)
+        try:
+            squad = _next_squad(list(part.squad_card_ids or []), cards, part.formation, int(config.career_squad_size))
+        except ConflictError:
+            continue  # not enough cards for a team any more
+        ready.append((part, profile, squad))
+    together = len(ready) == 2 and ready[0][1].division == ready[1][1].division
+    for group in ([ready] if together else [[r] for r in ready]):
+        division = group[0][1].division
+        season = CareerSeason(
+            difficulty=division_bot_level(division, config), division=division, creator_id=group[0][0].user_id,
+            status="pending", state={},
         )
-        return
-    if await _current_participation(db, part.user_id):
-        return
-    cards = await _career_cards(db, part.user_id, config)
-    try:
-        squad = _next_squad(list(part.squad_card_ids or []), cards, part.formation, int(config.career_squad_size))
-    except ConflictError:
-        return  # not enough cards for a team any more
-    division = profile.division
-    season = CareerSeason(
-        difficulty=division_bot_level(division, config), division=division, creator_id=part.user_id, status="pending",
-        state={},
-    )
-    lineup = {code: cid for code, cid in (part.lineup or {}).items() if cid in squad} or None
-    new_part = CareerParticipant(
-        user_id=part.user_id, team_index=0, status="accepted", squad_card_ids=squad, division=division,
-        ambition=DEFAULT_AMBITION, formation=part.formation, mentality=part.mentality, playstyle=part.playstyle,
-        tactic=part.tactic, set_pieces=part.set_pieces, match_plan=part.match_plan, lineup=lineup,
-        training=part.training,
-    )
-    season.participants.append(new_part)
-    db.add(season)
-    await db.flush()
-    await _activate(db, season, now, config)
-    state = dict(season.state)
-    state["offseason"] = {
-        "prev_season_id": prev.id, "prev_squad": list(part.squad_card_ids or []),
-        "prev_familiarity": int(part.familiarity or 0), "prev_formation": part.formation,
-        "prev_tactic": _my_tactic(part),
-    }
-    season.state = state
-    _offseason_familiarity(new_part, state, config)
-    first = datetime.fromisoformat(state["schedule"][0])
-    await notify(
-        db, part.user_id, NotificationType.career_invite, "Межсезонье: новый сезон уже ждёт",
-        f"Первый тур — {first.astimezone(app_timezone()).strftime('%d.%m в %H:%M')}. До старта можно обновить заявку, "
-        "выбрать сборы и цель руководства, сыграть товарищеский матч.",
-        related_object_type="career_season", related_object_id=season.id,
-    )
+        new_parts = []
+        for team_index, (part, _profile, squad) in enumerate(group):
+            lineup = {code: cid for code, cid in (part.lineup or {}).items() if cid in squad} or None
+            new_part = CareerParticipant(
+                user_id=part.user_id, team_index=team_index, status="accepted", squad_card_ids=squad, division=division,
+                ambition=DEFAULT_AMBITION, formation=part.formation, mentality=part.mentality, playstyle=part.playstyle,
+                tactic=part.tactic, set_pieces=part.set_pieces, match_plan=part.match_plan, lineup=lineup,
+                training=part.training, roles=part.roles,
+            )
+            season.participants.append(new_part)
+            new_parts.append((part, new_part))
+        db.add(season)
+        await db.flush()
+        await _activate(db, season, now, config)
+        state = dict(season.state)
+        state["offseason"] = {"prev_season_id": prev.id, "teams": {
+            str(new.team_index): {
+                "prev_squad": list(old.squad_card_ids or []), "prev_familiarity": int(old.familiarity or 0),
+                "prev_formation": old.formation, "prev_tactic": _my_tactic(old),
+            }
+            for old, new in new_parts
+        }}
+        season.state = state
+        first = datetime.fromisoformat(state["schedule"][0])
+        names = {p.user_id: _team_name(await db.get(User, p.user_id)) for _, p in new_parts}
+        for _, new_part in new_parts:
+            _offseason_familiarity(new_part, state, config)
+            friend = next((names[p.user_id] for _, p in new_parts if p.user_id != new_part.user_id), None)
+            await notify(
+                db, new_part.user_id, NotificationType.career_invite, "Межсезонье: новый сезон уже ждёт",
+                (f"Ваша лига с «{friend}» продолжается. " if friend else "")
+                + f"Первый тур — {first.astimezone(app_timezone()).strftime('%d.%m в %H:%M')}. До старта можно "
+                "обновить заявку, выбрать сборы и цель руководства, сыграть товарищеский матч.",
+                related_object_type="career_season", related_object_id=season.id,
+            )
 
 
 async def _editable_offseason(db: AsyncSession, user: User) -> tuple[CareerParticipant, CareerSeason]:
@@ -837,7 +878,7 @@ async def play_friendly(db: AsyncSession, user: User) -> None:
     config = await get_config(db)
     part, season = await _editable_offseason(db, user)
     state = copy.deepcopy(season.state or {})
-    if state.get("friendly"):
+    if _friendly_of(state, part.team_index):
         raise ConflictError("Товарищеский матч уже сыгран")
     league_ids = {t.get("club_id") for t in state.get("teams") or []}
     pool = (await db.execute(
@@ -862,7 +903,7 @@ async def play_friendly(db: AsyncSession, user: User) -> None:
     match = tournament_match_engine.simulate_match_controlled(
         tactics.CareerMatchController(runner, other), config, me_team["name"], bot["name"], tracker=tracker,
     )
-    state["friendly"] = {
+    state.setdefault("friendlies", {})[str(part.team_index)] = {
         "opponent": bot["name"], "home_score": match.score_a, "away_score": match.score_b, "events": match.event_log,
         "analysis": tactics.build_analysis(match.event_log, tracker, "a", runner, other),
     }
@@ -876,15 +917,17 @@ async def _offseason_out(db: AsyncSession, season: CareerSeason, me: CareerParti
     first round: last season's result and summary, the core, camps, the
     friendly match."""
     state = season.state or {}
-    off = state.get("offseason")
+    off = _offseason_of(state, me.team_index)
     if not off or season.rounds_played > 0 or me.status != "accepted":
         return None
     prev = await db.get(CareerSeason, off.get("prev_season_id"))
     prev_part = next((p for p in prev.participants if p.user_id == me.user_id), None) if prev else None
     cards = {c.id: c for c in await _career_cards(db, me.user_id)}
     names = {cid: c.player.display_name for cid, c in cards.items()}
-    friendly = state.get("friendly")
+    friendly = _friendly_of(state, me.team_index)
+    friend = next((p for p in season.participants if p.user_id != me.user_id and p.status == "accepted"), None)
     return {
+        "friend_league": friend is not None,
         "prev_season_id": prev.id if prev else None,
         "prev_place": prev_part.final_place if prev_part else None,
         "prev_division": _division_info(prev_part.division, config) if prev_part and prev_part.division else None,
@@ -927,10 +970,10 @@ async def friendly_events(db: AsyncSession, user: User, season_id: int) -> dict:
     season = await db.get(CareerSeason, season_id)
     if season is None or not any(p.user_id == user.id for p in season.participants):
         raise NotFoundError("Матч не найден")
-    friendly = (season.state or {}).get("friendly")
+    me = next(p for p in season.participants if p.user_id == user.id)
+    friendly = _friendly_of(season.state or {}, me.team_index)
     if not friendly:
         raise NotFoundError("Товарищеский матч ещё не сыгран")
-    me = next(p for p in season.participants if p.user_id == user.id)
     return {
         "home_name": season.state["teams"][me.team_index]["name"], "away_name": friendly["opponent"],
         "home_score": friendly["home_score"], "away_score": friendly["away_score"], "events": friendly["events"],
@@ -1080,6 +1123,133 @@ async def set_plan(
     except tactics.PlanError as exc:
         raise ConflictError(str(exc)) from exc
     await db.commit()
+
+
+async def set_roles(db: AsyncSession, user: User, roles: Optional[dict], round_index: Optional[int] = None) -> None:
+    """Player roles per line (winger / pivot / full-backs) for the coming rounds."""
+    part = await _editable_participation(db, user, round_index)
+    season = await db.get(CareerSeason, part.season_id)
+    if _tactics_version(season.state) < tactics.TACTICS_VERSION:
+        raise ConflictError("Роли игроков доступны с нового сезона")
+    try:
+        part.roles = tactics.clean_roles(roles) or None
+    except tactics.TacticError as exc:
+        raise ConflictError(str(exc)) from exc
+    await db.commit()
+
+
+async def set_marking(db: AsyncSession, user: User, marker_card_id: Optional[int], round_index: Optional[int] = None) -> None:
+    """Man-marking of the next opponent's star (scouting) by one of my
+    outfield players, for that round only; None clears it."""
+    config = await get_config(db)
+    part = await _editable_participation(db, user, round_index)
+    season = await db.get(CareerSeason, part.season_id)
+    if _tactics_version(season.state) < tactics.TACTICS_VERSION:
+        raise ConflictError("Персональная опека доступна с нового сезона")
+    if marker_card_id is None:
+        part.marking = None
+        await db.commit()
+        return
+    star = (_scouting(season, part, config) or {}).get("star")
+    if not star:
+        raise ConflictError("Звезда соперника неизвестна — опеку назначить нельзя")
+    cards = {c.id: c for c in await _career_cards(db, user.id, config)}
+    card = cards.get(marker_card_id)
+    if card is None or marker_card_id not in _squad_ids(part, cards) or not _usable(card):
+        raise ConflictError("Опекать может только игрок заявки")
+    if card.player.position == Position.GK:
+        raise ConflictError("Вратарь не может опекать игрока")
+    part.marking = {"round": season.rounds_played, "marker": marker_card_id, "target": star["player_id"],
+                    "target_name": star["name"]}
+    await db.commit()
+
+
+async def set_halftime(db: AsyncSession, user: User, orders: dict) -> None:
+    """Half-time orders in the live match centre: until the second half
+    starts, replaces any earlier orders for that match."""
+    config = await get_config(db)
+    part = await _current_participation(db, user.id)
+    if part is None or part.status != "accepted":
+        raise NotFoundError("Нет активного сезона")
+    await resolve_due(db, part.season_id)
+    season = await _lock_season(db, part.season_id)
+    live = (season.state or {}).get("live") or {}
+    me = next(p for p in season.participants if p.user_id == user.id)
+    rec = next((m for m in (live.get("matches") or {}).values() if me.team_index in (m["home"], m["away"])), None)
+    if not live or rec is None or datetime.fromisoformat(live["second_half_at"]) <= datetime.now(timezone.utc):
+        raise ConflictError("Перерыв уже закончился", details={"code": "halftime_over"})
+    side = rec["sides"][str(me.team_index)]
+    try:
+        clean = tactics.clean_halftime(
+            orders, {x["card_id"] for x in side["on"]}, {x["card_id"] for x in side["bench"]},
+            max(0, int(config.career_max_substitutions) - int(side.get("subs_used") or 0)),
+        )
+    except tactics.PlanError as exc:
+        raise ConflictError(str(exc)) from exc
+    state = copy.deepcopy(season.state)
+    state["live"].setdefault("orders", {})[str(me.team_index)] = clean
+    season.state = state
+    flag_modified(season, "state")
+    await db.commit()
+
+
+def _live_out(season: CareerSeason, me: CareerParticipant, by_id: dict, config) -> Optional[dict]:
+    """My match in the live match centre (first half played, break running)."""
+    state = season.state or {}
+    live = state.get("live") or {}
+    rec = next((m for m in (live.get("matches") or {}).values() if me.team_index in (m["home"], m["away"])), None)
+    if rec is None:
+        return None
+    teams = state.get("teams") or []
+    side = rec["sides"].get(str(me.team_index)) or {}
+
+    def player(entry: dict) -> dict:
+        card = by_id.get(entry["card_id"])
+        return {**entry, "name": card.player.display_name if card else "Игрок",
+                "position": card.player.position.value if card else None,
+                "rating": _effective(card) if card else None}
+
+    return {
+        "round": live["round"], "second_half_at": live["second_half_at"],
+        "home": rec["home"], "away": rec["away"],
+        "home_name": teams[rec["home"]]["name"], "away_name": teams[rec["away"]]["name"],
+        "hs": rec["hs"], "as": rec["as"], "events": rec["events"],
+        "my_side": "a" if rec["home"] == me.team_index else "b",
+        "on": [player(x) for x in side.get("on") or []], "bench": [player(x) for x in side.get("bench") or []],
+        "subs_left": max(0, int(config.career_max_substitutions) - int(side.get("subs_used") or 0)),
+        "mentality": side.get("mentality"), "tactic": side.get("tactic"),
+        "orders": (live.get("orders") or {}).get(str(me.team_index)),
+    }
+
+
+def _plan_hints(part: CareerParticipant, xi: list, config, scouting: Optional[dict]) -> list[dict]:
+    """What the coach could still add to the plan for the next match."""
+    plan = part.match_plan or {}
+    subs, rules = plan.get("subs") or [], plan.get("rules") or []
+    fresh = tactics.tuning_of(config)["sub_fresh"]
+    hints = []
+    tired = [card.player.display_name for card, _ in xi if _condition(part, card.id)["fatigue"] >= 70]
+    if tired and len(subs) < len(tired):
+        hints.append({"code": "tired", "text": f"Усталость 70+: {', '.join(tired[:4])}"
+                      f"{' и др.' if len(tired) > 4 else ''}. Добавь замены: свежий игрок получает +{fresh} к рейтингу."})
+    elif not subs:
+        hints.append({"code": "no_subs", "text": f"В плане нет замен. К концу матча основа устаёт, "
+                      f"а вышедший со скамейки получает +{fresh} к рейтингу."})
+    if not any(r.get("score") == "behind" for r in rules):
+        hints.append({"code": "no_behind_rule", "text": "Нет указания на случай, если проигрываем — "
+                      "например, атакующий настрой с 60-й минуты."})
+    star = (scouting or {}).get("star")
+    if star and not ((part.marking or {}).get("round") == (scouting or {}).get("round_index")):
+        hints.append({"code": "star", "text": f"У соперника звезда — {star['name']} ({star['rating']}). "
+                      "Можно назначить персональную опеку."})
+    tactic, roles = _my_tactic(part), part.roles or {}
+    has_wingers = any(s.ideal_position.value in tactics.ROLE_GROUPS["winger"]["positions"]
+                      for s in get_formation_slots(part.formation))
+    if has_wingers and "winger" not in roles and tactic.get("direction") in ("wings", "center"):
+        role = "crosser" if tactic["direction"] == "wings" else "inside"
+        hints.append({"code": "roles", "text": f"Атака через {'фланги' if role == 'crosser' else 'центр'}: "
+                      f"дай крайним роль «{tactics.ROLE_LABELS['winger'][role]}»."})
+    return hints
 
 
 # --- playing rounds ------------------------------------------------------------
@@ -1242,19 +1412,70 @@ def _tactics_version(state: dict) -> int:
     return int((state or {}).get("tactics_version") or 0)
 
 
+def _bot_roles(tactic: dict) -> dict:
+    """Roles a bot coach picks to fit its own tactic."""
+    roles = {}
+    if tactic.get("direction") == "wings":
+        roles["winger"], roles["fullback"] = "crosser", "attacking"
+    elif tactic.get("direction") == "center":
+        roles["winger"] = "inside"
+    if tactic.get("block") == "low":
+        roles["pivot"] = "destroyer"
+        if tactic.get("direction") != "wings":
+            roles["fullback"] = "holding"
+    elif tactic.get("buildup") == "short":
+        roles["pivot"] = "playmaker"
+    return roles
+
+
 def _bot_runner(team: dict, label: str, round_index: int, config, chem_rules, choice: dict):
     on_pitch = [tactics.LivePlayer(card=c, base_rating=c.player.rating, pre_fatigue=0, slot=slot)
                 for c, slot in _bot_cards(team, round_index, config)]
     return tactics.CareerSideRunner(
         label, team["name"], team["formation"], team["mentality"], choice["tactic"], on_pitch, [], config,
         familiarity=choice["familiarity"], plan=choice["plan"], chem_rules=chem_rules,
-        set_pieces=team.get("set_pieces"),
+        set_pieces=team.get("set_pieces"), roles=_bot_roles(choice["tactic"]),
     )
+
+
+def _star(players: list) -> Optional[tactics.LivePlayer]:
+    """The best outfield player of a side (the one worth man-marking)."""
+    outfield = [p for p in players if p.slot is not None and p.slot.category != "GK"]
+    return max(outfield, key=lambda p: (p.base_rating, -p.card.id)) if outfield else None
+
+
+def _bot_marking(bot: tactics.CareerSideRunner, human: tactics.CareerSideRunner) -> Optional[dict]:
+    """A «Легенда» bot man-marks the human's best player with its best
+    defensive midfielder or centre-back."""
+    star = _star(human.on_pitch)
+    markers = [p for p in bot.on_pitch if p.slot.ideal_position.value in ("CDM", "CB")]
+    if star is None or not markers:
+        return None
+    marker = max(markers, key=lambda p: (p.base_rating, -p.card.id))
+    return {"marker": marker.card.id, "target": star.card.player_id}
+
+
+def _match_seed(season_id: int, round_index: int, match_index: int) -> int:
+    return season_id * 1_000_003 + round_index * 1_009 + match_index * 31 + 7
+
+
+@contextlib.contextmanager
+def _seeded(seed: int):
+    """Runs a career match on a fixed seed (the live match centre replays
+    the first half exactly when the second half is played) without making
+    the process-wide RNG predictable for anything else."""
+    saved = random.getstate()
+    random.seed(seed)
+    try:
+        yield
+    finally:
+        random.setstate(saved)
 
 
 def _human_runner(
     part: CareerParticipant, cards: list, config, chem_rules, label: str, team_name: str, *,
     avail_round: int, rotate: bool = False, training: Optional[str] = None, profile=None,
+    marking: Optional[dict] = None,
 ):
     """The human side for a match: XI (holes filled out of position), bench,
     pre-match fatigue / form, club tenure, familiarity and the plan.
@@ -1290,14 +1511,18 @@ def _human_runner(
         label, team_name, part.formation, part.mentality, _my_tactic(part),
         [live(c, slot) for c, slot in pairs], [live(c) for c in bench], config,
         familiarity=familiarity, plan=copy.deepcopy(part.match_plan), chem_rules=chem_rules,
-        set_pieces=part.set_pieces, training=training,
+        set_pieces=part.set_pieces, training=training, roles=part.roles, marking=marking,
         boost=tr["opponent_boost"] if training == "opponent" else 1.0,
         set_piece_boost=tr["set_piece_boost"] if training == "set_pieces" else 1.0,
     )
     return runner, pairs, base_familiarity
 
 
-async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, config) -> None:
+async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, config, live: bool = False) -> None:
+    """Plays a round. live=True (live match centre) only plays the first
+    half of the matches with a human, stores it in state["live"] and
+    changes nothing else; the real pass later replays them on the same
+    seeds with the half-time orders applied."""
     state = copy.deepcopy(season.state)
     teams = state["teams"]
     humans = {p.team_index: p for p in season.participants if p.status in ("accepted", "left")}
@@ -1336,6 +1561,10 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         pairs = resolve_lineup(part, {c.id: c for c in cards}, round_index, [c for c in cards if _usable(c)])
         played[team_index] = {c.id for c, _ in pairs}
         return _human_side(part, pairs, config)
+
+    live_state = (season.state or {}).get("live") or {}
+    orders = (live_state.get("orders") or {}) if live_state.get("round") == round_index else {}
+    saved_conditions = {p.id: copy.deepcopy(p.condition) for p in humans.values()} if live else {}
 
     async def runner_for(team_index: int, label: str, opponent_index: int, cup: bool = False):
         team = _cup_team(state, team_index)
@@ -1383,27 +1612,41 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             avail_round=round_index + 1 if cup else round_index,
             rotate=cup and bool(((state.get("cup") or {}).get("rotation") or {}).get(str(team_index))),
             training=training, profile=profiles.get(team_index),
+            marking=part.marking if not cup and (part.marking or {}).get("round") == round_index else None,
         )
         if runner is None:
             return None  # fewer than 11 fit players in the whole collection
+        if not cup:
+            runner.halftime = orders.get(str(team_index))
         (cup_played if cup else played)[team_index] = {c.id for c, _ in pairs}
         if not cup:
             used_familiarity[team_index] = base_familiarity
         return runner
 
     results = []
-    for home, away in state["fixtures"][round_index]:
+    live_matches: dict = {}
+    for match_index, (home, away) in enumerate(state["fixtures"][round_index]):
         with_human = bool(teams[home].get("user_id") or teams[away].get("user_id"))
+        if live and not with_human:
+            continue
         events = None
         extra: dict = {}
         if v1:
             run_h, run_a = await runner_for(home, "a", away), await runner_for(away, "b", home)
             if run_h and run_a:
+                if season.difficulty == "legend":
+                    for bot, human, bot_index in ((run_h, run_a, home), (run_a, run_h, away)):
+                        if teams[bot_index].get("user_id") is None and teams[away if bot is run_h else home].get("user_id"):
+                            bot.marking = _bot_marking(bot, human)
                 tracker: dict = {}
-                match = tournament_match_engine.simulate_match_controlled(
-                    tactics.CareerMatchController(run_h, run_a), config, teams[home]["name"], teams[away]["name"],
-                    tracker=tracker,
-                )
+                with _seeded(_match_seed(season.id, round_index, match_index)):
+                    match = tournament_match_engine.simulate_match_controlled(
+                        tactics.CareerMatchController(run_h, run_a), config, teams[home]["name"], teams[away]["name"],
+                        tracker=tracker,
+                    )
+                if live:
+                    live_matches[str(match_index)] = _live_record(match, run_h, run_a, home, away)
+                    continue
                 hs, as_ = match.score_a, match.score_b
                 extra["tactics"] = {}
                 for index, runner in ((home, run_h), (away, run_a)):
@@ -1440,6 +1683,32 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             else:
                 hs, as_ = (0, 3) if not side_h else (3, 0)
         results.append({"home": home, "away": away, "hs": hs, "as": as_, "events": events, **extra})
+    if live:
+        for part in humans.values():
+            part.condition = saved_conditions.get(part.id, part.condition)
+        if not live_matches:
+            return
+        at = _round_at(season, round_index)
+        second_half = at + timedelta(minutes=int(config.career_halftime_minutes))
+        fresh = copy.deepcopy(season.state)
+        fresh["live"] = {"round": round_index, "second_half_at": second_half.isoformat(), "matches": live_matches,
+                         "orders": {}}
+        season.state = fresh
+        flag_modified(season, "state")
+        for team_index, part in humans.items():
+            if part.status != "accepted":
+                continue
+            rec = next((m for m in live_matches.values() if team_index in (m["home"], m["away"])), None)
+            if rec is None:
+                continue
+            own, opp = (rec["hs"], rec["as"]) if rec["home"] == team_index else (rec["as"], rec["hs"])
+            await notify(
+                db, part.user_id, NotificationType.career_round_result, f"Карьера, тур {round_index + 1}: перерыв {own}:{opp}",
+                f"Первый тайм окончен. {int(config.career_halftime_minutes)} мин на указания: замены, настрой, тактика.",
+                related_object_type="career_season", related_object_id=season.id,
+            )
+        return
+    state.pop("live", None)
     state["results"].append(results)
 
     rng = random.Random(season.id * 104729 + round_index)
@@ -1465,6 +1734,12 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             season_minutes = state.setdefault("minutes", {}).setdefault(str(team_index), {})
             for cid, mins in minutes_by_team.get(team_index, {}).items():
                 season_minutes[str(cid)] = season_minutes.get(str(cid), 0) + mins
+        unlocked_text = ""
+        if v1 and team_index in profiles:
+            hint = (((match.get("analysis") or {}).get(str(team_index)) or {}).get("matchup") or {}).get("hint")
+            new = achievements.record_match(profiles[team_index], own, opp, events=match.get("events"),
+                                            side="a" if is_home else "b", matchup_hint=hint)
+            unlocked_text = await _grant_achievements(db, part, new, config, season.id)
         report = _after_match(
             part, played.get(team_index, set()), own, opp, round_index, config, rng, names, _squad_ids(part, own_cards),
             gains=gains,
@@ -1484,7 +1759,8 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         outcome = "Победа" if own > opp else "Ничья" if own == opp else "Поражение"
         await notify(
             db, part.user_id, NotificationType.career_round_result, f"Карьера, тур {round_index + 1}: {outcome}",
-            f"{own}:{opp} против «{opponent}»" + (f" · +{reward} монет" if reward else "") + _report_line(report),
+            f"{own}:{opp} против «{opponent}»" + (f" · +{reward} монет" if reward else "") + _report_line(report)
+            + unlocked_text,
             related_object_type="career_season", related_object_id=season.id,
         )
 
@@ -1696,10 +1972,12 @@ async def _finish(db: AsyncSession, season: CareerSeason, config) -> None:
             elif part.next_division > part.division:
                 rep += int(config.career_rep_relegation)
                 move = f"\nВылет: следующий сезон — {division_name(part.next_division, config)}"
+            objective_met = False
             if part.ambition in AMBITIONS:
                 i = AMBITIONS.index(part.ambition)
                 target = ambition_target(part.ambition, season.division or part.division, config)
                 if place <= target["place"]:
+                    objective_met = True
                     profile.objectives_met += 1
                     rep += int((config.career_ambition_rep_success or [0, 0, 0])[i])
                     bonus = base * pct // 100 * int((config.career_ambition_bonus_pct or [0, 0, 0])[i]) // 100
@@ -1713,6 +1991,14 @@ async def _finish(db: AsyncSession, season: CareerSeason, config) -> None:
             profile.division = part.next_division
             if rep:
                 move += f"\nРепутация: {'+' if rep > 0 else ''}{rep}"
+            if _tactics_version(season.state) >= tactics.TACTICS_VERSION:
+                new = achievements.record_season(
+                    profile, place=place, division=part.division, division_label=division_name(part.division, config),
+                    promoted=part.next_division < part.division, objective_met=objective_met,
+                    cup_won=(season.state.get("cup") or {}).get("winner") == part.team_index,
+                    unbeaten="L" not in _team_form_all(season.state, part.team_index), season_id=season.id,
+                )
+                move += await _grant_achievements(db, part, new, config, season.id)
         await notify(
             db, part.user_id, NotificationType.career_season_finished, f"Сезон карьеры завершён: {place} место",
             f"Награда: {coins} монет" + (" и трофей «Чемпион карьеры»" if place == 1 and trophy else "") + move,
@@ -1721,6 +2007,7 @@ async def _finish(db: AsyncSession, season: CareerSeason, config) -> None:
     season.status = "finished"
     season.finished_at = datetime.now(timezone.utc)
     if season.division is not None:
+        renewing = []
         for part in season.participants:
             if part.status != "accepted" or part.next_division is None:
                 continue
@@ -1729,7 +2016,8 @@ async def _finish(db: AsyncSession, season: CareerSeason, config) -> None:
                 profile, table, season.state.get("teams") or [], season.division, part.next_division,
                 lambda division, place: division_after(division, place, config),
             )
-            await _create_next_season(db, part, season, config, season.finished_at)
+            renewing.append(part)
+        await _create_next_season(db, renewing, season, config, season.finished_at)
 
 
 async def resolve_due(db: AsyncSession, season_id: int, now: Optional[datetime] = None) -> int:
@@ -1745,22 +2033,80 @@ async def resolve_due(db: AsyncSession, season_id: int, now: Optional[datetime] 
                 part.status = "declined"
         await _activate(db, season, now, config)
     while season.status == "active" and season.rounds_played < ROUNDS:
-        at = _round_at(season, season.rounds_played)
+        index = season.rounds_played
+        at = _round_at(season, index)
         if at is None or at > now:
             break
-        await _play_round(db, season, season.rounds_played, config)
+        if _live_applies(season, config) and now < at + timedelta(minutes=int(config.career_halftime_minutes)):
+            # Live match centre: the first half now, the second after the break.
+            if ((season.state or {}).get("live") or {}).get("round") != index:
+                await _play_round(db, season, index, config, live=True)
+            break
+        await _play_round(db, season, index, config)
         played += 1
     await db.commit()
     return played
 
 
+def _live_applies(season: CareerSeason, config) -> bool:
+    return (bool(config.career_live_enabled) and _tactics_version(season.state) >= tactics.TACTICS_VERSION
+            and any(p.status == "accepted" for p in season.participants))
+
+
+def _live_record(match, run_h, run_a, home: int, away: int) -> dict:
+    """First half of a live match: score and events up to HALF_TIME and each
+    human-relevant side as it went into the break."""
+    first = [e for e in match.event_log if (e.get("minute") or 0) <= tactics.HALF_TIME]
+    goals = {"a": 0, "b": 0}
+    for e in first:
+        if e.get("event_type") == "goal" and e.get("team") in goals:
+            goals[e["team"]] += 1
+    sides = {}
+    for index, runner, own, opp in ((home, run_h, goals["a"], goals["b"]), (away, run_a, goals["b"], goals["a"])):
+        if runner.snapshot is None:
+            runner._take_snapshot(own, opp)
+        sides[str(index)] = runner.snapshot
+    return {"home": home, "away": away, "hs": goals["a"], "as": goals["b"], "events": first, "sides": sides}
+
+
 REMINDER_WINDOW = timedelta(minutes=60)
+
+
+async def _reminder_notes(db: AsyncSession, season: CareerSeason, part: CareerParticipant, index: int) -> list[str]:
+    """What to check before this round: holes in the XI, a cup tie the same
+    evening without rotation, off-season choices still open."""
+    notes = []
+    state = season.state or {}
+    cards = await _career_cards(db, part.user_id)
+    by_id = {c.id: c for c in cards}
+    xi = resolve_lineup(part, by_id, index, [c for c in cards if _usable(c)],
+                        fill_any_position=_tactics_version(state) >= tactics.TACTICS_VERSION)
+    holes = [w for w in _squad_warnings(part, by_id, index, xi) if w["level"] == "critical"]
+    if holes:
+        notes.append(f"⚠️ Дыры в составе: {len(holes)} — кто-то сыграет не по амплуа.")
+    out_xi = [by_id[cid].player.display_name for cid in (part.lineup or {}).values()
+              if cid in by_id and _is_out(part, cid, index)]
+    if out_xi:
+        notes.append(f"🚑 Не сыграют: {', '.join(out_xi[:3])} — замени в составе.")
+    cup = state.get("cup") or {}
+    if cup and index in CUP_AFTER_ROUNDS and cup.get("winner") is None:
+        k = CUP_AFTER_ROUNDS.index(index)
+        ties = (cup.get("rounds") or [])[k]["ties"] if k < len(cup.get("rounds") or []) else []
+        mine = any(part.team_index in tie for tie in ties)
+        if mine and not (cup.get("rotation") or {}).get(str(part.team_index)):
+            notes.append("🏆 Вечером ещё и кубок — включи ротацию, чтобы не загнать основу.")
+    if index == 0 and _offseason_of(state, part.team_index) and not part.camp:
+        notes.append("🏕 Сборы ещё не выбраны.")
+    return notes
 
 
 async def send_reminders(db: AsyncSession, now: Optional[datetime] = None) -> int:
     """"Скоро тур — проверь состав": one notification per human per round,
-    for rounds starting within REMINDER_WINDOW. The bot calls this ~30 min
-    before each slot; state["reminded"] keeps it to one per round."""
+    for rounds starting within REMINDER_WINDOW, with what needs attention
+    (holes, the cup evening, the off-season). The evening before an
+    off-season's first round: one more about the camp and squad. The bot
+    calls this ~30 min before each slot; state["reminded"] /
+    state["reminded_offseason"] keep it to one each."""
     now = now or datetime.now(timezone.utc)
     config = await get_config(db)
     if not config.career_reminders_enabled:
@@ -1771,27 +2117,134 @@ async def send_reminders(db: AsyncSession, now: Optional[datetime] = None) -> in
         season = await _lock_season(db, season_id)
         index = season.rounds_played
         at = _round_at(season, index) if season.status == "active" else None
-        reminded = list((season.state or {}).get("reminded") or [])
-        if at is None or index in reminded or not (now < at <= now + REMINDER_WINDOW):
-            await db.commit()
-            continue
-        teams = season.state["teams"]
-        minutes = max(1, round((at - now).total_seconds() / 60))
-        for part in season.participants:
-            if part.status != "accepted":
+        state = copy.deepcopy(season.state or {})
+        reminded = list(state.get("reminded") or [])
+        changed = False
+        if (at is not None and index == 0 and state.get("offseason") and not state.get("reminded_offseason")
+                and now + REMINDER_WINDOW < at <= now + OFFSEASON_REMINDER_WINDOW):
+            when = at.astimezone(app_timezone()).strftime("%d.%m в %H:%M")
+            for part in season.participants:
+                if part.status != "accepted":
+                    continue
+                await notify(
+                    db, part.user_id, NotificationType.career_reminder, "Межсезонье: скоро старт сезона",
+                    f"Первый тур — {when}. " + ("Сборы ещё не выбраны. " if not part.camp else "")
+                    + "Проверь заявку, цель руководства и сыграй товарищеский матч.",
+                    related_object_type="career_season", related_object_id=season.id,
+                )
+                sent += 1
+            state["reminded_offseason"] = True
+            changed = True
+        if at is not None and index not in reminded and now < at <= now + REMINDER_WINDOW:
+            teams = state["teams"]
+            minutes = max(1, round((at - now).total_seconds() / 60))
+            for part in season.participants:
+                if part.status != "accepted":
+                    continue
+                match = next(m for m in state["fixtures"][index] if part.team_index in m)
+                opponent = teams[match[1] if match[0] == part.team_index else match[0]]["name"]
+                notes = await _reminder_notes(db, season, part, index)
+                await notify(
+                    db, part.user_id, NotificationType.career_reminder, f"Карьера: тур {index + 1} через {minutes} мин",
+                    f"Соперник — «{opponent}». " + (" ".join(notes) if notes else
+                                                     "Проверь состав: усталость, травмы и дисквалификации."),
+                    related_object_type="career_season", related_object_id=season.id,
+                )
+                sent += 1
+            state["reminded"] = reminded + [index]
+            changed = True
+        if changed:
+            season.state = state
+            flag_modified(season, "state")
+        await db.commit()
+    return sent
+
+
+OFFSEASON_REMINDER_WINDOW = timedelta(hours=20)
+
+
+def _week_key(now: datetime) -> str:
+    year, week, _ = now.astimezone(app_timezone()).isocalendar()
+    return f"{year}-W{week:02d}"
+
+
+async def _digest_for(db: AsyncSession, profile: CareerProfile, now: datetime, config) -> Optional[str]:
+    """Last 7 days of a coach's career as text, None if nothing was played."""
+    since = now - timedelta(days=7)
+    parts = (await db.execute(
+        select(CareerParticipant).join(CareerSeason, CareerSeason.id == CareerParticipant.season_id)
+        .where(CareerParticipant.user_id == profile.user_id, CareerParticipant.status == "accepted",
+               CareerSeason.status.in_(("active", "finished")), CareerSeason.created_at >= now - timedelta(days=30))
+        .options(joinedload(CareerParticipant.season))
+    )).scalars().unique().all()
+    w = d = lose = gf = ga = 0
+    scorers: dict[str, int] = {}
+    place_line = None
+    for part in parts:
+        state = part.season.state or {}
+        schedule = state.get("schedule") or []
+        for r, results in enumerate(state.get("results") or []):
+            at = datetime.fromisoformat(schedule[r]) if r < len(schedule) else None
+            if at is None or not (since <= at <= now):
                 continue
-            match = next(m for m in season.state["fixtures"][index] if part.team_index in m)
-            opponent = teams[match[1] if match[0] == part.team_index else match[0]]["name"]
-            await notify(
-                db, part.user_id, NotificationType.career_reminder, f"Карьера: тур {index + 1} через {minutes} мин",
-                f"Соперник — «{opponent}». Проверь состав: усталость, травмы и дисквалификации.",
-                related_object_type="career_season", related_object_id=season.id,
-            )
+            m = next((m for m in results if part.team_index in (m["home"], m["away"])), None)
+            if m is None:
+                continue
+            home = m["home"] == part.team_index
+            own, opp = (m["hs"], m["as"]) if home else (m["as"], m["hs"])
+            gf, ga = gf + own, ga + opp
+            w, d, lose = w + (own > opp), d + (own == opp), lose + (own < opp)
+            side = "a" if home else "b"
+            for e in m.get("events") or []:
+                if e.get("event_type") == "goal" and e.get("team") == side:
+                    name = (e.get("payload") or {}).get("shooter")
+                    if name:
+                        scorers[name] = scorers.get(name, 0) + 1
+        if part.season.status == "active" and state.get("teams"):
+            table = standings(state)
+            place = next((n + 1 for n, row in enumerate(table) if row["team_index"] == part.team_index), None)
+            if place and part.season.division is not None:
+                place_line = f"Лига: {place}-е место · {division_name(part.season.division, config)}"
+    if w + d + lose == 0:
+        return None
+    data = achievements.data_of(profile)
+    lines = [f"Матчи: {w + d + lose} · {w}В {d}Н {lose}П · голы {gf}:{ga}"]
+    if place_line:
+        lines.append(place_line)
+    if scorers:
+        name, goals = max(scorers.items(), key=lambda x: (x[1], x[0]))
+        lines.append(f"Лучший бомбардир: {name} — {goals}")
+    prev_rep = (data.get("digest") or {}).get("reputation")
+    delta = profile.reputation - prev_rep if prev_rep is not None else None
+    lines.append(f"Репутация: {profile.reputation}" + (f" ({'+' if delta >= 0 else ''}{delta})" if delta else ""))
+    fresh = [code for code, at in data["unlocked"].items() if datetime.fromisoformat(at) >= since]
+    if fresh:
+        lines.append(f"Достижения: {achievements.titles_text(fresh)}")
+    return "\n".join(lines)
+
+
+async def send_weekly_digests(db: AsyncSession, now: Optional[datetime] = None) -> int:
+    """«Неделя в карьере»: once per ISO week (the first career slot of the
+    week fires it) to every coach who played in the last 7 days."""
+    now = now or datetime.now(timezone.utc)
+    config = await get_config(db)
+    if not config.career_digest_enabled or not config.career_enabled:
+        return 0
+    week = _week_key(now)
+    profiles = (await db.execute(
+        select(CareerProfile).where(CareerProfile.last_active_at >= now - timedelta(days=30))
+    )).scalars().all()
+    sent = 0
+    for profile in profiles:
+        data = achievements.data_of(profile)
+        if (data.get("digest") or {}).get("week") == week:
+            continue
+        text = await _digest_for(db, profile, now, config)
+        data["digest"] = {"week": week, "reputation": profile.reputation}
+        profile.achievements = data
+        if text:
+            await notify(db, profile.user_id, NotificationType.career_digest, "📊 Карьера: итоги недели", text)
             sent += 1
-        state = copy.deepcopy(season.state)
-        state["reminded"] = reminded + [index]
-        season.state = state
-        flag_modified(season, "state")
         await db.commit()
     return sent
 
@@ -1883,6 +2336,7 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         "ambition": me.ambition, "ambitions": [], "training": me.training, "trainings": training_options(),
         "cup": None, "offseason": None, "summary": None,
         "set_pieces": {**tactics.DEFAULT_SET_PIECES, **(me.set_pieces or {})}, "squad_warnings": [],
+        "roles": me.roles or {}, "live": None, "plan_hints": [],
     }
     if season.division is not None:
         config = await get_config(db)
@@ -1934,6 +2388,10 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         )
         out["lineup"] = {slot.code: card.id for card, slot in xi}
         out["squad_warnings"] = _squad_warnings(me, by_id, next_round, xi)
+        if out["tactics_version"] >= tactics.TACTICS_VERSION and season.status == "active":
+            config = await get_config(db)
+            out["live"] = _live_out(season, me, by_id, config)
+            out["plan_hints"] = _plan_hints(me, xi, config, out["scouting"])
         # Chemistry of the XI that would play the next round, under the
         # season's frozen rules (tactics seasons only).
         rules = chemistry_service.rules_from_dict(state.get("chemistry_rules")) if out["tactics_version"] else None
@@ -1971,6 +2429,61 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
 
 
 FORM_MATCHES = 5
+
+
+def _team_form_all(state: dict, team_index: int) -> list[str]:
+    form = []
+    for round_results in state.get("results") or []:
+        for m in round_results:
+            if team_index in (m["home"], m["away"]):
+                own, opp = (m["hs"], m["as"]) if m["home"] == team_index else (m["as"], m["hs"])
+                form.append("W" if own > opp else "D" if own == opp else "L")
+    return form
+
+
+async def _grant_achievements(db: AsyncSession, part: CareerParticipant, codes: list[str], config, season_id: int) -> str:
+    """Coins for newly unlocked achievements (counted in the season's
+    earnings); the line for the notification."""
+    if not codes:
+        return ""
+    amount = int(config.career_achievement_reward) * len(codes)
+    credited = await _credit(db, part.user_id, amount, "Карьера: достижения", season_id) if amount else 0
+    part.coins_earned += credited
+    return f"\nДостижения: {achievements.titles_text(codes)}" + (f" · +{credited} монет" if credited else "")
+
+
+async def leaderboard(db: AsyncSession, user: User, division: Optional[int] = None, limit: int = 50) -> dict:
+    """Coaches by reputation (then titles, promotions), overall or within
+    the division their next season is played in."""
+    config = await get_config(db)
+    query = select(CareerProfile, User).join(User, User.id == CareerProfile.user_id)
+    if division is not None:
+        query = query.where(CareerProfile.division == division)
+    query = query.order_by(CareerProfile.reputation.desc(), CareerProfile.titles.desc(),
+                           CareerProfile.promotions.desc(), CareerProfile.id)
+    rows = (await db.execute(query.limit(limit))).all()
+
+    def row(n: int, profile: CareerProfile, u: User) -> dict:
+        data = achievements.data_of(profile)
+        return {
+            "rank": n, "user_id": u.id, "name": u.first_name or u.username or "Тренер",
+            "division": profile.division, "division_name": division_name(profile.division, config),
+            "reputation": profile.reputation, "level": reputation_level(profile.reputation, config)["name"],
+            "titles": profile.titles, "promotions": profile.promotions, "seasons": profile.seasons_played,
+            "trophies": len(data["trophies"]), "achievements": len(data["unlocked"]), "is_me": u.id == user.id,
+        }
+
+    out = [row(n + 1, profile, u) for n, (profile, u) in enumerate(rows)]
+    me = None
+    if not any(r["is_me"] for r in out):
+        mine = (await db.execute(select(CareerProfile).where(CareerProfile.user_id == user.id))).scalar_one_or_none()
+        if mine is not None and (division is None or mine.division == division):
+            ahead = select(func.count()).select_from(CareerProfile).where(CareerProfile.reputation > mine.reputation)
+            if division is not None:
+                ahead = ahead.where(CareerProfile.division == division)
+            me = row(int((await db.execute(ahead)).scalar_one()) + 1, mine, user)
+    return {"division": division, "rows": out, "me": me,
+            "divisions": [_division_info(d, config) for d in range(1, division_count(config) + 1)]}
 
 
 def _team_form(state: dict, team_index: int) -> list[str]:
@@ -2013,6 +2526,14 @@ def _scouting(season: CareerSeason, me: CareerParticipant, config, profile: Opti
     my_history = (state.get("played_tactics") or {}).get(str(me.team_index)) or []
     my_last = tactics.tactic_for(my_history[-1].get("tactic"), my_history[-1].get("playstyle")) if my_history else None
     adaptive = v1 and is_bot and season.difficulty in ("pro", "legend")
+    star = None
+    if v1 and is_bot and team.get("players"):
+        outfield = [(c, slot) for c, slot in _bot_cards(team, round_index, config) if slot.category != "GK"]
+        if outfield:
+            c, slot = max(outfield, key=lambda x: (x[0].player.rating, -x[0].id))
+            star = {"player_id": c.player_id, "name": c.player.display_name, "rating": c.player.rating,
+                    "position": c.player.position.value}
+    marking = me.marking if (me.marking or {}).get("round") == round_index else None
     mine = _my_tactic(me)
     threat = None
     if adaptive and my_last:
@@ -2030,6 +2551,7 @@ def _scouting(season: CareerSeason, me: CareerParticipant, config, profile: Opti
         "matchup": tactics.matchup_report(mine, their, config) if v1 and their else None,
         "win_pct": tactics.preset_win_pct(tactics.preset_of(mine), tactics.preset_of(their)) if v1 and their else None,
         "adaptive": adaptive, "my_last_tactic": my_last if adaptive else None, "threat": threat,
+        "star": star, "marking": marking, "marks_you": v1 and is_bot and season.difficulty == "legend",
     }
 
 
@@ -2058,6 +2580,12 @@ def tactics_catalog(config) -> dict:
     """Axes, values, presets and interactions for the tactics UI — the
     client never keeps its own copy of these tables."""
     return {
+        "roles": [
+            {"group": g, "label": spec["label"], "positions": list(spec["positions"]),
+             "values": [{"value": v, "label": tactics.ROLE_LABELS[g][v], "hint": tactics.ROLE_HINTS[g][v]}
+                        for v in spec["values"]]}
+            for g, spec in tactics.ROLE_GROUPS.items()
+        ],
         "axes": [{"key": axis, "label": tactics.AXIS_LABELS[axis],
                   "values": [{"value": v, "label": tactics.VALUE_LABELS[axis][v], "hint": tactics.VALUE_HINTS[axis][v]}
                              for v in values]}

@@ -128,7 +128,7 @@ DEFAULT_TUNING: dict[str, Any] = {
     "retry": {"short": 0.55, "mixed": 0.25, "direct": 0.0},
     "initiative": {"high": 1.04, "mid": 1.0, "low": 0.86, "keep": 1.08, "fast": 1.0},
     # Share of the back line available in defence (high block pushes up).
-    "pool": {"high": 0.80, "mid": 1.0, "low": 1.15},
+    "pool": {"high": 0.84, "mid": 1.0, "low": 1.15},
     # ...and right after losing the ball.
     "counter_pool": {"counterpress": 1.0, "drop": 1.2},
     "transition": {"fast": 1.5, "keep": 1.0},
@@ -138,10 +138,10 @@ DEFAULT_TUNING: dict[str, Any] = {
     # (0.3 = advance x1.3 and breakdown x0.7 for the favoured attacker), see
     # INTERACTIONS and club_tactical_matchup_service._stage1_weights.
     "shift": {
-        "press_vs_short": 0.24, "direct_behind_line": 0.26, "direct_inaccuracy": 0.06, "wings_beat_press": 0.24,
-        "low_block_center": 0.24, "low_block_crosses": 0.21, "patient_vs_low_block": 0.2,
-        "fast_counter_high_line": 0.32, "counterpress": 0.32, "counter_behind_fullbacks": 0.24,
-        "hard_tackling_wins": 0.12, "soft_tackling_jockeys": 0.10, "hard_tackle_gaps": 0.16,
+        "press_vs_short": 0.26, "direct_behind_line": 0.15, "direct_inaccuracy": 0.06, "wings_beat_press": 0.24,
+        "low_block_center": 0.24, "low_block_crosses": 0.21, "patient_vs_low_block": 0.14,
+        "fast_counter_high_line": 0.2, "counterpress": 0.26, "counter_behind_fullbacks": 0.24,
+        "center_vs_wide": 0.24, "hard_tackling_wins": 0.12, "soft_tackling_jockeys": 0.10, "hard_tackle_gaps": 0.16,
     },
     # Tackling: foul / tackle-attempt rates and post-match card odds.
     "foul": {"normal": 1.0, "hard": 1.6, "soft": 0.6},
@@ -162,6 +162,23 @@ DEFAULT_TUNING: dict[str, Any] = {
     # one, and the score above which a matchup is called an advantage.
     "counter_weight": 0.35,
     "hint_threshold": 0.05,
+    # Player roles (ROLE_GROUPS): stage-1 bias toward the attacker when the
+    # player in that role is the attacking ("att") or defending ("def")
+    # duelist, per zone ("*" = any zone).
+    "roles": {
+        "winger:crosser": {"att": {"wing_attack": 0.10, "central_attack": -0.06}},
+        "winger:inside": {"att": {"central_attack": 0.10, "wing_attack": -0.06}},
+        "pivot:destroyer": {"att": {"*": -0.06}, "def": {"central_attack": -0.12, "wing_attack": -0.04}},
+        "pivot:playmaker": {"att": {"*": 0.08}, "def": {"*": 0.06}},
+        "fullback:attacking": {"att": {"wing_attack": 0.10}, "def": {"wing_attack": 0.08}},
+        "fullback:holding": {"att": {"wing_attack": -0.06}, "def": {"wing_attack": -0.10}},
+    },
+    # Man-marking the opponent's star: his duels vs the marked side, the gap
+    # the marker leaves when another attacker draws him, the marker's own
+    # attacking duels.
+    "marking": {"star": 0.18, "gap": 0.06, "marker_attack": 0.06},
+    # Match rating bonus of a substitute (fresh legs) for the rest of the match.
+    "sub_fresh": 2,
 }
 
 # One table, three readers (engine duels, scouting, bots). sign +1 favours
@@ -184,6 +201,8 @@ INTERACTIONS: list[dict] = [
      "sign": 1, "label": "Быстрая контратака в пространство за высокой линией"},
     {"id": "counter_behind_fullbacks", "kind": "counter", "att": {"on_win": "fast"}, "def": {"direction": "wings"},
      "sign": 1, "label": "Быстрая атака в зону ушедших вперёд крайних"},
+    {"id": "center_vs_wide", "kind": "build_up", "zone": "central_attack", "att": {"direction": "center"},
+     "def": {"direction": "wings"}, "sign": 1, "label": "Атака через центр против команды, растянутой по флангам"},
     {"id": "counterpress", "kind": "counter", "att": {}, "def": {"on_loss": "counterpress"}, "sign": -1,
      "label": "Контрпрессинг гасит контратаку сразу после потери"},
     {"id": "direct_inaccuracy", "kind": "build_up", "att": {"buildup": "direct"}, "def": {}, "sign": -1,
@@ -196,6 +215,72 @@ INTERACTIONS: list[dict] = [
      "base": True, "label": "Промах в жёстком отборе оставляет дыру"},
 ]
 INTERACTION_LABELS = {ix["id"]: ix["label"] for ix in INTERACTIONS}
+
+# Player roles per line, by the slot's ideal position (a line the formation
+# doesn't have simply has no role). Effects: DEFAULT_TUNING["roles"].
+ROLE_GROUPS: dict[str, dict] = {
+    "winger": {"positions": ("LW", "RW", "LM", "RM"), "values": ("crosser", "inside"), "label": "Крайние полузащитники"},
+    "pivot": {"positions": ("CDM",), "values": ("destroyer", "playmaker"), "label": "Опорник"},
+    "fullback": {"positions": ("LB", "RB"), "values": ("attacking", "holding"), "label": "Крайние защитники"},
+}
+ROLE_LABELS = {
+    "winger": {"crosser": "Навесы с фланга", "inside": "Срезка в центр"},
+    "pivot": {"destroyer": "Разрушитель", "playmaker": "Плеймейкер"},
+    "fullback": {"attacking": "Атакующие", "holding": "Оборонительные"},
+}
+ROLE_HINTS = {
+    "winger": {
+        "crosser": "Идёт до лицевой и навешивает: сильнее в атаках флангом, слабее, если атака идёт через центр.",
+        "inside": "Смещается в центр под удар: сильнее в центральных атаках, слабее на бровке.",
+    },
+    "pivot": {
+        "destroyer": "Закрывает центр и отбирает мяч, но в атаке почти не помогает.",
+        "playmaker": "Раздаёт передачи из глубины: атаки опаснее, но в обороне он уязвим.",
+    },
+    "fullback": {
+        "attacking": "Подключается к атакам флангом, но за его спиной остаётся зона.",
+        "holding": "Остаётся сзади: надёжно закрывает фланг, в атаке почти не помогает.",
+    },
+}
+PLAYER_EFFECT_LABELS = {
+    **{f"role:{g}:{v}": f"{ROLE_GROUPS[g]['label']}: «{lbl}» в атаке" for g, vals in ROLE_LABELS.items()
+       for v, lbl in vals.items()},
+    **{f"role_def:{g}:{v}": f"{ROLE_GROUPS[g]['label']}: «{lbl}» в обороне" for g, vals in ROLE_LABELS.items()
+       for v, lbl in vals.items()},
+    "mark_star": "Персональная опека звезды",
+    "mark_gap": "Опекун отвлечён: дыра в его зоне",
+    "mark_marker_attack": "Опекун меньше помогает в атаке",
+}
+
+
+def clean_roles(raw: Any) -> dict:
+    """{group: value} for the role groups; unknown groups/values rejected."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise TacticError("Неверный формат ролей")
+    out = {}
+    for group, value in raw.items():
+        if group not in ROLE_GROUPS:
+            raise TacticError("Неизвестная роль")
+        if value is None:
+            continue
+        if value not in ROLE_GROUPS[group]["values"]:
+            raise TacticError(f"{ROLE_GROUPS[group]['label']}: неизвестная роль")
+        out[group] = value
+    return out
+
+
+def roles_by_slot(roles: Optional[dict], slots) -> dict[str, str]:
+    """slot code -> "group:value" for the slots a role applies to."""
+    out = {}
+    for slot in slots:
+        position = getattr(slot.ideal_position, "value", slot.ideal_position)
+        for group, spec in ROLE_GROUPS.items():
+            value = (roles or {}).get(group)
+            if value and position in spec["positions"]:
+                out[slot.code] = f"{group}:{value}"
+    return out
 
 
 def tuning_of(config) -> dict:
@@ -260,12 +345,22 @@ def _matches(conditions: dict, tactic: dict) -> bool:
     return all(tactic.get(axis) == value for axis, value in conditions.items())
 
 
+_IX_CACHE: dict[tuple, list[dict]] = {}
+
+
 def interactions_for(att: dict, defn: dict, kind: str, zone: Optional[str]) -> list[dict]:
-    return [
-        ix for ix in INTERACTIONS
-        if ix["kind"] == kind and (ix.get("zone") is None or zone is None or ix["zone"] == zone)
-        and _matches(ix["att"], att) and _matches(ix["def"], defn)
-    ]
+    # Called on every duel: the answer depends only on the two tactics,
+    # so it is memoised (at most a few thousand keys).
+    key = (tuple(att.get(a) for a in AXES), tuple(defn.get(a) for a in AXES), kind, zone)
+    found = _IX_CACHE.get(key)
+    if found is None:
+        found = [
+            ix for ix in INTERACTIONS
+            if ix["kind"] == kind and (ix.get("zone") is None or zone is None or ix["zone"] == zone)
+            and _matches(ix["att"], att) and _matches(ix["def"], defn)
+        ]
+        _IX_CACHE[key] = found
+    return found
 
 
 @dataclass
@@ -276,6 +371,10 @@ class TacticAxes:
     tuning: dict
     # «Разбор соперника» training: interactions in this side's favour are stronger.
     boost: float = 1.0
+    # card id -> "group:value" role of the players on the pitch.
+    roles_by_card: dict = field(default_factory=dict)
+    # {"marker": my card id, "target": their player_id} while the marker plays.
+    marking: Optional[dict] = None
 
     def zone_weights(self) -> dict[str, float]:
         none = self.tuning["recycle"][self.tactic["buildup"]]
@@ -319,6 +418,33 @@ class TacticAxes:
                 value *= self.boost if value > 0 else defender.boost
             favour_attacker += value
         return favour_attacker, tuple(ix["id"] for ix in applied)
+
+    def player_shift(self, defender: "TacticAxes", att_card: Any, def_card: Any, zone: str) -> tuple[float, tuple]:
+        """Duel-level levers on top of the axes, from the two duelists: their
+        roles and man-marking. (Stage-1 bias toward the attacker, ids.)"""
+        value, ids = 0.0, []
+        roles = self.tuning["roles"]
+        for card, axes, side, prefix in ((att_card, self, "att", "role"), (def_card, defender, "def", "role_def")):
+            role = axes.roles_by_card.get(card.id) if card is not None else None
+            if not role:
+                continue
+            effect = (roles.get(role) or {}).get(side) or {}
+            x = effect.get(zone, effect.get("*", 0.0))
+            if x:
+                value += x
+                ids.append(f"{prefix}:{role}")
+        mark = self.tuning["marking"]
+        theirs = defender.marking
+        if theirs and att_card is not None and att_card.player_id == theirs["target"]:
+            value -= mark["star"]
+            ids.append("mark_star")
+        elif theirs and def_card is not None and def_card.id == theirs["marker"]:
+            value += mark["gap"]
+            ids.append("mark_gap")
+        if self.marking and att_card is not None and att_card.id == self.marking["marker"]:
+            value -= mark["marker_attack"]
+            ids.append("mark_marker_attack")
+        return value, tuple(ids)
 
 
 # --- scouting: the same table, in expectation ------------------------------------------
@@ -366,7 +492,7 @@ def engine_fingerprint() -> str:
     interaction table, default tuning, presets). test_career_tactics fails
     when it no longer matches — rerun scripts/simulate_career_tactics.py --write."""
     payload = {
-        "interactions": INTERACTIONS, "presets": PRESETS,
+        "interactions": INTERACTIONS, "presets": PRESETS, "roles": ROLE_GROUPS,
         # Training and the scouting-hint knobs don't change simulated matches.
         "tuning": {k: v for k, v in DEFAULT_TUNING.items() if k not in ("training", "counter_weight", "hint_threshold")},
         "initiative": matchup.INITIATIVE_MULT, "sample": matchup.SAMPLE_FRACTION,
@@ -427,6 +553,41 @@ SCORE_STATES = ("behind", "level", "ahead")
 
 class PlanError(ValueError):
     pass
+
+
+HALF_TIME = 45
+
+
+def clean_halftime(raw: Any, on_ids: set[int], bench_ids: set[int], subs_left: int) -> dict:
+    """Half-time orders from the live match centre: mentality?, tactic?
+    (some axes), subs [{out: card on the pitch, in: card on the bench}]."""
+    if not isinstance(raw, dict):
+        raise PlanError("Неверный формат указаний")
+    mentality = raw.get("mentality")
+    if mentality is not None and mentality not in matchup.MENTALITIES:
+        raise PlanError("Неизвестный настрой")
+    try:
+        tactic = clean_tactic(raw.get("tactic") or {}, partial=True)
+    except TacticError as exc:
+        raise PlanError(str(exc)) from exc
+    subs_in = raw.get("subs") or []
+    if not isinstance(subs_in, list):
+        raise PlanError("Неверный формат замен")
+    if len(subs_in) > subs_left:
+        raise PlanError(f"Осталось замен: {subs_left}")
+    subs, outs, ins = [], set(), set()
+    for sub in subs_in:
+        if not isinstance(sub, dict):
+            raise PlanError("Неверный формат замены")
+        out, incoming = sub.get("out"), sub.get("in")
+        if out not in on_ids or out in outs:
+            raise PlanError("Заменить можно только игрока на поле")
+        if incoming not in bench_ids or incoming in ins:
+            raise PlanError("Выйти может только игрок со скамейки")
+        outs.add(out)
+        ins.add(incoming)
+        subs.append({"out": out, "in": incoming})
+    return {"mentality": mentality, "tactic": tactic, "subs": subs}
 
 
 def clean_plan(raw: Optional[dict], slot_codes: set[str], squad_ids: set[int], config) -> Optional[dict]:
@@ -509,6 +670,8 @@ def drop_stale_subs(plan: Optional[dict], slot_codes: set[str]) -> Optional[dict
 def _rule_active(rule: dict, minute: int, diff: int) -> bool:
     if minute < rule["from_minute"]:
         return False
+    if rule["score"] == "any":  # half-time orders (live match centre)
+        return True
     if rule["score"] == "behind":
         return diff <= -rule["margin"]
     if rule["score"] == "ahead":
@@ -604,12 +767,24 @@ class CareerSideRunner:
     boost: float = 1.0
     set_piece_boost: float = 1.0
     training: Optional[str] = None
+    # Player roles ({group: value}) and man-marking ({"marker", "target"}).
+    roles: Optional[dict] = None
+    marking: Optional[dict] = None
+    # Live match centre: orders given at half-time (clean_halftime), applied
+    # at the first phase after HALF_TIME; `snapshot` is the side as it went
+    # into the break (who is on, fatigue, subs used).
+    halftime: Optional[dict] = None
+    snapshot: Optional[dict] = None
     events_meta: list[dict] = field(default_factory=list)  # rule/sub log for the analysis
     _subs_done: set = field(default_factory=set)
     _effective: tuple = ()
     _cache_key: Any = None
     _cache: Any = None
     _minute: int = 0
+    _tactic_memo_key: Any = None
+    _tactic_memo: Any = None
+    _subs_made: int = 0
+    _halftime_done: bool = False
 
     def __post_init__(self):
         self.tactic = {**NEUTRAL_TACTIC, **self.tactic}
@@ -646,7 +821,7 @@ class CareerSideRunner:
         pitch, faster under a high block / counter-press."""
         elapsed = max(0, minute - self._minute)
         if elapsed:
-            rate = self.config.career_fatigue_per_match / 90 * TacticAxes(self.effective_tactic, self.tuning).fatigue_mult()
+            rate = self.config.career_fatigue_per_match / 90 * self._per_tactic()[0]
             for p in self.on_pitch:
                 p.gained += rate * elapsed
         self._minute = max(self._minute, minute)
@@ -655,10 +830,21 @@ class CareerSideRunner:
         value = familiarity_for(self.familiarity, None, self.tactic, self.formation, tactic, self.config)
         return value / 10
 
+    def _per_tactic(self) -> tuple[float, float]:
+        """(fatigue multiplier, familiarity %) of the effective tactic — they
+        only change with a plan instruction, not every phase."""
+        if self._tactic_memo_key != self._effective:
+            tactic = self.effective_tactic
+            self._tactic_memo = (TacticAxes(tactic, self.tuning).fatigue_mult(), self._familiarity_pct(tactic))
+            self._tactic_memo_key = self._effective
+        return self._tactic_memo
+
     def _rating(self, p: LivePlayer, minute: int, fam_pct: float) -> int:
         penalty = self.live_fatigue(p, minute) / 100 * self.config.career_fatigue_penalty_pct / 100
         base = chemistry_service.boosted_rating(p.base_rating, p.chem_bonus)
         rating = base * (1 + fam_pct / 100) * (1 - penalty) + p.form
+        if p.on_minute > 0:  # came off the bench: fresh legs
+            rating += self.tuning["sub_fresh"]
         return max(1, min(99, round(rating)))
 
     def _apply_rules(self, minute: int, diff: int) -> list[dict]:
@@ -673,9 +859,16 @@ class CareerSideRunner:
         if effective == self._effective:
             return []
         previous = self.effective_tactic
+        previous_mentality = self._effective[0]
         self._effective = effective
         if active is None:
             text = f"📋 {self.name}: возврат к базовой тактике"
+        elif rules[active].get("score") == "any":
+            changes = []
+            if mentality != previous_mentality:
+                changes.append(f"настрой «{MENTALITY_LABELS[mentality]}»")
+            changes += [VALUE_LABELS[axis][tactic[axis]].lower() for axis in AXES if tactic[axis] != previous[axis]]
+            text = f"🗣 {self.name}: указания в перерыве — " + (", ".join(changes) or "без изменений")
         else:
             changes = []
             if mentality != self.mentality:
@@ -704,6 +897,8 @@ class CareerSideRunner:
         for i, sub in enumerate((self.plan or {}).get("subs") or []):
             if i in self._subs_done or minute < sub["minute"]:
                 continue
+            if self._subs_made >= int(self.config.career_max_substitutions):
+                break  # half-time changes used the rest
             if sub.get("slot") is not None:
                 out = next((p for p in self.on_pitch if p.slot.code == sub["slot"]), None)
             else:
@@ -716,30 +911,69 @@ class CareerSideRunner:
             if incoming is None:
                 self.events_meta.append({"kind": "sub_skipped", "minute": minute, "sub": i})
                 continue
-            fatigue = self.live_fatigue(out, minute)
-            out.off_minute = minute
-            incoming.slot, incoming.on_minute = out.slot, minute
-            self.on_pitch[self.on_pitch.index(out)] = incoming
-            self.bench.remove(incoming)
-            self.bench.append(out)
-            self.refresh_chemistry()
-            name_in, name_out = incoming.card.player.display_name, out.card.player.display_name
-            self.events_meta.append({"kind": "sub", "minute": minute, "sub": i, "in": name_in, "out": name_out,
-                                     "fatigue": fatigue})
-            events.append({
-                "minute": minute, "event_type": "substitution", "team": self.label,
-                "description": f"🔁 {self.name}: {name_in} вместо {name_out}",
-                "payload": {"in": name_in, "out": name_out, "in_id": incoming.card.id, "out_id": out.card.id,
-                            "sub": i, "fatigue": fatigue},
-            })
+            events.append(self._substitute(out, incoming, minute, i))
+        return events
+
+    def _substitute(self, out: LivePlayer, incoming: LivePlayer, minute: int, sub: Optional[int]) -> dict:
+        fatigue = self.live_fatigue(out, minute)
+        out.off_minute = minute
+        incoming.slot, incoming.on_minute = out.slot, minute
+        self.on_pitch[self.on_pitch.index(out)] = incoming
+        self.bench.remove(incoming)
+        self.bench.append(out)
+        self._subs_made += 1
+        self.refresh_chemistry()
+        name_in, name_out = incoming.card.player.display_name, out.card.player.display_name
+        self.events_meta.append({"kind": "sub", "minute": minute, "sub": sub, "in": name_in, "out": name_out,
+                                 "fatigue": fatigue, **({"halftime": True} if sub is None else {})})
+        return {
+            "minute": minute, "event_type": "substitution", "team": self.label,
+            "description": f"🔁 {self.name}: {name_in} вместо {name_out}" + (" (в перерыве)" if sub is None else ""),
+            "payload": {"in": name_in, "out": name_out, "in_id": incoming.card.id, "out_id": out.card.id,
+                        "sub": sub, "fatigue": fatigue},
+        }
+
+    def _take_snapshot(self, own: int, opp: int) -> None:
+        self.snapshot = {
+            "score": [own, opp], "subs_used": self._subs_made,
+            "mentality": self._effective[0], "tactic": dict(self._effective[1]),
+            "on": [{"card_id": p.card.id, "slot": p.slot.code, "fatigue": self.live_fatigue(p, HALF_TIME)}
+                   for p in self.on_pitch],
+            "bench": [{"card_id": p.card.id, "fatigue": self.live_fatigue(p, HALF_TIME)}
+                      for p in self.bench if p.off_minute is None],
+        }
+
+    def _apply_halftime(self, minute: int) -> list[dict]:
+        """Half-time orders: direct substitutions (within the match limit)
+        and, if given, one instruction that replaces the plan's rules for
+        the second half."""
+        if not self.halftime or self._halftime_done or minute <= HALF_TIME:
+            return []
+        self._halftime_done = True
+        events = []
+        for sub in self.halftime.get("subs") or []:
+            if self._subs_made >= int(self.config.career_max_substitutions):
+                break
+            out = next((p for p in self.on_pitch if p.card.id == sub["out"]), None)
+            incoming = next((p for p in self.bench if p.card.id == sub["in"] and p.off_minute is None), None)
+            if out is None or incoming is None:
+                continue
+            events.append(self._substitute(out, incoming, minute, None))
+        if self.halftime.get("mentality") or self.halftime.get("tactic"):
+            rule = {"score": "any", "margin": 0, "from_minute": HALF_TIME + 1,
+                    "mentality": self.halftime.get("mentality"), "tactic": self.halftime.get("tactic") or {}}
+            self.plan = {**(self.plan or {}), "rules": [rule]}
         return events
 
     def state_at(self, minute: int, own: int, opp: int):
+        if minute > HALF_TIME and self.snapshot is None:
+            self._advance_fatigue(HALF_TIME)
+            self._take_snapshot(own, opp)
         self._advance_fatigue(minute)
-        events = self._apply_subs(minute) + self._apply_rules(minute, own - opp)
+        events = self._apply_halftime(minute) + self._apply_subs(minute) + self._apply_rules(minute, own - opp)
         mentality = self._effective[0]
         tactic = self.effective_tactic
-        fam_pct = self._familiarity_pct(tactic)
+        fam_pct = self._per_tactic()[1]
         ratings = [self._rating(p, minute, fam_pct) for p in self.on_pitch]
         # Ratings move by whole points only every few minutes: rebuild the
         # side (zone profile) only when something actually changed.
@@ -751,7 +985,7 @@ class CareerSideRunner:
             p.card.player.rating = rating
             with_slots.append((p.card, p.slot))
         side = matchup.build_side(with_slots, mentality, matchup.CAREER_PLAYSTYLE, coach=self.coach)
-        side.career = TacticAxes(tactic, self.tuning, boost=self.boost)
+        side.career = TacticAxes(tactic, self.tuning, boost=self.boost, **self._player_levers())
         lineup = [
             {"club_card_id": c.id, "player_id": c.player_id, "name": c.player.display_name, "rating": c.player.rating,
              "position": c.player.position.value, "category": slot.category,
@@ -760,6 +994,15 @@ class CareerSideRunner:
         ]
         self._cache_key, self._cache = key, (side, lineup)
         return side, lineup, events
+
+    def _player_levers(self) -> dict:
+        """Roles of the players on the pitch and the marking while the
+        marker is still on."""
+        by_slot = roles_by_slot(self.roles, [p.slot for p in self.on_pitch])
+        on_ids = {p.card.id for p in self.on_pitch}
+        marking = self.marking if self.marking and self.marking.get("marker") in on_ids else None
+        return {"roles_by_card": {p.card.id: by_slot[p.slot.code] for p in self.on_pitch if p.slot.code in by_slot},
+                "marking": marking}
 
     def finish(self) -> None:
         self._advance_fatigue(90)
@@ -1065,7 +1308,8 @@ def build_analysis(
     duels = []
     for who, stats in (("me", mine), ("them", theirs)):
         for ix_id, (applied, won) in sorted((stats.get("interactions") or {}).items()):
-            duels.append({"id": ix_id, "label": INTERACTION_LABELS.get(ix_id, ix_id), "attacker": who,
+            label = INTERACTION_LABELS.get(ix_id) or PLAYER_EFFECT_LABELS.get(ix_id, ix_id)
+            duels.append({"id": ix_id, "label": label, "attacker": who,
                           "applied": applied, "attacker_won": won})
 
     return {

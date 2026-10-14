@@ -46,6 +46,38 @@ async def run_career_round_loop() -> None:
     await _run("/career/resolve-due", "Career rounds", 0)
 
 
+# Live match centre: the second half of a round is played after the
+# half-time break (GameConfig.career_halftime_minutes, 10 by default), so
+# rounds are also resolved every minute for this long after each slot.
+LIVE_WINDOW_MINUTES = 40
+LIVE_POLL_SECONDS = 60
+
+
+async def run_career_live_loop() -> None:
+    """Plays the second halves when the break ends, even if every player
+    has closed the app (resolve-due is idempotent; outside the windows
+    after the slots it does nothing)."""
+    tz = ZoneInfo(settings.timezone)
+    while True:
+        try:
+            now = datetime.now(tz)
+            for hour, minute in CAREER_SLOTS:
+                start = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if 0 < (now - start).total_seconds() <= LIVE_WINDOW_MINUTES * 60:
+                    slot_key = f"{now.date().isoformat()}T{hour:02d}:{minute:02d}-live"
+                    await _post_internal("/career/resolve-due", slot_key)
+                    break
+        except Exception:  # noqa: BLE001 - keep the loop alive across transient HTTP/network errors
+            logger.exception("Career live loop iteration failed")
+        await asyncio.sleep(LIVE_POLL_SECONDS)
+
+
+async def run_career_digest_loop() -> None:
+    """Weekly career digest («итоги недели»): fired at the career slots; the
+    backend sends once per ISO week per coach."""
+    await _run("/career/digest", "Career digest", 0)
+
+
 async def run_club_league_loop() -> None:
     """Pays out last week's «Лига клубов» at the career slots. The backend
     settles a week at most once (and the Mini App settles lazily too), so

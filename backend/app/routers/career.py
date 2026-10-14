@@ -11,6 +11,9 @@ from app.schemas.career import (
     CareerLineupIn,
     CareerMatchEventsOut,
     CareerPlanIn,
+    CareerRolesIn,
+    CareerMarkingIn,
+    CareerHalftimeIn,
     CareerTacticPreviewIn,
     CareerAmbitionIn,
     CareerTrainingIn,
@@ -75,6 +78,28 @@ async def set_plan(payload: CareerPlanIn, db: AsyncSession = Depends(get_db), us
     return await _view(db, user)
 
 
+@router.put("/roles", response_model=CareerViewOut)
+async def set_roles(payload: CareerRolesIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Player roles per line: wingers, holding midfielder, full-backs."""
+    await career_service.set_roles(db, user, payload.roles, payload.round_index)
+    return await _view(db, user)
+
+
+@router.put("/marking", response_model=CareerViewOut)
+async def set_marking(payload: CareerMarkingIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Man-mark the next opponent's star (next round only)."""
+    await career_service.set_marking(db, user, payload.marker_card_id, payload.round_index)
+    return await _view(db, user)
+
+
+@router.put("/halftime", response_model=CareerViewOut)
+async def set_halftime(payload: CareerHalftimeIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Live match centre: orders for the second half while the break lasts."""
+    await check_rate_limit(f"career_halftime:{user.id}", max_calls=20, window_seconds=60)
+    await career_service.set_halftime(db, user, payload.model_dump())
+    return await _view(db, user)
+
+
 @router.put("/ambition", response_model=CareerViewOut)
 async def set_ambition(payload: CareerAmbitionIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """Board objective for the season (before round 1)."""
@@ -135,6 +160,14 @@ async def friendly_events(season_id: int, db: AsyncSession = Depends(get_db), us
 async def career_collection(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """Own usable cards for building the season squad."""
     return await career_service.collection(db, user)
+
+
+@router.get("/leaderboard")
+async def career_leaderboard(
+    division: int | None = None, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """Coaches by reputation: overall or within one division."""
+    return await career_service.leaderboard(db, user, division)
 
 
 @router.post("/tactics/preview")

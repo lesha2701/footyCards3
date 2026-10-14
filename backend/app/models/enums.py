@@ -349,6 +349,7 @@ class NotificationType(str, enum.Enum):
     career_round_result = "career_round_result"
     career_season_finished = "career_season_finished"
     career_reminder = "career_reminder"
+    career_digest = "career_digest"
     player_career_round_result = "player_career_round_result"
     player_career_season_finished = "player_career_season_finished"
     club_league_reward = "club_league_reward"

@@ -397,7 +397,7 @@ async def test_scouting_tactics_deadline_and_round_history(client, db_session, b
     assert resp.json()["matchup"] == tactics.matchup_report(COUNTER, scout["tactic"], config)
 
     first = datetime.fromisoformat(season["schedule"][0])
-    assert await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1)) == 1
+    assert await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=11)) == 1
 
     # Round 1 has kicked off: a change still aimed at it is refused.
     resp = await client.put(f"{API}/career/lineup", headers=headers, json=_lineup(season, COUNTER, 0))
@@ -464,7 +464,7 @@ async def test_plan_api_validates_and_is_snapshotted_at_kick_off(client, db_sess
     assert (await client.put(f"{API}/career/plan", headers=headers, json=foreign)).status_code == 409
 
     first = datetime.fromisoformat(season["schedule"][0])
-    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=11))
     row = await _season_row(db_session, season["id"])
     match = next(m for m in row.state["results"][0] if 0 in (m["home"], m["away"]))
     assert match["analysis"]["0"]["plan"] == saved
@@ -483,11 +483,11 @@ async def test_pro_bot_counters_only_already_played_tactics(client, db_session, 
 
     assert (await client.put(f"{API}/career/lineup", headers=headers, json=_lineup(season, POSSESSION, 0))).status_code == 200
     first = datetime.fromisoformat(season["schedule"][0])
-    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=11))
     # Before round 2 the human switches to COUNTER — the bot must not see it.
     assert (await client.put(f"{API}/career/lineup", headers=headers, json=_lineup(season, COUNTER, 1))).status_code == 200
     second = datetime.fromisoformat(season["schedule"][1])
-    await career_service.resolve_due(db_session, season["id"], now=second + timedelta(minutes=1))
+    await career_service.resolve_due(db_session, season["id"], now=second + timedelta(minutes=11))
 
     row = await _season_row(db_session, season["id"])
     match = next(m for m in row.state["results"][1] if 0 in (m["home"], m["away"]))
@@ -625,7 +625,7 @@ async def test_season_freezes_chemistry_rules_and_reports_lineup_chemistry(clien
     assert chem["enabled"] and chem["formation"] == season["formation"] and chem["team_max"] == 33
     assert {p["slot_code"] for p in chem["players"]} == set(season["lineup"])
     first = datetime.fromisoformat(season["schedule"][0])
-    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=11))
     row = await _season_row(db_session, season["id"])
     match = next(m for m in row.state["results"][0] if 0 in (m["home"], m["away"]))
     assert match["analysis"]["0"]["chemistry"]["max"] == 33
@@ -720,7 +720,7 @@ async def test_holes_are_filled_out_of_position_and_flagged(client, db_session, 
     critical = [w for w in view["squad_warnings"] if w["level"] == "critical"]
     assert critical and all(w["category"] == "DEF" for w in critical)
     first = datetime.fromisoformat(season["schedule"][0])
-    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=11))
     row = await _season_row(db_session, season["id"])
     match = next(m for m in row.state["results"][0] if 0 in (m["home"], m["away"]))
     assert match["events"]  # played, not 0:3 by default
@@ -767,7 +767,7 @@ async def test_objective_reputation_and_profile_after_a_season(client, db_sessio
     assert view["profile"]["reputation"] == 0 and view["season"]["ambition"] == "mid"
     assert (await client.put(f"{API}/career/ambition", headers=headers, json={"ambition": "survive"})).status_code == 200
     first = datetime.fromisoformat(season["schedule"][0])
-    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=11))
     # The objective is fixed once the season is on.
     assert (await client.put(f"{API}/career/ambition", headers=headers, json={"ambition": "promote"})).status_code == 409
 
@@ -804,7 +804,7 @@ async def test_training_recovery_and_tactical(client, db_session, bot_token):
     assert resp.status_code == 200 and resp.json()["season"]["training"] == "recovery"
     assert (await client.put(f"{API}/career/training", headers=headers, json={"training": "yoga"})).status_code == 409
     first = datetime.fromisoformat(season["schedule"][0])
-    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=11))
     row = await _season_row(db_session, season["id"])
     part = row.participants[0]
     rested = [c for c in part.squad_card_ids if str(c) in part.condition and c not in season["lineup"].values()]
@@ -937,7 +937,7 @@ async def test_living_league_catalog_history_and_tenure(client, db_session, bot_
     bot_clubs = [t["club_id"] for t in row.state["teams"] if t.get("user_id") is None]
     assert all(bot_clubs) and len(set(bot_clubs)) == 7
     first = datetime.fromisoformat(season["schedule"][0])
-    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=11))
     db_session.expire_all()
     profile = (await db_session.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))).scalar_one()
     assert sum(sum(r.values()) for r in profile.league["history"].values()) == 1
@@ -1006,5 +1006,5 @@ async def test_first_season_squad_can_be_rebuilt_before_round_one(client, db_ses
     assert resp.status_code == 200, resp.text
     assert len(resp.json()["season"]["squad"]) == 12
     first = datetime.fromisoformat(season["schedule"][0])
-    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=11))
     assert (await client.put(f"{API}/career/squad", headers=headers, json={"card_ids": keep[:11]})).status_code == 409

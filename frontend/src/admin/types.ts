@@ -240,6 +240,10 @@ export interface GameConfig {
   career_tenure_minutes_per_point: number;
   career_tenure_max: number;
   career_division_club_count: number;
+  career_live_enabled: boolean;
+  career_halftime_minutes: number;
+  career_achievement_reward: number;
+  career_digest_enabled: boolean;
   career_familiarity_step_tenths: number;
   career_familiarity_max_tenths: number;
   career_familiarity_keep_pct: number;

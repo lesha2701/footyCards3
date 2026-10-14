@@ -72,6 +72,10 @@ class CareerParticipant(Base):
     match_plan: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Set-piece takers and schemes (career_tactics_service.DEFAULT_SET_PIECES).
     set_pieces: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Player roles per line ({group: value}, career_tactics_service.ROLE_GROUPS)
+    # and man-marking for one round ({"round", "marker", "target"}).
+    roles: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    marking: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Board objective chosen for this season (survive / mid / promote) and
     # the training focus before the next round (career_service.TRAININGS).
     ambition: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
@@ -121,6 +125,9 @@ class CareerProfile(Base):
     tenure: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     # Persistent league / rivals history (off-season).
     league: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # career_achievements_service: unlocked achievements, the trophy cabinet,
+    # running streaks and the weekly digest bookkeeping.
+    achievements: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 

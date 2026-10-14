@@ -336,6 +336,16 @@ def career_shift(attacker: ClubTacticalSide, defender: ClubTacticalSide, kind: s
     return attacker.career.duel_shift(defender.career, kind, zone)
 
 
+def career_player_shift(
+    attacker: ClubTacticalSide, defender: ClubTacticalSide, att_card: Any, def_card: Any, zone: str,
+) -> tuple[float, tuple]:
+    """Duel-level career levers (roles, man-marking) for the two duelists;
+    (0.0, ()) outside career matches. Draws no random numbers."""
+    if attacker.career is None or defender.career is None:
+        return 0.0, ()
+    return attacker.career.player_shift(defender.career, att_card, def_card, zone)
+
+
 def _pool_mult(side: ClubTacticalSide, after_losing_ball: bool = False) -> float:
     return side.career.pool_mult(after_losing_ball) if side.career is not None else 1.0
 
@@ -639,7 +649,8 @@ def _resolve_progression_and_duel(
     defender_duelist = _pick_defender(defender, defence_zone)
     ratio_1 = zone_ratio(attacker_duelist, zone, defender_duelist, defence_zone, ratio_shift)
     stage1_notes: list = []
-    outcome_1 = _resolve_stage1_for(ratio_1, attacker_duelist, stage1_notes, bias=axis_bias)
+    player_bias, player_ids = career_player_shift(attacker, defender, attacker_duelist, defender_duelist, zone)
+    outcome_1 = _resolve_stage1_for(ratio_1, attacker_duelist, stage1_notes, bias=axis_bias + player_bias)
 
     if attacker.career is not None:
         retry = outcome_1 == "stall" and random.random() < attacker.career.retry_chance(attacker.profile.midfield_control)
@@ -655,10 +666,11 @@ def _resolve_progression_and_duel(
         ratio_1 = zone_ratio(attacker_duelist, zone, defender_duelist, defence_zone, ratio_shift)
         # Only the duel that actually decides the phase keeps its notes.
         stage1_notes = []
-        outcome_1 = _resolve_stage1_for(ratio_1, attacker_duelist, stage1_notes, bias=axis_bias)
+        player_bias, player_ids = career_player_shift(attacker, defender, attacker_duelist, defender_duelist, zone)
+        outcome_1 = _resolve_stage1_for(ratio_1, attacker_duelist, stage1_notes, bias=axis_bias + player_bias)
 
     _track(tracker, attacking_side, outcome_1)
-    _track_interactions(tracker, attacking_side, axis_ids, outcome_1 == "advance")
+    _track_interactions(tracker, attacking_side, axis_ids + player_ids, outcome_1 == "advance")
     if outcome_1 == "stall":
         return None
     if outcome_1 == "breakdown":

@@ -281,6 +281,13 @@ class GameConfig(TimestampMixin, Base):
     career_tenure_max: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     # Bot clubs per division in the catalog («Сформировать» in the admin).
     career_division_club_count: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Live match centre: the second half of a round with a human waits this
+    # many minutes after kick-off for half-time instructions.
+    career_live_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    career_halftime_minutes: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Coins for each career achievement unlocked; weekly Telegram digest.
+    career_achievement_reward: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    career_digest_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Match plan limits: conditional instructions and substitutions per match.
     career_max_plan_rules: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     career_max_substitutions: Mapped[int] = mapped_column(Integer, default=3, nullable=False)

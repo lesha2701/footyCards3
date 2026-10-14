@@ -57,6 +57,25 @@ class CareerTrainingIn(BaseModel):
     round_index: Optional[int] = None
 
 
+class CareerRolesIn(BaseModel):
+    roles: dict[str, Optional[str]] = Field(default_factory=dict)
+    round_index: Optional[int] = None
+
+
+class CareerMarkingIn(BaseModel):
+    # One of my outfield players to man-mark the next opponent's star; None clears.
+    marker_card_id: Optional[int] = None
+    round_index: Optional[int] = None
+
+
+class CareerHalftimeIn(BaseModel):
+    """Live match centre, during the break: mentality / some axes for the
+    second half and substitutions [{out, in}] (card ids)."""
+    mentality: Optional[str] = None
+    tactic: Optional[dict[str, str]] = None
+    subs: list[dict] = Field(default_factory=list)
+
+
 class CareerPlanIn(BaseModel):
     """Conditional instructions + substitutions; validated server-side
     (career_tactics_service.clean_plan)."""
@@ -125,6 +144,11 @@ class CareerScoutingOut(BaseModel):
     adaptive: bool = False
     my_last_tactic: Optional[dict[str, str]] = None
     threat: Optional[dict] = None
+    # Their best outfield player (bots), my marking of him for this round,
+    # and whether a «Легенда» bot will man-mark my own best player.
+    star: Optional[dict] = None
+    marking: Optional[dict] = None
+    marks_you: bool = False
 
 
 class CareerDifficultyOut(BaseModel):
@@ -260,6 +284,11 @@ class CareerSeasonOut(BaseModel):
     set_pieces: Optional[dict] = None
     # Holes / thin lines for the next round (career_service._squad_warnings).
     squad_warnings: list[dict] = []
+    # Player roles per line, live match centre (first half + break), and
+    # what the coach could still add to the match plan.
+    roles: dict[str, str] = {}
+    live: Optional[dict] = None
+    plan_hints: list[dict] = []
     ambition: Optional[str] = None
     ambitions: list[dict] = []
     training: Optional[str] = None
