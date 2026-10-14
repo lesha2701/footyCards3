@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -76,6 +76,12 @@ class CareerParticipant(Base):
     # the training focus before the next round (career_service.TRAININGS).
     ambition: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     training: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    # Off-season: preseason camp focus, how many squad cards carried over
+    # from the previous season (the "core"), and the familiarity carried
+    # over (before the camp's own bonus).
+    camp: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    core_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    carried_familiarity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     # The participant's own division when the season started and where the
     # final place sends them (promotion / relegation), set at the finish or
     # on leaving. A friend may play in the creator's division, but moves up
@@ -115,6 +121,28 @@ class CareerProfile(Base):
     tenure: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     # Persistent league / rivals history (off-season).
     league: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class CareerClub(Base):
+    """A bot club of a career division (admin-editable). source: "real" =
+    named after a real club in the card pool, its roster drawn from that
+    club's players (gaps filled with others); "generated" = an invented
+    club with players from the whole pool; "admin" = added by hand."""
+
+    __tablename__ = "career_clubs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    division: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="generated")
+    # Club name in the player pool whose players form the roster (real clubs).
+    pool_club: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    # ± rating vs the division's bot strength.
+    rating_offset: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    formation: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    preset: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 

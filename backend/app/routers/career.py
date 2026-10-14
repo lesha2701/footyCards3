@@ -15,6 +15,8 @@ from app.schemas.career import (
     CareerAmbitionIn,
     CareerTrainingIn,
     CareerCupIn,
+    CareerSquadIn,
+    CareerCampIn,
     CareerViewOut,
 )
 from app.services import career_service
@@ -100,6 +102,39 @@ async def cup_match(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await career_service.cup_match_events(db, user, season_id, round_index, tie_index)
+
+
+@router.put("/squad", response_model=CareerViewOut)
+async def set_squad(payload: CareerSquadIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Season squad (заявка) before round 1 — the off-season core decides
+    how much familiarity carries over."""
+    await career_service.set_squad(db, user, payload.card_ids)
+    return await _view(db, user)
+
+
+@router.put("/camp", response_model=CareerViewOut)
+async def set_camp(payload: CareerCampIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await career_service.set_camp(db, user, payload.camp)
+    return await _view(db, user)
+
+
+@router.post("/friendly", response_model=CareerViewOut)
+async def play_friendly(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """One free friendly before round 1 (no rewards, fatigue or familiarity)."""
+    await check_rate_limit(f"career_friendly:{user.id}", max_calls=5, window_seconds=60)
+    await career_service.play_friendly(db, user)
+    return await _view(db, user)
+
+
+@router.get("/seasons/{season_id}/friendly", response_model=CareerMatchEventsOut)
+async def friendly_events(season_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await career_service.friendly_events(db, user, season_id)
+
+
+@router.get("/collection")
+async def career_collection(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Own usable cards for building the season squad."""
+    return await career_service.collection(db, user)
 
 
 @router.post("/tactics/preview")

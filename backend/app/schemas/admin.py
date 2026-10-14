@@ -273,6 +273,16 @@ class GameConfigOut(BaseModel):
     career_cup_enabled: bool = True
     career_cup_rewards: list[int] = []
     career_rep_cup: int = 15
+    career_offseason_auto: bool = True
+    career_inactive_days: int = 3
+    career_core_min: int = 15
+    career_core_keep_pct: int = 50
+    career_camp_physical_pct: int = 30
+    career_camp_physical_rounds: int = 3
+    career_camp_tactical_tenths: int = 40
+    career_tenure_minutes_per_point: int = 900
+    career_tenure_max: int = 2
+    career_division_club_count: int = 10
     career_familiarity_step_tenths: int = 20
     career_familiarity_max_tenths: int = 90
     career_familiarity_keep_pct: int = 50
@@ -572,6 +582,16 @@ class GameConfigUpdate(BaseModel):
     career_cup_enabled: Optional[bool] = None
     career_cup_rewards: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
     career_rep_cup: Optional[int] = Field(default=None, ge=0, le=500)
+    career_offseason_auto: Optional[bool] = None
+    career_inactive_days: Optional[int] = Field(default=None, ge=1, le=60)
+    career_core_min: Optional[int] = Field(default=None, ge=0, le=30)
+    career_core_keep_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    career_camp_physical_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    career_camp_physical_rounds: Optional[int] = Field(default=None, ge=0, le=14)
+    career_camp_tactical_tenths: Optional[int] = Field(default=None, ge=0, le=150)
+    career_tenure_minutes_per_point: Optional[int] = Field(default=None, ge=90, le=100000)
+    career_tenure_max: Optional[int] = Field(default=None, ge=0, le=10)
+    career_division_club_count: Optional[int] = Field(default=None, ge=7, le=40)
     career_familiarity_step_tenths: Optional[int] = Field(default=None, ge=0, le=50)
     career_familiarity_max_tenths: Optional[int] = Field(default=None, ge=0, le=150)
     career_familiarity_keep_pct: Optional[int] = Field(default=None, ge=0, le=100)

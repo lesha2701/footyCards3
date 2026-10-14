@@ -262,6 +262,25 @@ class GameConfig(TimestampMixin, Base):
     career_cup_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     career_cup_rewards: Mapped[list] = mapped_column(JSON, default=lambda: [800, 400, 200], nullable=False)
     career_rep_cup: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    # Off-season: the next season is created automatically right after the
+    # last round (first round the next day) unless the coach hasn't opened
+    # the career for inactive_days — then no new season and one division
+    # down. Core: with >= core_min cards kept and the same formation,
+    # core_keep_pct of the familiarity carries over.
+    career_offseason_auto: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    career_inactive_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    career_core_min: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    career_core_keep_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    # Preseason camp: physical = less fatigue gained in the first rounds;
+    # tactical = familiarity bonus (tenths of a %) while the system is kept.
+    career_camp_physical_pct: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    career_camp_physical_rounds: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    career_camp_tactical_tenths: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    # Club tenure: +1 career-only rating per N minutes played, up to max.
+    career_tenure_minutes_per_point: Mapped[int] = mapped_column(Integer, default=900, nullable=False)
+    career_tenure_max: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # Bot clubs per division in the catalog («Сформировать» in the admin).
+    career_division_club_count: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     # Match plan limits: conditional instructions and substitutions per match.
     career_max_plan_rules: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     career_max_substitutions: Mapped[int] = mapped_column(Integer, default=3, nullable=False)

@@ -411,7 +411,8 @@ async def test_scouting_tactics_deadline_and_round_history(client, db_session, b
     row = await _season_row(db_session, season["id"])
     my = row.state["played_tactics"]["0"]
     assert my == [{"round": 0, "formation": "4-3-3", "mentality": "ATTACKING", "tactic": PRESS, "preset": "HIGH_PRESS"}]
-    part = (await db_session.execute(select(CareerParticipant).where(CareerParticipant.user_id == user_id))).scalar_one()
+    part = (await db_session.execute(select(CareerParticipant).where(
+        CareerParticipant.user_id == user_id, CareerParticipant.season_id == season["id"]))).scalar_one()
     assert part.familiarity == 20 and part.familiar_tactic == PRESS
     # One axis changed keeps 80%.
     assert view["familiarity"]["stored_pct"] == 2 and view["familiarity"]["current_pct"] == 1.6
@@ -531,7 +532,8 @@ async def test_old_seasons_play_on_the_original_path(client, db_session, bot_tok
             assert "analysis" not in m and "tactics" not in m
             for e in m["events"] or []:
                 assert e["event_type"] not in ("tactic_change", "substitution")
-    part = (await db_session.execute(select(CareerParticipant).where(CareerParticipant.user_id == user_id))).scalar_one()
+    part = (await db_session.execute(select(CareerParticipant).where(
+        CareerParticipant.user_id == user_id, CareerParticipant.season_id == season["id"]))).scalar_one()
     assert part.familiarity == 0 and part.next_division is None
 
 
@@ -557,14 +559,18 @@ async def test_divisions_set_difficulty_and_move_between_seasons(client, db_sess
 
     later = datetime.now(timezone.utc) + timedelta(days=8)
     await career_service.resolve_due(db_session, season["id"], now=later)
-    part = (await db_session.execute(select(CareerParticipant).where(CareerParticipant.user_id == user_id))).scalar_one()
+    part = (await db_session.execute(select(CareerParticipant).where(
+        CareerParticipant.user_id == user_id, CareerParticipant.season_id == season["id"]))).scalar_one()
     expected = career_service.division_after(count, part.final_place, config)
     assert part.next_division == expected
 
     view = (await client.get(f"{API}/career", headers=headers)).json()
     assert view["division"]["division"] == expected
-    assert view["season"]["next_division"]["division"] == expected
     assert {a["key"] for a in view["tactics_catalog"]["axes"]} == set(tactics.AXES)
+    # The next season was created automatically in the new division (off-season).
+    assert view["season"]["id"] != season["id"] and view["season"]["division"]["division"] == expected
+    assert view["season"]["rounds_played"] == 0
+    assert (await client.post(f"{API}/career/leave", headers=headers)).status_code == 204
 
     profile = (await db_session.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))).scalar_one()
     assert profile.division == expected
@@ -769,7 +775,8 @@ async def test_objective_reputation_and_profile_after_a_season(client, db_sessio
     later = datetime.now(timezone.utc) + timedelta(days=8)
     await career_service.resolve_due(db_session, season["id"], now=later)
     db_session.expire_all()
-    part = (await db_session.execute(select(CareerParticipant).where(CareerParticipant.user_id == user_id))).scalar_one()
+    part = (await db_session.execute(select(CareerParticipant).where(
+        CareerParticipant.user_id == user_id, CareerParticipant.season_id == season["id"]))).scalar_one()
     profile = (await db_session.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))).scalar_one()
     config = await get_config(db_session)
     met = part.final_place <= career_service.ambition_target("survive", part.division, config)["place"]
@@ -856,5 +863,136 @@ async def test_cup_runs_alongside_the_league(client, db_session, bot_token):
     k, i = 0, next(i for i, res in enumerate(rounds[0]["results"]) if 0 in (res["a"], res["b"]))
     data = (await client.get(f"{API}/career/seasons/{season['id']}/cup/{k}/{i}", headers=headers)).json()
     assert data["events"] and data["analysis"] and data["my_side"] in ("a", "b")
+    row = await _season_row(db_session, season["id"])
+    me = next(p for p in row.participants if p.user_id == user_id)
+    config = await get_config(db_session)
+    assert career_service._cup_out(row.state, me, config)["status"] in ("winner", "out")
+
+
+# --- off-season, living league, tenure ------------------------------------------------------------
+
+async def test_offseason_auto_start_core_camp_friendly(client, db_session, bot_token):
+    user_id, headers, season = await _season(client, db_session, bot_token, 870013)
+    later = datetime.now(timezone.utc) + timedelta(days=8)
+    await career_service.resolve_due(db_session, season["id"], now=later)
+    view = (await client.get(f"{API}/career", headers=headers)).json()
+    nxt = view["season"]
+    assert nxt["id"] != season["id"] and nxt["rounds_played"] == 0
+    off = nxt["offseason"]
+    assert off["prev_season_id"] == season["id"] and off["summary"]["tactics"]
+    assert off["core_count"] == 16  # the whole squad kept
+    config = await get_config(db_session)
+    old = (await db_session.execute(select(CareerParticipant).where(
+        CareerParticipant.user_id == user_id, CareerParticipant.season_id == season["id"]))).scalar_one()
+    expected = old.familiarity * config.career_core_keep_pct // 100 if off["core_count"] >= config.career_core_min else 0
+    assert off["carried_pct"] == expected / 10
+    assert datetime.fromisoformat(nxt["schedule"][0]) > datetime.now(timezone.utc)
+
+    resp = await client.put(f"{API}/career/camp", headers=headers, json={"camp": "tactical"})
+    assert resp.json()["season"]["offseason"]["camp"] == "tactical"
+    stored = min(config.career_familiarity_max_tenths, expected + config.career_camp_tactical_tenths)
+    assert resp.json()["season"]["familiarity"]["stored_pct"] == stored / 10
+
+    keep = [s["card_id"] for s in nxt["squad"]][:11]
+    resp = await client.put(f"{API}/career/squad", headers=headers, json={"card_ids": keep})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["season"]["offseason"]["core_count"] == 11
+    assert (await client.put(f"{API}/career/squad", headers=headers, json={"card_ids": keep[:5]})).status_code == 409
+
+    resp = await client.post(f"{API}/career/friendly", headers=headers)
+    assert resp.status_code == 200, resp.text
+    friendly = resp.json()["season"]["offseason"]["friendly"]
+    assert friendly and friendly["opponent"]
+    assert (await client.post(f"{API}/career/friendly", headers=headers)).status_code == 409
+    data = (await client.get(f"{API}/career/seasons/{nxt['id']}/friendly", headers=headers)).json()
+    assert data["events"] and data["analysis"]
+    coll = (await client.get(f"{API}/career/collection", headers=headers)).json()
+    assert coll["squad_size"] == 22 and sum(c["in_squad"] for c in coll["cards"]) == 11
+
+
+async def test_inactive_coach_is_not_renewed_and_drops(client, db_session, bot_token):
+    user_id, headers, season = await _season(client, db_session, bot_token, 870014)
+    profile = (await db_session.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))).scalar_one()
+    profile.last_active_at = datetime.now(timezone.utc) - timedelta(days=10)
+    await db_session.commit()
+    later = datetime.now(timezone.utc) + timedelta(days=8)
+    await career_service.resolve_due(db_session, season["id"], now=later)
+    db_session.expire_all()
+    profile = (await db_session.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))).scalar_one()
+    part = (await db_session.execute(select(CareerParticipant).where(
+        CareerParticipant.user_id == user_id, CareerParticipant.season_id == season["id"]))).scalar_one()
+    seasons = (await db_session.execute(select(CareerParticipant).where(CareerParticipant.user_id == user_id))).scalars().all()
+    assert len(seasons) == 1  # not renewed
+    config = await get_config(db_session)
+    assert profile.division == min(config.career_division_count, part.next_division + 1)
+
+
+async def test_living_league_catalog_history_and_tenure(client, db_session, bot_token):
+    user_id, headers, season = await _season(client, db_session, bot_token, 870015)
+    from app.models.career import CareerClub
+    clubs = (await db_session.execute(select(CareerClub))).scalars().all()
+    config = await get_config(db_session)
+    assert clubs and {c.division for c in clubs} == set(range(1, config.career_division_count + 1))
+    row = await _season_row(db_session, season["id"])
+    bot_clubs = [t["club_id"] for t in row.state["teams"] if t.get("user_id") is None]
+    assert all(bot_clubs) and len(set(bot_clubs)) == 7
+    first = datetime.fromisoformat(season["schedule"][0])
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    db_session.expire_all()
+    profile = (await db_session.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))).scalar_one()
+    assert sum(sum(r.values()) for r in profile.league["history"].values()) == 1
+    assert sum(profile.tenure.values()) >= 11 * 80  # the XI's minutes
     view = (await client.get(f"{API}/career", headers=headers)).json()["season"]
-    assert view["cup"]["status"] in ("winner", "out")
+    assert view["scouting"]["head_to_head"] is not None
+
+    later = datetime.now(timezone.utc) + timedelta(days=8)
+    await career_service.resolve_due(db_session, season["id"], now=later)
+    db_session.expire_all()
+    profile = (await db_session.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))).scalar_one()
+    carried = set(profile.league["next_clubs"])
+    nxt = (await client.get(f"{API}/career", headers=headers)).json()["season"]
+    nrow = await _season_row(db_session, nxt["id"])
+    new_clubs = {t["club_id"] for t in nrow.state["teams"] if t.get("user_id") is None}
+    assert carried <= new_clubs
+
+
+def test_tenure_bonus_and_memory():
+    from app.services import career_league_service as league
+    config = _defaults(career_tenure_minutes_per_point=900, career_tenure_max=2)
+    profile = CareerProfile(user_id=1, division=5, tenure={}, league={})
+    league.add_tenure(profile, {7: 90})
+    assert league.tenure_bonus(profile, 7, config) == 0
+    league.add_tenure(profile, {7: 900})
+    assert league.tenure_bonus(profile, 7, config) == 1
+    league.add_tenure(profile, {7: 9000})
+    assert league.tenure_bonus(profile, 7, config) == 2  # capped
+    league.record_meeting(profile, 3, 2, 0, "HIGH_PRESS")
+    assert league.remembered_tactic(profile, 3) is None
+    league.record_meeting(profile, 3, 1, 0, "HIGH_PRESS")
+    assert league.remembered_tactic(profile, 3) == "HIGH_PRESS"
+    assert league.head_to_head(profile, 3) == {"w": 2, "d": 0, "l": 0, "meetings": 2}
+
+
+async def test_admin_division_clubs(client, db_session, bot_token):
+    from tests.factories import create_player
+    for i in range(9):  # a real club with enough players
+        await create_player(db_session, rating=80, position=Position.ST, club="Реал Тест")
+    from tests.utils import telegram_headers
+    session = (await client.post(f"{API}/auth/session", headers=telegram_headers(999000001, bot_token))).json()
+    admin = {"Authorization": f"Bearer {session['admin_token']}"}
+    built = (await client.post(f"{API}/admin/career/clubs/build", headers=admin, json={"replace": True})).json()
+    config = await get_config(db_session)
+    clubs = built["clubs"]
+    assert len(clubs) == config.career_division_count * config.career_division_club_count
+    real = next(c for c in clubs if c["pool_club"] == "Реал Тест")
+    assert real["source"] == "real" and real["division"] == 1 and real["pool_players"] == 9
+    resp = await client.put(f"{API}/admin/career/clubs/{real['id']}", headers=admin, json={
+        "name": "Реал", "division": 2, "pool_club": "Реал Тест", "rating_offset": 3, "formation": "4-2-3-1",
+        "preset": "POSSESSION", "is_active": True,
+    })
+    updated = next(c for c in resp.json()["clubs"] if c["id"] == real["id"])
+    assert updated["division"] == 2 and updated["formation"] == "4-2-3-1"
+    bad = await client.post(f"{API}/admin/career/clubs", headers=admin, json={"name": "X клуб", "division": 99})
+    assert bad.status_code in (409, 422)
+    added = await client.post(f"{API}/admin/career/clubs", headers=admin, json={"name": "Новый клуб", "division": 3})
+    assert any(c["name"] == "Новый клуб" and c["source"] == "admin" for c in added.json()["clubs"])

@@ -35,6 +35,15 @@ CONFIG_INT_COLUMNS = (
     ("career_rep_promotion", "10"),
     ("career_rep_relegation", "-10"),
     ("career_rep_cup", "15"),
+    ("career_inactive_days", "3"),
+    ("career_core_min", "15"),
+    ("career_core_keep_pct", "50"),
+    ("career_camp_physical_pct", "30"),
+    ("career_camp_physical_rounds", "3"),
+    ("career_camp_tactical_tenths", "40"),
+    ("career_tenure_minutes_per_point", "900"),
+    ("career_tenure_max", "2"),
+    ("career_division_club_count", "10"),
 )
 CONFIG_JSON_COLUMNS = (
     ("career_tactics_tuning", "{}"),
@@ -82,9 +91,30 @@ def upgrade() -> None:
     for name, default in CONFIG_JSON_COLUMNS:
         op.add_column("game_config", sa.Column(name, sa.JSON(), nullable=False, server_default=sa.text(f"'{default}'::json")))
     op.add_column("game_config", sa.Column("career_cup_enabled", sa.Boolean(), nullable=False, server_default=sa.true()))
+    op.add_column("game_config", sa.Column("career_offseason_auto", sa.Boolean(), nullable=False, server_default=sa.true()))
+    op.add_column("career_participants", sa.Column("camp", sa.String(16), nullable=True))
+    op.add_column("career_participants", sa.Column("core_count", sa.Integer(), nullable=False, server_default="0"))
+    op.add_column("career_participants", sa.Column("carried_familiarity", sa.Integer(), nullable=False, server_default="0"))
+    op.create_table(
+        "career_clubs",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("name", sa.String(64), nullable=False),
+        sa.Column("division", sa.Integer(), nullable=False, index=True),
+        sa.Column("source", sa.String(16), nullable=False, server_default="generated"),
+        sa.Column("pool_club", sa.String(128), nullable=True),
+        sa.Column("rating_offset", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("formation", sa.String(16), nullable=True),
+        sa.Column("preset", sa.String(16), nullable=True),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+    )
 
 
 def downgrade() -> None:
+    op.drop_table("career_clubs")
+    for column in ("carried_familiarity", "core_count", "camp"):
+        op.drop_column("career_participants", column)
+    op.drop_column("game_config", "career_offseason_auto")
     op.drop_column("game_config", "career_cup_enabled")
     for name, _ in reversed(CONFIG_JSON_COLUMNS):
         op.drop_column("game_config", name)

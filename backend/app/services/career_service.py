@@ -24,11 +24,12 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.timeutil import app_timezone, ensure_aware
 from app.models.card import UserCard
-from app.models.career import CareerParticipant, CareerProfile, CareerSeason, Friendship
+from app.models.career import CareerClub, CareerParticipant, CareerProfile, CareerSeason, Friendship
 from app.models.enums import NotificationType, Position, Rarity, TransactionType
 from app.models.player import Player
 from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.user import User
+from app.services import career_league_service as league_service
 from app.services import career_tactics_service as tactics
 from app.services import chemistry_service
 from app.services import my_player_service, tournament_match_engine, wallet_service
@@ -438,7 +439,11 @@ def _bot_side(team: dict, round_index: int, config):
 async def _build_bots(
     db: AsyncSession, season: CareerSeason, bot_indexes: list[int], human_avg: float, config,
     name_pool: Optional[list[str]] = None, seed_salt: int = 0, spreads: Optional[list[int]] = None,
+    clubs: Optional[list] = None,
 ) -> list[dict]:
+    """Bot teams around the humans' strength. With `clubs` (catalog
+    CareerClub rows, living league) each team is that club: its name, its
+    real players first (pool_club), its formation / tactic / strength offset."""
     rng = random.Random(season.id * 7919 + seed_salt * 104729)
     if season.division is not None:
         offset = int(_division_setting(config, "career_division_rating_offset", season.division, 0))
@@ -447,19 +452,22 @@ async def _build_bots(
         offset = offsets[DIFFICULTIES.index(season.difficulty)] if len(offsets) == 3 else 0
     spreads = list(spreads or [-4, -3, -1, 0, 1, 3, 4])
     rng.shuffle(spreads)
-    names = rng.sample(name_pool or BOT_CLUB_NAMES, len(bot_indexes))
+    names = [c.name for c in clubs] if clubs else rng.sample(name_pool or BOT_CLUB_NAMES, len(bot_indexes))
     players = (await db.execute(
         select(Player).where(Player.is_active.is_(True)).order_by(Player.id).limit(2000)
     )).scalars().all()
     by_category: dict[str, list[Player]] = {cat: [p for p in players if p.position in pos] for cat, pos in CATEGORY_POSITIONS.items()}
     teams = []
     for n, index in enumerate(bot_indexes):
-        formation = rng.choice(BOT_FORMATIONS)
-        target = human_avg + offset + spreads[n % len(spreads)]
+        club = clubs[n] if clubs and n < len(clubs) else None
+        formation = club.formation if club and club.formation in CLUB_FORMATIONS else rng.choice(BOT_FORMATIONS)
+        target = human_avg + offset + spreads[n % len(spreads)] + (club.rating_offset if club else 0)
+        own = [p for p in players if club and club.pool_club and (p.club or "").strip() == club.pool_club]
         used: set[int] = set()
         roster = []
         for slot in get_formation_slots(formation):
-            candidates = [p for p in by_category[slot.category] if p.id not in used] or players
+            own_fit = [p for p in own if p.id not in used and p.position in CATEGORY_POSITIONS[slot.category]]
+            candidates = own_fit or [p for p in by_category[slot.category] if p.id not in used] or players
             ideal = [p for p in candidates if p.position == slot.ideal_position]
             pick = rng.choice(ideal or candidates) if candidates else None
             if pick is not None:
@@ -477,7 +485,8 @@ async def _build_bots(
         teams.append({
             "index": index, "name": names[n], "user_id": None, "formation": formation,
             "mentality": rng.choice([m for m in MENTALITIES if m != "PARK_THE_BUS"]),
-            "playstyle": (preset := rng.choice(PLAYSTYLES)), "tactic": dict(tactics.PRESETS[preset]), "players": roster,
+            "playstyle": (preset := (club.preset if club and club.preset in tactics.PRESETS else rng.choice(PLAYSTYLES))),
+            "tactic": dict(tactics.PRESETS[preset]), "players": roster, "club_id": club.id if club else None,
             "set_pieces": {**tactics.DEFAULT_SET_PIECES, "corner_routine": rng.choice(list(tactics.CORNER_ROUTINES)),
                            "corner_defence": rng.choice(list(tactics.SET_PIECE_DEFENCES))},
         })
@@ -523,7 +532,11 @@ async def _activate(db: AsyncSession, season: CareerSeason, now: datetime, confi
         teams[part.team_index] = {"index": part.team_index, "name": _team_name(user), "user_id": part.user_id}
     human_avg = sum(human_ratings) / len(human_ratings) if human_ratings else 70
     bot_indexes = [i for i in range(TEAMS) if teams[i] is None]
-    for bot in await _build_bots(db, season, bot_indexes, human_avg, config):
+    clubs = None
+    if season.division is not None:
+        creator = await get_profile(db, season.creator_id, config)
+        clubs = await league_service.league_clubs(db, creator, season.division, config, seed=season.id * 17)
+    for bot in await _build_bots(db, season, bot_indexes, human_avg, config, clubs=clubs):
         teams[bot["index"]] = bot
     season.state = {
         "teams": teams, "fixtures": double_round_robin(), "schedule": build_schedule(now), "results": [],
@@ -662,6 +675,319 @@ async def leave_season(db: AsyncSession, user: User) -> None:
         profile.reputation = max(0, profile.reputation + int(config.career_rep_relegation))
     part.status = "left"
     await db.commit()
+
+
+# --- off-season ----------------------------------------------------------------------------
+
+CAMPS = {
+    "physical": ("Физика", "Первые туры — меньше усталости за матч."),
+    "tactical": ("Тактика", "Стартовая сыгранность в выбранной системе — пока её не меняешь."),
+    "cohesion": ("Сплочение", "Новички не сбрасывают сыгранность ядра: она переходит даже при обновлённой заявке."),
+}
+
+
+def camp_options(config) -> list[dict]:
+    return [{"code": code, "label": label, "hint": hint} for code, (label, hint) in CAMPS.items()]
+
+
+def _offseason_familiarity(part: CareerParticipant, state: dict, config) -> None:
+    """Familiarity at the start of a season that follows another: the core
+    (cards kept from last season's squad) carries core_keep_pct of last
+    season's familiarity if the formation is kept — with a «Сплочение» camp
+    even when the core is smaller than core_min — plus the tactical camp's
+    bonus."""
+    off = state.get("offseason") or {}
+    if not off:
+        return
+    core = len(set(off.get("prev_squad") or []) & set(part.squad_card_ids or []))
+    part.core_count = core
+    same = part.formation == off.get("prev_formation")
+    carry = 0
+    if same and (core >= int(config.career_core_min) or part.camp == "cohesion"):
+        carry = int(off.get("prev_familiarity") or 0) * int(config.career_core_keep_pct) // 100
+    part.carried_familiarity = carry
+    bonus = int(config.career_camp_tactical_tenths) if part.camp == "tactical" else 0
+    part.familiarity = min(int(config.career_familiarity_max_tenths), carry + bonus)
+    part.familiar_formation = part.formation
+    part.familiar_tactic = off.get("prev_tactic") if carry else _my_tactic(part)
+
+
+def _next_squad(prev: list[int], cards: list, formation: str, size: int) -> list[int]:
+    """Last season's squad (still owned and usable) topped up with the best
+    remaining cards: the core stays unless the coach changes it."""
+    by_id = {c.id: c for c in cards}
+    kept = [cid for cid in prev if cid in by_id and _usable(by_id[cid])][:size]
+    used_players = {by_id[cid].player_id for cid in kept}
+    best = pick_squad(cards, formation if formation in CLUB_FORMATIONS else "4-3-3", size=size)
+    for cid in best:
+        if len(kept) >= size:
+            break
+        if cid not in kept and by_id[cid].player_id not in used_players:
+            kept.append(cid)
+            used_players.add(by_id[cid].player_id)
+    return kept
+
+
+async def _create_next_season(db: AsyncSession, part: CareerParticipant, prev: CareerSeason, config, now: datetime) -> None:
+    """Right after a season ends: the next one, first round the next day.
+    A coach who hasn't opened the career for career_inactive_days isn't
+    renewed and drops a division instead."""
+    if not config.career_offseason_auto or not config.career_enabled:
+        return
+    profile = await get_profile(db, part.user_id, config)
+    cutoff = now - timedelta(days=int(config.career_inactive_days))
+    if profile.last_active_at is None or ensure_aware(profile.last_active_at) < cutoff:
+        profile.division = min(division_count(config), profile.division + 1)
+        await notify(
+            db, part.user_id, NotificationType.career_season_finished, "Карьера на паузе",
+            f"Тебя давно не было — новый сезон не начат, клуб опустился в дивизион «{division_name(profile.division, config)}». "
+            "Загляни в карьеру, чтобы начать снова.",
+            related_object_type="career_season", related_object_id=prev.id,
+        )
+        return
+    if await _current_participation(db, part.user_id):
+        return
+    cards = await _career_cards(db, part.user_id, config)
+    try:
+        squad = _next_squad(list(part.squad_card_ids or []), cards, part.formation, int(config.career_squad_size))
+    except ConflictError:
+        return  # not enough cards for a team any more
+    division = profile.division
+    season = CareerSeason(
+        difficulty=division_bot_level(division, config), division=division, creator_id=part.user_id, status="pending",
+        state={},
+    )
+    lineup = {code: cid for code, cid in (part.lineup or {}).items() if cid in squad} or None
+    new_part = CareerParticipant(
+        user_id=part.user_id, team_index=0, status="accepted", squad_card_ids=squad, division=division,
+        ambition=DEFAULT_AMBITION, formation=part.formation, mentality=part.mentality, playstyle=part.playstyle,
+        tactic=part.tactic, set_pieces=part.set_pieces, match_plan=part.match_plan, lineup=lineup,
+        training=part.training,
+    )
+    season.participants.append(new_part)
+    db.add(season)
+    await db.flush()
+    await _activate(db, season, now, config)
+    state = dict(season.state)
+    state["offseason"] = {
+        "prev_season_id": prev.id, "prev_squad": list(part.squad_card_ids or []),
+        "prev_familiarity": int(part.familiarity or 0), "prev_formation": part.formation,
+        "prev_tactic": _my_tactic(part),
+    }
+    season.state = state
+    _offseason_familiarity(new_part, state, config)
+    first = datetime.fromisoformat(state["schedule"][0])
+    await notify(
+        db, part.user_id, NotificationType.career_invite, "Межсезонье: новый сезон уже ждёт",
+        f"Первый тур — {first.astimezone(app_timezone()).strftime('%d.%m в %H:%M')}. До старта можно обновить заявку, "
+        "выбрать сборы и цель руководства, сыграть товарищеский матч.",
+        related_object_type="career_season", related_object_id=season.id,
+    )
+
+
+async def _editable_offseason(db: AsyncSession, user: User) -> tuple[CareerParticipant, CareerSeason]:
+    part = await _editable_participation(db, user, None)
+    season = await _lock_season(db, part.season_id)
+    if season.rounds_played > 0:
+        raise ConflictError("Сезон уже идёт — это меняется только до первого тура")
+    if _tactics_version(season.state) < tactics.TACTICS_VERSION:
+        raise ConflictError("Доступно с нового сезона")
+    return part, season
+
+
+async def set_squad(db: AsyncSession, user: User, card_ids: list[int]) -> None:
+    """The season squad (заявка), before round 1: own usable cards, distinct
+    players, up to career_squad_size, covering every position of the formation."""
+    config = await get_config(db)
+    part, season = await _editable_offseason(db, user)
+    cards = {c.id: c for c in await _career_cards(db, user.id, config)}
+    if len(card_ids) > int(config.career_squad_size):
+        raise ConflictError(f"В заявке не больше {config.career_squad_size} игроков")
+    players: set[int] = set()
+    for cid in card_ids:
+        card = cards.get(cid)
+        if card is None or not _usable(card):
+            raise ConflictError("В заявку — только свои доступные карточки")
+        if card.player_id in players:
+            raise ConflictError("Один игрок не может быть в заявке дважды")
+        players.add(card.player_id)
+    probe = CareerParticipant(squad_card_ids=list(card_ids), formation=part.formation, condition={}, lineup=None, user_id=user.id)
+    xi = resolve_lineup(probe, cards, 0, [])
+    if len(xi) < len(get_formation_slots(part.formation)):
+        raise ConflictError("Заявка должна закрывать все позиции схемы")
+    part.squad_card_ids = list(card_ids)
+    part.lineup = {code: cid for code, cid in (part.lineup or {}).items() if cid in card_ids} or None
+    _offseason_familiarity(part, season.state or {}, config)
+    await db.commit()
+
+
+async def set_camp(db: AsyncSession, user: User, camp: Optional[str]) -> None:
+    if camp is not None and camp not in CAMPS:
+        raise ConflictError("Неизвестные сборы")
+    config = await get_config(db)
+    part, season = await _editable_offseason(db, user)
+    part.camp = camp
+    _offseason_familiarity(part, season.state or {}, config)
+    await db.commit()
+
+
+async def play_friendly(db: AsyncSession, user: User) -> None:
+    """One free friendly before round 1 against a club of the division:
+    no rewards, no fatigue, no familiarity — a test of tactic and squad."""
+    config = await get_config(db)
+    part, season = await _editable_offseason(db, user)
+    state = copy.deepcopy(season.state or {})
+    if state.get("friendly"):
+        raise ConflictError("Товарищеский матч уже сыгран")
+    league_ids = {t.get("club_id") for t in state.get("teams") or []}
+    pool = (await db.execute(
+        select(CareerClub).where(CareerClub.division == season.division, CareerClub.is_active.is_(True))
+    )).scalars().all()
+    rng = random.Random(season.id * 613)
+    candidates = [c for c in pool if c.id not in league_ids] or list(pool)
+    cards = await _career_cards(db, user.id, config)
+    me_team = state["teams"][part.team_index]
+    human_avg = sum(_effective(c) for c, _ in resolve_lineup(part, {c.id: c for c in cards}, 0, [])) / 11
+    bots = await _build_bots(db, season, [99], human_avg, config, clubs=[rng.choice(candidates)] if candidates else None,
+                             seed_salt=7)
+    bot = bots[0]
+    chem_rules = chemistry_service.rules_from_dict(state.get("chemistry_rules"))
+    runner, _, _ = _human_runner(part, cards, config, chem_rules, "a", me_team["name"], avail_round=0,
+                                 profile=await get_profile(db, user.id, config))
+    if runner is None:
+        raise ConflictError("Не хватает игроков на состав")
+    choice = {"tactic": tactics.tactic_for(bot.get("tactic"), bot.get("playstyle")), "familiarity": 0, "plan": None}
+    other = _bot_runner(bot, "b", 0, config, chem_rules, choice)
+    tracker: dict = {}
+    match = tournament_match_engine.simulate_match_controlled(
+        tactics.CareerMatchController(runner, other), config, me_team["name"], bot["name"], tracker=tracker,
+    )
+    state["friendly"] = {
+        "opponent": bot["name"], "home_score": match.score_a, "away_score": match.score_b, "events": match.event_log,
+        "analysis": tactics.build_analysis(match.event_log, tracker, "a", runner, other),
+    }
+    season.state = state
+    flag_modified(season, "state")
+    await db.commit()
+
+
+async def _offseason_out(db: AsyncSession, season: CareerSeason, me: CareerParticipant, config) -> Optional[dict]:
+    """The off-season panel of a season created after another, until its
+    first round: last season's result and summary, the core, camps, the
+    friendly match."""
+    state = season.state or {}
+    off = state.get("offseason")
+    if not off or season.rounds_played > 0 or me.status != "accepted":
+        return None
+    prev = await db.get(CareerSeason, off.get("prev_season_id"))
+    prev_part = next((p for p in prev.participants if p.user_id == me.user_id), None) if prev else None
+    cards = {c.id: c for c in await _career_cards(db, me.user_id)}
+    names = {cid: c.player.display_name for cid, c in cards.items()}
+    friendly = state.get("friendly")
+    return {
+        "prev_season_id": prev.id if prev else None,
+        "prev_place": prev_part.final_place if prev_part else None,
+        "prev_division": _division_info(prev_part.division, config) if prev_part and prev_part.division else None,
+        "prev_coins": prev_part.coins_earned if prev_part else 0,
+        "summary": _season_summary(prev.state or {}, prev_part, names) if prev and prev_part else None,
+        "core_count": me.core_count, "core_min": int(config.career_core_min),
+        "carried_pct": me.carried_familiarity / 10, "keep_pct": int(config.career_core_keep_pct),
+        "prev_formation": off.get("prev_formation"),
+        "camp": me.camp, "camps": camp_options(config),
+        "friendly": {"opponent": friendly["opponent"], "home_score": friendly["home_score"],
+                     "away_score": friendly["away_score"]} if friendly else None,
+        "starts_at": (state.get("schedule") or [None])[0],
+    }
+
+
+async def collection(db: AsyncSession, user: User) -> dict:
+    """Own usable cards (and «Мой игрок») for building the season squad."""
+    from app.schemas.card import UserCardOut
+
+    config = await get_config(db)
+    part = await _current_participation(db, user.id)
+    cards = await _career_cards(db, user.id, config)
+    squad = set(part.squad_card_ids or []) if part else set()
+    out = []
+    for card in cards:
+        if not _usable(card):
+            continue
+        mine = getattr(card, "is_my_player", False)
+        out.append({
+            "card_id": card.id, "in_squad": card.id in squad,
+            "card": UserCardOut.model_validate(card) if not mine else None,
+            "my_player": {"name": card.player.display_name, "position": card.player.position.value,
+                          "rating": card.player.rating, "club": card.player.club, "country": card.player.country}
+            if mine else None,
+        })
+    return {"squad_size": int(config.career_squad_size), "cards": out}
+
+
+async def friendly_events(db: AsyncSession, user: User, season_id: int) -> dict:
+    season = await db.get(CareerSeason, season_id)
+    if season is None or not any(p.user_id == user.id for p in season.participants):
+        raise NotFoundError("Матч не найден")
+    friendly = (season.state or {}).get("friendly")
+    if not friendly:
+        raise NotFoundError("Товарищеский матч ещё не сыгран")
+    me = next(p for p in season.participants if p.user_id == user.id)
+    return {
+        "home_name": season.state["teams"][me.team_index]["name"], "away_name": friendly["opponent"],
+        "home_score": friendly["home_score"], "away_score": friendly["away_score"], "events": friendly["events"],
+        "analysis": friendly["analysis"], "my_side": "a",
+    }
+
+
+def _season_summary(state: dict, me: CareerParticipant, names: dict[int, str]) -> Optional[dict]:
+    """Facts of a finished season for the coach, from the stored history
+    only: points by tactic, the tactical interactions that applied for and
+    against, top scorer, most minutes, most rounds missed."""
+    results = state.get("results") or []
+    if not results:
+        return None
+    team = me.team_index
+    by_tactic: dict[str, dict] = {}
+    duels: dict[tuple, dict] = {}
+    goals: dict[int, int] = {}
+    for round_results in results:
+        for m in round_results:
+            if team not in (m["home"], m["away"]):
+                continue
+            home = m["home"] == team
+            own, opp = (m["hs"], m["as"]) if home else (m["as"], m["hs"])
+            played = (m.get("tactics") or {}).get(str(team)) or {}
+            key = played.get("preset") or "CUSTOM"
+            row = by_tactic.setdefault(key, {"preset": key, "played": 0, "points": 0, "tactic": played.get("tactic")})
+            row["played"] += 1
+            row["points"] += 3 if own > opp else 1 if own == opp else 0
+            analysis = (m.get("analysis") or {}).get(str(team)) or {}
+            for d in analysis.get("duels") or []:
+                agg = duels.setdefault((d["id"], d["attacker"]), {"id": d["id"], "label": d["label"], "attacker": d["attacker"],
+                                                                  "applied": 0, "attacker_won": 0})
+                agg["applied"] += d["applied"]
+                agg["attacker_won"] += d["attacker_won"]
+            side = "a" if home else "b"
+            for e in m.get("events") or []:
+                if e.get("event_type") == "goal" and e.get("team") == side:
+                    sid = (e.get("payload") or {}).get("shooter_id")
+                    if sid:
+                        goals[sid] = goals.get(sid, 0) + 1
+    minutes = {int(k): v for k, v in ((state.get("minutes") or {}).get(str(team)) or {}).items()}
+    missed: dict[str, int] = {}
+    for reports in (state.get("reports") or {}).values():
+        report = reports.get(str(team)) or {}
+        for name in (report.get("injured") or []) + (report.get("red") or []) + (report.get("suspended") or []):
+            missed[name] = missed.get(name, 0) + 1
+    top_scorer = max(goals.items(), key=lambda kv: kv[1]) if goals else None
+    workhorse = max(minutes.items(), key=lambda kv: kv[1]) if minutes else None
+    absent = max(missed.items(), key=lambda kv: kv[1]) if missed else None
+    return {
+        "tactics": sorted(by_tactic.values(), key=lambda r: (-r["points"], -r["played"])),
+        "duels": sorted(duels.values(), key=lambda d: -d["applied"])[:6],
+        "top_scorer": {"name": names.get(top_scorer[0], "Игрок"), "goals": top_scorer[1]} if top_scorer else None,
+        "most_minutes": {"name": names.get(workhorse[0], "Игрок"), "minutes": workhorse[1]} if workhorse else None,
+        "most_missed": {"name": absent[0], "rounds": absent[1]} if absent else None,
+    }
 
 
 async def _editable_participation(db: AsyncSession, user: User, round_index: Optional[int]) -> CareerParticipant:
@@ -916,6 +1242,61 @@ def _tactics_version(state: dict) -> int:
     return int((state or {}).get("tactics_version") or 0)
 
 
+def _bot_runner(team: dict, label: str, round_index: int, config, chem_rules, choice: dict):
+    on_pitch = [tactics.LivePlayer(card=c, base_rating=c.player.rating, pre_fatigue=0, slot=slot)
+                for c, slot in _bot_cards(team, round_index, config)]
+    return tactics.CareerSideRunner(
+        label, team["name"], team["formation"], team["mentality"], choice["tactic"], on_pitch, [], config,
+        familiarity=choice["familiarity"], plan=choice["plan"], chem_rules=chem_rules,
+        set_pieces=team.get("set_pieces"),
+    )
+
+
+def _human_runner(
+    part: CareerParticipant, cards: list, config, chem_rules, label: str, team_name: str, *,
+    avail_round: int, rotate: bool = False, training: Optional[str] = None, profile=None,
+):
+    """The human side for a match: XI (holes filled out of position), bench,
+    pre-match fatigue / form, club tenure, familiarity and the plan.
+    Returns (runner, pairs, base_familiarity) — runner None when fewer than
+    eleven fit players exist in the whole collection."""
+    by_id = {c.id: c for c in cards}
+    pairs = resolve_lineup(part, by_id, avail_round, [c for c in cards if _usable(c)], fill_any_position=True,
+                           rotate=rotate)
+    if len(pairs) != len(get_formation_slots(part.formation)):
+        return None, [], 0
+    xi_ids = {c.id for c, _ in pairs}
+    xi_players = {c.player_id for c, _ in pairs}
+    bench = [by_id[cid] for cid in _squad_ids(part, by_id) if cid in by_id]
+    bench = [c for c in bench if _usable(c) and not _is_out(part, c.id, avail_round)
+             and c.id not in xi_ids and c.player_id not in xi_players]
+    tr = tactics.tuning_of(config)["training"]
+
+    def live(card, slot=None):
+        engine_card = _engine_card(card, config)
+        cond = _condition(part, card.id)
+        base = min(99, engine_card.player.rating + league_service.tenure_bonus(profile, card.id, config))
+        return tactics.LivePlayer(card=engine_card, base_rating=base, pre_fatigue=cond["fatigue"], form=cond["form"],
+                                  slot=slot)
+
+    base_familiarity = tactics.familiarity_for(
+        part.familiarity, part.familiar_formation, part.familiar_tactic, part.formation, _my_tactic(part), config,
+    )
+    familiarity = base_familiarity
+    if training == "tactical":  # this match only; growth counts from the base
+        familiarity = min(int(config.career_familiarity_max_tenths) + tr["tactical_familiarity_tenths"],
+                          familiarity + tr["tactical_familiarity_tenths"])
+    runner = tactics.CareerSideRunner(
+        label, team_name, part.formation, part.mentality, _my_tactic(part),
+        [live(c, slot) for c, slot in pairs], [live(c) for c in bench], config,
+        familiarity=familiarity, plan=copy.deepcopy(part.match_plan), chem_rules=chem_rules,
+        set_pieces=part.set_pieces, training=training,
+        boost=tr["opponent_boost"] if training == "opponent" else 1.0,
+        set_piece_boost=tr["set_piece_boost"] if training == "set_pieces" else 1.0,
+    )
+    return runner, pairs, base_familiarity
+
+
 async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, config) -> None:
     state = copy.deepcopy(season.state)
     teams = state["teams"]
@@ -932,6 +1313,11 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
     minutes_by_team: dict[int, dict[int, int]] = {}
     gains_by_team: dict[int, dict[int, int]] = {}
     cup_played: dict[int, set[int]] = {}
+    profiles: dict[int, CareerProfile] = {}
+    if v1:
+        for ti, p in humans.items():
+            if p.status == "accepted":
+                profiles[ti] = await get_profile(db, p.user_id, config)
     used_familiarity: dict[int, int] = {}
 
     async def human_cards(part: CareerParticipant) -> list:
@@ -956,9 +1342,15 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         if team.get("user_id") is None:
             opponent_human = _cup_team(state, opponent_index).get("user_id") is not None
             roll = random.Random(season.id * 7919 + round_index * 131 + team_index).random()
+            seen = history.get(str(opponent_index), []) if opponent_human else []
+            if opponent_human and not seen:
+                # Nothing played this season yet: a club remembers the
+                # tactic that beat it twice before (living league).
+                remembered = league_service.remembered_tactic(profiles.get(opponent_index), team.get("club_id"))
+                if remembered in tactics.PRESETS:
+                    seen = [{"tactic": tactics.PRESETS[remembered], "preset": remembered}]
             choice = tactics.bot_tactics_for_round(
-                team, season.difficulty, history.get(str(opponent_index), []) if opponent_human else [],
-                bot_states.get(str(team_index), {}), config, roll,
+                team, season.difficulty, seen, bot_states.get(str(team_index), {}), config, roll,
             )
             if not cup:
                 bot_states[str(team_index)] = {
@@ -966,13 +1358,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                     "familiarity": tactics.familiarity_after_match(choice["familiarity"], config)
                     if season.difficulty == "legend" else 0,
                 }
-            on_pitch = [tactics.LivePlayer(card=c, base_rating=c.player.rating, pre_fatigue=0, slot=slot)
-                        for c, slot in _bot_cards(team, round_index, config)]
-            return tactics.CareerSideRunner(
-                label, team["name"], team["formation"], team["mentality"], choice["tactic"], on_pitch, [], config,
-                familiarity=choice["familiarity"], plan=choice["plan"], chem_rules=chem_rules,
-                set_pieces=team.get("set_pieces"),
-            )
+            return _bot_runner(team, label, round_index, config, chem_rules, choice)
         part = humans.get(team_index)
         if part is None or part.status != "accepted":
             return None  # left the season / declined: technical defeat
@@ -992,41 +1378,18 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             flag_modified(part, "condition")
         # A cup tie follows the league match the same evening: players hurt
         # or banned there are already out; with rotation the freshest play.
-        avail_round = round_index + 1 if cup else round_index
-        rotate = cup and bool(((state.get("cup") or {}).get("rotation") or {}).get(str(team_index)))
-        pairs = resolve_lineup(part, by_id, avail_round, [c for c in cards if _usable(c)], fill_any_position=True,
-                               rotate=rotate)
-        if len(pairs) != len(get_formation_slots(part.formation)):
+        runner, pairs, base_familiarity = _human_runner(
+            part, cards, config, chem_rules, label, team["name"],
+            avail_round=round_index + 1 if cup else round_index,
+            rotate=cup and bool(((state.get("cup") or {}).get("rotation") or {}).get(str(team_index))),
+            training=training, profile=profiles.get(team_index),
+        )
+        if runner is None:
             return None  # fewer than 11 fit players in the whole collection
-        played_now = cup_played if cup else played
-        played_now[team_index] = {c.id for c, _ in pairs}
-        xi_players = {c.player_id for c, _ in pairs}
-        bench = [by_id[cid] for cid in _squad_ids(part, by_id) if cid in by_id]
-        bench = [c for c in bench if _usable(c) and not _is_out(part, c.id, avail_round)
-                 and c.id not in played_now[team_index] and c.player_id not in xi_players]
-
-        def live(card, slot=None):
-            engine_card = _engine_card(card, config)
-            cond = _condition(part, card.id)
-            return tactics.LivePlayer(card=engine_card, base_rating=engine_card.player.rating,
-                                      pre_fatigue=cond["fatigue"], form=cond["form"], slot=slot)
-
-        familiarity = tactics.familiarity_for(
-            part.familiarity, part.familiar_formation, part.familiar_tactic, part.formation, _my_tactic(part), config,
-        )
+        (cup_played if cup else played)[team_index] = {c.id for c, _ in pairs}
         if not cup:
-            used_familiarity[team_index] = familiarity
-        if training == "tactical":  # this match only; growth counts from the base
-            familiarity = min(int(config.career_familiarity_max_tenths) + tr["tactical_familiarity_tenths"],
-                              familiarity + tr["tactical_familiarity_tenths"])
-        return tactics.CareerSideRunner(
-            label, team["name"], part.formation, part.mentality, _my_tactic(part),
-            [live(c, slot) for c, slot in pairs], [live(c) for c in bench], config,
-            familiarity=familiarity, plan=copy.deepcopy(part.match_plan), chem_rules=chem_rules,
-            set_pieces=part.set_pieces, training=training,
-            boost=tr["opponent_boost"] if training == "opponent" else 1.0,
-            set_piece_boost=tr["set_piece_boost"] if training == "set_pieces" else 1.0,
-        )
+            used_familiarity[team_index] = base_familiarity
+        return runner
 
     results = []
     for home, away in state["fixtures"][round_index]:
@@ -1090,9 +1453,21 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         opponent = teams[match["away"] if is_home else match["home"]]["name"]
         own_cards = {c.id: c for c in cards_cache.get(part.user_id, [])}
         names = {cid: c.player.display_name for cid, c in own_cards.items()}
+        gains = gains_by_team.get(team_index)
+        if gains is not None and part.camp == "physical" and round_index < int(config.career_camp_physical_rounds):
+            keep = 100 - int(config.career_camp_physical_pct)
+            gains = {cid: g * keep // 100 for cid, g in gains.items()}
+        if team_index in profiles:
+            opp_team = teams[match["away"] if is_home else match["home"]]
+            my_preset = ((match.get("tactics") or {}).get(str(team_index)) or {}).get("preset")
+            league_service.record_meeting(profiles[team_index], opp_team.get("club_id"), own, opp, my_preset)
+            league_service.add_tenure(profiles[team_index], minutes_by_team.get(team_index, {}))
+            season_minutes = state.setdefault("minutes", {}).setdefault(str(team_index), {})
+            for cid, mins in minutes_by_team.get(team_index, {}).items():
+                season_minutes[str(cid)] = season_minutes.get(str(cid), 0) + mins
         report = _after_match(
             part, played.get(team_index, set()), own, opp, round_index, config, rng, names, _squad_ids(part, own_cards),
-            gains=gains_by_team.get(team_index),
+            gains=gains,
             card_mult=tactics.tuning_of(config)["foul"][_my_tactic(part).get("tackling", "normal")] if v1 else 1.0,
         )
         reports[str(team_index)] = report
@@ -1345,6 +1720,16 @@ async def _finish(db: AsyncSession, season: CareerSeason, config) -> None:
         )
     season.status = "finished"
     season.finished_at = datetime.now(timezone.utc)
+    if season.division is not None:
+        for part in season.participants:
+            if part.status != "accepted" or part.next_division is None:
+                continue
+            profile = await get_profile(db, part.user_id, config)
+            league_service.plan_next_league(
+                profile, table, season.state.get("teams") or [], season.division, part.next_division,
+                lambda division, place: division_after(division, place, config),
+            )
+            await _create_next_season(db, part, season, config, season.finished_at)
 
 
 async def resolve_due(db: AsyncSession, season_id: int, now: Optional[datetime] = None) -> int:
@@ -1496,7 +1881,7 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         "tactics_version": _tactics_version(state),
         "scouting": None, "familiarity": None, "match_plan": me.match_plan, "plan_limits": {},
         "ambition": me.ambition, "ambitions": [], "training": me.training, "trainings": training_options(),
-        "cup": None,
+        "cup": None, "offseason": None, "summary": None,
         "set_pieces": {**tactics.DEFAULT_SET_PIECES, **(me.set_pieces or {})}, "squad_warnings": [],
     }
     if season.division is not None:
@@ -1504,6 +1889,10 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         out["division"] = _division_info(season.division, config)
         out["ambitions"] = ambition_options(season.division, config)
         out["cup"] = _cup_out(state, me, config)
+        out["offseason"] = await _offseason_out(db, season, me, config)
+        if season.status == "finished":
+            cards_now = {c.id: c for c in await _career_cards(db, me.user_id)}
+            out["summary"] = _season_summary(state, me, {cid: c.player.display_name for cid, c in cards_now.items()})
         if me.next_division is not None:
             out["next_division"] = _division_info(me.next_division, config)
     results = state.get("results") or []
@@ -1522,7 +1911,7 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         })
     if me.status == "accepted" and season.status == "active" and season.rounds_played < ROUNDS:
         config = await get_config(db)
-        out["scouting"] = _scouting(season, me, config)
+        out["scouting"] = _scouting(season, me, config, await get_profile(db, me.user_id, config))
         if out["tactics_version"] >= tactics.TACTICS_VERSION:
             out["familiarity"] = {
                 "stored_pct": me.familiarity / 10,
@@ -1596,7 +1985,7 @@ def _team_form(state: dict, team_index: int) -> list[str]:
     return form[-FORM_MATCHES:]
 
 
-def _scouting(season: CareerSeason, me: CareerParticipant, config) -> Optional[dict]:
+def _scouting(season: CareerSeason, me: CareerParticipant, config, profile: Optional[CareerProfile] = None) -> Optional[dict]:
     """The next opponent as far as it is knowable: the tactic it actually
     played last (or its season set-up before round 1 — a friend's is hidden
     until played), its form, and the counter hint for my saved style
@@ -1631,6 +2020,7 @@ def _scouting(season: CareerSeason, me: CareerParticipant, config) -> Optional[d
         code = max(tactics.PRESETS, key=lambda c: tactics.matchup_report(tactics.PRESETS[c], my_last, config)["score"])
         threat = {"preset": code, "tactic": tactics.PRESETS[code]}
     return {
+        "head_to_head": league_service.head_to_head(profile, team.get("club_id")) if is_bot else None,
         "round_index": round_index, "opponent_index": opp_index, "opponent_name": team["name"], "is_bot": is_bot,
         "strength": round(sum(p["rating"] for p in team["players"]) / len(team["players"])) if team.get("players") else None,
         "formation": seen.get("formation"), "mentality": seen.get("mentality"),

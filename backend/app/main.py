@@ -19,6 +19,7 @@ from app.routers import (
     admin_daily_rewards,
     admin_dashboard,
     admin_diamond_upgrades,
+    admin_career,
     admin_games,
     admin_gifts,
     admin_leagues,
@@ -176,6 +177,7 @@ app.include_router(admin_leagues.router, prefix=API_PREFIX)
 app.include_router(admin_lifestyle.router, prefix=API_PREFIX)
 app.include_router(admin_wheel.router, prefix=API_PREFIX)
 app.include_router(admin_games.router, prefix=API_PREFIX)
+app.include_router(admin_career.router, prefix=API_PREFIX)
 app.include_router(admin_log.router, prefix=API_PREFIX)
 app.include_router(admin_stars_purchases.router, prefix=API_PREFIX)
 app.include_router(internal.router, prefix=API_PREFIX)

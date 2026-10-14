@@ -40,6 +40,14 @@ class CareerAmbitionIn(BaseModel):
     ambition: str
 
 
+class CareerSquadIn(BaseModel):
+    card_ids: list[int]
+
+
+class CareerCampIn(BaseModel):
+    camp: Optional[str] = None
+
+
 class CareerCupIn(BaseModel):
     rotation: bool
 
@@ -100,6 +108,8 @@ class CareerScoutingOut(BaseModel):
     strength: Optional[int] = None
     formation: Optional[str] = None
     mentality: Optional[str] = None
+    # Head-to-head with this bot club over past seasons (living league).
+    head_to_head: Optional[dict] = None
     # Their tactic (axes) and its preset code / CUSTOM; None for seasons from
     # before the tactics update (playstyle only) or a friend not yet seen.
     tactic: Optional[dict[str, str]] = None
@@ -256,6 +266,10 @@ class CareerSeasonOut(BaseModel):
     trainings: list[dict] = []
     # Cup bracket, my status, rotation and prizes (tactics seasons).
     cup: Optional[dict] = None
+    # Off-season panel until round 1 of a season that follows another;
+    # summary of a finished season.
+    offseason: Optional[dict] = None
+    summary: Optional[dict] = None
     scouting: Optional[CareerScoutingOut] = None
     familiarity: Optional[CareerFamiliarityOut] = None
     match_plan: Optional[CareerPlanOut] = None
