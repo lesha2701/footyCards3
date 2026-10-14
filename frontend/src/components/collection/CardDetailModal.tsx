@@ -1,7 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
+
+import { fetchCardStars } from "@/api/collection";
 import { IconCoin, IconLock, IconTag, IconUpgrade } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { POSITION_LABELS, RARITY_GLOW, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import CardSkillPanel from "@/components/collection/CardSkillPanel";
+import CardStarPanel from "@/components/collection/CardStarPanel";
 import type { UserCard } from "@/types";
 
 export default function CardDetailModal({
@@ -21,6 +25,15 @@ export default function CardDetailModal({
 }) {
   const player = card.player;
   const isDiamond = player.rarity === "diamond";
+  // Same cache entry CardStarPanel reads, so feeding duplicates updates the
+  // rating shown here right away (the `card` prop is a snapshot).
+  const { data: starState } = useQuery({
+    queryKey: ["card-stars", card.id],
+    queryFn: () => fetchCardStars(card.id),
+    enabled: !isDiamond,
+  });
+  const rating = starState?.rating_now ?? player.rating;
+  const starBonus = starState?.rating_bonus ?? card.star_rating_bonus ?? 0;
   return (
     // Bottom sheet on phones (same pattern as the app's confirm/help sheets),
     // centered card on wider screens; the sheet itself scrolls when its
@@ -53,7 +66,10 @@ export default function CardDetailModal({
           </p>
         )}
         <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <span className="text-ink-mist">Рейтинг: <b className="font-mono text-accent-cyan">{player.rating}</b></span>
+          <span className="text-ink-mist">
+            Рейтинг: <b className="font-mono text-accent-cyan">{rating}</b>
+            {starBonus > 0 && <span className="text-amber-300"> (+{starBonus}★)</span>}
+          </span>
           <span className="text-ink-mist">№ {card.serial_number}</span>
           <span className="text-ink-mist">Атака: <b className="font-mono text-accent-cyan">{player.attack_rating}</b></span>
           <span className="text-ink-mist">Защита: <b className="font-mono text-accent-cyan">{player.defense_rating}</b></span>
@@ -61,6 +77,7 @@ export default function CardDetailModal({
           <span className="text-ink-mist">Страна: <b className="text-ink-chalk">{player.country}</b></span>
         </div>
         <CardSkillPanel key={card.id} cardId={card.id} />
+        <CardStarPanel key={`stars-${card.id}`} cardId={card.id} isDiamond={isDiamond} />
         {(card.is_locked_by_admin || card.is_locked_in_trade || card.is_in_lineup || card.is_in_tactico_squad) && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-mist">
             <IconLock size={13} />

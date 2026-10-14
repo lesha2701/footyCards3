@@ -11,6 +11,8 @@ interface Props {
   onClick?: () => void;
   selected?: boolean;
   dimmed?: boolean;
+  /** «Звёзды» of this specific copy (its rating already includes them). */
+  stars?: number;
 }
 
 const SIZE_CLASSES: Record<NonNullable<Props["size"]>, string> = {
@@ -19,7 +21,7 @@ const SIZE_CLASSES: Record<NonNullable<Props["size"]>, string> = {
   lg: "text-sm",
 };
 
-export default function PlayerCard({ player, size = "md", badge, footer, onClick, selected, dimmed }: Props) {
+export default function PlayerCard({ player, size = "md", badge, footer, onClick, selected, dimmed, stars = 0 }: Props) {
   const imageUrl = staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp");
 
   return (
@@ -38,6 +40,11 @@ export default function PlayerCard({ player, size = "md", badge, footer, onClick
           <img src={imageUrl} alt={player.display_name} className="h-full w-full object-cover" loading="lazy" />
           <div className="absolute left-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-display font-bold leading-none text-white">
             <span className={SIZE_CLASSES[size]}>{player.rating}</span>
+            {stars > 0 && (
+              <span className="mt-0.5 block text-[8px] leading-none text-amber-300" aria-label={`Звёзд: ${stars}`}>
+                {"★".repeat(stars)}
+              </span>
+            )}
           </div>
           <div className="absolute right-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-display font-semibold leading-none text-white">
             <span className={SIZE_CLASSES[size]}>{player.position}</span>

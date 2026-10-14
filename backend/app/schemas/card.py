@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.models.enums import CardSource
 from app.schemas.player import PlayerOut
-from app.services.player_stats_service import effective_card_stats
+from app.services.player_stats_service import card_rating_bonus, effective_card_stats
 
 
 class UserCardOut(BaseModel):
@@ -22,6 +22,12 @@ class UserCardOut(BaseModel):
     is_in_tactico_squad: bool
     hidden_from_trade: bool
     diamond_rating_bonus: int = 0
+    # «Звёзды карточки» (services/card_star_service.py): earned stars, duplicates
+    # banked toward the next one, and the rating the stars add (already baked
+    # into player.rating below, like the diamond bonus).
+    stars: int = 0
+    star_progress: int = 0
+    star_rating_bonus: int = 0
     # This copy's own skill (see services/card_skill_service.py); null = none.
     skill_code: Optional[str] = None
     skill_level: Optional[int] = None
@@ -41,7 +47,7 @@ class UserCardOut(BaseModel):
         site changes needed. The underlying Player template is untouched."""
         if isinstance(data, dict):
             return data
-        bonus = getattr(data, "diamond_rating_bonus", 0) or 0
+        bonus = card_rating_bonus(data)
         player_out = PlayerOut.model_validate(data.player)
         if bonus > 0:
             rating, attack, defense = effective_card_stats(data.player, bonus)
@@ -57,7 +63,10 @@ class UserCardOut(BaseModel):
             "is_in_lineup": data.is_in_lineup,
             "is_in_tactico_squad": data.is_in_tactico_squad,
             "hidden_from_trade": data.hidden_from_trade,
-            "diamond_rating_bonus": bonus,
+            "diamond_rating_bonus": getattr(data, "diamond_rating_bonus", 0) or 0,
+            "stars": getattr(data, "stars", 0) or 0,
+            "star_progress": getattr(data, "star_progress", 0) or 0,
+            "star_rating_bonus": getattr(data, "star_rating_bonus", 0) or 0,
             "skill_code": getattr(data, "skill_code", None),
             "skill_level": getattr(data, "skill_level", None),
         }

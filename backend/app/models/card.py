@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -44,9 +44,21 @@ class UserCard(Base):
         String(32), ForeignKey("card_skills.code", ondelete="RESTRICT"), nullable=True, index=True
     )
     skill_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # «Звёзды карточки» (services/card_star_service.py): duplicates of the
+    # same player fed into THIS copy. star_progress = duplicates banked toward
+    # the next star; star_rating_bonus = rating the earned stars add, fixed at
+    # the moment each star was claimed (like diamond_rating_bonus, so a later
+    # admin retune never rewrites already-earned stars). Travels with the row
+    # on a trade. Never set on diamond cards (they have their own upgrade).
+    stars: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    star_progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    star_rating_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     owner: Mapped["User"] = relationship(back_populates="cards")
     player: Mapped["Player"] = relationship(back_populates="cards")
+
+    def has_star_investment(self) -> bool:
+        return bool(self.stars or self.star_progress)
 
     def is_locked(self) -> bool:
         return self.is_locked_by_admin or self.is_locked_in_trade or self.is_in_lineup or self.is_in_tactico_squad
@@ -58,4 +70,36 @@ class UserCard(Base):
             "(skill_code IS NOT NULL AND skill_level IS NOT NULL AND skill_level BETWEEN 1 AND 3)",
             name="ck_user_cards_skill_level",
         ),
+        CheckConstraint(
+            "stars >= 0 AND star_progress >= 0 AND star_rating_bonus >= 0", name="ck_user_cards_stars_non_negative",
+        ),
     )
+
+
+class CardStarLedger(Base):
+    """Append-only journal of every «Звёзды карточек» operation: feeding
+    duplicates into a copy and claiming stars. `idempotency_key` is unique
+    per user, which is what makes a retried feed/claim a replay instead of a
+    second charge — same DB-constraint approach as card_skill_ledger."""
+
+    __tablename__ = "card_star_ledger"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    # SET NULL: the history outlives the card being sold/consumed later.
+    user_card_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # feed | claim
+    cards_consumed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    consumed_card_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    stars_before: Mapped[int] = mapped_column(Integer, nullable=False)
+    stars_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    progress_before: Mapped[int] = mapped_column(Integer, nullable=False)
+    progress_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    coins_spent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rating_bonus_after: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "idempotency_key", name="uq_card_star_ledger_user_key"),)

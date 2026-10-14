@@ -18,6 +18,7 @@ from app.models.user import User
 from app.services import card_skill_service, chemistry_service, personal_squad_service, tournament_match_engine, wallet_service
 from app.services.card_skill_effects import SNAPSHOT_VERSION, effect_for_card
 from app.services.chemistry_service import ChemistryRules
+from app.services.player_stats_service import card_rating_bonus
 from app.services.club_formation_service import get_formation_slots
 from app.services.club_tactical_matchup_service import build_side
 from app.services.game_config_service import get_config
@@ -48,7 +49,7 @@ class _EngineCard:
 def _engine_card(card: UserCard, config=None, chemistry_bonus: int = 0) -> _EngineCard:
     """chemistry_bonus: this card's neighbour-link chemistry bonus
     (chemistry_service, 0 while the mechanic is off) — folded into the match
-    rating the engine reads, after the diamond bonus and before any zone
+    rating the engine reads, after the diamond/star bonus and before any zone
     profile / coach / stadium math."""
     p = card.player
     skill = effect_for_card(card.skill_code, card.skill_level, p.position, config) if config is not None else None
@@ -56,12 +57,12 @@ def _engine_card(card: UserCard, config=None, chemistry_bonus: int = 0) -> _Engi
         skill["player"] = p.display_name
     return _EngineCard(
         id=card.id, player_id=card.player_id, skill=skill,
-        # No diamond_rating_bonus on the adapter itself: the bonus is already
-        # folded into player.rating, and calculate_base_strength would add it
-        # again via getattr(card, "diamond_rating_bonus", 0).
+        # No diamond/star bonus fields on the adapter itself: the bonus is
+        # already folded into player.rating, and calculate_base_strength would
+        # add it again via card_rating_bonus(card).
         player=SimpleNamespace(
             display_name=p.display_name, position=p.position,
-            rating=chemistry_service.boosted_rating(min(99, p.rating + card.diamond_rating_bonus), chemistry_bonus),
+            rating=chemistry_service.boosted_rating(min(99, p.rating + card_rating_bonus(card)), chemistry_bonus),
             rarity=p.rarity, club=p.club, country=p.country,
             attack_rating=getattr(p, "attack_rating", None), defense_rating=getattr(p, "defense_rating", None),
         ),

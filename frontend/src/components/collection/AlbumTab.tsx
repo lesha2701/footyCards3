@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { losesProgress } from "@/lib/cardStars";
 import { useState } from "react";
 
 import CardUpgradeModal from "@/components/cards/CardUpgradeModal";
@@ -238,7 +239,7 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
         <CardDetailModal
           card={detailCard}
           onClose={() => setDetailCard(null)}
-          onSell={() => setConfirmSell({ ids: [detailCard.id], lastCopy: false, skillLoss: !!detailCard.skill_code })}
+          onSell={() => setConfirmSell({ ids: [detailCard.id], lastCopy: false, skillLoss: losesProgress(detailCard) })}
           onToggleHidden={(hidden) => hideMutation.mutate({ id: detailCard.id, hidden })}
           hiddenPending={hideMutation.isPending}
           onUpgrade={
@@ -258,7 +259,7 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
           (confirmSell?.lastCopy
             ? "Ты продашь единственный экземпляр этого футболиста — он снова станет пустым слотом в альбоме. Это действие нельзя отменить."
             : "Монеты будут зачислены на баланс. Действие нельзя отменить.")
-          + (confirmSell?.skillLoss ? " У карточки есть навык — он будет потерян, жетоны не вернутся." : "")
+          + (confirmSell?.skillLoss ? " У карточки есть навык или звёзды — они будут потеряны без возврата." : "")
         }
         danger
         confirmLabel="Продать"

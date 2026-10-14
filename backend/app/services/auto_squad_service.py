@@ -24,6 +24,7 @@ from app.services import chemistry_service
 from app.services.card_skill_catalog import SKILL_DEFINITIONS
 from app.services.chemistry_service import ChemistryRules
 from app.services.lineup_service import CATEGORY_POSITIONS, calculate_base_strength
+from app.services.player_stats_service import card_rating_bonus
 
 
 @dataclass(frozen=True)
@@ -65,7 +66,7 @@ def pick_cards(
             key = (
                 card.id in preferred_ids,
                 card.player.position == slot.ideal_position,
-                min(99, card.player.rating + (card.diamond_rating_bonus or 0)),
+                min(99, card.player.rating + card_rating_bonus(card)),
                 _skill_bonus(card, engine),
                 -card.id,
             )
@@ -256,7 +257,7 @@ async def auto_personal_squad(db: AsyncSession, user: User, template_index: int,
 
 
 def _effective(card: UserCard) -> int:
-    return min(99, card.player.rating + (card.diamond_rating_bonus or 0))
+    return min(99, card.player.rating + card_rating_bonus(card))
 
 
 def bench_upgrades(

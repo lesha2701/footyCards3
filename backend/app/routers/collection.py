@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.enums import Rarity
 from app.models.user import User
 from app.schemas.card import CollectionStatsOut, UserCardOut
+from app.schemas.card_star import CardStarClaimRequest, CardStarFeedRequest, CardStarOperationOut, CardStarStateOut
 from app.schemas.card_upgrade import CardUpgradeResultOut, CardUpgradeRuleOut, UpgradeCardRequest
 from app.schemas.collection import (
     AlbumCollectionDetailOut,
@@ -29,6 +30,7 @@ from app.schemas.diamond_upgrade import (
     FeedCardsRequest,
     FeedCardsResult,
 )
+from app.services import card_star_service
 from app.services.card_upgrade_service import list_rules, list_upgradeable_cards, upgrade_card
 from app.services.collection_service import (
     collection_stats,
@@ -42,6 +44,25 @@ from app.services.collection_service import (
 from app.services.diamond_upgrade_service import feed_cards, get_effective_rating_cap, get_material_cards, list_tiers
 
 router = APIRouter(prefix="/collection", tags=["collection"])
+
+
+@router.get("/cards/{card_id}/stars", response_model=CardStarStateOut)
+async def get_card_stars(card_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await card_star_service.get_state(db, user, card_id)
+
+
+@router.post("/cards/{card_id}/stars/feed", response_model=CardStarOperationOut)
+async def feed_card_stars(
+    card_id: int, payload: CardStarFeedRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await card_star_service.feed(db, user, card_id, payload)
+
+
+@router.post("/cards/{card_id}/stars/claim", response_model=CardStarOperationOut)
+async def claim_card_star(
+    card_id: int, payload: CardStarClaimRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await card_star_service.claim(db, user, card_id, payload.idempotency_key)
 
 
 @router.get("/album", response_model=AlbumOverviewOut)
@@ -92,7 +113,7 @@ async def sell_one_card(
 async def sell_duplicate_cards(
     payload: SellDuplicatesRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
-    return await sell_duplicates(db, user, payload.preview, payload.include_diamond)
+    return await sell_duplicates(db, user, payload.preview, payload.include_diamond, payload.include_star_material)
 
 
 @router.post("/cards/bulk-sell", response_model=SellResultOut)
