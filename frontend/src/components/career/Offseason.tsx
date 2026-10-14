@@ -97,8 +97,8 @@ function lineOf(position: string): "GK" | "DEF" | "MID" | "FWD" {
   return (Object.keys(CATEGORY_POSITIONS) as ("GK" | "DEF" | "MID" | "FWD")[]).find((c) => CATEGORY_POSITIONS[c].includes(position)) ?? "MID";
 }
 
-/** Bottom sheet: pick the season squad from the collection. */
-function SquadBuilder({ onClose, onView, onError }: { onClose: () => void } & Handlers) {
+/** Bottom sheet: pick the season squad from the collection (before round 1). */
+export function SquadBuilder({ onClose, onView, onError }: { onClose: () => void } & Handlers) {
   const { data } = useQuery({ queryKey: ["career", "collection"], queryFn: fetchCareerCollection });
   const [picked, setPicked] = useState<Set<number> | null>(null);
   const selected = picked ?? new Set((data?.cards ?? []).filter((c) => c.in_squad).map((c) => c.card_id));

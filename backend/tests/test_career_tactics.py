@@ -996,3 +996,15 @@ async def test_admin_division_clubs(client, db_session, bot_token):
     assert bad.status_code in (409, 422)
     added = await client.post(f"{API}/admin/career/clubs", headers=admin, json={"name": "Новый клуб", "division": 3})
     assert any(c["name"] == "Новый клуб" and c["source"] == "admin" for c in added.json()["clubs"])
+
+
+async def test_first_season_squad_can_be_rebuilt_before_round_one(client, db_session, bot_token):
+    user_id, headers, season = await _season(client, db_session, bot_token, 870016)
+    assert season["offseason"] is None  # the very first season
+    keep = [s["card_id"] for s in season["squad"]][:12]
+    resp = await client.put(f"{API}/career/squad", headers=headers, json={"card_ids": keep})
+    assert resp.status_code == 200, resp.text
+    assert len(resp.json()["season"]["squad"]) == 12
+    first = datetime.fromisoformat(season["schedule"][0])
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    assert (await client.put(f"{API}/career/squad", headers=headers, json={"card_ids": keep[:11]})).status_code == 409

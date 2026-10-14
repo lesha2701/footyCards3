@@ -19,6 +19,7 @@ vi.mock("@/api/career", async (orig) => ({
   setCareerPlan: (plan: unknown) => setCareerPlan(plan),
   setCareerLineup: (payload: unknown) => setCareerLineup(payload),
   previewCareerTactic: (tactic: unknown) => previewCareerTactic(tactic),
+  fetchCareerCollection: () => Promise.resolve({ squad_size: 22, cards: [] }),
 }));
 
 const axis = (key: string, label: string, values: [string, string][]) => ({
@@ -287,5 +288,16 @@ describe("CareerSquad", () => {
     fireEvent.click(screen.getByRole("button", { name: "FWD2: Пётр Жуков" }));
     // Гомес shares neither club nor country with the LW: chemistry drops.
     expect(screen.getByText("-2 хим.")).toBeInTheDocument();
+    // Round 1 already played: the squad itself is fixed.
+    expect(screen.queryByRole("button", { name: /Изменить заявку/ })).not.toBeInTheDocument();
+  });
+
+  it("lets the squad be rebuilt before round 1", async () => {
+    const client = new QueryClient();
+    render(<QueryClientProvider client={client}>
+      <CareerSquad season={{ ...season, rounds_played: 0, status: "active" }} onView={() => {}} onError={() => {}} />
+    </QueryClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Изменить заявку · 3" }));
+    expect(await screen.findByText("Заявка на сезон")).toBeInTheDocument();
   });
 });

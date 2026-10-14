@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { setCareerLineup, type CareerSeason, type CareerSlot, type CareerSquadCard, type CareerView } from "@/api/career";
 import { ChemistryDiamonds, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
+import { SquadBuilder } from "@/components/career/Offseason";
 import PitchBackground from "@/components/squad/PitchBackground";
 import { staticUrl } from "@/lib/api";
 import { chemistryGain, computeChemistry } from "@/lib/chemistry";
@@ -159,6 +160,9 @@ function BenchCard({ entry, onClick, gain, selected }: { entry: CareerSquadCard;
 export default function CareerSquad({ season, onView, onError }: { season: CareerSeason } & Handlers) {
   const [slots, setSlots] = useState<Record<string, number>>(season.lineup);
   const [picking, setPicking] = useState<CareerSlot | null>(null);
+  const [building, setBuilding] = useState(false);
+  // The season squad (заявка) can be rebuilt until round 1 kicks off.
+  const squadEditable = season.rounds_played === 0 && (season.tactics_version ?? 0) > 0 && season.status === "active";
   const savedKey = JSON.stringify(season.lineup);
   useEffect(() => setSlots(JSON.parse(savedKey)), [savedKey]);
   const pitchRef = useRef<HTMLDivElement>(null);
@@ -231,8 +235,18 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
           <p className="text-[10px] uppercase tracking-wider text-ink-mist">Состав на тур {season.rounds_played + 1}</p>
           <p className="font-display text-lg font-bold leading-tight text-ink-chalk">{formationLabel(season.formation)}</p>
         </div>
-        <p className="text-[11px] text-ink-mist">заявка · {season.squad.length}</p>
+        {squadEditable ? (
+          <button onClick={() => setBuilding(true)}
+            className="rounded-xl bg-white/10 px-3 py-1.5 text-[11px] font-semibold text-ink-chalk active:scale-95">
+            Изменить заявку · {season.squad.length}
+          </button>
+        ) : (
+          <p className="text-[11px] text-ink-mist">заявка · {season.squad.length}</p>
+        )}
       </div>
+      {squadEditable && (
+        <p className="-mt-1 text-[10px] text-ink-mist-dim">Заявку можно менять до первого тура, состав — перед каждым туром.</p>
+      )}
       {chemistry?.enabled && <ChemistrySummary chemistry={chemistry} />}
 
       <div
@@ -286,6 +300,8 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
       >
         {save.isPending ? "Сохраняем..." : dirty ? "Сохранить состав" : "Состав сохранён"}
       </button>
+
+      {building && <SquadBuilder onClose={() => setBuilding(false)} onView={onView} onError={onError} />}
 
       {picking && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={() => setPicking(null)}>
