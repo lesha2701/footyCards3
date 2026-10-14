@@ -1,5 +1,4 @@
 import asyncio
-import os
 import uuid
 
 import pytest
@@ -15,7 +14,6 @@ from app.services.tournament_queue_service import apply_to_tournament
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
 
-REAL_POSTGRES_URL = os.environ.get("REAL_POSTGRES_URL", "postgresql+asyncpg://postgres:1234@postgres:5432/footycards")
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -194,23 +192,20 @@ async def test_apply_rejects_non_manager(client, db_session, bot_token):
         await apply_to_tournament(db_session, member)
 
 
-async def test_eight_concurrent_applications_form_exactly_one_tournament():
+async def test_eight_concurrent_applications_form_exactly_one_tournament(real_pg):
     """Genuine concurrency regression test for the singleton TournamentQueueState lock: 8 clubs
     apply concurrently (asyncio.gather, independent DB sessions/connections against real Postgres)
     and exactly one of them must observe the queue crossing 8 entries and form the Tournament.
 
-    Runs against real Postgres (see REAL_POSTGRES_URL above) — skips gracefully if unreachable,
-    same as test_club_packs.py's own concurrent-race regression test. For the same reason that
+    Runs against the real-Postgres test database (`real_pg`, every created row — including the
+    formed tournament — is deleted on teardown) — skips gracefully if unreachable, same as
+    test_club_packs.py's own concurrent-race regression test. For the same reason that
     test avoids the pytest suite's SQLite-backed `client`/`db_session` fixtures (a single shared
     StaticPool connection can't reproduce genuine two-connection FOR UPDATE lock timing, and the
     dependency-overridden `client` never touches real Postgres at all), this test also builds its
     fixtures — users, clubs, full 11-card lineups — directly against `RealSessionLocal`, mirroring
     test_club_packs.py's raw-model-construction pattern instead of going through HTTP endpoints.
     """
-    from sqlalchemy import text
-    from sqlalchemy.exc import OperationalError
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
     from app.models.club import ClubMember
     from app.models.club_card import ClubCard
     from app.models.club_lineup import ClubLineup, ClubLineupCard
@@ -219,15 +214,7 @@ async def test_eight_concurrent_applications_form_exactly_one_tournament():
     from app.models.user import User
     from app.services.lineup_service import FORMATION_SLOTS
 
-    engine = create_async_engine(REAL_POSTGRES_URL, pool_pre_ping=True)
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-    except (OSError, OperationalError) as exc:
-        await engine.dispose()
-        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
-
-    RealSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+    RealSessionLocal = real_pg
     suffix = uuid.uuid4().hex[:8]
 
     setup = RealSessionLocal()
@@ -301,5 +288,3 @@ async def test_eight_concurrent_applications_form_exactly_one_tournament():
             await session.execute(select(TournamentClub).where(TournamentClub.tournament_id == formed[0].tournament_id))
         ).scalars().all()
         assert len(participants) == 8
-
-    await engine.dispose()

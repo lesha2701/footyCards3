@@ -1,19 +1,14 @@
 """«Звёзды карточек» concurrency against a REAL PostgreSQL (row locks).
-SQLite ignores SELECT ... FOR UPDATE, so these only run when
-CARD_STARS_PG_URL points at a database already migrated to head, e.g.:
-
-    CARD_STARS_PG_URL=postgresql+asyncpg://postgres:pw@localhost:5446/footycards \\
-        pytest tests/test_card_stars_postgres.py -v
-
-Each test creates its own users/cards, so the database can be reused.
+SQLite ignores SELECT ... FOR UPDATE, so these run on the `real_pg` fixture
+(tests/conftest.py): a dedicated `*_test` database, created and migrated to head
+on first use, never the app's own; every row a test creates is deleted on
+teardown. See CLAUDE.md → Backend checks.
 """
 import asyncio
-import os
 import uuid
 
 import pytest
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.exceptions import AppError
 from app.models.card import CardStarLedger, UserCard
@@ -24,10 +19,6 @@ from app.models.user import User
 from app.schemas.card_star import CardStarFeedRequest
 from app.services import card_star_service
 
-PG_URL = os.environ.get("CARD_STARS_PG_URL")
-pytestmark = pytest.mark.skipif(not PG_URL, reason="CARD_STARS_PG_URL not set (needs real PostgreSQL)")
-
-
 @pytest.fixture(autouse=True)
 def _fresh_schema():
     # Overrides conftest's SQLite create_all/drop_all: the PG database is
@@ -36,9 +27,8 @@ def _fresh_schema():
 
 
 @pytest.fixture
-async def pg():
-    engine = create_async_engine(PG_URL, pool_size=10)
-    async with async_sessionmaker(bind=engine)() as s:
+async def pg(real_pg):
+    async with real_pg() as s:
         config = await s.get(GameConfig, 1)
         if config is None:
             config = GameConfig(id=1)
@@ -47,8 +37,7 @@ async def pg():
         config.card_star_dupes_per_level = {r: [2, 3, 5] for r in ("common", "rare", "epic", "legendary")}
         config.card_star_coin_cost = {r: [100, 200, 400] for r in ("common", "rare", "epic", "legendary")}
         await s.commit()
-    yield async_sessionmaker(bind=engine, expire_on_commit=False)
-    await engine.dispose()
+    yield real_pg
 
 
 async def _user_with_copies(pg, copies: int, balance: int) -> tuple[int, list[int]]:

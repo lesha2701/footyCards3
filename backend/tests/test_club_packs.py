@@ -1,12 +1,8 @@
 import asyncio
-import os
 import uuid
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.models.club import Club, ClubMember
 from app.models.club_pack import ClubPack, ClubPackRarityProbability
@@ -16,21 +12,12 @@ from app.services.club_pack_service import open_club_pack
 from tests.factories import create_player
 from tests.utils import telegram_headers
 
-# The pytest suite's own `client`/`db_session` fixtures (tests/conftest.py) hardcode
-# DATABASE_URL to in-memory SQLite for every test, unconditionally overwriting whatever
-# real DATABASE_URL the process actually started with (verified: even inside the
-# `docker compose exec backend pytest ...` container, whose env really does point at the
-# dev Postgres instance, `tests.conftest.engine.url` is still `sqlite+aiosqlite://`).
-# A genuine two-independent-connection race additionally can't be reproduced against that
-# SQLite DB at all: it uses a single shared StaticPool connection, so two "concurrent"
-# AsyncSessions end up fighting over one physical DBAPI connection and raise an unrelated
-# greenlet/threading error instead of exercising Postgres's real unique-constraint timing.
-# So this test opens its own independent connection straight to the real dev Postgres
-# instance (matching docker-compose.yml's/.env.example's default credentials, overridable
-# via REAL_POSTGRES_URL) and skips gracefully if that instance isn't reachable — this is
-# the same "verify manually against real Postgres" real-DB check CLAUDE.md calls for with
-# row-locking-sensitive changes, just written as a permanent, self-cleaning regression test.
-REAL_POSTGRES_URL = os.environ.get("REAL_POSTGRES_URL", "postgresql+asyncpg://postgres:1234@postgres:5432/footycards")
+# The concurrency test below needs genuinely independent connections: the suite's
+# `client`/`db_session` fixtures (tests/conftest.py) use one shared in-memory SQLite
+# connection, where two "concurrent" AsyncSessions just fight over the same DBAPI
+# connection and never exercise Postgres's real unique-constraint timing. It therefore
+# uses the `real_pg` fixture — a dedicated `*_test` Postgres database, never the app's
+# own, with every created row deleted on teardown (see tests/real_postgres.py).
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -301,7 +288,7 @@ async def test_open_club_pack_requires_manager_role(client, db_session, bot_toke
     assert club_detail.json()["budget"] == 200  # unchanged: the daily-claim credit, no pack debit
 
 
-async def test_open_club_pack_concurrent_same_idempotency_key_no_double_debit():
+async def test_open_club_pack_concurrent_same_idempotency_key_no_double_debit(real_pg):
     """Genuine concurrency regression test for the flush-time IntegrityError bug: two truly
     concurrent open_club_pack calls (asyncio.gather, two independent DB sessions/connections)
     with the same idempotency_key both pass the pre-check SELECT before either commits, so both
@@ -312,26 +299,19 @@ async def test_open_club_pack_concurrent_same_idempotency_key_no_double_debit():
     from test_open_club_pack_idempotency_key_prevents_double_charge above, which only issues two
     *sequential* HTTP requests — the second request's pre-check always finds the first request's
     already-committed row and returns early, never reaching `db.flush()`, so it can't catch this
-    bug. Runs against real Postgres (see REAL_POSTGRES_URL above) — skips if unreachable.
+    bug. Runs against the real-Postgres test database (`real_pg`) — skips if unreachable.
     """
-    engine = create_async_engine(REAL_POSTGRES_URL, pool_pre_ping=True)
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-    except OSError as exc:
-        await engine.dispose()
-        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
-    except OperationalError as exc:
-        await engine.dispose()
-        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
-
-    RealSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+    RealSessionLocal = real_pg
     suffix = uuid.uuid4().hex[:10]
 
     setup = RealSessionLocal()
     user = club_id = pack_id = None
     user_id = None
     try:
+        # The pack's card roll needs an active, droppable player — the real-Postgres test
+        # database starts empty (without one, the first caller raises while holding the
+        # club's row lock and the second waits on it forever).
+        await create_player(setup, rarity=Rarity.common)
         user = User(telegram_id=990_000_000_000 + uuid.uuid4().int % 1_000_000_000, username=f"race_{suffix}")
         setup.add(user)
         await setup.flush()
@@ -381,25 +361,4 @@ async def test_open_club_pack_concurrent_same_idempotency_key_no_double_debit():
             final_club = await verify.get(Club, club_id)
             assert final_club.budget == 150, "club budget must reflect exactly one debit, not two"
     finally:
-        # Self-cleaning: this test writes real rows into the shared dev Postgres instance, so
-        # tear everything it created back down regardless of pass/fail. Deleting the club first
-        # cascades club_members/club_pack_openings/club_pack_opening_cards/club_cards/
-        # club_budget_transactions (all ondelete="CASCADE" on club_id/opening_id); the pack and
-        # user are deleted afterwards since nothing still references them at that point.
-        async with RealSessionLocal() as cleanup:
-            if club_id is not None:
-                club_row = await cleanup.get(Club, club_id)
-                if club_row is not None:
-                    await cleanup.delete(club_row)
-            if pack_id is not None:
-                pack_row = await cleanup.get(ClubPack, pack_id)
-                if pack_row is not None:
-                    await cleanup.delete(pack_row)
-            await cleanup.commit()
-            if user is not None and user_id is not None:
-                user_row = await cleanup.get(User, user_id)
-                if user_row is not None:
-                    await cleanup.delete(user_row)
-                    await cleanup.commit()
         await setup.close()
-        await engine.dispose()

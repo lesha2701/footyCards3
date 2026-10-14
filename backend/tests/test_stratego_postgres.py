@@ -1,19 +1,14 @@
 """Stratego concurrency against a REAL PostgreSQL (row locks). SQLite ignores
-SELECT ... FOR UPDATE, so these only run when STRATEGO_PG_URL points at a
-database already migrated to head, e.g.:
-
-    STRATEGO_PG_URL=postgresql+asyncpg://postgres:pw@localhost:5446/footycards \\
-        pytest tests/test_stratego_postgres.py -v
-
-Each test creates its own users/cards, so the database can be reused.
+SELECT ... FOR UPDATE, so these run on the `real_pg` fixture (tests/conftest.py):
+a dedicated `*_test` database, created and migrated to head
+on first use, never the app's own; every row a test creates is deleted on
+teardown. See CLAUDE.md → Backend checks.
 """
 import asyncio
-import os
 import uuid
 
 import pytest
 from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.exceptions import AppError
 from app.models.card import UserCard
@@ -25,10 +20,6 @@ from app.models.transaction import CoinTransaction
 from app.models.user import User
 from app.services import stratego_service
 
-PG_URL = os.environ.get("STRATEGO_PG_URL")
-pytestmark = pytest.mark.skipif(not PG_URL, reason="STRATEGO_PG_URL not set (needs real PostgreSQL)")
-
-
 @pytest.fixture(autouse=True)
 def _fresh_schema():
     # Overrides conftest's SQLite create_all/drop_all: the PG database is
@@ -37,14 +28,12 @@ def _fresh_schema():
 
 
 @pytest.fixture
-async def pg():
-    engine = create_async_engine(PG_URL, pool_size=10)
-    async with async_sessionmaker(bind=engine)() as s:
+async def pg(real_pg):
+    async with real_pg() as s:
         if await s.get(GameConfig, 1) is None:
             s.add(GameConfig(id=1))
             await s.commit()
-    yield async_sessionmaker(bind=engine, expire_on_commit=False)
-    await engine.dispose()
+    yield real_pg
 
 
 async def _user_with_cards(pg) -> int:

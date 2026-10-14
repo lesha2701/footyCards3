@@ -1,20 +1,15 @@
 """Card-skill concurrency against a REAL PostgreSQL (row locks, unique
-indexes). SQLite ignores SELECT ... FOR UPDATE, so these only run when
-CARD_SKILLS_PG_URL points at a database already migrated to head, e.g.:
-
-    CARD_SKILLS_PG_URL=postgresql+asyncpg://postgres:pw@localhost:5499/mig_clean \
-        pytest tests/test_card_skills_postgres.py -v
-
-Each test uses its own fresh users/cards, so the database can be reused.
+indexes). SQLite ignores SELECT ... FOR UPDATE, so these run on the `real_pg` fixture
+(tests/conftest.py): a dedicated `*_test` database, created and migrated to head
+on first use, never the app's own; every row a test creates is deleted on
+teardown. See CLAUDE.md → Backend checks.
 """
 import asyncio
-import os
 import uuid
 from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.exceptions import AppError
 from app.models.card import UserCard
@@ -29,10 +24,6 @@ from app.schemas.trade import TradeCreateRequest
 from app.services import card_skill_service, task_service, trade_service
 from app.services.wallet_service import lock_user_for_update
 
-PG_URL = os.environ.get("CARD_SKILLS_PG_URL")
-pytestmark = pytest.mark.skipif(not PG_URL, reason="CARD_SKILLS_PG_URL not set (needs real PostgreSQL)")
-
-
 @pytest.fixture(autouse=True)
 def _fresh_schema():
     # Overrides conftest's SQLite create_all/drop_all: the PG database is
@@ -41,10 +32,8 @@ def _fresh_schema():
 
 
 @pytest.fixture
-async def pg():
-    engine = create_async_engine(PG_URL, pool_size=10)
-    yield async_sessionmaker(bind=engine, expire_on_commit=False)
-    await engine.dispose()
+async def pg(real_pg):
+    yield real_pg
 
 
 async def _user(pg, balance=0) -> int:

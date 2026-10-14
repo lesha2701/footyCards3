@@ -189,8 +189,28 @@ python -c "from app.main import app"    # import/startup sanity check
 ```
 
 Row-level locking (`SELECT ... FOR UPDATE`) is not exercised by the SQLite
-test DB — verify locking-dependent changes manually against real Postgres
-(e.g. via the running `docker compose` backend/postgres containers).
+test DB. Concurrency/locking tests that need real Postgres use the `real_pg`
+fixture (`tests/conftest.py`, logic in `tests/real_postgres.py`) — use it for
+any new one, never a hand-rolled `create_async_engine`:
+
+- They write to a **separate database whose name must end in `_test`**, never
+  the app's own: `REAL_POSTGRES_URL` if set, otherwise the process's
+  `DATABASE_URL` with `_test` appended (inside the backend container:
+  `footycards_test` on the compose `postgres`). Any other database name fails
+  the test. A missing test DB is created and `alembic upgrade head`-ed once
+  per pytest session; it is disposable — drop it any time.
+- Each test snapshots the max primary key of every table and on teardown
+  (pass or fail) deletes every row created after it, children first —
+  including rows the code under test created (tournaments, transactions,
+  user_cards, …). Tests don't write their own cleanup.
+- Unreachable server → the tests skip, so plain SQLite runs stay green.
+
+```bash
+# inside the dev stack (writes to footycards_test on the compose postgres):
+docker compose exec backend pytest tests/ -v
+# from the host against the compose postgres (port 5434):
+REAL_POSTGRES_URL=postgresql+asyncpg://postgres:<password>@localhost:5434/footycards_test pytest tests/ -v
+```
 
 ### Database migrations
 

@@ -1,21 +1,16 @@
 """«Футбольный магнат» concurrency against a REAL PostgreSQL (row locks,
-SKIP LOCKED). SQLite ignores both, so these only run when MAGNATE_PG_URL
-points at a database already migrated to head, e.g.:
-
-    MAGNATE_PG_URL=postgresql+asyncpg://postgres:pw@localhost:5447/footycards \\
-        pytest tests/test_magnate_postgres.py -v
-
-Each test creates its own users, so the database can be reused.
+SKIP LOCKED). SQLite ignores both, so these run on the `real_pg` fixture
+(tests/conftest.py): a dedicated `*_test` database, created and migrated to head
+on first use, never the app's own; every row a test creates is deleted on
+teardown. See CLAUDE.md → Backend checks.
 """
 import asyncio
 import copy
-import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.exceptions import AppError
@@ -23,10 +18,6 @@ from app.models.game_config import GameConfig
 from app.models.magnate import MagnateMatch, MagnateSeat
 from app.models.user import User
 from app.services import magnate_service
-
-PG_URL = os.environ.get("MAGNATE_PG_URL")
-pytestmark = pytest.mark.skipif(not PG_URL, reason="MAGNATE_PG_URL not set (needs real PostgreSQL)")
-
 
 @pytest.fixture(autouse=True)
 def _fresh_schema():
@@ -36,17 +27,15 @@ def _fresh_schema():
 
 
 @pytest.fixture
-async def pg():
-    engine = create_async_engine(PG_URL, pool_size=20)
-    async with async_sessionmaker(bind=engine)() as s:
+async def pg(real_pg):
+    async with real_pg() as s:
         config = await s.get(GameConfig, 1)
         if config is None:
             s.add(GameConfig(id=1, hourly_game_limit=100))
         else:
             config.hourly_game_limit = 100
         await s.commit()
-    yield async_sessionmaker(bind=engine, expire_on_commit=False)
-    await engine.dispose()
+    yield real_pg
 
 
 async def _user(pg) -> int:

@@ -1,13 +1,10 @@
 import asyncio
-import os
 import secrets
 import uuid
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select, text
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy import select
 
 from app.core.exceptions import ConflictError
 from app.models.club import Club, ClubMember
@@ -20,11 +17,10 @@ from app.services.wallet_service import credit_coins
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
 
-# See test_club_packs.py's REAL_POSTGRES_URL comment for why this test opens its own
-# independent connection to the real dev Postgres instance rather than using the pytest
+# See test_club_packs.py's real-Postgres comment for why this test uses the `real_pg`
+# fixture (a dedicated `*_test` database, cleaned after every test) rather than the pytest
 # suite's `client`/`db_session` fixtures (hardcoded to in-memory SQLite, single shared
 # connection, can't reproduce genuine two-connection unique-constraint race timing).
-REAL_POSTGRES_URL = os.environ.get("REAL_POSTGRES_URL", "postgresql+asyncpg://postgres:1234@postgres:5432/footycards")
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -613,7 +609,7 @@ async def test_club_detail_reports_daily_reward_countdown_only_after_claiming(cl
     assert after.json()["daily_reward_seconds_remaining"] > 0
 
 
-async def test_claim_daily_reward_concurrent_same_user_no_double_credit():
+async def test_claim_daily_reward_concurrent_same_user_no_double_credit(real_pg):
     """Genuine concurrency regression test for the same unhandled-IntegrityError race as
     test_club_packs.py's test_open_club_pack_concurrent_same_idempotency_key_no_double_debit:
     two truly concurrent claim_daily_reward calls (asyncio.gather, two independent DB
@@ -621,21 +617,10 @@ async def test_claim_daily_reward_concurrent_same_user_no_double_credit():
     runs before any lock is held) before either commits, so both attempt the INSERT into
     club_daily_claims. Postgres enforces the (club_id, user_id, claim_date) unique constraint
     at INSERT/flush time, not at COMMIT time — before the fix, the loser's `await db.commit()`
-    raised an unhandled IntegrityError instead of a clean ConflictError/409. Runs against real
-    Postgres (see REAL_POSTGRES_URL above) — skips if unreachable.
+    raised an unhandled IntegrityError instead of a clean ConflictError/409. Runs against the
+    real-Postgres test database (`real_pg`) — skips if unreachable.
     """
-    engine = create_async_engine(REAL_POSTGRES_URL, pool_pre_ping=True)
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-    except OSError as exc:
-        await engine.dispose()
-        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
-    except OperationalError as exc:
-        await engine.dispose()
-        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
-
-    RealSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+    RealSessionLocal = real_pg
     suffix = uuid.uuid4().hex[:10]
 
     setup = RealSessionLocal()
@@ -687,23 +672,7 @@ async def test_claim_daily_reward_concurrent_same_user_no_double_credit():
             ).scalars().all()
             assert len(claims) == 1, "exactly one ClubDailyClaim row must exist despite two concurrent attempts"
     finally:
-        # Self-cleaning: this test writes real rows into the shared dev Postgres instance, so
-        # tear everything it created back down regardless of pass/fail. Deleting the club first
-        # cascades club_members/club_daily_claims/club_budget_transactions (all
-        # ondelete="CASCADE" on club_id); the user is deleted afterwards.
-        async with RealSessionLocal() as cleanup:
-            if club_id is not None:
-                club_row = await cleanup.get(Club, club_id)
-                if club_row is not None:
-                    await cleanup.delete(club_row)
-            await cleanup.commit()
-            if user is not None and user_id is not None:
-                user_row = await cleanup.get(User, user_id)
-                if user_row is not None:
-                    await cleanup.delete(user_row)
-                    await cleanup.commit()
         await setup.close()
-        await engine.dispose()
 
 
 async def test_join_open_club_converts_race_integrity_error_to_conflict(client, db_session, bot_token, monkeypatch):
@@ -756,7 +725,7 @@ async def test_join_by_invite_converts_race_integrity_error_to_conflict(client, 
         await join_by_invite(db_session, joiner, target_club["invite_code"])
 
 
-async def test_soft_disband_survives_real_postgres_cascade():
+async def test_soft_disband_survives_real_postgres_cascade(real_pg):
     """Committed, CI-run proof that soft-disbanding a club with tournament history does NOT
     trigger the ON DELETE CASCADE bug found in review: TournamentClub.club_id,
     TournamentMatch.club_a_id/club_b_id, and TournamentClubStanding.club_id all FK to clubs.id
@@ -764,7 +733,7 @@ async def test_soft_disband_survives_real_postgres_cascade():
     (no PRAGMA foreign_keys=ON), so the SQLite-backed tests elsewhere in this file would pass
     even if leave_club regressed back to unconditionally calling db.delete(club). This test
     builds a genuine Tournament/TournamentClub/TournamentMatch/TournamentClubStanding footprint
-    for one club directly against real Postgres (see REAL_POSTGRES_URL above), calls the actual
+    for one club directly against the real-Postgres test database (`real_pg`), calls the actual
     leave_club service function, and asserts every one of those rows is still there afterward —
     proving _disband_or_soft_disband never issues db.delete(club) on this path. Skips if real
     Postgres is unreachable.
@@ -776,18 +745,7 @@ async def test_soft_disband_survives_real_postgres_cascade():
     from app.models.tournament_match import TournamentMatch
     from app.models.tournament_standing import TournamentClubStanding
 
-    engine = create_async_engine(REAL_POSTGRES_URL, pool_pre_ping=True)
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-    except OSError as exc:
-        await engine.dispose()
-        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
-    except OperationalError as exc:
-        await engine.dispose()
-        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
-
-    RealSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+    RealSessionLocal = real_pg
     suffix = uuid.uuid4().hex[:10]
 
     setup = RealSessionLocal()
@@ -846,28 +804,7 @@ async def test_soft_disband_survives_real_postgres_cascade():
             standing_after = await verify.get(TournamentClubStanding, standing_id)
             assert standing_after is not None, "TournamentClubStanding row must survive — ON DELETE CASCADE must not fire"
     finally:
-        # Self-cleaning against the shared dev Postgres instance. The club row was never hard-
-        # deleted by the code under test, so clean it up explicitly here (this cascades
-        # tournament_matches/tournament_clubs/tournament_club_standings/club_members via their
-        # own ON DELETE CASCADE — which is exactly fine for throwaway test scaffolding that has
-        # no other club depending on it, unlike the real disband path this test exists to guard).
-        async with RealSessionLocal() as cleanup:
-            if club_id is not None:
-                club_row = await cleanup.get(Club, club_id)
-                if club_row is not None:
-                    await cleanup.delete(club_row)
-            if tournament_id is not None:
-                tournament_row = await cleanup.get(Tournament, tournament_id)
-                if tournament_row is not None:
-                    await cleanup.delete(tournament_row)
-            await cleanup.commit()
-            if captain is not None and captain_id is not None:
-                user_row = await cleanup.get(User, captain_id)
-                if user_row is not None:
-                    await cleanup.delete(user_row)
-                    await cleanup.commit()
         await setup.close()
-        await engine.dispose()
 
 
 async def test_club_has_tournament_columns_with_zero_defaults(client, db_session, bot_token):
