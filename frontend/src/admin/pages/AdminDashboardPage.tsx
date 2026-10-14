@@ -3,14 +3,12 @@ import { useEffect, useState } from "react";
 
 import { clearMaintenanceBanner, fetchAnnouncementAdmin, fetchDashboard, setAnnouncement, startMaintenanceBanner } from "@/admin/api";
 import { fetchMaintenanceStatus } from "@/api/maintenance";
+import { fillDailySeries, type ChartPoint } from "@/admin/chartSeries";
 
 export default function AdminDashboardPage() {
   const { data, isLoading } = useQuery({ queryKey: ["admin-dashboard"], queryFn: fetchDashboard });
 
   if (isLoading || !data) return <p className="text-slate-400">Загрузка...</p>;
-
-  const maxReg = Math.max(1, ...data.registrations_by_day.map((p) => p.count));
-  const maxPacks = Math.max(1, ...data.pack_openings_by_day.map((p) => p.count));
 
   return (
     <div className="flex flex-col gap-6">
@@ -29,8 +27,8 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ChartCard title="Регистрации (14 дней)" points={data.registrations_by_day} max={maxReg} />
-        <ChartCard title="Открытия паков (14 дней)" points={data.pack_openings_by_day} max={maxPacks} />
+        <ChartCard title="Регистрации (14 дней)" points={data.registrations_by_day} />
+        <ChartCard title="Открытия паков (14 дней)" points={data.pack_openings_by_day} />
       </div>
 
       <div className="rounded-2xl border border-white/5 bg-bg-surface p-4">
@@ -166,23 +164,37 @@ function StatCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-function ChartCard({ title, points, max }: { title: string; points: { date: string; count: number }[]; max: number }) {
+function ChartCard({ title, points }: { title: string; points: ChartPoint[] }) {
+  const series = fillDailySeries(points);
+  const max = Math.max(1, ...series.map((p) => p.count));
+  const total = series.reduce((sum, p) => sum + p.count, 0);
+
   return (
     <div className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-      <p className="mb-3 font-display text-sm font-bold">{title}</p>
-      <div className="flex h-32 items-end gap-1">
-        {points.map((p) => (
-          <div key={p.date} className="group relative flex-1">
+      <div className="mb-3 flex items-baseline justify-between">
+        <p className="font-display text-sm font-bold">{title}</p>
+        <span className="text-xs text-slate-400">всего {total}</span>
+      </div>
+      {/* Every column must stretch to the container's full height (h-full):
+          the bar's height is a percentage of its column, and an auto-height
+          column collapses to 0px, which made every bar invisible. */}
+      <div className="flex h-32 items-end gap-1 pt-4">
+        {series.map((p) => (
+          <div key={p.date} className="flex h-full flex-1 flex-col items-center justify-end" title={`${p.date}: ${p.count}`}>
+            {p.count > 0 && <span className="mb-0.5 text-[10px] leading-none text-slate-400">{p.count}</span>}
             <div
-              className="w-full rounded-t bg-accent/70 transition-all"
-              style={{ height: `${Math.max(4, (p.count / max) * 100)}%` }}
+              className={`w-full rounded-t ${p.count > 0 ? "bg-accent/70" : "bg-white/5"}`}
+              style={{ height: p.count > 0 ? `${Math.max(4, (p.count / max) * 100)}%` : "2px" }}
             />
-            <span className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] text-slate-500 opacity-0 group-hover:opacity-100">
-              {p.count}
-            </span>
           </div>
         ))}
-        {!points.length && <p className="text-xs text-slate-500">Нет данных</p>}
+      </div>
+      <div className="mt-1 flex gap-1">
+        {series.map((p, i) => (
+          <span key={p.date} className="flex-1 text-center text-[10px] text-slate-500">
+            {i % 2 === series.length % 2 ? "" : p.date.slice(8, 10)}
+          </span>
+        ))}
       </div>
     </div>
   );
