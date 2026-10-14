@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+from app.services import chemistry_service
 from app.services import club_tactical_matchup_service as matchup
 from app.services import club_tactical_profile_service as profile_service
 from app.services.lineup_service import CATEGORY_POSITIONS
@@ -483,6 +484,7 @@ class LivePlayer:
     on_minute: int = 0
     off_minute: Optional[int] = None
     gained: float = 0.0       # fatigue gained in this match
+    chem_bonus: int = 0       # «химия» rating bonus in the current XI
 
 
 @dataclass
@@ -501,6 +503,9 @@ class CareerSideRunner:
     familiarity: int = 0                 # tenths of a % for the base formation + tactic
     plan: Optional[dict] = None
     coach: Any = None
+    # Chemistry rules frozen at the season start (chemistry_service; None =
+    # the mechanic was off). Recomputed for the XI after every substitution.
+    chem_rules: Any = None
     events_meta: list[dict] = field(default_factory=list)  # rule/sub log for the analysis
     _subs_done: set = field(default_factory=set)
     _effective: tuple = ()
@@ -512,6 +517,24 @@ class CareerSideRunner:
         self.tactic = {**NEUTRAL_TACTIC, **self.tactic}
         self.tuning = tuning_of(self.config)
         self._effective = (self.mentality, tuple(sorted(self.tactic.items())))
+        self.chemistry_team, self.chemistry_max = 0, 0
+        self.refresh_chemistry()
+        self.chemistry_start = (self.chemistry_team, self.chemistry_max)
+
+    def refresh_chemistry(self) -> None:
+        """Neighbour-link chemistry of the players on the pitch (the same
+        chemistry_service the other modes use); each one's bonus feeds his
+        match rating."""
+        if self.chem_rules is None:
+            return
+        result = chemistry_service.compute_chemistry(
+            [(p.card, p.slot) for p in self.on_pitch], self.formation, self.chem_rules, slot_count=len(self.on_pitch),
+        )
+        for p in self.on_pitch:
+            p.chem_bonus = result.rating_bonus(p.slot.code)
+        for p in self.bench:
+            p.chem_bonus = 0
+        self.chemistry_team, self.chemistry_max = result.team, result.team_max
 
     @property
     def effective_tactic(self) -> dict:
@@ -536,7 +559,8 @@ class CareerSideRunner:
 
     def _rating(self, p: LivePlayer, minute: int, fam_pct: float) -> int:
         penalty = self.live_fatigue(p, minute) / 100 * self.config.career_fatigue_penalty_pct / 100
-        rating = p.base_rating * (1 + fam_pct / 100) * (1 - penalty) + p.form
+        base = chemistry_service.boosted_rating(p.base_rating, p.chem_bonus)
+        rating = base * (1 + fam_pct / 100) * (1 - penalty) + p.form
         return max(1, min(99, round(rating)))
 
     def _apply_rules(self, minute: int, diff: int) -> list[dict]:
@@ -600,6 +624,7 @@ class CareerSideRunner:
             self.on_pitch[self.on_pitch.index(out)] = incoming
             self.bench.remove(incoming)
             self.bench.append(out)
+            self.refresh_chemistry()
             name_in, name_out = incoming.card.player.display_name, out.card.player.display_name
             self.events_meta.append({"kind": "sub", "minute": minute, "sub": i, "in": name_in, "out": name_out,
                                      "fatigue": fatigue})
@@ -779,6 +804,7 @@ def build_analysis(
         "preset": preset_of(me.tactic), "opponent_tactic": opponent.tactic,
         "matchup": matchup_report(me.tactic, opponent.tactic, me.config),
         "familiarity_pct": me.familiarity / 10,
+        "chemistry": {"team": me.chemistry_start[0], "max": me.chemistry_start[1]} if me.chem_rules else None,
         "mine": phases(mine), "theirs": phases(theirs),
         "goals_mine": goals(side), "goals_theirs": goals(other),
         "duels": duels,

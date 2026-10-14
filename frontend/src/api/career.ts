@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { MatchEvent, UserCard } from "@/types";
+import type { ChemistryOut, MatchEvent, UserCard } from "@/types";
 
 export interface CareerTeam {
   index: number;
@@ -48,7 +48,7 @@ export interface CareerRound {
 export interface CareerSquadCard {
   card: UserCard | null;
   /** «Мой игрок» entry (card is null for it). */
-  my_player?: { name: string; position: string; rating: number } | null;
+  my_player?: { name: string; position: string; rating: number; club?: string; country?: string } | null;
   card_id: number;
   fatigue: number;
   injured_rounds: number;
@@ -202,6 +202,8 @@ export interface CareerSeason {
   scouting?: CareerScouting | null;
   familiarity?: CareerFamiliarity | null;
   match_plan?: CareerPlan | null;
+  /** Chemistry of the XI for the next round (season's frozen rules). */
+  chemistry?: ChemistryOut | null;
   plan_limits?: { rules?: number; subs?: number };
 }
 

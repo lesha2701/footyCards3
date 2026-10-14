@@ -30,6 +30,7 @@ from app.models.player import Player
 from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.user import User
 from app.services import career_tactics_service as tactics
+from app.services import chemistry_service
 from app.services import my_player_service, tournament_match_engine, wallet_service
 from app.services.auto_squad_service import SlotSpec, owned_cards, pick_cards
 from app.services.club_formation_service import CLUB_FORMATIONS, get_formation_slots
@@ -405,6 +406,9 @@ async def _activate(db: AsyncSession, season: CareerSeason, now: datetime, confi
         # Seasons without this key (started before the tactics update) keep
         # the original match path; see _play_round.
         "tactics_version": tactics.TACTICS_VERSION,
+        # Chemistry rules frozen for the whole season (like player
+        # tournaments): later GameConfig edits don't change a running league.
+        "chemistry_rules": (rules.as_dict() if (rules := chemistry_service.active_rules(config)) else None),
     }
     season.status = "active"
     season.starts_at = datetime.fromisoformat(season.state["schedule"][0])
@@ -665,6 +669,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
     # adaptive bots — they only ever read rounds already played), minutes
     # per card (post-match fatigue) and the familiarity each human used.
     history: dict = state.setdefault("played_tactics", {}) if v1 else {}
+    chem_rules = chemistry_service.rules_from_dict(state.get("chemistry_rules")) if v1 else None
     bot_states: dict = state.setdefault("bot_tactics", {}) if v1 else {}
     minutes_by_team: dict[int, dict[int, int]] = {}
     gains_by_team: dict[int, dict[int, int]] = {}
@@ -705,7 +710,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                         for c, slot in _bot_cards(team, round_index, config)]
             return tactics.CareerSideRunner(
                 label, team["name"], team["formation"], team["mentality"], choice["tactic"], on_pitch, [], config,
-                familiarity=choice["familiarity"], plan=choice["plan"],
+                familiarity=choice["familiarity"], plan=choice["plan"], chem_rules=chem_rules,
             )
         part = humans.get(team_index)
         if part is None or part.status != "accepted":
@@ -734,7 +739,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         return tactics.CareerSideRunner(
             label, team["name"], part.formation, part.mentality, _my_tactic(part),
             [live(c, slot) for c, slot in pairs], [live(c) for c in bench], config,
-            familiarity=familiarity, plan=copy.deepcopy(part.match_plan),
+            familiarity=familiarity, plan=copy.deepcopy(part.match_plan), chem_rules=chem_rules,
         )
 
     results = []
@@ -1123,6 +1128,16 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         next_round = min(season.rounds_played, ROUNDS - 1)
         xi = resolve_lineup(me, by_id, next_round, [c for c in cards if _usable(c)])
         out["lineup"] = {slot.code: card.id for card, slot in xi}
+        # Chemistry of the XI that would play the next round, under the
+        # season's frozen rules (tactics seasons only).
+        rules = chemistry_service.rules_from_dict(state.get("chemistry_rules")) if out["tactics_version"] else None
+        result = (
+            chemistry_service.compute_chemistry(xi, me.formation, rules, slot_count=len(get_formation_slots(me.formation)))
+            if rules is not None and xi else None
+        )
+        out["chemistry"] = chemistry_service.to_out(
+            result, rules, live_enabled=chemistry_service.active_rules(await get_config(db)) is not None,
+        )
         out["slots"] = [{"code": s.code, "category": s.category, "ideal_position": s.ideal_position.value}
                         for s in get_formation_slots(me.formation)]
         from app.schemas.card import UserCardOut
@@ -1134,7 +1149,8 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
             out["squad"].append({
                 "card": UserCardOut.model_validate(card) if card and not mine else None,
                 "my_player": (
-                    {"name": card.player.display_name, "position": card.player.position.value, "rating": card.player.rating}
+                    {"name": card.player.display_name, "position": card.player.position.value, "rating": card.player.rating,
+                     "club": card.player.club, "country": card.player.country}
                     if mine else None
                 ),
                 "card_id": card_id,

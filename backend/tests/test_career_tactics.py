@@ -577,3 +577,46 @@ async def test_divisions_set_difficulty_and_move_between_seasons(client, db_sess
         select(CareerParticipant).where(CareerParticipant.user_id == user_id).order_by(CareerParticipant.id.desc())
     )).scalars().first()
     assert left.next_division == count
+
+
+# --- chemistry ------------------------------------------------------------------------------
+
+def test_chemistry_feeds_match_ratings_and_follows_substitutions():
+    from app.services import chemistry_service
+    rules = chemistry_service.ChemistryRules()
+    config = _defaults()
+    linked = _runner(config=config, bench_positions=(Position.ST,))
+    # Same club + country everywhere -> strong links on every edge.
+    for p in linked.on_pitch + linked.bench:
+        p.card.player.club, p.card.player.country = "Спартак", "Россия"
+    linked.chem_rules = rules
+    linked.refresh_chemistry()
+    plain = _runner(config=config)
+    assert linked.chemistry_team > 0 and linked.chemistry_max == 33
+    side_linked, _, _ = linked.state_at(1, 0, 0)
+    side_plain, _, _ = plain.state_at(1, 0, 0)
+    assert side_linked.cards[9].player.rating > side_plain.cards[9].player.rating
+    # A substitute from another club breaks the striker's links.
+    linked.bench[0].card.player.club, linked.bench[0].card.player.country = "Зенит", "Бразилия"
+    linked.plan = {"rules": [], "subs": [{"minute": 60, "slot": "FWD2", "card_id": 50, "min_fatigue": 0}]}
+    before = linked.chemistry_team
+    linked.state_at(61, 0, 0)
+    assert linked.on_pitch[9].card.id == 50 and linked.chemistry_team < before
+    assert linked.on_pitch[9].chem_bonus == 0
+
+
+async def test_season_freezes_chemistry_rules_and_reports_lineup_chemistry(client, db_session, bot_token):
+    config = await get_config(db_session)
+    config.chemistry_enabled = True
+    await db_session.commit()
+    user_id, headers, season = await _season(client, db_session, bot_token, 870007)
+    row = await _season_row(db_session, season["id"])
+    assert row.state["chemistry_rules"] is not None
+    chem = season["chemistry"]
+    assert chem["enabled"] and chem["formation"] == season["formation"] and chem["team_max"] == 33
+    assert {p["slot_code"] for p in chem["players"]} == set(season["lineup"])
+    first = datetime.fromisoformat(season["schedule"][0])
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    row = await _season_row(db_session, season["id"])
+    match = next(m for m in row.state["results"][0] if 0 in (m["home"], m["away"]))
+    assert match["analysis"]["0"]["chemistry"]["max"] == 33

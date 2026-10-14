@@ -4,7 +4,9 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CareerAnalysis, CareerDivision, CareerSeason, CareerView, Tactic, TacticsCatalog } from "@/api/career";
+import type { ChemistryOut, UserCard } from "@/types";
 import CareerMatchAnalysis from "@/components/career/CareerMatchAnalysis";
+import CareerSquad from "@/components/career/CareerSquad";
 import CareerPage from "@/pages/CareerPage";
 
 const fetchCareer = vi.fn<() => Promise<CareerView>>();
@@ -250,5 +252,40 @@ describe("CareerMatchAnalysis", () => {
     expect(screen.getByText(/замена 2 не проведена/)).toBeInTheDocument();
     expect(screen.getByText("Замена 3: условие не наступило")).toBeInTheDocument();
     expect(screen.getByText(/сыгранность \+6%/)).toBeInTheDocument();
+  });
+});
+
+describe("CareerSquad", () => {
+  const card = (id: number, name: string, position: string, club: string, country: string) => ({
+    card: { id, player: { id, display_name: name, position, rating: 80, club, country, image_path: null } } as unknown as UserCard,
+    my_player: null, card_id: id, fatigue: 20, injured_rounds: 0, suspended_rounds: 0, yellows: 0, form: 0, owned: true,
+  });
+  const chem = {
+    enabled: true, strength_bonus: null, formation: "4-3-3", team: 2, team_max: 6,
+    links: [{ a: "FWD1", b: "FWD2", level: "strong" as const, points: 2 }],
+    players: [
+      { slot_code: "FWD1", points: 1, link_sum: 2, on_position: true, rating_bonus: 1 },
+      { slot_code: "FWD2", points: 1, link_sum: 2, on_position: true, rating_bonus: 1 },
+    ],
+    adjacency: [["FWD1", "FWD2"]] as [string, string][],
+    rules: { link_strong: 2, link_medium: 1, thresholds: [1, 2, 4], player_max: 3, player_floor: 0, rating_per_point: 1, off_position_penalty: 0 },
+  };
+  const season: CareerSeason = {
+    ...activeSeason, tactics_version: 1, tactic: POSSESSION,
+    slots: [{ code: "FWD1", category: "FWD", ideal_position: "LW" }, { code: "FWD2", category: "FWD", ideal_position: "ST" }],
+    lineup: { FWD1: 1, FWD2: 2 },
+    squad: [card(1, "Иван Комаров", "LW", "Спартак", "Россия"), card(2, "Пётр Жуков", "ST", "Спартак", "Россия"),
+      card(3, "Луис Гомес", "ST", "Бока", "Аргентина")],
+    chemistry: chem as unknown as ChemistryOut,
+  };
+
+  it("shows the XI with photos, chemistry and the chemistry cost of a swap", () => {
+    const client = new QueryClient();
+    render(<QueryClientProvider client={client}><CareerSquad season={season} onView={() => {}} onError={() => {}} /></QueryClientProvider>);
+    expect(screen.getByRole("button", { name: "FWD2: Пётр Жуков" })).toBeInTheDocument();
+    expect(screen.getByText("Запас · 1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "FWD2: Пётр Жуков" }));
+    // Гомес shares neither club nor country with the LW: chemistry drops.
+    expect(screen.getByText("-2 хим.")).toBeInTheDocument();
   });
 });

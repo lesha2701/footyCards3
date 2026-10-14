@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.schemas.card import UserCardOut
+from app.schemas.chemistry import ChemistryOut
 from app.schemas.user import UserPublicOut
 
 
@@ -175,6 +176,8 @@ class CareerMyPlayerOut(BaseModel):
     name: str
     position: str
     rating: int
+    club: str = ""
+    country: str = ""
 
 
 class CareerSquadCardOut(BaseModel):
@@ -227,6 +230,8 @@ class CareerSeasonOut(BaseModel):
     tactics_version: int = 0
     tactic: Optional[dict[str, str]] = None
     squad_size: int = 0
+    # Chemistry of the XI for the next round (season's frozen rules).
+    chemistry: Optional[ChemistryOut] = None
     scouting: Optional[CareerScoutingOut] = None
     familiarity: Optional[CareerFamiliarityOut] = None
     match_plan: Optional[CareerPlanOut] = None

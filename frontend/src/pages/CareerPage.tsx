@@ -18,6 +18,7 @@ import {
   type TacticsCatalog,
 } from "@/api/career";
 import { fetchFriends } from "@/api/friends";
+import CareerSquad from "@/components/career/CareerSquad";
 import { PlanEditor, ScoutingCard, TacticsBoard } from "@/components/career/CareerTactics";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
@@ -332,7 +333,8 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
           )}
         </>
       )}
-      {tab === "squad" && <LineupEditor season={season} onView={onView} onError={onError} />}
+      {tab === "squad" && hasTactics && <CareerSquad season={season} onView={onView} onError={onError} />}
+      {tab === "squad" && !hasTactics && <LineupEditor season={season} onView={onView} onError={onError} />}
       {tab === "table" && <section className="rounded-3xl bg-bg-surface p-4"><StandingsTable season={season} /></section>}
       {tab === "calendar" && <Calendar season={season} />}
 
