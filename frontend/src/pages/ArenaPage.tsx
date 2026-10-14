@@ -9,6 +9,9 @@ import { skillByCode, skillInactiveReason, useSkillCatalog } from "@/lib/cardSki
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
 import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPickerModal";
 import EmptyState from "@/components/common/EmptyState";
+import MatchPitchView from "@/components/match/MatchPitchView";
+import MatchSheet from "@/components/match/MatchSheet";
+import MatchStatsTable from "@/components/match/MatchStatsTable";
 import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
 import BenchUpgradeHints from "@/components/squad/BenchUpgradeHints";
 import { ChemistryDiamonds, ChemistryHints, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
@@ -82,6 +85,11 @@ export default function ArenaPage() {
   const [matchError, setMatchError] = useState<string | null>(null);
   const [lineupError, setLineupError] = useState<string | null>(null);
   const [simulating, setSimulating] = useState(false);
+  // The match plays in a sheet over the lineup. `matchReopened` = the sheet
+  // was reopened for a match that already finished, so it shows the final
+  // state instead of replaying (and never re-credits the reward).
+  const [matchSheetOpen, setMatchSheetOpen] = useState(false);
+  const [matchReopened, setMatchReopened] = useState(false);
   const [strengthHintOpen, setStrengthHintOpen] = useState(false);
   const pitchRef = useRef<HTMLDivElement>(null);
   const [coachPickerOpen, setCoachPickerOpen] = useState(false);
@@ -137,6 +145,8 @@ export default function ArenaPage() {
       setMatch(data);
       setMatchError(null);
       setSimulating(true);
+      setMatchReopened(false);
+      setMatchSheetOpen(true);
       // Balance, stats and history only update once the simulation finishes
       // playing out (MatchSimulation's onFinished) so the result isn't spoiled.
     },
@@ -194,7 +204,7 @@ export default function ArenaPage() {
   const nativePlayButton = useTelegramMainButton({
     text: "Играть матч",
     onClick: () => playMutation.mutate(),
-    visible: !simulating && match?.status !== "in_progress",
+    visible: !simulating && match?.status !== "in_progress" && !matchSheetOpen,
     enabled: !!lineup?.is_complete,
     loading: playMutation.isPending,
   });
@@ -562,33 +572,70 @@ export default function ArenaPage() {
         </button>
       </section>
 
-      {match && (
-        <MatchSimulation
-          key={match.id}
-          match={match}
-          actPending={actMutation.isPending}
-          onAct={(action) => actMutation.mutate(action)}
-          onFinished={() => {
-            setSimulating(false);
-            if (match.reward_coins > 0) {
-              updateBalance((useAuthStore.getState().user?.balance ?? 0) + match.reward_coins);
-            }
-            queryClient.invalidateQueries({ queryKey: ["arena-stats"] });
-            queryClient.invalidateQueries({ queryKey: ["match-history"] });
-            hapticNotify(match.result === "win" ? "success" : match.result === "loss" ? "error" : "warning");
-          }}
-        />
-      )}
-
-      {simulating && match?.status === "in_progress" && (
+      {/* After the sheet is closed, the last result stays one tap away. */}
+      {match && !matchSheetOpen && match.status === "finished" && (
         <button
-          onClick={() => forfeitMutation.mutate()}
-          disabled={forfeitMutation.isPending}
-          className="self-center text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2 active:scale-95"
+          onClick={() => { setMatchReopened(true); setMatchSheetOpen(true); }}
+          className="flex items-center justify-between rounded-xl bg-bg-surface px-3 py-2.5 text-sm active:scale-[0.98]"
         >
-          Сдаться (засчитается поражение)
+          <span className="text-ink-mist">Последний матч · vs {match.opponent_name}</span>
+          <span className="font-semibold text-accent-green">Открыть</span>
         </button>
       )}
+
+      <MatchSheet
+        open={!!match && matchSheetOpen}
+        title="Матч Card Arena"
+        footer={
+          match && simulating && match.status === "in_progress" ? (
+            <button
+              onClick={() => forfeitMutation.mutate()}
+              disabled={forfeitMutation.isPending}
+              className="w-full text-center text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2 active:scale-95"
+            >
+              Сдаться (засчитается поражение)
+            </button>
+          ) : match && !simulating ? (
+            <div className="flex flex-col gap-2">
+              {matchError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{matchError}</p>}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setMatchSheetOpen(false)}
+                  className="rounded-2xl bg-white/10 py-3 font-display text-sm font-bold text-ink-chalk active:scale-95"
+                >
+                  К составу
+                </button>
+                <button
+                  onClick={() => playMutation.mutate()}
+                  disabled={!lineup?.is_complete || playMutation.isPending}
+                  className="rounded-2xl bg-floodlight py-3 font-display text-sm font-bold text-bg-base active:scale-95 disabled:opacity-40"
+                >
+                  {playMutation.isPending ? "Начинаем..." : "Ещё матч"}
+                </button>
+              </div>
+            </div>
+          ) : null
+        }
+      >
+        {match && (
+          <MatchSimulation
+            key={match.id}
+            match={match}
+            startRevealed={matchReopened}
+            actPending={actMutation.isPending}
+            onAct={(action) => actMutation.mutate(action)}
+            onFinished={() => {
+              setSimulating(false);
+              if (match.reward_coins > 0) {
+                updateBalance((useAuthStore.getState().user?.balance ?? 0) + match.reward_coins);
+              }
+              queryClient.invalidateQueries({ queryKey: ["arena-stats"] });
+              queryClient.invalidateQueries({ queryKey: ["match-history"] });
+              hapticNotify(match.result === "win" ? "success" : match.result === "loss" ? "error" : "warning");
+            }}
+          />
+        )}
+      </MatchSheet>
 
       <section>
         <p className="mb-2 font-display text-base font-bold text-ink-chalk">История матчей</p>
@@ -671,19 +718,24 @@ function MatchSimulation({
   actPending,
   onAct,
   onFinished,
+  startRevealed = false,
 }: {
   match: Match;
   actPending: boolean;
   onAct: (action: MatchActionKind) => void;
   onFinished: () => void;
+  /** Reopening an already-finished match: show it as played, don't replay it. */
+  startRevealed?: boolean;
 }) {
-  const [revealedCount, setRevealedCount] = useState(0);
+  const [revealedCount, setRevealedCount] = useState(startRevealed ? match.events.length : 0);
   const [autoSkip, setAutoSkip] = useState(false);
   const [flashKey, setFlashKey] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
-  const finishedFiredRef = useRef(false);
-  const prevRevealedRef = useRef(0);
+  // A reopened, already-played match must not re-credit the reward or
+  // re-flash its goals.
+  const finishedFiredRef = useRef(startRevealed);
+  const prevRevealedRef = useRef(startRevealed ? match.events.length : 0);
   const ackedBreakawayRef = useRef(-1);
 
   const total = match.events.length;
@@ -725,7 +777,7 @@ function MatchSimulation({
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
-  }, [revealedCount]);
+  }, [revealedCount, caughtUp, isFinished]);
 
   // Auto-play any pending action while skipping, so the match resolves
   // itself all the way to the final result without further input.
@@ -759,6 +811,17 @@ function MatchSimulation({
   const revealed = match.events.slice(0, revealedCount);
   const currentMinute = revealed.length ? revealed[revealed.length - 1].minute : 0;
   const pendingMoment = caughtUp && !isFinished && !autoSkip ? match.pending_moment : null;
+  const showFinal = caughtUp && isFinished;
+
+  // Keep the pitch on the chance the player just answered until its outcome
+  // is revealed, instead of snapping back while the action request is in
+  // flight and the next event waits for its reveal tick.
+  const [heldMoment, setHeldMoment] = useState<{ team: string; shot_type: string; at: number } | null>(null);
+  useEffect(() => {
+    if (pendingMoment) setHeldMoment({ team: pendingMoment.team, shot_type: pendingMoment.shot_type, at: revealedCount });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingMoment?.seq]);
+  const pitchMoment = pendingMoment ?? (heldMoment && heldMoment.at === revealedCount ? heldMoment : null);
 
   // The live score only counts goals among the *revealed* events, so it
   // climbs to the final score in step with the commentary instead of
@@ -767,7 +830,7 @@ function MatchSimulation({
   const liveOpponentScore = revealed.filter((e) => e.event_type === "goal" && e.team === "opponent").length;
 
   return (
-    <section className="relative overflow-hidden rounded-2xl bg-bg-surface p-4">
+    <section className="relative flex min-h-0 flex-1 flex-col">
       {flashKey > 0 && (
         <div
           key={flashKey}
@@ -775,32 +838,33 @@ function MatchSimulation({
         />
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex shrink-0 items-center justify-between">
         <span className="font-mono text-xs text-ink-mist-dim">
-          {caughtUp && isFinished ? "Матч завершён" : autoSkip ? "Пропускаем матч..." : `${currentMinute}' · идёт матч...`}
+          {showFinal ? "Матч завершён" : autoSkip ? "Пропускаем матч..." : `${currentMinute}' · идёт матч...`}
         </span>
         {/* Visible any time there's still something to skip through — including
             while waiting on the player's own action choice (caughtUp && !isFinished),
             not just during the event-by-event reveal — only hidden once the match
             has actually finished or a skip is already in progress. */}
-        {!autoSkip && !(caughtUp && isFinished) && (
+        {!autoSkip && !showFinal && (
           <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-ink-chalk">
             Пропустить
           </button>
         )}
       </div>
 
-      <p className="mt-1 text-center font-mono text-lg font-bold text-ink-chalk">
+      {/* You first, as before — and the pitch/stats below keep you on the
+          left too, so the numbers always line up with the sides. */}
+      <p className="mt-1 shrink-0 text-center font-mono text-3xl font-bold tabular-nums text-ink-chalk">
         {liveUserScore} : {liveOpponentScore}
       </p>
-      <p className="text-center text-sm text-ink-mist">vs {match.opponent_name}</p>
 
       {/* The win/draw/loss verdict and reward stay hidden until the
           simulation actually finishes playing out, even though the live
           score above already tracks along with it. */}
-      {caughtUp && isFinished && (
+      {showFinal && (
         <p
-          className={`mt-1 flex items-center justify-center gap-1 text-center font-display text-sm font-bold ${
+          className={`mt-1 flex shrink-0 items-center justify-center gap-1 text-center font-display text-sm font-bold ${
             match.result === "win" ? "text-accent-green" : match.result === "loss" ? "text-red-400" : "text-ink-mist"
           }`}
         >
@@ -808,9 +872,21 @@ function MatchSimulation({
           <IconCoin size={13} />
         </p>
       )}
-      {caughtUp && isFinished && <MatchSkillSummary events={match.events} />}
 
-      <div ref={logRef} className="mt-3 max-h-48 space-y-1 overflow-y-auto text-xs">
+      {/* Live: the schematic pitch. After the whistle the pitch has nothing
+          left to say, so the summary takes its place, in view without scrolling. */}
+      <div className="mt-3 shrink-0">
+        {showFinal ? (
+          <div className="flex flex-col gap-2">
+            <MatchStatsTable events={match.events} opponentName={match.opponent_name} />
+            <MatchSkillSummary events={match.events} />
+          </div>
+        ) : (
+          <MatchPitchView events={revealed} opponentName={match.opponent_name} pending={pitchMoment} />
+        )}
+      </div>
+
+      <div ref={logRef} className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto pb-2 text-xs">
         {revealed.map((e, i) => (
           <p key={i} className={e.team === "user" ? "text-accent-green" : "text-ink-mist"}>
             <span className="font-mono text-ink-mist-dim">{e.minute}&apos;</span> {e.description}
@@ -820,7 +896,7 @@ function MatchSimulation({
       </div>
 
       {isBreakawayNext && !autoSkip && (
-        <div className="mt-4 flex flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
+        <div className="mt-3 flex shrink-0 flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
           <p className="text-sm font-semibold text-ink-chalk">
             <span className="inline-flex items-center gap-1.5"><IconWarning size={15} className="shrink-0 text-amber-300" />Соперник выходит один на один с твоим вратарём!</span>
           </p>
@@ -858,7 +934,7 @@ function ActionPrompt({
   };
 
   return (
-    <div className="mt-4 flex flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
+    <div className="mt-3 flex shrink-0 flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
       <p className="text-sm font-semibold text-ink-chalk">{pending.description}</p>
       <div className={`grid gap-2 ${pending.actions.length === 1 ? "grid-cols-1" : pending.actions.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
         {pending.actions.map((action) => {
