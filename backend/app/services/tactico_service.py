@@ -39,7 +39,7 @@ from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS
 from app.services.match_service import BOT_NAMES
 from app.services.notification_service import notify
-from app.services.player_stats_service import effective_card_stats
+from app.services.player_stats_service import card_rating_bonus, effective_card_stats
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 SQUAD_SIZE = 11
@@ -350,7 +350,7 @@ def _record_pick(state: dict, side: str, card: UserCard) -> None:
         raise ConflictError("You already submitted a card for this round")
     pool.remove(card.id)
     state[f"{side}_pending_card_id"] = card.id
-    state[f"{side}_pending_snapshot"] = _card_snapshot(card.player, user_card_id=card.id, diamond_rating_bonus=card.diamond_rating_bonus)
+    state[f"{side}_pending_snapshot"] = _card_snapshot(card.player, user_card_id=card.id, diamond_rating_bonus=card_rating_bonus(card))
 
 
 def _bot_submit(state: dict, difficulty: MatchDifficulty, config: GameConfig, bonus_pct: float) -> None:
@@ -1130,7 +1130,7 @@ async def _hydrate_match(db: AsyncSession, match: TacticoMatch, viewer: User) ->
                     TacticoCardOut(
                         **_card_snapshot(
                             cards_by_id[cid].player, user_card_id=cid,
-                            diamond_rating_bonus=cards_by_id[cid].diamond_rating_bonus,
+                            diamond_rating_bonus=card_rating_bonus(cards_by_id[cid]),
                         )
                     )
                     for cid in pool_ids

@@ -23,7 +23,7 @@ from app.services import chemistry_service
 from app.services.chemistry_service import ChemistryResult
 from app.services.coach_boost_service import arena_rarity_team_strength_bonus
 from app.services.game_config_service import get_config
-from app.services.player_stats_service import effective_card_stats
+from app.services.player_stats_service import card_rating_bonus, effective_card_stats
 
 
 def clean_group_key(value):
@@ -238,7 +238,7 @@ def calculate_base_strength(
         # concept of its own) alongside personal UserCard rows — getattr
         # keeps this function correct for both instead of forcing an
         # unrelated column onto ClubCard.
-        rating, _, _ = effective_card_stats(player, getattr(card, "diamond_rating_bonus", 0))
+        rating, _, _ = effective_card_stats(player, card_rating_bonus(card))
         if chemistry is not None:
             rating = chemistry_service.boosted_rating(rating, chemistry.rating_bonus(slot.code))
         category_mult = category_multipliers.get(slot.category, 1.0)

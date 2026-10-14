@@ -440,6 +440,12 @@ class GameConfigOut(BaseModel):
     chemistry_off_position_penalty: int = 0
     chemistry_coach_country_points: int = 1
     chemistry_stadium_club_points: int = 1
+    card_stars_enabled: bool = False
+    card_stars_max: int = 3
+    card_star_dupes_per_level: dict[str, list[int]] = {}
+    card_star_coin_cost: dict[str, list[int]] = {}
+    card_star_rating_per_star: int = 1
+    card_star_bonus_cap: int = 6
 
 
 class GameConfigUpdate(BaseModel):
@@ -755,6 +761,27 @@ class GameConfigUpdate(BaseModel):
     chemistry_off_position_penalty: Optional[int] = Field(default=None, ge=0, le=20)
     chemistry_coach_country_points: Optional[int] = Field(default=None, ge=0, le=3)
     chemistry_stadium_club_points: Optional[int] = Field(default=None, ge=0, le=3)
+    card_stars_enabled: Optional[bool] = None
+    card_stars_max: Optional[int] = Field(default=None, ge=0, le=5)
+    card_star_dupes_per_level: Optional[dict[str, list[int]]] = None
+    card_star_coin_cost: Optional[dict[str, list[int]]] = None
+    card_star_rating_per_star: Optional[int] = Field(default=None, ge=0, le=10)
+    card_star_bonus_cap: Optional[int] = Field(default=None, ge=0, le=30)
+
+    @field_validator("card_star_dupes_per_level", "card_star_coin_cost")
+    @classmethod
+    def _star_levels_per_rarity(cls, value, info):
+        # Diamond is deliberately not allowed: diamond cards have their own upgrade.
+        if value is None:
+            return value
+        allowed = {"common", "rare", "epic", "legendary"}
+        minimum = 1 if info.field_name == "card_star_dupes_per_level" else 0
+        for rarity, levels in value.items():
+            if rarity not in allowed:
+                raise ValueError(f"unknown rarity '{rarity}' (allowed: {', '.join(sorted(allowed))})")
+            if len(levels) > 5 or any(not minimum <= v <= 1_000_000 for v in levels):
+                raise ValueError(f"{rarity}: up to 5 values, each {minimum}..1000000")
+        return value
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod

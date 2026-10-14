@@ -2,8 +2,8 @@
 and vice versa — lineup_service.on_ideal_position) and the 3-4-3 formation
 (code only).
 
-Revision ID: 0143
-Revises: 0142
+Revision ID: 0144
+Revises: 0143
 Create Date: 2026-10-14
 
 """
@@ -11,8 +11,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "0143"
-down_revision: Union[str, None] = "0142"
+revision: str = "0144"
+down_revision: Union[str, None] = "0143"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

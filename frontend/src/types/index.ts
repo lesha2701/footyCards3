@@ -120,6 +120,43 @@ export interface UserCard {
   /** Collection list only: every skilled copy of this player (the list
    * collapses duplicates into one representative). */
   skilled_copies?: SkilledCopy[];
+  /** «Звёзды карточки»: earned stars, duplicates banked toward the next one
+   * and the rating the stars add (already included in player.rating). */
+  stars?: number;
+  star_progress?: number;
+  star_rating_bonus?: number;
+}
+
+export interface CardStarState {
+  card_id: number;
+  player_id: number;
+  rarity: Rarity;
+  enabled: boolean;
+  block_reason: string | null;
+  stars: number;
+  max_stars: number;
+  progress: number;
+  thresholds: number[];
+  coin_costs: number[];
+  next_threshold: number | null;
+  next_coin_cost: number | null;
+  claimable: boolean;
+  dupes_to_max: number;
+  rating_base: number;
+  rating_now: number;
+  rating_bonus: number;
+  rating_after_next_star: number | null;
+  free_duplicates: { id: number; serial_number: number; skill_code: string | null; skill_level: number | null }[];
+}
+
+export interface CardStarOperation {
+  kind: "feed" | "claim";
+  cards_consumed: number;
+  stars_gained: number;
+  coins_spent: number;
+  new_balance: number;
+  replayed: boolean;
+  state: CardStarState;
 }
 
 export interface SkilledCopy {

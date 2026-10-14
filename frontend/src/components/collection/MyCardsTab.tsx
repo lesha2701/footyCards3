@@ -6,6 +6,7 @@ import EmptyState from "@/components/common/EmptyState";
 import { IconCoin, IconCollection } from "@/components/icons";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import CardUpgradeModal from "@/components/cards/CardUpgradeModal";
+import { losesProgress } from "@/lib/cardStars";
 import PlayerCard from "@/components/cards/PlayerCard";
 import CardDetailModal from "@/components/collection/CardDetailModal";
 import { useCardActions } from "@/components/collection/useCardActions";
@@ -183,6 +184,7 @@ export default function MyCardsTab() {
           <PlayerCard
             key={card.id}
             player={card.player}
+            stars={card.stars}
             badge={<CardTileBadges card={card} />}
             selected={selectMode && selected.includes(card.id)}
             onClick={() => (selectMode ? toggleSelect(card.id) : setDetailCard(card))}
@@ -223,7 +225,7 @@ export default function MyCardsTab() {
             onClick={() => setConfirmSell({
               ids: selected,
               lastCopy: false,
-              skillLoss: (page?.items ?? []).some((c) => selected.includes(c.id) && !!c.skill_code),
+              skillLoss: (page?.items ?? []).some((c) => selected.includes(c.id) && losesProgress(c)),
             })}
             className="rounded-full bg-red-500 px-4 py-2 text-xs font-bold text-white active:scale-95"
           >
@@ -236,7 +238,7 @@ export default function MyCardsTab() {
         <CardDetailModal
           card={detailCard}
           onClose={() => setDetailCard(null)}
-          onSell={() => setConfirmSell({ ids: [detailCard.id], lastCopy: false, skillLoss: !!detailCard.skill_code })}
+          onSell={() => setConfirmSell({ ids: [detailCard.id], lastCopy: false, skillLoss: losesProgress(detailCard) })}
           onToggleHidden={(hidden) => hideMutation.mutate({ id: detailCard.id, hidden })}
           hiddenPending={hideMutation.isPending}
           onUpgrade={
@@ -268,7 +270,7 @@ export default function MyCardsTab() {
           (confirmSell?.lastCopy
             ? "Ты продашь единственный экземпляр этого футболиста. Это действие нельзя отменить."
             : "Монеты будут зачислены на баланс. Действие нельзя отменить.")
-          + (confirmSell?.skillLoss ? " У карточки есть навык — он будет потерян, жетоны не вернутся." : "")
+          + (confirmSell?.skillLoss ? " У карточки есть навык или звёзды — они будут потеряны без возврата." : "")
         }
         danger
         confirmLabel="Продать"

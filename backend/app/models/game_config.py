@@ -575,3 +575,27 @@ class GameConfig(TimestampMixin, Base):
     # whose club = the stadium's (Stadium.club; home matches only).
     chemistry_coach_country_points: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     chemistry_stadium_club_points: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+    # --- «Звёзды карточек» (services/card_star_service.py) ---
+    # Off = no new duplicates can be fed and no new stars claimed; stars
+    # already earned keep their rating bonus either way (like card skills).
+    card_stars_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    card_stars_max: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Duplicates of the same player needed for star 1, 2, 3 — per rarity.
+    # Diamond is never listed: diamond cards have their own upgrade.
+    card_star_dupes_per_level: Mapped[dict] = mapped_column(
+        JSON, nullable=False,
+        default=lambda: {"common": [10, 15, 25], "rare": [10, 15, 25], "epic": [10, 15, 25], "legendary": [10, 15, 25]},
+    )
+    # Coins charged when star 1, 2, 3 is claimed — per rarity.
+    card_star_coin_cost: Mapped[dict] = mapped_column(
+        JSON, nullable=False,
+        default=lambda: {
+            "common": [100, 200, 400], "rare": [300, 600, 1200], "epic": [1000, 2000, 4000],
+            "legendary": [3000, 6000, 12000],
+        },
+    )
+    card_star_rating_per_star: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Ceiling on the rating stars can add to one card (the card itself is
+    # always kept at or below 99 on top of that).
+    card_star_bonus_cap: Mapped[int] = mapped_column(Integer, default=6, nullable=False)

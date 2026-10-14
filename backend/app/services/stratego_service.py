@@ -64,7 +64,7 @@ from app.services import stratego_puzzles
 from app.services.game_config_service import get_config
 from app.services.match_service import BOT_NAMES
 from app.services.notification_service import notify
-from app.services.player_stats_service import effective_card_stats
+from app.services.player_stats_service import card_rating_bonus, effective_card_stats
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 MATCHMAKING_TIMEOUT_SECONDS = 60
@@ -122,7 +122,7 @@ def _with_skill(info: dict, code: Optional[str], level: Optional[int], per_level
 
 
 def _card_info(card: UserCard, per_level: int = 0) -> dict:
-    info = _player_info(card.player, card.id, card.diamond_rating_bonus)
+    info = _player_info(card.player, card.id, card_rating_bonus(card))
     return _with_skill(info, getattr(card, "skill_code", None), getattr(card, "skill_level", None), per_level)
 
 

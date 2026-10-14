@@ -41,6 +41,7 @@ from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES, 
 from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS, on_ideal_position
 from app.services.notification_service import notify
+from app.services.player_stats_service import card_rating_bonus
 from app.services.player_tournament_simulation_service import _EngineCard, _engine_card
 
 TEAMS = 8
@@ -269,7 +270,7 @@ def _round_at(season: CareerSeason, index: int) -> Optional[datetime]:
 # --- squads ------------------------------------------------------------------
 
 def _effective(card: UserCard) -> int:
-    return min(99, card.player.rating + (card.diamond_rating_bonus or 0))
+    return min(99, card.player.rating + card_rating_bonus(card))
 
 
 def _usable(card: UserCard) -> bool:

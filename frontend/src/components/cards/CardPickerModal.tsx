@@ -69,6 +69,7 @@ export default function CardPickerModal({
                     <PlayerCard
                       key={card.id}
                       player={card.player}
+                      stars={card.stars}
                       size="sm"
                       badge={showSkills ? <CardSkillBadge code={card.skill_code} level={card.skill_level} /> : undefined}
                       dimmed={disabledCardIds.includes(card.id)}

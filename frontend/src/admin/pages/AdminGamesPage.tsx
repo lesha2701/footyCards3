@@ -111,7 +111,8 @@ export default function AdminGamesPage() {
       | "career_digest_enabled"
       | "my_player_enabled"
       | "player_career_enabled"
-      | "chemistry_enabled",
+      | "chemistry_enabled"
+      | "card_stars_enabled",
     label: string,
   ) => (
     <label className="flex items-center gap-2 text-sm">
@@ -283,6 +284,39 @@ export default function AdminGamesPage() {
         <p className="mt-2 text-[11px] text-slate-500">
           Подбор значений: <code>python -m scripts.compare_chemistry --synthetic 2000</code> в backend сравнивает силу
           существующих составов по старой и новой формуле.
+        </p>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Звёзды карточек</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Дубли того же игрока копятся в конкретной карточке; при достижении порога за монеты выдаётся звезда (+рейтинг).
+          Бриллианты не участвуют. Выключено — нельзя вкладывать и забирать новые звёзды, полученные продолжают действовать.
+          Бонус звезды фиксируется на карточке в момент получения.
+        </p>
+        <div className="mb-3">{toggle("card_stars_enabled", "Включить звёзды карточек")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("card_stars_max", "Максимум звёзд (0–5)")}
+          {field("card_star_rating_per_star", "+ рейтинга за звезду")}
+          {field("card_star_bonus_cap", "Потолок прибавки от звёзд")}
+        </div>
+        <p className="mb-2 mt-3 text-xs font-semibold text-slate-400">По редкостям: дубли / монеты за ★1, ★2, ★3 (через запятую)</p>
+        <div className="grid grid-cols-[auto_1fr_1fr] items-center gap-2 text-xs">
+          {(["common", "rare", "epic", "legendary"] as const).map((rarity) => (
+            <StarLadderRow
+              key={rarity}
+              rarity={rarity}
+              dupes={form.card_star_dupes_per_level?.[rarity] ?? []}
+              coins={form.card_star_coin_cost?.[rarity] ?? []}
+              onChange={(kind, values) =>
+                setForm({ ...form, [kind]: { ...(form[kind] ?? {}), [rarity]: values } })
+              }
+            />
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] text-slate-500">
+          Оценка до включения: <code>python -m scripts.estimate_card_stars</code> в backend — сколько звёзд игроки получили бы
+          сразу и сколько дублей ушло бы из быстрой продажи.
         </p>
       </section>
 
@@ -866,5 +900,37 @@ export default function AdminGamesPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+const STAR_RARITY_LABELS: Record<string, string> = { common: "Обычная", rare: "Редкая", epic: "Эпическая", legendary: "Легендарная" };
+
+function StarLadderRow({
+  rarity, dupes, coins, onChange,
+}: {
+  rarity: string;
+  dupes: number[];
+  coins: number[];
+  onChange: (kind: "card_star_dupes_per_level" | "card_star_coin_cost", values: number[]) => void;
+}) {
+  const parse = (value: string) => value.split(",").map((v) => Number(v.trim())).filter((v) => Number.isFinite(v) && v >= 0);
+  return (
+    <>
+      <span className="text-slate-400">{STAR_RARITY_LABELS[rarity]}</span>
+      <input
+        key={`d-${dupes.join(",")}`}
+        defaultValue={dupes.join(", ")}
+        onBlur={(e) => onChange("card_star_dupes_per_level", parse(e.target.value))}
+        aria-label={`Дубли за звёзды: ${STAR_RARITY_LABELS[rarity]}`}
+        className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+      />
+      <input
+        key={`c-${coins.join(",")}`}
+        defaultValue={coins.join(", ")}
+        onBlur={(e) => onChange("card_star_coin_cost", parse(e.target.value))}
+        aria-label={`Монеты за звёзды: ${STAR_RARITY_LABELS[rarity]}`}
+        className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+      />
+    </>
   );
 }

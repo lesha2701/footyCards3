@@ -398,6 +398,14 @@ export interface GameConfig {
   chemistry_off_position_penalty: number;
   chemistry_coach_country_points: number;
   chemistry_stadium_club_points: number;
+  card_stars_enabled: boolean;
+  card_stars_max: number;
+  /** Per rarity (common/rare/epic/legendary): duplicates for star 1, 2, 3. */
+  card_star_dupes_per_level: Record<string, number[]>;
+  /** Per rarity: coins charged when star 1, 2, 3 is claimed. */
+  card_star_coin_cost: Record<string, number[]>;
+  card_star_rating_per_star: number;
+  card_star_bonus_cap: number;
 }
 
 export interface AdminSkillLedgerEntry {

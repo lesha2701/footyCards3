@@ -25,6 +25,7 @@ from app.schemas.pack import CollectionRewardGrantOut
 from app.schemas.player import PlayerOut
 from app.services import notification_service
 from app.services.card_skill_service import require_skill_loss_confirmation
+from app.services.player_stats_service import card_rating_bonus
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
 OTHER_COLLECTION_ID = -1
@@ -63,7 +64,7 @@ def _pick_representative(current: Optional[UserCard], card: UserCard) -> UserCar
     while a plain duplicate exists. Skilled copies are listed separately."""
     if current is None:
         return card
-    if current.skill_code and not card.skill_code:
+    if (current.skill_code or current.has_star_investment()) and not (card.skill_code or card.has_star_investment()):
         return card
     return current
 
@@ -121,13 +122,14 @@ async def list_user_cards(
     # A user can own several copies of the same player (duplicates); the
     # collection list should show each player once, with duplicate_count
     # conveying how many copies are owned — not one row per physical card.
-    # Exception: a copy WITH a skill is a distinct item of its own (keyed by
-    # its card id), because every picker built on this list (lineups,
-    # tournament squads, trades, sell) must be able to choose exactly that
-    # copy — plain duplicates stay collapsed behind one representative.
+    # Exception: a copy WITH a skill or with stars / a started «копилка» is a
+    # distinct item of its own (keyed by its card id), because every picker
+    # built on this list (lineups, tournament squads, trades, sell) must be
+    # able to choose exactly that copy — plain duplicates stay collapsed
+    # behind one representative.
     representative_by_key: dict[object, UserCard] = {}
     for card in all_cards:
-        key = ("skilled", card.id) if card.skill_code else card.player_id
+        key = ("own", card.id) if card.skill_code or card.has_star_investment() else card.player_id
         representative_by_key[key] = _pick_representative(representative_by_key.get(key), card)
     unique_cards = list(representative_by_key.values())
 
@@ -245,12 +247,16 @@ def _locked(card: UserCard) -> bool:
     return card.is_locked_by_admin or card.is_locked_in_trade or card.is_in_lineup or card.is_in_tactico_squad
 
 
-async def duplicate_sale_plan(db: AsyncSession, user_id: int, include_diamond: bool = False) -> list[UserCard]:
+async def duplicate_sale_plan(
+    db: AsyncSession, user_id: int, include_diamond: bool = False, include_star_material: bool = False,
+) -> list[UserCard]:
     """Copies "Продать дубликаты" would sell: for every player owned more than
-    once, one copy is always kept (a locked / in-squad / skilled copy if there
-    is one, otherwise the best diamond-bonus, lowest-numbered copy), and only
-    plain, unlocked, skill-less spare copies are sold. Diamond cards are
-    left alone unless asked (they are diamond-upgrade material)."""
+    once, one copy is always kept (a locked / in-squad / skilled / starred
+    copy if there is one, otherwise the best-bonus, lowest-numbered copy),
+    and only plain, unlocked, skill-less, star-less spare copies are sold.
+    Diamond cards are left alone unless asked (they are diamond-upgrade
+    material), and so are the spares of a player whose copy already has
+    stars or a started «копилка» (they are star material) unless asked."""
     result = await db.execute(
         select(UserCard).where(UserCard.owner_id == user_id).options(joinedload(UserCard.player))
     )
@@ -261,12 +267,14 @@ async def duplicate_sale_plan(db: AsyncSession, user_id: int, include_diamond: b
     for copies in by_player.values():
         if len(copies) < 2:
             continue
-        protected = [c for c in copies if _locked(c) or c.skill_code]
+        protected = [c for c in copies if _locked(c) or c.skill_code or c.has_star_investment()]
         if not protected:
-            keeper = sorted(copies, key=lambda c: (-(c.diamond_rating_bonus or 0), c.serial_number or 0))[0]
+            keeper = sorted(copies, key=lambda c: (-card_rating_bonus(c), c.serial_number or 0))[0]
             protected = [keeper]
+        if not include_star_material and any(c.has_star_investment() for c in copies):
+            continue
         for card in copies:
-            if card in protected or _locked(card) or card.skill_code:
+            if card in protected or _locked(card) or card.skill_code or card.has_star_investment():
                 continue
             if card.player.rarity == Rarity.diamond and not include_diamond:
                 continue
@@ -274,8 +282,10 @@ async def duplicate_sale_plan(db: AsyncSession, user_id: int, include_diamond: b
     return to_sell
 
 
-async def sell_duplicates(db: AsyncSession, user: User, preview: bool, include_diamond: bool = False) -> dict:
-    plan = await duplicate_sale_plan(db, user.id, include_diamond)
+async def sell_duplicates(
+    db: AsyncSession, user: User, preview: bool, include_diamond: bool = False, include_star_material: bool = False,
+) -> dict:
+    plan = await duplicate_sale_plan(db, user.id, include_diamond, include_star_material)
     coins = sum(c.player.quick_sell_price for c in plan)
     by_rarity: dict[str, int] = {}
     for card in plan:

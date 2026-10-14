@@ -1,5 +1,7 @@
 import { api } from "@/lib/api";
 import type {
+  CardStarOperation,
+  CardStarState,
   CardUpgradeResult,
   CardUpgradeRule,
   CollectionStats,
@@ -136,5 +138,23 @@ export interface SellDuplicatesResult {
  * counts them for the confirmation dialog. */
 export async function sellDuplicates(preview: boolean): Promise<SellDuplicatesResult> {
   const { data } = await api.post<SellDuplicatesResult>("/collection/cards/sell-duplicates", { preview });
+  return data;
+}
+
+export async function fetchCardStars(cardId: number): Promise<CardStarState> {
+  const { data } = await api.get<CardStarState>(`/collection/cards/${cardId}/stars`);
+  return data;
+}
+
+export async function feedCardStars(
+  cardId: number,
+  payload: { all_free?: boolean; material_card_ids?: number[]; confirm_skill_loss?: boolean; idempotency_key: string },
+): Promise<CardStarOperation> {
+  const { data } = await api.post<CardStarOperation>(`/collection/cards/${cardId}/stars/feed`, payload);
+  return data;
+}
+
+export async function claimCardStar(cardId: number, idempotencyKey: string): Promise<CardStarOperation> {
+  const { data } = await api.post<CardStarOperation>(`/collection/cards/${cardId}/stars/claim`, { idempotency_key: idempotencyKey });
   return data;
 }
