@@ -23,6 +23,9 @@ import { PlanEditor, ScoutingCard, TacticsBoard } from "@/components/career/Care
 import { SetPiecesCard, SquadWarnings } from "@/components/career/SetPiecesCard";
 import { CoachProfileCard, ObjectiveCard, TrainingCard } from "@/components/career/CareerManagement";
 import CupCard from "@/components/career/CupCard";
+import { LiveMatchCenter } from "@/components/career/CareerLive";
+import { CoachExtras } from "@/components/career/CoachExtras";
+import { MarkingCard, PlanHints, RolesCard } from "@/components/career/RolesMarking";
 import { OffseasonPanel, SeasonSummaryView } from "@/components/career/Offseason";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
@@ -56,7 +59,11 @@ function formatWhen(iso: string | null): string {
  * daily) with the player's own cards, solo or together with a friend. */
 export default function CareerPage() {
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ["career"], queryFn: fetchCareer, refetchInterval: 60_000 });
+  const { data, isLoading } = useQuery({
+    queryKey: ["career"], queryFn: fetchCareer,
+    // Faster while a live match is at half-time: the second half follows the break.
+    refetchInterval: (query) => (query.state.data?.season?.live ? 15_000 : 60_000),
+  });
   const [error, setError] = useState<string | null>(null);
   const onView = (view: CareerView) => {
     setError(null);
@@ -76,6 +83,7 @@ export default function CareerPage() {
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
 
       {data.profile && <CoachProfileCard profile={data.profile} />}
+      {data.profile && <CoachExtras achievements={data.profile.achievements} />}
       {data.invite && <InviteCard view={data} onView={onView} onError={onError} />}
 
       {!data.season || data.season.status === "finished" || data.season.my_status === "left" ? (
@@ -289,6 +297,7 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
 
   return (
     <>
+      {season.live && <LiveMatchCenter live={season.live} catalog={catalog} onView={onView} onError={onError} />}
       <section className="rounded-3xl bg-bg-surface p-4">
         <div className="flex items-center justify-between text-xs text-ink-mist">
           <span>{season.division?.name ?? season.difficulty_label} · тур {Math.min(season.rounds_played + 1, season.total_rounds)} из {season.total_rounds}</span>
@@ -325,16 +334,25 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
         ))}
       </div>
 
-      {tab === "prep" && season.scouting && (
+      {tab === "prep" && season.scouting && season.live && (
+        <p className="rounded-2xl bg-bg-surface p-4 text-xs text-ink-mist">
+          Идёт тур {season.live.round + 1}: указания на второй тайм — в матч-центре выше. Подготовка к следующему туру
+          откроется после финального свистка.
+        </p>
+      )}
+      {tab === "prep" && season.scouting && !season.live && (
         <>
           <OffseasonPanel season={season} catalog={catalog} onView={onView} onError={onError} />
           <SquadWarnings warnings={season.squad_warnings} />
           {hasTactics && <ObjectiveCard season={season} onView={onView} onError={onError} />}
           <ScoutingCard scouting={season.scouting} catalog={catalog} difficultyLabel={season.difficulty_label} />
+          {hasTactics && <MarkingCard season={season} onView={onView} onError={onError} />}
           {hasTactics && catalog ? (
             <>
               <TrainingCard season={season} onView={onView} onError={onError} />
               <TacticsBoard season={season} catalog={catalog} onView={onView} onError={onError} />
+              <RolesCard season={season} catalog={catalog} onView={onView} onError={onError} />
+              <PlanHints season={season} />
               <PlanEditor season={season} catalog={catalog} onView={onView} onError={onError} />
               <SetPiecesCard season={season} catalog={catalog} onView={onView} onError={onError} />
             </>

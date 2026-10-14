@@ -196,6 +196,11 @@ export function OffseasonPanel({ season, catalog, onView, onError }: {
       <p className="text-[10px] uppercase tracking-wider text-accent-lime">Межсезонье</p>
       <p className="font-display text-lg font-bold text-ink-chalk">Новый сезон — {formatWhen(off.starts_at)}</p>
       <p className="mb-4 text-[11px] text-ink-mist">Любой шаг можно пропустить: сезон начнётся сам с текущими настройками.</p>
+      {off.friend_league && (
+        <p className="-mt-2 mb-4 rounded-xl bg-accent-cyan/10 px-3 py-2 text-[11px] text-accent-cyan">
+          Лига с другом продолжается: вы снова в одном дивизионе.
+        </p>
+      )}
 
       <Step n={1} title="Итоги сезона">
         <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">

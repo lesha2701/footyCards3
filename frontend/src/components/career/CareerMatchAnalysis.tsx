@@ -127,7 +127,7 @@ export default function CareerMatchAnalysis({ analysis, catalog }: { analysis: C
                 <span className="font-mono text-ink-mist-dim">{r.minute}&apos;</span>{" "}
                 {r.rule === null
                   ? "условие больше не выполняется — базовая тактика"
-                  : `указание ${r.rule + 1}: ${tacticLabel(MENTALITIES, r.mentality)}${
+                  : `${r.halftime ? "указания в перерыве" : `указание ${r.rule + 1}`}: ${tacticLabel(MENTALITIES, r.mentality)}${
                     catalog ? catalog.axes.filter((a) => r.tactic[a.key] !== analysis.tactic[a.key])
                       .map((a) => ` · ${axisValueLabel(catalog, a.key, r.tactic[a.key]).toLowerCase()}`).join("") : ""}`}
               </li>
@@ -139,8 +139,8 @@ export default function CareerMatchAnalysis({ analysis, catalog }: { analysis: C
               <li key={`s${i}`}>
                 <span className="font-mono text-ink-mist-dim">{s.minute}&apos;</span>{" "}
                 {s.kind === "sub"
-                  ? `замена: ${s.in} вместо ${s.out} (усталость ${s.fatigue}%)`
-                  : `замена ${s.sub + 1} не проведена — в запасе нет подходящего игрока`}
+                  ? `${s.halftime ? "замена в перерыве" : "замена"}: ${s.in} вместо ${s.out} (усталость ${s.fatigue}%)`
+                  : `замена ${(s.sub ?? 0) + 1} не проведена — в запасе нет подходящего игрока`}
               </li>
             ))}
             {planSubs.map((_, i) => !doneSubs.has(i) && (

@@ -876,7 +876,8 @@ class CareerSideRunner:
             changes += [VALUE_LABELS[axis][tactic[axis]].lower() for axis in AXES if tactic[axis] != previous[axis]]
             text = f"📋 {self.name}: указание {active + 1} — " + (", ".join(changes) or "без изменений")
         payload = {"rule": active, "mentality": mentality, "tactic": tactic}
-        self.events_meta.append({"kind": "rule", "minute": minute, **payload})
+        halftime = active is not None and rules[active].get("score") == "any"
+        self.events_meta.append({"kind": "rule", "minute": minute, **payload, **({"halftime": True} if halftime else {})})
         return [{"minute": minute, "event_type": "tactic_change", "team": self.label, "description": text,
                  "payload": payload}]
 

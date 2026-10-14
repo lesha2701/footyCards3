@@ -12,12 +12,18 @@ export function TournamentMatchReplay({
   clubBName,
   scoreA,
   scoreB,
+  finishedLabel = "Матч завершён",
+  scoreLabel = "Итоговый счёт",
 }: {
   events: MatchEvent[];
   clubAName: string;
   clubBName: string;
   scoreA: number;
   scoreB: number;
+  /** Status once every event is shown (e.g. "Перерыв" for a first half). */
+  finishedLabel?: string;
+  /** Caption of the score once every event is shown. */
+  scoreLabel?: string;
 }) {
   const [revealedCount, setRevealedCount] = useState(0);
   const [autoSkip, setAutoSkip] = useState(false);
@@ -70,7 +76,7 @@ export function TournamentMatchReplay({
     <section className="rounded-2xl bg-bg-surface p-4">
       <div className="flex items-center justify-between">
         <span className="font-mono text-xs text-ink-mist-dim">
-          {caughtUp ? "Матч завершён" : autoSkip ? "Пропускаем матч..." : `${currentMinute}' · идёт матч...`}
+          {caughtUp ? finishedLabel : autoSkip ? "Пропускаем матч..." : `${currentMinute}' · идёт матч...`}
         </span>
         {!caughtUp && !autoSkip && (
           <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-ink-chalk">
@@ -92,10 +98,10 @@ export function TournamentMatchReplay({
 
       {caughtUp && (
         <div
-          aria-label={`Итоговый счёт ${scoreA} : ${scoreB}`}
+          aria-label={`${scoreLabel} ${scoreA} : ${scoreB}`}
           className="mt-1 flex items-center justify-center gap-2 font-display text-sm font-bold text-ink-chalk"
         >
-          <span>Итоговый счёт:</span>
+          <span>{scoreLabel}:</span>
           <span className="w-6 text-right">{scoreA}</span>
           <span>:</span>
           <span className="w-6 text-left">{scoreB}</span>

@@ -156,7 +156,7 @@ export function MatchupList({ report, compact = false }: { report: MatchupReport
   );
 }
 
-function Segmented({ value, options, onChange, label }: {
+export function Segmented({ value, options, onChange, label }: {
   value: string; options: { value: string; label: string }[]; onChange: (v: string) => void; label: string;
 }) {
   return (

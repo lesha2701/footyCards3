@@ -83,7 +83,16 @@ export type MatchupHint = "advantage" | "neutral" | "disadvantage";
 /** Tactical axes: direction / buildup / on_loss / on_win / block -> value. */
 export type Tactic = Record<string, string>;
 
+export interface RoleGroup {
+  group: string;
+  label: string;
+  positions: string[];
+  values: { value: string; label: string; hint: string }[];
+}
+
 export interface TacticsCatalog {
+  /** Player roles per line (wingers / holding midfielder / full-backs). */
+  roles?: RoleGroup[];
   axes: { key: string; label: string; values: { value: string; label: string; hint: string }[] }[];
   presets: { code: string; label: string; tactic: Tactic }[];
   interactions: { id: string; label: string; base: boolean }[];
@@ -114,6 +123,39 @@ export interface CareerProfile {
   titles: number;
   promotions: number;
   objectives_met: number;
+  achievements?: CareerAchievements;
+}
+
+export interface CareerAchievement {
+  code: string;
+  icon: string;
+  title: string;
+  text: string;
+  unlocked_at: string | null;
+}
+
+export interface CareerTrophy {
+  kind: "title" | "cup" | "promotion";
+  label: string;
+  division: number | null;
+  season_id: number;
+  at: string;
+}
+
+export interface CareerAchievements {
+  items: CareerAchievement[];
+  unlocked: number;
+  total: number;
+  /** Newest first. */
+  trophies: CareerTrophy[];
+  run: { wins: number; unbeaten: number; clean: number };
+}
+
+export interface CareerStar {
+  player_id: number;
+  name: string;
+  rating: number;
+  position: string;
 }
 
 export interface CareerAmbition {
@@ -173,6 +215,8 @@ export interface CareerOffseason {
   camps: { code: string; label: string; hint: string }[];
   friendly: { opponent: string; home_score: number; away_score: number } | null;
   starts_at: string | null;
+  /** The friend league carries over: both coaches play this season together. */
+  friend_league?: boolean;
 }
 
 export interface CareerCollectionCard {
@@ -230,6 +274,11 @@ export interface CareerScouting {
   adaptive: boolean;
   my_last_tactic: Tactic | null;
   threat: { preset: string; tactic: Tactic } | null;
+  /** Their best outfield player (bots) and my man-marking of him this round. */
+  star?: CareerStar | null;
+  marking?: { round: number; marker: number; target: number; target_name: string } | null;
+  /** A «Легенда» bot man-marks my own best player. */
+  marks_you?: boolean;
 }
 
 export interface CareerFamiliarity {
@@ -316,6 +365,69 @@ export interface CareerSeason {
   offseason?: CareerOffseason | null;
   summary?: CareerSeasonSummary | null;
   plan_limits?: { rules?: number; subs?: number };
+  /** Player roles per line: group -> value. */
+  roles?: Record<string, string>;
+  /** Live match centre: my match at half-time (first half played). */
+  live?: CareerLive | null;
+  /** What the coach could still add to the match plan. */
+  plan_hints?: { code: string; text: string }[];
+}
+
+export interface CareerLivePlayer {
+  card_id: number;
+  slot?: string;
+  fatigue: number;
+  name: string;
+  position: string | null;
+  rating: number | null;
+}
+
+export interface CareerHalftimeOrders {
+  mentality: string | null;
+  tactic: Tactic;
+  subs: { out: number; in: number }[];
+}
+
+export interface CareerLive {
+  round: number;
+  second_half_at: string;
+  home: number;
+  away: number;
+  home_name: string;
+  away_name: string;
+  hs: number;
+  as: number;
+  events: Record<string, unknown>[];
+  my_side: "a" | "b";
+  on: CareerLivePlayer[];
+  bench: CareerLivePlayer[];
+  subs_left: number;
+  mentality: string | null;
+  tactic: Tactic | null;
+  orders: CareerHalftimeOrders | null;
+}
+
+export interface CareerLeaderboardRow {
+  rank: number;
+  user_id: number;
+  name: string;
+  division: number;
+  division_name: string;
+  reputation: number;
+  level: string;
+  titles: number;
+  promotions: number;
+  seasons: number;
+  trophies: number;
+  achievements: number;
+  is_me: boolean;
+}
+
+export interface CareerLeaderboard {
+  division: number | null;
+  rows: CareerLeaderboardRow[];
+  me: CareerLeaderboardRow | null;
+  divisions: CareerDivision[];
 }
 
 export interface CareerView {
@@ -422,6 +534,26 @@ export async function setCareerPlan(plan: CareerPlan & { round_index?: number; s
   return data;
 }
 
+export async function setCareerRoles(roles: Record<string, string | null>, roundIndex?: number): Promise<CareerView> {
+  const { data } = await api.put<CareerView>("/career/roles", { roles, round_index: roundIndex });
+  return data;
+}
+
+export async function setCareerMarking(markerCardId: number | null, roundIndex?: number): Promise<CareerView> {
+  const { data } = await api.put<CareerView>("/career/marking", { marker_card_id: markerCardId, round_index: roundIndex });
+  return data;
+}
+
+export async function setCareerHalftime(orders: CareerHalftimeOrders): Promise<CareerView> {
+  const { data } = await api.put<CareerView>("/career/halftime", orders);
+  return data;
+}
+
+export async function fetchCareerLeaderboard(division?: number | null): Promise<CareerLeaderboard> {
+  const { data } = await api.get<CareerLeaderboard>("/career/leaderboard", { params: division ? { division } : {} });
+  return data;
+}
+
 export async function leaveCareer(): Promise<void> {
   await api.post("/career/leave");
 }
@@ -487,8 +619,11 @@ export interface CareerAnalysis {
   chemistry?: { team: number; max: number } | null;
   /** Axis interactions that applied in duels: whose attack, how many, how many the attacker won. */
   duels: { id: string; label: string; attacker: "me" | "them"; applied: number; attacker_won: number }[];
-  instructions: { kind: "rule"; minute: number; rule: number | null; mentality: string; tactic: Tactic }[];
-  substitutions: { kind: "sub" | "sub_skipped"; minute: number; sub: number; in?: string; out?: string; fatigue?: number }[];
+  /** halftime = orders given in the live match centre's break. */
+  instructions: { kind: "rule"; minute: number; rule: number | null; mentality: string; tactic: Tactic; halftime?: boolean }[];
+  substitutions: {
+    kind: "sub" | "sub_skipped"; minute: number; sub: number | null; in?: string; out?: string; fatigue?: number; halftime?: boolean;
+  }[];
   plan: CareerPlan | null;
 }
 
