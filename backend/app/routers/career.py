@@ -66,7 +66,7 @@ async def set_lineup(payload: CareerLineupIn, db: AsyncSession = Depends(get_db)
 async def set_plan(payload: CareerPlanIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """Match plan for the coming rounds: up to N conditional instructions
     (score + minute -> mentality/style) and N substitutions."""
-    await career_service.set_plan(db, user, payload.rules, payload.subs, payload.round_index)
+    await career_service.set_plan(db, user, payload.rules, payload.subs, payload.round_index, payload.set_pieces)
     return await _view(db, user)
 
 

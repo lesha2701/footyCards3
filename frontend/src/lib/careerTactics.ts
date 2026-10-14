@@ -14,7 +14,7 @@ export const HINT_TEXT: Record<MatchupHint, { label: string; tone: string }> = {
 export const AXIS_PHASES: { title: string; axes: string[] }[] = [
   { title: "С мячом", axes: ["direction", "buildup"] },
   { title: "Переходы", axes: ["on_loss", "on_win"] },
-  { title: "Без мяча", axes: ["block"] },
+  { title: "Без мяча", axes: ["block", "tackling"] },
 ];
 
 export function axisValueLabel(catalog: TacticsCatalog | null | undefined, axis: string, value: string | undefined): string {

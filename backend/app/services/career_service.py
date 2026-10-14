@@ -235,6 +235,7 @@ def _is_out(part: CareerParticipant, card_id: int, round_index: int) -> bool:
 
 def resolve_lineup(
     part: CareerParticipant, cards_by_id: dict[int, UserCard], round_index: int, extra_cards: list[UserCard],
+    fill_any_position: bool = False,
 ) -> list[tuple[UserCard, object]]:
     """The XI that plays `round_index`: the saved lineup where its cards are
     still owned, fit and in a legal slot, the gaps auto-filled from the
@@ -262,7 +263,25 @@ def resolve_lineup(
     missing = [SlotSpec(s.code, s.category, s.ideal_position) for s in slots if s.code not in chosen]
     if missing:
         pool = [c for c in extra_cards if c.player_id not in used_players and c.id not in squad_ids]
-        chosen.update(pick_cards(missing, pool, "tournament"))
+        for code, card in pick_cards(missing, pool, "tournament").items():
+            chosen[code] = card
+            used_players.add(card.player_id)
+    if fill_any_position:
+        # Still a hole (nobody of that line is fit or owned): rather than a
+        # technical defeat, the best remaining fit player plays out of
+        # position — squad first, then the collection; outfield before a
+        # keeper and vice versa.
+        for slot in slots:
+            if slot.code in chosen:
+                continue
+            spare = [c for c in available + [c for c in extra_cards if c.id not in squad_ids]
+                     if c.player_id not in used_players]
+            if not spare:
+                break
+            prefer_gk = slot.category == "GK"
+            card = max(spare, key=lambda c: ((c.player.position.value == "GK") == prefer_gk, _effective(c), -c.id))
+            chosen[slot.code] = card
+            used_players.add(card.player_id)
     return [(chosen[s.code], s) for s in slots if s.code in chosen]
 
 
@@ -356,6 +375,8 @@ async def _build_bots(db: AsyncSession, season: CareerSeason, bot_indexes: list[
             "index": index, "name": names[n], "user_id": None, "formation": formation,
             "mentality": rng.choice([m for m in MENTALITIES if m != "PARK_THE_BUS"]),
             "playstyle": (preset := rng.choice(PLAYSTYLES)), "tactic": dict(tactics.PRESETS[preset]), "players": roster,
+            "set_pieces": {**tactics.DEFAULT_SET_PIECES, "corner_routine": rng.choice(list(tactics.CORNER_ROUTINES)),
+                           "corner_defence": rng.choice(list(tactics.SET_PIECE_DEFENCES))},
         })
     return teams
 
@@ -597,9 +618,13 @@ async def set_lineup(
     await db.commit()
 
 
-async def set_plan(db: AsyncSession, user: User, rules: list, subs: list, round_index: Optional[int] = None) -> None:
-    """Saves the match plan (conditional instructions + substitutions) for
-    the coming rounds; validated here, snapshotted at kick-off."""
+async def set_plan(
+    db: AsyncSession, user: User, rules: list, subs: list, round_index: Optional[int] = None,
+    set_pieces: Optional[dict] = None,
+) -> None:
+    """Saves the match plan (conditional instructions + substitutions, and
+    set-piece takers/schemes when given) for the coming rounds; validated
+    here, snapshotted at kick-off."""
     config = await get_config(db)
     part = await _editable_participation(db, user, round_index)
     season = await db.get(CareerSeason, part.season_id)
@@ -611,6 +636,8 @@ async def set_plan(db: AsyncSession, user: User, rules: list, subs: list, round_
         part.match_plan = tactics.clean_plan(
             {"rules": rules, "subs": subs}, slot_codes, set(_squad_ids(part, cards)), config,
         )
+        if set_pieces is not None:
+            part.set_pieces = tactics.clean_set_pieces(set_pieces, set(_squad_ids(part, cards)))
     except tactics.PlanError as exc:
         raise ConflictError(str(exc)) from exc
     await db.commit()
@@ -648,6 +675,40 @@ async def _credit(db: AsyncSession, user_id: int, amount: int, description: str,
         related_object_type="career_season", related_object_id=season_id,
     )
     return amount
+
+
+CATEGORY_LABELS_RU = {"GK": "вратарей", "DEF": "защитников", "MID": "полузащитников", "FWD": "нападающих"}
+
+
+def _squad_warnings(part: CareerParticipant, by_id: dict, next_round: int, xi: list) -> list[dict]:
+    """Holes and thin lines for the next round: "critical" = the XI has a
+    player out of his line (nobody fit to cover it), "thin" = exactly as
+    many fit players as the formation needs — one injury or ban away from
+    playing someone out of position."""
+    slots = get_formation_slots(part.formation)
+    need: dict[str, int] = {}
+    for s in slots:
+        need[s.category] = need.get(s.category, 0) + 1
+    fit: dict[str, int] = {cat: 0 for cat in need}
+    for cid in _squad_ids(part, by_id):
+        card = by_id.get(cid)
+        if card is None or not _usable(card) or _is_out(part, cid, next_round):
+            continue
+        for cat, positions in CATEGORY_POSITIONS.items():
+            if card.player.position in positions and cat in fit:
+                fit[cat] += 1
+    out = []
+    for card, slot in xi:
+        if card.player.position not in CATEGORY_POSITIONS[slot.category]:
+            out.append({"level": "critical", "category": slot.category,
+                        "text": f"На позиции {slot.code} сыграет {card.player.display_name} не по амплуа — "
+                                f"в заявке нет свободных {CATEGORY_LABELS_RU[slot.category]}"})
+    for cat, n in need.items():
+        if fit[cat] == n and not any(w["category"] == cat for w in out):
+            out.append({"level": "thin", "category": cat,
+                        "text": f"Здоровых {CATEGORY_LABELS_RU[cat]} ровно {n} — травма или дисквалификация "
+                                f"оставит дыру. Добавь запасного в заявку."})
+    return out
 
 
 def _my_tactic(part: CareerParticipant) -> dict:
@@ -711,15 +772,16 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             return tactics.CareerSideRunner(
                 label, team["name"], team["formation"], team["mentality"], choice["tactic"], on_pitch, [], config,
                 familiarity=choice["familiarity"], plan=choice["plan"], chem_rules=chem_rules,
+                set_pieces=team.get("set_pieces"),
             )
         part = humans.get(team_index)
         if part is None or part.status != "accepted":
             return None  # left the season / declined: technical defeat
         cards = await human_cards(part)
         by_id = {c.id: c for c in cards}
-        pairs = resolve_lineup(part, by_id, round_index, [c for c in cards if _usable(c)])
+        pairs = resolve_lineup(part, by_id, round_index, [c for c in cards if _usable(c)], fill_any_position=True)
         if len(pairs) != len(get_formation_slots(part.formation)):
-            return None
+            return None  # fewer than 11 fit players in the whole collection
         played[team_index] = {c.id for c, _ in pairs}
         xi_players = {c.player_id for c, _ in pairs}
         bench = [by_id[cid] for cid in _squad_ids(part, by_id) if cid in by_id]
@@ -740,6 +802,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             label, team["name"], part.formation, part.mentality, _my_tactic(part),
             [live(c, slot) for c, slot in pairs], [live(c) for c in bench], config,
             familiarity=familiarity, plan=copy.deepcopy(part.match_plan), chem_rules=chem_rules,
+            set_pieces=part.set_pieces,
         )
 
     results = []
@@ -807,6 +870,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         report = _after_match(
             part, played.get(team_index, set()), own, opp, round_index, config, rng, names, _squad_ids(part, own_cards),
             gains=gains_by_team.get(team_index),
+            card_mult=tactics.tuning_of(config)["foul"][_my_tactic(part).get("tackling", "normal")] if v1 else 1.0,
         )
         reports[str(team_index)] = report
         flag_modified(part, "condition")
@@ -836,7 +900,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
 def _after_match(
     part: CareerParticipant, played_ids: set[int], own: int, opp: int, round_index: int, config,
     rng: random.Random, names: dict[int, str], squad_ids: Optional[list[int]] = None,
-    gains: Optional[dict[int, int]] = None,
+    gains: Optional[dict[int, int]] = None, card_mult: float = 1.0,
 ) -> dict:
     """Fatigue, injuries, yellow/red cards and form for one human squad after
     a round. Returns the round report (player names per event) shown in the
@@ -858,10 +922,10 @@ def _after_match(
                 entry["injured_until"] = round_index + 1 + rng.randint(1, 2)
                 report["injured"].append(name)
             # Discipline: a straight red, or the Nth yellow, = one round out.
-            if rng.random() * 100 < config.career_red_chance_pct:
+            if rng.random() * 100 < config.career_red_chance_pct * card_mult:
                 entry["suspended_until"] = round_index + 2
                 report["red"].append(name)
-            elif rng.random() * 100 < config.career_yellow_chance_pct:
+            elif rng.random() * 100 < config.career_yellow_chance_pct * card_mult:
                 entry["yellows"] += 1
                 report["yellow"].append(name)
                 if entry["yellows"] >= config.career_yellows_for_ban:
@@ -1086,6 +1150,7 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         "tactic": _my_tactic(me), "squad_size": len(me.squad_card_ids or []),
         "tactics_version": _tactics_version(state),
         "scouting": None, "familiarity": None, "match_plan": me.match_plan, "plan_limits": {},
+        "set_pieces": {**tactics.DEFAULT_SET_PIECES, **(me.set_pieces or {})}, "squad_warnings": [],
     }
     if season.division is not None:
         config = await get_config(db)
@@ -1126,8 +1191,11 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         cards = await _career_cards(db, me.user_id)
         by_id = {c.id: c for c in cards}
         next_round = min(season.rounds_played, ROUNDS - 1)
-        xi = resolve_lineup(me, by_id, next_round, [c for c in cards if _usable(c)])
+        xi = resolve_lineup(
+            me, by_id, next_round, [c for c in cards if _usable(c)], fill_any_position=bool(out["tactics_version"]),
+        )
         out["lineup"] = {slot.code: card.id for card, slot in xi}
+        out["squad_warnings"] = _squad_warnings(me, by_id, next_round, xi)
         # Chemistry of the XI that would play the next round, under the
         # season's frozen rules (tactics seasons only).
         rules = chemistry_service.rules_from_dict(state.get("chemistry_rules")) if out["tactics_version"] else None
@@ -1258,6 +1326,11 @@ def tactics_catalog(config) -> dict:
         "presets": [{"code": code, "label": tactics.PRESET_LABELS[code], "tactic": axes}
                     for code, axes in tactics.PRESETS.items()],
         "interactions": [{"id": ix["id"], "label": ix["label"], "base": bool(ix.get("base"))} for ix in tactics.INTERACTIONS],
+        "set_pieces": {
+            "routines": [{"value": k, "label": v} for k, v in tactics.CORNER_ROUTINES.items()],
+            "defences": [{"value": k, "label": v} for k, v in tactics.SET_PIECE_DEFENCES.items()],
+            "beats": tactics.ROUTINE_BEATS,
+        },
     }
 
 

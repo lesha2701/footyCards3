@@ -20,6 +20,7 @@ import {
 import { fetchFriends } from "@/api/friends";
 import CareerSquad from "@/components/career/CareerSquad";
 import { PlanEditor, ScoutingCard, TacticsBoard } from "@/components/career/CareerTactics";
+import { SetPiecesCard, SquadWarnings } from "@/components/career/SetPiecesCard";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconTrophy, IconUsers } from "@/components/icons";
@@ -320,11 +321,13 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
 
       {tab === "prep" && season.scouting && (
         <>
+          <SquadWarnings warnings={season.squad_warnings} />
           <ScoutingCard scouting={season.scouting} catalog={catalog} difficultyLabel={season.difficulty_label} />
           {hasTactics && catalog ? (
             <>
               <TacticsBoard season={season} catalog={catalog} onView={onView} onError={onError} />
               <PlanEditor season={season} catalog={catalog} onView={onView} onError={onError} />
+              <SetPiecesCard season={season} catalog={catalog} onView={onView} onError={onError} />
             </>
           ) : (
             <p className="rounded-2xl bg-bg-surface p-4 text-xs text-ink-mist">
@@ -333,7 +336,12 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
           )}
         </>
       )}
-      {tab === "squad" && hasTactics && <CareerSquad season={season} onView={onView} onError={onError} />}
+      {tab === "squad" && hasTactics && (
+        <>
+          <SquadWarnings warnings={season.squad_warnings} />
+          <CareerSquad season={season} onView={onView} onError={onError} />
+        </>
+      )}
       {tab === "squad" && !hasTactics && <LineupEditor season={season} onView={onView} onError={onError} />}
       {tab === "table" && <section className="rounded-3xl bg-bg-surface p-4"><StandingsTable season={season} /></section>}
       {tab === "calendar" && <Calendar season={season} />}

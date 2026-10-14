@@ -47,6 +47,7 @@ def upgrade() -> None:
     op.add_column("career_participants", sa.Column("familiar_tactic", sa.JSON(), nullable=True))
     op.add_column("career_participants", sa.Column("tactic", sa.JSON(), nullable=True))
     op.add_column("career_participants", sa.Column("match_plan", sa.JSON(), nullable=True))
+    op.add_column("career_participants", sa.Column("set_pieces", sa.JSON(), nullable=True))
     op.add_column("career_participants", sa.Column("division", sa.Integer(), nullable=True))
     op.add_column("career_participants", sa.Column("next_division", sa.Integer(), nullable=True))
     op.add_column("career_seasons", sa.Column("division", sa.Integer(), nullable=True))
@@ -62,5 +63,5 @@ def downgrade() -> None:
     for name, _ in reversed(CONFIG_INT_COLUMNS):
         op.drop_column("game_config", name)
     op.drop_column("career_seasons", "division")
-    for column in ("next_division", "division", "match_plan", "tactic", "familiar_tactic", "familiar_formation", "familiarity"):
+    for column in ("next_division", "division", "set_pieces", "match_plan", "tactic", "familiar_tactic", "familiar_formation", "familiarity"):
         op.drop_column("career_participants", column)

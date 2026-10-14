@@ -620,3 +620,120 @@ async def test_season_freezes_chemistry_rules_and_reports_lineup_chemistry(clien
     row = await _season_row(db_session, season["id"])
     match = next(m for m in row.state["results"][0] if 0 in (m["home"], m["away"]))
     assert match["analysis"]["0"]["chemistry"]["max"] == 33
+
+
+# --- tackling, set pieces, holes ----------------------------------------------------------------
+
+def test_tackling_axis_levers_and_old_clients():
+    tuning = tactics.tuning_of(_defaults())
+    hard = tactics.TacticAxes({**NEUTRAL, "tackling": "hard"}, tuning)
+    soft = tactics.TacticAxes({**NEUTRAL, "tackling": "soft"}, tuning)
+    assert hard.foul_mult() > 1 > soft.foul_mult()
+    assert hard.tackle_attempt_mult() > 1 > soft.tackle_attempt_mult()
+    # Hard tackling wins more build-up duels but leaves gaps on the counter.
+    att = tactics.TacticAxes(NEUTRAL, tuning)
+    assert att.duel_shift(hard, "build_up", "central_attack")[0] < 0
+    assert att.duel_shift(hard, "counter", "central_attack")[0] > 0
+    assert att.duel_shift(soft, "build_up", "central_attack")[0] > 0
+    # A client that doesn't know the axis yet sends five axes: normal tackling.
+    five = {k: v for k, v in NEUTRAL.items() if k != "tackling"}
+    assert tactics.clean_tactic(five)["tackling"] == "normal"
+
+
+def test_set_pieces_validation():
+    clean = tactics.clean_set_pieces({"corner_taker": 5, "corner_routine": "near", "corner_defence": "man"}, {5})
+    assert clean["corner_taker"] == 5 and clean["penalty_taker"] is None and clean["corner_routine"] == "near"
+    for raw in ({"corner_taker": 9}, {"corner_routine": "short"}, {"corner_defence": "none"}, "x"):
+        with pytest.raises(tactics.PlanError):
+            tactics.clean_set_pieces(raw, {5})
+
+
+def test_set_pieces_and_penalties_in_a_match():
+    """Corners follow blocked/saved shots, free kicks follow fouls outside the
+    box, penalties are taken by the chosen taker — all logged as events."""
+    config = _defaults()
+    random.seed(3)
+    a = _runner("a", {**NEUTRAL, "tackling": "hard"}, config=config)
+    a.set_pieces = {"corner_taker": 10, "penalty_taker": 9, "corner_routine": "far"}
+    b = _runner("b", {**NEUTRAL, "tackling": "hard"}, config=config, offset=1000)
+    b.set_pieces = {"corner_defence": "zonal"}
+    controller = tactics.CareerMatchController(a, b)
+    totals = {"corner": 0, "free_kick": 0, "penalty": 0}
+    for _ in range(40):
+        a2, b2 = _runner("a", {**NEUTRAL, "tackling": "hard"}, config=config), _runner("b", {**NEUTRAL, "tackling": "hard"}, config=config, offset=1000)
+        a2.set_pieces = a.set_pieces
+        result = engine.simulate_match_controlled(tactics.CareerMatchController(a2, b2), config)
+        goals = {"a": 0, "b": 0}
+        for e in result.event_log:
+            kind = (e.get("payload") or {}).get("set_piece")
+            if kind:
+                totals[kind] += 1
+                if kind == "corner" and e["team"] == "a":
+                    assert e["payload"]["taker"] == "P10"
+                if kind == "penalty" and e["team"] == "a":
+                    assert e["payload"]["shooter"] == "P9"
+            if e["event_type"] == "goal":
+                goals[e["team"]] += 1
+        assert (goals["a"], goals["b"]) == (result.score_a, result.score_b)
+    assert totals["corner"] > 0 and totals["free_kick"] > 0 and totals["penalty"] > 0
+    assert controller.set_piece_log == []  # nothing played on the unused controller
+
+
+def test_corner_routine_vs_defence_edge():
+    config = _defaults()
+    a, b = _runner("a", config=config), _runner("b", config=config, offset=1000)
+    a.set_pieces, b.set_pieces = {"corner_routine": "far"}, {"corner_defence": "zonal"}
+    controller = tactics.CareerMatchController(a, b)
+    random.seed(1)
+    for _ in range(200):
+        controller._corner("a", 50)
+    assert all(entry["edge"] for entry in controller.set_piece_log)
+    b.set_pieces = {"corner_defence": "man"}
+    controller.set_piece_log.clear()
+    controller._corner("a", 50)
+    assert not controller.set_piece_log[0]["edge"]
+
+
+async def test_holes_are_filled_out_of_position_and_flagged(client, db_session, bot_token):
+    user_id, headers, season = await _season(client, db_session, bot_token, 870008)
+    row = await _season_row(db_session, season["id"])
+    part = row.participants[0]
+    # Suspend every defender in the squad for the next round.
+    defenders = [s["card_id"] for s in season["squad"]
+                 if s["card"] and s["card"]["player"]["position"] in ("LB", "CB", "RB")]
+    cond = dict(part.condition or {})
+    for cid in defenders:
+        cond[str(cid)] = {"fatigue": 0, "injured_until": 0, "suspended_until": 5, "yellows": 0, "form": 0}
+    part.condition = cond
+    await db_session.commit()
+    view = (await client.get(f"{API}/career", headers=headers)).json()["season"]
+    assert len(view["lineup"]) == 11  # no technical defeat
+    critical = [w for w in view["squad_warnings"] if w["level"] == "critical"]
+    assert critical and all(w["category"] == "DEF" for w in critical)
+    first = datetime.fromisoformat(season["schedule"][0])
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    row = await _season_row(db_session, season["id"])
+    match = next(m for m in row.state["results"][0] if 0 in (m["home"], m["away"]))
+    assert match["events"]  # played, not 0:3 by default
+
+
+async def test_thin_line_warning_and_set_pieces_api(client, db_session, bot_token):
+    user_id, headers, season = await _season(client, db_session, bot_token, 870009)
+    assert not [w for w in season["squad_warnings"] if w["category"] == "DEF"]  # 5 defenders for 4 places
+    # Ban the spare defender: exactly four fit — one more absence is a hole.
+    spare = next(s["card_id"] for s in season["squad"] if s["card"] and s["card"]["player"]["position"] in ("LB", "CB", "RB")
+                 and s["card_id"] not in season["lineup"].values())
+    row = await _season_row(db_session, season["id"])
+    row.participants[0].condition = {str(spare): {"fatigue": 0, "injured_until": 3, "suspended_until": 0, "yellows": 0, "form": 0}}
+    await db_session.commit()
+    season = (await client.get(f"{API}/career", headers=headers)).json()["season"]
+    assert {w["category"] for w in season["squad_warnings"] if w["level"] == "thin"} == {"DEF"}
+    taker = next(s["card_id"] for s in season["squad"] if s["card"] and s["card"]["player"]["position"] == "ST")
+    resp = await client.put(f"{API}/career/plan", headers=headers, json={
+        "rules": [], "subs": [], "set_pieces": {"penalty_taker": taker, "corner_routine": "near", "corner_defence": "man"},
+    })
+    assert resp.status_code == 200, resp.text
+    sp = resp.json()["season"]["set_pieces"]
+    assert sp["penalty_taker"] == taker and sp["corner_routine"] == "near" and sp["corner_defence"] == "man"
+    bad = await client.put(f"{API}/career/plan", headers=headers, json={"rules": [], "subs": [], "set_pieces": {"penalty_taker": 10 ** 9}})
+    assert bad.status_code == 409

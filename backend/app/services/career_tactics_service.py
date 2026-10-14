@@ -26,6 +26,7 @@ the axis levers).
 """
 import hashlib
 import json
+import random
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -50,10 +51,11 @@ AXES: dict[str, tuple[str, ...]] = {
     "on_loss": ("counterpress", "drop"),
     "on_win": ("fast", "keep"),
     "block": ("high", "mid", "low"),
+    "tackling": ("normal", "hard", "soft"),
 }
 AXIS_LABELS = {
     "direction": "Направление атаки", "buildup": "Построение атаки", "on_loss": "После потери мяча",
-    "on_win": "После отбора", "block": "Линия обороны и прессинга",
+    "on_win": "После отбора", "block": "Линия обороны и прессинга", "tackling": "Отбор мяча",
 }
 VALUE_LABELS = {
     "direction": {"wings": "Фланги", "mixed": "Смешанно", "center": "Центр"},
@@ -61,6 +63,7 @@ VALUE_LABELS = {
     "on_loss": {"counterpress": "Контрпрессинг", "drop": "Отход в блок"},
     "on_win": {"fast": "Быстрая атака", "keep": "Сохранить мяч"},
     "block": {"high": "Высокий прессинг", "mid": "Средний блок", "low": "Низкий блок"},
+    "tackling": {"normal": "Обычный", "hard": "Жёсткий", "soft": "Аккуратный"},
 }
 # One line per choice for the tactics screen: what it gives and what it costs.
 VALUE_HINTS = {
@@ -87,15 +90,27 @@ VALUE_HINTS = {
         "mid": "Средний блок: баланс без явных слабостей.",
         "low": "Глубокий блок: закрывает центр и защищает много людей, но отдаёт фланги и инициативу.",
     },
+    "tackling": {
+        "normal": "Игроки идут в отбор, когда уверены, что заберут мяч чисто, без риска фола.",
+        "hard": "Идут в отбор на всё: чаще отбирают мяч, но больше фолов, пенальти, жёлтых и красных. Промах оставляет дыру сзади.",
+        "soft": "Не идут в подкат, а сопровождают соперника: меньше фолов и карточек, но мяч отбирают реже.",
+    },
 }
-NEUTRAL_TACTIC = {"direction": "mixed", "buildup": "mixed", "on_loss": "drop", "on_win": "keep", "block": "mid"}
+NEUTRAL_TACTIC = {
+    "direction": "mixed", "buildup": "mixed", "on_loss": "drop", "on_win": "keep", "block": "mid", "tackling": "normal",
+}
 
 PRESETS: dict[str, dict[str, str]] = {
-    "WING_PLAY": {"direction": "wings", "buildup": "mixed", "on_loss": "drop", "on_win": "keep", "block": "mid"},
-    "CENTRAL_PLAY": {"direction": "center", "buildup": "short", "on_loss": "counterpress", "on_win": "keep", "block": "mid"},
-    "POSSESSION": {"direction": "mixed", "buildup": "short", "on_loss": "counterpress", "on_win": "keep", "block": "mid"},
-    "HIGH_PRESS": {"direction": "mixed", "buildup": "direct", "on_loss": "counterpress", "on_win": "fast", "block": "high"},
-    "COUNTER_ATTACK": {"direction": "mixed", "buildup": "direct", "on_loss": "drop", "on_win": "fast", "block": "low"},
+    "WING_PLAY": {"direction": "wings", "buildup": "mixed", "on_loss": "drop", "on_win": "keep", "block": "mid",
+                  "tackling": "normal"},
+    "CENTRAL_PLAY": {"direction": "center", "buildup": "short", "on_loss": "counterpress", "on_win": "keep", "block": "mid",
+                     "tackling": "normal"},
+    "POSSESSION": {"direction": "mixed", "buildup": "short", "on_loss": "counterpress", "on_win": "keep", "block": "mid",
+                   "tackling": "soft"},
+    "HIGH_PRESS": {"direction": "mixed", "buildup": "direct", "on_loss": "counterpress", "on_win": "fast", "block": "high",
+                   "tackling": "hard"},
+    "COUNTER_ATTACK": {"direction": "mixed", "buildup": "direct", "on_loss": "drop", "on_win": "fast", "block": "low",
+                       "tackling": "normal"},
 }
 PRESET_LABELS = {
     "WING_PLAY": "Фланговая игра", "CENTRAL_PLAY": "Игра через центр", "POSSESSION": "Контроль мяча",
@@ -126,7 +141,20 @@ DEFAULT_TUNING: dict[str, Any] = {
         "press_vs_short": 0.24, "direct_behind_line": 0.26, "direct_inaccuracy": 0.06, "wings_beat_press": 0.24,
         "low_block_center": 0.24, "low_block_crosses": 0.21, "patient_vs_low_block": 0.2,
         "fast_counter_high_line": 0.32, "counterpress": 0.32, "counter_behind_fullbacks": 0.24,
+        "hard_tackling_wins": 0.12, "soft_tackling_jockeys": 0.10, "hard_tackle_gaps": 0.16,
     },
+    # Tackling: foul / tackle-attempt rates and post-match card odds.
+    "foul": {"normal": 1.0, "hard": 1.6, "soft": 0.6},
+    "tackle_attempt": {"normal": 1.0, "hard": 1.35, "soft": 0.7},
+    # Set pieces: chances a blocked/saved shot gives a corner, goal odds
+    # of a corner / direct free kick / penalty (scaled by the players), and
+    # how much the right delivery vs the defending scheme matters.
+    "corner_chance": 0.35,
+    "corner_goal": 0.06,
+    "free_kick_goal": 0.07,
+    "penalty_goal": 0.76,
+    "routine_edge": 1.4,
+    "routine_miss": 0.8,
     # Scouting: how much a counter-attack interaction weighs vs a build-up
     # one, and the score above which a matchup is called an advantage.
     "counter_weight": 0.35,
@@ -157,6 +185,12 @@ INTERACTIONS: list[dict] = [
      "label": "Контрпрессинг гасит контратаку сразу после потери"},
     {"id": "direct_inaccuracy", "kind": "build_up", "att": {"buildup": "direct"}, "def": {}, "sign": -1,
      "base": True, "label": "Длинные передачи чаще теряются"},
+    {"id": "hard_tackling_wins", "kind": "build_up", "att": {}, "def": {"tackling": "hard"}, "sign": -1,
+     "base": True, "label": "Жёсткий отбор чаще забирает мяч"},
+    {"id": "soft_tackling_jockeys", "kind": "build_up", "att": {}, "def": {"tackling": "soft"}, "sign": 1,
+     "base": True, "label": "Аккуратный отбор реже забирает мяч"},
+    {"id": "hard_tackle_gaps", "kind": "counter", "att": {}, "def": {"tackling": "hard"}, "sign": 1,
+     "base": True, "label": "Промах в жёстком отборе оставляет дыру"},
 ]
 INTERACTION_LABELS = {ix["id"]: ix["label"] for ix in INTERACTIONS}
 
@@ -186,6 +220,9 @@ def clean_tactic(raw: Any, partial: bool = False) -> dict:
     for axis, values in AXES.items():
         if axis not in raw or raw[axis] is None:
             if partial:
+                continue
+            if axis == "tackling":  # added later: older clients don't send it
+                out[axis] = NEUTRAL_TACTIC[axis]
                 continue
             raise TacticError(f"Не выбрано: {AXIS_LABELS[axis].lower()}")
         if raw[axis] not in values:
@@ -256,6 +293,12 @@ class TacticAxes:
     def retry_chance(self, midfield_control: float) -> float:
         quality = max(0.0, min(1.0, (midfield_control - 58) / (99 - 58)))
         return self.tuning["retry"][self.tactic["buildup"]] * quality
+
+    def foul_mult(self) -> float:
+        return self.tuning["foul"][self.tactic.get("tackling", "normal")]
+
+    def tackle_attempt_mult(self) -> float:
+        return self.tuning["tackle_attempt"][self.tactic.get("tackling", "normal")]
 
     def fatigue_mult(self) -> float:
         t = self.tuning["fatigue"]
@@ -461,6 +504,43 @@ def _rule_active(rule: dict, minute: int, diff: int) -> bool:
     return diff == 0
 
 
+# --- set pieces ------------------------------------------------------------------------------
+
+CORNER_ROUTINES = {"near": "Навес на ближнюю штангу", "far": "Навес на дальнюю штангу"}
+SET_PIECE_DEFENCES = {"zonal": "Зонная защита", "man": "Персональная опека"}
+# Which delivery beats which defence (the other pairing is a miss).
+ROUTINE_BEATS = {"far": "zonal", "near": "man"}
+SET_PIECE_TAKERS = ("corner_taker", "free_kick_taker", "penalty_taker")
+DEFAULT_SET_PIECES = {"corner_taker": None, "free_kick_taker": None, "penalty_taker": None,
+                      "corner_routine": "far", "corner_defence": "zonal"}
+# Auto-picked takers when none is chosen (or the chosen one isn't on the pitch).
+TAKER_POSITIONS = {
+    "corner_taker": ("LW", "RW", "LM", "RM", "CAM", "CM", "LB", "RB"),
+    "free_kick_taker": ("CAM", "CM", "LW", "RW", "ST", "LM", "RM", "CDM"),
+    "penalty_taker": ("ST", "CAM", "LW", "RW", "CM", "LM", "RM"),
+}
+
+
+def clean_set_pieces(raw: Any, squad_ids: set[int]) -> dict:
+    """Validated set-piece settings (takers are squad card ids or None = auto)."""
+    if not isinstance(raw, dict):
+        raise PlanError("Неверный формат стандартов")
+    out = dict(DEFAULT_SET_PIECES)
+    for key in SET_PIECE_TAKERS:
+        value = raw.get(key)
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value not in squad_ids):
+            raise PlanError("Исполнитель стандартов — только игрок заявки")
+        out[key] = value
+    if raw.get("corner_routine", "far") not in CORNER_ROUTINES:
+        raise PlanError("Неизвестная подача углового")
+    if raw.get("corner_defence", "zonal") not in SET_PIECE_DEFENCES:
+        raise PlanError("Неизвестная защита на стандартах")
+    out["corner_routine"] = raw.get("corner_routine", "far")
+    out["corner_defence"] = raw.get("corner_defence", "zonal")
+    return out
+
+
+
 # Legend bots' own conditional instructions (same mechanism as a human plan).
 LEGEND_BOT_PLAN = {
     "rules": [
@@ -506,6 +586,8 @@ class CareerSideRunner:
     # Chemistry rules frozen at the season start (chemistry_service; None =
     # the mechanic was off). Recomputed for the XI after every substitution.
     chem_rules: Any = None
+    # Set-piece takers and schemes (DEFAULT_SET_PIECES shape).
+    set_pieces: Optional[dict] = None
     events_meta: list[dict] = field(default_factory=list)  # rule/sub log for the analysis
     _subs_done: set = field(default_factory=set)
     _effective: tuple = ()
@@ -666,6 +748,32 @@ class CareerSideRunner:
     def finish(self) -> None:
         self._advance_fatigue(90)
 
+    # --- set pieces ---
+
+    def set_piece_settings(self) -> dict:
+        return {**DEFAULT_SET_PIECES, **(self.set_pieces or {})}
+
+    def taker(self, kind: str) -> Optional[LivePlayer]:
+        """The chosen taker if he is on the pitch, else the best-rated player
+        in a fitting position, else the best outfield player."""
+        outfield = [p for p in self.on_pitch if p.slot.category != "GK"]
+        chosen = self.set_piece_settings().get(kind)
+        found = next((p for p in outfield if p.card.id == chosen), None)
+        if found is not None:
+            return found
+        fitting = [p for p in outfield if p.card.player.position.value in TAKER_POSITIONS[kind]]
+        pool = fitting or outfield
+        return max(pool, key=lambda p: (p.card.player.rating, -p.card.id)) if pool else None
+
+    def aerial(self, exclude: Optional[LivePlayer] = None) -> Optional[LivePlayer]:
+        """Best header in the box: strikers and centre-backs first."""
+        pool = [p for p in self.on_pitch if p is not exclude and p.card.player.position.value in ("ST", "CB")]
+        pool = pool or [p for p in self.on_pitch if p is not exclude and p.slot.category != "GK"]
+        return max(pool, key=lambda p: (p.card.player.rating, -p.card.id)) if pool else None
+
+    def keeper(self) -> Optional[LivePlayer]:
+        return next((p for p in self.on_pitch if p.slot.category == "GK"), None)
+
     def minutes_played(self) -> dict[int, int]:
         """card id -> minutes on the pitch."""
         out = {}
@@ -681,11 +789,116 @@ class CareerSideRunner:
         return {p.card.id: round(p.gained) for p in self.on_pitch + self.bench if p.slot is not None}
 
 
+def _rating_of(p: Optional[LivePlayer]) -> int:
+    return int(p.card.player.rating) if p is not None else 60
+
+
+def _actor(p: Optional[LivePlayer]) -> dict:
+    if p is None:
+        return {}
+    return {"name": p.card.player.display_name, "club_card_id": p.card.id}
+
+
 class CareerMatchController:
-    """tournament_match_engine.MatchController for a career match."""
+    """tournament_match_engine.MatchController for a career match: sides
+    per phase, tackling levers, penalties and set pieces."""
 
     def __init__(self, a: CareerSideRunner, b: CareerSideRunner):
         self.a, self.b = a, b
+        self.set_piece_log: list[dict] = []
+
+    def _side(self, label: str) -> CareerSideRunner:
+        return self.a if label == "a" else self.b
+
+    def _axes(self, label: str) -> TacticAxes:
+        runner = self._side(label)
+        return TacticAxes(runner.effective_tactic, runner.tuning)
+
+    # tackling levers for the defending side (engine hooks)
+    def tackle_attempt_mult(self, defending: str) -> float:
+        return self._axes(defending).tackle_attempt_mult()
+
+    def foul_mult(self, defending: str) -> float:
+        return self._axes(defending).foul_mult()
+
+    def penalty(self, attacking: str, minute: int, card_kind: str) -> tuple[dict, bool]:
+        """A penalty after a foul in the box: the taker vs the keeper."""
+        shooter = self._side(attacking).taker("penalty_taker")
+        defending = "b" if attacking == "a" else "a"
+        keeper = self._side(defending).keeper()
+        tuning = self._side(attacking).tuning
+        chance = max(0.55, min(0.92, tuning["penalty_goal"] + (_rating_of(shooter) - _rating_of(keeper)) / 200))
+        scored = random.random() < chance
+        event = {
+            "minute": minute, "event_type": "goal" if scored else "save", "team": attacking,
+            "payload": {"action": "penalty", "is_penalty": True, "set_piece": "penalty", "card": card_kind,
+                        "shooter": _actor(shooter).get("name"), "shooter_id": _actor(shooter).get("club_card_id"),
+                        "keeper": _actor(keeper).get("name")},
+            "description": (f"⚽ Пенальти! {_actor(shooter).get('name', 'Игрок')} реализует удар с точки"
+                            if scored else f"🧤 {_actor(keeper).get('name', 'Вратарь')} отражает пенальти!"),
+        }
+        self.set_piece_log.append({"kind": "penalty", "team": attacking, "scored": scored})
+        return event, scored
+
+    def _corner(self, attacking: str, minute: int) -> tuple[dict, bool]:
+        att, dfn = self._side(attacking), self._side("b" if attacking == "a" else "a")
+        tuning = att.tuning
+        taker = att.taker("corner_taker")
+        target = att.aerial(exclude=taker)
+        marker = dfn.aerial()
+        routine = att.set_piece_settings()["corner_routine"]
+        defence = dfn.set_piece_settings()["corner_defence"]
+        edge = tuning["routine_edge"] if ROUTINE_BEATS[routine] == defence else tuning["routine_miss"]
+        delivery = 1 + 0.5 * (_rating_of(taker) - 70) / 30
+        header = 2 * _rating_of(target) / max(1, _rating_of(target) + _rating_of(marker))
+        chance = max(0.01, min(0.2, tuning["corner_goal"] * delivery * header * edge))
+        scored = random.random() < chance
+        name = _actor(target).get("name", "Игрок")
+        event = {
+            "minute": minute, "event_type": "goal" if scored else "shot", "team": attacking,
+            "payload": {"action": "header", "set_piece": "corner", "routine": routine, "defence": defence,
+                        "taker": _actor(taker).get("name"), "shooter": name, "shooter_id": _actor(target).get("club_card_id"),
+                        "assist": _actor(taker).get("name"), "assist_id": _actor(taker).get("club_card_id")},
+            "description": (f"⚽ Гол после углового! {name} головой с подачи {_actor(taker).get('name', '')}"
+                            if scored else f"🚩 Угловой: {name} бьёт головой — мимо"),
+        }
+        self.set_piece_log.append({"kind": "corner", "team": attacking, "scored": scored, "edge": edge > 1})
+        return event, scored
+
+    def _free_kick(self, attacking: str, minute: int) -> tuple[dict, bool]:
+        att, dfn = self._side(attacking), self._side("b" if attacking == "a" else "a")
+        taker, keeper = att.taker("free_kick_taker"), dfn.keeper()
+        quality = 1 + (_rating_of(taker) - _rating_of(keeper)) / 40
+        chance = max(0.02, min(0.18, att.tuning["free_kick_goal"] * quality))
+        scored = random.random() < chance
+        name = _actor(taker).get("name", "Игрок")
+        event = {
+            "minute": minute, "event_type": "goal" if scored else "save", "team": attacking,
+            "payload": {"action": "free_kick", "set_piece": "free_kick", "shooter": name,
+                        "shooter_id": _actor(taker).get("club_card_id"), "keeper": _actor(keeper).get("name")},
+            "description": (f"⚽ {name} забивает со штрафного!" if scored else f"🧤 Штрафной {name} — вратарь на месте"),
+        }
+        self.set_piece_log.append({"kind": "free_kick", "team": attacking, "scored": scored})
+        return event, scored
+
+    def set_pieces(self, new_events: list[dict], minute: int) -> list[tuple[dict, Optional[str]]]:
+        """Set pieces that follow the moment just played: a blocked or saved
+        shot can give a corner, a foul outside the box a direct free kick."""
+        out = []
+        for ev in new_events:
+            payload = ev.get("payload") or {}
+            if payload.get("set_piece") or payload.get("is_penalty"):
+                continue
+            if ev["event_type"] in ("blocked", "save"):
+                attacking = ev["team"]
+                if random.random() < self._side(attacking).tuning["corner_chance"]:
+                    event, scored = self._corner(attacking, minute)
+                    out.append((event, attacking if scored else None))
+            elif ev["event_type"] == "foul_stopped":
+                attacking = "b" if ev["team"] == "a" else "a"
+                event, scored = self._free_kick(attacking, minute)
+                out.append((event, attacking if scored else None))
+        return out
 
     def before_phase(self, minute: int, score_a: int, score_b: int):
         side_a, lineup_a, ev_a = self.a.state_at(minute, score_a, score_b)
@@ -772,13 +985,15 @@ def build_analysis(
     mine, theirs = tracker.get(side, {}), tracker.get(other, {})
 
     def goals(team: str) -> dict:
-        out = {"wing": 0, "central": 0, "counter": 0, "penalty": 0}
+        out = {"wing": 0, "central": 0, "counter": 0, "penalty": 0, "set_piece": 0}
         for e in events:
             if e.get("event_type") != "goal" or e.get("team") != team:
                 continue
             payload = e.get("payload") or {}
             if payload.get("is_penalty"):
                 out["penalty"] += 1
+            elif payload.get("set_piece"):
+                out["set_piece"] += 1
             elif payload.get("origin") == "counter":
                 out["counter"] += 1
             elif payload.get("zone") == "wing_attack":
@@ -792,6 +1007,16 @@ def build_analysis(
             "attacks", "wing_attack", "central_attack", "recycled", "advance", "stall", "breakdown",
             "counters", "counter_chances",
         )}
+
+    def set_pieces(team: str) -> dict:
+        out = {k: 0 for k in ("corner", "corner_goals", "free_kick", "free_kick_goals", "penalty", "penalty_goals")}
+        for e in events:
+            kind = (e.get("payload") or {}).get("set_piece")
+            if kind and e.get("team") == team:
+                out[kind] += 1
+                if e.get("event_type") == "goal":
+                    out[f"{kind}_goals"] += 1
+        return out
 
     duels = []
     for who, stats in (("me", mine), ("them", theirs)):
@@ -807,6 +1032,7 @@ def build_analysis(
         "chemistry": {"team": me.chemistry_start[0], "max": me.chemistry_start[1]} if me.chem_rules else None,
         "mine": phases(mine), "theirs": phases(theirs),
         "goals_mine": goals(side), "goals_theirs": goals(other),
+        "set_pieces_mine": set_pieces(side), "set_pieces_theirs": set_pieces(other),
         "duels": duels,
         "instructions": [m for m in me.events_meta if m["kind"] == "rule"],
         "substitutions": [m for m in me.events_meta if m["kind"] in ("sub", "sub_skipped")],

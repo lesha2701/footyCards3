@@ -87,6 +87,27 @@ export interface TacticsCatalog {
   axes: { key: string; label: string; values: { value: string; label: string; hint: string }[] }[];
   presets: { code: string; label: string; tactic: Tactic }[];
   interactions: { id: string; label: string; base: boolean }[];
+  set_pieces?: {
+    routines: { value: string; label: string }[];
+    defences: { value: string; label: string }[];
+    /** routine -> the defence it beats. */
+    beats: Record<string, string>;
+  };
+}
+
+export interface CareerSetPieces {
+  corner_taker: number | null;
+  free_kick_taker: number | null;
+  penalty_taker: number | null;
+  corner_routine: string;
+  corner_defence: string;
+}
+
+export interface CareerSquadWarning {
+  /** critical = someone plays out of his line; thin = no cover left in a line. */
+  level: "critical" | "thin";
+  category: string;
+  text: string;
 }
 
 export interface MatchupItem {
@@ -204,6 +225,8 @@ export interface CareerSeason {
   match_plan?: CareerPlan | null;
   /** Chemistry of the XI for the next round (season's frozen rules). */
   chemistry?: ChemistryOut | null;
+  set_pieces?: CareerSetPieces | null;
+  squad_warnings?: CareerSquadWarning[];
   plan_limits?: { rules?: number; subs?: number };
 }
 
@@ -260,7 +283,7 @@ export async function previewCareerTactic(tactic: Tactic): Promise<MatchupReport
   return data.matchup;
 }
 
-export async function setCareerPlan(plan: CareerPlan & { round_index?: number }): Promise<CareerView> {
+export async function setCareerPlan(plan: CareerPlan & { round_index?: number; set_pieces?: CareerSetPieces }): Promise<CareerView> {
   const { data } = await api.put<CareerView>("/career/plan", plan);
   return data;
 }
@@ -298,6 +321,16 @@ export interface CareerGoalsByOrigin {
   central: number;
   counter: number;
   penalty: number;
+  set_piece?: number;
+}
+
+export interface CareerSetPieceStats {
+  corner: number;
+  corner_goals: number;
+  free_kick: number;
+  free_kick_goals: number;
+  penalty: number;
+  penalty_goals: number;
 }
 
 export interface CareerAnalysis {
@@ -312,6 +345,9 @@ export interface CareerAnalysis {
   theirs: CareerPhaseStats;
   goals_mine: CareerGoalsByOrigin;
   goals_theirs: CareerGoalsByOrigin;
+  set_pieces_mine?: CareerSetPieceStats;
+  set_pieces_theirs?: CareerSetPieceStats;
+  chemistry?: { team: number; max: number } | null;
   /** Axis interactions that applied in duels: whose attack, how many, how many the attacker won. */
   duels: { id: string; label: string; attacker: "me" | "them"; applied: number; attacker_won: number }[];
   instructions: { kind: "rule"; minute: number; rule: number | null; mentality: string; tactic: Tactic }[];

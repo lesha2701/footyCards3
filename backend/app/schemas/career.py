@@ -42,6 +42,8 @@ class CareerPlanIn(BaseModel):
     rules: list[dict] = Field(default_factory=list)
     subs: list[dict] = Field(default_factory=list)
     round_index: Optional[int] = None
+    # Set-piece takers / schemes (unchanged when omitted).
+    set_pieces: Optional[dict] = None
 
 
 class CareerPlanRuleOut(BaseModel):
@@ -232,6 +234,9 @@ class CareerSeasonOut(BaseModel):
     squad_size: int = 0
     # Chemistry of the XI for the next round (season's frozen rules).
     chemistry: Optional[ChemistryOut] = None
+    set_pieces: Optional[dict] = None
+    # Holes / thin lines for the next round (career_service._squad_warnings).
+    squad_warnings: list[dict] = []
     scouting: Optional[CareerScoutingOut] = None
     familiarity: Optional[CareerFamiliarityOut] = None
     match_plan: Optional[CareerPlanOut] = None

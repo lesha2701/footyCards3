@@ -256,6 +256,7 @@ def _resolve_shot_action(
 
 def _resolve_defense_tackle(
     defending_side: str, moment: dict, config, keeper: dict | None = None,
+    foul_mult: float = 1.0, penalty_hook=None,
 ) -> tuple[dict, str, tuple[int, str] | None]:
     """Default policy: defending side always attempts a tackle (same
     rating-driven foul/card rolls as a human picking 'tackle' today).
@@ -264,7 +265,10 @@ def _resolve_defense_tackle(
     is_box = moment["is_box"]
     shot_type = moment["shot_type"]
 
-    foul = random.random() < _lerp_chance(defender["rating"], float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max))
+    foul_chance = _lerp_chance(defender["rating"], float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max))
+    if foul_mult != 1.0:  # career tackling style (career_tactics_service)
+        foul_chance = min(0.95, foul_chance * foul_mult)
+    foul = random.random() < foul_chance
     if not foul:
         event = {
             "minute": moment["minute"], "event_type": "tackle_won", "team": defending_side,
@@ -274,6 +278,12 @@ def _resolve_defense_tackle(
 
     is_red = random.random() < _lerp_chance(defender["rating"], float(config.match_tackle_red_chance_min), float(config.match_tackle_red_chance_max))
     card_kind = "red" if is_red else "yellow"
+
+    if is_box and penalty_hook is not None:
+        # Career: the penalty is taken by the attacking side's taker vs its keeper.
+        attacking_side = "a" if defending_side == "b" else "b"
+        event, scored = penalty_hook(attacking_side, moment["minute"], card_kind)
+        return event, (attacking_side if scored else "none"), (defender["club_card_id"], card_kind)
 
     if is_box:
         eff_gk = _clamp_rating(defender["rating"] - config.match_penalty_gk_rating_penalty)
@@ -340,7 +350,7 @@ def simulate_match(
 
 def _resolve_chance(
     result: MatchResult, chance, side_a, side_b, lineup_a: list[dict], lineup_b: list[dict], config,
-    club_a_name: str, club_b_name: str, tag_origin: bool = False,
+    club_a_name: str, club_b_name: str, tag_origin: bool = False, controller=None,
 ) -> None:
     """Resolves one tactical Chance into event(s) and score on `result`.
     `tag_origin` (career matches) also records the chance's origin/zone in
@@ -406,10 +416,20 @@ def _resolve_chance(
     # path; everywhere else, shoot/pass resolves directly against the
     # defender's rating via _resolve_shot_continuation's blocker/keeper
     # roll, same as the personal engine.
-    if event["event_type"] in ("blocked", "save") and random.random() < float(config.club_tactical_tackle_attempt_chance):
-        defense_event, defense_scorer, card = _resolve_defense_tackle(defending_side, moment, config, keeper=defending_keeper)
+    tackle_chance = float(config.club_tactical_tackle_attempt_chance)
+    if controller is not None:
+        tackle_chance = min(0.95, tackle_chance * controller.tackle_attempt_mult(defending_side))
+    if event["event_type"] in ("blocked", "save") and random.random() < tackle_chance:
+        if controller is not None:
+            defense_event, defense_scorer, card = _resolve_defense_tackle(
+                defending_side, moment, config, keeper=defending_keeper,
+                foul_mult=controller.foul_mult(defending_side), penalty_hook=controller.penalty,
+            )
+        else:
+            defense_event, defense_scorer, card = _resolve_defense_tackle(defending_side, moment, config, keeper=defending_keeper)
         result.event_log.append(defense_event)
-        defense_event["description"] = _describe_event(defense_event["event_type"], defense_event["team"], club_a_name, club_b_name)
+        if "description" not in defense_event:
+            defense_event["description"] = _describe_event(defense_event["event_type"], defense_event["team"], club_a_name, club_b_name)
         if defense_scorer != "none":
             setattr(result, f"score_{defense_scorer}", getattr(result, f"score_{defense_scorer}") + 1)
         if card is not None:
@@ -455,7 +475,16 @@ def simulate_match_controlled(
         if chance is None:
             continue
         chances += 1
-        _resolve_chance(result, chance, side_a, side_b, lineup_a, lineup_b, config, club_a_name, club_b_name, tag_origin=True)
+        before = len(result.event_log)
+        _resolve_chance(
+            result, chance, side_a, side_b, lineup_a, lineup_b, config, club_a_name, club_b_name, tag_origin=True,
+            controller=controller if hasattr(controller, "penalty") else None,
+        )
+        if hasattr(controller, "set_pieces"):
+            for event, scorer in controller.set_pieces(result.event_log[before:], minute):
+                result.event_log.append(event)
+                if scorer:
+                    setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
     if hasattr(controller, "finish"):
         controller.finish()
     return result

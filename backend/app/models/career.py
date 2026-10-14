@@ -70,6 +70,8 @@ class CareerParticipant(Base):
     # `playstyle` then holds the matching preset code or CUSTOM.
     tactic: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     match_plan: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Set-piece takers and schemes (career_tactics_service.DEFAULT_SET_PIECES).
+    set_pieces: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # The participant's own division when the season started and where the
     # final place sends them (promotion / relegation), set at the finish or
     # on leaving. A friend may play in the creator's division, but moves up

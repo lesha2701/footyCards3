@@ -1,167 +1,167 @@
 {
- "generated": "2026-10-13",
+ "generated": "2026-10-14",
  "generator": "scripts/simulate_career_tactics.py",
- "fingerprint": "0001fa4c6b8efbae",
+ "fingerprint": "be6574373ee1ece6",
  "n": 1200,
  "seed": 20261013,
  "rating": 80,
- "pp_per_rating_point": 1.47,
- "best_answer_gain_pp": 10.4,
+ "pp_per_rating_point": 1.8,
+ "best_answer_gain_pp": 11.7,
  "best_answers": {
   "WING_PLAY": {
-   "best": "POSSESSION",
-   "gain_pp": 2.2
+   "best": "CENTRAL_PLAY",
+   "gain_pp": 1.3
   },
   "CENTRAL_PLAY": {
    "best": "HIGH_PRESS",
-   "gain_pp": 6.9
+   "gain_pp": 8.3
   },
   "POSSESSION": {
    "best": "HIGH_PRESS",
-   "gain_pp": 3.8
+   "gain_pp": 10.0
   },
   "HIGH_PRESS": {
    "best": "COUNTER_ATTACK",
-   "gain_pp": 19.4
+   "gain_pp": 22.4
   },
   "COUNTER_ATTACK": {
    "best": "POSSESSION",
-   "gain_pp": 19.6
+   "gain_pp": 16.6
   }
  },
  "presets": {
   "WING_PLAY": {
    "WING_PLAY": {
-    "win": 42.6,
-    "draw": 17.5,
-    "loss": 39.9
+    "win": 43.7,
+    "draw": 15.4,
+    "loss": 40.9
    },
    "CENTRAL_PLAY": {
-    "win": 38.5,
-    "draw": 18.3,
-    "loss": 43.2
+    "win": 39.0,
+    "draw": 17.6,
+    "loss": 43.4
    },
    "POSSESSION": {
-    "win": 37.9,
-    "draw": 19.0,
-    "loss": 43.1
+    "win": 43.3,
+    "draw": 15.8,
+    "loss": 40.8
    },
    "HIGH_PRESS": {
-    "win": 45.0,
-    "draw": 18.2,
-    "loss": 36.8
+    "win": 43.0,
+    "draw": 16.0,
+    "loss": 41.0
    },
    "COUNTER_ATTACK": {
-    "win": 47.8,
-    "draw": 16.7,
-    "loss": 35.6
+    "win": 49.5,
+    "draw": 16.8,
+    "loss": 33.7
    }
   },
   "CENTRAL_PLAY": {
    "WING_PLAY": {
-    "win": 43.8,
-    "draw": 17.1,
-    "loss": 39.2
+    "win": 45.0,
+    "draw": 17.2,
+    "loss": 37.8
    },
    "CENTRAL_PLAY": {
-    "win": 40.2,
-    "draw": 18.9,
-    "loss": 40.8
+    "win": 40.1,
+    "draw": 16.9,
+    "loss": 43.0
    },
    "POSSESSION": {
-    "win": 41.2,
-    "draw": 18.1,
-    "loss": 40.7
+    "win": 43.6,
+    "draw": 16.9,
+    "loss": 39.5
    },
    "HIGH_PRESS": {
-    "win": 37.9,
-    "draw": 17.6,
-    "loss": 44.5
+    "win": 33.6,
+    "draw": 20.7,
+    "loss": 45.8
    },
    "COUNTER_ATTACK": {
-    "win": 55.2,
-    "draw": 15.9,
-    "loss": 28.8
+    "win": 57.4,
+    "draw": 15.3,
+    "loss": 27.2
    }
   },
   "POSSESSION": {
    "WING_PLAY": {
-    "win": 44.8,
-    "draw": 17.1,
-    "loss": 38.1
+    "win": 39.2,
+    "draw": 16.6,
+    "loss": 44.2
    },
    "CENTRAL_PLAY": {
-    "win": 41.2,
-    "draw": 19.2,
-    "loss": 39.6
+    "win": 35.6,
+    "draw": 18.1,
+    "loss": 46.3
    },
    "POSSESSION": {
-    "win": 39.7,
-    "draw": 18.2,
-    "loss": 42.2
+    "win": 42.3,
+    "draw": 17.6,
+    "loss": 40.1
    },
    "HIGH_PRESS": {
-    "win": 36.8,
-    "draw": 18.2,
-    "loss": 45.0
+    "win": 31.8,
+    "draw": 17.9,
+    "loss": 50.2
    },
    "COUNTER_ATTACK": {
-    "win": 60.5,
-    "draw": 15.2,
-    "loss": 24.2
+    "win": 57.9,
+    "draw": 15.7,
+    "loss": 26.4
    }
   },
   "HIGH_PRESS": {
    "WING_PLAY": {
-    "win": 35.3,
-    "draw": 16.8,
-    "loss": 47.9
+    "win": 40.3,
+    "draw": 16.2,
+    "loss": 43.5
    },
    "CENTRAL_PLAY": {
-    "win": 47.1,
-    "draw": 17.8,
-    "loss": 35.2
+    "win": 48.4,
+    "draw": 18.5,
+    "loss": 33.1
    },
    "POSSESSION": {
-    "win": 43.5,
-    "draw": 17.4,
-    "loss": 39.1
+    "win": 52.3,
+    "draw": 18.2,
+    "loss": 29.4
    },
    "HIGH_PRESS": {
-    "win": 40.8,
-    "draw": 15.2,
-    "loss": 44.0
+    "win": 39.7,
+    "draw": 15.7,
+    "loss": 44.7
    },
    "COUNTER_ATTACK": {
-    "win": 24.8,
-    "draw": 14.7,
-    "loss": 60.6
+    "win": 28.6,
+    "draw": 14.0,
+    "loss": 57.4
    }
   },
   "COUNTER_ATTACK": {
    "WING_PLAY": {
-    "win": 36.4,
-    "draw": 16.2,
-    "loss": 47.4
+    "win": 37.1,
+    "draw": 15.8,
+    "loss": 47.1
    },
    "CENTRAL_PLAY": {
-    "win": 26.8,
-    "draw": 18.2,
-    "loss": 55.1
+    "win": 29.4,
+    "draw": 16.5,
+    "loss": 54.1
    },
    "POSSESSION": {
-    "win": 24.2,
-    "draw": 14.2,
-    "loss": 61.6
+    "win": 26.5,
+    "draw": 14.7,
+    "loss": 58.8
    },
    "HIGH_PRESS": {
-    "win": 60.2,
-    "draw": 14.2,
-    "loss": 25.7
+    "win": 62.1,
+    "draw": 13.8,
+    "loss": 24.2
    },
    "COUNTER_ATTACK": {
-    "win": 40.9,
-    "draw": 16.6,
+    "win": 41.3,
+    "draw": 16.2,
     "loss": 42.5
    }
   }
@@ -169,53 +169,68 @@
  "interactions": {
   "press_vs_short": {
    "sign": -1,
-   "attacker_win_delta_pp": -10.8,
-   "favoured_delta_pp": 10.8
+   "attacker_win_delta_pp": -11.2,
+   "favoured_delta_pp": 11.2
   },
   "direct_behind_line": {
    "sign": 1,
-   "attacker_win_delta_pp": 11.3,
-   "favoured_delta_pp": 11.3
+   "attacker_win_delta_pp": 14.2,
+   "favoured_delta_pp": 14.2
   },
   "wings_beat_press": {
    "sign": 1,
-   "attacker_win_delta_pp": 7.6,
-   "favoured_delta_pp": 7.6
+   "attacker_win_delta_pp": 5.7,
+   "favoured_delta_pp": 5.7
   },
   "low_block_center": {
    "sign": -1,
-   "attacker_win_delta_pp": -8.7,
-   "favoured_delta_pp": 8.7
+   "attacker_win_delta_pp": -8.2,
+   "favoured_delta_pp": 8.2
   },
   "low_block_crosses": {
    "sign": 1,
-   "attacker_win_delta_pp": 10.2,
-   "favoured_delta_pp": 10.2
+   "attacker_win_delta_pp": 7.2,
+   "favoured_delta_pp": 7.2
   },
   "patient_vs_low_block": {
    "sign": 1,
-   "attacker_win_delta_pp": 10.3,
-   "favoured_delta_pp": 10.3
+   "attacker_win_delta_pp": 10.0,
+   "favoured_delta_pp": 10.0
   },
   "fast_counter_high_line": {
    "sign": 1,
-   "attacker_win_delta_pp": 4.0,
-   "favoured_delta_pp": 4.0
+   "attacker_win_delta_pp": 2.7,
+   "favoured_delta_pp": 2.7
   },
   "counter_behind_fullbacks": {
    "sign": 1,
-   "attacker_win_delta_pp": 2.9,
-   "favoured_delta_pp": 2.9
+   "attacker_win_delta_pp": 3.0,
+   "favoured_delta_pp": 3.0
   },
   "counterpress": {
    "sign": -1,
-   "attacker_win_delta_pp": -2.3,
-   "favoured_delta_pp": 2.3
+   "attacker_win_delta_pp": -2.8,
+   "favoured_delta_pp": 2.8
   },
   "direct_inaccuracy": {
    "sign": -1,
-   "attacker_win_delta_pp": -0.9,
-   "favoured_delta_pp": 0.9
+   "attacker_win_delta_pp": -4.1,
+   "favoured_delta_pp": 4.1
+  },
+  "hard_tackling_wins": {
+   "sign": -1,
+   "attacker_win_delta_pp": -7.8,
+   "favoured_delta_pp": 7.8
+  },
+  "soft_tackling_jockeys": {
+   "sign": 1,
+   "attacker_win_delta_pp": 7.7,
+   "favoured_delta_pp": 7.7
+  },
+  "hard_tackle_gaps": {
+   "sign": 1,
+   "attacker_win_delta_pp": 2.3,
+   "favoured_delta_pp": 2.3
   }
  }
 }

@@ -8,7 +8,7 @@ import { MENTALITIES } from "@/lib/clubTactics";
 function goalsText(g: CareerGoalsByOrigin): string {
   const parts = [
     g.wing && `с флангов ${g.wing}`, g.central && `через центр ${g.central}`,
-    g.counter && `с контратак ${g.counter}`, g.penalty && `пенальти ${g.penalty}`,
+    g.counter && `с контратак ${g.counter}`, g.set_piece && `со стандартов ${g.set_piece}`, g.penalty && `пенальти ${g.penalty}`,
   ].filter(Boolean);
   return parts.length ? parts.join(", ") : "нет";
 }
@@ -100,6 +100,17 @@ export default function CareerMatchAnalysis({ analysis, catalog }: { analysis: C
           <Row label="Отобрали мяч" value={`${theirs.breakdown} · ваших моментов с контратак ${mine.counter_chances}`} />
         </div>
       </Section>
+
+      {analysis.set_pieces_mine && analysis.set_pieces_theirs && (
+        <Section title="Стандарты">
+          <div className="divide-y divide-white/5">
+            {([["corner", "Угловые"], ["free_kick", "Штрафные"], ["penalty", "Пенальти"]] as const).map(([key, label]) => (
+              <Row key={key} label={label}
+                value={`${analysis.set_pieces_mine![key]} (голов ${analysis.set_pieces_mine![`${key}_goals`]}) : ${analysis.set_pieces_theirs![key]} (${analysis.set_pieces_theirs![`${key}_goals`]})`} />
+            ))}
+          </div>
+        </Section>
+      )}
 
       <Section title="Голы">
         <div className="divide-y divide-white/5">
