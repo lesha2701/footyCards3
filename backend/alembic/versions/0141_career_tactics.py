@@ -5,8 +5,8 @@ season/participant division with promotion and relegation.
 Seasons started before this revision have no state["tactics_version"] and
 keep playing the original match path (career_service._play_round).
 
-Revision ID: 0138
-Revises: 0135
+Revision ID: 0141
+Revises: 0140
 Create Date: 2026-10-12
 
 """
@@ -15,10 +15,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0138"
-# 0136/0137 are taken by parallel branches (blackjack, card/club chemistry);
-# whichever merges later re-points its down_revision to the current head.
-down_revision: Union[str, None] = "0135"
+revision: str = "0141"
+down_revision: Union[str, None] = "0140"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

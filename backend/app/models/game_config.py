@@ -233,7 +233,7 @@ class GameConfig(TimestampMixin, Base):
     career_yellows_for_ban: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     career_form_max: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     career_reminders_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    # Tactics (career_tactics_service; seasons created after migration 0138).
+    # Tactics (career_tactics_service; seasons created after migration 0141).
     # Axis levers and interaction strengths: overrides on top of
     # career_tactics_service.DEFAULT_TUNING (empty = defaults).
     career_tactics_tuning: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
