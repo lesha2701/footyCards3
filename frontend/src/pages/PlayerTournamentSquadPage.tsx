@@ -22,7 +22,8 @@ import { staticUrl } from "@/lib/api";
 import { BOOST_TYPE_LABELS } from "@/lib/coaches";
 import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
-import { inRow, pitchRows } from "@/lib/formationLayout";
+import { inRow, pitchRows, PITCH_STYLE } from "@/lib/formationLayout";
+import PitchBackground from "@/components/squad/PitchBackground";
 import { formatGameError } from "@/lib/errors";
 import { haptic } from "@/lib/telegram";
 import type { PersonalSquadSlot, UserCard } from "@/types";
@@ -310,7 +311,8 @@ export default function PlayerTournamentSquadPage() {
           />
         </div>
 
-        <div ref={pitchRef} className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
+        <div ref={pitchRef} style={PITCH_STYLE} className="relative flex flex-col gap-3 overflow-hidden rounded-[22px] p-3 ring-1 ring-white/10">
+          <PitchBackground />
           <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
           {pitchRows(squad?.formation, (squad?.slots ?? []).map((s) => s.slot_code)).map((row) => { const category = row.category; return (
             <div key={row.key} className="relative flex justify-evenly gap-2">

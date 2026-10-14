@@ -3,10 +3,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { setCareerLineup, type CareerSeason, type CareerSlot, type CareerSquadCard, type CareerView } from "@/api/career";
 import { ChemistryDiamonds, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
+import PitchBackground from "@/components/squad/PitchBackground";
 import { staticUrl } from "@/lib/api";
 import { chemistryGain, computeChemistry } from "@/lib/chemistry";
 import { CATEGORY_POSITIONS } from "@/lib/formation";
-import { formationLabel, inRow, pitchRows } from "@/lib/formationLayout";
+import { formationLabel, inRow, pitchRows, PITCH_STYLE } from "@/lib/formationLayout";
 import { RARITY_GLOW, RARITY_GRADIENTS } from "@/lib/rarity";
 import { haptic } from "@/lib/telegram";
 import type { ChemistryOut, Rarity } from "@/types";
@@ -237,20 +238,9 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
       <div
         ref={pitchRef}
         className="relative overflow-hidden rounded-[22px] px-1 py-4 ring-1 ring-white/10"
-        style={{ background: "repeating-linear-gradient(180deg, #145236 0 34px, #11482f 34px 68px)" }}
+        style={PITCH_STYLE}
       >
-        <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 140" preserveAspectRatio="none" aria-hidden>
-          <g fill="none" stroke="#ffffff" strokeOpacity="0.16" strokeWidth="0.45">
-            <rect x="2.5" y="1.5" width="95" height="137" rx="1.5" />
-            <line x1="2.5" y1="70" x2="97.5" y2="70" />
-            <circle cx="50" cy="70" r="9" />
-            <rect x="25" y="1.5" width="50" height="15" />
-            <rect x="37" y="1.5" width="26" height="6" />
-            <rect x="25" y="123.5" width="50" height="15" />
-            <rect x="37" y="132.5" width="26" height="6" />
-          </g>
-        </svg>
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_60%)]" />
+        <PitchBackground />
         <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
         <div className="relative flex flex-col gap-2.5">
           {rows.map((row) => (

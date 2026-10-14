@@ -54,3 +54,6 @@ export function inRow<T extends { slot_code?: string; code?: string }>(row: Pitc
     .map((code) => slots.find((s) => (s.slot_code ?? s.code) === code))
     .filter((s): s is T => s !== undefined);
 }
+
+/** Striped grass for squad pitches (components/squad/PitchBackground draws the markings). */
+export const PITCH_STYLE = { background: "repeating-linear-gradient(180deg, #145236 0 34px, #11482f 34px 68px)" };
