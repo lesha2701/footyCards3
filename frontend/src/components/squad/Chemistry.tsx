@@ -20,11 +20,35 @@ interface Segment {
   y2: number;
 }
 
+const MIN_LINK_PX = 22;
+
+interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Where the segment from the centre of `box` towards (tx, ty) leaves the
+ * box (plus a small gap), so a link runs from card edge to card edge. */
+function edgePoint(box: Box, tx: number, ty: number, gap = 2): { x: number; y: number } {
+  const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+  const dx = tx - cx, dy = ty - cy;
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
+  const sx = dx !== 0 ? (box.w / 2 + gap) / Math.abs(dx) : Infinity;
+  const sy = dy !== 0 ? (box.h / 2 + gap) / Math.abs(dy) : Infinity;
+  const t = Math.min(sx, sy, 1);
+  return { x: cx + dx * t, y: cy + dy * t };
+}
+
 /** Green/yellow/red lines between neighbouring cards on the pitch. Cards are
  * found by their `data-chem-slot` attribute inside `containerRef` and
  * measured from the DOM, so the overlay follows whatever layout the editor
- * uses (and re-measures on resize). Must be rendered as the container's
- * FIRST child so the cards paint on top of the lines. */
+ * uses (re-measuring on resize and when card images finish loading). Each
+ * line spans the gap between the cards' EDGES (at least MIN_LINK_PX) and is
+ * drawn above the cards with a dark halo, so it stays visible however big or opaque the
+ * cards (photos) are — drawn centre-to-centre beneath them, links between
+ * photo cards used to be almost entirely hidden. */
 export function ChemistryLinksOverlay({
   containerRef,
   chemistry,
@@ -44,38 +68,67 @@ export function ChemistryLinksOverlay({
     }
     const measure = () => {
       const box = container.getBoundingClientRect();
-      const centers = new Map<string, { x: number; y: number }>();
+      const boxes = new Map<string, Box>();
       container.querySelectorAll<HTMLElement>("[data-chem-slot]").forEach((el) => {
         const r = el.getBoundingClientRect();
-        centers.set(el.dataset.chemSlot!, { x: r.left - box.left + r.width / 2, y: r.top - box.top + r.height / 2 });
+        boxes.set(el.dataset.chemSlot!, { x: r.left - box.left, y: r.top - box.top, w: r.width, h: r.height });
       });
       setSegments(
         links.flatMap((l) => {
-          const a = centers.get(l.a), b = centers.get(l.b);
-          return a && b ? [{ key: `${l.a}-${l.b}`, level: l.level, x1: a.x, y1: a.y, x2: b.x, y2: b.y }] : [];
+          const a = boxes.get(l.a), b = boxes.get(l.b);
+          if (!a || !b) return [];
+          const ax = a.x + a.w / 2, ay = a.y + a.h / 2, bx = b.x + b.w / 2, by = b.y + b.h / 2;
+          const dist = Math.hypot(bx - ax, by - ay);
+          if (dist < 1) return [];
+          const p1 = edgePoint(a, bx, by);
+          const p2 = edgePoint(b, ax, ay);
+          // Cards that (nearly) fill the pitch leave gaps of a few pixels:
+          // stretch the link to a readable minimum, centred on the gap, so it
+          // slightly overlaps the card frames.
+          const ux = (bx - ax) / dist, uy = (by - ay) / dist;
+          const gap = Math.max(0, (p2.x - p1.x) * ux + (p2.y - p1.y) * uy);
+          const len = Math.min(Math.max(gap, MIN_LINK_PX), dist * 0.6);
+          const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+          return [{
+            key: `${l.a}-${l.b}`, level: l.level,
+            x1: mx - (ux * len) / 2, y1: my - (uy * len) / 2, x2: mx + (ux * len) / 2, y2: my + (uy * len) / 2,
+          }];
         }),
       );
     };
     measure();
-    if (typeof ResizeObserver === "undefined") return;
+    // Card photos change card sizes as they load.
+    const images = Array.from(container.querySelectorAll("img"));
+    images.forEach((img) => img.addEventListener("load", measure));
+    if (typeof ResizeObserver === "undefined") {
+      return () => images.forEach((img) => img.removeEventListener("load", measure));
+    }
     const observer = new ResizeObserver(measure);
     observer.observe(container);
-    return () => observer.disconnect();
+    container.querySelectorAll<HTMLElement>("[data-chem-slot]").forEach((el) => observer.observe(el));
+    return () => {
+      observer.disconnect();
+      images.forEach((img) => img.removeEventListener("load", measure));
+    };
   }, [containerRef, links]);
 
   if (segments.length === 0) return null;
   return (
-    <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
+    <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full" aria-hidden>
       {segments.map((s) => (
-        <line
-          key={s.key}
-          x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2}
-          stroke={LINK_STROKE[s.level]}
-          strokeWidth={s.level === "strong" ? 3 : 2}
-          strokeOpacity={s.level === "none" ? 0.55 : 0.85}
-          strokeDasharray={s.level === "none" ? "4 4" : undefined}
-          strokeLinecap="round"
-        />
+        <g key={s.key}>
+          <line
+            x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2}
+            stroke="#04130c" strokeOpacity={0.75} strokeWidth={s.level === "strong" ? 6 : 5} strokeLinecap="round"
+          />
+          <line
+            x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2}
+            stroke={LINK_STROKE[s.level]}
+            strokeWidth={s.level === "strong" ? 3.5 : 2.5}
+            strokeDasharray={s.level === "none" ? "3 3" : undefined}
+            strokeLinecap="round"
+          />
+        </g>
       ))}
     </svg>
   );
