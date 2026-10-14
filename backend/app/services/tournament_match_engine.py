@@ -59,6 +59,41 @@ _PLAYSTYLE_GOAL_FLAVOR: dict[str, list[str]] = {
 }
 
 
+OPENER_PHRASE = "открывает счёт"
+
+
+def score_phrase(own: int, opp: int) -> str:
+    """What a goal did to the score, from the scorer's side, `own`/`opp`
+    counted after it: the opener, an equaliser, going ahead, extending a
+    lead or pulling one back."""
+    if own + opp == 1:
+        return OPENER_PHRASE
+    if own == opp:
+        return "сравнивает счёт"
+    if own == opp + 1:
+        return "выходит вперёд"
+    if own > opp:
+        return "увеличивает преимущество"
+    return "сокращает отставание"
+
+
+def fix_goal_descriptions(events: list[dict]) -> None:
+    """Goal texts are drawn before the score is known: "открывает счёт" may
+    land on any goal. Rewrites it to fit the running score — a separate pass
+    over the finished log, so it draws no random numbers and never changes
+    a result."""
+    goals = {"a": 0, "b": 0}
+    for event in events:
+        team = event.get("team")
+        if event.get("event_type") != "goal" or team not in goals:
+            continue
+        goals[team] += 1
+        text = event.get("description") or ""
+        if OPENER_PHRASE in text:
+            other = "b" if team == "a" else "a"
+            event["description"] = text.replace(OPENER_PHRASE, score_phrase(goals[team], goals[other]))
+
+
 def _describe_event(
     event_type: str, team: str, club_a_name: str, club_b_name: str,
     playstyle: str | None = None, quality: str | None = None,
@@ -345,6 +380,7 @@ def simulate_match(
     result = MatchResult(score_a=0, score_b=0)
     for chance in chances:
         _resolve_chance(result, chance, side_a, side_b, lineup_a, lineup_b, config, club_a_name, club_b_name)
+    fix_goal_descriptions(result.event_log)
     return result
 
 
@@ -487,4 +523,5 @@ def simulate_match_controlled(
                     setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
     if hasattr(controller, "finish"):
         controller.finish()
+    fix_goal_descriptions(result.event_log)
     return result

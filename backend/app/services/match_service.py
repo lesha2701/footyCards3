@@ -209,6 +209,20 @@ _EVENT_DESCRIPTIONS: dict[str, list[tuple[str, str]]] = {
 }
 
 
+def _fit_goal_to_score(event: dict, scored_by: str, state: dict) -> None:
+    """Card Arena: a goal text saying "открывает счёт" only on the opener
+    (the score is already updated for this goal); otherwise what the goal
+    did to the score. No random numbers."""
+    from app.services.tournament_match_engine import OPENER_PHRASE, score_phrase
+
+    text = event.get("description") or ""
+    if event.get("event_type") != "goal" or OPENER_PHRASE not in text:
+        return
+    other = "opponent" if scored_by == "user" else "user"
+    phrase = score_phrase(state[f"{scored_by}_score"], state[f"{other}_score"])
+    event["description"] = text.replace(OPENER_PHRASE, phrase)
+
+
 def _describe_event(event_type: str, team: str, opponent_name: str) -> str:
     mine_text, opponent_text = random.choice(_EVENT_DESCRIPTIONS[event_type])
     text = mine_text if team == "user" else opponent_text
@@ -594,6 +608,7 @@ def _advance(state: dict, config: GameConfig, opponent_name: str) -> list[dict]:
         events.append(event)
         if scored_by:
             state[f"{scored_by}_score"] += 1
+            _fit_goal_to_score(event, scored_by, state)
         i += 1
     state["next_index"] = i
     return events
@@ -885,6 +900,7 @@ async def resolve_action(db: AsyncSession, user: User, match_id: int, payload: M
     event, scored_by = _resolve_action(pending, payload.action, state, config, match.opponent_name)
     if scored_by:
         state[f"{scored_by}_score"] += 1
+        _fit_goal_to_score(event, scored_by, state)
     state["next_index"] = i + 1
 
     new_events = [event] + _advance(state, config, match.opponent_name)
