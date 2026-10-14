@@ -103,6 +103,30 @@ export interface CareerSetPieces {
   corner_defence: string;
 }
 
+export interface CareerProfile {
+  division: number;
+  reputation: number;
+  rep_level: number;
+  rep_name: string;
+  rep_next_at: number | null;
+  rep_floor: number;
+  seasons_played: number;
+  titles: number;
+  promotions: number;
+  objectives_met: number;
+}
+
+export interface CareerAmbition {
+  code: string;
+  label: string;
+  text: string;
+  /** Worst place that still meets the objective. */
+  place: number;
+  bonus_pct: number;
+  rep_success: number;
+  rep_fail: number;
+}
+
 export interface CareerSquadWarning {
   /** critical = someone plays out of his line; thin = no cover left in a line. */
   level: "critical" | "thin";
@@ -227,6 +251,10 @@ export interface CareerSeason {
   chemistry?: ChemistryOut | null;
   set_pieces?: CareerSetPieces | null;
   squad_warnings?: CareerSquadWarning[];
+  ambition?: string | null;
+  ambitions?: CareerAmbition[];
+  training?: string | null;
+  trainings?: { code: string; label: string; hint: string }[];
   plan_limits?: { rules?: number; subs?: number };
 }
 
@@ -241,6 +269,7 @@ export interface CareerView {
   division?: CareerDivision | null;
   divisions?: CareerDivision[];
   tactics_catalog?: TacticsCatalog | null;
+  profile?: CareerProfile | null;
   season: CareerSeason | null;
   invite: { season_id: number; difficulty_label: string; from_name: string; expires_at: string | null } | null;
 }
@@ -275,6 +304,16 @@ export async function setCareerLineup(payload: {
   tactic?: Tactic;
 }): Promise<CareerView> {
   const { data } = await api.put<CareerView>("/career/lineup", payload);
+  return data;
+}
+
+export async function setCareerAmbition(ambition: string): Promise<CareerView> {
+  const { data } = await api.put<CareerView>("/career/ambition", { ambition });
+  return data;
+}
+
+export async function setCareerTraining(training: string | null, roundIndex?: number): Promise<CareerView> {
+  const { data } = await api.put<CareerView>("/career/training", { training, round_index: roundIndex ?? null });
   return data;
 }
 

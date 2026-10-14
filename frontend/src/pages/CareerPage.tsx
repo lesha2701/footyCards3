@@ -21,6 +21,7 @@ import { fetchFriends } from "@/api/friends";
 import CareerSquad from "@/components/career/CareerSquad";
 import { PlanEditor, ScoutingCard, TacticsBoard } from "@/components/career/CareerTactics";
 import { SetPiecesCard, SquadWarnings } from "@/components/career/SetPiecesCard";
+import { CoachProfileCard, ObjectiveCard, TrainingCard } from "@/components/career/CareerManagement";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconTrophy, IconUsers } from "@/components/icons";
@@ -72,6 +73,7 @@ export default function CareerPage() {
       </h1>
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
 
+      {data.profile && <CoachProfileCard profile={data.profile} />}
       {data.invite && <InviteCard view={data} onView={onView} onError={onError} />}
 
       {!data.season || data.season.status === "finished" || data.season.my_status === "left" ? (
@@ -322,9 +324,11 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
       {tab === "prep" && season.scouting && (
         <>
           <SquadWarnings warnings={season.squad_warnings} />
+          {hasTactics && <ObjectiveCard season={season} onView={onView} onError={onError} />}
           <ScoutingCard scouting={season.scouting} catalog={catalog} difficultyLabel={season.difficulty_label} />
           {hasTactics && catalog ? (
             <>
+              <TrainingCard season={season} onView={onView} onError={onError} />
               <TacticsBoard season={season} catalog={catalog} onView={onView} onError={onError} />
               <PlanEditor season={season} catalog={catalog} onView={onView} onError={onError} />
               <SetPiecesCard season={season} catalog={catalog} onView={onView} onError={onError} />

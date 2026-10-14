@@ -13,7 +13,8 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import select
 
-from app.models.career import CareerParticipant, CareerSeason
+from app.models.career import CareerParticipant, CareerProfile, CareerSeason
+from app.models.user import User
 from app.models.enums import Position, Rarity
 from app.models.game_config import GameConfig
 from app.services import career_service
@@ -737,3 +738,81 @@ async def test_thin_line_warning_and_set_pieces_api(client, db_session, bot_toke
     assert sp["penalty_taker"] == taker and sp["corner_routine"] == "near" and sp["corner_defence"] == "man"
     bad = await client.put(f"{API}/career/plan", headers=headers, json={"rules": [], "subs": [], "set_pieces": {"penalty_taker": 10 ** 9}})
     assert bad.status_code == 409
+
+
+# --- profile, board objectives, training ------------------------------------------------------
+
+def test_ambition_targets_and_reputation_levels():
+    config = _defaults()
+    assert career_service.ambition_target("promote", 3, config)["place"] == 2
+    assert career_service.ambition_target("promote", 1, config)["label"] == "Чемпионство"
+    assert career_service.ambition_target("mid", 3, config)["place"] == 5
+    assert career_service.ambition_target("survive", 3, config)["place"] == 6
+    assert career_service.reputation_level(0, config)["name"] == "Новичок"
+    level = career_service.reputation_level(130, config)
+    assert level["level"] == 3 and level["next_at"] == 250
+
+
+async def test_objective_reputation_and_profile_after_a_season(client, db_session, bot_token):
+    user_id, headers, season = await _season(client, db_session, bot_token, 870010)
+    view = (await client.get(f"{API}/career", headers=headers)).json()
+    assert view["profile"]["reputation"] == 0 and view["season"]["ambition"] == "mid"
+    assert (await client.put(f"{API}/career/ambition", headers=headers, json={"ambition": "survive"})).status_code == 200
+    first = datetime.fromisoformat(season["schedule"][0])
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    # The objective is fixed once the season is on.
+    assert (await client.put(f"{API}/career/ambition", headers=headers, json={"ambition": "promote"})).status_code == 409
+
+    balance_before = (await db_session.get(User, user_id)).balance
+    later = datetime.now(timezone.utc) + timedelta(days=8)
+    await career_service.resolve_due(db_session, season["id"], now=later)
+    db_session.expire_all()
+    part = (await db_session.execute(select(CareerParticipant).where(CareerParticipant.user_id == user_id))).scalar_one()
+    profile = (await db_session.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))).scalar_one()
+    config = await get_config(db_session)
+    met = part.final_place <= career_service.ambition_target("survive", part.division, config)["place"]
+    assert profile.seasons_played == 1 and profile.objectives_met == (1 if met else 0)
+    assert profile.division == part.next_division
+    expected = 0
+    if part.final_place == 1:
+        expected += config.career_rep_title
+    if part.next_division < part.division:
+        expected += config.career_rep_promotion
+    expected += config.career_ambition_rep_success[0] if met else config.career_ambition_rep_fail[0]
+    assert profile.reputation == max(0, expected)
+    # Place reward and (when met) the objective bonus went through the wallet.
+    assert (await db_session.get(User, user_id)).balance - balance_before > 0
+
+
+async def test_training_recovery_and_tactical(client, db_session, bot_token):
+    user_id, headers, season = await _season(client, db_session, bot_token, 870011)
+    row = await _season_row(db_session, season["id"])
+    part = row.participants[0]
+    part.condition = {str(cid): {"fatigue": 50, "injured_until": 0, "suspended_until": 0, "yellows": 0, "form": 0}
+                      for cid in part.squad_card_ids}
+    await db_session.commit()
+    resp = await client.put(f"{API}/career/training", headers=headers, json={"training": "recovery", "round_index": 0})
+    assert resp.status_code == 200 and resp.json()["season"]["training"] == "recovery"
+    assert (await client.put(f"{API}/career/training", headers=headers, json={"training": "yoga"})).status_code == 409
+    first = datetime.fromisoformat(season["schedule"][0])
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    row = await _season_row(db_session, season["id"])
+    part = row.participants[0]
+    rested = [c for c in part.squad_card_ids if str(c) in part.condition and c not in season["lineup"].values()]
+    tr = tactics.tuning_of(_defaults())["training"]
+    # Bench players: recovery before kick-off, then the usual rest recovery.
+    for cid in rested:
+        assert part.condition[str(cid)]["fatigue"] <= 50 + tr["recovery_fatigue"]
+    match = next(m for m in row.state["results"][0] if 0 in (m["home"], m["away"]))
+    assert match["analysis"]["0"]["training"] == "recovery"
+
+
+def test_opponent_training_boosts_only_favourable_interactions():
+    tuning = tactics.tuning_of(_defaults())
+    att = tactics.TacticAxes({**NEUTRAL, "buildup": "direct"}, tuning, boost=1.25)
+    high = tactics.TacticAxes({**NEUTRAL, "block": "high"}, tuning)
+    plain = tactics.TacticAxes({**NEUTRAL, "buildup": "direct"}, tuning)
+    boosted, _ = att.duel_shift(high, "build_up", "central_attack")
+    base, _ = plain.duel_shift(high, "build_up", "central_attack")
+    # direct_behind_line (+) is boosted, the base direct_inaccuracy (-) is not.
+    assert boosted - base == pytest.approx(tuning["shift"]["direct_behind_line"] * 0.25)

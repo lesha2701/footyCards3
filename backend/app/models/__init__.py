@@ -3,7 +3,7 @@ from app.models.badge import Badge, UserBadge
 from app.models.blackjack import BlackjackMatch
 from app.models.card import UserCard
 from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
-from app.models.career import CareerParticipant, CareerSeason, Friendship
+from app.models.career import CareerParticipant, CareerProfile, CareerSeason, Friendship
 from app.models.lifestyle import LifestyleItem, UserLifestyleItem
 from app.models.my_player import MyPlayer
 from app.models.player_career import PlayerCareerSeason

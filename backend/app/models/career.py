@@ -72,6 +72,10 @@ class CareerParticipant(Base):
     match_plan: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Set-piece takers and schemes (career_tactics_service.DEFAULT_SET_PIECES).
     set_pieces: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Board objective chosen for this season (survive / mid / promote) and
+    # the training focus before the next round (career_service.TRAININGS).
+    ambition: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    training: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     # The participant's own division when the season started and where the
     # final place sends them (promotion / relegation), set at the finish or
     # on leaving. A friend may play in the creator's division, but moves up
@@ -88,6 +92,30 @@ class CareerParticipant(Base):
         UniqueConstraint("season_id", "user_id", name="uq_career_participant"),
         Index("ix_career_participants_season", "season_id"),
     )
+
+
+class CareerProfile(Base):
+    """Long-term coach career of a user across seasons: the division the next
+    season is played in, reputation (never reset), a few counters, the last
+    time the user opened the career (inactive coaches drop a division at
+    the season change) and per-card club tenure (minutes played)."""
+
+    __tablename__ = "career_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    division: Mapped[int] = mapped_column(Integer, nullable=False)
+    reputation: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    seasons_played: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    titles: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    promotions: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    objectives_met: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    last_active_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # card id -> minutes played in career matches (club tenure, off-season).
+    tenure: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Persistent league / rivals history (off-season).
+    league: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
 class Friendship(Base):

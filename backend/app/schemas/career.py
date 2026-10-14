@@ -36,6 +36,15 @@ class CareerTacticPreviewIn(BaseModel):
     tactic: dict[str, str]
 
 
+class CareerAmbitionIn(BaseModel):
+    ambition: str
+
+
+class CareerTrainingIn(BaseModel):
+    training: Optional[str] = None
+    round_index: Optional[int] = None
+
+
 class CareerPlanIn(BaseModel):
     """Conditional instructions + substitutions; validated server-side
     (career_tactics_service.clean_plan)."""
@@ -237,6 +246,10 @@ class CareerSeasonOut(BaseModel):
     set_pieces: Optional[dict] = None
     # Holes / thin lines for the next round (career_service._squad_warnings).
     squad_warnings: list[dict] = []
+    ambition: Optional[str] = None
+    ambitions: list[dict] = []
+    training: Optional[str] = None
+    trainings: list[dict] = []
     scouting: Optional[CareerScoutingOut] = None
     familiarity: Optional[CareerFamiliarityOut] = None
     match_plan: Optional[CareerPlanOut] = None
@@ -259,6 +272,8 @@ class CareerViewOut(BaseModel):
     division: Optional[CareerDivisionOut] = None
     divisions: list[CareerDivisionOut] = []
     tactics_catalog: Optional[dict] = None
+    # Long-term coach career: division, reputation and its level, counters.
+    profile: Optional[dict] = None
     season: Optional[CareerSeasonOut] = None
     invite: Optional[CareerInviteOut] = None
 

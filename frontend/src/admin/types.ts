@@ -220,6 +220,13 @@ export interface GameConfig {
   career_tactics_tuning: Record<string, unknown>;
   career_familiarity_axis_keep_pct: number;
   career_squad_size: number;
+  career_ambition_bonus_pct: number[];
+  career_ambition_rep_success: number[];
+  career_ambition_rep_fail: number[];
+  career_rep_title: number;
+  career_rep_promotion: number;
+  career_rep_relegation: number;
+  career_rep_levels: number[];
   career_familiarity_step_tenths: number;
   career_familiarity_max_tenths: number;
   career_familiarity_keep_pct: number;

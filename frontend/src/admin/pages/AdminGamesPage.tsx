@@ -52,6 +52,10 @@ export default function AdminGamesPage() {
       | "career_bot_counter_chance_pct"
       | "career_division_rating_offset"
       | "career_division_reward_pct"
+      | "career_ambition_bonus_pct"
+      | "career_ambition_rep_success"
+      | "career_ambition_rep_fail"
+      | "career_rep_levels"
       | "my_player_tier_thresholds"
       | "player_career_place_rewards"
       | "club_league_rewards"
@@ -380,6 +384,16 @@ export default function AdminGamesPage() {
             Тактика (новые сезоны): оси «направление / построение / после потери / после отбора / линия».
           </p>
           {field("career_squad_size", "Размер заявки на сезон")}
+          <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">
+            Задачи руководства и репутация (списки: Выживание, Середина, Выход)
+          </p>
+          {listField("career_ambition_bonus_pct", "Бонус к награде за выполненную задачу, %")}
+          {listField("career_ambition_rep_success", "Репутация за выполненную задачу")}
+          {listField("career_ambition_rep_fail", "Репутация за проваленную задачу")}
+          {field("career_rep_title", "Репутация за чемпионство")}
+          {field("career_rep_promotion", "Репутация за повышение")}
+          {field("career_rep_relegation", "Репутация за вылет (отрицательная)")}
+          {listField("career_rep_levels", "Пороги уровней репутации")}
           {field("career_familiarity_step_tenths", "Сыгранность за матч, десятые %")}
           {field("career_familiarity_max_tenths", "Потолок сыгранности, десятые %")}
           {field("career_familiarity_keep_pct", "Сохраняется при смене схемы, %")}

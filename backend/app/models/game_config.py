@@ -246,6 +246,16 @@ class GameConfig(TimestampMixin, Base):
     career_familiarity_axis_keep_pct: Mapped[int] = mapped_column(Integer, default=80, nullable=False)
     # Season squad (заявка) size for new seasons.
     career_squad_size: Mapped[int] = mapped_column(Integer, default=22, nullable=False)
+    # Board objectives [survive, mid, promote]: bonus % of the place reward
+    # when met, reputation when met / missed. Reputation for a title,
+    # promotion, relegation; thresholds for the coach's reputation levels.
+    career_ambition_bonus_pct: Mapped[list] = mapped_column(JSON, default=lambda: [10, 25, 50], nullable=False)
+    career_ambition_rep_success: Mapped[list] = mapped_column(JSON, default=lambda: [5, 10, 20], nullable=False)
+    career_ambition_rep_fail: Mapped[list] = mapped_column(JSON, default=lambda: [-3, -6, -15], nullable=False)
+    career_rep_title: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    career_rep_promotion: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    career_rep_relegation: Mapped[int] = mapped_column(Integer, default=-10, nullable=False)
+    career_rep_levels: Mapped[list] = mapped_column(JSON, default=lambda: [0, 40, 120, 250, 500], nullable=False)
     # Match plan limits: conditional instructions and substitutions per match.
     career_max_plan_rules: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     career_max_substitutions: Mapped[int] = mapped_column(Integer, default=3, nullable=False)

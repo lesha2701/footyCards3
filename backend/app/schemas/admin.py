@@ -263,6 +263,13 @@ class GameConfigOut(BaseModel):
     career_tactics_tuning: dict = {}
     career_familiarity_axis_keep_pct: int = 80
     career_squad_size: int = 22
+    career_ambition_bonus_pct: list[int] = []
+    career_ambition_rep_success: list[int] = []
+    career_ambition_rep_fail: list[int] = []
+    career_rep_title: int = 25
+    career_rep_promotion: int = 10
+    career_rep_relegation: int = -10
+    career_rep_levels: list[int] = []
     career_familiarity_step_tenths: int = 20
     career_familiarity_max_tenths: int = 90
     career_familiarity_keep_pct: int = 50
@@ -552,6 +559,13 @@ class GameConfigUpdate(BaseModel):
     career_tactics_tuning: Optional[dict] = None
     career_familiarity_axis_keep_pct: Optional[int] = Field(default=None, ge=0, le=100)
     career_squad_size: Optional[int] = Field(default=None, ge=16, le=30)
+    career_ambition_bonus_pct: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    career_ambition_rep_success: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    career_ambition_rep_fail: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    career_rep_title: Optional[int] = Field(default=None, ge=0, le=500)
+    career_rep_promotion: Optional[int] = Field(default=None, ge=0, le=500)
+    career_rep_relegation: Optional[int] = Field(default=None, ge=-500, le=0)
+    career_rep_levels: Optional[list[int]] = Field(default=None, min_length=2, max_length=10)
     career_familiarity_step_tenths: Optional[int] = Field(default=None, ge=0, le=50)
     career_familiarity_max_tenths: Optional[int] = Field(default=None, ge=0, le=150)
     career_familiarity_keep_pct: Optional[int] = Field(default=None, ge=0, le=100)

@@ -24,7 +24,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.timeutil import app_timezone, ensure_aware
 from app.models.card import UserCard
-from app.models.career import CareerParticipant, CareerSeason, Friendship
+from app.models.career import CareerParticipant, CareerProfile, CareerSeason, Friendship
 from app.models.enums import NotificationType, Position, Rarity, TransactionType
 from app.models.player import Player
 from app.models.trophy import TrophyDefinition, UserTrophy
@@ -95,9 +95,9 @@ def division_after(division: int, place: int, config) -> int:
     return max(1, min(count, division))
 
 
-async def current_division(db: AsyncSession, user_id: int, config) -> int:
-    """The division the user's next season is played in: where their last
-    finished (or left) season sent them; newcomers start at the bottom."""
+async def _legacy_division(db: AsyncSession, user_id: int, config) -> int:
+    """Division for a user without a profile yet: where their last finished
+    (or left) season sent them; newcomers start at the bottom."""
     last = (await db.execute(
         select(CareerParticipant.next_division)
         .where(CareerParticipant.user_id == user_id, CareerParticipant.next_division.is_not(None))
@@ -105,6 +105,106 @@ async def current_division(db: AsyncSession, user_id: int, config) -> int:
     )).scalar_one_or_none()
     count = division_count(config)
     return max(1, min(count, last if last is not None else count))
+
+
+async def get_profile(db: AsyncSession, user_id: int, config) -> CareerProfile:
+    profile = (await db.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))).scalar_one_or_none()
+    if profile is None:
+        profile = CareerProfile(user_id=user_id, division=await _legacy_division(db, user_id, config),
+                                reputation=0, tenure={}, league={})
+        db.add(profile)
+        await db.flush()
+    return profile
+
+
+async def current_division(db: AsyncSession, user_id: int, config) -> int:
+    """The division the user's next season is played in (career profile)."""
+    profile = await get_profile(db, user_id, config)
+    return max(1, min(division_count(config), profile.division))
+
+
+# --- board objectives & reputation -------------------------------------------------
+
+AMBITIONS = ("survive", "mid", "promote")
+DEFAULT_AMBITION = "mid"
+REP_LEVEL_NAMES = ("Новичок", "Подающий надежды", "Опытный тренер", "Известный тренер", "Легенда")
+
+
+def ambition_target(ambition: str, division: int, config) -> dict:
+    """What the board expects: the worst acceptable place and its wording."""
+    count = division_count(config)
+    relegate, promote = int(config.career_division_relegate), int(config.career_division_promote)
+    if ambition == "promote":
+        if division == 1:
+            return {"place": 1, "label": "Чемпионство", "text": "выиграть высшую лигу"}
+        return {"place": max(1, promote), "label": "Выход наверх", "text": f"финишировать в топ-{max(1, promote)}"}
+    if ambition == "mid":
+        return {"place": 5, "label": "Середина таблицы", "text": "финишировать в топ-5"}
+    safe = TEAMS - relegate if division < count and relegate else TEAMS - 2
+    return {"place": safe, "label": "Выживание", "text": f"не опуститься ниже {safe}-го места"}
+
+
+def ambition_options(division: int, config) -> list[dict]:
+    bonus = list(config.career_ambition_bonus_pct or [0, 0, 0])
+    good = list(config.career_ambition_rep_success or [0, 0, 0])
+    bad = list(config.career_ambition_rep_fail or [0, 0, 0])
+    return [{"code": a, **ambition_target(a, division, config), "bonus_pct": int(bonus[i]),
+             "rep_success": int(good[i]), "rep_fail": int(bad[i])} for i, a in enumerate(AMBITIONS)]
+
+
+def reputation_level(reputation: int, config) -> dict:
+    levels = sorted(int(x) for x in (config.career_rep_levels or [0]))
+    index = max(i for i, threshold in enumerate(levels) if reputation >= threshold) if reputation >= levels[0] else 0
+    name = REP_LEVEL_NAMES[min(index, len(REP_LEVEL_NAMES) - 1)]
+    nxt = levels[index + 1] if index + 1 < len(levels) else None
+    return {"level": index + 1, "name": name, "next_at": nxt, "floor": levels[index]}
+
+
+def _profile_out(profile: CareerProfile, config) -> dict:
+    return {
+        "division": profile.division, "reputation": profile.reputation, **{f"rep_{k}": v for k, v in reputation_level(profile.reputation, config).items()},
+        "seasons_played": profile.seasons_played, "titles": profile.titles, "promotions": profile.promotions,
+        "objectives_met": profile.objectives_met,
+    }
+
+
+# --- training before a round ----------------------------------------------------------
+
+TRAININGS = {
+    "recovery": ("Восстановление", "Лёгкие занятия: усталость всей заявки ниже к матчу."),
+    "tactical": ("Тактика", "Отработка схемы: сыгранность в этом матче выше. Нагрузка — немного усталости."),
+    "opponent": ("Разбор соперника", "Взаимодействия в вашу пользу в этом матче сильнее. Нагрузка — немного усталости."),
+    "set_pieces": ("Стандарты", "Угловые и штрафные в этом матче опаснее. Нагрузка — немного усталости."),
+}
+
+
+def training_options() -> list[dict]:
+    return [{"code": code, "label": label, "hint": hint} for code, (label, hint) in TRAININGS.items()]
+
+
+async def set_ambition(db: AsyncSession, user: User, ambition: str) -> None:
+    """Board objective: chosen before round 1 (fixed once the season is on)."""
+    if ambition not in AMBITIONS:
+        raise ConflictError("Неизвестная цель")
+    part = await _editable_participation(db, user, None)
+    season = await db.get(CareerSeason, part.season_id)
+    if season.division is None:
+        raise ConflictError("Задачи руководства — с нового сезона")
+    if season.rounds_played > 0:
+        raise ConflictError("Цель на сезон уже не изменить — первый тур сыгран")
+    part.ambition = ambition
+    await db.commit()
+
+
+async def set_training(db: AsyncSession, user: User, training: Optional[str], round_index: Optional[int] = None) -> None:
+    if training is not None and training not in TRAININGS:
+        raise ConflictError("Неизвестная тренировка")
+    part = await _editable_participation(db, user, round_index)
+    season = await db.get(CareerSeason, part.season_id)
+    if _tactics_version(season.state) < tactics.TACTICS_VERSION:
+        raise ConflictError("Тренировки — с нового сезона")
+    part.training = training
+    await db.commit()
 
 
 def _division_info(division: int, config) -> dict:
@@ -467,6 +567,7 @@ async def create_season(
     )
     season.participants.append(CareerParticipant(
         user_id=user.id, team_index=0, status="accepted", squad_card_ids=squad, division=division,
+        ambition=DEFAULT_AMBITION,
     ))
     if friend is not None:
         season.participants.append(CareerParticipant(user_id=friend.id, team_index=1, status="invited", squad_card_ids=[]))
@@ -509,6 +610,7 @@ async def respond_invite(db: AsyncSession, user: User, season_id: int, accept: b
         if season.division is not None:
             # Plays in the creator's league, moves up/down from their own.
             part.division = await current_division(db, user.id, config)
+            part.ambition = DEFAULT_AMBITION
     else:
         part.status = "declined"
     await _activate(db, season, datetime.now(timezone.utc), config)
@@ -546,7 +648,11 @@ async def leave_season(db: AsyncSession, user: User) -> None:
         season.status = "cancelled"
     elif season.status == "active" and part.division is not None:
         # Leaving a running season counts as finishing last: relegation.
-        part.next_division = division_after(part.division, TEAMS, await get_config(db))
+        config = await get_config(db)
+        part.next_division = division_after(part.division, TEAMS, config)
+        profile = await get_profile(db, user.id, config)
+        profile.division = part.next_division
+        profile.reputation = max(0, profile.reputation + int(config.career_rep_relegation))
     part.status = "left"
     await db.commit()
 
@@ -779,6 +885,18 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             return None  # left the season / declined: technical defeat
         cards = await human_cards(part)
         by_id = {c.id: c for c in cards}
+        training = part.training if part.training in TRAININGS else None
+        tr = tactics.tuning_of(config)["training"]
+        if training:
+            # Training load / recovery before kick-off, kept in the condition.
+            delta = tr["recovery_fatigue"] if training == "recovery" else tr["load_fatigue"]
+            condition = dict(part.condition or {})
+            for cid in _squad_ids(part, by_id):
+                entry = {**_FRESH, **condition.get(str(cid), {})}
+                entry["fatigue"] = max(0, min(100, entry["fatigue"] + delta))
+                condition[str(cid)] = entry
+            part.condition = condition
+            flag_modified(part, "condition")
         pairs = resolve_lineup(part, by_id, round_index, [c for c in cards if _usable(c)], fill_any_position=True)
         if len(pairs) != len(get_formation_slots(part.formation)):
             return None  # fewer than 11 fit players in the whole collection
@@ -798,11 +916,16 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             part.familiarity, part.familiar_formation, part.familiar_tactic, part.formation, _my_tactic(part), config,
         )
         used_familiarity[team_index] = familiarity
+        if training == "tactical":  # this match only; growth counts from the base
+            familiarity = min(int(config.career_familiarity_max_tenths) + tr["tactical_familiarity_tenths"],
+                              familiarity + tr["tactical_familiarity_tenths"])
         return tactics.CareerSideRunner(
             label, team["name"], part.formation, part.mentality, _my_tactic(part),
             [live(c, slot) for c, slot in pairs], [live(c) for c in bench], config,
             familiarity=familiarity, plan=copy.deepcopy(part.match_plan), chem_rules=chem_rules,
-            set_pieces=part.set_pieces,
+            set_pieces=part.set_pieces, training=training,
+            boost=tr["opponent_boost"] if training == "opponent" else 1.0,
+            set_piece_boost=tr["set_piece_boost"] if training == "set_pieces" else 1.0,
         )
 
     results = []
@@ -992,10 +1115,36 @@ async def _finish(db: AsyncSession, season: CareerSeason, config) -> None:
         move = ""
         if part.division is not None:
             part.next_division = division_after(part.division, place, config)
+            profile = await get_profile(db, part.user_id, config)
+            profile.seasons_played += 1
+            rep = 0
+            if place == 1:
+                profile.titles += 1
+                rep += int(config.career_rep_title)
             if part.next_division < part.division:
+                profile.promotions += 1
+                rep += int(config.career_rep_promotion)
                 move = f"\nПовышение: следующий сезон — {division_name(part.next_division, config)}"
             elif part.next_division > part.division:
+                rep += int(config.career_rep_relegation)
                 move = f"\nВылет: следующий сезон — {division_name(part.next_division, config)}"
+            if part.ambition in AMBITIONS:
+                i = AMBITIONS.index(part.ambition)
+                target = ambition_target(part.ambition, season.division or part.division, config)
+                if place <= target["place"]:
+                    profile.objectives_met += 1
+                    rep += int((config.career_ambition_rep_success or [0, 0, 0])[i])
+                    bonus = base * pct // 100 * int((config.career_ambition_bonus_pct or [0, 0, 0])[i]) // 100
+                    extra = await _credit(db, part.user_id, bonus, "Карьера: задача руководства", season.id)
+                    part.coins_earned += extra
+                    move += f"\nЗадача «{target['label']}» выполнена" + (f": +{extra} монет" if extra else "")
+                else:
+                    rep += int((config.career_ambition_rep_fail or [0, 0, 0])[i])
+                    move += f"\nЗадача «{target['label']}» провалена"
+            profile.reputation = max(0, profile.reputation + rep)
+            profile.division = part.next_division
+            if rep:
+                move += f"\nРепутация: {'+' if rep > 0 else ''}{rep}"
         await notify(
             db, part.user_id, NotificationType.career_season_finished, f"Сезон карьеры завершён: {place} место",
             f"Награда: {coins} монет" + (" и трофей «Чемпион карьеры»" if place == 1 and trophy else "") + move,
@@ -1096,7 +1245,10 @@ async def get_view(db: AsyncSession, user: User) -> dict:
         .order_by(CareerParticipant.id.desc()).limit(1)
     )).scalar_one_or_none()
     config = await get_config(db)
-    base = {"enabled": config.career_enabled, "difficulties": [
+    profile = await get_profile(db, user.id, config)
+    profile.last_active_at = datetime.now(timezone.utc)
+    await db.commit()
+    base = {"enabled": config.career_enabled, "profile": _profile_out(profile, config), "difficulties": [
         {"code": d, "label": DIFFICULTY_LABELS[d], "reward_pct": (config.career_difficulty_reward_pct or [100, 150, 200])[i]}
         for i, d in enumerate(DIFFICULTIES)
     ], "place_rewards": config.career_place_rewards, "slots": [f"{h:02d}:{m:02d}" for h, m in CAREER_SLOTS],
@@ -1150,11 +1302,13 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         "tactic": _my_tactic(me), "squad_size": len(me.squad_card_ids or []),
         "tactics_version": _tactics_version(state),
         "scouting": None, "familiarity": None, "match_plan": me.match_plan, "plan_limits": {},
+        "ambition": me.ambition, "ambitions": [], "training": me.training, "trainings": training_options(),
         "set_pieces": {**tactics.DEFAULT_SET_PIECES, **(me.set_pieces or {})}, "squad_warnings": [],
     }
     if season.division is not None:
         config = await get_config(db)
         out["division"] = _division_info(season.division, config)
+        out["ambitions"] = ambition_options(season.division, config)
         if me.next_division is not None:
             out["next_division"] = _division_info(me.next_division, config)
     results = state.get("results") or []

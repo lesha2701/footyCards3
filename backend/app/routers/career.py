@@ -12,6 +12,8 @@ from app.schemas.career import (
     CareerMatchEventsOut,
     CareerPlanIn,
     CareerTacticPreviewIn,
+    CareerAmbitionIn,
+    CareerTrainingIn,
     CareerViewOut,
 )
 from app.services import career_service
@@ -67,6 +69,20 @@ async def set_plan(payload: CareerPlanIn, db: AsyncSession = Depends(get_db), us
     """Match plan for the coming rounds: up to N conditional instructions
     (score + minute -> mentality/style) and N substitutions."""
     await career_service.set_plan(db, user, payload.rules, payload.subs, payload.round_index, payload.set_pieces)
+    return await _view(db, user)
+
+
+@router.put("/ambition", response_model=CareerViewOut)
+async def set_ambition(payload: CareerAmbitionIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Board objective for the season (before round 1)."""
+    await career_service.set_ambition(db, user, payload.ambition)
+    return await _view(db, user)
+
+
+@router.put("/training", response_model=CareerViewOut)
+async def set_training(payload: CareerTrainingIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Training focus before the next round (kept until changed)."""
+    await career_service.set_training(db, user, payload.training, payload.round_index)
     return await _view(db, user)
 
 

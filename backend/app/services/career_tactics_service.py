@@ -155,6 +155,9 @@ DEFAULT_TUNING: dict[str, Any] = {
     "penalty_goal": 0.76,
     "routine_edge": 1.4,
     "routine_miss": 0.8,
+    # Training before a round (career_service.TRAININGS).
+    "training": {"recovery_fatigue": -12, "load_fatigue": 5, "tactical_familiarity_tenths": 15,
+                 "opponent_boost": 1.25, "set_piece_boost": 1.35},
     # Scouting: how much a counter-attack interaction weighs vs a build-up
     # one, and the score above which a matchup is called an advantage.
     "counter_weight": 0.35,
@@ -271,6 +274,8 @@ class TacticAxes:
 
     tactic: dict
     tuning: dict
+    # «Разбор соперника» training: interactions in this side's favour are stronger.
+    boost: float = 1.0
 
     def zone_weights(self) -> dict[str, float]:
         none = self.tuning["recycle"][self.tactic["buildup"]]
@@ -307,7 +312,12 @@ class TacticAxes:
     def duel_shift(self, defender: "TacticAxes", kind: str, zone: str) -> tuple[float, tuple]:
         """(Stage-1 bias toward the attacker, ids applied)."""
         applied = interactions_for(self.tactic, defender.tactic, kind, zone)
-        favour_attacker = sum(ix["sign"] * self.tuning["shift"][ix["id"]] for ix in applied)
+        favour_attacker = 0.0
+        for ix in applied:
+            value = ix["sign"] * self.tuning["shift"][ix["id"]]
+            if not ix.get("base"):
+                value *= self.boost if value > 0 else defender.boost
+            favour_attacker += value
         return favour_attacker, tuple(ix["id"] for ix in applied)
 
 
@@ -356,7 +366,9 @@ def engine_fingerprint() -> str:
     interaction table, default tuning, presets). test_career_tactics fails
     when it no longer matches — rerun scripts/simulate_career_tactics.py --write."""
     payload = {
-        "interactions": INTERACTIONS, "tuning": DEFAULT_TUNING, "presets": PRESETS,
+        "interactions": INTERACTIONS, "presets": PRESETS,
+        # Training and the scouting-hint knobs don't change simulated matches.
+        "tuning": {k: v for k, v in DEFAULT_TUNING.items() if k not in ("training", "counter_weight", "hint_threshold")},
         "initiative": matchup.INITIATIVE_MULT, "sample": matchup.SAMPLE_FRACTION,
         "amplify": matchup.RATIO_AMPLIFICATION, "stage1": matchup.STAGE1_BANDS, "stage2": matchup.STAGE2_BANDS,
         "mentality_shift": matchup.MENTALITY_DEFENSE_SHIFT, "pool": matchup.DEFENSIVE_POOL_STRATEGY,
@@ -588,6 +600,10 @@ class CareerSideRunner:
     chem_rules: Any = None
     # Set-piece takers and schemes (DEFAULT_SET_PIECES shape).
     set_pieces: Optional[dict] = None
+    # Training effects for this match (career_service.TRAININGS).
+    boost: float = 1.0
+    set_piece_boost: float = 1.0
+    training: Optional[str] = None
     events_meta: list[dict] = field(default_factory=list)  # rule/sub log for the analysis
     _subs_done: set = field(default_factory=set)
     _effective: tuple = ()
@@ -735,7 +751,7 @@ class CareerSideRunner:
             p.card.player.rating = rating
             with_slots.append((p.card, p.slot))
         side = matchup.build_side(with_slots, mentality, matchup.CAREER_PLAYSTYLE, coach=self.coach)
-        side.career = TacticAxes(tactic, self.tuning)
+        side.career = TacticAxes(tactic, self.tuning, boost=self.boost)
         lineup = [
             {"club_card_id": c.id, "player_id": c.player_id, "name": c.player.display_name, "rating": c.player.rating,
              "position": c.player.position.value, "category": slot.category,
@@ -851,7 +867,7 @@ class CareerMatchController:
         edge = tuning["routine_edge"] if ROUTINE_BEATS[routine] == defence else tuning["routine_miss"]
         delivery = 1 + 0.5 * (_rating_of(taker) - 70) / 30
         header = 2 * _rating_of(target) / max(1, _rating_of(target) + _rating_of(marker))
-        chance = max(0.01, min(0.2, tuning["corner_goal"] * delivery * header * edge))
+        chance = max(0.01, min(0.25, tuning["corner_goal"] * delivery * header * edge * att.set_piece_boost))
         scored = random.random() < chance
         name = _actor(target).get("name", "Игрок")
         event = {
@@ -869,7 +885,7 @@ class CareerMatchController:
         att, dfn = self._side(attacking), self._side("b" if attacking == "a" else "a")
         taker, keeper = att.taker("free_kick_taker"), dfn.keeper()
         quality = 1 + (_rating_of(taker) - _rating_of(keeper)) / 40
-        chance = max(0.02, min(0.18, att.tuning["free_kick_goal"] * quality))
+        chance = max(0.02, min(0.22, att.tuning["free_kick_goal"] * quality * att.set_piece_boost))
         scored = random.random() < chance
         name = _actor(taker).get("name", "Игрок")
         event = {
@@ -1029,6 +1045,7 @@ def build_analysis(
         "preset": preset_of(me.tactic), "opponent_tactic": opponent.tactic,
         "matchup": matchup_report(me.tactic, opponent.tactic, me.config),
         "familiarity_pct": me.familiarity / 10,
+        "training": me.training,
         "chemistry": {"team": me.chemistry_start[0], "max": me.chemistry_start[1]} if me.chem_rules else None,
         "mine": phases(mine), "theirs": phases(theirs),
         "goals_mine": goals(side), "goals_theirs": goals(other),
