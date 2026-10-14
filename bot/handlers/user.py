@@ -82,6 +82,16 @@ async def cmd_start(message: Message) -> None:
         keyboard = (
             open_app_keyboard(path=f"/play/penalty/open/{match_id}") if match_id.isdigit() else open_app_keyboard()
         )
+    elif payload and payload.startswith("magnate_"):
+        code = payload[len("magnate_"):]
+        text = (
+            f"Привет, {message.from_user.first_name}! 👋\n\n"
+            "🏟 Тебя зовут за стол «Футбольного магната»!\n\n"
+            "Нажми кнопку ниже, чтобы занять место в комнате 👇"
+        )
+        keyboard = (
+            open_app_keyboard(path=f"/play/magnate/room/{code}") if code.isalnum() else open_app_keyboard()
+        )
     elif payload == "chatpack":
         # Deep link from the "вкарта" group-chat button — the card is
         # already granted, this is just getting them into the Mini App to see it.

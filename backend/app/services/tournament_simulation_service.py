@@ -14,9 +14,10 @@ from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_match import TournamentMatch
 from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLog
 from app.models.tournament_standing import TournamentClubStanding
-from app.services import tournament_match_engine, tournament_notification_service
+from app.services import chemistry_service, tournament_match_engine, tournament_notification_service
 from app.services.club_budget_service import credit_club_budget
 from app.services.club_formation_service import get_formation_slots
+from app.services.chemistry_service import ChemistryRules
 from app.services.club_tactical_matchup_service import build_side
 from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot, calculate_base_strength
@@ -93,6 +94,35 @@ async def resolve_match_lineup(
             cards_with_slots.append((card, slot))
 
     return result, had_substitution, cards_with_slots, lineup
+
+
+def apply_chemistry(
+    lineup: list[dict], cards_with_slots: list[tuple[ClubCard, FormationSlot]], club_lineup: "ClubLineup | None",
+    rules: ChemistryRules | None, is_home: bool = True,
+) -> tuple[list[dict], list[tuple[ClubCard, FormationSlot]]]:
+    """resolve_match_lineup's (lineup, cards_with_slots) with neighbour-link
+    chemistry folded into every fielded card's match rating — computed on
+    the XI that actually takes the pitch (substitutes included, an unfilled
+    slot simply has no links). rules = the tournament's own frozen rules
+    (Tournament.chemistry_rules), never the live GameConfig; None returns
+    both lists unchanged, so a tournament without chemistry plays exactly
+    as before. Order: card rating → + chemistry (≤ 99) → zone profile →
+    coach boosts → training / stadium multipliers (build_side). The
+    «домашний стадион» extra, like the stadium boost, only for the home side."""
+    if rules is None or club_lineup is None:
+        return lineup, cards_with_slots
+    formation_slots = get_formation_slots(club_lineup.formation)
+    chemistry = chemistry_service.compute_chemistry(
+        cards_with_slots, club_lineup.formation, rules, slot_count=len(formation_slots),
+        coach_country=chemistry_service.coach_country_of(
+            club_lineup.club_coach_card.coach if club_lineup.club_coach_card else None
+        ),
+        stadium_club=chemistry_service.stadium_club_of(
+            club_lineup.club_stadium_card.stadium if is_home and club_lineup.club_stadium_card else None
+        ),
+    )
+    boosted = chemistry_service.with_match_ratings(cards_with_slots, chemistry)
+    return [_card_to_actor(card, slot.category) for card, slot in boosted], boosted
 
 
 async def form_multiplier(db: AsyncSession, club_id: int, config) -> float:
@@ -297,6 +327,9 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
         ).scalars().all()
         standings_by_club = {s.club_id: s for s in standings_rows}
 
+        # Frozen when the tournament started (tournament_queue_service) —
+        # retuning GameConfig mid-tournament never changes its rules.
+        chemistry_rules = chemistry_service.rules_from_dict(tournament.chemistry_rules)
         round_matches: list[TournamentMatch] = []
         for _, club_a_id, club_b_id in fixtures:
             if club_a_id in withdrawn_ids or club_b_id in withdrawn_ids:
@@ -317,6 +350,10 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
 
             lineup_a, _had_sub_a, cards_with_slots_a, club_lineup_a = await resolve_match_lineup(db, club_a_id)
             lineup_b, _had_sub_b, cards_with_slots_b, club_lineup_b = await resolve_match_lineup(db, club_b_id)
+            lineup_a, cards_with_slots_a = apply_chemistry(lineup_a, cards_with_slots_a, club_lineup_a, chemistry_rules)
+            lineup_b, cards_with_slots_b = apply_chemistry(
+                lineup_b, cards_with_slots_b, club_lineup_b, chemistry_rules, is_home=False,
+            )
             coach_a = club_lineup_a.club_coach_card.coach if club_lineup_a.club_coach_card else None
             coach_b = club_lineup_b.club_coach_card.coach if club_lineup_b.club_coach_card else None
             # club_a is always the home side for this fixture row (see

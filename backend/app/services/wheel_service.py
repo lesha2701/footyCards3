@@ -9,7 +9,7 @@ from sqlalchemy.orm import joinedload
 from app.core.exceptions import ConflictError
 from app.core.timeutil import app_timezone, local_today
 from app.models.badge import UserBadge
-from app.models.enums import CardSource, TransactionType, WheelPrizeType, WheelSpinSource
+from app.models.enums import CardSource, TransactionType, WheelPrizePool, WheelPrizeType, WheelSpinSource
 from app.models.pack import Pack, PackOpening, StarsInvoice
 from app.models.user import User
 from app.models.wheel import WheelPrize, WheelSpin
@@ -40,14 +40,14 @@ async def _ensure_daily_reset(db: AsyncSession, user: User) -> None:
         db.add(user)
 
 
-async def _active_prizes(db: AsyncSession) -> list[WheelPrize]:
+async def _active_prizes(db: AsyncSession, pool: WheelPrizePool = WheelPrizePool.regular) -> list[WheelPrize]:
     # WheelPrize.pack is lazy="joined", but Pack.rarity_probabilities (needed
     # by PackOut, nested in WheelPrizeOut.pack) isn't — without this explicit
     # option, serializing a pack-type prize triggers an async lazy-load
     # outside any awaited context (MissingGreenlet).
     result = await db.execute(
         select(WheelPrize)
-        .where(WheelPrize.is_active.is_(True))
+        .where(WheelPrize.is_active.is_(True), WheelPrize.pool == pool)
         .order_by(WheelPrize.sort_order)
         .options(joinedload(WheelPrize.pack).joinedload(Pack.rarity_probabilities))
     )
@@ -68,15 +68,17 @@ async def get_status(db: AsyncSession, user: User) -> WheelStatusOut:
     )
 
 
-async def _roll_prize(db: AsyncSession) -> WheelPrize:
-    prizes = await _active_prizes(db)
+async def _roll_prize(db: AsyncSession, pool: WheelPrizePool = WheelPrizePool.regular) -> WheelPrize:
+    prizes = await _active_prizes(db, pool)
     if not prizes:
         raise ConflictError("The wheel has no active prizes configured; contact support")
     return random.choices(prizes, weights=[p.weight for p in prizes], k=1)[0]
 
 
-async def _grant_prize(db: AsyncSession, user: User, prize: WheelPrize, source: WheelSpinSource) -> WheelSpinResultOut:
-    spin = WheelSpin(user_id=user.id, prize_id=prize.id, source=source)
+async def _grant_prize(
+    db: AsyncSession, user: User, prize: WheelPrize, source: WheelSpinSource, blackjack_match_id: int | None = None,
+) -> WheelSpinResultOut:
+    spin = WheelSpin(user_id=user.id, prize_id=prize.id, source=source, blackjack_match_id=blackjack_match_id)
 
     pack_result: PackOpenResult | None = None
     card_result = None

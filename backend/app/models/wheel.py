@@ -5,7 +5,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-from app.models.enums import Rarity, WheelPrizeType, WheelSpinSource
+from app.models.enums import Rarity, WheelPrizePool, WheelPrizeType, WheelSpinSource
 from app.models.mixins import TimestampMixin, utcnow
 from sqlalchemy import Enum as SAEnum
 
@@ -28,6 +28,12 @@ class WheelPrize(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     prize_type: Mapped[WheelPrizeType] = mapped_column(SAEnum(WheelPrizeType, name="wheel_prize_type_enum"), nullable=False)
+    # Which wheel this entry belongs to — every pool rolls independently
+    # (wheel_service._roll_prize(db, pool)); pre-existing prizes are regular.
+    pool: Mapped[WheelPrizePool] = mapped_column(
+        SAEnum(WheelPrizePool, name="wheel_prize_pool_enum"), default=WheelPrizePool.regular,
+        server_default=WheelPrizePool.regular.value, nullable=False, index=True,
+    )
     weight: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -61,6 +67,11 @@ class WheelSpin(Base):
     badge_granted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     duplicate_badge_coins: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     coins_amount: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # «21» reward spin: the match that earned it. UNIQUE, so a retried or
+    # concurrent stand/hit can never pay one match out twice.
+    blackjack_match_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("blackjack_matches.id", ondelete="SET NULL"), nullable=True, unique=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 

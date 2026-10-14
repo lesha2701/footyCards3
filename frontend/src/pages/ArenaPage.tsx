@@ -11,6 +11,8 @@ import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPicker
 import EmptyState from "@/components/common/EmptyState";
 import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
 import BenchUpgradeHints from "@/components/squad/BenchUpgradeHints";
+import { ChemistryDiamonds, ChemistryHints, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
+import { chemistryGain, chemistrySwapHints, type ChemistrySwapHint } from "@/lib/chemistry";
 import {
   IconBall,
   IconBoot,
@@ -81,6 +83,7 @@ export default function ArenaPage() {
   const [lineupError, setLineupError] = useState<string | null>(null);
   const [simulating, setSimulating] = useState(false);
   const [strengthHintOpen, setStrengthHintOpen] = useState(false);
+  const pitchRef = useRef<HTMLDivElement>(null);
   const [coachPickerOpen, setCoachPickerOpen] = useState(false);
   const { data: coachCards } = useQuery({ queryKey: ["lineup", "coach-cards"], queryFn: fetchUserCoachCards });
   const [stadiumPickerOpen, setStadiumPickerOpen] = useState(false);
@@ -231,6 +234,42 @@ export default function ArenaPage() {
     }
   };
 
+  // Neighbour-link chemistry (only when the server has it switched on):
+  // per-slot points for the diamonds, and instant "what if" numbers for the
+  // picker and the swap hints computed by the same rules the server returned.
+  const chemistry = lineup?.chemistry;
+  const chemistryOn = !!chemistry?.enabled;
+  const chemBySlot = new Map((chemistry?.players ?? []).map((p) => [p.slot_code, p]));
+  const chemSlots = (lineup?.slots ?? []).map((s) => ({ slot_code: s.slot_code, ideal_position: s.ideal_position, player: s.card?.player ?? null }));
+  const diamondsOutside = (slotCode: string) =>
+    (lineup?.slots ?? []).filter((s) => s.card && s.slot_code !== slotCode && s.card.player.rarity === "diamond").length;
+  const chemistryHints = chemistryOn
+    ? chemistrySwapHints(chemistry, chemSlots, (slot) => {
+        const positions = CATEGORY_POSITIONS[(lineup?.slots.find((s) => s.slot_code === slot.slot_code)?.category ?? "GK") as FormationSlot["category"]];
+        return (collectionPage?.items ?? [])
+          .filter((c) => positions.includes(c.player.position))
+          .filter((c) => c.player.rarity !== "diamond" || diamondsOutside(slot.slot_code) < maxDiamond)
+          .map((c) => ({ cardId: c.id, playerId: c.player.id, name: c.player.display_name, club: c.player.club, country: c.player.country, position: c.player.position }));
+      })
+    : [];
+  const applyChemistryHint = (hint: ChemistrySwapHint) => {
+    const slots = (lineup?.slots ?? [])
+      .filter((s) => s.card && s.slot_code !== hint.slotCode)
+      .map((s) => ({ slot_code: s.slot_code, user_card_id: s.card!.id }));
+    slots.push({ slot_code: hint.slotCode, user_card_id: hint.cardId });
+    setLineupMutation.mutate(slots);
+  };
+  const pickerChemistryNote = (card: UserCard) => {
+    if (!chemistryOn || !pickerSlot) return null;
+    const gain = chemistryGain(chemistry, chemSlots, pickerSlot.code, card.player);
+    if (gain == null) return null;
+    return (
+      <span className={`font-mono text-[10px] font-bold ${gain > 0 ? "text-accent-green" : gain < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
+        {gain > 0 ? "+" : ""}{gain} хим.
+      </span>
+    );
+  };
+
   const lastFive = (history ?? []).slice(0, 5).reverse();
 
   return (
@@ -343,7 +382,11 @@ export default function ArenaPage() {
           <div className="mb-3 rounded-xl bg-white/5 px-3 py-2 text-[11px] leading-relaxed text-ink-mist">
             <p className="mb-1 font-semibold text-ink-chalk">Что влияет на силу состава:</p>
             <p>· Позиция игрока: 100% рейтинга на своей позиции, 90% на смежной, 75% не по профилю</p>
-            <p>· Химия: бонус за игроков одного клуба и одной страны в составе</p>
+            {chemistryOn ? (
+              <p>· Химия: связи с соседями по схеме — каждое очко химии игрока добавляет рейтинг в матче</p>
+            ) : (
+              <p>· Химия: бонус за игроков одного клуба и одной страны в составе</p>
+            )}
             <p>· Редкость карточки: чем выше редкость, тем больше вклад рейтинга в силу</p>
             <p>· Тренер: даёт бонус к силе по своей редкости</p>
             <p>· Тактика: атакующая усиливает нападающих, оборонительная — защитников, сбалансированная даёт небольшой бонус всем — выгоднее та тактика, что совпадает с сильной стороной состава</p>
@@ -353,12 +396,15 @@ export default function ArenaPage() {
         <div className="mb-3">
           <BenchUpgradeHints hints={benchUpgrades} onApply={applyBenchUpgrade} busy={setLineupMutation.isPending} />
         </div>
+        <ChemistrySummary chemistry={chemistry} />
+        <ChemistryHints hints={chemistryHints} onApply={applyChemistryHint} busy={setLineupMutation.isPending} />
         <p className="mb-3 text-[11px] font-semibold">
           <span className={`rounded-full px-2.5 py-1 ${diamondCount >= maxDiamond ? "bg-rarity-diamond/20 text-rarity-diamond" : "bg-white/5 text-ink-mist"}`}>
             Диамантовых: {diamondCount}/{maxDiamond}
           </span>
         </p>
-        <div className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
+        <div ref={pitchRef} className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
+          <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
           <div className="pointer-events-none absolute inset-x-3 top-1/2 h-px -translate-y-1/2 bg-white/10" />
           <div className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
           {(["FWD", "MID", "DEF", "GK"] as const).map((category) => (
@@ -370,6 +416,7 @@ export default function ArenaPage() {
                   return (
                     <button
                       key={slot.slot_code}
+                      data-chem-slot={slot.slot_code}
                       onClick={() => setPickerSlot(formationSlot)}
                       disabled={setLineupMutation.isPending}
                       className="flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 disabled:opacity-60"
@@ -391,6 +438,13 @@ export default function ArenaPage() {
                             {slot.card.player.position}
                           </span>
                           <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.card.player.rating}</span>
+                          {chemistryOn && chemBySlot.has(slot.slot_code) && (
+                            <ChemistryDiamonds
+                              points={chemBySlot.get(slot.slot_code)!.points}
+                              max={chemistry!.rules?.player_max ?? 3}
+                              onPosition={chemBySlot.get(slot.slot_code)!.on_position}
+                            />
+                          )}
                           <CardSkillBadge
                             code={slot.card.skill_code}
                             level={slot.card.skill_level}
@@ -567,6 +621,7 @@ export default function ArenaPage() {
           onClose={() => { setPickerSlot(null); setPickerSearch(""); }}
           searchValue={pickerSearch}
           onSearchChange={setPickerSearch}
+          cardNote={pickerChemistryNote}
         />
       )}
 

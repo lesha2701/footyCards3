@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { fetchGameConfig, fetchSuspiciousMatches, fetchSuspiciousMemorySessions, updateGameConfig } from "@/admin/api";
+import AdminMagnateBoardEditor from "@/admin/pages/AdminMagnateBoardEditor";
 import type { GameConfig } from "@/admin/types";
 
 // Codes from backend my_player_service.COSMETICS.
@@ -53,7 +54,9 @@ export default function AdminGamesPage() {
       | "career_division_reward_pct"
       | "my_player_tier_thresholds"
       | "player_career_place_rewards"
-      | "club_league_rewards",
+      | "club_league_rewards"
+      | "magnate_place_rewards"
+      | "magnate_stadium_rents",
     label: string,
   ) => (
     <label className="col-span-2 flex flex-col gap-1">
@@ -88,6 +91,7 @@ export default function AdminGamesPage() {
     key:
       | "matchmaking_enabled"
       | "wheel_enabled"
+      | "blackjack_enabled"
       | "leagues_enabled"
       | "diamond_rating_cap_enabled"
       | "bot_daily_digest_enabled"
@@ -96,7 +100,8 @@ export default function AdminGamesPage() {
       | "career_enabled"
       | "career_reminders_enabled"
       | "my_player_enabled"
-      | "player_career_enabled",
+      | "player_career_enabled"
+      | "chemistry_enabled",
     label: string,
   ) => (
     <label className="flex items-center gap-2 text-sm">
@@ -122,6 +127,7 @@ export default function AdminGamesPage() {
         <div className="flex flex-col gap-2">
           {toggle("matchmaking_enabled", "Показывать кнопку «Играть» (подбор соперника) в Тактико и Пенальти")}
           {toggle("wheel_enabled", "Показывать раздел «Колесо фортуны» на главном экране")}
+          {toggle("blackjack_enabled", "Игра «21: Добавленное время» (новые партии и покупка попыток)")}
           {toggle("leagues_enabled", "Показывать баннер лиг на главном экране и в профиле")}
         </div>
       </section>
@@ -240,6 +246,34 @@ export default function AdminGamesPage() {
           {field("club_position_match_reward_min", "Минимальная награда")}
           {field("club_position_match_penalty_per_mistake", "Штраф за ошибку")}
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Химия карточек</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Связи между соседями в схеме Card Arena, турниров игроков и клубных составов: один клуб и страна — сильная связь, клуб или
+          страна — средняя. Выключено — старая формула (бонус за самый частый клуб/страну) без изменений. Уже начатые
+          матчи Арены, турниры игроков и клубные турниры доигрываются по правилам, действовавшим на их старте. FUT Draft всегда считает
+          химию по-своему (настройки в блоке FUT Draft).
+        </p>
+        <div className="mb-3">{toggle("chemistry_enabled", "Включить химию связей")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("chemistry_link_strong", "Сильная связь, очков")}
+          {field("chemistry_link_medium", "Средняя связь, очков")}
+          {field("chemistry_threshold_1", "Порог 1-го очка (сумма связей)")}
+          {field("chemistry_threshold_2", "Порог 2-го очка")}
+          {field("chemistry_threshold_3", "Порог 3-го очка")}
+          {field("chemistry_player_max", "Максимум химии игрока (0–3)")}
+          {field("chemistry_player_floor", "Пол химии для игрока на своей позиции")}
+          {field("chemistry_rating_per_point", "+ рейтинга в матче за очко химии")}
+          {field("chemistry_off_position_penalty", "Штраф рейтинга не на своей позиции")}
+          {field("chemistry_coach_country_points", "+ химии игроку из страны тренера")}
+          {field("chemistry_stadium_club_points", "+ химии игроку клуба стадиона (дома)")}
+        </div>
+        <p className="mt-2 text-[11px] text-slate-500">
+          Подбор значений: <code>python -m scripts.compare_chemistry --synthetic 2000</code> в backend сравнивает силу
+          существующих составов по старой и новой формуле.
+        </p>
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
@@ -487,6 +521,20 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">«21: Добавленное время»</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Призы победы и «Хет-трика» — Золотое и Джекпот-колесо на странице «Колесо фортуны». Лимит платных 0 = только
+          бесплатные партии.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("blackjack_free_per_day", "Бесплатных партий в день")}
+          {field("blackjack_stars_cost", "Платная попытка, ⭐")}
+          {field("blackjack_paid_daily_limit", "Платных попыток в день (покупок)")}
+          {field("blackjack_consolation_coins", "Утешительный приз за поражение, монеты")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Пак в чате (команда «вкарта»)</p>
         <p className="mb-3 text-xs text-slate-500">
           Использует тот же пак, что и бесплатный (Slug пака выше), но на собственном кулдауне.
@@ -684,6 +732,41 @@ export default function AdminGamesPage() {
           {field("stratego_reward_loss", "Награда за поражение")}
           {field("stratego_daily_limit", "Лимит наградных матчей/день")}
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Футбольный магнат</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Деньги партии («М») — отдельная валюта, не монеты. Правила, поле и карточки фиксируются в партии при её старте —
+          идущие партии доигрываются по старым настройкам; награды и лимиты считаются при завершении. Круг — каждый игрок
+          ходит по разу. Партия с одним человеком (против ботов или лобби, куда никто не пришёл) платит указанный %
+          от наград. Ушедший или замененный ботом игрок награды не получает.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("magnate_start_money", "Стартовый бюджет, М")}
+          {field("magnate_pass_start_bonus", "За проход старта, М")}
+          {field("magnate_fine_amount", "Штраф федерации, М")}
+          {field("magnate_jail_fine", "Штраф за выход из дисквалификации, М")}
+          {field("magnate_max_jail_turns", "Бросков в дисквалификации до штрафа")}
+          {field("magnate_building_sell_pct", "Возврат за постройку при долге, %")}
+          {field("magnate_max_rounds", "Кругов в партии")}
+          {field("magnate_time_limit_minutes", "Лимит времени партии, мин")}
+          {field("magnate_turn_seconds", "Время на решение, с")}
+          {field("magnate_max_missed_turns", "Пропусков подряд до замены ботом")}
+          {field("magnate_lobby_wait_seconds", "Ожидание лобби до ботов, с")}
+          {field("magnate_room_wait_minutes", "Ожидание комнаты друзей, мин")}
+          {field("magnate_bot_buy_reserve", "Бот покупает, если остаётся ≥ М")}
+          {field("magnate_bot_build_reserve", "Бот строит, если остаётся ≥ М")}
+          {field("magnate_bot_reward_pct", "Награда за стол с ботами, %")}
+          {field("magnate_daily_limit", "Лимит наградных партий/день")}
+          {listField("magnate_place_rewards", "Монеты по месту (1-е, 2-е, 3-е, 4-е)")}
+          {listField("magnate_stadium_rents", "Аренда стадиона при 1, 2, 3, 4 стадионах, М")}
+        </div>
+        <AdminMagnateBoardEditor
+          board={form.magnate_board}
+          cards={form.magnate_cards}
+          onChange={(board, cards) => setForm({ ...form, magnate_board: board, magnate_cards: cards })}
+        />
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">

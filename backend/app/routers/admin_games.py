@@ -10,6 +10,7 @@ from app.models.game import GameSession
 from app.models.match import Match
 from app.models.user import User
 from app.schemas.admin import GameConfigOut, GameConfigUpdate, SuspiciousMatchOut, SuspiciousMemorySessionOut
+from app.services import magnate_engine
 from app.services.admin_log_service import log_action
 from app.services.game_config_service import get_config
 
@@ -26,6 +27,13 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
     config = await get_config(db)
     old_value = GameConfigOut.model_validate(config).model_dump(mode="json")
     updates = payload.model_dump(exclude_unset=True)
+    try:
+        if updates.get("magnate_board") is not None:
+            updates["magnate_board"] = magnate_engine.validate_board(updates["magnate_board"])
+        if updates.get("magnate_cards") is not None:
+            updates["magnate_cards"] = magnate_engine.validate_cards(updates["magnate_cards"])
+    except magnate_engine.EngineError as exc:
+        raise ConflictError(f"Футбольный магнат: {exc}")
     for key, value in updates.items():
         setattr(config, key, value)
     if config.shop_daily_offer_pack_id == 0:
@@ -49,6 +57,13 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
     await db.commit()
     await db.refresh(config)
     return config
+
+
+@router.get("/magnate-defaults")
+async def magnate_defaults():
+    """Built-in «Футбольный магнат» board and event cards — what the game
+    uses while GameConfig.magnate_board / magnate_cards are NULL."""
+    return {"board": magnate_engine.DEFAULT_BOARD, "cards": magnate_engine.DEFAULT_CARDS}
 
 
 @router.get("/suspicious-memory-sessions", response_model=list[SuspiciousMemorySessionOut])

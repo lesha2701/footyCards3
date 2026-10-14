@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.enums import CoachBoostType, Rarity
 
@@ -49,6 +49,14 @@ def _validate_boosts(rarity: Rarity, boosts: list[CoachBoostCreate]) -> list[Coa
     return boosts
 
 
+def _blank_to_none(value: Optional[str]) -> Optional[str]:
+    """Coach.country / Stadium.club: whitespace-normalised, "" = not set."""
+    if value is None:
+        return None
+    cleaned = " ".join(value.split())
+    return cleaned or None
+
+
 class CoachOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -56,6 +64,7 @@ class CoachOut(BaseModel):
     display_name: str
     rarity: Rarity
     image_path: Optional[str]
+    country: Optional[str] = None
     quick_sell_price: int
     is_active: bool
     is_pack_droppable: bool
@@ -65,10 +74,13 @@ class CoachOut(BaseModel):
 class CoachCreate(BaseModel):
     display_name: str
     rarity: Rarity
+    country: Optional[str] = Field(default=None, max_length=64)
     quick_sell_price: int = Field(ge=0, default=10)
     is_active: bool = True
     is_pack_droppable: bool = True
     boosts: list[CoachBoostCreate]
+
+    _country = field_validator("country")(_blank_to_none)
 
     @model_validator(mode="after")
     def _check_boosts(self) -> "CoachCreate":
@@ -79,10 +91,14 @@ class CoachCreate(BaseModel):
 class CoachUpdate(BaseModel):
     display_name: Optional[str] = None
     rarity: Optional[Rarity] = None
+    # "" clears the country (sent explicitly, so exclude_unset keeps it).
+    country: Optional[str] = Field(default=None, max_length=64)
     quick_sell_price: Optional[int] = Field(default=None, ge=0)
     is_active: Optional[bool] = None
     is_pack_droppable: Optional[bool] = None
     boosts: Optional[list[CoachBoostCreate]] = None
+
+    _country = field_validator("country")(_blank_to_none)
 
     @model_validator(mode="after")
     def _check_boosts(self) -> "CoachUpdate":

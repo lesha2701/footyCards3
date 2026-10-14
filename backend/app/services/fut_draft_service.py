@@ -32,6 +32,7 @@ from app.services.lineup_service import (
     FormationSlot,
     calculate_base_strength,
     clean_group_key,
+    legacy_chemistry_bonus,
     split_strength,
 )
 from app.services.match_service import (
@@ -281,13 +282,32 @@ async def _compute_team_strength(db: AsyncSession, picks: dict, slots: list[Form
 
 
 def _chemistry_hints(config, state: dict, players_by_id: dict[int, Player], slots_by_code: dict[str, FormationSlot]) -> list[str]:
-    """Mirrors _fut_draft_chemistry_bonus exactly so the numbers shown here
-    are the real contribution, not an approximation — the whole point is
-    proving to the player that a "smart" pick actually helped."""
+    """Mirrors _compute_team_strength's chemistry exactly so the numbers
+    shown here are the real contribution, not an approximation — the whole
+    point is proving to the player that a "smart" pick actually helped. The
+    "+N" figures add up to exactly what chemistry contributes to
+    team_strength: the draft's own per-group bonus (_fut_draft_chemistry_bonus)
+    plus the flat squad bonus calculate_base_strength builds in
+    (lineup_service.legacy_chemistry_bonus).
+
+    FUT Draft deliberately keeps this formula even with
+    GameConfig.chemistry_enabled on: picks are dealt per slot with club/
+    country-weighted odds (_weighted_choice) tuned for group counts, scores
+    feed a leaderboard that must stay comparable across drafts, and a draft
+    already in progress must not change rules mid-way."""
     hints: list[str] = []
     picks: dict = state["picks"]
     club_counts: dict = state["club_counts"]
     country_counts: dict = state["country_counts"]
+
+    picked = [
+        (SimpleNamespace(player=players_by_id[player_id]), slots_by_code[slot_code])
+        for slot_code, player_id in picks.items()
+        if slot_code in slots_by_code and player_id in players_by_id
+    ]
+    squad_bonus = legacy_chemistry_bonus(picked)
+    if squad_bonus > 0:
+        hints.append(f"Сыгранность (самый частый клуб и страна): +{squad_bonus} к силе")
 
     # Every qualifying group, not just the single biggest one — sorted by
     # count desc so the strongest synergy leads, ties broken by name for a

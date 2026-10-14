@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import ClubCardPickerModal from "@/components/clubs/ClubCardPickerModal";
 import ClubCoachCardPickerModal from "@/components/clubs/ClubCoachCardPickerModal";
@@ -9,6 +9,7 @@ import {
   IconBoot, IconChevronLeft, IconChevronUp, IconFlag, IconPlus, IconStadium, IconStar, IconTarget, IconUsers,
 } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
+import { ChemistryDiamonds, ChemistryFrozenNote, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
 import { fetchMyClub } from "@/api/clubs";
 import {
   activateClubLineupTemplate, activateClubTraining, fetchClubCards, fetchClubCoachCards, fetchClubLineupTemplates,
@@ -32,6 +33,12 @@ export default function ClubSquadPage() {
   const activeIndex = templates?.find((t) => t.is_active)?.template_index ?? 1;
   const viewedIndex = selectedIndex ?? activeIndex;
   const lineup = templates?.find((t) => t.template_index === viewedIndex);
+  // Neighbour-link chemistry, see ArenaPage for the same wiring. A running
+  // tournament keeps the rules it started with (chemistry.frozen).
+  const pitchRef = useRef<HTMLDivElement>(null);
+  const chemistry = lineup?.chemistry;
+  const chemistryOn = !!chemistry?.enabled;
+  const chemBySlot = new Map((chemistry?.players ?? []).map((p) => [p.slot_code, p]));
   const { data: cards } = useQuery({ queryKey: ["clubs", "cards"], queryFn: fetchClubCards });
   const { data: coachCards } = useQuery({ queryKey: ["clubs", "coach-cards"], queryFn: fetchClubCoachCards, enabled: canEdit });
   const { data: stadiumCards } = useQuery({ queryKey: ["clubs", "stadium-cards"], queryFn: fetchClubStadiumCards, enabled: canEdit });
@@ -254,7 +261,11 @@ export default function ClubSquadPage() {
             />
           </div>
         )}
-        <div className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
+        <ChemistryFrozenNote chemistry={chemistry} />
+        <ChemistrySummary chemistry={chemistry} />
+
+        <div ref={pitchRef} className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
+          <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
           {(["FWD", "MID", "DEF", "GK"] as const).map((category) => (
             <div key={category} className="relative flex justify-evenly gap-2">
               {category === "GK" && (
@@ -324,6 +335,7 @@ export default function ClubSquadPage() {
                 .map((slot) => (
                   <button
                     key={slot.slot_code}
+                    data-chem-slot={slot.slot_code}
                     onClick={canEdit ? () => setPickerSlot(slot) : undefined}
                     disabled={!canEdit || setLineupMutation.isPending}
                     className={`flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm ${
@@ -347,6 +359,13 @@ export default function ClubSquadPage() {
                         </div>
                         <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[9px] font-bold leading-none text-accent-cyan">{slot.card.player.position}</span>
                         <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.card.player.rating}</span>
+                        {chemistryOn && chemBySlot.has(slot.slot_code) && (
+                          <ChemistryDiamonds
+                            points={chemBySlot.get(slot.slot_code)!.points}
+                            max={chemistry!.rules?.player_max ?? 3}
+                            onPosition={chemBySlot.get(slot.slot_code)!.on_position}
+                          />
+                        )}
                         {slot.card.availability && (
                           <span className="text-center font-mono text-[8px] font-bold leading-tight text-red-400">
                             {slot.card.availability.reason === "red_card" ? "Кр." : "Травма"} · {slot.card.availability.rounds_remaining}т

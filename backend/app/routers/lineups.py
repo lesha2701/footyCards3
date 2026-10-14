@@ -5,13 +5,14 @@ from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.services import auto_squad_service
+from app.schemas.chemistry import ChemistryOut, ChemistryPreviewRequest
 from app.schemas.lineup import (
     BenchUpgradeOut,
     LineupCoachSetRequest, LineupOut, LineupRenameRequest, LineupSetRequest, LineupStadiumSetRequest,
     LineupTacticRequest, UserCoachCardOut, UserStadiumCardOut,
 )
 from app.services.lineup_service import (
-    activate_template, get_active_lineup, list_templates, list_user_coach_cards, list_user_stadium_cards,
+    activate_template, get_active_lineup, preview_chemistry, list_templates, list_user_coach_cards, list_user_stadium_cards,
     rename_template, set_lineup, set_lineup_coach, set_lineup_stadium, set_tactic,
 )
 
@@ -31,6 +32,13 @@ async def read_user_coach_cards(db: AsyncSession = Depends(get_db), user: User =
 @router.get("/stadium-cards", response_model=list[UserStadiumCardOut])
 async def read_user_stadium_cards(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await list_user_stadium_cards(db, user)
+
+
+@router.post("/chemistry/preview", response_model=ChemistryOut)
+async def chemistry_preview(
+    payload: ChemistryPreviewRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await preview_chemistry(db, user, payload)
 
 
 @router.put("/active", response_model=LineupOut)

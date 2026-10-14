@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
@@ -12,6 +12,8 @@ import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
 import type { BenchUpgrade } from "@/api/lineups";
 import BenchUpgradeHints from "@/components/squad/BenchUpgradeHints";
+import { ChemistryDiamonds, ChemistryFrozenNote, ChemistryHints, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
+import { chemistryGain, chemistrySwapHints, type ChemistrySwapHint } from "@/lib/chemistry";
 import {
   activatePersonalSquad, autoFillPersonalSquad, fetchPersonalSquadBenchUpgrades, fetchPersonalSquadCoachCards, fetchPersonalSquads, fetchPersonalSquadStadiumCards,
   renamePersonalSquad, setPersonalSquadCards, setPersonalSquadCoach, setPersonalSquadStadium, setPersonalSquadTactics,
@@ -50,6 +52,7 @@ export default function PlayerTournamentSquadPage() {
   const [coachPickerOpen, setCoachPickerOpen] = useState(false);
   const [stadiumPickerOpen, setStadiumPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pitchRef = useRef<HTMLDivElement>(null);
 
   const autoFillMutation = useMutation({
     mutationFn: (copyFromArena: boolean) => autoFillPersonalSquad(viewedIndex, copyFromArena),
@@ -127,6 +130,36 @@ export default function PlayerTournamentSquadPage() {
   const cardsForSlot = (slot: PersonalSquadSlot): UserCard[] => {
     const positions = CATEGORY_POSITIONS[slot.category as FormationSlot["category"]];
     return (collectionPage?.items ?? []).filter((c) => positions.includes(c.player.position));
+  };
+
+  // Neighbour-link chemistry, see ArenaPage for the same wiring.
+  const chemistry = squad?.chemistry;
+  const chemistryOn = !!chemistry?.enabled;
+  const chemBySlot = new Map((chemistry?.players ?? []).map((p) => [p.slot_code, p]));
+  const chemSlots = squad?.slots ?? [];
+  const chemistryHints = chemistryOn
+    ? chemistrySwapHints(chemistry, chemSlots, (slot) =>
+        cardsForSlot(slot as PersonalSquadSlot).map((c) => ({
+          cardId: c.id, playerId: c.player.id, name: c.player.display_name, club: c.player.club, country: c.player.country, position: c.player.position,
+        })),
+      )
+    : [];
+  const applyChemistryHint = (hint: ChemistrySwapHint) => {
+    const slots = (squad?.slots ?? [])
+      .filter((s) => s.user_card_id != null && s.slot_code !== hint.slotCode)
+      .map((s) => ({ slot_code: s.slot_code, user_card_id: s.user_card_id! }));
+    slots.push({ slot_code: hint.slotCode, user_card_id: hint.cardId });
+    setCardsMutation.mutate(slots);
+  };
+  const pickerChemistryNote = (card: UserCard) => {
+    if (!chemistryOn || !pickerSlot) return null;
+    const gain = chemistryGain(chemistry, chemSlots, pickerSlot.slot_code, card.player);
+    if (gain == null) return null;
+    return (
+      <span className={`font-mono text-[10px] font-bold ${gain > 0 ? "text-accent-green" : gain < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
+        {gain > 0 ? "+" : ""}{gain} хим.
+      </span>
+    );
   };
 
   const assignSlot = async (slot: PersonalSquadSlot, card: UserCard) => {
@@ -248,6 +281,9 @@ export default function PlayerTournamentSquadPage() {
         <div className="mb-3">
           <BenchUpgradeHints hints={benchUpgrades} onApply={applyBenchUpgrade} busy={setCardsMutation.isPending} />
         </div>
+        <ChemistryFrozenNote chemistry={chemistry} />
+        <ChemistrySummary chemistry={chemistry} />
+        <ChemistryHints hints={chemistryHints} onApply={applyChemistryHint} busy={setCardsMutation.isPending} />
 
         <div className="mb-3 flex flex-col gap-1.5">
           <TacticSelect
@@ -273,7 +309,8 @@ export default function PlayerTournamentSquadPage() {
           />
         </div>
 
-        <div className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
+        <div ref={pitchRef} className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
+          <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
           {(["FWD", "MID", "DEF", "GK"] as const).map((category) => (
             <div key={category} className="relative flex justify-evenly gap-2">
               {category === "GK" && (
@@ -335,6 +372,7 @@ export default function PlayerTournamentSquadPage() {
                 .map((slot) => (
                   <button
                     key={slot.slot_code}
+                    data-chem-slot={slot.slot_code}
                     onClick={() => setPickerSlot(slot)}
                     disabled={setCardsMutation.isPending}
                     className="flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 disabled:opacity-60"
@@ -351,6 +389,13 @@ export default function PlayerTournamentSquadPage() {
                           {slot.player.position}
                         </span>
                         <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.player.rating}</span>
+                        {chemistryOn && chemBySlot.has(slot.slot_code) && (
+                          <ChemistryDiamonds
+                            points={chemBySlot.get(slot.slot_code)!.points}
+                            max={chemistry!.rules?.player_max ?? 3}
+                            onPosition={chemBySlot.get(slot.slot_code)!.on_position}
+                          />
+                        )}
                         <CardSkillBadge
                           code={slot.skill_code}
                           level={slot.skill_level}
@@ -396,6 +441,7 @@ export default function PlayerTournamentSquadPage() {
           onClose={() => { setPickerSlot(null); setPickerSearch(""); }}
           searchValue={pickerSearch}
           onSearchChange={setPickerSearch}
+          cardNote={pickerChemistryNote}
         />
       )}
 

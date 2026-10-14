@@ -12,6 +12,7 @@ from app.models.tournament_queue import TournamentQueue, TournamentQueueEntry, T
 from app.models.tournament_standing import TournamentClubStanding
 from app.models.user import User
 from app.schemas.tournament import TournamentApplyResult
+from app.services import chemistry_service
 from app.services.game_config_service import get_config
 from app.services.lineup_service import FORMATION_SLOTS
 from app.services.tournament_fixture_service import generate_fixtures
@@ -138,7 +139,10 @@ async def apply_to_tournament(db: AsyncSession, user: User) -> TournamentApplyRe
         return TournamentApplyResult(queued=True, queue_position=len(entries))
 
     club_ids = [e.club_id for e in entries]
-    tournament = Tournament()
+    # Chemistry rules are frozen for the tournament's whole run: toggling or
+    # retuning GameConfig later only affects tournaments that start after it.
+    rules = chemistry_service.active_rules(config)
+    tournament = Tournament(chemistry_rules=rules.as_dict() if rules is not None else None)
     db.add(tournament)
     await db.flush()
 

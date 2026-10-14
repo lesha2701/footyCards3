@@ -384,6 +384,44 @@ class GameConfig(TimestampMixin, Base):
     stratego_reward_loss: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
     stratego_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
 
+    # «Футбольный магнат» (rules in magnate_engine.py). Money here is the
+    # in-match budget, not coins. Everything below except the rewards/limits
+    # is snapshotted into a match at its start.
+    magnate_start_money: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
+    magnate_pass_start_bonus: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    magnate_jail_fine: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    # Failed doubles attempts before the fine is forced and the player moves.
+    magnate_max_jail_turns: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    magnate_fine_amount: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    # % of a building's cost the bank pays back when it is sold to cover a debt.
+    magnate_building_sell_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    # Rounds (every player moves once) and wall-clock minutes; whichever ends
+    # first decides the winner by capital (cash + property + buildings).
+    magnate_max_rounds: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    magnate_time_limit_minutes: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    # Per decision; on timeout the autopilot plays the turn, and after this
+    # many timed-out turns in a row a bot takes the seat for good.
+    magnate_turn_seconds: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    magnate_max_missed_turns: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # Public lobby: empty seats are filled with bots after this wait.
+    magnate_lobby_wait_seconds: Mapped[int] = mapped_column(Integer, default=45, nullable=False)
+    # Private room: starts with bots in the empty seats after this many
+    # minutes if a friend joined, otherwise it is cancelled.
+    magnate_room_wait_minutes: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Bot policy: buys when it keeps at least this much cash, builds likewise.
+    magnate_bot_buy_reserve: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    magnate_bot_build_reserve: Mapped[int] = mapped_column(Integer, default=250, nullable=False)
+    # Coins by final place (index 0 = 1st), within magnate_daily_limit
+    # rewarded matches per day; the vs-bots mode pays magnate_bot_reward_pct %.
+    magnate_place_rewards: Mapped[list] = mapped_column(JSON, default=lambda: [150, 75, 35, 10], nullable=False)
+    magnate_bot_reward_pct: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
+    magnate_daily_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # Rent for owning 1..4 stadiums.
+    magnate_stadium_rents: Mapped[list] = mapped_column(JSON, default=lambda: [25, 50, 100, 200], nullable=False)
+    # NULL = magnate_engine.DEFAULT_BOARD / DEFAULT_CARDS.
+    magnate_board: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    magnate_cards: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
     match_max_diamond_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     # Soft ceiling on diamond card leveling (feed_cards never lets a card's
@@ -415,6 +453,15 @@ class GameConfig(TimestampMixin, Base):
     wheel_spin_cost_coins: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
     wheel_spin_cost_stars: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     wheel_duplicate_badge_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+
+    # «21: Добавленное время» (blackjack_service.py). Rewards themselves are
+    # the golden/jackpot WheelPrize pools (admin «Колесо фортуны» page).
+    # blackjack_paid_daily_limit = 0 turns paid entries off (free-only).
+    blackjack_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    blackjack_free_per_day: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    blackjack_stars_cost: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    blackjack_paid_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    blackjack_consolation_coins: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
 
     bingo_reward_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     bingo_reward_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -458,3 +505,31 @@ class GameConfig(TimestampMixin, Base):
     # Player-tournament place rewards in skill tokens: index 0 = 1st place;
     # each entry is null or {"skill_code": str, "quantity": int}. Empty = none.
     ptour_place_skill_tokens: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+
+    # --- «Химия карточек» (services/chemistry_service.py) ---
+    # Off = every mode keeps the old flat club/country bonus byte-for-byte.
+    # On = Card Arena lineups, player-tournament squads and club squads use neighbour
+    # links instead (FUT Draft always keeps its own formula). Only NEW
+    # matches/rounds read it: an Arena match freezes its strengths at start,
+    # player and club tournaments freeze the rules at their own start.
+    chemistry_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Link value between two adjacent slots: same club AND country / one of them.
+    chemistry_link_strong: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    chemistry_link_medium: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # A player's link sum reaching each threshold = +1 chemistry point.
+    chemistry_threshold_1: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    chemistry_threshold_2: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    chemistry_threshold_3: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    chemistry_player_max: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Minimum chemistry of an on-position player («пол для новичков»).
+    chemistry_player_floor: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Match-rating points per chemistry point (the card's shown rating is untouched).
+    chemistry_rating_per_point: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Extra match-rating penalty off the slot's ideal position (on top of the
+    # existing 0.9/0.75 position fit, so 0 = no double penalty by default).
+    chemistry_off_position_penalty: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Extra chemistry points (capped at chemistry_player_max) for an
+    # on-position player whose country = the coach's (Coach.country) and
+    # whose club = the stadium's (Stadium.club; home matches only).
+    chemistry_coach_country_points: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    chemistry_stadium_club_points: Mapped[int] = mapped_column(Integer, default=1, nullable=False)

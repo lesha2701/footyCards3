@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
+import type { ReactNode } from "react";
 
 import EmptyState from "@/components/common/EmptyState";
 import { IconCollection } from "@/components/icons";
@@ -22,10 +23,12 @@ interface Props {
   /** Show each copy's skill badge — only where skills have a match effect
    * (Card Arena lineup, tournament squads), never in unrelated mini-games. */
   showSkills?: boolean;
+  /** Extra per-card note under the card (e.g. "+2 хим." for this slot). */
+  cardNote?: (card: UserCard) => ReactNode;
 }
 
 export default function CardPickerModal({
-  open, title, cards, disabledCardIds = [], onSelect, onClose, searchValue, onSearchChange, showSkills = false,
+  open, title, cards, disabledCardIds = [], onSelect, onClose, searchValue, onSearchChange, showSkills = false, cardNote,
 }: Props) {
   return (
     <AnimatePresence>
@@ -61,16 +64,26 @@ export default function CardPickerModal({
               <EmptyState icon={IconCollection} title="Нет подходящих карточек" description="Открой паки, чтобы получить игроков этой позиции" />
             ) : (
               <div className="grid grid-cols-3 gap-3">
-                {cards.map((card) => (
-                  <PlayerCard
-                    key={card.id}
-                    player={card.player}
-                    size="sm"
-                    badge={showSkills ? <CardSkillBadge code={card.skill_code} level={card.skill_level} /> : undefined}
-                    dimmed={disabledCardIds.includes(card.id)}
-                    onClick={() => !disabledCardIds.includes(card.id) && onSelect(card)}
-                  />
-                ))}
+                {cards.map((card) => {
+                  const playerCard = (
+                    <PlayerCard
+                      key={card.id}
+                      player={card.player}
+                      size="sm"
+                      badge={showSkills ? <CardSkillBadge code={card.skill_code} level={card.skill_level} /> : undefined}
+                      dimmed={disabledCardIds.includes(card.id)}
+                      onClick={() => !disabledCardIds.includes(card.id) && onSelect(card)}
+                    />
+                  );
+                  const note = cardNote?.(card);
+                  if (note == null) return playerCard;
+                  return (
+                    <div key={card.id} className="flex flex-col items-center gap-1">
+                      {playerCard}
+                      {note}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </motion.div>

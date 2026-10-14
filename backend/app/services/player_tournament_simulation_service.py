@@ -15,8 +15,9 @@ from app.models.player_tournament import (
 )
 from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLog
 from app.models.user import User
-from app.services import card_skill_service, personal_squad_service, tournament_match_engine, wallet_service
+from app.services import card_skill_service, chemistry_service, personal_squad_service, tournament_match_engine, wallet_service
 from app.services.card_skill_effects import SNAPSHOT_VERSION, effect_for_card
+from app.services.chemistry_service import ChemistryRules
 from app.services.club_formation_service import get_formation_slots
 from app.services.club_tactical_matchup_service import build_side
 from app.services.game_config_service import get_config
@@ -44,7 +45,11 @@ class _EngineCard:
     skill: dict | None = None
 
 
-def _engine_card(card: UserCard, config=None) -> _EngineCard:
+def _engine_card(card: UserCard, config=None, chemistry_bonus: int = 0) -> _EngineCard:
+    """chemistry_bonus: this card's neighbour-link chemistry bonus
+    (chemistry_service, 0 while the mechanic is off) — folded into the match
+    rating the engine reads, after the diamond bonus and before any zone
+    profile / coach / stadium math."""
     p = card.player
     skill = effect_for_card(card.skill_code, card.skill_level, p.position, config) if config is not None else None
     if skill is not None:
@@ -55,7 +60,8 @@ def _engine_card(card: UserCard, config=None) -> _EngineCard:
         # folded into player.rating, and calculate_base_strength would add it
         # again via getattr(card, "diamond_rating_bonus", 0).
         player=SimpleNamespace(
-            display_name=p.display_name, position=p.position, rating=min(99, p.rating + card.diamond_rating_bonus),
+            display_name=p.display_name, position=p.position,
+            rating=chemistry_service.boosted_rating(min(99, p.rating + card.diamond_rating_bonus), chemistry_bonus),
             rarity=p.rarity, club=p.club, country=p.country,
             attack_rating=getattr(p, "attack_rating", None), defense_rating=getattr(p, "defense_rating", None),
         ),
@@ -66,12 +72,16 @@ def _engine_card(card: UserCard, config=None) -> _EngineCard:
 class _Side:
     side: object  # ClubTacticalSide
     lineup: list[dict]
+    # {"team", "max", "cards": {card_id: points}} when chemistry was applied.
+    chemistry: dict | None = None
 
     def skill_snapshot(self) -> dict:
         return {str(c["club_card_id"]): c["skill"] for c in self.lineup if c.get("skill")}
 
 
-async def _build_side(db: AsyncSession, user_id: int, *, is_home: bool, config=None) -> _Side | None:
+async def _build_side(
+    db: AsyncSession, user_id: int, *, is_home: bool, config=None, chemistry_rules: ChemistryRules | None = None,
+) -> _Side | None:
     """None when the player cannot field a full starting XI (cards sold or
     traded away since applying). Stadium boost only applies to the home side
     (see player_tournament_fixture_service.generate_fixtures: user_a_id is
@@ -80,8 +90,25 @@ async def _build_side(db: AsyncSession, user_id: int, *, is_home: bool, config=N
     squad, pairs = await personal_squad_service.resolve_active_squad(db, user_id)
     if len(pairs) != len(get_formation_slots(squad.formation)):
         return None
-    with_slots: list[tuple[_EngineCard, FormationSlot]] = [(_engine_card(c, config), slot) for c, slot in pairs]
+    formation_slots = get_formation_slots(squad.formation)
+    # chemistry_rules = the tournament's own frozen rules (PlayerTournament
+    # .chemistry_rules), never the live GameConfig — see _play_match.
     coach = squad.user_coach_card.coach if squad.user_coach_card else None
+    chemistry = (
+        chemistry_service.compute_chemistry(
+            pairs, squad.formation, chemistry_rules, slot_count=len(formation_slots),
+            coach_country=chemistry_service.coach_country_of(coach),
+            # «Домашний стадион» — like the stadium boost, home side only.
+            stadium_club=chemistry_service.stadium_club_of(
+                squad.user_stadium_card.stadium if is_home and squad.user_stadium_card else None
+            ),
+        )
+        if chemistry_rules is not None else None
+    )
+    with_slots: list[tuple[_EngineCard, FormationSlot]] = [
+        (_engine_card(c, config, chemistry.rating_bonus(slot.code) if chemistry is not None else 0), slot)
+        for c, slot in pairs
+    ]
     stadium_multiplier = (
         1.0 + float(squad.user_stadium_card.stadium.boost_pct) if is_home and squad.user_stadium_card else 1.0
     )
@@ -94,7 +121,13 @@ async def _build_side(db: AsyncSession, user_id: int, *, is_home: bool, config=N
         }
         for c, slot in with_slots
     ]
-    return _Side(side=side, lineup=lineup)
+    chemistry_snapshot = None
+    if chemistry is not None:
+        chemistry_snapshot = {
+            "team": chemistry.team, "max": chemistry.team_max,
+            "cards": {str(c.id): chemistry.players[slot.code].points for c, slot in with_slots},
+        }
+    return _Side(side=side, lineup=lineup, chemistry=chemistry_snapshot)
 
 
 async def _lock_tournament(db: AsyncSession, tournament_id: int) -> PlayerTournament:
@@ -131,19 +164,26 @@ def _at(values: list, index: int) -> int:
 
 async def _play_match(
     db: AsyncSession, user_a_id: int, user_b_id: int, names: dict[int, str], config,
+    chemistry_rules: ChemistryRules | None = None,
 ) -> tuple[int, int, list, dict | None]:
     """Returns (score_a, score_b, event_log, skill_snapshot). The snapshot is
     taken from the squads at this exact moment — the whole match is simulated
     in this one call, so nothing can change it mid-match; it is stored on the
     match row so the applied skills stay auditable after cards change."""
-    side_a = await _build_side(db, user_a_id, is_home=True, config=config)
-    side_b = await _build_side(db, user_b_id, is_home=False, config=config)
+    side_a = await _build_side(db, user_a_id, is_home=True, config=config, chemistry_rules=chemistry_rules)
+    side_b = await _build_side(db, user_b_id, is_home=False, config=config, chemistry_rules=chemistry_rules)
     if side_a is not None and side_b is not None:
         result = tournament_match_engine.simulate_match(
             side_a.side, side_b.side, side_a.lineup, side_b.lineup, config, names[user_a_id], names[user_b_id],
         )
         snapshot_a, snapshot_b = side_a.skill_snapshot(), side_b.skill_snapshot()
         snapshot = {"version": SNAPSHOT_VERSION, "a": snapshot_a, "b": snapshot_b} if snapshot_a or snapshot_b else None
+        if side_a.chemistry is not None or side_b.chemistry is not None:
+            # Rides along in the same frozen-at-simulation snapshot column so
+            # the chemistry a round was played with stays auditable after the
+            # squads (or the GameConfig tuning) change.
+            snapshot = snapshot or {"version": SNAPSHOT_VERSION, "a": {}, "b": {}}
+            snapshot["chemistry"] = {"a": side_a.chemistry, "b": side_b.chemistry}
         return result.score_a, result.score_b, result.event_log, snapshot
     if side_a is None and side_b is None:
         return 0, 0, [], None
@@ -209,7 +249,10 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
 
             round_matches: list[PlayerTournamentMatch] = []
             for _, user_a_id, user_b_id in (f for f in generate_fixtures(user_ids) if f[0] == round_number):
-                score_a, score_b, event_log, skill_snapshot = await _play_match(db, user_a_id, user_b_id, names, config)
+                score_a, score_b, event_log, skill_snapshot = await _play_match(
+                    db, user_a_id, user_b_id, names, config,
+                    chemistry_rules=chemistry_service.rules_from_dict(tournament.chemistry_rules),
+                )
                 match = PlayerTournamentMatch(
                     tournament_id=tournament.id, round_number=round_number, user_a_id=user_a_id, user_b_id=user_b_id,
                     score_a=score_a, score_b=score_b, event_log=event_log, simulated_at=datetime.now(timezone.utc),

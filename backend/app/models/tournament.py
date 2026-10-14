@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Optional
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Integer, UniqueConstraint
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -17,6 +18,11 @@ class Tournament(Base):
     )
     rounds_simulated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    # ChemistryRules.as_dict() frozen when the club tournament starts; NULL =
+    # the neighbour-link chemistry was off then (incl. every tournament that
+    # predates it), and stays off for this tournament's whole run — same
+    # contract as PlayerTournament.chemistry_rules.
+    chemistry_rules: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (
         CheckConstraint("rounds_simulated >= 0 AND rounds_simulated <= 14", name="ck_tournaments_rounds_simulated_range"),

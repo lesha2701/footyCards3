@@ -15,8 +15,11 @@ from app.schemas.personal_squad import (
     PersonalSquadCoachRequest, PersonalSquadOut, PersonalSquadSetRequest, PersonalSquadSlotOut,
     PersonalSquadStadiumRequest, PersonalSquadTacticsRequest,
 )
+from app.services import chemistry_service
+from app.services.chemistry_service import ChemistryRules
 from app.services.club_formation_service import CLUB_FORMATIONS, get_formation_slots
 from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES
+from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot
 
 TEMPLATE_COUNT = 5
@@ -101,11 +104,14 @@ def _slots_by_code(formation: str) -> dict[str, FormationSlot]:
     return {s.code: s for s in get_formation_slots(formation)}
 
 
-def _serialize(squad: PersonalSquad) -> PersonalSquadOut:
+def _serialize(
+    squad: PersonalSquad, rules: ChemistryRules | None = None, frozen: bool = False, live_enabled: bool | None = None,
+) -> PersonalSquadOut:
     # Same ownership rule as resolve_active_squad: a traded-away card is not shown.
     by_slot = {c.slot_code: c.user_card for c in squad.cards if c.user_card.owner_id == squad.user_id}
     slots = []
-    for slot in get_formation_slots(squad.formation):
+    formation_slots = get_formation_slots(squad.formation)
+    for slot in formation_slots:
         card = by_slot.get(slot.code)
         slots.append(PersonalSquadSlotOut(
             slot_code=slot.code, category=slot.category, ideal_position=slot.ideal_position.value,
@@ -121,33 +127,69 @@ def _serialize(squad: PersonalSquad) -> PersonalSquadOut:
         # Same construction as lineup_service._serialize_lineup.
         coach = EquippedCoachOut(
             id=c.id, display_name=c.display_name, rarity=c.rarity.value,
-            image_path=c.image_path, boosts=c.boosts,
+            image_path=c.image_path, boosts=c.boosts, country=c.country,
         )
     stadium = None
     if squad.user_stadium_card is not None:
         s = squad.user_stadium_card.stadium
         stadium = EquippedStadiumOut(
             id=s.id, display_name=s.display_name, rarity=s.rarity.value,
-            image_path=s.image_path, boost_pct=float(s.boost_pct),
+            image_path=s.image_path, boost_pct=float(s.boost_pct), club=s.club,
         )
     return PersonalSquadOut(
         template_index=squad.template_index, name=squad.name, is_active=squad.is_active,
         is_complete=all(s.user_card_id is not None for s in slots),
         formation=squad.formation, mentality=squad.mentality, playstyle=squad.playstyle,
         slots=slots, coach=coach, stadium=stadium,
+        # No single team-strength number in this mode (the tournament engine
+        # works on per-card ratings and zones), so no strength_bonus either.
+        chemistry=chemistry_service.to_out(
+            chemistry_service.compute_chemistry(
+                [(by_slot[s.code], s) for s in formation_slots if s.code in by_slot], squad.formation, rules,
+                slot_count=len(formation_slots),
+                # Shown as a home match: the stadium extra only applies at home.
+                coach_country=chemistry_service.coach_country_of(squad.user_coach_card.coach if squad.user_coach_card else None),
+                stadium_club=chemistry_service.stadium_club_of(squad.user_stadium_card.stadium if squad.user_stadium_card else None),
+            ) if rules is not None else None,
+            rules, frozen=frozen, live_enabled=live_enabled,
+        ),
     )
 
 
+async def chemistry_context(db: AsyncSession, user_id: int) -> tuple[ChemistryRules | None, bool, bool]:
+    """(rules, frozen, live_enabled): the chemistry the player's NEXT
+    tournament match will actually be played with. While they are in an
+    active player tournament that is its frozen rules
+    (PlayerTournament.chemistry_rules, None = off for that tournament) and
+    frozen=True; otherwise the live GameConfig."""
+    from app.models.enums import TournamentStatus
+    from app.models.player_tournament import PlayerTournament, PlayerTournamentParticipant
+
+    config = await get_config(db)
+    live_enabled = bool(config.chemistry_enabled)
+    row = (
+        await db.execute(
+            select(PlayerTournament.chemistry_rules)
+            .join(PlayerTournamentParticipant, PlayerTournamentParticipant.tournament_id == PlayerTournament.id)
+            .where(PlayerTournamentParticipant.user_id == user_id, PlayerTournament.status == TournamentStatus.active)
+        )
+    ).first()
+    if row is not None:
+        return chemistry_service.rules_from_dict(row[0]), True, live_enabled
+    return chemistry_service.active_rules(config), False, live_enabled
+
+
 async def _out(db: AsyncSession, user_id: int, template_index: int) -> PersonalSquadOut:
-    return _serialize(await _get_row(db, user_id, template_index))
+    return _serialize(await _get_row(db, user_id, template_index), *await chemistry_context(db, user_id))
 
 
 async def list_templates(db: AsyncSession, user: User) -> list[PersonalSquadOut]:
-    return [_serialize(t) for t in await _ensure_templates(db, user.id)]
+    context = await chemistry_context(db, user.id)
+    return [_serialize(t, *context) for t in await _ensure_templates(db, user.id)]
 
 
 async def get_squad(db: AsyncSession, user: User, template_index: int | None = None) -> PersonalSquadOut:
-    return _serialize(await _get_row(db, user.id, template_index))
+    return _serialize(await _get_row(db, user.id, template_index), *await chemistry_context(db, user.id))
 
 
 async def set_squad_cards(

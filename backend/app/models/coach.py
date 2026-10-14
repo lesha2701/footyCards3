@@ -15,6 +15,9 @@ class Coach(TimestampMixin, Base):
     display_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     rarity: Mapped[Rarity] = mapped_column(Enum(Rarity, name="rarity_enum"), nullable=False, index=True)
     image_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # «Тренер-земляк»: players of this country get extra chemistry
+    # (chemistry_service); NULL = no country, no extra.
+    country: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     quick_sell_price: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Separate from is_active, same convention as Player.is_pack_droppable:

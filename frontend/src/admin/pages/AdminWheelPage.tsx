@@ -2,10 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
-  createWheelPrize, deleteWheelPrize, fetchAdminBadges, fetchAdminPacks, fetchAdminWheelPrizes,
-  toggleWheelPrizeActive, updateWheelPrize,
+  createWheelPrize, deleteWheelPrize, fetchAdminBadges, fetchAdminPacks, fetchAdminWheelPoolsSummary,
+  fetchAdminWheelPrizes, toggleWheelPrizeActive, updateWheelPrize,
 } from "@/admin/api";
-import type { AdminWheelPrize } from "@/admin/types";
+import type { AdminWheelPrize, AdminWheelPrizePool } from "@/admin/types";
 import { ApiRequestError } from "@/lib/api";
 import { showConfirm } from "@/lib/telegram";
 
@@ -14,6 +14,7 @@ type CardRarity = NonNullable<AdminWheelPrize["card_rarity"]>;
 
 interface PrizeForm {
   prize_type: PrizeType;
+  pool: AdminWheelPrizePool;
   weight: number;
   coins_amount: number;
   pack_id: number | "";
@@ -23,9 +24,10 @@ interface PrizeForm {
   sort_order: number;
 }
 
-function prizeToForm(p?: AdminWheelPrize): PrizeForm {
+function prizeToForm(p?: AdminWheelPrize, pool: AdminWheelPrizePool = "regular"): PrizeForm {
   return {
     prize_type: p?.prize_type ?? "coins",
+    pool: p?.pool ?? pool,
     weight: p?.weight ?? 10,
     coins_amount: p?.coins_amount ?? 50,
     pack_id: p?.pack_id ?? "",
@@ -38,10 +40,18 @@ function prizeToForm(p?: AdminWheelPrize): PrizeForm {
 
 const TYPE_LABELS: Record<PrizeType, string> = { coins: "Монеты", pack: "Пак", card_rarity: "Карта редкости", badge: "Значок" };
 const RARITY_LABELS: Record<CardRarity, string> = { common: "Обычная", rare: "Редкая", epic: "Эпическая", legendary: "Легендарная" };
+const POOL_LABELS: Record<AdminWheelPrizePool, string> = {
+  regular: "Обычное колесо",
+  golden: "Золотое («21»: победа)",
+  jackpot: "Джекпот («21»: хет-трик)",
+};
+const fmt = (n: number) => Math.round(n).toLocaleString("ru-RU");
 
 export default function AdminWheelPage() {
   const queryClient = useQueryClient();
-  const { data: prizes, isLoading } = useQuery({ queryKey: ["admin-wheel-prizes"], queryFn: fetchAdminWheelPrizes });
+  const [pool, setPool] = useState<AdminWheelPrizePool>("regular");
+  const { data: prizes, isLoading } = useQuery({ queryKey: ["admin-wheel-prizes", pool], queryFn: () => fetchAdminWheelPrizes(pool) });
+  const { data: summary } = useQuery({ queryKey: ["admin-wheel-pools-summary"], queryFn: fetchAdminWheelPoolsSummary });
   const { data: packs } = useQuery({ queryKey: ["admin-packs"], queryFn: fetchAdminPacks });
   const { data: badges } = useQuery({ queryKey: ["admin-badges"], queryFn: fetchAdminBadges });
   const [editing, setEditing] = useState<AdminWheelPrize | null>(null);
@@ -49,7 +59,10 @@ export default function AdminWheelPage() {
   const [form, setForm] = useState<PrizeForm>(prizeToForm());
   const [error, setError] = useState<string | null>(null);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-wheel-prizes"] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin-wheel-prizes"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-wheel-pools-summary"] });
+  };
   const toggleMutation = useMutation({ mutationFn: toggleWheelPrizeActive, onSuccess: invalidate });
   const deleteMutation = useMutation({
     mutationFn: deleteWheelPrize,
@@ -63,6 +76,7 @@ export default function AdminWheelPage() {
 
   const buildPayload = () => ({
     prize_type: form.prize_type,
+    pool: form.pool,
     weight: form.weight,
     coins_amount: form.prize_type === "coins" ? form.coins_amount : null,
     pack_id: form.prize_type === "pack" ? form.pack_id || null : null,
@@ -96,10 +110,47 @@ export default function AdminWheelPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-2xl font-bold">Колесо фортуны</h1>
-        <button onClick={() => { setCreating(true); setForm(prizeToForm()); }} className="rounded-lg bg-accent px-3 py-2 text-xs font-bold text-bg-base">
+        <button onClick={() => { setCreating(true); setForm(prizeToForm(undefined, pool)); }} className="rounded-lg bg-accent px-3 py-2 text-xs font-bold text-bg-base">
           + Новый приз
         </button>
       </div>
+
+      <div className="flex flex-wrap gap-2">
+        {(Object.keys(POOL_LABELS) as AdminWheelPrizePool[]).map((p) => (
+          <button
+            key={p}
+            onClick={() => setPool(p)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${pool === p ? "bg-accent text-bg-base" : "bg-white/5"}`}
+          >
+            {POOL_LABELS[p]}
+          </button>
+        ))}
+      </div>
+
+      {summary && (
+        <div className="rounded-2xl border border-white/5 bg-bg-surface p-3 text-xs text-slate-400">
+          <p className="mb-2 font-display text-sm font-bold text-ink-chalk">Ожидаемая ценность одного спина</p>
+          <div className="grid grid-cols-3 gap-2">
+            {summary.pools.map((s) => (
+              <div key={s.pool} className="rounded-lg bg-white/5 p-2">
+                <p className="text-[11px]">{POOL_LABELS[s.pool]}</p>
+                <p className="font-mono text-base font-bold text-ink-chalk">≈ {fmt(s.expected_value_coins)}</p>
+                <p className="text-[10px]">призов: {s.active_prizes}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2">
+            Платный спин обычного колеса стоит {fmt(summary.regular_spin_cost_coins)} монет. Одна партия «21» в среднем
+            приносит ≈ <span className="font-mono text-ink-chalk">{fmt(summary.blackjack_expected_value_coins)}</span>{" "}
+            (хет-трик {Math.round(summary.blackjack_p_jackpot * 1000) / 10}%, победа{" "}
+            {Math.round(summary.blackjack_p_golden * 1000) / 10}%, поражение {Math.round(summary.blackjack_p_loss * 1000) / 10}% ×{" "}
+            {summary.blackjack_consolation_coins}; ничьи переигрываются).
+          </p>
+          <p className="mt-1 text-[10px] text-slate-500">
+            Карты и паки оценены по средней цене быстрой продажи — это нижняя граница, значки — по компенсации за повтор.
+          </p>
+        </div>
+      )}
 
       {isLoading && <p className="text-sm text-slate-400">Загрузка...</p>}
       {error && !creating && !editing && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
@@ -112,6 +163,14 @@ export default function AdminWheelPage() {
               <p className="text-xs text-slate-500">Вес: {p.weight}</p>
             </div>
             <p className="text-xs text-slate-400">{prizeSummary(p)}</p>
+            {(() => {
+              const row = summary?.pools.find((s) => s.pool === p.pool)?.prizes.find((r) => r.prize_id === p.id);
+              return row ? (
+                <p className="text-xs text-slate-500">
+                  Шанс {Math.round(row.probability * 1000) / 10}% · ценность ≈ {fmt(row.value_coins)}
+                </p>
+              ) : null;
+            })()}
             <p className="text-xs text-slate-500">{p.is_active ? "Активен" : "Отключён"}</p>
             <div className="mt-2 flex flex-wrap gap-1">
               <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
@@ -137,6 +196,17 @@ export default function AdminWheelPage() {
                   className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
                 >
                   {(Object.keys(TYPE_LABELS) as PrizeType[]).map((t) => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Колесо</span>
+                <select
+                  value={form.pool}
+                  onChange={(e) => setForm({ ...form, pool: e.target.value as AdminWheelPrizePool })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                >
+                  {(Object.keys(POOL_LABELS) as AdminWheelPrizePool[]).map((p) => <option key={p} value={p}>{POOL_LABELS[p]}</option>)}
                 </select>
               </label>
 

@@ -353,6 +353,27 @@ class GameConfigOut(BaseModel):
     stratego_reward_draw: int
     stratego_reward_loss: int
     stratego_daily_limit: int
+    magnate_start_money: int
+    magnate_pass_start_bonus: int
+    magnate_jail_fine: int
+    magnate_max_jail_turns: int
+    magnate_fine_amount: int
+    magnate_building_sell_pct: int
+    magnate_max_rounds: int
+    magnate_time_limit_minutes: int
+    magnate_turn_seconds: int
+    magnate_max_missed_turns: int
+    magnate_lobby_wait_seconds: int
+    magnate_room_wait_minutes: int
+    magnate_bot_buy_reserve: int
+    magnate_bot_build_reserve: int
+    magnate_bot_reward_pct: int
+    magnate_daily_limit: int
+    magnate_place_rewards: list[int] = []
+    magnate_stadium_rents: list[int] = []
+    # NULL = built-in default board / cards (GET /admin/games/magnate-defaults).
+    magnate_board: Optional[dict] = None
+    magnate_cards: Optional[dict] = None
     match_max_diamond_cards: int
     diamond_rating_cap: int
     diamond_rating_cap_enabled: bool
@@ -360,6 +381,11 @@ class GameConfigOut(BaseModel):
     wheel_spin_cost_coins: int
     wheel_spin_cost_stars: int
     wheel_duplicate_badge_coins: int
+    blackjack_enabled: bool = True
+    blackjack_free_per_day: int = 1
+    blackjack_stars_cost: int = 10
+    blackjack_paid_daily_limit: int = 10
+    blackjack_consolation_coins: int = 25
     bingo_reward_coins: int
     bingo_reward_pack_id: Optional[int] = None
     card_skills_enabled: bool = True
@@ -378,6 +404,18 @@ class GameConfigOut(BaseModel):
     card_skill_replace_token_cost: int = 1
     card_skill_replace_coin_cost: int = 300
     ptour_place_skill_tokens: list[Optional[PlaceSkillTokenReward]] = []
+    chemistry_enabled: bool = False
+    chemistry_link_strong: int = 2
+    chemistry_link_medium: int = 1
+    chemistry_threshold_1: int = 1
+    chemistry_threshold_2: int = 2
+    chemistry_threshold_3: int = 4
+    chemistry_player_max: int = 3
+    chemistry_player_floor: int = 0
+    chemistry_rating_per_point: int = 1
+    chemistry_off_position_penalty: int = 0
+    chemistry_coach_country_points: int = 1
+    chemistry_stadium_club_points: int = 1
 
 
 class GameConfigUpdate(BaseModel):
@@ -606,6 +644,27 @@ class GameConfigUpdate(BaseModel):
     stratego_reward_draw: Optional[int] = Field(default=None, ge=0)
     stratego_reward_loss: Optional[int] = Field(default=None, ge=0)
     stratego_daily_limit: Optional[int] = Field(default=None, ge=0)
+    magnate_start_money: Optional[int] = Field(default=None, ge=100, le=100000)
+    magnate_pass_start_bonus: Optional[int] = Field(default=None, ge=0, le=10000)
+    magnate_jail_fine: Optional[int] = Field(default=None, ge=0, le=10000)
+    magnate_max_jail_turns: Optional[int] = Field(default=None, ge=1, le=5)
+    magnate_fine_amount: Optional[int] = Field(default=None, ge=0, le=10000)
+    magnate_building_sell_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    magnate_max_rounds: Optional[int] = Field(default=None, ge=3, le=60)
+    magnate_time_limit_minutes: Optional[int] = Field(default=None, ge=5, le=120)
+    magnate_turn_seconds: Optional[int] = Field(default=None, ge=10, le=300)
+    magnate_max_missed_turns: Optional[int] = Field(default=None, ge=1, le=10)
+    magnate_lobby_wait_seconds: Optional[int] = Field(default=None, ge=10, le=600)
+    magnate_room_wait_minutes: Optional[int] = Field(default=None, ge=1, le=120)
+    magnate_bot_buy_reserve: Optional[int] = Field(default=None, ge=0)
+    magnate_bot_build_reserve: Optional[int] = Field(default=None, ge=0)
+    magnate_bot_reward_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    magnate_daily_limit: Optional[int] = Field(default=None, ge=0)
+    magnate_place_rewards: Optional[list[Annotated[int, Field(ge=0)]]] = Field(default=None, min_length=1, max_length=4)
+    magnate_stadium_rents: Optional[list[Annotated[int, Field(ge=0)]]] = Field(default=None, min_length=4, max_length=4)
+    # Validated by magnate_engine.validate_board / validate_cards in the router.
+    magnate_board: Optional[dict] = None
+    magnate_cards: Optional[dict] = None
     match_max_diamond_cards: Optional[int] = Field(default=None, ge=0, le=11)
     diamond_rating_cap: Optional[int] = Field(default=None, ge=1, le=99)
     diamond_rating_cap_enabled: Optional[bool] = None
@@ -613,6 +672,11 @@ class GameConfigUpdate(BaseModel):
     wheel_spin_cost_coins: Optional[int] = Field(default=None, ge=0)
     wheel_spin_cost_stars: Optional[int] = Field(default=None, ge=0)
     wheel_duplicate_badge_coins: Optional[int] = Field(default=None, ge=0)
+    blackjack_enabled: Optional[bool] = None
+    blackjack_free_per_day: Optional[int] = Field(default=None, ge=0, le=20)
+    blackjack_stars_cost: Optional[int] = Field(default=None, ge=1, le=10000)
+    blackjack_paid_daily_limit: Optional[int] = Field(default=None, ge=0, le=100)
+    blackjack_consolation_coins: Optional[int] = Field(default=None, ge=0)
     bingo_reward_coins: Optional[int] = Field(default=None, ge=0)
     bingo_reward_pack_id: Optional[int] = Field(default=None)
     card_skills_enabled: Optional[bool] = None
@@ -631,6 +695,18 @@ class GameConfigUpdate(BaseModel):
     card_skill_replace_token_cost: Optional[int] = Field(default=None, ge=0, le=100)
     card_skill_replace_coin_cost: Optional[int] = Field(default=None, ge=0)
     ptour_place_skill_tokens: Optional[list[Optional[PlaceSkillTokenReward]]] = Field(default=None, max_length=16)
+    chemistry_enabled: Optional[bool] = None
+    chemistry_link_strong: Optional[int] = Field(default=None, ge=0, le=10)
+    chemistry_link_medium: Optional[int] = Field(default=None, ge=0, le=10)
+    chemistry_threshold_1: Optional[int] = Field(default=None, ge=0, le=40)
+    chemistry_threshold_2: Optional[int] = Field(default=None, ge=0, le=40)
+    chemistry_threshold_3: Optional[int] = Field(default=None, ge=0, le=40)
+    chemistry_player_max: Optional[int] = Field(default=None, ge=0, le=3)
+    chemistry_player_floor: Optional[int] = Field(default=None, ge=0, le=3)
+    chemistry_rating_per_point: Optional[int] = Field(default=None, ge=0, le=10)
+    chemistry_off_position_penalty: Optional[int] = Field(default=None, ge=0, le=20)
+    chemistry_coach_country_points: Optional[int] = Field(default=None, ge=0, le=3)
+    chemistry_stadium_club_points: Optional[int] = Field(default=None, ge=0, le=3)
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod

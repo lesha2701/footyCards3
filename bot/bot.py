@@ -15,6 +15,7 @@ from handlers import user as user_handlers
 from services.career_scheduler import run_career_reminder_loop, run_career_round_loop, run_club_league_loop
 from services.daily_reminder import run_daily_reward_reminder
 from services.free_pack_notifier import run_free_pack_notifier
+from services.magnate_scheduler import run_magnate_sweep_loop
 from services.notifier import run_notification_dispatcher
 from services.premium_subscription_check import run_premium_subscription_check
 from services.player_tournament_scheduler import (
@@ -61,6 +62,7 @@ async def run_polling() -> None:
         asyncio.create_task(run_career_round_loop()),
         asyncio.create_task(run_career_reminder_loop()),
         asyncio.create_task(run_club_league_loop()),
+        asyncio.create_task(run_magnate_sweep_loop()),
     ]
 
     try:
@@ -95,6 +97,7 @@ async def run_webhook() -> None:
     asyncio.create_task(run_career_round_loop())
     asyncio.create_task(run_career_reminder_loop())
     asyncio.create_task(run_club_league_loop())
+    asyncio.create_task(run_magnate_sweep_loop())
 
     await bot.set_webhook(settings.bot_webhook_url, secret_token=settings.bot_webhook_secret, drop_pending_updates=True)
 

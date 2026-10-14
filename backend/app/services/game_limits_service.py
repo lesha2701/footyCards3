@@ -16,7 +16,7 @@ def _remaining(hourly_attempts: int, hour_started_at, limit: int) -> int:
 _COLUMNS = {
     "memory": "memory", "arena": "match", "saboteur": "saboteur", "penalty": "penalty",
     "free_kick": "free_kick", "hangman": "hangman", "tactico": "tactico", "pairs": "pairs",
-    "stratego": "stratego",
+    "stratego": "stratego", "magnate": "magnate",
 }
 
 
@@ -43,4 +43,5 @@ def get_remaining_plays(user: User, config: GameConfig) -> GameLimitsOut:
         tactico=_remaining(user.tactico_hourly_attempts, user.tactico_hour_started_at, limit),
         pairs=_remaining(user.pairs_hourly_attempts, user.pairs_hour_started_at, limit),
         stratego=_remaining(user.stratego_hourly_attempts, user.stratego_hour_started_at, limit),
+        magnate=_remaining(user.magnate_hourly_attempts, user.magnate_hour_started_at, limit),
     )

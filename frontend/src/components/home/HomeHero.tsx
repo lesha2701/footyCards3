@@ -19,6 +19,7 @@ const GAME_TITLES: Record<string, string> = {
   "/play/arena": "Card Arena",
   "/play/tactico": "Тактико",
   "/play/stratego": "Стратего",
+  "/play/magnate": "Магнат",
   "/player-tournament": "Турнир",
   "/play/career": "Карьера",
   "/play/penalty": "Пенальти",

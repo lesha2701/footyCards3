@@ -19,7 +19,7 @@ const BOOST_SLOTS_BY_RARITY: Record<Rarity, number> = {
 type BoostFormRow = { boost_type: CoachBoostType };
 
 const emptyForm = {
-  display_name: "", rarity: "common" as Rarity, quick_sell_price: 10, is_active: true, is_pack_droppable: true,
+  display_name: "", rarity: "common" as Rarity, country: "", quick_sell_price: 10, is_active: true, is_pack_droppable: true,
   boosts: [{ boost_type: "attack_central" as CoachBoostType }] as BoostFormRow[],
 };
 
@@ -61,7 +61,7 @@ export default function AdminCoachesPage() {
   const openEdit = (c: Coach) => {
     setEditing(c);
     setForm({
-      display_name: c.display_name, rarity: c.rarity, quick_sell_price: c.quick_sell_price,
+      display_name: c.display_name, rarity: c.rarity, country: c.country ?? "", quick_sell_price: c.quick_sell_price,
       is_active: c.is_active, is_pack_droppable: c.is_pack_droppable,
       boosts: c.boosts.map((b) => ({ boost_type: b.boost_type })),
     });
@@ -162,6 +162,14 @@ export default function AdminCoachesPage() {
                 <select value={form.rarity} onChange={(e) => setRarity(e.target.value as Rarity)} className="rounded-lg bg-bg-surface px-3 py-2 outline-none">
                   {RARITIES.map((r) => <option key={r} value={r}>{RARITY_LABELS[r]}</option>)}
                 </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Страна (тренер-земляк: + химии игрокам этой страны)</span>
+                <input
+                  value={form.country} maxLength={64} placeholder="как у игроков, например «Испания»"
+                  onChange={(e) => setForm({ ...form, country: e.target.value })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                />
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Цена продажи</span>

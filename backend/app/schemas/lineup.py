@@ -3,6 +3,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 from app.schemas.card import UserCardOut
+from app.schemas.chemistry import ChemistryOut
 from app.schemas.coach import CoachBoostOut
 from app.schemas.pack import UserCoachCardOut, UserStadiumCardOut  # noqa: F401 - re-exported (lineup_service)
 
@@ -26,6 +27,7 @@ class EquippedCoachOut(BaseModel):
     display_name: str
     rarity: str
     image_path: Optional[str]
+    country: Optional[str] = None
     boosts: list[CoachBoostOut]
 
 
@@ -38,6 +40,7 @@ class EquippedStadiumOut(BaseModel):
     display_name: str
     rarity: str
     image_path: str | None
+    club: Optional[str] = None
     boost_pct: float
 
 
@@ -54,6 +57,7 @@ class LineupOut(BaseModel):
     coach: Optional[EquippedCoachOut] = None
     stadium: Optional[EquippedStadiumOut] = None
     slots: list[LineupSlotOut]
+    chemistry: ChemistryOut = ChemistryOut()
 
 
 class LineupSlotIn(BaseModel):

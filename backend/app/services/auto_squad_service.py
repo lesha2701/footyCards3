@@ -3,6 +3,11 @@ and save it through the regular setters (lineup_service.set_lineup /
 personal_squad_service.set_squad_cards), so every existing rule — slot
 category, one copy per player, trade/admin locks, the Card Arena diamond
 limit — is still enforced by the same code as a manual pick.
+
+With neighbour-link chemistry on (chemistry_service), the greedy pick is
+then refined by improve_for_chemistry — a bounded local search that may
+trade a little raw rating for links worth more in a match. With it off the
+greedy result is saved as-is, exactly as before.
 """
 from dataclasses import dataclass
 from typing import Iterable, Optional
@@ -15,8 +20,10 @@ from app.core.exceptions import ConflictError
 from app.models.card import UserCard
 from app.models.enums import Rarity
 from app.models.user import User
+from app.services import chemistry_service
 from app.services.card_skill_catalog import SKILL_DEFINITIONS
-from app.services.lineup_service import CATEGORY_POSITIONS
+from app.services.chemistry_service import ChemistryRules
+from app.services.lineup_service import CATEGORY_POSITIONS, calculate_base_strength
 
 
 @dataclass(frozen=True)
@@ -72,6 +79,117 @@ def pick_cards(
     return chosen
 
 
+# Local-search bounds: candidates tried per slot and improvement rounds.
+# Each round evaluates at most slots x (CHEM_TOP_RATED + CHEM_TOP_LINKED) +
+# slot-pair swaps lineups of 11 cards — milliseconds, even for big collections.
+CHEM_TOP_RATED = 6
+CHEM_TOP_LINKED = 10
+CHEM_MAX_ROUNDS = 25
+
+
+def _squad_score(
+    chosen: dict[str, UserCard], slots_by_code: dict[str, SlotSpec], formation: str, rules: ChemistryRules,
+    coach_country: Optional[str] = None, stadium_club: Optional[str] = None,
+) -> tuple:
+    """(players on their ideal position, match strength with chemistry) — the
+    same priority pick_cards has (ideal position first), then the Card Arena
+    strength formula (lineup_service.calculate_base_strength) with each
+    card's chemistry bonus; for tournament squads it is a proxy of the
+    engine's per-card match ratings, which are rating + chemistry too."""
+    pairs = [(card, slots_by_code[code]) for code, card in chosen.items()]
+    chemistry = chemistry_service.compute_chemistry(
+        pairs, formation, rules, slot_count=len(slots_by_code), coach_country=coach_country, stadium_club=stadium_club,
+    )
+    on_position = sum(1 for card, slot in pairs if card.player.position == slot.ideal_position)
+    return on_position, calculate_base_strength(pairs, chemistry=chemistry)
+
+
+def _group_key(value) -> Optional[str]:
+    # Same normalisation as chemistry_service._group_key.
+    if not isinstance(value, str):
+        return value
+    return " ".join(value.split()) or None
+
+
+def improve_for_chemistry(
+    chosen: dict[str, UserCard], slots: list[SlotSpec], cards: Iterable[UserCard], formation: str,
+    rules: ChemistryRules, max_diamonds: Optional[int] = None, fixed_ids: frozenset[int] = frozenset(),
+    coach_country: Optional[str] = None, stadium_club: Optional[str] = None,
+) -> dict[str, UserCard]:
+    """Steepest-ascent local search over pick_cards' result: each round tries
+    (a) replacing one slot's card with a bench card — the best-rated ones
+    for the slot plus the best ones sharing a club or country with a
+    neighbour — and (b) swapping two picked cards between slots, and
+    applies the single best strict improvement of _squad_score. Same hard
+    rules as pick_cards (slot category, one copy per player, locks, diamond
+    limit); slots holding a fixed_ids card (copied from another squad) are
+    never touched. coach_country / stadium_club: the equipped coach's
+    country and stadium's club («тренер-земляк» / «домашний стадион»
+    extras; cards matching them are candidates too). Deterministic: ties
+    keep the earlier/lower-id choice."""
+    coach_country, stadium_club = _group_key(coach_country), _group_key(stadium_club)
+    slots_by_code = {s.code: s for s in slots}
+    pool = [c for c in cards if not c.is_locked_by_admin and not c.is_locked_in_trade]
+    neighbours: dict[str, list[str]] = {s.code: [] for s in slots}
+    for a, b in chemistry_service.FORMATION_LINKS.get(formation, ()):
+        if a in neighbours and b in neighbours:
+            neighbours[a].append(b)
+            neighbours[b].append(a)
+
+    def fits(card: UserCard, slot: SlotSpec) -> bool:
+        return card.player.position in CATEGORY_POSITIONS[slot.category]
+
+    def diamonds_ok(trial: dict[str, UserCard]) -> bool:
+        return max_diamonds is None or sum(1 for c in trial.values() if c.player.rarity == Rarity.diamond) <= max_diamonds
+
+    def candidates(slot: SlotSpec, current: dict[str, UserCard]) -> list[UserCard]:
+        others = {code: c for code, c in current.items() if code != slot.code}
+        taken_players = {c.player_id for c in others.values()}
+        taken_ids = {c.id for c in current.values()}
+        eligible = [c for c in pool if c.id not in taken_ids and c.player_id not in taken_players and fits(c, slot)]
+        by_rating = sorted(
+            eligible, key=lambda c: (c.player.position == slot.ideal_position, _effective(c), -c.id), reverse=True,
+        )
+        near = [others[n].player for n in neighbours[slot.code] if n in others]
+        clubs = ({_group_key(p.club) for p in near} | {stadium_club}) - {None}
+        countries = ({_group_key(p.country) for p in near} | {coach_country}) - {None}
+        linked = [c for c in by_rating if _group_key(c.player.club) in clubs or _group_key(c.player.country) in countries]
+        seen: set[int] = set()
+        out = []
+        for c in by_rating[:CHEM_TOP_RATED] + linked[:CHEM_TOP_LINKED]:
+            if c.id not in seen:
+                seen.add(c.id)
+                out.append(c)
+        return out
+
+    current = dict(chosen)
+    best_score = _squad_score(current, slots_by_code, formation, rules, coach_country, stadium_club)
+    movable = [s for s in slots if current.get(s.code) is None or current[s.code].id not in fixed_ids]
+    for _ in range(CHEM_MAX_ROUNDS):
+        best_trial = None
+        for slot in movable:
+            for card in candidates(slot, current):
+                trial = {**current, slot.code: card}
+                if not diamonds_ok(trial):
+                    continue
+                score = _squad_score(trial, slots_by_code, formation, rules, coach_country, stadium_club)
+                if score > best_score:
+                    best_score, best_trial = score, trial
+        for i, slot_a in enumerate(movable):
+            for slot_b in movable[i + 1:]:
+                card_a, card_b = current.get(slot_a.code), current.get(slot_b.code)
+                if card_a is None or card_b is None or not fits(card_a, slot_b) or not fits(card_b, slot_a):
+                    continue
+                trial = {**current, slot_a.code: card_b, slot_b.code: card_a}
+                score = _squad_score(trial, slots_by_code, formation, rules, coach_country, stadium_club)
+                if score > best_score:
+                    best_score, best_trial = score, trial
+        if best_trial is None:
+            break
+        current = best_trial
+    return current
+
+
 async def owned_cards(db: AsyncSession, user_id: int) -> list[UserCard]:
     result = await db.execute(
         select(UserCard).where(UserCard.owner_id == user_id).options(joinedload(UserCard.player))
@@ -91,8 +209,17 @@ async def auto_arena_lineup(db: AsyncSession, user: User, template_index: int):
 
     config = await get_config(db)
     slots = [SlotSpec(s.code, s.category, s.ideal_position) for s in lineup_service.FORMATION_SLOTS]
-    chosen = pick_cards(slots, await owned_cards(db, user.id), "arena", max_diamonds=config.match_max_diamond_cards)
+    cards = await owned_cards(db, user.id)
+    chosen = pick_cards(slots, cards, "arena", max_diamonds=config.match_max_diamond_cards)
     require_any(chosen)
+    rules = chemistry_service.active_rules(config)
+    if rules is not None:
+        current = await lineup_service.get_active_lineup(db, user, template_index)
+        chosen = improve_for_chemistry(
+            chosen, slots, cards, lineup_service.ARENA_FORMATION, rules, max_diamonds=config.match_max_diamond_cards,
+            coach_country=current.coach.country if current.coach else None,
+            stadium_club=current.stadium.club if current.stadium else None,
+        )
     payload = LineupSetRequest(slots=[LineupSlotIn(slot_code=code, user_card_id=c.id) for code, c in chosen.items()])
     return await lineup_service.set_lineup(db, user, payload, template_index)
 
@@ -110,8 +237,18 @@ async def auto_personal_squad(db: AsyncSession, user: User, template_index: int,
         preferred = frozenset(s.card.id for s in arena.slots if s.card is not None)
         if not preferred:
             raise ConflictError("Состав Card Arena пуст — копировать нечего")
-    chosen = pick_cards(slots, await owned_cards(db, user.id), "tournament", preferred_ids=preferred)
+    cards = await owned_cards(db, user.id)
+    chosen = pick_cards(slots, cards, "tournament", preferred_ids=preferred)
     require_any(chosen)
+    # The rules the next tournament match will really use (a running
+    # tournament's frozen ones, else GameConfig).
+    rules, _frozen, _live = await personal_squad_service.chemistry_context(db, user.id)
+    if rules is not None:
+        chosen = improve_for_chemistry(
+            chosen, slots, cards, squad.formation, rules, fixed_ids=preferred,
+            coach_country=squad.coach.country if squad.coach else None,
+            stadium_club=squad.stadium.club if squad.stadium else None,
+        )
     payload = PersonalSquadSetRequest(
         slots=[PersonalSquadSlotIn(slot_code=code, user_card_id=c.id) for code, c in chosen.items()],
     )
