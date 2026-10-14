@@ -815,6 +815,34 @@ def _actor(p: Optional[LivePlayer]) -> dict:
     return {"name": p.card.player.display_name, "club_card_id": p.card.id}
 
 
+def penalty_shootout(a: CareerSideRunner, b: CareerSideRunner) -> tuple[int, int, list[dict]]:
+    """Cup tie level after 90': five kicks each by the best outfield
+    players vs the other keeper (same odds as an in-match penalty), then
+    sudden death. Returns (goals_a, goals_b, kicks)."""
+    def takers(runner: CareerSideRunner) -> list[LivePlayer]:
+        outfield = [p for p in runner.on_pitch if p.slot.category != "GK"]
+        return sorted(outfield, key=lambda p: (-p.card.player.rating, p.card.id)) or runner.on_pitch
+
+    order = {"a": takers(a), "b": takers(b)}
+    keepers = {"a": b.keeper(), "b": a.keeper()}
+    goals, kicks = {"a": 0, "b": 0}, []
+    for n in range(20):
+        for side, runner in (("a", a), ("b", b)):
+            shooter = order[side][n % len(order[side])]
+            chance = max(0.55, min(0.92, runner.tuning["penalty_goal"] + (_rating_of(shooter) - _rating_of(keepers[side])) / 200))
+            scored = random.random() < chance
+            goals[side] += int(scored)
+            kicks.append({"team": side, "shooter": shooter.card.player.display_name, "scored": scored})
+        taken = n + 1
+        if taken < 5:
+            left = 5 - taken
+            if goals["a"] > goals["b"] + left or goals["b"] > goals["a"] + left:
+                break
+        elif goals["a"] != goals["b"]:
+            break
+    return goals["a"], goals["b"], kicks
+
+
 class CareerMatchController:
     """tournament_match_engine.MatchController for a career match: sides
     per phase, tackling levers, penalties and set pieces."""

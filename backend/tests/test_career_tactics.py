@@ -816,3 +816,43 @@ def test_opponent_training_boosts_only_favourable_interactions():
     base, _ = plain.duel_shift(high, "build_up", "central_attack")
     # direct_behind_line (+) is boosted, the base direct_inaccuracy (-) is not.
     assert boosted - base == pytest.approx(tuning["shift"]["direct_behind_line"] * 0.25)
+
+
+# --- cup ------------------------------------------------------------------------------------------
+
+def test_penalty_shootout_always_has_a_winner():
+    config = _defaults()
+    for seed in range(30):
+        random.seed(seed)
+        a, b = _runner("a", config=config), _runner("b", config=config, offset=1000)
+        ga, gb, kicks = tactics.penalty_shootout(a, b)
+        assert ga != gb and len(kicks) >= 6
+        assert ga == sum(k["scored"] for k in kicks if k["team"] == "a")
+
+
+async def test_cup_runs_alongside_the_league(client, db_session, bot_token):
+    user_id, headers, season = await _season(client, db_session, bot_token, 870012)
+    cup = season["cup"]
+    assert [r["name"] for r in cup["rounds"]] == ["1/8 финала", "1/4 финала", "1/2 финала", "Финал"]
+    first = cup["rounds"][0]["ties"]
+    assert len(first) == 8 and len({t for tie in first for t in (tie["a"], tie["b"])}) == 16
+    assert any(t["mine"] for t in first) and cup["status"] == "alive"
+    assert (await client.put(f"{API}/career/cup", headers=headers, json={"rotation": True})).json()["season"]["cup"]["rotation"]
+
+    later = datetime.now(timezone.utc) + timedelta(days=8)
+    await career_service.resolve_due(db_session, season["id"], now=later)
+    row = await _season_row(db_session, season["id"])
+    rounds = row.state["cup"]["rounds"]
+    assert [len(r["results"]) for r in rounds] == [8, 4, 2, 1]
+    assert row.state["cup"]["winner"] is not None
+    for r in rounds:
+        for res in r["results"]:
+            assert res["winner"] in (res["a"], res["b"])
+            if res["sa"] == res["sb"]:
+                assert res["pens"] and res["pens"][0] != res["pens"][1]
+    # My first tie was played with events and an analysis, viewable via the API.
+    k, i = 0, next(i for i, res in enumerate(rounds[0]["results"]) if 0 in (res["a"], res["b"]))
+    data = (await client.get(f"{API}/career/seasons/{season['id']}/cup/{k}/{i}", headers=headers)).json()
+    assert data["events"] and data["analysis"] and data["my_side"] in ("a", "b")
+    view = (await client.get(f"{API}/career", headers=headers)).json()["season"]
+    assert view["cup"]["status"] in ("winner", "out")

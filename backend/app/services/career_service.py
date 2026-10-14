@@ -335,7 +335,7 @@ def _is_out(part: CareerParticipant, card_id: int, round_index: int) -> bool:
 
 def resolve_lineup(
     part: CareerParticipant, cards_by_id: dict[int, UserCard], round_index: int, extra_cards: list[UserCard],
-    fill_any_position: bool = False,
+    fill_any_position: bool = False, rotate: bool = False,
 ) -> list[tuple[UserCard, object]]:
     """The XI that plays `round_index`: the saved lineup where its cards are
     still owned, fit and in a legal slot, the gaps auto-filled from the
@@ -348,14 +348,14 @@ def resolve_lineup(
     by_id = {c.id: c for c in available}
     chosen: dict[str, UserCard] = {}
     used_players: set[int] = set()
-    for slot in slots:
+    for slot in ([] if rotate else slots):  # rotation: ignore the saved XI
         card = by_id.get((part.lineup or {}).get(slot.code) or -1)
         if card and card.player.position in CATEGORY_POSITIONS[slot.category] and card.player_id not in used_players:
             chosen[slot.code] = card
             used_players.add(card.player_id)
     missing = [SlotSpec(s.code, s.category, s.ideal_position) for s in slots if s.code not in chosen]
     if missing:
-        fresh = frozenset(c.id for c in available if _condition(part, c.id).get("fatigue", 0) < 60)
+        fresh = frozenset(c.id for c in available if _condition(part, c.id).get("fatigue", 0) < (35 if rotate else 60))
         pool = [c for c in available if c.player_id not in used_players]
         for code, card in pick_cards(missing, pool, "tournament", preferred_ids=fresh).items():
             chosen[code] = card
@@ -435,16 +435,19 @@ def _bot_side(team: dict, round_index: int, config):
     return side, lineup
 
 
-async def _build_bots(db: AsyncSession, season: CareerSeason, bot_indexes: list[int], human_avg: float, config) -> list[dict]:
-    rng = random.Random(season.id * 7919)
+async def _build_bots(
+    db: AsyncSession, season: CareerSeason, bot_indexes: list[int], human_avg: float, config,
+    name_pool: Optional[list[str]] = None, seed_salt: int = 0, spreads: Optional[list[int]] = None,
+) -> list[dict]:
+    rng = random.Random(season.id * 7919 + seed_salt * 104729)
     if season.division is not None:
         offset = int(_division_setting(config, "career_division_rating_offset", season.division, 0))
     else:  # season from before divisions: the hand-picked difficulty
         offsets = config.career_difficulty_rating_offset or [-6, 0, 4]
         offset = offsets[DIFFICULTIES.index(season.difficulty)] if len(offsets) == 3 else 0
-    spreads = [-4, -3, -1, 0, 1, 3, 4]
+    spreads = list(spreads or [-4, -3, -1, 0, 1, 3, 4])
     rng.shuffle(spreads)
-    names = rng.sample(BOT_CLUB_NAMES, len(bot_indexes))
+    names = rng.sample(name_pool or BOT_CLUB_NAMES, len(bot_indexes))
     players = (await db.execute(
         select(Player).where(Player.is_active.is_(True)).order_by(Player.id).limit(2000)
     )).scalars().all()
@@ -531,6 +534,10 @@ async def _activate(db: AsyncSession, season: CareerSeason, now: datetime, confi
         # tournaments): later GameConfig edits don't change a running league.
         "chemistry_rules": (rules.as_dict() if (rules := chemistry_service.active_rules(config)) else None),
     }
+    if config.career_cup_enabled:
+        state = dict(season.state)
+        await _create_cup(db, season, state, human_avg, config)
+        season.state = state
     season.status = "active"
     season.starts_at = datetime.fromisoformat(season.state["schedule"][0])
     season.invite_expires_at = None
@@ -821,6 +828,90 @@ def _my_tactic(part: CareerParticipant) -> dict:
     return tactics.tactic_for(part.tactic, part.playstyle)
 
 
+# --- cup -------------------------------------------------------------------------------------
+
+# The cup round played right after these league rounds (0-based): the
+# evenings of days 2, 3, 5 and 7 — a double match day, rotation matters.
+CUP_AFTER_ROUNDS = (3, 5, 9, 13)
+CUP_ROUND_NAMES = ("1/8 финала", "1/4 финала", "1/2 финала", "Финал")
+CUP_CLUB_NAMES = [
+    "Химик", "Энергия", "Локомотив Степной", "Факел", "Авангард", "Ротор Приречье", "Шахтёр Горный", "Волна",
+    "Кристалл", "Олимп", "Сатурн", "Нефтяник", "Луч", "Арсенал Озёрный", "Звезда Севера", "Прибой",
+]
+
+
+def _cup_team(state: dict, index: int) -> dict:
+    if index < len(state.get("teams") or []):
+        return state["teams"][index]
+    return next(t for t in state["cup"]["extra"] if t["index"] == index)
+
+
+async def _create_cup(db: AsyncSession, season: CareerSeason, state: dict, human_avg: float, config) -> None:
+    """16 teams: the league plus 8 bots from the neighbouring divisions
+    (four stronger, four weaker); a seeded open draw."""
+    extra = await _build_bots(
+        db, season, list(range(TEAMS, TEAMS * 2)), human_avg, config,
+        name_pool=CUP_CLUB_NAMES, seed_salt=1, spreads=[-7, -6, -5, -4, 4, 5, 6, 7],
+    )
+    rng = random.Random(season.id * 3571)
+    entrants = list(range(TEAMS * 2))
+    rng.shuffle(entrants)
+    ties = [[entrants[i], entrants[i + 1]] for i in range(0, len(entrants), 2)]
+    state["cup"] = {
+        "extra": extra,
+        "rounds": [{"after_round": r, "ties": ties if k == 0 else [], "results": []} for k, r in enumerate(CUP_AFTER_ROUNDS)],
+        "rotation": {}, "winner": None,
+    }
+
+
+async def set_cup_rotation(db: AsyncSession, user: User, rotation: bool) -> None:
+    """Cup matches with the freshest players instead of the league XI."""
+    part = await _editable_participation(db, user, None)
+    season = await _lock_season(db, part.season_id)
+    if not (season.state or {}).get("cup"):
+        raise ConflictError("В этом сезоне нет кубка")
+    state = copy.deepcopy(season.state)
+    state["cup"].setdefault("rotation", {})[str(part.team_index)] = bool(rotation)
+    season.state = state
+    flag_modified(season, "state")
+    await db.commit()
+
+
+def _cup_out(state: dict, me: CareerParticipant, config) -> Optional[dict]:
+    cup = state.get("cup")
+    if not cup:
+        return None
+    schedule = state.get("schedule") or []
+    rounds = []
+    alive = True
+    for k, rnd in enumerate(cup["rounds"]):
+        ties = []
+        for i, (a, b) in enumerate(rnd["ties"]):
+            res = rnd["results"][i] if i < len(rnd["results"]) else None
+            mine = me.team_index in (a, b)
+            if res and mine and res["winner"] != me.team_index:
+                alive = False
+            ties.append({
+                "a": a, "b": b, "a_name": _cup_team(state, a)["name"], "b_name": _cup_team(state, b)["name"],
+                "sa": res["sa"] if res else None, "sb": res["sb"] if res else None,
+                "pens": res.get("pens") if res else None, "winner": res["winner"] if res else None,
+                "has_events": bool(res and res.get("events")), "mine": mine,
+            })
+        rounds.append({
+            "name": CUP_ROUND_NAMES[k], "after_round": rnd["after_round"],
+            "at": schedule[rnd["after_round"]] if rnd["after_round"] < len(schedule) else None, "ties": ties,
+        })
+    rewards = list(config.career_cup_rewards or [0, 0, 0])
+    return {
+        "rounds": rounds, "winner": cup.get("winner"),
+        "status": "winner" if cup.get("winner") == me.team_index else ("alive" if alive else "out"),
+        "rotation": bool((cup.get("rotation") or {}).get(str(me.team_index), False)),
+        "rewards": {"winner": rewards[0] if rewards else 0, "final": rewards[1] if len(rewards) > 1 else 0,
+                    "semi": rewards[2] if len(rewards) > 2 else 0},
+        "rep_winner": int(config.career_rep_cup),
+    }
+
+
 def _tactics_version(state: dict) -> int:
     return int((state or {}).get("tactics_version") or 0)
 
@@ -840,6 +931,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
     bot_states: dict = state.setdefault("bot_tactics", {}) if v1 else {}
     minutes_by_team: dict[int, dict[int, int]] = {}
     gains_by_team: dict[int, dict[int, int]] = {}
+    cup_played: dict[int, set[int]] = {}
     used_familiarity: dict[int, int] = {}
 
     async def human_cards(part: CareerParticipant) -> list:
@@ -859,20 +951,21 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         played[team_index] = {c.id for c, _ in pairs}
         return _human_side(part, pairs, config)
 
-    async def runner_for(team_index: int, label: str, opponent_index: int):
-        team = teams[team_index]
+    async def runner_for(team_index: int, label: str, opponent_index: int, cup: bool = False):
+        team = _cup_team(state, team_index)
         if team.get("user_id") is None:
-            opponent_human = teams[opponent_index].get("user_id") is not None
+            opponent_human = _cup_team(state, opponent_index).get("user_id") is not None
             roll = random.Random(season.id * 7919 + round_index * 131 + team_index).random()
             choice = tactics.bot_tactics_for_round(
                 team, season.difficulty, history.get(str(opponent_index), []) if opponent_human else [],
                 bot_states.get(str(team_index), {}), config, roll,
             )
-            bot_states[str(team_index)] = {
-                "tactic": choice["tactic"], "adapted": choice["adapted"],
-                "familiarity": tactics.familiarity_after_match(choice["familiarity"], config)
-                if season.difficulty == "legend" else 0,
-            }
+            if not cup:
+                bot_states[str(team_index)] = {
+                    "tactic": choice["tactic"], "adapted": choice["adapted"],
+                    "familiarity": tactics.familiarity_after_match(choice["familiarity"], config)
+                    if season.difficulty == "legend" else 0,
+                }
             on_pitch = [tactics.LivePlayer(card=c, base_rating=c.player.rating, pre_fatigue=0, slot=slot)
                         for c, slot in _bot_cards(team, round_index, config)]
             return tactics.CareerSideRunner(
@@ -885,7 +978,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             return None  # left the season / declined: technical defeat
         cards = await human_cards(part)
         by_id = {c.id: c for c in cards}
-        training = part.training if part.training in TRAININGS else None
+        training = part.training if part.training in TRAININGS and not cup else None
         tr = tactics.tuning_of(config)["training"]
         if training:
             # Training load / recovery before kick-off, kept in the condition.
@@ -897,14 +990,20 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                 condition[str(cid)] = entry
             part.condition = condition
             flag_modified(part, "condition")
-        pairs = resolve_lineup(part, by_id, round_index, [c for c in cards if _usable(c)], fill_any_position=True)
+        # A cup tie follows the league match the same evening: players hurt
+        # or banned there are already out; with rotation the freshest play.
+        avail_round = round_index + 1 if cup else round_index
+        rotate = cup and bool(((state.get("cup") or {}).get("rotation") or {}).get(str(team_index)))
+        pairs = resolve_lineup(part, by_id, avail_round, [c for c in cards if _usable(c)], fill_any_position=True,
+                               rotate=rotate)
         if len(pairs) != len(get_formation_slots(part.formation)):
             return None  # fewer than 11 fit players in the whole collection
-        played[team_index] = {c.id for c, _ in pairs}
+        played_now = cup_played if cup else played
+        played_now[team_index] = {c.id for c, _ in pairs}
         xi_players = {c.player_id for c, _ in pairs}
         bench = [by_id[cid] for cid in _squad_ids(part, by_id) if cid in by_id]
-        bench = [c for c in bench if _usable(c) and not _is_out(part, c.id, round_index)
-                 and c.id not in played[team_index] and c.player_id not in xi_players]
+        bench = [c for c in bench if _usable(c) and not _is_out(part, c.id, avail_round)
+                 and c.id not in played_now[team_index] and c.player_id not in xi_players]
 
         def live(card, slot=None):
             engine_card = _engine_card(card, config)
@@ -915,7 +1014,8 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         familiarity = tactics.familiarity_for(
             part.familiarity, part.familiar_formation, part.familiar_tactic, part.formation, _my_tactic(part), config,
         )
-        used_familiarity[team_index] = familiarity
+        if not cup:
+            used_familiarity[team_index] = familiarity
         if training == "tactical":  # this match only; growth counts from the base
             familiarity = min(int(config.career_familiarity_max_tenths) + tr["tactical_familiarity_tenths"],
                               familiarity + tr["tactical_familiarity_tenths"])
@@ -1013,11 +1113,104 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             related_object_type="career_season", related_object_id=season.id,
         )
 
+    if v1 and state.get("cup") and round_index in CUP_AFTER_ROUNDS:
+        await _play_cup_round(
+            db, season, state, round_index, config, humans, runner_for, cup_played, cards_cache, rng,
+        )
+
     season.state = state
     flag_modified(season, "state")
     season.rounds_played = round_index + 1
     if season.rounds_played >= ROUNDS:
         await _finish(db, season, config)
+
+
+async def _play_cup_round(db, season, state, round_index, config, humans, runner_for, cup_played, cards_cache, rng) -> None:
+    cup = state["cup"]
+    k = CUP_AFTER_ROUNDS.index(round_index)
+    rnd = cup["rounds"][k]
+    results = []
+    for a, b in rnd["ties"]:
+        team_a, team_b = _cup_team(state, a), _cup_team(state, b)
+        with_human = bool(team_a.get("user_id") or team_b.get("user_id"))
+        run_a, run_b = await runner_for(a, "a", b, cup=True), await runner_for(b, "b", a, cup=True)
+        res: dict = {"a": a, "b": b, "events": None, "pens": None}
+        if run_a and run_b:
+            tracker: dict = {}
+            match = tournament_match_engine.simulate_match_controlled(
+                tactics.CareerMatchController(run_a, run_b), config, team_a["name"], team_b["name"], tracker=tracker,
+            )
+            res.update(sa=match.score_a, sb=match.score_b)
+            if match.score_a == match.score_b:
+                pa, pb, kicks = tactics.penalty_shootout(run_a, run_b)
+                res["pens"] = [pa, pb]
+                res["kicks"] = kicks
+                winner = a if pa > pb else b
+            else:
+                winner = a if match.score_a > match.score_b else b
+            if with_human:
+                res["events"] = match.event_log
+                res["analysis"] = {
+                    str(index): tactics.build_analysis(match.event_log, tracker, label, runner, other)
+                    for index, label, runner, other in ((a, "a", run_a, run_b), (b, "b", run_b, run_a))
+                    if _cup_team(state, index).get("user_id")
+                }
+            for index, runner in ((a, run_a), (b, run_b)):
+                part = humans.get(index)
+                if part is None or part.status != "accepted":
+                    continue
+                own_cards = {c.id: c for c in cards_cache.get(part.user_id, [])}
+                own, opp = (res["sa"], res["sb"]) if index == a else (res["sb"], res["sa"])
+                report = _after_match(
+                    part, {cid for cid, m in runner.minutes_played().items() if m > 0}, own, opp, round_index, config,
+                    rng, {cid: c.player.display_name for cid, c in own_cards.items()}, _squad_ids(part, own_cards),
+                    gains=runner.fatigue_gained(),
+                    card_mult=tactics.tuning_of(config)["foul"][_my_tactic(part).get("tackling", "normal")],
+                )
+                state.setdefault("cup_reports", {}).setdefault(str(k), {})[str(index)] = report
+                flag_modified(part, "condition")
+        else:
+            res.update(sa=3 if run_a else 0, sb=3 if run_b else 0)
+            winner = a if run_a else b
+        res["winner"] = winner
+        results.append(res)
+    rnd["results"] = results
+
+    winners = [r["winner"] for r in results]
+    if k + 1 < len(cup["rounds"]):
+        cup["rounds"][k + 1]["ties"] = [[winners[i], winners[i + 1]] for i in range(0, len(winners), 2)]
+    else:
+        cup["winner"] = winners[0]
+
+    rewards = list(config.career_cup_rewards or [0, 0, 0])
+    stage_reward = {2: rewards[2] if len(rewards) > 2 else 0, 3: rewards[1] if len(rewards) > 1 else 0}
+    for res in results:
+        for index in (res["a"], res["b"]):
+            part = humans.get(index)
+            if part is None or part.status != "accepted":
+                continue
+            won = res["winner"] == index
+            own, opp = (res["sa"], res["sb"]) if index == res["a"] else (res["sb"], res["sa"])
+            opponent = _cup_team(state, res["b"] if index == res["a"] else res["a"])["name"]
+            score = f"{own}:{opp}" + (f" (пен. {res['pens'][0] if index == res['a'] else res['pens'][1]}:"
+                                      f"{res['pens'][1] if index == res['a'] else res['pens'][0]})" if res.get("pens") else "")
+            coins, text = 0, ""
+            if k == len(cup["rounds"]) - 1 and won:
+                coins = await _credit(db, part.user_id, rewards[0] if rewards else 0, "Карьера: победа в кубке", season.id)
+                profile = await get_profile(db, part.user_id, config)
+                profile.reputation += int(config.career_rep_cup)
+                text = "Кубок твой!"
+            elif not won and k in stage_reward:
+                coins = await _credit(db, part.user_id, stage_reward[k], f"Карьера: {CUP_ROUND_NAMES[k]} кубка", season.id)
+                text = "Вылет из кубка"
+            else:
+                text = "Проход дальше" if won else "Вылет из кубка"
+            part.coins_earned += coins
+            await notify(
+                db, part.user_id, NotificationType.career_round_result, f"Кубок, {CUP_ROUND_NAMES[k]}: {text}",
+                f"{score} против «{opponent}»" + (f" · +{coins} монет" if coins else ""),
+                related_object_type="career_season", related_object_id=season.id,
+            )
 
 
 def _after_match(
@@ -1303,12 +1496,14 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         "tactics_version": _tactics_version(state),
         "scouting": None, "familiarity": None, "match_plan": me.match_plan, "plan_limits": {},
         "ambition": me.ambition, "ambitions": [], "training": me.training, "trainings": training_options(),
+        "cup": None,
         "set_pieces": {**tactics.DEFAULT_SET_PIECES, **(me.set_pieces or {})}, "squad_warnings": [],
     }
     if season.division is not None:
         config = await get_config(db)
         out["division"] = _division_info(season.division, config)
         out["ambitions"] = ambition_options(season.division, config)
+        out["cup"] = _cup_out(state, me, config)
         if me.next_division is not None:
             out["next_division"] = _division_info(me.next_division, config)
     results = state.get("results") or []
@@ -1485,6 +1680,25 @@ def tactics_catalog(config) -> dict:
             "defences": [{"value": k, "label": v} for k, v in tactics.SET_PIECE_DEFENCES.items()],
             "beats": tactics.ROUTINE_BEATS,
         },
+    }
+
+
+async def cup_match_events(db: AsyncSession, user: User, season_id: int, round_index: int, tie_index: int) -> dict:
+    season = await db.get(CareerSeason, season_id)
+    if season is None or not any(p.user_id == user.id for p in season.participants):
+        raise NotFoundError("Матч не найден")
+    cup = (season.state or {}).get("cup") or {}
+    rounds = cup.get("rounds") or []
+    if round_index >= len(rounds) or tie_index >= len(rounds[round_index].get("results") or []):
+        raise NotFoundError("Матч ещё не сыгран")
+    res = rounds[round_index]["results"][tie_index]
+    me = next(p for p in season.participants if p.user_id == user.id)
+    my_side = "a" if res["a"] == me.team_index else "b" if res["b"] == me.team_index else None
+    return {
+        "home_name": _cup_team(season.state, res["a"])["name"], "away_name": _cup_team(season.state, res["b"])["name"],
+        "home_score": res["sa"], "away_score": res["sb"], "events": res.get("events") or [],
+        "analysis": (res.get("analysis") or {}).get(str(me.team_index)) if my_side else None,
+        "my_side": my_side, "pens": res.get("pens"), "kicks": res.get("kicks"),
     }
 
 

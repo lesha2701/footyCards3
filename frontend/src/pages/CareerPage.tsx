@@ -22,6 +22,7 @@ import CareerSquad from "@/components/career/CareerSquad";
 import { PlanEditor, ScoutingCard, TacticsBoard } from "@/components/career/CareerTactics";
 import { SetPiecesCard, SquadWarnings } from "@/components/career/SetPiecesCard";
 import { CoachProfileCard, ObjectiveCard, TrainingCard } from "@/components/career/CareerManagement";
+import CupCard from "@/components/career/CupCard";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconTrophy, IconUsers } from "@/components/icons";
@@ -30,7 +31,7 @@ import { formatGameError } from "@/lib/errors";
 import { CATEGORY_POSITIONS } from "@/lib/formation";
 import { haptic } from "@/lib/telegram";
 
-type Tab = "prep" | "squad" | "table" | "calendar";
+type Tab = "prep" | "squad" | "table" | "calendar" | "cup";
 
 /** Round times in the viewer's own time zone (the server schedules them in
  * its own one, e.g. 12:00/19:00 Moscow). */
@@ -306,15 +307,16 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
         )}
       </section>
 
-      <div className={`grid gap-1 rounded-2xl bg-bg-surface p-1 ${season.scouting ? "grid-cols-4" : "grid-cols-3"}`}>
+      <div className="flex gap-1 overflow-x-auto rounded-2xl bg-bg-surface p-1" style={{ scrollbarWidth: "none" }}>
         {([
           ...(season.scouting ? [["prep", "Подготовка"]] : []),
           ["squad", "Состав"], ["table", "Таблица"], ["calendar", "Календарь"],
+          ...(season.cup ? [["cup", "Кубок"]] : []),
         ] as [Tab, string][]).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`rounded-xl py-2 text-xs font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
+            className={`shrink-0 flex-1 rounded-xl px-3 py-2 text-xs font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
           >
             {label}
           </button>
@@ -349,6 +351,7 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
       {tab === "squad" && !hasTactics && <LineupEditor season={season} onView={onView} onError={onError} />}
       {tab === "table" && <section className="rounded-3xl bg-bg-surface p-4"><StandingsTable season={season} /></section>}
       {tab === "calendar" && <Calendar season={season} />}
+      {tab === "cup" && <CupCard season={season} onView={onView} onError={onError} />}
 
       <button onClick={() => setConfirmLeave(true)} className="self-center text-xs text-ink-mist-dim underline underline-offset-2">
         Покинуть сезон

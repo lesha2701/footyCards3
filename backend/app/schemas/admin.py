@@ -270,6 +270,9 @@ class GameConfigOut(BaseModel):
     career_rep_promotion: int = 10
     career_rep_relegation: int = -10
     career_rep_levels: list[int] = []
+    career_cup_enabled: bool = True
+    career_cup_rewards: list[int] = []
+    career_rep_cup: int = 15
     career_familiarity_step_tenths: int = 20
     career_familiarity_max_tenths: int = 90
     career_familiarity_keep_pct: int = 50
@@ -566,6 +569,9 @@ class GameConfigUpdate(BaseModel):
     career_rep_promotion: Optional[int] = Field(default=None, ge=0, le=500)
     career_rep_relegation: Optional[int] = Field(default=None, ge=-500, le=0)
     career_rep_levels: Optional[list[int]] = Field(default=None, min_length=2, max_length=10)
+    career_cup_enabled: Optional[bool] = None
+    career_cup_rewards: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    career_rep_cup: Optional[int] = Field(default=None, ge=0, le=500)
     career_familiarity_step_tenths: Optional[int] = Field(default=None, ge=0, le=50)
     career_familiarity_max_tenths: Optional[int] = Field(default=None, ge=0, le=150)
     career_familiarity_keep_pct: Optional[int] = Field(default=None, ge=0, le=100)

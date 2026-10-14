@@ -127,6 +127,29 @@ export interface CareerAmbition {
   rep_fail: number;
 }
 
+export interface CareerCupTie {
+  a: number;
+  b: number;
+  a_name: string;
+  b_name: string;
+  sa: number | null;
+  sb: number | null;
+  /** Penalty shootout score when level after 90'. */
+  pens: [number, number] | null;
+  winner: number | null;
+  has_events: boolean;
+  mine: boolean;
+}
+
+export interface CareerCup {
+  rounds: { name: string; after_round: number; at: string | null; ties: CareerCupTie[] }[];
+  winner: number | null;
+  status: "alive" | "out" | "winner";
+  rotation: boolean;
+  rewards: { winner: number; final: number; semi: number };
+  rep_winner: number;
+}
+
 export interface CareerSquadWarning {
   /** critical = someone plays out of his line; thin = no cover left in a line. */
   level: "critical" | "thin";
@@ -255,6 +278,7 @@ export interface CareerSeason {
   ambitions?: CareerAmbition[];
   training?: string | null;
   trainings?: { code: string; label: string; hint: string }[];
+  cup?: CareerCup | null;
   plan_limits?: { rules?: number; subs?: number };
 }
 
@@ -317,6 +341,16 @@ export async function setCareerTraining(training: string | null, roundIndex?: nu
   return data;
 }
 
+export async function setCareerCupRotation(rotation: boolean): Promise<CareerView> {
+  const { data } = await api.put<CareerView>("/career/cup", { rotation });
+  return data;
+}
+
+export async function fetchCareerCupMatch(seasonId: number, round: number, tie: number): Promise<CareerMatchEvents> {
+  const { data } = await api.get<CareerMatchEvents>(`/career/seasons/${seasonId}/cup/${round}/${tie}`);
+  return data;
+}
+
 export async function previewCareerTactic(tactic: Tactic): Promise<MatchupReport | null> {
   const { data } = await api.post<{ matchup: MatchupReport | null }>("/career/tactics/preview", { tactic });
   return data.matchup;
@@ -341,6 +375,9 @@ export interface CareerMatchEvents {
   analysis?: CareerAnalysis | null;
   /** My engine side: "a" = home, "b" = away. */
   my_side?: "a" | "b" | null;
+  /** Cup tie level after 90': shootout score and kicks. */
+  pens?: [number, number] | null;
+  kicks?: { team: "a" | "b"; shooter: string; scored: boolean }[] | null;
 }
 
 export interface CareerPhaseStats {

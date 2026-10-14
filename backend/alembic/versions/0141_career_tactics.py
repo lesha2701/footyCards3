@@ -34,6 +34,7 @@ CONFIG_INT_COLUMNS = (
     ("career_rep_title", "25"),
     ("career_rep_promotion", "10"),
     ("career_rep_relegation", "-10"),
+    ("career_rep_cup", "15"),
 )
 CONFIG_JSON_COLUMNS = (
     ("career_tactics_tuning", "{}"),
@@ -45,6 +46,7 @@ CONFIG_JSON_COLUMNS = (
     ("career_ambition_rep_success", "[5, 10, 20]"),
     ("career_ambition_rep_fail", "[-3, -6, -15]"),
     ("career_rep_levels", "[0, 40, 120, 250, 500]"),
+    ("career_cup_rewards", "[800, 400, 200]"),
 )
 
 
@@ -79,9 +81,11 @@ def upgrade() -> None:
         op.add_column("game_config", sa.Column(name, sa.Integer(), nullable=False, server_default=default))
     for name, default in CONFIG_JSON_COLUMNS:
         op.add_column("game_config", sa.Column(name, sa.JSON(), nullable=False, server_default=sa.text(f"'{default}'::json")))
+    op.add_column("game_config", sa.Column("career_cup_enabled", sa.Boolean(), nullable=False, server_default=sa.true()))
 
 
 def downgrade() -> None:
+    op.drop_column("game_config", "career_cup_enabled")
     for name, _ in reversed(CONFIG_JSON_COLUMNS):
         op.drop_column("game_config", name)
     for name, _ in reversed(CONFIG_INT_COLUMNS):

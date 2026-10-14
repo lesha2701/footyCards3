@@ -256,6 +256,12 @@ class GameConfig(TimestampMixin, Base):
     career_rep_promotion: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     career_rep_relegation: Mapped[int] = mapped_column(Integer, default=-10, nullable=False)
     career_rep_levels: Mapped[list] = mapped_column(JSON, default=lambda: [0, 40, 120, 250, 500], nullable=False)
+    # Cup alongside the league (16 teams, knock-out after league rounds 4,
+    # 6, 10 and 14): coins for [winner, finalist, semi-finalist] (x division
+    # reward % is NOT applied) and reputation for the winner.
+    career_cup_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    career_cup_rewards: Mapped[list] = mapped_column(JSON, default=lambda: [800, 400, 200], nullable=False)
+    career_rep_cup: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     # Match plan limits: conditional instructions and substitutions per match.
     career_max_plan_rules: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     career_max_substitutions: Mapped[int] = mapped_column(Integer, default=3, nullable=False)

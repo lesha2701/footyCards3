@@ -40,6 +40,10 @@ class CareerAmbitionIn(BaseModel):
     ambition: str
 
 
+class CareerCupIn(BaseModel):
+    rotation: bool
+
+
 class CareerTrainingIn(BaseModel):
     training: Optional[str] = None
     round_index: Optional[int] = None
@@ -250,6 +254,8 @@ class CareerSeasonOut(BaseModel):
     ambitions: list[dict] = []
     training: Optional[str] = None
     trainings: list[dict] = []
+    # Cup bracket, my status, rotation and prizes (tactics seasons).
+    cup: Optional[dict] = None
     scouting: Optional[CareerScoutingOut] = None
     familiarity: Optional[CareerFamiliarityOut] = None
     match_plan: Optional[CareerPlanOut] = None
@@ -288,6 +294,9 @@ class CareerMatchEventsOut(BaseModel):
     # which engine side ("a" = home, "b" = away) the viewer was.
     analysis: Optional[dict] = None
     my_side: Optional[str] = None
+    # Cup ties level after 90': penalty shootout score and kicks.
+    pens: Optional[list[int]] = None
+    kicks: Optional[list[dict]] = None
 
 
 # --- friends ---------------------------------------------------------------------

@@ -14,6 +14,7 @@ from app.schemas.career import (
     CareerTacticPreviewIn,
     CareerAmbitionIn,
     CareerTrainingIn,
+    CareerCupIn,
     CareerViewOut,
 )
 from app.services import career_service
@@ -84,6 +85,21 @@ async def set_training(payload: CareerTrainingIn, db: AsyncSession = Depends(get
     """Training focus before the next round (kept until changed)."""
     await career_service.set_training(db, user, payload.training, payload.round_index)
     return await _view(db, user)
+
+
+@router.put("/cup", response_model=CareerViewOut)
+async def set_cup(payload: CareerCupIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Cup rotation: the freshest players in cup ties instead of the league XI."""
+    await career_service.set_cup_rotation(db, user, payload.rotation)
+    return await _view(db, user)
+
+
+@router.get("/seasons/{season_id}/cup/{round_index}/{tie_index}", response_model=CareerMatchEventsOut)
+async def cup_match(
+    season_id: int, round_index: int, tie_index: int,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await career_service.cup_match_events(db, user, season_id, round_index, tie_index)
 
 
 @router.post("/tactics/preview")
