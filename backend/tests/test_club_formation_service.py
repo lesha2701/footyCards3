@@ -38,4 +38,17 @@ def test_5_3_2_has_five_defenders_and_two_wide_backs():
     slots = svc.get_formation_slots("5-3-2")
     def_positions = [s.ideal_position for s in slots if s.category == "DEF"]
     assert def_positions.count(Position.CB) == 3
-    assert Position.LB in def_positions and Position.RB in def_positions
+    assert Position.LWB in def_positions and Position.RWB in def_positions
+
+
+def test_3_4_3_wing_backs_and_full_backs_are_on_position():
+    from app.services.lineup_service import on_ideal_position
+
+    slots = svc.get_formation_slots("3-4-3")
+    assert len(slots) == 11
+    by_code = {s.code: s.ideal_position for s in slots}
+    assert [by_code[c] for c in ("DEF1", "DEF2", "DEF3")] == [Position.CB] * 3
+    assert (by_code["DEF4"], by_code["DEF5"]) == (Position.LWB, Position.RWB)
+    # The card pool is mostly full-backs: they play wing-back slots on position.
+    assert on_ideal_position(Position.LB, Position.LWB) and on_ideal_position(Position.RWB, Position.RB)
+    assert not on_ideal_position(Position.LB, Position.RWB)

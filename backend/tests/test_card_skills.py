@@ -139,7 +139,7 @@ async def test_catalog_lists_all_available_skills(client, db_session, bot_token)
     ]
     by_code = {s["code"]: s for s in body["skills"]}
     assert all(s["is_available"] and s["engine_supported"] for s in body["skills"])
-    assert by_code["crosser"]["positions"] == ["LW", "RW", "LM", "RM", "LB", "RB"]
+    assert by_code["crosser"]["positions"] == ["LW", "RW", "LM", "RM", "LB", "RB", "LWB", "RWB"]
     assert by_code["last_line"]["positions"] == ["CB"]
     assert by_code["one_on_one"]["positions"] == ["GK"]
     assert by_code["aerial_master"]["positions"] == ["CB", "ST"]

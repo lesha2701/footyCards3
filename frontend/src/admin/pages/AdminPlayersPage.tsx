@@ -20,7 +20,7 @@ import { RARITY_LABELS } from "@/lib/rarity";
 import type { Player, Position, Rarity } from "@/types";
 
 const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
-const POSITIONS: Position[] = ["GK", "LB", "CB", "RB", "CDM", "CM", "CAM", "LM", "RM", "LW", "RW", "ST"];
+const POSITIONS: Position[] = ["GK", "LB", "CB", "RB", "LWB", "RWB", "CDM", "CM", "CAM", "LM", "RM", "LW", "RW", "ST"];
 
 const emptyForm = {
   first_name: "", last_name: "", display_name: "", rating: 70, rarity: "common" as Rarity,

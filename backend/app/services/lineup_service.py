@@ -95,10 +95,21 @@ TACTIC_CATEGORY_MULTIPLIERS: dict[str, dict[str, float]] = {
 
 CATEGORY_POSITIONS = {
     "GK": {Position.GK},
-    "DEF": {Position.LB, Position.CB, Position.RB},
+    "DEF": {Position.LB, Position.CB, Position.RB, Position.LWB, Position.RWB},
     "MID": {Position.CDM, Position.CM, Position.CAM, Position.LM, Position.RM},
     "FWD": {Position.LW, Position.ST, Position.RW},
 }
+
+# Full-backs and wing-backs count as each other's ideal position: the card
+# pool is mostly full-backs, and a wing-back slot shouldn't penalise them.
+POSITION_EQUIVALENTS = {
+    Position.LB: Position.LWB, Position.LWB: Position.LB, Position.RB: Position.RWB, Position.RWB: Position.RB,
+}
+
+
+def on_ideal_position(position, ideal) -> bool:
+    return position == ideal or POSITION_EQUIVALENTS.get(position) == ideal
+
 
 
 TEMPLATE_COUNT = 5
@@ -216,7 +227,7 @@ def calculate_base_strength(
     total = 0.0
     for card, slot in cards_with_slots:
         player = card.player
-        if player.position == slot.ideal_position:
+        if on_ideal_position(player.position, slot.ideal_position):
             fit = 1.0
         elif player.position in CATEGORY_POSITIONS[slot.category]:
             fit = 0.9

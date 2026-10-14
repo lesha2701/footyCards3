@@ -11,6 +11,7 @@ export const FORMATION_LABELS: Record<string, string> = {
   "4-4-2": "4-4-2",
   "3-5-2": "3-5-2",
   "5-3-2": "5-3-2",
+  "3-4-3": "3-4-3",
 };
 
 export function formationLabel(code: string | null | undefined): string {
@@ -24,6 +25,8 @@ const ROWS: Record<string, string[][]> = {
   "4-4-2": [["FWD1", "FWD2"], ["MID1", "MID2", "MID3", "MID4"], ["DEF1", "DEF2", "DEF3", "DEF4"], ["GK"]],
   "3-5-2": [["FWD1", "FWD2"], ["MID1", "MID2", "MID3", "MID4", "MID5"], ["DEF1", "DEF2", "DEF3"], ["GK"]],
   "5-3-2": [["FWD1", "FWD2"], ["MID1", "MID2", "MID3"], ["DEF1", "DEF2", "DEF3", "DEF4", "DEF5"], ["GK"]],
+  // Wing-backs (DEF4 / DEF5) play in the midfield row.
+  "3-4-3": [["FWD1", "FWD2", "FWD3"], ["DEF4", "MID1", "MID2", "DEF5"], ["DEF1", "DEF2", "DEF3"], ["GK"]],
 };
 
 export interface PitchRow {

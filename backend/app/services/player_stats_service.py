@@ -8,6 +8,8 @@ _SKEW: dict[Position, int] = {
     Position.GK: 18,
     Position.CB: 14,
     Position.LB: 8,
+    Position.LWB: 4,
+    Position.RWB: 4,
     Position.RB: 8,
     Position.CDM: 6,
     Position.CM: 0,
@@ -19,7 +21,7 @@ _SKEW: dict[Position, int] = {
     Position.ST: 16,
 }
 
-_DEFENSIVE_POSITIONS = {Position.GK, Position.CB, Position.LB, Position.RB, Position.CDM}
+_DEFENSIVE_POSITIONS = {Position.GK, Position.CB, Position.LB, Position.RB, Position.LWB, Position.RWB, Position.CDM}
 
 
 def compute_default_attack_defense(rating: int, position: Position) -> tuple[int, int]:

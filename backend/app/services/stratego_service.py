@@ -73,7 +73,7 @@ ACTIVE_STATUSES = (StrategoMatchStatus.in_progress,)
 
 # Which real positions fit each card role; roles absent here take any card.
 ROLE_POSITIONS: dict[str, frozenset[Position]] = {
-    "tackler": frozenset({Position.LB, Position.CB, Position.RB, Position.CDM}),
+    "tackler": frozenset({Position.LB, Position.CB, Position.RB, Position.LWB, Position.RWB, Position.CDM}),
     "speedster": frozenset({Position.LW, Position.RW, Position.LM, Position.RM}),
     "provocateur": frozenset({Position.CM, Position.CAM, Position.CDM, Position.LM, Position.RM}),
 }

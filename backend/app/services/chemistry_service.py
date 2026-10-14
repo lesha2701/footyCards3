@@ -100,6 +100,14 @@ FORMATION_LINKS: dict[str, tuple[tuple[str, str], ...]] = {
         ("MID1", "FWD1"), ("MID2", "FWD1"), ("MID2", "FWD2"), ("MID3", "FWD2"),
         ("FWD1", "FWD2"),
     ),
+    "3-4-3": (
+        ("GK", "DEF1"), ("GK", "DEF2"), ("GK", "DEF3"),
+        ("DEF1", "DEF2"), ("DEF2", "DEF3"), ("DEF1", "DEF4"), ("DEF3", "DEF5"),
+        ("DEF2", "MID1"), ("DEF2", "MID2"),
+        ("DEF4", "MID1"), ("MID1", "MID2"), ("MID2", "DEF5"),
+        ("DEF4", "FWD1"), ("MID1", "FWD2"), ("MID2", "FWD2"), ("DEF5", "FWD3"),
+        ("FWD1", "FWD2"), ("FWD2", "FWD3"),
+    ),
 }
 
 MAX_RATING = 99
@@ -266,7 +274,9 @@ def compute_chemistry(
             link_sums[a] += pts
             link_sums[b] += pts
     for card, slot in pairs:
-        on_position = card.player.position == slot.ideal_position
+        from app.services.lineup_service import on_ideal_position  # lineup_service imports this module
+
+        on_position = on_ideal_position(card.player.position, slot.ideal_position)
         base = player_points(link_sums[slot.code], on_position, rules)
         coach_extra = stadium_extra = 0
         if on_position:

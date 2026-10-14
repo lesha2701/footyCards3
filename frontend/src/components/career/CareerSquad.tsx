@@ -7,7 +7,7 @@ import { SquadBuilder } from "@/components/career/Offseason";
 import PitchBackground from "@/components/squad/PitchBackground";
 import { staticUrl } from "@/lib/api";
 import { chemistryGain, computeChemistry } from "@/lib/chemistry";
-import { CATEGORY_POSITIONS } from "@/lib/formation";
+import { CATEGORY_POSITIONS, onIdealPosition } from "@/lib/formation";
 import { formationLabel, inRow, pitchRows, PITCH_STYLE } from "@/lib/formationLayout";
 import { RARITY_GLOW, RARITY_GRADIENTS } from "@/lib/rarity";
 import { haptic } from "@/lib/telegram";
@@ -99,7 +99,7 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick }: {
   onClick: () => void;
 }) {
   const info = infoOf(entry);
-  const off = info && info.position !== slot.ideal_position;
+  const off = info && !onIdealPosition(info.position, slot.ideal_position);
   return (
     <button
       data-chem-slot={slot.code}

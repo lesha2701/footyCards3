@@ -4,7 +4,7 @@ from typing import Any
 from app.models.coach import Coach
 from app.models.enums import Position
 from app.services.coach_boost_service import apply_zone_boosts, depth_bonus_cap_for, resolve_active_boosts
-from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot, calculate_base_strength
+from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot, calculate_base_strength, on_ideal_position
 
 ZONES = ("central_attack", "wing_attack", "midfield_control", "central_defence", "wing_defence", "goalkeeping")
 
@@ -16,6 +16,9 @@ ZONE_WEIGHTS: dict[Position, dict[str, float]] = {
     Position.CB: {"midfield_control": 0.10, "central_defence": 1.00, "wing_defence": 0.25},
     Position.LB: {"wing_attack": 0.55, "midfield_control": 0.10, "central_defence": 0.20, "wing_defence": 1.00},
     Position.RB: {"wing_attack": 0.55, "midfield_control": 0.10, "central_defence": 0.20, "wing_defence": 1.00},
+    # Wing-backs: further forward than full-backs, less help in the middle.
+    Position.LWB: {"wing_attack": 0.80, "midfield_control": 0.15, "central_defence": 0.10, "wing_defence": 0.85},
+    Position.RWB: {"wing_attack": 0.80, "midfield_control": 0.15, "central_defence": 0.10, "wing_defence": 0.85},
     Position.CDM: {"central_attack": 0.05, "midfield_control": 0.85, "central_defence": 0.45, "wing_defence": 0.15},
     Position.CM: {"central_attack": 0.20, "wing_attack": 0.05, "midfield_control": 1.00, "central_defence": 0.10},
     Position.CAM: {"central_attack": 0.60, "wing_attack": 0.10, "midfield_control": 0.55},
@@ -131,7 +134,7 @@ def _formation_fit_score(cards_with_slots: list[tuple[Any, FormationSlot]]) -> f
         return 0.0
     fits = []
     for card, slot in cards_with_slots:
-        if card.player.position == slot.ideal_position:
+        if on_ideal_position(card.player.position, slot.ideal_position):
             fits.append(1.0)
         elif card.player.position in CATEGORY_POSITIONS[slot.category]:
             fits.append(0.9)

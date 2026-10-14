@@ -165,7 +165,7 @@ describe("CareerPage", () => {
 
     // Change one axis: the preview comes from the server, familiarity keeps 80%.
     fireEvent.click(within(screen.getByRole("radiogroup", { name: "Построение атаки" })).getByRole("radio", { name: "Прямой пас" }));
-    expect(screen.getByText("Своя тактика")).toBeInTheDocument();
+    expect(screen.getByLabelText("Тактика")).toHaveValue("CUSTOM");
     expect(await screen.findByText("Прямой пас за спину высокой линии")).toBeInTheDocument();
     expect(previewCareerTactic).toHaveBeenCalledWith({ ...POSSESSION, buildup: "direct" });
     expect(screen.getByText("+3.2%")).toBeInTheDocument();
@@ -174,7 +174,7 @@ describe("CareerPage", () => {
     expect(setCareerLineup.mock.calls[0][0]).toMatchObject({ tactic: { ...POSSESSION, buildup: "direct" }, round_index: 1 });
 
     // A preset chip sets every axis at once.
-    fireEvent.click(screen.getByRole("radio", { name: "Контратаки" }));
+    fireEvent.change(screen.getByLabelText("Тактика"), { target: { value: "COUNTER_ATTACK" } });
     expect(within(screen.getByRole("radiogroup", { name: "Линия обороны и прессинга" })).getByRole("radio", { name: "Низкий блок" }))
       .toHaveAttribute("aria-checked", "true");
 

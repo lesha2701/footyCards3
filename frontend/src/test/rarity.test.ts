@@ -19,6 +19,6 @@ describe("rarity utils", () => {
   it("has a Russian label for every position", () => {
     expect(POSITION_LABELS.GK).toBeDefined();
     expect(POSITION_LABELS.ST).toBeDefined();
-    expect(Object.keys(POSITION_LABELS)).toHaveLength(12);
+    expect(Object.keys(POSITION_LABELS)).toHaveLength(14);
   });
 });

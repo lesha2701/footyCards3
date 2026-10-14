@@ -58,12 +58,23 @@ CLUB_FORMATIONS: dict[str, list[FormationSlot]] = {
     ],
     "5-3-2": [
         FormationSlot("GK", "GK", Position.GK),
-        FormationSlot("DEF1", "DEF", Position.LB), FormationSlot("DEF2", "DEF", Position.CB),
+        FormationSlot("DEF1", "DEF", Position.LWB), FormationSlot("DEF2", "DEF", Position.CB),
         FormationSlot("DEF3", "DEF", Position.CB), FormationSlot("DEF4", "DEF", Position.CB),
-        FormationSlot("DEF5", "DEF", Position.RB),
+        FormationSlot("DEF5", "DEF", Position.RWB),
         FormationSlot("MID1", "MID", Position.CDM), FormationSlot("MID2", "MID", Position.CM),
         FormationSlot("MID3", "MID", Position.CAM),
         FormationSlot("FWD1", "FWD", Position.ST), FormationSlot("FWD2", "FWD", Position.ST),
+    ],
+    # Three centre-backs, wing-backs on the flanks of a two-man midfield,
+    # three forwards. Wing-backs are DEF slots drawn in the midfield row.
+    "3-4-3": [
+        FormationSlot("GK", "GK", Position.GK),
+        FormationSlot("DEF1", "DEF", Position.CB), FormationSlot("DEF2", "DEF", Position.CB),
+        FormationSlot("DEF3", "DEF", Position.CB),
+        FormationSlot("DEF4", "DEF", Position.LWB), FormationSlot("DEF5", "DEF", Position.RWB),
+        FormationSlot("MID1", "MID", Position.CM), FormationSlot("MID2", "MID", Position.CM),
+        FormationSlot("FWD1", "FWD", Position.LW), FormationSlot("FWD2", "FWD", Position.ST),
+        FormationSlot("FWD3", "FWD", Position.RW),
     ],
 }
 

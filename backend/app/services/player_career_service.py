@@ -48,7 +48,7 @@ from app.services.career_service import ROUNDS, build_schedule, double_round_rob
 from app.services.club_formation_service import get_formation_slots
 from app.services.club_tactical_matchup_service import build_side
 from app.services.game_config_service import get_config
-from app.services.lineup_service import CATEGORY_POSITIONS
+from app.services.lineup_service import CATEGORY_POSITIONS, on_ideal_position
 from app.services.notification_service import notify
 from app.services.player_tournament_simulation_service import _EngineCard, _engine_card
 
@@ -89,7 +89,7 @@ def _club_squad(name: str, players: list[Player], fallback_rating: int) -> list[
     squad: list[dict] = []
     for slot in sorted(slots, key=lambda s: 0 if s.category == "GK" else 1):
         fits = [p for p in pool if p.id not in used and p.position in CATEGORY_POSITIONS[slot.category]]
-        ideal = [p for p in fits if p.position == slot.ideal_position]
+        ideal = [p for p in fits if on_ideal_position(p.position, slot.ideal_position)]
         pick = (ideal or fits or [None])[0]
         if pick is None:
             continue
@@ -340,7 +340,7 @@ def _side(team: dict, mine: Optional[SimpleNamespace], config):
     if mine is not None:
         category = next(cat for cat, pos in CATEGORY_POSITIONS.items() if mine.player.position in pos)
         line = [p for p in roster if slots[p["slot"]].category == category]
-        exact = [p for p in line if slots[p["slot"]].ideal_position == mine.player.position]
+        exact = [p for p in line if on_ideal_position(mine.player.position, slots[p["slot"]].ideal_position)]
         replaced = min(exact or line, key=lambda p: p["rating"])
         my_slot = replaced["slot"]
     with_slots = []

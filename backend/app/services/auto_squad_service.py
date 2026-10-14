@@ -23,7 +23,7 @@ from app.models.user import User
 from app.services import chemistry_service
 from app.services.card_skill_catalog import SKILL_DEFINITIONS
 from app.services.chemistry_service import ChemistryRules
-from app.services.lineup_service import CATEGORY_POSITIONS, calculate_base_strength
+from app.services.lineup_service import CATEGORY_POSITIONS, calculate_base_strength, on_ideal_position
 
 
 @dataclass(frozen=True)
@@ -64,7 +64,7 @@ def pick_cards(
                 continue
             key = (
                 card.id in preferred_ids,
-                card.player.position == slot.ideal_position,
+                on_ideal_position(card.player.position, slot.ideal_position),
                 min(99, card.player.rating + (card.diamond_rating_bonus or 0)),
                 _skill_bonus(card, engine),
                 -card.id,
@@ -100,7 +100,7 @@ def _squad_score(
     chemistry = chemistry_service.compute_chemistry(
         pairs, formation, rules, slot_count=len(slots_by_code), coach_country=coach_country, stadium_club=stadium_club,
     )
-    on_position = sum(1 for card, slot in pairs if card.player.position == slot.ideal_position)
+    on_position = sum(1 for card, slot in pairs if on_ideal_position(card.player.position, slot.ideal_position))
     return on_position, calculate_base_strength(pairs, chemistry=chemistry)
 
 
@@ -148,7 +148,7 @@ def improve_for_chemistry(
         taken_ids = {c.id for c in current.values()}
         eligible = [c for c in pool if c.id not in taken_ids and c.player_id not in taken_players and fits(c, slot)]
         by_rating = sorted(
-            eligible, key=lambda c: (c.player.position == slot.ideal_position, _effective(c), -c.id), reverse=True,
+            eligible, key=lambda c: (on_ideal_position(c.player.position, slot.ideal_position), _effective(c), -c.id), reverse=True,
         )
         near = [others[n].player for n in neighbours[slot.code] if n in others]
         clubs = ({_group_key(p.club) for p in near} | {stadium_club}) - {None}

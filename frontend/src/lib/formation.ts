@@ -20,10 +20,18 @@ export const FORMATION_SLOTS: FormationSlot[] = [
 
 export const CATEGORY_POSITIONS: Record<FormationSlot["category"], string[]> = {
   GK: ["GK"],
-  DEF: ["LB", "CB", "RB"],
+  DEF: ["LB", "CB", "RB", "LWB", "RWB"],
   MID: ["CDM", "CM", "CAM", "LM", "RM"],
   FWD: ["LW", "ST", "RW"],
 };
+
+/** Full-backs and wing-backs count as each other's ideal position (as on
+ * the backend: lineup_service.on_ideal_position). */
+const POSITION_EQUIVALENTS: Record<string, string> = { LB: "LWB", LWB: "LB", RB: "RWB", RWB: "RB" };
+
+export function onIdealPosition(position: string | null | undefined, ideal: string): boolean {
+  return !!position && (position === ideal || POSITION_EQUIVALENTS[position] === ideal);
+}
 
 export const CATEGORY_LABELS: Record<FormationSlot["category"], string> = {
   GK: "Вратарь",

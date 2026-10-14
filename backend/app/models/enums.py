@@ -31,6 +31,10 @@ class Position(str, enum.Enum):
     LB = "LB"
     CB = "CB"
     RB = "RB"
+    # Wing-backs: defenders (DEF line), interchangeable with LB/RB for
+    # "on position" (lineup_service.on_ideal_position).
+    LWB = "LWB"
+    RWB = "RWB"
     CDM = "CDM"
     CM = "CM"
     CAM = "CAM"

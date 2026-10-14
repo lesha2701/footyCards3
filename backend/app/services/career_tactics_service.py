@@ -225,7 +225,7 @@ INTERACTION_LABELS = {ix["id"]: ix["label"] for ix in INTERACTIONS}
 ROLE_GROUPS: dict[str, dict] = {
     "winger": {"positions": ("LW", "RW", "LM", "RM"), "values": ("crosser", "inside"), "label": "Крайние полузащитники"},
     "pivot": {"positions": ("CDM",), "values": ("destroyer", "playmaker"), "label": "Опорник"},
-    "fullback": {"positions": ("LB", "RB"), "values": ("attacking", "holding"), "label": "Крайние защитники"},
+    "fullback": {"positions": ("LB", "RB", "LWB", "RWB"), "values": ("attacking", "holding"), "label": "Крайние защитники"},
 }
 ROLE_LABELS = {
     "winger": {"crosser": "Навесы с фланга", "inside": "Срезка в центр"},
@@ -694,7 +694,7 @@ DEFAULT_SET_PIECES = {"corner_taker": None, "free_kick_taker": None, "penalty_ta
                       "corner_routine": "far", "corner_defence": "zonal"}
 # Auto-picked takers when none is chosen (or the chosen one isn't on the pitch).
 TAKER_POSITIONS = {
-    "corner_taker": ("LW", "RW", "LM", "RM", "CAM", "CM", "LB", "RB"),
+    "corner_taker": ("LW", "RW", "LM", "RM", "CAM", "CM", "LWB", "RWB", "LB", "RB"),
     "free_kick_taker": ("CAM", "CM", "LW", "RW", "ST", "LM", "RM", "CDM"),
     "penalty_taker": ("ST", "CAM", "LW", "RW", "CM", "LM", "RM"),
 }

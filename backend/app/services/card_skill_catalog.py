@@ -78,7 +78,7 @@ SKILL_DEFINITIONS: dict[str, SkillDefinition] = {
     "interceptor": SkillDefinition(
         code="interceptor", name="Перехватчик", icon="🛡️",
         bonus_phrase="к шансу перехватить передачу", engines=("tournament",),
-        positions=(Position.CB, Position.LB, Position.RB, Position.CDM),
+        positions=(Position.CB, Position.LB, Position.RB, Position.LWB, Position.RWB, Position.CDM),
         effect="Повышает вероятность прервать передачу соперника, когда этот игрок — выбранный защитник эпизода",
         applies_in=(
             "Турниры игроков: передача соперника под удар, когда этот игрок защищается в эпизоде",
@@ -100,7 +100,7 @@ SKILL_DEFINITIONS: dict[str, SkillDefinition] = {
     "crosser": SkillDefinition(
         code="crosser", name="Мастер навесов", icon="📐",
         bonus_phrase="к шансу опасного навеса",
-        positions=(Position.LW, Position.RW, Position.LM, Position.RM, Position.LB, Position.RB),
+        positions=(Position.LW, Position.RW, Position.LM, Position.RM, Position.LB, Position.RB, Position.LWB, Position.RWB),
         effect="Повышает долю опасных моментов (высокого качества) в атаках через фланг",
         applies_in=(
             "Card Arena: действие «Пас» этого игрока в эпизоде на фланге (навес / прострел)",

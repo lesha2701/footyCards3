@@ -5,6 +5,7 @@ export const FORMATIONS: { value: string; label: string }[] = [
   { value: "4-4-2", label: "4-4-2" },
   { value: "3-5-2", label: "3-5-2" },
   { value: "5-3-2", label: "5-3-2" },
+  { value: "3-4-3", label: "3-4-3" },
 ];
 
 export const MENTALITIES: { value: string; label: string }[] = [

@@ -32,6 +32,8 @@ import { haptic } from "@/lib/telegram";
 
 type Handlers = { onView: (v: CareerView) => void; onError: (e: unknown) => void };
 
+const CUSTOM_PRESET = "CUSTOM";
+
 function HintBadge({ hint }: { hint: MatchupHint }) {
   const h = HINT_TEXT[hint];
   return <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${h.tone}`}>{h.label}</span>;
@@ -231,23 +233,6 @@ export function TacticsBoard({ season, catalog, onView, onError }: {
         {report && <HintBadge hint={report.hint} />}
       </div>
 
-      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1" style={{ scrollbarWidth: "none" }} role="radiogroup" aria-label="Готовые тактики">
-        {catalog.presets.map((p) => {
-          const on = sameTactic(p.tactic, tactic);
-          return (
-            <button
-              key={p.code}
-              role="radio"
-              aria-checked={on}
-              onClick={() => { setTactic({ ...p.tactic }); haptic("light"); }}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${on ? "bg-floodlight text-bg-base" : "bg-bg-raised text-ink-chalk"}`}
-            >
-              {p.label}
-            </button>
-          );
-        })}
-      </div>
-
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-start gap-3">
         <TacticPitch formation={formation} tactic={tactic} />
         <div className="flex flex-col gap-2">
@@ -260,6 +245,22 @@ export function TacticsBoard({ season, catalog, onView, onError }: {
               className="rounded-xl bg-bg-raised px-2 py-2 text-xs text-ink-chalk outline-none"
             >
               {FORMATIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase tracking-wider text-ink-mist">Тактика</span>
+            <select
+              aria-label="Тактика"
+              value={activePreset?.code ?? CUSTOM_PRESET}
+              onChange={(e) => {
+                const preset = catalog.presets.find((p) => p.code === e.target.value);
+                if (preset) { setTactic({ ...preset.tactic }); haptic("light"); }
+              }}
+              className="rounded-xl bg-bg-raised px-2 py-2 text-xs text-ink-chalk outline-none"
+            >
+              {/* «Своя» = the axes below as set by hand; picking it keeps them. */}
+              <option value={CUSTOM_PRESET}>Своя тактика</option>
+              {catalog.presets.map((p) => <option key={p.code} value={p.code}>{p.label}</option>)}
             </select>
           </label>
           <label className="flex flex-col gap-1">

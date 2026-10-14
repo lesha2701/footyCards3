@@ -66,7 +66,7 @@ TIER_LABELS = {"bronze": "Бронза", "silver": "Серебро", "gold": "З
 TIER_RARITY = {"bronze": Rarity.common, "silver": Rarity.rare, "gold": Rarity.epic, "legend": Rarity.legendary}
 
 # The attribute that matters most at a position (UI hint only).
-_DEFENSIVE_POSITIONS = {Position.GK, Position.LB, Position.CB, Position.RB, Position.CDM}
+_DEFENSIVE_POSITIONS = {Position.GK, Position.LB, Position.CB, Position.RB, Position.LWB, Position.RWB, Position.CDM}
 
 # Rewarded game actions that grant XP (coins credited with these types).
 XP_TX_TYPES = frozenset({

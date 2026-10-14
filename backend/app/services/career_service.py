@@ -39,7 +39,7 @@ from app.services.auto_squad_service import SlotSpec, owned_cards, pick_cards
 from app.services.club_formation_service import CLUB_FORMATIONS, get_formation_slots
 from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES, build_side
 from app.services.game_config_service import get_config
-from app.services.lineup_service import CATEGORY_POSITIONS
+from app.services.lineup_service import CATEGORY_POSITIONS, on_ideal_position
 from app.services.notification_service import notify
 from app.services.player_tournament_simulation_service import _EngineCard, _engine_card
 
@@ -53,7 +53,7 @@ START_LEAD = timedelta(hours=1)  # time to set a lineup before round 1
 INVITE_TTL = timedelta(hours=24)
 DIFFICULTIES = ("amateur", "pro", "legend")
 DIFFICULTY_LABELS = {"amateur": "Любитель", "pro": "Профи", "legend": "Легенда"}
-BOT_FORMATIONS = ("4-3-3", "4-4-2", "3-5-2", "4-3-3H", "4-2-3-1")
+BOT_FORMATIONS = ("4-3-3", "4-4-2", "3-5-2", "4-3-3H", "4-2-3-1", "3-4-3")
 BOT_CLUB_NAMES = [
     "Северный Ветер", "Портовые Волки", "Динамо Рассвет", "Торпедо Восток", "Атлетик Лесной",
     "Горняк", "Спартак Заречье", "Метеор", "Звезда Юга", "Речники", "Сокол", "Буревестник",
@@ -471,7 +471,7 @@ async def _build_bots(
         for slot in get_formation_slots(formation):
             own_fit = [p for p in own if p.id not in used and p.position in CATEGORY_POSITIONS[slot.category]]
             candidates = own_fit or [p for p in by_category[slot.category] if p.id not in used] or players
-            ideal = [p for p in candidates if p.position == slot.ideal_position]
+            ideal = [p for p in candidates if on_ideal_position(p.position, slot.ideal_position)]
             pick = rng.choice(ideal or candidates) if candidates else None
             if pick is not None:
                 used.add(pick.id)

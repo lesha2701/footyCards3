@@ -1,4 +1,5 @@
 import type { ChemistryLink, ChemistryLinkLevel, ChemistryOut, ChemistryRules, PlayerChemistry } from "@/types";
+import { onIdealPosition } from "@/lib/formation";
 
 /**
  * Client-side mirror of backend services/chemistry_service.compute_chemistry,
@@ -84,7 +85,7 @@ export function computeChemistry(
   }
   const result: Record<string, PlayerChemistry> = {};
   for (const p of players) {
-    const onPosition = p.position === p.idealPosition;
+    const onPosition = onIdealPosition(p.position, p.idealPosition);
     const linkSum = linkSums.get(p.slot) ?? 0;
     const base = playerPoints(linkSum, onPosition, rules);
     // Extras after the thresholds, on-position only, capped at player_max (chemistry_service.compute_chemistry).

@@ -1,5 +1,5 @@
 export type Rarity = "common" | "rare" | "epic" | "legendary" | "diamond";
-export type Position = "GK" | "LB" | "CB" | "RB" | "CDM" | "CM" | "CAM" | "LM" | "RM" | "LW" | "RW" | "ST";
+export type Position = "GK" | "LB" | "CB" | "RB" | "LWB" | "RWB" | "CDM" | "CM" | "CAM" | "LM" | "RM" | "LW" | "RW" | "ST";
 export type TradeStatus = "pending" | "accepted" | "rejected" | "cancelled" | "expired";
 export type MatchDifficulty = "easy" | "medium" | "hard";
 export type MatchResult = "win" | "draw" | "loss";

@@ -43,7 +43,7 @@ import { useAuthStore } from "@/store/authStore";
 
 const LINES: { category: MyPlayer["category"]; label: string; positions: string[] }[] = [
   { category: "GK", label: "Вратарь", positions: ["GK"] },
-  { category: "DEF", label: "Защитник", positions: ["LB", "CB", "RB"] },
+  { category: "DEF", label: "Защитник", positions: ["LB", "CB", "RB", "LWB", "RWB"] },
   { category: "MID", label: "Полузащитник", positions: ["CDM", "CM", "CAM", "LM", "RM"] },
   { category: "FWD", label: "Нападающий", positions: ["LW", "ST", "RW"] },
 ];
