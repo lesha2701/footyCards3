@@ -138,9 +138,9 @@ DEFAULT_TUNING: dict[str, Any] = {
     # (0.3 = advance x1.3 and breakdown x0.7 for the favoured attacker), see
     # INTERACTIONS and club_tactical_matchup_service._stage1_weights.
     "shift": {
-        "press_vs_short": 0.26, "direct_behind_line": 0.15, "direct_inaccuracy": 0.06, "wings_beat_press": 0.24,
+        "press_vs_short": 0.26, "direct_behind_line": 0.13, "direct_inaccuracy": 0.06, "wings_beat_press": 0.24,
         "low_block_center": 0.24, "low_block_crosses": 0.21, "patient_vs_low_block": 0.14,
-        "fast_counter_high_line": 0.2, "counterpress": 0.26, "counter_behind_fullbacks": 0.24,
+        "fast_counter_high_line": 0.26, "counterpress": 0.26, "counter_behind_fullbacks": 0.24,
         "center_vs_wide": 0.24, "hard_tackling_wins": 0.12, "soft_tackling_jockeys": 0.10, "hard_tackle_gaps": 0.16,
     },
     # Tackling: foul / tackle-attempt rates and post-match card odds.
@@ -178,7 +178,11 @@ DEFAULT_TUNING: dict[str, Any] = {
     # attacking duels.
     "marking": {"star": 0.18, "gap": 0.06, "marker_attack": 0.06},
     # Match rating bonus of a substitute (fresh legs) for the rest of the match.
-    "sub_fresh": 2,
+    "sub_fresh": 3,
+    # Rating penalty (%) at 100 fatigue gained IN the match (pre-match
+    # condition: GameConfig.career_fatigue_penalty_pct) — late in a match the
+    # starters fade, which is what substitutions are for.
+    "in_match_fatigue_pct": 25,
 }
 
 # One table, three readers (engine duels, scouting, bots). sign +1 favours
@@ -840,7 +844,9 @@ class CareerSideRunner:
         return self._tactic_memo
 
     def _rating(self, p: LivePlayer, minute: int, fam_pct: float) -> int:
-        penalty = self.live_fatigue(p, minute) / 100 * self.config.career_fatigue_penalty_pct / 100
+        pre = min(100, p.pre_fatigue)
+        gained = min(100 - pre, p.gained)
+        penalty = (pre * self.config.career_fatigue_penalty_pct + gained * self.tuning["in_match_fatigue_pct"]) / 10000
         base = chemistry_service.boosted_rating(p.base_rating, p.chem_bonus)
         rating = base * (1 + fam_pct / 100) * (1 - penalty) + p.form
         if p.on_minute > 0:  # came off the bench: fresh legs

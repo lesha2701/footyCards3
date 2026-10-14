@@ -404,7 +404,7 @@ export default function AdminGamesPage() {
           {toggle("career_cup_enabled", "Кубок в новых сезонах")}
           {listField("career_cup_rewards", "Призы кубка: победа, финал, полуфинал")}
           {field("career_rep_cup", "Репутация за кубок")}
-          <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">Межсезонье и живая лига</p>
+          <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">Предсезонка и живая лига</p>
           {toggle("career_offseason_auto", "Новый сезон автоматически на следующий день")}
           {field("career_inactive_days", "Неактивен дней — без продления и вниз")}
           {field("career_core_min", "Ядро: минимум игроков")}

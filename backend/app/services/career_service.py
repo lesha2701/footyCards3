@@ -554,6 +554,14 @@ async def _activate(db: AsyncSession, season: CareerSeason, now: datetime, confi
         state = dict(season.state)
         await _create_cup(db, season, state, human_avg, config)
         season.state = state
+    # Every season opens with a pre-season (squad, camp, objective, a
+    # friendly); _create_next_season replaces this with last season's data.
+    state = dict(season.state)
+    state["offseason"] = {"prev_season_id": None, "teams": {
+        str(p.team_index): {"prev_squad": [], "prev_familiarity": 0, "prev_formation": None, "prev_tactic": None}
+        for p in humans
+    }}
+    season.state = state
     season.status = "active"
     season.starts_at = datetime.fromisoformat(season.state["schedule"][0])
     season.invite_expires_at = None
@@ -818,7 +826,7 @@ async def _create_next_season(
             _offseason_familiarity(new_part, state, config)
             friend = next((names[p.user_id] for _, p in new_parts if p.user_id != new_part.user_id), None)
             await notify(
-                db, new_part.user_id, NotificationType.career_invite, "Межсезонье: новый сезон уже ждёт",
+                db, new_part.user_id, NotificationType.career_invite, "Предсезонка: новый сезон уже ждёт",
                 (f"Ваша лига с «{friend}» продолжается. " if friend else "")
                 + f"Первый тур — {first.astimezone(app_timezone()).strftime('%d.%m в %H:%M')}. До старта можно "
                 "обновить заявку, выбрать сборы и цель руководства, сыграть товарищеский матч.",
@@ -920,14 +928,15 @@ async def _offseason_out(db: AsyncSession, season: CareerSeason, me: CareerParti
     off = _offseason_of(state, me.team_index)
     if not off or season.rounds_played > 0 or me.status != "accepted":
         return None
-    prev = await db.get(CareerSeason, off.get("prev_season_id"))
+    prev = await db.get(CareerSeason, off["prev_season_id"]) if off.get("prev_season_id") else None
     prev_part = next((p for p in prev.participants if p.user_id == me.user_id), None) if prev else None
     cards = {c.id: c for c in await _career_cards(db, me.user_id)}
     names = {cid: c.player.display_name for cid, c in cards.items()}
     friendly = _friendly_of(state, me.team_index)
     friend = next((p for p in season.participants if p.user_id != me.user_id and p.status == "accepted"), None)
     return {
-        "friend_league": friend is not None,
+        "friend_league": friend is not None and prev is not None,
+        "first_season": prev is None,
         "prev_season_id": prev.id if prev else None,
         "prev_place": prev_part.final_place if prev_part else None,
         "prev_division": _division_info(prev_part.division, config) if prev_part and prev_part.division else None,
@@ -2127,7 +2136,7 @@ async def send_reminders(db: AsyncSession, now: Optional[datetime] = None) -> in
                 if part.status != "accepted":
                     continue
                 await notify(
-                    db, part.user_id, NotificationType.career_reminder, "Межсезонье: скоро старт сезона",
+                    db, part.user_id, NotificationType.career_reminder, "Предсезонка: скоро старт сезона",
                     f"Первый тур — {when}. " + ("Сборы ещё не выбраны. " if not part.camp else "")
                     + "Проверь заявку, цель руководства и сыграй товарищеский матч.",
                     related_object_type="career_season", related_object_id=season.id,

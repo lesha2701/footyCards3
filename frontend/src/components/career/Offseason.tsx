@@ -176,7 +176,7 @@ export function SquadBuilder({ onClose, onView, onError }: { onClose: () => void
   );
 }
 
-/** «Межсезонье»: steps top-down before round 1 of the new season — the
+/** «Предсезонка»: steps top-down before round 1 of the new season — the
  * old season's result and summary, the core and squad, the camp, the
  * friendly. Every step is optional; the season starts on its own. */
 export function OffseasonPanel({ season, catalog, onView, onError }: {
@@ -190,11 +190,15 @@ export function OffseasonPanel({ season, catalog, onView, onError }: {
   if (!off) return null;
   const moved = off.prev_division && season.division ? season.division.division - off.prev_division.division : 0;
   const coreOk = off.core_count >= off.core_min;
+  // Step numbers: the first season has no «Итоги сезона».
+  const first = off.first_season ? 0 : 1;
 
   return (
     <section className="flex flex-col rounded-3xl bg-gradient-to-b from-bg-surface to-bg-raised p-4 ring-1 ring-accent-lime/20">
-      <p className="text-[10px] uppercase tracking-wider text-accent-lime">Межсезонье</p>
-      <p className="font-display text-lg font-bold text-ink-chalk">Новый сезон — {formatWhen(off.starts_at)}</p>
+      <p className="text-[10px] uppercase tracking-wider text-accent-lime">Предсезонка</p>
+      <p className="font-display text-lg font-bold text-ink-chalk">
+        {off.first_season ? "Первый сезон" : "Новый сезон"} — {formatWhen(off.starts_at)}
+      </p>
       <p className="mb-4 text-[11px] text-ink-mist">Любой шаг можно пропустить: сезон начнётся сам с текущими настройками.</p>
       {off.friend_league && (
         <p className="-mt-2 mb-4 rounded-xl bg-accent-cyan/10 px-3 py-2 text-[11px] text-accent-cyan">
@@ -202,7 +206,7 @@ export function OffseasonPanel({ season, catalog, onView, onError }: {
         </p>
       )}
 
-      <Step n={1} title="Итоги сезона">
+      {!off.first_season && <Step n={1} title="Итоги сезона">
         <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
           {off.prev_place && <span className="rounded-full bg-bg-base/60 px-2.5 py-1 font-semibold text-ink-chalk">{off.prev_place} место</span>}
           {moved !== 0 && (
@@ -215,9 +219,19 @@ export function OffseasonPanel({ season, catalog, onView, onError }: {
           </span>
         </div>
         {off.summary ? <SeasonSummaryView summary={off.summary} catalog={catalog} /> : null}
-      </Step>
+      </Step>}
 
-      <Step n={2} title="Ядро команды и заявка">
+      <Step n={first + 1} title={off.first_season ? "Заявка на сезон" : "Ядро команды и заявка"}>
+        {off.first_season ? (
+          <div className="rounded-2xl bg-bg-base/50 p-3">
+            <p className="text-[11px] leading-snug text-ink-mist">
+              Заявка собрана автоматически из лучших карточек. Её можно поменять до первого тура — потом она станет ядром команды.
+            </p>
+            <button onClick={() => setBuilding(true)} className="mt-2 w-full rounded-xl bg-white/10 py-2 text-xs font-semibold text-ink-chalk active:scale-95">
+              Изменить заявку · {season.squad.length}
+            </button>
+          </div>
+        ) : (
         <div className="rounded-2xl bg-bg-base/50 p-3">
           <div className="flex items-center justify-between text-xs">
             <span className="text-ink-mist">Осталось с прошлого сезона</span>
@@ -234,9 +248,10 @@ export function OffseasonPanel({ season, catalog, onView, onError }: {
             Изменить заявку · {season.squad.length}
           </button>
         </div>
+        )}
       </Step>
 
-      <Step n={3} title="Предсезонные сборы">
+      <Step n={first + 2} title="Предсезонные сборы">
         <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Сборы">
           {off.camps.map((c) => {
             const on = off.camp === c.code;
@@ -255,7 +270,7 @@ export function OffseasonPanel({ season, catalog, onView, onError }: {
         </p>
       </Step>
 
-      <Step n={4} title="Товарищеский матч">
+      <Step n={first + 3} title="Товарищеский матч">
         {off.friendly ? (
           <button onClick={() => navigate(`/play/career/seasons/${season.id}/friendly`)}
             className="flex w-full items-center justify-between rounded-2xl bg-bg-base/50 px-3 py-2.5 text-left"

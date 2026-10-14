@@ -327,7 +327,7 @@ async def test_reminder_notes_cup_evening_and_offseason(client, db_session, bot_
     assert await career_service.send_reminders(db_session, now=first - timedelta(hours=18)) == 1
     assert await career_service.send_reminders(db_session, now=first - timedelta(hours=17)) == 0
     note = (await db_session.execute(select(Notification).where(
-        Notification.user_id == user_id, Notification.title == "Межсезонье: скоро старт сезона"))).scalars().all()
+        Notification.user_id == user_id, Notification.title == "Предсезонка: скоро старт сезона"))).scalars().all()
     assert len(note) == 1 and "Сборы ещё не выбраны" in note[0].body
 
 

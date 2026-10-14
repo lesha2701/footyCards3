@@ -774,7 +774,7 @@ async def test_objective_reputation_and_profile_after_a_season(client, db_sessio
     balance_before = (await db_session.get(User, user_id)).balance
     later = datetime.now(timezone.utc) + timedelta(days=8)
     await career_service.resolve_due(db_session, season["id"], now=later)
-    db_session.expire_all()
+    cup_winner = ((await _season_row(db_session, season["id"])).state.get("cup") or {}).get("winner")
     part = (await db_session.execute(select(CareerParticipant).where(
         CareerParticipant.user_id == user_id, CareerParticipant.season_id == season["id"]))).scalar_one()
     profile = (await db_session.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))).scalar_one()
@@ -788,6 +788,8 @@ async def test_objective_reputation_and_profile_after_a_season(client, db_sessio
     if part.next_division < part.division:
         expected += config.career_rep_promotion
     expected += config.career_ambition_rep_success[0] if met else config.career_ambition_rep_fail[0]
+    if cup_winner == part.team_index:  # the cup also pays reputation
+        expected += config.career_rep_cup
     assert profile.reputation == max(0, expected)
     # Place reward and (when met) the objective bonus went through the wallet.
     assert (await db_session.get(User, user_id)).balance - balance_before > 0
@@ -1000,7 +1002,8 @@ async def test_admin_division_clubs(client, db_session, bot_token):
 
 async def test_first_season_squad_can_be_rebuilt_before_round_one(client, db_session, bot_token):
     user_id, headers, season = await _season(client, db_session, bot_token, 870016)
-    assert season["offseason"] is None  # the very first season
+    off = season["offseason"]  # the very first season opens with a pre-season too
+    assert off["first_season"] and off["prev_season_id"] is None and off["summary"] is None and off["camps"]
     keep = [s["card_id"] for s in season["squad"]][:12]
     resp = await client.put(f"{API}/career/squad", headers=headers, json={"card_ids": keep})
     assert resp.status_code == 200, resp.text

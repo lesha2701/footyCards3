@@ -217,6 +217,8 @@ export interface CareerOffseason {
   starts_at: string | null;
   /** The friend league carries over: both coaches play this season together. */
   friend_league?: boolean;
+  /** The career's first season: a pre-season without last season's results or core. */
+  first_season?: boolean;
 }
 
 export interface CareerCollectionCard {
