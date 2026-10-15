@@ -29,7 +29,7 @@ const emptyForm = {
   is_pack_droppable: true,
   collection_id: "" as number | "",
   attack_rating: "" as number | "", defense_rating: "" as number | "",
-  /** «Начало пути»: talent of a diamond path card ("" = regular card). */
+  /** «Академия»: talent of a diamond path card ("" = regular card). */
   path_talent_code: "",
 };
 
@@ -242,7 +242,7 @@ export default function AdminPlayersPage() {
               </label>
               {form.rarity === "diamond" && (
                 <label className="flex flex-col gap-1">
-                  <span className="text-xs text-slate-400">Талант пути («Начало пути»)</span>
+                  <span className="text-xs text-slate-400">Талант пути («Академия»)</span>
                   <select
                     value={form.path_talent_code}
                     onChange={(e) => setForm({ ...form, path_talent_code: e.target.value })}

@@ -8,7 +8,7 @@ import type { MatchEvent, MatchSkillNote, MatchTalentNote } from "@/types";
  * claiming it caused the outcome. */
 export default function MatchSkillNotes({ event }: { event: MatchEvent }) {
   const notes = (event.payload?.skills as MatchSkillNote[] | undefined) ?? [];
-  // «Начало пути»: a talent line appears only when the talent really changed
+  // «Академия»: a talent line appears only when the talent really changed
   // this event's roll (the server attaches nothing otherwise).
   const talents = (event.payload?.talents as MatchTalentNote[] | undefined) ?? [];
   if (!notes.length && !talents.length) return null;

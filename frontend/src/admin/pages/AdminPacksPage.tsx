@@ -28,7 +28,7 @@ interface PackForm {
   coach_drop_chance: number;
   stadium_drop_chance: number;
   skill_token_drop_chance: number;
-  /** "path" = the «Начало пути» pack: diamond slots drop only path cards. */
+  /** "path" = the «Академия» pack: diamond slots drop only path cards. */
   player_pool: "default" | "path";
   guaranteed_min_rarity: Rarity | "";
   is_active: boolean;
@@ -200,8 +200,8 @@ export default function AdminPacksPage() {
                   onChange={(e) => setForm({ ...form, player_pool: e.target.value as PackForm["player_pool"] })}
                   className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
                 >
-                  <option value="default">Обычный — карты «Начала пути» не выпадают</option>
-                  <option value="path">«Начало пути» — бриллиантовый слот = карта пути</option>
+                  <option value="default">Обычный — карты «Академии» не выпадают</option>
+                  <option value="path">«Академия» — бриллиантовый слот = карта пути</option>
                 </select>
               </label>
               {form.coach_drop_chance + form.stadium_drop_chance + form.skill_token_drop_chance > 100 && (

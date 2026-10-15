@@ -27,7 +27,7 @@ export default function CardDetailModal({
 }) {
   const player = card.player;
   const isDiamond = player.rarity === "diamond";
-  // «Начало пути»: own frame and the path block instead of diamond leveling.
+  // «Академия»: own frame and the path block instead of diamond leveling.
   const isPath = !!player.path_talent_code;
   // Same cache entry CardStarPanel reads, so feeding duplicates updates the
   // rating shown here right away (the `card` prop is a snapshot).

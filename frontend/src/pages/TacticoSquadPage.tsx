@@ -78,7 +78,7 @@ export default function TacticoSquadPage() {
   const maxLegendary = squad?.max_legendary ?? 3;
   const maxEpic = squad?.max_epic ?? 3;
   const maxDiamond = squad?.max_diamond ?? 1;
-  // «Начало пути» cards are diamonds with a limit of their own.
+  // «Академия» cards are diamonds with a limit of their own.
   const maxPath = squad?.max_path ?? 1;
 
   const cardsById = new Map<number, UserCard>(cards.map((c) => [c.id, c]));
@@ -116,7 +116,7 @@ export default function TacticoSquadPage() {
     }
     if (card.player.path_talent_code && pathCount >= maxPath) {
       haptic("medium");
-      setError(`Максимум ${maxPath} карт «Начала пути» в составе`);
+      setError(`Максимум ${maxPath} карт «Академии» в составе`);
       return;
     }
     setError(null);
@@ -200,7 +200,7 @@ export default function TacticoSquadPage() {
         </span>
         {(pathCount > 0 || cards.some((c) => c.player.path_talent_code)) && (
           <span className={`rounded-full px-2.5 py-1 ${pathCount >= maxPath ? "bg-emerald-400/20 text-emerald-300" : "bg-white/5 text-ink-mist"}`}>
-            🌱 Начало пути: {pathCount}/{maxPath}
+            🌱 Академия: {pathCount}/{maxPath}
           </span>
         )}
       </div>

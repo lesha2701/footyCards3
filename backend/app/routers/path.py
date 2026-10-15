@@ -22,7 +22,7 @@ class BuyAttemptRequest(BaseModel):
 @router.get("/catalog")
 async def get_catalog(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
     """Talents (both levels, where each one works) and stages — for the
-    «Начало пути» info screen and the card badges."""
+    «Академия» info screen and the card badges."""
     config = await get_config(db)
     catalog = await path_service.load_catalog(db)
     return {

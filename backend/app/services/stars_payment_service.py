@@ -289,7 +289,7 @@ async def validate_pre_checkout(db: AsyncSession, payload_token: str, total_amou
         from app.services.game_config_service import get_config
 
         if not (await get_config(db)).path_enabled:
-            return False, "«Начало пути» сейчас недоступно"
+            return False, "«Академия» сейчас недоступна"
     return True, ""
 
 

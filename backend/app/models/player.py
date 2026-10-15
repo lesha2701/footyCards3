@@ -42,7 +42,7 @@ class Player(TimestampMixin, Base):
     )
     next_serial_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     next_club_serial_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    # «Начало пути» (services/path_service.py): set = this diamond design is a
+    # «Академия» (services/path_service.py): set = this diamond design is a
     # path card with this talent (chosen by the admin); NULL = a regular card.
     path_talent_code: Mapped[Optional[str]] = mapped_column(
         String(32), ForeignKey("path_talents.code", ondelete="RESTRICT"), nullable=True, index=True

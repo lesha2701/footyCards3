@@ -104,7 +104,7 @@ function StageNode({ stage, isLast, reduced }: { stage: PathStage; isLast: boole
   );
 }
 
-/** «Путь» screen of one «Начало пути» card: header with the level bar, the
+/** «Путь» screen of one «Академия» card: header with the level bar, the
  * road of stages with their tasks, the talent, today's attempts (with
  * purchases) and how experience is earned. Full-screen sheet, mobile-first. */
 export default function PathSheet({ cardId, player, onClose }: { cardId: number; player: Player; onClose: () => void }) {
@@ -174,7 +174,7 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
         <button type="button" onClick={onClose} className="rounded-xl bg-white/5 px-3 py-1.5 text-sm font-semibold text-ink-mist">
           ← Назад
         </button>
-        <p className="font-display text-base font-bold text-ink-chalk">{state?.title ?? "Начало пути"}</p>
+        <p className="font-display text-base font-bold text-ink-chalk">{state?.title ?? "Академия"}</p>
       </header>
 
       <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4">

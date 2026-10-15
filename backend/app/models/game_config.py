@@ -600,12 +600,12 @@ class GameConfig(TimestampMixin, Base):
     # always kept at or below 99 on top of that).
     card_star_bonus_cap: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
 
-    # --- «Начало пути» (services/path_service.py, docs/path-cards.md) ---
+    # --- «Академия» (services/path_service.py, docs/path-cards.md) ---
     # Off = no new experience / purchases and talents give nothing in new
     # matches; levels already earned keep their rating bonus.
     path_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Shown name of the mechanic, its collection and its pack.
-    path_title: Mapped[str] = mapped_column(String(64), default="Начало пути", nullable=False)
+    path_title: Mapped[str] = mapped_column(String(64), default="Академия", nullable=False)
     # Experience to go from rating r to r+1: base + step * (r - start_rating).
     path_xp_base: Mapped[int] = mapped_column(Integer, default=75, nullable=False)
     path_xp_step: Mapped[int] = mapped_column(Integer, default=10, nullable=False)

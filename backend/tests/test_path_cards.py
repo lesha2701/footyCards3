@@ -1,4 +1,4 @@
-"""«Начало пути» (services/path_service.py, path_talent_effects.py,
+"""«Академия» (services/path_service.py, path_talent_effects.py,
 path_match_service.py): experience and stages, daily limits and bought
 attempts, idempotency, squad limits, diamond-feed / trade / sale rules, the
 path pack, and every talent (fires / does not fire, cap, order, freezing,
@@ -345,7 +345,7 @@ async def test_path_card_has_its_own_limit_next_to_a_diamond(client, db_session,
     too_many = await client.put("/api/v1/lineups/active", headers=headers, json={"slots": [
         {"slot_code": "FWD2", "user_card_id": path_a.id}, {"slot_code": "FWD3", "user_card_id": path_b.id},
     ]})
-    assert too_many.status_code == 409 and "Начала пути" in too_many.json()["error"]["message"]
+    assert too_many.status_code == 409 and "Академии" in too_many.json()["error"]["message"]
 
 
 async def test_path_cards_are_excluded_from_diamond_feeding(client, db_session, bot_token):

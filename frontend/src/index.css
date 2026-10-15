@@ -51,7 +51,7 @@
 :root[data-theme="light"] .text-accent-lime { color: rgb(95 122 0); }
 :root[data-theme="light"] .text-accent-cyan { color: rgb(13 148 136); }
 :root[data-theme="light"] .text-accent-green { color: rgb(21 128 61); }
-/* «Начало пути» screens: pale emerald/amber text read on dark only. */
+/* «Академия» screens: pale emerald/amber text read on dark only. */
 :root[data-theme="light"] .path-ui .text-emerald-300,
 :root[data-theme="light"] .path-ui .text-emerald-300\/80,
 :root[data-theme="light"] .path-ui .text-emerald-300\/90 { color: rgb(4 120 87); }

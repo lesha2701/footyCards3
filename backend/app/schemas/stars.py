@@ -28,7 +28,7 @@ class StarsInvoiceStatusOut(BaseModel):
     my_player_result: Optional[dict] = None
     # «21» entry purchase: {"kind": "entry", "paid_entries": n}.
     blackjack_result: Optional[dict] = None
-    # «Начало пути» attempt purchase: {"kind": "path_attempt", "user_card_id": n}.
+    # «Академия» attempt purchase: {"kind": "path_attempt", "user_card_id": n}.
     path_result: Optional[dict] = None
 
 

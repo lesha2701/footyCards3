@@ -61,7 +61,7 @@ export interface Player {
   is_pack_droppable: boolean;
   collection_id: number | null;
   collection_name: string | null;
-  /** «Начало пути»: set = a path card with this talent. */
+  /** «Академия»: set = a path card with this talent. */
   path_talent_code?: string | null;
 }
 
@@ -127,7 +127,7 @@ export interface UserCard {
   stars?: number;
   star_progress?: number;
   star_rating_bonus?: number;
-  /** «Начало пути»: levels gained, stage reached (0 = Новичок …) and the
+  /** «Академия»: levels gained, stage reached (0 = Новичок …) and the
    * rating the levels add (already included in player.rating). */
   path_level?: number;
   path_stage?: number;
@@ -265,7 +265,7 @@ export interface Pack {
   coach_drop_chance: number;
   stadium_drop_chance: number;
   skill_token_drop_chance?: number;
-  /** "path" = the «Начало пути» pack (diamond slots drop only path cards). */
+  /** "path" = the «Академия» pack (diamond slots drop only path cards). */
   player_pool?: string;
   user_purchase_count: number;
   is_available_now: boolean;
@@ -585,7 +585,7 @@ export interface Lineup {
   is_complete: boolean;
   team_strength: number | null;
   max_diamond: number;
-  /** «Начало пути» cards: own limit next to the diamond one. */
+  /** «Академия» cards: own limit next to the diamond one. */
   max_path?: number;
   coach: EquippedCoach | null;
   stadium: EquippedStadium | null;
@@ -686,7 +686,7 @@ export interface Match {
   created_at: string;
   events: MatchEvent[];
   pending_moment: MatchPendingMoment | null;
-  /** «Начало пути»: static talents applied at kickoff / experience earned. */
+  /** «Академия»: static talents applied at kickoff / experience earned. */
   talent_notes?: MatchTalentNote[] | null;
   path_progress?: PathMatchProgress[] | null;
 }
@@ -2080,7 +2080,7 @@ export interface StrategoCard {
   rarity: Rarity;
   rating: number;
   is_my_player?: boolean;
-  /** «Начало пути»: own squad limit. */
+  /** «Академия»: own squad limit. */
   is_path?: boolean;
   skill_name?: string | null;
   skill_level?: number | null;
@@ -2389,7 +2389,7 @@ export interface MagnateRoomPreview {
   is_member: boolean;
 }
 
-// --- «Начало пути» ---------------------------------------------------------
+// --- «Академия» ---------------------------------------------------------
 
 export interface PathTask {
   id: number;

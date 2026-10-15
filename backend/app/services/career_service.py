@@ -1764,7 +1764,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
 
         reward = config.career_match_reward_win if own > opp else config.career_match_reward_draw if own == opp else 0
         part.coins_earned += await _credit(db, part.user_id, reward, f"Карьера: тур {round_index + 1}", season.id)
-        # «Начало пути»: experience for the path cards that played this league
+        # «Академия»: experience for the path cards that played this league
         # round (own daily cap per card; idempotent per card and round).
         await path_match_service.award_side(
             db, user_id=part.user_id, source_type="career", source_id=f"{season.id}:{round_index}",

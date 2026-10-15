@@ -53,7 +53,7 @@ export default function NewTradePage() {
   // Neither side's collection ever offers/requests a card locked elsewhere
   // (admin lock, in a trade, in a Card Arena lineup, or in a Tactico
   // squad) — the backend rejects all four (plus diamond rarity, which never
-  // trades — except «Начало пути» cards, whose path progress moves with the
+  // trades — except «Академия» cards, whose path progress moves with the
   // card) at accept time anyway, so showing them as pickable here just sets
   // the offer up to fail later.
   const isTradeable = (c: {

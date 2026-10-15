@@ -371,7 +371,7 @@ export default function AdminPathPage() {
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-2 font-display text-base font-bold">Игроки пути ({overview.players.length})</p>
         <p className="mb-2 text-xs text-slate-400">
-          Пак «{overview.title}» (вкладка «Паки», пул «Начало пути») в бриллиантовых слотах выдаёт только этих игроков;
+          Пак «{overview.title}» (вкладка «Паки», пул «Академия») в бриллиантовых слотах выдаёт только этих игроков;
           обычные паки их никогда не выдают.
         </p>
         <ul className="divide-y divide-white/5 text-sm">

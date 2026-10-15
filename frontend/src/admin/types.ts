@@ -406,7 +406,7 @@ export interface GameConfig {
   card_star_coin_cost: Record<string, number[]>;
   card_star_rating_per_star: number;
   card_star_bonus_cap: number;
-  // «Начало пути»
+  // «Академия»
   path_enabled: boolean;
   path_title: string;
   path_xp_base: number;

@@ -102,8 +102,8 @@ def _collection_active_filter():
 
 async def pick_random_player(db: AsyncSession, rarity: Rarity, pool: str = "default") -> Player:
     """A random active, pack-droppable player of `rarity`. pool="default"
-    (every source except the «Начало пути» pack) never drops a «Начало пути»
-    card; pool="path" (Pack.player_pool) drops ONLY «Начало пути» cards in a
+    (every source except the «Академия» pack) never drops a «Академия»
+    card; pool="path" (Pack.player_pool) drops ONLY «Академия» cards in a
     diamond slot — other rarities stay regular players."""
     path_slot = pool == "path" and rarity == Rarity.diamond
     path_filter = Player.path_talent_code.is_not(None) if path_slot else Player.path_talent_code.is_(None)
@@ -119,7 +119,7 @@ async def pick_random_player(db: AsyncSession, rarity: Rarity, pool: str = "defa
     )
     player = result.scalar_one_or_none()
     if player is None and path_slot:
-        raise ConflictError("В паке пока нет карточек «Начала пути»")
+        raise ConflictError("В паке пока нет карточек «Академии»")
     if player is None:
         # Fall back to any active, pack-droppable player (in an active collection) if this rarity has none configured.
         result = await db.execute(

@@ -267,7 +267,7 @@ def compute_chemistry(
     coach's country and stadium's club (coach_country_of / stadium_club_of;
     None = no such extra).
 
-    Match-time «Начало пути» talent hooks (path_talent_effects; all None in
+    Match-time «Академия» talent hooks (path_talent_effects; all None in
     editors and for every card without such a talent): link_floor — slot ->
     minimum link level with that slot (1 medium, 2 strong; «Свой парень»),
     on_position_slots — slots counted as on-position («Универсал» II),

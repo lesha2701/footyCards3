@@ -575,7 +575,7 @@ def require_skill_loss_confirmation(cards: list[UserCard], confirmed: bool, acti
     mention stars too."""
     skilled = [c for c in cards if c.skill_code]
     starred = [c for c in cards if getattr(c, "stars", 0) or getattr(c, "star_progress", 0)]
-    # «Начало пути»: the levels / stage reached on the path go with the copy.
+    # «Академия»: the levels / stage reached on the path go with the copy.
     pathed = [c for c in cards if getattr(c, "path_level", 0) or getattr(c, "path_stage", 0)]
     if (skilled or starred or pathed) and not confirmed:
         lost = " и ".join(

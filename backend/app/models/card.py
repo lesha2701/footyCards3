@@ -53,7 +53,7 @@ class UserCard(Base):
     stars: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     star_progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     star_rating_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    # «Начало пути» (services/path_service.py), path cards only: levels gained
+    # «Академия» (services/path_service.py), path cards only: levels gained
     # on the path, the stage reached (0 = Новичок … 4 = Легенда) and the rating
     # those levels add — fixed on the row when each level is gained, like
     # diamond_rating_bonus. The rest of the progress is in card_paths.

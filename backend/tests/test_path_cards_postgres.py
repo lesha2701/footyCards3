@@ -1,4 +1,4 @@
-"""«Начало пути» concurrency against a REAL PostgreSQL (row locks + unique
+"""«Академия» concurrency against a REAL PostgreSQL (row locks + unique
 constraints). Runs on the `real_pg` fixture (tests/conftest.py): a dedicated
 `*_test` database, migrated to head, every created row removed on teardown.
 """

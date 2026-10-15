@@ -1,4 +1,4 @@
-"""«Начало пути» — experience, levels and stages of path cards, daily limits,
+"""«Академия» — experience, levels and stages of path cards, daily limits,
 bought attempts. Talents' match effects: services/path_talent_effects.py.
 
 Rules (numbers from GameConfig / path_* tables, docs/path-cards.md):
@@ -419,7 +419,7 @@ async def _owned_path_card(db: AsyncSession, user: User, card_id: int, lock: boo
     if card.owner_id != user.id:
         raise ForbiddenError("Это не твоя карточка")
     if not is_path_card(card):
-        raise ConflictError("Это не карточка «Начала пути»")
+        raise ConflictError("Это не карточка «Академии»")
     return card
 
 
@@ -556,7 +556,7 @@ def build_state(card: UserCard, path: Optional[CardPath], catalog: Catalog, conf
 async def buy_attempt_with_coins(db: AsyncSession, user: User, card_id: int, idempotency_key: Optional[str]) -> dict:
     config = await get_config(db)
     if not config.path_enabled:
-        raise ConflictError("Механика «Начало пути» сейчас выключена")
+        raise ConflictError("Механика «Академия» сейчас выключена")
     locked_user = await lock_user_for_update(db, user.id)
     if idempotency_key:
         replay = (await db.execute(select(PathAttemptPurchase).where(
@@ -595,7 +595,7 @@ async def check_stars_purchase(db: AsyncSession, user: User, card_id: int) -> tu
     returns (card, price). The limit is checked again at delivery."""
     config = await get_config(db)
     if not config.path_enabled:
-        raise ConflictError("Механика «Начало пути» сейчас выключена")
+        raise ConflictError("Механика «Академия» сейчас выключена")
     card = await _owned_path_card(db, user, card_id)
     path = (await db.execute(select(CardPath).where(CardPath.user_card_id == card.id))).scalar_one_or_none()
     bought = path.stars_buys if path is not None and path.day == local_today() else 0

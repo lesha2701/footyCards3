@@ -465,13 +465,13 @@ async def set_lineup(
         player_ids_seen.add(card.player_id)
 
     config = await get_config(db)
-    # «Начало пути» cards are diamonds with a squad limit of their own.
+    # «Академия» cards are diamonds with a squad limit of their own.
     diamond_count = sum(1 for card in cards_by_id.values() if card.player.rarity == Rarity.diamond and not _is_path(card))
     if diamond_count > config.match_max_diamond_cards:
         raise ConflictError(f"Максимум {config.match_max_diamond_cards} диамантовых карт в составе")
     path_count = sum(1 for card in cards_by_id.values() if _is_path(card))
     if path_count > config.match_max_path_cards:
-        raise ConflictError(f"Максимум {config.match_max_path_cards} карт «Начала пути» в составе")
+        raise ConflictError(f"Максимум {config.match_max_path_cards} карт «Академии» в составе")
 
     lineup = await _get_template_row(db, user.id, template_index)
 

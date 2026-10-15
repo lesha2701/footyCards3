@@ -15,7 +15,7 @@ interface Props {
   dimmed?: boolean;
   /** «Звёзды» of this specific copy (its rating already includes them). */
   stars?: number;
-  /** «Начало пути»: stage of this specific copy (omit for a design). */
+  /** «Академия»: stage of this specific copy (omit for a design). */
   pathStage?: number;
 }
 

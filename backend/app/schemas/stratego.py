@@ -20,7 +20,7 @@ class StrategoCardOut(BaseModel):
     rarity: str
     rating: int
     is_my_player: bool = False
-    # «Начало пути» card (own squad limit, never a diamond place).
+    # «Академия» card (own squad limit, never a diamond place).
     is_path: bool = False
     # Card skill that counts in Stratego fights (attack or defence bonus).
     skill_name: Optional[str] = None

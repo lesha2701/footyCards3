@@ -83,7 +83,7 @@ async def create_player(payload: PlayerCreate, request: Request, db: AsyncSessio
 
 
 def validate_path_player(player: Player) -> None:
-    """«Начало пути»: a talent may only be set on a diamond player, must be
+    """«Академия»: a talent may only be set on a diamond player, must be
     from the server catalog and fit the player's position."""
     from app.core.exceptions import ConflictError
     from app.models.enums import Rarity
@@ -95,7 +95,7 @@ def validate_path_player(player: Player) -> None:
     if code not in TALENTS:
         raise ConflictError("Неизвестный талант")
     if player.rarity != Rarity.diamond:
-        raise ConflictError("Карточкой «Начала пути» может быть только бриллиантовый игрок")
+        raise ConflictError("Карточкой «Академии» может быть только бриллиантовый игрок")
     allowed = TALENTS[code].positions
     if allowed is not None and player.position not in allowed:
         raise ConflictError(f"Талант «{TALENTS[code].name}» не подходит для позиции {player.position.value}")

@@ -288,8 +288,8 @@ function PackCard({
                       : "bg-bg-raised text-ink-mist"
                   }`}
                 >
-                  {/* «Начало пути» pack: its diamond slot is a path card. */}
-                  {pack.player_pool === "path" && rp.rarity === "diamond" ? "🌱 Начало пути" : RARITY_LABELS[rp.rarity]}{" "}
+                  {/* «Академия» pack: its diamond slot is a path card. */}
+                  {pack.player_pool === "path" && rp.rarity === "diamond" ? "🌱 Академия" : RARITY_LABELS[rp.rarity]}{" "}
                   {Math.round(rp.probability * 100)}%
                 </span>
               ))}
@@ -361,8 +361,8 @@ function StarsPackCard({ pack, onPurchased }: { pack: Pack; onPurchased: (result
                       : "bg-bg-raised text-ink-mist"
                   }`}
                 >
-                  {/* «Начало пути» pack: its diamond slot is a path card. */}
-                  {pack.player_pool === "path" && rp.rarity === "diamond" ? "🌱 Начало пути" : RARITY_LABELS[rp.rarity]}{" "}
+                  {/* «Академия» pack: its diamond slot is a path card. */}
+                  {pack.player_pool === "path" && rp.rarity === "diamond" ? "🌱 Академия" : RARITY_LABELS[rp.rarity]}{" "}
                   {Math.round(rp.probability * 100)}%
                 </span>
               ))}

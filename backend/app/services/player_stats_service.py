@@ -43,7 +43,7 @@ def compute_default_attack_defense(rating: int, position: Position) -> tuple[int
 def card_rating_bonus(card) -> int:
     """Everything a specific owned copy adds to its player's rating: the
     diamond upgrade (diamond cards only), earned stars (non-diamond only,
-    services/card_star_service.py) and «Начало пути» levels (path cards
+    services/card_star_service.py) and «Академия» levels (path cards
     only, services/path_service.py). All are fixed on the card row when
     earned. getattr: also called with ClubCard rows and lightweight
     stand-ins that carry none of these columns."""

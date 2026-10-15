@@ -27,7 +27,7 @@ const talent = (over: Partial<PathTalent> = {}): PathTalent => ({
 });
 
 const catalog: PathCatalog = {
-  title: "Начало пути", enabled: true, talent_cap: 8,
+  title: "Академия", enabled: true, talent_cap: 8,
   stages: [
     { index: 0, name: "Новичок", max_rating: 65, talent_level: 0 },
     { index: 1, name: "Перспективный", max_rating: 74, talent_level: 0 },
@@ -39,7 +39,7 @@ const catalog: PathCatalog = {
 };
 
 const pathState: PathState = {
-  card_id: 7, title: "Начало пути", enabled: true, player_name: "Юный Форвард", position: "ST",
+  card_id: 7, title: "Академия", enabled: true, player_name: "Юный Форвард", position: "ST",
   base_rating: 60, rating: 68, ceiling: 96, level: 8, max_level: 36, xp: 900, xp_into_level: 40, xp_for_next: 145,
   blocked_by_tasks: false, stage: 1, stage_name: "Перспективный", is_legend: false,
   stages: [

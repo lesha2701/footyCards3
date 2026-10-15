@@ -39,7 +39,7 @@ export function starString(stars: number, max: number): string {
 }
 
 /** Selling/burning this copy would lose its skill, its stars/«копилка» or
- * its «Начало пути» progress. */
+ * its «Академия» progress. */
 export function losesProgress(
   card: Pick<UserCard, "skill_code" | "stars" | "star_progress"> & Partial<Pick<UserCard, "path_level" | "path_stage">>,
 ): boolean {

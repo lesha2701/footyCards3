@@ -48,7 +48,7 @@ class _EngineCard:
     # Frozen card-skill effect for this match (card_skill_effects.effect_for_card),
     # None when the card has no skill or the mechanic is off.
     skill: dict | None = None
-    # Frozen «Начало пути» talent snapshot (path_talent_effects), None = none.
+    # Frozen «Академия» talent snapshot (path_talent_effects), None = none.
     talent: dict | None = None
 
 
@@ -58,7 +58,7 @@ def _engine_card(
     """chemistry_bonus: this card's neighbour-link chemistry bonus
     (chemistry_service, 0 while the mechanic is off) — folded into the match
     rating the engine reads, after the diamond/star bonus and before any zone
-    profile / coach / stadium math. talent_bonus: its static «Начало пути»
+    profile / coach / stadium math. talent_bonus: its static «Академия»
     talents (kickoff), added on top; `talent` is the snapshot whose dynamic
     part the engine applies per chance."""
     p = card.player
@@ -87,7 +87,7 @@ class _Side:
     lineup: list[dict]
     # {"team", "max", "cards": {card_id: points}} when chemistry was applied.
     chemistry: dict | None = None
-    # «Начало пути»: path cards of the squad, whether any has a talent that
+    # «Академия»: path cards of the squad, whether any has a talent that
     # acts here, and the applied talent snapshot (when built with talents).
     path_cards: list | None = None
     talented: bool = False
@@ -118,7 +118,7 @@ async def _build_side(
     # .chemistry_rules), never the live GameConfig — see _play_match.
     coach = squad.user_coach_card.coach if squad.user_coach_card else None
     home_stadium = squad.user_stadium_card.stadium if is_home and squad.user_stadium_card else None
-    # «Начало пути» talents (kickoff): only on the second build of a side,
+    # «Академия» talents (kickoff): only on the second build of a side,
     # once the opponent's average rating is known (see _play_match).
     plan = None
     if with_talents and catalog is not None and config is not None:
@@ -249,7 +249,7 @@ async def _play_match(
             snapshot = snapshot or {"version": SNAPSHOT_VERSION, "a": {}, "b": {}}
             snapshot["chemistry"] = {"a": side_a.chemistry, "b": side_b.chemistry}
         if side_a.path_cards or side_b.path_cards:
-            # «Начало пути»: which path cards played (experience after the
+            # «Академия»: which path cards played (experience after the
             # match) and the talents applied — auditable like the skills.
             snapshot = snapshot or {"version": SNAPSHOT_VERSION, "a": {}, "b": {}}
             snapshot["path"] = {
@@ -333,7 +333,7 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
                 db.add(match)
                 apply_match_result(standings[user_a_id], standings[user_b_id], score_a, score_b)
 
-                # «Начало пути»: experience for the path cards that played
+                # «Академия»: experience for the path cards that played
                 # (own daily cap per card, never Arena attempts). Idempotent
                 # per (card, match).
                 path_cards = ((skill_snapshot or {}).get("path") or {}).get("cards") or {}

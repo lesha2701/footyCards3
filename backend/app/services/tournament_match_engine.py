@@ -342,7 +342,7 @@ def _resolve_defense_tackle(
         return event, (attacking_side if scored else "none"), (defender["club_card_id"], card_kind)
 
     if is_box:
-        # «Начало пути»: the keeper's talent on a penalty (Хладнокровие etc.).
+        # «Академия»: the keeper's talent on a penalty (Хладнокровие etc.).
         penalty_talents: list = []
         keeper_bonus = 0
         if talent_ctx is not None and keeper and keeper.get("talent"):
@@ -457,7 +457,7 @@ def _resolve_chance(
     }
     quality_bias = QUALITY_BIAS[chance.quality]
     defending_keeper = _keeper_of(lineup_b if attacking_side == "a" else lineup_a)
-    # «Начало пути» dynamic talents (no RNG draws: a match without talents
+    # «Академия» dynamic talents (no RNG draws: a match without talents
     # resolves exactly as before).
     own_att, own_def = getattr(result, f"score_{attacking_side}"), getattr(result, f"score_{defending_side}")
     keeper_bonus = 0

@@ -1,4 +1,4 @@
-"""Server catalog of «Начало пути» talents: what each talent DOES and where
+"""Server catalog of «Академия» talents: what each talent DOES and where
 the match engines model it. Admin-tunable state (on/off, strength per level,
 order) lives in the `path_talents` table; the numbers below are only the
 defaults a fresh row is seeded with and the fallback for a missing key.

@@ -1,6 +1,6 @@
 import { isLegendStage, stageIcon, talentByCode, talentLevelAt, usePathCatalog } from "@/lib/pathCards";
 
-/** «Росток» chip for a «Начало пути» card: stage mark + talent emoji and its
+/** «Росток» chip for a «Академия» card: stage mark + talent emoji and its
  * level (I/II, dimmed while the talent is not unlocked yet). Sits in the
  * bottom-RIGHT corner of the image, opposite the skill badge, so it never
  * covers the face, rating, position or name. */
@@ -23,7 +23,7 @@ export default function PathCardMark({
   return (
     <span
       title={[
-        catalog?.title ?? "Начало пути",
+        catalog?.title ?? "Академия",
         stageName,
         talent ? `${talent.name}${level ? ` ${level === 2 ? "II" : "I"}` : " — откроется на этапе «Основной»"}` : undefined,
       ].filter(Boolean).join(" · ")}

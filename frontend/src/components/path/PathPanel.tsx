@@ -7,7 +7,7 @@ import TalentBlock from "@/components/path/TalentBlock";
 import { levelFraction, shownLevelXp, pathFraction, stageIcon } from "@/lib/pathCards";
 import type { Player } from "@/types";
 
-/** «Начало пути» block of the card detail sheet: stage, path progress, the
+/** «Академия» block of the card detail sheet: stage, path progress, the
  * next level, the talent and the button to the full «Путь» screen. */
 export default function PathPanel({ cardId, player }: { cardId: number; player: Player }) {
   const [open, setOpen] = useState(false);

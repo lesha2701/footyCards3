@@ -79,7 +79,7 @@ export function markStageSeen(cardId: number, stage: number): void {
   }
 }
 
-/** «Росток» frame of a «Начало пути» card: a green-to-ice gradient in
+/** «Росток» frame of a «Академия» card: a green-to-ice gradient in
  * place of the diamond one; gold once it reached «Легенда». The shimmer runs
  * only when the user allows motion (motion-safe). */
 export const PATH_FRAME =

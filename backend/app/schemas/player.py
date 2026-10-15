@@ -31,7 +31,7 @@ class PlayerOut(BaseModel):
     is_pack_droppable: bool
     collection_id: Optional[int] = None
     collection_name: Optional[str] = None
-    # «Начало пути»: set = a path card with this talent (services/path_talent_catalog.py).
+    # «Академия»: set = a path card with this talent (services/path_talent_catalog.py).
     path_talent_code: Optional[str] = None
 
     @model_validator(mode="before")

@@ -447,7 +447,7 @@ class GameConfigOut(BaseModel):
     card_star_rating_per_star: int = 1
     card_star_bonus_cap: int = 6
     path_enabled: bool = True
-    path_title: str = "Начало пути"
+    path_title: str = "Академия"
     path_xp_base: int = 75
     path_xp_step: int = 10
     path_start_rating: int = 60

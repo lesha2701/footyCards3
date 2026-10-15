@@ -220,7 +220,7 @@ export default function ArenaPage() {
   )?.map((s) => s.card!.player.id) ?? [];
 
   const maxDiamond = lineup?.max_diamond ?? 1;
-  // «Начало пути» cards are diamonds with a squad limit of their own.
+  // «Академия» cards are diamonds with a squad limit of their own.
   const maxPath = lineup?.max_path ?? 1;
   const isPlainDiamond = (p: { rarity: string; path_talent_code?: string | null }) => p.rarity === "diamond" && !p.path_talent_code;
   const otherSlots = (pickerSlot
@@ -425,7 +425,7 @@ export default function ArenaPage() {
           </span>
           {pathCount > 0 && (
             <span className={`ml-1.5 rounded-full px-2.5 py-1 ${pathCount >= maxPath ? "bg-emerald-400/20 text-emerald-300" : "bg-white/5 text-ink-mist"}`}>
-              🌱 Начало пути: {pathCount}/{maxPath}
+              🌱 Академия: {pathCount}/{maxPath}
             </span>
           )}
         </p>

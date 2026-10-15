@@ -172,7 +172,7 @@ async def set_squad(
     diamond_count = sum(1 for c in cards_by_id.values() if is_plain_diamond(c))
     path_count = sum(1 for c in cards_by_id.values() if is_path_card(c))
     if path_count > config.tactico_max_path_cards:
-        raise ConflictError(f"Максимум {config.tactico_max_path_cards} карт «Начала пути» в составе Тактико")
+        raise ConflictError(f"Максимум {config.tactico_max_path_cards} карт «Академии» в составе Тактико")
     if legendary_count > config.tactico_max_legendary_cards:
         raise ConflictError(f"Максимум {config.tactico_max_legendary_cards} легендарных карт в составе Тактико")
     if epic_count > config.tactico_max_epic_cards:

@@ -6,7 +6,7 @@ const STATUS_TEXT: Record<string, string> = {
   duplicate: "уже засчитано",
 };
 
-/** After the whistle: the «Начало пути» talents that applied from kickoff and
+/** After the whistle: the «Академия» talents that applied from kickoff and
  * the experience each path card earned (or why it did not). Renders nothing
  * for a match without path cards. */
 export default function MatchPathSummary({ match }: { match: Pick<Match, "talent_notes" | "path_progress" | "reward_coins"> }) {
@@ -15,7 +15,7 @@ export default function MatchPathSummary({ match }: { match: Pick<Match, "talent
   if (!talents.length && !progress.length) return null;
   return (
     <div className="path-ui rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-[11px]">
-      <p className="font-semibold text-emerald-300">🌱 Начало пути</p>
+      <p className="font-semibold text-emerald-300">🌱 Академия</p>
       {talents.map((t, i) => (
         <p key={`t${i}`} className="text-ink-mist">
           {t.emoji} {t.name} {t.level_label}

@@ -151,7 +151,7 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
         for card in offered_cards:
             if card.owner_id != sender.id:
                 raise ForbiddenError("You can only offer your own cards")
-            # «Начало пути» cards are the one tradeable kind of diamond: their
+            # «Академия» cards are the one tradeable kind of diamond: their
             # path progress lives on the card row and moves with it.
             if card.player.rarity == Rarity.diamond and card.player.path_talent_code is None:
                 raise ConflictError("Diamond cards cannot be traded")
@@ -167,7 +167,7 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
         for card in requested_cards:
             if card.owner_id != receiver.id:
                 raise ConflictError("Requested cards must belong to the trade partner")
-            # «Начало пути» cards are the one tradeable kind of diamond: their
+            # «Академия» cards are the one tradeable kind of diamond: their
             # path progress lives on the card row and moves with it.
             if card.player.rarity == Rarity.diamond and card.player.path_talent_code is None:
                 raise ConflictError("Diamond cards cannot be traded")

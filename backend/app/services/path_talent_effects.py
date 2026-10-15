@@ -1,4 +1,4 @@
-"""Match effects of «Начало пути» talents. Pure: no DB access.
+"""Match effects of «Академия» talents. Pure: no DB access.
 
 Order of a card's match rating (Card Arena and player tournaments):
 base rating → diamond / stars / path levels (card_rating_bonus) → chemistry

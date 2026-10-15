@@ -374,7 +374,7 @@ def _keeper_effects(state: dict, side: str, one_on_one: bool) -> list:
 
 
 def _with_skill_notes(payload: dict, notes: list) -> dict:
-    # Skill notes and «Начало пути» talent notes may share one list (a
+    # Skill notes and «Академия» talent notes may share one list (a
     # talent note carries an "emoji" key); each kind gets its own key.
     talents = [n for n in notes if "emoji" in n]
     skills = [n for n in notes if "emoji" not in n]
@@ -416,7 +416,7 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
     minute = moment["minute"]
     one_on_one = "one_on_one" in situation.tags
     if action == "shoot":
-        # «Начало пути» talents act on the card's rating before the skill roll.
+        # «Академия» talents act on the card's rating before the skill roll.
         shooter_rating = path_match_service.arena_actor_rating(
             state, shooter, minute, "shooter", notes, one_on_one=one_on_one,
         )
@@ -755,7 +755,7 @@ async def _finalize_match(
             f"Награда за матч Card Arena ({result.value})", related_object_type="match", related_object_id=match.id,
         )
 
-    # «Начало пути»: experience only for a finished, rewarded match (a
+    # «Академия»: experience only for a finished, rewarded match (a
     # forfeit never counts), in the same transaction as the reward.
     if forced_result is None:
         await path_match_service.arena_after_match(
@@ -875,7 +875,7 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
             user_fwd, user_def, user_gk, opponent_strength, user_strength
         )
 
-    # «Начало пути»: talents decided at kickoff (after the opponent is known,
+    # «Академия»: talents decided at kickoff (after the opponent is known,
     # so a bot's strength never includes them) and frozen into the state.
     kickoff = await path_match_service.arena_kickoff(
         db, lineup, user_strength=user_strength, opponent_strength=opponent_strength, config=config,

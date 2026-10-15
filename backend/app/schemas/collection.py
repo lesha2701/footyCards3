@@ -33,7 +33,7 @@ class UserCardListItem(BaseModel):
     # This copy's own skill (null = none).
     skill_code: Optional[str] = None
     skill_level: Optional[int] = None
-    # «Начало пути» (services/path_service.py): levels gained, stage reached
+    # «Академия» (services/path_service.py): levels gained, stage reached
     # (0 = Новичок …) and the rating they add (already in player.rating).
     path_level: int = 0
     path_stage: int = 0

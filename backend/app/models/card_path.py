@@ -1,4 +1,4 @@
-"""«Начало пути» — diamond cards of young players that grow by playing.
+"""«Академия» — diamond cards of young players that grow by playing.
 
 What lives where (see docs/path-cards.md):
   * Player.path_talent_code — a Player design IS a path card when this is set

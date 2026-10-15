@@ -1,6 +1,6 @@
-"""«Начало пути»: path cards (diamond players that grow by playing) — talent
+"""«Академия»: path cards (diamond players that grow by playing) — talent
 catalog, stages and their gate tasks, per-copy progress, experience journal,
-bought attempts, GameConfig tuning, the «Начало пути» pack and collection.
+bought attempts, GameConfig tuning, the «Академия» pack and collection.
 
 Only adds tables/columns (existing cards get path_level = path_stage =
 path_rating_bonus = 0 and no card_paths row, i.e. nothing changes for them)
@@ -146,7 +146,7 @@ def upgrade() -> None:
 
     gc = [
         ("path_enabled", sa.Boolean(), sa.true()),
-        ("path_title", sa.String(64), "Начало пути"),
+        ("path_title", sa.String(64), "Академия"),
         ("path_xp_base", sa.Integer(), "75"), ("path_xp_step", sa.Integer(), "10"),
         ("path_start_rating", sa.Integer(), "60"), ("path_rating_per_level", sa.Integer(), "1"),
         ("path_xp_match", sa.Integer(), "10"), ("path_xp_win", sa.Integer(), "10"), ("path_xp_draw", sa.Integer(), "3"),
@@ -190,11 +190,11 @@ def upgrade() -> None:
             )
 
     # The collection (completion reward) and the pack — inactive until the
-    # admin has added «Начало пути» players (a path pack with no path players
+    # admin has added «Академия» players (a path pack with no path players
     # would have nothing to drop in its diamond slots).
     bind.execute(sa.text(
         "INSERT INTO card_collections (name, description, is_active, sort_order, reward_coins, created_at, updated_at) "
-        "VALUES ('Начало пути', 'Молодые игроки, которые растут, пока играют', true, 0, 5000, now(), now()) "
+        "VALUES ('Академия', 'Молодые игроки, которые растут, пока играют', true, 0, 5000, now(), now()) "
         "ON CONFLICT (name) DO NOTHING"
     ))
     exists = bind.execute(sa.text("SELECT id FROM packs WHERE slug = 'path-start'")).first()
@@ -202,7 +202,7 @@ def upgrade() -> None:
         pack_id = bind.execute(sa.text(
             "INSERT INTO packs (slug, name, description, price, card_count, guaranteed_min_rarity, is_active, sort_order, "
             "coach_drop_chance, stadium_drop_chance, skill_token_drop_chance, player_pool, created_at, updated_at) "
-            "VALUES ('path-start', 'Начало пути', '5 карточек: шанс на молодого игрока «Начала пути» в каждом слоте', "
+            "VALUES ('path-start', 'Академия', '5 карточек: шанс на молодого игрока «Академии» в каждом слоте', "
             "3000, 5, 'epic', false, 50, 0, 0, 0, 'path', now(), now()) RETURNING id"
         )).scalar_one()
         for rarity, probability in (("common", 0.20), ("rare", 0.35), ("epic", 0.30), ("legendary", 0.10), ("diamond", 0.05)):

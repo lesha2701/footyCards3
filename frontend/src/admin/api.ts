@@ -1018,7 +1018,7 @@ export async function deleteLifestyleItemImage(id: number): Promise<AdminLifesty
 }
 
 
-// --- «Начало пути» ---------------------------------------------------------
+// --- «Академия» ---------------------------------------------------------
 
 export async function fetchAdminPath(): Promise<AdminPathOverview> {
   const { data } = await api.get<AdminPathOverview>("/admin/path");

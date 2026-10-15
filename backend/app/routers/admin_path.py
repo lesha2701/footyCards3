@@ -1,4 +1,4 @@
-"""Admin: «Начало пути» catalog — talents (on/off, strength per level, order),
+"""Admin: «Академия» catalog — talents (on/off, strength per level, order),
 stages (name, rating band, talent level unlocked) and their gate tasks.
 Experience / limits / prices / squad limits are GameConfig fields edited
 through the existing PUT /admin/games/config; which players are path cards

@@ -1,4 +1,4 @@
-"""«Начало пути» in the match engines: kickoff talent decisions for Card Arena
+"""«Академия» in the match engines: kickoff talent decisions for Card Arena
 and player tournaments, and the experience award after a match. The pure
 rules are in path_talent_effects / path_service; this module only gathers
 the inputs (cards, chemistry, coach, stadium, streaks) and the outputs."""
@@ -41,7 +41,7 @@ class ArenaKickoff:
 
 
 async def arena_kickoff(db: AsyncSession, lineup, *, user_strength: int, opponent_strength: int, config) -> Optional[ArenaKickoff]:
-    """None when the lineup has no «Начало пути» card (nothing changes)."""
+    """None when the lineup has no «Академия» card (nothing changes)."""
     from app.services.lineup_service import ARENA_FORMATION, SLOTS_BY_CODE, calculate_base_strength
 
     path_ids = [s.card.id for s in lineup.slots if s.card is not None and _player_is_path(s.card.player)]

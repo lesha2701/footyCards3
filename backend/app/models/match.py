@@ -67,7 +67,7 @@ class Match(Base):
 
     @property
     def talent_notes(self) -> Optional[list]:
-        """«Начало пути» talents that applied from kickoff (static ones)."""
+        """«Академия» talents that applied from kickoff (static ones)."""
         talents = (self.server_state or {}).get("talents") or {}
         return talents.get("notes") or None
 

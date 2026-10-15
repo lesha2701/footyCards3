@@ -103,7 +103,7 @@ async def feed_cards(
     if diamond_card.player.rarity != Rarity.diamond:
         raise ConflictError("Only a diamond card can be leveled up this way")
     if diamond_card.player.path_talent_code is not None:
-        raise ConflictError("Карточки «Начала пути» растут только по своему пути")
+        raise ConflictError("Карточки «Академии» растут только по своему пути")
     if diamond_card.is_locked():
         raise ConflictError("This card is locked and cannot be upgraded")
 
@@ -114,7 +114,7 @@ async def feed_cards(
         if card.is_locked():
             raise ConflictError("This card is locked and cannot be used as material")
         if card.player.path_talent_code is not None:
-            raise ConflictError("Карточку «Начала пути» нельзя использовать как материал")
+            raise ConflictError("Карточку «Академии» нельзя использовать как материал")
     # Materials are destroyed; only the fed diamond card (same row, same
     # identity) keeps its skill.
     require_skill_loss_confirmation(material_cards, confirm_skill_loss, "прокачка бриллиантовой карточки")
@@ -190,7 +190,7 @@ async def get_material_cards(db: AsyncSession, user_id: int, diamond_card_id: in
     if diamond_card.player.rarity != Rarity.diamond:
         raise ConflictError("Only a diamond card can be leveled up this way")
     if diamond_card.player.path_talent_code is not None:
-        raise ConflictError("Карточки «Начала пути» растут только по своему пути")
+        raise ConflictError("Карточки «Академии» растут только по своему пути")
 
     current_rating, _, _ = effective_card_stats(diamond_card.player, diamond_card.diamond_rating_bonus)
     rating_cap = await get_effective_rating_cap(db)

@@ -96,7 +96,7 @@ def _player_info(player: Player, user_card_id: Optional[int] = None, diamond_bon
             "user_card_id": user_card_id, "player_id": player.id, "display_name": player.display_name,
             "position": player.position.value, "image_path": player.image_path,
             "rarity": player.rarity.value, "rating": rating,
-            # «Начало пути»: counted against their own squad limit, not the diamond one.
+            # «Академия»: counted against their own squad limit, not the diamond one.
             "is_path": getattr(player, "path_talent_code", None) is not None,
         },
     }
@@ -155,7 +155,7 @@ def _fits(role: str, info: dict) -> bool:
 
 RARITY_LABELS = {
     "common": "обычных", "rare": "редких", "epic": "эпических", "legendary": "легендарных", "diamond": "диамантовых",
-    "path": "карт «Начала пути»",
+    "path": "карт «Академии»",
 }
 
 
@@ -209,7 +209,7 @@ def _rarity(info: dict) -> str:
 
 
 def _limit_group(info: dict) -> str:
-    """Squad-limit bucket: the rarity, except that a «Начало пути» card has
+    """Squad-limit bucket: the rarity, except that a «Академия» card has
     its own limit (it never takes a diamond place)."""
     return "path" if info["card"].get("is_path") else _rarity(info)
 

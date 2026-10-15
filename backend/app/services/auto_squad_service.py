@@ -36,7 +36,7 @@ class SlotSpec:
 
 
 def _is_path(card) -> bool:
-    """«Начало пути» cards: a squad limit of their own (match_max_path_cards)."""
+    """«Академия» cards: a squad limit of their own (match_max_path_cards)."""
     return getattr(card.player, "path_talent_code", None) is not None
 
 

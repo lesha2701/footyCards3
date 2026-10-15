@@ -244,7 +244,7 @@ async def sell_cards(
 
 
 def _invested(card: UserCard) -> bool:
-    """Stars / «копилка» or «Начало пути» progress — a copy that is not
+    """Stars / «копилка» or «Академия» progress — a copy that is not
     interchangeable with its duplicates (listed on its own, never sold as a
     spare)."""
     return card.has_star_investment() or card.has_path_progress()
