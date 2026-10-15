@@ -271,6 +271,8 @@ export interface Pack {
   skill_token_drop_chance?: number;
   /** "path" = the «Академия» pack (diamond slots drop only path cards). */
   player_pool?: string;
+  /** Why the pack cannot be bought right now (e.g. no «Академия» players yet). */
+  unavailable_reason?: string | null;
   user_purchase_count: number;
   is_available_now: boolean;
   /** Average quick-sell value of the cards inside (shop listing only). */

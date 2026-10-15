@@ -166,6 +166,14 @@ async def create_invoice(db: AsyncSession, user: User, pack_id: int) -> StarsInv
         raise ConflictError("This pack is not purchasable with Telegram Stars")
     if not pack.is_active:
         raise ConflictError("This pack is not currently available")
+    from sqlalchemy.orm import selectinload
+
+    from app.services.pack_service import assert_pool_ready
+
+    pack = (await db.execute(
+        select(Pack).where(Pack.id == pack.id).options(selectinload(Pack.rarity_probabilities))
+    )).scalar_one()
+    await assert_pool_ready(db, pack)  # «Академия» pack with no players: refuse before charging
 
     payload_token = secrets.token_urlsafe(16)
     invoice = StarsInvoice(

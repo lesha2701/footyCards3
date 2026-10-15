@@ -248,7 +248,7 @@ export default function AdminPlayersPage() {
                     onChange={(e) => setForm({ ...form, path_talent_code: e.target.value })}
                     className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
                   >
-                    <option value="">Обычный бриллиант</option>
+                    <option value="">— Нет (обычный бриллиант, не «Академия»)</option>
                     {pathOverview?.talents
                       .filter((t) => !t.positions || t.positions.includes(form.position))
                       .map((t) => (

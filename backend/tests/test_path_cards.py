@@ -723,3 +723,37 @@ async def test_admin_overview_lists_talents_stages_and_tasks(client, db_session,
     catalog = await _catalog(db_session)
     assert [s.max_rating for s in catalog.stages] == [65, 74, 84, 89, 96]
     assert len(catalog.talents) == 10
+
+
+async def test_path_pack_without_academy_players_is_refused_before_payment(client, db_session, bot_token):
+    await _config(db_session)
+    headers, user = await _login(client, db_session, bot_token, 970031, balance=10_000)
+    await create_player(db_session, rarity=Rarity.diamond)  # a regular diamond only
+    await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(db_session, "path-empty", 100, 3, {Rarity.diamond: 0.5, Rarity.common: 0.5}, player_pool="path")
+
+    shop = (await client.get("/api/v1/packs", headers=headers)).json()
+    item = next(p for p in shop if p["id"] == pack.id)
+    assert item["is_available_now"] is False and "Академии" in item["unavailable_reason"]
+
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={})
+    assert resp.status_code == 409 and resp.json()["error"]["details"]["reason"] == "path_pool_empty"
+    await db_session.refresh(user)
+    assert user.balance == 10_000
+
+    await create_player(db_session, rarity=Rarity.diamond, path_talent_code="fighter")
+    shop = (await client.get("/api/v1/packs", headers=headers)).json()
+    assert next(p for p in shop if p["id"] == pack.id)["is_available_now"] is True
+    assert (await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={})).status_code == 200
+
+
+async def test_admin_cannot_switch_on_an_empty_academy_pack(client, db_session, bot_token):
+    await _config(db_session)
+    session = await client.post("/api/v1/auth/session", headers=telegram_headers(999000001, bot_token))
+    admin = {"Authorization": f"Bearer {session.json()['admin_token']}"}
+    pack = await create_pack(db_session, "path-off", 100, 1, {Rarity.diamond: 1.0}, player_pool="path", is_active=False)
+    resp = await client.post(f"/api/v1/admin/packs/{pack.id}/toggle-active", headers=admin)
+    assert resp.status_code == 409 and "Академии" in resp.json()["error"]["message"]
+    await create_player(db_session, rarity=Rarity.diamond, path_talent_code="captain", position=Position.CM)
+    resp = await client.post(f"/api/v1/admin/packs/{pack.id}/toggle-active", headers=admin)
+    assert resp.status_code == 200 and resp.json()["is_active"] is True

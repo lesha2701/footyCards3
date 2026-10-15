@@ -44,6 +44,8 @@ class PackOut(BaseModel):
     player_pool: str = "default"
     user_purchase_count: int = 0
     is_available_now: bool = True
+    # Why it cannot be bought now (e.g. «Академия» pack with no players yet).
+    unavailable_reason: Optional[str] = None
     # Average quick-sell value of the cards inside (pack_value_service);
     # filled for the shop listing only.
     expected_value: Optional[float] = None

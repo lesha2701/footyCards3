@@ -203,6 +203,12 @@ export default function AdminPathPage() {
     <div className="flex flex-col gap-6">
       <h1 className="font-display text-2xl font-bold">🌱 {overview.title}</h1>
       {message && <p className="rounded-lg bg-white/5 px-3 py-2 text-sm">{message}</p>}
+      {overview.players.length === 0 && (
+        <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          Игроков «Академии» пока нет — пак «{overview.title}» не продаётся и его нельзя включить. Открой «Игроки» →
+          бриллиантовый игрок → «Талант пути» и выбери талант (стартовый рейтинг ~60).
+        </p>
+      )}
 
       <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
         <label className="flex items-center gap-2 text-sm font-semibold">

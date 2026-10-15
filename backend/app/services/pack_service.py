@@ -62,6 +62,35 @@ def _assert_pack_available(pack: Pack) -> None:
         raise ConflictError("This pack sale has ended")
 
 
+PATH_POOL_EMPTY = "В паке пока нет карточек «Академии» — администратор ещё не добавил игроков"
+
+
+async def path_pool_ready(db: AsyncSession) -> bool:
+    """At least one «Академия» player can drop (same filter as
+    pick_random_player for a path-pool diamond slot)."""
+    row = (await db.execute(
+        select(Player.id).outerjoin(CardCollection, Player.collection_id == CardCollection.id)
+        .where(
+            Player.rarity == Rarity.diamond, Player.path_talent_code.is_not(None), Player.is_active.is_(True),
+            Player.is_pack_droppable.is_(True), _collection_active_filter(),
+        ).limit(1)
+    )).first()
+    return row is not None
+
+
+def _needs_path_pool(pack: Pack) -> bool:
+    return (getattr(pack, "player_pool", "default") or "default") == "path" and any(
+        rp.rarity == Rarity.diamond and float(rp.probability) > 0 for rp in pack.rarity_probabilities
+    )
+
+
+async def assert_pool_ready(db: AsyncSession, pack: Pack) -> None:
+    """Refuse BEFORE any payment: a path pack whose diamond slot has nothing
+    to drop would only fail mid-opening."""
+    if _needs_path_pool(pack) and not await path_pool_ready(db):
+        raise ConflictError(PATH_POOL_EMPTY, details={"reason": "path_pool_empty"})
+
+
 async def _assert_purchase_limit(db: AsyncSession, pack: Pack, user_id: int, quantity: int = 1) -> None:
     if pack.purchase_limit_per_user is None:
         return
@@ -535,6 +564,7 @@ async def open_pack(
 
     pack = await _get_pack_or_404(db, pack_id)
     _assert_pack_available(pack)
+    await assert_pool_ready(db, pack)
     await _assert_purchase_limit(db, pack, user.id)
 
     # Lock the buyer and (if a referral bonus might still be owed) their
@@ -732,6 +762,7 @@ async def open_pack_bulk(
             return await _get_bulk_opening_result(db, user, pack, quantity, idempotency_key)
 
     _assert_pack_available(pack)
+    await assert_pool_ready(db, pack)
     await _assert_purchase_limit(db, pack, user.id, quantity=quantity)
 
     # Same buyer(+referrer) locking order as open_pack — see that function's
@@ -848,6 +879,7 @@ async def list_available_packs(db: AsyncSession, user_id: Optional[int] = None) 
     from app.services.pack_value_service import pack_rarity_breakdown, rarity_quick_sell_averages
 
     averages = await rarity_quick_sell_averages(db)
+    pool_ready = await path_pool_ready(db) if any(_needs_path_pool(p) for p in packs) else True
     out = []
     for pack in packs:
         purchase_count = 0
@@ -864,9 +896,14 @@ async def list_available_packs(db: AsyncSession, user_id: Optional[int] = None) 
             is_available_now = False
         if pack.available_until and now > pack.available_until:
             is_available_now = False
+        unavailable_reason = None
+        if _needs_path_pool(pack) and not pool_ready:
+            is_available_now = False
+            unavailable_reason = "Скоро: игроки «Академии» ещё не добавлены"
         item = PackOut.model_validate(pack)
         item.user_purchase_count = purchase_count
         item.is_available_now = is_available_now
+        item.unavailable_reason = unavailable_reason
         item.expected_value = pack_rarity_breakdown(pack, averages)[0]
         out.append(item)
     return out
