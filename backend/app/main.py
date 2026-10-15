@@ -12,6 +12,7 @@ from app.routers import (
     admin_card_collections,
     admin_card_skills,
     admin_path,
+    admin_transactions,
     admin_card_upgrades,
     admin_club_packs,
     admin_clubs,
@@ -168,6 +169,7 @@ app.include_router(admin_card_collections.router, prefix=API_PREFIX)
 app.include_router(admin_card_upgrades.router, prefix=API_PREFIX)
 app.include_router(admin_card_skills.router, prefix=API_PREFIX)
 app.include_router(admin_path.router, prefix=API_PREFIX)
+app.include_router(admin_transactions.router, prefix=API_PREFIX)
 app.include_router(admin_diamond_upgrades.router, prefix=API_PREFIX)
 app.include_router(admin_bingo.router, prefix=API_PREFIX)
 app.include_router(admin_club_packs.router, prefix=API_PREFIX)

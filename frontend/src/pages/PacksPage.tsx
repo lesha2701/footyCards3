@@ -284,7 +284,7 @@ function PackCard({
                   key={rp.rarity}
                   className={`rounded-full px-2 py-0.5 font-mono text-[10px] ${
                     pack.player_pool === "path" && rp.rarity === "diamond"
-                      ? "bg-emerald-400/15 font-semibold text-emerald-300"
+                      ? "bg-emerald-400/15 font-semibold text-path"
                       : "bg-bg-raised text-ink-mist"
                   }`}
                 >
@@ -357,7 +357,7 @@ function StarsPackCard({ pack, onPurchased }: { pack: Pack; onPurchased: (result
                   key={rp.rarity}
                   className={`rounded-full px-2 py-0.5 font-mono text-[10px] ${
                     pack.player_pool === "path" && rp.rarity === "diamond"
-                      ? "bg-emerald-400/15 font-semibold text-emerald-300"
+                      ? "bg-emerald-400/15 font-semibold text-path"
                       : "bg-bg-raised text-ink-mist"
                   }`}
                 >

@@ -5,6 +5,7 @@ import CardPickerModal from "@/components/cards/CardPickerModal";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import MatchSkillNotes from "@/components/cards/MatchSkillNotes";
 import MatchPathSummary from "@/components/path/MatchPathSummary";
+import PathCardMark from "@/components/path/PathCardMark";
 import MatchSkillSummary from "@/components/cards/MatchSkillSummary";
 import { skillByCode, skillInactiveReason, useSkillCatalog } from "@/lib/cardSkills";
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
@@ -424,7 +425,7 @@ export default function ArenaPage() {
             Диамантовых: {diamondCount}/{maxDiamond}
           </span>
           {pathCount > 0 && (
-            <span className={`ml-1.5 rounded-full px-2.5 py-1 ${pathCount >= maxPath ? "bg-emerald-400/20 text-emerald-300" : "bg-white/5 text-ink-mist"}`}>
+            <span className={`ml-1.5 rounded-full px-2.5 py-1 ${pathCount >= maxPath ? "bg-emerald-400/20 text-path" : "bg-white/5 text-ink-mist"}`}>
               🌱 Академия: {pathCount}/{maxPath}
             </span>
           )}
@@ -449,7 +450,11 @@ export default function ArenaPage() {
                     >
                       {slot.card ? (
                         <>
-                          <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
+                          <div
+                            className={`relative aspect-square w-full overflow-hidden rounded-lg bg-black/40 ${
+                              slot.card.player.path_talent_code ? "ring-2 ring-path/70" : ""
+                            }`}
+                          >
                             <img
                               src={
                                 staticUrl(slot.card.player.image_path ?? undefined) ??
@@ -458,7 +463,17 @@ export default function ArenaPage() {
                               alt=""
                               className="h-full w-full object-cover"
                               loading="lazy"
+                              decoding="async"
                             />
+                            {slot.card.player.path_talent_code && (
+                              <span className="absolute bottom-0.5 right-0.5">
+                                <PathCardMark
+                                  talentCode={slot.card.talent_override || slot.card.player.path_talent_code}
+                                  stage={slot.card.path_stage}
+                                  size="sm"
+                                />
+                              </span>
+                            )}
                           </div>
                           <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[9px] font-bold leading-none text-accent-cyan">
                             {slot.card.player.position}
@@ -905,7 +920,12 @@ function MatchSimulation({
 
       <div ref={logRef} className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto pb-2 text-xs">
         {revealed.map((e, i) => (
-          <p key={i} className={e.team === "user" ? "text-accent-green" : "text-ink-mist"}>
+          <p
+            key={i}
+            className={`${e.team === "user" ? "text-accent-green" : "text-ink-mist"} ${
+              Array.isArray(e.payload?.talents) && e.payload.talents.length ? "-mx-1 rounded-md bg-path/10 px-1" : ""
+            }`}
+          >
             <span className="font-mono text-ink-mist-dim">{e.minute}&apos;</span> {e.description}
             <MatchSkillNotes event={e} />
           </p>

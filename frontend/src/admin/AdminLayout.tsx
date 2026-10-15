@@ -59,6 +59,7 @@ const SECTIONS: { to: string; label: string; Icon: (props: IconProps) => JSX.Ele
   { to: "/admin/bingo", label: "Бинго недели", Icon: IconTag },
   { to: "/admin/shop", label: "Магазин", Icon: IconCoin },
   { to: "/admin/broadcasts", label: "Рассылка", Icon: IconChat },
+  { to: "/admin/transactions", label: "Транзакции", Icon: IconCoin },
   { to: "/admin/log", label: "Журнал", Icon: IconScroll },
 ];
 

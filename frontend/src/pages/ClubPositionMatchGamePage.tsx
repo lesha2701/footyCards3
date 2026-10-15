@@ -5,7 +5,7 @@ import { claimClubPositionMatchReward, startClubPositionMatch, submitClubPositio
 import { IconChevronLeft, IconCoin, IconShirt, IconTrophy } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
-import { POSITION_LABELS, RARITY_GRADIENTS, RARITY_GLOW } from "@/lib/rarity";
+import { POSITION_LABELS, RARITY_GRADIENTS, RARITY_GLOW_STATIC } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import type { ClubPositionMatchCard, ClubPositionMatchClaim } from "@/types";
 
@@ -268,7 +268,7 @@ function CardButton({
         isMatched ? "opacity-50" : isSelected ? "bg-accent-lime/10 ring-2 ring-accent-lime" : isWrong ? "bg-red-500/10 ring-2 ring-red-500" : "bg-bg-surface"
       }`}
     >
-      <div className={`h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-gradient-to-b ${RARITY_GRADIENTS[card.rarity]} ${RARITY_GLOW[card.rarity]} p-[1.5px]`}>
+      <div className={`h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-gradient-to-b ${RARITY_GRADIENTS[card.rarity]} ${RARITY_GLOW_STATIC[card.rarity]} p-[1.5px]`}>
         <div className="h-full w-full overflow-hidden rounded-[7px] bg-bg-surface">
           {card.image_path ? (
             <img src={staticUrl(card.image_path) ?? undefined} alt={card.display_name} className="h-full w-full object-cover" />

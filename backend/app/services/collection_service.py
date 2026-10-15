@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from typing import Iterable, List, Optional
 
 from sqlalchemy import func, select
@@ -112,12 +113,24 @@ async def list_user_cards(
     query = query.order_by(order_col.desc() if filters.sort_dir == "desc" else order_col.asc())
 
     # Pagination and totals are computed after collapsing duplicate copies of
-    # the same player (below), not at the SQL level, so LIMIT/OFFSET can't be
-    # pushed into this query — the whole filtered set has to be fetched first.
-    all_cards: List[UserCard] = (await db.execute(query)).unique().scalars().all()
+    # the same player (below), so the whole filtered set is scanned — but only
+    # as LIGHT rows (the few columns the grouping needs, no Player objects);
+    # full cards are loaded for the requested page alone (two-phase load).
+    light = (await db.execute(query.with_only_columns(
+        UserCard.id, UserCard.player_id, UserCard.skill_code, UserCard.stars, UserCard.star_progress,
+        UserCard.path_level, UserCard.path_stage, UserCard.prestige, Player.rarity,
+    ))).all()
+    all_cards = [
+        SimpleNamespace(
+            id=r.id, player_id=r.player_id, skill_code=r.skill_code, rarity=r.rarity,
+            has_star_investment=(lambda r=r: bool(r.stars or r.star_progress)),
+            has_path_progress=(lambda r=r: bool(r.path_level or r.path_stage or r.prestige)),
+        )
+        for r in light
+    ]
 
     if filters.sort_by == "rarity":
-        all_cards.sort(key=lambda c: RARITY_ORDER[c.player.rarity], reverse=(filters.sort_dir == "desc"))
+        all_cards.sort(key=lambda c: RARITY_ORDER[c.rarity], reverse=(filters.sort_dir == "desc"))
 
     # A user can own several copies of the same player (duplicates); the
     # collection list should show each player once, with duplicate_count
@@ -134,7 +147,13 @@ async def list_user_cards(
     unique_cards = list(representative_by_key.values())
 
     total = len(unique_cards)
-    page_cards = unique_cards[params.offset : params.offset + params.page_size]
+    page_ids = [c.id for c in unique_cards[params.offset : params.offset + params.page_size]]
+    loaded = {
+        c.id: c for c in (await db.execute(
+            select(UserCard).where(UserCard.id.in_(page_ids)).options(joinedload(UserCard.player))
+        )).unique().scalars().all()
+    } if page_ids else {}
+    page_cards = [loaded[i] for i in page_ids if i in loaded]
 
     dup_counts = await _duplicate_counts(db, user_id)
     skilled = await _skilled_copies(db, user_id, (c.player_id for c in page_cards))

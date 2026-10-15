@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import MatchSkillNotes from "@/components/cards/MatchSkillNotes";
@@ -92,8 +93,12 @@ describe("path helpers", () => {
   });
 
   it("gives the legend a gold frame and warns about losing path progress", () => {
-    expect(pathFrameClass(4)).toContain("amber");
-    expect(pathFrameClass(1)).toContain("emerald");
+    // The frame follows prestige (gold accent on Золото, holo + shine on «Икона»), not the stage.
+    expect(pathFrameClass(4, 0)).toContain("lime");
+    expect(pathFrameClass(0, 3)).toContain("amber-300");
+    expect(pathFrameClass(0, 4)).toContain("card-shine");
+    expect(pathFrameClass(0, 0)).not.toContain("card-shine");
+    expect(pathFrameClass(0, 0, true)).toContain("card-shine");
     expect(losesProgress({ skill_code: null, stars: 0, star_progress: 0, path_level: 3 })).toBe(true);
     expect(losesProgress({ skill_code: null, stars: 0, star_progress: 0, path_level: 0, path_stage: 0 })).toBe(false);
   });
@@ -116,12 +121,15 @@ describe("path card UI", () => {
   });
 
   it("shows the road with the current stage, its tasks and today's attempts", async () => {
-    withQuery(<PathSheet cardId={7} player={player} onClose={() => {}} />);
+    withQuery(<MemoryRouter><PathSheet cardId={7} player={player} onClose={() => {}} /></MemoryRouter>);
     expect(await screen.findByText("Ты здесь")).toBeInTheDocument();
     expect(screen.getByText("12/80")).toBeInTheDocument();
     expect(screen.getByText("Пройден ✓")).toBeInTheDocument();
     expect(screen.getByText("7/10")).toBeInTheDocument();
     expect(screen.getByText("⭐ 3")).toBeInTheDocument();
+    // «Сегодня»: 7 free + 2 bought Arena attempts and the closest task.
+    expect(screen.getByText("Играть в Card Arena")).toBeEnabled();
+    expect(screen.getByText(/Ближайшее задание/)).toHaveTextContent("Сыграть матчей");
   });
 });
 

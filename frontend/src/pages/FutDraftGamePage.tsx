@@ -38,7 +38,7 @@ import {
 } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
-import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_TEXT } from "@/lib/rarity";
+import { RARITY_GRADIENTS, RARITY_GLOW_STATIC, RARITY_TEXT } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
@@ -670,7 +670,7 @@ function Pitch({
                 className={`flex h-[104px] w-[72px] shrink-0 flex-col items-center justify-center gap-1 rounded-xl p-1.5 backdrop-blur-sm active:scale-95 disabled:active:scale-100 ${
                   slot.slot_code === selectedSlotCode ? "ring-2 ring-accent-lime" : ""
                 } ${
-                  slot.player ? `bg-gradient-to-b ${RARITY_GRADIENTS[slot.player.rarity]} ${RARITY_GLOW[slot.player.rarity]} p-[1.5px]` : "bg-black/30"
+                  slot.player ? `bg-gradient-to-b ${RARITY_GRADIENTS[slot.player.rarity]} ${RARITY_GLOW_STATIC[slot.player.rarity]} p-[1.5px]` : "bg-black/30"
                 }`}
               >
                 {slot.player ? (
@@ -715,7 +715,7 @@ function DraftCandidateCard({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center gap-3 rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[card.rarity]} ${RARITY_GLOW[card.rarity]} p-[1.5px] text-left transition active:scale-[0.98] disabled:active:scale-100`}
+      className={`flex items-center gap-3 rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[card.rarity]} ${RARITY_GLOW_STATIC[card.rarity]} p-[1.5px] text-left transition active:scale-[0.98] disabled:active:scale-100`}
     >
       <div className="flex w-full items-center gap-3 rounded-[15px] bg-bg-surface p-3">
         <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-bg-raised">
@@ -747,7 +747,7 @@ function PlayerDetailModal({ card, onClose }: { card: FutDraftCandidate; onClose
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={onClose}>
       <div
-        className={`w-full max-w-xs rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[card.rarity]} ${RARITY_GLOW[card.rarity]} p-[1.5px]`}
+        className={`w-full max-w-xs rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[card.rarity]} ${RARITY_GLOW_STATIC[card.rarity]} p-[1.5px]`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col items-center gap-3 rounded-[15px] bg-bg-base p-5">

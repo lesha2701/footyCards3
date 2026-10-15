@@ -9,7 +9,7 @@ import { staticUrl } from "@/lib/api";
 import { chemistryGain, computeChemistry } from "@/lib/chemistry";
 import { CATEGORY_POSITIONS, onIdealPosition } from "@/lib/formation";
 import { formationLabel, inRow, pitchRows, PITCH_STYLE } from "@/lib/formationLayout";
-import { RARITY_GLOW, RARITY_GRADIENTS } from "@/lib/rarity";
+import { RARITY_GLOW_STATIC, RARITY_GRADIENTS } from "@/lib/rarity";
 import { haptic } from "@/lib/telegram";
 import type { ChemistryOut, Rarity } from "@/types";
 
@@ -77,7 +77,7 @@ function StatusBadge({ entry }: { entry: CareerSquadCard }) {
 /** A player card in a rarity frame: photo, rating, position, name. */
 function CardFace({ info, entry, width, children }: { info: Info; entry?: CareerSquadCard; width: string; children?: ReactNode }) {
   return (
-    <div className={`${width} rounded-[11px] bg-gradient-to-b p-[1.5px] ${RARITY_GRADIENTS[info.rarity]} ${RARITY_GLOW[info.rarity]}`}>
+    <div className={`${width} rounded-[11px] bg-gradient-to-b p-[1.5px] ${RARITY_GRADIENTS[info.rarity]} ${RARITY_GLOW_STATIC[info.rarity]}`}>
       <div className="flex flex-col items-center gap-0.5 rounded-[10px] bg-bg-surface/95 p-1">
         <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-gradient-to-b from-white/10 to-black/40">
           <img src={info.image} alt="" className="h-full w-full object-cover" loading="lazy" />

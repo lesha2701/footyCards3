@@ -199,7 +199,7 @@ export default function TacticoSquadPage() {
           Диамантовых: {diamondCount}/{maxDiamond}
         </span>
         {(pathCount > 0 || cards.some((c) => c.player.path_talent_code)) && (
-          <span className={`rounded-full px-2.5 py-1 ${pathCount >= maxPath ? "bg-emerald-400/20 text-emerald-300" : "bg-white/5 text-ink-mist"}`}>
+          <span className={`rounded-full px-2.5 py-1 ${pathCount >= maxPath ? "bg-emerald-400/20 text-path" : "bg-white/5 text-ink-mist"}`}>
             🌱 Академия: {pathCount}/{maxPath}
           </span>
         )}

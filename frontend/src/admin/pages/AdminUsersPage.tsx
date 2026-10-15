@@ -6,7 +6,6 @@ import {
   banUser,
   deleteUserCard,
   fetchAdminUserCollection,
-  fetchAdminUserTransactions,
   fetchAdminUsers,
   grantCard,
   resetUserLimits,
@@ -14,6 +13,7 @@ import {
   toggleTradeBan,
   unbanUser,
 } from "@/admin/api";
+import TransactionsTable from "@/admin/components/TransactionsTable";
 import type { AdminUser } from "@/admin/types";
 import { staticUrl } from "@/lib/api";
 
@@ -94,11 +94,7 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
     queryFn: () => fetchAdminUserCollection(user.id),
     enabled: tab === "collection",
   });
-  const { data: transactions } = useQuery({
-    queryKey: ["admin-user-transactions", user.id],
-    queryFn: () => fetchAdminUserTransactions(user.id),
-    enabled: tab === "transactions",
-  });
+
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-users"] });
 
@@ -212,17 +208,7 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
           </div>
         )}
 
-        {tab === "transactions" && (
-          <div className="flex flex-col gap-2">
-            {transactions?.items?.map((t) => (
-              <div key={t.id} className="flex items-center justify-between rounded-lg bg-bg-surface px-3 py-2 text-xs">
-                <span>{t.description || t.type}</span>
-                <span className={t.amount >= 0 ? "text-emerald-400" : "text-red-400"}>{t.amount}</span>
-              </div>
-            ))}
-            {!transactions?.items?.length && <p className="text-sm text-slate-500">Нет транзакций</p>}
-          </div>
-        )}
+        {tab === "transactions" && <TransactionsTable userId={user.id} />}
       </div>
     </div>
   );

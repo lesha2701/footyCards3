@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { buyPathAttempt, createPathStarsInvoice, fetchPathStarsInvoiceStatus, fetchPathState } from "@/api/path";
 import { IconCoin } from "@/components/icons";
@@ -35,6 +36,9 @@ function Bar({ value, className = "" }: { value: number; className?: string }) {
  * talent unlock and — for the current and future stages — its tasks. */
 function StageNode({ stage, isLast, reduced }: { stage: PathStage; isLast: boolean; reduced: boolean | null }) {
   const state = stage.reached ? "done" : stage.current ? "current" : "future";
+  // Future stages start collapsed: only the current one is spelled out.
+  const [open, setOpen] = useState(false);
+  const showTasks = state === "current" || (state === "future" && open);
   const doneTasks = stage.tasks.filter((t) => t.done).length;
   return (
     <li className="relative flex gap-3 pb-5 last:pb-0">
@@ -70,10 +74,20 @@ function StageNode({ stage, isLast, reduced }: { stage: PathStage; isLast: boole
         <p className="mt-0.5 text-[11px] text-ink-mist">
           {state === "done" ? "Пройден ✓" : state === "current" ? "Ты здесь" : "Впереди"}
           {stage.talent_level > 0 && (
-            <span className="ml-1.5 text-emerald-300">· талант {stage.talent_level === 2 ? "II" : "I"}</span>
+            <span className="ml-1.5 text-path">· талант {stage.talent_level === 2 ? "II" : "I"}</span>
           )}
         </p>
-        {state !== "done" && stage.tasks.length > 0 && (
+        {state === "future" && stage.tasks.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className="mt-1 min-h-[32px] text-[11px] font-semibold text-ink-mist underline-offset-2 hover:underline"
+          >
+            {open ? "Скрыть задания" : `Задания этапа · ${stage.tasks.length}`}
+          </button>
+        )}
+        {showTasks && stage.tasks.length > 0 && (
           <div className="mt-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-mist-dim">
               Задания для перехода дальше · {doneTasks}/{stage.tasks.length}
@@ -82,7 +96,7 @@ function StageNode({ stage, isLast, reduced }: { stage: PathStage; isLast: boole
               {stage.tasks.map((task) => (
                 <li key={task.id} className={state === "future" ? "opacity-60" : ""}>
                   <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className={task.done ? "text-emerald-300" : "text-ink-chalk"}>
+                    <span className={task.done ? "text-path" : "text-ink-chalk"}>
                       {task.done ? "✓ " : ""}
                       {task.label}
                       {!task.applies && <span className="text-ink-mist-dim"> — не для его позиции</span>}
@@ -105,10 +119,53 @@ function StageNode({ stage, isLast, reduced }: { stage: PathStage; isLast: boole
   );
 }
 
+/** «Сегодня»: what can be done right now — attempts left and the closest
+ * unfinished task of the current stage — with one button to go and play. */
+function TodayBlock({ state, onPlay }: { state: PathState; onPlay: () => void }) {
+  const current = state.stages.find((s) => s.current);
+  const next = current?.tasks
+    .filter((t) => t.applies && !t.done)
+    .sort((a, b) => (a.target - a.progress) / a.target - (b.target - b.progress) / b.target)[0];
+  const attempts = state.daily.arena_free_left + state.daily.bought_attempts;
+  return (
+    <section className="rounded-2xl border border-path/30 bg-path/5 p-3" aria-label="Сегодня">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-path">Сегодня</h3>
+      <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-xl bg-black/20 py-1.5">
+          <p className="font-mono text-base font-bold text-ink-chalk">{attempts}</p>
+          <p className="text-[10px] text-ink-mist">попыток Арены</p>
+        </div>
+        <div className="rounded-xl bg-black/20 py-1.5">
+          <p className="font-mono text-base font-bold text-ink-chalk">{state.daily.ptour_left}</p>
+          <p className="text-[10px] text-ink-mist">матчей турнира</p>
+        </div>
+        <div className="rounded-xl bg-black/20 py-1.5">
+          <p className="font-mono text-base font-bold text-ink-chalk">{state.daily.career_left}</p>
+          <p className="text-[10px] text-ink-mist">туров карьеры</p>
+        </div>
+      </div>
+      {next && (
+        <p className="mt-2 text-xs text-ink-chalk">
+          Ближайшее задание: <b>{next.label}</b> — ещё {next.target - next.progress}
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={onPlay}
+        disabled={!state.enabled || attempts <= 0}
+        className="mt-2 min-h-[44px] w-full rounded-xl bg-floodlight text-sm font-bold text-bg-base disabled:opacity-40"
+      >
+        {attempts > 0 ? "Играть в Card Arena" : "Попытки Арены на сегодня закончились"}
+      </button>
+    </section>
+  );
+}
+
 /** «Путь» screen of one «Академия» card: header with the level bar, the
  * road of stages with their tasks, the talent, today's attempts (with
  * purchases) and how experience is earned. Full-screen sheet, mobile-first. */
 export default function PathSheet({ cardId, player, onClose }: { cardId: number; player: Player; onClose: () => void }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const reduced = useReducedMotion();
   const updateBalance = useAuthStore((s) => s.updateBalance);
@@ -170,7 +227,7 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
   const image = staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp");
 
   return (
-    <div className="path-ui fixed inset-0 z-[60] flex flex-col bg-bg-base" role="dialog" aria-modal="true" aria-label="Путь карточки">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-bg-base" role="dialog" aria-modal="true" aria-label="Путь карточки">
       <header className="flex items-center gap-3 border-b border-white/10 bg-bg-surface/95 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <button type="button" onClick={onClose} className="rounded-xl bg-white/5 px-3 py-1.5 text-sm font-semibold text-ink-mist">
           ← Назад
@@ -199,7 +256,7 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
                     {stageIcon(state.stage)} {state.stage_name} · уровень {state.level}/{state.max_level}
                   </p>
                   <p className="mt-1 flex items-baseline gap-1.5">
-                    <span className="font-display text-2xl font-bold text-emerald-300">{state.rating}</span>
+                    <span className="font-display text-2xl font-bold text-path">{state.rating}</span>
                     <span className="text-xs text-ink-mist">из {state.ceiling}</span>
                   </p>
                   <Bar value={pathFraction(state)} className="mt-1" />
@@ -214,22 +271,24 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
                     </div>
                     <Bar value={levelFraction(state)} className="mt-1" />
                     {state.blocked_by_tasks && (
-                      <p className="mt-1.5 rounded-lg bg-amber-400/10 px-2 py-1 text-[11px] text-amber-300">
+                      <p className="mt-1.5 rounded-lg bg-amber-400/10 px-2 py-1 text-[11px] text-legend">
                         Опыта хватает — выполни задания этапа, чтобы расти дальше
                       </p>
                     )}
                   </>
                 ) : (
-                  <p className="text-center text-xs font-semibold text-amber-300">Путь пройден до конца 👑</p>
+                  <p className="text-center text-xs font-semibold text-legend">Путь пройден до конца 👑</p>
                 )}
               </div>
             </section>
 
             {!state.enabled && (
-              <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-xs text-amber-300">
+              <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-xs text-legend">
                 Механика сейчас выключена: опыт не начисляется, полученные уровни остаются.
               </p>
             )}
+
+            <TodayBlock state={state} onPlay={() => { onClose(); navigate("/play/arena"); }} />
 
             <section aria-label="Этапы пути">
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-mist-dim">Путь</h3>
@@ -292,7 +351,7 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
                   className="flex flex-col items-center rounded-xl bg-bg-raised py-2 text-xs font-semibold text-ink-chalk disabled:opacity-40"
                 >
                   <span>+1 попытка</span>
-                  <span className="mt-0.5 text-amber-300">
+                  <span className="mt-0.5 text-legend">
                     {state.daily.next_stars_price != null ? `⭐ ${state.daily.next_stars_price}` : "лимит на сегодня"}
                   </span>
                   <span className="text-[10px] font-normal text-ink-mist-dim">осталось {state.daily.stars_buys_left}</span>
@@ -316,7 +375,7 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
                   ["Пас", state.xp_rules.assist],
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-lg bg-black/20 py-1.5">
-                    <p className="font-mono text-sm font-bold text-emerald-300">+{value}</p>
+                    <p className="font-mono text-sm font-bold text-path">+{value}</p>
                     <p className="text-[9px] text-ink-mist">{label}</p>
                   </div>
                 ))}
@@ -334,9 +393,9 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
                         {item.result && <> · {item.result === "win" ? "победа" : item.result === "draw" ? "ничья" : "поражение"}</>}
                         {item.goals > 0 && <> · ⚽{item.goals}</>}
                         {item.assists > 0 && <> · 🅰️{item.assists}</>}
-                        {item.stages.length > 0 && <span className="text-emerald-300"> · новый этап!</span>}
+                        {item.stages.length > 0 && <span className="text-path"> · новый этап!</span>}
                       </span>
-                      <b className="font-mono text-emerald-300">+{item.xp}</b>
+                      <b className="font-mono text-path">+{item.xp}</b>
                     </li>
                   ))}
                 </ul>

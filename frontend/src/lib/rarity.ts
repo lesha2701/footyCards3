@@ -37,6 +37,18 @@ export const RARITY_GLOW: Record<Rarity, string> = {
   diamond: "shadow-glow-diamond bg-[length:100%_400%] animate-diamond-shimmer",
 };
 
+/** Same glows without any animation — for grids of cards, where dozens of
+ * animated borders (background-position / opacity, both repainting every
+ * frame) made scrolling heavy on weak phones. Motion is kept for the card
+ * in focus (detail sheet, pack reveal) via RARITY_GLOW and `.card-shine`. */
+export const RARITY_GLOW_STATIC: Record<Rarity, string> = {
+  common: "",
+  rare: "shadow-glow-rare",
+  epic: "shadow-glow-epic",
+  legendary: "shadow-glow-legendary",
+  diamond: "shadow-glow-diamond",
+};
+
 export const RARITY_TEXT: Record<Rarity, string> = {
   common: "text-slate-300",
   rare: "text-blue-400",

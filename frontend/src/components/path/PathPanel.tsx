@@ -15,14 +15,14 @@ export default function PathPanel({ cardId, player }: { cardId: number; player: 
   if (!state) return null;
   const tasksLeft = state.stages.find((s) => s.current)?.tasks.filter((t) => !t.done).length ?? 0;
   return (
-    <div className="path-ui mt-3 space-y-2">
+    <div className="mt-3 space-y-2">
       <button
         type="button"
         onClick={() => setOpen(true)}
         className="w-full rounded-2xl border border-emerald-400/30 bg-emerald-400/5 p-3 text-left"
       >
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-path">
             🌱 {state.title} · {stageIcon(state.stage)} {state.stage_name}
           </p>
           <span className="font-mono text-xs text-ink-mist">
@@ -41,9 +41,9 @@ export default function PathPanel({ cardId, player }: { cardId: number; player: 
               ? `Опыт до ${state.rating + 1}: ${shownLevelXp(state)}/${state.xp_for_next} (${Math.round(levelFraction(state) * 100)}%)`
               : "Путь пройден"}
           </span>
-          {tasksLeft > 0 && <span className="text-amber-300">заданий: {tasksLeft}</span>}
+          {tasksLeft > 0 && <span className="text-legend">заданий: {tasksLeft}</span>}
         </div>
-        <p className="mt-2 text-center text-sm font-semibold text-emerald-300">Открыть путь →</p>
+        <p className="mt-2 text-center text-sm font-semibold text-path">Открыть путь →</p>
       </button>
       {state.talent && <TalentBlock talent={state.talent} compact />}
       {open && <PathSheet cardId={cardId} player={player} onClose={() => setOpen(false)} />}

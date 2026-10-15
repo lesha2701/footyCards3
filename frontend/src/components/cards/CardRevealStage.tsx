@@ -1,8 +1,9 @@
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useMemo } from "react";
 
 import { IconGlobe, IconHelp, IconStadium, IconTag } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
+import { pathFrameClass, talentByCode, usePathCatalog } from "@/lib/pathCards";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import type { Player } from "@/types";
 import { STAGES, type Stage } from "@/components/cards/revealStages";
@@ -36,6 +37,8 @@ export function RevealStage({
   const player = opened.card.player;
   const showFrom = (s: Stage) => STAGES.indexOf(stage) >= STAGES.indexOf(s);
   const revealed = showFrom("reveal");
+  // «Академия»: its own frame, a sprouting reveal and the talent name.
+  const isAcademy = !!player.path_talent_code;
 
   return (
     <div
@@ -56,13 +59,16 @@ export function RevealStage({
           />
         )}
         {revealed && player.rarity === "legendary" && <LegendaryConfetti />}
-        {revealed && player.rarity === "diamond" && <DiamondSparkle />}
+        {revealed && player.rarity === "diamond" && !isAcademy && <DiamondSparkle />}
+        {revealed && isAcademy && <AcademyBloom />}
         <motion.div
           initial={{ scale: 0.85, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           className={`relative flex aspect-square w-64 flex-col items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-b ${
-            showFrom("rarity") ? RARITY_GRADIENTS[player.rarity] : "from-bg-raised to-bg-surface"
-          } p-[3px] ${showFrom("rarity") ? RARITY_GLOW[player.rarity] : ""}`}
+            showFrom("rarity")
+              ? isAcademy ? pathFrameClass(0, 0, true) : RARITY_GRADIENTS[player.rarity]
+              : "from-bg-raised to-bg-surface"
+          } p-[3px] ${showFrom("rarity") && !isAcademy ? RARITY_GLOW[player.rarity] : ""}`}
         >
           <div className="flex h-full w-full flex-col items-center justify-center rounded-[22px] bg-bg-surface">
             {revealed ? (
@@ -87,7 +93,7 @@ export function RevealStage({
           )}
           {showFrom("rarity") && (
             <span className="absolute right-2 top-2 rounded-md bg-black/70 px-2 py-1 text-[11px] font-bold text-ink-chalk">
-              {RARITY_LABELS[player.rarity]}
+              {isAcademy ? "🌱 Академия" : RARITY_LABELS[player.rarity]}
             </span>
           )}
         </motion.div>
@@ -111,6 +117,7 @@ export function RevealStage({
             <p className="font-display text-lg font-bold text-ink-chalk">{player.display_name}</p>
             <p className="font-mono text-base font-semibold text-accent-cyan">Рейтинг {player.rating}</p>
             <p className="font-mono text-xs text-ink-mist">АТК {player.attack_rating} · ЗЩТ {player.defense_rating}</p>
+            {isAcademy && <AcademyTalentLine code={player.path_talent_code!} />}
             {player.collection_name && (
               <p className="flex items-center justify-center gap-1 text-xs font-semibold text-accent-lime">
                 <IconTag size={12} />
@@ -231,6 +238,68 @@ function DiamondSparkle() {
           ✦
         </motion.span>
       ))}
+    </div>
+  );
+}
+
+function AcademyTalentLine({ code }: { code: string }) {
+  const { data: catalog } = usePathCatalog();
+  const talent = talentByCode(catalog, code);
+  if (!talent) return null;
+  return (
+    <p className="text-xs font-semibold text-path">
+      Талант: {talent.emoji} {talent.name} · растёт, пока играет
+    </p>
+  );
+}
+
+// «Академия»: a sprout growing up behind the card and leaves drifting out —
+// "a young talent", distinct from diamond's prismatic sparks. Static glow
+// only with reduced motion.
+function AcademyBloom() {
+  const reduced = useReducedMotion();
+  const leaves = useMemo(
+    () =>
+      Array.from({ length: 14 }, (_, i) => {
+        const angle = -Math.PI / 2 + (i / 13 - 0.5) * Math.PI * 1.4;
+        const distance = 90 + Math.random() * 80;
+        return {
+          id: i, x: Math.cos(angle) * distance, y: Math.sin(angle) * distance - 20,
+          rotate: Math.random() * 120 - 60, delay: 0.25 + Math.random() * 0.5,
+        };
+      }),
+    [],
+  );
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-visible">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 0.5, scale: 1.5 }}
+        transition={{ duration: 0.7 }}
+        className="absolute inset-0 -z-10 rounded-full blur-2xl"
+        style={{ background: "radial-gradient(circle, #6ee7b7, #bef264 45%, transparent 70%)" }}
+      />
+      {!reduced && (
+        <>
+          <motion.span
+            initial={{ scaleY: 0, opacity: 0 }}
+            animate={{ scaleY: 1, opacity: 1 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            className="absolute bottom-1/2 left-1/2 -z-10 h-40 w-1.5 origin-bottom -translate-x-1/2 rounded-full bg-gradient-to-t from-emerald-500 to-lime-300"
+          />
+          {leaves.map((leaf) => (
+            <motion.span
+              key={leaf.id}
+              initial={{ x: 0, y: 0, opacity: 0, rotate: 0, scale: 0.4 }}
+              animate={{ x: leaf.x, y: leaf.y, opacity: [0, 1, 0], rotate: leaf.rotate, scale: 1 }}
+              transition={{ duration: 1.6, delay: leaf.delay, ease: "easeOut" }}
+              className="absolute left-1/2 top-1/2 text-lg leading-none"
+            >
+              🍃
+            </motion.span>
+          ))}
+        </>
+      )}
     </div>
   );
 }

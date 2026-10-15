@@ -14,8 +14,8 @@ export default function MatchPathSummary({ match }: { match: Pick<Match, "talent
   const progress = (match.path_progress ?? []).filter((p) => p.status !== "not_path");
   if (!talents.length && !progress.length) return null;
   return (
-    <div className="path-ui rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-[11px]">
-      <p className="font-semibold text-emerald-300">🌱 Академия</p>
+    <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-[11px]">
+      <p className="font-semibold text-path">🌱 Академия</p>
       {talents.map((t, i) => (
         <p key={`t${i}`} className="text-ink-mist">
           {t.emoji} {t.name} {t.level_label}
@@ -27,8 +27,8 @@ export default function MatchPathSummary({ match }: { match: Pick<Match, "talent
           {p.status === "awarded" ? (
             <>
               +{p.xp} опыта
-              {p.levels.length > 0 && <span className="text-emerald-300"> · рейтинг {p.levels[p.levels.length - 1]}</span>}
-              {p.stages.length > 0 && <span className="font-semibold text-amber-300"> · новый этап!</span>}
+              {p.levels.length > 0 && <span className="text-path"> · рейтинг {p.levels[p.levels.length - 1]}</span>}
+              {p.stages.length > 0 && <span className="font-semibold text-legend"> · новый этап!</span>}
             </>
           ) : (
             <span className="text-ink-mist">Опыт не начислен: {STATUS_TEXT[p.status] ?? p.status}</span>

@@ -2,6 +2,9 @@
  * the profile's transaction history and the admin economy report. */
 export const TX_TYPE_LABELS: Record<string, string> = {
   starting_balance: "Стартовый бонус",
+  path_attempt_purchase: "Академия: покупка попытки",
+  path_prestige: "Академия: престиж",
+  path_prestige_reward: "Академия: награда за престиж",
   daily_reward: "Ежедневная награда",
   pack_purchase: "Покупка пака",
   card_sale: "Продажа карточки",

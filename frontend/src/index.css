@@ -31,6 +31,10 @@
   --c-ink-chalk: 243 246 242;
   --c-ink-mist: 138 150 142;
   --c-ink-mist-dim: 91 101 94;
+  /* Status semantics (cards): «Академия» growth, the Legend stage, prestige. */
+  --c-path: 110 231 183;
+  --c-legend: 252 211 77;
+  --c-prestige: 240 171 252;
 }
 
 /* Light theme (Telegram light mode, or chosen in Профиль → Тема). The app's
@@ -44,6 +48,9 @@
   --c-ink-chalk: 16 23 18;
   --c-ink-mist: 86 99 91;
   --c-ink-mist-dim: 134 146 138;
+  --c-path: 4 120 87;
+  --c-legend: 180 83 9;
+  --c-prestige: 162 28 175;
 }
 /* "text-bg-base" is always dark text on a bright fill (lime/floodlight). */
 :root[data-theme="light"] .text-bg-base { color: rgb(7 9 10); }
@@ -52,10 +59,6 @@
 :root[data-theme="light"] .text-accent-cyan { color: rgb(13 148 136); }
 :root[data-theme="light"] .text-accent-green { color: rgb(21 128 61); }
 /* «Академия» screens: pale emerald/amber text read on dark only. */
-:root[data-theme="light"] .path-ui .text-emerald-300,
-:root[data-theme="light"] .path-ui .text-emerald-300\/80,
-:root[data-theme="light"] .path-ui .text-emerald-300\/90 { color: rgb(4 120 87); }
-:root[data-theme="light"] .path-ui .text-amber-300 { color: rgb(180 83 9); }
 /* Translucent white overlays/borders become translucent black. */
 :root[data-theme="light"] .bg-white\/5 { background-color: rgb(0 0 0 / 0.04); }
 :root[data-theme="light"] .bg-white\/10 { background-color: rgb(0 0 0 / 0.07); }
@@ -127,4 +130,27 @@ body {
   100% {
     background-position: -200% 0;
   }
+}
+
+/* Card shine: a light band sweeping across a card on the GPU (transform of a
+   pseudo-element — no repaint of the card itself). Only where a card is the
+   focus (detail sheet, selection, pack reveal, «Икона»), never a whole grid,
+   and never with reduced motion. */
+.card-shine { isolation: isolate; }
+.card-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgb(255 255 255 / 0.28) 48%, transparent 60%);
+  transform: translateX(-130%);
+  will-change: transform;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card-shine::after { animation: card-shine 3.6s ease-in-out infinite; }
+}
+@keyframes card-shine {
+  0%, 55% { transform: translateX(-130%); }
+  100% { transform: translateX(130%); }
 }

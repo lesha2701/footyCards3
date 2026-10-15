@@ -59,7 +59,7 @@ export default function StageUpCelebration({
             transition={reduced ? { duration: 0.2 } : { type: "spring", stiffness: 260, damping: 18 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="path-ui rounded-[21px] bg-bg-surface px-5 py-6 text-center">
+            <div className="rounded-[21px] bg-bg-surface px-5 py-6 text-center">
               <motion.div
                 className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-emerald-400/15 text-5xl"
                 initial={reduced ? false : { rotate: -20, scale: 0.5 }}
@@ -69,7 +69,7 @@ export default function StageUpCelebration({
               >
                 {stageIcon(stageIndex)}
               </motion.div>
-              <p className="mt-3 text-[11px] font-semibold uppercase tracking-widest text-emerald-300">Новый этап пути</p>
+              <p className="mt-3 text-[11px] font-semibold uppercase tracking-widest text-path">Новый этап пути</p>
               <p className="mt-1 font-display text-2xl font-bold text-ink-chalk">{stageName}</p>
               {talentText && <p className="mt-2 rounded-xl bg-emerald-400/10 px-3 py-2 text-sm text-ink-chalk">{talentText}</p>}
               <button

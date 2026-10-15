@@ -31,6 +31,10 @@ export default {
           lime: "#c6e63a",
           soft: "#8fe3b8",
         },
+        // Card status semantics (theme-aware, see src/index.css).
+        path: "rgb(var(--c-path) / <alpha-value>)",
+        legend: "rgb(var(--c-legend) / <alpha-value>)",
+        prestige: "rgb(var(--c-prestige) / <alpha-value>)",
         ink: {
           chalk: "rgb(var(--c-ink-chalk) / <alpha-value>)",
           mist: "rgb(var(--c-ink-mist) / <alpha-value>)",

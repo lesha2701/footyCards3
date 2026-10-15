@@ -56,7 +56,7 @@ export default function PrestigeSection({ cardId, prestige, title }: { cardId: n
   const enough = p.next_dupes != null && p.free_units >= needUnits;
   const reward = p.next_reward;
   return (
-    <section className="path-ui rounded-2xl border border-white/10 bg-white/5 p-3" aria-label="Престиж">
+    <section className="rounded-2xl border border-white/10 bg-white/5 p-3" aria-label="Престиж">
       <div className="flex items-baseline justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-mist-dim">Престиж</h3>
         {p.tier > 0 && (
@@ -78,7 +78,7 @@ export default function PrestigeSection({ cardId, prestige, title }: { cardId: n
         })}
       </ol>
       {p.icon_number != null && (
-        <p className="mt-2 text-center font-display text-sm font-bold text-fuchsia-300">
+        <p className="mt-2 text-center font-display text-sm font-bold text-prestige">
           Икона {title === "Академия" ? "Академии" : `«${title}»`} №{p.icon_number}
         </p>
       )}
@@ -99,7 +99,7 @@ export default function PrestigeSection({ cardId, prestige, title }: { cardId: n
             {p.next_coins ? <> · <IconCoin size={11} className="inline" /> {p.next_coins}</> : null}
           </p>
           {reward && (
-            <p className="mt-1 text-emerald-300">
+            <p className="mt-1 text-path">
               Награда: {[reward.coins ? `${reward.coins} монет` : null, reward.attempts ? `${reward.attempts} попыт.` : null,
                 reward.skill_tokens ? `${reward.skill_tokens} жетон(а) навыка` : null].filter(Boolean).join(", ") || "—"}
             </p>
@@ -118,7 +118,7 @@ export default function PrestigeSection({ cardId, prestige, title }: { cardId: n
           </p>
         </div>
       ) : (
-        <p className="mt-2 text-center text-xs font-semibold text-amber-300">Высшая ступень престижа</p>
+        <p className="mt-2 text-center text-xs font-semibold text-legend">Высшая ступень престижа</p>
       )}
 
       {p.can_reforge && (
@@ -147,7 +147,7 @@ export default function PrestigeSection({ cardId, prestige, title }: { cardId: n
         </div>
       )}
       {p.reforged && <p className="mt-2 text-[11px] text-ink-mist">Талант этой копии уже перекован.</p>}
-      {granted && <p className="mt-2 rounded-lg bg-emerald-400/10 px-2 py-1 text-xs text-emerald-300">{granted}</p>}
+      {granted && <p className="mt-2 rounded-lg bg-emerald-400/10 px-2 py-1 text-xs text-path">{granted}</p>}
       {error && <p className="mt-2 rounded-lg bg-red-500/10 px-2 py-1 text-xs text-red-400">{error}</p>}
     </section>
   );

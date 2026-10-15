@@ -1,9 +1,10 @@
-import { IconTag } from "@/components/icons";
+import { memo } from "react";
+
 import PathCardMark from "@/components/path/PathCardMark";
-import { pathFrameClass } from "@/lib/pathCards";
-import { ICON_FRAME, isIconTier, prestigeMarks, prestigeStyle } from "@/lib/prestige";
 import { staticUrl } from "@/lib/api";
-import { RARITY_GLOW, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
+import { pathFrameClass } from "@/lib/pathCards";
+import { prestigeMarks, prestigeStyle } from "@/lib/prestige";
+import { RARITY_GLOW_STATIC, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import type { Player } from "@/types";
 
 interface Props {
@@ -18,25 +19,31 @@ interface Props {
   stars?: number;
   /** «Академия»: stage of this specific copy (omit for a design). */
   pathStage?: number;
-  /** «Академия» prestige tier of this copy (status marks; «Икона» = holo frame). */
+  /** «Академия» prestige tier of this copy (◆ marks; it also tints the frame). */
   prestige?: number;
   /** Talent picked in a prestige reforge (overrides the design's). */
   talentOverride?: string | null;
+  /** The card is the focus (pack reveal, detail): adds the GPU shine. */
+  animated?: boolean;
 }
 
-const SIZE_CLASSES: Record<NonNullable<Props["size"]>, string> = {
-  sm: "text-[10px]",
-  md: "text-xs",
-  lg: "text-sm",
-};
+// One corner = one meaning: top-left rating + status (★ stars / ◆ prestige),
+// top-right position, bottom-left skill (badge slot), bottom-right «Академия».
+// The footer keeps only the name (+ club and attack/defence from md up):
+// rarity and «Академия» are already said by the frame, so no repeated text.
+const RATING_TEXT = { sm: "text-[12px]", md: "text-sm", lg: "text-base" } as const;
+const NAME_TEXT = { sm: "text-[11px]", md: "text-xs", lg: "text-sm" } as const;
 
-export default function PlayerCard({
+function PlayerCard({
   player, size = "md", badge, footer, onClick, selected, dimmed, stars = 0, pathStage, prestige = 0, talentOverride,
+  animated = false,
 }: Props) {
   const isPath = !!player.path_talent_code;
   const frame = isPath
-    ? isIconTier(prestige) ? ICON_FRAME : pathFrameClass(pathStage)
-    : `${RARITY_GRADIENTS[player.rarity]} ${RARITY_GLOW[player.rarity]}`;
+    ? pathFrameClass(pathStage, prestige, animated || selected)
+    : `${RARITY_GRADIENTS[player.rarity]} ${RARITY_GLOW_STATIC[player.rarity]}${
+        (animated || selected) && (player.rarity === "diamond" || player.rarity === "legendary") ? " card-shine" : ""
+      }`;
   const imageUrl = staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp");
 
   return (
@@ -44,49 +51,53 @@ export default function PlayerCard({
       type="button"
       onClick={onClick}
       disabled={!onClick}
+      aria-label={`${player.display_name}, ${player.position}, рейтинг ${player.rating}, ${RARITY_LABELS[player.rarity]}${
+        isPath ? ", Академия" : ""
+      }`}
       className={`group relative flex aspect-[3/4] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-b ${frame} ${
         isPath ? "p-[3px]" : "p-[2px]"
       } transition-transform active:scale-[0.97] ${
-        selected ? (player.rarity === "diamond" ? "ring-4 ring-rarity-diamond shadow-glow-diamond" : "ring-4 ring-accent-lime") : ""
+        selected ? (player.rarity === "diamond" ? "ring-4 ring-rarity-diamond" : "ring-4 ring-accent-lime") : ""
       } ${dimmed ? "opacity-40 grayscale" : ""} ${onClick ? "cursor-pointer" : "cursor-default"}`}
     >
-      <div className="flex h-full w-full flex-col overflow-hidden rounded-[14px] bg-bg-surface/90">
-        <div className="relative flex-1 overflow-hidden">
-          <img src={imageUrl} alt={player.display_name} className="h-full w-full object-cover" loading="lazy" />
-          <div className="absolute left-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-display font-bold leading-none text-white">
-            <span className={SIZE_CLASSES[size]}>{player.rating}</span>
+      <div className="flex h-full w-full flex-col overflow-hidden rounded-[14px] bg-bg-surface">
+        <div className="relative flex-1 overflow-hidden bg-black/20">
+          <img
+            src={imageUrl}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+          />
+          <div className="absolute left-1 top-1 rounded-md bg-black/70 px-1.5 py-0.5 text-center font-display font-bold leading-none text-white">
+            <span className={RATING_TEXT[size]}>{player.rating}</span>
             {prestige > 0 && (
-              <span className={`mt-0.5 block text-[8px] leading-none ${prestigeStyle(prestige).mark}`} aria-label={`Престиж: ${prestige}`}>
+              <span className={`mt-0.5 block text-[9px] leading-none ${prestigeStyle(prestige).mark}`} aria-label={`Престиж: ${prestige}`}>
                 {prestigeMarks(prestige)}
               </span>
             )}
             {stars > 0 && (
-              <span className="mt-0.5 block text-[8px] leading-none text-amber-300" aria-label={`Звёзд: ${stars}`}>
+              <span className="mt-0.5 block text-[9px] leading-none text-amber-300" aria-label={`Звёзд: ${stars}`}>
                 {"★".repeat(stars)}
               </span>
             )}
           </div>
-          <div className="absolute right-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-display font-semibold leading-none text-white">
-            <span className={SIZE_CLASSES[size]}>{player.position}</span>
+          <div className="absolute right-1 top-1 rounded-md bg-black/70 px-1.5 py-0.5 font-display font-semibold leading-none text-white">
+            <span className={size === "sm" ? "text-[10px]" : "text-[11px]"}>{player.position}</span>
           </div>
-          {badge && <div className="absolute bottom-1.5 left-1.5">{badge}</div>}
+          {badge && <div className="absolute bottom-1 left-1">{badge}</div>}
           {isPath && (
-            <div className="absolute bottom-1.5 right-1.5">
+            <div className="absolute bottom-1 right-1">
               <PathCardMark talentCode={talentOverride || player.path_talent_code!} stage={pathStage} size={size} />
             </div>
           )}
         </div>
-        <div className="border-t border-white/10 bg-black/30 px-2 py-1.5 text-center">
-          <p className={`truncate font-display font-semibold text-ink-chalk ${SIZE_CLASSES[size]}`}>{player.display_name}</p>
-          <p className="mt-0.5 flex items-center justify-center gap-2 font-mono text-[8px] text-ink-mist">
-            <span>АТК <b className="text-accent-cyan">{player.attack_rating}</b></span>
-            <span>ЗЩТ <b className="text-accent-cyan">{player.defense_rating}</b></span>
-          </p>
-          <p className="truncate text-[9px] text-ink-mist">{player.club} · {RARITY_LABELS[player.rarity]}</p>
-          {player.collection_name && (
-            <p className="mt-0.5 flex items-center justify-center gap-0.5 truncate text-[8px] font-semibold text-accent-lime">
-              <IconTag size={8} />
-              {player.collection_name}
+        <div className="border-t border-white/10 bg-black/30 px-1.5 py-1 text-center">
+          <p className={`truncate font-display font-semibold leading-tight text-ink-chalk ${NAME_TEXT[size]}`}>{player.display_name}</p>
+          {size !== "sm" && (
+            <p className="mt-0.5 truncate text-[10px] leading-tight text-ink-mist">
+              {player.club} · <span className="font-mono text-accent-cyan">{player.attack_rating}/{player.defense_rating}</span>
             </p>
           )}
         </div>
@@ -95,3 +106,5 @@ export default function PlayerCard({
     </button>
   );
 }
+
+export default memo(PlayerCard);

@@ -1055,3 +1055,37 @@ export async function deleteAdminPathTask(id: number): Promise<AdminPathOverview
   const { data } = await api.delete<AdminPathOverview>(`/admin/path/tasks/${id}`);
   return data;
 }
+
+// --- All users' coin transactions --------------------------------------------
+
+export interface AdminTransactionFilters {
+  search?: string;
+  type?: string;
+  direction?: "income" | "spend";
+  date_from?: string;
+  date_to?: string;
+}
+
+export interface AdminTransaction extends CoinTransaction {
+  user_id: number;
+  user_name: string;
+  username: string | null;
+  telegram_id: number | null;
+}
+
+export interface AdminTransactionsPage {
+  items: AdminTransaction[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+  income: number;
+  spent: number;
+}
+
+export async function fetchAdminTransactions(
+  params: AdminTransactionFilters & { user_id?: number; page: number; page_size: number },
+): Promise<AdminTransactionsPage> {
+  const { data } = await api.get<AdminTransactionsPage>("/admin/transactions", { params });
+  return data;
+}

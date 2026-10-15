@@ -22,7 +22,7 @@ export default function AcademyShowcase({ userId }: { userId: number }) {
               talentOverride={card.talent_override}
             />
             {card.prestige_icon_number != null && (
-              <p className="mt-1 text-center text-[10px] font-bold text-fuchsia-300">Икона №{card.prestige_icon_number}</p>
+              <p className="mt-1 text-center text-[10px] font-bold text-prestige">Икона №{card.prestige_icon_number}</p>
             )}
           </div>
         ))}

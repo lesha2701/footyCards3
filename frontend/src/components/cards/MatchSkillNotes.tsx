@@ -15,7 +15,7 @@ export default function MatchSkillNotes({ event }: { event: MatchEvent }) {
   return (
     <>
       {talents.map((t, i) => (
-        <span key={`t${i}`} className="path-ui mt-0.5 block pl-6 text-[10px]"><span className="text-emerald-300/90">
+        <span key={`t${i}`} className="mt-0.5 block pl-6 text-[10px]"><span className="text-path/90">
           <span className="mr-1" aria-hidden>{t.emoji}</span>
           Талант «{t.name}» {t.level_label}
           {t.player ? ` (${t.player})` : ""}: +{t.bonus} к рейтингу

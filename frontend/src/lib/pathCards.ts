@@ -79,16 +79,22 @@ export function markStageSeen(cardId: number, stage: number): void {
   }
 }
 
-/** «Росток» frame of a «Академия» card: a green-to-ice gradient in
- * place of the diamond one; gold once it reached «Легенда». The shimmer runs
- * only when the user allows motion (motion-safe). */
-export const PATH_FRAME =
-  "from-emerald-300 via-lime-200 to-cyan-300 shadow-[0_0_22px_rgba(110,231,183,0.45)] bg-[length:100%_400%] motion-safe:animate-diamond-shimmer";
-export const PATH_LEGEND_FRAME =
-  "from-amber-200 via-lime-200 to-amber-400 shadow-glow-legendary bg-[length:100%_400%] motion-safe:animate-diamond-shimmer";
+/** Frame of an «Академия» card. One language for statuses: the frame is
+ * the class («росток» green) tinted by the copy's PRESTIGE (bronze, silver,
+ * gold accents; «Икона» — holo, the only one that shines in a grid); the
+ * Legend stage is shown by the 👑 corner mark, not by the frame. Static by
+ * default — `animated` adds the GPU shine for a card in focus. */
+const PRESTIGE_FRAMES = [
+  "from-emerald-300 via-lime-200 to-cyan-300 shadow-[0_0_18px_rgba(110,231,183,0.35)]",
+  "from-emerald-300 via-amber-600 to-emerald-400 shadow-[0_0_18px_rgba(217,119,6,0.35)]",
+  "from-emerald-300 via-slate-100 to-emerald-400 shadow-[0_0_18px_rgba(226,232,240,0.35)]",
+  "from-emerald-300 via-amber-300 to-emerald-400 shadow-glow-legendary",
+  "from-fuchsia-400 via-cyan-300 to-amber-300 shadow-glow-diamond card-shine",
+];
 
-export function pathFrameClass(stage: number | undefined, legendStage = 4): string {
-  return stage != null && stage >= legendStage ? PATH_LEGEND_FRAME : PATH_FRAME;
+export function pathFrameClass(_stage: number | undefined, prestige = 0, animated = false): string {
+  const frame = PRESTIGE_FRAMES[Math.max(0, Math.min(prestige, PRESTIGE_FRAMES.length - 1))];
+  return animated && !frame.includes("card-shine") ? `${frame} card-shine` : frame;
 }
 
 export const SOURCE_LABELS: Record<string, string> = {

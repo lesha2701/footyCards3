@@ -6,22 +6,22 @@ import type { PathTalent } from "@/types";
 export default function TalentBlock({ talent, compact = false }: { talent: PathTalent; compact?: boolean }) {
   const next = talent.levels.find((l) => !l.unlocked);
   return (
-    <section className="path-ui rounded-2xl border border-emerald-400/25 bg-emerald-400/5 p-3" aria-label="Талант">
+    <section className="rounded-2xl border border-emerald-400/25 bg-emerald-400/5 p-3" aria-label="Талант">
       <div className="flex items-start gap-2.5">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-400/15 text-xl" aria-hidden>
           {talent.emoji}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/80">Талант</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-path/80">Талант</p>
           <p className="font-display text-sm font-bold text-ink-chalk">
             {talent.name}
-            {talent.level_label && <span className="ml-1.5 text-emerald-300">{talent.level_label}</span>}
+            {talent.level_label && <span className="ml-1.5 text-path">{talent.level_label}</span>}
           </p>
           <p className="mt-0.5 text-xs text-ink-mist">{talent.summary}</p>
         </div>
       </div>
       {!talent.enabled && (
-        <p className="mt-2 rounded-lg bg-black/20 px-2 py-1 text-[11px] text-amber-300">Талант сейчас выключен администратором</p>
+        <p className="mt-2 rounded-lg bg-black/20 px-2 py-1 text-[11px] text-legend">Талант сейчас выключен администратором</p>
       )}
       <ul className="mt-2.5 space-y-1.5">
         {talent.levels.map((lvl) => (
@@ -29,7 +29,7 @@ export default function TalentBlock({ talent, compact = false }: { talent: PathT
             key={lvl.level}
             className={`flex gap-2 rounded-lg px-2 py-1.5 text-xs ${lvl.unlocked ? "bg-emerald-400/10 text-ink-chalk" : "bg-black/20 text-ink-mist"}`}
           >
-            <span className={`font-mono font-bold ${lvl.unlocked ? "text-emerald-300" : "text-ink-mist-dim"}`}>{lvl.label}</span>
+            <span className={`font-mono font-bold ${lvl.unlocked ? "text-path" : "text-ink-mist-dim"}`}>{lvl.label}</span>
             <span className="flex-1">
               {lvl.text}
               {!lvl.unlocked && lvl.unlock_stage && (
