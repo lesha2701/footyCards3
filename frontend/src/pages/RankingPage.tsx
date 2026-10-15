@@ -4,7 +4,7 @@ import { useState } from "react";
 import { fetchRanking } from "@/api/leaderboard";
 import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
-import { IconBall, IconCollection, IconFlag, IconFlagCheckered, IconGoal, IconHandshake, IconTrophy, IconUsers, type IconProps } from "@/components/icons";
+import { IconBall, IconCollection, IconFlag, IconFlagCheckered, IconGoal, IconHandshake, IconStar, IconTrophy, IconUsers, type IconProps } from "@/components/icons";
 import { useAuthStore } from "@/store/authStore";
 import type { RankingEntry, RankingMetric } from "@/types";
 
@@ -18,6 +18,7 @@ const METRICS: { value: RankingMetric; label: string; Icon: (props: IconProps) =
   { value: "cards_count", label: "Карт в коллекции", Icon: IconCollection },
   { value: "unique_players", label: "Уникальных игроков", Icon: IconUsers },
   { value: "referral_count", label: "Рефералов", Icon: IconHandshake },
+  { value: "academy_prestige", label: "Престиж Академии", Icon: IconStar },
 ];
 
 export default function RankingPage() {

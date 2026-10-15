@@ -233,7 +233,7 @@ export default function TacticoSquadPage() {
             <PlayerCard
               key={card.id}
               player={card.player}
-              pathStage={card.path_stage}
+              pathStage={card.path_stage} prestige={card.prestige} talentOverride={card.talent_override}
               size="sm"
               selected={selected}
               dimmed={!selected && (selectedIds.length >= SQUAD_SIZE || rarityBlocked)}

@@ -34,7 +34,15 @@ const NUMBER_FIELDS: [NumKey, string][] = [
   ["match_max_path_cards", "Макс. карт пути в составе Card Arena"],
   ["tactico_max_path_cards", "Макс. карт пути в составе Тактико"],
   ["stratego_max_path_cards", "Макс. карт пути в составе Стратего"],
+  ["path_prestige_other_ratio", "Престиж: 1 дубль = N карт других игроков Академии"],
+  ["path_prestige_xp_pct", "Престиж: +опыта за ступень, %"],
+  ["path_prestige_xp_cap_pct", "Престиж: потолок прибавки опыта, %"],
+  ["path_prestige_free_attempts", "Престиж: +бесплатных попыток Арены за ступень"],
+  ["path_prestige_sell_pct", "Престиж: +цены быстрой продажи за ступень, %"],
 ];
+
+type RewardKey = "coins" | "attempts" | "skill_tokens";
+const REWARD_LABELS: [RewardKey, string][] = [["coins", "монеты"], ["attempts", "попытки"], ["skill_tokens", "жетоны навыка"]];
 
 const PARAM_LABELS: Record<string, string> = {
   bonus: "Бонус к рейтингу",
@@ -132,6 +140,10 @@ export default function AdminPathPage() {
       path_title: config.path_title,
       path_coin_attempt_prices: config.path_coin_attempt_prices,
       path_stars_attempt_prices: config.path_stars_attempt_prices,
+      path_prestige_dupes: config.path_prestige_dupes,
+      path_prestige_coins: config.path_prestige_coins,
+      path_prestige_names: config.path_prestige_names,
+      path_prestige_rewards: config.path_prestige_rewards,
     };
     for (const [key] of NUMBER_FIELDS) (picked as Record<string, number>)[key] = config[key] as number;
     setForm(picked);
@@ -231,6 +243,58 @@ export default function AdminPathPage() {
           ))}
           {priceList("path_coin_attempt_prices", "Цены попыток за монеты")}
           {priceList("path_stars_attempt_prices", "Цены попыток за Stars")}
+        </div>
+        <p className="mb-2 mt-5 font-display text-sm font-bold">Престиж (дубли → ступени)</p>
+        <p className="mb-2 text-xs text-slate-400">
+          По ступеням через запятую; количество значений в «Дублях» = число ступеней. Престиж не меняет рейтинг.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {(["path_prestige_dupes", "path_prestige_coins"] as const).map((key) => (
+            <label key={key} className="flex flex-col gap-1">
+              <span className="text-xs text-slate-400">{key === "path_prestige_dupes" ? "Дублей своего игрока на ступень" : "Монет на ступень"}</span>
+              <input
+                value={(form[key] ?? []).join(", ")}
+                onChange={(e) => setForm({ ...form, [key]: e.target.value.split(",").map((v) => Number(v.trim())).filter((v) => !Number.isNaN(v)) })}
+                className="rounded-lg bg-bg-base px-3 py-2 outline-none"
+              />
+            </label>
+          ))}
+          <label className="flex flex-col gap-1 sm:col-span-2">
+            <span className="text-xs text-slate-400">Названия ступеней</span>
+            <input
+              value={(form.path_prestige_names ?? []).join(", ")}
+              onChange={(e) => setForm({ ...form, path_prestige_names: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })}
+              className="rounded-lg bg-bg-base px-3 py-2 outline-none"
+            />
+          </label>
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {(form.path_prestige_dupes ?? []).map((_, i) => {
+            const rewards = form.path_prestige_rewards ?? [];
+            const row = rewards[i] ?? { coins: 0, attempts: 0, skill_tokens: 0 };
+            return (
+              <div key={i} className="rounded-lg bg-white/5 p-2 text-xs">
+                <p className="mb-1 font-semibold">Награда: {(form.path_prestige_names ?? [])[i] ?? `ступень ${i + 1}`}</p>
+                {REWARD_LABELS.map(([k, label]) => (
+                  <label key={k} className="mb-1 flex items-center justify-between gap-2">
+                    <span className="text-slate-400">{label}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={row[k] ?? 0}
+                      onChange={(e) => {
+                        const next = [...rewards];
+                        while (next.length <= i) next.push({ coins: 0, attempts: 0, skill_tokens: 0 });
+                        next[i] = { ...row, [k]: Number(e.target.value) };
+                        setForm({ ...form, path_prestige_rewards: next });
+                      }}
+                      className="w-24 rounded bg-bg-base px-2 py-1 text-right outline-none"
+                    />
+                  </label>
+                ))}
+              </div>
+            );
+          })}
         </div>
         <button
           type="button"

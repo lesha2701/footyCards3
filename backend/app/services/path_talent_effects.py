@@ -31,6 +31,9 @@ def talent_snapshot(card, catalog, config, mode: str) -> Optional[dict]:
     by the admin, or not modelled in this mode («не действует»)."""
     player = getattr(card, "player", None)
     code = getattr(player, "path_talent_code", None)
+    # A prestige reforge overrides the design's talent for this copy only.
+    if code and getattr(card, "talent_override", None):
+        code = card.talent_override
     if not code or not config.path_enabled or code not in TALENTS:
         return None
     definition = TALENTS[code]

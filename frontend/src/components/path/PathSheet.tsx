@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { buyPathAttempt, createPathStarsInvoice, fetchPathStarsInvoiceStatus, fetchPathState } from "@/api/path";
 import { IconCoin } from "@/components/icons";
+import PrestigeSection from "@/components/path/PrestigeSection";
 import StageUpCelebration from "@/components/path/StageUpCelebration";
 import TalentBlock from "@/components/path/TalentBlock";
 import { staticUrl } from "@/lib/api";
@@ -240,6 +241,10 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
             </section>
 
             {state.talent && <TalentBlock talent={state.talent} />}
+
+            {state.prestige && state.prestige.max_tier > 0 && (
+              <PrestigeSection cardId={cardId} prestige={state.prestige} title={state.title} />
+            )}
 
             <section className="rounded-2xl bg-white/5 p-3" aria-label="Попытки на сегодня">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-mist-dim">Опыт сегодня</h3>

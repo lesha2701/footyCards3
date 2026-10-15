@@ -36,6 +36,11 @@ async def pg(real_pg):
         config.path_coin_attempt_prices = [300, 400]
         await s.commit()
     yield real_pg
+    # The config row outlives the test (teardown only removes new rows).
+    async with real_pg() as s:
+        config = await s.get(GameConfig, 1)
+        config.path_prestige_dupes, config.path_prestige_coins = [1, 2, 3, 5], [0, 0, 0, 0]
+        await s.commit()
 
 
 async def _user_with_path_card(pg, balance: int = 10_000) -> tuple[int, int]:
@@ -103,3 +108,51 @@ async def test_concurrent_coin_purchases_respect_the_daily_limit_and_charge_once
         purchases = (await s.execute(select(func.sum(PathAttemptPurchase.price)).where(PathAttemptPurchase.user_id == uid))).scalar_one()
         path = await s.get(CardPath, cid)
         assert purchases == 700 and user.balance == 10_000 - 700 and path.bought_attempts == 2
+
+
+async def _prestige_setup(pg, copies: int) -> tuple[int, list[int]]:
+    async with pg() as s:
+        config = await s.get(GameConfig, 1)
+        config.path_prestige_dupes = [1]
+        config.path_prestige_coins = [0]
+        user = User(telegram_id=int(uuid.uuid4().int % 10**12), first_name="PG", balance=0)
+        tag = uuid.uuid4().hex[:6]
+        player = Player(
+            first_name="P", last_name=tag, display_name=f"Pr {tag}", rating=60, rarity=Rarity.diamond,
+            country="X", club="Y", position=Position.ST, quick_sell_price=1, is_active=True, path_talent_code="fighter",
+        )
+        s.add_all([user, player])
+        await s.flush()
+        cards = [UserCard(owner_id=user.id, player_id=player.id, source=CardSource.seed, serial_number=i + 1)
+                 for i in range(copies)]
+        s.add_all(cards)
+        await s.commit()
+        return user.id, [c.id for c in cards]
+
+
+async def test_concurrent_prestige_never_burns_more_than_once_and_icon_numbers_stay_unique(pg):
+    from app.services import path_prestige_service
+
+    async def up(uid, cid, key):
+        async with pg() as s:
+            user = await s.get(User, uid)
+            try:
+                return await path_prestige_service.tier_up(s, user, cid, None, False, key)
+            except AppError as exc:
+                return exc
+
+    # One spare duplicate, two copies racing for it: exactly one tier-up.
+    uid, (a, b, spare) = await _prestige_setup(pg, 3)
+    results = await asyncio.gather(up(uid, a, "k-a"), up(uid, b, "k-b"))
+    assert sum(1 for r in results if not isinstance(r, AppError)) == 1
+    async with pg() as s:
+        left = (await s.execute(select(func.count(UserCard.id)).where(UserCard.owner_id == uid))).scalar_one()
+        assert left == 2
+
+    # Two different players reaching the top tier at once: distinct «Икона» numbers.
+    u1, (t1, s1) = await _prestige_setup(pg, 2)
+    u2, (t2, s2) = await _prestige_setup(pg, 2)
+    await asyncio.gather(up(u1, t1, "i-1"), up(u2, t2, "i-2"))
+    async with pg() as s:
+        numbers = [(await s.get(UserCard, t)).prestige_icon_number for t in (t1, t2)]
+        assert None not in numbers and len(set(numbers)) == 2

@@ -1,6 +1,7 @@
 import { IconTag } from "@/components/icons";
 import PathCardMark from "@/components/path/PathCardMark";
 import { pathFrameClass } from "@/lib/pathCards";
+import { ICON_FRAME, isIconTier, prestigeMarks, prestigeStyle } from "@/lib/prestige";
 import { staticUrl } from "@/lib/api";
 import { RARITY_GLOW, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import type { Player } from "@/types";
@@ -17,6 +18,10 @@ interface Props {
   stars?: number;
   /** «Академия»: stage of this specific copy (omit for a design). */
   pathStage?: number;
+  /** «Академия» prestige tier of this copy (status marks; «Икона» = holo frame). */
+  prestige?: number;
+  /** Talent picked in a prestige reforge (overrides the design's). */
+  talentOverride?: string | null;
 }
 
 const SIZE_CLASSES: Record<NonNullable<Props["size"]>, string> = {
@@ -25,10 +30,12 @@ const SIZE_CLASSES: Record<NonNullable<Props["size"]>, string> = {
   lg: "text-sm",
 };
 
-export default function PlayerCard({ player, size = "md", badge, footer, onClick, selected, dimmed, stars = 0, pathStage }: Props) {
+export default function PlayerCard({
+  player, size = "md", badge, footer, onClick, selected, dimmed, stars = 0, pathStage, prestige = 0, talentOverride,
+}: Props) {
   const isPath = !!player.path_talent_code;
   const frame = isPath
-    ? pathFrameClass(pathStage)
+    ? isIconTier(prestige) ? ICON_FRAME : pathFrameClass(pathStage)
     : `${RARITY_GRADIENTS[player.rarity]} ${RARITY_GLOW[player.rarity]}`;
   const imageUrl = staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp");
 
@@ -48,6 +55,11 @@ export default function PlayerCard({ player, size = "md", badge, footer, onClick
           <img src={imageUrl} alt={player.display_name} className="h-full w-full object-cover" loading="lazy" />
           <div className="absolute left-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-display font-bold leading-none text-white">
             <span className={SIZE_CLASSES[size]}>{player.rating}</span>
+            {prestige > 0 && (
+              <span className={`mt-0.5 block text-[8px] leading-none ${prestigeStyle(prestige).mark}`} aria-label={`Престиж: ${prestige}`}>
+                {prestigeMarks(prestige)}
+              </span>
+            )}
             {stars > 0 && (
               <span className="mt-0.5 block text-[8px] leading-none text-amber-300" aria-label={`Звёзд: ${stars}`}>
                 {"★".repeat(stars)}
@@ -60,7 +72,7 @@ export default function PlayerCard({ player, size = "md", badge, footer, onClick
           {badge && <div className="absolute bottom-1.5 left-1.5">{badge}</div>}
           {isPath && (
             <div className="absolute bottom-1.5 right-1.5">
-              <PathCardMark talentCode={player.path_talent_code!} stage={pathStage} size={size} />
+              <PathCardMark talentCode={talentOverride || player.path_talent_code!} stage={pathStage} size={size} />
             </div>
           )}
         </div>

@@ -123,6 +123,30 @@ class PathXpEvent(Base):
     )
 
 
+class PathPrestigeLedger(Base):
+    """Every prestige tier-up (duplicates burnt, coins, reward) and talent
+    reforge. `(user_id, idempotency_key)` unique = a retried request replays."""
+
+    __tablename__ = "path_prestige_ledger"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_card_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # tier_up | reforge
+    tier_after: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    consumed_card_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    coins_spent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reward: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    from_talent: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    to_talent: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "idempotency_key", name="uq_path_prestige_ledger_user_key"),)
+
+
 class PathAttemptPurchase(Base):
     __tablename__ = "path_attempt_purchases"
 

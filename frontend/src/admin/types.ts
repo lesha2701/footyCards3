@@ -427,6 +427,15 @@ export interface GameConfig {
   match_max_path_cards: number;
   tactico_max_path_cards: number;
   stratego_max_path_cards: number;
+  path_prestige_dupes: number[];
+  path_prestige_coins: number[];
+  path_prestige_names: string[];
+  path_prestige_rewards: { coins: number; attempts: number; skill_tokens: number }[];
+  path_prestige_xp_pct: number;
+  path_prestige_xp_cap_pct: number;
+  path_prestige_free_attempts: number;
+  path_prestige_sell_pct: number;
+  path_prestige_other_ratio: number;
 }
 
 export interface AdminPathTalent {

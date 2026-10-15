@@ -185,7 +185,7 @@ export default function MyCardsTab() {
             key={card.id}
             player={card.player}
             stars={card.stars}
-            pathStage={card.path_stage}
+            pathStage={card.path_stage} prestige={card.prestige} talentOverride={card.talent_override}
             badge={<CardTileBadges card={card} />}
             selected={selectMode && selected.includes(card.id)}
             onClick={() => (selectMode ? toggleSelect(card.id) : setDetailCard(card))}

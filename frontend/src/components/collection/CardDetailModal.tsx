@@ -65,6 +65,9 @@ export default function CardDetailModal({
         />
         <p className="mt-3 font-display text-lg font-bold text-ink-chalk">{player.display_name}</p>
         <p className="text-sm text-ink-mist">{POSITION_LABELS[player.position]} · {player.club}</p>
+        {card.prestige_icon_number != null && (
+          <p className="mt-1 text-xs font-bold text-fuchsia-300">Икона Академии №{card.prestige_icon_number}</p>
+        )}
         {player.collection_name && (
           <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-accent-lime">
             <IconTag size={12} />

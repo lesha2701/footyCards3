@@ -60,6 +60,16 @@ class UserCard(Base):
     path_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     path_stage: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     path_rating_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Академия» prestige (services/path_prestige_service.py): tier 0..max
+    # bought with duplicates of the same player — status, not power. The top
+    # tier gets a global «Икона» number (unique) and one talent reforge,
+    # which overrides the design's talent for THIS copy only.
+    prestige: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    prestige_icon_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, unique=True)
+    talent_override: Mapped[Optional[str]] = mapped_column(
+        String(32), ForeignKey("path_talents.code", ondelete="RESTRICT"), nullable=True
+    )
+    talent_reforged: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     owner: Mapped["User"] = relationship(back_populates="cards")
     player: Mapped["Player"] = relationship(back_populates="cards")
@@ -68,7 +78,7 @@ class UserCard(Base):
         return bool(self.stars or self.star_progress)
 
     def has_path_progress(self) -> bool:
-        return bool(self.path_level or self.path_stage)
+        return bool(self.path_level or self.path_stage or self.prestige)
 
     def is_locked(self) -> bool:
         return self.is_locked_by_admin or self.is_locked_in_trade or self.is_in_lineup or self.is_in_tactico_squad

@@ -222,10 +222,15 @@ async def sell_cards(
     if len(cards) != len(set(user_card_ids)):
         raise NotFoundError("One or more cards not found")
 
+    from app.services.game_config_service import get_config
+    from app.services.path_prestige_service import sell_price
+
+    config = await get_config(db)
     total_value = 0
     for card in cards:
         await _assert_sellable(db, user.id, card, confirm_last_copy)
-        total_value += card.player.quick_sell_price
+        # «Академия» prestige raises a copy's quick-sell price.
+        total_value += sell_price(card, config)
     require_skill_loss_confirmation(list(cards), confirm_skill_loss, "продажа")
 
     for card in cards:

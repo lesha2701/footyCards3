@@ -155,3 +155,43 @@ describe("match log", () => {
     expect(screen.getByText(/\+4 соседям/)).toBeInTheDocument();
   });
 });
+
+describe("prestige", () => {
+  const prestige = (over: Partial<import("@/types").PathPrestige> = {}): import("@/types").PathPrestige => ({
+    tier: 1, max_tier: 4, tier_name: "Бронза", names: ["Бронза", "Серебро", "Золото", "Икона"],
+    next_dupes: 2, ratio: 5, free_units: 7, next_coins: 0,
+    next_reward: { coins: 600, attempts: 2, skill_tokens: 0 }, free_duplicates: [],
+    xp_bonus_pct: 5, next_xp_bonus_pct: 10, extra_free_attempts: 1, sell_price: 1350,
+    icon_number: null, reforged: false, can_reforge: false, reforge_options: [], ...over,
+  });
+
+  it("explains the 5-to-1 rate and blocks the tier-up until there is enough", async () => {
+    const { default: PrestigeSection } = await import("@/components/path/PrestigeSection");
+    withQuery(<PrestigeSection cardId={7} prestige={prestige()} title="Академия" />);
+    expect(screen.getByText(/2 дубл\. этого игрока или 10 лишних карт других игроков/)).toBeInTheDocument();
+    expect(screen.getByText("Повысить престиж")).toBeDisabled();
+    expect(screen.getByText(/Награда: 600 монет, 2 попыт\./)).toBeInTheDocument();
+  });
+
+  it("shows the icon number and the one-off reforge on the top tier", async () => {
+    const { default: PrestigeSection } = await import("@/components/path/PrestigeSection");
+    withQuery(
+      <PrestigeSection
+        cardId={7}
+        title="Академия"
+        prestige={prestige({
+          tier: 4, tier_name: "Икона", next_dupes: null, next_reward: null, icon_number: 3, can_reforge: true,
+          reforge_options: [{ code: "composure", name: "Хладнокровие", emoji: "🧊", summary: "" }],
+        })}
+      />,
+    );
+    expect(screen.getByText("Икона Академии №3")).toBeInTheDocument();
+    expect(screen.getByText("Перековать")).toBeDisabled();
+    expect(screen.getByText("Высшая ступень престижа")).toBeInTheDocument();
+  });
+
+  it("marks the prestige tier on the card", () => {
+    withQuery(<PlayerCard player={player} pathStage={2} prestige={2} />);
+    expect(screen.getByLabelText("Престиж: 2")).toHaveTextContent("◆◆");
+  });
+});

@@ -238,7 +238,7 @@ async def career_fatigue_gains(db: AsyncSession, gains: Optional[dict], cards_by
         return gains
     candidates = [
         c for cid, c in cards_by_id.items()
-        if cid in gains and getattr(c.player, "path_talent_code", None) == "second_wind"
+        if cid in gains and path_service.talent_code_of(c) == "second_wind"
     ]
     if not candidates:
         return gains

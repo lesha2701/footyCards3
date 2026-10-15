@@ -7,6 +7,7 @@ import { PublicMyPlayer } from "@/components/myPlayer/MyPlayerEntry";
 import FriendButton from "@/components/profile/FriendButton";
 import { IconChevronLeft, IconSwap } from "@/components/icons";
 import { fetchPublicProfile } from "@/api/profile";
+import AcademyShowcase from "@/components/path/AcademyShowcase";
 import { staticUrl } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import type { UserPublic } from "@/types";
@@ -72,6 +73,8 @@ export default function PublicProfilePage() {
       </section>
 
       <PublicMyPlayer userId={profile.id} />
+
+      <AcademyShowcase userId={profile.id} />
 
       {profile.rarest_card && (
         <section className="flex items-center gap-3 rounded-2xl bg-rarity-legendary/10 p-4">

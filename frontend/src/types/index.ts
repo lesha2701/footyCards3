@@ -132,6 +132,10 @@ export interface UserCard {
   path_level?: number;
   path_stage?: number;
   path_rating_bonus?: number;
+  /** «Академия» prestige tier, its «Икона» number and the reforged talent. */
+  prestige?: number;
+  prestige_icon_number?: number | null;
+  talent_override?: string | null;
 }
 
 export interface CardStarState {
@@ -748,6 +752,7 @@ export interface ArenaLeaderboardEntry {
 }
 
 export type RankingMetric =
+  | "academy_prestige"
   | "arena_rating"
   | "matches_won"
   | "cards_count"
@@ -2483,6 +2488,34 @@ export interface PathState {
   totals: Record<string, number>;
   hunger_streak: number;
   recent: PathHistoryItem[];
+  prestige?: PathPrestige;
+}
+
+export interface PathPrestigeReward {
+  coins: number;
+  attempts: number;
+  skill_tokens: number;
+}
+
+export interface PathPrestige {
+  tier: number;
+  max_tier: number;
+  tier_name: string | null;
+  names: string[];
+  next_dupes: number | null;
+  ratio: number;
+  free_units: number;
+  next_coins: number | null;
+  next_reward: PathPrestigeReward | null;
+  free_duplicates: { id: number; serial_number: number; skill_code: string | null; player_name: string; same_player: boolean; units: number }[];
+  xp_bonus_pct: number;
+  next_xp_bonus_pct: number | null;
+  extra_free_attempts: number;
+  sell_price: number;
+  icon_number: number | null;
+  reforged: boolean;
+  can_reforge: boolean;
+  reforge_options: { code: string; name: string; emoji: string; summary: string }[];
 }
 
 export interface PathCatalog {

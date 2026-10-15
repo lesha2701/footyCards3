@@ -638,3 +638,28 @@ class GameConfig(TimestampMixin, Base):
     match_max_path_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     tactico_max_path_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     stratego_max_path_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # «Академия» prestige (services/path_prestige_service.py): duplicates of
+    # the same player raise THIS copy's prestige tier — status, never rating.
+    # Lists are per tier (their length = number of tiers).
+    path_prestige_dupes: Mapped[list] = mapped_column(JSON, nullable=False, default=lambda: [1, 2, 3, 5])
+    path_prestige_coins: Mapped[list] = mapped_column(JSON, nullable=False, default=lambda: [0, 0, 0, 0])
+    path_prestige_names: Mapped[list] = mapped_column(
+        JSON, nullable=False, default=lambda: ["Бронза", "Серебро", "Золото", "Икона"],
+    )
+    # One-off reward per tier reached: coins, bought Arena attempts, skill tokens.
+    path_prestige_rewards: Mapped[list] = mapped_column(
+        JSON, nullable=False,
+        default=lambda: [
+            {"coins": 300, "attempts": 1, "skill_tokens": 0}, {"coins": 600, "attempts": 2, "skill_tokens": 0},
+            {"coins": 1000, "attempts": 3, "skill_tokens": 1}, {"coins": 2000, "attempts": 5, "skill_tokens": 2},
+        ],
+    )
+    # Soft bonuses per tier: experience %, capped; free Arena attempts a day;
+    # quick-sell price %.
+    path_prestige_xp_pct: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    path_prestige_xp_cap_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    path_prestige_free_attempts: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    path_prestige_sell_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    # One duplicate of the SAME player = this many spare copies of other
+    # «Академия» players (prestige material exchange rate).
+    path_prestige_other_ratio: Mapped[int] = mapped_column(Integer, default=5, nullable=False)

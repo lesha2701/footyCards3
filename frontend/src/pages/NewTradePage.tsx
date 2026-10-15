@@ -156,7 +156,7 @@ export default function NewTradePage() {
             <div className="max-h-64 overflow-y-auto">
               <div className="grid grid-cols-3 gap-2">
                 {myCollection?.items.filter(isTradeable).map((c) => (
-                  <PlayerCard key={c.id} player={c.player} pathStage={c.path_stage} size="sm" badge={<CardSkillBadge code={c.skill_code} level={c.skill_level} />} selected={offeredIds.includes(c.id)} onClick={() => toggle(offeredIds, setOfferedIds, c.id)} />
+                  <PlayerCard key={c.id} player={c.player} pathStage={c.path_stage} prestige={c.prestige} talentOverride={c.talent_override} size="sm" badge={<CardSkillBadge code={c.skill_code} level={c.skill_level} />} selected={offeredIds.includes(c.id)} onClick={() => toggle(offeredIds, setOfferedIds, c.id)} />
                 ))}
                 {myCollection && !myCollection.items.filter(isTradeable).length && (
                   <p className="col-span-3 text-xs text-ink-mist-dim">
@@ -183,7 +183,7 @@ export default function NewTradePage() {
             <div className="max-h-64 overflow-y-auto">
               <div className="grid grid-cols-3 gap-2">
                 {theirCollection?.items.filter(isTradeable).map((c) => (
-                  <PlayerCard key={c.id} player={c.player} pathStage={c.path_stage} size="sm" badge={<CardSkillBadge code={c.skill_code} level={c.skill_level} />} selected={requestedIds.includes(c.id)} onClick={() => toggle(requestedIds, setRequestedIds, c.id)} />
+                  <PlayerCard key={c.id} player={c.player} pathStage={c.path_stage} prestige={c.prestige} talentOverride={c.talent_override} size="sm" badge={<CardSkillBadge code={c.skill_code} level={c.skill_level} />} selected={requestedIds.includes(c.id)} onClick={() => toggle(requestedIds, setRequestedIds, c.id)} />
                 ))}
                 {theirCollection && theirCollection.items.filter(isTradeable).length === 0 && (
                   <p className="col-span-3 text-xs text-ink-mist-dim">

@@ -58,7 +58,7 @@ from app.services.card_skill_effects import is_position_compatible, level_bonus_
 from app.services.game_config_service import get_config
 from app.services.wallet_service import debit_coins, lock_user_for_update
 
-GRANT_KINDS = {"grant_task", "grant_tournament", "grant_pack", "grant_admin", "revoke_admin"}
+GRANT_KINDS = {"grant_task", "grant_tournament", "grant_pack", "grant_admin", "revoke_admin", "grant_prestige"}
 
 
 # --- Catalog -----------------------------------------------------------------
@@ -576,7 +576,9 @@ def require_skill_loss_confirmation(cards: list[UserCard], confirmed: bool, acti
     skilled = [c for c in cards if c.skill_code]
     starred = [c for c in cards if getattr(c, "stars", 0) or getattr(c, "star_progress", 0)]
     # «Академия»: the levels / stage reached on the path go with the copy.
-    pathed = [c for c in cards if getattr(c, "path_level", 0) or getattr(c, "path_stage", 0)]
+    pathed = [
+        c for c in cards if getattr(c, "path_level", 0) or getattr(c, "path_stage", 0) or getattr(c, "prestige", 0)
+    ]
     if (skilled or starred or pathed) and not confirmed:
         lost = " и ".join(
             part for part, present in (

@@ -36,6 +36,10 @@ class UserCardOut(BaseModel):
     path_level: int = 0
     path_stage: int = 0
     path_rating_bonus: int = 0
+    # «Академия» prestige tier, its «Икона» number and the reforged talent.
+    prestige: int = 0
+    prestige_icon_number: Optional[int] = None
+    talent_override: Optional[str] = None
 
     @property
     def is_locked(self) -> bool:
@@ -77,6 +81,9 @@ class UserCardOut(BaseModel):
             "path_level": getattr(data, "path_level", 0) or 0,
             "path_stage": getattr(data, "path_stage", 0) or 0,
             "path_rating_bonus": getattr(data, "path_rating_bonus", 0) or 0,
+            "prestige": getattr(data, "prestige", 0) or 0,
+            "prestige_icon_number": getattr(data, "prestige_icon_number", None),
+            "talent_override": getattr(data, "talent_override", None),
         }
 
 

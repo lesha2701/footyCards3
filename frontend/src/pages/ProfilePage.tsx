@@ -12,6 +12,7 @@ import {
 } from "@/api/profile";
 import { UserBadge } from "@/components/common/UserBadge";
 import { MyPlayerEntry } from "@/components/myPlayer/MyPlayerEntry";
+import AcademyShowcase from "@/components/path/AcademyShowcase";
 import ThemeSetting from "@/components/profile/ThemeSetting";
 import { BuyCoinsModal } from "@/components/shop/CoinPackages";
 import {
@@ -210,6 +211,7 @@ export default function ProfilePage() {
       )}
 
       <MyPlayerEntry />
+      {user && <AcademyShowcase userId={user.id} />}
 
       <button
         onClick={() => navigate("/friends")}

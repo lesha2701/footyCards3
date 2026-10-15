@@ -466,6 +466,15 @@ class GameConfigOut(BaseModel):
     match_max_path_cards: int = 1
     tactico_max_path_cards: int = 1
     stratego_max_path_cards: int = 1
+    path_prestige_dupes: list[int] = []
+    path_prestige_coins: list[int] = []
+    path_prestige_names: list[str] = []
+    path_prestige_rewards: list[dict] = []
+    path_prestige_xp_pct: int = 5
+    path_prestige_xp_cap_pct: int = 15
+    path_prestige_free_attempts: int = 1
+    path_prestige_sell_pct: int = 50
+    path_prestige_other_ratio: int = 5
 
 
 class GameConfigUpdate(BaseModel):
@@ -807,6 +816,22 @@ class GameConfigUpdate(BaseModel):
     match_max_path_cards: Optional[int] = Field(default=None, ge=0, le=11)
     tactico_max_path_cards: Optional[int] = Field(default=None, ge=0, le=11)
     stratego_max_path_cards: Optional[int] = Field(default=None, ge=0, le=20)
+    path_prestige_dupes: Optional[list[int]] = Field(default=None, max_length=10)
+    path_prestige_coins: Optional[list[int]] = Field(default=None, max_length=10)
+    path_prestige_names: Optional[list[str]] = Field(default=None, max_length=10)
+    path_prestige_rewards: Optional[list[dict[str, int]]] = Field(default=None, max_length=10)
+    path_prestige_xp_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    path_prestige_xp_cap_pct: Optional[int] = Field(default=None, ge=0, le=200)
+    path_prestige_free_attempts: Optional[int] = Field(default=None, ge=0, le=20)
+    path_prestige_sell_pct: Optional[int] = Field(default=None, ge=0, le=1000)
+    path_prestige_other_ratio: Optional[int] = Field(default=None, ge=1, le=50)
+
+    @field_validator("path_prestige_dupes", "path_prestige_coins")
+    @classmethod
+    def _non_negative_tiers(cls, value):
+        if value is not None and any(int(v) < 0 for v in value):
+            raise ValueError("Значения по ступеням не могут быть отрицательными")
+        return value
 
     @field_validator("path_coin_attempt_prices", "path_stars_attempt_prices")
     @classmethod

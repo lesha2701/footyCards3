@@ -134,6 +134,15 @@ def is_path_card(card) -> bool:
     return player is not None and is_path_player(player)
 
 
+def talent_code_of(card) -> Optional[str]:
+    """This copy's talent: the one picked in a prestige reforge, else the
+    design's. None for a regular card."""
+    player = getattr(card, "player", None)
+    if player is None or not is_path_player(player):
+        return None
+    return getattr(card, "talent_override", None) or player.path_talent_code
+
+
 def is_plain_diamond(card) -> bool:
     """A diamond that takes a diamond slot in squads (path cards have their own limit)."""
     return card.player.rarity == Rarity.diamond and not is_path_card(card)
@@ -325,8 +334,10 @@ async def award_match(
             continue
         path = await get_or_create_path(db, card, catalog)
         _reset_day(path, today)
+        tier = getattr(card, "prestige", 0) or 0
         if source_type == "arena":
-            free_left = int(config.path_daily_free_arena) - path.arena_used
+            free_total = int(config.path_daily_free_arena) + tier * int(config.path_prestige_free_attempts)
+            free_left = free_total - path.arena_used
             if free_left <= 0 and path.bought_attempts <= 0:
                 results.append(AwardResult(card.id, "no_attempts"))
                 continue
@@ -338,6 +349,9 @@ async def award_match(
                 continue
             attempt = source_type
         xp = match_xp(config, entry.result, entry.goals, entry.assists)
+        # Prestige: +experience % per tier, capped (status bonus, not rating).
+        bonus_pct = min(int(config.path_prestige_xp_cap_pct), tier * int(config.path_prestige_xp_pct))
+        xp += xp * bonus_pct // 100
         event = PathXpEvent(
             user_card_id=card.id, user_id=user_id, source_type=source_type, source_id=str(source_id), xp=xp,
             details={"result": entry.result, "goals": entry.goals, "assists": entry.assists, "attempt": attempt},
@@ -398,7 +412,7 @@ async def update_hunger_streaks(db: AsyncSession, user_id: int, in_lineup: set[i
             continue
         keep = 0
         level = catalog.talent_level(card.path_stage)
-        if card.player.path_talent_code == "hunger" and level:
+        if talent_code_of(card) == "hunger" and level:
             row = catalog.talents.get("hunger")
             keep = values_for("hunger", level, row.level_values if row else None).get("keep_on_miss_pct", 0)
         path.hunger_streak = path.hunger_streak * int(keep) // 100
@@ -459,7 +473,7 @@ def card_path_summary(card, catalog: Catalog, config) -> Optional[dict]:
     stage = catalog.stage(card.path_stage)
     return {
         "stage": card.path_stage, "stage_name": stage.name, "level": card.path_level,
-        "talent_code": card.player.path_talent_code, "talent_level": catalog.talent_level(card.path_stage),
+        "talent_code": talent_code_of(card), "talent_level": catalog.talent_level(card.path_stage),
         "is_legend": card.path_stage >= catalog.last.stage_index,
     }
 
@@ -469,7 +483,13 @@ async def get_state(db: AsyncSession, user: User, card_id: int) -> dict:
     catalog = await load_catalog(db)
     card = await _owned_path_card(db, user, card_id)
     path = (await db.execute(select(CardPath).where(CardPath.user_card_id == card.id))).scalar_one_or_none()
-    return build_state(card, path, catalog, config, await _recent_events(db, card.id))
+    from app.services import path_prestige_service  # imports this module
+
+    state = build_state(card, path, catalog, config, await _recent_events(db, card.id))
+    state["prestige"] = path_prestige_service.state_out(
+        card, config, await path_prestige_service._free_materials(db, card), catalog,
+    )
+    return state
 
 
 async def _recent_events(db: AsyncSession, card_id: int) -> list[PathXpEvent]:
@@ -494,6 +514,7 @@ def build_state(card: UserCard, path: Optional[CardPath], catalog: Catalog, conf
     coin_buys = path.coin_buys if same_day else 0
     stars_buys = path.stars_buys if same_day else 0
     level = catalog.talent_level(stage_index)
+    free_total = int(config.path_daily_free_arena) + (card.prestige or 0) * int(config.path_prestige_free_attempts)
     stages_out = []
     min_rating = player.rating
     for stage in catalog.stages:
@@ -523,10 +544,10 @@ def build_state(card: UserCard, path: Optional[CardPath], catalog: Catalog, conf
         "stage": stage_index, "stage_name": catalog.stage(stage_index).name,
         "is_legend": stage_index >= catalog.last.stage_index,
         "stages": stages_out,
-        "talent": talent_out(player.path_talent_code, level, catalog, config),
+        "talent": talent_out(talent_code_of(card), level, catalog, config),
         "daily": {
-            "arena_free_total": int(config.path_daily_free_arena),
-            "arena_free_left": max(0, int(config.path_daily_free_arena) - (path.arena_used if same_day else 0)),
+            "arena_free_total": free_total,
+            "arena_free_left": max(0, free_total - (path.arena_used if same_day else 0)),
             "bought_attempts": path.bought_attempts if path else 0,
             "career_total": int(config.path_daily_career),
             "career_left": max(0, int(config.path_daily_career) - (path.career_used if same_day else 0)),

@@ -8,7 +8,8 @@ from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.stars import StarsInvoiceStatusOut
-from app.services import path_service, stars_payment_service
+from app.schemas.card import UserCardOut
+from app.services import path_prestige_service, path_service, stars_payment_service
 from app.services.game_config_service import get_config
 from app.services.path_talent_catalog import TALENTS
 
@@ -60,3 +61,37 @@ async def create_stars_invoice(card_id: int, db: AsyncSession = Depends(get_db),
 @router.get("/stars-invoices/{payload_token}", response_model=StarsInvoiceStatusOut)
 async def get_stars_invoice_status(payload_token: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await stars_payment_service.get_invoice_status(db, user, payload_token)
+
+
+class PrestigeRequest(BaseModel):
+    # None = take the free duplicates automatically (copies with a skill never).
+    material_card_ids: Optional[list[int]] = Field(default=None, max_length=20)
+    confirm_skill_loss: bool = False
+    idempotency_key: Optional[str] = Field(default=None, max_length=128)
+
+
+class ReforgeRequest(BaseModel):
+    talent_code: str = Field(max_length=32)
+    idempotency_key: Optional[str] = Field(default=None, max_length=128)
+
+
+@router.post("/cards/{card_id}/prestige")
+async def raise_prestige(
+    card_id: int, payload: PrestigeRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await path_prestige_service.tier_up(
+        db, user, card_id, payload.material_card_ids, payload.confirm_skill_loss, payload.idempotency_key,
+    )
+
+
+@router.post("/cards/{card_id}/reforge")
+async def reforge_talent(
+    card_id: int, payload: ReforgeRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await path_prestige_service.reforge(db, user, card_id, payload.talent_code, payload.idempotency_key)
+
+
+@router.get("/showcase/{user_id}", response_model=list[UserCardOut])
+async def get_showcase(user_id: int, db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
+    """Profile showcase: a user's most prestigious «Академия» copies."""
+    return await path_prestige_service.showcase(db, user_id)
