@@ -64,9 +64,9 @@ async def test_upgrade_charges_coins_runs_a_timer_and_completes_lazily(client, d
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["construction"]["building_code"] == "training" and body["construction"]["to_level"] == 1
-    assert body["construction"]["speedup_stars"] == 2 and body["new_balance"] == 8_000
+    assert body["construction"]["speedup_stars"] == 24 and body["new_balance"] == 7_000  # 24 h at 1 Star per hour; 3000 coins
     replay = await client.post("/api/v1/academy/wings/training/upgrade", headers=headers, json={"idempotency_key": "u1"})
-    assert replay.status_code == 200 and replay.json()["new_balance"] == 8_000
+    assert replay.status_code == 200 and replay.json()["new_balance"] == 7_000
     busy = await client.post("/api/v1/academy/wings/dorm/upgrade", headers=headers, json={})
     assert busy.status_code == 409  # one construction at a time
 
@@ -74,7 +74,7 @@ async def test_upgrade_charges_coins_runs_a_timer_and_completes_lazily(client, d
     state = (await client.get("/api/v1/academy", headers=headers)).json()
     wing = next(w for w in state["wings"] if w["code"] == "training")
     assert wing["level"] == 1 and state["construction"] is None and state["level"] == 1
-    assert state["effects"]["training"] == 4
+    assert state["effects"]["training"] == 2
     nxt = await client.post("/api/v1/academy/wings/dorm/upgrade", headers=headers, json={})
     assert nxt.status_code == 200
     assert (await _academy(db_session, user.id)).levels == {"training": 1}
@@ -91,7 +91,7 @@ async def test_not_enough_coins_and_max_level(client, db_session, bot_token):
         await _finish_now(db_session, user.id)
     assert (await client.post("/api/v1/academy/wings/hall/upgrade", headers=headers, json={})).status_code == 409
     state = (await client.get("/api/v1/academy", headers=headers)).json()
-    assert state["showcase_slots"] == 3 + 5
+    assert state["showcase_slots"] == 3 + 3
 
 
 async def test_stars_speedup_finishes_the_construction(client, db_session, bot_token, monkeypatch):
@@ -107,7 +107,7 @@ async def test_stars_speedup_finishes_the_construction(client, db_session, bot_t
     inv = await client.post("/api/v1/academy/speedup-invoice", headers=headers)
     assert inv.status_code == 200, inv.text
     token, stars = inv.json()["payload_token"], inv.json()["stars_amount"]
-    assert stars == 2
+    assert stars == 24
     ok, _ = await stars_payment_service.validate_pre_checkout(db_session, token, stars)
     assert ok
     await stars_payment_service.deliver_payment(db_session, token, user.telegram_id, "ch-academy-1", stars)
@@ -131,13 +131,13 @@ async def test_wings_shape_the_path(client, db_session, bot_token):
         )
         await db_session.commit()
         statuses.append(res[0])
-    # 1 free + 3 from the dorm (level 5 → +3); +20% experience.
-    assert [r.status for r in statuses] == ["awarded"] * 4 + ["no_attempts"]
-    assert statuses[0].xp == 24
+    # 1 free + 2 from the dorm (level 5 → +2); +10% experience.
+    assert [r.status for r in statuses] == ["awarded"] * 3 + ["no_attempts"] * 2
+    assert statuses[0].xp == 22
     catalog = await path_service.load_catalog(db_session)
-    assert path_service.task_target(30, 25) == 23 and path_service.task_target(1, 25) == 1
-    tasks = path_service.tasks_status(catalog, 0, {}, Position.ST, 25)
-    assert {t["metric"]: t["target"] for t in tasks} == {"matches": 23, "wins": 9}
+    assert path_service.task_target(30, 12) == 27 and path_service.task_target(1, 25) == 1
+    tasks = path_service.tasks_status(catalog, 0, {}, Position.ST, 12)
+    assert {t["metric"]: t["target"] for t in tasks} == {"matches": 27, "wins": 11}
 
 
 def test_scout_raises_the_academy_share_of_a_pack():
@@ -160,12 +160,12 @@ async def test_scouting_report_card_or_coins_and_cooldown(client, db_session, bo
     monkeypatch.setattr(academy_service.random, "random", lambda: 0.99)  # miss → coins
     first = await client.post("/api/v1/academy/scout-report", headers=headers, json={"idempotency_key": "r1"})
     assert first.status_code == 200, first.text
-    assert first.json()["report"] == {"coins": 200} and first.json()["new_balance"] == 200
+    assert first.json()["report"] == {"coins": 100} and first.json()["new_balance"] == 100
     again = await client.post("/api/v1/academy/scout-report", headers=headers, json={})
     assert again.status_code == 409  # cooldown
 
     academy = await _academy(db_session, user.id)
-    academy.scout_report_at = datetime.now(timezone.utc) - timedelta(days=8)
+    academy.scout_report_at = datetime.now(timezone.utc) - timedelta(days=11)
     await db_session.commit()
     monkeypatch.setattr(academy_service.random, "random", lambda: 0.0)  # hit → card
     hit = await client.post("/api/v1/academy/scout-report", headers=headers, json={})

@@ -697,19 +697,19 @@ class GameConfig(TimestampMixin, Base):
     academy_buildings: Mapped[dict] = mapped_column(
         JSON, nullable=False,
         default=lambda: {
-            "scout": {"costs": [2000, 5000, 10000, 20000, 40000], "hours": [1, 4, 8, 16, 24], "effect": [1, 2, 3, 4, 5]},
-            "training": {"costs": [2000, 5000, 10000, 20000, 40000], "hours": [1, 4, 8, 16, 24], "effect": [4, 8, 12, 16, 20]},
-            "dorm": {"costs": [3000, 6000, 12000, 24000, 48000], "hours": [2, 6, 12, 18, 24], "effect": [1, 1, 2, 2, 3]},
-            "staff": {"costs": [2500, 6000, 12000, 24000, 45000], "hours": [2, 6, 10, 16, 24], "effect": [5, 10, 15, 20, 25]},
-            "hall": {"costs": [1000, 3000, 6000, 12000, 25000], "hours": [1, 2, 4, 8, 12], "effect": [1, 2, 3, 4, 5]},
+            "scout": {"costs": [3000, 8000, 16000, 32000, 60000], "hours": [24, 48, 72, 120, 168], "effect": [1, 1, 2, 2, 3]},
+            "training": {"costs": [3000, 8000, 16000, 32000, 60000], "hours": [24, 48, 72, 120, 168], "effect": [2, 4, 6, 8, 10]},
+            "dorm": {"costs": [4000, 10000, 20000, 40000, 75000], "hours": [24, 48, 72, 120, 168], "effect": [1, 1, 1, 1, 2]},
+            "staff": {"costs": [3500, 9000, 18000, 36000, 65000], "hours": [24, 48, 72, 120, 168], "effect": [3, 5, 7, 9, 12]},
+            "hall": {"costs": [1500, 4000, 8000, 16000, 30000], "hours": [24, 48, 72, 120, 168], "effect": [1, 1, 2, 2, 3]},
         },
     )
     # Stars to finish a construction now: per started remaining hour (min 1).
-    academy_stars_per_hour: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    academy_stars_per_hour: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     # Free scouting report (scout wing >= 1), per scout level: chance of an
     # «Академия» card, days between reports, coins when no card was found.
     academy_scout_report: Mapped[dict] = mapped_column(
         JSON, nullable=False,
-        default=lambda: {"chance_pct": [15, 20, 25, 30, 40], "cooldown_days": [7, 6, 5, 4, 3],
-                         "consolation_coins": [200, 300, 400, 500, 700]},
+        default=lambda: {"chance_pct": [10, 12, 14, 16, 20], "cooldown_days": [10, 9, 8, 8, 7],
+                         "consolation_coins": [100, 150, 200, 250, 300]},
     )
