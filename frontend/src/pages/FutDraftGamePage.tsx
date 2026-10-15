@@ -677,7 +677,7 @@ function Pitch({
                   <div className="flex h-full w-full flex-col items-center justify-center gap-1 rounded-[9px] bg-bg-surface p-1">
                     <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
                       {slot.player.image_path ? (
-                        <img src={staticUrl(slot.player.image_path) ?? undefined} alt="" className="h-full w-full object-cover" loading="lazy" />
+                        <img decoding="async" src={staticUrl(slot.player.image_path) ?? undefined} alt="" className="h-full w-full object-cover" loading="lazy" />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center">
                           <IconShirt size={16} className="text-ink-mist-dim" />
@@ -720,7 +720,7 @@ function DraftCandidateCard({
       <div className="flex w-full items-center gap-3 rounded-[15px] bg-bg-surface p-3">
         <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-bg-raised">
           {card.image_path ? (
-            <img src={staticUrl(card.image_path) ?? undefined} alt={card.display_name} className="h-full w-full object-cover" />
+            <img decoding="async" loading="lazy" src={staticUrl(card.image_path) ?? undefined} alt={card.display_name} className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
               <IconShirt size={20} className="text-ink-mist-dim" />
@@ -756,7 +756,7 @@ function PlayerDetailModal({ card, onClose }: { card: FutDraftCandidate; onClose
           </button>
           <div className="h-28 w-28 overflow-hidden rounded-2xl bg-bg-surface">
             {card.image_path ? (
-              <img src={staticUrl(card.image_path) ?? undefined} alt={card.display_name} className="h-full w-full object-cover" />
+              <img decoding="async" loading="lazy" src={staticUrl(card.image_path) ?? undefined} alt={card.display_name} className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
                 <IconShirt size={32} className="text-ink-mist-dim" />
@@ -1118,7 +1118,7 @@ function PenaltyRoundPlayer({
         <div className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2">
           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-bg-raised">
             {round.picked_player.image_path ? (
-              <img
+              <img decoding="async" loading="lazy"
                 src={staticUrl(round.picked_player.image_path) ?? undefined}
                 alt=""
                 className="h-full w-full object-cover"

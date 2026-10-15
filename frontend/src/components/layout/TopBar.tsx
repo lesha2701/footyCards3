@@ -25,7 +25,7 @@ export default function TopBar() {
           onClick={() => (guardActive ? requestNavigate("/") : navigate("/"))}
           className="flex items-center gap-2"
         >
-          <img src="/brand/victor-fc-crest.jpg" alt="" className="h-7 w-7 rounded-full ring-1 ring-white/10" />
+          <img decoding="async" src="/brand/victor-fc-crest.jpg" alt="" className="h-7 w-7 rounded-full ring-1 ring-white/10" />
           <span className="font-display text-sm font-bold tracking-wide text-ink-chalk">
             VICTOR <span className="text-accent-lime">FC</span>
           </span>

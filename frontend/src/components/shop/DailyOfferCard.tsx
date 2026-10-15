@@ -42,7 +42,7 @@ export default function DailyOfferCard() {
         </span>
       </div>
       <div className="mt-3 flex items-center gap-3">
-        <img
+        <img decoding="async" loading="lazy"
           src={staticUrl(offer.pack.image_path ?? undefined)}
           alt={offer.pack.name}
           className="h-16 w-16 shrink-0 rounded-2xl object-cover"

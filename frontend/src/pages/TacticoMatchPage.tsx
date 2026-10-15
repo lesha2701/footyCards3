@@ -337,7 +337,7 @@ function TacticoCardTile({ card, phase, onClick }: { card: TacticoCard; phase: s
     >
       <div className="flex h-full w-full flex-col overflow-hidden rounded-[14px] bg-bg-surface/90">
         <div className="relative flex-1 overflow-hidden">
-          <img src={imageUrl} alt={card.display_name} className="h-full w-full object-cover" loading="lazy" />
+          <img decoding="async" src={imageUrl} alt={card.display_name} className="h-full w-full object-cover" loading="lazy" />
           <div className="absolute left-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-display text-xs font-bold leading-none text-white">★{card.rating}</div>
           <div className="absolute right-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-display text-xs font-semibold leading-none text-white">{card.position}</div>
         </div>

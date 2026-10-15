@@ -249,7 +249,7 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
               }`}
             >
               <div className="flex gap-3 rounded-[22px] bg-bg-surface p-3">
-                <img src={image} alt={player.display_name} className="h-20 w-16 shrink-0 rounded-xl object-cover" />
+                <img decoding="async" loading="lazy" src={image} alt={player.display_name} className="h-20 w-16 shrink-0 rounded-xl object-cover" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-display text-sm font-bold text-ink-chalk">{state.player_name}</p>
                   <p className="text-xs text-ink-mist">

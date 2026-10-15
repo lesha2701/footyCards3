@@ -173,7 +173,7 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
                     onClick={() => toggleCard(c)}
                     className={`relative rounded-lg ${isSelected ? "ring-2 ring-accent-lime" : ""}`}
                   >
-                    <img
+                    <img decoding="async" loading="lazy"
                       src={staticUrl(c.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                       alt={c.player.display_name}
                       className="h-14 w-full rounded-lg object-cover"

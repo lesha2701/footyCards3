@@ -101,7 +101,7 @@ export default function CardUpgradeModal({ cards, onClose }: { cards: UserCard[]
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {cards.map((c) => (
-                <img
+                <img decoding="async"
                   key={c.id}
                   src={staticUrl(c.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                   alt={c.player.display_name}
@@ -238,7 +238,7 @@ export default function CardUpgradeModal({ cards, onClose }: { cards: UserCard[]
                   className={`relative flex h-40 w-32 flex-col items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[result.new_card.player.rarity]} p-[3px] ${RARITY_GLOW[result.new_card.player.rarity]}`}
                 >
                   <div className="flex h-full w-full flex-col items-center justify-center rounded-[14px] bg-bg-surface">
-                    <img
+                    <img decoding="async"
                       src={staticUrl(result.new_card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                       alt={result.new_card.player.display_name}
                       className="h-full w-full object-cover"

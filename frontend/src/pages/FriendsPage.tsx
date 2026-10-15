@@ -70,7 +70,7 @@ export default function FriendsPage() {
 
 function Avatar({ user }: { user: UserPublic }) {
   return (
-    <img
+    <img decoding="async" loading="lazy"
       src={user.avatar_url ?? staticUrl("players/placeholder/player_placeholder.webp")}
       alt=""
       className="h-10 w-10 shrink-0 rounded-full object-cover"

@@ -86,7 +86,7 @@ export default function CardDetailModal({
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/15 sm:hidden" aria-hidden />
             <div className="flex gap-3">
               <div className="relative w-28 shrink-0">
-                <img
+                <img loading="lazy"
                   src={staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                   alt={player.display_name}
                   className="aspect-[3/4] w-full rounded-2xl object-cover"

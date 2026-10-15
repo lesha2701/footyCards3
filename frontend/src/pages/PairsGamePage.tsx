@@ -238,7 +238,7 @@ function Tile({
       }`}
     >
       <div className="flex h-full w-full flex-col overflow-hidden rounded-[10px] bg-bg-surface">
-        <img
+        <img decoding="async" loading="lazy"
           src={staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
           alt={player.display_name}
           className="h-full w-full object-cover"

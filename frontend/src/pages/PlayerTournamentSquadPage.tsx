@@ -327,7 +327,7 @@ export default function PlayerTournamentSquadPage() {
                   {squad?.coach ? (
                     <>
                       <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                        <img
+                        <img decoding="async"
                           src={staticUrl(squad.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
@@ -353,7 +353,7 @@ export default function PlayerTournamentSquadPage() {
                   {squad?.stadium ? (
                     <>
                       <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                        <img
+                        <img decoding="async"
                           src={staticUrl(squad.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
@@ -382,7 +382,7 @@ export default function PlayerTournamentSquadPage() {
                     {slot.player ? (
                       <>
                         <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                          <img
+                          <img decoding="async"
                             src={staticUrl(slot.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                             alt="" className="h-full w-full object-cover" loading="lazy"
                           />

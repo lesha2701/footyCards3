@@ -273,7 +273,7 @@ function PackCard({
   return (
     <div className="overflow-hidden rounded-3xl bg-bg-surface">
       <div className="flex">
-        <img src={staticUrl(pack.image_path ?? undefined)} alt={pack.name} className="h-36 w-32 object-cover" />
+        <img decoding="async" loading="lazy" src={staticUrl(pack.image_path ?? undefined)} alt={pack.name} className="h-36 w-32 object-cover" />
         <div className="flex flex-1 flex-col justify-between p-3">
           <div>
             <p className="font-display text-base font-bold text-ink-chalk">{pack.name}</p>
@@ -349,7 +349,7 @@ function StarsPackCard({ pack, onPurchased }: { pack: Pack; onPurchased: (result
   return (
     <div className="overflow-hidden rounded-3xl bg-bg-surface ring-1 ring-amber-400/30">
       <div className="flex">
-        <img src={staticUrl(pack.image_path ?? undefined)} alt={pack.name} className="h-36 w-32 object-cover" />
+        <img decoding="async" loading="lazy" src={staticUrl(pack.image_path ?? undefined)} alt={pack.name} className="h-36 w-32 object-cover" />
         <div className="flex flex-1 flex-col justify-between p-3">
           <div>
             <p className="font-display text-base font-bold text-ink-chalk">{pack.name}</p>
@@ -380,7 +380,7 @@ function StarsPackCard({ pack, onPurchased }: { pack: Pack; onPurchased: (result
               {pack.badge && (
                 <span className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-amber-300">
                   {pack.badge.image_path ? (
-                    <img src={staticUrl(pack.badge.image_path) ?? undefined} className="h-3 w-3 rounded-full object-cover" />
+                    <img decoding="async" loading="lazy" src={staticUrl(pack.badge.image_path) ?? undefined} className="h-3 w-3 rounded-full object-cover" />
                   ) : (
                     <span>{pack.badge.icon}</span>
                   )}

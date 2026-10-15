@@ -105,7 +105,7 @@ export default function HomePage() {
                       onClick={() => navigate("/packs")}
                       className="flex flex-col items-center gap-2 rounded-2xl bg-bg-surface py-4 active:scale-95"
                     >
-                      <img
+                      <img decoding="async" loading="lazy"
                         src={staticUrl(pack.image_path ?? undefined)}
                         alt={pack.name}
                         className="h-16 w-16 rounded-2xl object-cover"

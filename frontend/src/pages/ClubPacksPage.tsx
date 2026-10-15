@@ -24,7 +24,7 @@ export default function ClubPacksPage() {
       <div className="flex flex-col gap-2">
         {(packs ?? []).map((pack) => (
           <div key={pack.id} className="flex items-center gap-3 rounded-2xl bg-bg-surface p-3">
-            <img
+            <img decoding="async" loading="lazy"
               src={staticUrl(pack.image_path ?? undefined) ?? staticUrl("packs/basic.webp")}
               alt="" className="h-14 w-14 rounded-xl object-cover"
             />

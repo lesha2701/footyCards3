@@ -61,7 +61,7 @@ export function CoachRevealStage({
                 className="h-full w-full object-cover"
               />
             ) : showFrom("silhouette") ? (
-              <img
+              <img decoding="async" loading="lazy"
                 src={staticUrl(coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                 alt=""
                 className="h-full w-full object-cover opacity-30 blur-sm"

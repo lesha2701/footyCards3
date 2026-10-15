@@ -80,7 +80,7 @@ function CardFace({ info, entry, width, children }: { info: Info; entry?: Career
     <div className={`${width} rounded-[11px] bg-gradient-to-b p-[1.5px] ${RARITY_GRADIENTS[info.rarity]} ${RARITY_GLOW_STATIC[info.rarity]}`}>
       <div className="flex flex-col items-center gap-0.5 rounded-[10px] bg-bg-surface/95 p-1">
         <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-gradient-to-b from-white/10 to-black/40">
-          <img src={info.image} alt="" className="h-full w-full object-cover" loading="lazy" />
+          <img decoding="async" src={info.image} alt="" className="h-full w-full object-cover" loading="lazy" />
           <span className="absolute left-0.5 top-0.5 rounded-md bg-black/75 px-1 font-mono text-[10px] font-bold leading-tight text-accent-lime">
             {info.rating}
           </span>

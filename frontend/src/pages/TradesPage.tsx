@@ -159,7 +159,7 @@ function MiniCardRow({ cards, label, coins }: { cards: TradeOffer["offered_cards
       <p className="mb-1 text-[10px] text-ink-mist-dim">{label}</p>
       <div className="flex -space-x-2">
         {cards.slice(0, 3).map((c) => (
-          <img
+          <img decoding="async" loading="lazy"
             key={c.id}
             src={staticUrl(c.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
             alt={c.player.display_name}

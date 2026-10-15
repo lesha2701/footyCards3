@@ -90,7 +90,7 @@ export default function AdminTrophiesPage() {
           <div key={t.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-bg-surface px-3 py-2">
             <div className="flex items-center gap-2">
               {t.image_path ? (
-                <img src={staticUrl(t.image_path) ?? undefined} className="h-10 w-10 rounded-lg object-cover" />
+                <img decoding="async" loading="lazy" src={staticUrl(t.image_path) ?? undefined} className="h-10 w-10 rounded-lg object-cover" />
               ) : (
                 <span className="text-2xl">{t.icon}</span>
               )}
@@ -163,7 +163,7 @@ export default function AdminTrophiesPage() {
                   <span className="text-xs font-semibold text-slate-400">Картинка трофея</span>
                   <div className="flex items-center gap-3">
                     {(editing as TrophyDefinition).image_path ? (
-                      <img
+                      <img decoding="async" loading="lazy"
                         src={staticUrl((editing as TrophyDefinition).image_path!) ?? undefined}
                         className="h-14 w-14 rounded-lg border border-white/10 object-cover"
                       />

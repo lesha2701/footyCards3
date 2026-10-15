@@ -106,7 +106,7 @@ export default function AdminGiftsPage() {
           <div key={g.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-bg-surface px-3 py-2">
             <div className="flex items-center gap-2">
               {g.image_path ? (
-                <img src={staticUrl(g.image_path) ?? undefined} className="h-10 w-10 rounded-lg object-cover" />
+                <img decoding="async" loading="lazy" src={staticUrl(g.image_path) ?? undefined} className="h-10 w-10 rounded-lg object-cover" />
               ) : (
                 <span className="text-2xl">🎁</span>
               )}
@@ -244,7 +244,7 @@ export default function AdminGiftsPage() {
                   <span className="text-xs font-semibold text-slate-400">Картинка набора</span>
                   <div className="flex items-center gap-3">
                     {(editing as GiftSet).image_path ? (
-                      <img
+                      <img decoding="async" loading="lazy"
                         src={staticUrl((editing as GiftSet).image_path!) ?? undefined}
                         className="h-14 w-14 rounded-lg border border-white/10 object-cover"
                       />

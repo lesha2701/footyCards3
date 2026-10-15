@@ -112,6 +112,21 @@ body {
   border-radius: 999px;
 }
 
+/* OS "reduce motion": stop the endless decorative loops (rarity shimmer,
+   legendary/diamond pulse, skeleton sheen, spinners' siblings) and make
+   one-shot transitions near-instant. Functional state changes still happen,
+   they just don't animate. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 .skeleton {
   @apply relative overflow-hidden bg-bg-raised;
 }

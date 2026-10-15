@@ -75,7 +75,7 @@ function FootyCard({ card, index }: { card: BlackjackCard; index: number }) {
     >
       {card.hidden ? (
         <div className="flex h-full w-full items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-white/10 to-bg-surface shadow-lg">
-          <img src="/brand/victor-fc-crest.jpg" alt="" className="h-10 w-10 rounded-full opacity-80 ring-1 ring-white/10" />
+          <img decoding="async" src="/brand/victor-fc-crest.jpg" alt="" className="h-10 w-10 rounded-full opacity-80 ring-1 ring-white/10" />
         </div>
       ) : (
         <div

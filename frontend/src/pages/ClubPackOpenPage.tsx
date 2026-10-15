@@ -190,7 +190,7 @@ export default function ClubPackOpenPage() {
                   key={`coach-${item.coach_card!.id}`}
                   className={`flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2 ${result.cards.length === 1 ? "w-2/5" : ""}`}
                 >
-                  <img
+                  <img decoding="async"
                     src={staticUrl(item.coach_card!.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                     alt={item.coach_card!.coach.display_name}
                     className="aspect-square w-full rounded-lg object-cover"
@@ -204,7 +204,7 @@ export default function ClubPackOpenPage() {
                   key={`stadium-${item.stadium_card!.id}`}
                   className={`flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2 ${result.cards.length === 1 ? "w-2/5" : ""}`}
                 >
-                  <img
+                  <img decoding="async"
                     src={staticUrl(item.stadium_card!.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                     alt={item.stadium_card!.stadium.display_name}
                     className="aspect-square w-full rounded-lg object-cover"
@@ -218,7 +218,7 @@ export default function ClubPackOpenPage() {
                   key={`player-${item.card!.id}`}
                   className={`flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2 ${result.cards.length === 1 ? "w-2/5" : ""}`}
                 >
-                  <img
+                  <img decoding="async"
                     src={staticUrl(item.card!.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                     alt={item.card!.player.display_name}
                     className="aspect-square w-full rounded-lg object-cover"

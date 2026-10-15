@@ -81,7 +81,7 @@ export default function HomeHero({
 
       <div className="relative flex items-center gap-3">
         <div className="relative shrink-0">
-          <img
+          <img decoding="async"
             src={profile.avatar_url ?? "/brand/victor-fc-crest.jpg"}
             alt=""
             className="h-14 w-14 rounded-full object-cover ring-2 ring-accent-lime/60"
@@ -116,7 +116,7 @@ export default function HomeHero({
             }`}
           >
             {tier.image_path ? (
-              <img src={staticUrl(tier.image_path) ?? undefined} alt="" className="h-full w-full object-cover" />
+              <img decoding="async" src={staticUrl(tier.image_path) ?? undefined} alt="" className="h-full w-full object-cover" />
             ) : (
               <IconTrophy size={18} style={{ color: tier.color }} />
             )}

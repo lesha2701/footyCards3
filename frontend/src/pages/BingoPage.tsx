@@ -119,7 +119,7 @@ export default function BingoPage() {
             {data.reward_pack_name && (
               <span className="flex items-center gap-2 text-sm font-semibold text-accent-cyan">
                 {data.reward_pack_image_path ? (
-                  <img src={staticUrl(data.reward_pack_image_path) ?? undefined} className="h-8 w-8 rounded-lg object-cover" />
+                  <img decoding="async" loading="lazy" src={staticUrl(data.reward_pack_image_path) ?? undefined} className="h-8 w-8 rounded-lg object-cover" />
                 ) : (
                   <IconPack size={18} />
                 )}

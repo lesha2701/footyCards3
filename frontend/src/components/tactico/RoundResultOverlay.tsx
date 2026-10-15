@@ -133,7 +133,7 @@ function BattleCardTile({ card, phase, won }: { card: TacticoCard; phase: string
     >
       <div className={`flex flex-col overflow-hidden rounded-[14px] bg-bg-surface/90 ${won ? "" : "opacity-70"}`}>
         <div className="relative aspect-[3/4] w-full overflow-hidden">
-          <img src={imageUrl} alt={card.display_name} className="h-full w-full object-cover" />
+          <img decoding="async" src={imageUrl} alt={card.display_name} className="h-full w-full object-cover" />
           <span className="absolute right-1 top-1 rounded-md bg-black/60 px-1 py-0.5 font-mono text-[9px] font-bold text-white">
             ★{card.rating}
           </span>

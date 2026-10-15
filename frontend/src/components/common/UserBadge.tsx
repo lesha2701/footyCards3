@@ -5,7 +5,7 @@ export function UserBadge({ badge, className = "" }: { badge: Badge | null | und
   if (!badge) return null;
   if (badge.image_path) {
     return (
-      <img
+      <img decoding="async" loading="lazy"
         src={staticUrl(badge.image_path) ?? undefined}
         alt={badge.name}
         title={badge.name}

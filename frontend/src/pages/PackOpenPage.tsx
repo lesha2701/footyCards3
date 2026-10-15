@@ -673,7 +673,7 @@ function BulkSummary({
             className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.player.rarity]} p-[2px] ${RARITY_GLOW[opened.card.player.rarity]}`}
           >
             <div className="flex flex-col rounded-[14px] bg-bg-surface">
-              <img
+              <img decoding="async"
                 src={staticUrl(opened.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                 alt={opened.card.player.display_name}
                 className="aspect-square w-full object-cover"
@@ -699,7 +699,7 @@ function BulkSummary({
             className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.coach.rarity]} p-[2px] ${RARITY_GLOW[opened.card.coach.rarity]}`}
           >
             <div className="flex flex-col rounded-[14px] bg-bg-surface">
-              <img
+              <img decoding="async"
                 src={staticUrl(opened.card.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                 alt={opened.card.coach.display_name}
                 className="aspect-square w-full object-cover"
@@ -728,7 +728,7 @@ function BulkSummary({
             className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.stadium.rarity]} p-[2px] ${RARITY_GLOW[opened.card.stadium.rarity]}`}
           >
             <div className="flex flex-col rounded-[14px] bg-bg-surface">
-              <img
+              <img decoding="async"
                 src={staticUrl(opened.card.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                 alt={opened.card.stadium.display_name}
                 className="aspect-square w-full object-cover"
@@ -883,7 +883,7 @@ function Summary({
               className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.player.rarity]} p-[2px] ${RARITY_GLOW[opened.card.player.rarity]} ${singleCardWidthClass}`}
             >
               <div className="flex flex-col rounded-[14px] bg-bg-surface">
-                <img
+                <img decoding="async"
                   src={staticUrl(opened.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                   alt={opened.card.player.display_name}
                   className="aspect-square w-full object-cover"
@@ -915,7 +915,7 @@ function Summary({
               className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.coach.rarity]} p-[2px] ${RARITY_GLOW[opened.card.coach.rarity]} ${singleCardWidthClass}`}
             >
               <div className="flex flex-col rounded-[14px] bg-bg-surface">
-                <img
+                <img decoding="async"
                   src={staticUrl(opened.card.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                   alt={opened.card.coach.display_name}
                   className="aspect-square w-full object-cover"
@@ -946,7 +946,7 @@ function Summary({
               className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.stadium.rarity]} p-[2px] ${RARITY_GLOW[opened.card.stadium.rarity]} ${singleCardWidthClass}`}
             >
               <div className="flex flex-col rounded-[14px] bg-bg-surface">
-                <img
+                <img decoding="async"
                   src={staticUrl(opened.card.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                   alt={opened.card.stadium.display_name}
                   className="aspect-square w-full object-cover"

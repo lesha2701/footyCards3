@@ -14,7 +14,7 @@ const CATEGORY_ICONS: Record<LifestyleCategory, string> = { car: "🚗", estate:
 
 export function LifestyleIcon({ item, className = "h-14 w-14 text-4xl" }: { item: LifestyleItem; className?: string }) {
   return item.image_path ? (
-    <img src={staticUrl(item.image_path) ?? undefined} alt={item.name} className={`${className} rounded-xl object-cover`} />
+    <img decoding="async" loading="lazy" src={staticUrl(item.image_path) ?? undefined} alt={item.name} className={`${className} rounded-xl object-cover`} />
   ) : (
     <span className={`${className} flex items-center justify-center rounded-xl bg-bg-surface leading-none`}>{item.emoji}</span>
   );

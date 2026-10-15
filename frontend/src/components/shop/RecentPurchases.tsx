@@ -31,7 +31,7 @@ export default function RecentPurchases({
               onClick={() => onRebuy(pack)}
               className="flex w-28 shrink-0 flex-col items-center gap-1.5 rounded-2xl bg-bg-surface p-2.5 active:scale-95"
             >
-              <img src={staticUrl(pack.image_path ?? undefined)} alt="" className="h-12 w-12 rounded-xl object-cover" />
+              <img decoding="async" loading="lazy" src={staticUrl(pack.image_path ?? undefined)} alt="" className="h-12 w-12 rounded-xl object-cover" />
               <span className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{pack.name}</span>
               <span className="text-[10px] text-ink-mist">×{h.times_opened} · ещё раз</span>
             </button>

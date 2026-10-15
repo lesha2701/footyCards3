@@ -113,7 +113,7 @@ export default function AdminCoachesPage() {
             {data?.items.map((c) => (
               <tr key={c.id} className="border-t border-white/5">
                 <td className="px-3 py-2">
-                  <img src={staticUrl(c.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="h-10 w-10 rounded-lg object-cover" />
+                  <img decoding="async" loading="lazy" src={staticUrl(c.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="h-10 w-10 rounded-lg object-cover" />
                 </td>
                 <td className="px-3 py-2">{c.display_name}</td>
                 <td className="px-3 py-2">{RARITY_LABELS[c.rarity]}</td>
@@ -212,7 +212,7 @@ export default function AdminCoachesPage() {
 
               {editing && (
                 <div className="mt-2 flex items-center gap-2">
-                  <img src={staticUrl(editing.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="h-14 w-14 rounded-lg object-cover" />
+                  <img decoding="async" loading="lazy" src={staticUrl(editing.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="h-14 w-14 rounded-lg object-cover" />
                   <button onClick={() => fileInputRef.current?.click()} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs">Загрузить фото</button>
                   <input
                     ref={fileInputRef} type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden"

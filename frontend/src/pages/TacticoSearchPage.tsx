@@ -180,7 +180,7 @@ export default function TacticoSearchPage() {
         <p className="text-sm text-accent-lime">Соперник найден!</p>
         {opponent ? (
           <>
-            <img
+            <img decoding="async" loading="lazy"
               src={opponent.avatar_url ?? staticUrl("players/placeholder/player_placeholder.webp")}
               alt="avatar"
               className="h-20 w-20 rounded-full ring-2 ring-accent-lime object-cover"
@@ -193,7 +193,7 @@ export default function TacticoSearchPage() {
           </>
         ) : botOpponentName ? (
           <>
-            <img
+            <img decoding="async" loading="lazy"
               src={staticUrl("players/placeholder/player_placeholder.webp")}
               alt="avatar"
               className="h-20 w-20 rounded-full ring-2 ring-accent-lime object-cover"

@@ -106,7 +106,7 @@ export default function AdminClubPacksPage() {
         {packs?.map((p) => (
           <div key={p.id} className="rounded-2xl border border-white/5 bg-bg-surface p-3">
             <div className="flex items-center gap-3">
-              <img src={staticUrl(p.image_path ?? undefined) ?? staticUrl("packs/basic.webp")} className="h-12 w-12 rounded-lg object-cover" />
+              <img decoding="async" loading="lazy" src={staticUrl(p.image_path ?? undefined) ?? staticUrl("packs/basic.webp")} className="h-12 w-12 rounded-lg object-cover" />
               <div className="flex-1">
                 <p className="font-display text-sm font-bold">{p.name}</p>
                 <p className="text-xs text-slate-400">{p.card_count} карточки · 🪙 {p.price}</p>
@@ -129,7 +129,7 @@ export default function AdminClubPacksPage() {
             <div className="flex flex-col gap-2 text-sm">
               {editing && (
                 <div className="flex items-center gap-3">
-                  <img src={staticUrl(form.image_path ?? undefined) ?? staticUrl("packs/basic.webp")} className="h-16 w-16 rounded-lg object-cover" />
+                  <img decoding="async" loading="lazy" src={staticUrl(form.image_path ?? undefined) ?? staticUrl("packs/basic.webp")} className="h-16 w-16 rounded-lg object-cover" />
                   <div className="flex flex-col gap-1">
                     <button
                       type="button"

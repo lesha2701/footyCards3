@@ -282,7 +282,7 @@ export default function ClubSquadPage() {
                   {lineup?.coach ? (
                     <>
                       <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                        <img
+                        <img decoding="async"
                           src={staticUrl(lineup.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
@@ -312,7 +312,7 @@ export default function ClubSquadPage() {
                   {lineup?.stadium ? (
                     <>
                       <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                        <img
+                        <img decoding="async"
                           src={staticUrl(lineup.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
@@ -349,7 +349,7 @@ export default function ClubSquadPage() {
                         <div className={`relative aspect-square w-full overflow-hidden rounded-lg bg-black/40 ${
                           slot.card.availability ? "ring-2 ring-red-500" : ""
                         }`}>
-                          <img
+                          <img decoding="async"
                             src={staticUrl(slot.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                             alt="" className="h-full w-full object-cover" loading="lazy"
                           />
@@ -503,7 +503,7 @@ export default function ClubSquadPage() {
         <div className="grid grid-cols-4 gap-2">
           {(cards ?? []).filter((c) => !c.is_in_lineup).map((c) => (
             <div key={c.id} className="flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-1.5">
-              <img
+              <img decoding="async" loading="lazy"
                 src={staticUrl(c.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                 alt="" className="aspect-square w-full rounded-lg object-cover"
               />

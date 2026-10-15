@@ -102,7 +102,7 @@ export default function ProfilePage() {
   return (
     <div className="flex flex-col gap-5">
       <section className="flex flex-col items-center gap-2 rounded-3xl bg-bg-surface p-5 text-center">
-        <img
+        <img decoding="async" loading="lazy"
           src={user.avatar_url ?? staticUrl("players/placeholder/player_placeholder.webp")}
           alt="avatar"
           className="h-20 w-20 rounded-full ring-2 ring-accent-lime object-cover"
@@ -136,7 +136,7 @@ export default function ProfilePage() {
             {(() => {
               const tier = leagueStatus.current_league ?? leagueStatus.next_league!;
               return tier.image_path ? (
-                <img src={staticUrl(tier.image_path) ?? undefined} className="h-full w-full object-cover" />
+                <img decoding="async" loading="lazy" src={staticUrl(tier.image_path) ?? undefined} className="h-full w-full object-cover" />
               ) : (
                 <IconTrophy size={22} style={{ color: tier.color }} />
               );
@@ -198,7 +198,7 @@ export default function ProfilePage() {
               >
                 <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-b from-amber-400/20 to-amber-600/5">
                   {t.trophy.image_path ? (
-                    <img src={staticUrl(t.trophy.image_path) ?? undefined} className="h-full w-full object-cover" />
+                    <img decoding="async" loading="lazy" src={staticUrl(t.trophy.image_path) ?? undefined} className="h-full w-full object-cover" />
                   ) : (
                     <span className="text-2xl">{t.trophy.icon}</span>
                   )}
@@ -248,7 +248,7 @@ export default function ProfilePage() {
                   className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border-2 border-bg-surface bg-rarity-epic/10"
                 >
                   {g.gift_set.image_path ? (
-                    <img src={staticUrl(g.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
+                    <img decoding="async" loading="lazy" src={staticUrl(g.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
                   ) : (
                     <IconGift size={14} className="text-rarity-epic" />
                   )}
@@ -277,7 +277,7 @@ export default function ProfilePage() {
 
       {profile.rarest_card && (
         <section className="flex items-center gap-3 rounded-2xl bg-rarity-legendary/10 p-4">
-          <img
+          <img decoding="async" loading="lazy"
             src={staticUrl(profile.rarest_card.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
             alt={profile.rarest_card.display_name}
             className="h-16 w-16 rounded-xl object-cover"
@@ -493,7 +493,7 @@ function TrophyDetailModal({ trophy, onClose }: { trophy: UserTrophy; onClose: (
       >
         <div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b from-amber-400/25 to-amber-600/5">
           {trophy.trophy.image_path ? (
-            <img src={staticUrl(trophy.trophy.image_path) ?? undefined} className="h-full w-full object-cover" />
+            <img decoding="async" loading="lazy" src={staticUrl(trophy.trophy.image_path) ?? undefined} className="h-full w-full object-cover" />
           ) : (
             <span className="text-4xl">{trophy.trophy.icon}</span>
           )}
@@ -554,7 +554,7 @@ function DailyRewardResultModal({ result, onClose }: { result: DailyRewardClaimR
             className={`mx-auto mt-3 flex h-36 w-28 flex-col items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[result.granted_card.player.rarity]} p-[2px] ${RARITY_GLOW[result.granted_card.player.rarity]}`}
           >
             <div className="flex h-full w-full flex-col rounded-[14px] bg-bg-surface">
-              <img
+              <img decoding="async" loading="lazy"
                 src={staticUrl(result.granted_card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                 alt={result.granted_card.player.display_name}
                 className="aspect-square w-full object-cover"

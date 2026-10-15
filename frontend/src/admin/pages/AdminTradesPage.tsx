@@ -81,7 +81,7 @@ export default function AdminTradesPage() {
 function CardChip({ card }: { card: UserCard }) {
   return (
     <div className="flex items-center gap-1.5 rounded-lg bg-black/20 px-2 py-1">
-      <img
+      <img decoding="async" loading="lazy"
         src={staticUrl(card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
         alt={card.player.display_name}
         className="h-8 w-8 rounded object-cover"

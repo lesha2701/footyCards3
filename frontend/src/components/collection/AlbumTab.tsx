@@ -125,7 +125,7 @@ function CollectionSpread({ collection, onClick }: { collection: AlbumCollection
     >
       <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-bg-raised">
         {collection.image_path ? (
-          <img src={staticUrl(collection.image_path) ?? undefined} alt="" className="h-full w-full object-cover" />
+          <img decoding="async" loading="lazy" src={staticUrl(collection.image_path) ?? undefined} alt="" className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-800 to-bg-raised font-display text-lg font-bold text-white/70">
             {collection.name.slice(0, 2).toUpperCase()}
@@ -293,7 +293,7 @@ function AlbumSlot({ slot, onOpen }: { slot: AlbumPlayer; onOpen: () => void }) 
       onClick={onOpen}
       className="relative flex aspect-[3/4] flex-col overflow-hidden rounded-xl bg-bg-surface active:scale-95"
     >
-      <img
+      <img decoding="async"
         src={staticUrl(slot.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
         alt=""
         className="h-full w-full object-cover"

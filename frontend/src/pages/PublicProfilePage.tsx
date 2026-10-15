@@ -32,7 +32,7 @@ export default function PublicProfilePage() {
       </button>
 
       <section className="flex flex-col items-center gap-2 rounded-3xl bg-bg-surface p-5 text-center">
-        <img
+        <img decoding="async" loading="lazy"
           src={profile.avatar_url ?? staticUrl("players/placeholder/player_placeholder.webp")}
           alt="avatar"
           className="h-20 w-20 rounded-full ring-2 ring-accent-lime object-cover"
@@ -78,7 +78,7 @@ export default function PublicProfilePage() {
 
       {profile.rarest_card && (
         <section className="flex items-center gap-3 rounded-2xl bg-rarity-legendary/10 p-4">
-          <img
+          <img decoding="async" loading="lazy"
             src={staticUrl(profile.rarest_card.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
             alt={profile.rarest_card.display_name}
             className="h-16 w-16 rounded-xl object-cover"

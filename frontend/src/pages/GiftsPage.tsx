@@ -104,7 +104,7 @@ export default function GiftsPage() {
                   >
                     <span className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-rarity-epic/10">
                       {g.gift_set.image_path ? (
-                        <img src={staticUrl(g.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
+                        <img decoding="async" loading="lazy" src={staticUrl(g.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
                       ) : (
                         <IconGift size={26} className="text-rarity-epic" />
                       )}
@@ -129,7 +129,7 @@ export default function GiftsPage() {
                   <div key={g.id} className="flex items-center justify-between rounded-2xl bg-bg-surface p-3">
                     <div className="flex items-center gap-3">
                       {g.gift_set.image_path ? (
-                        <img src={staticUrl(g.gift_set.image_path) ?? undefined} className="h-12 w-12 rounded-xl object-cover" />
+                        <img decoding="async" loading="lazy" src={staticUrl(g.gift_set.image_path) ?? undefined} className="h-12 w-12 rounded-xl object-cover" />
                       ) : (
                         <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-rarity-epic/10">
                           <IconGift size={22} className="text-rarity-epic" />
@@ -189,7 +189,7 @@ function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; on
           <div className="flex flex-col items-center gap-1">
             <span className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-rarity-epic/10">
               {result.gift.gift_set.image_path ? (
-                <img src={staticUrl(result.gift.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
+                <img decoding="async" loading="lazy" src={staticUrl(result.gift.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
               ) : (
                 <IconGift size={32} className="text-rarity-epic" />
               )}
@@ -226,7 +226,7 @@ function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; on
             {result.pack_result.coach_cards.map((c) => (
               <div key={`coach-${c.card.id}`} className="flex flex-col items-center gap-1.5 overflow-hidden rounded-2xl bg-rarity-epic/10 p-2">
                 <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-black/20">
-                  <img
+                  <img decoding="async" loading="lazy"
                     src={staticUrl(c.card.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                     alt={c.card.coach.display_name}
                     className="h-full w-full object-cover"
@@ -242,7 +242,7 @@ function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; on
             {result.pack_result.stadium_cards.map((c) => (
               <div key={`stadium-${c.card.id}`} className="flex flex-col items-center gap-1.5 overflow-hidden rounded-2xl bg-rarity-epic/10 p-2">
                 <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-black/20">
-                  <img
+                  <img decoding="async" loading="lazy"
                     src={staticUrl(c.card.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                     alt={c.card.stadium.display_name}
                     className="h-full w-full object-cover"
@@ -282,7 +282,7 @@ function GiftDetailSheet({ gift, onClose }: { gift: Gift; onClose: () => void })
       <div className="w-full max-w-sm rounded-2xl bg-bg-surface p-5 text-center" onClick={(e) => e.stopPropagation()}>
         <span className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl bg-rarity-epic/10">
           {gift.gift_set.image_path ? (
-            <img src={staticUrl(gift.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
+            <img decoding="async" loading="lazy" src={staticUrl(gift.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
           ) : (
             <IconGift size={40} className="text-rarity-epic" />
           )}
@@ -401,7 +401,7 @@ export function GiftShop() {
                 className="flex flex-col items-center gap-2 rounded-2xl bg-bg-surface p-3 text-center active:scale-[0.98]"
               >
                 {g.image_path ? (
-                  <img src={staticUrl(g.image_path) ?? undefined} className="h-16 w-16 rounded-xl object-cover" />
+                  <img decoding="async" loading="lazy" src={staticUrl(g.image_path) ?? undefined} className="h-16 w-16 rounded-xl object-cover" />
                 ) : (
                   <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-rarity-epic/10">
                     <IconGift size={28} className="text-rarity-epic" />
@@ -681,7 +681,7 @@ function BundleShop({ giftSets }: { giftSets: GiftSet[] }) {
             className="flex flex-col items-center gap-2 rounded-2xl bg-bg-surface p-3 text-center active:scale-[0.98]"
           >
             {g.image_path ? (
-              <img src={staticUrl(g.image_path) ?? undefined} className="h-16 w-16 rounded-xl object-cover" />
+              <img decoding="async" loading="lazy" src={staticUrl(g.image_path) ?? undefined} className="h-16 w-16 rounded-xl object-cover" />
             ) : (
               <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-rarity-epic/10">
                 <IconGift size={28} className="text-rarity-epic" />

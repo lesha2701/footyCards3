@@ -106,7 +106,7 @@ export default function AdminLifestylePage() {
           <div key={item.id} className="flex items-center justify-between gap-2 rounded-xl border border-white/5 bg-bg-surface px-3 py-2">
             <div className="flex min-w-0 items-center gap-2">
               {item.image_path ? (
-                <img src={staticUrl(item.image_path) ?? undefined} className="h-10 w-10 rounded-lg object-cover" />
+                <img decoding="async" loading="lazy" src={staticUrl(item.image_path) ?? undefined} className="h-10 w-10 rounded-lg object-cover" />
               ) : (
                 <span className="text-2xl">{item.emoji}</span>
               )}
@@ -171,7 +171,7 @@ export default function AdminLifestylePage() {
               </label>
               {editing !== "new" && (
                 <div className="col-span-2 flex items-center gap-2">
-                  {editing.image_path && <img src={staticUrl(editing.image_path) ?? undefined} className="h-12 w-12 rounded-lg object-cover" />}
+                  {editing.image_path && <img decoding="async" loading="lazy" src={staticUrl(editing.image_path) ?? undefined} className="h-12 w-12 rounded-lg object-cover" />}
                   <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && upload.mutate(e.target.files[0])} />
                   <button onClick={() => fileRef.current?.click()} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs">
                     {editing.image_path ? "Заменить картинку" : "Загрузить картинку"}

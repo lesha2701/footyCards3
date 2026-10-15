@@ -307,7 +307,7 @@ function BadgesSection() {
           <div key={b.id} className="flex items-center justify-between rounded-xl bg-bg-base px-3 py-2">
             <div className="flex items-center gap-2">
               {b.image_path ? (
-                <img src={staticUrl(b.image_path) ?? undefined} className="h-7 w-7 rounded-full object-cover" />
+                <img decoding="async" loading="lazy" src={staticUrl(b.image_path) ?? undefined} className="h-7 w-7 rounded-full object-cover" />
               ) : (
                 <span className="text-lg">{b.icon}</span>
               )}
@@ -361,7 +361,7 @@ function BadgesSection() {
                   <span className="text-xs font-semibold text-slate-400">Картинка значка</span>
                   <div className="flex items-center gap-3">
                     {(editing as Badge).image_path ? (
-                      <img src={staticUrl((editing as Badge).image_path!) ?? undefined} className="h-12 w-12 rounded-full border border-white/10 object-cover" />
+                      <img decoding="async" loading="lazy" src={staticUrl((editing as Badge).image_path!) ?? undefined} className="h-12 w-12 rounded-full border border-white/10 object-cover" />
                     ) : (
                       <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 text-xl">{(editing as Badge).icon}</span>
                     )}

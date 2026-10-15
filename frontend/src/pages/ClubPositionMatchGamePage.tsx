@@ -271,7 +271,7 @@ function CardButton({
       <div className={`h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-gradient-to-b ${RARITY_GRADIENTS[card.rarity]} ${RARITY_GLOW_STATIC[card.rarity]} p-[1.5px]`}>
         <div className="h-full w-full overflow-hidden rounded-[7px] bg-bg-surface">
           {card.image_path ? (
-            <img src={staticUrl(card.image_path) ?? undefined} alt={card.display_name} className="h-full w-full object-cover" />
+            <img decoding="async" loading="lazy" src={staticUrl(card.image_path) ?? undefined} alt={card.display_name} className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
               <IconShirt size={16} className="text-ink-mist-dim" />

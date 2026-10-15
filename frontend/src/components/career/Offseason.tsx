@@ -146,7 +146,7 @@ export function SquadBuilder({ onClose, onView, onError }: { onClose: () => void
                     >
                       <span className="flex flex-col items-center gap-0.5 rounded-[10px] bg-bg-surface p-1">
                         <span className="relative block aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                          <img src={staticUrl(p?.image_path ?? "players/placeholder/player_placeholder.webp")} alt="" className="h-full w-full object-cover" loading="lazy" />
+                          <img decoding="async" src={staticUrl(p?.image_path ?? "players/placeholder/player_placeholder.webp")} alt="" className="h-full w-full object-cover" loading="lazy" />
                           <span className="absolute left-0.5 top-0.5 rounded bg-black/75 px-1 font-mono text-[10px] font-bold text-accent-lime">
                             {p?.rating ?? c.my_player?.rating}
                           </span>

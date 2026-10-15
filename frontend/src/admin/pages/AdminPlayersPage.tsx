@@ -150,7 +150,7 @@ export default function AdminPlayersPage() {
             {data?.items.map((p) => (
               <tr key={p.id} className="border-t border-white/5">
                 <td className="px-3 py-2">
-                  <img src={staticUrl(p.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="h-10 w-10 rounded-lg object-cover" />
+                  <img decoding="async" loading="lazy" src={staticUrl(p.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="h-10 w-10 rounded-lg object-cover" />
                 </td>
                 <td className="px-3 py-2">{p.display_name}</td>
                 <td className="px-3 py-2">{p.rating}</td>
@@ -280,7 +280,7 @@ export default function AdminPlayersPage() {
 
               {editing && (
                 <div className="mt-2 flex items-center gap-2">
-                  <img src={staticUrl(editing.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="h-14 w-14 rounded-lg object-cover" />
+                  <img decoding="async" loading="lazy" src={staticUrl(editing.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="h-14 w-14 rounded-lg object-cover" />
                   <button onClick={() => fileInputRef.current?.click()} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs">Загрузить фото</button>
                   <input
                     ref={fileInputRef}

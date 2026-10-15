@@ -71,7 +71,7 @@ export default function ClubCoachCardPickerModal({ open, cards, onSelect, onClos
                     className="flex items-center gap-3 rounded-xl bg-white/5 p-2.5 text-left active:scale-[0.99]"
                   >
                     <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-black/40">
-                      <img
+                      <img decoding="async" loading="lazy"
                         src={staticUrl(c.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                         alt="" className="h-full w-full object-cover"
                       />

@@ -93,7 +93,7 @@ export default function AdminCardCollectionsPage() {
         {collections?.map((c) => (
           <div key={c.id} className="flex gap-3 rounded-2xl border border-white/5 bg-bg-surface p-3">
             {c.image_path && (
-              <img src={staticUrl(c.image_path) ?? undefined} className="h-16 w-16 shrink-0 rounded-xl object-cover" />
+              <img decoding="async" loading="lazy" src={staticUrl(c.image_path) ?? undefined} className="h-16 w-16 shrink-0 rounded-xl object-cover" />
             )}
             <div className="min-w-0 flex-1">
               <p className="font-display text-sm font-bold">{c.name}</p>
@@ -135,7 +135,7 @@ export default function AdminCardCollectionsPage() {
                 <span className="text-xs font-semibold text-slate-400">Обложка коллекции</span>
                 <div className="flex items-center gap-3">
                   {form.image_path && (
-                    <img src={staticUrl(form.image_path) ?? undefined} className="h-20 w-16 rounded-lg border border-white/10 object-cover" />
+                    <img decoding="async" loading="lazy" src={staticUrl(form.image_path) ?? undefined} className="h-20 w-16 rounded-lg border border-white/10 object-cover" />
                   )}
                   {editing && (
                     <div className="flex flex-col gap-1">

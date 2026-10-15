@@ -91,7 +91,7 @@ export default function LeaguePage() {
               }`}
             >
               {ownTier.image_path ? (
-                <img src={staticUrl(ownTier.image_path) ?? undefined} className="h-full w-full object-cover" />
+                <img decoding="async" loading="lazy" src={staticUrl(ownTier.image_path) ?? undefined} className="h-full w-full object-cover" />
               ) : (
                 <IconTrophy size={28} style={{ color: ownTier.color }} />
               )}
@@ -166,7 +166,7 @@ export default function LeaguePage() {
                     </span>
                   )}
                   {t.image_path ? (
-                    <img src={staticUrl(t.image_path) ?? undefined} className="h-56 w-56 rounded-2xl object-cover" />
+                    <img decoding="async" loading="lazy" src={staticUrl(t.image_path) ?? undefined} className="h-56 w-56 rounded-2xl object-cover" />
                   ) : (
                     <span className="flex h-56 w-56 items-center justify-center">
                       <IconTrophy size={100} style={{ color: t.color }} />

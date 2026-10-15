@@ -140,7 +140,7 @@ export default function AdminPacksPage() {
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {packs?.map((p) => (
           <div key={p.id} className="flex gap-3 rounded-2xl border border-white/5 bg-bg-surface p-3">
-            <img src={staticUrl(p.image_path ?? undefined)} className="h-24 w-20 rounded-xl object-cover" />
+            <img decoding="async" loading="lazy" src={staticUrl(p.image_path ?? undefined)} className="h-24 w-20 rounded-xl object-cover" />
             <div className="flex-1">
               <p className="font-display text-sm font-bold">{p.name}</p>
               <p className="text-xs text-slate-400">
@@ -282,7 +282,7 @@ export default function AdminPacksPage() {
               <div className="mt-2 flex flex-col gap-2">
                 <span className="text-xs font-semibold text-slate-400">Обложка пака</span>
                 <div className="flex items-center gap-3">
-                  <img
+                  <img decoding="async" loading="lazy"
                     src={staticUrl(form.image_path ?? undefined)}
                     className="h-20 w-16 rounded-lg border border-white/10 object-cover"
                   />
@@ -311,7 +311,7 @@ export default function AdminPacksPage() {
                       className={`overflow-hidden rounded-lg border-2 ${form.image_path === t.path ? "border-accent" : "border-transparent"}`}
                       title={RARITY_LABELS[t.rarity]}
                     >
-                      <img src={staticUrl(t.path)} className="h-16 w-12 object-cover" />
+                      <img decoding="async" loading="lazy" src={staticUrl(t.path)} className="h-16 w-12 object-cover" />
                     </button>
                   ))}
                 </div>
