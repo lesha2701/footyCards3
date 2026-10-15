@@ -133,6 +133,15 @@ Main features:
   which blocks in-app navigation during a live match and also fires a
   `pagehide` keepalive `fetch` so a real tab close/reload still records a
   forfeit), TanStack Query for server state.
+- **Admin analytics**: `user_daily_activity` holds one row per user per
+  local day (settings.timezone), written by `activity_service.record_daily_activity`
+  from the same once-a-day spot in `core/dependencies.py` that advances the
+  login streak (`users.last_seen_at` alone can't answer "came back on day 7").
+  `admin_analytics_service.py` (`GET /admin/dashboard/analytics`) derives DAU/
+  WAU/MAU, retention cohorts, the new-player funnel, mode popularity and Stars
+  monetization from it plus the per-mode tables listed in `MODE_SOURCES` —
+  add a new game mode there. History before migration 0150 is backfilled from
+  timestamped activity, so it's a lower bound.
 - **Alembic revisions** are named sequentially (`0001_...` → current head),
   not autogenerate-hash IDs — follow that convention (`NNNN_short_description.py`)
   and bump `down_revision` to the current head.

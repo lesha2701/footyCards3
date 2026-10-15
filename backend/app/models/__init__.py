@@ -52,6 +52,7 @@ from app.models.transaction import CoinTransaction
 from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.wheel import WheelPrize, WheelSpin
 from app.models.user import User
+from app.models.user_activity import UserDailyActivity
 from app.models.user_coach_card import UserCoachCard
 from app.models.stadium import Stadium
 from app.models.user_stadium_card import UserStadiumCard
@@ -147,6 +148,7 @@ __all__ = [
     "WheelPrize",
     "WheelSpin",
     "User",
+    "UserDailyActivity",
     "UserCoachCard",
     "Stadium",
     "UserStadiumCard",

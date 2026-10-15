@@ -34,7 +34,19 @@ export default function AdminEconomyPage() {
         <p className="text-slate-400">Загрузка...</p>
       ) : (
         <>
+          {data.warning && (
+            <p className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
+              ⚠️ {data.warning} Стоит добавить способы тратить монеты или снизить награды.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Stat label="Монет у игроков сейчас" value={data.coins_in_circulation} />
+            <Stat
+              label="Выдано / списано"
+              value={data.inflow_outflow_ratio == null ? "—" : `${data.inflow_outflow_ratio}×`}
+              tone={data.warning ? "text-amber-300" : undefined}
+              hint={`дней с перевесом начислений: ${data.positive_days} из ${data.daily.length}`}
+            />
             <Stat label="Выдано монет" value={data.total_inflow} tone="text-emerald-400" />
             <Stat label="Списано монет" value={data.total_outflow} tone="text-rose-400" />
             <Stat

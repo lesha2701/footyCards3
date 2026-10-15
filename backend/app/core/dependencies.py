@@ -14,6 +14,7 @@ from app.core.timeutil import local_today
 from app.database import get_db
 from app.models.enums import TransactionType
 from app.models.user import User
+from app.services.activity_service import record_daily_activity
 from app.services.wallet_service import credit_coins
 
 settings = get_settings()
@@ -85,6 +86,7 @@ async def _get_or_create_user(
                         # via this client-supplied header alone.
                         user.referred_by_id = referrer.id
 
+            await record_daily_activity(db, user.id, local_today())
             await db.commit()
             await db.refresh(user)
             return user
@@ -113,6 +115,8 @@ async def _get_or_create_user(
     previous_day = local_today(user.last_seen_at) if user.last_seen_at else None
     if previous_day != today:
         user.daily_login_streak = user.daily_login_streak + 1 if previous_day == today - timedelta(days=1) else 1
+        # Same once-a-day trigger feeds the analytics activity history.
+        await record_daily_activity(db, user.id, today)
         changed = True
 
     user.last_seen_at = datetime.now(timezone.utc)

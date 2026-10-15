@@ -958,6 +958,10 @@ class EconomyDayRow(BaseModel):
 
 class EconomyReportOut(BaseModel):
     days: int
+    coins_in_circulation: int = 0
+    inflow_outflow_ratio: Optional[float] = None
+    positive_days: int = 0
+    warning: Optional[str] = None
     total_inflow: int
     total_outflow: int
     net: int

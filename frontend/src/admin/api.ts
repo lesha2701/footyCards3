@@ -68,6 +68,11 @@ export async function fetchDashboard(): Promise<Dashboard> {
 // --- Economy analytics ---
 export interface EconomyReport {
   days: number;
+  coins_in_circulation: number;
+  inflow_outflow_ratio: number | null;
+  positive_days: number;
+  /** Set when coins are minted noticeably faster than they're spent. */
+  warning: string | null;
   total_inflow: number;
   total_outflow: number;
   net: number;
@@ -81,6 +86,47 @@ export interface EconomyReport {
 
 export async function fetchEconomyReport(days: number): Promise<EconomyReport> {
   const { data } = await api.get<EconomyReport>("/admin/dashboard/economy", { params: { days } });
+  return data;
+}
+
+// --- Product analytics (backend: admin_analytics_service.py) ---
+export type DayCount = { date: string; count: number };
+
+export interface AnalyticsReport {
+  days: number;
+  today: string;
+  activity: {
+    dau_today: number;
+    wau: number;
+    mau: number;
+    stickiness: number | null;
+    active_in_period: number;
+    total_users: number;
+    dau_by_day: DayCount[];
+    registrations_by_day: DayCount[];
+  };
+  retention: {
+    cohorts: { date: string; size: number; d1: number | null; d7: number | null; d30: number | null }[];
+    summary: {
+      d1: number | null; d7: number | null; d30: number | null;
+      d1_eligible: number; d7_eligible: number; d30_eligible: number;
+    };
+  };
+  modes: { key: string; label: string; games: number; players: number }[];
+  funnel: { cohort_size: number; steps: { key: string; label: string; users: number; share: number | null }[] };
+  monetization: {
+    stars_total: number;
+    purchases: number;
+    payers: number;
+    paying_share: number | null;
+    arppu: number | null;
+    stars_by_day: DayCount[];
+    by_product: { product: string; stars: number; purchases: number }[];
+  };
+}
+
+export async function fetchAnalyticsReport(days: number): Promise<AnalyticsReport> {
+  const { data } = await api.get<AnalyticsReport>("/admin/dashboard/analytics", { params: { days } });
   return data;
 }
 
