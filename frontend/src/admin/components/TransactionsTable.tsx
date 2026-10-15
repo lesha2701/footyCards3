@@ -4,12 +4,11 @@ import { useState } from "react";
 import { fetchAdminTransactions, type AdminTransactionFilters } from "@/admin/api";
 import { TX_TYPE_LABELS } from "@/lib/transactionLabels";
 
-const PAGE_SIZE = 50;
 
 /** Every coin transaction (optionally of one user), newest first, by pages,
  * with filters and the totals of the filtered set. Used by «Транзакции»
  * and the user card's «Транзакции» tab. */
-export default function TransactionsTable({ userId }: { userId?: number }) {
+export default function TransactionsTable({ userId, pageSize = 50 }: { userId?: number; pageSize?: number }) {
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<AdminTransactionFilters>({});
   const set = (patch: Partial<AdminTransactionFilters>) => {
@@ -18,9 +17,33 @@ export default function TransactionsTable({ userId }: { userId?: number }) {
   };
   const { data, isFetching } = useQuery({
     queryKey: ["admin-transactions", userId ?? null, filters, page],
-    queryFn: () => fetchAdminTransactions({ ...filters, user_id: userId, page, page_size: PAGE_SIZE }),
+    queryFn: () => fetchAdminTransactions({ ...filters, user_id: userId, page, page_size: pageSize }),
     placeholderData: keepPreviousData,
   });
+
+  // The page switcher sits both above and below the table, so it is reachable
+  // without scrolling through a whole page of rows.
+  const pager = data && data.pages > 1 ? (
+        <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+          <button disabled={page <= 1} onClick={() => setPage(1)} className="rounded-lg bg-white/5 px-3 py-1.5 disabled:opacity-30">«</button>
+          <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-lg bg-white/5 px-3 py-1.5 disabled:opacity-30">Назад</button>
+          <span className="text-slate-400">
+            Стр.{" "}
+            <input
+              type="number"
+              min={1}
+              max={data.pages}
+              value={page}
+              onChange={(e) => setPage(Math.max(1, Math.min(data.pages, Number(e.target.value) || 1)))}
+              className="w-14 rounded bg-bg-surface px-1 py-0.5 text-center"
+              aria-label="Номер страницы"
+            />{" "}
+            из {data.pages}
+          </span>
+          <button disabled={page >= data.pages} onClick={() => setPage((p) => p + 1)} className="rounded-lg bg-white/5 px-3 py-1.5 disabled:opacity-30">Вперёд</button>
+          <button disabled={page >= data.pages} onClick={() => setPage(data.pages)} className="rounded-lg bg-white/5 px-3 py-1.5 disabled:opacity-30">»</button>
+        </div>
+  ) : null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -76,6 +99,8 @@ export default function TransactionsTable({ userId }: { userId?: number }) {
         </p>
       )}
 
+      {pager}
+
       <div className={`overflow-x-auto rounded-xl border border-white/5 ${isFetching ? "opacity-60" : ""}`}>
         <table className="w-full text-left text-xs">
           <thead className="bg-bg-surface text-slate-400">
@@ -113,27 +138,7 @@ export default function TransactionsTable({ userId }: { userId?: number }) {
         {data && !data.items.length && <p className="px-3 py-4 text-sm text-slate-500">Нет транзакций</p>}
       </div>
 
-      {data && data.pages > 1 && (
-        <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
-          <button disabled={page <= 1} onClick={() => setPage(1)} className="rounded-lg bg-white/5 px-3 py-1.5 disabled:opacity-30">«</button>
-          <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-lg bg-white/5 px-3 py-1.5 disabled:opacity-30">Назад</button>
-          <span className="text-slate-400">
-            Стр.{" "}
-            <input
-              type="number"
-              min={1}
-              max={data.pages}
-              value={page}
-              onChange={(e) => setPage(Math.max(1, Math.min(data.pages, Number(e.target.value) || 1)))}
-              className="w-14 rounded bg-bg-surface px-1 py-0.5 text-center"
-              aria-label="Номер страницы"
-            />{" "}
-            из {data.pages}
-          </span>
-          <button disabled={page >= data.pages} onClick={() => setPage((p) => p + 1)} className="rounded-lg bg-white/5 px-3 py-1.5 disabled:opacity-30">Вперёд</button>
-          <button disabled={page >= data.pages} onClick={() => setPage(data.pages)} className="rounded-lg bg-white/5 px-3 py-1.5 disabled:opacity-30">»</button>
-        </div>
-      )}
+      {pager}
     </div>
   );
 }

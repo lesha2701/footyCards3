@@ -208,7 +208,7 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
           </div>
         )}
 
-        {tab === "transactions" && <TransactionsTable userId={user.id} />}
+        {tab === "transactions" && <TransactionsTable userId={user.id} pageSize={25} />}
       </div>
     </div>
   );

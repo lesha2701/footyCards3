@@ -20,7 +20,9 @@ describe("admin transactions", () => {
     render(<QueryClientProvider client={new QueryClient()}><TransactionsTable /></QueryClientProvider>);
     expect(await screen.findByText("Матч стр. 1")).toBeInTheDocument();
     expect(screen.getByText(/Найдено:/)).toHaveTextContent("120");
-    fireEvent.click(screen.getByText("Вперёд"));
+    // The page switcher is shown above and below the table.
+    expect(screen.getAllByText("Вперёд")).toHaveLength(2);
+    fireEvent.click(screen.getAllByText("Вперёд")[0]);
     expect(await screen.findByText("Матч стр. 2")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, page_size: 50 }));
   });
