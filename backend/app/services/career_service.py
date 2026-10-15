@@ -34,7 +34,7 @@ from app.services import career_achievements_service as achievements
 from app.services import career_league_service as league_service
 from app.services import career_tactics_service as tactics
 from app.services import chemistry_service
-from app.services import my_player_service, tournament_match_engine, wallet_service
+from app.services import my_player_service, path_match_service, tournament_match_engine, wallet_service
 from app.services.auto_squad_service import SlotSpec, owned_cards, pick_cards
 from app.services.club_formation_service import CLUB_FORMATIONS, get_formation_slots
 from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES, build_side
@@ -1750,6 +1750,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             new = achievements.record_match(profiles[team_index], own, opp, events=match.get("events"),
                                             side="a" if is_home else "b", matchup_hint=hint)
             unlocked_text = await _grant_achievements(db, part, new, config, season.id)
+        gains = await path_match_service.career_fatigue_gains(db, gains, own_cards, config)
         report = _after_match(
             part, played.get(team_index, set()), own, opp, round_index, config, rng, names, _squad_ids(part, own_cards),
             gains=gains,
@@ -1763,6 +1764,13 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
 
         reward = config.career_match_reward_win if own > opp else config.career_match_reward_draw if own == opp else 0
         part.coins_earned += await _credit(db, part.user_id, reward, f"Карьера: тур {round_index + 1}", season.id)
+        # «Начало пути»: experience for the path cards that played this league
+        # round (own daily cap per card; idempotent per card and round).
+        await path_match_service.award_side(
+            db, user_id=part.user_id, source_type="career", source_id=f"{season.id}:{round_index}",
+            card_ids=played.get(team_index, set()), own=own, opp=opp, event_log=match.get("events") or [],
+            side="a" if is_home else "b", config=config,
+        )
         if my_player_service.card_id_for(part.user_id) in played.get(team_index, set()):
             locked = await wallet_service.lock_user_for_update(db, part.user_id)
             my_player_service.add_xp(locked, config.my_player_xp_career_match, config)

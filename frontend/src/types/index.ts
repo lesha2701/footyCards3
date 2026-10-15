@@ -61,6 +61,8 @@ export interface Player {
   is_pack_droppable: boolean;
   collection_id: number | null;
   collection_name: string | null;
+  /** «Начало пути»: set = a path card with this talent. */
+  path_talent_code?: string | null;
 }
 
 export type CoachBoostType =
@@ -125,6 +127,11 @@ export interface UserCard {
   stars?: number;
   star_progress?: number;
   star_rating_bonus?: number;
+  /** «Начало пути»: levels gained, stage reached (0 = Новичок …) and the
+   * rating the levels add (already included in player.rating). */
+  path_level?: number;
+  path_stage?: number;
+  path_rating_bonus?: number;
 }
 
 export interface CardStarState {
@@ -258,6 +265,8 @@ export interface Pack {
   coach_drop_chance: number;
   stadium_drop_chance: number;
   skill_token_drop_chance?: number;
+  /** "path" = the «Начало пути» pack (diamond slots drop only path cards). */
+  player_pool?: string;
   user_purchase_count: number;
   is_available_now: boolean;
   /** Average quick-sell value of the cards inside (shop listing only). */
@@ -576,6 +585,8 @@ export interface Lineup {
   is_complete: boolean;
   team_strength: number | null;
   max_diamond: number;
+  /** «Начало пути» cards: own limit next to the diamond one. */
+  max_path?: number;
   coach: EquippedCoach | null;
   stadium: EquippedStadium | null;
   slots: LineupSlot[];
@@ -675,6 +686,9 @@ export interface Match {
   created_at: string;
   events: MatchEvent[];
   pending_moment: MatchPendingMoment | null;
+  /** «Начало пути»: static talents applied at kickoff / experience earned. */
+  talent_notes?: MatchTalentNote[] | null;
+  path_progress?: PathMatchProgress[] | null;
 }
 
 export interface ArenaStats {
@@ -796,6 +810,7 @@ export interface TacticoSquad {
   max_legendary: number;
   max_epic: number;
   max_diamond: number;
+  max_path?: number;
 }
 
 export interface TacticoStats {
@@ -2065,6 +2080,8 @@ export interface StrategoCard {
   rarity: Rarity;
   rating: number;
   is_my_player?: boolean;
+  /** «Начало пути»: own squad limit. */
+  is_path?: boolean;
   skill_name?: string | null;
   skill_level?: number | null;
   skill_kind?: "atk" | "def" | null;
@@ -2103,7 +2120,7 @@ export interface StrategoSquad {
   layout: Record<string, [number, number]>;
   is_complete: boolean;
   cards_needed: number;
-  rarity_limits: { max_legendary: number; max_diamond: number; min_rare: number; min_common: number };
+  rarity_limits: { max_legendary: number; max_diamond: number; max_path?: number; min_rare: number; min_common: number };
   /** Highest rarity allowed on a Подкатчик slot. */
   tackler_max_rarity: Rarity;
   /** Highest rarity per capped role (tackler / provocateur / speedster). */
@@ -2130,6 +2147,7 @@ export interface StrategoInfo {
   rewarded_today: number;
   max_legendary: number;
   max_diamond: number;
+  max_path?: number;
   min_rare: number;
   min_common: number;
   my_player_xp: number;
@@ -2369,4 +2387,127 @@ export interface MagnateRoomPreview {
   players: string[];
   seats_total: number;
   is_member: boolean;
+}
+
+// --- «Начало пути» ---------------------------------------------------------
+
+export interface PathTask {
+  id: number;
+  metric: string;
+  label: string;
+  target: number;
+  progress: number;
+  applies: boolean;
+  done: boolean;
+}
+
+export interface PathStage {
+  index: number;
+  name: string;
+  min_rating: number;
+  max_rating: number;
+  talent_level: number;
+  reached: boolean;
+  current: boolean;
+  tasks: PathTask[];
+}
+
+export interface PathTalentLevel {
+  level: number;
+  label: string;
+  text: string;
+  unlocked: boolean;
+  unlock_stage: string | null;
+}
+
+export interface PathTalent {
+  code: string;
+  name: string;
+  emoji: string;
+  summary: string;
+  kind: "static" | "dynamic";
+  level: number;
+  level_label: string | null;
+  enabled: boolean;
+  levels: PathTalentLevel[];
+  modes: { mode: string; label: string; text: string | null }[];
+}
+
+export interface PathDaily {
+  arena_free_total: number;
+  arena_free_left: number;
+  bought_attempts: number;
+  career_total: number;
+  career_left: number;
+  ptour_total: number;
+  ptour_left: number;
+  coin_buys_left: number;
+  next_coin_price: number | null;
+  stars_buys_left: number;
+  next_stars_price: number | null;
+}
+
+export interface PathHistoryItem {
+  source_type: "arena" | "ptour" | "career";
+  xp: number;
+  result: "win" | "draw" | "loss" | null;
+  goals: number;
+  assists: number;
+  levels: number[];
+  stages: number[];
+  created_at: string | null;
+}
+
+export interface PathState {
+  card_id: number;
+  title: string;
+  enabled: boolean;
+  player_name: string;
+  position: string;
+  base_rating: number;
+  rating: number;
+  ceiling: number;
+  level: number;
+  max_level: number;
+  xp: number;
+  xp_into_level: number;
+  xp_for_next: number | null;
+  blocked_by_tasks: boolean;
+  stage: number;
+  stage_name: string;
+  is_legend: boolean;
+  stages: PathStage[];
+  talent: PathTalent | null;
+  daily: PathDaily;
+  xp_rules: { match: number; win: number; draw: number; goal: number; assist: number };
+  totals: Record<string, number>;
+  hunger_streak: number;
+  recent: PathHistoryItem[];
+}
+
+export interface PathCatalog {
+  title: string;
+  enabled: boolean;
+  talent_cap: number;
+  stages: { index: number; name: string; max_rating: number; talent_level: number }[];
+  talents: PathTalent[];
+}
+
+export interface MatchTalentNote {
+  code: string;
+  name: string;
+  emoji: string;
+  level: number;
+  level_label: string;
+  player: string | null;
+  bonus: number;
+  aura?: boolean;
+}
+
+export interface PathMatchProgress {
+  user_card_id: number;
+  status: "awarded" | "duplicate" | "no_attempts" | "limit" | "not_path";
+  xp: number;
+  levels: number[];
+  stages: number[];
 }

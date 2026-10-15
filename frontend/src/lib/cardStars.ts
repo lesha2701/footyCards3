@@ -38,7 +38,10 @@ export function starString(stars: number, max: number): string {
   return "★".repeat(Math.max(0, stars)) + "☆".repeat(Math.max(0, max - stars));
 }
 
-/** Selling/burning this copy would lose its skill or its stars/«копилка». */
-export function losesProgress(card: Pick<UserCard, "skill_code" | "stars" | "star_progress">): boolean {
-  return !!card.skill_code || !!card.stars || !!card.star_progress;
+/** Selling/burning this copy would lose its skill, its stars/«копилка» or
+ * its «Начало пути» progress. */
+export function losesProgress(
+  card: Pick<UserCard, "skill_code" | "stars" | "star_progress"> & Partial<Pick<UserCard, "path_level" | "path_stage">>,
+): boolean {
+  return !!card.skill_code || !!card.stars || !!card.star_progress || !!card.path_level || !!card.path_stage;
 }

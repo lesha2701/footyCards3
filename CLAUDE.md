@@ -9,6 +9,10 @@ Telegram Mini App for collecting football cards.
 Main features:
 - packs with staged opening animation, including themed card collections with completion rewards;
 - card collection (album + "my cards"), filtering and selling;
+- «Начало пути» path cards: diamond youngsters that level up from rewarded
+  matches along staged gates and carry a situational talent
+  (`path_service.py` / `path_talent_effects.py` / `path_match_service.py`,
+  see docs/path-cards.md);
 - game currency, daily rewards and a free periodic pack;
 - mini-games: Memory Sequence, Card Arena, Саботёр (Saboteur), Пенальти,
   Штрафной удар (Free Kick), Футбольные буквы (a football-themed word-guessing

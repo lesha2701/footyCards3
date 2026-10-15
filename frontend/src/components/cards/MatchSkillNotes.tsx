@@ -1,5 +1,5 @@
 import { SkillIcon } from "@/components/icons/skills";
-import type { MatchEvent, MatchSkillNote } from "@/types";
+import type { MatchEvent, MatchSkillNote, MatchTalentNote } from "@/types";
 
 /** Skill lines under one match-log event. The server only attaches a note
  * when a skill actually took part in that event's roll; "decisive" is set
@@ -8,9 +8,19 @@ import type { MatchEvent, MatchSkillNote } from "@/types";
  * claiming it caused the outcome. */
 export default function MatchSkillNotes({ event }: { event: MatchEvent }) {
   const notes = (event.payload?.skills as MatchSkillNote[] | undefined) ?? [];
-  if (!notes.length) return null;
+  // «Начало пути»: a talent line appears only when the talent really changed
+  // this event's roll (the server attaches nothing otherwise).
+  const talents = (event.payload?.talents as MatchTalentNote[] | undefined) ?? [];
+  if (!notes.length && !talents.length) return null;
   return (
     <>
+      {talents.map((t, i) => (
+        <span key={`t${i}`} className="path-ui mt-0.5 block pl-6 text-[10px]"><span className="text-emerald-300/90">
+          <span className="mr-1" aria-hidden>{t.emoji}</span>
+          Талант «{t.name}» {t.level_label}
+          {t.player ? ` (${t.player})` : ""}: +{t.bonus} к рейтингу
+        </span></span>
+      ))}
       {notes.map((note, i) => (
         <span key={i} className="mt-0.5 block pl-6 text-[10px] text-accent-lime/80">
           <SkillIcon code={note.code} size={11} className="mr-1 inline-block align-[-1px]" aria-hidden />

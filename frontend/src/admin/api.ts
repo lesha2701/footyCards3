@@ -29,6 +29,8 @@ import type {
   UserTrophy,
 } from "@/types";
 import type {
+  AdminPathOverview,
+  AdminPathTask,
   AdminLifestyleItem,
   AdminActionLog,
   AdminClub,
@@ -1012,5 +1014,44 @@ export async function uploadLifestyleItemImage(id: number, file: File): Promise<
 
 export async function deleteLifestyleItemImage(id: number): Promise<AdminLifestyleItem> {
   const { data } = await api.delete<AdminLifestyleItem>(`/admin/lifestyle/${id}/image`);
+  return data;
+}
+
+
+// --- «Начало пути» ---------------------------------------------------------
+
+export async function fetchAdminPath(): Promise<AdminPathOverview> {
+  const { data } = await api.get<AdminPathOverview>("/admin/path");
+  return data;
+}
+
+export async function updateAdminPathTalent(
+  code: string, payload: { is_enabled?: boolean; sort_order?: number; level_values?: Record<string, Record<string, number>> },
+): Promise<AdminPathOverview> {
+  const { data } = await api.put<AdminPathOverview>(`/admin/path/talents/${code}`, payload);
+  return data;
+}
+
+export async function updateAdminPathStage(
+  index: number, payload: { name?: string; max_rating?: number; talent_level?: number },
+): Promise<AdminPathOverview> {
+  const { data } = await api.put<AdminPathOverview>(`/admin/path/stages/${index}`, payload);
+  return data;
+}
+
+export type AdminPathTaskIn = Omit<AdminPathTask, "id">;
+
+export async function createAdminPathTask(payload: AdminPathTaskIn): Promise<AdminPathOverview> {
+  const { data } = await api.post<AdminPathOverview>("/admin/path/tasks", payload);
+  return data;
+}
+
+export async function updateAdminPathTask(id: number, payload: AdminPathTaskIn): Promise<AdminPathOverview> {
+  const { data } = await api.put<AdminPathOverview>(`/admin/path/tasks/${id}`, payload);
+  return data;
+}
+
+export async function deleteAdminPathTask(id: number): Promise<AdminPathOverview> {
+  const { data } = await api.delete<AdminPathOverview>(`/admin/path/tasks/${id}`);
   return data;
 }

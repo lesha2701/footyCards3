@@ -55,11 +55,16 @@ export default function StrategoSquadPage() {
   // Live rarity counters over the current (possibly unsaved) picks; the
   // server re-checks the same rules on save and at match start.
   const picked = Object.values(cards).map((id) => cardById.get(id)).filter(Boolean) as StrategoCard[];
-  const count = (r: string) => picked.filter((c) => c.rarity === r).length;
+  // «Начало пути» cards count against their own limit, not the diamond one.
+  const count = (r: string) =>
+    picked.filter((c) => (r === "path" ? !!c.is_path : c.rarity === r && !(r === "diamond" && c.is_path))).length;
   const lim = squad.rarity_limits;
   const rules = [
     { label: "Легендарных", value: count("legendary"), ok: count("legendary") <= lim.max_legendary, hint: `≤${lim.max_legendary}` },
     { label: "Диамантов", value: count("diamond"), ok: count("diamond") <= lim.max_diamond, hint: `≤${lim.max_diamond}` },
+    ...(count("path") > 0
+      ? [{ label: "Начало пути", value: count("path"), ok: count("path") <= (lim.max_path ?? 1), hint: `≤${lim.max_path ?? 1}` }]
+      : []),
     { label: "Редких", value: count("rare"), ok: count("rare") >= lim.min_rare, hint: `≥${lim.min_rare}` },
     { label: "Обычных", value: count("common"), ok: count("common") >= lim.min_common, hint: `≥${lim.min_common}` },
   ];

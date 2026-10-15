@@ -53,12 +53,22 @@ class UserCard(Base):
     stars: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     star_progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     star_rating_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Начало пути» (services/path_service.py), path cards only: levels gained
+    # on the path, the stage reached (0 = Новичок … 4 = Легенда) and the rating
+    # those levels add — fixed on the row when each level is gained, like
+    # diamond_rating_bonus. The rest of the progress is in card_paths.
+    path_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    path_stage: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    path_rating_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     owner: Mapped["User"] = relationship(back_populates="cards")
     player: Mapped["Player"] = relationship(back_populates="cards")
 
     def has_star_investment(self) -> bool:
         return bool(self.stars or self.star_progress)
+
+    def has_path_progress(self) -> bool:
+        return bool(self.path_level or self.path_stage)
 
     def is_locked(self) -> bool:
         return self.is_locked_by_admin or self.is_locked_in_trade or self.is_in_lineup or self.is_in_tactico_squad
@@ -72,6 +82,9 @@ class UserCard(Base):
         ),
         CheckConstraint(
             "stars >= 0 AND star_progress >= 0 AND star_rating_bonus >= 0", name="ck_user_cards_stars_non_negative",
+        ),
+        CheckConstraint(
+            "path_level >= 0 AND path_stage >= 0 AND path_rating_bonus >= 0", name="ck_user_cards_path_non_negative",
         ),
     )
 

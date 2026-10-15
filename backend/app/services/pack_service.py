@@ -100,24 +100,35 @@ def _collection_active_filter():
     return or_(Player.collection_id.is_(None), CardCollection.is_active.is_(True))
 
 
-async def pick_random_player(db: AsyncSession, rarity: Rarity) -> Player:
+async def pick_random_player(db: AsyncSession, rarity: Rarity, pool: str = "default") -> Player:
+    """A random active, pack-droppable player of `rarity`. pool="default"
+    (every source except the «Начало пути» pack) never drops a «Начало пути»
+    card; pool="path" (Pack.player_pool) drops ONLY «Начало пути» cards in a
+    diamond slot — other rarities stay regular players."""
+    path_slot = pool == "path" and rarity == Rarity.diamond
+    path_filter = Player.path_talent_code.is_not(None) if path_slot else Player.path_talent_code.is_(None)
     result = await db.execute(
         select(Player)
         .outerjoin(CardCollection, Player.collection_id == CardCollection.id)
         .where(
             Player.rarity == rarity, Player.is_active.is_(True), Player.is_pack_droppable.is_(True),
-            _collection_active_filter(),
+            _collection_active_filter(), path_filter,
         )
         .order_by(func.random())
         .limit(1)
     )
     player = result.scalar_one_or_none()
+    if player is None and path_slot:
+        raise ConflictError("В паке пока нет карточек «Начала пути»")
     if player is None:
         # Fall back to any active, pack-droppable player (in an active collection) if this rarity has none configured.
         result = await db.execute(
             select(Player)
             .outerjoin(CardCollection, Player.collection_id == CardCollection.id)
-            .where(Player.is_active.is_(True), Player.is_pack_droppable.is_(True), _collection_active_filter())
+            .where(
+                Player.is_active.is_(True), Player.is_pack_droppable.is_(True), _collection_active_filter(),
+                Player.path_talent_code.is_(None),
+            )
             .order_by(func.random())
             .limit(1)
         )
@@ -384,7 +395,7 @@ async def roll_and_create_cards(
             ))
             opened_token_items.append(OpenedSkillTokenOut(skill_code=skill_code, quantity=quantity))
         else:
-            player = await pick_random_player(db, rarity)
+            player = await pick_random_player(db, rarity, getattr(pack, "player_pool", "default") or "default")
             is_new = dup_counts.get(player.id, 0) == 0 and player.id not in seen_this_opening
             seen_this_opening.add(player.id)
             dup_counts[player.id] = dup_counts.get(player.id, 0) + 1

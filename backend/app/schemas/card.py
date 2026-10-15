@@ -31,6 +31,11 @@ class UserCardOut(BaseModel):
     # This copy's own skill (see services/card_skill_service.py); null = none.
     skill_code: Optional[str] = None
     skill_level: Optional[int] = None
+    # «Начало пути» (services/path_service.py): levels gained, stage reached
+    # (0 = Новичок …) and the rating they add (already in player.rating).
+    path_level: int = 0
+    path_stage: int = 0
+    path_rating_bonus: int = 0
 
     @property
     def is_locked(self) -> bool:
@@ -69,6 +74,9 @@ class UserCardOut(BaseModel):
             "star_rating_bonus": getattr(data, "star_rating_bonus", 0) or 0,
             "skill_code": getattr(data, "skill_code", None),
             "skill_level": getattr(data, "skill_level", None),
+            "path_level": getattr(data, "path_level", 0) or 0,
+            "path_stage": getattr(data, "path_stage", 0) or 0,
+            "path_rating_bonus": getattr(data, "path_rating_bonus", 0) or 0,
         }
 
 

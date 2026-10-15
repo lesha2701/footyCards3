@@ -406,6 +406,63 @@ export interface GameConfig {
   card_star_coin_cost: Record<string, number[]>;
   card_star_rating_per_star: number;
   card_star_bonus_cap: number;
+  // «Начало пути»
+  path_enabled: boolean;
+  path_title: string;
+  path_xp_base: number;
+  path_xp_step: number;
+  path_start_rating: number;
+  path_rating_per_level: number;
+  path_xp_match: number;
+  path_xp_win: number;
+  path_xp_draw: number;
+  path_xp_goal: number;
+  path_xp_assist: number;
+  path_daily_free_arena: number;
+  path_daily_career: number;
+  path_daily_ptour: number;
+  path_coin_attempt_prices: number[];
+  path_stars_attempt_prices: number[];
+  path_talent_cap: number;
+  match_max_path_cards: number;
+  tactico_max_path_cards: number;
+  stratego_max_path_cards: number;
+}
+
+export interface AdminPathTalent {
+  code: string;
+  name: string;
+  emoji: string;
+  kind: "static" | "dynamic";
+  summary: string;
+  level_text: string[];
+  params: Record<string, number[]>;
+  modes: Record<string, string>;
+  positions: string[] | null;
+  is_enabled: boolean;
+  sort_order: number;
+  level_values: Record<string, Record<string, number>>;
+  players: number;
+}
+
+export interface AdminPathTask {
+  id: number;
+  stage_index: number;
+  metric: string;
+  target: number;
+  positions: string[] | null;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface AdminPathOverview {
+  title: string;
+  metrics: Record<string, string>;
+  positions: string[];
+  talents: AdminPathTalent[];
+  stages: { index: number; name: string; max_rating: number; talent_level: number }[];
+  tasks: AdminPathTask[];
+  players: { id: number; display_name: string; position: string; rating: number; talent_code: string; is_active: boolean; copies: number }[];
 }
 
 export interface AdminSkillLedgerEntry {

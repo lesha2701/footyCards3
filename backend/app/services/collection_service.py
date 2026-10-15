@@ -64,7 +64,7 @@ def _pick_representative(current: Optional[UserCard], card: UserCard) -> UserCar
     while a plain duplicate exists. Skilled copies are listed separately."""
     if current is None:
         return card
-    if (current.skill_code or current.has_star_investment()) and not (card.skill_code or card.has_star_investment()):
+    if (current.skill_code or _invested(current)) and not (card.skill_code or _invested(card)):
         return card
     return current
 
@@ -129,7 +129,7 @@ async def list_user_cards(
     # behind one representative.
     representative_by_key: dict[object, UserCard] = {}
     for card in all_cards:
-        key = ("own", card.id) if card.skill_code or card.has_star_investment() else card.player_id
+        key = ("own", card.id) if card.skill_code or _invested(card) else card.player_id
         representative_by_key[key] = _pick_representative(representative_by_key.get(key), card)
     unique_cards = list(representative_by_key.values())
 
@@ -243,6 +243,13 @@ async def sell_cards(
     return {"sold_count": len(cards), "coins_earned": total_value, "new_balance": locked_user.balance}
 
 
+def _invested(card: UserCard) -> bool:
+    """Stars / «копилка» or «Начало пути» progress — a copy that is not
+    interchangeable with its duplicates (listed on its own, never sold as a
+    spare)."""
+    return card.has_star_investment() or card.has_path_progress()
+
+
 def _locked(card: UserCard) -> bool:
     return card.is_locked_by_admin or card.is_locked_in_trade or card.is_in_lineup or card.is_in_tactico_squad
 
@@ -267,14 +274,14 @@ async def duplicate_sale_plan(
     for copies in by_player.values():
         if len(copies) < 2:
             continue
-        protected = [c for c in copies if _locked(c) or c.skill_code or c.has_star_investment()]
+        protected = [c for c in copies if _locked(c) or c.skill_code or _invested(c)]
         if not protected:
             keeper = sorted(copies, key=lambda c: (-card_rating_bonus(c), c.serial_number or 0))[0]
             protected = [keeper]
         if not include_star_material and any(c.has_star_investment() for c in copies):
             continue
         for card in copies:
-            if card in protected or _locked(card) or card.skill_code or card.has_star_investment():
+            if card in protected or _locked(card) or card.skill_code or _invested(card):
                 continue
             if card.player.rarity == Rarity.diamond and not include_diamond:
                 continue

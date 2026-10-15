@@ -61,6 +61,11 @@ class Pack(TimestampMixin, Base):
     # the card_skills drop table (pack_drop_weight / pack_drop_quantity). 1.0
     # turns every slot into tokens — a dedicated "skill pack".
     skill_token_drop_chance: Mapped[float] = mapped_column(Numeric(5, 4), default=0.0, nullable=False)
+    # Which players a slot can drop (pack_service.pick_random_player):
+    # "default" — every regular player, never a «Начало пути» card; "path" —
+    # a diamond slot drops only «Начало пути» cards, other rarities stay
+    # regular players (the «Начало пути» pack).
+    player_pool: Mapped[str] = mapped_column(String(16), default="default", nullable=False)
 
     rarity_probabilities: Mapped[list["PackRarityProbability"]] = relationship(
         back_populates="pack", cascade="all, delete-orphan"
@@ -194,4 +199,9 @@ class StarsInvoice(TimestampMixin, Base):
     # «21: Добавленное время» entry (never with the fields above): delivery
     # banks one paid entry — blackjack_service.deliver_stars_entry.
     is_blackjack_entry: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # «Начало пути»: one extra Card Arena attempt for this path card (never
+    # with the fields above) — path_service.deliver_stars_attempt.
+    path_user_card_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True
+    )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

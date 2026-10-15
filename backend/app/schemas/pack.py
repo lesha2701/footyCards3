@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -40,6 +40,8 @@ class PackOut(BaseModel):
     coach_drop_chance: float
     stadium_drop_chance: float
     skill_token_drop_chance: float = 0.0
+    # "default" | "path" — see Pack.player_pool.
+    player_pool: str = "default"
     user_purchase_count: int = 0
     is_available_now: bool = True
     # Average quick-sell value of the cards inside (pack_value_service);
@@ -71,6 +73,7 @@ class PackCreate(BaseModel):
     coach_drop_chance: float = Field(default=0.0, ge=0, le=1)
     stadium_drop_chance: float = Field(default=0.0, ge=0, le=1)
     skill_token_drop_chance: float = Field(default=0.0, ge=0, le=1)
+    player_pool: Literal["default", "path"] = "default"
 
 
 class PackUpdate(BaseModel):
@@ -91,6 +94,7 @@ class PackUpdate(BaseModel):
     coach_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
     stadium_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
     skill_token_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
+    player_pool: Optional[Literal["default", "path"]] = None
 
 
 class UserCoachCardOut(BaseModel):

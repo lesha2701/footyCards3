@@ -13,6 +13,7 @@ import {
   togglePlayerPackDroppable,
   updatePlayer,
   uploadPlayerImage,
+  fetchAdminPath,
 } from "@/admin/api";
 import NumberInput from "@/components/common/NumberInput";
 import { ApiRequestError, staticUrl } from "@/lib/api";
@@ -28,6 +29,8 @@ const emptyForm = {
   is_pack_droppable: true,
   collection_id: "" as number | "",
   attack_rating: "" as number | "", defense_rating: "" as number | "",
+  /** «Начало пути»: talent of a diamond path card ("" = regular card). */
+  path_talent_code: "",
 };
 
 export default function AdminPlayersPage() {
@@ -44,6 +47,7 @@ export default function AdminPlayersPage() {
 
   const { data, isLoading } = useQuery({ queryKey: ["admin-players", search, page], queryFn: () => fetchAdminPlayers(search, page) });
   const { data: collections } = useQuery({ queryKey: ["admin-card-collections"], queryFn: fetchAdminCardCollections });
+  const { data: pathOverview } = useQuery({ queryKey: ["admin-path"], queryFn: fetchAdminPath });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-players"] });
 
@@ -52,6 +56,7 @@ export default function AdminPlayersPage() {
     collection_id: form.collection_id === "" ? null : form.collection_id,
     attack_rating: form.attack_rating === "" ? null : form.attack_rating,
     defense_rating: form.defense_rating === "" ? null : form.defense_rating,
+    path_talent_code: form.rarity === "diamond" && form.path_talent_code ? form.path_talent_code : null,
   });
 
   const createMutation = useMutation({
@@ -90,6 +95,7 @@ export default function AdminPlayersPage() {
       is_pack_droppable: p.is_pack_droppable,
       collection_id: p.collection_id ?? "",
       attack_rating: p.attack_rating, defense_rating: p.defense_rating,
+      path_talent_code: p.path_talent_code ?? "",
     });
   };
 
@@ -234,6 +240,27 @@ export default function AdminPlayersPage() {
                   ))}
                 </select>
               </label>
+              {form.rarity === "diamond" && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-400">Талант пути («Начало пути»)</span>
+                  <select
+                    value={form.path_talent_code}
+                    onChange={(e) => setForm({ ...form, path_talent_code: e.target.value })}
+                    className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                  >
+                    <option value="">Обычный бриллиант</option>
+                    {pathOverview?.talents
+                      .filter((t) => !t.positions || t.positions.includes(form.position))
+                      .map((t) => (
+                        <option key={t.code} value={t.code}>{t.emoji} {t.name}{t.is_enabled ? "" : " (выключен)"}</option>
+                      ))}
+                  </select>
+                  <span className="text-[11px] text-slate-500">
+                    Карта пути стартует с рейтинга игрока и растёт игрой; бриллиантовая прокачка к ней не применяется, у неё
+                    свой лимит в составах. Обычно стартовый рейтинг — 60.
+                  </span>
+                </label>
+              )}
               <label className="flex items-center gap-2 text-xs text-slate-300">
                 <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
                 Активен

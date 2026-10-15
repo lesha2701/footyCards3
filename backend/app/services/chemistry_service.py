@@ -192,6 +192,9 @@ def link_level(player_a, player_b) -> str:
     return LINK_NONE
 
 
+_LEVEL_ORDER = {LINK_NONE: 0, LINK_MEDIUM: 1, LINK_STRONG: 2}
+
+
 def link_points(level: str, rules: ChemistryRules) -> int:
     if level == LINK_STRONG:
         return rules.link_strong
@@ -253,6 +256,8 @@ def stadium_club_of(stadium) -> str | None:
 def compute_chemistry(
     cards_with_slots: Iterable[tuple[Any, Any]], formation: str, rules: ChemistryRules, slot_count: int | None = None,
     coach_country: str | None = None, stadium_club: str | None = None,
+    link_floor: dict[str, int] | None = None, on_position_slots: set | None = None,
+    extra_points: dict[str, int] | None = None,
 ) -> ChemistryResult:
     """cards_with_slots: (card-like with .player.{club,country,position},
     FormationSlot) pairs — UserCard, the tournament _EngineCard adapter and
@@ -260,7 +265,13 @@ def compute_chemistry(
     slot_count: the formation's total slot count for team_max (defaults to
     the number of filled slots). coach_country / stadium_club: the equipped
     coach's country and stadium's club (coach_country_of / stadium_club_of;
-    None = no such extra)."""
+    None = no such extra).
+
+    Match-time «Начало пути» talent hooks (path_talent_effects; all None in
+    editors and for every card without such a talent): link_floor — slot ->
+    minimum link level with that slot (1 medium, 2 strong; «Свой парень»),
+    on_position_slots — slots counted as on-position («Универсал» II),
+    extra_points — slot -> extra chemistry points when on position."""
     pairs = list(cards_with_slots)
     by_code = {slot.code: card for card, slot in pairs}
     coach_country, stadium_club = _group_key(coach_country), _group_key(stadium_club)
@@ -269,6 +280,10 @@ def compute_chemistry(
     for a, b in FORMATION_LINKS.get(formation, ()):
         if a in by_code and b in by_code:
             level = link_level(by_code[a].player, by_code[b].player)
+            if link_floor:
+                floor = max(link_floor.get(a, 0), link_floor.get(b, 0))
+                if floor and _LEVEL_ORDER[level] < floor:
+                    level = (LINK_NONE, LINK_MEDIUM, LINK_STRONG)[min(floor, 2)]
             pts = link_points(level, rules)
             result.links.append(ChemistryLink(a=a, b=b, level=level, points=pts))
             link_sums[a] += pts
@@ -276,7 +291,9 @@ def compute_chemistry(
     for card, slot in pairs:
         from app.services.lineup_service import on_ideal_position  # lineup_service imports this module
 
-        on_position = on_ideal_position(card.player.position, slot.ideal_position)
+        on_position = on_ideal_position(card.player.position, slot.ideal_position) or (
+            bool(on_position_slots) and slot.code in on_position_slots
+        )
         base = player_points(link_sums[slot.code], on_position, rules)
         coach_extra = stadium_extra = 0
         if on_position:
@@ -284,7 +301,11 @@ def compute_chemistry(
                 coach_extra = max(0, rules.coach_country_points)
             if stadium_club is not None and _group_key(card.player.club) == stadium_club:
                 stadium_extra = max(0, rules.stadium_club_points)
-        pts = min(max(0, rules.player_max), base + coach_extra + stadium_extra) if (coach_extra or stadium_extra) else base
+        talent_extra = (extra_points or {}).get(slot.code, 0) if on_position else 0
+        pts = (
+            min(max(0, rules.player_max), base + coach_extra + stadium_extra + talent_extra)
+            if (coach_extra or stadium_extra or talent_extra) else base
+        )
         bonus = pts * rules.rating_per_point - (0 if on_position else rules.off_position_penalty)
         result.players[slot.code] = PlayerChemistry(
             slot_code=slot.code, points=pts, link_sum=link_sums[slot.code], on_position=on_position, rating_bonus=bonus,

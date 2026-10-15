@@ -51,6 +51,10 @@ class MatchOut(BaseModel):
     created_at: datetime
     events: list[MatchEventOut] = []
     pending_moment: Optional[MatchPendingMomentOut] = None
+    # «Начало пути»: static talents applied at kickoff, and the experience
+    # the path cards earned once the match is over.
+    talent_notes: Optional[list[dict]] = None
+    path_progress: Optional[list[dict]] = None
 
 
 class StartMatchRequest(BaseModel):

@@ -558,6 +558,10 @@ def _card_to_actor(card: Any) -> dict:
     skill = getattr(card, "skill", None)
     if skill:
         actor["skill"] = skill
+    # «Начало пути»: frozen talent snapshot (player tournaments only).
+    talent = getattr(card, "talent", None)
+    if talent:
+        actor["talent"] = talent
     return actor
 
 

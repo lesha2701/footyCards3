@@ -1,4 +1,6 @@
 import { IconTag } from "@/components/icons";
+import PathCardMark from "@/components/path/PathCardMark";
+import { pathFrameClass } from "@/lib/pathCards";
 import { staticUrl } from "@/lib/api";
 import { RARITY_GLOW, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import type { Player } from "@/types";
@@ -13,6 +15,8 @@ interface Props {
   dimmed?: boolean;
   /** «Звёзды» of this specific copy (its rating already includes them). */
   stars?: number;
+  /** «Начало пути»: stage of this specific copy (omit for a design). */
+  pathStage?: number;
 }
 
 const SIZE_CLASSES: Record<NonNullable<Props["size"]>, string> = {
@@ -21,7 +25,11 @@ const SIZE_CLASSES: Record<NonNullable<Props["size"]>, string> = {
   lg: "text-sm",
 };
 
-export default function PlayerCard({ player, size = "md", badge, footer, onClick, selected, dimmed, stars = 0 }: Props) {
+export default function PlayerCard({ player, size = "md", badge, footer, onClick, selected, dimmed, stars = 0, pathStage }: Props) {
+  const isPath = !!player.path_talent_code;
+  const frame = isPath
+    ? pathFrameClass(pathStage)
+    : `${RARITY_GRADIENTS[player.rarity]} ${RARITY_GLOW[player.rarity]}`;
   const imageUrl = staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp");
 
   return (
@@ -29,9 +37,9 @@ export default function PlayerCard({ player, size = "md", badge, footer, onClick
       type="button"
       onClick={onClick}
       disabled={!onClick}
-      className={`group relative flex aspect-[3/4] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-b ${
-        RARITY_GRADIENTS[player.rarity]
-      } ${RARITY_GLOW[player.rarity]} p-[2px] transition-transform active:scale-[0.97] ${
+      className={`group relative flex aspect-[3/4] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-b ${frame} ${
+        isPath ? "p-[3px]" : "p-[2px]"
+      } transition-transform active:scale-[0.97] ${
         selected ? (player.rarity === "diamond" ? "ring-4 ring-rarity-diamond shadow-glow-diamond" : "ring-4 ring-accent-lime") : ""
       } ${dimmed ? "opacity-40 grayscale" : ""} ${onClick ? "cursor-pointer" : "cursor-default"}`}
     >
@@ -50,6 +58,11 @@ export default function PlayerCard({ player, size = "md", badge, footer, onClick
             <span className={SIZE_CLASSES[size]}>{player.position}</span>
           </div>
           {badge && <div className="absolute bottom-1.5 left-1.5">{badge}</div>}
+          {isPath && (
+            <div className="absolute bottom-1.5 right-1.5">
+              <PathCardMark talentCode={player.path_talent_code!} stage={pathStage} size={size} />
+            </div>
+          )}
         </div>
         <div className="border-t border-white/10 bg-black/30 px-2 py-1.5 text-center">
           <p className={`truncate font-display font-semibold text-ink-chalk ${SIZE_CLASSES[size]}`}>{player.display_name}</p>

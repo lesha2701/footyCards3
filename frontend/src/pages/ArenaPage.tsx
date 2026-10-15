@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import MatchSkillNotes from "@/components/cards/MatchSkillNotes";
+import MatchPathSummary from "@/components/path/MatchPathSummary";
 import MatchSkillSummary from "@/components/cards/MatchSkillSummary";
 import { skillByCode, skillInactiveReason, useSkillCatalog } from "@/lib/cardSkills";
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
@@ -219,10 +220,17 @@ export default function ArenaPage() {
   )?.map((s) => s.card!.player.id) ?? [];
 
   const maxDiamond = lineup?.max_diamond ?? 1;
-  const diamondCount = (pickerSlot
+  // «Начало пути» cards are diamonds with a squad limit of their own.
+  const maxPath = lineup?.max_path ?? 1;
+  const isPlainDiamond = (p: { rarity: string; path_talent_code?: string | null }) => p.rarity === "diamond" && !p.path_talent_code;
+  const otherSlots = (pickerSlot
     ? lineup?.slots.filter((s) => s.card && s.slot_code !== pickerSlot.code)
     : lineup?.slots.filter((s) => s.card)
-  )?.filter((s) => s.card!.player.rarity === "diamond").length ?? 0;
+  ) ?? [];
+  const diamondCount = otherSlots.filter((s) => isPlainDiamond(s.card!.player)).length;
+  const pathCount = otherSlots.filter((s) => !!s.card!.player.path_talent_code).length;
+  const limitBlocked = (c: UserCard) =>
+    (isPlainDiamond(c.player) && diamondCount >= maxDiamond) || (!!c.player.path_talent_code && pathCount >= maxPath);
 
   const cardsForSlot = (slot: FormationSlot): UserCard[] => {
     const positions = CATEGORY_POSITIONS[slot.category];
@@ -252,13 +260,16 @@ export default function ArenaPage() {
   const chemBySlot = new Map((chemistry?.players ?? []).map((p) => [p.slot_code, p]));
   const chemSlots = (lineup?.slots ?? []).map((s) => ({ slot_code: s.slot_code, ideal_position: s.ideal_position, player: s.card?.player ?? null }));
   const diamondsOutside = (slotCode: string) =>
-    (lineup?.slots ?? []).filter((s) => s.card && s.slot_code !== slotCode && s.card.player.rarity === "diamond").length;
+    (lineup?.slots ?? []).filter((s) => s.card && s.slot_code !== slotCode && isPlainDiamond(s.card.player)).length;
+  const pathOutside = (slotCode: string) =>
+    (lineup?.slots ?? []).filter((s) => s.card && s.slot_code !== slotCode && !!s.card.player.path_talent_code).length;
   const chemistryHints = chemistryOn
     ? chemistrySwapHints(chemistry, chemSlots, (slot) => {
         const positions = CATEGORY_POSITIONS[(lineup?.slots.find((s) => s.slot_code === slot.slot_code)?.category ?? "GK") as FormationSlot["category"]];
         return (collectionPage?.items ?? [])
           .filter((c) => positions.includes(c.player.position))
-          .filter((c) => c.player.rarity !== "diamond" || diamondsOutside(slot.slot_code) < maxDiamond)
+          .filter((c) => !isPlainDiamond(c.player) || diamondsOutside(slot.slot_code) < maxDiamond)
+          .filter((c) => !c.player.path_talent_code || pathOutside(slot.slot_code) < maxPath)
           .map((c) => ({ cardId: c.id, playerId: c.player.id, name: c.player.display_name, club: c.player.club, country: c.player.country, position: c.player.position }));
       })
     : [];
@@ -412,6 +423,11 @@ export default function ArenaPage() {
           <span className={`rounded-full px-2.5 py-1 ${diamondCount >= maxDiamond ? "bg-rarity-diamond/20 text-rarity-diamond" : "bg-white/5 text-ink-mist"}`}>
             Диамантовых: {diamondCount}/{maxDiamond}
           </span>
+          {pathCount > 0 && (
+            <span className={`ml-1.5 rounded-full px-2.5 py-1 ${pathCount >= maxPath ? "bg-emerald-400/20 text-emerald-300" : "bg-white/5 text-ink-mist"}`}>
+              🌱 Начало пути: {pathCount}/{maxPath}
+            </span>
+          )}
         </p>
         <div ref={pitchRef} className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
           <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
@@ -662,7 +678,7 @@ export default function ArenaPage() {
           title={`Выбери на позицию ${CATEGORY_LABELS[pickerSlot.category]}`}
           cards={cardsForSlot(pickerSlot)}
           disabledCardIds={cardsForSlot(pickerSlot)
-            .filter((c) => usedPlayerIds.includes(c.player.id) || (c.player.rarity === "diamond" && diamondCount >= maxDiamond))
+            .filter((c) => usedPlayerIds.includes(c.player.id) || limitBlocked(c))
             .map((c) => c.id)}
           onSelect={(card) => assignSlot(pickerSlot, card)}
           onClose={() => { setPickerSlot(null); setPickerSearch(""); }}
@@ -880,6 +896,7 @@ function MatchSimulation({
           <div className="flex flex-col gap-2">
             <MatchStatsTable events={match.events} opponentName={match.opponent_name} />
             <MatchSkillSummary events={match.events} />
+            <MatchPathSummary match={match} />
           </div>
         ) : (
           <MatchPitchView events={revealed} opponentName={match.opponent_name} pending={pitchMoment} />

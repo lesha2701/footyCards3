@@ -2,6 +2,7 @@ from app.models.admin_action import AdminAction
 from app.models.badge import Badge, UserBadge
 from app.models.blackjack import BlackjackMatch
 from app.models.card import CardStarLedger, UserCard
+from app.models.card_path import CardPath, PathAttemptPurchase, PathStage, PathStageTask, PathTalent, PathXpEvent
 from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
 from app.models.career import CareerClub, CareerParticipant, CareerProfile, CareerSeason, Friendship
 from app.models.lifestyle import LifestyleItem, UserLifestyleItem
@@ -65,6 +66,12 @@ __all__ = [
     "UserBadge",
     "UserCard",
     "CardStarLedger",
+    "CardPath",
+    "PathAttemptPurchase",
+    "PathStage",
+    "PathStageTask",
+    "PathTalent",
+    "PathXpEvent",
     "CardCollection",
     "UserCollectionReward",
     "CardUpgradeAttempt",

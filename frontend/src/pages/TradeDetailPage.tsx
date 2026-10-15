@@ -165,6 +165,7 @@ function TradeSide({ title, cards, coins }: { title: string; cards: UserCard[]; 
             <PlayerCard
               key={c.id}
               player={c.player}
+              pathStage={c.path_stage}
               size="sm"
               badge={<CardSkillBadge code={c.skill_code} level={c.skill_level} />}
             />

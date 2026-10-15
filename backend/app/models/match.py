@@ -65,6 +65,18 @@ class Match(Base):
         }
 
 
+    @property
+    def talent_notes(self) -> Optional[list]:
+        """«Начало пути» talents that applied from kickoff (static ones)."""
+        talents = (self.server_state or {}).get("talents") or {}
+        return talents.get("notes") or None
+
+    @property
+    def path_progress(self) -> Optional[list]:
+        """Experience the path cards got for this match (set at the end)."""
+        return ((self.server_state or {}).get("path") or {}).get("awarded")
+
+
 class MatchEvent(Base):
     __tablename__ = "match_events"
 

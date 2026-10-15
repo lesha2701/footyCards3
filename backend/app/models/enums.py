@@ -112,6 +112,7 @@ class TransactionType(str, enum.Enum):
     blackjack_consolation = "blackjack_consolation"
     magnate_reward = "magnate_reward"
     card_star_upgrade = "card_star_upgrade"
+    path_attempt_purchase = "path_attempt_purchase"
 
 
 class GiftKind(str, enum.Enum):

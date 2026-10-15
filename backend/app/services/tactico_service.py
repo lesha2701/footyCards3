@@ -39,6 +39,7 @@ from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS
 from app.services.match_service import BOT_NAMES
 from app.services.notification_service import notify
+from app.services.path_service import is_path_card, is_plain_diamond
 from app.services.player_stats_service import card_rating_bonus, effective_card_stats
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
@@ -120,7 +121,7 @@ async def _serialize_squad(db: AsyncSession, squad: TacticoSquad) -> TacticoSqua
         template_index=squad.template_index, name=squad.name, is_active=squad.is_active,
         is_complete=len(cards) == SQUAD_SIZE, cards=cards,
         max_legendary=config.tactico_max_legendary_cards, max_epic=config.tactico_max_epic_cards,
-        max_diamond=config.tactico_max_diamond_cards,
+        max_diamond=config.tactico_max_diamond_cards, max_path=config.tactico_max_path_cards,
     )
 
 
@@ -168,7 +169,10 @@ async def set_squad(
 
     legendary_count = sum(1 for c in cards_by_id.values() if c.player.rarity == Rarity.legendary)
     epic_count = sum(1 for c in cards_by_id.values() if c.player.rarity == Rarity.epic)
-    diamond_count = sum(1 for c in cards_by_id.values() if c.player.rarity == Rarity.diamond)
+    diamond_count = sum(1 for c in cards_by_id.values() if is_plain_diamond(c))
+    path_count = sum(1 for c in cards_by_id.values() if is_path_card(c))
+    if path_count > config.tactico_max_path_cards:
+        raise ConflictError(f"Максимум {config.tactico_max_path_cards} карт «Начала пути» в составе Тактико")
     if legendary_count > config.tactico_max_legendary_cards:
         raise ConflictError(f"Максимум {config.tactico_max_legendary_cards} легендарных карт в составе Тактико")
     if epic_count > config.tactico_max_epic_cards:

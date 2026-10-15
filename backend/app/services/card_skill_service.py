@@ -575,22 +575,29 @@ def require_skill_loss_confirmation(cards: list[UserCard], confirmed: bool, acti
     mention stars too."""
     skilled = [c for c in cards if c.skill_code]
     starred = [c for c in cards if getattr(c, "stars", 0) or getattr(c, "star_progress", 0)]
-    if (skilled or starred) and not confirmed:
+    # «Начало пути»: the levels / stage reached on the path go with the copy.
+    pathed = [c for c in cards if getattr(c, "path_level", 0) or getattr(c, "path_stage", 0)]
+    if (skilled or starred or pathed) and not confirmed:
         lost = " и ".join(
-            part for part, present in (("навык", skilled), ("звёзды и копилку", starred)) if present
+            part for part, present in (
+                ("навык", skilled), ("звёзды и копилку", starred), ("прогресс пути", pathed),
+            ) if present
         )
         raise ConflictError(
             f"При действии «{action}» карточка потеряет {lost} без возврата",
             details={
                 "requires_skill_loss_confirmation": True,
                 "requires_star_loss_confirmation": bool(starred),
+                "requires_path_loss_confirmation": bool(pathed),
                 "cards": [
                     {
                         "id": c.id, "serial_number": c.serial_number, "skill_code": c.skill_code,
                         "skill_level": c.skill_level, "stars": getattr(c, "stars", 0) or 0,
                         "star_progress": getattr(c, "star_progress", 0) or 0,
+                        "path_level": getattr(c, "path_level", 0) or 0,
+                        "path_stage": getattr(c, "path_stage", 0) or 0,
                     }
-                    for c in cards if c in skilled or c in starred
+                    for c in cards if c in skilled or c in starred or c in pathed
                 ],
             },
         )

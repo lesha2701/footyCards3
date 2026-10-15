@@ -117,6 +117,11 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
     if invoice.is_blackjack_entry:
         return StarsInvoiceStatusOut(status="completed", blackjack_result={"kind": "entry"})
 
+    if invoice.path_user_card_id is not None:
+        return StarsInvoiceStatusOut(
+            status="completed", path_result={"kind": "path_attempt", "user_card_id": invoice.path_user_card_id},
+        )
+
     user = await db.get(User, invoice.user_id)
     return StarsInvoiceStatusOut(
         status="completed",
@@ -280,6 +285,11 @@ async def validate_pre_checkout(db: AsyncSession, payload_token: str, total_amou
         from app.services import blackjack_service
 
         return await blackjack_service.validate_stars_entry(db, invoice)
+    elif invoice.path_user_card_id is not None:
+        from app.services.game_config_service import get_config
+
+        if not (await get_config(db)).path_enabled:
+            return False, "«Начало пути» сейчас недоступно"
     return True, ""
 
 
@@ -386,6 +396,12 @@ async def deliver_payment(
         if invoice.stars_amount != total_amount:
             raise ConflictError("Stars amount does not match the invoice")
         blackjack_result = await blackjack_service.deliver_stars_entry(db, user)
+    elif invoice.path_user_card_id is not None:
+        from app.services import path_service
+
+        if invoice.stars_amount != total_amount:
+            raise ConflictError("Stars amount does not match the invoice")
+        path_result = await path_service.deliver_stars_attempt(db, user, invoice)
     elif invoice.is_wheel_spin:
         # Imported here rather than at module level: wheel_service itself
         # imports _request_telegram_invoice_link from this module at import
@@ -452,6 +468,8 @@ async def deliver_payment(
         return StarsInvoiceStatusOut(status="completed", my_player_result=my_player_result)
     if invoice.is_blackjack_entry:
         return StarsInvoiceStatusOut(status="completed", blackjack_result=blackjack_result)
+    if invoice.path_user_card_id is not None:
+        return StarsInvoiceStatusOut(status="completed", path_result=path_result)
     return StarsInvoiceStatusOut(
         status="completed",
         coin_result=StarsCoinResultOut(coins_credited=invoice.coins_amount, new_balance=user.balance),

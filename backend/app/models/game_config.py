@@ -599,3 +599,42 @@ class GameConfig(TimestampMixin, Base):
     # Ceiling on the rating stars can add to one card (the card itself is
     # always kept at or below 99 on top of that).
     card_star_bonus_cap: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+
+    # --- «Начало пути» (services/path_service.py, docs/path-cards.md) ---
+    # Off = no new experience / purchases and talents give nothing in new
+    # matches; levels already earned keep their rating bonus.
+    path_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Shown name of the mechanic, its collection and its pack.
+    path_title: Mapped[str] = mapped_column(String(64), default="Начало пути", nullable=False)
+    # Experience to go from rating r to r+1: base + step * (r - start_rating).
+    path_xp_base: Mapped[int] = mapped_column(Integer, default=75, nullable=False)
+    path_xp_step: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    path_start_rating: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    path_rating_per_level: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Experience per match that earns it (same in every mode).
+    path_xp_match: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    path_xp_win: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    path_xp_draw: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    path_xp_goal: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    path_xp_assist: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Per card per local day: free Card Arena attempts, and matches of the
+    # career / player tournament that count (they never use Arena attempts).
+    path_daily_free_arena: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    path_daily_career: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    path_daily_ptour: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Price of the 1st, 2nd, … extra Arena attempt bought for a card today;
+    # the list length is the daily purchase limit per card.
+    path_coin_attempt_prices: Mapped[list] = mapped_column(
+        JSON, nullable=False, default=lambda: [300, 400, 500, 600, 700],
+    )
+    path_stars_attempt_prices: Mapped[list] = mapped_column(
+        JSON, nullable=False, default=lambda: [3, 4, 5, 6, 7],
+    )
+    # Talents: ceiling on what all talents together add to one card in one
+    # match (the match rating itself always stays <= 99).
+    path_talent_cap: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    # Squad limits for path cards, separate from the diamond limits (a path
+    # card does not take a diamond slot).
+    match_max_path_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    tactico_max_path_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    stratego_max_path_cards: Mapped[int] = mapped_column(Integer, default=1, nullable=False)

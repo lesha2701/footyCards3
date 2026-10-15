@@ -34,6 +34,15 @@ class SlotSpec:
     ideal_position: object  # Position
 
 
+
+def _is_path(card) -> bool:
+    """«Начало пути» cards: a squad limit of their own (match_max_path_cards)."""
+    return getattr(card.player, "path_talent_code", None) is not None
+
+
+def _is_diamond(card) -> bool:
+    return card.player.rarity == Rarity.diamond and not _is_path(card)
+
 def _skill_bonus(card: UserCard, engine: str) -> int:
     """Tie-break only: a copy whose skill actually acts in this engine and
     fits its position edges out an otherwise equal copy."""
@@ -45,7 +54,7 @@ def _skill_bonus(card: UserCard, engine: str) -> int:
 
 def pick_cards(
     slots: list[SlotSpec], cards: Iterable[UserCard], engine: str,
-    max_diamonds: Optional[int] = None, preferred_ids: frozenset[int] = frozenset(),
+    max_diamonds: Optional[int] = None, preferred_ids: frozenset[int] = frozenset(), max_path: Optional[int] = None,
 ) -> dict[str, UserCard]:
     """Greedy, scarcest slots first (GK, then the rest in formation order).
     Per slot: preferred cards (e.g. copied from another squad) first, then
@@ -54,14 +63,16 @@ def pick_cards(
     pool = [c for c in cards if not c.is_locked_by_admin and not c.is_locked_in_trade]
     chosen: dict[str, UserCard] = {}
     used_players: set[int] = set()
-    diamonds = 0
+    diamonds = paths = 0
     ordered = sorted(slots, key=lambda s: 0 if s.category == "GK" else 1)
     for slot in ordered:
         best, best_key = None, None
         for card in pool:
             if card.player_id in used_players or card.player.position not in CATEGORY_POSITIONS[slot.category]:
                 continue
-            if card.player.rarity == Rarity.diamond and max_diamonds is not None and diamonds >= max_diamonds:
+            if _is_diamond(card) and max_diamonds is not None and diamonds >= max_diamonds:
+                continue
+            if _is_path(card) and max_path is not None and paths >= max_path:
                 continue
             key = (
                 card.id in preferred_ids,
@@ -75,8 +86,8 @@ def pick_cards(
         if best is not None:
             chosen[slot.code] = best
             used_players.add(best.player_id)
-            if best.player.rarity == Rarity.diamond:
-                diamonds += 1
+            diamonds += _is_diamond(best)
+            paths += _is_path(best)
     return chosen
 
 
@@ -115,6 +126,7 @@ def _group_key(value) -> Optional[str]:
 def improve_for_chemistry(
     chosen: dict[str, UserCard], slots: list[SlotSpec], cards: Iterable[UserCard], formation: str,
     rules: ChemistryRules, max_diamonds: Optional[int] = None, fixed_ids: frozenset[int] = frozenset(),
+    max_path: Optional[int] = None,
     coach_country: Optional[str] = None, stadium_club: Optional[str] = None,
 ) -> dict[str, UserCard]:
     """Steepest-ascent local search over pick_cards' result: each round tries
@@ -141,7 +153,9 @@ def improve_for_chemistry(
         return card.player.position in CATEGORY_POSITIONS[slot.category]
 
     def diamonds_ok(trial: dict[str, UserCard]) -> bool:
-        return max_diamonds is None or sum(1 for c in trial.values() if c.player.rarity == Rarity.diamond) <= max_diamonds
+        return (max_diamonds is None or sum(1 for c in trial.values() if _is_diamond(c)) <= max_diamonds) and (
+            max_path is None or sum(1 for c in trial.values() if _is_path(c)) <= max_path
+        )
 
     def candidates(slot: SlotSpec, current: dict[str, UserCard]) -> list[UserCard]:
         others = {code: c for code, c in current.items() if code != slot.code}
@@ -211,13 +225,16 @@ async def auto_arena_lineup(db: AsyncSession, user: User, template_index: int):
     config = await get_config(db)
     slots = [SlotSpec(s.code, s.category, s.ideal_position) for s in lineup_service.FORMATION_SLOTS]
     cards = await owned_cards(db, user.id)
-    chosen = pick_cards(slots, cards, "arena", max_diamonds=config.match_max_diamond_cards)
+    chosen = pick_cards(
+        slots, cards, "arena", max_diamonds=config.match_max_diamond_cards, max_path=config.match_max_path_cards,
+    )
     require_any(chosen)
     rules = chemistry_service.active_rules(config)
     if rules is not None:
         current = await lineup_service.get_active_lineup(db, user, template_index)
         chosen = improve_for_chemistry(
             chosen, slots, cards, lineup_service.ARENA_FORMATION, rules, max_diamonds=config.match_max_diamond_cards,
+            max_path=config.match_max_path_cards,
             coach_country=current.coach.country if current.coach else None,
             stadium_club=current.stadium.club if current.stadium else None,
         )
@@ -262,7 +279,7 @@ def _effective(card: UserCard) -> int:
 
 def bench_upgrades(
     slots: list[SlotSpec], current: dict[str, Optional[int]], cards: Iterable[UserCard],
-    max_diamonds: Optional[int] = None,
+    max_diamonds: Optional[int] = None, max_path: Optional[int] = None,
 ) -> list[dict]:
     """Per slot: the strongest owned card NOT already in the squad that fits
     the slot and beats what is there now (or fills an empty slot). Unlike
@@ -272,7 +289,8 @@ def bench_upgrades(
     pool = [c for c in by_id.values() if not c.is_locked_by_admin and not c.is_locked_in_trade]
     in_squad = {cid for cid in current.values() if cid}
     used_players = {by_id[cid].player_id for cid in in_squad if cid in by_id}
-    diamonds = sum(1 for cid in in_squad if cid in by_id and by_id[cid].player.rarity == Rarity.diamond)
+    diamonds = sum(1 for cid in in_squad if cid in by_id and _is_diamond(by_id[cid]))
+    paths = sum(1 for cid in in_squad if cid in by_id and _is_path(by_id[cid]))
     hints: list[dict] = []
     for slot in sorted(slots, key=lambda s: 0 if s.category == "GK" else 1):
         now = by_id.get(current.get(slot.code) or -1)
@@ -283,9 +301,11 @@ def bench_upgrades(
                 continue
             if card.player.position not in CATEGORY_POSITIONS[slot.category]:
                 continue
-            is_diamond = card.player.rarity == Rarity.diamond
-            swaps_out_diamond = now is not None and now.player.rarity == Rarity.diamond
-            if is_diamond and max_diamonds is not None and diamonds - swaps_out_diamond >= max_diamonds:
+            swaps_out_diamond = now is not None and _is_diamond(now)
+            if _is_diamond(card) and max_diamonds is not None and diamonds - swaps_out_diamond >= max_diamonds:
+                continue
+            swaps_out_path = now is not None and _is_path(now)
+            if _is_path(card) and max_path is not None and paths - swaps_out_path >= max_path:
                 continue
             if _effective(card) <= now_rating:
                 continue
@@ -295,8 +315,8 @@ def bench_upgrades(
             continue
         used_players.add(best.player_id)
         in_squad.add(best.id)
-        if best.player.rarity == Rarity.diamond:
-            diamonds += 1
+        diamonds += _is_diamond(best)
+        paths += _is_path(best)
         hints.append({
             "slot_code": slot.code,
             "current_card_id": now.id if now else None,
@@ -318,7 +338,10 @@ async def arena_bench_upgrades(db: AsyncSession, user: User, template_index: int
     config = await get_config(db)
     slots = [SlotSpec(s.code, s.category, s.ideal_position) for s in lineup_service.FORMATION_SLOTS]
     current = {s.slot_code: (s.card.id if s.card else None) for s in lineup.slots}
-    return bench_upgrades(slots, current, await owned_cards(db, user.id), max_diamonds=config.match_max_diamond_cards)
+    return bench_upgrades(
+        slots, current, await owned_cards(db, user.id), max_diamonds=config.match_max_diamond_cards,
+        max_path=config.match_max_path_cards,
+    )
 
 
 async def personal_bench_upgrades(db: AsyncSession, user: User, template_index: int) -> list[dict]:

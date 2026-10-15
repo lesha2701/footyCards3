@@ -107,6 +107,10 @@ POSITION_EQUIVALENTS = {
 }
 
 
+def _is_path(card) -> bool:
+    return getattr(card.player, "path_talent_code", None) is not None
+
+
 def on_ideal_position(position, ideal) -> bool:
     return position == ideal or POSITION_EQUIVALENTS.get(position) == ideal
 
@@ -327,7 +331,7 @@ async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
     return LineupOut(
         id=lineup.id, template_index=lineup.template_index, name=lineup.name, is_active=lineup.is_active,
         formation=lineup.formation, tactic=lineup.tactic, is_complete=is_complete,
-        team_strength=strength, max_diamond=config.match_max_diamond_cards,
+        team_strength=strength, max_diamond=config.match_max_diamond_cards, max_path=config.match_max_path_cards,
         coach=EquippedCoachOut(
             id=coach.id, display_name=coach.display_name, rarity=coach.rarity.value,
             image_path=coach.image_path, boosts=coach.boosts, country=coach.country,
@@ -461,9 +465,13 @@ async def set_lineup(
         player_ids_seen.add(card.player_id)
 
     config = await get_config(db)
-    diamond_count = sum(1 for card in cards_by_id.values() if card.player.rarity == Rarity.diamond)
+    # «Начало пути» cards are diamonds with a squad limit of their own.
+    diamond_count = sum(1 for card in cards_by_id.values() if card.player.rarity == Rarity.diamond and not _is_path(card))
     if diamond_count > config.match_max_diamond_cards:
         raise ConflictError(f"Максимум {config.match_max_diamond_cards} диамантовых карт в составе")
+    path_count = sum(1 for card in cards_by_id.values() if _is_path(card))
+    if path_count > config.match_max_path_cards:
+        raise ConflictError(f"Максимум {config.match_max_path_cards} карт «Начала пути» в составе")
 
     lineup = await _get_template_row(db, user.id, template_index)
 

@@ -16,6 +16,7 @@ class TacticoSquadOut(BaseModel):
     max_legendary: int
     max_epic: int
     max_diamond: int
+    max_path: int = 1
 
 
 class TacticoSquadSetRequest(BaseModel):

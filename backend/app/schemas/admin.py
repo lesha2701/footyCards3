@@ -446,6 +446,26 @@ class GameConfigOut(BaseModel):
     card_star_coin_cost: dict[str, list[int]] = {}
     card_star_rating_per_star: int = 1
     card_star_bonus_cap: int = 6
+    path_enabled: bool = True
+    path_title: str = "Начало пути"
+    path_xp_base: int = 75
+    path_xp_step: int = 10
+    path_start_rating: int = 60
+    path_rating_per_level: int = 1
+    path_xp_match: int = 10
+    path_xp_win: int = 10
+    path_xp_draw: int = 3
+    path_xp_goal: int = 5
+    path_xp_assist: int = 3
+    path_daily_free_arena: int = 10
+    path_daily_career: int = 2
+    path_daily_ptour: int = 3
+    path_coin_attempt_prices: list[int] = []
+    path_stars_attempt_prices: list[int] = []
+    path_talent_cap: int = 8
+    match_max_path_cards: int = 1
+    tactico_max_path_cards: int = 1
+    stratego_max_path_cards: int = 1
 
 
 class GameConfigUpdate(BaseModel):
@@ -767,6 +787,33 @@ class GameConfigUpdate(BaseModel):
     card_star_coin_cost: Optional[dict[str, list[int]]] = None
     card_star_rating_per_star: Optional[int] = Field(default=None, ge=0, le=10)
     card_star_bonus_cap: Optional[int] = Field(default=None, ge=0, le=30)
+    path_enabled: Optional[bool] = None
+    path_title: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    path_xp_base: Optional[int] = Field(default=None, ge=1, le=10000)
+    path_xp_step: Optional[int] = Field(default=None, ge=0, le=10000)
+    path_start_rating: Optional[int] = Field(default=None, ge=1, le=99)
+    path_rating_per_level: Optional[int] = Field(default=None, ge=1, le=5)
+    path_xp_match: Optional[int] = Field(default=None, ge=0, le=1000)
+    path_xp_win: Optional[int] = Field(default=None, ge=0, le=1000)
+    path_xp_draw: Optional[int] = Field(default=None, ge=0, le=1000)
+    path_xp_goal: Optional[int] = Field(default=None, ge=0, le=1000)
+    path_xp_assist: Optional[int] = Field(default=None, ge=0, le=1000)
+    path_daily_free_arena: Optional[int] = Field(default=None, ge=0, le=100)
+    path_daily_career: Optional[int] = Field(default=None, ge=0, le=100)
+    path_daily_ptour: Optional[int] = Field(default=None, ge=0, le=100)
+    path_coin_attempt_prices: Optional[list[int]] = Field(default=None, max_length=20)
+    path_stars_attempt_prices: Optional[list[int]] = Field(default=None, max_length=20)
+    path_talent_cap: Optional[int] = Field(default=None, ge=0, le=20)
+    match_max_path_cards: Optional[int] = Field(default=None, ge=0, le=11)
+    tactico_max_path_cards: Optional[int] = Field(default=None, ge=0, le=11)
+    stratego_max_path_cards: Optional[int] = Field(default=None, ge=0, le=20)
+
+    @field_validator("path_coin_attempt_prices", "path_stars_attempt_prices")
+    @classmethod
+    def _positive_prices(cls, value):
+        if value is not None and any(int(v) < 1 for v in value):
+            raise ValueError("Цены попыток должны быть не меньше 1")
+        return value
 
     @field_validator("card_star_dupes_per_level", "card_star_coin_cost")
     @classmethod

@@ -280,8 +280,17 @@ function PackCard({
             <p className="mt-1 text-xs text-ink-mist">{pack.description}</p>
             <div className="mt-2 flex flex-wrap gap-1">
               {pack.rarity_probabilities.map((rp) => (
-                <span key={rp.rarity} className="rounded-full bg-bg-raised px-2 py-0.5 font-mono text-[10px] text-ink-mist">
-                  {RARITY_LABELS[rp.rarity]} {Math.round(rp.probability * 100)}%
+                <span
+                  key={rp.rarity}
+                  className={`rounded-full px-2 py-0.5 font-mono text-[10px] ${
+                    pack.player_pool === "path" && rp.rarity === "diamond"
+                      ? "bg-emerald-400/15 font-semibold text-emerald-300"
+                      : "bg-bg-raised text-ink-mist"
+                  }`}
+                >
+                  {/* «Начало пути» pack: its diamond slot is a path card. */}
+                  {pack.player_pool === "path" && rp.rarity === "diamond" ? "🌱 Начало пути" : RARITY_LABELS[rp.rarity]}{" "}
+                  {Math.round(rp.probability * 100)}%
                 </span>
               ))}
             </div>
@@ -344,8 +353,17 @@ function StarsPackCard({ pack, onPurchased }: { pack: Pack; onPurchased: (result
             <p className="mt-1 text-xs text-ink-mist">{pack.description}</p>
             <div className="mt-2 flex flex-wrap gap-1">
               {pack.rarity_probabilities.map((rp) => (
-                <span key={rp.rarity} className="rounded-full bg-bg-raised px-2 py-0.5 font-mono text-[10px] text-ink-mist">
-                  {RARITY_LABELS[rp.rarity]} {Math.round(rp.probability * 100)}%
+                <span
+                  key={rp.rarity}
+                  className={`rounded-full px-2 py-0.5 font-mono text-[10px] ${
+                    pack.player_pool === "path" && rp.rarity === "diamond"
+                      ? "bg-emerald-400/15 font-semibold text-emerald-300"
+                      : "bg-bg-raised text-ink-mist"
+                  }`}
+                >
+                  {/* «Начало пути» pack: its diamond slot is a path card. */}
+                  {pack.player_pool === "path" && rp.rarity === "diamond" ? "🌱 Начало пути" : RARITY_LABELS[rp.rarity]}{" "}
+                  {Math.round(rp.probability * 100)}%
                 </span>
               ))}
               {!!pack.bonus_coins && (

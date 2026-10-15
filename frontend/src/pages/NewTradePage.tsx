@@ -53,13 +53,15 @@ export default function NewTradePage() {
   // Neither side's collection ever offers/requests a card locked elsewhere
   // (admin lock, in a trade, in a Card Arena lineup, or in a Tactico
   // squad) — the backend rejects all four (plus diamond rarity, which never
-  // trades at all) at accept time anyway, so showing them as pickable here
-  // just sets the offer up to fail later.
+  // trades — except «Начало пути» cards, whose path progress moves with the
+  // card) at accept time anyway, so showing them as pickable here just sets
+  // the offer up to fail later.
   const isTradeable = (c: {
     is_locked_by_admin: boolean; is_locked_in_trade: boolean; is_in_lineup: boolean; is_in_tactico_squad: boolean;
-    player: { rarity: string };
+    player: { rarity: string; path_talent_code?: string | null };
   }) =>
-    !c.is_locked_by_admin && !c.is_locked_in_trade && !c.is_in_lineup && !c.is_in_tactico_squad && c.player.rarity !== "diamond";
+    !c.is_locked_by_admin && !c.is_locked_in_trade && !c.is_in_lineup && !c.is_in_tactico_squad &&
+    (c.player.rarity !== "diamond" || !!c.player.path_talent_code);
 
   const createMutation = useMutation({
     mutationFn: createTradeOffer,
@@ -154,7 +156,7 @@ export default function NewTradePage() {
             <div className="max-h-64 overflow-y-auto">
               <div className="grid grid-cols-3 gap-2">
                 {myCollection?.items.filter(isTradeable).map((c) => (
-                  <PlayerCard key={c.id} player={c.player} size="sm" badge={<CardSkillBadge code={c.skill_code} level={c.skill_level} />} selected={offeredIds.includes(c.id)} onClick={() => toggle(offeredIds, setOfferedIds, c.id)} />
+                  <PlayerCard key={c.id} player={c.player} pathStage={c.path_stage} size="sm" badge={<CardSkillBadge code={c.skill_code} level={c.skill_level} />} selected={offeredIds.includes(c.id)} onClick={() => toggle(offeredIds, setOfferedIds, c.id)} />
                 ))}
                 {myCollection && !myCollection.items.filter(isTradeable).length && (
                   <p className="col-span-3 text-xs text-ink-mist-dim">
@@ -181,7 +183,7 @@ export default function NewTradePage() {
             <div className="max-h-64 overflow-y-auto">
               <div className="grid grid-cols-3 gap-2">
                 {theirCollection?.items.filter(isTradeable).map((c) => (
-                  <PlayerCard key={c.id} player={c.player} size="sm" badge={<CardSkillBadge code={c.skill_code} level={c.skill_level} />} selected={requestedIds.includes(c.id)} onClick={() => toggle(requestedIds, setRequestedIds, c.id)} />
+                  <PlayerCard key={c.id} player={c.player} pathStage={c.path_stage} size="sm" badge={<CardSkillBadge code={c.skill_code} level={c.skill_level} />} selected={requestedIds.includes(c.id)} onClick={() => toggle(requestedIds, setRequestedIds, c.id)} />
                 ))}
                 {theirCollection && theirCollection.items.filter(isTradeable).length === 0 && (
                   <p className="col-span-3 text-xs text-ink-mist-dim">

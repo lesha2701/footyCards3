@@ -7,7 +7,7 @@ from app.models.enums import Position, Rarity
 _PLAYER_COLUMN_FIELDS = (
     "id", "first_name", "last_name", "display_name", "rating", "rarity",
     "country", "club", "position", "image_path", "quick_sell_price", "is_active",
-    "is_pack_droppable", "collection_id",
+    "is_pack_droppable", "collection_id", "path_talent_code",
 )
 
 
@@ -31,6 +31,8 @@ class PlayerOut(BaseModel):
     is_pack_droppable: bool
     collection_id: Optional[int] = None
     collection_name: Optional[str] = None
+    # «Начало пути»: set = a path card with this talent (services/path_talent_catalog.py).
+    path_talent_code: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -45,7 +47,7 @@ class PlayerOut(BaseModel):
         fixes both concerns everywhere at once instead of per call site."""
         if isinstance(data, dict):
             return data
-        result = {name: getattr(data, name) for name in _PLAYER_COLUMN_FIELDS}
+        result = {name: getattr(data, name, None) for name in _PLAYER_COLUMN_FIELDS}
         collection = getattr(data, "collection", None)
         result["collection_name"] = collection.name if collection is not None else None
         result["attack_rating"] = data.attack_rating if data.attack_rating is not None else data.rating
@@ -68,6 +70,7 @@ class PlayerCreate(BaseModel):
     is_active: bool = True
     is_pack_droppable: bool = True
     collection_id: Optional[int] = None
+    path_talent_code: Optional[str] = None
 
 
 class PlayerUpdate(BaseModel):
@@ -85,3 +88,4 @@ class PlayerUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_pack_droppable: Optional[bool] = None
     collection_id: Optional[int] = None
+    path_talent_code: Optional[str] = None

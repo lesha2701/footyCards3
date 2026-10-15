@@ -6,6 +6,8 @@ import { staticUrl } from "@/lib/api";
 import { POSITION_LABELS, RARITY_GLOW, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import CardSkillPanel from "@/components/collection/CardSkillPanel";
 import CardStarPanel from "@/components/collection/CardStarPanel";
+import { pathFrameClass } from "@/lib/pathCards";
+import PathPanel from "@/components/path/PathPanel";
 import type { UserCard } from "@/types";
 
 export default function CardDetailModal({
@@ -25,6 +27,8 @@ export default function CardDetailModal({
 }) {
   const player = card.player;
   const isDiamond = player.rarity === "diamond";
+  // «Начало пути»: own frame and the path block instead of diamond leveling.
+  const isPath = !!player.path_talent_code;
   // Same cache entry CardStarPanel reads, so feeding duplicates updates the
   // rating shown here right away (the `card` prop is a snapshot).
   const { data: starState } = useQuery({
@@ -44,9 +48,11 @@ export default function CardDetailModal({
     >
       <div
         className={`max-h-[92vh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl sm:max-w-xs sm:rounded-3xl ${
-          isDiamond
-            ? `bg-gradient-to-b ${RARITY_GRADIENTS.diamond} p-[3px] ${RARITY_GLOW.diamond}`
-            : "border border-white/10 bg-bg-surface"
+          isPath
+            ? `bg-gradient-to-b ${pathFrameClass(card.path_stage)} p-[3px]`
+            : isDiamond
+              ? `bg-gradient-to-b ${RARITY_GRADIENTS.diamond} p-[3px] ${RARITY_GLOW.diamond}`
+              : "border border-white/10 bg-bg-surface"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -69,6 +75,7 @@ export default function CardDetailModal({
           <span className="text-ink-mist">
             Рейтинг: <b className="font-mono text-accent-cyan">{rating}</b>
             {starBonus > 0 && <span className="text-amber-300"> (+{starBonus}★)</span>}
+            {!!card.path_rating_bonus && <span className="path-ui"><span className="text-emerald-300"> (+{card.path_rating_bonus} 🌱)</span></span>}
           </span>
           <span className="text-ink-mist">№ {card.serial_number}</span>
           <span className="text-ink-mist">Атака: <b className="font-mono text-accent-cyan">{player.attack_rating}</b></span>
@@ -76,6 +83,7 @@ export default function CardDetailModal({
           <span className="text-ink-mist">Редкость: <b className="text-ink-chalk">{RARITY_LABELS[player.rarity]}</b></span>
           <span className="text-ink-mist">Страна: <b className="text-ink-chalk">{player.country}</b></span>
         </div>
+        {isPath && <PathPanel key={`path-${card.id}`} cardId={card.id} player={player} />}
         <CardSkillPanel key={card.id} cardId={card.id} />
         <CardStarPanel key={`stars-${card.id}`} cardId={card.id} isDiamond={isDiamond} />
         {(card.is_locked_by_admin || card.is_locked_in_trade || card.is_in_lineup || card.is_in_tactico_squad) && (

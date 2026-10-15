@@ -22,7 +22,7 @@ from app.schemas.match import (
 )
 from app.schemas.lineup import LineupOut
 from app.schemas.ranking import RankingMetric
-from app.services import bingo_service, chemistry_service, league_service, ranking_service, task_service
+from app.services import bingo_service, chemistry_service, league_service, path_match_service, ranking_service, task_service
 from app.services.card_skill_effects import SNAPSHOT_VERSION, effect_for_card, effect_of, skill_roll
 from app.services.game_config_service import get_config
 from app.services.lineup_service import TACTIC_MULTIPLIERS, get_active_lineup, split_strength
@@ -374,8 +374,18 @@ def _keeper_effects(state: dict, side: str, one_on_one: bool) -> list:
 
 
 def _with_skill_notes(payload: dict, notes: list) -> dict:
+    # Skill notes and «Начало пути» talent notes may share one list (a
+    # talent note carries an "emoji" key); each kind gets its own key.
+    talents = [n for n in notes if "emoji" in n]
+    skills = [n for n in notes if "emoji" not in n]
+    if skills:
+        payload["skills"] = skills
+    return _with_talent_notes(payload, talents)
+
+
+def _with_talent_notes(payload: dict, notes: list) -> dict:
     if notes:
-        payload["skills"] = notes
+        payload["talents"] = payload.get("talents", []) + notes
     return payload
 
 
@@ -403,8 +413,14 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
     pass_target = moment["actors"]["pass_target"]
 
     notes: list = []
+    minute = moment["minute"]
+    one_on_one = "one_on_one" in situation.tags
     if action == "shoot":
-        eff_rating = _clamp_rating(shooter["rating"] + situation.bias)
+        # «Начало пути» talents act on the card's rating before the skill roll.
+        shooter_rating = path_match_service.arena_actor_rating(
+            state, shooter, minute, "shooter", notes, one_on_one=one_on_one,
+        )
+        eff_rating = _clamp_rating(shooter_rating + situation.bias)
         missed, shot_notes = skill_roll(
             _lerp_chance(
                 eff_rating, float(config.match_attack_shoot_miss_chance_min), float(config.match_attack_shoot_miss_chance_max)
@@ -416,7 +432,10 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
             missed, shot_type, config, blocker_rating=ratings["opponent_def"], keeper_rating=ratings["opponent_gk"],
             keeper_effect=_keeper_effects(state, "opponent", "one_on_one" in situation.tags), notes=notes,
         )
-        payload = _with_skill_notes({"shot_type": shot_type, "action": action, "shooter": shooter["name"], **extra}, notes)
+        payload = _with_skill_notes({
+            "shot_type": shot_type, "action": action, "shooter": shooter["name"],
+            "shooter_id": shooter.get("user_card_id"), **extra,
+        }, notes)
         event = {
             "minute": moment["minute"], "event_type": outcome, "team": "user",
             "description": _describe_event(outcome, "user", opponent_name), "payload": payload,
@@ -424,7 +443,8 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
         return event, "user" if outcome == "goal" else None
 
     # action == "pass"
-    eff_passer_rating = _clamp_rating(shooter["rating"] - situation.bias)
+    passer_rating = path_match_service.arena_actor_rating(state, shooter, minute, "passer", notes)
+    eff_passer_rating = _clamp_rating(passer_rating - situation.bias)
     pass_failed, pass_notes = skill_roll(
         _lerp_chance(eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max)),
         # A passer has one skill: playmaker on any pass, or crosser when the
@@ -441,9 +461,12 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
         }
         return event, None
 
+    receiver_rating = path_match_service.arena_actor_rating(
+        state, pass_target, minute, "shooter", notes, one_on_one=one_on_one,
+    )
     missed, shot_notes = skill_roll(
         _lerp_chance(
-            pass_target["rating"], float(config.match_receiver_shot_miss_chance_min), float(config.match_receiver_shot_miss_chance_max)
+            receiver_rating, float(config.match_receiver_shot_miss_chance_min), float(config.match_receiver_shot_miss_chance_max)
         ),
         [(_card_effect(state, pass_target, "sniper"), -1, pass_target["name"])],
     )
@@ -453,7 +476,8 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
         keeper_effect=_keeper_effects(state, "opponent", "one_on_one" in situation.tags), notes=notes,
     )
     payload = _with_skill_notes(
-        {"shot_type": shot_type, "action": action, "shooter": pass_target["name"], "assisted_by": shooter["name"], **extra},
+        {"shot_type": shot_type, "action": action, "shooter": pass_target["name"], "assisted_by": shooter["name"],
+         "shooter_id": pass_target.get("user_card_id"), "assist_id": shooter.get("user_card_id"), **extra},
         notes,
     )
     event = {
@@ -468,30 +492,40 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
     situation = DEFENSE_SITUATIONS_BY_ID[moment["situation_id"]]
     shot_type = moment["shot_type"]
     defender = moment["actors"]["defender"]
+    minute = moment["minute"]
+    one_on_one = "one_on_one" in situation.tags
+    talent_notes: list = []
 
     last_line = _card_effect(state, defender, "last_line") if "breakaway" in situation.tags else None
+    if action in ("tackle", "block"):
+        # The defender plays this roll himself (not the keeper's «keeper» action).
+        defender_rating = path_match_service.arena_actor_rating(state, defender, minute, "defender", talent_notes)
     if action == "tackle":
         foul, tackle_notes = skill_roll(
-            _lerp_chance(defender["rating"], float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max)),
+            _lerp_chance(defender_rating, float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max)),
             [(last_line, -1, defender["name"])],
         )
         if not foul:
             event = {
                 "minute": moment["minute"], "event_type": "tackle_won", "team": "opponent",
                 "description": _describe_event("tackle_won", "opponent", opponent_name),
-                "payload": _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"]}, tackle_notes),
+                "payload": _with_talent_notes(
+                    _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"]}, tackle_notes),
+                    talent_notes,
+                ),
             }
             return event, None
 
         is_red = random.random() < _lerp_chance(
-            defender["rating"], float(config.match_tackle_red_chance_min), float(config.match_tackle_red_chance_max)
+            defender_rating, float(config.match_tackle_red_chance_min), float(config.match_tackle_red_chance_max)
         )
         card = _apply_card(state, defender["user_card_id"], is_red)
         if card == "red":
             _apply_red_card_debuff(state, config)
 
         if "box" in situation.tags:
-            eff_gk = _clamp_rating(ratings["user_gk"] - config.match_penalty_gk_rating_penalty)
+            keeper_bonus = path_match_service.arena_keeper_bonus(state, minute, talent_notes, penalty=True)
+            eff_gk = _clamp_rating(ratings["user_gk"] + keeper_bonus - config.match_penalty_gk_rating_penalty)
             keeper = _keeper_effect(state, "user")
             saved, save_notes = skill_roll(
                 _lerp_chance_positive(eff_gk, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
@@ -502,10 +536,10 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
             event = {
                 "minute": moment["minute"], "event_type": outcome, "team": "opponent",
                 "description": prefix + _describe_event(outcome, "opponent", opponent_name),
-                "payload": _with_skill_notes({
+                "payload": _with_talent_notes(_with_skill_notes({
                     "shot_type": shot_type, "action": action, "defender": defender["name"],
                     "card": card, "is_penalty": True,
-                }, save_notes),
+                }, save_notes), talent_notes),
             }
             return event, "opponent" if outcome == "goal" else None
 
@@ -525,7 +559,7 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
         # aerial duel — the defender's own aerial_master lowers the fail chance.
         aerial = _card_effect(state, defender, "aerial_master") if "aerial" in situation.tags else None
         fail, block_notes = skill_roll(
-            _lerp_chance(defender["rating"], float(config.match_block_fail_chance_min), float(config.match_block_fail_chance_max)),
+            _lerp_chance(defender_rating, float(config.match_block_fail_chance_min), float(config.match_block_fail_chance_max)),
             # A defender has one skill: aerial_master on crosses, last_line
             # when he's the last man against a breakaway.
             [(aerial, -1, defender["name"]), (last_line, -1, defender["name"])],
@@ -534,24 +568,33 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
             event = {
                 "minute": moment["minute"], "event_type": "blocked", "team": "opponent",
                 "description": _describe_event("blocked", "opponent", opponent_name),
-                "payload": _with_skill_notes(
+                "payload": _with_talent_notes(_with_skill_notes(
                     {"shot_type": shot_type, "action": action, "defender": defender["name"], "missed": False, "blocked": True},
                     block_notes,
-                ),
+                ), talent_notes),
             }
             return event, None
         missed = random.random() < _lerp_chance(
             ratings["opponent_fwd"], float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
         )
         notes: list = []
+        keeper_notes: list = []
+        keeper_rating = ratings["user_gk"] + path_match_service.arena_keeper_bonus(
+            state, minute, keeper_notes, one_on_one=one_on_one,
+        )
         outcome, extra = _resolve_shot_continuation(
-            missed, shot_type, config, blocker_rating=None, keeper_rating=ratings["user_gk"],
+            missed, shot_type, config, blocker_rating=None, keeper_rating=keeper_rating,
             keeper_effect=_keeper_effects(state, "user", "one_on_one" in situation.tags), notes=notes,
         )
+        if outcome in ("save", "goal"):  # the keeper's talent only counts if he had a save to make
+            talent_notes.extend(keeper_notes)
         event = {
             "minute": moment["minute"], "event_type": outcome, "team": "opponent",
             "description": _describe_event(outcome, "opponent", opponent_name),
-            "payload": _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"], **extra}, notes),
+            "payload": _with_talent_notes(
+                _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"], **extra}, notes),
+                talent_notes,
+            ),
         }
         return event, "opponent" if outcome == "goal" else None
 
@@ -560,14 +603,23 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
         ratings["opponent_fwd"], float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
     )
     notes = []
+    keeper_notes: list = []
+    keeper_rating = ratings["user_gk"] + path_match_service.arena_keeper_bonus(
+        state, minute, keeper_notes, one_on_one=one_on_one,
+    )
     outcome, extra = _resolve_shot_continuation(
-        missed, shot_type, config, blocker_rating=None, keeper_rating=ratings["user_gk"],
+        missed, shot_type, config, blocker_rating=None, keeper_rating=keeper_rating,
         keeper_effect=_keeper_effects(state, "user", "one_on_one" in situation.tags), notes=notes,
     )
+    if outcome in ("save", "goal"):  # the keeper's talent only counts if he had a save to make
+        talent_notes.extend(keeper_notes)
     event = {
         "minute": moment["minute"], "event_type": outcome, "team": "opponent",
         "description": _describe_event(outcome, "opponent", opponent_name),
-        "payload": _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"], **extra}, notes),
+        "payload": _with_talent_notes(
+            _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"], **extra}, notes),
+            talent_notes,
+        ),
     }
     return event, "opponent" if outcome == "goal" else None
 
@@ -703,6 +755,16 @@ async def _finalize_match(
             f"Награда за матч Card Arena ({result.value})", related_object_type="match", related_object_id=match.id,
         )
 
+    # «Начало пути»: experience only for a finished, rewarded match (a
+    # forfeit never counts), in the same transaction as the reward.
+    if forced_result is None:
+        await path_match_service.arena_after_match(
+            db, locked_user.id, match, state, result.value, rewarded=reward > 0, config=config,
+        )
+        if state.get("path") is not None:
+            match.server_state = state
+            flag_modified(match, "server_state")
+
     await league_service.sync_league_rewards_for_user(db, locked_user)
     await db.commit()
 
@@ -813,6 +875,18 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
             user_fwd, user_def, user_gk, opponent_strength, user_strength
         )
 
+    # «Начало пути»: talents decided at kickoff (after the opponent is known,
+    # so a bot's strength never includes them) and frozen into the state.
+    kickoff = await path_match_service.arena_kickoff(
+        db, lineup, user_strength=user_strength, opponent_strength=opponent_strength, config=config,
+    )
+    if kickoff is not None and kickoff.plan is not None and kickoff.plan.active:
+        user_strength = max(1, user_strength + kickoff.strength_delta)
+        user_attack, user_defense = split_strength(user_strength, lineup.tactic)
+        user_fwd = kickoff.ratings.get("FWD", user_fwd)
+        user_def = kickoff.ratings.get("DEF", user_def)
+        user_gk = kickoff.ratings.get("GK", user_gk)
+
     state = {
         "moments": _generate_moment_queue(user_attack, opponent_attack, config, lineup, opponent_name),
         "next_index": 0,
@@ -832,6 +906,7 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
             "opponent": opponent_lineup.chemistry.team if opponent_lineup is not None and opponent_lineup.chemistry.enabled else None,
             "max": lineup.chemistry.team_max if lineup.chemistry.enabled else None,
         },
+        **(kickoff.state() if kickoff is not None else {}),
     }
 
     match = Match(
@@ -898,6 +973,9 @@ async def resolve_action(db: AsyncSession, user: User, match_id: int, payload: M
         raise ConflictError(f"Action '{payload.action}' is not available for this moment")
 
     event, scored_by = _resolve_action(pending, payload.action, state, config, match.opponent_name)
+    if scored_by == "user":
+        event_payload = event.get("payload") or {}
+        path_match_service.arena_track_goal(state, event_payload.get("shooter_id"), event_payload.get("assist_id"))
     if scored_by:
         state[f"{scored_by}_score"] += 1
         _fit_goal_to_score(event, scored_by, state)

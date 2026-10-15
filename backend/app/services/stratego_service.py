@@ -96,6 +96,8 @@ def _player_info(player: Player, user_card_id: Optional[int] = None, diamond_bon
             "user_card_id": user_card_id, "player_id": player.id, "display_name": player.display_name,
             "position": player.position.value, "image_path": player.image_path,
             "rarity": player.rarity.value, "rating": rating,
+            # «Начало пути»: counted against their own squad limit, not the diamond one.
+            "is_path": getattr(player, "path_talent_code", None) is not None,
         },
     }
 
@@ -151,7 +153,10 @@ def _fits(role: str, info: dict) -> bool:
     return allowed is None or Position(info["card"]["position"]) in allowed
 
 
-RARITY_LABELS = {"common": "обычных", "rare": "редких", "epic": "эпических", "legendary": "легендарных", "diamond": "диамантовых"}
+RARITY_LABELS = {
+    "common": "обычных", "rare": "редких", "epic": "эпических", "legendary": "легендарных", "diamond": "диамантовых",
+    "path": "карт «Начала пути»",
+}
 
 
 RARITY_ADJ = {"common": "обычной", "rare": "редкой", "epic": "эпической", "legendary": "легендарной", "diamond": "диамантовой"}
@@ -160,7 +165,10 @@ _RANK = {r.value: RARITY_ORDER[r] for r in Rarity}
 
 def _rarity_rules(config: GameConfig) -> dict:
     return {
-        "max": {"legendary": config.stratego_max_legendary_cards, "diamond": config.stratego_max_diamond_cards},
+        "max": {
+            "legendary": config.stratego_max_legendary_cards, "diamond": config.stratego_max_diamond_cards,
+            "path": config.stratego_max_path_cards,
+        },
         "min": {"rare": config.stratego_min_rare_cards, "common": config.stratego_min_common_cards},
         # Hard per-role ceiling on card rarity (role -> highest allowed rarity).
         "role_max": _role_caps(config),
@@ -200,9 +208,15 @@ def _rarity(info: dict) -> str:
     return info["card"]["rarity"]
 
 
+def _limit_group(info: dict) -> str:
+    """Squad-limit bucket: the rarity, except that a «Начало пути» card has
+    its own limit (it never takes a diamond place)."""
+    return "path" if info["card"].get("is_path") else _rarity(info)
+
+
 def rarity_violations(picked: list[dict], rules: dict) -> list[str]:
     """Human-readable squad composition problems (empty list = valid)."""
-    counts = Counter(_rarity(i) for i in picked)
+    counts = Counter(_limit_group(i) for i in picked)
     problems = [
         f"Максимум {cap} {RARITY_LABELS[r]} карт (сейчас {counts[r]})"
         for r, cap in rules["max"].items() if counts[r] > cap
@@ -223,15 +237,15 @@ def _assign_once(infos: list[dict], slots: list[str], fixed: dict[str, dict], ru
     pool = sorted(infos, key=_sort_key)
 
     def feasible(cand: dict, slots_left_after: int) -> bool:
-        counts = Counter(_rarity(i) for i in chosen.values())
-        counts[_rarity(cand)] += 1
+        counts = Counter(_limit_group(i) for i in chosen.values())
+        counts[_limit_group(cand)] += 1
         if any(counts[r] > cap for r, cap in rules["max"].items()):
             return False
         need = {r: max(0, n - counts[r]) for r, n in rules["min"].items()}
         if sum(need.values()) > slots_left_after:
             return False
         taken = used | {id(cand)}
-        return all(sum(1 for i in pool if id(i) not in taken and _rarity(i) == r) >= n for r, n in need.items())
+        return all(sum(1 for i in pool if id(i) not in taken and _limit_group(i) == r) >= n for r, n in need.items())
 
     def best(role: str, slots_left_after: int) -> Optional[dict]:
         free = [i for i in pool if id(i) not in used and _role_allows(role, i, rules)]
@@ -381,6 +395,7 @@ async def get_squad(db: AsyncSession, user: User) -> StrategoSquadOut:
         cards_needed=len(cslots),
         rarity_limits={
             "max_legendary": config.stratego_max_legendary_cards, "max_diamond": config.stratego_max_diamond_cards,
+            "max_path": config.stratego_max_path_cards,
             "min_rare": config.stratego_min_rare_cards, "min_common": config.stratego_min_common_cards,
         },
         tackler_max_rarity=config.stratego_tackler_max_rarity,
@@ -458,6 +473,7 @@ async def get_info(db: AsyncSession, user: User) -> StrategoInfoOut:
         reward_loss=config.stratego_reward_loss, daily_limit=config.stratego_daily_limit,
         rewarded_today=user.stratego_rewarded_attempts_today if reset_day == local_today() else 0,
         max_legendary=config.stratego_max_legendary_cards, max_diamond=config.stratego_max_diamond_cards,
+        max_path=config.stratego_max_path_cards,
         min_rare=config.stratego_min_rare_cards, min_common=config.stratego_min_common_cards,
         my_player_xp=config.stratego_my_player_xp,
         tackler_max_rarity=config.stratego_tackler_max_rarity,
