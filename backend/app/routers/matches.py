@@ -5,10 +5,23 @@ from app.core.dependencies import get_current_user
 from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.user import User
-from app.schemas.match import ArenaLeaderboardEntry, ArenaStatsOut, MatchActionRequest, MatchOut, StartMatchRequest
+from app.schemas.match import (
+    ArenaLeaderboardEntry,
+    ArenaPreviewOut,
+    ArenaStatsOut,
+    MatchActionRequest,
+    MatchOut,
+    StartMatchRequest,
+)
 from app.services import match_service
 
 router = APIRouter(prefix="/matches", tags=["matches"])
+
+
+@router.post("/opponent", response_model=ArenaPreviewOut)
+async def opponent_preview(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"arena_opponent:{user.id}", max_calls=30, window_seconds=60)
+    return await match_service.preview_opponent(db, user)
 
 
 @router.post("/play", response_model=MatchOut)

@@ -172,6 +172,18 @@ export interface GameConfig {
   match_keeper_save_chance_max: number;
   match_red_card_strength_penalty_pct: number;
   match_penalty_gk_rating_penalty: number;
+  arena_style_matchup_bonus_pct: number;
+  arena_share_exponent: number;
+  arena_shot_exponent: number;
+  arena_edge_rating_per_10pct: number;
+  arena_edge_rating_max: number;
+  arena_points_k: number;
+  arena_points_scale: number;
+  arena_shield_matches: number;
+  arena_matchmaking_window: number;
+  arena_division_min_points: number[];
+  arena_division_reward_coins: number[];
+  arena_division_coin_pct: number[];
   saboteur_line_base_reward: number;
   saboteur_line_growth: number;
   saboteur_max_steward_count: number;

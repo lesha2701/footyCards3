@@ -133,6 +133,30 @@ class GameConfig(TimestampMixin, Base):
     match_red_card_strength_penalty_pct: Mapped[float] = mapped_column(Numeric(4, 2), default=0.12, nullable=False)
     match_penalty_gk_rating_penalty: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
 
+    # Card Arena balance (arena_tactics.compute_balance): style matchup
+    # bonus, how sharply the strength gap decides possession / chances, and
+    # the rating edge every roll gets from the strength ratio.
+    arena_style_matchup_bonus_pct: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    arena_share_exponent: Mapped[float] = mapped_column(Numeric(4, 2), default=1.2, nullable=False)
+    arena_shot_exponent: Mapped[float] = mapped_column(Numeric(4, 2), default=0.8, nullable=False)
+    arena_edge_rating_per_10pct: Mapped[float] = mapped_column(Numeric(4, 2), default=2.0, nullable=False)
+    arena_edge_rating_max: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
+    # Card Arena divisions (arena_ladder_service): Elo-like points, division
+    # N = index N-1 of these parallel lists (first threshold is always 0).
+    arena_points_k: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    arena_points_scale: Mapped[int] = mapped_column(Integer, default=400, nullable=False)
+    arena_shield_matches: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    arena_matchmaking_window: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    arena_division_min_points: Mapped[list] = mapped_column(
+        JSON, default=lambda: [0, 100, 200, 300, 400, 550, 700, 850, 1000, 1200], nullable=False,
+    )
+    arena_division_reward_coins: Mapped[list] = mapped_column(
+        JSON, default=lambda: [0, 100, 150, 200, 300, 400, 500, 700, 1000, 1500], nullable=False,
+    )
+    arena_division_coin_pct: Mapped[list] = mapped_column(
+        JSON, default=lambda: [100, 105, 110, 115, 120, 125, 130, 135, 140, 150], nullable=False,
+    )
+
     saboteur_line_base_reward: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     saboteur_line_growth: Mapped[float] = mapped_column(Numeric(4, 2), default=1.15, nullable=False)
     saboteur_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)

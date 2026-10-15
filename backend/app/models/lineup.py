@@ -17,7 +17,7 @@ class Lineup(TimestampMixin, Base):
     template_index: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     name: Mapped[str] = mapped_column(String(64), nullable=False, default="Основной состав")
     formation: Mapped[str] = mapped_column(String(16), nullable=False, default="4-3-3")
-    tactic: Mapped[str] = mapped_column(String(16), nullable=False, default="balanced")
+    tactic: Mapped[str] = mapped_column(String(16), nullable=False, default="possession")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     user_coach_card_id: Mapped[int | None] = mapped_column(
         ForeignKey("user_coach_cards.id", ondelete="SET NULL"), nullable=True

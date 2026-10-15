@@ -5,6 +5,7 @@ export const TX_TYPE_LABELS: Record<string, string> = {
   path_attempt_purchase: "Академия: покупка попытки",
   path_prestige: "Академия: престиж",
   path_prestige_reward: "Академия: награда за престиж",
+  arena_division_reward: "Card Arena: новый дивизион",
   daily_reward: "Ежедневная награда",
   pack_purchase: "Покупка пака",
   card_sale: "Продажа карточки",

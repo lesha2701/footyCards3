@@ -215,6 +215,18 @@ class GameConfigOut(BaseModel):
     match_keeper_save_chance_max: float
     match_red_card_strength_penalty_pct: float
     match_penalty_gk_rating_penalty: int
+    arena_style_matchup_bonus_pct: int = 6
+    arena_share_exponent: float = 1.2
+    arena_shot_exponent: float = 0.8
+    arena_edge_rating_per_10pct: float = 2.0
+    arena_edge_rating_max: int = 12
+    arena_points_k: int = 40
+    arena_points_scale: int = 400
+    arena_shield_matches: int = 3
+    arena_matchmaking_window: int = 150
+    arena_division_min_points: list[int] = []
+    arena_division_reward_coins: list[int] = []
+    arena_division_coin_pct: list[int] = []
     saboteur_line_base_reward: int
     saboteur_line_growth: float
     saboteur_daily_limit: int
@@ -560,6 +572,34 @@ class GameConfigUpdate(BaseModel):
     match_keeper_save_chance_max: Optional[float] = Field(default=None, ge=0, le=1)
     match_red_card_strength_penalty_pct: Optional[float] = Field(default=None, ge=0, le=1)
     match_penalty_gk_rating_penalty: Optional[int] = Field(default=None, ge=0)
+    arena_style_matchup_bonus_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    arena_share_exponent: Optional[float] = Field(default=None, ge=0, le=5)
+    arena_shot_exponent: Optional[float] = Field(default=None, ge=0, le=5)
+    arena_edge_rating_per_10pct: Optional[float] = Field(default=None, ge=0, le=10)
+    arena_edge_rating_max: Optional[int] = Field(default=None, ge=0, le=40)
+    arena_points_k: Optional[int] = Field(default=None, ge=1, le=200)
+    arena_points_scale: Optional[int] = Field(default=None, ge=50, le=2000)
+    arena_shield_matches: Optional[int] = Field(default=None, ge=0, le=20)
+    arena_matchmaking_window: Optional[int] = Field(default=None, ge=0, le=5000)
+    arena_division_min_points: Optional[list[int]] = Field(default=None, min_length=1, max_length=30)
+    arena_division_reward_coins: Optional[list[int]] = Field(default=None, min_length=1, max_length=30)
+    arena_division_coin_pct: Optional[list[int]] = Field(default=None, min_length=1, max_length=30)
+
+    @field_validator("arena_division_min_points")
+    @classmethod
+    def _arena_thresholds(cls, value):
+        if value is None:
+            return value
+        if value[0] != 0 or any(b <= a for a, b in zip(value, value[1:])):
+            raise ValueError("Пороги дивизионов: первый 0, дальше строго по возрастанию")
+        return value
+
+    @field_validator("arena_division_reward_coins", "arena_division_coin_pct")
+    @classmethod
+    def _arena_division_values(cls, value):
+        if value is not None and any(int(v) < 0 for v in value):
+            raise ValueError("Значения по дивизионам не могут быть отрицательными")
+        return value
     saboteur_line_base_reward: Optional[int] = Field(default=None, ge=0)
     saboteur_line_growth: Optional[float] = Field(default=None, ge=1)
     saboteur_daily_limit: Optional[int] = Field(default=None, ge=0)

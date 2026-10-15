@@ -19,7 +19,7 @@ from app.schemas.lineup import (
     EquippedCoachOut, EquippedStadiumOut, LineupCoachSetRequest, LineupOut, LineupSetRequest, LineupSlotOut,
     LineupStadiumSetRequest, UserCoachCardOut, UserStadiumCardOut,
 )
-from app.services import chemistry_service
+from app.services import arena_tactics, chemistry_service
 from app.services.chemistry_service import ChemistryResult
 from app.services.coach_boost_service import arena_rarity_team_strength_bonus
 from app.services.game_config_service import get_config
@@ -75,22 +75,21 @@ SLOTS_BY_CODE = {s.code: s for s in FORMATION_SLOTS}
 ARENA_FORMATION = "4-3-3"
 
 # tactic -> (attack_multiplier, defense_multiplier)
-TACTIC_MULTIPLIERS: dict[str, tuple[float, float]] = {
-    "attacking": (1.15, 0.85),
-    "balanced": (1.0, 1.0),
-    "defensive": (0.85, 1.15),
-}
+# The attack/defense split of each Card Arena style lives in
+# arena_tactics.STYLE_SPLIT (with the style matchup); kept under this name
+# for callers that only need the set of valid styles.
+TACTIC_MULTIPLIERS: dict[str, tuple[float, float]] = dict(arena_tactics.STYLE_SPLIT)
 
 # tactic -> category -> multiplier applied to each card's own contribution to
-# team_strength in calculate_base_strength. Rewards matching your tactic to
-# your squad's real strengths: "attacking"/"defensive" give a real bump to
-# FWD/DEF respectively (and nothing elsewhere), "balanced" gives a smaller
-# bump to every category — so whichever category your squad is objectively
-# strongest in is also the more advantageous tactic to pick.
+# team_strength in calculate_base_strength: every style boosts its own line
+# (Атака — forwards, Владение — midfield, Оборона — defence and keeper,
+# Контратака — a little of both ends), so the style that fits a squad's
+# strongest line is worth picking unless countering the opponent pays more.
 TACTIC_CATEGORY_MULTIPLIERS: dict[str, dict[str, float]] = {
     "attacking": {"FWD": 1.08},
-    "balanced": {"GK": 1.02, "DEF": 1.02, "MID": 1.02, "FWD": 1.02},
-    "defensive": {"DEF": 1.08},
+    "possession": {"MID": 1.08},
+    "defensive": {"DEF": 1.06, "GK": 1.06},
+    "counter": {"FWD": 1.04, "DEF": 1.04},
 }
 
 CATEGORY_POSITIONS = {
@@ -221,7 +220,7 @@ def calculate_base_strength(
     # keeps club_tactical_profile_service.py, tournament_simulation_service.py
     # and club_squad_service.py (which all call this with a single positional
     # argument, no tactic concept of their own) byte-for-byte unaffected.
-    category_multipliers = TACTIC_CATEGORY_MULTIPLIERS.get(tactic, {}) if tactic else {}
+    category_multipliers = TACTIC_CATEGORY_MULTIPLIERS[arena_tactics.resolve_style(tactic)] if tactic else {}
 
     # The rarity bonus is per card (each card's own rarity boosts only its
     # own contribution) rather than based on the team's average rarity —
@@ -256,9 +255,9 @@ def calculate_base_strength(
 
 
 def split_strength(strength: int, tactic: str) -> tuple[int, int]:
-    """Splits a single strength number into (attack, defense) per the tactic's multipliers."""
-    attack_mult, defense_mult = TACTIC_MULTIPLIERS.get(tactic, TACTIC_MULTIPLIERS["balanced"])
-    return max(1, round(strength * attack_mult)), max(1, round(strength * defense_mult))
+    """Splits a single strength number into (attack, defense) per the style."""
+    attack, defense = arena_tactics.split(strength, tactic)
+    return max(1, round(attack)), max(1, round(defense))
 
 
 async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
@@ -330,7 +329,7 @@ async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
 
     return LineupOut(
         id=lineup.id, template_index=lineup.template_index, name=lineup.name, is_active=lineup.is_active,
-        formation=lineup.formation, tactic=lineup.tactic, is_complete=is_complete,
+        formation=lineup.formation, tactic=arena_tactics.resolve_style(lineup.tactic), is_complete=is_complete,
         team_strength=strength, max_diamond=config.match_max_diamond_cards, max_path=config.match_max_path_cards,
         coach=EquippedCoachOut(
             id=coach.id, display_name=coach.display_name, rarity=coach.rarity.value,

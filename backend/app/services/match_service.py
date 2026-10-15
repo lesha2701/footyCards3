@@ -1,5 +1,9 @@
+import json
+import math
 import random
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import func, select
@@ -14,18 +18,28 @@ from app.models.game_config import GameConfig
 from app.models.match import Match, MatchEvent
 from app.models.user import User
 from app.schemas.match import (
+    ArenaDivisionOut,
     ArenaLeaderboardEntry,
+    ArenaLineCompareOut,
+    ArenaPreviewOut,
     ArenaStatsOut,
     MatchActionRequest,
     MatchOut,
     StartMatchRequest,
 )
 from app.schemas.lineup import LineupOut
-from app.schemas.ranking import RankingMetric
-from app.services import bingo_service, chemistry_service, league_service, path_match_service, ranking_service, task_service
+from app.services import (
+    arena_ladder_service,
+    arena_tactics,
+    bingo_service,
+    chemistry_service,
+    league_service,
+    path_match_service,
+    task_service,
+)
 from app.services.card_skill_effects import SNAPSHOT_VERSION, effect_for_card, effect_of, skill_roll
 from app.services.game_config_service import get_config
-from app.services.lineup_service import TACTIC_MULTIPLIERS, get_active_lineup, split_strength
+from app.services.lineup_service import get_active_lineup, split_strength
 from app.services.match_situations import (
     ATTACK_SITUATIONS_BY_ID,
     ATTACK_SITUATIONS_BY_SHOT_TYPE,
@@ -267,20 +281,32 @@ def _build_shot_moment(minute: int, team: str, shot_type: str, lineup: LineupOut
 
 
 def _generate_moment_queue(
-    user_attack: int, opponent_attack: int, config: GameConfig, lineup: LineupOut, opponent_name: str
+    user_attack: int, opponent_attack: int, config: GameConfig, lineup: LineupOut, opponent_name: str,
+    balance: Optional[dict] = None,
 ) -> list[dict]:
     """Decides *what* happens and *when* — minute, kind (flavor/shot), team,
     and (for shots) the full situation/actors/description. Outcome rolls are
     deferred to resolution time; only identity + narration are baked in now,
-    so resolution never has to trust client-supplied actor identity."""
-    total_attack = user_attack + opponent_attack
-    user_attack_prob = user_attack / total_attack if total_attack else 0.5
+    so resolution never has to trust client-supplied actor identity.
+
+    Card Arena passes `balance` (arena_tactics.compute_balance): the moment
+    share and each side's chance frequency then follow attack vs defense.
+    Without it (FUT Draft) the old linear attack share and fixed weights."""
+    if balance is not None:
+        user_attack_prob = float(balance["share"])
+    else:
+        total_attack = user_attack + opponent_attack
+        user_attack_prob = user_attack / total_attack if total_attack else 0.5
 
     num_chances = random.randint(14, 22)
     minutes = sorted(random.sample(range(1, 90), num_chances))
 
     kinds = [t for t, _ in _FLAVOR_WEIGHTS] + ["shot_chance"]
-    weights = [w for _, w in _FLAVOR_WEIGHTS] + [_SHOT_CHANCE_WEIGHT]
+    flavor_weights = [w for _, w in _FLAVOR_WEIGHTS]
+    team_weights = {
+        team: flavor_weights + [int(balance[f"{team}_shot_weight"]) if balance is not None else _SHOT_CHANCE_WEIGHT]
+        for team in ("user", "opponent")
+    }
 
     shot_weights = [
         config.match_shot_type_in_box_weight,
@@ -291,7 +317,7 @@ def _generate_moment_queue(
     moments: list[dict] = []
     for minute in minutes:
         team = "user" if random.random() < user_attack_prob else "opponent"
-        kind = random.choices(kinds, weights=weights, k=1)[0]
+        kind = random.choices(kinds, weights=team_weights[team], k=1)[0]
         if kind == "shot_chance":
             shot_type = random.choices(list(SHOT_TYPES), weights=shot_weights, k=1)[0]
             moments.append(_build_shot_moment(minute, team, shot_type, lineup, opponent_name))
@@ -351,6 +377,13 @@ def _resolve_shot_continuation(
     return outcome, {"missed": missed, "blocked": blocked}
 
 
+def _edge(state: dict) -> int:
+    """Card Arena: rating points the strength gap adds to every user roll and
+    takes from every opponent roll (frozen at kickoff; 0 for FUT Draft and
+    matches started before the balance rework)."""
+    return int((state.get("balance") or {}).get("edge", 0))
+
+
 def _skills(state: dict) -> dict:
     # Absent/None for matches started before skills existed or while the
     # mechanic was off — every lookup below then resolves to "no effect".
@@ -389,9 +422,11 @@ def _with_talent_notes(payload: dict, notes: list) -> dict:
     return payload
 
 
-def _resolve_breakaway(moment: dict, ratings: dict, config: GameConfig, opponent_name: str) -> tuple[dict, Optional[str]]:
+def _resolve_breakaway(
+    moment: dict, ratings: dict, config: GameConfig, opponent_name: str, edge: int = 0,
+) -> tuple[dict, Optional[str]]:
     team = moment["team"]
-    fwd = ratings[f"{team}_fwd"]
+    fwd = ratings[f"{team}_fwd"] + (edge if team == "user" else -edge)
     missed = random.random() < _lerp_chance(
         fwd, float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
     )
@@ -415,12 +450,13 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
     notes: list = []
     minute = moment["minute"]
     one_on_one = "one_on_one" in situation.tags
+    edge = _edge(state)
     if action == "shoot":
         # «Академия» talents act on the card's rating before the skill roll.
         shooter_rating = path_match_service.arena_actor_rating(
             state, shooter, minute, "shooter", notes, one_on_one=one_on_one,
         )
-        eff_rating = _clamp_rating(shooter_rating + situation.bias)
+        eff_rating = _clamp_rating(shooter_rating + situation.bias + edge)
         missed, shot_notes = skill_roll(
             _lerp_chance(
                 eff_rating, float(config.match_attack_shoot_miss_chance_min), float(config.match_attack_shoot_miss_chance_max)
@@ -429,7 +465,8 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
         )
         notes.extend(shot_notes)
         outcome, extra = _resolve_shot_continuation(
-            missed, shot_type, config, blocker_rating=ratings["opponent_def"], keeper_rating=ratings["opponent_gk"],
+            missed, shot_type, config, blocker_rating=ratings["opponent_def"] - edge,
+            keeper_rating=ratings["opponent_gk"] - edge,
             keeper_effect=_keeper_effects(state, "opponent", "one_on_one" in situation.tags), notes=notes,
         )
         payload = _with_skill_notes({
@@ -444,7 +481,7 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
 
     # action == "pass"
     passer_rating = path_match_service.arena_actor_rating(state, shooter, minute, "passer", notes)
-    eff_passer_rating = _clamp_rating(passer_rating - situation.bias)
+    eff_passer_rating = _clamp_rating(passer_rating - situation.bias + edge)
     pass_failed, pass_notes = skill_roll(
         _lerp_chance(eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max)),
         # A passer has one skill: playmaker on any pass, or crosser when the
@@ -463,7 +500,7 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
 
     receiver_rating = path_match_service.arena_actor_rating(
         state, pass_target, minute, "shooter", notes, one_on_one=one_on_one,
-    )
+    ) + edge
     missed, shot_notes = skill_roll(
         _lerp_chance(
             receiver_rating, float(config.match_receiver_shot_miss_chance_min), float(config.match_receiver_shot_miss_chance_max)
@@ -472,7 +509,8 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
     )
     notes.extend(shot_notes)
     outcome, extra = _resolve_shot_continuation(
-        missed, shot_type, config, blocker_rating=ratings["opponent_def"], keeper_rating=ratings["opponent_gk"],
+        missed, shot_type, config, blocker_rating=ratings["opponent_def"] - edge,
+        keeper_rating=ratings["opponent_gk"] - edge,
         keeper_effect=_keeper_effects(state, "opponent", "one_on_one" in situation.tags), notes=notes,
     )
     payload = _with_skill_notes(
@@ -495,11 +533,12 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
     minute = moment["minute"]
     one_on_one = "one_on_one" in situation.tags
     talent_notes: list = []
+    edge = _edge(state)
 
     last_line = _card_effect(state, defender, "last_line") if "breakaway" in situation.tags else None
     if action in ("tackle", "block"):
         # The defender plays this roll himself (not the keeper's «keeper» action).
-        defender_rating = path_match_service.arena_actor_rating(state, defender, minute, "defender", talent_notes)
+        defender_rating = path_match_service.arena_actor_rating(state, defender, minute, "defender", talent_notes) + edge
     if action == "tackle":
         foul, tackle_notes = skill_roll(
             _lerp_chance(defender_rating, float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max)),
@@ -525,7 +564,7 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
 
         if "box" in situation.tags:
             keeper_bonus = path_match_service.arena_keeper_bonus(state, minute, talent_notes, penalty=True)
-            eff_gk = _clamp_rating(ratings["user_gk"] + keeper_bonus - config.match_penalty_gk_rating_penalty)
+            eff_gk = _clamp_rating(ratings["user_gk"] + keeper_bonus + edge - config.match_penalty_gk_rating_penalty)
             keeper = _keeper_effect(state, "user")
             saved, save_notes = skill_roll(
                 _lerp_chance_positive(eff_gk, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
@@ -575,11 +614,11 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
             }
             return event, None
         missed = random.random() < _lerp_chance(
-            ratings["opponent_fwd"], float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
+            ratings["opponent_fwd"] - edge, float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
         )
         notes: list = []
         keeper_notes: list = []
-        keeper_rating = ratings["user_gk"] + path_match_service.arena_keeper_bonus(
+        keeper_rating = ratings["user_gk"] + edge + path_match_service.arena_keeper_bonus(
             state, minute, keeper_notes, one_on_one=one_on_one,
         )
         outcome, extra = _resolve_shot_continuation(
@@ -600,11 +639,11 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
 
     # action == "keeper"
     missed = random.random() < _lerp_chance(
-        ratings["opponent_fwd"], float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
+        ratings["opponent_fwd"] - edge, float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
     )
     notes = []
     keeper_notes: list = []
-    keeper_rating = ratings["user_gk"] + path_match_service.arena_keeper_bonus(
+    keeper_rating = ratings["user_gk"] + edge + path_match_service.arena_keeper_bonus(
         state, minute, keeper_notes, one_on_one=one_on_one,
     )
     outcome, extra = _resolve_shot_continuation(
@@ -627,7 +666,7 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
 def _resolve_action(moment: dict, action: str, state: dict, config: GameConfig, opponent_name: str) -> tuple[dict, Optional[str]]:
     situation_kind = moment["situation_kind"]
     if situation_kind.startswith("breakaway"):
-        return _resolve_breakaway(moment, state["ratings"], config, opponent_name)
+        return _resolve_breakaway(moment, state["ratings"], config, opponent_name, _edge(state))
     if situation_kind == "attack":
         return _resolve_attack(moment, action, state, config, opponent_name)
     return _resolve_defense(moment, action, state, config, opponent_name)
@@ -656,7 +695,7 @@ def _advance(state: dict, config: GameConfig, opponent_name: str) -> list[dict]:
             continue
         if _is_interactive(moment):
             break
-        event, scored_by = _resolve_breakaway(moment, state["ratings"], config, opponent_name)
+        event, scored_by = _resolve_breakaway(moment, state["ratings"], config, opponent_name, _edge(state))
         events.append(event)
         if scored_by:
             state[f"{scored_by}_score"] += 1
@@ -739,8 +778,11 @@ async def _finalize_match(
         MatchResult.draw: config.match_reward_draw,
         MatchResult.loss: config.match_reward_loss,
     }
+    division_pct = arena_ladder_service.coin_pct(
+        arena_ladder_service.division_of(locked_user.arena_points, config), config,
+    )
     reward = 0 if locked_user.game_rewards_blocked else round(
-        reward_base[result] * difficulty_multiplier[match.difficulty] + user_score * 5
+        reward_base[result] * difficulty_multiplier[match.difficulty] * division_pct / 100 + user_score * 5
     )
 
     match.result = result
@@ -761,15 +803,128 @@ async def _finalize_match(
         await path_match_service.arena_after_match(
             db, locked_user.id, match, state, result.value, rewarded=reward > 0, config=config,
         )
-        if state.get("path") is not None:
-            match.server_state = state
-            flag_modified(match, "server_state")
+
+    # Divisions: a forfeit moves the ladder like any loss.
+    state["ladder"] = await arena_ladder_service.apply_result(
+        db, locked_user, int(state.get("opponent_points", locked_user.arena_points)), result, config,
+    )
+    events = (await db.execute(select(MatchEvent).where(MatchEvent.match_id == match.id))).scalars().all()
+    state["report"] = build_report(match, state, list(events), result, forfeited=forced_result is not None)
+    match.server_state = state
+    flag_modified(match, "server_state")
 
     await league_service.sync_league_rewards_for_user(db, locked_user)
     await db.commit()
 
     # Bingo of the Week: one finished Card Arena match counts once.
     await bingo_service.increment_goal(db, BingoGoalType.arena_matches_played, 1)
+
+
+_USER_CHANCE_EVENTS = {"goal", "shot", "save", "blocked", "pass_failed"}
+_OPPONENT_CHANCE_EVENTS = {"goal", "shot", "save", "blocked", "tackle_won", "foul_stopped"}
+
+
+def _pct_diff(a: float, b: float) -> int:
+    return round(abs(a / b - 1) * 100) if b else 0
+
+
+def build_report(match: Match, state: dict, events: list, result: MatchResult, forfeited: bool) -> Optional[dict]:
+    """The «Разбор матча»: chances before kickoff, both line-ups, the style
+    matchup, how the chances went, and a one-line verdict with its reasons.
+    None for matches started before the balance rework (no frozen balance)."""
+    balance = state.get("balance")
+    if not balance:
+        return None
+    chances = state.get("chances") or win_chances(balance["strength_ratio"])
+    lines = state.get("lines") or {"user": {}, "opponent": {}}
+    user_score, opponent_score = state.get("user_score", 0), state.get("opponent_score", 0)
+
+    user_chances = sum(1 for e in events if e.team == "user" and e.event_type in _USER_CHANCE_EVENTS)
+    opponent_chances = sum(1 for e in events if e.team == "opponent" and e.event_type in _OPPONENT_CHANCE_EVENTS)
+    opponent_keeper_saves = sum(1 for e in events if e.team == "user" and e.event_type == "save")
+    user_keeper_saves = sum(1 for e in events if e.team == "opponent" and e.event_type == "save")
+    red_card = any(c.get("sent_off") for c in (state.get("cards") or {}).values())
+
+    win_pct, loss_pct = chances["win"], chances["loss"]
+    if forfeited:
+        verdict = "Матч прерван — засчитано техническое поражение."
+    elif result == MatchResult.win:
+        verdict = (
+            f"Закономерная победа фаворита (≈{win_pct}% на победу)." if win_pct >= 60
+            else "Победа в равной игре." if win_pct >= 35
+            else f"Сенсация! Победа при шансах всего ≈{win_pct}%."
+        )
+    elif result == MatchResult.draw:
+        verdict = (
+            f"Фаворит не дожал: ничья при ≈{win_pct}% на победу." if win_pct >= 60
+            else f"Ценная ничья против фаворита (у него было ≈{loss_pct}%)." if loss_pct >= 60
+            else "Ничья в равной игре."
+        )
+    else:
+        verdict = (
+            f"Обидное поражение фаворита (≈{win_pct}% на победу) — так бывает редко." if win_pct >= 60
+            else "Поражение в равной игре." if loss_pct < 60
+            else f"Соперник был сильнее: у него было ≈{loss_pct}% на победу."
+        )
+
+    reasons: list[str] = []
+    user_strength, opponent_strength = match.user_team_strength, match.opponent_team_strength
+    ratio = user_strength / opponent_strength if opponent_strength else 1.0
+    if ratio >= 1.03:
+        reasons.append(f"Ваш состав сильнее на {_pct_diff(user_strength, opponent_strength)}% ({user_strength} против {opponent_strength}).")
+    elif ratio <= 0.97:
+        reasons.append(f"Состав соперника сильнее на {_pct_diff(opponent_strength, user_strength)}% ({opponent_strength} против {user_strength}).")
+    else:
+        reasons.append(f"Составы почти равны ({user_strength} против {opponent_strength}).")
+
+    if balance["matchup"] != "neutral":
+        sign = "+" if balance["matchup"] == "win" else "−"
+        reasons.append(
+            arena_tactics.matchup_text(balance["user_style"], balance["opponent_style"])
+            + f" ({sign}{balance['matchup_bonus_pct']}% к силе)."
+        )
+
+    gaps = [
+        (lines["opponent"].get(key, 0) - lines["user"].get(key, 0), label, key)
+        for key, label in _LINES if key in lines["user"] and key in lines["opponent"]
+    ]
+    worst = max(gaps, default=None)
+    best = min(gaps, default=None)
+    if worst is not None and worst[0] >= 3:
+        reasons.append(f"{worst[1]} соперника сильнее: {lines['opponent'][worst[2]]} против {lines['user'][worst[2]]}.")
+    if best is not None and best[0] <= -3:
+        reasons.append(f"Ваша линия «{best[1]}» сильнее: {lines['user'][best[2]]} против {lines['opponent'][best[2]]}.")
+
+    if not forfeited:
+        reasons.append(f"Моменты: у вас {user_chances}, у соперника {opponent_chances}; реализовано {user_score} и {opponent_score}.")
+        if result != MatchResult.win and opponent_keeper_saves >= 3:
+            reasons.append(f"Вратарь соперника отразил {opponent_keeper_saves} ударов.")
+        if result != MatchResult.loss and user_keeper_saves >= 3:
+            reasons.append(f"Ваш вратарь отразил {user_keeper_saves} ударов.")
+        if result != MatchResult.win and user_chances >= opponent_chances + 2 and user_score <= opponent_score:
+            reasons.append("Вы создали больше моментов, но не реализовали их — в следующий раз чаще выбирайте лучшее действие.")
+        if red_card:
+            reasons.append("Красная карточка ослабила вашу оборону.")
+
+    return {
+        "verdict": verdict,
+        "reasons": reasons,
+        "chances": chances,
+        "user_strength": user_strength,
+        "opponent_strength": opponent_strength,
+        "user_style": balance["user_style"],
+        "opponent_style": balance["opponent_style"],
+        "matchup": balance["matchup"],
+        "matchup_bonus_pct": balance["matchup_bonus_pct"],
+        "lines": [
+            {"key": key, "label": label, "user": lines["user"].get(key), "opponent": lines["opponent"].get(key)}
+            for key, label in _LINES
+        ],
+        "user_chances": user_chances,
+        "opponent_chances": opponent_chances,
+        "user_keeper_saves": user_keeper_saves,
+        "opponent_keeper_saves": opponent_keeper_saves,
+    }
 
 
 def _lineup_gk(lineup: LineupOut):
@@ -807,13 +962,129 @@ def build_skill_snapshot(lineup: LineupOut, opponent_lineup: Optional[LineupOut]
     }
 
 
+_LINES = (("GK", "Вратарь"), ("DEF", "Защита"), ("MID", "Полузащита"), ("FWD", "Атака"))
+_BALANCE_TABLE: Optional[list] = None
+
+
+def _balance_table() -> list:
+    global _BALANCE_TABLE
+    if _BALANCE_TABLE is None:
+        path = Path(__file__).with_name("arena_balance_table.json")
+        _BALANCE_TABLE = json.loads(path.read_text(encoding="utf-8"))["table"]
+    return _BALANCE_TABLE
+
+
+def win_chances(strength_ratio: float) -> dict:
+    """≈ win/draw/loss % for an average player at this effective strength
+    ratio — interpolated (in log ratio) from the table that
+    scripts/simulate_arena_balance.py --write measured on the real engine."""
+    table = _balance_table()
+    x = math.log(max(1e-3, strength_ratio))
+    points = [(math.log(row["ratio"]), row) for row in table]
+    if x <= points[0][0]:
+        row = points[0][1]
+    elif x >= points[-1][0]:
+        row = points[-1][1]
+    else:
+        for (x0, r0), (x1, r1) in zip(points, points[1:]):
+            if x0 <= x <= x1:
+                t = (x - x0) / (x1 - x0) if x1 > x0 else 0
+                row = {k: r0[k] + (r1[k] - r0[k]) * t for k in ("win", "draw", "loss")}
+                break
+    win, loss = round(row["win"]), round(row["loss"])
+    return {"win": win, "draw": max(0, 100 - win - loss), "loss": loss}
+
+
+def _lines_of(lineup: LineupOut) -> dict:
+    return {key: _category_avg(lineup, key) for key, _ in _LINES}
+
+
+@dataclass
+class _ArenaOpponent:
+    user: Optional[User]
+    name: str
+    avatar_url: Optional[str]
+    points: int
+    strength: int
+    style: str
+    lineup: Optional[LineupOut]
+    lines: dict
+
+
+async def _resolve_opponent(db: AsyncSession, pending: dict, user_strength: int, user_lines: dict) -> _ArenaOpponent:
+    """The real opponent's current squad when it's still complete, else a
+    bot of `bot_ratio` x your strength (under the found player's name)."""
+    if pending.get("user_id"):
+        opponent = await db.get(User, pending["user_id"])
+        if opponent is not None and not opponent.is_banned:
+            opponent_lineup = await get_active_lineup(db, opponent)
+            if opponent_lineup.is_complete and opponent_lineup.team_strength:
+                return _ArenaOpponent(
+                    user=opponent, name=pending["name"], avatar_url=pending.get("avatar_url"),
+                    points=int(pending.get("points", 0)), strength=opponent_lineup.team_strength,
+                    style=arena_tactics.resolve_style(opponent_lineup.tactic), lineup=opponent_lineup,
+                    lines=_lines_of(opponent_lineup),
+                )
+    strength = max(1, round(user_strength * float(pending.get("bot_ratio", 1.0))))
+    fwd, defense, gk = _synthesize_bot_ratings(user_lines["FWD"], user_lines["DEF"], user_lines["GK"], strength, user_strength)
+    mid, _, _ = _synthesize_bot_ratings(user_lines["MID"], user_lines["MID"], user_lines["MID"], strength, user_strength)
+    return _ArenaOpponent(
+        user=None, name=pending["name"], avatar_url=pending.get("avatar_url"),
+        points=int(pending.get("points", 0)), strength=strength,
+        style=arena_tactics.resolve_style(pending.get("bot_style")), lineup=None,
+        lines={"GK": gk, "DEF": defense, "MID": mid, "FWD": fwd},
+    )
+
+
+async def _pending_opponent(db: AsyncSession, locked_user: User, config: GameConfig) -> dict:
+    if not locked_user.arena_pending_opponent:
+        locked_user.arena_pending_opponent = await arena_ladder_service.find_opponent(db, locked_user, config)
+        db.add(locked_user)
+    return dict(locked_user.arena_pending_opponent)
+
+
+async def preview_opponent(db: AsyncSession, user: User) -> ArenaPreviewOut:
+    """The opponent of the next match (found once, kept until played), with
+    both line-ups compared, the style matchup, ≈ chances and the points at
+    stake — so the player can pick a style before kickoff and later see
+    why the match went the way it did."""
+    config = await get_config(db)
+    lineup = await get_active_lineup(db, user)
+    if not lineup.is_complete:
+        raise ConflictError("Complete your starting XI (4-3-3) before playing a match")
+    locked_user = await lock_user_for_update(db, user.id)
+    pending = await _pending_opponent(db, locked_user, config)
+    await db.commit()
+
+    user_lines = _lines_of(lineup)
+    opponent = await _resolve_opponent(db, pending, lineup.team_strength, user_lines)
+    balance = arena_tactics.compute_balance(lineup.team_strength, lineup.tactic, opponent.strength, opponent.style, config)
+    division = arena_ladder_service.division_info(locked_user, config)
+    return ArenaPreviewOut(
+        opponent_name=opponent.name,
+        opponent_avatar_url=opponent.avatar_url,
+        opponent_is_bot=opponent.user is None,
+        opponent_points=opponent.points,
+        opponent_division=arena_ladder_service.division_of(opponent.points, config),
+        opponent_strength=opponent.strength,
+        opponent_style=opponent.style,
+        user_strength=lineup.team_strength,
+        user_style=balance["user_style"],
+        matchup=balance["matchup"],
+        matchup_bonus_pct=balance["matchup_bonus_pct"],
+        matchup_text=arena_tactics.matchup_text(balance["user_style"], opponent.style),
+        lines=[
+            ArenaLineCompareOut(key=key, label=label, user=user_lines[key], opponent=opponent.lines[key])
+            for key, label in _LINES
+        ],
+        chances=win_chances(balance["strength_ratio"]),
+        points_at_stake=arena_ladder_service.points_preview(locked_user.arena_points, opponent.points, config),
+        division=ArenaDivisionOut(**division),
+    )
+
+
 async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) -> MatchOut:
     config = await get_config(db)
-    difficulty_multiplier = {
-        MatchDifficulty.easy: float(config.difficulty_easy_multiplier),
-        MatchDifficulty.medium: float(config.difficulty_medium_multiplier),
-        MatchDifficulty.hard: float(config.difficulty_hard_multiplier),
-    }
 
     lineup = await get_active_lineup(db, user)
     if not lineup.is_complete:
@@ -831,49 +1102,22 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
             },
         )
     locked_user.match_hourly_attempts += 1
+
+    # The opponent shown in the preview (or found now for a client that
+    # skipped it); used up by this kickoff.
+    pending = await _pending_opponent(db, locked_user, config)
+    locked_user.arena_pending_opponent = None
+    locked_user.arena_last_strength = lineup.team_strength
     db.add(locked_user)
 
-    user_strength = _with_jitter(lineup.team_strength)
-    user_attack, user_defense = split_strength(user_strength, lineup.tactic)
-    user_fwd, user_def = _category_avg(lineup, "FWD"), _category_avg(lineup, "DEF")
-    user_gk = _category_avg(lineup, "GK")
-
-    opponent_result = await db.execute(
-        select(User)
-        .where(User.id != locked_user.id, User.is_banned.is_(False))
-        .order_by(func.random())
-        .limit(1)
-    )
-    opponent_user = opponent_result.scalar_one_or_none()
-
-    # opponent_name always borrows a real, non-banned player's display name
-    # when one exists — purely cosmetic, that player's own rating/coins/
-    # lineup ownership are untouched — rather than falling back to the
-    # scripted BOT_NAMES list just because their own lineup isn't complete
-    # enough to also borrow for strength. Falls back to BOT_NAMES only when
-    # no other user exists at all yet (e.g. a fresh install).
-    opponent_name = opponent_user.full_display_name() if opponent_user is not None else random.choice(BOT_NAMES)
-    opponent_tactic = random.choice(list(TACTIC_MULTIPLIERS))
-    opponent_lineup: Optional[LineupOut] = None
-    if opponent_user is not None:
-        candidate_lineup = await get_active_lineup(db, opponent_user)
-        if candidate_lineup.is_complete:
-            opponent_lineup = candidate_lineup
-            opponent_strength = _with_jitter(candidate_lineup.team_strength)
-            opponent_tactic = candidate_lineup.tactic
-        else:
-            opponent_strength = _bot_strength(user_strength, payload.difficulty, difficulty_multiplier)
-    else:
-        opponent_strength = _bot_strength(user_strength, payload.difficulty, difficulty_multiplier)
-    opponent_attack, opponent_defense = split_strength(opponent_strength, opponent_tactic)
-
-    if opponent_lineup is not None:
-        opponent_fwd, opponent_def = _category_avg(opponent_lineup, "FWD"), _category_avg(opponent_lineup, "DEF")
-        opponent_gk = _category_avg(opponent_lineup, "GK")
-    else:
-        opponent_fwd, opponent_def, opponent_gk = _synthesize_bot_ratings(
-            user_fwd, user_def, user_gk, opponent_strength, user_strength
-        )
+    # No jitter: the strengths are exactly what the preview showed.
+    user_strength = lineup.team_strength
+    user_lines = _lines_of(lineup)
+    opponent = await _resolve_opponent(db, pending, user_strength, user_lines)
+    opponent_strength = opponent.strength
+    opponent_lineup = opponent.lineup
+    user_fwd, user_def, user_gk = user_lines["FWD"], user_lines["DEF"], user_lines["GK"]
+    opponent_fwd, opponent_def, opponent_gk = opponent.lines["FWD"], opponent.lines["DEF"], opponent.lines["GK"]
 
     # «Академия»: talents decided at kickoff (after the opponent is known,
     # so a bot's strength never includes them) and frozen into the state.
@@ -882,13 +1126,17 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
     )
     if kickoff is not None and kickoff.plan is not None and kickoff.plan.active:
         user_strength = max(1, user_strength + kickoff.strength_delta)
-        user_attack, user_defense = split_strength(user_strength, lineup.tactic)
         user_fwd = kickoff.ratings.get("FWD", user_fwd)
         user_def = kickoff.ratings.get("DEF", user_def)
         user_gk = kickoff.ratings.get("GK", user_gk)
+        user_lines = {**user_lines, "FWD": user_fwd, "DEF": user_def, "GK": user_gk}
+
+    balance = arena_tactics.compute_balance(user_strength, lineup.tactic, opponent_strength, opponent.style, config)
+    user_attack, _user_defense = split_strength(user_strength, balance["user_style"])
+    opponent_attack, _opponent_defense = split_strength(opponent_strength, balance["opponent_style"])
 
     state = {
-        "moments": _generate_moment_queue(user_attack, opponent_attack, config, lineup, opponent_name),
+        "moments": _generate_moment_queue(user_attack, opponent_attack, config, lineup, opponent.name, balance=balance),
         "next_index": 0,
         "user_score": 0,
         "opponent_score": 0,
@@ -906,13 +1154,18 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
             "opponent": opponent_lineup.chemistry.team if opponent_lineup is not None and opponent_lineup.chemistry.enabled else None,
             "max": lineup.chemistry.team_max if lineup.chemistry.enabled else None,
         },
+        # Divisions + the match report: what the engine was told at kickoff.
+        "balance": balance,
+        "chances": win_chances(balance["strength_ratio"]),
+        "lines": {"user": user_lines, "opponent": opponent.lines},
+        "opponent_points": opponent.points,
         **(kickoff.state() if kickoff is not None else {}),
     }
 
     match = Match(
         user_id=locked_user.id,
-        opponent_user_id=opponent_user.id if opponent_user else None,
-        opponent_name=opponent_name,
+        opponent_user_id=opponent.user.id if opponent.user is not None else None,
+        opponent_name=opponent.name,
         difficulty=payload.difficulty,
         user_team_strength=user_strength,
         opponent_team_strength=opponent_strength,
@@ -1034,25 +1287,26 @@ async def match_history(db: AsyncSession, user: User, limit: int = 20) -> list[M
 
 
 async def arena_stats(db: AsyncSession, user: User) -> ArenaStatsOut:
-    ranking = await ranking_service.get_ranking(db, RankingMetric.arena_rating, user)
+    config = await get_config(db)
     return ArenaStatsOut(
         matches_won=user.matches_won,
         matches_drawn=user.matches_drawn,
         matches_lost=user.matches_lost,
         arena_rating=user.arena_rating,
-        arena_rank=ranking.me.rank if ranking.me else None,
+        arena_rank=await arena_ladder_service.points_rank(db, user),
+        division=ArenaDivisionOut(**arena_ladder_service.division_info(user, config)),
     )
 
 
 async def arena_leaderboard(db: AsyncSession, limit: int = 20) -> list[ArenaLeaderboardEntry]:
-    result = await db.execute(
-        select(User).where(User.is_admin.is_(False)).order_by(User.arena_rating.desc()).limit(limit)
-    )
-    users = result.scalars().all()
+    config = await get_config(db)
+    users = await arena_ladder_service.leaderboard(db, limit)
     return [
         ArenaLeaderboardEntry(
             user_id=u.id, display_name=u.full_display_name(), avatar_url=u.avatar_url,
-            arena_rating=u.arena_rating, matches_won=u.matches_won, matches_drawn=u.matches_drawn,
+            arena_rating=u.arena_rating, arena_points=u.arena_points,
+            division=arena_ladder_service.division_of(u.arena_points, config),
+            matches_won=u.matches_won, matches_drawn=u.matches_drawn,
             matches_lost=u.matches_lost, goal_difference=u.goals_for - u.goals_against,
             points=u.matches_won * 3 + u.matches_drawn,
         )

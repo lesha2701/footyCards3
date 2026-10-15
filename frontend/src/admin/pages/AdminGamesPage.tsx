@@ -62,7 +62,10 @@ export default function AdminGamesPage() {
       | "player_career_place_rewards"
       | "club_league_rewards"
       | "magnate_place_rewards"
-      | "magnate_stadium_rents",
+      | "magnate_stadium_rents"
+      | "arena_division_min_points"
+      | "arena_division_reward_coins"
+      | "arena_division_coin_pct",
     label: string,
   ) => (
     <label className="col-span-2 flex flex-col gap-1">
@@ -640,8 +643,8 @@ export default function AdminGamesPage() {
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Card Arena</p>
         <p className="mb-3 text-xs text-slate-500">
-          Итоговая награда = (награда ниже × множитель сложности) + 5 монет за каждый забитый гол — этот бонус за голы
-          не настраивается отдельно. Игрок всегда играет на среднем множителе (выбора сложности в интерфейсе нет).
+          Итоговая награда = (награда ниже × множитель сложности × множитель дивизиона) + 5 монет за каждый забитый
+          гол — этот бонус за голы не настраивается отдельно. Игрок всегда играет на среднем множителе (выбора сложности в интерфейсе нет).
           Множители сложности общие с ботом Тактико (раздел ниже) — «сложный» там сейчас недостижим, так как в Тактико
           оставлены только лёгкий и продвинутый уровни.
         </p>
@@ -689,6 +692,41 @@ export default function AdminGamesPage() {
           {field("match_keeper_save_chance_max", "Сейв вратаря, макс (0-1)")}
           {field("match_red_card_strength_penalty_pct", "Штраф к обороне за красную (0-1)")}
           {field("match_penalty_gk_rating_penalty", "Штраф к рейтингу вратаря на пенальти")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Card Arena — дивизионы</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Очки арены считаются как Эло: за победу над соперником с теми же очками +K/2, за поражение −K/2; против
+          соперника выше по очкам победа дороже, против более слабого — поражение дороже. Дивизион N — N-е значение
+          списков ниже (первый порог всегда 0). Награда за дивизион выдаётся один раз — при первом достижении.
+          Рейтинг арены для общей «Лиги» (+3/+1/−1) не меняется.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {listField("arena_division_min_points", "Пороги очков по дивизионам (1, 2, 3, …)")}
+          {listField("arena_division_reward_coins", "Награда за первое достижение дивизиона, монеты")}
+          {listField("arena_division_coin_pct", "Множитель монет за матч по дивизионам, %")}
+          {field("arena_points_k", "K — максимум очков за матч")}
+          {field("arena_points_scale", "Шкала Эло (разница очков для 10:1)")}
+          {field("arena_shield_matches", "Матчей защиты от вылета после повышения")}
+          {field("arena_matchmaking_window", "Окно подбора соперника, ± очков")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Card Arena — баланс и стили</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Насколько разница в силе решает исход. По умолчанию: перевес 30% ≈ 87% побед и ≈3% поражений, равные
+          ≈ 46/27/27. Показатель «шанс на победу» перед матчем берётся из таблицы симуляции
+          (backend/scripts/simulate_arena_balance.py --write) — после сильных изменений здесь её стоит пересчитать.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("arena_style_matchup_bonus_pct", "Бонус выигранного матчапа стилей, % к силе")}
+          {field("arena_share_exponent", "Степень доли моментов (атака vs защита)")}
+          {field("arena_shot_exponent", "Степень частоты опасных моментов")}
+          {field("arena_edge_rating_per_10pct", "Очков рейтинга в каждом розыгрыше за +10% силы")}
+          {field("arena_edge_rating_max", "Максимум этих очков")}
         </div>
       </section>
 

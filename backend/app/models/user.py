@@ -46,6 +46,17 @@ class User(TimestampMixin, Base):
     goals_for: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     goals_against: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     arena_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Card Arena divisions (arena_ladder_service) — separate from
+    # arena_rating, which keeps feeding the overall «Лига».
+    arena_points: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
+    arena_shield_matches: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    arena_best_division: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Team strength at this user's last Arena kickoff — matchmaking only
+    # picks opponents who actually play the Arena.
+    arena_last_strength: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The opponent found for the next match (shown before kickoff, kept until
+    # that match is played so a player can't re-roll for an easier one).
+    arena_pending_opponent: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Lifetime counters feeding `metric_counter` tasks (see task_service.py).
     arena_clean_sheet_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     memory_levels_completed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

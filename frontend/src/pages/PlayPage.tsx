@@ -75,7 +75,10 @@ export default function PlayPage() {
     {
       path: "/play/arena", Icon: IconBall, badgeClass: "bg-accent-green", title: "Card Arena",
       description: "Собери состав 4-3-3 и сыграй матч",
-      stat: `Рейтинг: ${arenaStats?.arena_rating ?? user?.arena_rating ?? 1000}`, limitKey: "arena",
+      stat: arenaStats?.division
+        ? `Дивизион ${arenaStats.division.division} · ${arenaStats.division.points} очк.`
+        : `Рейтинг: ${arenaStats?.arena_rating ?? user?.arena_rating ?? 1000}`,
+      limitKey: "arena",
     },
     {
       path: "/play/tactico", Icon: IconFlagCheckered, badgeClass: "bg-rarity-rare", title: "Тактико",

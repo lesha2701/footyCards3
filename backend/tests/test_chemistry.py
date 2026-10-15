@@ -193,7 +193,7 @@ def _legacy_reference_strength(pairs, coach=None, tactic=None, stadium_multiplie
     return round(total * stadium_multiplier)
 
 
-@pytest.mark.parametrize("tactic", [None, "attacking", "balanced", "defensive"])
+@pytest.mark.parametrize("tactic", [None, "attacking", "possession", "defensive", "counter"])
 def test_flag_off_strength_is_byte_for_byte_the_old_formula(tactic):
     coach = Coach(display_name="T", rarity=Rarity.legendary)
     coach.boosts = []
@@ -212,14 +212,18 @@ def test_chemistry_strength_replaces_flat_bonus_and_respects_coach_and_stadium_o
     coach.boosts = []
     pairs = _squad(club=lambda s: "A", country=lambda s: "N", rating=98)
     chemistry = compute_chemistry(pairs, "4-3-3", ChemistryRules(rating_per_point=1))
-    got = calculate_base_strength(pairs, coach=coach, tactic="balanced", stadium_multiplier=1.05, chemistry=chemistry)
+    got = calculate_base_strength(pairs, coach=coach, tactic="possession", stadium_multiplier=1.05, chemistry=chemistry)
     # rating + chemistry (capped at 99) -> fit/rarity/tactic -> + coach -> × stadium; no flat bonus.
-    per_card = sum(min(99, 98 + 3) * 1.0 * (1 + 0.03 * RARITY_ORDER[Rarity.common]) * 1.02 for _ in pairs)
+    # «Владение» boosts the midfield line only.
+    per_card = sum(
+        min(99, 98 + 3) * 1.0 * (1 + 0.03 * RARITY_ORDER[Rarity.common]) * (1.08 if slot.category == "MID" else 1.0)
+        for _, slot in pairs
+    )
     assert got == round((per_card + arena_rarity_team_strength_bonus(coach)) * 1.05)
     # An empty result = neither the per-card bonus nor the old flat bonus.
-    zero = calculate_base_strength(pairs, coach=coach, tactic="balanced", stadium_multiplier=1.05,
+    zero = calculate_base_strength(pairs, coach=coach, tactic="possession", stadium_multiplier=1.05,
                                    chemistry=ChemistryResult(formation="4-3-3"))
-    flat = calculate_base_strength(pairs, coach=coach, tactic="balanced", stadium_multiplier=1.05)
+    flat = calculate_base_strength(pairs, coach=coach, tactic="possession", stadium_multiplier=1.05)
     assert legacy_chemistry_bonus(pairs) == 30 and flat > zero
 
 

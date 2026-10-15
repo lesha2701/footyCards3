@@ -5,7 +5,7 @@ export type MatchDifficulty = "easy" | "medium" | "hard";
 export type MatchResult = "win" | "draw" | "loss";
 export type MatchStatus = "in_progress" | "finished";
 export type ShotType = "in_box" | "long_range" | "empty_net";
-export type LineupTactic = "attacking" | "balanced" | "defensive";
+export type LineupTactic = "attacking" | "possession" | "defensive" | "counter";
 export type MatchActionKind = "shoot" | "pass" | "tackle" | "block" | "keeper" | "strike";
 
 export interface Page<T> {
@@ -693,6 +693,94 @@ export interface Match {
   /** «Академия»: static talents applied at kickoff / experience earned. */
   talent_notes?: MatchTalentNote[] | null;
   path_progress?: PathMatchProgress[] | null;
+  /** Card Arena divisions: styles/chances at kickoff, points, the report. */
+  arena?: MatchArenaInfo | null;
+  ladder?: ArenaLadderResult | null;
+  report?: ArenaMatchReport | null;
+}
+
+export type ArenaMatchup = "win" | "loss" | "neutral";
+
+export interface ArenaChances {
+  win: number;
+  draw: number;
+  loss: number;
+}
+
+export interface MatchArenaInfo {
+  user_style: LineupTactic;
+  opponent_style: LineupTactic;
+  matchup: ArenaMatchup;
+  matchup_bonus_pct: number;
+  chances: ArenaChances | null;
+  opponent_points: number | null;
+}
+
+export interface ArenaLadderResult {
+  points_before: number;
+  points_after: number;
+  delta: number;
+  division_before: number;
+  division_after: number;
+  promoted: boolean;
+  relegated: boolean;
+  shield_used: boolean;
+  shield_left: number;
+  rewards: { division: number; coins: number }[];
+}
+
+export interface ArenaLineCompare {
+  key: "GK" | "DEF" | "MID" | "FWD";
+  label: string;
+  user: number;
+  opponent: number;
+}
+
+export interface ArenaMatchReport {
+  verdict: string;
+  reasons: string[];
+  chances: ArenaChances;
+  user_strength: number;
+  opponent_strength: number;
+  user_style: LineupTactic;
+  opponent_style: LineupTactic;
+  matchup: ArenaMatchup;
+  matchup_bonus_pct: number;
+  lines: ArenaLineCompare[];
+  user_chances: number;
+  opponent_chances: number;
+  user_keeper_saves: number;
+  opponent_keeper_saves: number;
+}
+
+export interface ArenaDivision {
+  division: number;
+  total_divisions: number;
+  points: number;
+  min_points: number;
+  next_min_points: number | null;
+  shield_matches: number;
+  coin_pct: number;
+  next_reward_coins: number | null;
+}
+
+export interface ArenaPreview {
+  opponent_name: string;
+  opponent_avatar_url: string | null;
+  opponent_is_bot: boolean;
+  opponent_points: number;
+  opponent_division: number;
+  opponent_strength: number;
+  opponent_style: LineupTactic;
+  user_strength: number;
+  user_style: LineupTactic;
+  matchup: ArenaMatchup;
+  matchup_bonus_pct: number;
+  matchup_text: string;
+  lines: ArenaLineCompare[];
+  chances: ArenaChances;
+  points_at_stake: Record<MatchResult, number>;
+  division: ArenaDivision;
 }
 
 export interface ArenaStats {
@@ -700,7 +788,9 @@ export interface ArenaStats {
   matches_drawn: number;
   matches_lost: number;
   arena_rating: number;
+  /** Place by arena points (null before the first division match). */
   arena_rank: number | null;
+  division?: ArenaDivision | null;
 }
 
 export interface MaintenanceStatus {
@@ -744,6 +834,8 @@ export interface ArenaLeaderboardEntry {
   display_name: string;
   avatar_url: string | null;
   arena_rating: number;
+  arena_points?: number;
+  division?: number;
   matches_won: number;
   matches_drawn: number;
   matches_lost: number;

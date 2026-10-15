@@ -72,6 +72,30 @@ class Match(Base):
         return talents.get("notes") or None
 
     @property
+    def arena(self) -> Optional[dict]:
+        """Styles, matchup and ≈ chances frozen at kickoff (divisions era)."""
+        state = self.server_state or {}
+        balance = state.get("balance")
+        if not balance:
+            return None
+        return {
+            "user_style": balance["user_style"],
+            "opponent_style": balance["opponent_style"],
+            "matchup": balance["matchup"],
+            "matchup_bonus_pct": balance.get("matchup_bonus_pct", 0),
+            "chances": state.get("chances"),
+            "opponent_points": state.get("opponent_points"),
+        }
+
+    @property
+    def ladder(self) -> Optional[dict]:
+        return (self.server_state or {}).get("ladder")
+
+    @property
+    def report(self) -> Optional[dict]:
+        return (self.server_state or {}).get("report")
+
+    @property
     def path_progress(self) -> Optional[list]:
         """Experience the path cards got for this match (set at the end)."""
         return ((self.server_state or {}).get("path") or {}).get("awarded")
