@@ -63,14 +63,45 @@ function spreadY(seed: number, range = 12): number {
   return MID_Y + step;
 }
 
+// --- Two-side engines (club/player tournaments, career) -----------------------
+//
+// tournament_match_engine / career_tactics_service log sides as "a"/"b" and,
+// unlike Card Arena, put the DEFENDING side in `team` for tackle_won and
+// foul_stopped. Normalising to Arena semantics lets the same frames, pressure
+// and stats run on both: "a" attacks right (drawn like "user"), "b" left.
+
+const DEFENDER_TEAM_EVENTS = new Set(["tackle_won", "foul_stopped"]);
+
+export function normalizeTwoSideEvents(events: MatchEvent[]): MatchEvent[] {
+  return events.map((e) => {
+    if (e.team !== "a" && e.team !== "b") return e;
+    const team = e.team === "a" ? "user" : "opponent";
+    const attacking = DEFENDER_TEAM_EVENTS.has(e.event_type) ? (team === "user" ? "opponent" : "user") : team;
+    return { ...e, team: attacking };
+  });
+}
+
+/** Where a shot starts, from what the event itself records. Set pieces and
+ * penalties have a known spot; a career chance's zone (wing vs central)
+ * picks the band; otherwise a spread spot for the shot type. */
+function shotOrigin(event: MatchEvent, side: MatchSide, index: number): PitchPoint {
+  const p = event.payload ?? {};
+  if (p.is_penalty || p.set_piece === "penalty") return { x: attackX(side, 89), y: MID_Y };
+  if (p.set_piece === "corner") return { x: attackX(side, 92), y: index % 2 ? MID_Y - 6 : MID_Y + 6 };
+  if (p.set_piece === "free_kick") return { x: attackX(side, 74), y: spreadY(index, 10) };
+  const shotType = typeof p.shot_type === "string" ? p.shot_type : "in_box";
+  const x = attackX(side, SHOT_ORIGIN_X[shotType] ?? SHOT_ORIGIN_X.in_box);
+  if (p.zone === "wing_attack") return { x, y: index % 2 ? 12 : PITCH_H - 12 };
+  if (p.zone === "central_attack") return { x, y: spreadY(index, 5) };
+  return { x, y: spreadY(index, 8) };
+}
+
 export function frameForEvent(event: MatchEvent, index: number, previous: PitchFrame = KICKOFF_FRAME): PitchFrame {
   const side = asSide(event.team);
   if (!side) return { ...previous, label: null, from: null, kind: "other", tone: "neutral", goalSide: null };
 
   const defending = otherSide(side);
-  const shotType = typeof event.payload?.shot_type === "string" ? (event.payload.shot_type as string) : "in_box";
-  const originX = SHOT_ORIGIN_X[shotType] ?? SHOT_ORIGIN_X.in_box;
-  const shotFrom = { x: attackX(side, originX), y: spreadY(index, 8) };
+  const shotFrom = shotOrigin(event, side, index);
   const at = (x: number, y = spreadY(index)): PitchPoint => ({ x: attackX(side, x), y });
 
   switch (event.event_type) {
@@ -98,6 +129,13 @@ export function frameForEvent(event: MatchEvent, index: number, previous: PitchF
       return { kind: "offside", ball: at(80), from: null, label: "Офсайд", tone: "neutral", goalSide: null };
     case "possession":
       return { kind: "possession", ball: at(58), from: null, label: null, tone: side, goalSide: null };
+    case "substitution":
+    case "tactic_change":
+      // Bench decisions (career): nothing moves on the pitch.
+      return {
+        kind: "other", ball: previous.ball, from: null,
+        label: event.event_type === "substitution" ? "Замена" : "Тактика", tone: side, goalSide: null,
+      };
     case "yellow_card":
     case "red_card":
       // The ball doesn't move for a booking — keep it where the last moment

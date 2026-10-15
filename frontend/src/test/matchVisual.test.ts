@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { KICKOFF_FRAME, currentFrame, frameForEvent, matchStats, pendingFrame, pressure } from "@/lib/matchVisual";
+import {
+  KICKOFF_FRAME,
+  currentFrame,
+  frameForEvent,
+  matchStats,
+  normalizeTwoSideEvents,
+  pendingFrame,
+  pressure,
+} from "@/lib/matchVisual";
 import type { MatchEvent } from "@/types";
 
 const ev = (event_type: string, team: string, payload: Record<string, unknown> | null = null, minute = 10): MatchEvent => ({
@@ -64,6 +72,48 @@ describe("frameForEvent", () => {
         expect(f.ball.y).toBeLessThanOrEqual(60);
       });
     }
+  });
+});
+
+describe("normalizeTwoSideEvents (tournament/career engines)", () => {
+  it("maps club A to the right-attacking side and B to the left", () => {
+    const [a, b] = normalizeTwoSideEvents([ev("goal", "a"), ev("goal", "b")]);
+    expect(a.team).toBe("user");
+    expect(b.team).toBe("opponent");
+    expect(frameForEvent(a, 0).ball.x).toBeGreaterThan(95);
+    expect(frameForEvent(b, 0).ball.x).toBeLessThan(5);
+  });
+
+  it("flips tackles and fouls, which those engines log under the defending side", () => {
+    // B won the ball off A's attack → A was attacking, so the tackle is in B's half (right).
+    const [tackle] = normalizeTwoSideEvents([ev("tackle_won", "b")]);
+    expect(tackle.team).toBe("user");
+    expect(frameForEvent(tackle, 0).tone).toBe("opponent");
+    expect(frameForEvent(tackle, 0).ball.x).toBeGreaterThan(50);
+    const stats = matchStats(normalizeTwoSideEvents([ev("tackle_won", "b"), ev("foul_stopped", "a", { card: "yellow" })]));
+    expect(stats.opponent.tacklesWon).toBe(1);
+    expect(stats.user.yellow).toBe(1);
+  });
+
+  it("leaves Arena events and unknown teams untouched", () => {
+    const arena = [ev("tackle_won", "opponent"), ev("goal", "Динамо")];
+    expect(normalizeTwoSideEvents(arena)).toEqual(arena);
+  });
+
+  it("starts set pieces and penalties from their spot and uses the career zone band", () => {
+    const pen = frameForEvent(normalizeTwoSideEvents([ev("goal", "a", { is_penalty: true })])[0], 0);
+    expect(pen.from).toEqual({ x: 89, y: 30 });
+    const fk = frameForEvent(normalizeTwoSideEvents([ev("save", "b", { set_piece: "free_kick" })])[0], 0);
+    expect(fk.from!.x).toBe(26);
+    const wing = frameForEvent(normalizeTwoSideEvents([ev("shot", "a", { zone: "wing_attack", shot_type: "in_box" })])[0], 1);
+    expect([12, 48]).toContain(wing.from!.y);
+  });
+
+  it("shows bench decisions without moving the ball", () => {
+    const corner = frameForEvent(ev("corner", "user"), 0);
+    const sub = frameForEvent(normalizeTwoSideEvents([ev("substitution", "a")])[0], 1, corner);
+    expect(sub.ball).toEqual(corner.ball);
+    expect(sub.label).toBe("Замена");
   });
 });
 

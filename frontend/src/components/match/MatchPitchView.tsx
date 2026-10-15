@@ -23,12 +23,18 @@ export default function MatchPitchView({
   events,
   opponentName,
   pending,
+  leftLabel = "Ты",
 }: {
-  /** Revealed events only — the view never runs ahead of the commentary. */
+  /** Revealed events only — the view never runs ahead of the commentary.
+   * Arena semantics ("user" attacks right); two-side engines go through
+   * normalizeTwoSideEvents first. */
   events: MatchEvent[];
+  /** Name of the side attacking left. */
   opponentName: string;
   /** The chance awaiting the player's choice, if any. */
   pending?: { team: string; shot_type: string } | null;
+  /** Name of the side attacking right (default: the player). */
+  leftLabel?: string;
 }) {
   const reduceMotion = useReducedMotion();
   const frame = (pending && pendingFrame(pending.team, pending.shot_type, events.length)) || currentFrame(events);
@@ -47,8 +53,8 @@ export default function MatchPitchView({
             attacking right — same order as the score above. */}
         {/* Theme tokens here (not the fixed pitch palette): this text sits on
             the sheet, and the light theme maps accent-green to a darker shade. */}
-        <span className="text-accent-green">Ты →</span>
-        <span className="max-w-[60%] truncate text-red-400">← {opponentName}</span>
+        <span className="max-w-[45%] truncate text-accent-green">{leftLabel} →</span>
+        <span className="max-w-[45%] truncate text-red-400">← {opponentName}</span>
       </div>
 
       <div className="relative overflow-hidden rounded-xl" style={{ aspectRatio: `${PITCH_W} / ${PITCH_H}` }}>

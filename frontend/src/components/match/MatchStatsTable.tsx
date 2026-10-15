@@ -13,7 +13,16 @@ const ROWS: { key: keyof SideStats; label: string }[] = [
 
 /** Post-match numbers, counted from the same event log as the commentary.
  * You on the left, the opponent on the right — same as the score and pitch. */
-export default function MatchStatsTable({ events, opponentName }: { events: MatchEvent[]; opponentName: string }) {
+export default function MatchStatsTable({
+  events,
+  opponentName,
+  leftLabel = "Ты",
+}: {
+  events: MatchEvent[];
+  opponentName: string;
+  /** Name of the left column's side (default: the player). */
+  leftLabel?: string;
+}) {
   const stats = matchStats(events);
   // Rare rows only when something actually happened — "0 — 0" rows are noise.
   const rows = ROWS.filter((r) => !["yellow", "red", "offsides"].includes(r.key) || stats.user[r.key] + stats.opponent[r.key] > 0);
@@ -21,7 +30,7 @@ export default function MatchStatsTable({ events, opponentName }: { events: Matc
   return (
     <div className="rounded-xl bg-black/20 px-3 py-2">
       <div className="mb-1 flex items-center justify-between text-[11px] font-semibold">
-        <span className="text-accent-green">Ты</span>
+        <span className="max-w-[40%] truncate text-accent-green">{leftLabel}</span>
         <span className="text-ink-mist-dim">Статистика</span>
         <span className="max-w-[40%] truncate text-red-400">{opponentName}</span>
       </div>

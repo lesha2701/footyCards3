@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import MatchSkillNotes from "@/components/cards/MatchSkillNotes";
 import MatchSkillSummary from "@/components/cards/MatchSkillSummary";
+import MatchPitchView from "@/components/match/MatchPitchView";
+import MatchStatsTable from "@/components/match/MatchStatsTable";
+import { normalizeTwoSideEvents } from "@/lib/matchVisual";
 import type { MatchEvent } from "@/types";
 
 const EVENT_STEP_MS = 950;
@@ -55,6 +58,12 @@ export function TournamentMatchReplay({
   };
 
   const revealed = events.slice(0, revealedCount);
+  // Arena-shaped copy for the shared pitch/stats: club A attacks right.
+  const normalizedRevealed = useMemo(
+    () => normalizeTwoSideEvents(events.slice(0, revealedCount)),
+    [events, revealedCount],
+  );
+  const normalizedAll = useMemo(() => normalizeTwoSideEvents(events), [events]);
   const currentMinute = revealed.length ? revealed[revealed.length - 1].minute : 0;
   const liveScoreA = revealed.filter((e) => e.event_type === "goal" && e.team === "a").length;
   const liveScoreB = revealed.filter((e) => e.event_type === "goal" && e.team === "b").length;
@@ -107,6 +116,15 @@ export function TournamentMatchReplay({
           <span className="w-6 text-left">{scoreB}</span>
         </div>
       )}
+      {/* Schematic pitch while it plays; once everything is shown the pitch
+          has nothing left to add, so the numbers take its place. */}
+      <div className="mt-3">
+        {caughtUp ? (
+          <MatchStatsTable events={normalizedAll} leftLabel={clubAName} opponentName={clubBName} />
+        ) : (
+          <MatchPitchView events={normalizedRevealed} leftLabel={clubAName} opponentName={clubBName} />
+        )}
+      </div>
       {caughtUp && <MatchSkillSummary events={events} />}
 
       <div ref={logRef} className="mt-3 max-h-64 space-y-1 overflow-y-auto text-xs">
