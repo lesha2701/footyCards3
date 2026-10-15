@@ -436,6 +436,10 @@ export interface GameConfig {
   path_prestige_free_attempts: number;
   path_prestige_sell_pct: number;
   path_prestige_other_ratio: number;
+  academy_enabled: boolean;
+  academy_buildings: Record<string, { costs: number[]; hours: number[]; effect: number[] }>;
+  academy_stars_per_hour: number;
+  academy_scout_report: { chance_pct: number[]; cooldown_days: number[]; consolation_coins: number[] };
 }
 
 export interface AdminPathTalent {

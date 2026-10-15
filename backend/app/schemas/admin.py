@@ -475,6 +475,10 @@ class GameConfigOut(BaseModel):
     path_prestige_free_attempts: int = 1
     path_prestige_sell_pct: int = 50
     path_prestige_other_ratio: int = 5
+    academy_enabled: bool = True
+    academy_buildings: dict = {}
+    academy_stars_per_hour: int = 2
+    academy_scout_report: dict = {}
 
 
 class GameConfigUpdate(BaseModel):
@@ -825,6 +829,10 @@ class GameConfigUpdate(BaseModel):
     path_prestige_free_attempts: Optional[int] = Field(default=None, ge=0, le=20)
     path_prestige_sell_pct: Optional[int] = Field(default=None, ge=0, le=1000)
     path_prestige_other_ratio: Optional[int] = Field(default=None, ge=1, le=50)
+    academy_enabled: Optional[bool] = None
+    academy_buildings: Optional[dict[str, dict[str, list[int]]]] = None
+    academy_stars_per_hour: Optional[int] = Field(default=None, ge=1, le=100)
+    academy_scout_report: Optional[dict[str, list[int]]] = None
 
     @field_validator("path_prestige_dupes", "path_prestige_coins")
     @classmethod

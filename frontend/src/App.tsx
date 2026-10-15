@@ -56,6 +56,7 @@ const PackOpenPage = lazy(() => import("@/pages/PackOpenPage"));
 const PlayPage = lazy(() => import("@/pages/PlayPage"));
 const MemoryGamePage = lazy(() => import("@/pages/MemoryGamePage"));
 const ArenaPage = lazy(() => import("@/pages/ArenaPage"));
+const AcademyPage = lazy(() => import("@/pages/AcademyPage"));
 const TacticoMatchesPage = lazy(() => import("@/pages/TacticoMatchesPage"));
 const TacticoMatchPage = lazy(() => import("@/pages/TacticoMatchPage"));
 const TacticoOpenChallengePage = lazy(() => import("@/pages/TacticoOpenChallengePage"));
@@ -234,6 +235,7 @@ export default function App() {
         <Route path="/play" element={<PlayPage />} />
         <Route path="/play/memory" element={<MemoryGamePage />} />
         <Route path="/play/arena" element={<ArenaPage />} />
+        <Route path="/academy" element={<AcademyPage />} />
         <Route path="/play/tactico" element={<TacticoMatchesPage />} />
         <Route path="/play/career" element={<CareerPage />} />
         <Route path="/play/career/seasons/:seasonId/rounds/:round/matches/:match" element={<CareerMatchPage />} />

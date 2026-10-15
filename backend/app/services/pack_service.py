@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 import random
 from datetime import datetime, timezone
 from typing import Optional
@@ -123,6 +124,24 @@ def roll_rarities(probabilities: list[PackRarityProbability], card_count: int, g
             rolled[-1] = forced_rarity
 
     return rolled
+
+
+def scout_adjusted(probabilities, bonus: float) -> list:
+    """Rarity shares with the diamond share raised by `bonus` (absolute,
+    0..1) and the rest scaled down proportionally — the total stays the
+    same. A pack with no diamond row is returned unchanged."""
+    rows = list(probabilities)
+    total = sum(float(p.probability) for p in rows)
+    diamond = next((p for p in rows if p.rarity == Rarity.diamond), None)
+    if bonus <= 0 or diamond is None or total <= 0:
+        return rows
+    d = float(diamond.probability) / total
+    new_d = min(1.0, d + bonus)
+    scale = (1 - new_d) / (1 - d) if d < 1 else 0.0
+    return [
+        SimpleNamespace(rarity=p.rarity, probability=(new_d if p is diamond else float(p.probability) / total * scale) * total)
+        for p in rows
+    ]
 
 
 def _collection_active_filter():
@@ -342,7 +361,16 @@ async def roll_and_create_cards(
     seen_this_opening: set[int] = set()
     seen_coaches_this_opening: set[int] = set()
     seen_stadiums_this_opening: set[int] = set()
-    rolled_rarities = roll_rarities(pack.rarity_probabilities, pack.card_count, pack.guaranteed_min_rarity)
+    probabilities = pack.rarity_probabilities
+    if (getattr(pack, "player_pool", "default") or "default") == "path":
+        # «Академия» building, scout wing: +pp to the «Академия» (diamond) share
+        # of each slot, the other rarities scaled down to keep the total.
+        from app.services.academy_service import user_effects
+        from app.services.game_config_service import get_config as _get_config
+
+        bonus = (await user_effects(db, user.id, await _get_config(db)))["scout"] / 100
+        probabilities = scout_adjusted(probabilities, bonus)
+    rolled_rarities = roll_rarities(probabilities, pack.card_count, pack.guaranteed_min_rarity)
 
     # Each slot is an independent coin flip against the pack's coach_drop_chance
     # and stadium_drop_chance — not a fixed count of coach/stadium slots — mirrors

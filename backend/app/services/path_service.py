@@ -21,6 +21,7 @@ Rules (numbers from GameConfig / path_* tables, docs/path-cards.md):
     unique constraint makes a retried / concurrent award a no-op.
   * Everything travels with the card on a trade (rows keyed by user_cards.id).
 """
+import math
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Optional
@@ -210,24 +211,30 @@ def task_applies(task: PathStageTask, position) -> bool:
     return value in task.positions
 
 
-def tasks_status(catalog: Catalog, stage_index: int, counters: dict, position) -> list[dict]:
+def task_target(target: int, cut_pct: int = 0) -> int:
+    """Stage task target after the «Тренерский штаб» cut (rounded up, ≥ 1)."""
+    return max(1, math.ceil(target * (100 - max(0, min(cut_pct, 90))) / 100))
+
+
+def tasks_status(catalog: Catalog, stage_index: int, counters: dict, position, cut_pct: int = 0) -> list[dict]:
     out = []
     for task in catalog.tasks.get(stage_index, []):
         applies = task_applies(task, position)
         progress = int((counters or {}).get(task.metric, 0))
+        target = task_target(task.target, cut_pct)
         out.append({
             "id": task.id, "metric": task.metric, "label": METRICS.get(task.metric, task.metric),
-            "target": task.target, "progress": min(progress, task.target), "applies": applies,
-            "done": (not applies) or progress >= task.target,
+            "target": target, "progress": min(progress, target), "applies": applies,
+            "done": (not applies) or progress >= target,
         })
     return out
 
 
-def stage_tasks_done(catalog: Catalog, stage_index: int, counters: dict, position) -> bool:
-    return all(t["done"] for t in tasks_status(catalog, stage_index, counters, position))
+def stage_tasks_done(catalog: Catalog, stage_index: int, counters: dict, position, cut_pct: int = 0) -> bool:
+    return all(t["done"] for t in tasks_status(catalog, stage_index, counters, position, cut_pct))
 
 
-def advance(card: UserCard, path: CardPath, catalog: Catalog, config) -> dict:
+def advance(card: UserCard, path: CardPath, catalog: Catalog, config, task_cut_pct: int = 0) -> dict:
     """Applies everything the card's experience and stage tasks allow:
     gains levels up to the current stage's top, moves to the next stage when
     the band is full AND its tasks are done (counters restart), repeats.
@@ -249,7 +256,7 @@ def advance(card: UserCard, path: CardPath, catalog: Catalog, config) -> dict:
         is_last = stage.stage_index >= catalog.last.stage_index
         if is_last or card.path_level < band_top:
             break
-        if not stage_tasks_done(catalog, stage.stage_index, path.stage_counters, player.position):
+        if not stage_tasks_done(catalog, stage.stage_index, path.stage_counters, player.position, task_cut_pct):
             break
         card.path_stage = stage.stage_index + 1
         path.stage_counters = {}
@@ -327,6 +334,10 @@ async def award_match(
     catalog = await load_catalog(db)
     today = local_today()
     results: list[AwardResult] = []
+    # «Академия» building: training (+% xp), dorm (+free attempts), staff (task cut).
+    from app.services.academy_service import user_effects
+
+    academy = await user_effects(db, user_id, config)
     for entry in sorted(entries, key=lambda e: e.user_card_id):  # stable lock order
         card = await _lock_card(db, entry.user_card_id)
         if card is None or card.owner_id != user_id or not is_path_card(card):
@@ -336,7 +347,9 @@ async def award_match(
         _reset_day(path, today)
         tier = getattr(card, "prestige", 0) or 0
         if source_type == "arena":
-            free_total = int(config.path_daily_free_arena) + tier * int(config.path_prestige_free_attempts)
+            free_total = (
+                int(config.path_daily_free_arena) + tier * int(config.path_prestige_free_attempts) + academy["dorm"]
+            )
             free_left = free_total - path.arena_used
             if free_left <= 0 and path.bought_attempts <= 0:
                 results.append(AwardResult(card.id, "no_attempts"))
@@ -351,6 +364,7 @@ async def award_match(
         xp = match_xp(config, entry.result, entry.goals, entry.assists)
         # Prestige: +experience % per tier, capped (status bonus, not rating).
         bonus_pct = min(int(config.path_prestige_xp_cap_pct), tier * int(config.path_prestige_xp_pct))
+        bonus_pct += academy["training"]  # «Тренировочная база», on top of the prestige cap
         xp += xp * bonus_pct // 100
         event = PathXpEvent(
             user_card_id=card.id, user_id=user_id, source_type=source_type, source_id=str(source_id), xp=xp,
@@ -375,7 +389,7 @@ async def award_match(
             k: int((path.stage_counters or {}).get(k, 0)) + v for k, v in deltas.items()
         }}
         path.totals = {**(path.totals or {}), **{k: int((path.totals or {}).get(k, 0)) + v for k, v in deltas.items()}}
-        gained = advance(card, path, catalog, config)
+        gained = advance(card, path, catalog, config, academy["staff"])
         event.details = {**event.details, **gained}
         db.add_all([card, path, event])
         results.append(AwardResult(card.id, "awarded", xp, gained["levels"], gained["stages"]))
@@ -484,8 +498,10 @@ async def get_state(db: AsyncSession, user: User, card_id: int) -> dict:
     card = await _owned_path_card(db, user, card_id)
     path = (await db.execute(select(CardPath).where(CardPath.user_card_id == card.id))).scalar_one_or_none()
     from app.services import path_prestige_service  # imports this module
+    from app.services.academy_service import user_effects
 
-    state = build_state(card, path, catalog, config, await _recent_events(db, card.id))
+    academy = await user_effects(db, user.id, config)
+    state = build_state(card, path, catalog, config, await _recent_events(db, card.id), academy)
     state["prestige"] = path_prestige_service.state_out(
         card, config, await path_prestige_service._free_materials(db, card), catalog,
     )
@@ -498,7 +514,9 @@ async def _recent_events(db: AsyncSession, card_id: int) -> list[PathXpEvent]:
     )).scalars().all())
 
 
-def build_state(card: UserCard, path: Optional[CardPath], catalog: Catalog, config, events=()) -> dict:
+def build_state(card: UserCard, path: Optional[CardPath], catalog: Catalog, config, events=(), academy=None) -> dict:
+    academy = academy or {}
+    cut = int(academy.get("staff", 0))
     player = card.player
     today = local_today()
     xp = path.xp if path else 0
@@ -514,7 +532,10 @@ def build_state(card: UserCard, path: Optional[CardPath], catalog: Catalog, conf
     coin_buys = path.coin_buys if same_day else 0
     stars_buys = path.stars_buys if same_day else 0
     level = catalog.talent_level(stage_index)
-    free_total = int(config.path_daily_free_arena) + (card.prestige or 0) * int(config.path_prestige_free_attempts)
+    free_total = (
+        int(config.path_daily_free_arena) + (card.prestige or 0) * int(config.path_prestige_free_attempts)
+        + int(academy.get("dorm", 0))
+    )
     stages_out = []
     min_rating = player.rating
     for stage in catalog.stages:
@@ -526,10 +547,10 @@ def build_state(card: UserCard, path: Optional[CardPath], catalog: Catalog, conf
             "tasks": tasks_status(
                 catalog, stage.stage_index,
                 counters if stage.stage_index == stage_index else ({} if stage.stage_index > stage_index else None),
-                player.position,
+                player.position, cut,
             ) if stage.stage_index >= stage_index else [
                 {**t, "progress": t["target"], "done": True}
-                for t in tasks_status(catalog, stage.stage_index, {}, player.position)
+                for t in tasks_status(catalog, stage.stage_index, {}, player.position, cut)
             ],
         })
         min_rating = stage.max_rating + 1
@@ -564,6 +585,8 @@ def build_state(card: UserCard, path: Optional[CardPath], catalog: Catalog, conf
         },
         "totals": (path.totals if path else {}) or {},
         "hunger_streak": path.hunger_streak if path else 0,
+        "academy": {"xp_pct": int(academy.get("training", 0)), "attempts": int(academy.get("dorm", 0)),
+                    "task_cut_pct": cut},
         "recent": [
             {"source_type": e.source_type, "xp": e.xp, "result": (e.details or {}).get("result"),
              "goals": (e.details or {}).get("goals", 0), "assists": (e.details or {}).get("assists", 0),

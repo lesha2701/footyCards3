@@ -144,6 +144,10 @@ export default function AdminPathPage() {
       path_prestige_coins: config.path_prestige_coins,
       path_prestige_names: config.path_prestige_names,
       path_prestige_rewards: config.path_prestige_rewards,
+      academy_enabled: config.academy_enabled,
+      academy_buildings: config.academy_buildings,
+      academy_stars_per_hour: config.academy_stars_per_hour,
+      academy_scout_report: config.academy_scout_report,
     };
     for (const [key] of NUMBER_FIELDS) (picked as Record<string, number>)[key] = config[key] as number;
     setForm(picked);
@@ -310,6 +314,75 @@ export default function AdminPathPage() {
         >
           Сохранить настройки
         </button>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Здание Академии</p>
+        <p className="mb-3 text-xs text-slate-400">
+          По уровням через запятую (количество значений = число уровней). Эффекты: скауты — +п.п. к шансу карты Академии в
+          слоте её пака; база — +% опыта; интернат — +попытки Арены в день; штаб — −% целей заданий; зал славы — +места в
+          витрине. Сохраняется кнопкой «Сохранить настройки» выше.
+        </p>
+        <label className="mb-3 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={!!form.academy_enabled} onChange={(e) => setForm({ ...form, academy_enabled: e.target.checked })} />
+          Здание включено
+        </label>
+        <label className="mb-3 flex max-w-xs flex-col gap-1">
+          <span className="text-xs text-slate-400">Stars за час ускорения стройки</span>
+          <input
+            type="number"
+            min={1}
+            value={form.academy_stars_per_hour ?? 2}
+            onChange={(e) => setForm({ ...form, academy_stars_per_hour: Number(e.target.value) })}
+            className="rounded-lg bg-bg-base px-3 py-2 outline-none"
+          />
+        </label>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {Object.entries(form.academy_buildings ?? {}).map(([code, wing]) => (
+            <div key={code} className="rounded-lg bg-white/5 p-2 text-xs">
+              <p className="mb-1 font-semibold">{({ scout: "🔭 Скауты", training: "🏋️ База", dorm: "🛏️ Интернат", staff: "📋 Штаб", hall: "🏛️ Зал славы" } as Record<string, string>)[code] ?? code}</p>
+              {(["costs", "hours", "effect"] as const).map((key) => (
+                <label key={key} className="mb-1 flex items-center justify-between gap-2">
+                  <span className="text-slate-400">{key === "costs" ? "Монеты" : key === "hours" ? "Часы" : "Эффект"}</span>
+                  <input
+                    value={(wing[key] ?? []).join(", ")}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        academy_buildings: {
+                          ...form.academy_buildings,
+                          [code]: { ...wing, [key]: e.target.value.split(",").map((v) => Number(v.trim())).filter((v) => !Number.isNaN(v)) },
+                        },
+                      })
+                    }
+                    className="w-40 rounded bg-bg-base px-2 py-1 outline-none"
+                  />
+                </label>
+              ))}
+            </div>
+          ))}
+          <div className="rounded-lg bg-white/5 p-2 text-xs">
+            <p className="mb-1 font-semibold">🔭 Скаутский отчёт (по уровню скаутов)</p>
+            {(["chance_pct", "cooldown_days", "consolation_coins"] as const).map((key) => (
+              <label key={key} className="mb-1 flex items-center justify-between gap-2">
+                <span className="text-slate-400">{key === "chance_pct" ? "Шанс карты, %" : key === "cooldown_days" ? "Раз в дней" : "Монеты при промахе"}</span>
+                <input
+                  value={(form.academy_scout_report?.[key] ?? []).join(", ")}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      academy_scout_report: {
+                        ...form.academy_scout_report!,
+                        [key]: e.target.value.split(",").map((v) => Number(v.trim())).filter((v) => !Number.isNaN(v)),
+                      },
+                    })
+                  }
+                  className="w-40 rounded bg-bg-base px-2 py-1 outline-none"
+                />
+              </label>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">

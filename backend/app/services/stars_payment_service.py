@@ -121,6 +121,8 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
         return StarsInvoiceStatusOut(
             status="completed", path_result={"kind": "path_attempt", "user_card_id": invoice.path_user_card_id},
         )
+    if invoice.academy_speedup:
+        return StarsInvoiceStatusOut(status="completed", path_result={"kind": "academy_speedup"})
 
     user = await db.get(User, invoice.user_id)
     return StarsInvoiceStatusOut(
@@ -298,6 +300,11 @@ async def validate_pre_checkout(db: AsyncSession, payload_token: str, total_amou
 
         if not (await get_config(db)).path_enabled:
             return False, "«Академия» сейчас недоступна"
+    elif invoice.academy_speedup:
+        from app.services.game_config_service import get_config
+
+        if not (await get_config(db)).academy_enabled:
+            return False, "Академия сейчас закрыта"
     return True, ""
 
 
@@ -410,6 +417,12 @@ async def deliver_payment(
         if invoice.stars_amount != total_amount:
             raise ConflictError("Stars amount does not match the invoice")
         path_result = await path_service.deliver_stars_attempt(db, user, invoice)
+    elif invoice.academy_speedup:
+        from app.services import academy_service
+
+        if invoice.stars_amount != total_amount:
+            raise ConflictError("Stars amount does not match the invoice")
+        path_result = await academy_service.deliver_speedup(db, user, invoice)
     elif invoice.is_wheel_spin:
         # Imported here rather than at module level: wheel_service itself
         # imports _request_telegram_invoice_link from this module at import
@@ -476,7 +489,7 @@ async def deliver_payment(
         return StarsInvoiceStatusOut(status="completed", my_player_result=my_player_result)
     if invoice.is_blackjack_entry:
         return StarsInvoiceStatusOut(status="completed", blackjack_result=blackjack_result)
-    if invoice.path_user_card_id is not None:
+    if invoice.path_user_card_id is not None or invoice.academy_speedup:
         return StarsInvoiceStatusOut(status="completed", path_result=path_result)
     return StarsInvoiceStatusOut(
         status="completed",

@@ -358,6 +358,11 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
                 </button>
               </div>
               {error && <p className="mt-2 rounded-lg bg-red-500/10 px-2 py-1 text-xs text-red-400">{error}</p>}
+              {state.academy && (state.academy.xp_pct > 0 || state.academy.attempts > 0 || state.academy.task_cut_pct > 0) && (
+                <p className="mt-2 rounded-lg bg-path/10 px-2 py-1 text-[11px] text-path">
+                  🏫 Бонусы здания Академии: +{state.academy.xp_pct}% опыта · +{state.academy.attempts} попыт. · задания −{state.academy.task_cut_pct}%
+                </p>
+              )}
               <p className="mt-2 text-[10px] text-ink-mist-dim">
                 Опыт идёт только за наградные матчи с этой карточкой в составе. Попытки Card Arena тратятся сначала бесплатные,
                 потом купленные; турнир игроков и карьера попытки не тратят.

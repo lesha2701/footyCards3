@@ -162,3 +162,43 @@ class PathAttemptPurchase(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     __table_args__ = (UniqueConstraint("user_id", "idempotency_key", name="uq_path_attempt_purchases_user_key"),)
+
+
+class UserAcademy(Base):
+    """A user's «Академия» building (services/academy_service.py): the level
+    of each wing ({code: level}), the one construction in progress (wing,
+    target level, finish time — completed lazily on the next read) and the
+    last free scouting report. `total_level` (sum of wing levels) is kept in
+    a column for the leaderboard."""
+
+    __tablename__ = "user_academies"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    levels: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    total_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
+    building_code: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    building_to_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    build_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    build_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    scout_report_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class AcademyLedger(Base):
+    """Every academy operation: upgrade start (coins), Stars speed-up,
+    completion, scouting report. `(user_id, idempotency_key)` unique."""
+
+    __tablename__ = "academy_ledger"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # upgrade | speedup | report
+    building_code: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    to_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    coins_spent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    stars_spent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    result: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "idempotency_key", name="uq_academy_ledger_user_key"),)
