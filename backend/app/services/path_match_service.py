@@ -249,3 +249,71 @@ async def career_fatigue_gains(db: AsyncSession, gains: Optional[dict], cards_by
         if snap is not None:
             out[card.id] = out[card.id] * (100 - int(snap["values"]["fatigue_cut_pct"])) // 100
     return out
+
+
+async def career_apply_talents(db: AsyncSession, runners, cards_by_id: dict, config) -> None:
+    """«Академия» talents for a «Карьера тренера» match, decided at kickoff
+    once both sides exist (opponent strength for «Большие матчи»). Static
+    ones go into each starter's match rating (after familiarity, fatigue and
+    form); dynamic ones ride on the engine card's `talent` snapshot and are
+    applied per chance by tournament_match_engine exactly as in player
+    tournaments; «Универсал» / «Свой парень» shape the runner's chemistry.
+    Bench players carry their dynamic talents only. No RNG is drawn."""
+    if not config.path_enabled:
+        return
+    runners = [r for r in runners if r is not None]
+    if len(runners) != 2 or not any(
+        path_service.is_path_card(cards_by_id.get(p.card.id)) for r in runners for p in r.on_pitch + r.bench
+        if cards_by_id.get(p.card.id) is not None
+    ):
+        return
+    catalog = await path_service.load_catalog(db)
+
+    def avg(runner) -> float:
+        return sum(p.base_rating for p in runner.on_pitch) / len(runner.on_pitch) if runner.on_pitch else 0.0
+
+    for runner, other in ((runners[0], runners[1]), (runners[1], runners[0])):
+        talents = {}
+        for p in runner.on_pitch + runner.bench:
+            card = cards_by_id.get(p.card.id)
+            if card is None or card.owner_id is None:
+                continue
+            snap = talent_snapshot(card, catalog, config, "career")
+            if snap is not None:
+                talents[p.card.id] = snap
+        if not talents:
+            continue
+        own_avg, opp_avg = avg(runner), avg(other)
+        pairs = [(_CareerCard(p.card, cards_by_id.get(p.card.id)), p.slot) for p in runner.on_pitch]
+        plan = plan_static(
+            pairs, {cid: s for cid, s in talents.items() if any(p.card.id == cid for p in runner.on_pitch)}, config,
+            formation=runner.formation, opponent_ratio=(opp_avg / own_avg) if own_avg else None,
+            coach_country=chemistry_service.coach_country_of(runner.coach), stadium_club=None,
+            chemistry_on=runner.chem_rules is not None,
+        )
+        cap = max(0, int(config.path_talent_cap))
+        for p in runner.on_pitch:
+            p.talent_static = plan.static.get(p.card.id, 0)
+            position = plan.position_override.get(p.card.id)
+            if position is not None:
+                p.card.player.position = position  # this match's engine copy only
+        for p in runner.on_pitch + runner.bench:
+            snap = plan.talents.get(p.card.id)
+            if snap is None and p.card.id in talents:
+                snap = {**talents[p.card.id], "static": 0, "room": cap if talents[p.card.id]["kind"] == "dynamic" else 0}
+            if snap is not None:
+                p.card.talent = snap
+        runner.talent_hooks = plan.chemistry_hooks()
+        runner.refresh_chemistry()
+        runner._cache_key = None
+
+
+class _CareerCard:
+    """(engine card, user card) for plan_static: identity / position / club /
+    country come from the engine copy, the talent from the user card."""
+
+    def __init__(self, engine_card, user_card):
+        self.id = engine_card.id
+        self.player = engine_card.player
+        self.player_id = getattr(engine_card, "player_id", None)
+        self._user_card = user_card

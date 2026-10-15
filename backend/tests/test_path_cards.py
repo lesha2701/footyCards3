@@ -723,3 +723,80 @@ async def test_admin_overview_lists_talents_stages_and_tasks(client, db_session,
     catalog = await _catalog(db_session)
     assert [s.max_rating for s in catalog.stages] == [65, 74, 84, 89, 96]
     assert len(catalog.talents) == 10
+
+
+async def test_path_pack_without_academy_players_is_refused_before_payment(client, db_session, bot_token):
+    await _config(db_session)
+    headers, user = await _login(client, db_session, bot_token, 970031, balance=10_000)
+    await create_player(db_session, rarity=Rarity.diamond)  # a regular diamond only
+    await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(db_session, "path-empty", 100, 3, {Rarity.diamond: 0.5, Rarity.common: 0.5}, player_pool="path")
+
+    shop = (await client.get("/api/v1/packs", headers=headers)).json()
+    item = next(p for p in shop if p["id"] == pack.id)
+    assert item["is_available_now"] is False and "Академии" in item["unavailable_reason"]
+
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={})
+    assert resp.status_code == 409 and resp.json()["error"]["details"]["reason"] == "path_pool_empty"
+    await db_session.refresh(user)
+    assert user.balance == 10_000
+
+    await create_player(db_session, rarity=Rarity.diamond, path_talent_code="fighter")
+    shop = (await client.get("/api/v1/packs", headers=headers)).json()
+    assert next(p for p in shop if p["id"] == pack.id)["is_available_now"] is True
+    assert (await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={})).status_code == 200
+
+
+async def test_admin_cannot_switch_on_an_empty_academy_pack(client, db_session, bot_token):
+    await _config(db_session)
+    session = await client.post("/api/v1/auth/session", headers=telegram_headers(999000001, bot_token))
+    admin = {"Authorization": f"Bearer {session.json()['admin_token']}"}
+    pack = await create_pack(db_session, "path-off", 100, 1, {Rarity.diamond: 1.0}, player_pool="path", is_active=False)
+    resp = await client.post(f"/api/v1/admin/packs/{pack.id}/toggle-active", headers=admin)
+    assert resp.status_code == 409 and "Академии" in resp.json()["error"]["message"]
+    await create_player(db_session, rarity=Rarity.diamond, path_talent_code="captain", position=Position.CM)
+    resp = await client.post(f"/api/v1/admin/packs/{pack.id}/toggle-active", headers=admin)
+    assert resp.status_code == 200 and resp.json()["is_active"] is True
+
+
+async def test_career_applies_static_and_dynamic_talents(db_session):
+    from tests.test_career_tactics import _defaults, _runner
+
+    config = await _config(db_session)
+    await path_service.ensure_catalog(db_session)
+    cfg = _defaults(path_enabled=True, path_talent_cap=8)
+    home, away = _runner("a", config=cfg, rating=70), _runner("b", config=cfg, offset=200, rating=80)
+    striker = next(p for p in home.on_pitch if p.slot.code == "FWD2")
+    keeper = next(p for p in home.on_pitch if p.slot.category == "GK")
+
+    def user_card(engine, code, stage):
+        return NS(id=engine.card.id, owner_id=1, path_stage=stage, talent_override=None,
+                  player=NS(display_name=engine.card.player.display_name, path_talent_code=code))
+
+    cards = {
+        striker.card.id: user_card(striker, "big_matches", 2),   # opponent avg 80 vs 70 → +3
+        keeper.card.id: user_card(keeper, "hold_lead", 4),       # dynamic only
+    }
+    await path_match_service.career_apply_talents(db_session, (home, away), cards, config)
+    assert striker.talent_static == 3
+    assert keeper.talent_static == 0 and keeper.card.talent["code"] == "hold_lead" and keeper.card.talent["room"] == 8
+    _side, lineup, _events = home.state_at(10, 0, 0)
+    gk = next(x for x in lineup if x["category"] == "GK")
+    assert gk["talent"]["code"] == "hold_lead"
+    st = next(x for x in lineup if x["club_card_id"] == striker.card.id)
+    plain = next(x for x in lineup if x["category"] == "FWD" and x["club_card_id"] != striker.card.id)
+    assert st["rating"] == plain["rating"] + 3
+    # Away side has no academy cards: untouched.
+    assert all(p.talent_static == 0 and not getattr(p.card, "talent", None) for p in away.on_pitch)
+
+
+async def test_career_talents_off_when_mechanic_disabled(db_session):
+    from tests.test_career_tactics import _defaults, _runner
+
+    config = await _config(db_session, path_enabled=False)
+    home, away = _runner("a", config=_defaults()), _runner("b", config=_defaults(), offset=200, rating=90)
+    striker = home.on_pitch[-1]
+    cards = {striker.card.id: NS(id=striker.card.id, owner_id=1, path_stage=4, talent_override=None,
+                                 player=NS(display_name="x", path_talent_code="big_matches"))}
+    await path_match_service.career_apply_talents(db_session, (home, away), cards, config)
+    assert striker.talent_static == 0

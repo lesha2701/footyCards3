@@ -271,6 +271,8 @@ export interface Pack {
   skill_token_drop_chance?: number;
   /** "path" = the «Академия» pack (diamond slots drop only path cards). */
   player_pool?: string;
+  /** Why the pack cannot be bought right now (e.g. no «Академия» players yet). */
+  unavailable_reason?: string | null;
   user_purchase_count: number;
   is_available_now: boolean;
   /** Average quick-sell value of the cards inside (shop listing only). */
@@ -844,6 +846,7 @@ export interface ArenaLeaderboardEntry {
 }
 
 export type RankingMetric =
+  | "academy_level"
   | "academy_prestige"
   | "arena_rating"
   | "matches_won"
@@ -2581,6 +2584,8 @@ export interface PathState {
   hunger_streak: number;
   recent: PathHistoryItem[];
   prestige?: PathPrestige;
+  /** «Академия» building bonuses applied to this card. */
+  academy?: { xp_pct: number; attempts: number; task_cut_pct: number };
 }
 
 export interface PathPrestigeReward {
@@ -2635,4 +2640,35 @@ export interface PathMatchProgress {
   xp: number;
   levels: number[];
   stages: number[];
+}
+
+// --- «Академия» building ---------------------------------------------------
+
+export interface AcademyWing {
+  code: "scout" | "training" | "dorm" | "staff" | "hall";
+  name: string;
+  emoji: string;
+  about: string;
+  level: number;
+  max_level: number;
+  effect: string | null;
+  next_effect: string | null;
+  next_cost: number | null;
+  next_hours: number | null;
+  building: boolean;
+}
+
+export interface AcademyState {
+  enabled: boolean;
+  level: number;
+  max_level: number;
+  wings: AcademyWing[];
+  construction: { building_code: string; to_level: number; ends_at: string; remaining_seconds: number; speedup_stars: number } | null;
+  scout_report: { chance_pct: number; consolation_coins: number; cooldown_days: number; available: boolean; next_at: string | null } | null;
+  effects: Record<string, number>;
+  showcase_slots: number;
+  academy_cards: number;
+  cards: UserCard[];
+  new_balance?: number;
+  report?: { coins?: number; card_id?: number; player_name?: string } | null;
 }

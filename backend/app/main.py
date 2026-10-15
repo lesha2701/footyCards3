@@ -45,6 +45,7 @@ from app.routers import (
     card_collections,
     card_skills,
     path,
+    academy,
     career,
     clubs,
     player_tournaments,
@@ -125,6 +126,7 @@ app.include_router(card_collections.router, prefix=API_PREFIX)
 app.include_router(collection.router, prefix=API_PREFIX)
 app.include_router(card_skills.router, prefix=API_PREFIX)
 app.include_router(path.router, prefix=API_PREFIX)
+app.include_router(academy.router, prefix=API_PREFIX)
 app.include_router(bingo.router, prefix=API_PREFIX)
 app.include_router(packs.router, prefix=API_PREFIX)
 app.include_router(free_pack.router, prefix=API_PREFIX)

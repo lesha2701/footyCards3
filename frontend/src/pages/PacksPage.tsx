@@ -278,6 +278,9 @@ function PackCard({
           <div>
             <p className="font-display text-base font-bold text-ink-chalk">{pack.name}</p>
             <p className="mt-1 text-xs text-ink-mist">{pack.description}</p>
+            {pack.unavailable_reason && (
+              <p className="mt-1 rounded-md bg-amber-400/10 px-2 py-0.5 text-[11px] font-semibold text-amber-300">{pack.unavailable_reason}</p>
+            )}
             <div className="mt-2 flex flex-wrap gap-1">
               {pack.rarity_probabilities.map((rp) => (
                 <span
@@ -351,6 +354,9 @@ function StarsPackCard({ pack, onPurchased }: { pack: Pack; onPurchased: (result
           <div>
             <p className="font-display text-base font-bold text-ink-chalk">{pack.name}</p>
             <p className="mt-1 text-xs text-ink-mist">{pack.description}</p>
+            {pack.unavailable_reason && (
+              <p className="mt-1 rounded-md bg-amber-400/10 px-2 py-0.5 text-[11px] font-semibold text-amber-300">{pack.unavailable_reason}</p>
+            )}
             <div className="mt-2 flex flex-wrap gap-1">
               {pack.rarity_probabilities.map((rp) => (
                 <span

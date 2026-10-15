@@ -9,6 +9,7 @@ import { fetchMyProfile } from "@/api/profile";
 import { fetchTasks } from "@/api/tasks";
 import { fetchWheelStatus } from "@/api/wheel";
 import { Skeleton } from "@/components/common/Skeleton";
+import AcademyHomeCard from "@/components/home/AcademyHomeCard";
 import ClubHomeCard from "@/components/home/ClubHomeCard";
 import HomeHero from "@/components/home/HomeHero";
 import TodayCard from "@/components/home/TodayCard";
@@ -62,6 +63,8 @@ export default function HomePage() {
       />
 
       <TodayCard wheel={flags?.wheel_enabled !== false ? wheelStatus : null} />
+
+      <AcademyHomeCard />
 
       <ClubHomeCard />
 

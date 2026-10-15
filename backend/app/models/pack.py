@@ -204,4 +204,7 @@ class StarsInvoice(TimestampMixin, Base):
     path_user_card_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True
     )
+    # «Академия» building speed-up (never with the fields above): finishes
+    # the construction of this wing/level — academy_service.deliver_speedup.
+    academy_speedup: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

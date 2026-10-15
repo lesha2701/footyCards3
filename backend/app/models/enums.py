@@ -115,6 +115,8 @@ class TransactionType(str, enum.Enum):
     path_attempt_purchase = "path_attempt_purchase"
     path_prestige = "path_prestige"
     path_prestige_reward = "path_prestige_reward"
+    academy_upgrade = "academy_upgrade"
+    academy_scout_reward = "academy_scout_reward"
     arena_division_reward = "arena_division_reward"
 
 

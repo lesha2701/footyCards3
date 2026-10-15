@@ -687,3 +687,29 @@ class GameConfig(TimestampMixin, Base):
     # One duplicate of the SAME player = this many spare copies of other
     # «Академия» players (prestige material exchange rate).
     path_prestige_other_ratio: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # «Академия» building (services/academy_service.py): per wing — coin cost,
+    # build time in hours and the effect value at each level (list index =
+    # level - 1). Effects: scout — +percentage points to the «Академия» card
+    # chance of a slot in the «Академия» pack; training — +% path experience;
+    # dorm — +free Card Arena attempts a day per card; staff — −% of stage
+    # task targets; hall — +profile showcase slots.
+    academy_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    academy_buildings: Mapped[dict] = mapped_column(
+        JSON, nullable=False,
+        default=lambda: {
+            "scout": {"costs": [2000, 5000, 10000, 20000, 40000], "hours": [1, 4, 8, 16, 24], "effect": [1, 2, 3, 4, 5]},
+            "training": {"costs": [2000, 5000, 10000, 20000, 40000], "hours": [1, 4, 8, 16, 24], "effect": [4, 8, 12, 16, 20]},
+            "dorm": {"costs": [3000, 6000, 12000, 24000, 48000], "hours": [2, 6, 12, 18, 24], "effect": [1, 1, 2, 2, 3]},
+            "staff": {"costs": [2500, 6000, 12000, 24000, 45000], "hours": [2, 6, 10, 16, 24], "effect": [5, 10, 15, 20, 25]},
+            "hall": {"costs": [1000, 3000, 6000, 12000, 25000], "hours": [1, 2, 4, 8, 12], "effect": [1, 2, 3, 4, 5]},
+        },
+    )
+    # Stars to finish a construction now: per started remaining hour (min 1).
+    academy_stars_per_hour: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # Free scouting report (scout wing >= 1), per scout level: chance of an
+    # «Академия» card, days between reports, coins when no card was found.
+    academy_scout_report: Mapped[dict] = mapped_column(
+        JSON, nullable=False,
+        default=lambda: {"chance_pct": [15, 20, 25, 30, 40], "cooldown_days": [7, 6, 5, 4, 3],
+                         "consolation_coins": [200, 300, 400, 500, 700]},
+    )

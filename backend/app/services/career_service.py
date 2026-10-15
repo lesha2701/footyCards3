@@ -1644,6 +1644,9 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         if v1:
             run_h, run_a = await runner_for(home, "a", away), await runner_for(away, "b", home)
             if run_h and run_a:
+                await path_match_service.career_apply_talents(
+                    db, (run_h, run_a), {c.id: c for cards in cards_cache.values() for c in cards}, config,
+                )
                 if season.difficulty == "legend":
                     for bot, human, bot_index in ((run_h, run_a, home), (run_a, run_h, away)):
                         if teams[bot_index].get("user_id") is None and teams[away if bot is run_h else home].get("user_id"):
@@ -1803,6 +1806,10 @@ async def _play_cup_round(db, season, state, round_index, config, humans, runner
         team_a, team_b = _cup_team(state, a), _cup_team(state, b)
         with_human = bool(team_a.get("user_id") or team_b.get("user_id"))
         run_a, run_b = await runner_for(a, "a", b, cup=True), await runner_for(b, "b", a, cup=True)
+        if run_a and run_b:
+            await path_match_service.career_apply_talents(
+                db, (run_a, run_b), {c.id: c for cards in cards_cache.values() for c in cards}, config,
+            )
         res: dict = {"a": a, "b": b, "events": None, "pens": None}
         if run_a and run_b:
             tracker: dict = {}

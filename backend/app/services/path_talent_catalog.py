@@ -53,6 +53,7 @@ TALENTS: dict[str, TalentDefinition] = {t.code: t for t in (
         modes={
             "arena": "Сила соперника на старте матча больше силы твоего состава",
             "ptour": "Средний рейтинг состава соперника больше твоего",
+            "career": "Средний рейтинг стартового состава соперника больше твоего",
         },
     ),
     TalentDefinition(
@@ -64,7 +65,7 @@ TALENTS: dict[str, TalentDefinition] = {t.code: t for t in (
         modes={
             "arena": "Моменты с его участием с указанной минуты",
             "ptour": "Моменты с его участием с указанной минуты",
-            "career": "Набирает меньше усталости за матч (рейтинг в карьере не меняет)",
+            "career": "Его эпизоды с указанной минуты и меньше усталости за матч",
         },
     ),
     TalentDefinition(
@@ -76,6 +77,7 @@ TALENTS: dict[str, TalentDefinition] = {t.code: t for t in (
         modes={
             "arena": "Слот соседней позиции в составе Арены",
             "ptour": "Слот соседней позиции в составе турнира",
+            "career": "Слот соседней позиции в составе карьеры (и при заполнении дыр)",
         },
     ),
     TalentDefinition(
@@ -87,6 +89,7 @@ TALENTS: dict[str, TalentDefinition] = {t.code: t for t in (
         modes={
             "arena": "Только при включённой химии",
             "ptour": "Только если турнир играется с химией",
+            "career": "Только если сезон играется с химией",
         },
     ),
     TalentDefinition(
@@ -98,6 +101,7 @@ TALENTS: dict[str, TalentDefinition] = {t.code: t for t in (
         modes={
             "arena": "Тренер и стадион из состава Арены",
             "ptour": "Тренер — всегда, стадион — только в домашнем матче",
+            "career": "Тренер команды из его страны (стадиона в карьере нет)",
         },
     ),
     TalentDefinition(
@@ -117,6 +121,7 @@ TALENTS: dict[str, TalentDefinition] = {t.code: t for t in (
         modes={
             "arena": "Моменты с его участием при отставании в счёте",
             "ptour": "Моменты с его участием при отставании в счёте",
+            "career": "Моменты с его участием при отставании в счёте",
         },
     ),
     TalentDefinition(
@@ -128,6 +133,7 @@ TALENTS: dict[str, TalentDefinition] = {t.code: t for t in (
         modes={
             "arena": "Удар в эпизоде «один на один»; вратарь — сейв один на один и пенальти",
             "ptour": "Удар в моменте наивысшего качества; вратарь — сейв в нём и на пенальти",
+            "career": "Удар в моменте наивысшего качества; вратарь — сейв в нём",
         },
     ),
     TalentDefinition(
@@ -139,6 +145,7 @@ TALENTS: dict[str, TalentDefinition] = {t.code: t for t in (
         modes={
             "arena": "Его отбор/блок и сейвы вратаря при ведении в концовке",
             "ptour": "Его оборона и сейвы вратаря при ведении в концовке",
+            "career": "Его оборона и сейвы вратаря при ведении в концовке",
         },
         positions=DEFENDERS,
     ),
@@ -151,6 +158,7 @@ TALENTS: dict[str, TalentDefinition] = {t.code: t for t in (
         modes={
             "arena": "Соседи по связям схемы 4-3-3",
             "ptour": "Соседи по связям схемы турнирного состава",
+            "career": "Соседи по связям схемы на старте матча",
         },
     ),
 )}

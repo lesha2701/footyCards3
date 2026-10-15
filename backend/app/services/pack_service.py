@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 import random
 from datetime import datetime, timezone
 from typing import Optional
@@ -62,6 +63,35 @@ def _assert_pack_available(pack: Pack) -> None:
         raise ConflictError("This pack sale has ended")
 
 
+PATH_POOL_EMPTY = "В паке пока нет карточек «Академии» — администратор ещё не добавил игроков"
+
+
+async def path_pool_ready(db: AsyncSession) -> bool:
+    """At least one «Академия» player can drop (same filter as
+    pick_random_player for a path-pool diamond slot)."""
+    row = (await db.execute(
+        select(Player.id).outerjoin(CardCollection, Player.collection_id == CardCollection.id)
+        .where(
+            Player.rarity == Rarity.diamond, Player.path_talent_code.is_not(None), Player.is_active.is_(True),
+            Player.is_pack_droppable.is_(True), _collection_active_filter(),
+        ).limit(1)
+    )).first()
+    return row is not None
+
+
+def _needs_path_pool(pack: Pack) -> bool:
+    return (getattr(pack, "player_pool", "default") or "default") == "path" and any(
+        rp.rarity == Rarity.diamond and float(rp.probability) > 0 for rp in pack.rarity_probabilities
+    )
+
+
+async def assert_pool_ready(db: AsyncSession, pack: Pack) -> None:
+    """Refuse BEFORE any payment: a path pack whose diamond slot has nothing
+    to drop would only fail mid-opening."""
+    if _needs_path_pool(pack) and not await path_pool_ready(db):
+        raise ConflictError(PATH_POOL_EMPTY, details={"reason": "path_pool_empty"})
+
+
 async def _assert_purchase_limit(db: AsyncSession, pack: Pack, user_id: int, quantity: int = 1) -> None:
     if pack.purchase_limit_per_user is None:
         return
@@ -94,6 +124,24 @@ def roll_rarities(probabilities: list[PackRarityProbability], card_count: int, g
             rolled[-1] = forced_rarity
 
     return rolled
+
+
+def scout_adjusted(probabilities, bonus: float) -> list:
+    """Rarity shares with the diamond share raised by `bonus` (absolute,
+    0..1) and the rest scaled down proportionally — the total stays the
+    same. A pack with no diamond row is returned unchanged."""
+    rows = list(probabilities)
+    total = sum(float(p.probability) for p in rows)
+    diamond = next((p for p in rows if p.rarity == Rarity.diamond), None)
+    if bonus <= 0 or diamond is None or total <= 0:
+        return rows
+    d = float(diamond.probability) / total
+    new_d = min(1.0, d + bonus)
+    scale = (1 - new_d) / (1 - d) if d < 1 else 0.0
+    return [
+        SimpleNamespace(rarity=p.rarity, probability=(new_d if p is diamond else float(p.probability) / total * scale) * total)
+        for p in rows
+    ]
 
 
 def _collection_active_filter():
@@ -313,7 +361,16 @@ async def roll_and_create_cards(
     seen_this_opening: set[int] = set()
     seen_coaches_this_opening: set[int] = set()
     seen_stadiums_this_opening: set[int] = set()
-    rolled_rarities = roll_rarities(pack.rarity_probabilities, pack.card_count, pack.guaranteed_min_rarity)
+    probabilities = pack.rarity_probabilities
+    if (getattr(pack, "player_pool", "default") or "default") == "path":
+        # «Академия» building, scout wing: +pp to the «Академия» (diamond) share
+        # of each slot, the other rarities scaled down to keep the total.
+        from app.services.academy_service import user_effects
+        from app.services.game_config_service import get_config as _get_config
+
+        bonus = (await user_effects(db, user.id, await _get_config(db)))["scout"] / 100
+        probabilities = scout_adjusted(probabilities, bonus)
+    rolled_rarities = roll_rarities(probabilities, pack.card_count, pack.guaranteed_min_rarity)
 
     # Each slot is an independent coin flip against the pack's coach_drop_chance
     # and stadium_drop_chance — not a fixed count of coach/stadium slots — mirrors
@@ -535,6 +592,7 @@ async def open_pack(
 
     pack = await _get_pack_or_404(db, pack_id)
     _assert_pack_available(pack)
+    await assert_pool_ready(db, pack)
     await _assert_purchase_limit(db, pack, user.id)
 
     # Lock the buyer and (if a referral bonus might still be owed) their
@@ -732,6 +790,7 @@ async def open_pack_bulk(
             return await _get_bulk_opening_result(db, user, pack, quantity, idempotency_key)
 
     _assert_pack_available(pack)
+    await assert_pool_ready(db, pack)
     await _assert_purchase_limit(db, pack, user.id, quantity=quantity)
 
     # Same buyer(+referrer) locking order as open_pack — see that function's
@@ -848,6 +907,7 @@ async def list_available_packs(db: AsyncSession, user_id: Optional[int] = None) 
     from app.services.pack_value_service import pack_rarity_breakdown, rarity_quick_sell_averages
 
     averages = await rarity_quick_sell_averages(db)
+    pool_ready = await path_pool_ready(db) if any(_needs_path_pool(p) for p in packs) else True
     out = []
     for pack in packs:
         purchase_count = 0
@@ -864,9 +924,14 @@ async def list_available_packs(db: AsyncSession, user_id: Optional[int] = None) 
             is_available_now = False
         if pack.available_until and now > pack.available_until:
             is_available_now = False
+        unavailable_reason = None
+        if _needs_path_pool(pack) and not pool_ready:
+            is_available_now = False
+            unavailable_reason = "Скоро: игроки «Академии» ещё не добавлены"
         item = PackOut.model_validate(pack)
         item.user_purchase_count = purchase_count
         item.is_available_now = is_available_now
+        item.unavailable_reason = unavailable_reason
         item.expected_value = pack_rarity_breakdown(pack, averages)[0]
         out.append(item)
     return out

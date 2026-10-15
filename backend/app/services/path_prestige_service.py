@@ -346,8 +346,13 @@ async def get_state(db: AsyncSession, user: User, card_id: int) -> dict:
     return await path_service.get_state(db, user, card_id)
 
 
-async def showcase(db: AsyncSession, user_id: int, limit: int = 3) -> list[UserCard]:
-    """Profile showcase: the user's most prestigious «Академия» copies."""
+async def showcase(db: AsyncSession, user_id: int, limit: Optional[int] = None) -> list[UserCard]:
+    """Profile showcase: the user's most prestigious «Академия» copies — 3
+    places plus the «Зал славы» wing's extra ones."""
+    if limit is None:
+        from app.services.academy_service import SHOWCASE_BASE, user_effects
+
+        limit = SHOWCASE_BASE + (await user_effects(db, user_id, await get_config(db)))["hall"]
     rows = (await db.execute(
         select(UserCard).join(Player, Player.id == UserCard.player_id).options(joinedload(UserCard.player))
         .where(UserCard.owner_id == user_id, Player.path_talent_code.is_not(None), UserCard.prestige > 0)

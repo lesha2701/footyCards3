@@ -18,6 +18,7 @@ const METRICS: { value: RankingMetric; label: string; Icon: (props: IconProps) =
   { value: "cards_count", label: "Карт в коллекции", Icon: IconCollection },
   { value: "unique_players", label: "Уникальных игроков", Icon: IconUsers },
   { value: "referral_count", label: "Рефералов", Icon: IconHandshake },
+  { value: "academy_level", label: "Уровень Академии", Icon: IconStar },
   { value: "academy_prestige", label: "Престиж Академии", Icon: IconStar },
 ];
 

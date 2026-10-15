@@ -744,6 +744,7 @@ class LivePlayer:
     off_minute: Optional[int] = None
     gained: float = 0.0       # fatigue gained in this match
     chem_bonus: int = 0       # «химия» rating bonus in the current XI
+    talent_static: int = 0    # «Академия» static talents decided at kickoff
 
 
 @dataclass
@@ -779,6 +780,9 @@ class CareerSideRunner:
     # into the break (who is on, fatigue, subs used).
     halftime: Optional[dict] = None
     snapshot: Optional[dict] = None
+    # «Академия»: chemistry hooks of «Свой парень» / «Универсал» II
+    # (path_talent_effects.TalentPlan.chemistry_hooks), frozen at kickoff.
+    talent_hooks: Optional[dict] = None
     events_meta: list[dict] = field(default_factory=list)  # rule/sub log for the analysis
     _subs_done: set = field(default_factory=set)
     _effective: tuple = ()
@@ -806,6 +810,7 @@ class CareerSideRunner:
             return
         result = chemistry_service.compute_chemistry(
             [(p.card, p.slot) for p in self.on_pitch], self.formation, self.chem_rules, slot_count=len(self.on_pitch),
+            **(self.talent_hooks or {}),
         )
         for p in self.on_pitch:
             p.chem_bonus = result.rating_bonus(p.slot.code)
@@ -851,6 +856,8 @@ class CareerSideRunner:
         rating = base * (1 + fam_pct / 100) * (1 - penalty) + p.form
         if p.on_minute > 0:  # came off the bench: fresh legs
             rating += self.tuning["sub_fresh"]
+        # «Академия» static talents: after familiarity / fatigue / form.
+        rating += p.talent_static
         return max(1, min(99, round(rating)))
 
     def _apply_rules(self, minute: int, diff: int) -> list[dict]:
@@ -996,7 +1003,8 @@ class CareerSideRunner:
         lineup = [
             {"club_card_id": c.id, "player_id": c.player_id, "name": c.player.display_name, "rating": c.player.rating,
              "position": c.player.position.value, "category": slot.category,
-             **({"skill": c.skill} if getattr(c, "skill", None) else {})}
+             **({"skill": c.skill} if getattr(c, "skill", None) else {}),
+             **({"talent": c.talent} if getattr(c, "talent", None) else {})}
             for c, slot in with_slots
         ]
         self._cache_key, self._cache = key, (side, lineup)
