@@ -217,6 +217,20 @@ class User(TimestampMixin, Base):
     )
     active_badge: Mapped[Optional["Badge"]] = relationship(lazy="joined")
 
+    # Equipped cosmetics (models/monetization.py) — visual only. Stored as
+    # ids; cosmetic_service resolves them to style keys for display.
+    equipped_frame_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
+    equipped_background_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
+    equipped_card_skin_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
+    # When the one-time starter offer was first shown full-screen.
+    starter_offer_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     cards: Mapped[list["UserCard"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
 
     def full_display_name(self) -> str:

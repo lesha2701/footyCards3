@@ -781,3 +781,31 @@ class GameConfig(TimestampMixin, Base):
         default=lambda: {"chance_pct": [10, 12, 14, 16, 20], "cooldown_days": [10, 9, 8, 8, 7],
                          "consolation_coins": [100, 150, 200, 250, 300]},
     )
+
+    # --- Monetization (models/monetization.py) ---------------------------
+    # Monthly login calendar: catching up a missed day of the current month.
+    # 0 = that currency is off.
+    calendar_catchup_coins: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    calendar_catchup_stars: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    calendar_catchup_max_per_month: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # «Клубный абонемент» (monthly Stars subscription) and its perks.
+    club_pass_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    club_pass_stars: Mapped[int] = mapped_column(Integer, default=199, nullable=False)
+    club_pass_daily_coins: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    club_pass_daily_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    club_pass_extra_rewarded_attempts: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    club_pass_frame_cosmetic_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    club_pass_badge_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Reserved for when ads exist: subscribers won't see them.
+    club_pass_ad_free: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # «Сезонный пропуск»: XP per rewarded game and per calendar claim.
+    season_pass_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    season_xp_per_game: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    season_xp_per_daily_claim: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    # One-time starter offer for new players.
+    starter_offer_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    starter_offer_hours: Mapped[int] = mapped_column(Integer, default=48, nullable=False)
+    starter_offer_stars: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    starter_offer_coins: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    starter_offer_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    starter_offer_cosmetic_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

@@ -59,6 +59,18 @@ from app.models.wheel import WheelPrize, WheelSpin
 from app.models.user import User
 from app.models.user_activity import UserDailyActivity
 from app.models.stars_payment_receipt import StarsPaymentReceipt
+from app.models.monetization import (
+    ClubSubscription,
+    Cosmetic,
+    LoginCalendarBonusClaim,
+    LoginCalendarDay,
+    Season,
+    SeasonClaim,
+    SeasonLevel,
+    SeasonProgress,
+    StarterOfferPurchase,
+    UserCosmetic,
+)
 from app.models.user_coach_card import UserCoachCard
 from app.models.stadium import Stadium
 from app.models.user_stadium_card import UserStadiumCard
@@ -156,6 +168,16 @@ __all__ = [
     "User",
     "UserDailyActivity",
     "StarsPaymentReceipt",
+    "ClubSubscription",
+    "Cosmetic",
+    "LoginCalendarBonusClaim",
+    "LoginCalendarDay",
+    "Season",
+    "SeasonClaim",
+    "SeasonLevel",
+    "SeasonProgress",
+    "StarterOfferPurchase",
+    "UserCosmetic",
     "UserCoachCard",
     "Stadium",
     "UserStadiumCard",

@@ -274,7 +274,10 @@ async def _finish(db: AsyncSession, match: MagnateMatch, state: dict, config: Ga
         if user is not None and not row.replaced_by_bot:
             _ensure_daily_reset(user)
             reward = 0
-            if not user.game_rewards_blocked and user.magnate_rewarded_attempts_today < config.magnate_daily_limit:
+            from app.services.club_pass_service import extra_rewarded_attempts
+
+            limit = config.magnate_daily_limit + await extra_rewarded_attempts(db, user.id, config)
+            if not user.game_rewards_blocked and user.magnate_rewarded_attempts_today < limit:
                 user.magnate_rewarded_attempts_today += 1
                 reward = _place_reward(config, place, state.get("reward_pct", 100))
                 if reward > 0:

@@ -120,6 +120,7 @@ async def deliver_with_receipt(db: AsyncSession, payload: StarsPaymentDeliverIn)
     try:
         result = await stars_payment_service.deliver_payment(
             db, payload.payload_token, payload.telegram_user_id, charge_id, payload.total_amount,
+            subscription_expiration=payload.subscription_expiration_date,
         )
     except Exception as exc:
         await db.rollback()
@@ -240,6 +241,10 @@ async def _describe(db: AsyncSession, invoice: Optional[StarsInvoice]) -> str:
         return "Попытка «Академии»"
     if invoice.academy_speedup:
         return "Ускорение Академии"
+    if invoice.shop_product:
+        from app.services.shop_product_service import label
+
+        return label(invoice.shop_product)
     if invoice.coins_amount:
         return f"{invoice.coins_amount} монет"
     return "Покупка"

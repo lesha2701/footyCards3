@@ -13,6 +13,7 @@ from app.schemas.game import MemoryClaimOut, MemoryLeaderboardEntry, MemoryStart
 from app.services import task_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
+from app.services.club_pass_service import extra_rewarded_attempts
 
 SYMBOLS = ["⚽", "🥅", "🟨", "🟥", "👟", "🧤", "🏆", "🚩", "🎯", "🔥"]
 INITIAL_LENGTH = 3
@@ -168,7 +169,9 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> MemoryC
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked_user)
-    daily_cap_reached = locked_user.memory_rewarded_attempts_today >= config.memory_daily_reward_limit
+    daily_cap_reached = locked_user.memory_rewarded_attempts_today >= config.memory_daily_reward_limit + await extra_rewarded_attempts(
+        db, locked_user.id, config
+    )
 
     reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else min(session.score, config.memory_reward_cap)
     session.is_rewarded = True

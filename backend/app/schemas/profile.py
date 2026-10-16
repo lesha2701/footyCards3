@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from app.schemas.badge import BadgeOut
+from app.schemas.monetization import EquippedCosmeticsOut
 from app.schemas.player import PlayerOut
 
 
@@ -19,6 +20,9 @@ class ProfilePublicOut(BaseModel):
     arena_rank: int
     league_rank: int
     active_badge: Optional[BadgeOut] = None
+    # Equipped cosmetics (style keys) and whether the club pass is on.
+    cosmetics: EquippedCosmeticsOut = EquippedCosmeticsOut()
+    club_pass_active: bool = False
     matches_won: int
     matches_drawn: int
     matches_lost: int

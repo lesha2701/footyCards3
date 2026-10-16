@@ -121,6 +121,11 @@ class TransactionType(str, enum.Enum):
     my_player_duel_reward = "my_player_duel_reward"
     my_player_role_change = "my_player_role_change"
     lifestyle_income = "lifestyle_income"
+    calendar_catchup = "calendar_catchup"
+    cosmetic_purchase = "cosmetic_purchase"
+    club_pass_reward = "club_pass_reward"
+    season_pass_reward = "season_pass_reward"
+    starter_offer_reward = "starter_offer_reward"
 
 
 class GiftKind(str, enum.Enum):

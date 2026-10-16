@@ -336,6 +336,10 @@ def _product(inv: StarsInvoice) -> str:
         return "Академия: попытки"
     if inv.academy_speedup:
         return "Академия: ускорение"
+    if inv.shop_product:
+        from app.services.shop_product_service import label
+
+        return label(inv.shop_product)
     return "Другое"
 
 

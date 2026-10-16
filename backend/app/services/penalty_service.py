@@ -16,6 +16,7 @@ from app.schemas.ranking import RankingMetric
 from app.services import league_service, ranking_service, task_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
+from app.services.club_pass_service import extra_rewarded_attempts
 
 # 3x2 grid: which third of the goal (left/center/right) and which half
 # (top/bottom) the shot/dive targets. Shared with PvP (see penalty_match_service.py).
@@ -204,7 +205,9 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> Penalty
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked_user)
-    daily_cap_reached = locked_user.penalty_rewarded_attempts_today >= config.penalty_daily_limit
+    daily_cap_reached = locked_user.penalty_rewarded_attempts_today >= config.penalty_daily_limit + await extra_rewarded_attempts(
+        db, locked_user.id, config
+    )
 
     reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else session.reward_coins
     session.is_rewarded = True

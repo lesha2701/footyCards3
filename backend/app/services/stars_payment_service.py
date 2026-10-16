@@ -123,6 +123,8 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
         )
     if invoice.academy_speedup:
         return StarsInvoiceStatusOut(status="completed", path_result={"kind": "academy_speedup"})
+    if invoice.shop_product:
+        return StarsInvoiceStatusOut(status="completed", shop_result={"kind": invoice.shop_product.split(":")[0]})
 
     user = await db.get(User, invoice.user_id)
     return StarsInvoiceStatusOut(
@@ -131,7 +133,9 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
     )
 
 
-async def _request_telegram_invoice_link(payload_token: str, title: str, description: str, stars_amount: int) -> str:
+async def _request_telegram_invoice_link(
+    payload_token: str, title: str, description: str, stars_amount: int, subscription_period: int | None = None,
+) -> str:
     """Calls the Bot API to mint an invoice link. Split out from the create_*
     functions so tests can monkeypatch this one Telegram-calling function
     instead of mocking httpx (mirrors telegram_service's
@@ -144,6 +148,10 @@ async def _request_telegram_invoice_link(payload_token: str, title: str, descrip
         "currency": "XTR",
         "prices": [{"label": title[:32], "amount": stars_amount}],
     }
+    if subscription_period:
+        # Telegram Stars subscription: Telegram charges the same price again
+        # every period until the player (or we) cancel it.
+        body["subscription_period"] = subscription_period
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/createInvoiceLink"
     try:
         async with httpx.AsyncClient(timeout=10, proxy=settings.telegram_proxy_url or None) as client:
@@ -305,6 +313,10 @@ async def validate_pre_checkout(db: AsyncSession, payload_token: str, total_amou
 
         if not (await get_config(db)).academy_enabled:
             return False, "Академия сейчас закрыта"
+    elif invoice.shop_product:
+        from app.services import shop_product_service
+
+        return await shop_product_service.validate(db, invoice)
     return True, ""
 
 
@@ -321,8 +333,39 @@ async def _grant_pack_badge(db: AsyncSession, user: User, badge_id: int) -> None
     db.add(user)
 
 
+async def _deliver_subscription_renewal(
+    db: AsyncSession, user: User, charge_id: str, total_amount: int, subscription_expiration: int | None,
+) -> StarsInvoiceStatusOut:
+    """A Telegram Stars subscription renews by sending another
+    successful_payment with the ORIGINAL invoice payload and a new charge id.
+    Each renewal gets its own completed StarsInvoice row ("club_pass_renewal")
+    — that row's unique charge id is what makes a redelivered renewal a
+    no-op, and it is what revenue analytics count."""
+    from app.services import shop_product_service
+
+    existing = (await db.execute(
+        select(StarsInvoice).where(StarsInvoice.telegram_payment_charge_id == charge_id)
+    )).scalar_one_or_none()
+    if existing is not None:
+        return StarsInvoiceStatusOut(status="completed", shop_result={"kind": "club_pass_renewal"})
+
+    renewal = StarsInvoice(
+        user_id=user.id, payload_token=secrets.token_urlsafe(16), stars_amount=total_amount,
+        shop_product="club_pass_renewal", telegram_payment_charge_id=charge_id,
+        completed_at=datetime.now(timezone.utc),
+    )
+    db.add(renewal)
+    shop_result = await shop_product_service.deliver(db, user, renewal, charge_id, subscription_expiration)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()  # a concurrent delivery of the same renewal won
+    return StarsInvoiceStatusOut(status="completed", shop_result=shop_result)
+
+
 async def deliver_payment(
-    db: AsyncSession, payload_token: str, telegram_user_id: int, telegram_payment_charge_id: str, total_amount: int
+    db: AsyncSession, payload_token: str, telegram_user_id: int, telegram_payment_charge_id: str, total_amount: int,
+    subscription_expiration: int | None = None,
 ) -> StarsInvoiceStatusOut:
     """Grants the pack or credits the coins for a completed Telegram Stars
     payment. Called by the bot after it receives `successful_payment`.
@@ -341,7 +384,11 @@ async def deliver_payment(
     if invoice is None:
         raise NotFoundError("Invoice not found")
 
-    if invoice.completed_at is not None:
+    is_renewal = (
+        invoice.completed_at is not None and invoice.shop_product == "club_pass"
+        and invoice.telegram_payment_charge_id != telegram_payment_charge_id
+    )
+    if invoice.completed_at is not None and not is_renewal:
         return await _delivered_result(db, invoice)
 
     result = await db.execute(select(User).where(User.telegram_id == telegram_user_id))
@@ -350,6 +397,10 @@ async def deliver_payment(
         raise NotFoundError("User not found")
     if user.id != invoice.user_id:
         raise ConflictError("This payment does not belong to the invoice's original user")
+    if is_renewal:
+        return await _deliver_subscription_renewal(
+            db, user, telegram_payment_charge_id, total_amount, subscription_expiration,
+        )
 
     # By the time successful_payment arrives the player has already been
     # charged, so delivery checks only what the payment itself must match —
@@ -432,6 +483,14 @@ async def deliver_payment(
         if invoice.stars_amount != total_amount:
             raise ConflictError("Stars amount does not match the invoice")
         path_result = await academy_service.deliver_speedup(db, user, invoice)
+    elif invoice.shop_product:
+        from app.services import shop_product_service
+
+        if invoice.stars_amount != total_amount:
+            raise ConflictError("Stars amount does not match the invoice")
+        shop_result = await shop_product_service.deliver(
+            db, user, invoice, telegram_payment_charge_id, subscription_expiration,
+        )
     elif invoice.is_wheel_spin:
         # Imported here rather than at module level: wheel_service itself
         # imports _request_telegram_invoice_link from this module at import
@@ -500,6 +559,8 @@ async def deliver_payment(
         return StarsInvoiceStatusOut(status="completed", blackjack_result=blackjack_result)
     if invoice.path_user_card_id is not None or invoice.academy_speedup:
         return StarsInvoiceStatusOut(status="completed", path_result=path_result)
+    if invoice.shop_product:
+        return StarsInvoiceStatusOut(status="completed", shop_result=shop_result)
     return StarsInvoiceStatusOut(
         status="completed",
         coin_result=StarsCoinResultOut(coins_credited=invoice.coins_amount, new_balance=user.balance),

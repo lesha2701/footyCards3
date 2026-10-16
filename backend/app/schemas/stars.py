@@ -30,6 +30,8 @@ class StarsInvoiceStatusOut(BaseModel):
     blackjack_result: Optional[dict] = None
     # «Академия» attempt purchase: {"kind": "path_attempt", "user_card_id": n}.
     path_result: Optional[dict] = None
+    # Monetization products (shop_product_service): {"kind": ..., ...}.
+    shop_result: Optional[dict] = None
 
 
 class StarsCoinInvoiceCreate(BaseModel):
@@ -61,3 +63,8 @@ class StarsPaymentDeliverIn(BaseModel):
     telegram_user_id: int
     telegram_payment_charge_id: str
     total_amount: int
+    # Telegram Stars subscriptions (club pass): when the paid period ends,
+    # and whether this payment is a renewal. Absent on retries.
+    subscription_expiration_date: Optional[int] = None
+    is_recurring: bool = False
+    is_first_recurring: bool = False

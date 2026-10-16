@@ -1000,7 +1000,10 @@ async def _grant_reward(
     db: AsyncSession, user: User, result: MatchResult, config: GameConfig, match_id: int, pct: int = 100,
 ) -> int:
     _ensure_daily_reset(user)
-    if user.game_rewards_blocked or user.stratego_rewarded_attempts_today >= config.stratego_daily_limit:
+    from app.services.club_pass_service import extra_rewarded_attempts
+
+    limit = config.stratego_daily_limit + await extra_rewarded_attempts(db, user.id, config)
+    if user.game_rewards_blocked or user.stratego_rewarded_attempts_today >= limit:
         db.add(user)
         return 0
     reward = round(_reward_for(result, config) * pct / 100)

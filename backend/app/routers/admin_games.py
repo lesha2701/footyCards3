@@ -38,6 +38,10 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
         setattr(config, key, value)
     if config.shop_daily_offer_pack_id == 0:
         config.shop_daily_offer_pack_id = None  # 0 from the admin form = rotate by date
+    for key in ("club_pass_daily_pack_id", "club_pass_frame_cosmetic_id", "club_pass_badge_id",
+                "starter_offer_pack_id", "starter_offer_cosmetic_id"):
+        if getattr(config, key) == 0:
+            setattr(config, key, None)  # 0 from the admin form = none
     if config.card_skill_probability_floor_pct >= config.card_skill_probability_ceiling_pct:
         await db.rollback()
         raise ConflictError("Нижняя граница вероятности навыков должна быть меньше верхней")

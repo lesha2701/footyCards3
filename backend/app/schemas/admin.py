@@ -551,6 +551,26 @@ class GameConfigOut(BaseModel):
     academy_buildings: dict = {}
     academy_stars_per_hour: int = 2
     academy_scout_report: dict = {}
+    calendar_catchup_coins: int = 150
+    calendar_catchup_stars: int = 10
+    calendar_catchup_max_per_month: int = 5
+    club_pass_enabled: bool = True
+    club_pass_stars: int = 199
+    club_pass_daily_coins: int = 150
+    club_pass_daily_pack_id: Optional[int] = None
+    club_pass_extra_rewarded_attempts: int = 1
+    club_pass_frame_cosmetic_id: Optional[int] = None
+    club_pass_badge_id: Optional[int] = None
+    club_pass_ad_free: bool = True
+    season_pass_enabled: bool = True
+    season_xp_per_game: int = 10
+    season_xp_per_daily_claim: int = 25
+    starter_offer_enabled: bool = True
+    starter_offer_hours: int = 48
+    starter_offer_stars: int = 50
+    starter_offer_coins: int = 1000
+    starter_offer_pack_id: Optional[int] = None
+    starter_offer_cosmetic_id: Optional[int] = None
 
 
 class GameConfigUpdate(BaseModel):
@@ -996,6 +1016,27 @@ class GameConfigUpdate(BaseModel):
             if len(levels) > 5 or any(not minimum <= v <= 1_000_000 for v in levels):
                 raise ValueError(f"{rarity}: up to 5 values, each {minimum}..1000000")
         return value
+
+    calendar_catchup_coins: Optional[int] = Field(default=None, ge=0)
+    calendar_catchup_stars: Optional[int] = Field(default=None, ge=0, le=10000)
+    calendar_catchup_max_per_month: Optional[int] = Field(default=None, ge=0, le=31)
+    club_pass_enabled: Optional[bool] = None
+    club_pass_stars: Optional[int] = Field(default=None, ge=1, le=10000)
+    club_pass_daily_coins: Optional[int] = Field(default=None, ge=0)
+    club_pass_daily_pack_id: Optional[int] = Field(default=None, ge=0)
+    club_pass_extra_rewarded_attempts: Optional[int] = Field(default=None, ge=0, le=20)
+    club_pass_frame_cosmetic_id: Optional[int] = Field(default=None, ge=0)
+    club_pass_badge_id: Optional[int] = Field(default=None, ge=0)
+    club_pass_ad_free: Optional[bool] = None
+    season_pass_enabled: Optional[bool] = None
+    season_xp_per_game: Optional[int] = Field(default=None, ge=0, le=10000)
+    season_xp_per_daily_claim: Optional[int] = Field(default=None, ge=0, le=10000)
+    starter_offer_enabled: Optional[bool] = None
+    starter_offer_hours: Optional[int] = Field(default=None, ge=1, le=720)
+    starter_offer_stars: Optional[int] = Field(default=None, ge=1, le=10000)
+    starter_offer_coins: Optional[int] = Field(default=None, ge=0)
+    starter_offer_pack_id: Optional[int] = Field(default=None, ge=0)
+    starter_offer_cosmetic_id: Optional[int] = Field(default=None, ge=0)
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod

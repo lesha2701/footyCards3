@@ -207,4 +207,9 @@ class StarsInvoice(TimestampMixin, Base):
     # «Академия» building speed-up (never with the fields above): finishes
     # the construction of this wing/level — academy_service.deliver_speedup.
     academy_speedup: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    # Monetization products (never with the fields above) — see
+    # shop_product_service: "calendar_catchup:<YYYY-MM-DD>", "club_pass",
+    # "club_pass_renewal", "season_premium:<season_id>", "starter_offer",
+    # "cosmetic:<cosmetic_id>".
+    shop_product: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

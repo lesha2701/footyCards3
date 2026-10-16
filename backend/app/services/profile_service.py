@@ -144,6 +144,8 @@ async def _build_public(db: AsyncSession, user: User) -> ProfilePublicOut:
     packs_opened = await _packs_opened(db, user.id)
     tactics_won, tactics_drawn, tactics_lost = await _tactico_record(db, user.id)
     penalty_won, penalty_drawn, penalty_lost = await _penalty_record(db, user.id)
+    from app.services import club_pass_service, cosmetic_service
+
     return ProfilePublicOut(
         id=user.id,
         username=user.username,
@@ -165,6 +167,8 @@ async def _build_public(db: AsyncSession, user: User) -> ProfilePublicOut:
         packs_opened=packs_opened,
         referral_count=user.referral_count,
         active_badge=BadgeOut.model_validate(user.active_badge) if user.active_badge else None,
+        cosmetics=await cosmetic_service.equipped(db, user),
+        club_pass_active=club_pass_service.is_active(await club_pass_service.get_subscription(db, user.id)),
         tactics_rating=user.tactics_rating,
         tactics_matches_won=tactics_won,
         tactics_matches_drawn=tactics_drawn,
@@ -184,6 +188,9 @@ async def get_public_profile(db: AsyncSession, user_id: int) -> ProfilePublicOut
 
 
 async def get_private_profile(db: AsyncSession, user: User) -> ProfilePrivateOut:
+    from app.services import club_pass_service
+
+    await club_pass_service.expire_if_needed(db, user)
     public = await _build_public(db, user)
     config = await get_config(db)
     return ProfilePrivateOut(

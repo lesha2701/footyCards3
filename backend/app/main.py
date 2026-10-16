@@ -27,6 +27,7 @@ from app.routers import (
     admin_leagues,
     admin_lifestyle,
     admin_log,
+    admin_monetization,
     admin_packs,
     admin_players,
     admin_stadiums,
@@ -58,6 +59,7 @@ from app.routers import (
     gifts,
     internal,
     leaderboard,
+    monetization,
     leagues,
     lineups,
     maintenance,
@@ -192,6 +194,8 @@ app.include_router(admin_log.router, prefix=API_PREFIX)
 app.include_router(admin_stars_purchases.router, prefix=API_PREFIX)
 app.include_router(internal.router, prefix=API_PREFIX)
 app.include_router(wallet.router, prefix=API_PREFIX)
+app.include_router(monetization.router, prefix=API_PREFIX)
+app.include_router(admin_monetization.router, prefix=API_PREFIX)
 
 
 @app.get("/api/health")

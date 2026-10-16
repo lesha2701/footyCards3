@@ -1,240 +1,312 @@
-import random
-from datetime import date, datetime, timedelta, timezone
+"""«Календарь наград»: the monthly login calendar (replaced the old 7-day
+streak). Every day of the current month has a reward from one admin-edited
+template (login_calendar_days, day 1..31; day 0 = the bonus for claiming
+every day of a month). Today's reward is claimed once; a missed day of the
+current month stays missed unless it is caught up for coins or Stars (a
+limited number per month, GameConfig.calendar_catchup_*).
+
+Claims are still `daily_rewards` rows (reward_date = the calendar day,
+streak_day = its day of the month, claim_method = login/coins/stars), so the
+unique (user_id, reward_date) constraint keeps every day claimable once and
+the bot's reminder / club activity queries keep working unchanged."""
+import calendar as pycalendar
+from datetime import date, timedelta
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from app.core.exceptions import ConflictError
 from app.core.timeutil import local_today
-from app.models.card import UserCard
-from app.models.daily_reward import DailyReward, DailyRewardOption
-from app.models.enums import CardSource, Rarity, TransactionType
-from app.models.pack import Pack, PackOpening, PackOpeningCard
+from app.models.daily_reward import DailyReward
+from app.models.enums import CardSource, TransactionType
+from app.models.monetization import LoginCalendarBonusClaim, LoginCalendarDay
+from app.models.pack import Pack
 from app.models.user import User
-from app.schemas.card import UserCardOut
-from app.schemas.daily_reward import DailyRewardCalendarOut, DailyRewardClaimOut, DailyRewardDayOut
-from app.services.card_creation import create_user_card
-from app.services.collection_service import grant_collection_rewards_for_new_cards
-from app.services.pack_service import pick_random_player, roll_rarities
-from app.services.wallet_service import credit_coins, lock_user_for_update
+from app.schemas.monetization import (
+    CalendarClaimOut,
+    CalendarDayOut,
+    CalendarOut,
+    CalendarTemplateDayOut,
+    CalendarTemplateIn,
+    GrantedRewardsOut,
+)
+from app.services import reward_bundle_service
+from app.services.game_config_service import get_config
+from app.services.reward_bundle_service import Bundle
+from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
-# Default candidate pool seeded the first time daily_reward_options is read
-# and found empty (same lazy-singleton-row pattern as game_config_service's
-# GameConfig) — an escalating spread of amounts around this feature's old
-# fixed per-day value, keeping each day's special grant (pack/random card)
-# on every candidate so a day's "identity" (e.g. "day 4 gives a pack") stays
-# recognizable regardless of which candidate gets rolled. Admins can freely
-# diverge from this after the fact via the admin panel.
-DEFAULT_DAILY_REWARD_OPTIONS: dict[int, list[dict]] = {
-    1: [{"coins": c} for c in (40, 45, 50, 55, 60)],
-    2: [{"coins": c} for c in (65, 70, 75, 80, 90)],
-    3: [{"coins": c} for c in (85, 95, 100, 110, 120)],
-    4: [{"coins": c, "free_pack_slug": "basic"} for c in (110, 120, 125, 135, 150)],
-    5: [{"coins": c} for c in (130, 140, 150, 160, 175)],
-    6: [{"coins": c, "grants_random_card": True} for c in (175, 190, 200, 215, 230)],
-    7: [{"coins": c, "free_pack_slug": "premium"} for c in (260, 280, 300, 325, 350)],
-}
-
-RANDOM_CARD_RARITY_WEIGHTS = {Rarity.common: 0.55, Rarity.rare: 0.28, Rarity.epic: 0.13, Rarity.legendary: 0.04}
+BIG_DAYS = (7, 14, 21, 28)
 
 
-async def _ensure_default_options(db: AsyncSession) -> None:
-    count = (await db.execute(select(func.count(DailyRewardOption.id)))).scalar_one()
-    if count > 0:
-        return
-    for day, options in DEFAULT_DAILY_REWARD_OPTIONS.items():
-        for index, cfg in enumerate(options, start=1):
-            db.add(
-                DailyRewardOption(
-                    day=day, option_index=index, coins=cfg["coins"],
-                    free_pack_slug=cfg.get("free_pack_slug"), grants_random_card=cfg.get("grants_random_card", False),
-                )
-            )
-    try:
-        await db.commit()
-    except IntegrityError:
-        # Two concurrent requests both saw an empty table — the loser just
-        # discards its own attempt and reads back what the winner inserted.
-        await db.rollback()
+def _default_template(basic_pack_id: Optional[int], premium_pack_id: Optional[int]) -> dict[int, dict]:
+    """Seeded the first time the template is read and found empty (same lazy
+    pattern as GameConfig): growing coins every day, something bigger every
+    7th day and a legendary card for the full month. Admins edit it freely."""
+    days: dict[int, dict] = {d: {"coins": 50 + 5 * (d - 1)} for d in range(1, 32)}
+    days[7] = {"coins": 300, "pack_id": basic_pack_id}
+    days[14] = {"coins": 500, "card_rarity": "rare"}
+    days[21] = {"coins": 700, "pack_id": premium_pack_id or basic_pack_id}
+    days[28] = {"coins": 1000, "card_rarity": "epic"}
+    days[0] = {"coins": 2000, "card_rarity": "legendary"}
+    return days
 
 
-async def get_day_options(db: AsyncSession) -> dict[int, list[DailyRewardOption]]:
-    await _ensure_default_options(db)
-    result = await db.execute(
-        select(DailyRewardOption).order_by(DailyRewardOption.day, DailyRewardOption.option_index)
+async def get_template(db: AsyncSession) -> dict[int, LoginCalendarDay]:
+    rows = (await db.execute(select(LoginCalendarDay))).scalars().all()
+    if not rows:
+        packs = {p.slug: p.id for p in (await db.execute(select(Pack).where(Pack.slug.in_(("basic", "premium"))))).scalars()}
+        try:
+            # A savepoint, not a full rollback on conflict: the caller's
+            # objects (the current user) must stay loaded.
+            async with db.begin_nested():
+                for day, cfg in _default_template(packs.get("basic"), packs.get("premium")).items():
+                    db.add(LoginCalendarDay(day=day, **{"coins": 0, **cfg}))
+                await db.flush()
+            await db.commit()
+        except IntegrityError:
+            pass  # a concurrent request seeded it first
+        rows = (await db.execute(select(LoginCalendarDay))).scalars().all()
+    return {r.day: r for r in rows}
+
+
+def _month_bounds(day: date) -> tuple[date, date, int]:
+    first = day.replace(day=1)
+    days_in_month = pycalendar.monthrange(day.year, day.month)[1]
+    return first, first + timedelta(days=days_in_month), days_in_month
+
+
+def _bundle(template: dict[int, LoginCalendarDay], day: int) -> Bundle:
+    row = template.get(day)
+    return Bundle.of(row) if row else Bundle()
+
+
+async def _claims(db: AsyncSession, user_id: int, first: date, end: date) -> dict[date, str]:
+    rows = await db.execute(
+        select(DailyReward.reward_date, DailyReward.claim_method)
+        .where(DailyReward.user_id == user_id, DailyReward.reward_date >= first, DailyReward.reward_date < end)
     )
-    by_day: dict[int, list[DailyRewardOption]] = {day: [] for day in range(1, 8)}
-    for option in result.scalars().all():
-        by_day.setdefault(option.day, []).append(option)
-    return by_day
+    return {d: m for d, m in rows.all()}
 
 
-def _cycle_start_date(today: date, streak_day: int) -> date:
-    """The reward_date of this cycle's day-1 claim, derived (not looked up)
-    from today's date and the current cycle position — valid because a
-    cycle is always a run of consecutive calendar days (see
-    _compute_next_streak: any gap resets streak_day to 1, i.e. starts a new
-    cycle whose day-1 date IS today)."""
-    return today - timedelta(days=streak_day - 1)
+async def _bonus_claimed(db: AsyncSession, user_id: int, first: date) -> bool:
+    return (await db.execute(select(LoginCalendarBonusClaim.id).where(
+        LoginCalendarBonusClaim.user_id == user_id, LoginCalendarBonusClaim.month == first,
+    ))).first() is not None
 
 
-def _resolve_option(user_id: int, cycle_start: date, day: int, candidates: list[DailyRewardOption]) -> DailyRewardOption:
-    """Deterministically "randomly" picks this user's reward for `day`
-    within the cycle that started on `cycle_start` — deterministic so that
-    re-fetching the calendar (or claiming, moments after previewing it)
-    always resolves to the same candidate for as long as the cycle lasts,
-    with no extra state to persist: the same (user_id, cycle_start, day)
-    always seeds the same pick, and a new cycle (new cycle_start) reseeds
-    every day's pick at once, exactly the "new random set each cycle"
-    behavior asked for. random.Random(str) is used instead of Python's
-    built-in hash() because hash() is randomized per-process (PYTHONHASHSEED)
-    and would pick differently across requests/workers."""
-    if not candidates:
-        # Defensive only — _ensure_default_options always seeds every day;
-        # this only guards a day an admin has since emptied out entirely.
-        return DailyRewardOption(day=day, option_index=0, coins=0)
-    rng = random.Random(f"{user_id}:{cycle_start.isoformat()}:{day}")
-    return candidates[rng.randrange(len(candidates))]
+def _catchups_used(claims: dict[date, str]) -> int:
+    return sum(1 for m in claims.values() if m != "login")
 
 
-async def _latest_reward(db: AsyncSession, user_id: int) -> Optional[DailyReward]:
-    result = await db.execute(
-        select(DailyReward).where(DailyReward.user_id == user_id).order_by(DailyReward.reward_date.desc()).limit(1)
-    )
-    return result.scalar_one_or_none()
-
-
-async def _compute_next_streak(db: AsyncSession, user_id: int) -> tuple[int, bool]:
+async def get_calendar(db: AsyncSession, user: User) -> CalendarOut:
     today = local_today()
-    latest = await _latest_reward(db, user_id)
-    if latest and latest.reward_date == today:
-        return latest.streak_day, True
-    if latest and latest.reward_date == today - timedelta(days=1):
-        next_streak = latest.streak_day + 1
-        if next_streak > 7:
-            next_streak = 1
-        return next_streak, False
-    return 1, False
-
-
-async def get_calendar(db: AsyncSession, user: User) -> DailyRewardCalendarOut:
-    next_streak, already_claimed = await _compute_next_streak(db, user.id)
-    today = local_today()
-    cycle_start = _cycle_start_date(today, next_streak)
-    day_options = await get_day_options(db)
+    first, end, days_in_month = _month_bounds(today)
+    template = await get_template(db)
+    claims = await _claims(db, user.id, first, end)
+    config = await get_config(db)
 
     days = []
-    for day in range(1, 8):
-        opt = _resolve_option(user.id, cycle_start, day, day_options[day])
-        pack_name = None
-        if opt.free_pack_slug:
-            pack = (await db.execute(select(Pack).where(Pack.slug == opt.free_pack_slug))).scalar_one_or_none()
-            pack_name = pack.name if pack else opt.free_pack_slug
-        days.append(
-            DailyRewardDayOut(
-                day=day,
-                coins=opt.coins,
-                free_pack_name=pack_name,
-                grants_random_card=opt.grants_random_card,
-                is_claimed=already_claimed and day == next_streak,
-                is_today=(not already_claimed) and day == next_streak,
-            )
-        )
-
-    return DailyRewardCalendarOut(current_streak=next_streak, already_claimed_today=already_claimed, days=days)
-
-
-async def _grant_free_pack(
-    db: AsyncSession, user: User, slug: str
-) -> tuple[Optional[str], Optional[UserCard], list[int]]:
-    result = await db.execute(
-        select(Pack).where(Pack.slug == slug).options(joinedload(Pack.rarity_probabilities))
+    for n in range(1, days_in_month + 1):
+        d = first.replace(day=n)
+        bundle = _bundle(template, n)
+        status = "claimed" if d in claims else "today" if d == today else "missed" if d < today else "future"
+        days.append(CalendarDayOut(
+            day=n, date=d, reward=await reward_bundle_service.describe(db, bundle), status=status,
+            claim_method=claims.get(d), is_big=n in BIG_DAYS or bool(bundle.pack_id or bundle.card_rarity
+                                                                     or bundle.badge_id or bundle.cosmetic_id),
+        ))
+    return CalendarOut(
+        month=first, today=today, days=days, claimed_count=len(claims), days_in_month=days_in_month,
+        already_claimed_today=today in claims,
+        month_bonus=await reward_bundle_service.describe(db, _bundle(template, 0)),
+        month_bonus_claimed=await _bonus_claimed(db, user.id, first),
+        catchup_coins=config.calendar_catchup_coins, catchup_stars=config.calendar_catchup_stars,
+        catchups_left=max(0, config.calendar_catchup_max_per_month - _catchups_used(claims)),
     )
-    pack = result.unique().scalar_one_or_none()
-    if not pack:
-        return None, None, []
 
-    opening = PackOpening(
-        user_id=user.id, pack_id=pack.id, price_paid=0,
-        idempotency_key=f"daily-reward-{user.id}-{local_today().isoformat()}",
-        created_at=datetime.now(timezone.utc),
+
+async def _grant_day(
+    db: AsyncSession, user: User, day: date, method: str, template: dict[int, LoginCalendarDay],
+) -> GrantedRewardsOut:
+    """Records the claim (the unique constraint refuses a second one) and
+    grants that day's reward. `user` is row-locked; the caller commits."""
+    bundle = _bundle(template, day.day)
+    row = DailyReward(
+        user_id=user.id, reward_date=day, streak_day=day.day, coins_awarded=bundle.coins, claim_method=method,
     )
-    db.add(opening)
-    await db.flush()
+    try:
+        async with db.begin_nested():
+            db.add(row)
+            await db.flush()
+    except IntegrityError:
+        raise ConflictError("Награда за этот день уже получена") from None
+    granted = await reward_bundle_service.grant(
+        db, user, bundle, tx_type=TransactionType.daily_reward,
+        description=f"Календарь наград: {day.day} число", card_source=CardSource.daily_reward,
+        idempotency_prefix=f"calendar-{user.id}-{day.isoformat()}", cosmetic_source="calendar",
+        related_object_type="daily_reward", related_object_id=row.id,
+    )
+    if granted.cards:
+        row.random_card_id = granted.cards[-1].id
+    from app.services import season_pass_service
 
-    rarities = roll_rarities(pack.rarity_probabilities, pack.card_count, pack.guaranteed_min_rarity)
-    last_card = None
-    player_ids: list[int] = []
-    for rarity in rarities:
-        player = await pick_random_player(db, rarity)
-        card = await create_user_card(db, user.id, player.id, CardSource.daily_reward, opening.id)
-        db.add(PackOpeningCard(opening_id=opening.id, user_card_id=card.id, user_coach_card_id=None, is_new=False))
-        card.player = player
-        last_card = card
-        player_ids.append(player.id)
-    return pack.name, last_card, player_ids
-
-
-async def _grant_random_card(db: AsyncSession, user: User) -> UserCard:
-    rarity = random.choices(
-        list(RANDOM_CARD_RARITY_WEIGHTS.keys()), weights=list(RANDOM_CARD_RARITY_WEIGHTS.values()), k=1
-    )[0]
-    player = await pick_random_player(db, rarity)
-    card = await create_user_card(db, user.id, player.id, CardSource.daily_reward)
-    card.player = player
-    return card
+    await season_pass_service.add_xp_for_daily_claim(db, user)
+    return granted
 
 
-async def claim_daily_reward(db: AsyncSession, user: User) -> DailyRewardClaimOut:
-    next_streak, already_claimed = await _compute_next_streak(db, user.id)
-    if already_claimed:
-        raise ConflictError("Daily reward already claimed today")
+async def _maybe_month_bonus(
+    db: AsyncSession, user: User, month_day: date, template: dict[int, LoginCalendarDay],
+) -> Optional[GrantedRewardsOut]:
+    """Grants the full-month bonus once every day of that month is claimed."""
+    first, end, days_in_month = _month_bounds(month_day)
+    if len(await _claims(db, user.id, first, end)) < days_in_month or await _bonus_claimed(db, user.id, first):
+        return None
+    bundle = _bundle(template, 0)
+    try:
+        async with db.begin_nested():
+            db.add(LoginCalendarBonusClaim(user_id=user.id, month=first))
+            await db.flush()
+    except IntegrityError:
+        return None
+    if bundle.is_empty():
+        return None
+    return await reward_bundle_service.grant(
+        db, user, bundle, tx_type=TransactionType.daily_reward, description="Календарь наград: весь месяц",
+        card_source=CardSource.daily_reward, idempotency_prefix=f"calendar-bonus-{user.id}-{first.isoformat()}",
+        cosmetic_source="calendar",
+    )
 
+
+async def claim_daily_reward(db: AsyncSession, user: User) -> CalendarClaimOut:
     today = local_today()
-    cycle_start = _cycle_start_date(today, next_streak)
-    day_options = await get_day_options(db)
-    opt = _resolve_option(user.id, cycle_start, next_streak, day_options[next_streak])
-
-    locked_user = await lock_user_for_update(db, user.id)
-
-    reward_row = DailyReward(user_id=locked_user.id, reward_date=today, streak_day=next_streak, coins_awarded=opt.coins)
-    db.add(reward_row)
-    await db.flush()
-
-    if opt.coins > 0:
-        await credit_coins(
-            db, locked_user, opt.coins, TransactionType.daily_reward,
-            f"Ежедневная награда, день {next_streak}", "daily_reward", reward_row.id,
-        )
-
-    granted_pack_name = None
-    granted_card = None
-    touched_player_ids: list[int] = []
-    if opt.free_pack_slug:
-        granted_pack_name, granted_card, touched_player_ids = await _grant_free_pack(
-            db, locked_user, opt.free_pack_slug
-        )
-        if granted_card:
-            reward_row.random_card_id = granted_card.id
-    elif opt.grants_random_card:
-        granted_card = await _grant_random_card(db, locked_user)
-        reward_row.random_card_id = granted_card.id
-        touched_player_ids = [granted_card.player_id]
-
-    if touched_player_ids:
-        await grant_collection_rewards_for_new_cards(db, locked_user, touched_player_ids)
-
-    db.add(reward_row)
+    template = await get_template(db)
+    locked = await lock_user_for_update(db, user.id)
+    granted = await _grant_day(db, locked, today, "login", template)
+    bonus = await _maybe_month_bonus(db, locked, today, template)
     await db.commit()
-    await db.refresh(locked_user)
+    await db.refresh(locked)
+    return CalendarClaimOut(day=today.day, granted=granted, month_bonus=bonus, new_balance=locked.balance)
 
-    return DailyRewardClaimOut(
-        streak_day=next_streak,
-        coins_awarded=opt.coins,
-        new_balance=locked_user.balance,
-        granted_card=UserCardOut.model_validate(granted_card) if granted_card else None,
-        granted_pack_name=granted_pack_name,
+
+def _check_catchup_date(day: date, today: date) -> None:
+    first, _end, _n = _month_bounds(today)
+    if not (first <= day < today):
+        raise ConflictError("Догнать можно только пропущенный день этого месяца")
+
+
+async def _check_catchup(db: AsyncSession, user_id: int, day: date) -> None:
+    today = local_today()
+    _check_catchup_date(day, today)
+    first, end, _n = _month_bounds(today)
+    claims = await _claims(db, user_id, first, end)
+    if day in claims:
+        raise ConflictError("Награда за этот день уже получена")
+    config = await get_config(db)
+    if _catchups_used(claims) >= config.calendar_catchup_max_per_month:
+        raise ConflictError("В этом месяце догонять пропуски больше нельзя")
+
+
+async def catch_up_with_coins(db: AsyncSession, user: User, day: date) -> CalendarClaimOut:
+    config = await get_config(db)
+    if config.calendar_catchup_coins <= 0:
+        raise ConflictError("Догнать за монеты сейчас нельзя")
+    template = await get_template(db)
+    locked = await lock_user_for_update(db, user.id)
+    await _check_catchup(db, locked.id, day)
+    await debit_coins(
+        db, locked, config.calendar_catchup_coins, TransactionType.calendar_catchup,
+        f"Календарь наград: догнать {day.day} число",
     )
+    granted = await _grant_day(db, locked, day, "coins", template)
+    bonus = await _maybe_month_bonus(db, locked, day, template)
+    await db.commit()
+    await db.refresh(locked)
+    return CalendarClaimOut(day=day.day, granted=granted, month_bonus=bonus, new_balance=locked.balance)
+
+
+# --- Stars catch-up ("calendar_catchup:<YYYY-MM-DD>", see shop_product_service) --------
+
+
+async def stars_order(db: AsyncSession, user: User, day: date) -> tuple[str, int, str, str]:
+    config = await get_config(db)
+    if config.calendar_catchup_stars <= 0:
+        raise ConflictError("Догнать за звёзды сейчас нельзя")
+    await _check_catchup(db, user.id, day)
+    bundle = await reward_bundle_service.describe(db, _bundle(await get_template(db), day.day))
+    parts = [f"{bundle.coins} монет"] if bundle.coins else []
+    if bundle.pack_name:
+        parts.append(f"пак «{bundle.pack_name}»")
+    if bundle.card_rarity:
+        parts.append("случайная карточка")
+    if bundle.badge:
+        parts.append(f"значок «{bundle.badge.name}»")
+    if bundle.cosmetic:
+        parts.append(f"«{bundle.cosmetic.name}»")
+    return (
+        f"calendar_catchup:{day.isoformat()}", config.calendar_catchup_stars, f"Награда за {day.day} число",
+        "Пропущенный день календаря наград: " + (", ".join(parts) or "награда дня"),
+    )
+
+
+async def validate_stars(db: AsyncSession, user_id: int, day: date, stars_amount: int) -> tuple[bool, str]:
+    config = await get_config(db)
+    if config.calendar_catchup_stars != stars_amount:
+        return False, "Цена изменилась — открой покупку заново"
+    try:
+        await _check_catchup(db, user_id, day)
+    except ConflictError as exc:
+        return False, exc.message
+    return True, ""
+
+
+async def deliver_stars(db: AsyncSession, user: User, day: date) -> dict:
+    """Already paid: never refuses. If the day got claimed meanwhile (e.g. a
+    coins catch-up raced it), the player gets the coins price instead."""
+    template = await get_template(db)
+    locked = await lock_user_for_update(db, user.id)
+    already = (await db.execute(select(DailyReward.id).where(
+        DailyReward.user_id == locked.id, DailyReward.reward_date == day,
+    ))).first()
+    if already:
+        config = await get_config(db)
+        await credit_coins(
+            db, locked, max(config.calendar_catchup_coins, _bundle(template, day.day).coins),
+            TransactionType.calendar_catchup, f"Календарь наград: компенсация за {day.day} число",
+        )
+        return {"kind": "calendar_catchup", "day": day.day, "compensated": True}
+    await _grant_day(db, locked, day, "stars", template)
+    await _maybe_month_bonus(db, locked, day, template)
+    return {"kind": "calendar_catchup", "day": day.day}
+
+
+# --- admin ----------------------------------------------------------------------------
+
+
+async def admin_template(db: AsyncSession) -> list[CalendarTemplateDayOut]:
+    template = await get_template(db)
+    return [
+        CalendarTemplateDayOut(day=d, **Bundle.of(template[d]).to_in().model_dump())
+        for d in sorted(template)
+    ]
+
+
+async def admin_update_template(db: AsyncSession, payload: CalendarTemplateIn) -> list[CalendarTemplateDayOut]:
+    days = {d.day: d for d in payload.days}
+    for d in days.values():
+        await reward_bundle_service.validate(db, Bundle.from_in(d))
+    template = await get_template(db)
+    for n in range(0, 32):
+        data = days.get(n)
+        row = template.get(n)
+        if data is None:
+            continue
+        if row is None:
+            row = LoginCalendarDay(day=n)
+            db.add(row)
+        for key, value in data.model_dump(exclude={"day"}).items():
+            setattr(row, key, value)
+    await db.commit()
+    return await admin_template(db)
+
