@@ -357,6 +357,27 @@ class GameConfig(TimestampMixin, Base):
     my_player_extra_trainings_max: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     my_player_extra_training_coins: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
     my_player_extra_training_stars: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    # Training streak: every `days` free trainings in a row pay `tokens`
+    # skill tokens (of the player's skill, or one that fits the position).
+    my_player_streak_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
+    my_player_streak_tokens: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Freshness (0-100): -per_match for every «Карьера игрока» match,
+    # +regen_per_hour over time, +training per training run. At 0 freshness
+    # the match rating drops by fatigue_max_penalty (linearly from 100).
+    # Defaults: two matches a day cost a little more than a day of rest
+    # gives back, so the daily training is what keeps him fresh all season.
+    my_player_freshness_per_match: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    my_player_freshness_regen_per_hour: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    my_player_freshness_training: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    my_player_fatigue_max_penalty: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # Friend duels: per day, coins for a win/draw (challenger only), XP per duel.
+    my_player_duels_per_day: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    my_player_duel_reward_win: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    my_player_duel_reward_draw: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    my_player_duel_xp: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Changing the line (e.g. CM -> ST): price in coins / Stars (0 = not sold).
+    my_player_role_change_coins: Mapped[int] = mapped_column(Integer, default=25000, nullable=False)
+    my_player_role_change_stars: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
     # --- «Карьера игрока» (services/player_career_service.py) ---
     player_career_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # A real club (Player.club) joins the catalog with at least this many active cards.
@@ -382,8 +403,22 @@ class GameConfig(TimestampMixin, Base):
         default=lambda: {
             "headband": 300, "earring": 400, "chain": 600, "goggles": 800,
             "bg_sunset": 500, "bg_neon": 700, "bg_gold": 1200,
+            "captain": 700, "headphones": 900, "bg_night": 900,
         },
     )
+    # The same for Telegram Stars; an item may be sold for either or both.
+    my_player_cosmetic_stars_prices: Mapped[dict] = mapped_column(
+        JSON, nullable=False,
+        default=lambda: {
+            "crown": 150, "bg_galaxy": 75, "bg_champions": 100,
+            "fx_sparkle": 50, "fx_fire": 75, "fx_lightning": 100,
+        },
+    )
+    # «Карьера игрока»: salary per season = club rating x this; every
+    # completed club objective pays objective_coins and objective_rep.
+    player_career_salary_per_rating: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    player_career_objective_coins: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    player_career_objective_rep: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     free_pack_pack_slug: Mapped[str] = mapped_column(String, default="basic", nullable=False)
 
     # "вкарта" command in group chats — reuses free_pack_pack_slug's pack but

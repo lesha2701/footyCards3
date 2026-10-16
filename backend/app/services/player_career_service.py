@@ -22,6 +22,12 @@ stronger than the current one) are offered; the club can only be changed
 between seasons. Trophies: champion, league top scorer, player of the season
 (average rating 7.5+).
 
+Contract — the club pays a salary at the end of every season (club rating x
+config.player_career_salary_per_rating) and sets objectives at its start
+(final place, goals or clean sheets by line, average rating); each one met
+pays coins and reputation. Every match costs the player freshness
+(my_player_service), and a tired player is fielded weaker.
+
 Every number comes from GameConfig.player_career_*.
 """
 import copy
@@ -56,6 +62,9 @@ TEAMS = 8
 FORMATION = "4-3-3"
 ACADEMY_GAP = 4
 MVP_AVG_RATING = 7.5
+OBJECTIVE_AVG_RATING = 6.8
+# Line -> (objective code, target) for the personal objective.
+LINE_OBJECTIVE = {"FWD": ("goals", 8), "MID": ("goals", 4), "DEF": ("goals", 2), "GK": ("clean_sheets", 4)}
 DEMO_CLUBS = [
     ("Юность", 48), ("Заря", 52), ("Текстильщик", 55), ("Волна", 58), ("Сокол", 61),
     ("Металлург", 64), ("Энергия", 67), ("Нефтяник", 70), ("Олимп", 73), ("Авангард", 76),
@@ -145,10 +154,15 @@ def club_access(club: dict, player_rating: int, reputation: int, config) -> Opti
     return None
 
 
+def salary_of(club_rating: int, config) -> int:
+    return max(0, club_rating * config.player_career_salary_per_rating)
+
+
 def _club_brief(club: dict, mp: MyPlayer, rating: int, config) -> dict:
     return {
         "key": club["key"], "name": club["name"], "rating": club["rating"], "is_demo": club["is_demo"],
         "real_cards": club["real_cards"], "reputation_needed": reputation_needed(club["rating"], config),
+        "salary": salary_of(club["rating"], config),
         "locked_reason": club_access(club, rating, mp.reputation or 0, config),
         "stars": [p["name"] for p in sorted(club["squad"], key=lambda p: -p["rating"]) if not p.get("academy")][:3],
     }
@@ -176,6 +190,56 @@ async def _last_season(db: AsyncSession, user_id: int) -> Optional[PlayerCareerS
     )).scalar_one_or_none()
 
 
+def _objective_label(code: str, target) -> str:
+    return {
+        "place": f"Финишировать не ниже {target} места",
+        "goals": f"Забить {target} голов",
+        "clean_sheets": f"Сыграть на ноль {target} матчей",
+        "avg_rating": f"Средняя оценка {target}+",
+    }[code]
+
+
+def make_objectives(category: str, my_rank: int) -> list[dict]:
+    """The club's objectives for a season: a place by the club's strength in
+    the league, a personal target by the player's line, a match rating."""
+    code, target = LINE_OBJECTIVE[category]
+    return [
+        {"code": "place", "target": min(TEAMS, my_rank + 1)},
+        {"code": code, "target": target},
+        {"code": "avg_rating", "target": OBJECTIVE_AVG_RATING},
+    ]
+
+
+def _objective_progress(objective: dict, state: dict, place: Optional[int]) -> tuple[float, bool]:
+    """(current value, met so far) — the place only counts at the finish."""
+    played = [v for v in (state.get("my_rounds") or {}).values() if v.get("played")]
+    code, target = objective["code"], objective["target"]
+    if code == "place":
+        return (place or 0), place is not None and place <= target
+    if code == "goals":
+        value = sum(v["goals"] for v in played)
+        return value, value >= target
+    if code == "clean_sheets":
+        value = sum(1 for v in played if v["opp"] == 0)
+        return value, value >= target
+    value = round(sum(v["rating"] for v in played) / len(played), 2) if played else 0
+    return value, bool(played) and value >= target
+
+
+def _objectives_out(season: PlayerCareerSeason, state: dict, table: list[dict]) -> list[dict]:
+    current = next((n + 1 for n, row in enumerate(table) if row["team_index"] == 0), None)
+    done_final = set(state.get("objectives_done") or [])
+    out = []
+    for objective in state.get("objectives") or []:
+        value, met = _objective_progress(objective, state, current)
+        out.append({
+            "code": objective["code"], "target": objective["target"],
+            "label": _objective_label(objective["code"], objective["target"]),
+            "value": value, "met": objective["code"] in done_final if season.status != "active" else met,
+        })
+    return out
+
+
 def _season_out(season: PlayerCareerSeason) -> dict:
     state = season.state or {}
     schedule = state.get("schedule") or []
@@ -194,11 +258,12 @@ def _season_out(season: PlayerCareerSeason) -> dict:
         })
     my_rounds = [v for v in (state.get("my_rounds") or {}).values() if v.get("played")]
     scorers = sorted((state.get("scorers") or {}).values(), key=lambda s: (-s["goals"], s["name"]))[:10]
+    table = standings(state) if teams else []
     return {
         "id": season.id, "status": season.status, "rounds_played": season.rounds_played, "total_rounds": ROUNDS,
         "next_round_at": schedule[season.rounds_played] if season.rounds_played < len(schedule) else None,
         "teams": [{"index": t["index"], "name": t["name"], "rating": t["rating"], "is_mine": t["index"] == 0} for t in teams],
-        "table": standings(state) if teams else [],
+        "table": table,
         "rounds": rounds,
         "stats": {
             "matches": len(my_rounds), "goals": sum(v["goals"] for v in my_rounds),
@@ -209,7 +274,34 @@ def _season_out(season: PlayerCareerSeason) -> dict:
         "final_place": season.final_place, "coins_earned": season.coins_earned,
         "awards": state.get("awards") or [],
         "offers": state.get("offers") or [],
+        "objectives": _objectives_out(season, state, table),
+        "salary": state.get("salary") or 0,
+        "objective_coins": state.get("objective_coins") or 0,
     }
+
+
+def _history_entry(season: PlayerCareerSeason) -> dict:
+    state = season.state or {}
+    played = [v for v in (state.get("my_rounds") or {}).values() if v.get("played")]
+    teams = state.get("teams") or []
+    return {
+        "id": season.id, "club": teams[0]["name"] if teams else season.club_key,
+        "club_rating": teams[0]["rating"] if teams else None,
+        "place": season.final_place, "matches": len(played),
+        "goals": sum(v["goals"] for v in played), "assists": sum(v["assists"] for v in played),
+        "avg_rating": round(sum(v["rating"] for v in played) / len(played), 2) if played else None,
+        "awards": state.get("awards") or [], "coins_earned": season.coins_earned,
+        "finished_at": ensure_aware(season.finished_at).isoformat() if season.finished_at else None,
+    }
+
+
+async def history(db: AsyncSession, user_id: int, limit: int = 20) -> list[dict]:
+    """Finished seasons, newest first — the career timeline."""
+    rows = (await db.execute(
+        select(PlayerCareerSeason).where(PlayerCareerSeason.user_id == user_id, PlayerCareerSeason.status == "finished")
+        .order_by(PlayerCareerSeason.id.desc()).limit(limit)
+    )).scalars().all()
+    return [_history_entry(s) for s in rows]
 
 
 async def get_view(db: AsyncSession, user: User) -> dict:
@@ -240,6 +332,13 @@ async def get_view(db: AsyncSession, user: User) -> dict:
             "win": config.player_career_match_reward_win, "draw": config.player_career_match_reward_draw,
             "goal": config.player_career_goal_reward, "xp": config.player_career_match_xp,
             "places": list(config.player_career_place_rewards or []),
+            "objective_coins": config.player_career_objective_coins,
+            "objective_rep": config.player_career_objective_rep,
+        },
+        "history": await history(db, user.id),
+        "freshness": {
+            "value": my_player_service.freshness_now(mp, config, regen_bonus=await my_player_service.regen_bonus(db, user.id)),
+            "per_match": config.my_player_freshness_per_match,
         },
     })
     return view
@@ -298,10 +397,12 @@ async def start_season(db: AsyncSession, user: User, now: Optional[datetime] = N
     rivals = sorted((c for c in clubs if c["key"] != mine["key"]), key=lambda c: (abs(c["rating"] - mine["rating"]), c["key"]))
     league = [mine, *rivals[:TEAMS - 1]]
     teams = [_team_from_club(i, c) for i, c in enumerate(league)]
+    my_rank = 1 + sum(1 for c in league[1:] if c["rating"] > mine["rating"])
     season = PlayerCareerSeason(
         user_id=user.id, club_key=mine["key"], status="active",
         state={"teams": teams, "fixtures": double_round_robin(TEAMS), "schedule": build_schedule(now),
-               "results": [], "my_rounds": {}, "scorers": {}},
+               "results": [], "my_rounds": {}, "scorers": {},
+               "objectives": make_objectives(my_player_service.category_of(mp.position), my_rank)},
     )
     db.add(season)
     await db.commit()
@@ -428,13 +529,24 @@ async def _play_round(db: AsyncSession, season: PlayerCareerSeason, round_index:
     mp = (await db.execute(select(MyPlayer).where(MyPlayer.user_id == season.user_id).with_for_update())).scalar_one_or_none()
     if mp is not None and played:
         locked = await wallet_service.lock_user_for_update(db, season.user_id)
-        my_player_service.add_xp(locked, config.player_career_match_xp, config)
+        my_player_service.add_xp(
+            locked, config.player_career_match_xp, config,
+            bonus_pct=await my_player_service.xp_bonus_pct(db, season.user_id),
+        )
         mp.reputation = (mp.reputation or 0) + goals * config.player_career_rep_per_goal \
             + assists * config.player_career_rep_per_assist + (config.player_career_rep_per_win if own > opp else 0)
         stats = {**(mp.career_stats or {})}
         for k, v in (("matches", 1), ("goals", goals), ("assists", assists)):
             stats[k] = stats.get(k, 0) + v
         mp.career_stats = stats
+        # Fatigue as of the round's own kick-off, so rounds resolved late in a
+        # batch still get the recovery between them.
+        schedule = state.get("schedule") or []
+        at = ensure_aware(datetime.fromisoformat(schedule[round_index])) if round_index < len(schedule) else datetime.now(timezone.utc)
+        if mp.freshness_at is not None and ensure_aware(mp.freshness_at) > at:
+            at = ensure_aware(mp.freshness_at)
+        fresh = my_player_service.freshness_now(mp, config, at, await my_player_service.regen_bonus(db, season.user_id))
+        my_player_service.set_freshness(mp, fresh - config.my_player_freshness_per_match, at)
     outcome = "Победа" if own > opp else "Ничья" if own == opp else "Поражение"
     personal = f" · голы: {goals}" if goals else ""
     personal += f" · передачи: {assists}" if assists else ""
@@ -490,8 +602,19 @@ async def _finish(db: AsyncSession, season: PlayerCareerSeason, config) -> None:
     if avg >= MVP_AVG_RATING and (name := await _grant_trophy(db, season.user_id, "player_career_mvp", f"Средняя оценка {avg:.2f}")):
         awards.append(name)
 
+    # Contract: salary (if he played at all) and the club's objectives.
+    salary = salary_of(state["teams"][0]["rating"], config) if my_rounds else 0
+    season.coins_earned += await _credit(db, season.user_id, salary, f"Карьера игрока: зарплата за сезон в «{club}»", season.id)
+    objectives_done = [o["code"] for o in state.get("objectives") or [] if _objective_progress(o, state, place)[1]]
+    objective_coins = await _credit(
+        db, season.user_id, len(objectives_done) * config.player_career_objective_coins,
+        f"Карьера игрока: цели клуба ({len(objectives_done)})", season.id,
+    )
+    season.coins_earned += objective_coins
+
     offers: list[dict] = []
     if mp is not None:
+        mp.reputation = (mp.reputation or 0) + len(objectives_done) * config.player_career_objective_rep
         stats = {**(mp.career_stats or {})}
         stats["seasons"] = stats.get("seasons", 0) + 1
         if place == 1:
@@ -510,12 +633,17 @@ async def _finish(db: AsyncSession, season: PlayerCareerSeason, config) -> None:
             if c["key"] != season.club_key and c["rating"] > current
             and club_access(c, rating, mp.reputation or 0, config) is None
         ][:3]
-    state = {**state, "awards": awards, "offers": offers}
+    state = {
+        **state, "awards": awards, "offers": offers,
+        "salary": salary, "objectives_done": objectives_done, "objective_coins": objective_coins,
+    }
     season.state = state
     flag_modified(season, "state")
     season.status = "finished"
     season.finished_at = datetime.now(timezone.utc)
-    text = f"Награда: {coins} монет"
+    text = f"Награда: {coins} монет, зарплата: {salary}"
+    if objectives_done:
+        text += f" · цели клуба: {len(objectives_done)} из {len(state.get('objectives') or [])}"
     if awards:
         text += " · трофеи: " + ", ".join(awards)
     if offers:

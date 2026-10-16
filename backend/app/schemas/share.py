@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 class SharePrepareIn(BaseModel):
-    kind: Literal["card", "match", "trophy"]
+    kind: Literal["card", "match", "trophy", "my_player"]
     id: int
 
 

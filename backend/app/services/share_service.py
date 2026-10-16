@@ -1,6 +1,7 @@
 """«Поделиться в Telegram»: a player shares one of their own moments — a
 legendary/diamond card they own, an Arena match they won, a trophy they
-hold — as an image with a «Играть» button carrying their referral link.
+hold, their «Мой игрок» card — as an image with a «Играть» button carrying
+their referral link.
 
 Ownership is checked here; the image is rendered on the server
 (share_card_service) from the player's own data, never uploaded by the
@@ -38,7 +39,7 @@ settings = get_settings()
 
 SHARE_DIR = STATIC_DIR / "share"
 SHAREABLE_RARITIES = {Rarity.legendary, Rarity.diamond}
-KINDS = ("card", "match", "trophy")
+KINDS = ("card", "match", "trophy", "my_player")
 
 
 def referral_link(user: User) -> str:
@@ -114,6 +115,27 @@ async def _trophy(db: AsyncSession, user: User, trophy_id: int) -> tuple[str, st
     return path, f"Новый трофей: «{d.name}»! 🏆 Собирай карточки в Victor FC"
 
 
+async def _my_player(db: AsyncSession, user: User) -> tuple[str, str]:
+    from app.services import my_player_service
+    from app.services.game_config_service import get_config
+
+    config = await get_config(db)
+    mp = await my_player_service.get_my_player(db, user.id) if config.my_player_enabled else None
+    if mp is None:
+        raise NotFoundError("Сначала создай своего игрока")
+    out = my_player_service.player_out(mp, config)
+    level = my_player_service.level_info(user.my_player_xp or 0, config)[0]
+    image = share_card_service.render_my_player(
+        name=out["name"], number=out["number"], position=out["position"], rating=out["rating"],
+        attack=out["attack_rating"], defense=out["defense_rating"], level=level,
+        tier=out["tier"], tier_label=out["tier_label"], appearance=out["appearance"],
+        bot_username=settings.telegram_bot_username,
+    )
+    fingerprint = f"{out['name']}|{out['number']}|{out['position']}|{out['rating']}|{out['attributes']}|{level}|{out['tier']}|{sorted(out['appearance'].items())}"
+    path = _store(image, "my_player", mp.id, fingerprint)
+    return path, f"Мой игрок {out['name']}: рейтинг {out['rating']}, {out['tier_label'].lower()}! ⚽ Создай своего в Victor FC"
+
+
 def _can_prepare_messages() -> bool:
     """Telegram must be able to download the photo (public HTTPS) and the
     bot must be real — neither holds in local dev."""
@@ -157,6 +179,8 @@ async def prepare_share(db: AsyncSession, user: User, kind: str, object_id: int)
         path, caption = await _match(db, user, object_id)
     elif kind == "trophy":
         path, caption = await _trophy(db, user, object_id)
+    elif kind == "my_player":
+        path, caption = await _my_player(db, user)
     else:
         raise NotFoundError("Нечем поделиться")
 

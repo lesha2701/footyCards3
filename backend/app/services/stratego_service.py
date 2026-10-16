@@ -1069,7 +1069,9 @@ async def _finish_match(
             p["side"] == side and p.get("card") and p["card"].get("user_card_id") == mine_id for p in state["pieces"]
         )
         if fielded:
-            my_player_xp[side] = my_player_service.add_xp(locked[uid], config.stratego_my_player_xp, config)
+            my_player_xp[side] = my_player_service.add_xp(
+                locked[uid], config.stratego_my_player_xp, config, bonus_pct=await my_player_service.xp_bonus_pct(db, uid),
+            )
             db.add(locked[uid])
     state["my_player_xp"] = my_player_xp
 

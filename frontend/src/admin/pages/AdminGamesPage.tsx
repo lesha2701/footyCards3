@@ -12,9 +12,18 @@ const MY_PLAYER_COSMETICS: [string, string][] = [
   ["earring", "Серьга"],
   ["chain", "Цепочка"],
   ["goggles", "Спортивные очки"],
+  ["captain", "Капитанская повязка"],
+  ["headphones", "Наушники"],
+  ["crown", "Корона"],
   ["bg_sunset", "Фон «Закат»"],
   ["bg_neon", "Фон «Неон»"],
   ["bg_gold", "Фон «Золотой стадион»"],
+  ["bg_night", "Фон «Ночной матч»"],
+  ["bg_galaxy", "Фон «Галактика»"],
+  ["bg_champions", "Фон «Лига чемпионов»"],
+  ["fx_sparkle", "Эффект «Искры»"],
+  ["fx_fire", "Эффект «Пламя»"],
+  ["fx_lightning", "Эффект «Молния»"],
 ];
 
 export default function AdminGamesPage() {
@@ -509,25 +518,36 @@ export default function AdminGamesPage() {
           {field("my_player_extra_trainings_max", "Доп. тренировок в день (макс.)")}
           {field("my_player_extra_training_coins", "Доп. тренировка, монеты (0 — нет)")}
           {field("my_player_extra_training_stars", "Доп. тренировка, звёзды ⭐ (0 — нет)")}
+          {field("my_player_streak_days", "Серия тренировок: дней для награды")}
+          {field("my_player_streak_tokens", "Серия: жетонов навыка (0 — нет)")}
+          {field("my_player_freshness_per_match", "Свежесть: −за матч Карьеры игрока")}
+          {field("my_player_freshness_regen_per_hour", "Свежесть: +в час")}
+          {field("my_player_freshness_training", "Свежесть: +за тренировку")}
+          {field("my_player_fatigue_max_penalty", "Усталость: −рейтинга при 0% свежести")}
+          {field("my_player_duels_per_day", "Дуэлей в день (0 — выкл.)")}
+          {field("my_player_duel_reward_win", "Дуэль: монеты за победу")}
+          {field("my_player_duel_reward_draw", "Дуэль: монеты за ничью")}
+          {field("my_player_duel_xp", "Дуэль: опыт")}
+          {field("my_player_role_change_coins", "Смена амплуа, монеты (0 — нет)")}
+          {field("my_player_role_change_stars", "Смена амплуа, звёзды ⭐ (0 — нет)")}
         </div>
-        <p className="mb-2 mt-4 text-xs text-slate-400">Цены косметики, монеты (0 — не продаётся)</p>
-        <div className="grid grid-cols-2 items-end gap-3">
+        <p className="mb-2 mt-4 text-xs text-slate-400">Цены косметики: монеты / звёзды ⭐ (0 — не продаётся за эту валюту)</p>
+        <div className="grid grid-cols-1 gap-2">
           {MY_PLAYER_COSMETICS.map(([code, label]) => (
-            <label key={code} className="flex flex-col gap-1">
-              <span className="text-xs text-slate-400">{label}</span>
-              <input
-                type="number"
-                min={0}
-                value={form.my_player_cosmetic_prices?.[code] ?? 0}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    my_player_cosmetic_prices: { ...form.my_player_cosmetic_prices, [code]: Number(e.target.value) },
-                  })
-                }
-                className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
-              />
-            </label>
+            <div key={code} className="grid grid-cols-[1fr_6rem_6rem] items-center gap-2">
+              <span className="text-xs text-slate-300">{label}</span>
+              {(["my_player_cosmetic_prices", "my_player_cosmetic_stars_prices"] as const).map((key) => (
+                <input
+                  key={key}
+                  type="number"
+                  min={0}
+                  aria-label={`${label}: ${key === "my_player_cosmetic_prices" ? "монеты" : "звёзды"}`}
+                  value={form[key]?.[code] ?? 0}
+                  onChange={(e) => setForm({ ...form, [key]: { ...form[key], [code]: Number(e.target.value) } })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                />
+              ))}
+            </div>
           ))}
         </div>
       </section>
@@ -551,6 +571,9 @@ export default function AdminGamesPage() {
           {field("player_career_match_reward_draw", "Монеты за ничью")}
           {field("player_career_goal_reward", "Монеты за гол игрока")}
           {field("player_career_match_xp", "Опыт за матч")}
+          {field("player_career_salary_per_rating", "Зарплата за сезон = рейтинг клуба ×")}
+          {field("player_career_objective_coins", "Цель клуба: монеты")}
+          {field("player_career_objective_rep", "Цель клуба: репутация")}
           {listField("player_career_place_rewards", "Награда за места 1–8, монеты")}
         </div>
       </section>

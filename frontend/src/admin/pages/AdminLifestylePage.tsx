@@ -20,6 +20,14 @@ const CATEGORIES = [
   { code: "other", label: "✨ Другое" },
 ];
 
+// Codes from backend lifestyle_service.EFFECTS.
+const EFFECTS = [
+  { code: "none", label: "Без эффекта", unit: "" },
+  { code: "freshness_regen", label: "Свежесть: +в час", unit: "в час" },
+  { code: "xp_bonus_pct", label: "Бонус опыта, %", unit: "%" },
+  { code: "weekly_income", label: "Доход в неделю, монеты", unit: "монет/нед." },
+];
+
 type Form = Omit<AdminLifestyleItem, "id" | "image_path" | "sold_count">;
 
 function toForm(item?: AdminLifestyleItem): Form {
@@ -34,6 +42,8 @@ function toForm(item?: AdminLifestyleItem): Form {
     max_supply: item?.max_supply ?? null,
     is_active: item?.is_active ?? true,
     sort_order: item?.sort_order ?? 0,
+    effect: item?.effect ?? "none",
+    effect_value: item?.effect_value ?? 0,
   };
 }
 
@@ -87,7 +97,8 @@ export default function AdminLifestylePage() {
           <h1 className="font-display text-2xl font-bold">Имущество</h1>
           <p className="text-xs text-slate-500">
             Статусные предметы «Моего игрока»: машины, недвижимость, акции и т. п. Цена в монетах и/или звёздах (0 — не
-            продаётся за эту валюту), престиж — очки статуса. Тираж пустой — без ограничений.
+            продаётся за эту валюту), престиж — очки статуса. Тираж пустой — без ограничений. Эффект — польза для игрока:
+            быстрее восстанавливает свежесть, даёт бонус опыта или доход раз в неделю (суммируется по всем предметам).
           </p>
         </div>
         <button
@@ -116,6 +127,7 @@ export default function AdminLifestylePage() {
                   {CATEGORIES.find((c) => c.code === item.category)?.label} · {item.coins_price > 0 && `🪙 ${item.coins_price} `}
                   {item.stars_price > 0 && `⭐ ${item.stars_price} `}· престиж {item.prestige} · продано {item.sold_count}
                   {item.max_supply != null && ` из ${item.max_supply}`}
+                  {item.effect !== "none" && ` · ${EFFECTS.find((e) => e.code === item.effect)?.label}: ${item.effect_value}`}
                   {!item.is_active && " · выключен"}
                 </p>
               </div>
@@ -165,6 +177,22 @@ export default function AdminLifestylePage() {
                 />
               </label>
               {num("sort_order", "Порядок")}
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Эффект</span>
+                <select value={form.effect} onChange={(e) => setForm({ ...form, effect: e.target.value })} className="rounded-lg bg-bg-surface px-3 py-2 outline-none">
+                  {EFFECTS.map((e) => <option key={e.code} value={e.code}>{e.label}</option>)}
+                </select>
+              </label>
+              {form.effect !== "none" && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-400">Размер ({EFFECTS.find((e) => e.code === form.effect)?.unit})</span>
+                  <input
+                    type="number" min={0} value={form.effect_value}
+                    onChange={(e) => setForm({ ...form, effect_value: Number(e.target.value) })}
+                    className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                  />
+                </label>
+              )}
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
                 В продаже

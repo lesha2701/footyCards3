@@ -1,4 +1,4 @@
-import type { MyPlayerAttr, MyPlayerTier } from "@/api/myPlayer";
+import type { MyPlayerAttr, MyPlayerCosmeticKind, MyPlayerDrill, MyPlayerTier } from "@/api/myPlayer";
 
 // Option sets — counts must match backend my_player_service.APPEARANCE_OPTIONS.
 export const SKIN_TONES = ["#f6d7c3", "#eac0a0", "#d7a27c", "#b67b52", "#8d5a3b", "#5e3b26"];
@@ -31,3 +31,13 @@ export const TIER_TEXT: Record<MyPlayerTier, string> = {
 
 export const ATTR_ORDER: MyPlayerAttr[] = ["atk", "def"];
 export const ATTR_SHORT: Record<MyPlayerAttr, string> = { atk: "АТК", def: "ЗЩТ" };
+
+export const DRILL_ICONS: Record<MyPlayerDrill, string> = { shot: "⚽", pass: "🎯", tackle: "🛡️", save: "🧤" };
+
+export const COSMETIC_GROUPS: { kind: MyPlayerCosmeticKind; title: string }[] = [
+  { kind: "accessory", title: "Аксессуары" },
+  { kind: "background", title: "Фон карточки" },
+  { kind: "effect", title: "Эффект карточки" },
+];
+
+export const TIER_NAMES: Record<MyPlayerTier, string> = { bronze: "Бронза", silver: "Серебро", gold: "Золото", legend: "Легенда" };

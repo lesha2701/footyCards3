@@ -188,3 +188,121 @@ def render_trophy(*, name: str, description: str, image: Optional[Path], bot_use
     for i, line in enumerate(_wrap(draw, description, body, SIZE - 140)):
         _center(draw, 566 + i * 34, line, body, MIST)
     return _jpeg(img)
+
+
+# «Мой игрок»: the constructor's option palettes (frontend lib/myPlayer.ts).
+_SKIN = ["#f6d7c3", "#eac0a0", "#d7a27c", "#b67b52", "#8d5a3b", "#5e3b26"]
+_HAIR = ["#1f1a17", "#4a2f1f", "#7b4a26", "#c08a3e", "#e3c27a", "#a33a1f", "#bdbdbd"]
+_EYES = ["#4a3426", "#24160d", "#3b82c4", "#3f8f5a", "#7b8794", "#8a6a2f"]
+_KITS = ["#d62828", "#1d4ed8", "#38bdf8", "#15803d", "#facc15", "#f97316", "#7c3aed", "#18181b", "#f4f4f5", "#7f1d1d"]
+TIER_COLORS = {"bronze": (205, 127, 50), "silver": (203, 213, 225), "gold": (250, 204, 21), "legend": (232, 121, 249)}
+_BALD, _LONG, _MOHAWK, _AFRO = 7, 4, 5, 6
+
+
+def _rgb(hex_color: str) -> tuple[int, int, int]:
+    n = int(hex_color.lstrip("#"), 16)
+    return n >> 16, (n >> 8) & 255, n & 255
+
+
+def _pick(palette: list[str], index: int) -> tuple[int, int, int]:
+    return _rgb(palette[index] if 0 <= index < len(palette) else palette[0])
+
+
+def _draw_avatar(img: Image.Image, box: tuple[int, int, int, int], appearance: dict, number: int) -> None:
+    """A flat version of the constructor's avatar (components/myPlayer/PlayerAvatar.tsx)."""
+    x0, y0, x1, y1 = box
+    layer = Image.new("RGBA", (x1 - x0, y1 - y0), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    w, h = layer.size
+    cx = w // 2
+    skin, hair = _pick(_SKIN, appearance.get("skin", 0)), _pick(_HAIR, appearance.get("hair_color", 0))
+    kit, eyes = _pick(_KITS, appearance.get("kit", 0)), _pick(_EYES, appearance.get("eye_color", 0))
+    style, beard = appearance.get("hair", 0), appearance.get("beard", 0)
+    light_kit = appearance.get("kit", 0) in (4, 8)
+    head = (cx - 72, 70, cx + 72, 250)
+
+    if style == _AFRO:
+        d.ellipse((cx - 112, 34, cx + 112, 240), fill=hair)
+    if style == _LONG:
+        d.rounded_rectangle((cx - 86, 120, cx + 86, 300), radius=40, fill=hair)
+    # torso and kit
+    d.rounded_rectangle((cx - 150, 275, cx + 150, h + 60), radius=90, fill=kit)
+    if appearance.get("kit_pattern") == 1:
+        for sx in range(cx - 130, cx + 140, 52):
+            d.rectangle((sx, 290, sx + 18, h), fill=(255, 255, 255) if not light_kit else (29, 78, 216))
+    elif appearance.get("kit_pattern") == 2:
+        for sy in (320, 356):
+            d.rectangle((cx - 150, sy, cx + 150, sy + 16), fill=(255, 255, 255) if not light_kit else (29, 78, 216))
+    d.rectangle((cx - 34, 220, cx + 34, 292), fill=skin)
+    d.pieslice((cx - 40, 258, cx + 40, 316), 0, 180, fill=skin)
+    num_font = _font(FONT_HEAVY, 46)
+    label = str(number)
+    d.text((cx + 52 - d.textlength(label, font=num_font) / 2, 318), label, font=num_font,
+           fill=(24, 24, 27) if light_kit else (255, 255, 255))
+    # ears + head
+    for ex in (cx - 76, cx + 76):
+        d.ellipse((ex - 14, 150, ex + 14, 190), fill=skin)
+    d.ellipse(head, fill=skin)
+    # hair on top
+    if style == _MOHAWK:
+        d.rounded_rectangle((cx - 16, 40, cx + 16, 120), radius=14, fill=hair)
+    elif style not in (_BALD,):
+        d.chord((cx - 76, 60, cx + 76, 190), 180, 360, fill=hair)
+        d.rectangle((cx - 74, 116, cx - 62, 160), fill=hair)
+        d.rectangle((cx + 62, 116, cx + 74, 160), fill=hair)
+    # beard
+    if beard == 1:
+        stubble = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+        ImageDraw.Draw(stubble).chord((cx - 70, 120, cx + 70, 250), 15, 165, fill=hair + (80,))
+        layer.alpha_composite(stubble)
+        d = ImageDraw.Draw(layer)
+    elif beard in (2, 3):
+        d.chord((cx - 70 if beard == 3 else cx - 26, 150, cx + 70 if beard == 3 else cx + 26, 252), 20, 160, fill=hair)
+    if beard in (2, 3, 4):
+        d.rounded_rectangle((cx - 28, 196, cx + 28, 206), radius=5, fill=hair)
+    # brows, eyes, mouth
+    for side in (-1, 1):
+        ex = cx + side * 32
+        d.line((ex - 16, 142, ex + 14, 138), fill=tuple(max(0, c - 40) for c in hair), width=6)
+        d.ellipse((ex - 15, 154, ex + 15, 174), fill=(255, 255, 255))
+        d.ellipse((ex - 8, 156, ex + 8, 172), fill=eyes)
+        d.ellipse((ex - 4, 160, ex + 4, 168), fill=(13, 13, 13))
+    if beard != 3:
+        d.arc((cx - 22, 196, cx + 22, 226), 20, 160, fill=(122, 52, 40), width=5)
+    img.paste(layer, (x0, y0), layer)
+
+
+def render_my_player(
+    *, name: str, number: int, position: str, rating: int, attack: int, defense: int, level: int,
+    tier: str, tier_label: str, appearance: dict, bot_username: str,
+) -> bytes:
+    img, draw = _base("Мой игрок в Victor FC!", bot_username)
+    color = TIER_COLORS.get(tier, TIER_COLORS["bronze"])
+    box = (SIZE // 2 - 170, 165, SIZE // 2 + 170, 575)
+    glow = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    for i, alpha in enumerate((70, 44, 24)):
+        pad = 8 + i * 8
+        gd.rounded_rectangle([box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad], radius=34 + pad, outline=color + (alpha,), width=8)
+    img.paste(glow, (0, 0), glow)
+    draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle(box, radius=30, fill=(22, 32, 44), outline=color, width=7)
+    _draw_avatar(img, (box[0] + 8, box[1] + 8, box[2] - 8, box[3] - 8), appearance, number)
+    draw = ImageDraw.Draw(img)
+
+    draw.rounded_rectangle([box[0] + 16, box[1] + 16, box[0] + 106, box[1] + 106], radius=18, fill=(8, 12, 10))
+    rating_font = _font(FONT_HEAVY, 44)
+    rw = draw.textlength(str(rating), font=rating_font)
+    draw.text((box[0] + 61 - rw / 2, box[1] + 24), str(rating), font=rating_font, fill=color)
+    pos_font = _font(FONT_BOLD, 18)
+    pw = draw.textlength(position, font=pos_font)
+    draw.text((box[0] + 61 - pw / 2, box[1] + 76), position, font=pos_font, fill=WHITE)
+    tier_font = _font(FONT_BOLD, 20)
+    label = tier_label.upper()
+    draw.rounded_rectangle([box[2] - 26 - draw.textlength(label, font=tier_font), box[1] + 18, box[2] - 14, box[1] + 50], radius=12, fill=(8, 12, 10))
+    draw.text((box[2] - 20 - draw.textlength(label, font=tier_font), box[1] + 22), label, font=tier_font, fill=color)
+
+    title = f"{name} #{number}"
+    _center(draw, 592, title, _fit(draw, title, FONT_HEAVY, 40, SIZE - 80), WHITE)
+    _center(draw, 646, f"АТК {attack} · ЗЩТ {defense} · уровень {level}", _font(FONT_BOLD, 26), color)
+    return _jpeg(img)

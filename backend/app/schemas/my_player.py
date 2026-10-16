@@ -27,9 +27,20 @@ class MyPlayerSkillIn(BaseModel):
 
 
 class MyPlayerStarsInvoiceIn(BaseModel):
-    # "training" (one extra training) | "item" (an «Имущество» item).
+    # "training" (one extra training) | "item" (an «Имущество» item, item_id)
+    # | "cosmetic" (code) | "role" (line change to `position`).
     purchase: str
     item_id: Optional[int] = None
+    code: Optional[str] = Field(default=None, max_length=32)
+    position: Optional[str] = Field(default=None, max_length=8)
+
+
+class MyPlayerRoleIn(BaseModel):
+    position: str = Field(max_length=8)
+
+
+class MyPlayerDuelIn(BaseModel):
+    opponent_user_id: int
 
 
 class MyPlayerStarsInvoiceOut(BaseModel):
@@ -67,6 +78,59 @@ class MyPlayerOut(BaseModel):
     key_attr: str
     accessory: Optional[str] = None
     background: Optional[str] = None
+    effect: Optional[str] = None
+
+
+class MyPlayerLevelUpOut(BaseModel):
+    from_level: int
+    to_level: int
+    # Attribute points the new levels brought.
+    points: int
+
+
+class MyPlayerFreshnessOut(BaseModel):
+    value: int
+    # Rating points the player loses in matches right now.
+    penalty: int
+    max_penalty: int
+    regen_per_hour: int
+    # Part of regen_per_hour that comes from «Имущество».
+    regen_bonus: int = 0
+    per_match: int
+    training: int
+
+
+class MyPlayerRoleChangeOut(BaseModel):
+    coins_price: int
+    stars_price: int
+
+
+class MyPlayerTrophyOut(BaseModel):
+    id: int
+    code: str
+    name: str
+    icon: str
+    image_path: Optional[str] = None
+    message: Optional[str] = None
+    granted_at: str
+
+
+class MyPlayerAttentionOut(BaseModel):
+    """What the top-bar dot is for (any true = show it)."""
+    create: bool = False
+    level_up: bool = False
+    points: bool = False
+    training: bool = False
+    income: bool = False
+    career_offers: bool = False
+
+
+class MyPlayerStreakRewardOut(BaseModel):
+    tokens: int
+    skill_code: str
+    skill_name: str
+    skill_icon: str
+    streak: int
 
 
 class MyPlayerViewOut(BaseModel):
@@ -83,8 +147,14 @@ class MyPlayerViewOut(BaseModel):
     xp_per_reward: int
     xp_career_match: int
     xp_stratego_match: int = 0
+    xp_player_career_match: int = 0
+    # XP bonus from «Имущество», percent.
+    xp_bonus_pct: int = 0
     points_available: int
     points_per_level: int
+    level_seen: int = 1
+    # Set while the level-up screen hasn't been shown for the current level.
+    level_up: Optional[MyPlayerLevelUpOut] = None
     rating_cap: int
     at_rating_cap: bool
     tier_thresholds: list[int]
@@ -94,13 +164,20 @@ class MyPlayerViewOut(BaseModel):
     skill: Optional["MyPlayerSkillOut"] = None
     training: "MyPlayerTrainingOut"
     cosmetics: "MyPlayerCosmeticsOut"
-    # Only on the training-finish response: XP credited by that run.
+    freshness: Optional[MyPlayerFreshnessOut] = None
+    role_change: Optional[MyPlayerRoleChangeOut] = None
+    trophies: list[MyPlayerTrophyOut] = []
+    attention: MyPlayerAttentionOut = MyPlayerAttentionOut()
+    # Only on the training-finish response: XP credited by that run, and
+    # the skill tokens a streak paid (if this run completed one).
     training_xp: Optional[int] = None
+    streak_reward: Optional[MyPlayerStreakRewardOut] = None
 
 
 class MyPlayerPublicOut(BaseModel):
     player: Optional[MyPlayerOut] = None
     level: Optional[int] = None
+    trophies: list[MyPlayerTrophyOut] = []
 
 
 class MyPlayerSkillOptionOut(BaseModel):
@@ -137,6 +214,13 @@ class MyPlayerSkillOut(BaseModel):
     options: list[MyPlayerSkillOptionOut]
 
 
+class MyPlayerDrillOut(BaseModel):
+    # shot | pass | tackle | save
+    code: str
+    name: str
+    hint: str
+
+
 class MyPlayerTrainingOut(BaseModel):
     # The free daily run is used up.
     done_today: bool
@@ -151,18 +235,31 @@ class MyPlayerTrainingOut(BaseModel):
     xp_base: int
     xp_per_hit: int
     max_hits: int
+    # Today's drill (follows the weekday and the line).
+    drill: MyPlayerDrillOut
+    # Free trainings in a row; every streak_days pays streak_tokens skill tokens.
+    streak: int = 0
+    streak_days: int = 7
+    streak_tokens: int = 1
+    streak_left: int = 7
+    # Freshness one training restores.
+    freshness_bonus: int = 0
 
 
 class MyPlayerTrainingStartOut(BaseModel):
     max_hits: int
     min_seconds: int
+    drill: str = "shot"
 
 
 class MyPlayerCosmeticItemOut(BaseModel):
     code: str
+    # accessory | background | effect
     kind: str
     name: str
+    # Coins / Telegram Stars; 0 = not sold for that currency.
     price: int
+    stars_price: int = 0
     owned: bool
 
 
@@ -170,6 +267,7 @@ class MyPlayerCosmeticsOut(BaseModel):
     owned: list[str]
     accessory: Optional[str] = None
     background: Optional[str] = None
+    effect: Optional[str] = None
     catalog: list[MyPlayerCosmeticItemOut]
 
 
@@ -186,6 +284,61 @@ class MyPlayerLeaderboardOut(BaseModel):
     scope: str
     entries: list[MyPlayerLeaderboardEntryOut]
     me: Optional[MyPlayerLeaderboardEntryOut] = None
+
+
+class MyPlayerDuelFriendOut(BaseModel):
+    user_id: int
+    user_name: str
+    level: int
+    player: MyPlayerOut
+
+
+class MyPlayerDuelEventOut(BaseModel):
+    n: int
+    # me | opp — from the viewer's side.
+    side: str
+    # goal | save | miss
+    outcome: str
+
+
+class MyPlayerDuelSideOut(MyPlayerOut):
+    # Rating as fielded in the duel (fatigue included).
+    match_rating: Optional[int] = None
+
+
+class MyPlayerDuelOut(BaseModel):
+    id: int
+    created_at: str
+    # The viewer started it (only the challenger is rewarded).
+    as_challenger: bool
+    opponent_user_id: int
+    opponent_name: str
+    my_goals: int
+    opp_goals: int
+    # win | draw | loss — from the viewer's side.
+    result: str
+    reward_coins: int
+    events: list[MyPlayerDuelEventOut]
+    me: Optional[MyPlayerDuelSideOut] = None
+    opp: Optional[MyPlayerDuelSideOut] = None
+
+
+class MyPlayerDuelsOut(BaseModel):
+    enabled: bool
+    left_today: int
+    per_day: int
+    reward_win: int
+    reward_draw: int
+    xp: int
+    attacks: int
+    friends: list[MyPlayerDuelFriendOut]
+    recent: list[MyPlayerDuelOut]
+
+
+class MyPlayerDuelPlayOut(BaseModel):
+    duel: MyPlayerDuelOut
+    duels: MyPlayerDuelsOut
+    balance: int
 
 
 MyPlayerViewOut.model_rebuild()
@@ -206,10 +359,23 @@ class LifestyleItemOut(BaseModel):
     sold_out: bool
     owned: bool
     serial_number: Optional[int] = None
+    # none | freshness_regen | xp_bonus_pct | weekly_income
+    effect: str = "none"
+    effect_value: int = 0
+    effect_label: str = ""
+    # weekly_income: coins ready to claim on this item, and when the next week completes.
+    income_ready: int = 0
+    next_income_at: Optional[str] = None
 
 
 class LifestyleCategoryOut(BaseModel):
     code: str
+    label: str
+
+
+class LifestyleEffectTotalOut(BaseModel):
+    effect: str
+    value: int
     label: str
 
 
@@ -218,6 +384,11 @@ class LifestyleCatalogOut(BaseModel):
     items: list[LifestyleItemOut]
     prestige: int
     balance: int = 0
+    # Effects summed over everything owned.
+    effects: list[LifestyleEffectTotalOut] = []
+    income_ready: int = 0
+    # Only on the claim response: coins just credited.
+    claimed: Optional[int] = None
 
 
 class LifestylePublicOut(BaseModel):
@@ -236,6 +407,8 @@ class AdminLifestyleItemIn(BaseModel):
     max_supply: Optional[int] = Field(default=None, ge=1)
     is_active: bool = True
     sort_order: int = 0
+    effect: str = "none"
+    effect_value: int = Field(default=0, ge=0, le=100000)
 
 
 class AdminLifestyleItemUpdate(BaseModel):
@@ -250,6 +423,8 @@ class AdminLifestyleItemUpdate(BaseModel):
     max_supply: Optional[int] = Field(default=None, ge=1)
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
+    effect: Optional[str] = None
+    effect_value: Optional[int] = Field(default=None, ge=0, le=100000)
 
 
 class AdminLifestyleItemOut(BaseModel):
@@ -268,3 +443,5 @@ class AdminLifestyleItemOut(BaseModel):
     sold_count: int
     is_active: bool
     sort_order: int
+    effect: str = "none"
+    effect_value: int = 0

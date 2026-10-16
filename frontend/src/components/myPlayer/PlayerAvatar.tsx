@@ -11,10 +11,38 @@ interface Props {
   className?: string;
   /** Stadium-glow backdrop (off where the avatar sits on its own surface). */
   background?: boolean;
-  /** Equipped cosmetics (shop codes): headband | earring | chain | goggles. */
+  /** Equipped cosmetics (shop codes): headband | earring | chain | goggles |
+   * captain | headphones | crown. */
   accessory?: string | null;
-  /** bg_sunset | bg_neon | bg_gold; anything else = the default stadium. */
+  /** bg_sunset | bg_neon | bg_gold | bg_night | bg_galaxy | bg_champions;
+   * anything else = the default stadium. */
   backdrop?: string | null;
+}
+
+// Radial backdrop colours (centre, middle, edge) per background code.
+const BACKDROPS: Record<string, [string, string, string]> = {
+  default: ["#2b3a4d", "#16202c", "#0c1219"],
+  bg_gold: ["#ffe8a3", "#c48a1c", "#4a3006"],
+  bg_neon: ["#2a0f4d", "#120a2e", "#05030f"],
+  bg_night: ["#27496d", "#0b1a2e", "#03070d"],
+  bg_galaxy: ["#5b21b6", "#1e1b4b", "#05030f"],
+  bg_champions: ["#1d4ed8", "#0c1a4a", "#020617"],
+};
+
+// Fixed star field for «Галактика» (x, y, r).
+const GALAXY_STARS = [
+  [14, 20, 1.2], [38, 52, 0.8], [62, 14, 1], [88, 34, 0.7], [120, 12, 1.3], [150, 40, 0.8], [178, 22, 1.1],
+  [190, 70, 0.7], [24, 92, 0.9], [170, 104, 1], [8, 140, 0.8], [192, 150, 1.2], [44, 128, 0.6], [150, 132, 0.7],
+  [100, 6, 0.9], [76, 70, 0.6], [132, 84, 0.8], [30, 172, 0.7], [182, 186, 0.9], [12, 60, 0.7],
+];
+
+function starPath(cx: number, cy: number, r: number): string {
+  const points = Array.from({ length: 10 }, (_, i) => {
+    const angle = (Math.PI / 5) * i - Math.PI / 2;
+    const radius = i % 2 === 0 ? r : r * 0.45;
+    return `${(cx + radius * Math.cos(angle)).toFixed(1)} ${(cy + radius * Math.sin(angle)).toFixed(1)}`;
+  });
+  return `M${points.join(" L")}Z`;
 }
 
 function shade(hex: string, amount: number): string {
@@ -210,10 +238,15 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
     <svg viewBox="0 0 200 240" className={className} role="img" aria-label="Аватар игрока" preserveAspectRatio="xMidYMax slice">
       <defs>
         <radialGradient id={`bg${id}`} cx="50%" cy="30%" r="80%">
-          <stop offset="0" stopColor={backdrop === "bg_gold" ? "#ffe8a3" : backdrop === "bg_neon" ? "#2a0f4d" : "#2b3a4d"} />
-          <stop offset="0.6" stopColor={backdrop === "bg_gold" ? "#c48a1c" : backdrop === "bg_neon" ? "#120a2e" : "#16202c"} />
-          <stop offset="1" stopColor={backdrop === "bg_gold" ? "#4a3006" : backdrop === "bg_neon" ? "#05030f" : "#0c1219"} />
+          {(BACKDROPS[backdrop ?? ""] ?? BACKDROPS.default).map((color, i) => (
+            <stop key={i} offset={[0, 0.6, 1][i]} stopColor={color} />
+          ))}
         </radialGradient>
+        <linearGradient id={`crown${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff3b0" />
+          <stop offset="0.5" stopColor="#f5c542" />
+          <stop offset="1" stopColor="#a8740f" />
+        </linearGradient>
         <linearGradient id={`sunset${id}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#ff9a3d" />
           <stop offset="0.45" stopColor="#d64a6b" />
@@ -268,6 +301,29 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
               </g>
             </>
           )}
+          {backdrop === "bg_night" && (
+            <>
+              <path d="M0 0 L40 0 L120 240 L70 240Z" fill="#e0f2fe" opacity="0.1" />
+              <path d="M200 0 L160 0 L80 240 L130 240Z" fill="#e0f2fe" opacity="0.1" />
+              {[10, 24, 176, 190].map((x) => <circle key={x} cx={x} cy="10" r="3.5" fill="#f8fafc" opacity="0.85" />)}
+              <path d="M0 190 Q100 170 200 190 L200 240 L0 240Z" fill="#14532d" opacity="0.55" />
+            </>
+          )}
+          {backdrop === "bg_galaxy" && (
+            <>
+              <ellipse cx="50" cy="60" rx="70" ry="34" fill="#ec4899" opacity="0.16" transform="rotate(-20 50 60)" />
+              <ellipse cx="160" cy="110" rx="60" ry="26" fill="#22d3ee" opacity="0.14" transform="rotate(25 160 110)" />
+              {GALAXY_STARS.map(([x, y, r]) => <circle key={`${x}-${y}`} cx={x} cy={y} r={r} fill="#fff" opacity="0.85" />)}
+            </>
+          )}
+          {backdrop === "bg_champions" && (
+            <g fill="#f8fafc" opacity="0.28">
+              {Array.from({ length: 8 }, (_, i) => {
+                const angle = (Math.PI * 2 * i) / 8 - Math.PI / 2;
+                return <path key={i} d={starPath(100 + 64 * Math.cos(angle), 84 + 52 * Math.sin(angle), 10)} />;
+              })}
+            </g>
+          )}
           <g opacity={backdrop === "bg_gold" ? 0.22 : 0.08} fill="#fff">
             <path d="M30 0 L60 0 L100 240 L90 240Z" />
             <path d="M150 0 L175 0 L115 240 L106 240Z" />
@@ -286,6 +342,14 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
         <path d="M154 182 Q148 214 152 240" stroke="#000" strokeOpacity="0.25" strokeWidth="2" fill="none" />
         <rect x="0" y="150" width="200" height="90" fill={`url(#fold${id})`} />
       </g>
+      {accessory === "captain" && (
+        <g clipPath={`url(#torso${id})`}>
+          <g transform="rotate(-10 30 210)">
+            <rect x="10" y="202" width="40" height="15" rx="2" fill="#facc15" />
+            <text x="30" y="214" textAnchor="middle" fontSize="12" fontWeight="900" fontFamily="system-ui, sans-serif" fill="#18181b">C</text>
+          </g>
+        </g>
+      )}
       <path d="M80 162 Q100 190 120 162" fill="none" stroke={trim} strokeWidth="5" strokeLinecap="round" />
       <path d="M80 162 Q100 186 120 162" fill="none" stroke="#000" strokeOpacity="0.25" strokeWidth="1.5" />
       <g transform="translate(58 192)">
@@ -358,6 +422,27 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
             </g>
           ))}
           <path d="M93 97 Q100 93 107 97" stroke="#18181b" strokeWidth="3" fill="none" />
+        </>
+      )}
+      {accessory === "headphones" && (
+        <>
+          <path d="M74 160 Q100 192 126 160" fill="none" stroke="#18181b" strokeWidth="6" strokeLinecap="round" />
+          {[72, 128].map((x) => (
+            <g key={x}>
+              <ellipse cx={x} cy="158" rx="10" ry="13" fill="#18181b" />
+              <ellipse cx={x} cy="158" rx="5.5" ry="8" fill="#ef4444" />
+            </g>
+          ))}
+        </>
+      )}
+      {accessory === "crown" && (
+        <>
+          <path d="M68 52 L74 20 L88 38 L100 12 L112 38 L126 20 L132 52Z" fill={`url(#crown${id})`} stroke="#8a5d08" strokeWidth="1.5" strokeLinejoin="round" />
+          <rect x="67" y="48" width="66" height="9" rx="2" fill={`url(#crown${id})`} stroke="#8a5d08" strokeWidth="1.5" />
+          {([[84, "#ef4444"], [100, "#22d3ee"], [116, "#22c55e"]] as const).map(([x, color]) => (
+            <circle key={x} cx={x} cy="52" r="3" fill={color} />
+          ))}
+          <circle cx="100" cy="14" r="3" fill="#fff" opacity="0.9" />
         </>
       )}
       {accessory === "headband" && (

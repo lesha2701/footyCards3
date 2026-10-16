@@ -4,6 +4,7 @@ import { useState } from "react";
 import { buyExtraTraining, type MyPlayerView } from "@/api/myPlayer";
 import { IconCoin } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
+import { DRILL_ICONS } from "@/lib/myPlayer";
 import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { hapticNotify } from "@/lib/telegram";
 
@@ -13,8 +14,9 @@ interface Props {
   onStart: () => void;
 }
 
-/** «Тренировка дня»: the free daily run, then extra runs bought for coins or
- * Telegram Stars (up to the daily max set in the admin panel). */
+/** «Тренировка дня»: the drill of the day (changes with the weekday and the
+ * line), the free daily run with its streak, then extra runs bought for
+ * coins or Telegram Stars (up to the daily max set in the admin panel). */
 export default function TrainingSection({ view, onSaved, onStart }: Props) {
   const t = view.training;
   const queryClient = useQueryClient();
@@ -31,7 +33,7 @@ export default function TrainingSection({ view, onSaved, onStart }: Props) {
     setError(null);
     setStarsBusy(true);
     try {
-      if ((await payMyPlayerWithStars("training")) === "paid") {
+      if ((await payMyPlayerWithStars({ purchase: "training" })) === "paid") {
         hapticNotify("success");
         await queryClient.invalidateQueries({ queryKey: ["my-player"] });
       }
@@ -43,18 +45,26 @@ export default function TrainingSection({ view, onSaved, onStart }: Props) {
   };
 
   const status = !t.done_today
-    ? `Бесплатная тренировка: до +${maxXp} опыта сверх дневного лимита`
+    ? `До +${maxXp} опыта сверх лимита · +${t.freshness_bonus} свежести`
     : t.extra_credits > 0
       ? `Дополнительных тренировок: ${t.extra_credits}`
       : "Бесплатная на сегодня пройдена";
   const canBuy = t.done_today && t.extra_credits === 0 && t.extra_left_today > 0;
+  // Dots for the current streak window; today's dot is lit once done.
+  const filled = t.streak % t.streak_days || (t.streak > 0 ? t.streak_days : 0);
 
   return (
     <section className="rounded-2xl bg-bg-surface p-4">
       <div className="flex items-center justify-between gap-3">
-        <span>
-          <span className="block font-display text-base font-bold text-ink-chalk">Тренировка дня</span>
-          <span className="block text-caption text-ink-mist">{status}</span>
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-bg-raised text-2xl">
+            {DRILL_ICONS[t.drill.code]}
+          </span>
+          <span className="min-w-0">
+            <span className="block text-micro font-semibold uppercase tracking-wider text-accent-lime">Тренировка дня</span>
+            <span className="block truncate font-display text-base font-bold text-ink-chalk">{t.drill.name}</span>
+            <span className="block text-caption text-ink-mist">{status}</span>
+          </span>
         </span>
         <button
           disabled={!t.can_train}
@@ -64,6 +74,27 @@ export default function TrainingSection({ view, onSaved, onStart }: Props) {
           {t.can_train ? "Начать" : "✓"}
         </button>
       </div>
+
+      {t.streak_tokens > 0 && (
+        <div className="mt-3 rounded-xl bg-bg-raised p-3" data-testid="training-streak">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-ink-chalk">🔥 Серия: {t.streak} {t.streak === 1 ? "день" : t.streak < 5 && t.streak > 1 ? "дня" : "дней"}</span>
+            <span className="text-ink-mist">
+              {t.done_today && filled === t.streak_days
+                ? `+${t.streak_tokens} жетон навыка получен!`
+                : `ещё ${t.streak_left} → +${t.streak_tokens} жетон навыка`}
+            </span>
+          </div>
+          <div className="mt-2 flex gap-1.5">
+            {Array.from({ length: t.streak_days }).map((_, i) => (
+              <span
+                key={i}
+                className={`h-2 flex-1 rounded-full ${i < filled ? "bg-gradient-to-r from-orange-400 to-amber-300" : "bg-bg-surface"}`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {t.done_today && t.extra_max > 0 && (
         <div className="mt-3 rounded-xl bg-bg-raised p-3">

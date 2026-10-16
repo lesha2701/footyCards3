@@ -326,6 +326,22 @@ class GameConfigOut(BaseModel):
     my_player_extra_trainings_max: int = 3
     my_player_extra_training_coins: int = 300
     my_player_extra_training_stars: int = 15
+    my_player_streak_days: int = 7
+    my_player_streak_tokens: int = 1
+    my_player_freshness_per_match: int = 15
+    my_player_freshness_regen_per_hour: int = 1
+    my_player_freshness_training: int = 20
+    my_player_fatigue_max_penalty: int = 5
+    my_player_duels_per_day: int = 5
+    my_player_duel_reward_win: int = 30
+    my_player_duel_reward_draw: int = 10
+    my_player_duel_xp: int = 10
+    my_player_role_change_coins: int = 25000
+    my_player_role_change_stars: int = 300
+    my_player_cosmetic_stars_prices: dict[str, int] = {}
+    player_career_salary_per_rating: int = 10
+    player_career_objective_coins: int = 150
+    player_career_objective_rep: int = 5
     player_career_enabled: bool = True
     player_career_min_club_cards: int = 5
     player_career_rating_margin: int = 5
@@ -707,6 +723,22 @@ class GameConfigUpdate(BaseModel):
     my_player_extra_trainings_max: Optional[int] = Field(default=None, ge=0, le=20)
     my_player_extra_training_coins: Optional[int] = Field(default=None, ge=0)
     my_player_extra_training_stars: Optional[int] = Field(default=None, ge=0, le=10000)
+    my_player_streak_days: Optional[int] = Field(default=None, ge=1, le=60)
+    my_player_streak_tokens: Optional[int] = Field(default=None, ge=0, le=100)
+    my_player_freshness_per_match: Optional[int] = Field(default=None, ge=0, le=100)
+    my_player_freshness_regen_per_hour: Optional[int] = Field(default=None, ge=0, le=100)
+    my_player_freshness_training: Optional[int] = Field(default=None, ge=0, le=100)
+    my_player_fatigue_max_penalty: Optional[int] = Field(default=None, ge=0, le=30)
+    my_player_duels_per_day: Optional[int] = Field(default=None, ge=0, le=100)
+    my_player_duel_reward_win: Optional[int] = Field(default=None, ge=0)
+    my_player_duel_reward_draw: Optional[int] = Field(default=None, ge=0)
+    my_player_duel_xp: Optional[int] = Field(default=None, ge=0, le=1000)
+    my_player_role_change_coins: Optional[int] = Field(default=None, ge=0)
+    my_player_role_change_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    my_player_cosmetic_stars_prices: Optional[dict[str, int]] = None
+    player_career_salary_per_rating: Optional[int] = Field(default=None, ge=0, le=10000)
+    player_career_objective_coins: Optional[int] = Field(default=None, ge=0)
+    player_career_objective_rep: Optional[int] = Field(default=None, ge=0, le=1000)
     player_career_enabled: Optional[bool] = None
     player_career_min_club_cards: Optional[int] = Field(default=None, ge=1, le=11)
     player_career_rating_margin: Optional[int] = Field(default=None, ge=0, le=30)

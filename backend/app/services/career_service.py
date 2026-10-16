@@ -1776,7 +1776,10 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         )
         if my_player_service.card_id_for(part.user_id) in played.get(team_index, set()):
             locked = await wallet_service.lock_user_for_update(db, part.user_id)
-            my_player_service.add_xp(locked, config.my_player_xp_career_match, config)
+            my_player_service.add_xp(
+                locked, config.my_player_xp_career_match, config,
+                bonus_pct=await my_player_service.xp_bonus_pct(db, part.user_id),
+            )
         outcome = "Победа" if own > opp else "Ничья" if own == opp else "Поражение"
         await notify(
             db, part.user_id, NotificationType.career_round_result, f"Карьера, тур {round_index + 1}: {outcome}",

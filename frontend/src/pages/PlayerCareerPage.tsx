@@ -8,13 +8,14 @@ import {
   signPlayerCareerContract,
   startPlayerCareerSeason,
   type PlayerCareerClub,
+  type PlayerCareerHistoryEntry,
   type PlayerCareerSeason,
   type PlayerCareerView,
 } from "@/api/playerCareer";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconLock, IconProfile, IconTrophy } from "@/components/icons";
+import { IconCoin, IconLock, IconProfile, IconTrophy } from "@/components/icons";
 import PlayerAvatar from "@/components/myPlayer/PlayerAvatar";
 import { formatGameError } from "@/lib/errors";
 import { hapticNotify } from "@/lib/telegram";
@@ -84,6 +85,11 @@ export default function PlayerCareerPage() {
           <span className="block text-xs text-ink-mist">
             {data.club ? `Клуб: ${data.club.name} (${data.club.rating})` : "Без клуба"} · репутация {data.reputation}
           </span>
+          {data.freshness && (
+            <span className={`block text-caption ${data.freshness.value >= 70 ? "text-ink-mist" : data.freshness.value >= 40 ? "text-amber-300" : "text-red-400"}`}>
+              Свежесть {data.freshness.value}% · матч −{data.freshness.per_match}
+            </span>
+          )}
           {data.career && data.career.seasons > 0 && (
             <span className="block text-caption text-ink-mist-dim">
               Сезонов {data.career.seasons} · матчей {data.career.matches} · голов {data.career.goals} · передач {data.career.assists}
@@ -105,11 +111,19 @@ export default function PlayerCareerPage() {
       ) : (
         <>
           {season && <SeasonBlock season={season} view={data} onView={onView} onError={onError} />}
+          {data.history.length > 0 && <CareerTimeline history={data.history} />}
           {!active && data.club && (
             <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
               <p className="text-sm text-ink-mist">
                 Сезон: 8 клубов твоего уровня, 14 туров по два в день. За результат +{data.rewards?.win}/{data.rewards?.draw} монет,
                 за гол +{data.rewards?.goal}, за матч +{data.rewards?.xp} опыта, в конце — награда за место и трофеи.
+              </p>
+              <p className="flex items-start gap-1.5 rounded-xl bg-bg-raised px-3 py-2 text-xs text-ink-chalk">
+                <IconCoin size={13} className="mt-0.5 shrink-0 text-accent-lime" />
+                <span>
+                  Контракт: зарплата <b>{data.club.salary}</b> за сезон + {data.rewards?.objective_coins} монет за каждую выполненную
+                  цель клуба
+                </span>
               </p>
               <button
                 disabled={start.isPending}
@@ -161,6 +175,7 @@ function ClubPicker({
             <span className="block truncate text-caption text-ink-mist">
               {club.is_demo ? "Клуб лиги" : `${club.real_cards} карточек · ${club.stars.join(", ")}`}
             </span>
+            <span className="block text-micro text-accent-lime">Зарплата {club.salary} за сезон</span>
           </span>
           {club.locked_reason ? (
             <span className="flex shrink-0 items-center gap-1 text-micro text-ink-mist"><IconLock size={12} /> {club.locked_reason}</span>
@@ -224,6 +239,12 @@ function SeasonBlock({
               </div>
             ))}
           </div>
+          {season.objectives.length > 0 && <Objectives season={season} rewardCoins={view.rewards?.objective_coins ?? 0} />}
+          {!active && (season.salary > 0 || season.objective_coins > 0) && (
+            <p className="rounded-xl bg-bg-raised px-3 py-2 text-xs text-ink-chalk">
+              Зарплата +{season.salary} · цели клуба +{season.objective_coins}
+            </p>
+          )}
           {active && season.next_round_at && (
             <p className="text-sm text-ink-mist">Следующий тур: <b className="text-ink-chalk">{formatWhen(season.next_round_at)}</b></p>
           )}
@@ -336,6 +357,59 @@ function SeasonBlock({
           onCancel={() => setConfirmLeave(false)}
         />
       )}
+    </section>
+  );
+}
+
+const OBJECTIVE_ICONS: Record<string, string> = { place: "🏁", goals: "⚽", clean_sheets: "🧱", avg_rating: "⭐" };
+
+/** The club's season objectives: progress now, met / missed at the end. */
+function Objectives({ season, rewardCoins }: { season: PlayerCareerSeason; rewardCoins: number }) {
+  const active = season.status === "active";
+  return (
+    <div className="flex flex-col gap-1.5 rounded-xl bg-bg-raised p-3" data-testid="career-objectives">
+      <p className="flex items-center justify-between text-xs font-bold text-ink-chalk">
+        Цели клуба <span className="font-normal text-ink-mist">+{rewardCoins} монет за каждую</span>
+      </p>
+      {season.objectives.map((o) => {
+        const value = o.code === "place" ? (o.value ? `${o.value} место` : "—") : o.code === "avg_rating" ? (o.value || "—") : `${o.value}/${o.target}`;
+        return (
+          <div key={o.code} className="flex items-center gap-2 text-xs">
+            <span>{OBJECTIVE_ICONS[o.code] ?? "🎯"}</span>
+            <span className={`min-w-0 flex-1 truncate ${o.met ? "text-ink-chalk" : "text-ink-mist"}`}>{o.label}</span>
+            <span className={`font-mono font-bold ${o.met ? "text-accent-lime" : active ? "text-ink-mist" : "text-red-400"}`}>
+              {o.met ? "✓" : active ? value : "✗"}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Career timeline: every finished season, newest first. */
+function CareerTimeline({ history }: { history: PlayerCareerHistoryEntry[] }) {
+  return (
+    <section className="rounded-2xl bg-bg-surface p-4" data-testid="career-timeline">
+      <h2 className="font-display text-base font-bold text-ink-chalk">История карьеры</h2>
+      <ol className="relative mt-3 flex flex-col gap-4 border-l border-white/10 pl-4">
+        {history.map((h, i) => (
+          <li key={h.id} className="relative">
+            <span
+              className={`absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full ring-4 ring-bg-surface ${h.place === 1 ? "bg-amber-400" : "bg-accent-lime"}`}
+            />
+            <p className="text-sm font-semibold text-ink-chalk">
+              Сезон {history.length - i} · {h.club}
+              {h.club_rating != null && <span className="text-ink-mist-dim"> ({h.club_rating})</span>}
+            </p>
+            <p className="text-caption text-ink-mist">
+              {h.place != null ? `${h.place} место` : "—"} · голов {h.goals} · передач {h.assists}
+              {h.avg_rating != null && ` · оценка ${h.avg_rating}`}
+            </p>
+            {h.awards.length > 0 && <p className="text-caption font-semibold text-amber-300">🏆 {h.awards.join(" · ")}</p>}
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }

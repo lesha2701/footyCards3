@@ -118,6 +118,9 @@ class TransactionType(str, enum.Enum):
     academy_upgrade = "academy_upgrade"
     academy_scout_reward = "academy_scout_reward"
     arena_division_reward = "arena_division_reward"
+    my_player_duel_reward = "my_player_duel_reward"
+    my_player_role_change = "my_player_role_change"
+    lifestyle_income = "lifestyle_income"
 
 
 class GiftKind(str, enum.Enum):
@@ -368,6 +371,7 @@ class NotificationType(str, enum.Enum):
     stratego_challenge_accepted = "stratego_challenge_accepted"
     stratego_your_turn = "stratego_your_turn"
     stratego_match_finished = "stratego_match_finished"
+    my_player_duel = "my_player_duel"
 
 
 class TradeCardSide(str, enum.Enum):

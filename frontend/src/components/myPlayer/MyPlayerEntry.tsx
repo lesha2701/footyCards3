@@ -8,6 +8,7 @@ import { TIER_TEXT } from "@/lib/myPlayer";
 
 import MyPlayerCard from "./MyPlayerCard";
 import PlayerAvatar from "./PlayerAvatar";
+import TrophyShowcase from "./TrophyShowcase";
 
 /** Profile row leading to /my-player: the avatar + level, or a "create" call. */
 export function MyPlayerEntry() {
@@ -65,6 +66,11 @@ export function PublicMyPlayer({ userId }: { userId: number }) {
       <div className="w-44">
         <MyPlayerCard player={data.player} level={data.level} />
       </div>
+      {data.trophies.length > 0 && (
+        <div className="w-full">
+          <TrophyShowcase trophies={data.trophies} />
+        </div>
+      )}
       {!!property?.items.length && (
         <div className="w-full rounded-xl bg-bg-raised p-3">
           <p className="text-xs text-ink-mist">

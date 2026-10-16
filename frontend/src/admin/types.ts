@@ -282,6 +282,22 @@ export interface GameConfig {
   my_player_extra_trainings_max: number;
   my_player_extra_training_coins: number;
   my_player_extra_training_stars: number;
+  my_player_streak_days: number;
+  my_player_streak_tokens: number;
+  my_player_freshness_per_match: number;
+  my_player_freshness_regen_per_hour: number;
+  my_player_freshness_training: number;
+  my_player_fatigue_max_penalty: number;
+  my_player_duels_per_day: number;
+  my_player_duel_reward_win: number;
+  my_player_duel_reward_draw: number;
+  my_player_duel_xp: number;
+  my_player_role_change_coins: number;
+  my_player_role_change_stars: number;
+  my_player_cosmetic_stars_prices: Record<string, number>;
+  player_career_salary_per_rating: number;
+  player_career_objective_coins: number;
+  player_career_objective_rep: number;
   player_career_enabled: boolean;
   player_career_min_club_cards: number;
   player_career_rating_margin: number;
@@ -703,6 +719,9 @@ export interface AdminLifestyleItem {
   sold_count: number;
   is_active: boolean;
   sort_order: number;
+  /** none | freshness_regen | xp_bonus_pct | weekly_income */
+  effect: string;
+  effect_value: number;
 }
 
 export interface MagnateBoardCellConfig {

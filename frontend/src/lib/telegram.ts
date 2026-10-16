@@ -40,6 +40,16 @@ interface TelegramWebApp {
     offClick: (cb: () => void) => void;
   };
   openInvoice?: (url: string, callback?: (status: "paid" | "cancelled" | "failed" | "pending") => void) => void;
+  /** Bot API 8.0+: device orientation (radians); events "deviceOrientationChanged". */
+  DeviceOrientation?: {
+    isStarted: boolean;
+    alpha: number | null;
+    beta: number | null;
+    gamma: number | null;
+    start: (params: { refresh_rate?: number; need_absolute?: boolean }, callback?: (started: boolean) => void) => void;
+    stop: (callback?: (stopped: boolean) => void) => void;
+  };
+  isVersionAtLeast?: (version: string) => boolean;
   openTelegramLink?: (url: string) => void;
   /** Bot API 8.0+: lets the user pick a chat for a message the bot prepared. */
   shareMessage?: (msgId: string, callback?: (sent: boolean) => void) => void;

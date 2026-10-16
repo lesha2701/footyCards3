@@ -6,7 +6,7 @@ from app.models.card_path import AcademyLedger, UserAcademy, CardPath, PathAttem
 from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
 from app.models.career import CareerClub, CareerParticipant, CareerProfile, CareerSeason, Friendship
 from app.models.lifestyle import LifestyleItem, UserLifestyleItem
-from app.models.my_player import MyPlayer
+from app.models.my_player import MyPlayer, MyPlayerDuel
 from app.models.player_career import PlayerCareerSeason
 from app.models.card_collection import CardCollection, UserCollectionReward
 from app.models.card_upgrade import CardUpgradeAttempt, CardUpgradeRule
@@ -160,6 +160,7 @@ __all__ = [
     "CareerParticipant",
     "Friendship",
     "MyPlayer",
+    "MyPlayerDuel",
     "LifestyleItem",
     "UserLifestyleItem",
     "PlayerCareerSeason",

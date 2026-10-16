@@ -18,6 +18,7 @@ async def prepare_share(
     db: AsyncSession = Depends(get_db),
 ):
     """Image + referral link for sharing one of the player's own moments
-    (a legendary/diamond card, an Arena win, a trophy) to a Telegram chat."""
+    (a legendary/diamond card, an Arena win, a trophy, «Мой игрок») to a
+    Telegram chat. For «my_player» the id is ignored (always the caller's)."""
     await check_rate_limit(f"share_prepare:{user.id}", max_calls=10, window_seconds=60)
     return await share_service.prepare_share(db, user, body.kind, body.id)

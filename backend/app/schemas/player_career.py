@@ -21,6 +21,8 @@ class PlayerCareerClubOut(BaseModel):
     # None = open for the player.
     locked_reason: Optional[str] = None
     stars: list[str] = []
+    # Coins the club pays at the end of every season.
+    salary: int = 0
 
 
 class PlayerCareerMyRoundOut(BaseModel):
@@ -69,6 +71,16 @@ class PlayerCareerOfferOut(BaseModel):
     rating: int
 
 
+class PlayerCareerObjectiveOut(BaseModel):
+    # place | goals | clean_sheets | avg_rating
+    code: str
+    target: float
+    label: str
+    value: float
+    # Active season: on track; finished: met.
+    met: bool
+
+
 class PlayerCareerSeasonOut(BaseModel):
     id: int
     status: str
@@ -84,6 +96,9 @@ class PlayerCareerSeasonOut(BaseModel):
     coins_earned: int
     awards: list[str] = []
     offers: list[PlayerCareerOfferOut] = []
+    objectives: list[PlayerCareerObjectiveOut] = []
+    salary: int = 0
+    objective_coins: int = 0
 
 
 class PlayerCareerTotalsOut(BaseModel):
@@ -102,6 +117,27 @@ class PlayerCareerRewardsOut(BaseModel):
     goal: int
     xp: int
     places: list[int]
+    objective_coins: int = 0
+    objective_rep: int = 0
+
+
+class PlayerCareerHistoryOut(BaseModel):
+    id: int
+    club: str
+    club_rating: Optional[int] = None
+    place: Optional[int] = None
+    matches: int
+    goals: int
+    assists: int
+    avg_rating: Optional[float] = None
+    awards: list[str] = []
+    coins_earned: int
+    finished_at: Optional[datetime] = None
+
+
+class PlayerCareerFreshnessOut(BaseModel):
+    value: int
+    per_match: int
 
 
 class PlayerCareerViewOut(BaseModel):
@@ -116,3 +152,5 @@ class PlayerCareerViewOut(BaseModel):
     season: Optional[PlayerCareerSeasonOut] = None
     can_change_club: bool = True
     rewards: Optional[PlayerCareerRewardsOut] = None
+    history: list[PlayerCareerHistoryOut] = []
+    freshness: Optional[PlayerCareerFreshnessOut] = None

@@ -17,6 +17,8 @@ export default function TopBar() {
   const requestNavigate = useMatchGuardStore((s) => s.requestNavigate);
   const { data: myPlayer } = useQuery({ queryKey: ["my-player"], queryFn: fetchMyPlayer, enabled: !!user, staleTime: 60_000 });
   const mine = myPlayer?.player;
+  // Something waits in «Мой игрок»: points, a free training, a level-up, income, club offers…
+  const attention = !!myPlayer?.attention && Object.values(myPlayer.attention).some(Boolean);
 
   return (
     <header className="safe-top sticky top-0 z-30 border-b border-white/5 bg-bg-base/85 backdrop-blur">
@@ -42,8 +44,11 @@ export default function TopBar() {
               ) : (
                 <IconProfile size={17} />
               )}
-              {(!mine || myPlayer.points_available > 0) && (
-                <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-accent-lime ring-2 ring-bg-base" />
+              {attention && (
+                <span
+                  data-testid="my-player-dot"
+                  className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-bg-base"
+                />
               )}
             </button>
           )}

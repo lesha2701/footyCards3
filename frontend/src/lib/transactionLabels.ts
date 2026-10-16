@@ -46,4 +46,7 @@ export const TX_TYPE_LABELS: Record<string, string> = {
   my_player_cosmetic: "Мой игрок: стиль",
   my_player_extra_training: "Мой игрок: доп. тренировка",
   lifestyle_purchase: "Имущество",
+  lifestyle_income: "Имущество: доход",
+  my_player_duel_reward: "Дуэль игроков",
+  my_player_role_change: "Мой игрок: смена амплуа",
 };

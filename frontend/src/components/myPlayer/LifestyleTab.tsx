@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { buyLifestyleWithCoins, fetchLifestyle, type LifestyleCategory, type LifestyleItem } from "@/api/lifestyle";
+import { buyLifestyleWithCoins, claimLifestyleIncome, fetchLifestyle, type LifestyleCategory, type LifestyleItem } from "@/api/lifestyle";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconCoin } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
@@ -22,7 +22,8 @@ export function LifestyleIcon({ item, className = "h-14 w-14 text-4xl" }: { item
 
 /** «Имущество»: the player's status collection (garage, real estate,
  * investments, other) and the shop. Items are bought for coins or Stars,
- * one of each; limited editions are numbered. */
+ * one of each; limited editions are numbered. Items may help the player:
+ * faster freshness recovery, an XP bonus or a weekly income collected here. */
 export default function LifestyleTab() {
   const queryClient = useQueryClient();
   const updateBalance = useAuthStore((s) => s.updateBalance);
@@ -41,11 +42,22 @@ export default function LifestyleTab() {
     },
     onError: (err) => setError(formatGameError(err, "Не получилось купить")),
   });
+  const claim = useMutation({
+    mutationFn: claimLifestyleIncome,
+    onSuccess: (next) => {
+      hapticNotify("success");
+      setError(null);
+      queryClient.setQueryData(["lifestyle"], next);
+      updateBalance(next.balance);
+      void queryClient.invalidateQueries({ queryKey: ["my-player"], exact: true });
+    },
+    onError: (err) => setError(formatGameError(err, "Не получилось забрать доход")),
+  });
   const buyStars = async (item: LifestyleItem) => {
     setError(null);
     setStarsBusy(item.id);
     try {
-      if ((await payMyPlayerWithStars("item", item.id)) === "paid") {
+      if ((await payMyPlayerWithStars({ purchase: "item", itemId: item.id })) === "paid") {
         hapticNotify("success");
         await queryClient.invalidateQueries({ queryKey: ["lifestyle"] });
       }
@@ -73,7 +85,30 @@ export default function LifestyleTab() {
         {owned.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1 text-xl">{owned.slice(0, 12).map((i) => <span key={i.id}>{i.emoji}</span>)}</div>
         )}
+        {data.effects.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {data.effects.map((e) => (
+              <span key={e.effect} className="rounded-full bg-accent-lime/15 px-2 py-0.5 text-micro font-semibold text-accent-lime">{e.label}</span>
+            ))}
+          </div>
+        )}
       </section>
+
+      {data.income_ready > 0 && (
+        <button
+          disabled={claim.isPending}
+          onClick={() => claim.mutate()}
+          className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-accent-lime/25 to-bg-surface p-4 text-left active:scale-[0.99] disabled:opacity-50"
+        >
+          <span>
+            <span className="block font-display text-base font-bold text-ink-chalk">Доход от имущества</span>
+            <span className="block text-caption text-ink-mist">Накопилось за прошедшие недели</span>
+          </span>
+          <span className="flex items-center gap-1 rounded-xl bg-floodlight px-3 py-2 text-sm font-bold text-bg-base">
+            <IconCoin size={14} /> +{data.income_ready}
+          </span>
+        </button>
+      )}
 
       <div className="flex gap-1.5 overflow-x-auto pb-1">
         {[{ code: "owned" as const, label: "Моё" }, ...data.categories].map((c) => (
@@ -101,6 +136,9 @@ export default function LifestyleTab() {
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-bold text-ink-chalk">{item.name}</span>
                 <span className="block truncate text-caption text-ink-mist">{item.description}</span>
+                {item.effect_label && (
+                  <span className="mt-0.5 block text-caption font-semibold text-accent-lime">{item.effect_label}</span>
+                )}
                 <span className="mt-0.5 block text-caption text-amber-300">
                   +{item.prestige} престижа
                   {item.max_supply != null &&

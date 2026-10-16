@@ -12,6 +12,31 @@ export interface PlayerCareerClub {
   /** null = the player may sign for this club. */
   locked_reason: string | null;
   stars: string[];
+  /** Coins the club pays at the end of every season. */
+  salary: number;
+}
+
+export interface PlayerCareerObjective {
+  code: "place" | "goals" | "clean_sheets" | "avg_rating";
+  target: number;
+  label: string;
+  value: number;
+  /** Active season: on track; finished: met. */
+  met: boolean;
+}
+
+export interface PlayerCareerHistoryEntry {
+  id: number;
+  club: string;
+  club_rating: number | null;
+  place: number | null;
+  matches: number;
+  goals: number;
+  assists: number;
+  avg_rating: number | null;
+  awards: string[];
+  coins_earned: number;
+  finished_at: string | null;
 }
 
 export interface PlayerCareerMyRound {
@@ -42,6 +67,9 @@ export interface PlayerCareerSeason {
   coins_earned: number;
   awards: string[];
   offers: { key: string; name: string; rating: number }[];
+  objectives: PlayerCareerObjective[];
+  salary: number;
+  objective_coins: number;
 }
 
 export interface PlayerCareerView {
@@ -55,7 +83,12 @@ export interface PlayerCareerView {
   clubs: PlayerCareerClub[];
   season: PlayerCareerSeason | null;
   can_change_club: boolean;
-  rewards: { win: number; draw: number; goal: number; xp: number; places: number[] } | null;
+  rewards: {
+    win: number; draw: number; goal: number; xp: number; places: number[];
+    objective_coins: number; objective_rep: number;
+  } | null;
+  history: PlayerCareerHistoryEntry[];
+  freshness: { value: number; per_match: number } | null;
 }
 
 export async function fetchPlayerCareer(): Promise<PlayerCareerView> {
