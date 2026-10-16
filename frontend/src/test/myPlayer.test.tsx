@@ -59,6 +59,7 @@ const baseView: MyPlayerView = {
   role_change: { coins_price: 25000, stars_price: 300 },
   trophies: [],
   attention: { create: false, level_up: false, points: false, training: true, income: false, career_offers: false },
+  countries: ["Испания", "Россия"],
 };
 
 function renderPage() {

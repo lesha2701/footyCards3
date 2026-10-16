@@ -372,6 +372,7 @@ class NotificationType(str, enum.Enum):
     stratego_your_turn = "stratego_your_turn"
     stratego_match_finished = "stratego_match_finished"
     my_player_duel = "my_player_duel"
+    player_career_event = "player_career_event"
 
 
 class TradeCardSide(str, enum.Enum):

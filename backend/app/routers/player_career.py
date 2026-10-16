@@ -5,7 +5,7 @@ from app.core.dependencies import get_current_user
 from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.user import User
-from app.schemas.player_career import PlayerCareerContractIn, PlayerCareerViewOut
+from app.schemas.player_career import PlayerCareerContractIn, PlayerCareerCounterIn, PlayerCareerViewOut
 from app.services import player_career_service
 
 router = APIRouter(prefix="/player-career", tags=["player-career"])
@@ -32,3 +32,19 @@ async def start_season(db: AsyncSession = Depends(get_db), user: User = Depends(
 @router.post("/leave", response_model=PlayerCareerViewOut)
 async def leave_season(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await player_career_service.leave_season(db, user)
+
+
+@router.post("/offers/{club_key}/accept", response_model=PlayerCareerViewOut)
+async def accept_offer(club_key: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Transfer window: sign the offer (salary + signing bonus)."""
+    await check_rate_limit(f"player_career_offer:{user.id}", max_calls=10, window_seconds=60)
+    return await player_career_service.accept_offer(db, user, club_key)
+
+
+@router.post("/offers/{club_key}/counter", response_model=PlayerCareerViewOut)
+async def counter_offer(
+    club_key: str, payload: PlayerCareerCounterIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """Transfer window: ask for more — the club may agree or walk away."""
+    await check_rate_limit(f"player_career_offer:{user.id}", max_calls=10, window_seconds=60)
+    return await player_career_service.counter_offer(db, user, club_key, payload.raise_pct)

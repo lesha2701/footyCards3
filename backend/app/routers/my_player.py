@@ -40,13 +40,18 @@ async def get_my_player(db: AsyncSession = Depends(get_db), user: User = Depends
 @router.post("", response_model=MyPlayerViewOut)
 async def create_my_player(payload: MyPlayerCreateIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"my_player_create:{user.id}", max_calls=10, window_seconds=60)
-    return await my_player_service.create(db, user, payload.name, payload.number, payload.position, payload.appearance)
+    return await my_player_service.create(
+        db, user, payload.name, payload.number, payload.position, payload.appearance, payload.country,
+    )
 
 
 @router.patch("", response_model=MyPlayerViewOut)
 async def update_my_player(payload: MyPlayerUpdateIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"my_player_update:{user.id}", max_calls=20, window_seconds=60)
-    return await my_player_service.update(db, user, payload.name, payload.number, payload.position, payload.appearance)
+    return await my_player_service.update(
+        db, user, payload.name, payload.number, payload.position, payload.appearance,
+        payload.country, country_set="country" in payload.model_fields_set,
+    )
 
 
 @router.post("/train", response_model=MyPlayerViewOut)

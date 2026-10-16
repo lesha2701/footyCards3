@@ -69,6 +69,12 @@ export default function AdminGamesPage() {
       | "career_cup_rewards"
       | "my_player_tier_thresholds"
       | "player_career_place_rewards"
+      | "player_career_level_ratings"
+      | "player_career_level_salary"
+      | "player_career_level_prestige"
+      | "player_career_star_prestige"
+      | "player_career_cl_rewards"
+      | "player_career_national_rewards"
       | "club_league_rewards"
       | "magnate_place_rewards"
       | "magnate_stadium_rents"
@@ -555,25 +561,45 @@ export default function AdminGamesPage() {
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-1 font-display text-base font-bold">Карьера игрока</p>
         <p className="mb-3 text-xs text-slate-400">
-          Клубы собираются из карточек (поле «клуб»). Клуб открыт, если его рейтинг ≤ рейтинг игрока + запас и репутация ≥
-          (рейтинг клуба − 60) × «репутации за пункт». Сезон — 8 клубов, 14 туров в слоты «Карьеры тренера».
+          Клубы и дивизионы — общие с «Карьерой тренера» (список клубов выше). Клуб открыт, если его рейтинг ≤ рейтинг игрока +
+          запас и престиж игрока ≥ «престиж за звёзды клуба» + «престиж за дивизион». Зарплата = база дивизиона × (1 + % за
+          каждую звезду сверх первой) × (1 + 1% за 10 престижа, до потолка). Списки — по дивизионам/звёздам от 1 до 5. Сезон — 8
+          клубов дивизиона, 14 туров в слоты «Карьеры тренера».
         </p>
         <div className="grid grid-cols-2 items-end gap-3">
           {toggle("player_career_enabled", "Режим включён")}
-          {field("player_career_min_club_cards", "Мин. карточек у клуба")}
           {field("player_career_rating_margin", "Запас рейтинга для клуба")}
-          {field("player_career_rep_per_club_rating", "Репутации за пункт рейтинга клуба")}
-          {field("player_career_rep_per_goal", "Репутация за гол")}
-          {field("player_career_rep_per_assist", "Репутация за передачу")}
-          {field("player_career_rep_per_win", "Репутация за победу")}
-          {field("player_career_rep_title", "Репутация за титул")}
+          {field("player_career_rep_per_goal", "Престиж за гол")}
+          {field("player_career_rep_per_assist", "Престиж за передачу")}
+          {field("player_career_rep_per_win", "Престиж за победу")}
+          {field("player_career_rep_title", "Престиж за титул")}
           {field("player_career_match_reward_win", "Монеты за победу")}
           {field("player_career_match_reward_draw", "Монеты за ничью")}
           {field("player_career_goal_reward", "Монеты за гол игрока")}
           {field("player_career_match_xp", "Опыт за матч")}
-          {field("player_career_salary_per_rating", "Зарплата за сезон = рейтинг клуба ×")}
           {field("player_career_objective_coins", "Цель клуба: монеты")}
-          {field("player_career_objective_rep", "Цель клуба: репутация")}
+          {field("player_career_objective_rep", "Цель клуба: престиж")}
+          {listField("player_career_level_ratings", "Рейтинг клубов без карточек по дивизионам 1–5")}
+          {listField("player_career_level_salary", "Базовая зарплата по дивизионам 1–5")}
+          {listField("player_career_level_prestige", "Престиж за дивизион 1–5")}
+          {listField("player_career_star_prestige", "Престиж за звёзды клуба 1–5")}
+          {field("player_career_star_salary_pct", "Зарплата: +% за звезду клуба")}
+          {field("player_career_prestige_salary_cap", "Зарплата: потолок % от престижа")}
+          {field("player_career_contract_seasons", "Длина контракта, сезонов")}
+          {field("player_career_free_agent_level", "Без контракта: дивизионы от N и ниже")}
+          {field("player_career_offers_max", "Предложений в трансферное окно")}
+          {field("player_career_haggle_base", "Торг: базовый шанс согласия, %")}
+          {field("player_career_haggle_raise_penalty", "Торг: −% шанса за 1% прибавки")}
+          {field("player_career_haggle_repeat_penalty", "Торг: −% шанса за повторный торг")}
+          {field("player_career_cl_places", "ЛЧ: мест из высшего дивизиона")}
+          {listField("player_career_cl_rewards", "ЛЧ: монеты за 1/4, 1/2, финал")}
+          {field("player_career_cl_prestige", "ЛЧ: престиж за победу")}
+          {field("player_career_national_prestige", "Сборная: престиж для вызова")}
+          {listField("player_career_national_rewards", "Сборная: монеты за 1/4, 1/2, финал")}
+          {field("player_career_national_win_prestige", "Сборная: престиж за победу")}
+          {field("player_career_golden_ball_min_matches", "Золотой мяч: минимум матчей")}
+          {field("player_career_golden_ball_coins", "Золотой мяч: монеты")}
+          {field("player_career_golden_ball_prestige", "Золотой мяч: престиж")}
           {listField("player_career_place_rewards", "Награда за места 1–8, монеты")}
         </div>
       </section>

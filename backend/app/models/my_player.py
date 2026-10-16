@@ -61,11 +61,18 @@ class MyPlayer(Base):
     duels_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     duels_today: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # «Карьера игрока»: current club (player_career_service club key),
-    # reputation (opens bigger clubs) and lifetime stats
+    # reputation — shown as «Престиж» (opens bigger clubs, raises the salary) — and lifetime stats
     # {"seasons", "matches", "goals", "assists", "titles", "top_scorer", "mvp"}.
     club_key: Mapped[Optional[str]] = mapped_column(String(96), nullable=True)
     reputation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     career_stats: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Contract with club_key: salary agreed at signing (0 = market rate) and
+    # seasons left; 0 seasons = expired, only lower-league clubs or the
+    # transfer-window offers remain.
+    contract_salary: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    contract_seasons_left: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # National team (Player.country values); NULL = not chosen.
+    country: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 

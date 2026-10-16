@@ -380,12 +380,10 @@ class GameConfig(TimestampMixin, Base):
     my_player_role_change_stars: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
     # --- «Карьера игрока» (services/player_career_service.py) ---
     player_career_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    # A real club (Player.club) joins the catalog with at least this many active cards.
-    player_career_min_club_cards: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     # A club is open if its rating <= player rating + margin and the
-    # player's reputation >= (club rating - 60) x rep_per_club_rating.
+    # player's prestige (MyPlayer.reputation) >= star_prestige[stars - 1] +
+    # level_prestige[league level - 1].
     player_career_rating_margin: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
-    player_career_rep_per_club_rating: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     player_career_rep_per_goal: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     player_career_rep_per_assist: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     player_career_rep_per_win: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
@@ -414,11 +412,46 @@ class GameConfig(TimestampMixin, Base):
             "fx_sparkle": 50, "fx_fire": 75, "fx_lightning": 100,
         },
     )
-    # «Карьера игрока»: salary per season = club rating x this; every
-    # completed club objective pays objective_coins and objective_rep.
-    player_career_salary_per_rating: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # «Карьера игрока»: every completed club objective pays objective_coins
+    # and objective_rep (prestige).
     player_career_objective_coins: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
     player_career_objective_rep: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # By division of the «Карьера тренера» club list (1 = top … 5): base
+    # squad rating of clubs without cards, base salary per season, prestige
+    # needed on top of the club's stars.
+    player_career_level_ratings: Mapped[list] = mapped_column(JSON, default=lambda: [80, 74, 68, 62, 54], nullable=False)
+    player_career_level_salary: Mapped[list] = mapped_column(JSON, default=lambda: [1500, 1000, 600, 350, 150], nullable=False)
+    player_career_level_prestige: Mapped[list] = mapped_column(JSON, default=lambda: [150, 80, 30, 10, 0], nullable=False)
+    # Club stars 1..5: prestige needed, and +star_salary_pct salary per star above 1.
+    player_career_star_prestige: Mapped[list] = mapped_column(JSON, default=lambda: [0, 30, 80, 160, 300], nullable=False)
+    player_career_star_salary_pct: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    # +1% salary per 10 prestige, up to this many percent.
+    player_career_prestige_salary_cap: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    # Contract length; once it runs out without a new deal, only divisions
+    # free_agent_level and lower are open.
+    player_career_contract_seasons: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    player_career_free_agent_level: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    # Transfer window: offers per window, and the per-counter-offer odds
+    # (club accepts with base - raise% x raise_penalty - counters x
+    # repeat_penalty, in percent).
+    player_career_offers_max: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    player_career_haggle_base: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
+    player_career_haggle_raise_penalty: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    player_career_haggle_repeat_penalty: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    # Champions League: top N of a division-1 season; coins per round won (QF,
+    # SF, final) and prestige for the title.
+    player_career_cl_places: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    player_career_cl_rewards: Mapped[list] = mapped_column(JSON, default=lambda: [300, 600, 1500], nullable=False)
+    player_career_cl_prestige: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    # National team: prestige for a call-up (tournament every two weeks),
+    # coins per round won, prestige for the title.
+    player_career_national_prestige: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    player_career_national_rewards: Mapped[list] = mapped_column(JSON, default=lambda: [200, 400, 1000], nullable=False)
+    player_career_national_win_prestige: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    # «Золотой мяч»: monthly; minimum matches, prize coins and prestige.
+    player_career_golden_ball_min_matches: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    player_career_golden_ball_coins: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
+    player_career_golden_ball_prestige: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
     free_pack_pack_slug: Mapped[str] = mapped_column(String, default="basic", nullable=False)
 
     # "вкарта" command in group chats — reuses free_pack_pack_slug's pack but

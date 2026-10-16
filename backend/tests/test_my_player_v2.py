@@ -323,11 +323,13 @@ async def test_admin_lifestyle_effect_validation(client, db_session, bot_token):
 async def test_player_career_salary_objectives_history_and_fatigue(client, db_session, bot_token):
     user_id, headers = await _login(client, db_session, bot_token, 890011)
     await _create(client, headers, name="Карьерист")
-    clubs = {c["name"]: c for c in (await client.get(f"{API}/player-career", headers=headers)).json()["clubs"]}
+    clubs = (await client.get(f"{API}/player-career", headers=headers)).json()["clubs"]
+    club = min((c for c in clubs if not c["locked_reason"]), key=lambda c: (-c["level"], c["rating"]))
     config = await get_config(db_session)
     objective_coins = config.player_career_objective_coins
-    assert clubs["Юность"]["salary"] == clubs["Юность"]["rating"] * config.player_career_salary_per_rating
-    await client.post(f"{API}/player-career/contract", headers=headers, json={"club_key": clubs["Юность"]["key"]})
+    level_salary = config.player_career_level_salary[club["level"] - 1]
+    assert club["salary"] == round(level_salary * (100 + (club["club_stars"] - 1) * config.player_career_star_salary_pct) / 100 / 10) * 10
+    await client.post(f"{API}/player-career/contract", headers=headers, json={"club_key": club["key"]})
     season = (await client.post(f"{API}/player-career/seasons", headers=headers)).json()["season"]
     codes = [o["code"] for o in season["objectives"]]
     assert codes == ["place", "goals", "avg_rating"]
@@ -337,7 +339,7 @@ async def test_player_career_salary_objectives_history_and_fatigue(client, db_se
     assert await player_career_service.resolve_due(db_session, season["id"], now=later) == 14
     db_session.expire_all()
     row = await db_session.get(PlayerCareerSeason, season["id"])
-    assert row.state["salary"] == clubs["Юность"]["salary"]
+    assert row.state["salary"] == club["salary"]
     done = row.state["objectives_done"]
     assert row.state["objective_coins"] == len(done) * objective_coins
     salary_tx = (await db_session.execute(select(CoinTransaction).where(
@@ -351,7 +353,7 @@ async def test_player_career_salary_objectives_history_and_fatigue(client, db_se
     view = (await client.get(f"{API}/player-career", headers=headers)).json()
     assert len(view["history"]) == 1
     entry = view["history"][0]
-    assert entry["club"] == "Юность" and entry["matches"] == 14 and entry["place"] == row.final_place
+    assert entry["club"] == club["name"] and entry["matches"] == 14 and entry["place"] == row.final_place
     finished = view["season"]
     assert finished["salary"] == row.state["salary"]
     assert sum(1 for o in finished["objectives"] if o["met"]) == len(done)

@@ -81,6 +81,7 @@ export default function AdminCareerClubs({ divisions }: { divisions: number }) {
       <p className="mb-3 text-xs text-slate-400">
         Боты лиги берутся отсюда. «Из карточек» — реальные клубы, у которых в игре 8+ игроков: их составы собираются
         из этих игроков. Недостающие места заполняются сгенерированными клубами. Сила — сдвиг рейтинга относительно дивизиона.
+        Эти же клубы и дивизионы — лиги «Карьеры игрока» (там рейтинг клуба считается по его карточкам или по базе дивизиона + сила).
       </p>
       <div className="mb-3 flex flex-wrap gap-2">
         <button onClick={() => build.mutate(false)} disabled={build.isPending} className="rounded-lg bg-accent-lime/20 px-3 py-1.5 text-xs text-accent-lime">

@@ -7,7 +7,12 @@ from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
 from app.models.career import CareerClub, CareerParticipant, CareerProfile, CareerSeason, Friendship
 from app.models.lifestyle import LifestyleItem, UserLifestyleItem
 from app.models.my_player import MyPlayer, MyPlayerDuel
-from app.models.player_career import PlayerCareerSeason
+from app.models.player_career import (
+    PlayerCareerCup,
+    PlayerCareerGoldenBall,
+    PlayerCareerMonthStat,
+    PlayerCareerSeason,
+)
 from app.models.card_collection import CardCollection, UserCollectionReward
 from app.models.card_upgrade import CardUpgradeAttempt, CardUpgradeRule
 from app.models.club import Club, ClubJoinRequest, ClubMember
@@ -164,4 +169,7 @@ __all__ = [
     "LifestyleItem",
     "UserLifestyleItem",
     "PlayerCareerSeason",
+    "PlayerCareerCup",
+    "PlayerCareerMonthStat",
+    "PlayerCareerGoldenBall",
 ]

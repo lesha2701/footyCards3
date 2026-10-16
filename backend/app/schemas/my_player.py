@@ -8,6 +8,8 @@ class MyPlayerCreateIn(BaseModel):
     number: int = 10
     position: str
     appearance: dict[str, int] = Field(default_factory=dict)
+    # National team (one of the view's `countries`).
+    country: Optional[str] = Field(default=None, max_length=64)
 
 
 class MyPlayerUpdateIn(BaseModel):
@@ -15,6 +17,8 @@ class MyPlayerUpdateIn(BaseModel):
     number: Optional[int] = None
     position: Optional[str] = None
     appearance: Optional[dict[str, int]] = None
+    # Explicit null clears it.
+    country: Optional[str] = Field(default=None, max_length=64)
 
 
 class MyPlayerTrainIn(BaseModel):
@@ -79,6 +83,7 @@ class MyPlayerOut(BaseModel):
     accessory: Optional[str] = None
     background: Optional[str] = None
     effect: Optional[str] = None
+    country: Optional[str] = None
 
 
 class MyPlayerLevelUpOut(BaseModel):
@@ -168,6 +173,8 @@ class MyPlayerViewOut(BaseModel):
     role_change: Optional[MyPlayerRoleChangeOut] = None
     trophies: list[MyPlayerTrophyOut] = []
     attention: MyPlayerAttentionOut = MyPlayerAttentionOut()
+    # Countries the player can represent (national team).
+    countries: list[str] = []
     # Only on the training-finish response: XP credited by that run, and
     # the skill tokens a streak paid (if this run completed one).
     training_xp: Optional[int] = None

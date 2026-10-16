@@ -11,6 +11,17 @@ class PlayerCareerContractIn(BaseModel):
     club_key: str
 
 
+class PlayerCareerCounterIn(BaseModel):
+    # +10 / +20 / +30 percent salary and bonus.
+    raise_pct: int
+
+
+class PlayerCareerLeagueOut(BaseModel):
+    id: int
+    name: str
+    level: int
+
+
 class PlayerCareerClubOut(BaseModel):
     key: str
     name: str
@@ -20,9 +31,15 @@ class PlayerCareerClubOut(BaseModel):
     reputation_needed: int
     # None = open for the player.
     locked_reason: Optional[str] = None
+    # Best real players of the club.
     stars: list[str] = []
-    # Coins the club pays at the end of every season.
+    # Market salary per season for this player.
     salary: int = 0
+    league: Optional[PlayerCareerLeagueOut] = None
+    # Division (1 = top).
+    level: int = 1
+    # Club prestige, 1-5.
+    club_stars: int = 1
 
 
 class PlayerCareerMyRoundOut(BaseModel):
@@ -69,6 +86,18 @@ class PlayerCareerOfferOut(BaseModel):
     key: str
     name: str
     rating: int
+    club_stars: int = 1
+    league: Optional[str] = None
+    level: int = 1
+    salary: int
+    bonus: int
+    counters: int = 0
+    # open | accepted | closed | withdrawn
+    status: str
+    # The current club's renewal.
+    renewal: bool = False
+    # Result of the last counter-offer: agreed | walked.
+    last: Optional[str] = None
 
 
 class PlayerCareerObjectiveOut(BaseModel):
@@ -96,6 +125,7 @@ class PlayerCareerSeasonOut(BaseModel):
     coins_earned: int
     awards: list[str] = []
     offers: list[PlayerCareerOfferOut] = []
+    league: Optional[PlayerCareerLeagueOut] = None
     objectives: list[PlayerCareerObjectiveOut] = []
     salary: int = 0
     objective_coins: int = 0
@@ -140,9 +170,116 @@ class PlayerCareerFreshnessOut(BaseModel):
     per_match: int
 
 
+class PlayerCareerContractOut(BaseModel):
+    salary: int
+    seasons_left: int
+    # Ran out (or the club is gone): only lower divisions or offers remain.
+    expired: bool
+    free_agent_level: int
+
+
+class PlayerCareerNationalOut(BaseModel):
+    country: Optional[str] = None
+    prestige_needed: int
+    called_up: bool
+
+
+class PlayerCareerCupMatchOut(BaseModel):
+    home: str
+    away: str
+    home_mine: bool
+    away_mine: bool
+    hs: Optional[int] = None
+    away_score: Optional[int] = None
+    pens: Optional[bool] = None
+    winner_mine: Optional[bool] = None
+    home_won: Optional[bool] = None
+
+
+class PlayerCareerCupMyRoundOut(BaseModel):
+    played: bool
+    goals: int
+    assists: int
+    rating: Optional[float] = None
+    own: int
+    opp: int
+    pens: bool = False
+    won: bool
+    opponent: str
+
+
+class PlayerCareerCupRoundOut(BaseModel):
+    label: str
+    at: Optional[datetime] = None
+    matches: list[PlayerCareerCupMatchOut]
+    me: Optional[PlayerCareerCupMyRoundOut] = None
+
+
+class PlayerCareerCupOut(BaseModel):
+    id: int
+    # cl | national
+    kind: str
+    title: str
+    status: str
+    rounds_played: int
+    next_round_at: Optional[datetime] = None
+    alive: bool
+    won: bool
+    award: Optional[str] = None
+    coins_earned: int
+    rounds: list[PlayerCareerCupRoundOut]
+    my_team: Optional[str] = None
+
+
+class PlayerCareerGoldenBallEntryOut(BaseModel):
+    place: int
+    user_id: int
+    user_name: str
+    is_me: bool
+    matches: int
+    goals: int
+    assists: int
+    clean_sheets: int = 0
+    # GK | DEF | MID | FWD
+    line: str = "FWD"
+    avg_rating: Optional[float] = None
+    score: float
+
+
+class PlayerCareerGoldenBallWinnerOut(BaseModel):
+    month: str
+    month_label: str
+    user_name: str
+    is_me: bool
+    score: float
+    goals: int
+    avg_rating: float
+
+
+class PlayerCareerGoldenBallOut(BaseModel):
+    month: str
+    month_label: str
+    min_matches: int
+    prize_coins: int
+    prize_prestige: int
+    # Points per goal / assist / clean sheet by line.
+    weights: dict[str, dict[str, int]] = {}
+    table: list[PlayerCareerGoldenBallEntryOut]
+    me: Optional[PlayerCareerGoldenBallEntryOut] = None
+    winners: list[PlayerCareerGoldenBallWinnerOut]
+
+
+class PlayerCareerHaggleOut(BaseModel):
+    club: str
+    agreed: bool
+    chance: int
+
+
 class PlayerCareerViewOut(BaseModel):
     enabled: bool
     has_player: bool
+    # Coin balance, to refresh the top bar after a signing bonus.
+    balance: Optional[int] = None
     player: Optional[MyPlayerOut] = None
     rating: Optional[int] = None
     reputation: int = 0
@@ -154,3 +291,11 @@ class PlayerCareerViewOut(BaseModel):
     rewards: Optional[PlayerCareerRewardsOut] = None
     history: list[PlayerCareerHistoryOut] = []
     freshness: Optional[PlayerCareerFreshnessOut] = None
+    contract: Optional[PlayerCareerContractOut] = None
+    national: Optional[PlayerCareerNationalOut] = None
+    cups: list[PlayerCareerCupOut] = []
+    golden_ball: Optional[PlayerCareerGoldenBallOut] = None
+    haggle_steps: list[int] = []
+    max_counters: int = 2
+    # Only on the counter-offer response.
+    haggle: Optional[PlayerCareerHaggleOut] = None

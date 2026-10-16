@@ -97,7 +97,7 @@ export default function AdminLifestylePage() {
           <h1 className="font-display text-2xl font-bold">Имущество</h1>
           <p className="text-xs text-slate-500">
             Статусные предметы «Моего игрока»: машины, недвижимость, акции и т. п. Цена в монетах и/или звёздах (0 — не
-            продаётся за эту валюту), престиж — очки статуса. Тираж пустой — без ограничений. Эффект — польза для игрока:
+            продаётся за эту валюту), статус — очки статуса (не влияет на престиж «Карьеры игрока»). Тираж пустой — без ограничений. Эффект — польза для игрока:
             быстрее восстанавливает свежесть, даёт бонус опыта или доход раз в неделю (суммируется по всем предметам).
           </p>
         </div>
@@ -125,7 +125,7 @@ export default function AdminLifestylePage() {
                 <p className="truncate text-sm font-semibold">{item.name}</p>
                 <p className="text-caption text-slate-500">
                   {CATEGORIES.find((c) => c.code === item.category)?.label} · {item.coins_price > 0 && `🪙 ${item.coins_price} `}
-                  {item.stars_price > 0 && `⭐ ${item.stars_price} `}· престиж {item.prestige} · продано {item.sold_count}
+                  {item.stars_price > 0 && `⭐ ${item.stars_price} `}· статус {item.prestige} · продано {item.sold_count}
                   {item.max_supply != null && ` из ${item.max_supply}`}
                   {item.effect !== "none" && ` · ${EFFECTS.find((e) => e.code === item.effect)?.label}: ${item.effect_value}`}
                   {!item.is_active && " · выключен"}
@@ -167,7 +167,7 @@ export default function AdminLifestylePage() {
               </label>
               {num("coins_price", "Цена, монеты")}
               {num("stars_price", "Цена, звёзды ⭐")}
-              {num("prestige", "Престиж")}
+              {num("prestige", "Статус (очки)")}
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Тираж (пусто — без лимита)</span>
                 <input

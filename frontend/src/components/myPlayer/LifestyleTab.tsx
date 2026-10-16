@@ -77,10 +77,10 @@ export default function LifestyleTab() {
       <section className="rounded-2xl bg-gradient-to-br from-amber-400/20 to-bg-surface p-4">
         <p className="text-xs text-ink-mist">Статус</p>
         <p className="font-display text-3xl font-black text-ink-chalk">
-          {data.prestige} <span className="text-base font-bold text-amber-300">престижа</span>
+          {data.prestige} <span className="text-base font-bold text-amber-300">статуса</span>
         </p>
         <p className="mt-1 text-caption text-ink-mist">
-          {owned.length ? `${owned.length} в имуществе · видно в твоём профиле` : "Собери гараж, недвижимость и инвестиции — каждый предмет добавляет престиж"}
+          {owned.length ? `${owned.length} в имуществе · видно в твоём профиле` : "Собери гараж, недвижимость и инвестиции — каждый предмет добавляет статус"}
         </p>
         {owned.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1 text-xl">{owned.slice(0, 12).map((i) => <span key={i.id}>{i.emoji}</span>)}</div>
@@ -140,7 +140,7 @@ export default function LifestyleTab() {
                   <span className="mt-0.5 block text-caption font-semibold text-accent-lime">{item.effect_label}</span>
                 )}
                 <span className="mt-0.5 block text-caption text-amber-300">
-                  +{item.prestige} престижа
+                  +{item.prestige} статуса
                   {item.max_supply != null &&
                     (item.owned && item.serial_number
                       ? ` · №${item.serial_number} из ${item.max_supply}`

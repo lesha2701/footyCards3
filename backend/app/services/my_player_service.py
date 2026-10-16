@@ -138,7 +138,10 @@ DUEL_BASE_CHANCE = 0.32
 DUEL_SLOPE = 0.012
 DUEL_CHANCE_RANGE = (0.08, 0.75)
 
-TROPHY_CODES = ("player_career_champion", "player_career_top_scorer", "player_career_mvp")
+TROPHY_CODES = (
+    "player_career_champion", "player_career_top_scorer", "player_career_mvp",
+    "player_career_cl_winner", "player_career_national_winner", "player_career_golden_ball",
+)
 
 NAME_RE = re.compile(r"^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё .'\-]{1,19}$")
 _BANNED_ROOTS = (
@@ -384,6 +387,7 @@ def player_out(mp: MyPlayer, config) -> dict:
         "background": cosmetics["background"],
         "effect": cosmetics["effect"],
         "tier": tier, "tier_label": TIER_LABELS[tier],
+        "country": mp.country,
     }
 
 
@@ -506,6 +510,7 @@ async def get_view(db: AsyncSession, user: User) -> dict:
             "coins_price": config.my_player_role_change_coins, "stars_price": config.my_player_role_change_stars,
         },
         "trophies": await trophies_of(db, user.id) if mp else [],
+        "countries": await _countries(db),
     }
     view["attention"] = {
         "create": mp is None,
@@ -516,6 +521,20 @@ async def get_view(db: AsyncSession, user: User) -> dict:
         "career_offers": bool(mp) and await _career_offers_waiting(db, user.id),
     }
     return view
+
+
+async def _countries(db: AsyncSession) -> list[str]:
+    from app.services.player_career_cups import countries
+
+    return await countries(db)
+
+
+async def _clean_country(db: AsyncSession, country: Optional[str]) -> Optional[str]:
+    if country is None or not country.strip():
+        return None
+    if country not in await _countries(db):
+        raise ConflictError("Неизвестная страна")
+    return country
 
 
 def _freshness_view(mp: MyPlayer, config, bonus: int) -> dict:
@@ -635,7 +654,9 @@ def _require_enabled(config) -> None:
         raise ConflictError("«Мой игрок» сейчас недоступен")
 
 
-async def create(db: AsyncSession, user: User, name: str, number: int, position: str, appearance: dict) -> dict:
+async def create(
+    db: AsyncSession, user: User, name: str, number: int, position: str, appearance: dict, country: Optional[str] = None,
+) -> dict:
     config = await get_config(db)
     _require_enabled(config)
     pos = _position(position)
@@ -644,7 +665,7 @@ async def create(db: AsyncSession, user: User, name: str, number: int, position:
     db.add(MyPlayer(
         user_id=user.id, name=clean_name(name), number=clean_number(number), position=pos,
         appearance=clean_appearance(appearance), attributes=start_attributes(pos), points_spent=0,
-        level_seen=level_info(user.my_player_xp or 0, config)[0],
+        level_seen=level_info(user.my_player_xp or 0, config)[0], country=await _clean_country(db, country),
     ))
     await db.commit()
     return await get_view(db, user)
@@ -652,7 +673,7 @@ async def create(db: AsyncSession, user: User, name: str, number: int, position:
 
 async def update(
     db: AsyncSession, user: User, name: Optional[str], number: Optional[int],
-    position: Optional[str], appearance: Optional[dict],
+    position: Optional[str], appearance: Optional[dict], country: Optional[str] = None, country_set: bool = False,
 ) -> dict:
     config = await get_config(db)
     _require_enabled(config)
@@ -665,6 +686,12 @@ async def update(
         mp.number = clean_number(number)
     if appearance is not None:
         mp.appearance = clean_appearance(appearance)
+    if country_set:
+        from app.services.player_career_cups import active_cup
+
+        if country != mp.country and await active_cup(db, user.id, "national"):
+            raise ConflictError("Сборную нельзя сменить во время турнира")
+        mp.country = await _clean_country(db, country)
     if position is not None:
         pos = _position(position)
         if category_of(pos) != category_of(mp.position):

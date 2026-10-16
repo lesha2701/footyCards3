@@ -33,6 +33,8 @@ export interface MyPlayer {
   background?: string | null;
   /** Card effect (fx_sparkle | fx_fire | fx_lightning). */
   effect?: string | null;
+  /** National team. */
+  country?: string | null;
 }
 
 export type MyPlayerCosmeticKind = "accessory" | "background" | "effect";
@@ -178,6 +180,8 @@ export interface MyPlayerView {
   trophies: MyPlayerTrophy[];
   /** What the top-bar dot is for. */
   attention: MyPlayerAttention;
+  /** Countries the player can represent. */
+  countries: string[];
   /** Only on the training-finish response. */
   training_xp?: number | null;
   streak_reward?: { tokens: number; skill_code: string; skill_name: string; skill_icon: string; streak: number } | null;
@@ -188,6 +192,7 @@ export interface MyPlayerDraft {
   number: number;
   position: string;
   appearance: MyPlayerAppearance;
+  country?: string | null;
 }
 
 export async function fetchMyPlayer(): Promise<MyPlayerView> {

@@ -93,7 +93,7 @@ async def resolve_career_rounds(slot_key: str | None = None, db: AsyncSession = 
     # «Карьера игрока» shares the career slots (player_career_service).
     from app.services import player_career_service
 
-    total = await career_service.resolve_all_due(db) + await player_career_service.resolve_all_due(db)
+    total = await career_service.resolve_all_due(db) + await player_career_service.resolve_everything_due(db)
     return SimulateRoundResult(matches_simulated=total)
 
 

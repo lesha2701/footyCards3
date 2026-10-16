@@ -339,13 +339,31 @@ class GameConfigOut(BaseModel):
     my_player_role_change_coins: int = 25000
     my_player_role_change_stars: int = 300
     my_player_cosmetic_stars_prices: dict[str, int] = {}
-    player_career_salary_per_rating: int = 10
+    player_career_level_ratings: list[int] = []
+    player_career_level_salary: list[int] = []
+    player_career_level_prestige: list[int] = []
+    player_career_star_prestige: list[int] = []
+    player_career_star_salary_pct: int = 20
+    player_career_prestige_salary_cap: int = 50
+    player_career_contract_seasons: int = 2
+    player_career_free_agent_level: int = 4
+    player_career_offers_max: int = 3
+    player_career_haggle_base: int = 90
+    player_career_haggle_raise_penalty: int = 2
+    player_career_haggle_repeat_penalty: int = 15
+    player_career_cl_places: int = 2
+    player_career_cl_rewards: list[int] = []
+    player_career_cl_prestige: int = 40
+    player_career_national_prestige: int = 150
+    player_career_national_rewards: list[int] = []
+    player_career_national_win_prestige: int = 30
+    player_career_golden_ball_min_matches: int = 8
+    player_career_golden_ball_coins: int = 3000
+    player_career_golden_ball_prestige: int = 50
     player_career_objective_coins: int = 150
     player_career_objective_rep: int = 5
     player_career_enabled: bool = True
-    player_career_min_club_cards: int = 5
     player_career_rating_margin: int = 5
-    player_career_rep_per_club_rating: int = 4
     player_career_rep_per_goal: int = 3
     player_career_rep_per_assist: int = 2
     player_career_rep_per_win: int = 2
@@ -736,13 +754,31 @@ class GameConfigUpdate(BaseModel):
     my_player_role_change_coins: Optional[int] = Field(default=None, ge=0)
     my_player_role_change_stars: Optional[int] = Field(default=None, ge=0, le=100000)
     my_player_cosmetic_stars_prices: Optional[dict[str, int]] = None
-    player_career_salary_per_rating: Optional[int] = Field(default=None, ge=0, le=10000)
+    player_career_level_ratings: Optional[list[int]] = Field(default=None, min_length=5, max_length=5)
+    player_career_level_salary: Optional[list[int]] = Field(default=None, min_length=5, max_length=5)
+    player_career_level_prestige: Optional[list[int]] = Field(default=None, min_length=5, max_length=5)
+    player_career_star_prestige: Optional[list[int]] = Field(default=None, min_length=5, max_length=5)
+    player_career_star_salary_pct: Optional[int] = Field(default=None, ge=0, le=500)
+    player_career_prestige_salary_cap: Optional[int] = Field(default=None, ge=0, le=500)
+    player_career_contract_seasons: Optional[int] = Field(default=None, ge=1, le=10)
+    player_career_free_agent_level: Optional[int] = Field(default=None, ge=1, le=5)
+    player_career_offers_max: Optional[int] = Field(default=None, ge=0, le=10)
+    player_career_haggle_base: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_haggle_raise_penalty: Optional[int] = Field(default=None, ge=0, le=10)
+    player_career_haggle_repeat_penalty: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_cl_places: Optional[int] = Field(default=None, ge=0, le=8)
+    player_career_cl_rewards: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    player_career_cl_prestige: Optional[int] = Field(default=None, ge=0, le=10000)
+    player_career_national_prestige: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_national_rewards: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    player_career_national_win_prestige: Optional[int] = Field(default=None, ge=0, le=10000)
+    player_career_golden_ball_min_matches: Optional[int] = Field(default=None, ge=1, le=200)
+    player_career_golden_ball_coins: Optional[int] = Field(default=None, ge=0)
+    player_career_golden_ball_prestige: Optional[int] = Field(default=None, ge=0, le=10000)
     player_career_objective_coins: Optional[int] = Field(default=None, ge=0)
     player_career_objective_rep: Optional[int] = Field(default=None, ge=0, le=1000)
     player_career_enabled: Optional[bool] = None
-    player_career_min_club_cards: Optional[int] = Field(default=None, ge=1, le=11)
     player_career_rating_margin: Optional[int] = Field(default=None, ge=0, le=30)
-    player_career_rep_per_club_rating: Optional[int] = Field(default=None, ge=0, le=100)
     player_career_rep_per_goal: Optional[int] = Field(default=None, ge=0, le=100)
     player_career_rep_per_assist: Optional[int] = Field(default=None, ge=0, le=100)
     player_career_rep_per_win: Optional[int] = Field(default=None, ge=0, le=100)

@@ -74,7 +74,7 @@ export function PublicMyPlayer({ userId }: { userId: number }) {
       {!!property?.items.length && (
         <div className="w-full rounded-xl bg-bg-raised p-3">
           <p className="text-xs text-ink-mist">
-            Имущество · <b className="text-amber-300">{property.prestige} престижа</b>
+            Имущество · <b className="text-amber-300">{property.prestige} статуса</b>
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {property.items.map((i) => (

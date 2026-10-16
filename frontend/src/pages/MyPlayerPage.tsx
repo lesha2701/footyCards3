@@ -433,8 +433,8 @@ function Constructor({
   const [step, setStep] = useState<Step>("look");
   const [draft, setDraft] = useState<MyPlayerDraft>(() =>
     existing
-      ? { name: existing.name, number: existing.number, position: existing.position, appearance: existing.appearance }
-      : { name: "", number: 10, position: "ST", appearance: DEFAULT_LOOK },
+      ? { name: existing.name, number: existing.number, position: existing.position, appearance: existing.appearance, country: existing.country ?? null }
+      : { name: "", number: 10, position: "ST", appearance: DEFAULT_LOOK, country: null },
   );
   const [error, setError] = useState<string | null>(null);
   const setLook = (patch: Partial<MyPlayerAppearance>) => setDraft((d) => ({ ...d, appearance: { ...d.appearance, ...patch } }));
@@ -541,6 +541,19 @@ function Constructor({
                 </p>
               )}
             </div>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-semibold text-ink-mist">Сборная (страна)</span>
+              <select
+                value={draft.country ?? ""}
+                onChange={(e) => setDraft((d) => ({ ...d, country: e.target.value || null }))}
+                className="rounded-xl bg-bg-raised px-3 py-2 text-sm text-ink-chalk outline-none"
+                aria-label="Сборная"
+              >
+                <option value="">Не выбрана</option>
+                {view.countries.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <span className="text-caption text-ink-mist-dim">С высоким престижем тебя вызовут на турнир сборных в «Карьере игрока».</span>
+            </label>
             {existing && view.role_change && <RoleChange view={view} player={existing} onSaved={onSaved} />}
           </>
         )}
