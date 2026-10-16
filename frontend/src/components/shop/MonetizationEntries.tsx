@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
-import { fetchClubPass, fetchSeasonPass } from "@/api/monetization";
+import { fetchArtifacts, fetchClubPass, fetchSeasonPass } from "@/api/monetization";
 import { IconChevronRight, IconStar, IconTicket, IconTrophy, type IconProps } from "@/components/icons";
 
 function Entry({
@@ -40,6 +40,7 @@ export default function MonetizationEntries({ showStyle = true }: { showStyle?: 
   const navigate = useNavigate();
   const { data: clubPass } = useQuery({ queryKey: ["club-pass"], queryFn: fetchClubPass });
   const { data: season } = useQuery({ queryKey: ["season-pass"], queryFn: fetchSeasonPass });
+  const { data: artifacts } = useQuery({ queryKey: ["artifacts"], queryFn: fetchArtifacts });
 
   return (
     <div className="flex flex-col gap-2">
@@ -65,6 +66,15 @@ export default function MonetizationEntries({ showStyle = true }: { showStyle?: 
           subtitle={`Уровень ${season.level} · ${season.xp} XP${season.locked_premium ? ` · ${season.locked_premium} премиум-наград ждут` : ""}`}
           badge={season.claimable ? String(season.claimable) : null}
           onClick={() => navigate("/season")}
+        />
+      )}
+      {artifacts?.enabled && (
+        <Entry
+          Icon={IconTrophy}
+          iconClass="bg-amber-400/15 text-amber-300"
+          title="Артефакты"
+          subtitle={`Активных ${artifacts.active_count}/${artifacts.slots} · на полке ${artifacts.shelf.length - artifacts.active_count}`}
+          onClick={() => navigate("/artifacts")}
         />
       )}
       {showStyle && (

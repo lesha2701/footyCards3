@@ -126,6 +126,7 @@ class TransactionType(str, enum.Enum):
     club_pass_reward = "club_pass_reward"
     season_pass_reward = "season_pass_reward"
     starter_offer_reward = "starter_offer_reward"
+    artifact_purchase = "artifact_purchase"
 
 
 class GiftKind(str, enum.Enum):

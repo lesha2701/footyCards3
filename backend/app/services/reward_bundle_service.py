@@ -2,12 +2,14 @@
 of a rarity, a badge and a cosmetic. Shared by the login calendar, the club
 pass, the season pass and the starter offer, so they all preview ("what's
 inside") and grant the same way."""
+import logging
 from dataclasses import dataclass
 from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import ConflictError
 from app.models.badge import Badge, UserBadge
 from app.models.enums import CardSource, Rarity, TransactionType
 from app.models.monetization import Cosmetic
@@ -16,6 +18,8 @@ from app.models.user import User
 from app.schemas.badge import BadgeOut
 from app.schemas.card import UserCardOut
 from app.schemas.monetization import CosmeticOut, GrantedRewardsOut, RewardBundleIn, RewardBundleOut
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -53,8 +57,6 @@ class Bundle:
 
 async def validate(db: AsyncSession, bundle: Bundle) -> None:
     """Admin input check: every referenced pack/badge/cosmetic exists."""
-    from app.core.exceptions import ConflictError
-
     if bundle.pack_id is not None and await db.get(Pack, bundle.pack_id) is None:
         raise ConflictError(f"Пак #{bundle.pack_id} не найден")
     if bundle.badge_id is not None and await db.get(Badge, bundle.badge_id) is None:
@@ -123,22 +125,34 @@ async def grant(
         )
         out.coins = bundle.coins
 
+    # Cards come from the live player pool: if it can't supply them (e.g. no
+    # active players), that part is skipped (inside a savepoint) rather than
+    # failing the whole grant — paid deliveries must not break on it.
     touched: list[int] = []
     if bundle.pack_id is not None:
-        opened = await grant_bonus_pack_opening(
-            db, user, bundle.pack_id, idempotency_prefix=idempotency_prefix, source=card_source,
-        )
+        try:
+            async with db.begin_nested():
+                opened = await grant_bonus_pack_opening(
+                    db, user, bundle.pack_id, idempotency_prefix=idempotency_prefix, source=card_source,
+                )
+        except ConflictError:
+            logger.warning("reward bundle: pack %s could not be opened, skipped", bundle.pack_id)
+            opened = None
         if opened is not None:
             out.pack_name = opened.pack.name
             out.cards.extend(item.card for item in opened.cards)
             touched.extend(item.card.player.id for item in opened.cards)
 
     if bundle.card_rarity:
-        player = await pick_random_player(db, Rarity(bundle.card_rarity))
-        card = await create_user_card(db, user.id, player.id, card_source)
-        card.player = player
-        out.cards.append(UserCardOut.model_validate(card))
-        touched.append(player.id)
+        try:
+            async with db.begin_nested():
+                player = await pick_random_player(db, Rarity(bundle.card_rarity))
+                card = await create_user_card(db, user.id, player.id, card_source)
+            card.player = player
+            out.cards.append(UserCardOut.model_validate(card))
+            touched.append(player.id)
+        except ConflictError:
+            logger.warning("reward bundle: no %s card to give, skipped", bundle.card_rarity)
 
     if touched:
         await collection_service.grant_collection_rewards_for_new_cards(db, user, touched)

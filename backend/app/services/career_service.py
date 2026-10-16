@@ -1528,6 +1528,23 @@ def _human_runner(
     return runner, pairs, base_familiarity
 
 
+
+async def _apply_club_artifacts(db: AsyncSession, teams: list, home: int, away: int, run_h, run_a, config) -> None:
+    """Club «Артефакты» of the human sides (artifact_service): team_boost_pct
+    makes their own side stronger, opp_home_pct weakens the visitors when
+    they play at home. Both act on the runners' `boost`."""
+    from app.services import artifact_service
+
+    for index, runner, other, at_home in ((home, run_h, run_a, True), (away, run_a, run_h, False)):
+        user_id = teams[index].get("user_id")
+        if not user_id:
+            continue
+        effects = await artifact_service.effects_of(db, user_id, "club", config)
+        if effects.get("team_boost_pct"):
+            runner.boost *= 1 + effects["team_boost_pct"] / 100
+        if at_home and effects.get("opp_home_pct"):
+            other.boost *= 1 - effects["opp_home_pct"] / 100
+
 async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, config, live: bool = False) -> None:
     """Plays a round. live=True (live match centre) only plays the first
     half of the matches with a human, stores it in state["live"] and
@@ -1644,6 +1661,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         if v1:
             run_h, run_a = await runner_for(home, "a", away), await runner_for(away, "b", home)
             if run_h and run_a:
+                await _apply_club_artifacts(db, teams, home, away, run_h, run_a, config)
                 await path_match_service.career_apply_talents(
                     db, (run_h, run_a), {c.id: c for cards in cards_cache.values() for c in cards}, config,
                 )

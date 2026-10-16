@@ -122,6 +122,15 @@ export interface GameConfig {
   club_pass_daily_coins: number;
   club_pass_daily_pack_id: number | null;
   club_pass_extra_rewarded_attempts: number;
+  club_pass_bonus_coins: number;
+  club_pass_bonus_pack_id: number | null;
+  club_pass_bonus_card_rarity: string | null;
+  club_pass_season_xp_bonus_pct: number;
+  club_pass_free_catchups: number;
+  artifacts_enabled: boolean;
+  artifact_slots: number;
+  artifact_max_opp_pct: number;
+  artifact_max_stat: number;
   club_pass_frame_cosmetic_id: number | null;
   club_pass_badge_id: number | null;
   club_pass_ad_free: boolean;
@@ -645,6 +654,33 @@ export const EMPTY_BUNDLE: RewardBundleInput = { coins: 0, pack_id: null, card_r
 
 export interface CalendarTemplateDay extends RewardBundleInput {
   day: number;
+}
+
+export interface AdminArtifact {
+  id?: number;
+  name: string;
+  description: string | null;
+  image_path?: string | null;
+  icon: string;
+  rarity: Rarity;
+  target: "club" | "my_player";
+  effect: string;
+  effect_value: number;
+  stadium_id: number | null;
+  stadium_effect_value: number;
+  coins_price: number;
+  stars_price: number;
+  max_supply: number | null;
+  sold_count?: number;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface AdminArtifactCatalog {
+  artifacts: AdminArtifact[];
+  effects: Record<string, string>;
+  targets: Record<string, string>;
+  target_effects: Record<string, string[]>;
 }
 
 export interface AdminSeasonLevel {

@@ -239,10 +239,13 @@ def add_xp(
 
 
 async def xp_bonus_pct(db: AsyncSession, user_id: int) -> int:
-    """XP bonus from the player's «Имущество» (xp_bonus_pct effects)."""
+    """XP bonus from the player's «Имущество» and worn «Артефакты»."""
+    from app.services import artifact_service
     from app.services.lifestyle_service import effects_of
 
-    return (await effects_of(db, user_id)).get("xp_bonus_pct", 0)
+    return (await effects_of(db, user_id)).get("xp_bonus_pct", 0) + (
+        await artifact_service.effects_of(db, user_id)
+    ).get("xp_bonus_pct", 0)
 
 
 async def grant_reward_xp(db: AsyncSession, user: User, tx_type: TransactionType, amount: int) -> int:
@@ -286,9 +289,12 @@ def fatigue_penalty(freshness: int, config) -> int:
 
 
 async def regen_bonus(db: AsyncSession, user_id: int) -> int:
+    from app.services import artifact_service
     from app.services.lifestyle_service import effects_of
 
-    return (await effects_of(db, user_id)).get("freshness_regen", 0)
+    return (await effects_of(db, user_id)).get("freshness_regen", 0) + (
+        await artifact_service.effects_of(db, user_id)
+    ).get("freshness_regen", 0)
 
 
 # --- validation ------------------------------------------------------------------
@@ -392,13 +398,18 @@ def player_out(mp: MyPlayer, config) -> dict:
 
 
 async def match_stats(db: AsyncSession, mp: MyPlayer, config, now: Optional[datetime] = None) -> dict:
-    """Rating / attack / defense as fielded in matches: minus the fatigue penalty."""
+    """Rating / attack / defense as fielded in matches: minus the fatigue
+    penalty, plus the attack/defense of worn «Артефакты»."""
+    from app.services import artifact_service
+
     out = player_out(mp, config)
     penalty = fatigue_penalty(freshness_now(mp, config, now, await regen_bonus(db, mp.user_id)), config)
+    artifacts = await artifact_service.effects_of(db, mp.user_id, "my_player", config)
+    atk_bonus, def_bonus = artifacts.get("attack", 0), artifacts.get("defense", 0)
     return {
-        "rating": max(1, out["rating"] - penalty),
-        "attack": max(1, out["attack_rating"] - penalty),
-        "defense": max(1, out["defense_rating"] - penalty),
+        "rating": max(1, min(99, out["rating"] - penalty + round((atk_bonus + def_bonus) / 2))),
+        "attack": max(1, min(99, out["attack_rating"] - penalty + atk_bonus)),
+        "defense": max(1, min(99, out["defense_rating"] - penalty + def_bonus)),
         "penalty": penalty, "tier": out["tier"],
     }
 

@@ -21,6 +21,7 @@ TROPHIES_DIR = STATIC_DIR / "trophies" / "uploads"
 GIFT_SETS_DIR = STATIC_DIR / "gift_sets" / "uploads"
 LEAGUE_TIERS_DIR = STATIC_DIR / "leagues" / "uploads"
 LIFESTYLE_DIR = STATIC_DIR / "lifestyle" / "uploads"
+ARTIFACTS_DIR = STATIC_DIR / "artifacts" / "uploads"
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
@@ -210,4 +211,13 @@ async def save_lifestyle_image(upload: UploadFile, name: str) -> str:
 
 
 def delete_lifestyle_image(relative_path: str | None) -> None:
+    _delete_static(relative_path)
+
+
+async def save_artifact_image(upload: UploadFile, name: str) -> str:
+    """Validates and stores an uploaded «Артефакт» image; returns the DB-stored relative path."""
+    return await _save_upload(upload, ARTIFACTS_DIR, "artifacts/uploads", name, "artifacts")
+
+
+def delete_artifact_image(relative_path: str | None) -> None:
     _delete_static(relative_path)

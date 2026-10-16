@@ -179,3 +179,56 @@ class StarterOfferPurchase(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
     stars_amount: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class Artifact(TimestampMixin, Base):
+    """«Артефакты»: collectibles that look like gifts (an uploaded picture)
+    and carry a small bonus while active (artifact_service.EFFECTS). Each
+    is meant either for the player's club (`target` "club", e.g. a «This is
+    Anfield» plaque) or for «Мой игрок» ("my_player", e.g. Maradona's signed
+    shirt). `stadium_id` + `stadium_effect_value`: a stronger value when the
+    owner also has a card of that stadium."""
+
+    __tablename__ = "artifacts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    image_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    icon: Mapped[str] = mapped_column(String(16), default="🏺", nullable=False)
+    rarity: Mapped[str] = mapped_column(String(16), default="rare", nullable=False)
+    target: Mapped[str] = mapped_column(String(16), default="my_player", nullable=False)
+    effect: Mapped[str] = mapped_column(String(32), default="none", nullable=False)
+    effect_value: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    stadium_id: Mapped[Optional[int]] = mapped_column(ForeignKey("stadiums.id", ondelete="SET NULL"), nullable=True)
+    stadium_effect_value: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    coins_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    stars_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # NULL = unlimited; otherwise a numbered limited edition.
+    max_supply: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sold_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class UserArtifact(Base):
+    """One owned copy. A player may own many copies of the same artifact
+    (and give them to friends); at most one copy of each artifact is active,
+    and at most GameConfig.artifact_slots copies in total — the rest sit on
+    the shelf for show."""
+
+    __tablename__ = "user_artifacts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    artifact_id: Mapped[int] = mapped_column(ForeignKey("artifacts.id", ondelete="CASCADE"), nullable=False)
+    serial_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    equipped: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Who gave it (a gift from a friend), if anyone.
+    gifted_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    artifact: Mapped["Artifact"] = relationship(lazy="joined")
+
+    __table_args__ = (UniqueConstraint("artifact_id", "serial_number", name="uq_user_artifact_serial"),)

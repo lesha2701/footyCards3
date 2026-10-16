@@ -30,6 +30,7 @@ LABELS = {
     "club_pass_renewal": "Клубный абонемент: продление",
     "season_premium": "Сезонный пропуск",
     "starter_offer": "Стартовое предложение",
+    "artifact": "Артефакты",
 }
 
 
@@ -93,6 +94,10 @@ async def validate(db: AsyncSession, invoice: StarsInvoice) -> tuple[bool, str]:
         return await season_pass_service.validate_stars(db, invoice.user_id, int(arg), invoice.stars_amount)
     if kind == "starter_offer":
         return await starter_offer_service.validate_stars(db, invoice.user_id, invoice.stars_amount)
+    if kind == "artifact":
+        from app.services import artifact_service
+
+        return await artifact_service.validate_stars(db, invoice.user_id, int(arg), invoice.stars_amount)
     return False, "Unknown order"
 
 
@@ -124,4 +129,8 @@ async def deliver(
         return await season_pass_service.deliver_stars(db, user, int(arg))
     if kind == "starter_offer":
         return await starter_offer_service.deliver_stars(db, user, invoice)
+    if kind == "artifact":
+        from app.services import artifact_service
+
+        return await artifact_service.deliver_stars(db, user, int(arg))
     raise NotFoundError("Unknown product")

@@ -39,6 +39,19 @@ def _setup(monkeypatch):
     yield calls
 
 
+@pytest.fixture(autouse=True)
+async def _launched(db_session):
+    """Everything here ships switched off; these tests run with it launched.
+    The monthly club-pass bonus card is off too unless a test sets it (no
+    players exist in most tests)."""
+    config = await get_config(db_session)
+    config.club_pass_enabled = config.season_pass_enabled = config.starter_offer_enabled = True
+    config.artifacts_enabled = True
+    config.club_pass_bonus_card_rarity = None
+    await db_session.commit()
+    yield
+
+
 async def _register(client, db_session, telegram_id, bot_token):
     headers = telegram_headers(telegram_id, bot_token)
     await client.post("/api/v1/auth/session", headers=headers)
@@ -205,7 +218,7 @@ async def test_club_pass_daily_bonus_once_a_day(client, db_session, bot_token):
     await _pay(client, inv["payload_token"], 720012, 199, "sub-daily")
     first = await client.post("/api/v1/club-pass/daily", headers=headers)
     assert first.status_code == 200
-    assert first.json()["coins"] == 150 and first.json()["pack_name"] == pack.name
+    assert first.json()["coins"] == 300 and first.json()["pack_name"] == pack.name
     assert len(first.json()["cards"]) == 1
     assert (await client.post("/api/v1/club-pass/daily", headers=headers)).status_code == 409
 
@@ -216,7 +229,7 @@ async def test_club_pass_perks_stop_at_expiry(client, db_session, bot_token):
     inv = (await client.post("/api/v1/club-pass/stars-invoice", headers=headers)).json()
     await _pay(client, inv["payload_token"], 720013, 199, "sub-exp")
     config = await get_config(db_session)
-    assert await club_pass_service.extra_rewarded_attempts(db_session, user.id, config) == 1
+    assert await club_pass_service.extra_rewarded_attempts(db_session, user.id, config) == 2
 
     sub = (await db_session.execute(select(ClubSubscription).where(ClubSubscription.user_id == user.id))).scalar_one()
     sub.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
@@ -264,7 +277,7 @@ async def test_club_pass_gives_extra_rewarded_mini_game_attempt(client, db_sessi
 
     inv = (await client.post("/api/v1/club-pass/stars-invoice", headers=headers)).json()
     await _pay(client, inv["payload_token"], 720015, 199, "sub-games")
-    assert await club_pass_service.extra_rewarded_attempts(db_session, user.id, config) == 1
+    assert await club_pass_service.extra_rewarded_attempts(db_session, user.id, config) == 2
     config.club_pass_extra_rewarded_attempts = 0
     await db_session.commit()
     assert await club_pass_service.extra_rewarded_attempts(db_session, user.id, config) == 0
@@ -413,3 +426,266 @@ async def test_receipts_and_analytics_name_the_products(client, db_session, bot_
         db_session, "all", __import__("app.core.pagination", fromlist=["PageParams"]).PageParams(page=1, page_size=10),
     )
     assert receipt_page.items[0].product == "Стартовое предложение"
+
+
+# --- launch switches, richer club pass ------------------------------------------------
+
+
+async def test_paid_features_ship_switched_off(client, db_session, bot_token):
+    from app.models.game_config import GameConfig
+
+    fresh = GameConfig(id=2)
+    assert fresh.club_pass_enabled is None or fresh.club_pass_enabled is False
+    for col in ("club_pass_enabled", "season_pass_enabled", "starter_offer_enabled", "artifacts_enabled"):
+        assert GameConfig.__table__.c[col].default.arg is False
+
+    config = await get_config(db_session)
+    config.club_pass_enabled = config.season_pass_enabled = config.starter_offer_enabled = False
+    config.artifacts_enabled = False
+    await db_session.commit()
+    headers, _ = await _register(client, db_session, 720050, bot_token)
+    assert (await client.post("/api/v1/club-pass/stars-invoice", headers=headers)).status_code == 409
+    assert (await client.post("/api/v1/starter-offer/stars-invoice", headers=headers)).status_code == 409
+    assert (await client.get("/api/v1/starter-offer", headers=headers)).json()["available"] is False
+    assert (await client.get("/api/v1/season-pass", headers=headers)).json()["enabled"] is False
+    assert (await client.get("/api/v1/artifacts", headers=headers)).json()["shop"] == []
+
+
+async def test_club_pass_monthly_bonus_with_every_payment(client, db_session, bot_token, _setup):
+    await create_player(db_session, rarity=Rarity.epic)
+    config = await get_config(db_session)
+    config.club_pass_bonus_card_rarity = "epic"
+    await db_session.commit()
+    headers, user = await _register(client, db_session, 720051, bot_token)
+    status = (await client.get("/api/v1/club-pass", headers=headers)).json()
+    assert status["perks"]["monthly_bonus"]["coins"] == 2000
+    assert status["perks"]["season_xp_bonus_pct"] == 50 and status["perks"]["free_catchups"] == 3
+
+    inv = (await client.post("/api/v1/club-pass/stars-invoice", headers=headers)).json()
+    assert "каждый месяц сразу: 2000 монет" in _setup[-1]["description"]
+    await _pay(client, inv["payload_token"], 720051, 199, "sub-bonus-1")
+    await db_session.refresh(user)
+    assert user.balance == 500 + 2000
+    await client.post("/api/v1/internal/stars-payments/deliver", headers=INTERNAL, json={
+        "payload_token": inv["payload_token"], "telegram_user_id": 720051,
+        "telegram_payment_charge_id": "sub-bonus-2", "total_amount": 199,
+    })
+    await db_session.refresh(user)
+    assert user.balance == 500 + 4000
+    from app.models.card import UserCard
+
+    cards = (await db_session.execute(select(UserCard).where(UserCard.owner_id == user.id))).scalars().all()
+    assert len(cards) == 2
+
+
+async def test_club_pass_boosts_season_xp(client, db_session, bot_token):
+    await _season(client, bot_token)
+    headers, user = await _register(client, db_session, 720052, bot_token)
+    inv = (await client.post("/api/v1/club-pass/stars-invoice", headers=headers)).json()
+    await _pay(client, inv["payload_token"], 720052, 199, "sub-xp")
+    locked = await lock_user_for_update(db_session, user.id)
+    await credit_coins(db_session, locked, 50, TransactionType.game_reward, "game")
+    await db_session.commit()
+    assert (await client.get("/api/v1/season-pass", headers=headers)).json()["xp"] == 15
+
+
+async def test_club_pass_free_calendar_catchups(client, db_session, bot_token, monkeypatch):
+    from datetime import date
+
+    from app.services import daily_reward_service
+
+    monkeypatch.setattr(daily_reward_service, "local_today", lambda: date(2026, 10, 16))
+    headers, user = await _register(client, db_session, 720053, bot_token)
+    no_pass = await client.post("/api/v1/daily-rewards/catch-up", headers=headers, json={"date": "2026-10-02", "free": True})
+    assert no_pass.status_code == 409
+
+    inv = (await client.post("/api/v1/club-pass/stars-invoice", headers=headers)).json()
+    await _pay(client, inv["payload_token"], 720053, 199, "sub-catch")
+    await db_session.refresh(user)
+    before = user.balance
+    for n in (2, 3, 4):
+        ok = await client.post("/api/v1/daily-rewards/catch-up", headers=headers, json={"date": f"2026-10-0{n}", "free": True})
+        assert ok.status_code == 200, ok.json()
+    assert (await client.post("/api/v1/daily-rewards/catch-up", headers=headers,
+                              json={"date": "2026-10-05", "free": True})).status_code == 409
+    calendar = (await client.get("/api/v1/daily-rewards/calendar", headers=headers)).json()
+    assert calendar["free_catchups_left"] == 0 and calendar["catchups_left"] == 5  # paid ones untouched
+    await db_session.refresh(user)
+    assert user.balance == before + (50 + 5) + (50 + 10) + (50 + 15)  # no coins charged
+
+
+# --- «Артефакты» ----------------------------------------------------------------------
+
+
+async def _artifact(client, bot_token, **kw):
+    auth = await _admin(client, bot_token)
+    payload = {"name": "This is Anfield", "target": "club", "effect": "opp_home_pct", "effect_value": 1,
+               "coins_price": 100, "stars_price": 20, **kw}
+    resp = await client.post("/api/v1/admin/artifacts", headers=auth, json=payload)
+    assert resp.status_code == 200, resp.json()
+    return resp.json()
+
+
+def _copies_of(body, artifact_id):
+    return [c for c in body["shelf"] if c["artifact"]["id"] == artifact_id]
+
+
+async def test_artifact_copies_one_active_per_artifact_and_three_slots(client, db_session, bot_token):
+    from app.services import artifact_service
+
+    shirt = await _artifact(client, bot_token, name="Футболка Марадоны", target="my_player", effect="attack", effect_value=3)
+    others = [await _artifact(client, bot_token, name=f"Артефакт {i}", target="my_player", effect="defense", effect_value=1)
+              for i in range(3)]
+    headers, user = await _register(client, db_session, 720060, bot_token)
+    user.balance = 10_000
+    await db_session.commit()
+
+    body = (await client.post(f"/api/v1/artifacts/{shirt['id']}/buy", headers=headers)).json()
+    body = (await client.post(f"/api/v1/artifacts/{shirt['id']}/buy", headers=headers)).json()
+    copies = _copies_of(body, shirt["id"])
+    assert len(copies) == 2 and [c["equipped"] for c in copies] == [True, False]  # the copy goes to the shelf
+    assert {c["serial_number"] for c in copies} == {1, 2}
+    assert body["effects"]["my_player"] == [{"effect": "attack", "value": 3, "label": "+3 к атаке"}]
+
+    second = next(c for c in copies if not c["equipped"])
+    dup = await client.post(f"/api/v1/artifacts/copies/{second['copy_id']}/active", headers=headers, json={"equipped": True})
+    assert dup.status_code == 409  # copies never stack
+
+    for a in others:
+        body = (await client.post(f"/api/v1/artifacts/{a['id']}/buy", headers=headers)).json()
+    assert body["active_count"] == 3  # 3 slots: the last purchase stayed on the shelf
+    last = _copies_of(body, others[-1]["id"])[0]
+    assert last["equipped"] is False
+    full = await client.post(f"/api/v1/artifacts/copies/{last['copy_id']}/active", headers=headers, json={"equipped": True})
+    assert full.status_code == 409
+    effects = await artifact_service.effects_of(db_session, user.id, "my_player")
+    assert effects == {"attack": 3, "defense": 2}
+
+
+async def test_my_player_artifact_reaches_match_stats(client, db_session, bot_token):
+    from app.models.enums import Position
+    from app.models.my_player import MyPlayer
+    from app.services import my_player_service
+
+    shirt = await _artifact(client, bot_token, name="Футболка", target="my_player", effect="attack", effect_value=4)
+    plaque = await _artifact(client, bot_token)  # a club artifact does nothing for «Мой игрок»
+    headers, user = await _register(client, db_session, 720061, bot_token)
+    mp = MyPlayer(user_id=user.id, name="Тест", position=Position.ST, attributes={"atk": 60, "def": 40})
+    db_session.add(mp)
+    await db_session.commit()
+    config = await get_config(db_session)
+    before = await my_player_service.match_stats(db_session, mp, config)
+    await client.post(f"/api/v1/artifacts/{plaque['id']}/buy", headers=headers)
+    assert (await my_player_service.match_stats(db_session, mp, config))["attack"] == before["attack"]
+    await client.post(f"/api/v1/artifacts/{shirt['id']}/buy", headers=headers)
+    after = await my_player_service.match_stats(db_session, mp, config)
+    assert after["attack"] == before["attack"] + 4 and after["defense"] == before["defense"]
+
+
+async def test_stadium_artifact_is_stronger_with_that_stadium(client, db_session, bot_token):
+    from app.models.enums import CardSource, Rarity as R
+    from app.models.stadium import Stadium
+    from app.models.user_stadium_card import UserStadiumCard
+    from app.services import artifact_service
+
+    stadium = Stadium(display_name="Энфилд", rarity=R.epic, club="Liverpool")
+    db_session.add(stadium)
+    await db_session.commit()
+    a = await _artifact(client, bot_token, stadium_id=stadium.id, stadium_effect_value=2)
+    headers, user = await _register(client, db_session, 720062, bot_token)
+    await client.post(f"/api/v1/artifacts/{a['id']}/buy", headers=headers)
+    assert (await artifact_service.effects_of(db_session, user.id, "club")) == {"opp_home_pct": 1}
+
+    db_session.add(UserStadiumCard(user_id=user.id, stadium_id=stadium.id, serial_number=1, source=CardSource.admin_grant))
+    await db_session.commit()
+    assert (await artifact_service.effects_of(db_session, user.id, "club")) == {"opp_home_pct": 2}
+    shop_item = next(i for i in (await client.get("/api/v1/artifacts", headers=headers)).json()["shop"] if i["id"] == a["id"])
+    assert shop_item["stadium_owned"] and shop_item["active_label"] == "−2% к силе соперника в домашних матчах"
+
+
+async def test_club_artifacts_change_coach_career_runners(db_session):
+    from types import SimpleNamespace
+
+    from app.models.monetization import Artifact, UserArtifact
+    from app.models.user import User
+    from app.services import career_service
+
+    config = await get_config(db_session)
+    user = User(telegram_id=720070, first_name="Coach", balance=0)
+    db_session.add(user)
+    await db_session.flush()
+    for name, effect, value in (("Табличка", "opp_home_pct", 4), ("Флаг", "team_boost_pct", 3)):
+        a = Artifact(name=name, target="club", effect=effect, effect_value=value)
+        db_session.add(a)
+        await db_session.flush()
+        db_session.add(UserArtifact(user_id=user.id, artifact_id=a.id, serial_number=1, equipped=True, source="admin"))
+    await db_session.commit()
+    teams = [{"user_id": user.id}, {"user_id": None}]
+    home, away = SimpleNamespace(boost=1.0), SimpleNamespace(boost=1.0)
+    await career_service._apply_club_artifacts(db_session, teams, 0, 1, home, away, config)
+    assert home.boost == pytest.approx(1.03) and away.boost == pytest.approx(0.96)
+    # Away from home only the own-team boost applies.
+    home, away = SimpleNamespace(boost=1.0), SimpleNamespace(boost=1.0)
+    await career_service._apply_club_artifacts(db_session, teams[::-1], 0, 1, home, away, config)
+    assert home.boost == pytest.approx(1.0) and away.boost == pytest.approx(1.03)
+
+
+def test_home_edge_weakens_the_away_side():
+    from app.services import player_career_service
+
+    team = {"index": 1, "name": "X", "mentality": "balanced", "playstyle": "balanced", "players": [
+        {"slot": slot.code, "name": f"P{i}", "position": slot.ideal_position.value, "rating": 80}
+        for i, slot in enumerate(player_career_service.get_formation_slots(player_career_service.FORMATION))
+    ]}
+    _side, plain = player_career_service._side(team, None, None)
+    _side, weak = player_career_service._side(team, None, None, weaken_pct=5)
+    assert all(p["rating"] == 80 for p in plain) and all(p["rating"] == 76 for p in weak)
+
+
+async def test_gift_an_artifact_copy_to_a_friend(client, db_session, bot_token):
+    from app.models.career import Friendship
+    from app.services import friend_service
+
+    a = await _artifact(client, bot_token)
+    headers, user = await _register(client, db_session, 720071, bot_token)
+    friend_headers, friend = await _register(client, db_session, 720072, bot_token)
+    stranger_headers, stranger = await _register(client, db_session, 720073, bot_token)
+    body = (await client.post(f"/api/v1/artifacts/{a['id']}/buy", headers=headers)).json()
+    copy_id = body["shelf"][0]["copy_id"]
+
+    refused = await client.post(f"/api/v1/artifacts/copies/{copy_id}/gift", headers=headers, json={"recipient_id": stranger.id})
+    assert refused.status_code == 403
+
+    db_session.add(Friendship(requester_id=user.id, addressee_id=friend.id, user_low=min(user.id, friend.id),
+                              user_high=max(user.id, friend.id), status="accepted"))
+    await db_session.commit()
+    assert friend.id in await friend_service.friend_ids(db_session, user.id)
+
+    resp = await client.post(f"/api/v1/artifacts/copies/{copy_id}/gift", headers=headers, json={"recipient_id": friend.id})
+    assert resp.status_code == 200 and resp.json()["shelf"] == []
+    theirs = (await client.get("/api/v1/artifacts", headers=friend_headers)).json()["shelf"]
+    assert len(theirs) == 1 and theirs[0]["source"] == "gift" and theirs[0]["equipped"]
+
+
+async def test_artifact_for_stars_and_limited_supply(client, db_session, bot_token):
+    a = await _artifact(client, bot_token, coins_price=0, stars_price=20, max_supply=1)
+    headers, user = await _register(client, db_session, 720063, bot_token)
+    other_headers, _ = await _register(client, db_session, 720064, bot_token)
+    assert (await client.post(f"/api/v1/artifacts/{a['id']}/buy", headers=headers)).status_code == 409  # stars only
+
+    inv = (await client.post(f"/api/v1/artifacts/{a['id']}/stars-invoice", headers=headers)).json()
+    pre, resp = await _pay(client, inv["payload_token"], 720063, 20, "art-1")
+    assert pre["ok"] and resp.json()["shop_result"]["kind"] == "artifact"
+    assert (await client.post(f"/api/v1/artifacts/{a['id']}/stars-invoice", headers=other_headers)).status_code == 409
+
+
+async def test_admin_artifact_rules(client, db_session, bot_token):
+    auth = await _admin(client, bot_token)
+    bad = await client.post("/api/v1/admin/artifacts", headers=auth, json={
+        "name": "X", "target": "club", "effect": "attack", "effect_value": 2,
+    })
+    assert bad.status_code == 409  # attack is a «Мой игрок» effect
+    a = await _artifact(client, bot_token)
+    _, user = await _register(client, db_session, 720065, bot_token)
+    resp = await client.post(f"/api/v1/admin/artifacts/{a['id']}/grant", headers=auth, json={"user_id": user.id})
+    assert resp.status_code == 200 and resp.json()["serial_number"] == 1

@@ -59,6 +59,7 @@ export default function LoginCalendar() {
 
   const claim = useMutation({ mutationFn: claimDailyReward, onSuccess: done, onError });
   const catchUpCoins = useMutation({ mutationFn: (date: string) => catchUpDay(date), onSuccess: done, onError });
+  const catchUpFree = useMutation({ mutationFn: (date: string) => catchUpDay(date, true), onSuccess: done, onError });
   const catchUpStars = useMutation({
     mutationFn: (date: string) => payShopWithStars(() => createCatchUpStarsInvoice(date)),
     onSuccess: (status) => {
@@ -77,7 +78,7 @@ export default function LoginCalendar() {
   const monthName = localDate(calendar.month).toLocaleDateString("ru-RU", { month: "long" });
   // Monday-first offset of the 1st, so the grid lines up with weekdays.
   const offset = (localDate(calendar.month).getDay() + 6) % 7;
-  const busy = claim.isPending || catchUpCoins.isPending || catchUpStars.isPending;
+  const busy = claim.isPending || catchUpCoins.isPending || catchUpStars.isPending || catchUpFree.isPending;
 
   return (
     <section className="rounded-2xl bg-bg-surface p-4">
@@ -143,6 +144,8 @@ export default function LoginCalendar() {
           catchupCoins={calendar.catchup_coins}
           catchupStars={calendar.catchup_stars}
           catchupsLeft={calendar.catchups_left}
+          freeLeft={calendar.free_catchups_left}
+          onCatchUpFree={() => catchUpFree.mutate(selected.date)}
           busy={busy}
           onClaim={() => claim.mutate()}
           onCatchUpCoins={() => catchUpCoins.mutate(selected.date)}
@@ -164,8 +167,10 @@ export default function LoginCalendar() {
 }
 
 function DaySheet({
-  day, catchupCoins, catchupStars, catchupsLeft, busy, onClaim, onCatchUpCoins, onCatchUpStars, onClose,
+  day, catchupCoins, catchupStars, catchupsLeft, freeLeft, busy, onClaim, onCatchUpCoins, onCatchUpStars, onCatchUpFree, onClose,
 }: {
+  freeLeft: number;
+  onCatchUpFree: () => void;
   day: CalendarDay;
   catchupCoins: number;
   catchupStars: number;
@@ -177,6 +182,7 @@ function DaySheet({
   onClose: () => void;
 }) {
   const canCatchUp = day.status === "missed" && catchupsLeft > 0;
+  const canFree = day.status === "missed" && freeLeft > 0;
   const date = localDate(day.date).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
@@ -205,6 +211,15 @@ function DaySheet({
             Забрать
           </button>
         )}
+        {canFree && (
+          <button
+            onClick={onCatchUpFree}
+            disabled={busy}
+            className="mt-4 w-full rounded-2xl bg-emerald-400 py-3 text-sm font-bold text-bg-base disabled:opacity-40"
+          >
+            Догнать бесплатно · абонемент (осталось {freeLeft})
+          </button>
+        )}
         {canCatchUp && (
           <div className="mt-4 flex flex-col gap-2">
             {catchupCoins > 0 && (
@@ -228,7 +243,7 @@ function DaySheet({
             <p className="text-center text-caption text-ink-mist-dim">Догнать можно ещё {catchupsLeft} раз в этом месяце</p>
           </div>
         )}
-        {day.status === "missed" && !canCatchUp && (
+        {day.status === "missed" && !canCatchUp && !canFree && (
           <p className="mt-3 text-xs text-ink-mist-dim">Лимит догонялок на этот месяц исчерпан.</p>
         )}
       </motion.div>

@@ -68,13 +68,19 @@ async def _progress(db: AsyncSession, user_id: int, season_id: int, create: bool
 
 
 async def add_xp(db: AsyncSession, user_id: int, amount: int) -> int:
-    """Adds season XP. Callers hold the user's row lock, so one player's XP
-    updates are serialized. Returns the XP added (0 without a season)."""
+    """Adds season XP (+club pass bonus). Callers hold the user's row lock,
+    so one player's XP updates are serialized. Returns the XP added (0
+    without a season)."""
     if amount <= 0:
         return 0
     season = await active_season(db)
     if season is None:
         return 0
+    from app.services import club_pass_service
+
+    config = await db.get(GameConfig, 1)
+    if config is not None and config.club_pass_season_xp_bonus_pct and await club_pass_service.is_subscriber(db, user_id):
+        amount += amount * config.club_pass_season_xp_bonus_pct // 100
     progress = await _progress(db, user_id, season.id, create=True)
     progress.xp += amount
     db.add(progress)

@@ -3,14 +3,23 @@ import { useState } from "react";
 
 import { claimClubPassDaily, createClubPassInvoice, fetchClubPass, setClubPassAutoRenew } from "@/api/monetization";
 import { UserBadge } from "@/components/common/UserBadge";
-import { IconCheck, IconCoin, IconPack, IconPlay, IconStar, IconTicket } from "@/components/icons";
+import { IconCheck, IconClock, IconCoin, IconGift, IconPack, IconPlay, IconStar, IconTicket, IconTrophy } from "@/components/icons";
 import { GrantedRewardModal } from "@/components/rewards/RewardBundleView";
 import { frameClass } from "@/lib/cosmetics";
 import { formatGameError } from "@/lib/errors";
 import { payShopWithStars } from "@/lib/shopStars";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { GrantedRewards } from "@/types";
+import { RARITY_LABELS } from "@/lib/rarity";
+import type { GrantedRewards, RewardBundle } from "@/types";
+
+function monthlyText(b: RewardBundle): string {
+  return [
+    b.coins ? `${b.coins} монет` : null,
+    b.pack_name ? `пак «${b.pack_name}»` : null,
+    b.card_rarity ? `${RARITY_LABELS[b.card_rarity].toLowerCase()} карточка` : null,
+  ].filter(Boolean).join(" + ");
+}
 
 function Perk({ icon, text }: { icon: JSX.Element; text: string }) {
   return (
@@ -87,12 +96,21 @@ export default function ClubPassPage() {
         )}
 
         <ul className="mt-4 flex flex-col gap-2.5">
+          {perks.monthly_bonus && (
+            <Perk icon={<IconGift size={15} />} text={`Сразу и каждый месяц: ${monthlyText(perks.monthly_bonus)}`} />
+          )}
           {perks.daily_coins > 0 && <Perk icon={<IconCoin size={15} />} text={`+${perks.daily_coins} монет каждый день`} />}
           {perks.daily_pack?.pack_name && (
             <Perk icon={<IconPack size={15} />} text={`Бесплатный пак «${perks.daily_pack.pack_name}» каждый день`} />
           )}
           {perks.extra_rewarded_attempts > 0 && (
-            <Perk icon={<IconPlay size={15} />} text={`+${perks.extra_rewarded_attempts} награждаемая попытка в каждой мини-игре`} />
+            <Perk icon={<IconPlay size={15} />} text={`+${perks.extra_rewarded_attempts} награждаемых попытки в каждой мини-игре`} />
+          )}
+          {perks.season_xp_bonus_pct > 0 && (
+            <Perk icon={<IconTrophy size={15} />} text={`+${perks.season_xp_bonus_pct}% опыта сезонного пропуска`} />
+          )}
+          {perks.free_catchups > 0 && (
+            <Perk icon={<IconClock size={15} />} text={`${perks.free_catchups} бесплатных догона пропущенных дней в месяц`} />
           )}
           {perks.frame && (
             <Perk

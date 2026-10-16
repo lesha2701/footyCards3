@@ -123,6 +123,8 @@ class CalendarOut(BaseModel):
     catchup_coins: int
     catchup_stars: int
     catchups_left: int
+    # «Клубный абонемент»: free catch-ups left this month (0 without a pass).
+    free_catchups_left: int = 0
 
 
 class CalendarClaimOut(BaseModel):
@@ -134,6 +136,8 @@ class CalendarClaimOut(BaseModel):
 
 class CalendarCatchupIn(BaseModel):
     date: date
+    # Use one of the club pass's free catch-ups instead of paying coins.
+    free: bool = False
 
 
 class CalendarDayIn(RewardBundleIn):
@@ -154,7 +158,11 @@ class CalendarTemplateDayOut(RewardBundleIn):
 class ClubPassPerksOut(BaseModel):
     daily_coins: int
     daily_pack: Optional[RewardBundleOut] = None
+    # Granted with every paid month.
+    monthly_bonus: Optional[RewardBundleOut] = None
     extra_rewarded_attempts: int
+    season_xp_bonus_pct: int = 0
+    free_catchups: int = 0
     frame: Optional[CosmeticOut] = None
     badge: Optional[BadgeOut] = None
     ad_free: bool
@@ -252,3 +260,35 @@ class StarterOfferOut(BaseModel):
 class ShopInvoiceStatusOut(BaseModel):
     status: Literal["pending", "completed"]
     product: Optional[str] = None
+
+
+# --- «Артефакты» ----------------------------------------------------------------------
+
+
+class ArtifactIn(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    description: Optional[str] = Field(default=None, max_length=255)
+    icon: str = Field(default="🏺", min_length=1, max_length=16)
+    rarity: RarityName = "rare"
+    target: Literal["club", "my_player"] = "my_player"
+    effect: str = "none"
+    effect_value: int = Field(default=0, ge=0, le=100)
+    stadium_id: Optional[int] = None
+    stadium_effect_value: int = Field(default=0, ge=0, le=100)
+    coins_price: int = Field(default=0, ge=0)
+    stars_price: int = Field(default=0, ge=0, le=10000)
+    max_supply: Optional[int] = Field(default=None, ge=1)
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class ArtifactEquipIn(BaseModel):
+    equipped: bool
+
+
+class ArtifactGrantIn(BaseModel):
+    user_id: int
+
+
+class ArtifactGiftIn(BaseModel):
+    recipient_id: int

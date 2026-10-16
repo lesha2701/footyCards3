@@ -95,14 +95,29 @@ async def expire_if_needed(db: AsyncSession, user: User) -> None:
     await db.refresh(user)
 
 
+def _monthly_bonus(config: GameConfig) -> Bundle:
+    return Bundle(
+        coins=config.club_pass_bonus_coins, pack_id=config.club_pass_bonus_pack_id,
+        card_rarity=config.club_pass_bonus_card_rarity or None,
+    )
+
+
+async def is_subscriber(db: AsyncSession, user_id: int) -> bool:
+    return is_active(await get_subscription(db, user_id))
+
+
 async def _perks(db: AsyncSession, config: GameConfig) -> ClubPassPerksOut:
     frame = await db.get(Cosmetic, config.club_pass_frame_cosmetic_id) if config.club_pass_frame_cosmetic_id else None
     badge = await db.get(Badge, config.club_pass_badge_id) if config.club_pass_badge_id else None
+    monthly = _monthly_bonus(config)
     return ClubPassPerksOut(
         daily_coins=config.club_pass_daily_coins,
         daily_pack=await reward_bundle_service.describe(db, Bundle(pack_id=config.club_pass_daily_pack_id))
         if config.club_pass_daily_pack_id else None,
+        monthly_bonus=None if monthly.is_empty() else await reward_bundle_service.describe(db, monthly),
         extra_rewarded_attempts=config.club_pass_extra_rewarded_attempts,
+        season_xp_bonus_pct=config.club_pass_season_xp_bonus_pct,
+        free_catchups=config.club_pass_free_catchups,
         frame=CosmeticOut.model_validate(frame) if frame else None,
         badge=BadgeOut.model_validate(badge) if badge else None,
         ad_free=config.club_pass_ad_free,
@@ -124,12 +139,24 @@ async def get_status(db: AsyncSession, user: User) -> ClubPassOut:
 
 def _perk_lines(perks: ClubPassPerksOut) -> str:
     lines = []
+    bonus = perks.monthly_bonus
+    if bonus:
+        parts = [f"{bonus.coins} монет"] if bonus.coins else []
+        if bonus.pack_name:
+            parts.append(f"пак «{bonus.pack_name}»")
+        if bonus.card_rarity:
+            parts.append("карточка")
+        lines.append("каждый месяц сразу: " + " + ".join(parts))
     if perks.daily_coins:
         lines.append(f"+{perks.daily_coins} монет каждый день")
     if perks.daily_pack and perks.daily_pack.pack_name:
         lines.append(f"пак «{perks.daily_pack.pack_name}» каждый день")
     if perks.extra_rewarded_attempts:
-        lines.append(f"+{perks.extra_rewarded_attempts} награждаемая попытка в мини-играх")
+        lines.append(f"+{perks.extra_rewarded_attempts} награждаемых попытки в мини-играх")
+    if perks.season_xp_bonus_pct:
+        lines.append(f"+{perks.season_xp_bonus_pct}% опыта сезона")
+    if perks.free_catchups:
+        lines.append(f"{perks.free_catchups} бесплатных догона в календаре")
     if perks.frame:
         lines.append(f"рамка «{perks.frame.name}»")
     if perks.badge:
@@ -190,6 +217,14 @@ async def deliver_payment(
     await _grant_perk_items(db, locked, config)
     sub.perks_granted = True
     await db.flush()
+    bonus = _monthly_bonus(config)
+    if not bonus.is_empty():
+        await reward_bundle_service.grant(
+            db, locked, bonus, tx_type=TransactionType.club_pass_reward,
+            description="Клубный абонемент: бонус за месяц", card_source=CardSource.stars_purchase,
+            idempotency_prefix=f"club-pass-month-{locked.id}-{sub.payments}", cosmetic_source="club_pass",
+            related_object_type="club_subscription", related_object_id=sub.id,
+        )
     return {"kind": "club_pass", "expires_at": new_end.isoformat(), "renewal": is_renewal}
 
 

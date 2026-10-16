@@ -23,7 +23,7 @@ async def claim_reward(db: AsyncSession = Depends(get_db), user: User = Depends(
 
 @router.post("/catch-up", response_model=CalendarClaimOut)
 async def catch_up(payload: CalendarCatchupIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    return await daily_reward_service.catch_up_with_coins(db, user, payload.date)
+    return await daily_reward_service.catch_up_with_coins(db, user, payload.date, free=payload.free)
 
 
 @router.post("/catch-up/stars-invoice", response_model=StarsInvoiceCreateOut)

@@ -400,9 +400,11 @@ async def _lock_season(db: AsyncSession, season_id: int) -> PlayerCareerSeason:
 
 # --- playing rounds (stage 2) ---------------------------------------------------------
 
-def _side(team: dict, mine: Optional[SimpleNamespace], config):
+def _side(team: dict, mine: Optional[SimpleNamespace], config, weaken_pct: int = 0):
     """Engine side for a club. `mine` (the user's engine card) replaces the
-    weakest player of his line, at the slot closest to his position."""
+    weakest player of his line, at the slot closest to his position.
+    `weaken_pct` lowers every rating (the opponent of a home match when «Мой
+    игрок» wears an opp_home_pct «Артефакт»)."""
     slots = {s.code: s for s in get_formation_slots(FORMATION)}
     roster = list(team["players"])
     my_slot = None
@@ -418,8 +420,9 @@ def _side(team: dict, mine: Optional[SimpleNamespace], config):
         if p["slot"] == my_slot:
             with_slots.append((_engine_card(mine, config), slot))
             continue
+        rating = max(1, round(p["rating"] * (100 - weaken_pct) / 100)) if weaken_pct else p["rating"]
         player = SimpleNamespace(
-            display_name=p["name"], position=Position(p["position"]), rating=p["rating"], rarity=Rarity.common,
+            display_name=p["name"], position=Position(p["position"]), rating=rating, rarity=Rarity.common,
             club=team["name"], country="", attack_rating=None, defense_rating=None,
         )
         with_slots.append((_EngineCard(id=-(team["index"] * 100 + i + 1), player_id=p.get("player_id") or 0, player=player), slot))
@@ -460,11 +463,14 @@ async def _play_round(db: AsyncSession, season: PlayerCareerSeason, round_index:
     teams = state["teams"]
     mine = await my_player_service.engine_card(db, season.user_id, config)
     my_id = mine.id if mine is not None else None
+    from app.services import artifact_service
+
+    home_edge = (await artifact_service.effects_of(db, season.user_id, "my_player", config)).get("opp_home_pct", 0) if mine else 0
     results = []
     my_match = None
     for home, away in state["fixtures"][round_index]:
         side_h = _side(teams[home], mine if home == 0 else None, config)
-        side_a = _side(teams[away], mine if away == 0 else None, config)
+        side_a = _side(teams[away], mine if away == 0 else None, config, weaken_pct=home_edge if home == 0 else 0)
         match = tournament_match_engine.simulate_match(
             side_h[0], side_a[0], side_h[1], side_a[1], config, teams[home]["name"], teams[away]["name"],
         )

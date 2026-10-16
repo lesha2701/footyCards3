@@ -6,6 +6,8 @@ from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.monetization import (
+    ArtifactEquipIn,
+    ArtifactGiftIn,
     ClubPassOut,
     CosmeticCatalogOut,
     CosmeticEquipIn,
@@ -17,6 +19,7 @@ from app.schemas.monetization import (
 )
 from app.schemas.stars import StarsInvoiceCreateOut
 from app.services import (
+    artifact_service,
     club_pass_service,
     cosmetic_service,
     season_pass_service,
@@ -114,6 +117,38 @@ async def starter_offer_seen(db: AsyncSession = Depends(get_db), user: User = De
 @router.post("/starter-offer/stars-invoice", response_model=StarsInvoiceCreateOut)
 async def starter_offer_invoice(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await shop_product_service.create_invoice(db, user, *await starter_offer_service.stars_order(db, user))
+
+
+# --- «Артефакты» ----------------------------------------------------------------------
+
+
+@router.get("/artifacts")
+async def artifacts(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await artifact_service.catalog(db, user)
+
+
+@router.post("/artifacts/{artifact_id}/buy")
+async def buy_artifact(artifact_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await artifact_service.buy_with_coins(db, user, artifact_id)
+
+
+@router.post("/artifacts/{artifact_id}/stars-invoice", response_model=StarsInvoiceCreateOut)
+async def artifact_invoice(artifact_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await shop_product_service.create_invoice(db, user, *await artifact_service.stars_order(db, user, artifact_id))
+
+
+@router.post("/artifacts/copies/{copy_id}/active")
+async def activate_artifact(
+    copy_id: int, payload: ArtifactEquipIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await artifact_service.set_active(db, user, copy_id, payload.equipped)
+
+
+@router.post("/artifacts/copies/{copy_id}/gift")
+async def gift_artifact(
+    copy_id: int, payload: ArtifactGiftIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await artifact_service.gift(db, user, copy_id, payload.recipient_id)
 
 
 # --- shared ---------------------------------------------------------------------------

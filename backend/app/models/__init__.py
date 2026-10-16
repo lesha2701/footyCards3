@@ -60,6 +60,7 @@ from app.models.user import User
 from app.models.user_activity import UserDailyActivity
 from app.models.stars_payment_receipt import StarsPaymentReceipt
 from app.models.monetization import (
+    Artifact,
     ClubSubscription,
     Cosmetic,
     LoginCalendarBonusClaim,
@@ -69,6 +70,7 @@ from app.models.monetization import (
     SeasonLevel,
     SeasonProgress,
     StarterOfferPurchase,
+    UserArtifact,
     UserCosmetic,
 )
 from app.models.user_coach_card import UserCoachCard
@@ -178,6 +180,8 @@ __all__ = [
     "SeasonProgress",
     "StarterOfferPurchase",
     "UserCosmetic",
+    "Artifact",
+    "UserArtifact",
     "UserCoachCard",
     "Stadium",
     "UserStadiumCard",

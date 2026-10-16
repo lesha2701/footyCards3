@@ -554,23 +554,32 @@ class GameConfigOut(BaseModel):
     calendar_catchup_coins: int = 150
     calendar_catchup_stars: int = 10
     calendar_catchup_max_per_month: int = 5
-    club_pass_enabled: bool = True
+    club_pass_enabled: bool = False
     club_pass_stars: int = 199
-    club_pass_daily_coins: int = 150
+    club_pass_daily_coins: int = 300
     club_pass_daily_pack_id: Optional[int] = None
-    club_pass_extra_rewarded_attempts: int = 1
+    club_pass_extra_rewarded_attempts: int = 2
+    club_pass_bonus_coins: int = 2000
+    club_pass_bonus_pack_id: Optional[int] = None
+    club_pass_bonus_card_rarity: Optional[str] = None
+    club_pass_season_xp_bonus_pct: int = 50
+    club_pass_free_catchups: int = 3
     club_pass_frame_cosmetic_id: Optional[int] = None
     club_pass_badge_id: Optional[int] = None
     club_pass_ad_free: bool = True
-    season_pass_enabled: bool = True
+    season_pass_enabled: bool = False
     season_xp_per_game: int = 10
     season_xp_per_daily_claim: int = 25
-    starter_offer_enabled: bool = True
+    starter_offer_enabled: bool = False
     starter_offer_hours: int = 48
     starter_offer_stars: int = 50
     starter_offer_coins: int = 1000
     starter_offer_pack_id: Optional[int] = None
     starter_offer_cosmetic_id: Optional[int] = None
+    artifacts_enabled: bool = False
+    artifact_slots: int = 3
+    artifact_max_opp_pct: int = 5
+    artifact_max_stat: int = 6
 
 
 class GameConfigUpdate(BaseModel):
@@ -1025,6 +1034,11 @@ class GameConfigUpdate(BaseModel):
     club_pass_daily_coins: Optional[int] = Field(default=None, ge=0)
     club_pass_daily_pack_id: Optional[int] = Field(default=None, ge=0)
     club_pass_extra_rewarded_attempts: Optional[int] = Field(default=None, ge=0, le=20)
+    club_pass_bonus_coins: Optional[int] = Field(default=None, ge=0)
+    club_pass_bonus_pack_id: Optional[int] = Field(default=None, ge=0)
+    club_pass_bonus_card_rarity: Optional[Literal["", "common", "rare", "epic", "legendary", "diamond"]] = None
+    club_pass_season_xp_bonus_pct: Optional[int] = Field(default=None, ge=0, le=500)
+    club_pass_free_catchups: Optional[int] = Field(default=None, ge=0, le=31)
     club_pass_frame_cosmetic_id: Optional[int] = Field(default=None, ge=0)
     club_pass_badge_id: Optional[int] = Field(default=None, ge=0)
     club_pass_ad_free: Optional[bool] = None
@@ -1037,6 +1051,10 @@ class GameConfigUpdate(BaseModel):
     starter_offer_coins: Optional[int] = Field(default=None, ge=0)
     starter_offer_pack_id: Optional[int] = Field(default=None, ge=0)
     starter_offer_cosmetic_id: Optional[int] = Field(default=None, ge=0)
+    artifacts_enabled: Optional[bool] = None
+    artifact_slots: Optional[int] = Field(default=None, ge=0, le=10)
+    artifact_max_opp_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    artifact_max_stat: Optional[int] = Field(default=None, ge=0, le=50)
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod

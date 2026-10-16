@@ -25,7 +25,7 @@ const calendar: Calendar = {
   days: Array.from({ length: 31 }, (_, i) => day(i + 1, i + 1 < 16 ? (i + 1 === 3 ? "missed" : "claimed") : i + 1 === 16 ? "today" : "future")),
   claimed_count: 14, days_in_month: 31, already_claimed_today: false,
   month_bonus: bundle({ coins: 2000, card_rarity: "legendary" }), month_bonus_claimed: false,
-  catchup_coins: 150, catchup_stars: 10, catchups_left: 5,
+  catchup_coins: 150, catchup_stars: 10, catchups_left: 5, free_catchups_left: 0,
 };
 
 const api = vi.hoisted(() => ({
@@ -44,7 +44,10 @@ vi.mock("@/api/dailyRewards", () => ({
 
 const clubPass: ClubPass = {
   enabled: true, stars_price: 199, is_active: false, expires_at: null, auto_renew: false, daily_claimed_today: false,
-  perks: { daily_coins: 150, daily_pack: bundle({ pack_id: 1, pack_name: "Базовый" }), extra_rewarded_attempts: 1, frame: null, badge: null, ad_free: true },
+  perks: {
+    daily_coins: 150, daily_pack: bundle({ pack_id: 1, pack_name: "Базовый" }), extra_rewarded_attempts: 2, frame: null, badge: null,
+    ad_free: true, monthly_bonus: bundle({ coins: 2000, card_rarity: "epic" }), season_xp_bonus_pct: 50, free_catchups: 3,
+  },
 };
 let clubPassState = clubPass;
 
@@ -123,6 +126,8 @@ describe("club pass page", () => {
     expect(await screen.findByText("Оформить за 199 ⭐ / месяц")).toBeInTheDocument();
     expect(screen.getByText("+150 монет каждый день")).toBeInTheDocument();
     expect(screen.getByText("Бесплатный пак «Базовый» каждый день")).toBeInTheDocument();
+    expect(screen.getByText(/Сразу и каждый месяц: 2000 монет \+ эпическая карточка/i)).toBeInTheDocument();
+    expect(screen.getByText("+50% опыта сезонного пропуска")).toBeInTheDocument();
     expect(screen.getByText(/Звёзды не выводятся/)).toBeInTheDocument();
   });
 

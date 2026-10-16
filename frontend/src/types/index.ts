@@ -1062,6 +1062,8 @@ export interface LoginCalendar {
   catchup_coins: number;
   catchup_stars: number;
   catchups_left: number;
+  /** «Клубный абонемент»: free catch-ups left this month. */
+  free_catchups_left: number;
 }
 
 export interface CalendarClaimResult {
@@ -1074,7 +1076,11 @@ export interface CalendarClaimResult {
 export interface ClubPassPerks {
   daily_coins: number;
   daily_pack: RewardBundle | null;
+  /** Granted with every paid month. */
+  monthly_bonus: RewardBundle | null;
   extra_rewarded_attempts: number;
+  season_xp_bonus_pct: number;
+  free_catchups: number;
   frame: Cosmetic | null;
   badge: Badge | null;
   ad_free: boolean;
@@ -1116,6 +1122,60 @@ export interface SeasonPass {
   locked_premium: number;
   xp_per_game: number;
   xp_per_daily_claim: number;
+}
+
+export type ArtifactTarget = "club" | "my_player";
+
+export interface ArtifactInfo {
+  id: number;
+  name: string;
+  description: string | null;
+  image_path: string | null;
+  icon: string;
+  rarity: Rarity;
+  target: ArtifactTarget;
+  target_label: string;
+  effect: string;
+  effect_value: number;
+  effect_label: string;
+  stadium_id: number | null;
+  stadium_name: string | null;
+  stadium_label: string;
+  stadium_owned: boolean;
+  /** The value that applies to this player (stadium bonus included). */
+  active_label: string;
+  coins_price: number;
+  stars_price: number;
+  max_supply: number | null;
+  left: number | null;
+}
+
+export interface ArtifactShopItem extends ArtifactInfo {
+  owned_count: number;
+}
+
+export interface ArtifactCopy {
+  copy_id: number;
+  serial_number: number;
+  equipped: boolean;
+  source: string;
+  artifact: ArtifactInfo;
+}
+
+export interface ArtifactEffect {
+  effect: string;
+  value: number;
+  label: string;
+}
+
+export interface ArtifactCatalog {
+  enabled: boolean;
+  slots: number;
+  active_count: number;
+  shop: ArtifactShopItem[];
+  shelf: ArtifactCopy[];
+  effects: Record<ArtifactTarget, ArtifactEffect[]>;
+  balance: number;
 }
 
 export interface StarterOffer {

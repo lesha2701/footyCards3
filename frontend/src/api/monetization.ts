@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import type {
+  ArtifactCatalog,
   ClubPass,
   CosmeticCatalog,
   CosmeticKind,
@@ -85,5 +86,31 @@ export async function createStarterOfferInvoice(): Promise<StarsInvoiceCreate> {
 
 export async function fetchShopInvoiceStatus(token: string): Promise<{ status: "pending" | "completed" }> {
   const { data } = await api.get<{ status: "pending" | "completed" }>(`/shop/stars-invoices/${token}`);
+  return data;
+}
+
+// --- «Артефакты» ---
+export async function fetchArtifacts(): Promise<ArtifactCatalog> {
+  const { data } = await api.get<ArtifactCatalog>("/artifacts");
+  return data;
+}
+
+export async function buyArtifactWithCoins(id: number): Promise<ArtifactCatalog> {
+  const { data } = await api.post<ArtifactCatalog>(`/artifacts/${id}/buy`);
+  return data;
+}
+
+export async function createArtifactStarsInvoice(id: number): Promise<StarsInvoiceCreate> {
+  const { data } = await api.post<StarsInvoiceCreate>(`/artifacts/${id}/stars-invoice`);
+  return data;
+}
+
+export async function setArtifactActive(copyId: number, active: boolean): Promise<ArtifactCatalog> {
+  const { data } = await api.post<ArtifactCatalog>(`/artifacts/copies/${copyId}/active`, { equipped: active });
+  return data;
+}
+
+export async function giftArtifact(copyId: number, recipientId: number): Promise<ArtifactCatalog> {
+  const { data } = await api.post<ArtifactCatalog>(`/artifacts/copies/${copyId}/gift`, { recipient_id: recipientId });
   return data;
 }

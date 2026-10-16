@@ -47,6 +47,8 @@ import type {
   AdminWheelPrize,
   AdminWheelPrizePool,
   CardCollection,
+  AdminArtifact,
+  AdminArtifactCatalog,
   AdminSeason,
   CalendarTemplateDay,
   MagnateBoardConfig,
@@ -1179,5 +1181,30 @@ export async function fetchAdminTransactions(
   params: AdminTransactionFilters & { user_id?: number; page: number; page_size: number },
 ): Promise<AdminTransactionsPage> {
   const { data } = await api.get<AdminTransactionsPage>("/admin/transactions", { params });
+  return data;
+}
+
+// --- «Артефакты» ---
+export async function fetchAdminArtifacts(): Promise<AdminArtifactCatalog> {
+  const { data } = await api.get<AdminArtifactCatalog>("/admin/artifacts");
+  return data;
+}
+export async function saveAdminArtifact(item: AdminArtifact): Promise<AdminArtifact> {
+  const { id, sold_count: _sold, image_path: _image, ...body } = item;
+  const { data } = id
+    ? await api.put<AdminArtifact>(`/admin/artifacts/${id}`, body)
+    : await api.post<AdminArtifact>("/admin/artifacts", body);
+  return data;
+}
+export async function uploadArtifactImage(id: number, file: File): Promise<AdminArtifact> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<AdminArtifact>(`/admin/artifacts/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+export async function grantArtifact(id: number, userId: number): Promise<{ serial_number: number }> {
+  const { data } = await api.post<{ serial_number: number }>(`/admin/artifacts/${id}/grant`, { user_id: userId });
   return data;
 }

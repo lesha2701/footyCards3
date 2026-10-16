@@ -22,6 +22,7 @@ import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronRight, IconCoin, IconEdit, IconFlag, IconFlagCheckered, IconHelp, IconProfile, IconStar } from "@/components/icons";
 import LevelUpModal from "@/components/myPlayer/LevelUpModal";
 import LifestyleTab from "@/components/myPlayer/LifestyleTab";
+import MyPlayerArtifacts from "@/components/artifacts/MyPlayerArtifacts";
 import MyPlayerCard from "@/components/myPlayer/MyPlayerCard";
 import MyPlayerDuels from "@/components/myPlayer/MyPlayerDuels";
 import MyPlayerLeaderboard from "@/components/myPlayer/MyPlayerLeaderboard";
@@ -186,6 +187,7 @@ function Overview({
         ))}
       </div>
 
+      {tab === "property" && <MyPlayerArtifacts />}
       {tab === "property" && <LifestyleTab />}
       {tab === "style" && (
         <MyPlayerStyleShop view={view} player={player} preview={preview} onPreview={setPreview} onSaved={onSaved} />

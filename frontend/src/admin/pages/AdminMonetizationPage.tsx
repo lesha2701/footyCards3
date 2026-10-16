@@ -12,14 +12,16 @@ import {
   updateGameConfig,
 } from "@/admin/api";
 import { useAdminToastStore } from "@/admin/adminToastStore";
+import AdminArtifactsTab from "@/admin/components/AdminArtifactsTab";
 import RewardBundleEditor from "@/admin/components/RewardBundleEditor";
 import { EMPTY_BUNDLE, type AdminSeason, type GameConfig } from "@/admin/types";
 import CosmeticPreview from "@/components/shop/CosmeticPreview";
 import { ApiRequestError } from "@/lib/api";
 import { KIND_LABELS, STYLE_OPTIONS } from "@/lib/cosmetics";
+import { RARITY_LABELS } from "@/lib/rarity";
 import type { Cosmetic, CosmeticKind } from "@/types";
 
-type Tab = "settings" | "cosmetics" | "seasons";
+type Tab = "settings" | "cosmetics" | "seasons" | "artifacts";
 const input = "w-full rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none";
 const toast = (msg: string) => useAdminToastStore.getState().push(msg, "success");
 const errText = (err: unknown, fallback: string) => (err instanceof ApiRequestError ? err.message : fallback);
@@ -32,7 +34,7 @@ export default function AdminMonetizationPage() {
     <div className="flex flex-col gap-4">
       <h1 className="font-display text-2xl font-bold">Абонемент, сезон, стиль</h1>
       <div className="flex gap-1 rounded-xl bg-bg-surface p-1">
-        {([["settings", "Настройки"], ["cosmetics", "Косметика"], ["seasons", "Сезоны"]] as [Tab, string][]).map(([id, label]) => (
+        {([["settings", "Настройки"], ["cosmetics", "Косметика"], ["seasons", "Сезоны"], ["artifacts", "Артефакты"]] as [Tab, string][]).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
@@ -45,6 +47,7 @@ export default function AdminMonetizationPage() {
       {tab === "settings" && <SettingsTab />}
       {tab === "cosmetics" && <CosmeticsTab />}
       {tab === "seasons" && <SeasonsTab />}
+      {tab === "artifacts" && <AdminArtifactsTab />}
     </div>
   );
 }
@@ -103,7 +106,7 @@ function SettingsTab() {
     <div className="flex flex-col gap-3">
       <section className={block}>
         <p className="font-display text-sm font-bold">Клубный абонемент (подписка Stars, 30 дней)</p>
-        {flag("club_pass_enabled", "Продаётся")}
+        {flag("club_pass_enabled", "Продаётся (запуск)")}
         <div className={grid}>
           {num("club_pass_stars", "Цена, ⭐ в месяц")}
           {num("club_pass_daily_coins", "Монеты каждый день")}
@@ -111,12 +114,32 @@ function SettingsTab() {
           {num("club_pass_extra_rewarded_attempts", "+ награждаемых попыток в мини-играх")}
           {pick("club_pass_frame_cosmetic_id", "Эксклюзивная рамка", frames)}
           {pick("club_pass_badge_id", "Значок", badges)}
+          {num("club_pass_season_xp_bonus_pct", "+% опыта сезона")}
+          {num("club_pass_free_catchups", "Бесплатных догонов календаря в месяц")}
+        </div>
+        <p className="text-micro text-slate-500">Бонус с каждой оплатой (сразу и при каждом продлении):</p>
+        <div className={grid}>
+          {num("club_pass_bonus_coins", "Монеты")}
+          {pick("club_pass_bonus_pack_id", "Пак", packs)}
+          <label className="flex flex-col gap-0.5">
+            <span className="text-micro text-slate-500">Карточка</span>
+            <select
+              value={(value("club_pass_bonus_card_rarity") as string | null) ?? ""}
+              onChange={(e) => set("club_pass_bonus_card_rarity", e.target.value)}
+              className={input}
+            >
+              <option value="">— нет —</option>
+              {(["common", "rare", "epic", "legendary", "diamond"] as const).map((r) => (
+                <option key={r} value={r}>{RARITY_LABELS[r]}</option>
+              ))}
+            </select>
+          </label>
         </div>
         {flag("club_pass_ad_free", "Без рекламы (на будущее)")}
       </section>
       <section className={block}>
         <p className="font-display text-sm font-bold">Стартовое предложение (один раз, новичкам)</p>
-        {flag("starter_offer_enabled", "Включено")}
+        {flag("starter_offer_enabled", "Включено (запуск)")}
         <div className={grid}>
           {num("starter_offer_stars", "Цена, ⭐")}
           {num("starter_offer_hours", "Доступно часов после регистрации")}
@@ -135,10 +158,19 @@ function SettingsTab() {
       </section>
       <section className={block}>
         <p className="font-display text-sm font-bold">Сезонный пропуск: опыт</p>
-        {flag("season_pass_enabled", "Сезоны включены")}
+        {flag("season_pass_enabled", "Сезоны включены (запуск)")}
         <div className={grid}>
           {num("season_xp_per_game", "XP за игру с наградой")}
           {num("season_xp_per_daily_claim", "XP за награду календаря")}
+        </div>
+      </section>
+      <section className={block}>
+        <p className="font-display text-sm font-bold">Артефакты</p>
+        {flag("artifacts_enabled", "Включены (запуск)")}
+        <div className={grid}>
+          {num("artifact_slots", "Активных слотов у игрока")}
+          {num("artifact_max_opp_pct", "Максимум %, сумма (сила соперника / команды)")}
+          {num("artifact_max_stat", "Максимум к атаке/защите, сумма")}
         </div>
       </section>
       {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}

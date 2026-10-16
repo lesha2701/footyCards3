@@ -18,6 +18,8 @@ import { RARITY_LABELS } from "@/lib/rarity";
 import { useAuthStore } from "@/store/authStore";
 import { usePacksUiStore } from "@/store/packsUiStore";
 import MonetizationEntries from "@/components/shop/MonetizationEntries";
+import ArtifactShop from "@/components/artifacts/ArtifactShop";
+import { fetchArtifacts } from "@/api/monetization";
 import { StarterOfferBanner } from "@/components/shop/StarterOffer";
 import type { Pack, PackOpenResult } from "@/types";
 
@@ -31,12 +33,13 @@ const BULK_QUANTITY_PRESETS = [5, 10, 100];
 // "Подарки" tab is opened.
 const GiftShop = lazy(() => import("@/pages/GiftsPage").then((m) => ({ default: m.GiftShop })));
 
-type ShopTab = "coins" | "stars" | "buy-coins" | "gifts";
+type ShopTab = "coins" | "stars" | "buy-coins" | "gifts" | "artifacts";
 const SHOP_TABS: { id: ShopTab; label: string }[] = [
   { id: "coins", label: "Паки" },
   { id: "stars", label: "За ⭐" },
   { id: "buy-coins", label: "Монеты" },
   { id: "gifts", label: "Подарки" },
+  { id: "artifacts", label: "Артефакты" },
 ];
 
 export default function PacksPage() {
@@ -55,6 +58,9 @@ export default function PacksPage() {
   const updateBalance = useAuthStore((s) => s.updateBalance);
   const [openingPack, setOpeningPack] = useState<Pack | null>(null);
 
+  // «Артефакты» tab only once an admin has launched them.
+  const { data: artifacts } = useQuery({ queryKey: ["artifacts"], queryFn: fetchArtifacts });
+  const shopTabs = SHOP_TABS.filter((t) => t.id !== "artifacts" || artifacts?.enabled);
   const coinPacks = packs?.filter((p) => p.stars_price == null);
   const starsPacks = packs?.filter((p) => p.stars_price != null);
   const sortedCoinPacks = coinPacks ? sortPacksByPrice(coinPacks, sortDirection) : undefined;
@@ -64,14 +70,18 @@ export default function PacksPage() {
     <div className="flex flex-col gap-4">
       <h1 className="font-display text-xl font-bold text-ink-chalk">Магазин</h1>
 
-      <div className="grid grid-cols-4 gap-1 rounded-2xl bg-bg-surface p-1" role="tablist" aria-label="Разделы магазина">
-        {SHOP_TABS.map((t) => (
+      <div
+        className={`grid ${shopTabs.length > 4 ? "grid-cols-5" : "grid-cols-4"} gap-1 rounded-2xl bg-bg-surface p-1`}
+        role="tablist"
+        aria-label="Разделы магазина"
+      >
+        {shopTabs.map((t) => (
           <button
             key={t.id}
             role="tab"
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
-            className={`rounded-xl py-2 text-xs font-semibold transition ${
+            className={`min-w-0 truncate rounded-xl py-2 font-semibold transition ${shopTabs.length > 4 ? "px-0.5 text-caption" : "text-xs"} ${
               tab === t.id ? (t.id === "stars" || t.id === "buy-coins" ? "bg-amber-400 text-bg-base" : "bg-floodlight text-bg-base") : "text-ink-mist"
             }`}
           >
@@ -90,6 +100,8 @@ export default function PacksPage() {
           </div>
           <CoinPackagesPanel onPurchased={updateBalance} />
         </section>
+      ) : tab === "artifacts" ? (
+        <ArtifactShop />
       ) : tab === "gifts" ? (
         <Suspense fallback={<ListSkeleton count={3} />}>
           <button onClick={() => navigate("/gifts")} className="self-end text-xs font-semibold text-accent-lime">

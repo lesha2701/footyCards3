@@ -12,9 +12,10 @@ export async function claimDailyReward(): Promise<CalendarClaimResult> {
   return data;
 }
 
-/** Catch up a missed day of this month for coins. */
-export async function catchUpDay(date: string): Promise<CalendarClaimResult> {
-  const { data } = await api.post<CalendarClaimResult>("/daily-rewards/catch-up", { date });
+/** Catch up a missed day of this month for coins — or, `free`, with one of
+ * the club pass's free catch-ups. */
+export async function catchUpDay(date: string, free = false): Promise<CalendarClaimResult> {
+  const { data } = await api.post<CalendarClaimResult>("/daily-rewards/catch-up", { date, free });
   return data;
 }
 

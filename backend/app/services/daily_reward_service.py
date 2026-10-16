@@ -97,7 +97,16 @@ async def _bonus_claimed(db: AsyncSession, user_id: int, first: date) -> bool:
 
 
 def _catchups_used(claims: dict[date, str]) -> int:
-    return sum(1 for m in claims.values() if m != "login")
+    """Paid catch-ups (coins/Stars); the club pass's free ones ("pass") count separately."""
+    return sum(1 for m in claims.values() if m in ("coins", "stars"))
+
+
+async def _free_catchups_left(db: AsyncSession, user_id: int, claims: dict[date, str], config) -> int:
+    from app.services import club_pass_service
+
+    if not config.club_pass_free_catchups or not await club_pass_service.is_subscriber(db, user_id):
+        return 0
+    return max(0, config.club_pass_free_catchups - sum(1 for m in claims.values() if m == "pass"))
 
 
 async def get_calendar(db: AsyncSession, user: User) -> CalendarOut:
@@ -124,6 +133,7 @@ async def get_calendar(db: AsyncSession, user: User) -> CalendarOut:
         month_bonus_claimed=await _bonus_claimed(db, user.id, first),
         catchup_coins=config.calendar_catchup_coins, catchup_stars=config.calendar_catchup_stars,
         catchups_left=max(0, config.calendar_catchup_max_per_month - _catchups_used(claims)),
+        free_catchups_left=await _free_catchups_left(db, user.id, claims, config),
     )
 
 
@@ -196,7 +206,7 @@ def _check_catchup_date(day: date, today: date) -> None:
         raise ConflictError("Догнать можно только пропущенный день этого месяца")
 
 
-async def _check_catchup(db: AsyncSession, user_id: int, day: date) -> None:
+async def _check_catchup(db: AsyncSession, user_id: int, day: date, free: bool = False) -> None:
     today = local_today()
     _check_catchup_date(day, today)
     first, end, _n = _month_bounds(today)
@@ -204,22 +214,28 @@ async def _check_catchup(db: AsyncSession, user_id: int, day: date) -> None:
     if day in claims:
         raise ConflictError("Награда за этот день уже получена")
     config = await get_config(db)
-    if _catchups_used(claims) >= config.calendar_catchup_max_per_month:
+    if free:
+        if await _free_catchups_left(db, user_id, claims, config) <= 0:
+            raise ConflictError("Бесплатные догоны абонемента в этом месяце закончились")
+    elif _catchups_used(claims) >= config.calendar_catchup_max_per_month:
         raise ConflictError("В этом месяце догонять пропуски больше нельзя")
 
 
-async def catch_up_with_coins(db: AsyncSession, user: User, day: date) -> CalendarClaimOut:
+async def catch_up_with_coins(db: AsyncSession, user: User, day: date, free: bool = False) -> CalendarClaimOut:
+    """Catches up a missed day for coins — or, with free=True, with one of
+    the club pass's free catch-ups."""
     config = await get_config(db)
-    if config.calendar_catchup_coins <= 0:
+    if not free and config.calendar_catchup_coins <= 0:
         raise ConflictError("Догнать за монеты сейчас нельзя")
     template = await get_template(db)
     locked = await lock_user_for_update(db, user.id)
-    await _check_catchup(db, locked.id, day)
-    await debit_coins(
-        db, locked, config.calendar_catchup_coins, TransactionType.calendar_catchup,
-        f"Календарь наград: догнать {day.day} число",
-    )
-    granted = await _grant_day(db, locked, day, "coins", template)
+    await _check_catchup(db, locked.id, day, free=free)
+    if not free:
+        await debit_coins(
+            db, locked, config.calendar_catchup_coins, TransactionType.calendar_catchup,
+            f"Календарь наград: догнать {day.day} число",
+        )
+    granted = await _grant_day(db, locked, day, "pass" if free else "coins", template)
     bonus = await _maybe_month_bonus(db, locked, day, template)
     await db.commit()
     await db.refresh(locked)
