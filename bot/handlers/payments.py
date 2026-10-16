@@ -61,8 +61,18 @@ async def handle_successful_payment(message: Message) -> None:
         # if the backend is down as well.
         logger.exception("could not record stars payment receipt")
 
+    # «Клубный абонемент» is a Telegram Stars subscription: its renewals
+    # arrive here too (same payload, new charge id) with these fields set.
+    subscription = None
+    if getattr(payment, "subscription_expiration_date", None):
+        subscription = {
+            "subscription_expiration_date": payment.subscription_expiration_date,
+            "is_recurring": bool(getattr(payment, "is_recurring", False)),
+            "is_first_recurring": bool(getattr(payment, "is_first_recurring", False)),
+        }
     outcome = await stars_delivery.deliver(
         payment.invoice_payload, telegram_user_id, payment.telegram_payment_charge_id, payment.total_amount,
+        subscription=subscription,
     )
     if outcome.ok:
         await message.answer(stars_delivery.success_text(outcome.body))

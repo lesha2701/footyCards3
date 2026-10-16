@@ -39,6 +39,51 @@ def test_success_text_matches_what_was_bought():
     assert "Пак" in stars_delivery.success_text({"result": {}})
 
 
+def test_success_text_for_monetization_products():
+    assert "абонемент активен" in stars_delivery.success_text({"shop_result": {"kind": "club_pass"}})
+    assert "продлён" in stars_delivery.success_text({"shop_result": {"kind": "club_pass", "renewal": True}})
+    assert "Сезонный пропуск" in stars_delivery.success_text({"shop_result": {"kind": "season_premium"}})
+    assert "календаря" in stars_delivery.success_text({"shop_result": {"kind": "calendar_catchup"}})
+    assert "Покупка зачислена" in stars_delivery.success_text({"shop_result": {"kind": "unknown"}})
+
+
+def test_deliver_forwards_subscription_fields(monkeypatch):
+    sent = {}
+
+    class FakeResp:
+        status = 200
+
+        async def json(self):
+            return {"status": "completed"}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+    class FakeSession:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        def post(self, url, json, headers):
+            sent.update(json)
+            return FakeResp()
+
+    monkeypatch.setattr(stars_delivery.aiohttp, "ClientSession", FakeSession)
+    outcome = asyncio.run(stars_delivery.deliver(
+        "tok", 1, "charge", 199, subscription={"subscription_expiration_date": 123, "is_recurring": True},
+    ))
+    assert outcome.ok
+    assert sent["subscription_expiration_date"] == 123 and sent["is_recurring"] is True
+
+
 def test_retry_loop_delivers_and_tells_the_player(monkeypatch):
     bot = FakeBot()
 
@@ -46,7 +91,7 @@ def test_retry_loop_delivers_and_tells_the_player(monkeypatch):
         assert max_attempts == stars_delivery.MAX_AUTO_ATTEMPTS
         return [_receipt()]
 
-    async def deliver(*args):
+    async def deliver(*args, **kwargs):
         return stars_delivery.DeliveryOutcome(ok=True, body={"coin_result": {"coins_credited": 100}}, status=200)
 
     monkeypatch.setattr(db, "fetch_due_stars_receipts", fetch_due)
@@ -63,7 +108,7 @@ def test_retry_loop_postpones_when_backend_is_unreachable(monkeypatch):
     async def fetch_due(max_attempts, limit=20):
         return [_receipt(id=7)]
 
-    async def deliver(*args):
+    async def deliver(*args, **kwargs):
         return stars_delivery.DeliveryOutcome(ok=False, status=None, error="ClientConnectorError")
 
     async def postpone(receipt_id, seconds):
@@ -85,7 +130,7 @@ def test_retry_loop_hands_over_to_admins_after_last_attempt(monkeypatch):
     async def fetch_due(max_attempts, limit=20):
         return [_receipt(attempts=stars_delivery.MAX_AUTO_ATTEMPTS - 1)]
 
-    async def deliver(*args):
+    async def deliver(*args, **kwargs):
         return stars_delivery.DeliveryOutcome(ok=False, status=409, error="Gift set not found")
 
     monkeypatch.setattr(db, "fetch_due_stars_receipts", fetch_due)
@@ -105,7 +150,7 @@ def test_retry_loop_stays_quiet_on_an_intermediate_failure(monkeypatch):
     async def fetch_due(max_attempts, limit=20):
         return [_receipt(attempts=2)]
 
-    async def deliver(*args):
+    async def deliver(*args, **kwargs):
         return stars_delivery.DeliveryOutcome(ok=False, status=500, error="boom")
 
     monkeypatch.setattr(db, "fetch_due_stars_receipts", fetch_due)
@@ -136,7 +181,7 @@ def test_payment_is_recorded_before_delivery_and_failure_is_announced(monkeypatc
     async def record(charge_id, payload, telegram_user_id, amount, first_retry):
         calls.append(("record", charge_id, first_retry))
 
-    async def deliver(*args):
+    async def deliver(*args, **kwargs):
         calls.append(("deliver",))
         return stars_delivery.DeliveryOutcome(ok=False, status=500, error="boom")
 
@@ -156,7 +201,7 @@ def test_payment_is_delivered_even_if_recording_fails(monkeypatch):
     async def record(*args):
         raise RuntimeError("db down")
 
-    async def deliver(*args):
+    async def deliver(*args, **kwargs):
         return stars_delivery.DeliveryOutcome(ok=True, body={"coin_result": {}}, status=200)
 
     monkeypatch.setattr(db, "record_stars_payment", record)

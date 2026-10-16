@@ -43,7 +43,13 @@ class DeliveryOutcome:
     error: str = ""
 
 
-async def deliver(payload_token: str, telegram_user_id: int, charge_id: str, total_amount: int) -> DeliveryOutcome:
+async def deliver(
+    payload_token: str, telegram_user_id: int, charge_id: str, total_amount: int,
+    subscription: Optional[dict] = None,
+) -> DeliveryOutcome:
+    """`subscription`: the Telegram Stars subscription fields of the payment
+    (subscription_expiration_date / is_recurring / is_first_recurring), when
+    known — only the live successful_payment has them, retries don't."""
     try:
         async with aiohttp.ClientSession(timeout=DELIVERY_TIMEOUT) as session:
             async with session.post(
@@ -53,6 +59,7 @@ async def deliver(payload_token: str, telegram_user_id: int, charge_id: str, tot
                     "telegram_user_id": telegram_user_id,
                     "telegram_payment_charge_id": charge_id,
                     "total_amount": total_amount,
+                    **(subscription or {}),
                 },
                 headers=_HEADERS,
             ) as resp:
@@ -66,8 +73,22 @@ async def deliver(payload_token: str, telegram_user_id: int, charge_id: str, tot
         return DeliveryOutcome(ok=False, status=None, error=f"{type(exc).__name__}: {exc}"[:300])
 
 
+SHOP_TEXTS = {
+    "calendar_catchup": "📅 Пропущенный день календаря наград получен! Открой приложение.",
+    "cosmetic": "✨ Украшение куплено! Надень его в профиле → «Стиль».",
+    "club_pass": "🎟 Клубный абонемент активен! Забирай ежедневный бонус в приложении.",
+    "club_pass_renewal": "🎟 Клубный абонемент продлён ещё на 30 дней. Спасибо, что ты с нами!",
+    "season_premium": "🏆 Сезонный пропуск открыт! Забери премиум-награды в приложении.",
+    "starter_offer": "🎁 Стартовый набор зачислен! Открой приложение и забирай.",
+}
+
+
 def success_text(body: dict) -> str:
     """Which result field is set tells what was bought (StarsInvoiceStatusOut)."""
+    shop = body.get("shop_result")
+    if shop is not None:
+        kind = "club_pass_renewal" if shop.get("renewal") else shop.get("kind", "")
+        return SHOP_TEXTS.get(kind, "⭐ Покупка зачислена! Открой приложение.")
     if body.get("gift_result") is not None:
         return "🎁 Подарок отправлен! Получатель сможет открыть его в приложении."
     if body.get("blackjack_result") is not None:
