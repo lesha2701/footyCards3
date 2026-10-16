@@ -37,8 +37,11 @@ def upgrade() -> None:
         sa.Column("target", sa.String(16), nullable=False, server_default="my_player"),
         sa.Column("effect", sa.String(32), nullable=False, server_default="none"),
         sa.Column("effect_value", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("stadium_id", sa.Integer(), sa.ForeignKey("stadiums.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("stadium_effect_value", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("link_type", sa.String(16), nullable=True),
+        sa.Column("link_id", sa.Integer(), nullable=True),
+        sa.Column("link_effect_value", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("card_player_id", sa.Integer(), sa.ForeignKey("players.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("card_rating_bonus", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("coins_price", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("stars_price", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("max_supply", sa.Integer(), nullable=True),
@@ -47,6 +50,7 @@ def upgrade() -> None:
         sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.CheckConstraint("link_type IS NULL OR link_type IN ('stadium', 'coach', 'player')", name="ck_artifacts_link_type"),
     )
     op.create_table(
         "user_artifacts",

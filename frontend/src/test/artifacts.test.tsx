@@ -10,15 +10,16 @@ import type { ArtifactCatalog, ArtifactInfo } from "@/types";
 const info = (patch: Partial<ArtifactInfo>): ArtifactInfo => ({
   id: 1, name: "This is Anfield", description: null, image_path: null, icon: "🪧", rarity: "epic",
   target: "club", target_label: "Для клуба", effect: "opp_home_pct", effect_value: 1,
-  effect_label: "−1% к силе соперника в домашних матчах", stadium_id: 5, stadium_name: "Энфилд",
-  stadium_label: "−2% к силе соперника в домашних матчах", stadium_owned: true,
+  effect_label: "−1% к силе соперника в домашних матчах", link_type: "stadium", link_kind: "стадион", link_name: "Энфилд",
+  link_label: "−2% к силе соперника в домашних матчах", link_owned: true, card_player_name: null, card_label: "",
   active_label: "−2% к силе соперника в домашних матчах", coins_price: 100, stars_price: 20, max_supply: null, left: null,
   ...patch,
 });
 
 const shirt = info({ id: 2, name: "Футболка Марадоны", target: "my_player", target_label: "Для Моего игрока",
-  effect: "attack", effect_value: 3, effect_label: "+3 к атаке", active_label: "+3 к атаке", stadium_id: null,
-  stadium_name: null, stadium_label: "", stadium_owned: false });
+  effect: "dribble_pp", effect_value: 3, effect_label: "+3% к обыгрышу 1 на 1", active_label: "+3% к обыгрышу 1 на 1",
+  link_type: null, link_kind: "", link_name: null, link_label: "", link_owned: false,
+  card_player_name: "Марадона", card_label: "+3 к рейтингу карточек «Марадона»" });
 
 const catalog: ArtifactCatalog = {
   enabled: true, slots: 3, active_count: 1, balance: 1000,
@@ -78,6 +79,7 @@ describe("artifacts page", () => {
     wrap(<ArtifactsPage />);
     fireEvent.click(await screen.findByText("Магазин"));
     expect(await screen.findByText(/Копии одного артефакта не суммируются/)).toBeInTheDocument();
-    expect(screen.getByText(/Со стадионом «Энфилд»: −2%/)).toBeInTheDocument();
+    expect(screen.getByText(/Если есть стадион «Энфилд»: −2%/)).toBeInTheDocument();
+    expect(screen.getByText("+3 к рейтингу карточек «Марадона»")).toBeInTheDocument();
   });
 });

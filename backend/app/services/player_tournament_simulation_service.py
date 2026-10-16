@@ -50,6 +50,8 @@ class _EngineCard:
     skill: dict | None = None
     # Frozen «Академия» talent snapshot (path_talent_effects), None = none.
     talent: dict | None = None
+    # «Артефакты» of «Мой игрок» ({"shot_pp", "dribble_pp"}), None = none.
+    boosts: dict | None = None
 
 
 def _engine_card(

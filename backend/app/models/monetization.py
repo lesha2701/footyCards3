@@ -186,8 +186,7 @@ class Artifact(TimestampMixin, Base):
     and carry a small bonus while active (artifact_service.EFFECTS). Each
     is meant either for the player's club (`target` "club", e.g. a «This is
     Anfield» plaque) or for «Мой игрок» ("my_player", e.g. Maradona's signed
-    shirt). `stadium_id` + `stadium_effect_value`: a stronger value when the
-    owner also has a card of that stadium."""
+    shirt)."""
 
     __tablename__ = "artifacts"
 
@@ -200,8 +199,17 @@ class Artifact(TimestampMixin, Base):
     target: Mapped[str] = mapped_column(String(16), default="my_player", nullable=False)
     effect: Mapped[str] = mapped_column(String(32), default="none", nullable=False)
     effect_value: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    stadium_id: Mapped[Optional[int]] = mapped_column(ForeignKey("stadiums.id", ondelete="SET NULL"), nullable=True)
-    stadium_effect_value: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Stronger with a card of a stadium / coach / player the owner has:
+    # link_type "stadium" | "coach" | "player" (NULL = no link), link_id the
+    # Stadium / Coach / Player id, link_effect_value used instead of
+    # effect_value then.
+    link_type: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    link_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    link_effect_value: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Second, independent bonus: +card_rating_bonus to the rating of every
+    # card of this player in the owner's squad (e.g. Maradona's shirt).
+    card_player_id: Mapped[Optional[int]] = mapped_column(ForeignKey("players.id", ondelete="SET NULL"), nullable=True)
+    card_rating_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     coins_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     stars_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # NULL = unlimited; otherwise a numbered limited edition.

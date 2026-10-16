@@ -170,6 +170,7 @@ function CopySheet({
             <p className="font-display text-lg font-bold text-ink-chalk">{a.name}</p>
             <p className="text-caption text-ink-mist">{a.target_label}{copy.source === "gift" ? " · подарок" : ""}</p>
             {a.active_label && <p className="mt-1 text-xs text-accent-lime">{a.active_label}</p>}
+            {a.card_label && <p className="text-xs text-accent-lime">{a.card_label}</p>}
             {a.description && <p className="mt-1 text-caption text-ink-mist-dim">{a.description}</p>}
           </div>
         </div>

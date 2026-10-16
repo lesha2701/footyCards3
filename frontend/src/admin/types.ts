@@ -666,8 +666,11 @@ export interface AdminArtifact {
   target: "club" | "my_player";
   effect: string;
   effect_value: number;
-  stadium_id: number | null;
-  stadium_effect_value: number;
+  link_type: "stadium" | "coach" | "player" | null;
+  link_id: number | null;
+  link_effect_value: number;
+  card_player_id: number | null;
+  card_rating_bonus: number;
   coins_price: number;
   stars_price: number;
   max_supply: number | null;

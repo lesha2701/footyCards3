@@ -10,13 +10,21 @@ Club («Карьера тренера», career_service):
 - opp_home_pct — the opponent is N% weaker in your home matches;
 - team_boost_pct — your team plays N% stronger.
 «Мой игрок»:
-- attack / defense — +N in every match (my_player_service.match_stats);
+- attack / defense / match_rating — +N in every match (my_player_service.match_stats);
+- skill_level — his card skill plays N levels higher (max level 3);
+- shot_pp — his shots miss N percentage points less often, and dribble_pp —
+  he wins N pp more stage-1 duels («обыгрыш 1 на 1») — both read by the
+  match engine from the engine card's `boosts` («Карьера игрока»);
 - opp_home_pct — the opponent is N% weaker in home matches of «Карьера
   игрока» (player_career_service._play_round);
 - xp_bonus_pct / freshness_regen — same as «Имущество».
 
-An artifact tied to a stadium (`stadium_id`) uses `stadium_effect_value`
-instead when its owner also has a card of that stadium."""
+An artifact linked to a stadium, coach or player (`link_type`/`link_id`)
+uses `link_effect_value` instead when its owner has a card of it (the
+«This is Anfield» plaque + Энфилд, Ferguson's board + coach Ferguson).
+Independently, `card_player_id` + `card_rating_bonus` add rating to every
+card of that player in the owner's «Карьера тренера» squad (Maradona's
+shirt → +3 to the owner's Maradona cards); see `card_bonuses`."""
 from typing import Optional
 
 from sqlalchemy import select
@@ -25,9 +33,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.models.enums import NotificationType, TransactionType
 from app.models.game_config import GameConfig
+from app.models.card import UserCard
+from app.models.coach import Coach
 from app.models.monetization import Artifact, UserArtifact
+from app.models.player import Player
 from app.models.stadium import Stadium
 from app.models.user import User
+from app.models.user_coach_card import UserCoachCard
 from app.models.user_stadium_card import UserStadiumCard
 from app.services.game_config_service import get_config
 from app.services.wallet_service import debit_coins, lock_user_for_update
@@ -40,16 +52,23 @@ EFFECTS = {
     "team_boost_pct": "+{v}% к силе команды",
     "attack": "+{v} к атаке",
     "defense": "+{v} к защите",
+    "match_rating": "+{v} к рейтингу в матче",
+    "skill_level": "+{v} к уровню навыка",
+    "shot_pp": "+{v}% к точности удара",
+    "dribble_pp": "+{v}% к обыгрышу 1 на 1",
     "xp_bonus_pct": "+{v}% опыта",
     "freshness_regen": "+{v} свежести в час",
 }
 # Which effects make sense for which target.
 TARGET_EFFECTS = {
     "club": {"none", "opp_home_pct", "team_boost_pct"},
-    "my_player": {"none", "opp_home_pct", "attack", "defense", "xp_bonus_pct", "freshness_regen"},
+    "my_player": {
+        "none", "opp_home_pct", "attack", "defense", "match_rating", "skill_level", "shot_pp", "dribble_pp",
+        "xp_bonus_pct", "freshness_regen",
+    },
 }
-_PCT_EFFECTS = {"opp_home_pct", "team_boost_pct"}
-_STAT_EFFECTS = {"attack", "defense"}
+_PCT_EFFECTS = {"opp_home_pct", "team_boost_pct", "shot_pp", "dribble_pp"}
+_STAT_EFFECTS = {"attack", "defense", "match_rating", "skill_level"}
 
 
 def label(effect: str, value: int) -> str:
@@ -57,14 +76,36 @@ def label(effect: str, value: int) -> str:
     return template.format(v=value) if template and value > 0 else ""
 
 
-async def _stadium_ids(db: AsyncSession, user_id: int) -> set[int]:
-    rows = await db.execute(select(UserStadiumCard.stadium_id).where(UserStadiumCard.user_id == user_id).distinct())
-    return {r[0] for r in rows.all()}
+LINK_TYPES = {"stadium": "стадион", "coach": "тренер", "player": "игрок"}
+_LINK_MODELS = {"stadium": (Stadium, Stadium.display_name), "coach": (Coach, Coach.display_name),
+                "player": (Player, Player.display_name)}
 
 
-def _value(artifact: Artifact, stadiums: set[int]) -> int:
-    if artifact.stadium_id and artifact.stadium_id in stadiums and artifact.stadium_effect_value > 0:
-        return artifact.stadium_effect_value
+async def _owned_links(db: AsyncSession, user_id: int, artifacts) -> dict[str, set[int]]:
+    """Which of the linked stadiums / coaches / players the user has a card of."""
+    wanted: dict[str, set[int]] = {}
+    for a in artifacts:
+        if a.link_type and a.link_id:
+            wanted.setdefault(a.link_type, set()).add(a.link_id)
+    owned: dict[str, set[int]] = {}
+    for kind, ids in wanted.items():
+        column, owner = {
+            "stadium": (UserStadiumCard.stadium_id, UserStadiumCard.user_id),
+            "coach": (UserCoachCard.coach_id, UserCoachCard.user_id),
+            "player": (UserCard.player_id, UserCard.owner_id),
+        }[kind]
+        rows = await db.execute(select(column).where(owner == user_id, column.in_(ids)).distinct())
+        owned[kind] = {r[0] for r in rows.all()}
+    return owned
+
+
+def _linked(artifact: Artifact, owned: dict[str, set[int]]) -> bool:
+    return bool(artifact.link_type and artifact.link_id in owned.get(artifact.link_type, set()))
+
+
+def _value(artifact: Artifact, owned: dict[str, set[int]]) -> int:
+    if _linked(artifact, owned) and artifact.link_effect_value > 0:
+        return artifact.link_effect_value
     return artifact.effect_value
 
 
@@ -82,6 +123,20 @@ async def _copies(db: AsyncSession, user_id: int) -> list[UserArtifact]:
     )).scalars())
 
 
+async def _active_artifacts(db: AsyncSession, user_id: int, target: Optional[str] = None) -> list[Artifact]:
+    """One Artifact per active artifact (a second active copy never counts)."""
+    query = (
+        select(UserArtifact).join(Artifact, Artifact.id == UserArtifact.artifact_id)
+        .where(UserArtifact.user_id == user_id, UserArtifact.equipped.is_(True))
+    )
+    if target is not None:
+        query = query.where(Artifact.target == target)
+    unique: dict[int, Artifact] = {}
+    for row in (await db.execute(query)).scalars().all():
+        unique.setdefault(row.artifact_id, row.artifact)
+    return list(unique.values())
+
+
 async def effects_of(
     db: AsyncSession, user_id: int, target: str = "my_player", config: Optional[GameConfig] = None,
 ) -> dict[str, int]:
@@ -89,44 +144,62 @@ async def effects_of(
     config = config or await db.get(GameConfig, 1)
     if config is None or not config.artifacts_enabled:
         return {}
-    active = (await db.execute(
-        select(UserArtifact).join(Artifact, Artifact.id == UserArtifact.artifact_id)
-        .where(UserArtifact.user_id == user_id, UserArtifact.equipped.is_(True), Artifact.target == target)
-    )).scalars().all()
+    active = [a for a in await _active_artifacts(db, user_id, target) if a.effect != "none"]
     if not active:
         return {}
-    stadiums = await _stadium_ids(db, user_id)
+    owned = await _owned_links(db, user_id, active)
     totals: dict[str, int] = {}
-    seen: set[int] = set()
-    for row in active:
-        a = row.artifact
-        if a.id in seen or a.effect == "none":  # one copy per artifact, never stacked
-            continue
-        seen.add(a.id)
-        totals[a.effect] = totals.get(a.effect, 0) + _value(a, stadiums)
+    for a in active:
+        totals[a.effect] = totals.get(a.effect, 0) + _value(a, owned)
     return {k: _cap(k, v, config) for k, v in totals.items() if v > 0}
 
 
-def _artifact_out(a: Artifact, stadium_name: Optional[str], stadiums: set[int]) -> dict:
+async def card_bonuses(db: AsyncSession, user_id: int, config: Optional[GameConfig] = None) -> dict[int, int]:
+    """{player_id: +rating} for the owner's cards, from active artifacts'
+    card_player_id / card_rating_bonus (summed per player, capped)."""
+    config = config or await db.get(GameConfig, 1)
+    if config is None or not config.artifacts_enabled:
+        return {}
+    totals: dict[int, int] = {}
+    for a in await _active_artifacts(db, user_id):
+        if a.card_player_id and a.card_rating_bonus > 0:
+            totals[a.card_player_id] = totals.get(a.card_player_id, 0) + a.card_rating_bonus
+    return {pid: min(v, config.artifact_max_stat) for pid, v in totals.items()}
+
+
+def _artifact_out(a: Artifact, names: dict, owned: dict[str, set[int]]) -> dict:
+    link_name = names.get((a.link_type, a.link_id)) if a.link_type else None
+    card_player = names.get(("player", a.card_player_id)) if a.card_player_id else None
     return {
         "id": a.id, "name": a.name, "description": a.description, "image_path": a.image_path, "icon": a.icon,
         "rarity": a.rarity, "target": a.target, "target_label": TARGETS.get(a.target, ""),
         "effect": a.effect, "effect_value": a.effect_value, "effect_label": label(a.effect, a.effect_value),
-        "stadium_id": a.stadium_id, "stadium_name": stadium_name,
-        "stadium_label": label(a.effect, a.stadium_effect_value) if a.stadium_id and a.stadium_effect_value else "",
-        "stadium_owned": bool(a.stadium_id and a.stadium_id in stadiums),
-        "active_label": label(a.effect, _value(a, stadiums)),
+        "link_type": a.link_type, "link_kind": LINK_TYPES.get(a.link_type or "", ""), "link_name": link_name,
+        "link_label": label(a.effect, a.link_effect_value) if a.link_type and a.link_effect_value else "",
+        "link_owned": _linked(a, owned),
+        "card_player_name": card_player,
+        "card_label": f"+{a.card_rating_bonus} к рейтингу карточек «{card_player}»"
+        if card_player and a.card_rating_bonus else "",
+        "active_label": label(a.effect, _value(a, owned)),
         "coins_price": a.coins_price, "stars_price": a.stars_price,
         "max_supply": a.max_supply, "left": None if a.max_supply is None else max(0, a.max_supply - a.sold_count),
     }
 
 
-async def _stadium_names(db: AsyncSession, artifacts) -> dict[int, str]:
-    ids = {a.stadium_id for a in artifacts if a.stadium_id}
-    if not ids:
-        return {}
-    rows = await db.execute(select(Stadium.id, Stadium.display_name).where(Stadium.id.in_(ids)))
-    return {i: n for i, n in rows.all()}
+async def _names(db: AsyncSession, artifacts) -> dict[tuple[str, int], str]:
+    """Display names of every linked stadium / coach / player."""
+    wanted: dict[str, set[int]] = {}
+    for a in artifacts:
+        if a.link_type and a.link_id:
+            wanted.setdefault(a.link_type, set()).add(a.link_id)
+        if a.card_player_id:
+            wanted.setdefault("player", set()).add(a.card_player_id)
+    names: dict[tuple[str, int], str] = {}
+    for kind, ids in wanted.items():
+        model, column = _LINK_MODELS[kind]
+        rows = await db.execute(select(model.id, column).where(model.id.in_(ids)))
+        names.update({(kind, i): n for i, n in rows.all()})
+    return names
 
 
 async def catalog(db: AsyncSession, user: User) -> dict:
@@ -140,8 +213,9 @@ async def catalog(db: AsyncSession, user: User) -> dict:
     shop = (await db.execute(
         select(Artifact).where(Artifact.is_active.is_(True)).order_by(Artifact.sort_order, Artifact.id)
     )).scalars().all()
-    names = await _stadium_names(db, [*shop, *(c.artifact for c in copies)])
-    stadiums = await _stadium_ids(db, user.id)
+    every = [*shop, *(c.artifact for c in copies)]
+    names = await _names(db, every)
+    owned = await _owned_links(db, user.id, every)
     owned_count: dict[int, int] = {}
     for c in copies:
         owned_count[c.artifact_id] = owned_count.get(c.artifact_id, 0) + 1
@@ -153,12 +227,11 @@ async def catalog(db: AsyncSession, user: User) -> dict:
         "enabled": True,
         "slots": config.artifact_slots,
         "active_count": sum(1 for c in copies if c.equipped),
-        "shop": [{**_artifact_out(a, names.get(a.stadium_id), stadiums), "owned_count": owned_count.get(a.id, 0)}
-                 for a in shop],
+        "shop": [{**_artifact_out(a, names, owned), "owned_count": owned_count.get(a.id, 0)} for a in shop],
         "shelf": [
             {
                 "copy_id": c.id, "serial_number": c.serial_number, "equipped": c.equipped, "source": c.source,
-                "artifact": _artifact_out(c.artifact, names.get(c.artifact.stadium_id), stadiums),
+                "artifact": _artifact_out(c.artifact, names, owned),
             }
             for c in sorted(copies, key=lambda c: (not c.equipped, c.artifact.sort_order, c.artifact_id, c.serial_number))
         ],
@@ -336,7 +409,8 @@ def admin_out(a: Artifact) -> dict:
     return {
         "id": a.id, "name": a.name, "description": a.description, "image_path": a.image_path, "icon": a.icon,
         "rarity": a.rarity, "target": a.target, "effect": a.effect, "effect_value": a.effect_value,
-        "stadium_id": a.stadium_id, "stadium_effect_value": a.stadium_effect_value, "coins_price": a.coins_price,
+        "link_type": a.link_type, "link_id": a.link_id, "link_effect_value": a.link_effect_value,
+        "card_player_id": a.card_player_id, "card_rating_bonus": a.card_rating_bonus, "coins_price": a.coins_price,
         "stars_price": a.stars_price, "max_supply": a.max_supply, "sold_count": a.sold_count, "is_active": a.is_active,
         "sort_order": a.sort_order,
     }
@@ -353,8 +427,14 @@ async def admin_save(db: AsyncSession, data: dict, artifact_id: Optional[int] = 
         raise ConflictError("Неизвестное назначение")
     if data.get("effect", "none") not in TARGET_EFFECTS[target]:
         raise ConflictError(f"Этот эффект не подходит для назначения «{TARGETS[target]}»")
-    if data.get("stadium_id") and await db.get(Stadium, data["stadium_id"]) is None:
-        raise ConflictError("Стадион не найден")
+    if bool(data.get("link_type")) != bool(data.get("link_id")):
+        raise ConflictError("Для связки выбери и тип, и кого именно")
+    if data.get("link_type"):
+        model, _ = _LINK_MODELS[data["link_type"]]
+        if await db.get(model, data["link_id"]) is None:
+            raise ConflictError("Связка: такой карточки нет")
+    if data.get("card_player_id") and await db.get(Player, data["card_player_id"]) is None:
+        raise ConflictError("Игрок для бонуса карточек не найден")
     if artifact_id is None:
         artifact = Artifact()
         db.add(artifact)

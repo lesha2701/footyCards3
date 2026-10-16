@@ -1138,11 +1138,16 @@ export interface ArtifactInfo {
   effect: string;
   effect_value: number;
   effect_label: string;
-  stadium_id: number | null;
-  stadium_name: string | null;
-  stadium_label: string;
-  stadium_owned: boolean;
-  /** The value that applies to this player (stadium bonus included). */
+  /** Stronger with a card of this stadium / coach / player. */
+  link_type: "stadium" | "coach" | "player" | null;
+  link_kind: string;
+  link_name: string | null;
+  link_label: string;
+  link_owned: boolean;
+  /** «+3 к рейтингу карточек «Марадона»» — "" when none. */
+  card_player_name: string | null;
+  card_label: string;
+  /** The value that applies to this player (link bonus included). */
   active_label: string;
   coins_price: number;
   stars_price: number;

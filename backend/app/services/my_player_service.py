@@ -406,8 +406,9 @@ async def match_stats(db: AsyncSession, mp: MyPlayer, config, now: Optional[date
     penalty = fatigue_penalty(freshness_now(mp, config, now, await regen_bonus(db, mp.user_id)), config)
     artifacts = await artifact_service.effects_of(db, mp.user_id, "my_player", config)
     atk_bonus, def_bonus = artifacts.get("attack", 0), artifacts.get("defense", 0)
+    rating_bonus = round((atk_bonus + def_bonus) / 2) + artifacts.get("match_rating", 0)
     return {
-        "rating": max(1, min(99, out["rating"] - penalty + round((atk_bonus + def_bonus) / 2))),
+        "rating": max(1, min(99, out["rating"] - penalty + rating_bonus)),
         "attack": max(1, min(99, out["attack_rating"] - penalty + atk_bonus)),
         "defense": max(1, min(99, out["defense_rating"] - penalty + def_bonus)),
         "penalty": penalty, "tier": out["tier"],
@@ -425,14 +426,21 @@ async def engine_card(db: AsyncSession, user_id: int, config=None) -> Optional[S
     mp = await get_my_player(db, user_id)
     if mp is None:
         return None
+    from app.services import artifact_service
+
     stats = await match_stats(db, mp, config)
+    artifacts = await artifact_service.effects_of(db, user_id, "my_player", config)
     card_id = card_id_for(user_id)
-    skill_level = mp.skill_level or 1
+    # A «skill_level» artifact plays the skill higher (3 = the top level).
+    skill_level = min(3, (mp.skill_level or 1) + artifacts.get("skill_level", 0)) if mp.skill_code else 1
+    # Match-engine boosts from artifacts (tournament_match_engine /
+    # club_tactical_matchup_service read them off the engine card).
+    boosts = {k: artifacts[k] for k in ("shot_pp", "dribble_pp") if artifacts.get(k)}
     has_skill = bool(mp.skill_code and effect_for_card(mp.skill_code, skill_level, mp.position, config))
     return SimpleNamespace(
         id=card_id, player_id=card_id, diamond_rating_bonus=0,
         skill_code=mp.skill_code if has_skill else None, skill_level=skill_level if has_skill else None,
-        is_locked_by_admin=False, is_locked_in_trade=False, is_my_player=True,
+        is_locked_by_admin=False, is_locked_in_trade=False, is_my_player=True, boosts=boosts or None,
         player=SimpleNamespace(
             display_name=mp.name, position=mp.position, rating=stats["rating"], rarity=TIER_RARITY[stats["tier"]],
             club="Мой игрок", country="", attack_rating=stats["attack"], defense_rating=stats["defense"],

@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { fetchAdminArtifacts, fetchAdminStadiums, grantArtifact, saveAdminArtifact, uploadArtifactImage } from "@/admin/api";
+import { fetchAdminArtifacts, grantArtifact, saveAdminArtifact, uploadArtifactImage } from "@/admin/api";
+import LinkPicker, { type LinkKind } from "@/admin/components/LinkPicker";
 import { useAdminToastStore } from "@/admin/adminToastStore";
 import type { AdminArtifact } from "@/admin/types";
 import ArtifactTile from "@/components/artifacts/ArtifactTile";
@@ -13,7 +14,7 @@ const input = "w-full rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none";
 const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
 const NEW: AdminArtifact = {
   name: "", description: "", icon: "🏺", rarity: "rare", target: "my_player", effect: "attack", effect_value: 1,
-  stadium_id: null, stadium_effect_value: 0, coins_price: 0, stars_price: 0, max_supply: null, is_active: true, sort_order: 0,
+  link_type: null, link_id: null, link_effect_value: 0, card_player_id: null, card_rating_bonus: 0, coins_price: 0, stars_price: 0, max_supply: null, is_active: true, sort_order: 0,
 };
 const errText = (err: unknown, fallback: string) => (err instanceof ApiRequestError ? err.message : fallback);
 
@@ -21,7 +22,6 @@ const errText = (err: unknown, fallback: string) => (err instanceof ApiRequestEr
 export default function AdminArtifactsTab() {
   const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: ["admin-artifacts"], queryFn: fetchAdminArtifacts });
-  const { data: stadiums } = useQuery({ queryKey: ["admin-stadiums-all"], queryFn: () => fetchAdminStadiums("", 1) });
   const [editing, setEditing] = useState<AdminArtifact | null>(null);
   const [grantUser, setGrantUser] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -61,8 +61,8 @@ export default function AdminArtifactsTab() {
     const e = editing;
     const set = (patch: Partial<AdminArtifact>) => setEditing({ ...e, ...patch });
     const preview = { ...e, id: e.id ?? 0, image_path: e.image_path ?? null, description: e.description ?? null,
-      target_label: data.targets[e.target], effect_label: "", stadium_name: null, stadium_label: "", stadium_owned: false,
-      active_label: "", left: null };
+      target_label: data.targets[e.target], effect_label: "", link_kind: "", link_name: null, link_label: "", link_owned: false,
+      card_player_name: null, card_label: "", active_label: "", left: null };
     return (
       <div className="flex flex-col gap-3 rounded-2xl border border-accent/40 bg-bg-surface p-3">
         <div className="flex items-start gap-3">
@@ -107,13 +107,29 @@ export default function AdminArtifactsTab() {
             <input type="number" min={0} value={e.effect_value} onChange={(ev) => set({ effect_value: Number(ev.target.value) })} className={input} /></label>
           <label className="flex flex-col gap-0.5"><span className="text-micro text-slate-500">Порядок</span>
             <input type="number" value={e.sort_order} onChange={(ev) => set({ sort_order: Number(ev.target.value) })} className={input} /></label>
-          <label className="col-span-2 flex flex-col gap-0.5"><span className="text-micro text-slate-500">Сильнее со стадионом</span>
-            <select value={e.stadium_id ?? ""} onChange={(ev) => set({ stadium_id: ev.target.value ? Number(ev.target.value) : null })} className={input}>
-              <option value="">—</option>
-              {stadiums?.items.map((s) => <option key={s.id} value={s.id}>{s.display_name}</option>)}
+          <label className="flex flex-col gap-0.5"><span className="text-micro text-slate-500">Сильнее, если есть карточка</span>
+            <select
+              value={e.link_type ?? ""}
+              onChange={(ev) => set({ link_type: (ev.target.value || null) as AdminArtifact["link_type"], link_id: null })}
+              className={input}
+            >
+              <option value="">— без связки —</option>
+              <option value="stadium">Стадиона</option>
+              <option value="coach">Тренера</option>
+              <option value="player">Игрока</option>
             </select></label>
-          <label className="flex flex-col gap-0.5"><span className="text-micro text-slate-500">N со стадионом</span>
-            <input type="number" min={0} value={e.stadium_effect_value} onChange={(ev) => set({ stadium_effect_value: Number(ev.target.value) })} className={input} /></label>
+          {e.link_type && (
+            <>
+              <div className="flex flex-col gap-0.5"><span className="text-micro text-slate-500">Кого именно</span>
+                <LinkPicker kind={e.link_type as LinkKind} value={e.link_id} onChange={(id) => set({ link_id: id })} /></div>
+              <label className="flex flex-col gap-0.5"><span className="text-micro text-slate-500">N со связкой</span>
+                <input type="number" min={0} value={e.link_effect_value} onChange={(ev) => set({ link_effect_value: Number(ev.target.value) })} className={input} /></label>
+            </>
+          )}
+          <div className="col-span-2 flex flex-col gap-0.5"><span className="text-micro text-slate-500">+ к рейтингу всех карточек игрока («Карьера тренера»)</span>
+            <LinkPicker kind="player" value={e.card_player_id} onChange={(id) => set({ card_player_id: id })} /></div>
+          <label className="flex flex-col gap-0.5"><span className="text-micro text-slate-500">+ рейтинга этим карточкам</span>
+            <input type="number" min={0} max={20} value={e.card_rating_bonus} onChange={(ev) => set({ card_rating_bonus: Number(ev.target.value) })} className={input} /></label>
           <label className="flex flex-col gap-0.5"><span className="text-micro text-slate-500">Тираж (пусто — без лимита)</span>
             <input type="number" min={1} value={e.max_supply ?? ""} onChange={(ev) => set({ max_supply: ev.target.value ? Number(ev.target.value) : null })} className={input} /></label>
           <label className="flex flex-col gap-0.5"><span className="text-micro text-slate-500">Цена, монеты (0 — нет)</span>
@@ -159,7 +175,8 @@ export default function AdminArtifactsTab() {
       {data.artifacts.map((a) => (
         <button key={a.id} onClick={() => setEditing(a)} className={`flex items-center gap-3 rounded-xl bg-bg-surface p-2 text-left ${a.is_active ? "" : "opacity-50"}`}>
           <ArtifactTile size="sm" artifact={{ ...a, id: a.id!, image_path: a.image_path ?? null, target_label: "", effect_label: "",
-            stadium_name: null, stadium_label: "", stadium_owned: false, active_label: "", left: null }} />
+            link_kind: "", link_name: null, link_label: "", link_owned: false, card_player_name: null, card_label: "",
+            active_label: "", left: null }} />
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold">#{a.id} {a.name}</span>
             <span className="block text-micro text-slate-500">

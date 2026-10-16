@@ -273,8 +273,11 @@ class ArtifactIn(BaseModel):
     target: Literal["club", "my_player"] = "my_player"
     effect: str = "none"
     effect_value: int = Field(default=0, ge=0, le=100)
-    stadium_id: Optional[int] = None
-    stadium_effect_value: int = Field(default=0, ge=0, le=100)
+    link_type: Optional[Literal["stadium", "coach", "player"]] = None
+    link_id: Optional[int] = None
+    link_effect_value: int = Field(default=0, ge=0, le=100)
+    card_player_id: Optional[int] = None
+    card_rating_bonus: int = Field(default=0, ge=0, le=20)
     coins_price: int = Field(default=0, ge=0)
     stars_price: int = Field(default=0, ge=0, le=10000)
     max_supply: Optional[int] = Field(default=None, ge=1)

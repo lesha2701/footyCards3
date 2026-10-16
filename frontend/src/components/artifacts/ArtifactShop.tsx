@@ -74,11 +74,12 @@ export default function ArtifactShop() {
               {a.target_label}
             </span>
             {a.effect_label && <p className="text-xs text-accent-lime">{a.effect_label}</p>}
-            {a.stadium_name && a.stadium_label && (
+            {a.link_name && a.link_label && (
               <p className="text-caption text-ink-mist">
-                Со стадионом «{a.stadium_name}»: {a.stadium_label}{a.stadium_owned ? " ✓ у тебя есть" : ""}
+                Если есть {a.link_kind} «{a.link_name}»: {a.link_label}{a.link_owned ? " ✓ у тебя есть" : ""}
               </p>
             )}
+            {a.card_label && <p className="text-xs text-accent-lime">{a.card_label}</p>}
             {a.description && <p className="text-caption text-ink-mist-dim">{a.description}</p>}
             {a.left !== null && <p className="text-caption text-amber-300">Осталось: {a.left} из {a.max_supply}</p>}
             {a.owned_count > 0 && <p className="text-caption text-ink-mist">У тебя: {a.owned_count}</p>}

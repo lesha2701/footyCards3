@@ -199,7 +199,11 @@ def _shot_miss_roll(
     """The scorer's miss roll (sniper), or — on a cross whose header duel
     involves an aerial_master — the same probability split into header duel
     + header (card_skill_effects.aerial_shot_roll). Without an aerial effect
-    this is exactly the old single roll."""
+    this is exactly the old single roll. A «Мой игрок» shot_pp artifact
+    (scorer["boosts"]) lowers the miss chance by that many points."""
+    shot_pp = (scorer.get("boosts") or {}).get("shot_pp") or 0
+    if shot_pp:
+        miss = max(0.02, miss - shot_pp / 100)
     if aerial and moment.get("is_cross"):
         target = scorer if scorer.get("position") in ("ST", "CB") else (aerial.get("attack_target") or scorer)
         defender = aerial.get("defender")

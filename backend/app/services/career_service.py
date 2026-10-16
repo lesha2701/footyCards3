@@ -1530,9 +1530,10 @@ def _human_runner(
 
 
 async def _apply_club_artifacts(db: AsyncSession, teams: list, home: int, away: int, run_h, run_a, config) -> None:
-    """Club «Артефакты» of the human sides (artifact_service): team_boost_pct
+    """«Артефакты» of the human sides (artifact_service): team_boost_pct
     makes their own side stronger, opp_home_pct weakens the visitors when
-    they play at home. Both act on the runners' `boost`."""
+    they play at home (both act on the runners' `boost`), and card bonuses
+    raise the base rating of the owner's cards of a given player."""
     from app.services import artifact_service
 
     for index, runner, other, at_home in ((home, run_h, run_a, True), (away, run_a, run_h, False)):
@@ -1540,6 +1541,13 @@ async def _apply_club_artifacts(db: AsyncSession, teams: list, home: int, away: 
         if not user_id:
             continue
         effects = await artifact_service.effects_of(db, user_id, "club", config)
+        # Card bonuses (e.g. Maradona's shirt: +3 to the owner's Maradona cards).
+        bonuses = await artifact_service.card_bonuses(db, user_id, config)
+        if bonuses:
+            for p in [*runner.on_pitch, *runner.bench]:
+                bonus = bonuses.get(getattr(p.card, "player_id", None), 0)
+                if bonus:
+                    p.base_rating = min(99, p.base_rating + bonus)
         if effects.get("team_boost_pct"):
             runner.boost *= 1 + effects["team_boost_pct"] / 100
         if at_home and effects.get("opp_home_pct"):

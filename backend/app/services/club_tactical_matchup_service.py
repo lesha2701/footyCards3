@@ -184,6 +184,25 @@ def _resolve_stage1_for(
     resolve_stage1(ratio), same RNG draw."""
     effect = effect_of(getattr(duelist, "skill", None), "dribbler")
     last_line = effect_of(getattr(defender, "skill", None), "last_line") if defender is not None else None
+    dribble_pp = ((getattr(duelist, "boosts", None) or {}).get("dribble_pp") or 0)
+    if dribble_pp and effect is not None:
+        # A «Дриблёр» skill and a dribble artifact add up (the artifact's
+        # points also lift the skill's own cap).
+        effect = {**effect, "bonus_pp": effect["bonus_pp"] + dribble_pp,
+                  "cap_pp": effect.get("cap_pp", effect["bonus_pp"]) + dribble_pp}
+        dribble_pp = 0
+    if dribble_pp and effect is None and last_line is None:
+        # «Артефакт»: +dribble_pp percentage points to "advance", taken
+        # proportionally from the other two outcomes.
+        weights = list(_stage1_weights(ratio, bias))
+        total = float(sum(weights))
+        advance = min(0.95, weights[2] / total + dribble_pp / 100)
+        rest = (weights[0] + weights[1]) / total
+        scale = (1 - advance) / rest if rest > 0 else 0.0
+        return random.choices(
+            ["breakdown", "stall", "advance"],
+            weights=[weights[0] / total * scale, weights[1] / total * scale, advance], k=1,
+        )[0]
     if last_line is not None:
         outcome, notes = skill_choice_sets(
             ["breakdown", "stall", "advance"], _stage1_weights(ratio, bias),
@@ -562,6 +581,10 @@ def _card_to_actor(card: Any) -> dict:
     talent = getattr(card, "talent", None)
     if talent:
         actor["talent"] = talent
+    # «Артефакты» of «Мой игрок» (shot accuracy etc.).
+    boosts = getattr(card, "boosts", None)
+    if boosts:
+        actor["boosts"] = boosts
     return actor
 
 

@@ -418,7 +418,9 @@ def _side(team: dict, mine: Optional[SimpleNamespace], config, weaken_pct: int =
     for i, p in enumerate(roster):
         slot = slots[p["slot"]]
         if p["slot"] == my_slot:
-            with_slots.append((_engine_card(mine, config), slot))
+            card = _engine_card(mine, config)
+            card.boosts = getattr(mine, "boosts", None)
+            with_slots.append((card, slot))
             continue
         rating = max(1, round(p["rating"] * (100 - weaken_pct) / 100)) if weaken_pct else p["rating"]
         player = SimpleNamespace(
@@ -429,7 +431,8 @@ def _side(team: dict, mine: Optional[SimpleNamespace], config, weaken_pct: int =
     side = build_side(with_slots, team["mentality"], team["playstyle"])
     lineup = [
         {"club_card_id": c.id, "player_id": c.player_id, "name": c.player.display_name, "rating": c.player.rating,
-         "position": c.player.position.value, "category": slot.category, **({"skill": c.skill} if c.skill else {})}
+         "position": c.player.position.value, "category": slot.category, **({"skill": c.skill} if c.skill else {}),
+         **({"boosts": c.boosts} if getattr(c, "boosts", None) else {})}
         for c, slot in with_slots
     ]
     return side, lineup

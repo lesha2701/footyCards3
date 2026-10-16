@@ -591,7 +591,7 @@ async def test_stadium_artifact_is_stronger_with_that_stadium(client, db_session
     stadium = Stadium(display_name="Энфилд", rarity=R.epic, club="Liverpool")
     db_session.add(stadium)
     await db_session.commit()
-    a = await _artifact(client, bot_token, stadium_id=stadium.id, stadium_effect_value=2)
+    a = await _artifact(client, bot_token, link_type="stadium", link_id=stadium.id, link_effect_value=2)
     headers, user = await _register(client, db_session, 720062, bot_token)
     await client.post(f"/api/v1/artifacts/{a['id']}/buy", headers=headers)
     assert (await artifact_service.effects_of(db_session, user.id, "club")) == {"opp_home_pct": 1}
@@ -600,7 +600,8 @@ async def test_stadium_artifact_is_stronger_with_that_stadium(client, db_session
     await db_session.commit()
     assert (await artifact_service.effects_of(db_session, user.id, "club")) == {"opp_home_pct": 2}
     shop_item = next(i for i in (await client.get("/api/v1/artifacts", headers=headers)).json()["shop"] if i["id"] == a["id"])
-    assert shop_item["stadium_owned"] and shop_item["active_label"] == "−2% к силе соперника в домашних матчах"
+    assert shop_item["link_owned"] and shop_item["link_name"] == "Энфилд"
+    assert shop_item["active_label"] == "−2% к силе соперника в домашних матчах"
 
 
 async def test_club_artifacts_change_coach_career_runners(db_session):
@@ -689,3 +690,109 @@ async def test_admin_artifact_rules(client, db_session, bot_token):
     _, user = await _register(client, db_session, 720065, bot_token)
     resp = await client.post(f"/api/v1/admin/artifacts/{a['id']}/grant", headers=auth, json={"user_id": user.id})
     assert resp.status_code == 200 and resp.json()["serial_number"] == 1
+
+
+async def test_my_player_match_artifacts_reach_engine_card(client, db_session, bot_token):
+    from app.models.enums import Position
+    from app.models.my_player import MyPlayer
+    from app.services import my_player_service
+
+    effects = [("match_rating", 2), ("skill_level", 1), ("shot_pp", 3)]
+    artifacts = [await _artifact(client, bot_token, name=f"A{e}", target="my_player", effect=e, effect_value=v)
+                 for e, v in effects]
+    headers, user = await _register(client, db_session, 720080, bot_token)
+    user.balance = 10_000
+    db_session.add(MyPlayer(user_id=user.id, name="Тест", position=Position.ST, attributes={"atk": 60, "def": 40},
+                            skill_code="sniper", skill_level=1))
+    await db_session.commit()
+    config = await get_config(db_session)
+    config.card_skills_enabled = True
+    await db_session.commit()
+    before = await my_player_service.engine_card(db_session, user.id, config)
+    for a in artifacts:
+        await client.post(f"/api/v1/artifacts/{a['id']}/buy", headers=headers)
+    after = await my_player_service.engine_card(db_session, user.id, config)
+    assert after.player.rating == before.player.rating + 2
+    assert after.skill_level == 2 and after.boosts == {"shot_pp": 3}
+
+
+def test_engine_reads_shot_and_dribble_boosts(monkeypatch):
+    import random
+    from types import SimpleNamespace
+
+    from app.services import club_tactical_matchup_service as m
+    from app.services import tournament_match_engine as e
+
+    monkeypatch.setattr(random, "random", lambda: 0.30)
+    plain = {"name": "X", "rating": 70}
+    missed, _notes, _aerial = e._shot_miss_roll(0.32, plain, {}, None)
+    assert missed is True
+    boosted, _notes, _aerial = e._shot_miss_roll(0.32, {**plain, "boosts": {"shot_pp": 5}}, {}, None)
+    assert boosted is False  # 0.30 < 0.32 misses; < 0.27 needed with the artifact
+
+    picks = []
+    monkeypatch.setattr(random, "choices", lambda outcomes, weights, k: picks.append(weights) or [outcomes[0]])
+    duelist = SimpleNamespace(skill=None, boosts={"dribble_pp": 10}, player=SimpleNamespace(display_name="D"))
+    m._resolve_stage1_for(1.0, duelist, [])
+    base = m._stage1_weights(1.0, 0.0)
+    assert picks[-1][2] == pytest.approx(base[2] / sum(base) + 0.10)
+
+
+async def test_coach_link_and_player_card_bonus(client, db_session, bot_token):
+    from types import SimpleNamespace
+
+    from app.models.coach import Coach
+    from app.models.enums import CardSource, Rarity as R
+    from app.models.user_coach_card import UserCoachCard
+    from app.services import artifact_service, career_service
+
+    coach = Coach(display_name="Сэр Алекс Фергюсон", rarity=R.legendary)
+    db_session.add(coach)
+    maradona = await create_player(db_session, rarity=Rarity.legendary)
+    await db_session.commit()
+    board = await _artifact(client, bot_token, name="Доска Фергюсона", target="club", effect="team_boost_pct",
+                            effect_value=1, link_type="coach", link_id=coach.id, link_effect_value=3)
+    shirt = await _artifact(client, bot_token, name="Футболка Марадоны", target="my_player", effect="dribble_pp",
+                            effect_value=2, card_player_id=maradona.id, card_rating_bonus=3)
+    headers, user = await _register(client, db_session, 720090, bot_token)
+    user.balance = 10_000
+    await db_session.commit()
+    for a in (board, shirt):
+        await client.post(f"/api/v1/artifacts/{a['id']}/buy", headers=headers)
+    assert (await artifact_service.effects_of(db_session, user.id, "club")) == {"team_boost_pct": 1}
+    db_session.add(UserCoachCard(user_id=user.id, coach_id=coach.id, serial_number=1, source=CardSource.admin_grant))
+    await db_session.commit()
+    assert (await artifact_service.effects_of(db_session, user.id, "club")) == {"team_boost_pct": 3}
+    assert await artifact_service.card_bonuses(db_session, user.id) == {maradona.id: 3}
+
+    item = next(i for i in (await client.get("/api/v1/artifacts", headers=headers)).json()["shop"] if i["id"] == shirt["id"])
+    assert item["card_label"] == f"+3 к рейтингу карточек «{maradona.display_name}»"
+
+    config = await get_config(db_session)
+    mine = SimpleNamespace(card=SimpleNamespace(player_id=maradona.id), base_rating=88)
+    other = SimpleNamespace(card=SimpleNamespace(player_id=-1), base_rating=70)
+    run = SimpleNamespace(boost=1.0, on_pitch=[mine, other], bench=[])
+    bot = SimpleNamespace(boost=1.0, on_pitch=[], bench=[])
+    await career_service._apply_club_artifacts(db_session, [{"user_id": user.id}, {"user_id": None}], 0, 1, run, bot, config)
+    assert mine.base_rating == 91 and other.base_rating == 70 and run.boost == pytest.approx(1.03)
+
+
+def test_dribbler_skill_and_artifact_add_up(monkeypatch):
+    import random
+    from types import SimpleNamespace
+
+    from app.services import club_tactical_matchup_service as m
+
+    seen = []
+    real = m.skill_choice
+
+    def spy(outcomes, weights, boosted, effect, player=None):
+        seen.append(effect)
+        return real(outcomes, weights, boosted, effect, player=player)
+
+    monkeypatch.setattr(m, "skill_choice", spy)
+    random.seed(1)
+    skill = {"code": "dribbler", "level": 2, "bonus_pp": 4, "cap_pp": 8, "floor": 0.02, "ceiling": 0.95}
+    duelist = SimpleNamespace(skill=skill, boosts={"dribble_pp": 3}, player=SimpleNamespace(display_name="D"))
+    m._resolve_stage1_for(1.0, duelist, [])
+    assert seen[-1]["bonus_pp"] == 7 and seen[-1]["cap_pp"] == 11
