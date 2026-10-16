@@ -19,6 +19,7 @@ import { SkillTokenRevealStage } from "@/components/cards/SkillTokenRevealStage"
 import SkillTokenTile from "@/components/cards/SkillTokenTile";
 import { StadiumRevealStage } from "@/components/cards/StadiumRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
+import PlayerCard from "@/components/cards/PlayerCard";
 import ShareButton from "@/components/common/ShareButton";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { UserBadge } from "@/components/common/UserBadge";
@@ -669,30 +670,7 @@ function BulkSummary({
       ))}
       <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
         {result.cards.map((opened) => (
-          <div
-            key={opened.card.id}
-            className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.player.rarity]} p-[2px] ${RARITY_GLOW[opened.card.player.rarity]}`}
-          >
-            <div className="flex flex-col rounded-[14px] bg-bg-surface">
-              <img decoding="async"
-                src={staticUrl(opened.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                alt={opened.card.player.display_name}
-                className="aspect-square w-full object-cover"
-              />
-              <div className="p-1.5 text-center">
-                <p className="truncate text-[11px] font-bold text-ink-chalk">{opened.card.player.display_name}</p>
-                <p className="text-[9px] text-ink-mist">{RARITY_LABELS[opened.card.player.rarity]}</p>
-              </div>
-            </div>
-            {opened.is_new && (
-              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
-            )}
-            {opened.duplicate_count > 1 && (
-              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
-                ×{opened.duplicate_count}
-              </span>
-            )}
-          </div>
+          <OpenedCardTile key={opened.card.id} opened={opened} />
         ))}
         {result.coach_cards.map((opened) => (
           <div
@@ -879,38 +857,8 @@ function Summary({
       {showRecap && (
         <div className={totalOpened === 1 ? "flex justify-center" : "grid grid-cols-2 gap-3 sm:grid-cols-3"}>
           {result.cards.map((opened) => (
-            <div
-              key={opened.card.id}
-              className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.player.rarity]} p-[2px] ${RARITY_GLOW[opened.card.player.rarity]} ${singleCardWidthClass}`}
-            >
-              <div className="flex flex-col rounded-[14px] bg-bg-surface">
-                <img decoding="async"
-                  src={staticUrl(opened.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                  alt={opened.card.player.display_name}
-                  className="aspect-square w-full object-cover"
-                />
-                <div className="p-2 text-center">
-                  <p className="truncate text-xs font-bold text-ink-chalk">{opened.card.player.display_name}</p>
-                  <p className="text-[10px] text-ink-mist">{RARITY_LABELS[opened.card.player.rarity]}</p>
-                  {opened.card.player.collection_name && (
-                    <p className="flex items-center justify-center gap-1 truncate text-[9px] font-semibold text-accent-lime">
-                      <IconTag size={9} />
-                      {opened.card.player.collection_name}
-                    </p>
-                  )}
-                  {(opened.card.player.rarity === "legendary" || opened.card.player.rarity === "diamond") && (
-                    <ShareButton kind="card" id={opened.card.id} compact className="mt-1.5" />
-                  )}
-                </div>
-              </div>
-              {opened.is_new && (
-                <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
-              )}
-              {opened.duplicate_count > 1 && (
-                <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
-                  ×{opened.duplicate_count}
-                </span>
-              )}
+            <div key={opened.card.id} className={singleCardWidthClass}>
+              <OpenedCardTile opened={opened} withDetails />
             </div>
           ))}
           {result.coach_cards.map((opened) => (
@@ -984,3 +932,46 @@ function Summary({
     </div>
   );
 }
+
+/** A card from the pack in the recap grids: the shared PlayerCard face
+ * (rating, position, rarity frame, «Академия» — same as everywhere else),
+ * with what's specific to *this opening* — new / ×N copies, the collection
+ * and, for a legendary or diamond, «Поделиться» — under the name instead of
+ * on top of the card's corners. */
+function OpenedCardTile({ opened, withDetails = false }: { opened: OpenedCard; withDetails?: boolean }) {
+  const player = opened.card.player;
+  const shareable = player.rarity === "legendary" || player.rarity === "diamond";
+  return (
+    <PlayerCard
+      player={player}
+      size="sm"
+      stars={opened.card.stars}
+      pathStage={opened.card.path_stage}
+      prestige={opened.card.prestige}
+      footer={
+        <div className="flex flex-col items-center gap-1 px-1.5 pb-1.5 pt-1">
+          {(opened.is_new || opened.duplicate_count > 1) && (
+            <div className="flex items-center gap-1">
+              {opened.is_new && (
+                <span className="rounded-full bg-accent-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-bg-base">NEW</span>
+              )}
+              {opened.duplicate_count > 1 && (
+                <span className="rounded-full bg-black/40 px-1.5 py-0.5 font-mono text-[10px] font-bold leading-none text-ink-chalk">
+                  ×{opened.duplicate_count}
+                </span>
+              )}
+            </div>
+          )}
+          {withDetails && player.collection_name && (
+            <p className="flex max-w-full items-center justify-center gap-1 truncate text-[10px] font-semibold text-accent-lime">
+              <IconTag size={10} />
+              {player.collection_name}
+            </p>
+          )}
+          {withDetails && shareable && <ShareButton kind="card" id={opened.card.id} compact />}
+        </div>
+      }
+    />
+  );
+}
+

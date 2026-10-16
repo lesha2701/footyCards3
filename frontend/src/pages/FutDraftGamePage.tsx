@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { formationLabel, inRow, pitchRows, PITCH_STYLE } from "@/lib/formationLayout";
+import PitchCardTile from "@/components/cards/PitchCardTile";
 import PitchBackground from "@/components/squad/PitchBackground";
 
 import {
@@ -667,26 +668,12 @@ function Pitch({
                 key={slot.slot_code}
                 onClick={() => onSlotTap(slot)}
                 disabled={slot.player ? false : disabled}
-                className={`flex h-[104px] w-[72px] shrink-0 flex-col items-center justify-center gap-1 rounded-xl p-1.5 backdrop-blur-sm active:scale-95 disabled:active:scale-100 ${
+                className={`flex h-[104px] w-[72px] shrink-0 flex-col items-center justify-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 disabled:active:scale-100 ${
                   slot.slot_code === selectedSlotCode ? "ring-2 ring-accent-lime" : ""
-                } ${
-                  slot.player ? `bg-gradient-to-b ${RARITY_GRADIENTS[slot.player.rarity]} ${RARITY_GLOW_STATIC[slot.player.rarity]} p-[1.5px]` : "bg-black/30"
                 }`}
               >
                 {slot.player ? (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-1 rounded-[9px] bg-bg-surface p-1">
-                    <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                      {slot.player.image_path ? (
-                        <img decoding="async" src={staticUrl(slot.player.image_path) ?? undefined} alt="" className="h-full w-full object-cover" loading="lazy" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center">
-                          <IconShirt size={16} className="text-ink-mist-dim" />
-                        </div>
-                      )}
-                    </div>
-                    <span className="font-mono text-[9px] font-bold leading-none text-ink-chalk">{slot.player.rating}</span>
-                    <span className="rounded-full bg-black/40 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">{slot.player.position}</span>
-                  </div>
+                  <PitchCardTile player={slot.player} />
                 ) : (
                   <>
                     <IconPlus size={18} className="text-ink-mist-dim" />

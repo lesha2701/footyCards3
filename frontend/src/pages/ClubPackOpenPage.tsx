@@ -16,6 +16,7 @@ import { StadiumRevealStage } from "@/components/cards/StadiumRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { IconCoin } from "@/components/icons";
+import PlayerCard from "@/components/cards/PlayerCard";
 import { openClubPack } from "@/api/clubPacks";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { haptic, hapticNotify } from "@/lib/telegram";
@@ -214,17 +215,16 @@ export default function ClubPackOpenPage() {
                   {item.is_new && <span className="text-[9px] font-bold text-accent-green">Новый!</span>}
                 </div>
               ) : (
-                <div
-                  key={`player-${item.card!.id}`}
-                  className={`flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2 ${result.cards.length === 1 ? "w-2/5" : ""}`}
-                >
-                  <img decoding="async"
-                    src={staticUrl(item.card!.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                    alt={item.card!.player.display_name}
-                    className="aspect-square w-full rounded-lg object-cover"
+                <div key={`player-${item.card!.id}`} className={result.cards.length === 1 ? "w-2/5" : ""}>
+                  <PlayerCard
+                    player={item.card!.player}
+                    size="sm"
+                    footer={
+                      item.is_new ? (
+                        <p className="pb-1 text-center text-[10px] font-bold leading-none text-accent-green">Новая!</p>
+                      ) : undefined
+                    }
                   />
-                  <span className="truncate text-[10px] font-semibold text-ink-chalk">{item.card!.player.display_name}</span>
-                  {item.is_new && <span className="text-[9px] font-bold text-accent-green">Новая!</span>}
                 </div>
               )
             )}

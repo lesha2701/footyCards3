@@ -9,6 +9,7 @@ import {
   IconBoot, IconChevronLeft, IconChevronUp, IconFlag, IconPlus, IconStadium, IconStar, IconTarget, IconUsers,
 } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
+import PitchCardTile from "@/components/cards/PitchCardTile";
 import { ChemistryDiamonds, ChemistryFrozenNote, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
 import { fetchMyClub } from "@/api/clubs";
 import {
@@ -346,21 +347,10 @@ export default function ClubSquadPage() {
                   >
                     {slot.card ? (
                       <>
-                        <div className={`relative aspect-square w-full overflow-hidden rounded-lg bg-black/40 ${
-                          slot.card.availability ? "ring-2 ring-red-500" : ""
-                        }`}>
-                          <img decoding="async"
-                            src={staticUrl(slot.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                            alt="" className="h-full w-full object-cover" loading="lazy"
-                          />
-                          {slot.card.availability && (
-                            <span className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-sm bg-red-600 text-[10px] font-black leading-none text-white">
-                              {slot.card.availability.reason === "red_card" ? "▮" : "+"}
-                            </span>
-                          )}
-                        </div>
-                        <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[9px] font-bold leading-none text-accent-cyan">{slot.card.player.position}</span>
-                        <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.card.player.rating}</span>
+                        <PitchCardTile
+                          player={slot.card.player}
+                          unavailable={slot.card.availability ? (slot.card.availability.reason === "red_card" ? "red_card" : "injury") : null}
+                        />
                         {chemistryOn && chemBySlot.has(slot.slot_code) && (
                           <ChemistryDiamonds
                             points={chemBySlot.get(slot.slot_code)!.points}

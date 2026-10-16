@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useRef, useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
-import CardSkillBadge from "@/components/cards/CardSkillBadge";
+import PitchCardTile from "@/components/cards/PitchCardTile";
 import { skillByCode, skillInactiveReason, useSkillCatalog } from "@/lib/cardSkills";
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
 import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPickerModal";
@@ -380,17 +380,12 @@ export default function PlayerTournamentSquadPage() {
                     className="flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 disabled:opacity-60"
                   >
                     {slot.player ? (
-                      <>
-                        <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                          <img decoding="async"
-                            src={staticUrl(slot.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                            alt="" className="h-full w-full object-cover" loading="lazy"
-                          />
-                        </div>
-                        <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[9px] font-bold leading-none text-accent-cyan">
-                          {slot.player.position}
-                        </span>
-                        <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.player.rating}</span>
+                      <PitchCardTile
+                        player={slot.player}
+                        skillCode={slot.skill_code}
+                        skillLevel={slot.skill_level}
+                        skillInactiveReason={skillInactive(slot.skill_code, slot.player.position)}
+                      >
                         {chemistryOn && chemBySlot.has(slot.slot_code) && (
                           <ChemistryDiamonds
                             points={chemBySlot.get(slot.slot_code)!.points}
@@ -398,12 +393,7 @@ export default function PlayerTournamentSquadPage() {
                             onPosition={chemBySlot.get(slot.slot_code)!.on_position}
                           />
                         )}
-                        <CardSkillBadge
-                          code={slot.skill_code}
-                          level={slot.skill_level}
-                          inactiveReason={skillInactive(slot.skill_code, slot.player.position)}
-                        />
-                      </>
+                      </PitchCardTile>
                     ) : (
                       <>
                         <IconPlus size={18} className="text-ink-mist-dim" />

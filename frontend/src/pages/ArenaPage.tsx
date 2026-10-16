@@ -2,10 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
-import CardSkillBadge from "@/components/cards/CardSkillBadge";
+import PitchCardTile from "@/components/cards/PitchCardTile";
 import MatchSkillNotes from "@/components/cards/MatchSkillNotes";
 import MatchPathSummary from "@/components/path/MatchPathSummary";
-import PathCardMark from "@/components/path/PathCardMark";
 import MatchSkillSummary from "@/components/cards/MatchSkillSummary";
 import { skillByCode, skillInactiveReason, useSkillCatalog } from "@/lib/cardSkills";
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
@@ -470,36 +469,16 @@ export default function ArenaPage() {
                       className="flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 disabled:opacity-60"
                     >
                       {slot.card ? (
-                        <>
-                          <div
-                            className={`relative aspect-square w-full overflow-hidden rounded-lg bg-black/40 ${
-                              slot.card.player.path_talent_code ? "ring-2 ring-path/70" : ""
-                            }`}
-                          >
-                            <img
-                              src={
-                                staticUrl(slot.card.player.image_path ?? undefined) ??
-                                staticUrl("players/placeholder/player_placeholder.webp")
-                              }
-                              alt=""
-                              className="h-full w-full object-cover"
-                              loading="lazy"
-                              decoding="async"
-                            />
-                            {slot.card.player.path_talent_code && (
-                              <span className="absolute bottom-0.5 right-0.5">
-                                <PathCardMark
-                                  talentCode={slot.card.talent_override || slot.card.player.path_talent_code}
-                                  stage={slot.card.path_stage}
-                                  size="sm"
-                                />
-                              </span>
-                            )}
-                          </div>
-                          <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[9px] font-bold leading-none text-accent-cyan">
-                            {slot.card.player.position}
-                          </span>
-                          <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.card.player.rating}</span>
+                        <PitchCardTile
+                          player={slot.card.player}
+                          stars={slot.card.stars}
+                          pathStage={slot.card.path_stage}
+                          prestige={slot.card.prestige}
+                          talentOverride={slot.card.talent_override}
+                          skillCode={slot.card.skill_code}
+                          skillLevel={slot.card.skill_level}
+                          skillInactiveReason={skillInactive(slot.card.skill_code, slot.card.player.position)}
+                        >
                           {chemistryOn && chemBySlot.has(slot.slot_code) && (
                             <ChemistryDiamonds
                               points={chemBySlot.get(slot.slot_code)!.points}
@@ -507,12 +486,7 @@ export default function ArenaPage() {
                               onPosition={chemBySlot.get(slot.slot_code)!.on_position}
                             />
                           )}
-                          <CardSkillBadge
-                            code={slot.card.skill_code}
-                            level={slot.card.skill_level}
-                            inactiveReason={skillInactive(slot.card.skill_code, slot.card.player.position)}
-                          />
-                        </>
+                        </PitchCardTile>
                       ) : (
                         <>
                           <IconPlus size={18} className="text-ink-mist-dim" />

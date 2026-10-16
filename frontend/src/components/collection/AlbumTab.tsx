@@ -8,6 +8,7 @@ import EmptyState from "@/components/common/EmptyState";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import CardDetailModal from "@/components/collection/CardDetailModal";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
+import PlayerCard from "@/components/cards/PlayerCard";
 import { bestSkilledCopy, useSkillUpgradeCheck } from "@/lib/cardSkills";
 import { useCardActions } from "@/components/collection/useCardActions";
 import { IconChevronLeft, IconChevronRight, IconCoin, IconCollection, IconParty, IconSearch } from "@/components/icons";
@@ -288,40 +289,32 @@ function AlbumSlot({ slot, onOpen }: { slot: AlbumPlayer; onOpen: () => void }) 
   }
 
   const best = bestSkilledCopy(slot.card.skilled_copies);
+  // The shared card face (rarity frame, rating top-left, position top-right,
+  // skill bottom-left, «Академия» bottom-right); copies count under the name.
   return (
-    <button
+    <PlayerCard
+      player={slot.player}
+      size="sm"
       onClick={onOpen}
-      className="relative flex aspect-[3/4] flex-col overflow-hidden rounded-xl bg-bg-surface active:scale-95"
-    >
-      <img decoding="async"
-        src={staticUrl(slot.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-        alt=""
-        className="h-full w-full object-cover"
-        loading="lazy"
-      />
-      {/* Skill badge sits in the top row next to the position chip — the
-          bottom of album art carries the player's name. */}
-      <span className="absolute left-1 top-1 flex items-center gap-0.5">
-        <span className="rounded bg-black/60 px-1 py-0.5 font-mono text-[9px] font-bold text-white">
-          {slot.player.position}
-        </span>
-        {best && (
+      stars={slot.card.stars}
+      pathStage={slot.card.path_stage}
+      prestige={slot.card.prestige}
+      talentOverride={slot.card.talent_override}
+      badge={
+        best ? (
           <CardSkillBadge
             code={best.skill_code}
             level={best.skill_level}
             extraCount={(slot.card.skilled_copies?.length ?? 1) - 1}
             upgradable={(slot.card.skilled_copies ?? []).some((c) => canUpgrade(c.skill_code, c.skill_level))}
           />
-        )}
-      </span>
-      <span className="absolute right-1 top-1 rounded bg-black/60 px-1 py-0.5 font-mono text-[9px] font-bold text-accent-lime">
-        {slot.player.rating}
-      </span>
-      {slot.duplicate_count > 1 && (
-        <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
-          ×{slot.duplicate_count}
-        </span>
-      )}
-    </button>
+        ) : undefined
+      }
+      footer={
+        slot.duplicate_count > 1 ? (
+          <p className="pb-1 text-center font-mono text-[10px] font-bold leading-none text-ink-mist">×{slot.duplicate_count}</p>
+        ) : undefined
+      }
+    />
   );
 }
