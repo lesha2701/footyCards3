@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { claimSaboteurReward, endSaboteur, revealSaboteurCell, startSaboteur } from "@/api/games";
 import { IconCoin, IconFlagCheckered, IconHelp, IconProfile } from "@/components/icons";
+import PrimaryActionButton from "@/components/common/PrimaryActionButton";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -123,13 +124,11 @@ export default function SaboteurGamePage() {
         </div>
 
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
-        <button
+        <PrimaryActionButton
+          text="Начать игру"
           onClick={() => startMutation.mutate(stewardCount)}
-          disabled={startMutation.isPending}
-          className="rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
-        >
-          {startMutation.isPending ? "Загрузка..." : "Начать игру"}
-        </button>
+          loading={startMutation.isPending}
+        />
       </div>
     );
   }

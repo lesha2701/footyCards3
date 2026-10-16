@@ -9,6 +9,8 @@ import {
   type IconProps,
 } from "@/components/icons";
 import { useNavBadges } from "@/lib/navBadges";
+import { hapticSelection } from "@/lib/telegram";
+import { useKeyboardOpen } from "@/lib/useKeyboardOpen";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
 
 const TABS: { to: string; label: string; Icon: (props: IconProps) => JSX.Element }[] = [
@@ -33,6 +35,9 @@ export default function BottomNav() {
   const { pathname } = useLocation();
   const badges = useNavBadges();
   const cardsSection = pathname.startsWith("/trades") || pathname.startsWith("/upgrade");
+  // Out of the way while typing: otherwise it rides up on the keyboard.
+  const keyboardOpen = useKeyboardOpen();
+  if (keyboardOpen) return null;
 
   return (
     <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-white/5 bg-bg-surface/95 backdrop-blur">
@@ -48,7 +53,9 @@ export default function BottomNav() {
                 if (guardActive) {
                   e.preventDefault();
                   requestNavigate(to);
+                  return;
                 }
+                if (to !== pathname) hapticSelection();
               }}
               className={({ isActive: routeActive }) =>
                 `flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-semibold transition-colors ${

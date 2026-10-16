@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { claimClubPositionMatchReward, startClubPositionMatch, submitClubPositionMatchAttempt } from "@/api/clubs";
 import { IconChevronLeft, IconCoin, IconShirt, IconTrophy } from "@/components/icons";
+import PrimaryActionButton from "@/components/common/PrimaryActionButton";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
 import { POSITION_LABELS, RARITY_GRADIENTS, RARITY_GLOW_STATIC } from "@/lib/rarity";
@@ -138,13 +139,11 @@ export default function ClubPositionMatchGamePage() {
         </p>
 
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
-        <button
+        <PrimaryActionButton
+          text="Начать игру"
           onClick={start}
-          disabled={starting}
-          className="rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
-        >
-          {starting ? "Загрузка..." : "Начать игру"}
-        </button>
+          loading={starting}
+        />
       </div>
     );
   }

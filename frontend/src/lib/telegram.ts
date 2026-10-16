@@ -11,6 +11,10 @@ interface TelegramWebApp {
   disableVerticalSwipes?: () => void;
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
+  /** Bot API 7.10+: colour of the bottom bar under the Mini App. */
+  setBottomBarColor?: (color: string) => void;
+  enableClosingConfirmation?: () => void;
+  disableClosingConfirmation?: () => void;
   onEvent: (event: string, handler: () => void) => void;
   offEvent: (event: string, handler: () => void) => void;
   HapticFeedback?: {
@@ -111,6 +115,21 @@ export function openTelegramLink(url: string): void {
   } else {
     window.open(url, "_blank", "noopener,noreferrer");
   }
+}
+
+/** Telegram asks "close the app?" before a swipe-down/close while this is on
+ * — used during live matches, where leaving costs the match. No-op outside
+ * Telegram or on clients without the method. */
+export function setClosingConfirmation(enabled: boolean): void {
+  const webApp = getTelegramWebApp();
+  if (!isInsideTelegram()) return;
+  if (enabled) webApp?.enableClosingConfirmation?.();
+  else webApp?.disableClosingConfirmation?.();
+}
+
+/** Light tick for switching tabs / segments (Telegram selection haptic). */
+export function hapticSelection(): void {
+  getTelegramWebApp()?.HapticFeedback?.selectionChanged();
 }
 
 /** Shares a server-prepared message (image + «Играть» button) to a chat the
