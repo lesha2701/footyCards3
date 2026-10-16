@@ -6,6 +6,7 @@ import { fetchPathState } from "@/api/path";
 import { IconCoin, IconLock, IconTag, IconUpgrade } from "@/components/icons";
 import CardSkillPanel from "@/components/collection/CardSkillPanel";
 import CardStarPanel from "@/components/collection/CardStarPanel";
+import ShareButton from "@/components/common/ShareButton";
 import PathPanel from "@/components/path/PathPanel";
 import { staticUrl } from "@/lib/api";
 import { pathFrameClass } from "@/lib/pathCards";
@@ -174,6 +175,9 @@ export default function CardDetailModal({
                       className="h-5 w-5 shrink-0 accent-accent-lime"
                     />
                   </label>
+                  {(player.rarity === "legendary" || player.rarity === "diamond") && (
+                    <ShareButton kind="card" id={card.id} label="Похвастаться в Telegram" />
+                  )}
                   {onUpgrade && (
                     <button
                       onClick={onUpgrade}

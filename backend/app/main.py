@@ -71,6 +71,7 @@ from app.routers import (
     penalty_matches,
     players,
     profile,
+    share,
     stratego,
     tactico,
     tasks,
@@ -152,6 +153,7 @@ app.include_router(daily_rewards.router, prefix=API_PREFIX)
 app.include_router(wheel.router, prefix=API_PREFIX)
 app.include_router(blackjack.router, prefix=API_PREFIX)
 app.include_router(profile.router, prefix=API_PREFIX)
+app.include_router(share.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(leaderboard.router, prefix=API_PREFIX)
 app.include_router(leagues.router, prefix=API_PREFIX)

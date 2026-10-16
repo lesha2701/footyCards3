@@ -10,6 +10,7 @@ import { fetchMyGifts } from "@/api/gifts";
 import {
   fetchMyAttention, fetchMyBadges, fetchMyProfile, fetchMyTransactions, fetchMyTrophies, updateMySettings,
 } from "@/api/profile";
+import ShareButton from "@/components/common/ShareButton";
 import { UserBadge } from "@/components/common/UserBadge";
 import { MyPlayerEntry } from "@/components/myPlayer/MyPlayerEntry";
 import AcademyShowcase from "@/components/path/AcademyShowcase";
@@ -506,6 +507,7 @@ function TrophyDetailModal({ trophy, onClose }: { trophy: UserTrophy; onClose: (
         <p className="mt-2 text-[11px] text-ink-mist-dim">
           Вручено {new Date(trophy.granted_at).toLocaleDateString("ru-RU")}
         </p>
+        <ShareButton kind="trophy" id={trophy.id} className="mt-4" />
         <button onClick={onClose} className="mt-4 w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95">
           Закрыть
         </button>

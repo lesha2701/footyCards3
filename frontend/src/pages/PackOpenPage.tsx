@@ -19,6 +19,7 @@ import { SkillTokenRevealStage } from "@/components/cards/SkillTokenRevealStage"
 import SkillTokenTile from "@/components/cards/SkillTokenTile";
 import { StadiumRevealStage } from "@/components/cards/StadiumRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
+import ShareButton from "@/components/common/ShareButton";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconCoin, IconHandshake, IconTag } from "@/components/icons";
@@ -896,6 +897,9 @@ function Summary({
                       <IconTag size={9} />
                       {opened.card.player.collection_name}
                     </p>
+                  )}
+                  {(opened.card.player.rarity === "legendary" || opened.card.player.rarity === "diamond") && (
+                    <ShareButton kind="card" id={opened.card.id} compact className="mt-1.5" />
                   )}
                 </div>
               </div>

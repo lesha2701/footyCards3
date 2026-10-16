@@ -11,6 +11,7 @@ import { skillByCode, skillInactiveReason, useSkillCatalog } from "@/lib/cardSki
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
 import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPickerModal";
 import EmptyState from "@/components/common/EmptyState";
+import ShareButton from "@/components/common/ShareButton";
 import MatchPitchView from "@/components/match/MatchPitchView";
 import MatchSheet from "@/components/match/MatchSheet";
 import MatchStatsTable from "@/components/match/MatchStatsTable";
@@ -664,6 +665,7 @@ export default function ArenaPage() {
             </button>
           ) : match && !simulating ? (
             <div className="flex flex-col gap-2">
+              {match.result === "win" && <ShareButton kind="match" id={match.id} label="Поделиться победой" />}
               {matchError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{matchError}</p>}
               <div className="grid grid-cols-2 gap-2">
                 <button
