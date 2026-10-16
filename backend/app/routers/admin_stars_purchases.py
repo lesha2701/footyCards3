@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -8,7 +10,16 @@ from app.core.pagination import Page, PageParams
 from app.database import get_db
 from app.models.pack import Pack, StarsInvoice
 from app.models.user import User
-from app.schemas.admin import StarsDonationSummaryOut, StarsPackPurchaseOut, TopSupporterOut
+from app.schemas.admin import (
+    StarsDonationSummaryOut,
+    StarsPackPurchaseOut,
+    StarsPaymentProblemCountOut,
+    StarsPaymentReceiptOut,
+    TopSupporterOut,
+)
+from app.models.user import User as AdminUser
+from app.services import stars_receipt_service
+from app.services.admin_log_service import log_action
 
 router = APIRouter(prefix="/admin/stars-purchases", tags=["admin"], dependencies=[Depends(get_current_admin)])
 
@@ -82,3 +93,52 @@ async def list_stars_pack_purchases(params: PageParams = Depends(), db: AsyncSes
         for invoice, user, pack_name in rows
     ]
     return Page.build(items, total, params)
+
+
+# ---- Received payments and their delivery (stars_receipt_service) ----
+
+
+@router.get("/receipts", response_model=Page[StarsPaymentReceiptOut])
+async def list_payment_receipts(
+    status: Literal["problems", "all", "pending", "delivered", "failed", "refunded"] = "problems",
+    params: PageParams = Depends(),
+    db: AsyncSession = Depends(get_db),
+):
+    """Every Stars payment the bot received; "problems" = paid but not
+    delivered yet (and not refunded)."""
+    return await stars_receipt_service.list_receipts(db, status, params)
+
+
+@router.get("/receipts/problem-count", response_model=StarsPaymentProblemCountOut)
+async def payment_problem_count(db: AsyncSession = Depends(get_db)):
+    return StarsPaymentProblemCountOut(count=await stars_receipt_service.count_problems(db))
+
+
+@router.post("/receipts/{receipt_id}/retry", response_model=StarsPaymentReceiptOut)
+async def retry_payment_receipt(
+    receipt_id: int, request: Request, admin: AdminUser = Depends(get_current_admin), db: AsyncSession = Depends(get_db),
+):
+    """Delivers the purchase now (same idempotent delivery as the bot's)."""
+    out = await stars_receipt_service.admin_retry(db, receipt_id)
+    await _log(db, admin, request, "stars_payment_retry", out)
+    return out
+
+
+@router.post("/receipts/{receipt_id}/refund", response_model=StarsPaymentReceiptOut)
+async def refund_payment_receipt(
+    receipt_id: int, request: Request, admin: AdminUser = Depends(get_current_admin), db: AsyncSession = Depends(get_db),
+):
+    """Returns the Stars (Bot API refundStarPayment) for a payment that was
+    never delivered."""
+    out = await stars_receipt_service.admin_refund(db, receipt_id)
+    await _log(db, admin, request, "stars_payment_refund", out)
+    return out
+
+
+async def _log(db: AsyncSession, admin: AdminUser, request: Request, action: str, out: StarsPaymentReceiptOut) -> None:
+    await log_action(
+        db, admin.id, action, "stars_payment_receipt", out.id,
+        new_value={"status": out.status, "stars": out.stars_amount, "telegram_user_id": out.telegram_user_id},
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()

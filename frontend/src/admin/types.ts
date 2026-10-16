@@ -62,6 +62,30 @@ export interface TopSupporter {
   purchase_count: number;
 }
 
+export type StarsReceiptStatus = "pending" | "delivered" | "failed" | "refunded";
+export type StarsReceiptFilter = "problems" | "all" | StarsReceiptStatus;
+
+/** One received Stars payment and how its delivery went. */
+export interface StarsPaymentReceipt {
+  id: number;
+  telegram_payment_charge_id: string;
+  telegram_user_id: number;
+  user_id: number | null;
+  user_username: string | null;
+  user_display_name: string | null;
+  product: string;
+  stars_amount: number;
+  status: StarsReceiptStatus;
+  attempts: number;
+  last_error: string | null;
+  next_attempt_at: string | null;
+  /** Still retried by the bot automatically (false = waits for an admin). */
+  auto_retry: boolean;
+  created_at: string;
+  delivered_at: string | null;
+  refunded_at: string | null;
+}
+
 export interface StarsPackPurchase {
   id: number;
   user_id: number;

@@ -23,6 +23,7 @@ from app.services import (
     player_tournament_notification_service,
     player_tournament_simulation_service,
     stars_payment_service,
+    stars_receipt_service,
     tournament_notification_service,
     tournament_simulation_service,
 )
@@ -40,9 +41,10 @@ async def pre_checkout(payload: StarsPreCheckoutValidateIn, db: AsyncSession = D
 
 @router.post("/stars-payments/deliver", response_model=StarsInvoiceStatusOut)
 async def deliver(payload: StarsPaymentDeliverIn, db: AsyncSession = Depends(get_db)):
-    return await stars_payment_service.deliver_payment(
-        db, payload.payload_token, payload.telegram_user_id, payload.telegram_payment_charge_id, payload.total_amount
-    )
+    """Called by the bot on successful_payment and by its retry loop for
+    receipts whose delivery failed. Every attempt is recorded on the
+    payment's receipt (stars_receipt_service)."""
+    return await stars_receipt_service.deliver_with_receipt(db, payload)
 
 
 @router.post("/chat-pack/open", response_model=PackOpenResult)

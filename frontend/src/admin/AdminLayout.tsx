@@ -1,7 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import AdminToastContainer from "@/admin/AdminToastContainer";
+import { fetchStarsReceiptProblemCount } from "@/admin/api";
 import {
   IconBall,
   IconBrain,
@@ -64,9 +66,24 @@ const SECTIONS: { to: string; label: string; Icon: (props: IconProps) => JSX.Ele
   { to: "/admin/log", label: "Журнал", Icon: IconScroll },
 ];
 
+function ProblemBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="ml-auto rounded-full bg-red-500 px-1.5 text-micro font-bold text-white" title="Неначисленные платежи Stars">
+      {count}
+    </span>
+  );
+}
+
 export default function AdminLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
+  // Paid-but-undelivered Stars payments — shown on «Магазин» so they get noticed.
+  const { data: paymentProblems = 0 } = useQuery({
+    queryKey: ["admin-stars-receipt-problems"],
+    queryFn: fetchStarsReceiptProblemCount,
+    refetchInterval: 60_000,
+  });
 
   return (
     <div className="flex min-h-screen w-full max-w-full overflow-x-hidden bg-bg-base text-slate-100">
@@ -83,6 +100,7 @@ export default function AdminLayout() {
               }
             >
               <s.Icon size={16} /> {s.label}
+              {s.to === "/admin/shop" && <ProblemBadge count={paymentProblems} />}
             </NavLink>
           ))}
         </nav>
@@ -109,6 +127,7 @@ export default function AdminLayout() {
                 }
               >
                 <s.Icon size={16} /> {s.label}
+              {s.to === "/admin/shop" && <ProblemBadge count={paymentProblems} />}
               </NavLink>
             ))}
             <button onClick={() => navigate("/")} className="rounded-xl bg-white/5 px-3 py-2 text-left text-sm text-slate-300">

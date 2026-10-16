@@ -11,6 +11,7 @@ from config import get_bot_settings
 from handlers import admin as admin_handlers
 from handlers import chat_pack as chat_pack_handlers
 from handlers import payments as payments_handlers
+from handlers import support as support_handlers
 from handlers import user as user_handlers
 from services.career_scheduler import (
     run_career_digest_loop,
@@ -24,6 +25,7 @@ from services.free_pack_notifier import run_free_pack_notifier
 from services.magnate_scheduler import run_magnate_sweep_loop
 from services.notifier import run_notification_dispatcher
 from services.premium_subscription_check import run_premium_subscription_check
+from services.stars_delivery import run_stars_payment_retry_loop
 from services.player_tournament_scheduler import (
     run_player_tournament_reminder_loop,
     run_player_tournament_simulation_loop,
@@ -40,6 +42,7 @@ def build_dispatcher() -> Dispatcher:
     dp = Dispatcher()
     dp.include_router(admin_handlers.router)
     dp.include_router(payments_handlers.router)
+    dp.include_router(support_handlers.router)
     dp.include_router(chat_pack_handlers.router)
     dp.include_router(user_handlers.router)
     return dp
@@ -71,6 +74,7 @@ async def run_polling() -> None:
         asyncio.create_task(run_career_digest_loop()),
         asyncio.create_task(run_club_league_loop()),
         asyncio.create_task(run_magnate_sweep_loop()),
+        asyncio.create_task(run_stars_payment_retry_loop(bot)),
     ]
 
     try:
@@ -108,6 +112,7 @@ async def run_webhook() -> None:
     asyncio.create_task(run_career_digest_loop())
     asyncio.create_task(run_club_league_loop())
     asyncio.create_task(run_magnate_sweep_loop())
+    asyncio.create_task(run_stars_payment_retry_loop(bot))
 
     await bot.set_webhook(settings.bot_webhook_url, secret_token=settings.bot_webhook_secret, drop_pending_updates=True)
 

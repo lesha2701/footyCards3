@@ -351,10 +351,17 @@ async def deliver_payment(
     if user.id != invoice.user_id:
         raise ConflictError("This payment does not belong to the invoice's original user")
 
+    # By the time successful_payment arrives the player has already been
+    # charged, so delivery checks only what the payment itself must match —
+    # the price frozen on the invoice. A product an admin switched off or
+    # re-priced after pre-checkout is still delivered: it was bought at the
+    # invoice's price (pre-checkout is where availability is enforced).
     if invoice.pack_id is not None:
         pack = await db.get(Pack, invoice.pack_id)
-        if pack is None or pack.stars_price != total_amount:
-            raise ConflictError("Stars amount does not match the pack price")
+        if pack is None:
+            raise NotFoundError("Pack not found")
+        if invoice.stars_amount != total_amount:
+            raise ConflictError("Stars amount does not match the invoice")
 
         # payload_token (our own short, bounded id), not the Telegram charge
         # id — real charge ids can run well past 128 characters, which
@@ -385,8 +392,10 @@ async def deliver_payment(
             await _grant_pack_badge(db, user, pack.badge_id)
     elif invoice.gift_set_id is not None:
         gift_set = await db.get(GiftSet, invoice.gift_set_id)
-        if gift_set is None or not gift_set.is_active or gift_set.stars_price != total_amount:
-            raise ConflictError("This gift set is no longer available")
+        if gift_set is None:
+            raise NotFoundError("Gift set not found")
+        if invoice.stars_amount != total_amount:
+            raise ConflictError("Stars amount does not match the invoice")
 
         serial_number = await gift_service.reserve_gift_serial_numbers(db, gift_set)
 

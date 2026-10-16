@@ -296,3 +296,59 @@ async def get_all_user_telegram_ids() -> list[int]:
     pool = await get_pool()
     rows = await pool.fetch("SELECT telegram_id FROM users WHERE is_banned = false AND bot_blocked = false")
     return [r["telegram_id"] for r in rows]
+
+
+# ---- Stars payment receipts (backend model: app/models/stars_payment_receipt.py) ----
+# The bot records every successful_payment here *before* asking the backend
+# to deliver it, so a paid order survives a backend outage; the backend
+# updates status/attempts on each delivery attempt.
+
+
+async def record_stars_payment(
+    charge_id: str, payload_token: str, telegram_user_id: int, total_amount: int, first_retry_in_seconds: int,
+) -> None:
+    pool = await get_pool()
+    await pool.execute(
+        """
+        INSERT INTO stars_payment_receipts
+            (telegram_payment_charge_id, payload_token, telegram_user_id, total_amount,
+             status, attempts, next_attempt_at, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, 'pending', 0, now() + $5::int * interval '1 second', now(), now())
+        ON CONFLICT (telegram_payment_charge_id) DO NOTHING
+        """,
+        charge_id, payload_token, telegram_user_id, total_amount, first_retry_in_seconds,
+    )
+
+
+async def fetch_due_stars_receipts(max_attempts: int, limit: int = 20) -> list[asyncpg.Record]:
+    """Paid but undelivered receipts whose next retry time has come."""
+    pool = await get_pool()
+    return await pool.fetch(
+        """
+        SELECT * FROM stars_payment_receipts
+        WHERE status IN ('pending', 'failed') AND attempts < $1
+          AND (next_attempt_at IS NULL OR next_attempt_at <= now())
+        ORDER BY id
+        LIMIT $2
+        """,
+        max_attempts, limit,
+    )
+
+
+async def postpone_stars_receipt(receipt_id: int, seconds: int) -> None:
+    """The backend couldn't be reached at all (so it recorded nothing) —
+    try again later without spending one of the receipt's attempts."""
+    pool = await get_pool()
+    await pool.execute(
+        "UPDATE stars_payment_receipts SET next_attempt_at = now() + $2::int * interval '1 second', updated_at = now() "
+        "WHERE id = $1 AND status IN ('pending', 'failed')",
+        receipt_id, seconds,
+    )
+
+
+async def recent_stars_receipts(telegram_user_id: int, limit: int = 5) -> list[asyncpg.Record]:
+    pool = await get_pool()
+    return await pool.fetch(
+        "SELECT * FROM stars_payment_receipts WHERE telegram_user_id = $1 ORDER BY created_at DESC LIMIT $2",
+        telegram_user_id, limit,
+    )

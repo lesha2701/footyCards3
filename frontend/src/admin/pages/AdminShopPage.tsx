@@ -16,6 +16,7 @@ import {
   updateCoinPackage,
   uploadBadgeImage,
 } from "@/admin/api";
+import StarsPaymentsSection from "@/admin/components/StarsPaymentsSection";
 import NumberInput from "@/components/common/NumberInput";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import type { Badge, CoinPackage } from "@/types";
@@ -24,6 +25,7 @@ export default function AdminShopPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-display text-2xl font-bold">Магазин</h1>
+      <StarsPaymentsSection />
       <CoinPackagesSection />
       <BadgesSection />
       <TopSupportersSection />

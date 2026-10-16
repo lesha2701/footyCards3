@@ -130,6 +130,32 @@ class StarsPackPurchaseOut(BaseModel):
     completed_at: datetime
 
 
+class StarsPaymentReceiptOut(BaseModel):
+    """One received Stars payment and how its delivery went (admin view)."""
+
+    id: int
+    telegram_payment_charge_id: str
+    telegram_user_id: int
+    user_id: Optional[int] = None
+    user_username: Optional[str] = None
+    user_display_name: Optional[str] = None
+    product: str
+    stars_amount: int
+    status: Literal["pending", "delivered", "failed", "refunded"]
+    attempts: int
+    last_error: Optional[str] = None
+    next_attempt_at: Optional[datetime] = None
+    # Still being retried by the bot on its own (false = waits for an admin).
+    auto_retry: bool
+    created_at: datetime
+    delivered_at: Optional[datetime] = None
+    refunded_at: Optional[datetime] = None
+
+
+class StarsPaymentProblemCountOut(BaseModel):
+    count: int
+
+
 class GameConfigOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -126,6 +126,19 @@ Main features:
   When changing a table the bot touches (users, notifications, daily
   rewards, free pack), update both the SQLAlchemy model/migration and the
   bot's raw SQL.
+- **Telegram Stars payments**: the Mini App creates a `StarsInvoice`
+  (price frozen on it); the bot answers `pre_checkout_query` and, on
+  `successful_payment`, first inserts a `stars_payment_receipts` row
+  straight into Postgres (the player is already charged — the receipt must
+  survive a backend outage), then calls `POST /internal/stars-payments/deliver`
+  (`stars_receipt_service.deliver_with_receipt` → idempotent
+  `stars_payment_service.deliver_payment`). Every attempt updates the
+  receipt (status/attempts/last_error/backoff); the bot's
+  `run_stars_payment_retry_loop` retries failed ones, and admins re-deliver
+  or refund (`refundStarPayment`) from Магазин → Платежи Stars. A refunded
+  receipt is never delivered and a delivered one never refunded (decided
+  under the receipt's row lock). Availability is enforced at pre-checkout,
+  not at delivery. The bot also serves `/paysupport` and `/terms`.
 - **Frontend routing**: one React app serves both the Mini App (`/`, `/packs`,
   `/play/*`, `/collection`, …) and the admin panel (`/admin/*`, gated by
   `AdminGuard` client-side and `get_current_admin` server-side). State:

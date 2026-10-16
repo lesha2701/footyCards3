@@ -54,6 +54,8 @@ import type {
   PackPreview,
   StarsDonationSummary,
   StarsPackPurchase,
+  StarsPaymentReceipt,
+  StarsReceiptFilter,
   TopSupporter,
   SuspiciousMatch,
   SuspiciousMemorySession,
@@ -885,6 +887,26 @@ export async function fetchStarsDonationSummary(): Promise<StarsDonationSummary>
 
 export async function fetchTopSupporters(): Promise<TopSupporter[]> {
   const { data } = await api.get<TopSupporter[]>("/admin/stars-purchases/top-supporters");
+  return data;
+}
+
+export async function fetchStarsReceipts(status: StarsReceiptFilter, page: number): Promise<Page<StarsPaymentReceipt>> {
+  const { data } = await api.get<Page<StarsPaymentReceipt>>("/admin/stars-purchases/receipts", { params: { status, page } });
+  return data;
+}
+
+export async function fetchStarsReceiptProblemCount(): Promise<number> {
+  const { data } = await api.get<{ count: number }>("/admin/stars-purchases/receipts/problem-count");
+  return data.count;
+}
+
+export async function retryStarsReceipt(id: number): Promise<StarsPaymentReceipt> {
+  const { data } = await api.post<StarsPaymentReceipt>(`/admin/stars-purchases/receipts/${id}/retry`);
+  return data;
+}
+
+export async function refundStarsReceipt(id: number): Promise<StarsPaymentReceipt> {
+  const { data } = await api.post<StarsPaymentReceipt>(`/admin/stars-purchases/receipts/${id}/refund`);
   return data;
 }
 
