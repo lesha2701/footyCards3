@@ -40,7 +40,7 @@ function AlbumOverview({ onOpen }: { onOpen: (id: number) => void }) {
     <div className="flex flex-col gap-4">
       {data && (
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-bg-surface p-4">
-          <p className="font-mono text-[10px] uppercase tracking-wider text-ink-mist">Собрано карточек</p>
+          <p className="font-mono text-micro uppercase tracking-wider text-ink-mist">Собрано карточек</p>
           <div className="mt-1 flex items-end justify-between">
             <p className="font-display text-3xl font-bold text-ink-chalk">
               {data.overall_owned}
@@ -101,11 +101,11 @@ function NextGoal({
     >
       <IconCollection size={20} className="shrink-0 text-accent-lime" />
       <span className="min-w-0 flex-1">
-        <span className="block text-[10px] font-semibold uppercase tracking-wider text-accent-lime">Почти собрано</span>
+        <span className="block text-micro font-semibold uppercase tracking-wider text-accent-lime">Почти собрано</span>
         <span className="block truncate text-sm font-semibold text-ink-chalk">
           «{goal.name}»: осталось {left} {left === 1 ? "карточка" : left < 5 ? "карточки" : "карточек"}
         </span>
-        <span className="flex items-center gap-1 text-[11px] text-ink-mist">
+        <span className="flex items-center gap-1 text-caption text-ink-mist">
           Награда: {goal.reward_coins > 0 && <>{goal.reward_coins} <IconCoin size={10} className="text-accent-lime" /></>}
           {goal.reward_pack_name && ` пак «${goal.reward_pack_name}»`}
         </span>
@@ -133,7 +133,7 @@ function CollectionSpread({ collection, onClick }: { collection: AlbumCollection
           </div>
         )}
         {collection.is_complete && (
-          <span className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent-lime text-[10px] font-bold text-bg-base">
+          <span className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent-lime text-micro font-bold text-bg-base">
             ✓
           </span>
         )}
@@ -152,9 +152,9 @@ function CollectionSpread({ collection, onClick }: { collection: AlbumCollection
           />
         </div>
         {collection.is_complete ? (
-          <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-accent-lime">Собрана</p>
+          <p className="mt-1 text-micro font-bold uppercase tracking-wide text-accent-lime">Собрана</p>
         ) : collection.reward_coins > 0 ? (
-          <p className="mt-1 flex items-center gap-1 text-[10px] text-ink-mist">
+          <p className="mt-1 flex items-center gap-1 text-micro text-ink-mist">
             Награда: {collection.reward_coins}
             <IconCoin size={9} className="text-accent-lime" />
             {collection.reward_pack_name && ` + пак «${collection.reward_pack_name}»`}
@@ -282,8 +282,8 @@ function AlbumSlot({ slot, onOpen }: { slot: AlbumPlayer; onOpen: () => void }) 
           <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.6" />
           <path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="1.6" />
         </svg>
-        <p className="line-clamp-2 text-[10px] font-semibold leading-tight text-ink-mist">{slot.player.display_name}</p>
-        <p className="text-[9px] uppercase tracking-wide text-ink-mist-dim">{POSITION_LABELS[slot.player.position]}</p>
+        <p className="line-clamp-2 text-micro font-semibold leading-tight text-ink-mist">{slot.player.display_name}</p>
+        <p className="text-micro uppercase tracking-wide text-ink-mist-dim">{POSITION_LABELS[slot.player.position]}</p>
       </div>
     );
   }
@@ -312,7 +312,7 @@ function AlbumSlot({ slot, onOpen }: { slot: AlbumPlayer; onOpen: () => void }) 
       }
       footer={
         slot.duplicate_count > 1 ? (
-          <p className="pb-1 text-center font-mono text-[10px] font-bold leading-none text-ink-mist">×{slot.duplicate_count}</p>
+          <p className="pb-1 text-center font-mono text-micro font-bold leading-none text-ink-mist">×{slot.duplicate_count}</p>
         ) : undefined
       }
     />

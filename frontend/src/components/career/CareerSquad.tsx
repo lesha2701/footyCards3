@@ -64,13 +64,13 @@ function isOut(entry: CareerSquadCard): boolean {
 
 function StatusBadge({ entry }: { entry: CareerSquadCard }) {
   if (entry.suspended_rounds > 0) {
-    return <span className="rounded bg-red-500 px-1 text-[8px] font-bold leading-tight text-white">🟥 {entry.suspended_rounds}</span>;
+    return <span className="rounded bg-red-500 px-1 text-micro font-bold leading-tight text-white">🟥 {entry.suspended_rounds}</span>;
   }
   if (entry.injured_rounds > 0) {
-    return <span className="rounded bg-red-500 px-1 text-[8px] font-bold leading-tight text-white">✚ {entry.injured_rounds}</span>;
+    return <span className="rounded bg-red-500 px-1 text-micro font-bold leading-tight text-white">✚ {entry.injured_rounds}</span>;
   }
-  if (entry.form > 0) return <span className="rounded bg-accent-lime px-1 text-[8px] font-bold leading-tight text-bg-base">▲{entry.form}</span>;
-  if (entry.form < 0) return <span className="rounded bg-red-400 px-1 text-[8px] font-bold leading-tight text-white">▼</span>;
+  if (entry.form > 0) return <span className="rounded bg-accent-lime px-1 text-micro font-bold leading-tight text-bg-base">▲{entry.form}</span>;
+  if (entry.form < 0) return <span className="rounded bg-red-400 px-1 text-micro font-bold leading-tight text-white">▼</span>;
   return null;
 }
 
@@ -81,13 +81,13 @@ function CardFace({ info, entry, width, children }: { info: Info; entry?: Career
       <div className="flex flex-col items-center gap-0.5 rounded-[10px] bg-bg-surface/95 p-1">
         <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-gradient-to-b from-white/10 to-black/40">
           <img decoding="async" src={info.image} alt="" className="h-full w-full object-cover" loading="lazy" />
-          <span className="absolute left-0.5 top-0.5 rounded-md bg-black/75 px-1 font-mono text-[10px] font-bold leading-tight text-accent-lime">
+          <span className="absolute left-0.5 top-0.5 rounded-md bg-black/75 px-1 font-mono text-micro font-bold leading-tight text-accent-lime">
             {info.rating}
           </span>
-          {info.mine && <span className="absolute right-0.5 top-0.5 rounded bg-accent-lime px-0.5 text-[7px] font-black text-bg-base">Я</span>}
+          {info.mine && <span className="absolute right-0.5 top-0.5 rounded bg-accent-lime px-0.5 text-micro font-black text-bg-base">Я</span>}
           {entry && <span className="absolute bottom-0.5 left-0.5"><StatusBadge entry={entry} /></span>}
         </div>
-        <span className="w-full truncate text-center text-[9px] font-semibold leading-tight text-ink-chalk">{info.short}</span>
+        <span className="w-full truncate text-center text-micro font-semibold leading-tight text-ink-chalk">{info.short}</span>
         {children}
       </div>
     </div>
@@ -109,7 +109,7 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick }: {
     >
       {info ? (
         <CardFace info={info} entry={entry} width="w-[62px]">
-          <span className={`rounded-full px-1.5 font-mono text-[8px] font-bold leading-tight ${off ? "bg-red-500/25 text-red-300" : "bg-white/10 text-accent-cyan"}`}>
+          <span className={`rounded-full px-1.5 font-mono text-micro font-bold leading-tight ${off ? "bg-red-500/25 text-red-300" : "bg-white/10 text-accent-cyan"}`}>
             {info.position}
           </span>
           {chemPoints && <ChemistryDiamonds points={chemPoints.points} max={chemMax} onPosition={chemPoints.on_position} />}
@@ -122,7 +122,7 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick }: {
       ) : (
         <div className="flex w-[62px] flex-col items-center gap-1 rounded-xl border border-dashed border-white/25 bg-black/30 p-2">
           <span className="text-lg leading-none text-ink-mist-dim">+</span>
-          <span className="font-mono text-[9px] text-ink-mist-dim">{slot.ideal_position}</span>
+          <span className="font-mono text-micro text-ink-mist-dim">{slot.ideal_position}</span>
         </div>
       )}
     </button>
@@ -138,12 +138,12 @@ function BenchCard({ entry, onClick, gain, selected }: { entry: CareerSquadCard;
       className={`relative flex min-w-0 flex-col items-center ${out ? "opacity-45 grayscale" : "active:scale-95"} ${selected ? "rounded-[12px] ring-2 ring-accent-lime" : ""}`}
     >
       <CardFace info={info} entry={entry} width="w-full">
-        <span className="font-mono text-[8px] font-bold leading-tight text-accent-cyan">{info.position}</span>
+        <span className="font-mono text-micro font-bold leading-tight text-accent-cyan">{info.position}</span>
         <span className="block h-[3px] w-full overflow-hidden rounded-full bg-white/10">
           <span className={`block h-full ${fatigueTone(entry.fatigue)}`} style={{ width: `${entry.fatigue}%` }} />
         </span>
         {gain != null && gain !== 0 && (
-          <span className={`font-mono text-[9px] font-bold leading-tight ${gain > 0 ? "text-accent-green" : "text-red-400"}`}>
+          <span className={`font-mono text-micro font-bold leading-tight ${gain > 0 ? "text-accent-green" : "text-red-400"}`}>
             {gain > 0 ? `+${gain}` : gain} хим.
           </span>
         )}
@@ -232,20 +232,20 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
     <section className="flex flex-col gap-3 rounded-3xl bg-bg-surface p-4">
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-ink-mist">Состав на тур {season.rounds_played + 1}</p>
+          <p className="text-micro uppercase tracking-wider text-ink-mist">Состав на тур {season.rounds_played + 1}</p>
           <p className="font-display text-lg font-bold leading-tight text-ink-chalk">{formationLabel(season.formation)}</p>
         </div>
         {squadEditable ? (
           <button onClick={() => setBuilding(true)}
-            className="rounded-xl bg-white/10 px-3 py-1.5 text-[11px] font-semibold text-ink-chalk active:scale-95">
+            className="rounded-xl bg-white/10 px-3 py-1.5 text-caption font-semibold text-ink-chalk active:scale-95">
             Изменить заявку · {season.squad.length}
           </button>
         ) : (
-          <p className="text-[11px] text-ink-mist">заявка · {season.squad.length}</p>
+          <p className="text-caption text-ink-mist">заявка · {season.squad.length}</p>
         )}
       </div>
       {squadEditable && (
-        <p className="-mt-1 text-[10px] text-ink-mist-dim">Заявку можно менять до первого тура, состав — перед каждым туром.</p>
+        <p className="-mt-1 text-micro text-ink-mist-dim">Заявку можно менять до первого тура, состав — перед каждым туром.</p>
       )}
       {chemistry?.enabled && <ChemistrySummary chemistry={chemistry} />}
 
@@ -276,12 +276,12 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
 
       <div className="flex flex-col gap-2.5">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-accent-cyan">Запас · {bench.length}</p>
-          <p className="text-[10px] text-ink-mist-dim">полоска — усталость</p>
+          <p className="text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">Запас · {bench.length}</p>
+          <p className="text-micro text-ink-mist-dim">полоска — усталость</p>
         </div>
         {benchByLine.map((line) => (
           <div key={line.category}>
-            <p className="mb-1 text-[10px] font-semibold text-ink-mist">{line.label} · {line.entries.length}</p>
+            <p className="mb-1 text-micro font-semibold text-ink-mist">{line.label} · {line.entries.length}</p>
             <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
               {line.entries.map((entry) => <BenchCard key={entry.card_id} entry={entry} />)}
             </div>
@@ -289,7 +289,7 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
         ))}
       </div>
 
-      <p className="text-[10px] leading-snug text-ink-mist-dim">
+      <p className="text-micro leading-snug text-ink-mist-dim">
         Нажми на игрока на поле, чтобы заменить. Линии — химия соседей: зелёная — один клуб и страна, жёлтая — что-то
         одно, красная — ничего общего.
       </p>
@@ -311,7 +311,7 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
             <p className="font-display text-base font-bold text-ink-chalk">Позиция {picking.ideal_position}</p>
-            <p className="mb-3 text-[11px] text-ink-mist">Цифра под карточкой — как изменится химия состава</p>
+            <p className="mb-3 text-caption text-ink-mist">Цифра под карточкой — как изменится химия состава</p>
             <div className="grid grid-cols-4 gap-2">
               {candidates.map((entry) => {
                 const info = infoOf(entry)!;

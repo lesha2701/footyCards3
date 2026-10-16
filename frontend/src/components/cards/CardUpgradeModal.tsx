@@ -126,7 +126,7 @@ export default function CardUpgradeModal({ cards, onClose }: { cards: UserCard[]
                     >
                       <div>
                         <p className="font-display text-sm font-bold text-ink-chalk">{RARITY_LABELS[rule.to_rarity]}</p>
-                        <p className="mt-0.5 font-mono text-[11px] text-ink-mist">
+                        <p className="mt-0.5 font-mono text-caption text-ink-mist">
                           Шанс {Math.round(chance * 100)}%
                         </p>
                       </div>

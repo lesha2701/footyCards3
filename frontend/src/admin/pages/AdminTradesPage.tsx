@@ -87,8 +87,8 @@ function CardChip({ card }: { card: UserCard }) {
         className="h-8 w-8 rounded object-cover"
       />
       <div className="leading-tight">
-        <p className="text-[11px] font-semibold text-slate-200">{card.player.display_name}</p>
-        <p className="text-[10px] text-slate-500">Рейтинг {card.player.rating} · #{card.serial_number}</p>
+        <p className="text-caption font-semibold text-slate-200">{card.player.display_name}</p>
+        <p className="text-micro text-slate-500">Рейтинг {card.player.rating} · #{card.serial_number}</p>
       </div>
     </div>
   );
@@ -97,15 +97,15 @@ function CardChip({ card }: { card: UserCard }) {
 function TradeSide({ label, cards, coins }: { label: string; cards: UserCard[]; coins: number }) {
   return (
     <div className="flex-1">
-      <p className="mb-1 text-[10px] font-semibold text-slate-500">{label}</p>
+      <p className="mb-1 text-micro font-semibold text-slate-500">{label}</p>
       <div className="flex flex-wrap gap-1.5">
         {cards.map((c) => <CardChip key={c.id} card={c} />)}
         {coins > 0 && (
-          <div className="flex items-center rounded-lg bg-black/20 px-2 py-1 text-[11px] font-semibold text-accent-lime">
+          <div className="flex items-center rounded-lg bg-black/20 px-2 py-1 text-caption font-semibold text-accent-lime">
             🪙 {coins}
           </div>
         )}
-        {cards.length === 0 && coins === 0 && <span className="text-[11px] text-slate-500">—</span>}
+        {cards.length === 0 && coins === 0 && <span className="text-caption text-slate-500">—</span>}
       </div>
     </div>
   );
@@ -118,9 +118,9 @@ function TradeRow({ trade: t, onForceCancel }: { trade: TradeOffer; onForceCance
         <span>
           #{t.id}: {t.sender.username ?? t.sender.id} → {t.receiver.username ?? t.receiver.id}
         </span>
-        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px]">{STATUS_LABELS[t.status]}</span>
+        <span className="rounded-full bg-white/5 px-2 py-0.5 text-caption">{STATUS_LABELS[t.status]}</span>
       </div>
-      <p className="mt-1 text-[11px] text-slate-500">{formatDateTime(t.created_at)}</p>
+      <p className="mt-1 text-caption text-slate-500">{formatDateTime(t.created_at)}</p>
 
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
         <TradeSide label="Отдаёт" cards={t.offered_cards} coins={t.sender_coins} />

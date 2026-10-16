@@ -134,7 +134,7 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
 
       <div>
         {division && <DivisionCard division={division} divisions={view.divisions ?? []} />}
-        <p className="mt-1.5 flex items-center gap-1 text-[11px] text-ink-mist">
+        <p className="mt-1.5 flex items-center gap-1 text-caption text-ink-mist">
           Чемпиону: {Math.round(((view.place_rewards[0] ?? 0) * pct) / 100)} <IconCoin size={11} className="text-accent-lime" /> и трофей
         </p>
       </div>
@@ -158,7 +158,7 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
               </button>
             ))
           )}
-          <p className="text-[11px] text-ink-mist-dim">Друг будет в той же лиге: два личных матча, общая таблица. Если не ответит за сутки — его место займёт бот.</p>
+          <p className="text-caption text-ink-mist-dim">Друг будет в той же лиге: два личных матча, общая таблица. Если не ответит за сутки — его место займёт бот.</p>
         </div>
       )}
 
@@ -176,9 +176,9 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
 function DivisionCard({ division, divisions }: { division: CareerDivision; divisions: CareerDivision[] }) {
   return (
     <div className="rounded-2xl bg-bg-raised p-3">
-      <p className="text-[10px] uppercase tracking-wider text-ink-mist">Твой дивизион</p>
+      <p className="text-micro uppercase tracking-wider text-ink-mist">Твой дивизион</p>
       <p className="font-display text-base font-bold text-ink-chalk">{division.name}</p>
-      <p className="mt-1 text-[11px] text-ink-mist">
+      <p className="mt-1 text-caption text-ink-mist">
         Соперники: {division.bot_level_label} · награды ×{division.reward_pct / 100}.
         {division.promote > 0 && division.division > 1 && ` Места 1–${division.promote} — повышение.`}
         {division.relegate > 0 && division.division < division.count && ` Последние ${division.relegate} — вылет.`}
@@ -306,7 +306,7 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
         {opponent && myMatch && (
           <div className="mt-3 flex items-center gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] uppercase tracking-wider text-ink-mist">Следующий матч · {formatWhen(nextRound.at)}</p>
+              <p className="text-micro uppercase tracking-wider text-ink-mist">Следующий матч · {formatWhen(nextRound.at)}</p>
               <p className="truncate font-display text-base font-bold text-ink-chalk">
                 {myMatch.home === season.my_team_index ? "Дома" : "В гостях"}: {opponent.name}
               </p>
@@ -445,10 +445,10 @@ function Calendar({ season }: { season: CareerSeason }) {
             onClick={() => navigate(`/play/career/seasons/${season.id}/rounds/${round.index}/matches/${index}`)}
             className="flex items-center gap-3 rounded-2xl bg-bg-surface px-3 py-2.5 text-left disabled:cursor-default"
           >
-            <span className="w-10 shrink-0 font-mono text-[11px] text-ink-mist">Тур {round.index + 1}</span>
+            <span className="w-10 shrink-0 font-mono text-caption text-ink-mist">Тур {round.index + 1}</span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm text-ink-chalk">{home ? "vs" : "@"} {opp.name}</span>
-              <span className="block text-[10px] text-ink-mist-dim">{formatWhen(round.at)}</span>
+              <span className="block text-micro text-ink-mist-dim">{formatWhen(round.at)}</span>
               {round.report && <RoundReport report={round.report} />}
             </span>
             <span className={`font-mono text-sm font-bold ${tone}`}>{played ? `${own}:${theirs}` : "—"}</span>
@@ -469,7 +469,7 @@ function RoundReport({ report }: { report: CareerRoundReport }) {
   if (report.form_up.length) parts.push({ text: `в форме: ${report.form_up.join(", ")}`, tone: "text-accent-lime" });
   if (!parts.length) return null;
   return (
-    <span className="mt-0.5 block text-[10px] leading-snug">
+    <span className="mt-0.5 block text-micro leading-snug">
       {parts.map((p, i) => (
         <span key={i} className={`${p.tone} block truncate`}>{p.text}</span>
       ))}
@@ -518,7 +518,7 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
       {tacticsSeason ? (
         <div className="flex items-center justify-between gap-2 text-xs">
           <span className="text-ink-mist">Схема {season.formation} · заявка {season.squad.length} игроков</span>
-          <span className="text-[11px] text-ink-mist-dim">тактика — во вкладке «Подготовка»</span>
+          <span className="text-caption text-ink-mist-dim">тактика — во вкладке «Подготовка»</span>
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-2">
@@ -527,7 +527,7 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
           <Select value={playstyle} options={PLAYSTYLES} onChange={setPlaystyle} />
         </div>
       )}
-      <p className="text-[11px] text-ink-mist">
+      <p className="text-caption text-ink-mist">
         Пустые места, травмированных и дисквалифицированных автоматически заменит лучший свежий игрок заявки.
         Усталость снижает рейтинг, форма ▲ после победы добавляет. Три жёлтые или красная — пропуск тура.
       </p>
@@ -538,7 +538,7 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
       </div>
       {bench.length > 0 && (
         <div>
-          <p className="mb-1 text-[11px] font-semibold text-ink-mist">Запас</p>
+          <p className="mb-1 text-caption font-semibold text-ink-mist">Запас</p>
           <div className="flex flex-col divide-y divide-white/5">
             {bench.map((entry) => <SquadRow key={entry.card_id} label="—" entry={entry} />)}
           </div>
@@ -590,21 +590,21 @@ function SquadRow({ label, entry, onClick }: { label: string; entry?: CareerSqua
   const mine = entry?.my_player;
   return (
     <button onClick={onClick} disabled={!onClick} className="flex w-full items-center gap-3 py-2 text-left">
-      <span className="w-10 shrink-0 font-mono text-[10px] text-ink-mist">{label}</span>
+      <span className="w-10 shrink-0 font-mono text-micro text-ink-mist">{label}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm text-ink-chalk">
           {mine ? (
             <>
-              {mine.name} <span className="rounded bg-accent-lime/15 px-1 text-[9px] font-bold text-accent-lime">МОЙ ИГРОК</span>
+              {mine.name} <span className="rounded bg-accent-lime/15 px-1 text-micro font-bold text-accent-lime">МОЙ ИГРОК</span>
             </>
           ) : card ? card.player.display_name : entry ? "Карточка продана" : "Авто"}
         </span>
-        {card && <span className="text-[10px] text-ink-mist">{card.player.position} · {card.player.rating}</span>}
-        {mine && <span className="text-[10px] text-ink-mist">{mine.position} · {mine.rating}</span>}
+        {card && <span className="text-micro text-ink-mist">{card.player.position} · {card.player.rating}</span>}
+        {mine && <span className="text-micro text-ink-mist">{mine.position} · {mine.rating}</span>}
       </span>
       {entry && entry.form !== 0 && entry.injured_rounds === 0 && entry.suspended_rounds === 0 && (
         <span
-          className={`font-mono text-[10px] font-bold ${entry.form > 0 ? "text-accent-lime" : "text-red-400"}`}
+          className={`font-mono text-micro font-bold ${entry.form > 0 ? "text-accent-lime" : "text-red-400"}`}
           title="Форма на следующий матч"
         >
           {entry.form > 0 ? `▲+${entry.form}` : `▼${entry.form}`}
@@ -618,11 +618,11 @@ function SquadRow({ label, entry, onClick }: { label: string; entry?: CareerSqua
         </span>
       )}
       {entry && entry.suspended_rounds > 0 ? (
-        <span className="flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
+        <span className="flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-micro font-semibold text-red-400">
           <span className="h-3 w-2 rounded-[2px] bg-red-500" /> дисквал. · {entry.suspended_rounds} т.
         </span>
       ) : entry && entry.injured_rounds > 0 ? (
-        <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
+        <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-micro font-semibold text-red-400">
           травма · {entry.injured_rounds} т.
         </span>
       ) : entry ? (

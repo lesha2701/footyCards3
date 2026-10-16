@@ -250,7 +250,7 @@ export default function PenaltyMatchPage() {
       </div>
 
       {match.status === "in_progress" && (
-        <div className="flex gap-3 text-[11px] font-mono">
+        <div className="flex gap-3 text-caption font-mono">
           <span className={kickSecondsLeft !== null && kickSecondsLeft <= 3 ? "text-red-400" : "text-ink-mist"}>
             Ход: {kickSecondsLeft ?? "—"}с
           </span>
@@ -282,7 +282,7 @@ export default function PenaltyMatchPage() {
                 key={z.value}
                 onClick={() => { setPickedZone(z.value); pickMutation.mutate(z.value); }}
                 disabled={!isViewerTurn || pickMutation.isPending}
-                className={`flex flex-col items-center gap-1 rounded-2xl px-3 py-3.5 text-[11px] font-semibold text-ink-chalk transition-colors active:scale-90 disabled:opacity-40 ${
+                className={`flex flex-col items-center gap-1 rounded-2xl px-3 py-3.5 text-caption font-semibold text-ink-chalk transition-colors active:scale-90 disabled:opacity-40 ${
                   pickedZone === z.value ? "bg-accent-cyan/20 ring-2 ring-accent-cyan" : "bg-bg-surface"
                 }`}
               >
@@ -294,7 +294,7 @@ export default function PenaltyMatchPage() {
           <button
             onClick={() => forfeitMutation.mutate()}
             disabled={forfeitMutation.isPending}
-            className="text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2 active:scale-95"
+            className="text-caption font-semibold text-ink-mist-dim underline underline-offset-2 active:scale-95"
           >
             Сдаться (засчитается поражение)
           </button>

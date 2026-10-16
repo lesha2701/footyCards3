@@ -116,7 +116,7 @@ function AddFriend({
           <Avatar user={u} />
           <span className="min-w-0 flex-1 truncate text-sm text-ink-chalk">{displayName(u)}</span>
           {known.has(u.id) ? (
-            <span className="text-[11px] text-ink-mist">уже в списке</span>
+            <span className="text-caption text-ink-mist">уже в списке</span>
           ) : (
             <button
               onClick={() => add.mutate(u.id)}
@@ -154,7 +154,7 @@ function FriendList({ friends, onChanged, onError }: { friends: UserPublic[]; on
               <span className="flex items-center gap-1.5 truncate text-sm font-semibold text-ink-chalk">
                 {displayName(u)} <UserBadge badge={u.active_badge} />
               </span>
-              <span className="text-[11px] text-ink-mist">Рейтинг Arena {u.arena_rating}</span>
+              <span className="text-caption text-ink-mist">Рейтинг Arena {u.arena_rating}</span>
             </span>
           </button>
           <div className="mt-2 grid grid-cols-3 gap-1.5">
@@ -162,7 +162,7 @@ function FriendList({ friends, onChanged, onError }: { friends: UserPublic[]; on
             <QuickButton Icon={IconFlagCheckered} label="Тактико" onClick={() => challenge.mutate(u.id)} disabled={challenge.isPending} />
             <QuickButton Icon={IconUsers} label="Сезон" onClick={() => navigate(`/play/career?friend=${u.id}`)} />
           </div>
-          <button onClick={() => remove.mutate(u.id)} className="mt-2 text-[11px] text-ink-mist-dim underline underline-offset-2">
+          <button onClick={() => remove.mutate(u.id)} className="mt-2 text-caption text-ink-mist-dim underline underline-offset-2">
             Удалить из друзей
           </button>
         </div>
@@ -183,7 +183,7 @@ function QuickButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center justify-center gap-1 rounded-xl bg-bg-raised py-2 text-[11px] font-semibold text-ink-chalk active:scale-95 disabled:opacity-50"
+      className="flex items-center justify-center gap-1 rounded-xl bg-bg-raised py-2 text-caption font-semibold text-ink-chalk active:scale-95 disabled:opacity-50"
     >
       <Icon size={13} /> {label}
     </button>
@@ -221,8 +221,8 @@ function Requests({
         <div key={r.request_id} className="flex items-center gap-3 rounded-2xl bg-bg-surface p-3 opacity-80">
           <Avatar user={r.user} />
           <span className="min-w-0 flex-1 truncate text-sm text-ink-chalk">{displayName(r.user)}</span>
-          <span className="text-[11px] text-ink-mist">ждёт ответа</span>
-          <button onClick={() => cancel.mutate(r.user.id)} className="text-[11px] text-ink-mist-dim underline">
+          <span className="text-caption text-ink-mist">ждёт ответа</span>
+          <button onClick={() => cancel.mutate(r.user.id)} className="text-caption text-ink-mist-dim underline">
             отменить
           </button>
         </div>
@@ -244,7 +244,7 @@ function Feed() {
           <Avatar user={item.user} />
           <span className="min-w-0 flex-1 text-sm text-ink-chalk">
             <b>{displayName(item.user)}</b> {item.text}
-            <span className="block text-[10px] text-ink-mist-dim">
+            <span className="block text-micro text-ink-mist-dim">
               {new Date(item.at).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
             </span>
           </span>

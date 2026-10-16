@@ -26,15 +26,15 @@ export default function AdminTournamentsPage() {
 
       <div className="flex gap-3">
         <div className="rounded-xl bg-bg-surface px-4 py-2.5">
-          <p className="text-[11px] text-slate-400">Идут сейчас</p>
+          <p className="text-caption text-slate-400">Идут сейчас</p>
           <p className="font-mono text-lg font-bold text-emerald-400">{stats?.active_count ?? "—"}</p>
         </div>
         <div className="rounded-xl bg-bg-surface px-4 py-2.5">
-          <p className="text-[11px] text-slate-400">Завершено всего</p>
+          <p className="text-caption text-slate-400">Завершено всего</p>
           <p className="font-mono text-lg font-bold text-slate-100">{stats?.completed_count ?? "—"}</p>
         </div>
         <div className="rounded-xl bg-bg-surface px-4 py-2.5">
-          <p className="text-[11px] text-slate-400">Клубов в очереди</p>
+          <p className="text-caption text-slate-400">Клубов в очереди</p>
           <p className="font-mono text-lg font-bold text-amber-300">{stats?.queued_club_count ?? "—"} / 8</p>
         </div>
       </div>

@@ -105,7 +105,7 @@ export default function CardSkillPanel({ cardId }: { cardId: number }) {
               <button
                 key={c.id}
                 onClick={() => { setSelectedId(c.id); setPicker(null); setError(null); }}
-                className={`flex shrink-0 flex-col items-center gap-1 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold ${
+                className={`flex shrink-0 flex-col items-center gap-1 rounded-xl px-2.5 py-1.5 text-caption font-semibold ${
                   active ? "bg-accent-lime/15 text-accent-lime ring-1 ring-accent-lime/60" : "bg-bg-raised text-ink-mist"
                 }`}
               >
@@ -113,7 +113,7 @@ export default function CardSkillPanel({ cardId }: { cardId: number }) {
                 {c.skill_code && c.skill_level ? (
                   <CardSkillBadge code={c.skill_code} level={c.skill_level} />
                 ) : (
-                  <span className="text-[9px] text-ink-mist-dim">без навыка</span>
+                  <span className="text-micro text-ink-mist-dim">без навыка</span>
                 )}
               </button>
             );
@@ -130,17 +130,17 @@ export default function CardSkillPanel({ cardId }: { cardId: number }) {
           <p className="mt-1 text-sm font-semibold text-accent-lime">
             +{state.skill.bonus_pp}% {current.bonus_phrase}
           </p>
-          <p className="mt-0.5 text-[11px] text-ink-mist">{current.effect}</p>
+          <p className="mt-0.5 text-caption text-ink-mist">{current.effect}</p>
           <EngineChips skill={current} />
           <SkillScope skill={current} />
           {state.next_level_bonus_pp !== null && (
-            <p className="mt-1 text-[11px] text-ink-mist-dim">
+            <p className="mt-1 text-caption text-ink-mist-dim">
               На уровне {SKILL_LEVEL_LABELS[state.skill.level + 1]}: +{state.next_level_bonus_pp}% {current.bonus_phrase}
             </p>
           )}
-          {state.skill.level >= 3 && <p className="mt-1 text-[11px] text-ink-mist-dim">Максимальный уровень.</p>}
+          {state.skill.level >= 3 && <p className="mt-1 text-caption text-ink-mist-dim">Максимальный уровень.</p>}
           {!state.skill.is_effective && (
-            <p className="mt-1.5 flex items-start gap-1 text-[11px] text-amber-300">
+            <p className="mt-1.5 flex items-start gap-1 text-caption text-amber-300">
               <IconWarning size={12} className="mt-0.5 shrink-0" />
               Сейчас навык не действует в матчах (выключено администратором или не подходит позиции карточки).
             </p>
@@ -153,7 +153,7 @@ export default function CardSkillPanel({ cardId }: { cardId: number }) {
       )}
 
       {state.blocked_reason && (
-        <p className="mt-2 flex items-start gap-1 text-[11px] text-ink-mist">
+        <p className="mt-2 flex items-start gap-1 text-caption text-ink-mist">
           <IconWarning size={12} className="mt-0.5 shrink-0" />
           {state.blocked_reason}
         </p>
@@ -190,7 +190,7 @@ export default function CardSkillPanel({ cardId }: { cardId: number }) {
         )}
       </div>
       {upgrade && !upgrade.allowed && upgrade.reason && !state.blocked_reason && (
-        <p className="mt-1 text-[11px] text-ink-mist-dim">{upgrade.reason}</p>
+        <p className="mt-1 text-caption text-ink-mist-dim">{upgrade.reason}</p>
       )}
 
       {picker && (
@@ -201,7 +201,7 @@ export default function CardSkillPanel({ cardId }: { cardId: number }) {
         />
       )}
 
-      {error && <p className="mt-2 rounded-lg bg-red-500/10 px-2 py-1.5 text-[11px] text-red-400">{error}</p>}
+      {error && <p className="mt-2 rounded-lg bg-red-500/10 px-2 py-1.5 text-caption text-red-400">{error}</p>}
 
       <SkillHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
 
@@ -231,7 +231,7 @@ function EngineChips({ skill }: { skill: SkillCatalogItem }) {
         return (
           <span
             key={engine}
-            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+            className={`rounded-full px-2 py-0.5 text-micro font-semibold ${
               active ? "bg-accent-lime/15 text-accent-lime" : "bg-white/5 text-ink-mist-dim line-through"
             }`}
           >
@@ -245,7 +245,7 @@ function EngineChips({ skill }: { skill: SkillCatalogItem }) {
 
 function SkillScope({ skill }: { skill: SkillCatalogItem }) {
   return (
-    <details className="mt-1 text-[11px] text-ink-mist-dim">
+    <details className="mt-1 text-caption text-ink-mist-dim">
       <summary className="cursor-pointer select-none">Где работает</summary>
       <ul className="mt-1 list-disc pl-4">
         {skill.applies_in.map((line) => <li key={line}>{line}</li>)}
@@ -271,7 +271,7 @@ function SkillPicker({
   const others = ordered.filter((a) => !a.position_compatible);
   return (
     <div className="mt-2 flex flex-col gap-1.5">
-      {fitting.length === 0 && <p className="text-[11px] text-ink-mist">Для этой позиции навыков нет.</p>}
+      {fitting.length === 0 && <p className="text-caption text-ink-mist">Для этой позиции навыков нет.</p>}
       {[...fitting, ...(showOthers ? others : [])].map((action) => {
         const skill = skillByCode(skills, action.skill_code);
         return (
@@ -286,22 +286,22 @@ function SkillPicker({
                 <SkillIcon code={action.skill_code} size={14} className="mr-1 inline-block align-[-2px] text-accent-lime" aria-hidden />
                 {skill?.name ?? action.skill_code}
               </span>
-              <span className="flex items-center gap-1 font-mono text-[10px] text-ink-mist">
+              <span className="flex items-center gap-1 font-mono text-micro text-ink-mist">
                 жетоны {action.tokens_owned}/{action.token_cost}
                 {action.coin_cost > 0 && (<> · <IconCoin size={10} />{action.coin_cost}</>)}
               </span>
             </div>
             {skill && (
-              <p className="mt-0.5 text-[10px] text-ink-mist-dim">
+              <p className="mt-0.5 text-micro text-ink-mist-dim">
                 +{skill.levels[0]?.bonus_pp ?? 0}% {skill.bonus_phrase} · {skill.engines.map((e) => ENGINE_LABELS[e]).join(", ")}
               </p>
             )}
-            {!action.allowed && action.reason && <p className="mt-0.5 text-[10px] text-amber-300">{action.reason}</p>}
+            {!action.allowed && action.reason && <p className="mt-0.5 text-micro text-amber-300">{action.reason}</p>}
           </button>
         );
       })}
       {others.length > 0 && (
-        <button onClick={() => setShowOthers((v) => !v)} className="py-1 text-[11px] text-ink-mist-dim underline">
+        <button onClick={() => setShowOthers((v) => !v)} className="py-1 text-caption text-ink-mist-dim underline">
           {showOthers ? "Скрыть неподходящие" : `Ещё ${others.length} не подходят этой позиции`}
         </button>
       )}
@@ -355,7 +355,7 @@ function SkillConfirmSheet({
                 </span>
               ) : action.skill_code}
             </p>
-            {targetBonus !== undefined && <p className="text-[10px] text-ink-mist">{targetBonus} п.п.</p>}
+            {targetBonus !== undefined && <p className="text-micro text-ink-mist">{targetBonus} п.п.</p>}
           </div>
         </div>
         <div className="mt-3 rounded-xl bg-black/20 p-2 text-xs text-ink-mist">

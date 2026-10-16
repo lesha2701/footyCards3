@@ -41,6 +41,14 @@ export default {
           "mist-dim": "rgb(var(--c-ink-mist-dim) / <alpha-value>)",
         },
       },
+      // Small-text scale. Below `micro` (10px) nothing is readable on a
+      // phone — use these instead of text-[Npx] so sizes can be tuned in one
+      // place (e.g. bump `caption` to 12px later). Larger text uses the
+      // Tailwind defaults (xs 12 / sm 14 / base 16 …).
+      fontSize: {
+        micro: ["10px", { lineHeight: "12px" }],
+        caption: ["11px", { lineHeight: "14px" }],
+      },
       fontFamily: {
         display: ["'Benzin'", "system-ui", "sans-serif"],
         body: ["'Manrope'", "system-ui", "sans-serif"],

@@ -240,7 +240,7 @@ function Stat({ label, value, hint }: { label: string; value: string | number; h
     <div className="rounded-2xl border border-white/5 bg-bg-surface p-4">
       <p className="text-xs text-slate-400">{label}</p>
       <p className="mt-1 font-display text-2xl font-bold text-slate-100">{value}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-slate-500">{hint}</p>}
+      {hint && <p className="mt-0.5 text-caption text-slate-500">{hint}</p>}
     </div>
   );
 }
@@ -269,7 +269,7 @@ function BarChart({ title, points }: { title: string; points: DayCount[] }) {
       </div>
       <div className="mt-1 flex gap-px">
         {points.map((p, i) => (
-          <span key={p.date} className="flex-1 text-center text-[10px] text-slate-500">
+          <span key={p.date} className="flex-1 text-center text-micro text-slate-500">
             {(points.length - 1 - i) % labelEvery === 0 ? p.date.slice(8, 10) : ""}
           </span>
         ))}

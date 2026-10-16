@@ -19,7 +19,7 @@ export default function PathCardMark({
   const level = stage != null ? talentLevelAt(catalog, stage) : 0;
   const legend = isLegendStage(catalog, stage);
   const stageName = stage != null ? catalog?.stages.find((s) => s.index === stage)?.name : undefined;
-  const text = size === "sm" ? "text-[9px]" : "text-[10px]";
+  const text = size === "sm" ? "text-micro" : "text-micro";
   return (
     <span
       title={[

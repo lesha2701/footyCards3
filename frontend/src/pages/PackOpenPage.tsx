@@ -684,15 +684,15 @@ function BulkSummary({
                 className="aspect-square w-full object-cover"
               />
               <div className="p-1.5 text-center">
-                <p className="truncate text-[11px] font-bold text-ink-chalk">{opened.card.coach.display_name}</p>
-                <p className="text-[9px] text-ink-mist">Тренер · {RARITY_LABELS[opened.card.coach.rarity]}</p>
+                <p className="truncate text-caption font-bold text-ink-chalk">{opened.card.coach.display_name}</p>
+                <p className="text-micro text-ink-mist">Тренер · {RARITY_LABELS[opened.card.coach.rarity]}</p>
               </div>
             </div>
             {opened.is_new && (
-              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
+              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-micro font-bold text-bg-base">NEW</span>
             )}
             {opened.duplicate_count > 1 && (
-              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
+              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-micro font-bold text-ink-chalk">
                 ×{opened.duplicate_count}
               </span>
             )}
@@ -713,15 +713,15 @@ function BulkSummary({
                 className="aspect-square w-full object-cover"
               />
               <div className="p-1.5 text-center">
-                <p className="truncate text-[11px] font-bold text-ink-chalk">{opened.card.stadium.display_name}</p>
-                <p className="text-[9px] text-ink-mist">Стадион · +{Math.round(opened.card.stadium.boost_pct * 100)}%</p>
+                <p className="truncate text-caption font-bold text-ink-chalk">{opened.card.stadium.display_name}</p>
+                <p className="text-micro text-ink-mist">Стадион · +{Math.round(opened.card.stadium.boost_pct * 100)}%</p>
               </div>
             </div>
             {opened.is_new && (
-              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
+              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-micro font-bold text-bg-base">NEW</span>
             )}
             {opened.duplicate_count > 1 && (
-              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
+              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-micro font-bold text-ink-chalk">
                 ×{opened.duplicate_count}
               </span>
             )}
@@ -874,14 +874,14 @@ function Summary({
                 />
                 <div className="p-2 text-center">
                   <p className="truncate text-xs font-bold text-ink-chalk">{opened.card.coach.display_name}</p>
-                  <p className="text-[10px] text-ink-mist">Тренер · {RARITY_LABELS[opened.card.coach.rarity]}</p>
+                  <p className="text-micro text-ink-mist">Тренер · {RARITY_LABELS[opened.card.coach.rarity]}</p>
                 </div>
               </div>
               {opened.is_new && (
-                <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
+                <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-micro font-bold text-bg-base">NEW</span>
               )}
               {opened.duplicate_count > 1 && (
-                <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
+                <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-micro font-bold text-ink-chalk">
                   ×{opened.duplicate_count}
                 </span>
               )}
@@ -905,14 +905,14 @@ function Summary({
                 />
                 <div className="p-2 text-center">
                   <p className="truncate text-xs font-bold text-ink-chalk">{opened.card.stadium.display_name}</p>
-                  <p className="text-[10px] text-ink-mist">Стадион · +{Math.round(opened.card.stadium.boost_pct * 100)}%</p>
+                  <p className="text-micro text-ink-mist">Стадион · +{Math.round(opened.card.stadium.boost_pct * 100)}%</p>
                 </div>
               </div>
               {opened.is_new && (
-                <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
+                <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-micro font-bold text-bg-base">NEW</span>
               )}
               {opened.duplicate_count > 1 && (
-                <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
+                <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-micro font-bold text-ink-chalk">
                   ×{opened.duplicate_count}
                 </span>
               )}
@@ -953,17 +953,17 @@ function OpenedCardTile({ opened, withDetails = false }: { opened: OpenedCard; w
           {(opened.is_new || opened.duplicate_count > 1) && (
             <div className="flex items-center gap-1">
               {opened.is_new && (
-                <span className="rounded-full bg-accent-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-bg-base">NEW</span>
+                <span className="rounded-full bg-accent-green px-1.5 py-0.5 text-micro font-bold leading-none text-bg-base">NEW</span>
               )}
               {opened.duplicate_count > 1 && (
-                <span className="rounded-full bg-black/40 px-1.5 py-0.5 font-mono text-[10px] font-bold leading-none text-ink-chalk">
+                <span className="rounded-full bg-black/40 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-ink-chalk">
                   ×{opened.duplicate_count}
                 </span>
               )}
             </div>
           )}
           {withDetails && player.collection_name && (
-            <p className="flex max-w-full items-center justify-center gap-1 truncate text-[10px] font-semibold text-accent-lime">
+            <p className="flex max-w-full items-center justify-center gap-1 truncate text-micro font-semibold text-accent-lime">
               <IconTag size={10} />
               {player.collection_name}
             </p>

@@ -36,7 +36,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   return (
     <div className="flex gap-3">
       <div className="flex flex-col items-center">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-floodlight font-mono text-[11px] font-bold text-bg-base">{n}</span>
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-floodlight font-mono text-caption font-bold text-bg-base">{n}</span>
         <span className="mt-1 w-px flex-1 bg-white/10" />
       </div>
       <div className="min-w-0 flex-1 pb-4">
@@ -56,10 +56,10 @@ export function SeasonSummaryView({ summary, catalog }: { summary: CareerSeasonS
     <div className="flex flex-col gap-2">
       {best && (
         <div className="rounded-2xl bg-bg-raised p-3">
-          <p className="text-[10px] uppercase tracking-wider text-ink-mist">Лучшая тактика сезона</p>
+          <p className="text-micro uppercase tracking-wider text-ink-mist">Лучшая тактика сезона</p>
           <p className="text-sm font-semibold text-ink-chalk">{presetLabel(best.preset)} — {best.points} очк. за {best.played} матч.</p>
           {summary.tactics.length > 1 && (
-            <p className="mt-0.5 text-[10px] text-ink-mist">
+            <p className="mt-0.5 text-micro text-ink-mist">
               {summary.tactics.slice(1).map((t) => `${presetLabel(t.preset)}: ${t.points} за ${t.played}`).join(" · ")}
             </p>
           )}
@@ -72,18 +72,18 @@ export function SeasonSummaryView({ summary, catalog }: { summary: CareerSeasonS
           ["🩹 Больше пропустил", summary.most_missed ? `${summary.most_missed.name} · ${summary.most_missed.rounds} т.` : "—"],
         ] as const).map(([label, value]) => (
           <div key={label} className="rounded-xl bg-bg-raised px-1.5 py-2">
-            <p className="text-[9px] text-ink-mist">{label}</p>
-            <p className="mt-0.5 text-[10px] font-semibold leading-tight text-ink-chalk">{value}</p>
+            <p className="text-micro text-ink-mist">{label}</p>
+            <p className="mt-0.5 text-micro font-semibold leading-tight text-ink-chalk">{value}</p>
           </div>
         ))}
       </div>
       {summary.duels.length > 0 && (
         <ul className="flex flex-col gap-1">
           {summary.duels.map((d) => (
-            <li key={`${d.id}-${d.attacker}`} className="flex items-center justify-between gap-2 rounded-xl bg-bg-raised px-3 py-1.5 text-[11px]">
+            <li key={`${d.id}-${d.attacker}`} className="flex items-center justify-between gap-2 rounded-xl bg-bg-raised px-3 py-1.5 text-caption">
               <span className="min-w-0">
                 <span className={`block truncate ${d.attacker === "me" ? "text-accent-lime" : "text-red-300"}`}>{d.label}</span>
-                <span className="block text-[9px] text-ink-mist-dim">{d.attacker === "me" ? "ваши атаки" : "атаки соперника"} · прорывов {d.attacker_won} из {d.applied}</span>
+                <span className="block text-micro text-ink-mist-dim">{d.attacker === "me" ? "ваши атаки" : "атаки соперника"} · прорывов {d.attacker_won} из {d.applied}</span>
               </span>
             </li>
           ))}
@@ -128,12 +128,12 @@ export function SquadBuilder({ onClose, onView, onError }: { onClose: () => void
             <p className="font-display text-base font-bold text-ink-chalk">Заявка на сезон</p>
             <span className={`font-mono text-sm font-bold ${selected.size === size ? "text-accent-lime" : "text-ink-chalk"}`}>{selected.size}/{size}</span>
           </div>
-          <p className="text-[11px] text-ink-mist">Отмеченные — в заявке. Кто был в прошлом сезоне, тот ядро команды.</p>
+          <p className="text-caption text-ink-mist">Отмеченные — в заявке. Кто был в прошлом сезоне, тот ядро команды.</p>
         </div>
         <div className="flex-1 overflow-y-auto px-4">
           {byLine.map((line) => (
             <div key={line.cat} className="mb-3">
-              <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-accent-cyan">
+              <p className="mb-1 text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">
                 {line.label} · {line.cards.filter((c) => selected.has(c.card_id)).length}
               </p>
               <div className="grid grid-cols-4 gap-1.5">
@@ -147,15 +147,15 @@ export function SquadBuilder({ onClose, onView, onError }: { onClose: () => void
                       <span className="flex flex-col items-center gap-0.5 rounded-[10px] bg-bg-surface p-1">
                         <span className="relative block aspect-square w-full overflow-hidden rounded-lg bg-black/40">
                           <img decoding="async" src={staticUrl(p?.image_path ?? "players/placeholder/player_placeholder.webp")} alt="" className="h-full w-full object-cover" loading="lazy" />
-                          <span className="absolute left-0.5 top-0.5 rounded bg-black/75 px-1 font-mono text-[10px] font-bold text-accent-lime">
+                          <span className="absolute left-0.5 top-0.5 rounded bg-black/75 px-1 font-mono text-micro font-bold text-accent-lime">
                             {p?.rating ?? c.my_player?.rating}
                           </span>
-                          {on && <span className="absolute right-0.5 top-0.5 rounded-full bg-accent-lime px-1 text-[8px] font-black text-bg-base">✓</span>}
+                          {on && <span className="absolute right-0.5 top-0.5 rounded-full bg-accent-lime px-1 text-micro font-black text-bg-base">✓</span>}
                         </span>
-                        <span className="w-full truncate text-center text-[9px] font-semibold text-ink-chalk">
+                        <span className="w-full truncate text-center text-micro font-semibold text-ink-chalk">
                           {(p?.display_name ?? c.my_player?.name ?? "").split(" ").slice(-1)[0]}
                         </span>
-                        <span className="font-mono text-[8px] text-accent-cyan">{p?.position ?? c.my_player?.position}</span>
+                        <span className="font-mono text-micro text-accent-cyan">{p?.position ?? c.my_player?.position}</span>
                       </span>
                     </button>
                   );
@@ -195,19 +195,19 @@ export function OffseasonPanel({ season, catalog, onView, onError }: {
 
   return (
     <section className="flex flex-col rounded-3xl bg-gradient-to-b from-bg-surface to-bg-raised p-4 ring-1 ring-accent-lime/20">
-      <p className="text-[10px] uppercase tracking-wider text-accent-lime">Предсезонка</p>
+      <p className="text-micro uppercase tracking-wider text-accent-lime">Предсезонка</p>
       <p className="font-display text-lg font-bold text-ink-chalk">
         {off.first_season ? "Первый сезон" : "Новый сезон"} — {formatWhen(off.starts_at)}
       </p>
-      <p className="mb-4 text-[11px] text-ink-mist">Любой шаг можно пропустить: сезон начнётся сам с текущими настройками.</p>
+      <p className="mb-4 text-caption text-ink-mist">Любой шаг можно пропустить: сезон начнётся сам с текущими настройками.</p>
       {off.friend_league && (
-        <p className="-mt-2 mb-4 rounded-xl bg-accent-cyan/10 px-3 py-2 text-[11px] text-accent-cyan">
+        <p className="-mt-2 mb-4 rounded-xl bg-accent-cyan/10 px-3 py-2 text-caption text-accent-cyan">
           Лига с другом продолжается: вы снова в одном дивизионе.
         </p>
       )}
 
       {!off.first_season && <Step n={1} title="Итоги сезона">
-        <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-caption">
           {off.prev_place && <span className="rounded-full bg-bg-base/60 px-2.5 py-1 font-semibold text-ink-chalk">{off.prev_place} место</span>}
           {moved !== 0 && (
             <span className={`rounded-full px-2.5 py-1 font-semibold ${moved < 0 ? "bg-accent-lime/15 text-accent-lime" : "bg-red-500/15 text-red-300"}`}>
@@ -224,7 +224,7 @@ export function OffseasonPanel({ season, catalog, onView, onError }: {
       <Step n={first + 1} title={off.first_season ? "Заявка на сезон" : "Ядро команды и заявка"}>
         {off.first_season ? (
           <div className="rounded-2xl bg-bg-base/50 p-3">
-            <p className="text-[11px] leading-snug text-ink-mist">
+            <p className="text-caption leading-snug text-ink-mist">
               Заявка собрана автоматически из лучших карточек. Её можно поменять до первого тура — потом она станет ядром команды.
             </p>
             <button onClick={() => setBuilding(true)} className="mt-2 w-full rounded-xl bg-white/10 py-2 text-xs font-semibold text-ink-chalk active:scale-95">
@@ -237,7 +237,7 @@ export function OffseasonPanel({ season, catalog, onView, onError }: {
             <span className="text-ink-mist">Осталось с прошлого сезона</span>
             <span className={`font-mono font-bold ${coreOk ? "text-accent-lime" : "text-amber-300"}`}>{off.core_count} / {off.core_min}+</span>
           </div>
-          <p className="mt-1 text-[11px] leading-snug text-ink-mist">
+          <p className="mt-1 text-caption leading-snug text-ink-mist">
             {off.carried_pct > 0
               ? `Ядро сохранено — переходит ${off.carried_pct}% сыгранности (${off.keep_pct}% от прошлой).`
               : off.prev_formation && season.formation !== off.prev_formation
@@ -260,12 +260,12 @@ export function OffseasonPanel({ season, catalog, onView, onError }: {
                 className={`flex flex-col items-center gap-1 rounded-2xl p-2.5 text-center ${on ? "bg-floodlight text-bg-base" : "bg-bg-base/50 text-ink-chalk"}`}
               >
                 <span className="text-lg">{CAMP_ICON[c.code] ?? "•"}</span>
-                <span className="text-[11px] font-bold">{c.label}</span>
+                <span className="text-caption font-bold">{c.label}</span>
               </button>
             );
           })}
         </div>
-        <p className="mt-1.5 text-[11px] leading-snug text-ink-mist">
+        <p className="mt-1.5 text-caption leading-snug text-ink-mist">
           {off.camps.find((c) => c.code === off.camp)?.hint ?? "Выбери фокус сборов на старт сезона."}
         </p>
       </Step>
@@ -285,7 +285,7 @@ export function OffseasonPanel({ season, catalog, onView, onError }: {
             >
               {friendly.isPending ? "Играем..." : "Сыграть товарищеский"}
             </button>
-            <p className="mt-1 text-[10px] text-ink-mist-dim">Без наград, усталости и сыгранности — проверка тактики и состава.</p>
+            <p className="mt-1 text-micro text-ink-mist-dim">Без наград, усталости и сыгранности — проверка тактики и состава.</p>
           </>
         )}
       </Step>

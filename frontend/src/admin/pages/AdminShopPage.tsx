@@ -59,7 +59,7 @@ function TopSupportersSection() {
                   {s.user_display_name}
                   {s.user_username && <span className="text-slate-500"> @{s.user_username}</span>}
                 </p>
-                <p className="text-[11px] text-slate-500">{s.purchase_count} покупок · id {s.user_telegram_id}</p>
+                <p className="text-caption text-slate-500">{s.purchase_count} покупок · id {s.user_telegram_id}</p>
               </div>
             </div>
             <span className="font-mono text-sm font-bold text-amber-300">{s.total_stars} ⭐</span>
@@ -92,7 +92,7 @@ function StarsPackPurchasesSection() {
         {summary && (
           <div className="shrink-0 rounded-xl bg-amber-400/10 px-3 py-2 text-right">
             <p className="font-display text-lg font-bold text-amber-300">{summary.total_stars} ⭐</p>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-caption text-slate-500">
               задонатили всего ({summary.total_purchases} покупок: паки + монеты)
             </p>
           </div>
@@ -120,7 +120,7 @@ function StarsPackPurchasesSection() {
                 <td className="px-3 py-2 text-xs">
                   {purchase.user_display_name}
                   {purchase.user_username && <span className="text-slate-500"> @{purchase.user_username}</span>}
-                  <div className="text-[11px] text-slate-500">id {purchase.user_telegram_id}</div>
+                  <div className="text-caption text-slate-500">id {purchase.user_telegram_id}</div>
                 </td>
                 <td className="px-3 py-2 text-xs">{purchase.pack_name}</td>
                 <td className="px-3 py-2 text-xs">{purchase.stars_amount}</td>
@@ -198,11 +198,11 @@ function CoinPackagesSection() {
           <div key={p.id} className="flex items-center justify-between rounded-xl bg-bg-base px-3 py-2">
             <div>
               <p className="text-sm font-semibold">{p.stars_price} ⭐ → {p.coins_amount} монет</p>
-              <p className="text-[11px] text-slate-500">{p.is_active ? "Активен" : "Отключён"} · порядок {p.sort_order}</p>
+              <p className="text-caption text-slate-500">{p.is_active ? "Активен" : "Отключён"} · порядок {p.sort_order}</p>
             </div>
             <div className="flex gap-1">
-              <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-              <button onClick={() => deleteMutation.mutate(p.id)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">Удалить</button>
+              <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+              <button onClick={() => deleteMutation.mutate(p.id)} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">Удалить</button>
             </div>
           </div>
         ))}
@@ -313,12 +313,12 @@ function BadgesSection() {
               )}
               <div>
                 <p className="text-sm font-semibold">{b.name}</p>
-                <p className="text-[11px] text-slate-500">{b.is_active ? "Активен" : "Отключён"} · порядок {b.sort_order}</p>
+                <p className="text-caption text-slate-500">{b.is_active ? "Активен" : "Отключён"} · порядок {b.sort_order}</p>
               </div>
             </div>
             <div className="flex gap-1">
-              <button onClick={() => openEdit(b)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-              <button onClick={() => deleteMutation.mutate(b.id)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">Удалить</button>
+              <button onClick={() => openEdit(b)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+              <button onClick={() => deleteMutation.mutate(b.id)} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">Удалить</button>
             </div>
           </div>
         ))}
@@ -385,7 +385,7 @@ function BadgesSection() {
                   </div>
                 </div>
               )}
-              {editing === "new" && <span className="text-[11px] text-slate-500">Картинку можно загрузить после создания значка.</span>}
+              {editing === "new" && <span className="text-caption text-slate-500">Картинку можно загрузить после создания значка.</span>}
             </div>
             <div className="mt-4 flex gap-2">
               <button onClick={() => setEditing(null)} className="flex-1 rounded-xl bg-white/5 py-2.5 text-sm">Отмена</button>

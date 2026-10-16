@@ -166,7 +166,7 @@ export default function NewTradePage() {
               </div>
             </div>
             {myCollection && myCollection.total > myCollection.items.length && !myCardSearch && (
-              <p className="mt-1 text-[11px] text-ink-mist-dim">
+              <p className="mt-1 text-caption text-ink-mist-dim">
                 Показано {myCollection.items.length} из {myCollection.total} — используй поиск, чтобы найти конкретную карточку
               </p>
             )}
@@ -193,7 +193,7 @@ export default function NewTradePage() {
               </div>
             </div>
             {theirCollection && theirCollection.total > theirCollection.items.length && !theirCardSearch && (
-              <p className="mt-1 text-[11px] text-ink-mist-dim">
+              <p className="mt-1 text-caption text-ink-mist-dim">
                 Показано {theirCollection.items.length} из {theirCollection.total} — используй поиск, чтобы найти конкретную карточку
               </p>
             )}

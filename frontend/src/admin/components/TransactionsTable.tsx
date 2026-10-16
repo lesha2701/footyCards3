@@ -120,7 +120,7 @@ export default function TransactionsTable({ userId, pageSize = 50 }: { userId?: 
                 {userId == null && (
                   <td className="px-3 py-2">
                     {t.user_name}
-                    <span className="block text-[10px] text-slate-500">
+                    <span className="block text-micro text-slate-500">
                       #{t.user_id}{t.username ? ` · @${t.username}` : ""}{t.telegram_id ? ` · ${t.telegram_id}` : ""}
                     </span>
                   </td>

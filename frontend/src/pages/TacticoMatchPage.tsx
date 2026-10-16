@@ -219,7 +219,7 @@ export default function TacticoMatchPage() {
                 Ждём ход соперника...
               </p>
               {match.round_deadline && (
-                <p className="mt-1 text-[11px] text-ink-mist-dim">
+                <p className="mt-1 text-caption text-ink-mist-dim">
                   Если соперник не успеет за <RoundCountdown deadline={match.round_deadline} />, за него сыграет случайная карта
                 </p>
               )}
@@ -235,7 +235,7 @@ export default function TacticoMatchPage() {
           <button
             onClick={() => forfeitMutation.mutate()}
             disabled={forfeitMutation.isPending}
-            className="mt-3 text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2 active:scale-95"
+            className="mt-3 text-caption font-semibold text-ink-mist-dim underline underline-offset-2 active:scale-95"
           >
             Сдаться (засчитается поражение)
           </button>
@@ -343,7 +343,7 @@ function TacticoCardTile({ card, phase, onClick }: { card: TacticoCard; phase: s
         </div>
         <div className="border-t border-white/10 bg-black/30 px-2 py-1.5 text-center">
           <p className="truncate font-display text-xs font-semibold text-ink-chalk">{card.display_name}</p>
-          <p className="mt-0.5 flex items-center justify-center gap-2 font-mono text-[9px]">
+          <p className="mt-0.5 flex items-center justify-center gap-2 font-mono text-micro">
             <span className={attackActive ? "font-bold text-accent-lime" : "text-ink-mist"}>
               АТК <b>{card.attack_rating}</b>
             </span>

@@ -14,7 +14,7 @@ export default function MatchPathSummary({ match }: { match: Pick<Match, "talent
   const progress = (match.path_progress ?? []).filter((p) => p.status !== "not_path");
   if (!talents.length && !progress.length) return null;
   return (
-    <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-[11px]">
+    <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-caption">
       <p className="font-semibold text-path">🌱 Академия</p>
       {talents.map((t, i) => (
         <p key={`t${i}`} className="text-ink-mist">

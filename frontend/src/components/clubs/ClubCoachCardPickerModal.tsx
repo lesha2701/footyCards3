@@ -78,8 +78,8 @@ export default function ClubCoachCardPickerModal({ open, cards, onSelect, onClos
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-ink-chalk">{c.coach.display_name}</p>
-                      <p className="text-[10px] text-ink-mist-dim">{RARITY_LABELS[c.coach.rarity]}</p>
-                      <p className="mt-0.5 truncate text-[10px] text-ink-mist">
+                      <p className="text-micro text-ink-mist-dim">{RARITY_LABELS[c.coach.rarity]}</p>
+                      <p className="mt-0.5 truncate text-micro text-ink-mist">
                         {c.coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
                       </p>
                     </div>

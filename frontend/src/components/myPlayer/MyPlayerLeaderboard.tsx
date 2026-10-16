@@ -36,7 +36,7 @@ export default function MyPlayerLeaderboard() {
           {data.entries.map((e) => <Row key={e.user_id} entry={e} />)}
           {data.me && (
             <>
-              <p className="py-1 text-center text-[10px] text-ink-mist-dim">…</p>
+              <p className="py-1 text-center text-micro text-ink-mist-dim">…</p>
               <Row entry={data.me} />
             </>
           )}
@@ -61,7 +61,7 @@ function Row({ entry }: { entry: MyPlayerLeaderboardEntry }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-ink-chalk">{p.name} <span className="text-ink-mist">#{p.number}</span></span>
-        <span className="block truncate text-[10px] text-ink-mist">
+        <span className="block truncate text-micro text-ink-mist">
           {entry.user_name} · {p.position} · ур. {entry.level} · <span className={TIER_TEXT[p.tier]}>{p.tier_label}</span>
         </span>
       </span>

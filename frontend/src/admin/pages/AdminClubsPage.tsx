@@ -226,7 +226,7 @@ function ClubDetailModal({ clubId, onClose }: { clubId: number; onClose: () => v
 function Info({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl bg-bg-surface px-3 py-2">
-      <p className="text-[11px] text-slate-400">{label}</p>
+      <p className="text-caption text-slate-400">{label}</p>
       <p className="font-semibold text-slate-100">{value}</p>
     </div>
   );

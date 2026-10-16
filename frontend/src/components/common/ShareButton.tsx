@@ -40,7 +40,7 @@ export default function ShareButton({
         disabled={share.isPending}
         className={`flex items-center justify-center gap-1.5 rounded-xl font-semibold active:scale-95 disabled:opacity-50 ${
           compact
-            ? "w-full bg-white/10 px-2 py-1.5 text-[11px] text-ink-chalk"
+            ? "w-full bg-white/10 px-2 py-1.5 text-caption text-ink-chalk"
             : "w-full bg-[#2AABEE] px-4 py-2.5 text-sm text-white"
         }`}
       >
@@ -48,7 +48,7 @@ export default function ShareButton({
         {share.isPending ? "Готовим…" : label}
       </button>
       {share.isError && (
-        <p className="text-center text-[11px] text-red-400">{formatGameError(share.error, "Не удалось поделиться")}</p>
+        <p className="text-center text-caption text-red-400">{formatGameError(share.error, "Не удалось поделиться")}</p>
       )}
     </div>
   );

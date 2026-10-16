@@ -125,7 +125,7 @@ export default function PenaltyMatchesPage() {
                 <IconPlay size={20} />
                 Играть
               </button>
-              <p className="-mt-2 text-center text-[11px] text-ink-mist-dim">
+              <p className="-mt-2 text-center text-caption text-ink-mist-dim">
                 За онлайн-матч рейтинг в <span className="font-semibold text-accent-lime">2 раза больше</span>, чем с ботом или другом
               </p>
             </>
@@ -235,7 +235,7 @@ function MatchRow({ match, onClick }: { match: PenaltyMatch; onClick: () => void
     <button onClick={onClick} className="flex items-center justify-between rounded-2xl bg-bg-surface p-4 text-left active:scale-[0.98]">
       <div>
         <p className="font-display text-sm font-bold text-ink-chalk">{match.opponent_name || "Открытый вызов"}</p>
-        <p className="mt-0.5 text-[11px] text-ink-mist">
+        <p className="mt-0.5 text-caption text-ink-mist">
           {OPPONENT_TYPE_LABELS[match.opponent_type]} · {STATUS_LABELS[match.status]}
           {match.stake_coins > 0 && ` · Ставка ${match.stake_coins}`}
         </p>
@@ -270,7 +270,7 @@ function ChatInviteSheet({ onClose, onCreate }: { onClose: () => void; onCreate:
           className="mb-3 w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk outline-none"
         />
         {stakeCoins > 0 && (
-          <p className="mb-3 text-[11px] text-ink-mist-dim">
+          <p className="mb-3 text-caption text-ink-mist-dim">
             Победитель заберёт {stakeCoins * 2} монет — по {stakeCoins} с каждой стороны.
           </p>
         )}

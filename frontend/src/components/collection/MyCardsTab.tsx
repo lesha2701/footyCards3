@@ -129,11 +129,11 @@ export default function MyCardsTab() {
         <div className="grid grid-cols-2 gap-x-3 rounded-2xl bg-bg-surface p-4">
           <div>
             <p className="font-display text-2xl font-bold text-ink-chalk">{stats.unique_players}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">Уникальных</p>
+            <p className="mt-0.5 text-caption text-ink-mist">Уникальных</p>
           </div>
           <div>
             <p className="font-display text-2xl font-bold text-ink-chalk">{stats.total_cards}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">Всего карточек</p>
+            <p className="mt-0.5 text-caption text-ink-mist">Всего карточек</p>
           </div>
         </div>
       )}
@@ -293,7 +293,7 @@ function CardTileBadges({ card }: { card: UserCard }) {
   return (
     <span className="flex items-center gap-1">
       {hasDuplicates && (
-        <span className="rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">×{card.duplicate_count}</span>
+        <span className="rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-micro font-bold text-ink-chalk">×{card.duplicate_count}</span>
       )}
       <CardSkillBadge code={card.skill_code} level={card.skill_level} upgradable={canUpgrade(card.skill_code, card.skill_level)} />
     </span>

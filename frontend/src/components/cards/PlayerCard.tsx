@@ -32,7 +32,7 @@ interface Props {
 // The footer keeps only the name (+ club and attack/defence from md up):
 // rarity and «Академия» are already said by the frame, so no repeated text.
 const RATING_TEXT = { sm: "text-[12px]", md: "text-sm", lg: "text-base" } as const;
-const NAME_TEXT = { sm: "text-[11px]", md: "text-xs", lg: "text-sm" } as const;
+const NAME_TEXT = { sm: "text-caption", md: "text-xs", lg: "text-sm" } as const;
 
 function PlayerCard({
   player, size = "md", badge, footer, onClick, selected, dimmed, stars = 0, pathStage, prestige = 0, talentOverride,
@@ -73,18 +73,18 @@ function PlayerCard({
           <div className="absolute left-1 top-1 rounded-md bg-black/70 px-1.5 py-0.5 text-center font-display font-bold leading-none text-white">
             <span className={RATING_TEXT[size]}>{player.rating}</span>
             {prestige > 0 && (
-              <span className={`mt-0.5 block text-[9px] leading-none ${prestigeStyle(prestige).mark}`} aria-label={`Престиж: ${prestige}`}>
+              <span className={`mt-0.5 block text-micro leading-none ${prestigeStyle(prestige).mark}`} aria-label={`Престиж: ${prestige}`}>
                 {prestigeMarks(prestige)}
               </span>
             )}
             {stars > 0 && (
-              <span className="mt-0.5 block text-[9px] leading-none text-amber-300" aria-label={`Звёзд: ${stars}`}>
+              <span className="mt-0.5 block text-micro leading-none text-amber-300" aria-label={`Звёзд: ${stars}`}>
                 {"★".repeat(stars)}
               </span>
             )}
           </div>
           <div className="absolute right-1 top-1 rounded-md bg-black/70 px-1.5 py-0.5 font-display font-semibold leading-none text-white">
-            <span className={size === "sm" ? "text-[10px]" : "text-[11px]"}>{player.position}</span>
+            <span className={size === "sm" ? "text-micro" : "text-caption"}>{player.position}</span>
           </div>
           {badge && <div className="absolute bottom-1 left-1">{badge}</div>}
           {isPath && (
@@ -96,7 +96,7 @@ function PlayerCard({
         <div className="border-t border-white/10 bg-black/30 px-1.5 py-1 text-center">
           <p className={`truncate font-display font-semibold leading-tight text-ink-chalk ${NAME_TEXT[size]}`}>{player.display_name}</p>
           {size !== "sm" && (
-            <p className="mt-0.5 truncate text-[10px] leading-tight text-ink-mist">
+            <p className="mt-0.5 truncate text-micro leading-tight text-ink-mist">
               {player.club} · <span className="font-mono text-accent-cyan">{player.attack_rating}/{player.defense_rating}</span>
             </p>
           )}

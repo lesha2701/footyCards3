@@ -112,7 +112,7 @@ export default function AdminLifestylePage() {
               )}
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{item.name}</p>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-caption text-slate-500">
                   {CATEGORIES.find((c) => c.code === item.category)?.label} · {item.coins_price > 0 && `🪙 ${item.coins_price} `}
                   {item.stars_price > 0 && `⭐ ${item.stars_price} `}· престиж {item.prestige} · продано {item.sold_count}
                   {item.max_supply != null && ` из ${item.max_supply}`}
@@ -121,8 +121,8 @@ export default function AdminLifestylePage() {
               </div>
             </div>
             <div className="flex shrink-0 gap-1">
-              <button onClick={() => openEdit(item)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-              <button onClick={() => confirmDelete(item)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">Удалить</button>
+              <button onClick={() => openEdit(item)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+              <button onClick={() => confirmDelete(item)} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">Удалить</button>
             </div>
           </div>
         ))}

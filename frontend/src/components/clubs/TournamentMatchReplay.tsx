@@ -88,7 +88,7 @@ export function TournamentMatchReplay({
           {caughtUp ? finishedLabel : autoSkip ? "Пропускаем матч..." : `${currentMinute}' · идёт матч...`}
         </span>
         {!caughtUp && !autoSkip && (
-          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-ink-chalk">
+          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-caption font-semibold text-ink-chalk">
             Пропустить
           </button>
         )}

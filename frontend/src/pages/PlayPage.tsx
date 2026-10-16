@@ -196,7 +196,7 @@ export default function PlayPage() {
         >
           <last.Icon size={20} />
           <span className="min-w-0 flex-1">
-            <span className="block text-[10px] font-semibold uppercase tracking-wider opacity-70">Продолжить</span>
+            <span className="block text-micro font-semibold uppercase tracking-wider opacity-70">Продолжить</span>
             <span className="block font-display text-sm font-bold">{last.title}</span>
           </span>
           <IconChevronRight size={18} />
@@ -212,7 +212,7 @@ export default function PlayPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="font-mono text-[11px] uppercase tracking-wider text-ink-mist">{title}</h2>
+      <h2 className="font-mono text-caption uppercase tracking-wider text-ink-mist">{title}</h2>
       {children}
     </section>
   );
@@ -239,26 +239,26 @@ function GameCard({
       </span>
       <div className="min-w-0 flex-1">
         <p className="font-display text-sm font-bold text-ink-chalk">{game.title}</p>
-        <p className="mt-0.5 text-[11px] leading-tight text-ink-mist">{game.description}</p>
-        {game.stat && <p className="mt-1 font-mono text-[10px] text-ink-mist">{game.stat}</p>}
+        <p className="mt-0.5 text-caption leading-tight text-ink-mist">{game.description}</p>
+        {game.stat && <p className="mt-1 font-mono text-micro text-ink-mist">{game.stat}</p>}
       </div>
       <div className="shrink-0 text-right">
         {game.rightLabel !== undefined ? (
-          <p className="text-[10px] text-ink-mist-dim">{game.rightLabel}</p>
+          <p className="text-micro text-ink-mist-dim">{game.rightLabel}</p>
         ) : remaining !== undefined && limit !== undefined ? (
           used ? (
             <>
               <p className="font-mono text-sm font-bold text-red-400">0/{limit}</p>
-              <p className="text-[10px] text-ink-mist-dim">{resetsAt ? `снова в ${formatClock(resetsAt)}` : "лимит на час"}</p>
+              <p className="text-micro text-ink-mist-dim">{resetsAt ? `снова в ${formatClock(resetsAt)}` : "лимит на час"}</p>
             </>
           ) : (
             <>
               <p className="font-mono text-sm font-bold text-ink-chalk">{remaining}/{limit}</p>
-              <p className="text-[10px] text-ink-mist-dim">осталось в час</p>
+              <p className="text-micro text-ink-mist-dim">осталось в час</p>
             </>
           )
         ) : game.noLimit ? (
-          <p className="text-[10px] text-ink-mist-dim">Платный вход</p>
+          <p className="text-micro text-ink-mist-dim">Платный вход</p>
         ) : (
           <Skeleton className="h-8 w-12" />
         )}

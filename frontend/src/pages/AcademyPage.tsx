@@ -165,7 +165,7 @@ export default function AcademyPage() {
         </div>
         <div className="text-right">
           <p className="font-display text-2xl font-bold text-path">{state.level}</p>
-          <p className="text-[10px] uppercase tracking-wider text-ink-mist">уровень из {state.max_level}</p>
+          <p className="text-micro uppercase tracking-wider text-ink-mist">уровень из {state.max_level}</p>
         </div>
       </header>
 
@@ -235,7 +235,7 @@ export default function AcademyPage() {
                     <span key={i} className={`h-1.5 flex-1 rounded-full ${i < wing.level ? "bg-path" : "bg-white/10"}`} />
                   ))}
                 </div>
-                <p className="mt-1.5 text-[11px] text-ink-mist">{wing.about}</p>
+                <p className="mt-1.5 text-caption text-ink-mist">{wing.about}</p>
                 {wing.effect && <p className="mt-1 text-xs text-path">Сейчас: {wing.effect}</p>}
                 {wing.next_effect && <p className="text-xs text-ink-chalk">Дальше: {wing.next_effect}</p>}
               </div>

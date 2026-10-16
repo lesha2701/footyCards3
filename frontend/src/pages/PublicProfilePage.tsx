@@ -84,7 +84,7 @@ export default function PublicProfilePage() {
             className="h-16 w-16 rounded-xl object-cover"
           />
           <div>
-            <p className="text-[11px] text-rarity-legendary">Самая редкая карточка</p>
+            <p className="text-caption text-rarity-legendary">Самая редкая карточка</p>
             <p className="font-display text-sm font-bold text-ink-chalk">{profile.rarest_card.display_name}</p>
           </div>
         </section>
@@ -97,7 +97,7 @@ function Stat({ label, value, accentClass }: { label: string; value: string | nu
   return (
     <div>
       <p className={`font-mono text-2xl font-bold ${accentClass ?? "text-ink-chalk"}`}>{value}</p>
-      <p className="mt-0.5 text-[11px] text-ink-mist">{label}</p>
+      <p className="mt-0.5 text-caption text-ink-mist">{label}</p>
     </div>
   );
 }

@@ -20,7 +20,7 @@ function ClubRow({ club, divisions, onSave }: { club: CareerClubAdmin; divisions
       <td className="py-1.5 pr-2">
         <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}
           className="w-36 rounded bg-bg-base px-2 py-1 text-xs" />
-        <p className="mt-0.5 text-[10px] text-slate-500">
+        <p className="mt-0.5 text-micro text-slate-500">
           {SOURCE[club.source ?? ""] ?? club.source}{club.pool_club ? ` · ${club.pool_club} (${club.pool_players})` : ""}
         </p>
       </td>
@@ -51,7 +51,7 @@ function ClubRow({ club, divisions, onSave }: { club: CareerClubAdmin; divisions
         <input type="checkbox" checked={draft.is_active} onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })} />
       </td>
       <td>
-        <button disabled={!dirty} onClick={() => onSave(draft)} className="rounded bg-accent-lime/20 px-2 py-1 text-[11px] text-accent-lime disabled:opacity-30">
+        <button disabled={!dirty} onClick={() => onSave(draft)} className="rounded bg-accent-lime/20 px-2 py-1 text-caption text-accent-lime disabled:opacity-30">
           Сохранить
         </button>
       </td>

@@ -77,7 +77,7 @@ export default function LeaguePage() {
             <p className="font-display text-sm font-bold text-accent-lime">
               {unseenCount > 1 ? `Новые награды за лиги (${unseenCount})` : "Новая награда за лигу"}
             </p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">Нажми, чтобы забрать</p>
+            <p className="mt-0.5 text-caption text-ink-mist">Нажми, чтобы забрать</p>
           </div>
         </button>
       )}
@@ -102,7 +102,7 @@ export default function LeaguePage() {
               </p>
               <p className="text-xs text-ink-mist">Суммарный рейтинг: {status.total_rating}</p>
               {status.current_league_percent !== null && (
-                <p className="text-[11px] text-ink-mist-dim">{status.current_league_percent}% игроков в этой лиге</p>
+                <p className="text-caption text-ink-mist-dim">{status.current_league_percent}% игроков в этой лиге</p>
               )}
             </div>
           </div>
@@ -117,15 +117,15 @@ export default function LeaguePage() {
           <div className="mt-3 grid grid-cols-3 gap-2 text-center">
             <div>
               <p className="font-mono text-sm font-bold text-accent-cyan">{status.arena_rating}</p>
-              <p className="text-[10px] text-ink-mist-dim">Arena</p>
+              <p className="text-micro text-ink-mist-dim">Arena</p>
             </div>
             <div>
               <p className="font-mono text-sm font-bold text-accent-lime">{status.tactics_rating}</p>
-              <p className="text-[10px] text-ink-mist-dim">Тактико</p>
+              <p className="text-micro text-ink-mist-dim">Тактико</p>
             </div>
             <div>
               <p className="font-mono text-sm font-bold text-rarity-epic">{status.penalty_rating}</p>
-              <p className="text-[10px] text-ink-mist-dim">Пенальти</p>
+              <p className="text-micro text-ink-mist-dim">Пенальти</p>
             </div>
           </div>
 
@@ -144,7 +144,7 @@ export default function LeaguePage() {
 
       {tiers && tiers.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h2 className="font-mono text-[11px] font-medium uppercase tracking-wider text-ink-mist">Лестница лиг</h2>
+          <h2 className="font-mono text-caption font-medium uppercase tracking-wider text-ink-mist">Лестница лиг</h2>
           <div className="-mx-4 flex snap-x snap-mandatory gap-5 overflow-x-auto px-6 pb-2">
             {tiers.map((t) => {
               const isCurrent = status?.current_league?.id === t.id;
@@ -197,7 +197,7 @@ export default function LeaguePage() {
       )}
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-mono text-[11px] font-medium uppercase tracking-wider text-ink-mist">Топ игроков</h2>
+        <h2 className="font-mono text-caption font-medium uppercase tracking-wider text-ink-mist">Топ игроков</h2>
         {ranking?.top.map((entry) => (
           <RankingRow key={entry.user_id} entry={entry} highlight={entry.user_id === user?.id} />
         ))}

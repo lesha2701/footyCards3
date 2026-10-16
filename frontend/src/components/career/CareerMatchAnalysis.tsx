@@ -25,7 +25,7 @@ function Row({ label, value }: { label: string; value: string }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-accent-cyan">{title}</p>
+      <p className="mb-1.5 text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">{title}</p>
       {children}
     </div>
   );
@@ -46,13 +46,13 @@ export default function CareerMatchAnalysis({ analysis, catalog }: { analysis: C
     <section className="flex flex-col gap-4 rounded-3xl bg-bg-surface p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="font-display text-base font-bold text-ink-chalk">Тактический разбор</p>
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${hint.tone}`}>{hint.label}</span>
+        <span className={`rounded-full px-2 py-0.5 text-micro font-bold ${hint.tone}`}>{hint.label}</span>
       </div>
 
       {catalog && (
         <div className="grid gap-2">
           <div className="rounded-2xl bg-bg-raised p-3">
-            <p className="mb-1.5 text-[11px] text-ink-mist">
+            <p className="mb-1.5 text-caption text-ink-mist">
               Вы: {analysis.formation} · {tacticLabel(MENTALITIES, analysis.mentality)}
               {myPreset && <> · <span className="text-ink-chalk">{myPreset}</span></>}
               {analysis.familiarity_pct > 0 && <> · сыгранность +{analysis.familiarity_pct}%</>}
@@ -60,7 +60,7 @@ export default function CareerMatchAnalysis({ analysis, catalog }: { analysis: C
             <TacticTags catalog={catalog} tactic={analysis.tactic} />
           </div>
           <div className="rounded-2xl bg-bg-raised p-3">
-            <p className="mb-1.5 text-[11px] text-ink-mist">Соперник{theirPreset && <> · <span className="text-ink-chalk">{theirPreset}</span></>}</p>
+            <p className="mb-1.5 text-caption text-ink-mist">Соперник{theirPreset && <> · <span className="text-ink-chalk">{theirPreset}</span></>}</p>
             <TacticTags catalog={catalog} tactic={analysis.opponent_tactic} />
           </div>
         </div>
@@ -77,8 +77,8 @@ export default function CareerMatchAnalysis({ analysis, catalog }: { analysis: C
               const share = d.applied ? Math.round((d.attacker_won / d.applied) * 100) : 0;
               return (
                 <li key={`${d.id}-${d.attacker}`} className="rounded-2xl bg-bg-raised p-2.5">
-                  <p className="text-[11px] text-ink-chalk">{d.label}</p>
-                  <p className="mt-0.5 text-[10px] text-ink-mist">
+                  <p className="text-caption text-ink-chalk">{d.label}</p>
+                  <p className="mt-0.5 text-micro text-ink-mist">
                     {d.attacker === "me" ? "Ваши атаки" : "Атаки соперника"}: {d.applied} дуэлей, прорыв в {d.attacker_won}
                   </p>
                   <span className="mt-1 block h-1 overflow-hidden rounded-full bg-white/10">

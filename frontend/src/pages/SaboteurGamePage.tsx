@@ -111,14 +111,14 @@ export default function SaboteurGamePage() {
                 }`}
               >
                 <p className="text-sm font-bold">{d.label}</p>
-                <p className={`flex items-center gap-1 text-[11px] ${stewardCount === d.stewardCount ? "text-bg-base/70" : "text-ink-mist-dim"}`}>
+                <p className={`flex items-center gap-1 text-caption ${stewardCount === d.stewardCount ? "text-bg-base/70" : "text-ink-mist-dim"}`}>
                   <IconProfile size={11} />
                   {d.stewardCount} из {LINE_SIZE} — стюардов в линии
                 </p>
               </button>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-ink-mist-dim">
+          <p className="mt-2 text-caption text-ink-mist-dim">
             Чем больше стюардов в линии — тем выше награда за проход, но и риск попасться больше.
           </p>
         </div>

@@ -255,7 +255,7 @@ export default function ClubPenaltyPage() {
                 key={z.value}
                 onClick={() => { setPickedZone(z.value); kickMutation.mutate(z.value); }}
                 disabled={kickMutation.isPending}
-                className={`flex flex-col items-center gap-1 rounded-2xl px-3 py-3.5 text-[11px] font-semibold text-ink-chalk transition-colors active:scale-90 disabled:opacity-40 ${
+                className={`flex flex-col items-center gap-1 rounded-2xl px-3 py-3.5 text-caption font-semibold text-ink-chalk transition-colors active:scale-90 disabled:opacity-40 ${
                   pickedZone === z.value ? "bg-accent-cyan/20 ring-2 ring-accent-cyan" : "bg-bg-surface"
                 }`}
               >

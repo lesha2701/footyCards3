@@ -54,7 +54,7 @@ export default function TrainingSection({ view, onSaved, onStart }: Props) {
       <div className="flex items-center justify-between gap-3">
         <span>
           <span className="block font-display text-base font-bold text-ink-chalk">Тренировка дня</span>
-          <span className="block text-[11px] text-ink-mist">{status}</span>
+          <span className="block text-caption text-ink-mist">{status}</span>
         </span>
         <button
           disabled={!t.can_train}

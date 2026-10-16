@@ -110,14 +110,14 @@ export default function GiftsPage() {
                         <IconGift size={26} className="text-rarity-epic" />
                       )}
                       {g.is_pinned && (
-                        <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent-lime text-[9px] font-bold text-bg-base">
+                        <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent-lime text-micro font-bold text-bg-base">
                           ★
                         </span>
                       )}
                     </span>
-                    <span className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{g.gift_set.name}</span>
+                    <span className="w-full truncate text-center text-caption font-semibold text-ink-chalk">{g.gift_set.name}</span>
                     {g.serial_number != null && (
-                      <span className="font-mono text-[10px] text-ink-mist-dim">№{g.serial_number}</span>
+                      <span className="font-mono text-micro text-ink-mist-dim">№{g.serial_number}</span>
                     )}
                   </button>
                 ))}
@@ -207,8 +207,8 @@ function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; on
                   className="h-full w-full object-cover"
                 />
               </span>
-              <p className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{c.card.coach.display_name}</p>
-              <p className="text-[10px] text-ink-mist">Тренер · {RARITY_LABELS[c.card.coach.rarity]}</p>
+              <p className="w-full truncate text-center text-caption font-semibold text-ink-chalk">{c.card.coach.display_name}</p>
+              <p className="text-micro text-ink-mist">Тренер · {RARITY_LABELS[c.card.coach.rarity]}</p>
             </div>
           ))}
           {(result.pack_result.skill_tokens ?? []).map((token, i) => (
@@ -223,8 +223,8 @@ function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; on
                   className="h-full w-full object-cover"
                 />
               </span>
-              <p className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{c.card.stadium.display_name}</p>
-              <p className="text-[10px] text-ink-mist">Стадион · +{Math.round(c.card.stadium.boost_pct * 100)}%</p>
+              <p className="w-full truncate text-center text-caption font-semibold text-ink-chalk">{c.card.stadium.display_name}</p>
+              <p className="text-micro text-ink-mist">Стадион · +{Math.round(c.card.stadium.boost_pct * 100)}%</p>
             </div>
           ))}
         </div>
@@ -413,7 +413,7 @@ export function GiftShop() {
                   {!!g.stars_price && <span>{g.stars_price} ⭐</span>}
                 </p>
                 {g.max_supply != null && (
-                  <p className="font-mono text-[10px] text-ink-mist-dim">
+                  <p className="font-mono text-micro text-ink-mist-dim">
                     Осталось {Math.max(0, g.max_supply - (g.next_serial_number - 1))} из {g.max_supply}
                   </p>
                 )}

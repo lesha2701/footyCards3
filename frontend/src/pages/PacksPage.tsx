@@ -158,7 +158,7 @@ export default function PacksPage() {
           </div>
           <button
             onClick={() => openLink(PACK_PURCHASE_TERMS_URL)}
-            className="text-center text-[11px] text-ink-mist-dim underline underline-offset-2"
+            className="text-center text-caption text-ink-mist-dim underline underline-offset-2"
           >
             Условия покупки цифровых паков
           </button>
@@ -236,7 +236,7 @@ function QuantitySheet({
         />
 
         {remaining !== null && (
-          <p className="mb-2 text-center text-[11px] text-ink-mist-dim">
+          <p className="mb-2 text-center text-caption text-ink-mist-dim">
             Осталось доступно: {remaining} {remaining === 1 ? "пак" : "паков"}
           </p>
         )}
@@ -279,13 +279,13 @@ function PackCard({
             <p className="font-display text-base font-bold text-ink-chalk">{pack.name}</p>
             <p className="mt-1 text-xs text-ink-mist">{pack.description}</p>
             {pack.unavailable_reason && (
-              <p className="mt-1 rounded-md bg-amber-400/10 px-2 py-0.5 text-[11px] font-semibold text-amber-300">{pack.unavailable_reason}</p>
+              <p className="mt-1 rounded-md bg-amber-400/10 px-2 py-0.5 text-caption font-semibold text-amber-300">{pack.unavailable_reason}</p>
             )}
             <div className="mt-2 flex flex-wrap gap-1">
               {pack.rarity_probabilities.map((rp) => (
                 <span
                   key={rp.rarity}
-                  className={`rounded-full px-2 py-0.5 font-mono text-[10px] ${
+                  className={`rounded-full px-2 py-0.5 font-mono text-micro ${
                     pack.player_pool === "path" && rp.rarity === "diamond"
                       ? "bg-emerald-400/15 font-semibold text-path"
                       : "bg-bg-raised text-ink-mist"
@@ -299,7 +299,7 @@ function PackCard({
             </div>
           </div>
           {pack.expected_value != null && pack.expected_value > 0 && (
-            <p className="mt-2 text-[10px] text-ink-mist" title="Средняя цена быстрой продажи карточек из пака">
+            <p className="mt-2 text-micro text-ink-mist" title="Средняя цена быстрой продажи карточек из пака">
               В среднем ~{Math.round(pack.expected_value)} монет ценности
             </p>
           )}
@@ -318,10 +318,10 @@ function PackCard({
           </div>
           {!disabled && !canAfford && (
             <div className="mt-2 flex gap-1.5">
-              <button onClick={onBuyCoins} className="flex-1 rounded-full bg-amber-400/15 py-1.5 text-[11px] font-semibold text-amber-300">
+              <button onClick={onBuyCoins} className="flex-1 rounded-full bg-amber-400/15 py-1.5 text-caption font-semibold text-amber-300">
                 Купить монеты
               </button>
-              <button onClick={onSellDuplicates} className="flex-1 rounded-full bg-white/5 py-1.5 text-[11px] font-semibold text-ink-mist">
+              <button onClick={onSellDuplicates} className="flex-1 rounded-full bg-white/5 py-1.5 text-caption font-semibold text-ink-mist">
                 Продать дубли
               </button>
             </div>
@@ -355,13 +355,13 @@ function StarsPackCard({ pack, onPurchased }: { pack: Pack; onPurchased: (result
             <p className="font-display text-base font-bold text-ink-chalk">{pack.name}</p>
             <p className="mt-1 text-xs text-ink-mist">{pack.description}</p>
             {pack.unavailable_reason && (
-              <p className="mt-1 rounded-md bg-amber-400/10 px-2 py-0.5 text-[11px] font-semibold text-amber-300">{pack.unavailable_reason}</p>
+              <p className="mt-1 rounded-md bg-amber-400/10 px-2 py-0.5 text-caption font-semibold text-amber-300">{pack.unavailable_reason}</p>
             )}
             <div className="mt-2 flex flex-wrap gap-1">
               {pack.rarity_probabilities.map((rp) => (
                 <span
                   key={rp.rarity}
-                  className={`rounded-full px-2 py-0.5 font-mono text-[10px] ${
+                  className={`rounded-full px-2 py-0.5 font-mono text-micro ${
                     pack.player_pool === "path" && rp.rarity === "diamond"
                       ? "bg-emerald-400/15 font-semibold text-path"
                       : "bg-bg-raised text-ink-mist"
@@ -373,12 +373,12 @@ function StarsPackCard({ pack, onPurchased }: { pack: Pack; onPurchased: (result
                 </span>
               ))}
               {!!pack.bonus_coins && (
-                <span className="flex items-center gap-1 rounded-full bg-accent-lime/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-accent-lime">
+                <span className="flex items-center gap-1 rounded-full bg-accent-lime/15 px-2 py-0.5 font-mono text-micro font-semibold text-accent-lime">
                   <IconCoin size={10} />+{pack.bonus_coins}
                 </span>
               )}
               {pack.badge && (
-                <span className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-amber-300">
+                <span className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 font-mono text-micro font-semibold text-amber-300">
                   {pack.badge.image_path ? (
                     <img decoding="async" loading="lazy" src={staticUrl(pack.badge.image_path) ?? undefined} className="h-3 w-3 rounded-full object-cover" />
                   ) : (
@@ -388,7 +388,7 @@ function StarsPackCard({ pack, onPurchased }: { pack: Pack; onPurchased: (result
                 </span>
               )}
             </div>
-            {error && <p className="mt-2 text-[11px] text-red-400">{error}</p>}
+            {error && <p className="mt-2 text-caption text-red-400">{error}</p>}
           </div>
           <div className="mt-2 flex items-center justify-between">
             <span className="flex items-center gap-1 font-mono text-sm font-semibold text-amber-400">⭐ {pack.stars_price}</span>

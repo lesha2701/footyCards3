@@ -30,7 +30,7 @@
   --c-bg-raised: 22 28 21;
   --c-ink-chalk: 243 246 242;
   --c-ink-mist: 138 150 142;
-  --c-ink-mist-dim: 91 101 94;
+  --c-ink-mist-dim: 118 130 122; /* 5.0:1 on bg-base (was 3.3, below WCAG AA) */
   /* Status semantics (cards): «Академия» growth, the Legend stage, prestige. */
   --c-path: 110 231 183;
   --c-legend: 252 211 77;
@@ -47,7 +47,7 @@
   --c-bg-raised: 228 234 225;
   --c-ink-chalk: 16 23 18;
   --c-ink-mist: 86 99 91;
-  --c-ink-mist-dim: 134 146 138;
+  --c-ink-mist-dim: 100 111 104; /* 4.6:1 on bg-base (was 2.9) */
   --c-path: 4 120 87;
   --c-legend: 180 83 9;
   --c-prestige: 162 28 175;

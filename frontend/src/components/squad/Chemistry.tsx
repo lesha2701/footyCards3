@@ -163,20 +163,20 @@ export function ChemistrySummary({ chemistry }: { chemistry: ChemistryOut | unde
         className="flex w-full items-center justify-between rounded-xl bg-white/5 px-3 py-2 active:scale-[0.99]"
       >
         <span className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wide text-ink-mist-dim">Химия</span>
+          <span className="text-micro uppercase tracking-wide text-ink-mist-dim">Химия</span>
           <span className="font-mono text-sm font-bold text-ink-chalk">{chemistry.team}/{chemistry.team_max}</span>
         </span>
-        <span className="flex items-center gap-2 text-[11px]">
+        <span className="flex items-center gap-2 text-caption">
           {chemistry.strength_bonus != null && chemistry.strength_bonus !== 0 && (
             <span className="font-mono font-bold text-accent-green">
               {chemistry.strength_bonus > 0 ? "+" : ""}{chemistry.strength_bonus} к силе
             </span>
           )}
-          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold text-ink-mist-dim">?</span>
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/10 text-micro font-bold text-ink-mist-dim">?</span>
         </span>
       </button>
       {open && rules && (
-        <div className="mt-1.5 rounded-xl bg-white/5 px-3 py-2 text-[11px] leading-relaxed text-ink-mist">
+        <div className="mt-1.5 rounded-xl bg-white/5 px-3 py-2 text-caption leading-relaxed text-ink-mist">
           <p>· Линия между соседями: <span className="text-accent-green">зелёная</span> — один клуб и одна страна, <span className="text-yellow-400">жёлтая</span> — клуб или страна, <span className="text-red-400">красная</span> — ничего общего</p>
           <p>· Химия игрока 0–{rules.player_max} растёт от связей с соседями; не на своей позиции — 0</p>
           <p>· Каждое очко химии: +{rules.rating_per_point} к рейтингу игрока в матче{rules.off_position_penalty > 0 ? `, не на своей позиции −${rules.off_position_penalty}` : ""}</p>
@@ -199,7 +199,7 @@ export function ChemistrySummary({ chemistry }: { chemistry: ChemistryOut | unde
 export function ChemistryFrozenNote({ chemistry }: { chemistry: ChemistryOut | undefined }) {
   const text = chemistryFrozenText(chemistry);
   if (!text) return null;
-  return <p className="mb-3 rounded-xl bg-white/5 px-3 py-2 text-[11px] leading-relaxed text-ink-mist">{text}</p>;
+  return <p className="mb-3 rounded-xl bg-white/5 px-3 py-2 text-caption leading-relaxed text-ink-mist">{text}</p>;
 }
 
 /** "Поставь X на DEF2 — +N к химии" one-tap swaps. */
@@ -217,16 +217,16 @@ export function ChemistryHints({
       <ul className="mt-2 flex flex-col gap-1.5">
         {hints.map((h) => (
           <li key={h.slotCode} className="flex items-center gap-2 text-xs">
-            <span className="w-9 shrink-0 font-mono text-[10px] text-ink-mist">{h.slotCode}</span>
+            <span className="w-9 shrink-0 font-mono text-micro text-ink-mist">{h.slotCode}</span>
             <span className="min-w-0 flex-1 truncate text-ink-chalk">
               {h.name}
               <span className="text-ink-mist">{h.currentName ? ` вместо ${h.currentName}` : " в пустой слот"}</span>
             </span>
-            <span className="shrink-0 font-mono text-[11px] font-bold text-accent-green">+{h.gain} хим.</span>
+            <span className="shrink-0 font-mono text-caption font-bold text-accent-green">+{h.gain} хим.</span>
             <button
               onClick={() => onApply(h)}
               disabled={busy}
-              className="shrink-0 rounded-full bg-accent-green/15 px-2 py-0.5 text-[11px] font-semibold text-accent-green disabled:opacity-50"
+              className="shrink-0 rounded-full bg-accent-green/15 px-2 py-0.5 text-caption font-semibold text-accent-green disabled:opacity-50"
             >
               Поставить
             </button>

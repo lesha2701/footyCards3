@@ -284,7 +284,7 @@ export default function AdminGamesPage() {
           {field("chemistry_coach_country_points", "+ химии игроку из страны тренера")}
           {field("chemistry_stadium_club_points", "+ химии игроку клуба стадиона (дома)")}
         </div>
-        <p className="mt-2 text-[11px] text-slate-500">
+        <p className="mt-2 text-caption text-slate-500">
           Подбор значений: <code>python -m scripts.compare_chemistry --synthetic 2000</code> в backend сравнивает силу
           существующих составов по старой и новой формуле.
         </p>
@@ -317,7 +317,7 @@ export default function AdminGamesPage() {
             />
           ))}
         </div>
-        <p className="mt-2 text-[11px] text-slate-500">
+        <p className="mt-2 text-caption text-slate-500">
           Оценка до включения: <code>python -m scripts.estimate_card_stars</code> в backend — сколько звёзд игроки получили бы
           сразу и сколько дублей ушло бы из быстрой продажи.
         </p>

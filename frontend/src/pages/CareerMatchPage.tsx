@@ -44,7 +44,7 @@ export default function CareerMatchPage() {
       {data.pens && (
         <section className="rounded-3xl bg-bg-surface p-4">
           <p className="font-display text-base font-bold text-ink-chalk">Серия пенальти {data.pens[0]}:{data.pens[1]}</p>
-          <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+          <div className="mt-2 grid grid-cols-2 gap-2 text-caption">
             {(["a", "b"] as const).map((side) => (
               <div key={side} className="flex flex-col gap-1">
                 <p className="truncate font-semibold text-ink-mist">{side === "a" ? data.home_name : data.away_name}</p>

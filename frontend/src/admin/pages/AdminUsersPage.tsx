@@ -198,8 +198,8 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
             {collection?.items?.map((c) => (
               <div key={c.id} className="rounded-xl bg-bg-surface p-2 text-center">
                 <img decoding="async" loading="lazy" src={staticUrl(c.player.image_path) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="aspect-square w-full rounded-lg object-cover" />
-                <p className="mt-1 truncate text-[11px]">{c.player.display_name}</p>
-                <button onClick={() => deleteCardMutation.mutate(c.id)} className="mt-1 w-full rounded-lg bg-red-500/80 py-1 text-[10px] font-bold text-white">
+                <p className="mt-1 truncate text-caption">{c.player.display_name}</p>
+                <button onClick={() => deleteCardMutation.mutate(c.id)} className="mt-1 w-full rounded-lg bg-red-500/80 py-1 text-micro font-bold text-white">
                   Удалить
                 </button>
               </div>
@@ -217,7 +217,7 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
 function Info({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl bg-bg-surface px-3 py-2">
-      <p className="text-[11px] text-slate-400">{label}</p>
+      <p className="text-caption text-slate-400">{label}</p>
       <p className="font-semibold text-slate-100">{value}</p>
     </div>
   );

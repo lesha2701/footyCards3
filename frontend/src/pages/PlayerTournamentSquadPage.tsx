@@ -158,7 +158,7 @@ export default function PlayerTournamentSquadPage() {
     const gain = chemistryGain(chemistry, chemSlots, pickerSlot.slot_code, card.player);
     if (gain == null) return null;
     return (
-      <span className={`font-mono text-[10px] font-bold ${gain > 0 ? "text-accent-green" : gain < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
+      <span className={`font-mono text-micro font-bold ${gain > 0 ? "text-accent-green" : gain < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
         {gain > 0 ? "+" : ""}{gain} хим.
       </span>
     );
@@ -198,9 +198,9 @@ export default function PlayerTournamentSquadPage() {
               t.template_index === viewedIndex ? "bg-accent-lime text-bg-base" : "bg-white/5 text-ink-mist"
             }`}
           >
-            <span className="whitespace-nowrap text-[11px] font-bold">{t.name}</span>
+            <span className="whitespace-nowrap text-caption font-bold">{t.name}</span>
             {t.is_active && (
-              <span className={`text-[8px] ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
+              <span className={`text-micro ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
                 Активный
               </span>
             )}
@@ -228,7 +228,7 @@ export default function PlayerTournamentSquadPage() {
       ) : (
         <button
           onClick={() => { setRenameValue(squad?.name ?? ""); setRenamingTemplate(true); }}
-          className="self-start text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2"
+          className="self-start text-caption font-semibold text-ink-mist-dim underline underline-offset-2"
         >
           Переименовать «{squad?.name}»
         </button>
@@ -251,7 +251,7 @@ export default function PlayerTournamentSquadPage() {
           <div>
             <p className="font-display text-base font-bold text-ink-chalk">Состав {squad?.formation}</p>
             {squadSkills.length > 0 && (
-              <p className="text-[11px] text-ink-mist">
+              <p className="text-caption text-ink-mist">
                 Навыки: действуют {activeSquadSkills.length} из {squadSkills.length}
               </p>
             )}
@@ -259,14 +259,14 @@ export default function PlayerTournamentSquadPage() {
               <button
                 onClick={() => autoFillMutation.mutate(false)}
                 disabled={autoFillMutation.isPending}
-                className="rounded-full bg-accent-lime/15 px-2.5 py-1 text-[11px] font-semibold text-accent-lime disabled:opacity-50"
+                className="rounded-full bg-accent-lime/15 px-2.5 py-1 text-caption font-semibold text-accent-lime disabled:opacity-50"
               >
                 Собрать лучший
               </button>
               <button
                 onClick={() => autoFillMutation.mutate(true)}
                 disabled={autoFillMutation.isPending}
-                className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-ink-mist disabled:opacity-50"
+                className="rounded-full bg-white/5 px-2.5 py-1 text-caption font-semibold text-ink-mist disabled:opacity-50"
               >
                 Из Card Arena
               </button>
@@ -332,12 +332,12 @@ export default function PlayerTournamentSquadPage() {
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
                       </div>
-                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">Тренер</span>
+                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">Тренер</span>
                     </>
                   ) : (
                     <>
                       <IconPlus size={16} className="text-ink-mist-dim" />
-                      <span className="text-[8px] text-ink-mist-dim">Тренер</span>
+                      <span className="text-micro text-ink-mist-dim">Тренер</span>
                     </>
                   )}
                 </button>
@@ -358,14 +358,14 @@ export default function PlayerTournamentSquadPage() {
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
                       </div>
-                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">
+                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">
                         +{Math.round(squad.stadium.boost_pct * 100)}%
                       </span>
                     </>
                   ) : (
                     <>
                       <IconPlus size={16} className="text-ink-mist-dim" />
-                      <span className="text-[8px] text-ink-mist-dim">Стадион</span>
+                      <span className="text-micro text-ink-mist-dim">Стадион</span>
                     </>
                   )}
                 </button>
@@ -397,7 +397,7 @@ export default function PlayerTournamentSquadPage() {
                     ) : (
                       <>
                         <IconPlus size={18} className="text-ink-mist-dim" />
-                        <span className="text-[9px] text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
+                        <span className="text-micro text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
                       </>
                     )}
                   </button>
@@ -409,7 +409,7 @@ export default function PlayerTournamentSquadPage() {
         {squad?.coach && (
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{squad.coach.display_name}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">
+            <p className="mt-0.5 text-caption text-ink-mist">
               {squad.coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
             </p>
           </div>
@@ -417,7 +417,7 @@ export default function PlayerTournamentSquadPage() {
         {squad?.stadium && (
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{squad.stadium.display_name}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">+{Math.round(squad.stadium.boost_pct * 100)}% к силе</p>
+            <p className="mt-0.5 text-caption text-ink-mist">+{Math.round(squad.stadium.boost_pct * 100)}% к силе</p>
           </div>
         )}
       </section>
@@ -466,7 +466,7 @@ function TacticSelect({
   const selected = options.find((o) => o.value === value);
   return (
     <div className={`relative flex items-center justify-between gap-3 rounded-xl bg-white/5 px-3 py-2.5 ${disabled ? "opacity-60" : ""}`}>
-      <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-mist-dim">{label}</span>
+      <span className="shrink-0 text-micro uppercase tracking-wide text-ink-mist-dim">{label}</span>
       <span className="flex min-w-0 items-center gap-1.5">
         <span className="truncate text-sm font-semibold text-ink-chalk">{selected?.label ?? value}</span>
       </span>

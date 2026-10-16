@@ -142,9 +142,9 @@ export default function TacticoSquadPage() {
               t.template_index === viewedIndex ? "bg-accent-lime text-bg-base" : "bg-white/5 text-ink-mist"
             }`}
           >
-            <span className="whitespace-nowrap text-[11px] font-bold">{t.name}</span>
+            <span className="whitespace-nowrap text-caption font-bold">{t.name}</span>
             {t.is_active && (
-              <span className={`text-[8px] ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
+              <span className={`text-micro ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
                 Активный
               </span>
             )}
@@ -172,7 +172,7 @@ export default function TacticoSquadPage() {
       ) : (
         <button
           onClick={() => { setRenameValue(squad?.name ?? ""); setRenamingTemplate(true); }}
-          className="self-start text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2"
+          className="self-start text-caption font-semibold text-ink-mist-dim underline underline-offset-2"
         >
           Переименовать «{squad?.name}»
         </button>
@@ -188,7 +188,7 @@ export default function TacticoSquadPage() {
         </button>
       )}
 
-      <div className="flex gap-2 text-[11px] font-semibold">
+      <div className="flex gap-2 text-caption font-semibold">
         <span className={`rounded-full px-2.5 py-1 ${legendaryCount >= maxLegendary ? "bg-rarity-legendary/20 text-rarity-legendary" : "bg-white/5 text-ink-mist"}`}>
           Легендарных: {legendaryCount}/{maxLegendary}
         </span>

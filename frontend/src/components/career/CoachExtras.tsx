@@ -11,9 +11,9 @@ export function AchievementsPanel({ data }: { data: CareerAchievements }) {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <p className="mb-1.5 text-[11px] font-semibold text-ink-mist">Трофеи</p>
+        <p className="mb-1.5 text-caption font-semibold text-ink-mist">Трофеи</p>
         {data.trophies.length === 0 ? (
-          <p className="rounded-xl bg-bg-base/40 px-3 py-2 text-[11px] text-ink-mist-dim">
+          <p className="rounded-xl bg-bg-base/40 px-3 py-2 text-caption text-ink-mist-dim">
             Пока пусто: титулы, кубки и повышения попадут сюда.
           </p>
         ) : (
@@ -21,15 +21,15 @@ export function AchievementsPanel({ data }: { data: CareerAchievements }) {
             {data.trophies.map((t, i) => (
               <div key={i} className="flex w-24 shrink-0 flex-col items-center gap-1 rounded-2xl bg-bg-base/50 p-2 text-center">
                 <span className="text-2xl" aria-hidden>{TROPHY_ICON[t.kind] ?? "🏆"}</span>
-                <span className="text-[10px] leading-tight text-ink-chalk">{t.label}</span>
-                <span className="text-[9px] text-ink-mist-dim">{new Date(t.at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}</span>
+                <span className="text-micro leading-tight text-ink-chalk">{t.label}</span>
+                <span className="text-micro text-ink-mist-dim">{new Date(t.at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}</span>
               </div>
             ))}
           </div>
         )}
       </div>
       <div>
-        <p className="mb-1.5 text-[11px] font-semibold text-ink-mist">Достижения · {data.unlocked} из {data.total}</p>
+        <p className="mb-1.5 text-caption font-semibold text-ink-mist">Достижения · {data.unlocked} из {data.total}</p>
         <div className="grid grid-cols-4 gap-1.5">
           {data.items.map((a) => (
             <div
@@ -38,12 +38,12 @@ export function AchievementsPanel({ data }: { data: CareerAchievements }) {
               className={`flex flex-col items-center gap-0.5 rounded-xl p-1.5 text-center ${a.unlocked_at ? "bg-accent-lime/10" : "bg-bg-base/40 opacity-45 grayscale"}`}
             >
               <span className="text-lg" aria-hidden>{a.icon}</span>
-              <span className="text-[9px] font-semibold leading-tight text-ink-chalk">{a.title}</span>
-              <span className="text-[8px] leading-tight text-ink-mist-dim">{a.text}</span>
+              <span className="text-micro font-semibold leading-tight text-ink-chalk">{a.title}</span>
+              <span className="text-micro leading-tight text-ink-mist-dim">{a.text}</span>
             </div>
           ))}
         </div>
-        <p className="mt-1.5 text-[10px] text-ink-mist-dim">
+        <p className="mt-1.5 text-micro text-ink-mist-dim">
           Серии: побед {data.run.wins} · без поражений {data.run.unbeaten} · сухих {data.run.clean}
         </p>
       </div>
@@ -57,9 +57,9 @@ function Row({ row }: { row: CareerLeaderboardRow }) {
       <span className="w-6 text-right font-mono text-ink-mist">{row.rank}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-semibold">{row.name}</span>
-        <span className="block truncate text-[10px] text-ink-mist">{row.division_name} · {row.level}</span>
+        <span className="block truncate text-micro text-ink-mist">{row.division_name} · {row.level}</span>
       </span>
-      <span className="text-[10px] text-ink-mist" title="Титулы / трофеи">🏆{row.titles} · 🎖{row.achievements}</span>
+      <span className="text-micro text-ink-mist" title="Титулы / трофеи">🏆{row.titles} · 🎖{row.achievements}</span>
       <span className="w-10 text-right font-mono font-bold">{row.reputation}</span>
     </div>
   );
@@ -80,7 +80,7 @@ export function CoachLeaderboard() {
           <button
             key={d.division ?? "all"}
             onClick={() => setDivision(d.division)}
-            className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${division === d.division ? "bg-floodlight text-bg-base" : "bg-bg-base/50 text-ink-mist"}`}
+            className={`shrink-0 rounded-lg px-2.5 py-1 text-caption font-semibold ${division === d.division ? "bg-floodlight text-bg-base" : "bg-bg-base/50 text-ink-mist"}`}
           >
             {d.name}
           </button>
@@ -89,13 +89,13 @@ export function CoachLeaderboard() {
       {isLoading || !data ? (
         <ListSkeleton count={3} />
       ) : data.rows.length === 0 ? (
-        <p className="text-[11px] text-ink-mist-dim">В этом дивизионе пока никого.</p>
+        <p className="text-caption text-ink-mist-dim">В этом дивизионе пока никого.</p>
       ) : (
         <div className="flex flex-col gap-0.5">
           {data.rows.map((r) => <Row key={r.user_id} row={r} />)}
           {data.me && (
             <>
-              <p className="text-center text-[10px] text-ink-mist-dim">…</p>
+              <p className="text-center text-micro text-ink-mist-dim">…</p>
               <Row row={data.me} />
             </>
           )}

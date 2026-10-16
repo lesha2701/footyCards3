@@ -107,7 +107,7 @@ export default function AdminDailyRewardsPage() {
           <div key={day} className="rounded-2xl border border-white/5 bg-bg-surface p-3">
             <div className="mb-2 flex items-center justify-between">
               <p className="font-display text-sm font-bold">День {day}</p>
-              <button onClick={() => addOption(day)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">
+              <button onClick={() => addOption(day)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">
                 + Вариант
               </button>
             </div>
@@ -115,7 +115,7 @@ export default function AdminDailyRewardsPage() {
               {(draft[day] ?? []).map((opt, index) => (
                 <div key={index} className="grid grid-cols-[1fr_2fr_auto_auto] items-center gap-2 rounded-xl bg-bg-base p-2">
                   <label className="flex flex-col gap-0.5">
-                    <span className="text-[10px] text-slate-500">Монеты</span>
+                    <span className="text-micro text-slate-500">Монеты</span>
                     <input
                       type="number"
                       value={opt.coins}
@@ -124,7 +124,7 @@ export default function AdminDailyRewardsPage() {
                     />
                   </label>
                   <label className="flex flex-col gap-0.5">
-                    <span className="text-[10px] text-slate-500">Бесплатный пак</span>
+                    <span className="text-micro text-slate-500">Бесплатный пак</span>
                     <select
                       value={opt.free_pack_slug ?? ""}
                       onChange={(e) => updateOption(day, index, { free_pack_slug: e.target.value || null })}
@@ -135,7 +135,7 @@ export default function AdminDailyRewardsPage() {
                     </select>
                   </label>
                   <label className="flex flex-col items-center gap-0.5">
-                    <span className="text-[10px] text-slate-500">Карта</span>
+                    <span className="text-micro text-slate-500">Карта</span>
                     <input
                       type="checkbox"
                       checked={opt.grants_random_card}
@@ -144,7 +144,7 @@ export default function AdminDailyRewardsPage() {
                   </label>
                   <button
                     onClick={() => removeOption(day, index)}
-                    className="rounded-lg bg-red-500/10 px-2 py-1.5 text-[11px] text-red-400"
+                    className="rounded-lg bg-red-500/10 px-2 py-1.5 text-caption text-red-400"
                   >
                     Удалить
                   </button>

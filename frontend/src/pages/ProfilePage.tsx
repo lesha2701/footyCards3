@@ -148,7 +148,7 @@ export default function ProfilePage() {
               {leagueStatus.current_league ? leagueStatus.current_league.name : "Пока вне лиги"}
             </p>
             {leagueStatus.current_league_percent !== null && (
-              <p className="mt-0.5 text-[11px] text-ink-mist-dim">
+              <p className="mt-0.5 text-caption text-ink-mist-dim">
                 {leagueStatus.current_league_percent}% игроков в этой лиге
               </p>
             )}
@@ -178,7 +178,7 @@ export default function ProfilePage() {
               </button>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-ink-mist-dim">
+          <p className="mt-2 text-caption text-ink-mist-dim">
             Нажми на значок, чтобы показать его рядом со своим именем. Нажми ещё раз, чтобы снять.
           </p>
         </section>
@@ -204,7 +204,7 @@ export default function ProfilePage() {
                     <span className="text-2xl">{t.trophy.icon}</span>
                   )}
                 </div>
-                <span className="w-full truncate text-center text-[10px] text-ink-mist">{t.trophy.name}</span>
+                <span className="w-full truncate text-center text-micro text-ink-mist">{t.trophy.name}</span>
               </button>
             ))}
           </div>
@@ -224,7 +224,7 @@ export default function ProfilePage() {
         </span>
         <span className="flex items-center gap-2">
           {!!attention?.friend_requests && (
-            <span className="rounded-full bg-accent-lime px-2 py-0.5 font-mono text-[10px] font-bold text-bg-base">
+            <span className="rounded-full bg-accent-lime px-2 py-0.5 font-mono text-micro font-bold text-bg-base">
               {attention.friend_requests} новых
             </span>
           )}
@@ -284,7 +284,7 @@ export default function ProfilePage() {
             className="h-16 w-16 rounded-xl object-cover"
           />
           <div>
-            <p className="text-[11px] text-rarity-legendary">Самая редкая карточка</p>
+            <p className="text-caption text-rarity-legendary">Самая редкая карточка</p>
             <p className="font-display text-sm font-bold text-ink-chalk">{profile.rarest_card.display_name}</p>
           </div>
         </section>
@@ -304,7 +304,7 @@ export default function ProfilePage() {
             return (
               <div
                 key={d.day}
-                className={`flex flex-col items-center gap-0.5 rounded-lg py-2 text-[10px] ${
+                className={`flex flex-col items-center gap-0.5 rounded-lg py-2 text-micro ${
                   d.is_claimed
                     ? "bg-accent-green/15 text-accent-green"
                     : d.is_today
@@ -352,7 +352,7 @@ export default function ProfilePage() {
               navigator.clipboard.writeText(`https://t.me/${profile.telegram_bot_username}?start=ref_${user.telegram_id}`);
               hapticNotify("success");
             }}
-            className="shrink-0 rounded-lg bg-floodlight px-2 py-1 text-[11px] font-bold text-bg-base"
+            className="shrink-0 rounded-lg bg-floodlight px-2 py-1 text-caption font-bold text-bg-base"
           >
             Копировать
           </button>
@@ -384,7 +384,7 @@ export default function ProfilePage() {
             className="h-5 w-5 shrink-0 accent-accent-lime"
           />
         </label>
-        <p className="mt-1 text-[11px] text-ink-mist-dim">
+        <p className="mt-1 text-caption text-ink-mist-dim">
           Если отключено, тебя не будет видно в поиске игроков и тебе не смогут предложить обмен. Сам ты по-прежнему сможешь предлагать обмены.
         </p>
       </section>
@@ -401,7 +401,7 @@ export default function ProfilePage() {
               <div key={tx.id} className="flex items-center justify-between rounded-xl bg-bg-surface px-3 py-2 text-sm">
                 <div>
                   <p className="text-ink-mist">{TX_TYPE_LABELS[tx.type] ?? tx.type}</p>
-                  <p className="font-mono text-[10px] text-ink-mist-dim">{new Date(tx.created_at).toLocaleString("ru-RU")}</p>
+                  <p className="font-mono text-micro text-ink-mist-dim">{new Date(tx.created_at).toLocaleString("ru-RU")}</p>
                 </div>
                 <span className={`font-mono font-bold ${tx.amount >= 0 ? "text-accent-green" : "text-red-400"}`}>
                   {tx.amount >= 0 ? "+" : ""}{tx.amount}
@@ -504,7 +504,7 @@ function TrophyDetailModal({ trophy, onClose }: { trophy: UserTrophy; onClose: (
         {trophy.message && (
           <p className="mt-3 rounded-xl bg-amber-400/10 px-3 py-2 text-xs italic text-amber-300">«{trophy.message}»</p>
         )}
-        <p className="mt-2 text-[11px] text-ink-mist-dim">
+        <p className="mt-2 text-caption text-ink-mist-dim">
           Вручено {new Date(trophy.granted_at).toLocaleDateString("ru-RU")}
         </p>
         <ShareButton kind="trophy" id={trophy.id} className="mt-4" />
@@ -553,7 +553,7 @@ function Stat({
         {Icon && <Icon size={16} className={iconClass} />}
         {value}
       </p>
-      <p className="mt-0.5 text-[11px] text-ink-mist">{label}</p>
+      <p className="mt-0.5 text-caption text-ink-mist">{label}</p>
     </div>
   );
 }

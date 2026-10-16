@@ -94,7 +94,7 @@ export default function RoundResultOverlay({ round, onDismiss }: { round: Tactic
               {opponentValue}
             </span>
           </motion.div>
-          <p className="text-[10px] text-ink-mist-dim">Итоговый показатель раунда — рейтинг + {phase.stat} с учётом бонуса за позицию</p>
+          <p className="text-micro text-ink-mist-dim">Итоговый показатель раунда — рейтинг + {phase.stat} с учётом бонуса за позицию</p>
 
           <motion.p
             className={`mt-3 font-display text-base font-bold ${
@@ -107,7 +107,7 @@ export default function RoundResultOverlay({ round, onDismiss }: { round: Tactic
             {round.winner ? WINNER_LABELS[round.winner] : ""}
           </motion.p>
 
-          <p className="mt-2 text-[11px] text-ink-mist-dim">Нажми, чтобы продолжить</p>
+          <p className="mt-2 text-caption text-ink-mist-dim">Нажми, чтобы продолжить</p>
         </motion.div>
       </motion.div>
     </AnimatePresence>
@@ -134,22 +134,22 @@ function BattleCardTile({ card, phase, won }: { card: TacticoCard; phase: string
       <div className={`flex flex-col overflow-hidden rounded-[14px] bg-bg-surface/90 ${won ? "" : "opacity-70"}`}>
         <div className="relative aspect-[3/4] w-full overflow-hidden">
           <img decoding="async" src={imageUrl} alt={card.display_name} className="h-full w-full object-cover" />
-          <span className="absolute right-1 top-1 rounded-md bg-black/60 px-1 py-0.5 font-mono text-[9px] font-bold text-white">
+          <span className="absolute right-1 top-1 rounded-md bg-black/60 px-1 py-0.5 font-mono text-micro font-bold text-white">
             ★{card.rating}
           </span>
           {bonus && (
-            <span className="absolute left-1 top-1 rounded-md bg-accent-lime px-1 py-0.5 font-mono text-[9px] font-bold text-bg-base">
+            <span className="absolute left-1 top-1 rounded-md bg-accent-lime px-1 py-0.5 font-mono text-micro font-bold text-bg-base">
               {BONUS_PCT_LABEL}
             </span>
           )}
         </div>
         <div className="border-t border-white/10 bg-black/30 px-1.5 py-1.5 text-center">
-          <p className="truncate font-display text-[10px] font-semibold text-ink-chalk">{card.display_name}</p>
+          <p className="truncate font-display text-micro font-semibold text-ink-chalk">{card.display_name}</p>
           <p className="mt-0.5 font-mono text-xs font-bold text-accent-cyan">
             {activeLabel} {raw}
             {bonus && <span className="text-accent-lime"> →{boosted}</span>}
           </p>
-          <p className="font-mono text-[9px] text-ink-mist-dim">{inactiveLabel} {inactive}</p>
+          <p className="font-mono text-micro text-ink-mist-dim">{inactiveLabel} {inactive}</p>
         </div>
       </div>
     </motion.div>

@@ -85,7 +85,7 @@ export default function PlayerCareerPage() {
             {data.club ? `Клуб: ${data.club.name} (${data.club.rating})` : "Без клуба"} · репутация {data.reputation}
           </span>
           {data.career && data.career.seasons > 0 && (
-            <span className="block text-[11px] text-ink-mist-dim">
+            <span className="block text-caption text-ink-mist-dim">
               Сезонов {data.career.seasons} · матчей {data.career.matches} · голов {data.career.goals} · передач {data.career.assists}
               {data.career.titles > 0 && ` · титулов ${data.career.titles}`}
             </span>
@@ -140,7 +140,7 @@ function ClubPicker({
         <h2 className="font-display text-base font-bold text-ink-chalk">Выбери клуб</h2>
         {onCancel && <button onClick={onCancel} className="text-xs text-ink-mist">Отмена</button>}
       </div>
-      <p className="text-[11px] text-ink-mist">
+      <p className="text-caption text-ink-mist">
         Клубы собраны из карточек игры: состав — лучшие карточки клуба, рейтинг — средний по основе. Чем выше твой рейтинг и
         репутация, тем сильнее клуб, за который можно играть.
       </p>
@@ -158,12 +158,12 @@ function ClubPicker({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold text-ink-chalk">{club.name}</span>
-            <span className="block truncate text-[11px] text-ink-mist">
+            <span className="block truncate text-caption text-ink-mist">
               {club.is_demo ? "Клуб лиги" : `${club.real_cards} карточек · ${club.stars.join(", ")}`}
             </span>
           </span>
           {club.locked_reason ? (
-            <span className="flex shrink-0 items-center gap-1 text-[10px] text-ink-mist"><IconLock size={12} /> {club.locked_reason}</span>
+            <span className="flex shrink-0 items-center gap-1 text-micro text-ink-mist"><IconLock size={12} /> {club.locked_reason}</span>
           ) : club.key === view.club?.key ? (
             <span className="text-xs font-bold text-accent-lime">твой</span>
           ) : (
@@ -207,7 +207,7 @@ function SeasonBlock({
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`rounded-lg py-1.5 text-[11px] font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
+            className={`rounded-lg py-1.5 text-caption font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
           >
             {label}
           </button>
@@ -220,7 +220,7 @@ function SeasonBlock({
             {[["Матчи", season.stats.matches], ["Голы", season.stats.goals], ["Пасы", season.stats.assists], ["Оценка", season.stats.avg_rating ?? "—"]].map(([label, value]) => (
               <div key={label} className="rounded-xl bg-bg-raised py-2">
                 <p className="font-display text-lg font-black text-ink-chalk">{value}</p>
-                <p className="text-[10px] text-ink-mist">{label}</p>
+                <p className="text-micro text-ink-mist">{label}</p>
               </div>
             ))}
           </div>
@@ -292,10 +292,10 @@ function SeasonBlock({
             const them = homeMine ? r.away_score : r.hs;
             return (
               <div key={r.index} className="flex items-center gap-3 py-2">
-                <span className="w-6 font-mono text-[10px] text-ink-mist">{r.index + 1}</span>
+                <span className="w-6 font-mono text-micro text-ink-mist">{r.index + 1}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm text-ink-chalk">{homeMine ? "vs" : "@"} {opp?.name}</span>
-                  <span className="block text-[10px] text-ink-mist-dim">
+                  <span className="block text-micro text-ink-mist-dim">
                     {played && r.me
                       ? [r.me.goals > 0 && `⚽ ${r.me.goals}`, r.me.assists > 0 && `🅰️ ${r.me.assists}`, r.me.rating != null && `оценка ${r.me.rating}`].filter(Boolean).join(" · ")
                       : formatWhen(r.at)}

@@ -91,7 +91,7 @@ export default function UpgradePage() {
             {RARITY_SEQUENCE.map((r, i) => (
               <div key={r} className="flex shrink-0 items-center gap-1.5">
                 <span
-                  className={`rounded-full bg-gradient-to-b ${RARITY_GRADIENTS[r]} px-2.5 py-1 font-mono text-[10px] font-bold text-white ${
+                  className={`rounded-full bg-gradient-to-b ${RARITY_GRADIENTS[r]} px-2.5 py-1 font-mono text-micro font-bold text-white ${
                     effectiveRarity === r ? "ring-2 ring-amber-300" : ""
                   }`}
                 >
@@ -117,7 +117,7 @@ export default function UpgradePage() {
               {previewCost ?? currentRule.coin_cost}
             </span>
             {currentRule.extra_card_bonus > 0 && (
-              <span className="w-full text-[10px] text-ink-mist-dim">
+              <span className="w-full text-micro text-ink-mist-dim">
                 Ставь несколько карт этой редкости разом — шанс растёт (максимум {Math.round(currentRule.max_success_chance * 100)}%)
               </span>
             )}

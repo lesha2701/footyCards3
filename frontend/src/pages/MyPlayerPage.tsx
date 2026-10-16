@@ -120,7 +120,7 @@ function Overview({
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`rounded-xl py-2 text-[11px] font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
+            className={`rounded-xl py-2 text-caption font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
           >
             {label}
           </button>
@@ -162,7 +162,7 @@ function Overview({
                 очков: {view.points_available}
               </span>
             </div>
-            <p className="mt-2 text-[11px] text-ink-mist">
+            <p className="mt-2 text-caption text-ink-mist">
               Как у всех карточек: атака решает в атакующих эпизодах, защита — в обороне. Рейтинг — среднее двух, 2 очка = +1 к рейтингу.
             </p>
             {view.at_rating_cap && (
@@ -177,7 +177,7 @@ function Overview({
                     <span className="w-20 shrink-0">
                       <span className="block text-sm text-ink-chalk">{view.attr_labels[attr]}</span>
                       {player.key_attr === attr && (
-                        <span className="block text-[10px] text-accent-lime">главная для {player.position}</span>
+                        <span className="block text-micro text-accent-lime">главная для {player.position}</span>
                       )}
                     </span>
                     <span className="h-2 flex-1 overflow-hidden rounded-full bg-bg-raised">
@@ -219,7 +219,7 @@ function Overview({
                 <IconFlagCheckered size={18} className="text-accent-lime" />
                 <span>
                   <span className="block text-sm font-semibold text-ink-chalk">Карьера тренера</span>
-                  <span className="block text-[11px] text-ink-mist">Всегда в заявке — поставь его в старт</span>
+                  <span className="block text-caption text-ink-mist">Всегда в заявке — поставь его в старт</span>
                 </span>
               </span>
               <IconChevronRight size={16} className="text-ink-mist-dim" />
@@ -232,7 +232,7 @@ function Overview({
                 <IconStar size={18} className="text-accent-lime" />
                 <span>
                   <span className="block text-sm font-semibold text-ink-chalk">Карьера игрока</span>
-                  <span className="block text-[11px] text-ink-mist">Контракт с клубом, сезоны, голы и трансферы</span>
+                  <span className="block text-caption text-ink-mist">Контракт с клубом, сезоны, голы и трансферы</span>
                 </span>
               </span>
               <IconChevronRight size={16} className="text-ink-mist-dim" />
@@ -245,14 +245,14 @@ function Overview({
                 <IconFlag size={18} className="text-accent-lime" />
                 <span>
                   <span className="block text-sm font-semibold text-ink-chalk">Футбольное Стратего</span>
-                  <span className="block text-[11px] text-ink-mist">
+                  <span className="block text-caption text-ink-mist">
                     Поставь его на любую роль в «Подготовке» — редкость по рамке «{player.tier_label}»
                   </span>
                 </span>
               </span>
               <IconChevronRight size={16} className="text-ink-mist-dim" />
             </button>
-            <p className="mt-2 text-[11px] text-ink-mist-dim">Карточку нельзя продать или обменять — она только твоя. Её видят друзья в твоём профиле.</p>
+            <p className="mt-2 text-caption text-ink-mist-dim">Карточку нельзя продать или обменять — она только твоя. Её видят друзья в твоём профиле.</p>
           </section>
         </>
       )}
@@ -415,7 +415,7 @@ function Constructor({
                 </div>
               ))}
               {!existing && (
-                <p className="text-[11px] text-ink-mist-dim">Линию (вратарь / защита / полузащита / атака) потом сменить нельзя.</p>
+                <p className="text-caption text-ink-mist-dim">Линию (вратарь / защита / полузащита / атака) потом сменить нельзя.</p>
               )}
             </div>
           </>

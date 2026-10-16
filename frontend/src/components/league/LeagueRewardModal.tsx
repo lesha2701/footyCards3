@@ -84,7 +84,7 @@ export default function LeagueRewardModal({ open, rewards, collecting, onCollect
 
             {rest.length > 0 && (
               <div className="mt-6 flex flex-col gap-2">
-                <p className="text-center text-[11px] uppercase tracking-wider text-ink-mist-dim">
+                <p className="text-center text-caption uppercase tracking-wider text-ink-mist-dim">
                   Также пройдено по пути
                 </p>
                 {rest.map((r) => (

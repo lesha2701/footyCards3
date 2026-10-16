@@ -11,7 +11,7 @@ export default function SkillTokenTile({ skillCode, quantity }: { skillCode: str
       <div className="flex aspect-[3/4] flex-col items-center justify-center gap-1.5 rounded-[14px] bg-bg-surface p-2 text-center">
         <SkillTokenIcon code={skillCode} size={48} className="text-accent-lime" aria-hidden />
         <p className="font-display text-sm font-bold text-ink-chalk">× {quantity}</p>
-        <p className="truncate text-[10px] text-ink-mist">Жетон «{skill?.name ?? skillCode}»</p>
+        <p className="truncate text-micro text-ink-mist">Жетон «{skill?.name ?? skillCode}»</p>
       </div>
     </div>
   );

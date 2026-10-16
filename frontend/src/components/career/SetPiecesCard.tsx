@@ -53,7 +53,7 @@ export function SetPiecesCard({ season, catalog, onView, onError }: {
     <section className="flex flex-col gap-3 rounded-3xl bg-bg-surface p-4">
       <div>
         <p className="font-display text-base font-bold text-ink-chalk">Стандарты и пенальти</p>
-        <p className="text-[11px] leading-snug text-ink-mist">
+        <p className="text-caption leading-snug text-ink-mist">
           Угловые бывают после заблокированных и отбитых ударов, штрафные — после фолов вне штрафной.
           Если исполнителя нет на поле, подаст лучший подходящий.
         </p>
@@ -61,12 +61,12 @@ export function SetPiecesCard({ season, catalog, onView, onError }: {
       <div className="flex flex-col gap-1.5">
         {TAKERS.map((t) => (
           <label key={t.key} className="flex items-center gap-2 rounded-xl bg-bg-raised px-3 py-2">
-            <span className="w-24 shrink-0 text-[11px] font-semibold text-ink-chalk">{t.icon} {t.label}</span>
+            <span className="w-24 shrink-0 text-caption font-semibold text-ink-chalk">{t.icon} {t.label}</span>
             <select
               aria-label={t.label}
               value={value[t.key] ?? ""}
               onChange={(e) => setValue({ ...value, [t.key]: e.target.value ? Number(e.target.value) : null })}
-              className="min-w-0 flex-1 rounded-lg bg-bg-base/60 px-2 py-1.5 text-[11px] text-ink-chalk outline-none"
+              className="min-w-0 flex-1 rounded-lg bg-bg-base/60 px-2 py-1.5 text-caption text-ink-chalk outline-none"
             >
               <option value="">Авто — лучший подходящий</option>
               {squad.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
@@ -77,20 +77,20 @@ export function SetPiecesCard({ season, catalog, onView, onError }: {
       {options && (
         <div className="grid grid-cols-2 gap-2">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-accent-cyan">Подача углового</span>
+            <span className="text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">Подача углового</span>
             {options.routines.map((r) => (
               <button key={r.value} onClick={() => setValue({ ...value, corner_routine: r.value })}
-                className={`rounded-xl px-2 py-2 text-[11px] font-semibold ${value.corner_routine === r.value ? "bg-floodlight text-bg-base" : "bg-bg-raised text-ink-mist"}`}
+                className={`rounded-xl px-2 py-2 text-caption font-semibold ${value.corner_routine === r.value ? "bg-floodlight text-bg-base" : "bg-bg-raised text-ink-mist"}`}
               >
                 {r.label}
               </button>
             ))}
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-accent-cyan">Защита на стандартах</span>
+            <span className="text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">Защита на стандартах</span>
             {options.defences.map((d) => (
               <button key={d.value} onClick={() => setValue({ ...value, corner_defence: d.value })}
-                className={`rounded-xl px-2 py-2 text-[11px] font-semibold ${value.corner_defence === d.value ? "bg-floodlight text-bg-base" : "bg-bg-raised text-ink-mist"}`}
+                className={`rounded-xl px-2 py-2 text-caption font-semibold ${value.corner_defence === d.value ? "bg-floodlight text-bg-base" : "bg-bg-raised text-ink-mist"}`}
               >
                 {d.label}
               </button>
@@ -99,7 +99,7 @@ export function SetPiecesCard({ season, catalog, onView, onError }: {
         </div>
       )}
       {options && (
-        <p className="text-[10px] leading-snug text-ink-mist-dim">
+        <p className="text-micro leading-snug text-ink-mist-dim">
           {options.routines.map((r) => `${r.label.toLowerCase()} опаснее против «${(options.defences.find((d) => d.value === options.beats[r.value])?.label ?? "").toLowerCase()}»`).join(", ")}.
         </p>
       )}
@@ -120,7 +120,7 @@ export function SquadWarnings({ warnings }: { warnings: CareerSquadWarning[] | u
   return (
     <div className="flex flex-col gap-1.5" role="alert">
       {warnings.map((w, i) => (
-        <p key={i} className={`rounded-2xl px-3 py-2 text-[11px] leading-snug ${
+        <p key={i} className={`rounded-2xl px-3 py-2 text-caption leading-snug ${
           w.level === "critical" ? "bg-red-500/15 text-red-300" : "bg-amber-400/10 text-amber-200"}`}
         >
           {w.level === "critical" ? "⚠️ " : "ℹ️ "}{w.text}

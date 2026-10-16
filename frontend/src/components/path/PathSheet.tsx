@@ -67,11 +67,11 @@ function StageNode({ stage, isLast, reduced }: { stage: PathStage; isLast: boole
       <div className={`min-w-0 flex-1 rounded-2xl p-3 ${state === "current" ? "border border-emerald-400/30 bg-emerald-400/5" : "bg-white/5"}`}>
         <div className="flex items-baseline justify-between gap-2">
           <p className={`font-display text-sm font-bold ${state === "future" ? "text-ink-mist" : "text-ink-chalk"}`}>{stage.name}</p>
-          <p className="font-mono text-[11px] text-ink-mist">
+          <p className="font-mono text-caption text-ink-mist">
             {stage.min_rating}–{stage.max_rating}
           </p>
         </div>
-        <p className="mt-0.5 text-[11px] text-ink-mist">
+        <p className="mt-0.5 text-caption text-ink-mist">
           {state === "done" ? "Пройден ✓" : state === "current" ? "Ты здесь" : "Впереди"}
           {stage.talent_level > 0 && (
             <span className="ml-1.5 text-path">· талант {stage.talent_level === 2 ? "II" : "I"}</span>
@@ -82,14 +82,14 @@ function StageNode({ stage, isLast, reduced }: { stage: PathStage; isLast: boole
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
-            className="mt-1 min-h-[32px] text-[11px] font-semibold text-ink-mist underline-offset-2 hover:underline"
+            className="mt-1 min-h-[32px] text-caption font-semibold text-ink-mist underline-offset-2 hover:underline"
           >
             {open ? "Скрыть задания" : `Задания этапа · ${stage.tasks.length}`}
           </button>
         )}
         {showTasks && stage.tasks.length > 0 && (
           <div className="mt-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-mist-dim">
+            <p className="text-micro font-semibold uppercase tracking-wider text-ink-mist-dim">
               Задания для перехода дальше · {doneTasks}/{stage.tasks.length}
             </p>
             <ul className="mt-1 space-y-1.5">
@@ -112,7 +112,7 @@ function StageNode({ stage, isLast, reduced }: { stage: PathStage; isLast: boole
           </div>
         )}
         {state !== "done" && stage.tasks.length === 0 && !isLast && (
-          <p className="mt-1 text-[11px] text-ink-mist-dim">Без заданий — только опыт</p>
+          <p className="mt-1 text-caption text-ink-mist-dim">Без заданий — только опыт</p>
         )}
       </div>
     </li>
@@ -133,15 +133,15 @@ function TodayBlock({ state, onPlay }: { state: PathState; onPlay: () => void })
       <div className="mt-2 grid grid-cols-3 gap-2 text-center">
         <div className="rounded-xl bg-black/20 py-1.5">
           <p className="font-mono text-base font-bold text-ink-chalk">{attempts}</p>
-          <p className="text-[10px] text-ink-mist">попыток Арены</p>
+          <p className="text-micro text-ink-mist">попыток Арены</p>
         </div>
         <div className="rounded-xl bg-black/20 py-1.5">
           <p className="font-mono text-base font-bold text-ink-chalk">{state.daily.ptour_left}</p>
-          <p className="text-[10px] text-ink-mist">матчей турнира</p>
+          <p className="text-micro text-ink-mist">матчей турнира</p>
         </div>
         <div className="rounded-xl bg-black/20 py-1.5">
           <p className="font-mono text-base font-bold text-ink-chalk">{state.daily.career_left}</p>
-          <p className="text-[10px] text-ink-mist">туров карьеры</p>
+          <p className="text-micro text-ink-mist">туров карьеры</p>
         </div>
       </div>
       {next && (
@@ -265,13 +265,13 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
               <div className="rounded-b-[22px] bg-bg-surface px-3 pb-3">
                 {state.xp_for_next ? (
                   <>
-                    <div className="flex justify-between text-[11px] text-ink-mist">
+                    <div className="flex justify-between text-caption text-ink-mist">
                       <span>Опыт до {state.rating + 1}</span>
                       <span className="font-mono">{shownLevelXp(state)}/{state.xp_for_next}</span>
                     </div>
                     <Bar value={levelFraction(state)} className="mt-1" />
                     {state.blocked_by_tasks && (
-                      <p className="mt-1.5 rounded-lg bg-amber-400/10 px-2 py-1 text-[11px] text-legend">
+                      <p className="mt-1.5 rounded-lg bg-amber-400/10 px-2 py-1 text-caption text-legend">
                         Опыта хватает — выполни задания этапа, чтобы расти дальше
                       </p>
                     )}
@@ -342,7 +342,7 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
                       "лимит на сегодня"
                     )}
                   </span>
-                  <span className="text-[10px] font-normal text-ink-mist-dim">осталось {state.daily.coin_buys_left}</span>
+                  <span className="text-micro font-normal text-ink-mist-dim">осталось {state.daily.coin_buys_left}</span>
                 </button>
                 <button
                   type="button"
@@ -354,16 +354,16 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
                   <span className="mt-0.5 text-legend">
                     {state.daily.next_stars_price != null ? `⭐ ${state.daily.next_stars_price}` : "лимит на сегодня"}
                   </span>
-                  <span className="text-[10px] font-normal text-ink-mist-dim">осталось {state.daily.stars_buys_left}</span>
+                  <span className="text-micro font-normal text-ink-mist-dim">осталось {state.daily.stars_buys_left}</span>
                 </button>
               </div>
               {error && <p className="mt-2 rounded-lg bg-red-500/10 px-2 py-1 text-xs text-red-400">{error}</p>}
               {state.academy && (state.academy.xp_pct > 0 || state.academy.attempts > 0 || state.academy.task_cut_pct > 0) && (
-                <p className="mt-2 rounded-lg bg-path/10 px-2 py-1 text-[11px] text-path">
+                <p className="mt-2 rounded-lg bg-path/10 px-2 py-1 text-caption text-path">
                   🏫 Бонусы здания Академии: +{state.academy.xp_pct}% опыта · +{state.academy.attempts} попыт. · задания −{state.academy.task_cut_pct}%
                 </p>
               )}
-              <p className="mt-2 text-[10px] text-ink-mist-dim">
+              <p className="mt-2 text-micro text-ink-mist-dim">
                 Опыт идёт только за наградные матчи с этой карточкой в составе. Попытки Card Arena тратятся сначала бесплатные,
                 потом купленные; турнир игроков и карьера попытки не тратят.
               </p>
@@ -381,7 +381,7 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-lg bg-black/20 py-1.5">
                     <p className="font-mono text-sm font-bold text-path">+{value}</p>
-                    <p className="text-[9px] text-ink-mist">{label}</p>
+                    <p className="text-micro text-ink-mist">{label}</p>
                   </div>
                 ))}
               </div>

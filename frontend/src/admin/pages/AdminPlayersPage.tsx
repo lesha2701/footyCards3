@@ -255,7 +255,7 @@ export default function AdminPlayersPage() {
                         <option key={t.code} value={t.code}>{t.emoji} {t.name}{t.is_enabled ? "" : " (выключен)"}</option>
                       ))}
                   </select>
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-caption text-slate-500">
                     Карта пути стартует с рейтинга игрока и растёт игрой; бриллиантовая прокачка к ней не применяется, у неё
                     свой лимит в составах. Обычно стартовый рейтинг — 60.
                   </span>
@@ -273,7 +273,7 @@ export default function AdminPlayersPage() {
                 />
                 Может выпасть из пака
               </label>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-caption text-slate-500">
                 Если выключить, карта останется активной (видна в коллекции, участвует в мини-играх), но новые паки
                 и колесо фортуны больше не будут её выдавать.
               </p>

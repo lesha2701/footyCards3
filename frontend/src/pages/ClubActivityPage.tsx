@@ -77,7 +77,7 @@ export default function ClubActivityPage() {
                 <p className="truncate text-sm font-semibold text-ink-chalk">
                   {m.username ?? m.first_name ?? `#${m.user_id}`}
                 </p>
-                <p className="text-[11px] text-ink-mist-dim">{ROLE_LABELS[m.role]}</p>
+                <p className="text-caption text-ink-mist-dim">{ROLE_LABELS[m.role]}</p>
                 <div className="mt-1.5 flex items-center gap-3 text-xs text-ink-mist">
                   <span className="flex items-center gap-1">
                     <IconBrain size={13} className="text-accent-lime" />

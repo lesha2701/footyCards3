@@ -48,7 +48,7 @@ export default function MatchPitchView({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between px-0.5 text-[11px] font-semibold">
+      <div className="flex items-center justify-between px-0.5 text-caption font-semibold">
         {/* TV convention: you're on the left, defending the left goal and
             attacking right — same order as the score above. */}
         {/* Theme tokens here (not the fixed pitch palette): this text sits on
@@ -122,7 +122,7 @@ export default function MatchPitchView({
           {frame.label && (
             <motion.span
               key={`label-${key}`}
-              className="pointer-events-none absolute whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
+              className="pointer-events-none absolute whitespace-nowrap rounded-full px-2 py-0.5 text-caption font-bold text-white"
               style={{
                 left: `${labelLeft}%`,
                 top: `${labelTop}%`,
@@ -154,7 +154,7 @@ export default function MatchPitchView({
             transition={reduceMotion ? { duration: 0 } : { duration: 0.5 }}
           />
         </div>
-        <span className="text-[10px] text-ink-mist-dim">давление</span>
+        <span className="text-micro text-ink-mist-dim">давление</span>
       </div>
     </div>
   );

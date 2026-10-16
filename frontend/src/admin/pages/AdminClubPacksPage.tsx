@@ -114,9 +114,9 @@ export default function AdminClubPacksPage() {
             </div>
             <p className="mt-1 text-xs text-slate-500">{p.is_active ? "Активен" : "Отключён"}</p>
             <div className="mt-2 flex flex-wrap gap-1">
-              <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-              <button onClick={() => toggleMutation.mutate(p.id)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">{p.is_active ? "Отключить" : "Включить"}</button>
-              <button onClick={() => confirmDelete(p)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">Удалить</button>
+              <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+              <button onClick={() => toggleMutation.mutate(p.id)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">{p.is_active ? "Отключить" : "Включить"}</button>
+              <button onClick={() => confirmDelete(p)} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">Удалить</button>
             </div>
           </div>
         ))}

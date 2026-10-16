@@ -133,9 +133,9 @@ export default function AdminWheelPage() {
           <div className="grid grid-cols-3 gap-2">
             {summary.pools.map((s) => (
               <div key={s.pool} className="rounded-lg bg-white/5 p-2">
-                <p className="text-[11px]">{POOL_LABELS[s.pool]}</p>
+                <p className="text-caption">{POOL_LABELS[s.pool]}</p>
                 <p className="font-mono text-base font-bold text-ink-chalk">≈ {fmt(s.expected_value_coins)}</p>
-                <p className="text-[10px]">призов: {s.active_prizes}</p>
+                <p className="text-micro">призов: {s.active_prizes}</p>
               </div>
             ))}
           </div>
@@ -146,7 +146,7 @@ export default function AdminWheelPage() {
             {Math.round(summary.blackjack_p_golden * 1000) / 10}%, поражение {Math.round(summary.blackjack_p_loss * 1000) / 10}% ×{" "}
             {summary.blackjack_consolation_coins}; ничьи переигрываются).
           </p>
-          <p className="mt-1 text-[10px] text-slate-500">
+          <p className="mt-1 text-micro text-slate-500">
             Карты и паки оценены по средней цене быстрой продажи — это нижняя граница, значки — по компенсации за повтор.
           </p>
         </div>
@@ -173,11 +173,11 @@ export default function AdminWheelPage() {
             })()}
             <p className="text-xs text-slate-500">{p.is_active ? "Активен" : "Отключён"}</p>
             <div className="mt-2 flex flex-wrap gap-1">
-              <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-              <button onClick={() => toggleMutation.mutate(p.id)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">
+              <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+              <button onClick={() => toggleMutation.mutate(p.id)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">
                 {p.is_active ? "Отключить" : "Включить"}
               </button>
-              <button onClick={() => confirmDelete(p)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">Удалить</button>
+              <button onClick={() => confirmDelete(p)} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">Удалить</button>
             </div>
           </div>
         ))}
@@ -260,7 +260,7 @@ export default function AdminWheelPage() {
                     <option value="">Выбери значок</option>
                     {badges?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
-                  <p className="text-[11px] text-slate-500">Заведи отдельный значок специально для колеса — не выбирай значки, уже привязанные к платным пакам.</p>
+                  <p className="text-caption text-slate-500">Заведи отдельный значок специально для колеса — не выбирай значки, уже привязанные к платным пакам.</p>
                 </label>
               )}
 

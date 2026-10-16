@@ -181,7 +181,7 @@ function ChartCard({ title, points }: { title: string; points: ChartPoint[] }) {
       <div className="flex h-32 items-end gap-1 pt-4">
         {series.map((p) => (
           <div key={p.date} className="flex h-full flex-1 flex-col items-center justify-end" title={`${p.date}: ${p.count}`}>
-            {p.count > 0 && <span className="mb-0.5 text-[10px] leading-none text-slate-400">{p.count}</span>}
+            {p.count > 0 && <span className="mb-0.5 text-micro leading-none text-slate-400">{p.count}</span>}
             <div
               className={`w-full rounded-t ${p.count > 0 ? "bg-accent/70" : "bg-white/5"}`}
               style={{ height: p.count > 0 ? `${Math.max(4, (p.count / max) * 100)}%` : "2px" }}
@@ -191,7 +191,7 @@ function ChartCard({ title, points }: { title: string; points: ChartPoint[] }) {
       </div>
       <div className="mt-1 flex gap-1">
         {series.map((p, i) => (
-          <span key={p.date} className="flex-1 text-center text-[10px] text-slate-500">
+          <span key={p.date} className="flex-1 text-center text-micro text-slate-500">
             {i % 2 === series.length % 2 ? "" : p.date.slice(8, 10)}
           </span>
         ))}

@@ -39,10 +39,10 @@ export default function CupCard({ season, onView, onError }: { season: CareerSea
           <IconTrophy size={22} className="text-rarity-legendary" />
           <div>
             <p className="font-display text-base font-bold text-ink-chalk">Кубок</p>
-            <p className="text-[11px] text-ink-mist">16 команд · матчи на вылет · ничья — серия пенальти</p>
+            <p className="text-caption text-ink-mist">16 команд · матчи на вылет · ничья — серия пенальти</p>
           </div>
         </div>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${status.tone}`}>{status.text}</span>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-micro font-bold ${status.tone}`}>{status.text}</span>
       </div>
 
       <div className="grid grid-cols-3 gap-1.5 text-center">
@@ -51,16 +51,16 @@ export default function CupCard({ season, onView, onError }: { season: CareerSea
             <p className="flex items-center justify-center gap-1 font-mono text-sm font-bold text-ink-chalk">
               {coins} <IconCoin size={11} className="text-accent-lime" />
             </p>
-            <p className="text-[9px] text-ink-mist">{label}</p>
+            <p className="text-micro text-ink-mist">{label}</p>
           </div>
         ))}
       </div>
-      {cup.rep_winner > 0 && <p className="-mt-2 text-center text-[10px] text-ink-mist-dim">Победителю ещё +{cup.rep_winner} к репутации</p>}
+      {cup.rep_winner > 0 && <p className="-mt-2 text-center text-micro text-ink-mist-dim">Победителю ещё +{cup.rep_winner} к репутации</p>}
 
       <label className="flex items-center justify-between gap-3 rounded-2xl bg-bg-raised px-3 py-2.5">
         <span>
           <span className="block text-xs font-semibold text-ink-chalk">Ротация в кубке</span>
-          <span className="block text-[10px] leading-snug text-ink-mist">
+          <span className="block text-micro leading-snug text-ink-mist">
             Кубок играется вечером после матча лиги — с ротацией выйдут самые свежие из заявки
           </span>
         </span>
@@ -71,11 +71,11 @@ export default function CupCard({ season, onView, onError }: { season: CareerSea
       {cup.rounds.map((round, k) => (
         <div key={round.name}>
           <div className="mb-1.5 flex items-center justify-between">
-            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-accent-cyan">{round.name}</p>
-            <p className="text-[10px] text-ink-mist-dim">{formatWhen(round.at)}</p>
+            <p className="text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">{round.name}</p>
+            <p className="text-micro text-ink-mist-dim">{formatWhen(round.at)}</p>
           </div>
           {round.ties.length === 0 ? (
-            <p className="rounded-xl bg-bg-raised px-3 py-2 text-[11px] text-ink-mist-dim">Пары определятся после предыдущего раунда</p>
+            <p className="rounded-xl bg-bg-raised px-3 py-2 text-caption text-ink-mist-dim">Пары определятся после предыдущего раунда</p>
           ) : (
             <div className="flex flex-col gap-1">
               {round.ties.map((tie, i) => {
@@ -83,7 +83,7 @@ export default function CupCard({ season, onView, onError }: { season: CareerSea
                 const row = (name: string, score: number | null, pen: number | null, win: boolean) => (
                   <span className={`flex items-center justify-between gap-2 ${played && !win ? "text-ink-mist" : "text-ink-chalk"}`}>
                     <span className={`min-w-0 truncate ${win ? "font-bold" : ""}`}>{name}</span>
-                    <span className="shrink-0 font-mono">{played ? score : "—"}{pen !== null ? <span className="text-[9px] text-ink-mist"> ({pen})</span> : null}</span>
+                    <span className="shrink-0 font-mono">{played ? score : "—"}{pen !== null ? <span className="text-micro text-ink-mist"> ({pen})</span> : null}</span>
                   </span>
                 );
                 return (

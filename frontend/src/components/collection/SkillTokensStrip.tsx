@@ -14,14 +14,14 @@ export default function SkillTokensStrip() {
   if (!owned.length) return null;
   return (
     <div className="rounded-2xl bg-bg-surface p-3">
-      <p className="text-[11px] text-ink-mist">
+      <p className="text-caption text-ink-mist">
         Жетоны навыков — открой карточку и выбери «Навык», чтобы назначить или улучшить
       </p>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {owned.map((t) => {
           const skill = skillByCode(catalog?.skills, t.skill_code);
           return (
-            <span key={t.skill_code} className="inline-flex items-center gap-1 rounded-full bg-black/30 px-2 py-1 text-[11px] font-semibold text-ink-chalk">
+            <span key={t.skill_code} className="inline-flex items-center gap-1 rounded-full bg-black/30 px-2 py-1 text-caption font-semibold text-ink-chalk">
               <SkillTokenIcon code={t.skill_code} size={15} className="text-accent-lime" aria-hidden />
               {skill?.name ?? t.skill_code} × <span className="font-mono text-accent-lime">{t.quantity}</span>
             </span>

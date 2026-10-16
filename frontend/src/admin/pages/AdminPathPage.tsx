@@ -87,7 +87,7 @@ function TalentRow({ talent, onSave, busy }: { talent: AdminPathTalent; onSave: 
         </label>
       </div>
       <p className="mt-1 text-xs text-slate-400">{talent.summary}</p>
-      <p className="mt-1 text-[11px] text-slate-500">
+      <p className="mt-1 text-caption text-slate-500">
         Режимы: {Object.entries(talent.modes).map(([m, t]) => `${m} — ${t}`).join("; ")}
         {talent.positions && ` · позиции: ${talent.positions.join(", ")}`} · игроков: {talent.players}
       </p>
@@ -392,7 +392,7 @@ export default function AdminPathPage() {
             <div key={stage.index} className="rounded-xl border border-white/5 bg-bg-base p-3">
               <div className="flex flex-wrap items-end gap-2">
                 <label className="flex flex-col gap-1">
-                  <span className="text-[11px] text-slate-400">Этап {stage.index + 1}</span>
+                  <span className="text-caption text-slate-400">Этап {stage.index + 1}</span>
                   <input
                     defaultValue={stage.name}
                     onBlur={(e) => e.target.value !== stage.name && stageMutation.mutate({ index: stage.index, payload: { name: e.target.value } })}
@@ -400,7 +400,7 @@ export default function AdminPathPage() {
                   />
                 </label>
                 <label className="flex flex-col gap-1">
-                  <span className="text-[11px] text-slate-400">Верхний рейтинг</span>
+                  <span className="text-caption text-slate-400">Верхний рейтинг</span>
                   <input
                     type="number"
                     defaultValue={stage.max_rating}
@@ -409,7 +409,7 @@ export default function AdminPathPage() {
                   />
                 </label>
                 <label className="flex flex-col gap-1">
-                  <span className="text-[11px] text-slate-400">Открывает талант</span>
+                  <span className="text-caption text-slate-400">Открывает талант</span>
                   <select
                     value={stage.talent_level}
                     onChange={(e) => stageMutation.mutate({ index: stage.index, payload: { talent_level: Number(e.target.value) } })}

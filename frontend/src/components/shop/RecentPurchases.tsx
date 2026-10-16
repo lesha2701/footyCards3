@@ -21,7 +21,7 @@ export default function RecentPurchases({
 
   return (
     <section>
-      <p className="mb-2 font-mono text-[11px] uppercase tracking-wider text-ink-mist">Недавние покупки</p>
+      <p className="mb-2 font-mono text-caption uppercase tracking-wider text-ink-mist">Недавние покупки</p>
       <div className="flex gap-2 overflow-x-auto pb-1">
         {items.map((h) => {
           const pack = onSale.get(h.pack.id)!;
@@ -32,8 +32,8 @@ export default function RecentPurchases({
               className="flex w-28 shrink-0 flex-col items-center gap-1.5 rounded-2xl bg-bg-surface p-2.5 active:scale-95"
             >
               <img decoding="async" loading="lazy" src={staticUrl(pack.image_path ?? undefined)} alt="" className="h-12 w-12 rounded-xl object-cover" />
-              <span className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{pack.name}</span>
-              <span className="text-[10px] text-ink-mist">×{h.times_opened} · ещё раз</span>
+              <span className="w-full truncate text-center text-caption font-semibold text-ink-chalk">{pack.name}</span>
+              <span className="text-micro text-ink-mist">×{h.times_opened} · ещё раз</span>
             </button>
           );
         })}

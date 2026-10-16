@@ -104,7 +104,7 @@ export default function CardDetailModal({
                   {isPath ? "🌱 Академия" : RARITY_LABELS[player.rarity]} · № {card.serial_number}
                 </p>
                 {(card.prestige ?? 0) > 0 && (
-                  <p className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${prestigeStyle(card.prestige!).chip}`}>
+                  <p className={`mt-1 inline-block rounded-full px-2 py-0.5 text-caption font-bold ${prestigeStyle(card.prestige!).chip}`}>
                     {prestigeMarks(card.prestige!)} Престиж
                   </p>
                 )}

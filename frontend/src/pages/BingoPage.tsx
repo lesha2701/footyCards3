@@ -204,7 +204,7 @@ function GoalCard({ goal }: { goal: BingoGoal }) {
           style={{ width: `${percent}%` }}
         />
       </div>
-      <p className="mt-1.5 font-mono text-[11px] text-ink-mist">
+      <p className="mt-1.5 font-mono text-caption text-ink-mist">
         {goal.current_value.toLocaleString("ru-RU")} / {goal.target_value.toLocaleString("ru-RU")}
       </p>
     </div>

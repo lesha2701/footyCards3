@@ -99,12 +99,12 @@ export default function AdminCardCollectionsPage() {
               <p className="font-display text-sm font-bold">{c.name}</p>
               <p className="text-xs text-slate-400">{c.description}</p>
               <p className="text-xs text-slate-500">{c.is_active ? "Активна (карты выпадают)" : "Отключена (не выпадает)"}</p>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-caption text-slate-500">
                 Награда: {c.reward_coins} монет{c.reward_pack_id ? ` + пак #${c.reward_pack_id}` : ""}
               </p>
               <div className="mt-2 flex flex-wrap gap-1">
-                <button onClick={() => openEdit(c)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-                <button onClick={() => toggleMutation.mutate(c.id)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">
+                <button onClick={() => openEdit(c)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+                <button onClick={() => toggleMutation.mutate(c.id)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">
                   {c.is_active ? "Отключить" : "Включить"}
                 </button>
               </div>
@@ -124,7 +124,7 @@ export default function AdminCardCollectionsPage() {
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Порядок сортировки</span>
                 <NumberInput value={form.sort_order} onChange={(v) => setForm({ ...form, sort_order: v })} />
-                <span className="text-[11px] text-slate-500">Определяет только порядок показа коллекций в списке (по возрастанию). На вероятность выпадения карт не влияет.</span>
+                <span className="text-caption text-slate-500">Определяет только порядок показа коллекций в списке (по возрастанию). На вероятность выпадения карт не влияет.</span>
               </label>
               <label className="mt-1 flex items-center gap-2 text-xs">
                 <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
@@ -152,7 +152,7 @@ export default function AdminCardCollectionsPage() {
                     </div>
                   )}
                 </div>
-                {!editing && <span className="text-[11px] text-slate-500">Обложку можно загрузить после создания коллекции.</span>}
+                {!editing && <span className="text-caption text-slate-500">Обложку можно загрузить после создания коллекции.</span>}
               </div>
 
               <label className="mt-2 flex flex-col gap-1">

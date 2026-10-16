@@ -239,7 +239,7 @@ function ClubHome({ club }: { club: Club }) {
             <button
               onClick={() => clubTypeMutation.mutate(club.club_type === "open" ? "closed" : "open")}
               disabled={clubTypeMutation.isPending}
-              className="rounded-lg bg-white/5 px-2 py-1 text-[11px] font-semibold text-ink-mist active:scale-95 disabled:opacity-40"
+              className="rounded-lg bg-white/5 px-2 py-1 text-caption font-semibold text-ink-mist active:scale-95 disabled:opacity-40"
             >
               Сделать {club.club_type === "open" ? "закрытым" : "открытым"}
             </button>
@@ -288,7 +288,7 @@ function ClubHome({ club }: { club: Club }) {
           <IconFlagCheckered size={16} className="text-accent-lime" />
           Турнир клуба
           {tournamentCurrent.status === "active" && (
-            <span className="ml-auto flex items-center gap-1.5 rounded-full bg-accent-lime/10 px-2 py-1 text-[10px] font-bold text-accent-lime">
+            <span className="ml-auto flex items-center gap-1.5 rounded-full bg-accent-lime/10 px-2 py-1 text-micro font-bold text-accent-lime">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-lime" />
               Идёт
             </span>
@@ -306,19 +306,19 @@ function ClubHome({ club }: { club: Club }) {
           <div className="grid grid-cols-4 gap-2 text-center">
             <div>
               <p className="font-mono text-sm font-bold text-accent-cyan">{nextOpponent.attack}</p>
-              <p className="text-[9px] text-ink-mist-dim">Атака</p>
+              <p className="text-micro text-ink-mist-dim">Атака</p>
             </div>
             <div>
               <p className="font-mono text-sm font-bold text-accent-cyan">{nextOpponent.midfield}</p>
-              <p className="text-[9px] text-ink-mist-dim">Полузащита</p>
+              <p className="text-micro text-ink-mist-dim">Полузащита</p>
             </div>
             <div>
               <p className="font-mono text-sm font-bold text-accent-cyan">{nextOpponent.defence}</p>
-              <p className="text-[9px] text-ink-mist-dim">Защита</p>
+              <p className="text-micro text-ink-mist-dim">Защита</p>
             </div>
             <div>
               <p className="font-mono text-sm font-bold text-accent-cyan">{nextOpponent.goalkeeping}</p>
-              <p className="text-[9px] text-ink-mist-dim">Вратарь</p>
+              <p className="text-micro text-ink-mist-dim">Вратарь</p>
             </div>
           </div>
           {isManager && (
@@ -380,7 +380,7 @@ function ClubHome({ club }: { club: Club }) {
                 navigator.clipboard.writeText(`https://t.me/${profile.telegram_bot_username}?start=club_${club.invite_code}`);
                 hapticNotify("success");
               }}
-              className="shrink-0 rounded-lg bg-floodlight px-2 py-1 text-[11px] font-bold text-bg-base"
+              className="shrink-0 rounded-lg bg-floodlight px-2 py-1 text-caption font-bold text-bg-base"
             >
               Копировать
             </button>
@@ -404,7 +404,7 @@ function ClubHome({ club }: { club: Club }) {
           <IconTrophy size={18} className="shrink-0 text-accent-lime" />
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold text-ink-chalk">Лига клубов</span>
-            <span className="block text-[11px] text-ink-mist">
+            <span className="block text-caption text-ink-mist">
               {league.my_row
                 ? `${league.my_row.rank} место · ${league.my_row.points} очк.${league.my_row.reward > 0 ? ` · приз ${league.my_row.reward}` : ""}`
                 : "Играйте, открывайте паки и выполняйте задания — клуб получит очки"}
@@ -466,14 +466,14 @@ function ClubHome({ club }: { club: Club }) {
                 <button
                   onClick={() => acceptMutation.mutate(r.id)}
                   disabled={acceptMutation.isPending}
-                  className="rounded-lg bg-accent-green px-2 py-1 text-[11px] font-bold text-bg-base disabled:opacity-50"
+                  className="rounded-lg bg-accent-green px-2 py-1 text-caption font-bold text-bg-base disabled:opacity-50"
                 >
                   Принять
                 </button>
                 <button
                   onClick={() => rejectMutation.mutate(r.id)}
                   disabled={rejectMutation.isPending}
-                  className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400 disabled:opacity-50"
+                  className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400 disabled:opacity-50"
                 >
                   Отклонить
                 </button>
@@ -494,7 +494,7 @@ function ClubHome({ club }: { club: Club }) {
               {isCaptain && m.role === "member" && m.user_id !== userId && assistantCount < MAX_ASSISTANTS && (
                 <button
                   onClick={() => setConfirmMemberAction({ type: "appoint", userId: m.user_id, name: m.username ?? m.first_name ?? `#${m.user_id}` })}
-                  className="rounded-lg bg-accent-lime/10 px-2 py-1 text-[11px] text-accent-lime"
+                  className="rounded-lg bg-accent-lime/10 px-2 py-1 text-caption text-accent-lime"
                 >
                   Назначить ассистентом
                 </button>
@@ -502,7 +502,7 @@ function ClubHome({ club }: { club: Club }) {
               {isCaptain && m.role === "assistant" && m.user_id !== userId && (
                 <button
                   onClick={() => removeAssistantMutation.mutate(m.user_id)}
-                  className="rounded-lg bg-white/5 px-2 py-1 text-[11px] text-ink-mist"
+                  className="rounded-lg bg-white/5 px-2 py-1 text-caption text-ink-mist"
                 >
                   Понизить
                 </button>
@@ -510,7 +510,7 @@ function ClubHome({ club }: { club: Club }) {
               {isManager && m.role === "member" && m.user_id !== userId && (
                 <button
                   onClick={() => setConfirmMemberAction({ type: "kick", userId: m.user_id, name: m.username ?? m.first_name ?? `#${m.user_id}` })}
-                  className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400"
+                  className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400"
                 >
                   Исключить
                 </button>
@@ -518,7 +518,7 @@ function ClubHome({ club }: { club: Club }) {
               {isCaptain && (
                 <button
                   onClick={() => togglePersonalRewardMutation.mutate({ userId: m.user_id, enabled: !m.personal_reward_enabled })}
-                  className={`rounded-lg px-2 py-1 text-[11px] ${m.personal_reward_enabled ? "bg-accent-lime/10 text-accent-lime" : "bg-white/5 text-ink-mist"}`}
+                  className={`rounded-lg px-2 py-1 text-caption ${m.personal_reward_enabled ? "bg-accent-lime/10 text-accent-lime" : "bg-white/5 text-ink-mist"}`}
                   title="Личная награда за матчи турнира"
                 >
                   {m.personal_reward_enabled ? "Награда: вкл" : "Награда: выкл"}

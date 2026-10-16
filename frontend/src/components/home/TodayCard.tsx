@@ -238,7 +238,7 @@ function TodayRow({
       >
         <Icon size={17} />
         {!!badge && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-[9px] font-bold text-bg-base">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-micro font-bold text-bg-base">
             {badge}
           </span>
         )}
@@ -248,7 +248,7 @@ function TodayRow({
         <span className="block text-xs text-ink-mist">{subtitle}</span>
       </span>
       {ready ? (
-        <span className="rounded-full bg-accent-lime/15 px-2.5 py-1 text-[11px] font-semibold text-accent-lime">
+        <span className="rounded-full bg-accent-lime/15 px-2.5 py-1 text-caption font-semibold text-accent-lime">
           {actionLabel}
         </span>
       ) : done ? (

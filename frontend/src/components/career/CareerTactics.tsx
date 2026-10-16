@@ -36,7 +36,7 @@ const CUSTOM_PRESET = "CUSTOM";
 
 function HintBadge({ hint }: { hint: MatchupHint }) {
   const h = HINT_TEXT[hint];
-  return <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${h.tone}`}>{h.label}</span>;
+  return <span className={`shrink-0 rounded-full px-2 py-0.5 text-micro font-bold ${h.tone}`}>{h.label}</span>;
 }
 
 function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -51,7 +51,7 @@ export function TacticTags({ catalog, tactic, highlight }: { catalog: TacticsCat
         <span
           key={a.key}
           title={a.label}
-          className={`rounded-lg px-2 py-0.5 text-[10px] font-semibold ${
+          className={`rounded-lg px-2 py-0.5 text-micro font-semibold ${
             highlight && highlight[a.key] !== tactic[a.key] ? "bg-amber-400/15 text-amber-300" : "bg-white/5 text-ink-chalk"
           }`}
         >
@@ -73,24 +73,24 @@ export function ScoutingCard({ scouting, catalog, difficultyLabel }: {
     <Card>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-wider text-ink-mist">Разведка · тур {scouting.round_index + 1}</p>
+          <p className="text-micro uppercase tracking-wider text-ink-mist">Разведка · тур {scouting.round_index + 1}</p>
           <p className="truncate font-display text-base font-bold text-ink-chalk">{scouting.opponent_name}</p>
         </div>
         {scouting.strength !== null && (
           <span className="shrink-0 rounded-xl bg-bg-raised px-2 py-1 text-center">
             <span className="block font-mono text-sm font-bold text-ink-chalk">{scouting.strength}</span>
-            <span className="block text-[9px] text-ink-mist">сила</span>
+            <span className="block text-micro text-ink-mist">сила</span>
           </span>
         )}
       </div>
 
       <div className="flex items-center gap-1.5">
-        <span className="text-[11px] text-ink-mist">Форма</span>
+        <span className="text-caption text-ink-mist">Форма</span>
         {scouting.form.length === 0 ? (
-          <span className="text-[11px] text-ink-mist-dim">ещё не играл</span>
+          <span className="text-caption text-ink-mist-dim">ещё не играл</span>
         ) : (
           scouting.form.map((r, i) => (
-            <span key={i} className={`flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold text-bg-base ${FORM_TONE[r]}`}>
+            <span key={i} className={`flex h-5 w-5 items-center justify-center rounded-md text-micro font-bold text-bg-base ${FORM_TONE[r]}`}>
               {FORM_LABEL[r] ?? r}
             </span>
           ))
@@ -98,13 +98,13 @@ export function ScoutingCard({ scouting, catalog, difficultyLabel }: {
       </div>
 
       {scouting.head_to_head && scouting.head_to_head.meetings > 0 && (
-        <p className="text-[11px] text-ink-mist">
+        <p className="text-caption text-ink-mist">
           Личные встречи: {scouting.head_to_head.meetings + 1}-я встреча · В{scouting.head_to_head.w} Н{scouting.head_to_head.d} П{scouting.head_to_head.l}
         </p>
       )}
       {scouting.tactic && catalog ? (
         <div className="rounded-2xl bg-bg-raised p-3">
-          <p className="mb-1.5 text-[11px] text-ink-mist">
+          <p className="mb-1.5 text-caption text-ink-mist">
             {scouting.source === "last_match" ? "В прошлом туре" : "Заявка на сезон"}: {scouting.formation} ·{" "}
             {tacticLabel(MENTALITIES, scouting.mentality)}
             {preset && <> · <span className="text-ink-chalk">{preset}</span></>}
@@ -118,7 +118,7 @@ export function ScoutingCard({ scouting, catalog, difficultyLabel }: {
       )}
 
       {scouting.adaptive && scouting.threat && catalog && (
-        <div className="rounded-2xl bg-amber-400/10 p-3 text-[11px] text-amber-200">
+        <div className="rounded-2xl bg-amber-400/10 p-3 text-caption text-amber-200">
           <p className="font-semibold text-amber-300">Соперник уровня «{difficultyLabel}» читает игру</p>
           <p className="mt-0.5">
             Против твоей прошлой тактики он скорее всего выберет «
@@ -134,15 +134,15 @@ export function ScoutingCard({ scouting, catalog, difficultyLabel }: {
 export function MatchupList({ report, compact = false }: { report: MatchupReport; compact?: boolean }) {
   const items = [...report.items].sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
   if (!items.length) {
-    return <p className="text-[11px] text-ink-mist">Тактики не пересекаются — решат игроки.</p>;
+    return <p className="text-caption text-ink-mist">Тактики не пересекаются — решат игроки.</p>;
   }
   return (
     <ul className="flex flex-col gap-1">
       {items.slice(0, compact ? 3 : items.length).map((item) => {
         const good = item.favours === "me";
         return (
-          <li key={`${item.id}-${item.attacker}`} className="flex items-start gap-2 text-[11px] leading-snug">
-            <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
+          <li key={`${item.id}-${item.attacker}`} className="flex items-start gap-2 text-caption leading-snug">
+            <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-micro font-bold ${
               good ? "bg-accent-lime/20 text-accent-lime" : "bg-red-500/20 text-red-400"}`}
             >
               {good ? "+" : "−"}
@@ -171,7 +171,7 @@ export function Segmented({ value, options, onChange, label }: {
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`rounded-lg px-1 py-1.5 text-[11px] font-semibold leading-tight transition-colors ${
+          className={`rounded-lg px-1 py-1.5 text-caption font-semibold leading-tight transition-colors ${
             value === o.value ? "bg-floodlight text-bg-base" : "text-ink-mist active:bg-white/5"}`}
         >
           {o.label}
@@ -227,7 +227,7 @@ export function TacticsBoard({ season, catalog, onView, onError }: {
     <Card>
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-ink-mist">Тактика на тур {season.rounds_played + 1}</p>
+          <p className="text-micro uppercase tracking-wider text-ink-mist">Тактика на тур {season.rounds_played + 1}</p>
           <p className="font-display text-base font-bold text-ink-chalk">{activePreset?.label ?? "Своя тактика"}</p>
         </div>
         {report && <HintBadge hint={report.hint} />}
@@ -237,7 +237,7 @@ export function TacticsBoard({ season, catalog, onView, onError }: {
         <TacticPitch formation={formation} tactic={tactic} />
         <div className="flex flex-col gap-2">
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-ink-mist">Схема</span>
+            <span className="text-micro uppercase tracking-wider text-ink-mist">Схема</span>
             <select
               aria-label="Схема"
               value={formation}
@@ -248,7 +248,7 @@ export function TacticsBoard({ season, catalog, onView, onError }: {
             </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-ink-mist">Тактика</span>
+            <span className="text-micro uppercase tracking-wider text-ink-mist">Тактика</span>
             <select
               aria-label="Тактика"
               value={activePreset?.code ?? CUSTOM_PRESET}
@@ -264,7 +264,7 @@ export function TacticsBoard({ season, catalog, onView, onError }: {
             </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-ink-mist">Настрой</span>
+            <span className="text-micro uppercase tracking-wider text-ink-mist">Настрой</span>
             <select
               aria-label="Настрой"
               value={mentality}
@@ -276,14 +276,14 @@ export function TacticsBoard({ season, catalog, onView, onError }: {
           </label>
           {fam && (
             <div className="rounded-xl bg-bg-raised p-2">
-              <div className="flex items-center justify-between text-[10px]">
+              <div className="flex items-center justify-between text-micro">
                 <span className="uppercase tracking-wider text-ink-mist">Сыгранность</span>
                 <span className="font-mono font-bold text-ink-chalk">+{famPreview.toFixed(1)}%</span>
               </div>
               <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-white/10">
                 <span className="block h-full bg-floodlight" style={{ width: `${Math.min(100, (famPreview / (fam.max_pct || 1)) * 100)}%` }} />
               </span>
-              <p className="mt-1 text-[9px] leading-tight text-ink-mist-dim">
+              <p className="mt-1 text-micro leading-tight text-ink-mist-dim">
                 до {fam.max_pct}% · +{fam.step_pct}% за матч без изменений
               </p>
             </div>
@@ -293,17 +293,17 @@ export function TacticsBoard({ season, catalog, onView, onError }: {
 
       {AXIS_PHASES.map((phase) => (
         <div key={phase.title} className="flex flex-col gap-2">
-          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-accent-cyan">{phase.title}</p>
+          <p className="text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">{phase.title}</p>
           {phase.axes.map((axis) => {
             const def = catalog.axes.find((a) => a.key === axis);
             if (!def) return null;
             const current = def.values.find((v) => v.value === tactic[axis]);
             return (
               <div key={axis} className="flex flex-col gap-1">
-                <span className="text-[11px] font-semibold text-ink-chalk">{def.label}</span>
+                <span className="text-caption font-semibold text-ink-chalk">{def.label}</span>
                 <Segmented label={def.label} value={tactic[axis] ?? ""} options={def.values}
                   onChange={(v) => setTactic({ ...tactic, [axis]: v })} />
-                {current && <p className="text-[10px] leading-snug text-ink-mist">{current.hint}</p>}
+                {current && <p className="text-micro leading-snug text-ink-mist">{current.hint}</p>}
               </div>
             );
           })}
@@ -313,18 +313,18 @@ export function TacticsBoard({ season, catalog, onView, onError }: {
       {report && season.scouting && (
         <div className="rounded-2xl bg-bg-raised p-3">
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold text-ink-chalk">Против «{season.scouting.opponent_name}»</p>
+            <p className="text-caption font-semibold text-ink-chalk">Против «{season.scouting.opponent_name}»</p>
             <HintBadge hint={report.hint} />
           </div>
           <MatchupList report={report} />
           {season.scouting.source === "last_match" && (
-            <p className="mt-1.5 text-[10px] text-ink-mist-dim">По тактике, которую он сыграл в прошлом туре.</p>
+            <p className="mt-1.5 text-micro text-ink-mist-dim">По тактике, которую он сыграл в прошлом туре.</p>
           )}
         </div>
       )}
 
       {formation !== season.formation && (
-        <p className="text-[11px] text-amber-300">Новая схема — расстановка заполнится автоматически, её можно поправить во вкладке «Состав».</p>
+        <p className="text-caption text-amber-300">Новая схема — расстановка заполнится автоматически, её можно поправить во вкладке «Состав».</p>
       )}
       <button
         onClick={() => save.mutate()}
@@ -354,7 +354,7 @@ function Select({ value, options, onChange, label }: {
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="min-w-0 rounded-xl bg-bg-base/60 px-2 py-2 text-[11px] text-ink-chalk outline-none"
+      className="min-w-0 rounded-xl bg-bg-base/60 px-2 py-2 text-caption text-ink-chalk outline-none"
     >
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
@@ -410,18 +410,18 @@ export function PlanEditor({ season, catalog, onView, onError }: {
     <Card>
       <div>
         <p className="font-display text-base font-bold text-ink-chalk">План на матч</p>
-        <p className="text-[11px] leading-snug text-ink-mist">
+        <p className="text-caption leading-snug text-ink-mist">
           Указание действует, пока выполняется условие, потом команда возвращается к базовой тактике. Нижнее указание важнее верхнего.
         </p>
       </div>
 
       <div className="flex flex-col gap-2">
-        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-accent-cyan">Указания · {rules.length}/{maxRules}</p>
+        <p className="text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">Указания · {rules.length}/{maxRules}</p>
         {rules.map((rule, i) => (
           <div key={i} className="flex flex-col gap-2 rounded-2xl bg-bg-raised p-3" aria-label={`Указание ${i + 1}`}>
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-ink-chalk">Указание {i + 1}</span>
-              <button onClick={() => setRules(rules.filter((_, j) => j !== i))} className="text-[11px] text-red-400">Удалить</button>
+              <span className="text-caption font-semibold text-ink-chalk">Указание {i + 1}</span>
+              <button onClick={() => setRules(rules.filter((_, j) => j !== i))} className="text-caption text-red-400">Удалить</button>
             </div>
             <div className="grid grid-cols-3 gap-1.5">
               <Select label="Счёт" value={rule.score} options={SCORE_OPTIONS}
@@ -452,12 +452,12 @@ export function PlanEditor({ season, catalog, onView, onError }: {
       </div>
 
       <div className="flex flex-col gap-2">
-        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-accent-cyan">Замены · {subs.length}/{maxSubs}</p>
+        <p className="text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">Замены · {subs.length}/{maxSubs}</p>
         {subs.map((sub, i) => (
           <div key={i} className="flex flex-col gap-2 rounded-2xl bg-bg-raised p-3" aria-label={`Замена ${i + 1}`}>
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-ink-chalk">Замена {i + 1}</span>
-              <button onClick={() => setSubs(subs.filter((_, j) => j !== i))} className="text-[11px] text-red-400">Удалить</button>
+              <span className="text-caption font-semibold text-ink-chalk">Замена {i + 1}</span>
+              <button onClick={() => setSubs(subs.filter((_, j) => j !== i))} className="text-caption text-red-400">Удалить</button>
             </div>
             <div className="grid grid-cols-2 gap-1.5">
               <Select label="Минута" value={String(sub.minute)} options={MINUTES.map((m) => ({ value: String(m), label: `с ${m}'` }))}
@@ -479,7 +479,7 @@ export function PlanEditor({ season, catalog, onView, onError }: {
             + Замена
           </button>
         )}
-        <p className="text-[10px] leading-snug text-ink-mist-dim">
+        <p className="text-micro leading-snug text-ink-mist-dim">
           Усталость растёт по ходу матча — быстрее при высоком прессинге и контрпрессинге. Если выбранный игрок не может выйти, выйдет лучший подходящий из запаса.
         </p>
       </div>

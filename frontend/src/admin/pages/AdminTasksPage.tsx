@@ -200,7 +200,7 @@ export default function AdminTasksPage() {
             {broadcastMutation.isPending ? "Отправка..." : "Отправить"}
           </button>
         </div>
-        <p className="mt-2 text-[11px] text-slate-500">
+        <p className="mt-2 text-caption text-slate-500">
           Предпросмотр: «Появилось {broadcastCount} {pluralizeTasks(broadcastCount)}! Успей получить награду»
           {broadcastMessage.trim() && <> + «{broadcastMessage.trim()}»</>}
         </p>
@@ -240,7 +240,7 @@ export default function AdminTasksPage() {
           <div key={t.id} className="rounded-2xl border border-white/5 bg-bg-surface p-3">
             <div className="flex items-center justify-between">
               <p className="font-display text-sm font-bold">{t.name}</p>
-              {t.category === "premium" && <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-300">Премиум</span>}
+              {t.category === "premium" && <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-micro text-amber-300">Премиум</span>}
             </div>
             <p className="text-xs text-slate-400">{t.description}</p>
             <p className="mt-1 text-xs text-slate-500">
@@ -262,11 +262,11 @@ export default function AdminTasksPage() {
               Забрали награду: <span className="font-semibold text-slate-300">{t.claimed_count}</span>
             </p>
             <div className="mt-2 flex flex-wrap gap-1">
-              <button onClick={() => openEdit(t)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-              <button onClick={() => toggleMutation.mutate(t.id)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">
+              <button onClick={() => openEdit(t)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+              <button onClick={() => toggleMutation.mutate(t.id)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">
                 {t.is_active ? "Отключить" : "Включить"}
               </button>
-              <button onClick={() => confirmDelete(t)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">
+              <button onClick={() => confirmDelete(t)} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">
                 Удалить
               </button>
             </div>
@@ -327,7 +327,7 @@ export default function AdminTasksPage() {
                   onChange={(v) => setForm({ ...form, max_rating: v })}
                 />
               ) : (
-                <p className="text-[11px] text-slate-500">
+                <p className="text-caption text-slate-500">
                   Выполняется автоматически, когда игрок сыграет матч Card Arena составом из 11 карточек одной страны.
                 </p>
               )}
@@ -387,7 +387,7 @@ export default function AdminTasksPage() {
                     value={form.invite_link}
                     onChange={(v) => setForm({ ...form, invite_link: v })}
                   />
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-caption text-slate-500">
                     Заполни @username ИЛИ ID канала — бот проверяет подписку по ID, если он указан, иначе по
                     @username (бот должен быть админом канала). Для приватных каналов без @username ID узнают у
                     админа канала — обычно вида -100xxxxxxxxxx. Пользователю в приложении показывается кнопка со

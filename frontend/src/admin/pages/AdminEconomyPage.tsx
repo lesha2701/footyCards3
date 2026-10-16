@@ -78,7 +78,7 @@ export default function AdminEconomyPage() {
                       <div className="flex-1 rounded-t bg-emerald-400/70" style={{ height: `${(d.inflow / maxDay) * 100}%` }} />
                       <div className="flex-1 rounded-t bg-rose-400/70" style={{ height: `${(d.outflow / maxDay) * 100}%` }} />
                     </div>
-                    <span className="text-[9px] text-slate-500">{d.date.slice(5)}</span>
+                    <span className="text-micro text-slate-500">{d.date.slice(5)}</span>
                   </div>
                 ))}
               </div>
@@ -117,7 +117,7 @@ function Stat({ label, value, tone, hint }: { label: string; value: string | num
     <div className="rounded-2xl border border-white/5 bg-bg-surface p-4">
       <p className={`font-display text-2xl font-bold ${tone ?? ""}`}>{value}</p>
       <p className="mt-1 text-xs text-slate-400">{label}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-slate-500">{hint}</p>}
+      {hint && <p className="mt-0.5 text-caption text-slate-500">{hint}</p>}
     </div>
   );
 }

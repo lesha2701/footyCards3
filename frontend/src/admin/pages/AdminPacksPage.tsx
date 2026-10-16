@@ -155,19 +155,19 @@ export default function AdminPacksPage() {
               )}
               <p className="text-xs text-slate-500">{p.is_active ? "Активен" : "Отключён"}</p>
               <div className="mt-2 flex flex-wrap gap-1">
-                <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-                <button onClick={() => toggleMutation.mutate(p.id)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">
+                <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+                <button onClick={() => toggleMutation.mutate(p.id)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">
                   {p.is_active ? "Отключить" : "Включить"}
                 </button>
                 <button
                   onClick={async () => setPreview({ pack: p, result: await previewPack(p.id) })}
-                  className="rounded-lg bg-white/5 px-2 py-1 text-[11px]"
+                  className="rounded-lg bg-white/5 px-2 py-1 text-caption"
                 >
                   Предпросмотр
                 </button>
                 <button
                   onClick={() => confirmDelete(p)}
-                  className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400"
+                  className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400"
                 >
                   Удалить
                 </button>
@@ -269,7 +269,7 @@ export default function AdminPacksPage() {
                   <span className="text-xs text-slate-500">%</span>
                 </div>
               ))}
-              <p className="text-[11px] text-slate-500">Можно указывать доли процента, например 0.05%</p>
+              <p className="text-caption text-slate-500">Можно указывать доли процента, например 0.05%</p>
               {editing && <PackValueHint packId={editing.id} />}
               {Math.abs(probabilitySum - 1) > 0.02 && (
                 <p className="text-xs text-amber-400">Сумма шансов должна быть ≈ 100%, иначе сохранить нельзя</p>
@@ -301,7 +301,7 @@ export default function AdminPacksPage() {
                     </div>
                   )}
                 </div>
-                <span className="text-[11px] text-slate-500">Или выбери готовый шаблон:</span>
+                <span className="text-caption text-slate-500">Или выбери готовый шаблон:</span>
                 <div className="flex gap-2">
                   {COVER_TEMPLATES.map((t) => (
                     <button
@@ -383,7 +383,7 @@ function PackValueHint({ packId }: { packId: number }) {
         Средняя ценность пака (быстрая продажа): <b>{data.expected_quick_sell_value}</b> монет при цене {data.price}
         {data.value_to_price != null && <> — <b>{Math.round(data.value_to_price * 100)}%</b> цены</>}
       </p>
-      <p className="mt-0.5 text-[11px] text-slate-500">
+      <p className="mt-0.5 text-caption text-slate-500">
         По сохранённым шансам; бонусы (тренер, стадион, жетон) и гарантия редкости не учтены.
       </p>
     </div>

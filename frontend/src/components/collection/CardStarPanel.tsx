@@ -70,7 +70,7 @@ export default function CardStarPanel({ cardId, isDiamond }: { cardId: number; i
       </div>
 
       {atMax ? (
-        <p className="mt-1 text-[11px] text-ink-mist">Максимум звёзд: +{state.rating_bonus} к рейтингу</p>
+        <p className="mt-1 text-caption text-ink-mist">Максимум звёзд: +{state.rating_bonus} к рейтингу</p>
       ) : (
         <>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -79,21 +79,21 @@ export default function CardStarPanel({ cardId, isDiamond }: { cardId: number; i
               style={{ width: `${Math.min(100, (100 * state.progress) / (state.next_threshold ?? 1))}%` }}
             />
           </div>
-          <p className="mt-1.5 text-[11px] text-ink-mist">
+          <p className="mt-1.5 text-caption text-ink-mist">
             Копилка: <b className="font-mono text-ink-chalk">{state.progress}/{state.next_threshold}</b> дублей до ★{state.stars + 1}
             {state.rating_after_next_star != null && (
               <> · рейтинг <b className="font-mono text-accent-cyan">{state.rating_now} → {state.rating_after_next_star}</b></>
             )}
           </p>
-          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-ink-mist">
+          <p className="mt-0.5 flex items-center gap-1 text-caption text-ink-mist">
             Звезда стоит <IconCoin size={11} /> {state.next_coin_cost}
             {freeSkilled > 0 && <span className="text-ink-mist-dim"> · копии с навыком не вкладываются</span>}
           </p>
         </>
       )}
 
-      {state.block_reason && !atMax && <p className="mt-1.5 text-[11px] text-amber-300/90">{state.block_reason}</p>}
-      {error && <p className="mt-1.5 rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">{error}</p>}
+      {state.block_reason && !atMax && <p className="mt-1.5 text-caption text-amber-300/90">{state.block_reason}</p>}
+      {error && <p className="mt-1.5 rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">{error}</p>}
 
       {!state.block_reason && state.claimable && (
         <button
@@ -115,11 +115,11 @@ export default function CardStarPanel({ cardId, isDiamond }: { cardId: number; i
         </button>
       )}
       {!state.block_reason && freePlain === 0 && !state.claimable && !atMax && (
-        <p className="mt-1.5 text-[11px] text-ink-mist-dim">Свободных дублей этого игрока пока нет</p>
+        <p className="mt-1.5 text-caption text-ink-mist-dim">Свободных дублей этого игрока пока нет</p>
       )}
 
       {confirming && (
-        <div className="mt-2 rounded-xl bg-white/5 p-2.5 text-[11px] text-ink-mist">
+        <div className="mt-2 rounded-xl bg-white/5 p-2.5 text-caption text-ink-mist">
           <p>
             −{preview.consumed} дубл{preview.consumed === 1 ? "ь" : "ей"}
             {preview.starsGained > 0 && <>, <b className="text-amber-300">+{preview.starsGained} ★</b></>}

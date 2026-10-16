@@ -29,7 +29,7 @@ export default function MatchStatsTable({
 
   return (
     <div className="rounded-xl bg-black/20 px-3 py-2">
-      <div className="mb-1 flex items-center justify-between text-[11px] font-semibold">
+      <div className="mb-1 flex items-center justify-between text-caption font-semibold">
         <span className="max-w-[40%] truncate text-accent-green">{leftLabel}</span>
         <span className="text-ink-mist-dim">Статистика</span>
         <span className="max-w-[40%] truncate text-red-400">{opponentName}</span>
@@ -43,7 +43,7 @@ export default function MatchStatsTable({
           <div key={key} className="py-1">
             <div className="flex items-center justify-between font-mono text-xs">
               <span className={mine > theirs ? "font-bold text-ink-chalk" : "text-ink-mist"}>{mine}</span>
-              <span className="font-body text-[11px] text-ink-mist">{label}</span>
+              <span className="font-body text-caption text-ink-mist">{label}</span>
               <span className={theirs > mine ? "font-bold text-ink-chalk" : "text-ink-mist"}>{theirs}</span>
             </div>
             <div className="mt-0.5 flex h-1 overflow-hidden rounded-full bg-red-400/80">

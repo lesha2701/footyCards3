@@ -158,7 +158,7 @@ function TabButton({
     >
       {label}
       {!!badge && (
-        <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+        <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-micro font-bold text-white">
           {badge}
         </span>
       )}
@@ -256,7 +256,7 @@ function TaskSkillReward({ code, quantity }: { code: string; quantity: number })
   const { data: catalog } = useSkillCatalog();
   const skill = skillByCode(catalog?.skills, code);
   return (
-    <p className="mt-0.5 text-[11px] font-semibold text-accent-lime">
+    <p className="mt-0.5 text-caption font-semibold text-accent-lime">
       + <SkillTokenIcon code={code} size={13} className="inline-block align-[-2px]" aria-hidden /> жетон «{skill?.name ?? code}» × {quantity}
     </p>
   );

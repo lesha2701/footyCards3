@@ -37,7 +37,7 @@ function Row({ row, mine }: { row: ClubLeagueRow; mine: boolean }) {
       <ClubLogo shape={row.logo_shape} color={row.logo_color} size={28} />
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-chalk">{row.name}</span>
       {row.reward > 0 && (
-        <span className="flex items-center gap-0.5 font-mono text-[11px] text-ink-mist">
+        <span className="flex items-center gap-0.5 font-mono text-caption text-ink-mist">
           +{row.reward}
           <IconCoin size={11} />
         </span>
@@ -90,7 +90,7 @@ export default function ClubLeaguePage() {
       {header}
 
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-accent-lime/20 via-bg-surface to-bg-surface p-4 ring-1 ring-accent-lime/20">
-        <div className="flex items-center justify-between gap-2 whitespace-nowrap text-[11px] text-ink-mist">
+        <div className="flex items-center justify-between gap-2 whitespace-nowrap text-caption text-ink-mist">
           <span className="font-mono uppercase tracking-wider">Неделя {weekLabel(league.week_start)}</span>
           <span className="flex items-center gap-1 font-mono">
             <IconClock size={12} />
@@ -109,7 +109,7 @@ export default function ClubLeaguePage() {
               </div>
               <div className="text-right">
                 <p className="font-mono text-xl font-bold text-accent-lime">{mine.points}</p>
-                <p className="text-[11px] text-ink-mist">очков</p>
+                <p className="text-caption text-ink-mist">очков</p>
               </div>
             </div>
           ) : (
@@ -140,29 +140,29 @@ export default function ClubLeaguePage() {
       </section>
 
       <section className="rounded-2xl bg-bg-surface p-3">
-        <p className="mb-2 font-mono text-[11px] uppercase tracking-wider text-ink-mist">Как набрать очки</p>
+        <p className="mb-2 font-mono text-caption uppercase tracking-wider text-ink-mist">Как набрать очки</p>
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="rounded-xl bg-black/20 py-2">
             <p className="font-mono text-base font-bold text-accent-lime">+{league.points_game}</p>
-            <p className="text-[10px] text-ink-mist">игра или матч</p>
+            <p className="text-micro text-ink-mist">игра или матч</p>
           </div>
           <div className="rounded-xl bg-black/20 py-2">
             <p className="font-mono text-base font-bold text-accent-lime">+{league.points_pack}</p>
-            <p className="text-[10px] text-ink-mist">покупка пака</p>
+            <p className="text-micro text-ink-mist">покупка пака</p>
           </div>
           <div className="rounded-xl bg-black/20 py-2">
             <p className="font-mono text-base font-bold text-accent-lime">+{league.points_task}</p>
-            <p className="text-[10px] text-ink-mist">задание</p>
+            <p className="text-micro text-ink-mist">задание</p>
           </div>
         </div>
-        <p className="mt-2 text-[11px] text-ink-mist-dim">
+        <p className="mt-2 text-caption text-ink-mist-dim">
           Каждый участник приносит клубу до {league.member_weekly_cap} очков за неделю. Призовые места:{" "}
           {league.rewards.length} — монеты идут в бюджет клуба.
         </p>
       </section>
 
       <section className="flex flex-col gap-1.5">
-        <p className="font-mono text-[11px] uppercase tracking-wider text-ink-mist">Таблица недели</p>
+        <p className="font-mono text-caption uppercase tracking-wider text-ink-mist">Таблица недели</p>
         {league.table.length === 0 && (
           <p className="rounded-xl bg-bg-surface px-3 py-4 text-center text-sm text-ink-mist">
             Пока ни у одного клуба нет очков — стань первым!
@@ -178,7 +178,7 @@ export default function ClubLeaguePage() {
 
       {inClub && (
         <section className="rounded-2xl bg-bg-surface p-3">
-          <p className="mb-2 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-ink-mist">
+          <p className="mb-2 flex items-center gap-1.5 font-mono text-caption uppercase tracking-wider text-ink-mist">
             <IconUsers size={12} />
             Вклад участников
           </p>
@@ -202,7 +202,7 @@ export default function ClubLeaguePage() {
 
       {league.last_week && (
         <section className="rounded-2xl bg-bg-surface p-3">
-          <p className="mb-2 font-mono text-[11px] uppercase tracking-wider text-ink-mist">
+          <p className="mb-2 font-mono text-caption uppercase tracking-wider text-ink-mist">
             Прошлая неделя · {weekLabel(league.last_week.week_start)}
           </p>
           <div className="flex flex-col gap-1.5">

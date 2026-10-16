@@ -119,7 +119,7 @@ function TradeCard({
           {isSender ? `Кому: ${offer.receiver.username ?? offer.receiver.first_name}` : `От: ${offer.sender.username ?? offer.sender.first_name}`}
           <UserBadge badge={isSender ? offer.receiver.active_badge : offer.sender.active_badge} />
         </span>
-        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-ink-mist-dim">{STATUS_LABELS[offer.status]}</span>
+        <span className="rounded-full bg-white/5 px-2 py-0.5 text-caption text-ink-mist-dim">{STATUS_LABELS[offer.status]}</span>
       </div>
 
       <div className="mt-3 flex items-center gap-2">
@@ -156,7 +156,7 @@ function TradeCard({
 function MiniCardRow({ cards, label, coins }: { cards: TradeOffer["offered_cards"]; label: string; coins: number }) {
   return (
     <div className="flex-1">
-      <p className="mb-1 text-[10px] text-ink-mist-dim">{label}</p>
+      <p className="mb-1 text-micro text-ink-mist-dim">{label}</p>
       <div className="flex -space-x-2">
         {cards.slice(0, 3).map((c) => (
           <img decoding="async" loading="lazy"
@@ -169,7 +169,7 @@ function MiniCardRow({ cards, label, coins }: { cards: TradeOffer["offered_cards
         {cards.length === 0 && coins === 0 && <span className="text-xs text-ink-mist-dim">—</span>}
       </div>
       {coins > 0 && (
-        <p className="mt-1 flex items-center gap-0.5 font-mono text-[11px] font-semibold text-accent-lime">
+        <p className="mt-1 flex items-center gap-0.5 font-mono text-caption font-semibold text-accent-lime">
           +{coins}
           <IconCoin size={10} />
         </p>

@@ -42,7 +42,7 @@ export function MyPlayerEntry() {
       </span>
       <span className="flex items-center gap-2">
         {player && data.points_available > 0 && (
-          <span className="rounded-full bg-accent-lime px-2 py-0.5 font-mono text-[10px] font-bold text-bg-base">
+          <span className="rounded-full bg-accent-lime px-2 py-0.5 font-mono text-micro font-bold text-bg-base">
             +{data.points_available}
           </span>
         )}

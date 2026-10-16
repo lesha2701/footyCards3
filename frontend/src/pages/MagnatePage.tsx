@@ -66,18 +66,18 @@ export default function MagnatePage() {
       {info && (
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-2xl bg-bg-surface px-3 py-2.5">
-            <p className="flex items-center gap-1.5 text-[11px] text-ink-mist">
+            <p className="flex items-center gap-1.5 text-caption text-ink-mist">
               <IconTrophy size={12} className="text-accent-lime" /> Побед
             </p>
             <p className="font-mono text-base font-bold text-ink-chalk">{info.wins}</p>
           </div>
           <div className="rounded-2xl bg-bg-surface px-3 py-2.5">
-            <p className="flex items-center gap-1.5 text-[11px] text-ink-mist">
+            <p className="flex items-center gap-1.5 text-caption text-ink-mist">
               <IconCoin size={12} className="text-accent-lime" /> Наградных сегодня
             </p>
             <p className="font-mono text-base font-bold text-ink-chalk">{info.rewarded_today}/{info.daily_limit}</p>
           </div>
-          <p className="col-span-2 text-[11px] text-ink-mist-dim">
+          <p className="col-span-2 text-caption text-ink-mist-dim">
             Награда по месту: {rewards.map((r, i) => `${i + 1}-е ${r}`).join(" · ")} монет · с одними ботами — {info.bot_reward_pct}%
           </p>
         </div>
@@ -101,7 +101,7 @@ export default function MagnatePage() {
             <IconPlay size={22} />
             <span>
               <span className="block font-display text-base font-bold">Против 3 ботов</span>
-              <span className="block text-[11px] opacity-80">Сразу за стол, боты ходят мгновенно</span>
+              <span className="block text-caption opacity-80">Сразу за стол, боты ходят мгновенно</span>
             </span>
           </button>
           <button
@@ -112,7 +112,7 @@ export default function MagnatePage() {
             <IconStadium size={22} className="text-accent-cyan" />
             <span>
               <span className="block font-display text-sm font-bold text-ink-chalk">Онлайн-лобби на 4</span>
-              <span className="block text-[11px] text-ink-mist">
+              <span className="block text-caption text-ink-mist">
                 Ждём игроков {info?.lobby_wait_seconds ?? "—"} с, свободные места займут боты
               </span>
             </span>
@@ -125,7 +125,7 @@ export default function MagnatePage() {
             <IconUsers size={22} className="text-accent-lime" />
             <span>
               <span className="block font-display text-sm font-bold text-ink-chalk">Комната для друзей</span>
-              <span className="block text-[11px] text-ink-mist">Отправь ссылку-приглашение в чат и начни, когда соберётесь</span>
+              <span className="block text-caption text-ink-mist">Отправь ссылку-приглашение в чат и начни, когда соберётесь</span>
             </span>
           </button>
         </div>
@@ -145,7 +145,7 @@ export default function MagnatePage() {
           >
             <span className="min-w-0">
               <span className="block text-sm font-semibold text-ink-chalk">{MODE_LABELS[m.mode]}</span>
-              <span className="block text-[11px] text-ink-mist">
+              <span className="block text-caption text-ink-mist">
                 {STATUS_LABELS[m.status]}
                 {m.left && " · ты вышел"}
                 {" · "}
@@ -156,7 +156,7 @@ export default function MagnatePage() {
               <span className="text-right">
                 <span className="block font-display text-sm font-bold text-ink-chalk">{m.my_place}-е место</span>
                 {m.reward_coins > 0 && (
-                  <span className="flex items-center justify-end gap-1 font-mono text-[11px] text-accent-lime">
+                  <span className="flex items-center justify-end gap-1 font-mono text-caption text-accent-lime">
                     +{m.reward_coins} <IconCoin size={10} />
                   </span>
                 )}

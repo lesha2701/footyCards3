@@ -104,7 +104,7 @@ export default function PlayerTournamentDetailPage() {
         <div className="overflow-x-auto rounded-2xl bg-bg-surface">
           <table className="w-full min-w-[420px] text-xs">
             <thead>
-              <tr className="border-b border-white/5 text-left text-[10px] uppercase text-ink-mist-dim">
+              <tr className="border-b border-white/5 text-left text-micro uppercase text-ink-mist-dim">
                 <th className="px-2 py-2 font-semibold">#</th>
                 <th className="px-2 py-2 font-semibold">Игрок</th>
                 <th className="px-2 py-2 text-center font-semibold">И</th>

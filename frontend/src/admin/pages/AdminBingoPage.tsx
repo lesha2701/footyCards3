@@ -204,7 +204,7 @@ export default function AdminBingoPage() {
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
             {statsPreview.map((item) => (
               <div key={item.goal_type} className="rounded-xl bg-bg-base px-3 py-2">
-                <p className="text-[11px] text-slate-400">{GOAL_LABELS[item.goal_type]}</p>
+                <p className="text-caption text-slate-400">{GOAL_LABELS[item.goal_type]}</p>
                 <p className="font-mono text-lg font-bold text-ink-chalk">{item.trailing_7d_count}</p>
               </div>
             ))}

@@ -77,8 +77,8 @@ export default function ClubStadiumCardPickerModal({ open, cards, onSelect, onCl
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-ink-chalk">{c.stadium.display_name}</p>
-                      <p className="text-[10px] text-ink-mist-dim">{RARITY_LABELS[c.stadium.rarity]}</p>
-                      <p className="mt-0.5 truncate text-[10px] text-ink-mist">
+                      <p className="text-micro text-ink-mist-dim">{RARITY_LABELS[c.stadium.rarity]}</p>
+                      <p className="mt-0.5 truncate text-micro text-ink-mist">
                         +{Math.round(c.stadium.boost_pct * 100)}% к силе
                       </p>
                     </div>

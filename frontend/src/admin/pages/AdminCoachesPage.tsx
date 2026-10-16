@@ -196,7 +196,7 @@ export default function AdminCoachesPage() {
                 </select>
               ))}
               {!boostsValid && (
-                <p className="text-[11px] text-red-400">
+                <p className="text-caption text-red-400">
                   Нужно ровно {slotsForRarity} усилени{slotsForRarity === 1 ? "е" : "я"}, все разных типов.
                 </p>
               )}

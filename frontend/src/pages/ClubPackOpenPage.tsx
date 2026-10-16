@@ -196,9 +196,9 @@ export default function ClubPackOpenPage() {
                     alt={item.coach_card!.coach.display_name}
                     className="aspect-square w-full rounded-lg object-cover"
                   />
-                  <span className="truncate text-[10px] font-semibold text-ink-chalk">{item.coach_card!.coach.display_name}</span>
-                  <span className="text-[9px] font-bold text-accent-cyan">Тренер</span>
-                  {item.is_new && <span className="text-[9px] font-bold text-accent-green">Новый!</span>}
+                  <span className="truncate text-micro font-semibold text-ink-chalk">{item.coach_card!.coach.display_name}</span>
+                  <span className="text-micro font-bold text-accent-cyan">Тренер</span>
+                  {item.is_new && <span className="text-micro font-bold text-accent-green">Новый!</span>}
                 </div>
               ) : item.kind === "stadium" ? (
                 <div
@@ -210,9 +210,9 @@ export default function ClubPackOpenPage() {
                     alt={item.stadium_card!.stadium.display_name}
                     className="aspect-square w-full rounded-lg object-cover"
                   />
-                  <span className="truncate text-[10px] font-semibold text-ink-chalk">{item.stadium_card!.stadium.display_name}</span>
-                  <span className="text-[9px] font-bold text-accent-cyan">Стадион · +{Math.round(item.stadium_card!.stadium.boost_pct * 100)}%</span>
-                  {item.is_new && <span className="text-[9px] font-bold text-accent-green">Новый!</span>}
+                  <span className="truncate text-micro font-semibold text-ink-chalk">{item.stadium_card!.stadium.display_name}</span>
+                  <span className="text-micro font-bold text-accent-cyan">Стадион · +{Math.round(item.stadium_card!.stadium.boost_pct * 100)}%</span>
+                  {item.is_new && <span className="text-micro font-bold text-accent-green">Новый!</span>}
                 </div>
               ) : (
                 <div key={`player-${item.card!.id}`} className={result.cards.length === 1 ? "w-2/5" : ""}>
@@ -221,7 +221,7 @@ export default function ClubPackOpenPage() {
                     size="sm"
                     footer={
                       item.is_new ? (
-                        <p className="pb-1 text-center text-[10px] font-bold leading-none text-accent-green">Новая!</p>
+                        <p className="pb-1 text-center text-micro font-bold leading-none text-accent-green">Новая!</p>
                       ) : undefined
                     }
                   />

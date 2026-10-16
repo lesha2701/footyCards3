@@ -56,15 +56,15 @@ export default function PitchCardTile({
       <div className={`relative aspect-square w-full rounded-lg bg-gradient-to-b ${frame} p-[2px]`}>
         <div className="relative h-full w-full overflow-hidden rounded-[6px] bg-black/40">
           <img src={imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" draggable={false} />
-          <span className="absolute left-0.5 top-0.5 rounded bg-black/75 px-1 py-px text-center font-display text-[10px] font-bold leading-none text-white">
+          <span className="absolute left-0.5 top-0.5 rounded bg-black/75 px-1 py-px text-center font-display text-micro font-bold leading-none text-white">
             {player.rating}
             {stars > 0 && (
-              <span className="block text-[8px] leading-none text-amber-300" aria-label={`Звёзд: ${stars}`}>
+              <span className="block text-micro leading-none text-amber-300" aria-label={`Звёзд: ${stars}`}>
                 {"★".repeat(stars)}
               </span>
             )}
           </span>
-          <span className="absolute right-0.5 top-0.5 rounded bg-black/75 px-1 py-px font-mono text-[9px] font-bold leading-none text-accent-cyan">
+          <span className="absolute right-0.5 top-0.5 rounded bg-black/75 px-1 py-px font-mono text-micro font-bold leading-none text-accent-cyan">
             {player.position}
           </span>
           {skillCode && skillLevel ? (
@@ -74,7 +74,7 @@ export default function PitchCardTile({
           ) : null}
           {unavailable && !isPath && (
             <span
-              className="absolute bottom-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-sm bg-red-600 text-[10px] font-black leading-none text-white"
+              className="absolute bottom-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-sm bg-red-600 text-micro font-black leading-none text-white"
               aria-label={unavailable === "red_card" ? "Дисквалификация" : "Травма"}
             >
               {unavailable === "red_card" ? "▮" : "+"}

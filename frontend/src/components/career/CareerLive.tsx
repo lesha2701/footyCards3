@@ -46,9 +46,9 @@ function PlayerRow({ p, selected, onClick, disabled }: {
       className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition-colors disabled:opacity-40 ${
         selected ? "bg-floodlight text-bg-base" : "bg-bg-raised text-ink-chalk active:bg-white/5"}`}
     >
-      <span className="w-9 shrink-0 font-mono text-[10px] opacity-70">{p.position ?? ""}</span>
+      <span className="w-9 shrink-0 font-mono text-micro opacity-70">{p.position ?? ""}</span>
       <span className="min-w-0 flex-1 truncate">{p.name}</span>
-      <span className="font-mono text-[11px]">{p.rating ?? ""}</span>
+      <span className="font-mono text-caption">{p.rating ?? ""}</span>
       <FatigueBar value={p.fatigue} />
     </button>
   );
@@ -104,7 +104,7 @@ export function LiveMatchCenter({ live, catalog, onView, onError }: {
   return (
     <section className="flex flex-col gap-3 rounded-3xl bg-gradient-to-br from-bg-surface to-bg-raised p-4 ring-1 ring-red-400/30">
       <div className="flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-red-300">
+        <span className="flex items-center gap-1.5 text-caption font-bold uppercase tracking-wider text-red-300">
           <span className="h-2 w-2 animate-pulse rounded-full bg-red-400" /> Live · тур {live.round + 1} · перерыв
         </span>
         <span className="font-mono text-xs text-ink-chalk" aria-live="polite">
@@ -116,7 +116,7 @@ export function LiveMatchCenter({ live, catalog, onView, onError }: {
         <p className="font-mono text-2xl font-bold text-ink-chalk">{live.hs}:{live.as}</p>
         <p className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-ink-chalk">{live.away_name}</p>
       </div>
-      <div className="grid grid-cols-3 gap-1 text-center text-[11px] text-ink-mist">
+      <div className="grid grid-cols-3 gap-1 text-center text-caption text-ink-mist">
         <span className="font-mono text-ink-chalk">{stats[0].shots}</span><span>удары</span><span className="font-mono text-ink-chalk">{stats[1].shots}</span>
         <span className="font-mono text-ink-chalk">{stats[0].tackles}</span><span>отборы</span><span className="font-mono text-ink-chalk">{stats[1].tackles}</span>
       </div>
@@ -137,13 +137,13 @@ export function LiveMatchCenter({ live, catalog, onView, onError }: {
             Указания на второй тайм{ownScore < oppScore ? " — нужно отыгрываться" : ownScore > oppScore ? " — удержать счёт" : ""}
           </p>
           <div className="flex flex-col gap-1">
-            <p className="text-[11px] text-ink-mist">Настрой</p>
+            <p className="text-caption text-ink-mist">Настрой</p>
             <Segmented label="Настрой" value={mentality} options={MENTALITIES.map((m) => ({ value: m.value, label: m.label }))}
               onChange={setMentality} />
           </div>
           {catalog?.axes.map((axis) => (
             <div key={axis.key} className="flex flex-col gap-1">
-              <p className="text-[11px] text-ink-mist">{axis.label}</p>
+              <p className="text-caption text-ink-mist">{axis.label}</p>
               <Segmented label={axis.label} value={tactic[axis.key] ?? ""}
                 options={axis.values.map((v) => ({ value: v.value, label: v.label }))}
                 onChange={(v) => setTactic({ ...tactic, [axis.key]: v })} />
@@ -151,7 +151,7 @@ export function LiveMatchCenter({ live, catalog, onView, onError }: {
           ))}
 
           <div className="flex flex-col gap-1.5">
-            <p className="text-[11px] text-ink-mist">Замены · осталось {Math.max(0, live.subs_left - subs.length)} из {live.subs_left}</p>
+            <p className="text-caption text-ink-mist">Замены · осталось {Math.max(0, live.subs_left - subs.length)} из {live.subs_left}</p>
             {subs.map((s) => (
               <div key={s.out} className="flex items-center gap-2 rounded-xl bg-bg-raised px-2 py-1.5 text-xs text-ink-chalk">
                 <span className="text-red-300">↓ {name(live.on, s.out)}</span>
@@ -162,18 +162,18 @@ export function LiveMatchCenter({ live, catalog, onView, onError }: {
             {!full && (
               <div className="grid grid-cols-2 gap-2">
                 <div className="flex flex-col gap-1">
-                  <p className="text-[10px] text-ink-mist-dim">Уходит</p>
+                  <p className="text-micro text-ink-mist-dim">Уходит</p>
                   {live.on.filter((p) => !usedOut.has(p.card_id)).map((p) => (
                     <PlayerRow key={p.card_id} p={p} selected={pickOut === p.card_id} onClick={() => setPickOut(p.card_id)} />
                   ))}
                 </div>
                 <div className="flex flex-col gap-1">
-                  <p className="text-[10px] text-ink-mist-dim">{pickOut ? "Выходит" : "Сначала выбери, кто уходит"}</p>
+                  <p className="text-micro text-ink-mist-dim">{pickOut ? "Выходит" : "Сначала выбери, кто уходит"}</p>
                   {live.bench.filter((p) => !usedIn.has(p.card_id)).map((p) => (
                     <PlayerRow key={p.card_id} p={p} selected={false} disabled={!pickOut}
                       onClick={() => { if (pickOut) { setSubs([...subs, { out: pickOut, in: p.card_id }]); setPickOut(null); } }} />
                   ))}
-                  {!live.bench.length && <p className="text-[10px] text-ink-mist-dim">Скамейка пуста</p>}
+                  {!live.bench.length && <p className="text-micro text-ink-mist-dim">Скамейка пуста</p>}
                 </div>
               </div>
             )}
@@ -186,7 +186,7 @@ export function LiveMatchCenter({ live, catalog, onView, onError }: {
           >
             {saved ? "Обновить указания" : "Отдать указания"}
           </button>
-          {saved && <p className="text-center text-[11px] text-accent-lime">Указания приняты — применятся с 46-й минуты</p>}
+          {saved && <p className="text-center text-caption text-accent-lime">Указания приняты — применятся с 46-й минуты</p>}
         </div>
       )}
     </section>

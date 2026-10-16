@@ -173,11 +173,11 @@ export default function PairsGamePage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between rounded-2xl bg-bg-surface px-4 py-3">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-wide text-ink-mist-dim">Пары</p>
+          <p className="font-mono text-micro uppercase tracking-wide text-ink-mist-dim">Пары</p>
           <p className="font-display text-lg font-bold text-ink-chalk">{matchedPairs}/{totalPairs}</p>
         </div>
         <div className="text-right">
-          <p className="font-mono text-[10px] uppercase tracking-wide text-ink-mist-dim">Ошибки</p>
+          <p className="font-mono text-micro uppercase tracking-wide text-ink-mist-dim">Ошибки</p>
           <p className="font-display text-lg font-bold text-ink-chalk">{wrongAttempts}</p>
         </div>
       </div>

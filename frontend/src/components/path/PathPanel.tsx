@@ -22,7 +22,7 @@ export default function PathPanel({ cardId, player }: { cardId: number; player: 
         className="w-full rounded-2xl border border-emerald-400/30 bg-emerald-400/5 p-3 text-left"
       >
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-path">
+          <p className="text-caption font-semibold uppercase tracking-wider text-path">
             🌱 {state.title} · {stageIcon(state.stage)} {state.stage_name}
           </p>
           <span className="font-mono text-xs text-ink-mist">
@@ -35,7 +35,7 @@ export default function PathPanel({ cardId, player }: { cardId: number; player: 
             style={{ width: `${Math.round(pathFraction(state) * 100)}%` }}
           />
         </div>
-        <div className="mt-1.5 flex items-center justify-between text-[11px] text-ink-mist">
+        <div className="mt-1.5 flex items-center justify-between text-caption text-ink-mist">
           <span>
             {state.xp_for_next
               ? `Опыт до ${state.rating + 1}: ${shownLevelXp(state)}/${state.xp_for_next} (${Math.round(levelFraction(state) * 100)}%)`

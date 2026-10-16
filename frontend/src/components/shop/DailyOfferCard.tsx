@@ -33,10 +33,10 @@ export default function DailyOfferCard() {
   return (
     <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-accent-lime/20 via-bg-surface to-bg-surface p-4 ring-1 ring-accent-lime/30">
       <div className="flex items-center justify-between">
-        <span className="rounded-full bg-accent-lime px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-bg-base">
+        <span className="rounded-full bg-accent-lime px-2 py-0.5 text-micro font-bold uppercase tracking-wider text-bg-base">
           Предложение дня · −{offer.discount_pct}%
         </span>
-        <span className="flex items-center gap-1 font-mono text-[11px] text-ink-mist">
+        <span className="flex items-center gap-1 font-mono text-caption text-ink-mist">
           <IconClock size={12} />
           {countdown}
         </span>
@@ -65,7 +65,7 @@ export default function DailyOfferCard() {
           {offer.claimed_today ? "Куплено" : canAfford ? "Купить" : "Мало монет"}
         </button>
       </div>
-      {offer.claimed_today && <p className="mt-2 text-[11px] text-ink-mist">Новое предложение — через {countdown}</p>}
+      {offer.claimed_today && <p className="mt-2 text-caption text-ink-mist">Новое предложение — через {countdown}</p>}
     </section>
   );
 }

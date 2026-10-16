@@ -60,7 +60,7 @@ export default function PrestigeSection({ cardId, prestige, title }: { cardId: n
       <div className="flex items-baseline justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-mist-dim">Престиж</h3>
         {p.tier > 0 && (
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${prestigeStyle(p.tier).chip}`}>
+          <span className={`rounded-full px-2 py-0.5 text-caption font-bold ${prestigeStyle(p.tier).chip}`}>
             {prestigeMarks(p.tier)} {p.tier_name}
           </span>
         )}
@@ -70,7 +70,7 @@ export default function PrestigeSection({ cardId, prestige, title }: { cardId: n
           const tier = i + 1;
           const reached = p.tier >= tier;
           return (
-            <li key={name} className={`rounded-lg py-1.5 text-[10px] ${reached ? prestigeStyle(tier).chip : "bg-black/20 text-ink-mist-dim"}`}>
+            <li key={name} className={`rounded-lg py-1.5 text-micro ${reached ? prestigeStyle(tier).chip : "bg-black/20 text-ink-mist-dim"}`}>
               <span className="block text-sm leading-none">{prestigeMarks(tier)}</span>
               {name}
             </li>
@@ -82,7 +82,7 @@ export default function PrestigeSection({ cardId, prestige, title }: { cardId: n
           Икона {title === "Академия" ? "Академии" : `«${title}»`} №{p.icon_number}
         </p>
       )}
-      <ul className="mt-2 space-y-0.5 text-[11px] text-ink-mist">
+      <ul className="mt-2 space-y-0.5 text-caption text-ink-mist">
         <li>Опыт: +{p.xp_bonus_pct}%{p.next_xp_bonus_pct != null && p.next_xp_bonus_pct > p.xp_bonus_pct ? ` (дальше +${p.next_xp_bonus_pct}%)` : ""}</li>
         <li>Бесплатных попыток Арены в день: +{p.extra_free_attempts}</li>
         <li className="flex items-center gap-1">Быстрая продажа: <IconCoin size={11} /> {p.sell_price}</li>
@@ -112,7 +112,7 @@ export default function PrestigeSection({ cardId, prestige, title }: { cardId: n
           >
             Повысить престиж
           </button>
-          <p className="mt-1 text-[10px] text-ink-mist-dim">
+          <p className="mt-1 text-micro text-ink-mist-dim">
             Берутся свободные дубли без своего прогресса; у каждого другого игрока остаётся хотя бы одна копия, копии с
             навыком не берутся.
           </p>
@@ -146,7 +146,7 @@ export default function PrestigeSection({ cardId, prestige, title }: { cardId: n
           </button>
         </div>
       )}
-      {p.reforged && <p className="mt-2 text-[11px] text-ink-mist">Талант этой копии уже перекован.</p>}
+      {p.reforged && <p className="mt-2 text-caption text-ink-mist">Талант этой копии уже перекован.</p>}
       {granted && <p className="mt-2 rounded-lg bg-emerald-400/10 px-2 py-1 text-xs text-path">{granted}</p>}
       {error && <p className="mt-2 rounded-lg bg-red-500/10 px-2 py-1 text-xs text-red-400">{error}</p>}
     </section>

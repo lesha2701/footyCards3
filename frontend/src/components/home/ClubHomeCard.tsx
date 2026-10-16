@@ -45,9 +45,9 @@ export default function ClubHomeCard() {
       <button onClick={() => navigate("/clubs")} className="flex w-full items-center gap-3 text-left">
         <ClubLogo shape={club.logo_shape} color={club.logo_color} size={44} />
         <span className="min-w-0 flex-1">
-          <span className="block font-mono text-[10px] uppercase tracking-wider text-ink-mist">Мой клуб</span>
+          <span className="block font-mono text-micro uppercase tracking-wider text-ink-mist">Мой клуб</span>
           <span className="block truncate font-display text-base font-bold text-ink-chalk">{club.name}</span>
-          <span className="flex items-center gap-2 text-[11px] text-ink-mist">
+          <span className="flex items-center gap-2 text-caption text-ink-mist">
             {club.member_count} в составе
             {club.cups_count > 0 && (
               <span className="flex items-center gap-0.5">

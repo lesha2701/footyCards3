@@ -58,7 +58,7 @@ export default function BottomNav() {
                 if (to !== pathname) hapticSelection();
               }}
               className={({ isActive: routeActive }) =>
-                `flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-semibold transition-colors ${
+                `flex flex-1 flex-col items-center gap-1 py-2.5 text-caption font-semibold transition-colors ${
                   routeActive || (to === "/collection" && cardsSection) ? "text-ink-chalk" : "text-ink-mist-dim"
                 }`
               }
@@ -72,7 +72,7 @@ export default function BottomNav() {
                       {badge > 0 && (
                         <span
                           aria-label={`${BADGE_LABELS[to]}: ${badge}`}
-                          className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-[9px] font-bold text-bg-base"
+                          className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-micro font-bold text-bg-base"
                         >
                           {badge > 9 ? "9+" : badge}
                         </span>

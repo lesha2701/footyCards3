@@ -228,7 +228,7 @@ function RefereeCards({ wrongCount, maxWrong }: { wrongCount: number; maxWrong: 
           );
         })}
       </div>
-      <p className="font-mono text-[11px] uppercase tracking-wide text-ink-mist-dim">
+      <p className="font-mono text-caption uppercase tracking-wide text-ink-mist-dim">
         {isSentOff ? "Удаление с поля" : "Карточки от судьи"}
       </p>
     </div>

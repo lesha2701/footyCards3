@@ -67,7 +67,7 @@ export default function LifestyleTab() {
         <p className="font-display text-3xl font-black text-ink-chalk">
           {data.prestige} <span className="text-base font-bold text-amber-300">престижа</span>
         </p>
-        <p className="mt-1 text-[11px] text-ink-mist">
+        <p className="mt-1 text-caption text-ink-mist">
           {owned.length ? `${owned.length} в имуществе · видно в твоём профиле` : "Собери гараж, недвижимость и инвестиции — каждый предмет добавляет престиж"}
         </p>
         {owned.length > 0 && (
@@ -100,8 +100,8 @@ export default function LifestyleTab() {
               <LifestyleIcon item={item} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-bold text-ink-chalk">{item.name}</span>
-                <span className="block truncate text-[11px] text-ink-mist">{item.description}</span>
-                <span className="mt-0.5 block text-[11px] text-amber-300">
+                <span className="block truncate text-caption text-ink-mist">{item.description}</span>
+                <span className="mt-0.5 block text-caption text-amber-300">
                   +{item.prestige} престижа
                   {item.max_supply != null &&
                     (item.owned && item.serial_number

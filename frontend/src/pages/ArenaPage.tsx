@@ -304,7 +304,7 @@ export default function ArenaPage() {
     const gain = chemistryGain(chemistry, chemSlots, pickerSlot.code, card.player);
     if (gain == null) return null;
     return (
-      <span className={`font-mono text-[10px] font-bold ${gain > 0 ? "text-accent-green" : gain < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
+      <span className={`font-mono text-micro font-bold ${gain > 0 ? "text-accent-green" : gain < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
         {gain > 0 ? "+" : ""}{gain} хим.
       </span>
     );
@@ -330,7 +330,7 @@ export default function ArenaPage() {
                 <span className="font-mono text-xs text-ink-mist-dim">—</span>
               )}
             </div>
-            <p className="mt-1 text-[10px] text-ink-mist-dim">Форма</p>
+            <p className="mt-1 text-micro text-ink-mist-dim">Форма</p>
           </div>
         </div>
       )}
@@ -346,9 +346,9 @@ export default function ArenaPage() {
               t.template_index === viewedIndex ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
             }`}
           >
-            <span className="whitespace-nowrap text-[11px] font-bold">{t.name}</span>
+            <span className="whitespace-nowrap text-caption font-bold">{t.name}</span>
             {t.is_active && (
-              <span className={`text-[8px] ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
+              <span className={`text-micro ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
                 Активный
               </span>
             )}
@@ -376,7 +376,7 @@ export default function ArenaPage() {
       ) : (
         <button
           onClick={() => { setRenameValue(lineup?.name ?? ""); setRenamingTemplate(true); }}
-          className="self-start text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2"
+          className="self-start text-caption font-semibold text-ink-mist-dim underline underline-offset-2"
         >
           Переименовать «{lineup?.name}»
         </button>
@@ -397,7 +397,7 @@ export default function ArenaPage() {
           <div>
             <p className="font-display text-base font-bold text-ink-chalk">Состав 4-3-3</p>
             {lineupSkills.length > 0 && (
-              <p className="text-[11px] text-ink-mist">
+              <p className="text-caption text-ink-mist">
                 Навыки: действуют {activeLineupSkills.length} из {lineupSkills.length}
                 {activeLineupSkills.length < lineupSkills.length && " (зачёркнутые здесь не работают)"}
               </p>
@@ -405,7 +405,7 @@ export default function ArenaPage() {
             <button
               onClick={() => autoFillMutation.mutate()}
               disabled={autoFillMutation.isPending}
-              className="mt-1 rounded-full bg-accent-lime/15 px-2.5 py-1 text-[11px] font-semibold text-accent-lime disabled:opacity-50"
+              className="mt-1 rounded-full bg-accent-lime/15 px-2.5 py-1 text-caption font-semibold text-accent-lime disabled:opacity-50"
             >
               {autoFillMutation.isPending ? "Собираем..." : "Собрать лучший состав"}
             </button>
@@ -416,12 +416,12 @@ export default function ArenaPage() {
               className="flex items-center gap-1 font-mono text-sm font-bold text-accent-cyan"
             >
               Сила: {lineup.team_strength}
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold text-ink-mist-dim">?</span>
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/10 text-micro font-bold text-ink-mist-dim">?</span>
             </button>
           )}
         </div>
         {strengthHintOpen && (
-          <div className="mb-3 rounded-xl bg-white/5 px-3 py-2 text-[11px] leading-relaxed text-ink-mist">
+          <div className="mb-3 rounded-xl bg-white/5 px-3 py-2 text-caption leading-relaxed text-ink-mist">
             <p className="mb-1 font-semibold text-ink-chalk">Что влияет на силу состава:</p>
             <p>· Позиция игрока: 100% рейтинга на своей позиции, 90% на смежной, 75% не по профилю</p>
             {chemistryOn ? (
@@ -440,7 +440,7 @@ export default function ArenaPage() {
         </div>
         <ChemistrySummary chemistry={chemistry} />
         <ChemistryHints hints={chemistryHints} onApply={applyChemistryHint} busy={setLineupMutation.isPending} />
-        <p className="mb-3 text-[11px] font-semibold">
+        <p className="mb-3 text-caption font-semibold">
           <span className={`rounded-full px-2.5 py-1 ${diamondCount >= maxDiamond ? "bg-rarity-diamond/20 text-rarity-diamond" : "bg-white/5 text-ink-mist"}`}>
             Диамантовых: {diamondCount}/{maxDiamond}
           </span>
@@ -490,7 +490,7 @@ export default function ArenaPage() {
                       ) : (
                         <>
                           <IconPlus size={18} className="text-ink-mist-dim" />
-                          <span className="text-[9px] text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
+                          <span className="text-micro text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
                         </>
                       )}
                     </button>
@@ -510,12 +510,12 @@ export default function ArenaPage() {
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
                       </div>
-                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">Тренер</span>
+                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">Тренер</span>
                     </>
                   ) : (
                     <>
                       <IconPlus size={16} className="text-ink-mist-dim" />
-                      <span className="text-[8px] text-ink-mist-dim">Тренер</span>
+                      <span className="text-micro text-ink-mist-dim">Тренер</span>
                     </>
                   )}
                 </button>
@@ -534,14 +534,14 @@ export default function ArenaPage() {
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
                       </div>
-                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">
+                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">
                         +{Math.round(lineup.stadium.boost_pct * 100)}%
                       </span>
                     </>
                   ) : (
                     <>
                       <IconPlus size={16} className="text-ink-mist-dim" />
-                      <span className="text-[8px] text-ink-mist-dim">Стадион</span>
+                      <span className="text-micro text-ink-mist-dim">Стадион</span>
                     </>
                   )}
                 </button>
@@ -552,7 +552,7 @@ export default function ArenaPage() {
         {lineup?.coach && (
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{lineup.coach.display_name}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">
+            <p className="mt-0.5 text-caption text-ink-mist">
               {lineup.coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
             </p>
           </div>
@@ -560,14 +560,14 @@ export default function ArenaPage() {
         {lineup?.stadium && (
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{lineup.stadium.display_name}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">+{Math.round(lineup.stadium.boost_pct * 100)}% к силе</p>
+            <p className="mt-0.5 text-caption text-ink-mist">+{Math.round(lineup.stadium.boost_pct * 100)}% к силе</p>
           </div>
         )}
       </section>
 
       <section className="rounded-2xl bg-bg-surface p-4">
         <p className="font-display text-sm font-bold text-ink-chalk">Стиль игры</p>
-        <p className="mb-3 mt-0.5 text-[11px] leading-snug text-ink-mist">
+        <p className="mb-3 mt-0.5 text-caption leading-snug text-ink-mist">
           Атака бьёт Оборону, Оборона — Владение, Владение — Контратаку, Контратака — Атаку. Стиль соперника виден перед матчем.
         </p>
         <div className="grid grid-cols-2 gap-2">
@@ -581,7 +581,7 @@ export default function ArenaPage() {
               }`}
             >
               <p className="whitespace-nowrap text-xs font-bold leading-tight">{t.label}</p>
-              <p className={`mt-0.5 text-[10px] leading-tight ${lineup?.tactic === t.value ? "text-bg-base/70" : "text-ink-mist-dim"}`}>
+              <p className={`mt-0.5 text-micro leading-tight ${lineup?.tactic === t.value ? "text-bg-base/70" : "text-ink-mist-dim"}`}>
                 {t.description} · бьёт «{TACTIC_LABELS[t.beats]}»
               </p>
             </button>
@@ -592,7 +592,7 @@ export default function ArenaPage() {
       {preview && activeLineup?.is_complete && !simulating && (
         <div className={previewFetching ? "opacity-70 transition-opacity" : "transition-opacity"}>
           {viewedIndex !== activeIndex && (
-            <p className="mb-1.5 text-[11px] text-ink-mist-dim">Играет активный состав «{activeLineup.name}»</p>
+            <p className="mb-1.5 text-caption text-ink-mist-dim">Играет активный состав «{activeLineup.name}»</p>
           )}
           <ArenaOpponentCard
             preview={preview}
@@ -633,7 +633,7 @@ export default function ArenaPage() {
             <button
               onClick={() => forfeitMutation.mutate()}
               disabled={forfeitMutation.isPending}
-              className="w-full text-center text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2 active:scale-95"
+              className="w-full text-center text-caption font-semibold text-ink-mist-dim underline underline-offset-2 active:scale-95"
             >
               Сдаться (засчитается поражение)
             </button>
@@ -696,7 +696,7 @@ export default function ArenaPage() {
                 <span className="min-w-0 truncate text-ink-mist">vs {m.opponent_name}</span>
                 <span className="flex shrink-0 items-center gap-2">
                   {m.ladder && (
-                    <span className={`font-mono text-[11px] ${m.ladder.delta > 0 ? "text-accent-green" : m.ladder.delta < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
+                    <span className={`font-mono text-caption ${m.ladder.delta > 0 ? "text-accent-green" : m.ladder.delta < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
                       {m.ladder.delta > 0 ? "+" : ""}{m.ladder.delta}
                     </span>
                   )}
@@ -748,7 +748,7 @@ function MiniStat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl bg-bg-surface py-2">
       <p className="font-mono text-sm font-bold text-ink-chalk">{value}</p>
-      <p className="text-[10px] text-ink-mist-dim">{label}</p>
+      <p className="text-micro text-ink-mist-dim">{label}</p>
     </div>
   );
 }
@@ -762,7 +762,7 @@ function FormBadge({ result }: { result: MatchResult | null }) {
         ? "bg-red-500/20 text-red-400"
         : "bg-white/10 text-ink-mist";
   return (
-    <span className={`flex h-5 w-5 items-center justify-center rounded-full font-mono text-[10px] font-bold ${className}`}>
+    <span className={`flex h-5 w-5 items-center justify-center rounded-full font-mono text-micro font-bold ${className}`}>
       {letter}
     </span>
   );
@@ -902,7 +902,7 @@ function MatchSimulation({
             not just during the event-by-event reveal — only hidden once the match
             has actually finished or a skip is already in progress. */}
         {!autoSkip && !showFinal && (
-          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-ink-chalk">
+          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-caption font-semibold text-ink-chalk">
             Пропустить
           </button>
         )}
@@ -1020,7 +1020,7 @@ function ActionPrompt({
             >
               <Icon size={16} />
               {label}
-              {subtitle && <span className="text-[10px] font-normal text-ink-mist-dim">{subtitle}</span>}
+              {subtitle && <span className="text-micro font-normal text-ink-mist-dim">{subtitle}</span>}
             </button>
           );
         })}

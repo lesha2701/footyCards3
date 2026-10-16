@@ -15,14 +15,14 @@ export default function MatchSkillNotes({ event }: { event: MatchEvent }) {
   return (
     <>
       {talents.map((t, i) => (
-        <span key={`t${i}`} className="mt-0.5 block pl-6 text-[10px]"><span className="text-path/90">
+        <span key={`t${i}`} className="mt-0.5 block pl-6 text-micro"><span className="text-path/90">
           <span className="mr-1" aria-hidden>{t.emoji}</span>
           Талант «{t.name}» {t.level_label}
           {t.player ? ` (${t.player})` : ""}: +{t.bonus} к рейтингу
         </span></span>
       ))}
       {notes.map((note, i) => (
-        <span key={i} className="mt-0.5 block pl-6 text-[10px] text-accent-lime/80">
+        <span key={i} className="mt-0.5 block pl-6 text-micro text-accent-lime/80">
           <SkillIcon code={note.code} size={11} className="mr-1 inline-block align-[-1px]" aria-hidden />
           {note.name} {note.level_label}
           {note.player ? ` (${note.player})` : ""}

@@ -88,7 +88,7 @@ export default function HomeHero({
           />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-mono text-[10px] uppercase tracking-wider text-ink-mist">С возвращением</p>
+          <p className="font-mono text-micro uppercase tracking-wider text-ink-mist">С возвращением</p>
           <p className="flex items-center gap-1.5 truncate font-display text-lg font-bold text-ink-chalk">
             <span className="truncate">{name}</span>
             <UserBadge badge={profile.active_badge} />
@@ -126,7 +126,7 @@ export default function HomeHero({
               <span className="truncate font-display text-sm font-bold text-ink-chalk">
                 {league.current_league ? league.current_league.name : "Пока вне лиги"}
               </span>
-              <span className="shrink-0 font-mono text-[10px] text-ink-mist">
+              <span className="shrink-0 font-mono text-micro text-ink-mist">
                 {league.next_league ? `ещё ${league.points_to_next} до «${league.next_league.name}»` : "высшая лига"}
               </span>
             </span>
@@ -135,7 +135,7 @@ export default function HomeHero({
             </span>
           </span>
           {league.unseen_rewards.length > 0 && (
-            <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-[9px] font-bold text-bg-base">
+            <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-micro font-bold text-bg-base">
               {league.unseen_rewards.length}
             </span>
           )}
@@ -178,13 +178,13 @@ function QuickAction({
       >
         <Icon size={20} />
         {!!badge && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-[9px] font-bold text-bg-base">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-micro font-bold text-bg-base">
             {badge > 9 ? "9+" : badge}
           </span>
         )}
       </span>
       <span className="w-full truncate text-center text-xs leading-tight text-ink-mist">{label}</span>
-      {hint && <span className="-mt-1 text-[9px] uppercase tracking-wider text-ink-mist-dim">{hint}</span>}
+      {hint && <span className="-mt-1 text-micro uppercase tracking-wider text-ink-mist-dim">{hint}</span>}
     </button>
   );
 }

@@ -111,7 +111,7 @@ export default function HomePage() {
                         className="h-16 w-16 rounded-2xl object-cover"
                       />
                       <p className="truncate px-1 text-xs font-semibold text-ink-chalk">{pack.name}</p>
-                      <p className="flex items-center gap-1 font-mono text-[11px] text-accent-lime">
+                      <p className="flex items-center gap-1 font-mono text-caption text-accent-lime">
                         <IconCoin size={12} />
                         {pack.price}
                       </p>
@@ -126,7 +126,7 @@ export default function HomePage() {
 
       {profile && (
         <section className="rounded-2xl bg-bg-surface p-4">
-          <h2 className="mb-4 font-mono text-[11px] font-medium uppercase tracking-wider text-ink-mist">Твоя статистика</h2>
+          <h2 className="mb-4 font-mono text-caption font-medium uppercase tracking-wider text-ink-mist">Твоя статистика</h2>
           <div className="grid grid-cols-2 gap-y-4">
             <Stat label="Уникальных карточек" value={profile.unique_cards} />
             <Stat label="Всего карточек" value={profile.total_cards} />
@@ -245,7 +245,7 @@ function Stat({ label, value, accent }: { label: string; value: string | number;
       >
         {value}
       </p>
-      <p className="mt-0.5 text-[11px] text-ink-mist">{label}</p>
+      <p className="mt-0.5 text-caption text-ink-mist">{label}</p>
     </div>
   );
 }

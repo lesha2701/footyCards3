@@ -396,11 +396,11 @@ export default function FutDraftGamePage() {
           </div>
           {config && (
             <div className="mt-1 flex flex-col gap-1 border-t border-white/5 pt-2">
-              <p className="text-[11px] text-ink-mist-dim">Награда за серию побед</p>
+              <p className="text-caption text-ink-mist-dim">Награда за серию побед</p>
               <div className="flex justify-between gap-1">
                 {config.reward_by_wins.map((amount, wins) => (
                   <div key={wins} className="flex flex-1 flex-col items-center gap-0.5 rounded-lg bg-white/5 py-1.5">
-                    <span className="text-[9px] text-ink-mist-dim">{wins} поб.</span>
+                    <span className="text-micro text-ink-mist-dim">{wins} поб.</span>
                     <span className="font-mono text-xs font-bold text-accent-lime">{amount}</span>
                   </div>
                 ))}
@@ -628,7 +628,7 @@ function StrengthBar({
     <div className="flex flex-col gap-2 rounded-2xl bg-bg-surface px-4 py-3">
       <div className="flex items-center justify-between">
         <button onClick={onToggleHint} className="flex items-center gap-1.5 text-ink-mist-dim">
-          <span className="font-mono text-[10px] uppercase tracking-wide">Сила состава</span>
+          <span className="font-mono text-micro uppercase tracking-wide">Сила состава</span>
           <IconHelp size={12} />
         </button>
         <div className="flex items-center gap-2">
@@ -638,7 +638,7 @@ function StrengthBar({
           <span className="font-display text-lg font-bold text-accent-lime">{teamStrength}</span>
         </div>
       </div>
-      {showHint && <p className="text-[11px] leading-relaxed text-ink-mist">{STRENGTH_HINT}</p>}
+      {showHint && <p className="text-caption leading-relaxed text-ink-mist">{STRENGTH_HINT}</p>}
     </div>
   );
 }
@@ -659,7 +659,7 @@ function Pitch({
   return (
     <div style={PITCH_STYLE} className="relative flex flex-col gap-2 overflow-hidden rounded-[22px] p-3 ring-1 ring-white/10">
       <PitchBackground />
-      <p className="relative text-center font-mono text-[10px] uppercase tracking-wide text-ink-mist">{formationLabel(formation)}</p>
+      <p className="relative text-center font-mono text-micro uppercase tracking-wide text-ink-mist">{formationLabel(formation)}</p>
       {pitchRows(formation, slots.map((s) => s.slot_code)).map((row) => (
         <div key={row.key} className="relative flex justify-center gap-2">
           {inRow(row, slots)
@@ -677,7 +677,7 @@ function Pitch({
                 ) : (
                   <>
                     <IconPlus size={18} className="text-ink-mist-dim" />
-                    <span className="font-mono text-[10px] font-bold text-ink-mist-dim">{slot.ideal_position}</span>
+                    <span className="font-mono text-micro font-bold text-ink-mist-dim">{slot.ideal_position}</span>
                   </>
                 )}
               </button>
@@ -721,8 +721,8 @@ function DraftCandidateCard({
         <div className="shrink-0 text-right">
           <p className="font-mono text-xl font-bold text-ink-chalk">{card.rating}</p>
           <div className="flex items-center gap-1">
-            <span className="rounded-full bg-white/5 px-1.5 py-0.5 font-mono text-[9px] font-bold text-accent-cyan">{card.position}</span>
-            <span className={`text-[10px] font-bold uppercase ${RARITY_TEXT[card.rarity]}`}>{card.rarity}</span>
+            <span className="rounded-full bg-white/5 px-1.5 py-0.5 font-mono text-micro font-bold text-accent-cyan">{card.position}</span>
+            <span className={`text-micro font-bold uppercase ${RARITY_TEXT[card.rarity]}`}>{card.rarity}</span>
           </div>
         </div>
       </div>
@@ -755,15 +755,15 @@ function PlayerDetailModal({ card, onClose }: { card: FutDraftCandidate; onClose
           <div className="grid w-full grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-bg-surface py-2">
               <p className="font-mono text-lg font-bold text-accent-lime">{card.rating}</p>
-              <p className="text-[9px] text-ink-mist-dim">Рейтинг</p>
+              <p className="text-micro text-ink-mist-dim">Рейтинг</p>
             </div>
             <div className="rounded-xl bg-bg-surface py-2">
               <p className="font-mono text-lg font-bold text-accent-cyan">{card.position}</p>
-              <p className="text-[9px] text-ink-mist-dim">Позиция</p>
+              <p className="text-micro text-ink-mist-dim">Позиция</p>
             </div>
             <div className="rounded-xl bg-bg-surface py-2">
-              <p className="truncate px-1 font-mono text-[11px] font-bold text-ink-chalk">{card.club}</p>
-              <p className="text-[9px] text-ink-mist-dim">Клуб</p>
+              <p className="truncate px-1 font-mono text-caption font-bold text-ink-chalk">{card.club}</p>
+              <p className="text-micro text-ink-mist-dim">Клуб</p>
             </div>
           </div>
           <p className="text-xs text-ink-mist">{card.country}</p>
@@ -879,7 +879,7 @@ function CardArenaRoundPlayer({
                 : `${currentMinute}' · идёт матч...`}
         </span>
         {!autoSkip && !(caughtUp && isFinished) && !awaitingCoinFlip && (
-          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-ink-chalk">
+          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-caption font-semibold text-ink-chalk">
             Пропустить
           </button>
         )}
@@ -966,7 +966,7 @@ function CardArenaActionPrompt({
             >
               <Icon size={16} />
               {label}
-              {subtitle && <span className="text-[10px] font-normal text-ink-mist-dim">{subtitle}</span>}
+              {subtitle && <span className="text-micro font-normal text-ink-mist-dim">{subtitle}</span>}
             </button>
           );
         })}
@@ -1133,7 +1133,7 @@ function PenaltyRoundPlayer({
             key={zone}
             onClick={() => onKick(zone)}
             disabled={busy}
-            className="rounded-xl bg-white/5 py-3 text-[11px] font-semibold text-ink-chalk active:scale-95 disabled:opacity-50"
+            className="rounded-xl bg-white/5 py-3 text-caption font-semibold text-ink-chalk active:scale-95 disabled:opacity-50"
           >
             {PENALTY_ZONE_LABELS[zone] ?? zone}
           </button>

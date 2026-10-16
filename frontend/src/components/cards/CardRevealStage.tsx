@@ -87,12 +87,12 @@ export function RevealStage({
           </div>
 
           {showFrom("position") && (
-            <span className="absolute left-2 top-2 rounded-md bg-black/70 px-2 py-1 font-mono text-[11px] font-bold text-ink-chalk">
+            <span className="absolute left-2 top-2 rounded-md bg-black/70 px-2 py-1 font-mono text-caption font-bold text-ink-chalk">
               {player.position}
             </span>
           )}
           {showFrom("rarity") && (
-            <span className="absolute right-2 top-2 rounded-md bg-black/70 px-2 py-1 text-[11px] font-bold text-ink-chalk">
+            <span className="absolute right-2 top-2 rounded-md bg-black/70 px-2 py-1 text-caption font-bold text-ink-chalk">
               {isAcademy ? "🌱 Академия" : RARITY_LABELS[player.rarity]}
             </span>
           )}
@@ -125,10 +125,10 @@ export function RevealStage({
               </p>
             )}
             {opened.is_new && (
-              <span className="inline-block rounded-full bg-accent-green px-2 py-0.5 text-[11px] font-bold text-bg-base">Новая!</span>
+              <span className="inline-block rounded-full bg-accent-green px-2 py-0.5 text-caption font-bold text-bg-base">Новая!</span>
             )}
             {!!opened.duplicate_count && opened.duplicate_count > 1 && (
-              <span className="ml-1 inline-block rounded-full bg-white/10 px-2 py-0.5 font-mono text-[11px] text-ink-mist">
+              <span className="ml-1 inline-block rounded-full bg-white/10 px-2 py-0.5 font-mono text-caption text-ink-mist">
                 ×{opened.duplicate_count} в коллекции
               </span>
             )}

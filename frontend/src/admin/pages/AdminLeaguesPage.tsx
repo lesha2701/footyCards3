@@ -136,12 +136,12 @@ export default function AdminLeaguesPage() {
               )}
               <div>
                 <p className="text-sm font-semibold">{t.name}</p>
-                <p className="text-[11px] text-slate-500">от {t.min_rating} рейтинга · +{t.reward_coins} монет</p>
+                <p className="text-caption text-slate-500">от {t.min_rating} рейтинга · +{t.reward_coins} монет</p>
               </div>
             </div>
             <div className="flex gap-1">
-              <button onClick={() => openEdit(t)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-              <button onClick={() => confirmDelete(t)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">Удалить</button>
+              <button onClick={() => openEdit(t)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+              <button onClick={() => confirmDelete(t)} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">Удалить</button>
             </div>
           </div>
         ))}
@@ -216,12 +216,12 @@ export default function AdminLeaguesPage() {
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploadImageMutation.isPending}
-                        className="rounded-lg bg-white/5 px-2 py-1 text-[11px]"
+                        className="rounded-lg bg-white/5 px-2 py-1 text-caption"
                       >
                         {uploadImageMutation.isPending ? "Загрузка..." : "Загрузить"}
                       </button>
                       {(editing as LeagueTier).image_path && (
-                        <button onClick={() => removeImageMutation.mutate()} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">
+                        <button onClick={() => removeImageMutation.mutate()} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">
                           Удалить картинку
                         </button>
                       )}

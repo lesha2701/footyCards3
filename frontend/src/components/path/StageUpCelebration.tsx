@@ -69,7 +69,7 @@ export default function StageUpCelebration({
               >
                 {stageIcon(stageIndex)}
               </motion.div>
-              <p className="mt-3 text-[11px] font-semibold uppercase tracking-widest text-path">Новый этап пути</p>
+              <p className="mt-3 text-caption font-semibold uppercase tracking-widest text-path">Новый этап пути</p>
               <p className="mt-1 font-display text-2xl font-bold text-ink-chalk">{stageName}</p>
               {talentText && <p className="mt-2 rounded-xl bg-emerald-400/10 px-3 py-2 text-sm text-ink-chalk">{talentText}</p>}
               <button
