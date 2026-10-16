@@ -17,6 +17,7 @@ import SkillTokenTile from "@/components/cards/SkillTokenTile";
 import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconCoin, IconGift, IconInboxEmpty, IconSearch, IconTrophy } from "@/components/icons";
+import RewardModal, { RewardCoins } from "@/components/common/RewardModal";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { hapticNotify, openTelegramInvoice, showConfirm } from "@/lib/telegram";
@@ -182,84 +183,78 @@ export default function GiftsPage() {
 
 function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; onClose: () => void }) {
   const isCollectible = result.gift.gift_set.kind === "collectible";
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-bg-surface p-5" onClick={(e) => e.stopPropagation()}>
-        {isCollectible ? (
-          <div className="flex flex-col items-center gap-1">
-            <span className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-rarity-epic/10">
-              {result.gift.gift_set.image_path ? (
-                <img decoding="async" loading="lazy" src={staticUrl(result.gift.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
-              ) : (
-                <IconGift size={32} className="text-rarity-epic" />
-              )}
-            </span>
-            <p className="mt-2 font-display text-base font-bold text-ink-chalk">{result.gift.gift_set.name}</p>
-            {result.gift.serial_number != null && (
-              <p className="font-mono text-xs text-ink-mist">
-                №{result.gift.serial_number}
-                {result.gift.gift_set.max_supply ? ` из ${result.gift.gift_set.max_supply}` : ""}
-              </p>
-            )}
-          </div>
-        ) : (
-          <p className="flex items-center justify-center gap-1.5 text-center font-display text-base font-bold text-ink-chalk">
-            <IconGift size={18} className="text-rarity-epic" />
-            Подарок открыт!
-          </p>
-        )}
-
-        {result.coins_credited > 0 && (
-          <div className="mt-3 flex items-center justify-center gap-1.5 rounded-xl bg-accent-green/10 py-2 font-mono text-sm font-bold text-accent-green">
-            +{result.coins_credited} <IconCoin size={14} />
-          </div>
-        )}
-
-        {result.pack_result && (
-          result.pack_result.cards.length > 0 || result.pack_result.coach_cards.length > 0 || result.pack_result.stadium_cards.length > 0
-          || (result.pack_result.skill_tokens ?? []).length > 0
-        ) && (
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {result.pack_result.cards.map((c) => (
-              <PlayerCard key={c.card.id} player={c.card.player} size="sm" />
-            ))}
-            {result.pack_result.coach_cards.map((c) => (
-              <div key={`coach-${c.card.id}`} className="flex flex-col items-center gap-1.5 overflow-hidden rounded-2xl bg-rarity-epic/10 p-2">
-                <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-black/20">
-                  <img decoding="async" loading="lazy"
-                    src={staticUrl(c.card.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                    alt={c.card.coach.display_name}
-                    className="h-full w-full object-cover"
-                  />
-                </span>
-                <p className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{c.card.coach.display_name}</p>
-                <p className="text-[10px] text-ink-mist">Тренер · {RARITY_LABELS[c.card.coach.rarity]}</p>
-              </div>
-            ))}
-            {(result.pack_result.skill_tokens ?? []).map((token, i) => (
-              <SkillTokenTile key={`token-${i}`} skillCode={token.skill_code} quantity={token.quantity} />
-            ))}
-            {result.pack_result.stadium_cards.map((c) => (
-              <div key={`stadium-${c.card.id}`} className="flex flex-col items-center gap-1.5 overflow-hidden rounded-2xl bg-rarity-epic/10 p-2">
-                <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-black/20">
-                  <img decoding="async" loading="lazy"
-                    src={staticUrl(c.card.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                    alt={c.card.stadium.display_name}
-                    className="h-full w-full object-cover"
-                  />
-                </span>
-                <p className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{c.card.stadium.display_name}</p>
-                <p className="text-[10px] text-ink-mist">Стадион · +{Math.round(c.card.stadium.boost_pct * 100)}%</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <button onClick={onClose} className="mt-4 w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95">
-          Отлично!
-        </button>
+  const packCards = result.pack_result?.cards ?? [];
+  const topRarity = packCards.some((c) => c.card.player.rarity === "diamond")
+    ? "diamond"
+    : packCards.some((c) => c.card.player.rarity === "legendary") ? "legendary" : null;
+  const items = [
+    result.coins_credited > 0 && <RewardCoins key="coins" amount={result.coins_credited} />,
+    result.pack_result && (
+      result.pack_result.cards.length > 0 || result.pack_result.coach_cards.length > 0
+      || result.pack_result.stadium_cards.length > 0 || (result.pack_result.skill_tokens ?? []).length > 0
+    ) && (
+      <div key="pack" className="w-full">
+        <div className="grid grid-cols-3 gap-2">
+          {result.pack_result.cards.map((c) => (
+            <PlayerCard key={c.card.id} player={c.card.player} size="sm" />
+          ))}
+          {result.pack_result.coach_cards.map((c) => (
+            <div key={`coach-${c.card.id}`} className="flex flex-col items-center gap-1.5 overflow-hidden rounded-2xl bg-rarity-epic/10 p-2">
+              <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-black/20">
+                <img decoding="async" loading="lazy"
+                  src={staticUrl(c.card.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                  alt={c.card.coach.display_name}
+                  className="h-full w-full object-cover"
+                />
+              </span>
+              <p className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{c.card.coach.display_name}</p>
+              <p className="text-[10px] text-ink-mist">Тренер · {RARITY_LABELS[c.card.coach.rarity]}</p>
+            </div>
+          ))}
+          {(result.pack_result.skill_tokens ?? []).map((token, i) => (
+            <SkillTokenTile key={`token-${i}`} skillCode={token.skill_code} quantity={token.quantity} />
+          ))}
+          {result.pack_result.stadium_cards.map((c) => (
+            <div key={`stadium-${c.card.id}`} className="flex flex-col items-center gap-1.5 overflow-hidden rounded-2xl bg-rarity-epic/10 p-2">
+              <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-black/20">
+                <img decoding="async" loading="lazy"
+                  src={staticUrl(c.card.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                  alt={c.card.stadium.display_name}
+                  className="h-full w-full object-cover"
+                />
+              </span>
+              <p className="w-full truncate text-center text-[11px] font-semibold text-ink-chalk">{c.card.stadium.display_name}</p>
+              <p className="text-[10px] text-ink-mist">Стадион · +{Math.round(c.card.stadium.boost_pct * 100)}%</p>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    ),
+  ].filter(Boolean) as JSX.Element[];
+  return (
+    <RewardModal
+      title={isCollectible ? result.gift.gift_set.name : "Подарок открыт!"}
+      subtitle={
+        isCollectible && result.gift.serial_number != null
+          ? `№${result.gift.serial_number}${result.gift.gift_set.max_supply ? ` из ${result.gift.gift_set.max_supply}` : ""}`
+          : undefined
+      }
+      icon={<IconGift size={30} />}
+      hero={
+        isCollectible ? (
+          <span className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-rarity-epic/10">
+            {result.gift.gift_set.image_path ? (
+              <img decoding="async" src={staticUrl(result.gift.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
+            ) : (
+              <IconGift size={32} className="text-rarity-epic" />
+            )}
+          </span>
+        ) : undefined
+      }
+      rarity={topRarity}
+      items={items}
+      onClose={onClose}
+    />
   );
 }
 

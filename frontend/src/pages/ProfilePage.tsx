@@ -16,6 +16,7 @@ import { MyPlayerEntry } from "@/components/myPlayer/MyPlayerEntry";
 import AcademyShowcase from "@/components/path/AcademyShowcase";
 import ThemeSetting from "@/components/profile/ThemeSetting";
 import { BuyCoinsModal } from "@/components/shop/CoinPackages";
+import RewardModal, { RewardCard, RewardCoins, RewardPack } from "@/components/common/RewardModal";
 import {
   IconChevronRight,
   IconCoin,
@@ -33,7 +34,6 @@ import {
 } from "@/components/icons";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from "@/lib/legalLinks";
-import { RARITY_GLOW, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import { TX_TYPE_LABELS } from "@/lib/transactionLabels";
 import { hapticNotify, openLink } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -517,63 +517,20 @@ function TrophyDetailModal({ trophy, onClose }: { trophy: UserTrophy; onClose: (
 }
 
 function DailyRewardResultModal({ result, onClose }: { result: DailyRewardClaimResult; onClose: () => void }) {
+  const items = [
+    result.coins_awarded > 0 && <RewardCoins key="coins" amount={result.coins_awarded} />,
+    result.granted_pack_name && <RewardPack key="pack" name={result.granted_pack_name} />,
+    result.granted_card && <RewardCard key="card" card={result.granted_card} />,
+  ].filter(Boolean) as JSX.Element[];
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm" onClick={onClose}>
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", damping: 20, stiffness: 300 }}
-        className="w-full max-w-xs rounded-3xl bg-bg-surface p-5 text-center"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <motion.div
-          initial={{ scale: 0.6, rotate: -10 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: "spring", damping: 12, stiffness: 260, delay: 0.1 }}
-          className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-accent-lime/15 text-accent-lime"
-        >
-          <IconGift size={30} />
-        </motion.div>
-        <p className="mt-3 font-display text-lg font-bold text-ink-chalk">Награда получена!</p>
-        <p className="text-xs text-ink-mist">День {result.streak_day} серии</p>
-
-        {result.coins_awarded > 0 && (
-          <p className="mt-3 flex items-center justify-center gap-1.5 font-mono text-2xl font-bold text-accent-lime">
-            +{result.coins_awarded}
-            <IconCoin size={20} />
-          </p>
-        )}
-
-        {result.granted_pack_name && (
-          <p className="mt-2 flex items-center justify-center gap-1.5 text-sm text-ink-chalk">
-            <IconPack size={16} className="text-accent-cyan" />
-            Пак «{result.granted_pack_name}»
-          </p>
-        )}
-
-        {result.granted_card && (
-          <div
-            className={`mx-auto mt-3 flex h-36 w-28 flex-col items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[result.granted_card.player.rarity]} p-[2px] ${RARITY_GLOW[result.granted_card.player.rarity]}`}
-          >
-            <div className="flex h-full w-full flex-col rounded-[14px] bg-bg-surface">
-              <img decoding="async" loading="lazy"
-                src={staticUrl(result.granted_card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                alt={result.granted_card.player.display_name}
-                className="aspect-square w-full object-cover"
-              />
-              <div className="p-1.5 text-center">
-                <p className="truncate text-[10px] font-bold text-ink-chalk">{result.granted_card.player.display_name}</p>
-                <p className="text-[9px] text-ink-mist">{RARITY_LABELS[result.granted_card.player.rarity]}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <button onClick={onClose} className="mt-4 w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95">
-          Отлично!
-        </button>
-      </motion.div>
-    </div>
+    <RewardModal
+      title="Награда получена!"
+      subtitle={`День ${result.streak_day} серии`}
+      icon={<IconGift size={30} />}
+      rarity={result.granted_card?.player.rarity ?? null}
+      items={items}
+      onClose={onClose}
+    />
   );
 }
 

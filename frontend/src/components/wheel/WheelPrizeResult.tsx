@@ -4,6 +4,7 @@ import { STAGES, STAGE_DURATION_MS } from "@/components/cards/revealStages";
 import { RevealStage } from "@/components/cards/CardRevealStage";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconTag } from "@/components/icons";
+import RewardModal from "@/components/common/RewardModal";
 import { haptic } from "@/lib/telegram";
 import { prizeLabel } from "@/lib/wheel";
 import type { CollectionRewardGrant, WheelSpinResult } from "@/types";
@@ -76,35 +77,23 @@ export function WheelPrizeResult({ result, onClose }: { result: WheelSpinResult;
     );
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={onClose}>
-      <div
-        className="max-h-[85vh] w-full max-w-xs overflow-y-auto rounded-2xl border border-white/10 bg-bg-surface p-6 text-center"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <p className="font-display text-lg font-bold text-ink-chalk">
-          {result.duplicate_badge_coins ? `+${result.duplicate_badge_coins} монет (значок уже был)` : `Приз получен!`}
-        </p>
-
-        {result.badge_result ? (
-          <div className="mt-3 flex flex-col items-center gap-2">
-            <UserBadge badge={result.badge_result} className="h-10 w-10 text-3xl" />
-            <p className="text-sm font-semibold text-ink-chalk">{result.badge_result.name}</p>
-          </div>
-        ) : (
-          <p className="mt-2 text-sm text-ink-mist">{prizeLabel(result.prize)}</p>
-        )}
-
-        {result.collection_rewards.length > 0 && (
-          <div className="mt-3">
-            <CollectionGrants grants={result.collection_rewards} />
-          </div>
-        )}
-
-        <button onClick={onClose} className="mt-5 w-full rounded-xl bg-accent py-2.5 text-sm font-bold text-bg-base active:scale-95">
-          Ок
-        </button>
+  const items = [
+    result.badge_result ? (
+      <div key="badge" className="flex flex-col items-center gap-2">
+        <UserBadge badge={result.badge_result} className="h-10 w-10 text-3xl" />
+        <p className="text-sm font-semibold text-ink-chalk">{result.badge_result.name}</p>
       </div>
-    </div>
+    ) : (
+      <p key="prize" className="text-sm font-semibold text-ink-chalk">{prizeLabel(result.prize)}</p>
+    ),
+    result.collection_rewards.length > 0 && <CollectionGrants key="grants" grants={result.collection_rewards} />,
+  ].filter(Boolean) as JSX.Element[];
+  return (
+    <RewardModal
+      title={result.duplicate_badge_coins ? `+${result.duplicate_badge_coins} монет` : "Приз получен!"}
+      subtitle={result.duplicate_badge_coins ? "Такой значок у тебя уже был" : undefined}
+      items={items}
+      onClose={onClose}
+    />
   );
 }
