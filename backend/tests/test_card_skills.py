@@ -334,7 +334,7 @@ async def test_two_copies_of_same_player_are_independent(client, db_session, bot
 # --- lifecycle ------------------------------------------------------------------------
 
 
-async def test_trade_moves_skill_with_the_copy_and_locks_changes_while_pending(client, db_session, bot_token):
+async def test_trade_moves_skill_with_the_copy_and_locks_changes_while_pending(client, db_session, bot_token, trade_guards_off):
     sender, _ = await _register(client, db_session, 820030, bot_token)
     receiver, _ = await _register(client, db_session, 820031, bot_token)
     card = await _card(db_session, sender.id, Position.ST, skill_code="sniper", skill_level=2)

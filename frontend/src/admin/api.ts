@@ -129,6 +129,23 @@ export interface AnalyticsReport {
     stars_by_day: DayCount[];
     by_product: { product: string; stars: number; purchases: number }[];
   };
+  suspicious_trades: {
+    young_days: number;
+    min_donors: number;
+    rows: SuspiciousTradeRow[];
+  };
+}
+
+export interface SuspiciousTradeRow {
+  user_id: number;
+  telegram_id: number | null;
+  name: string;
+  username: string | null;
+  young_donors: number;
+  coins_received: number;
+  cards_received: number;
+  trades: number;
+  last_trade_at: string | null;
 }
 
 export async function fetchAnalyticsReport(days: number): Promise<AnalyticsReport> {

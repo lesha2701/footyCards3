@@ -542,6 +542,12 @@ export interface GameConfig {
   academy_buildings: Record<string, { costs: number[]; hours: number[]; effect: number[] }>;
   academy_stars_per_hour: number;
   academy_scout_report: { chance_pct: number[]; cooldown_days: number[]; consolation_coins: number[] };
+  trade_send_min_account_age_days: number;
+  trade_send_min_active_days: number;
+  trade_daily_coins_receive_cap: number;
+  trade_coin_tax_pct: number;
+  trade_suspicious_young_days: number;
+  trade_suspicious_min_donors: number;
 }
 
 export interface AdminPathTalent {

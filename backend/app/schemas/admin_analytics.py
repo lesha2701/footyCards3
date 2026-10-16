@@ -76,6 +76,24 @@ class MonetizationOut(BaseModel):
     by_product: list[ProductRowOut]
 
 
+class SuspiciousTradeRowOut(BaseModel):
+    user_id: int
+    telegram_id: Optional[int] = None
+    name: str
+    username: Optional[str] = None
+    young_donors: int
+    coins_received: int
+    cards_received: int
+    trades: int
+    last_trade_at: Optional[str] = None
+
+
+class SuspiciousTradesOut(BaseModel):
+    young_days: int
+    min_donors: int
+    rows: list[SuspiciousTradeRowOut]
+
+
 class AnalyticsReportOut(BaseModel):
     days: int
     today: str
@@ -84,3 +102,4 @@ class AnalyticsReportOut(BaseModel):
     modes: list[ModeRowOut]
     funnel: FunnelOut
     monetization: MonetizationOut
+    suspicious_trades: SuspiciousTradesOut

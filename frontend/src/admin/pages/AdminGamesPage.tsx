@@ -675,6 +675,24 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Обмены: защита от фарма</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Отдавать монеты или карточки в обмене (с любой стороны) можно только с аккаунта не младше указанного
+          возраста и с нужным числом дней активности; получать можно всем. Лимит — монеты, полученные через обмены за
+          текущие сутки (МСК). Налог списывается с получателя монет и сжигается. 0 — правило выключено. Последние два
+          поля — пороги блока «Подозрительные обмены» на странице «Аналитика».
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("trade_send_min_account_age_days", "Мин. возраст аккаунта, дней")}
+          {field("trade_send_min_active_days", "Мин. дней активности")}
+          {field("trade_daily_coins_receive_cap", "Лимит получения монет в день")}
+          {field("trade_coin_tax_pct", "Налог на монеты, %")}
+          {field("trade_suspicious_young_days", "«Молодой» аккаунт — младше, дней")}
+          {field("trade_suspicious_min_donors", "Мин. молодых доноров для флага")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Рефералы</p>
         <div className="grid grid-cols-2 gap-3">
           {field("referral_referred_reward", "Награда приглашённому")}

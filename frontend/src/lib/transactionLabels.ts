@@ -20,6 +20,7 @@ export const TX_TYPE_LABELS: Record<string, string> = {
   task_reward: "Задание",
   trade_coins_sent: "Обмен: отправлено",
   trade_coins_received: "Обмен: получено",
+  trade_coin_tax: "Обмен: налог на монеты",
   admin_adjustment: "Корректировка администратором",
   card_upgrade: "Апгрейд карточки",
   referral_reward: "Реферальная награда",

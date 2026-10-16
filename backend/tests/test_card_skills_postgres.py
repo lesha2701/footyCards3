@@ -21,7 +21,7 @@ from app.models.trade import TradeOffer
 from app.models.user import User
 from app.schemas.card_skill import SkillOperationRequest
 from app.schemas.trade import TradeCreateRequest
-from app.services import card_skill_service, task_service, trade_service
+from app.services import card_skill_service, task_service, trade_guard_service, trade_service
 from app.services.wallet_service import lock_user_for_update
 
 @pytest.fixture(autouse=True)
@@ -151,7 +151,13 @@ async def test_two_upgrades_with_balance_for_only_one(pg):
     assert await _tokens(pg, user_id, "sniper") == 2
 
 
-async def test_assign_racing_a_trade_offer_never_loses_tokens(pg):
+async def test_assign_racing_a_trade_offer_never_loses_tokens(pg, monkeypatch):
+    # Fresh users are too young to give cards under the anti-farming rules;
+    # this test is about the skill/trade race, not those rules.
+    async def _no_block(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(trade_guard_service, "give_block_reason", _no_block)
     sender_id = await _user(pg)
     receiver_id = await _user(pg)
     async with pg() as s:

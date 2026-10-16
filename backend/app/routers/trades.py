@@ -8,10 +8,16 @@ from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.enums import TradeStatus
 from app.models.user import User
-from app.schemas.trade import TradeAcceptOut, TradeCreateRequest, TradeOfferOut
-from app.services import trade_service
+from app.schemas.trade import TradeAcceptOut, TradeCreateRequest, TradeOfferOut, TradeRulesOut
+from app.services import trade_guard_service, trade_service
+from app.services.game_config_service import get_config
 
 router = APIRouter(prefix="/trades", tags=["trades"])
+
+
+@router.get("/rules", response_model=TradeRulesOut)
+async def get_trade_rules(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await trade_guard_service.rules_for(db, user, await get_config(db))
 
 
 @router.get("/offers", response_model=list[TradeOfferOut])

@@ -1,7 +1,9 @@
 """Admin product analytics: activity (DAU/WAU/MAU), retention cohorts, mode
 popularity, the new-player funnel and Stars monetization.
 
-Read-only aggregates — no per-user data leaves this module. Activity history
+Read-only aggregates — no per-user data leaves this module, except the
+«suspicious trade flows» list (admin-only, the point of it is to name the
+accounts to look at). Activity history
 comes from `user_daily_activity` (one row per user per local day, see
 models/user_activity.py); "days" are local calendar days in
 settings.timezone, the same clock the daily login streak uses.
@@ -32,7 +34,10 @@ from app.models.stratego import StrategoMatch
 from app.models.tactico import TacticoMatch
 from app.models.user import User
 from app.models.user_activity import UserDailyActivity
+from app.models.enums import TradeCardSide, TradeStatus
+from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.wheel import WheelSpin
+from app.services.game_config_service import get_config
 
 RETENTION_DAYS = (1, 7, 30)
 
@@ -374,6 +379,102 @@ async def _monetization(db: AsyncSession, days: int, today: date, active_in_peri
     }
 
 
+# --- Suspicious trade flows -------------------------------------------------------
+
+SUSPICIOUS_TRADES_LIMIT = 50
+
+
+async def _suspicious_trades(db: AsyncSession, since: datetime) -> dict:
+    """Players who received value through trades from many young accounts —
+    the multi-account farming pattern (alts funnel their starter coins and
+    pack cards into one main account).
+
+    For every accepted trade in the window, each side's give (coins + card
+    count) is one directional flow. Per (giver, taker) pair the flows are
+    netted, so a fair swap cancels out; a pair counts against the taker when
+    the giver was younger than `trade_suspicious_young_days` at trade time
+    and the taker came out ahead in coins or cards. A taker is listed once
+    at least `trade_suspicious_min_donors` distinct young givers did that."""
+    config = await get_config(db)
+    young = timedelta(days=config.trade_suspicious_young_days)
+    min_donors = config.trade_suspicious_min_donors
+
+    offers = (await db.execute(
+        select(TradeOffer).where(
+            TradeOffer.status == TradeStatus.accepted,
+            TradeOffer.resolved_at.is_not(None),
+            TradeOffer.resolved_at >= since,
+        )
+    )).scalars().all()
+    result = {"young_days": config.trade_suspicious_young_days, "min_donors": min_donors, "rows": []}
+    if not offers:
+        return result
+
+    cards: dict[tuple[int, TradeCardSide], int] = defaultdict(int)
+    card_rows = (await db.execute(
+        select(TradeOfferCard.trade_offer_id, TradeOfferCard.side, func.count())
+        .where(TradeOfferCard.trade_offer_id.in_([o.id for o in offers]))
+        .group_by(TradeOfferCard.trade_offer_id, TradeOfferCard.side)
+    )).all()
+    for offer_id, side, n in card_rows:
+        cards[(offer_id, side)] = int(n)
+
+    user_ids = {o.sender_id for o in offers} | {o.receiver_id for o in offers}
+    users = {u.id: u for u in (await db.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()}
+
+    # (giver, taker) -> [coins, cards, young_at_any_give, trades, last_at]
+    pairs: dict[tuple[int, int], list] = {}
+    for o in offers:
+        at = ensure_aware(o.resolved_at)
+        for giver, taker, coins, n_cards in (
+            (o.sender_id, o.receiver_id, o.sender_coins, cards[(o.id, TradeCardSide.offered)]),
+            (o.receiver_id, o.sender_id, o.receiver_coins, cards[(o.id, TradeCardSide.requested)]),
+        ):
+            p = pairs.setdefault((giver, taker), [0, 0, False, 0, None])
+            p[0] += coins
+            p[1] += n_cards
+            p[3] += 1
+            p[4] = max(p[4], at) if p[4] else at
+            giver_user = users.get(giver)
+            if (coins > 0 or n_cards > 0) and giver_user is not None and giver_user.created_at is not None:
+                if at - ensure_aware(giver_user.created_at) < young:
+                    p[2] = True
+
+    # taker -> [donors, net coins, net cards, last_at]
+    takers: dict[int, list] = {}
+    for (giver, taker), (coins, n_cards, was_young, _trades, last_at) in pairs.items():
+        back = pairs.get((taker, giver), [0, 0, False, 0, None])
+        net_coins, net_cards = coins - back[0], n_cards - back[1]
+        if not was_young or (net_coins <= 0 and net_cards <= 0):
+            continue
+        t = takers.setdefault(taker, [set(), 0, 0, None])
+        t[0].add(giver)
+        t[1] += max(0, net_coins)
+        t[2] += max(0, net_cards)
+        t[3] = max(t[3], last_at) if t[3] else last_at
+
+    rows = []
+    for taker, (donors, net_coins, net_cards, last_at) in takers.items():
+        if len(donors) < min_donors:
+            continue
+        u = users.get(taker)
+        trades = sum(1 for o in offers if taker in (o.sender_id, o.receiver_id) and ({o.sender_id, o.receiver_id} - {taker}) & donors)
+        rows.append({
+            "user_id": taker,
+            "telegram_id": u.telegram_id if u else None,
+            "name": u.full_display_name() if u else f"#{taker}",
+            "username": u.username if u else None,
+            "young_donors": len(donors),
+            "coins_received": net_coins,
+            "cards_received": net_cards,
+            "trades": trades,
+            "last_trade_at": last_at.isoformat() if last_at else None,
+        })
+    rows.sort(key=lambda r: (-r["young_donors"], -r["coins_received"], -r["cards_received"]))
+    result["rows"] = rows[:SUSPICIOUS_TRADES_LIMIT]
+    return result
+
+
 async def analytics_report(db: AsyncSession, days: int, today: Optional[date] = None) -> dict:
     today = today or local_today()
     _first, since = _window(days, today)
@@ -386,4 +487,5 @@ async def analytics_report(db: AsyncSession, days: int, today: Optional[date] = 
         "modes": await _modes(db, since),
         "funnel": await _funnel(db, days, today),
         "monetization": await _monetization(db, days, today, activity["active_in_period"]),
+        "suspicious_trades": await _suspicious_trades(db, since),
     }

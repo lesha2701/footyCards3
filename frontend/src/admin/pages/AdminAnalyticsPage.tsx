@@ -54,6 +54,7 @@ export default function AdminAnalyticsPage() {
           <FunnelSection data={data} />
           <ModesSection data={data} />
           <MonetizationSection data={data} />
+          <SuspiciousTradesSection data={data} />
           <p className="text-xs text-slate-500">
             Дни считаются по московскому времени. Активность до запуска аналитики восстановлена по действиям игроков
             (входы, покупки, игры), поэтому для прошлых дней это нижняя оценка.
@@ -231,6 +232,59 @@ function MonetizationSection({ data }: { data: AnalyticsReport }) {
           )}
         </div>
       </div>
+    </section>
+  );
+}
+
+function SuspiciousTradesSection({ data }: { data: AnalyticsReport }) {
+  const s = data.suspicious_trades;
+  return (
+    <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+      <p className="font-display text-sm font-bold">Подозрительные обмены</p>
+      <p className="mb-3 mt-1 text-xs text-slate-500">
+        Игроки, которые за период получили через обмены монеты или карточки от {s.min_donors}+ аккаунтов младше{" "}
+        {s.young_days} дн. (на момент обмена) и не отдали столько же взамен — типичная схема фарма с твинков.
+        Честные обмены взаимно гасятся и сюда не попадают. Пороги — в «Игры → Обмены: защита от фарма».
+      </p>
+      {s.rows.length === 0 ? (
+        <p className="text-sm text-slate-400">Подозрительных потоков за период нет</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="text-xs text-slate-400">
+              <tr>
+                <th className="py-1 pr-3 font-normal">Игрок</th>
+                <th className="py-1 pr-3 font-normal">Молодых доноров</th>
+                <th className="py-1 pr-3 font-normal">Монет получено</th>
+                <th className="py-1 pr-3 font-normal">Карточек получено</th>
+                <th className="py-1 pr-3 font-normal">Обменов</th>
+                <th className="py-1 font-normal">Последний</th>
+              </tr>
+            </thead>
+            <tbody>
+              {s.rows.map((r) => (
+                <tr key={r.user_id} className="border-t border-white/5">
+                  <td className="py-1.5 pr-3">
+                    <span className="text-slate-200">{r.name}</span>
+                    <span className="block text-xs text-slate-500">
+                      #{r.user_id}
+                      {r.username ? ` · @${r.username}` : ""}
+                      {r.telegram_id ? ` · tg ${r.telegram_id}` : ""}
+                    </span>
+                  </td>
+                  <td className="py-1.5 pr-3 font-mono text-rose-300">{r.young_donors}</td>
+                  <td className="py-1.5 pr-3 font-mono">{r.coins_received}</td>
+                  <td className="py-1.5 pr-3 font-mono">{r.cards_received}</td>
+                  <td className="py-1.5 pr-3 font-mono">{r.trades}</td>
+                  <td className="py-1.5 text-xs text-slate-400">
+                    {r.last_trade_at ? new Date(r.last_trade_at).toLocaleString("ru-RU") : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

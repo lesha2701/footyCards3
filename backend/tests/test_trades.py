@@ -10,6 +10,10 @@ from tests.utils import telegram_headers
 
 settings = get_settings()
 
+# These tests are about trade mechanics; the anti-farming rules have their
+# own file (test_trade_anti_farming.py).
+pytestmark = pytest.mark.usefixtures("trade_guards_off")
+
 
 @pytest.fixture(autouse=True)
 def _reset_rate_limits():

@@ -11,6 +11,22 @@ export interface CreateTradePayload {
   message?: string;
 }
 
+/** Anti-farming rules as they apply to the current player (backend trade_guard_service). */
+export interface TradeRules {
+  can_give: boolean;
+  give_block_reason: string | null;
+  min_account_age_days: number;
+  min_active_days: number;
+  daily_coins_receive_cap: number;
+  coins_received_today: number;
+  coin_tax_pct: number;
+}
+
+export async function fetchTradeRules(): Promise<TradeRules> {
+  const { data } = await api.get<TradeRules>("/trades/rules");
+  return data;
+}
+
 export async function fetchTradeOffers(params: { status?: string; direction?: "incoming" | "outgoing" } = {}): Promise<TradeOffer[]> {
   const { data } = await api.get<TradeOffer[]>("/trades/offers", { params });
   return data;

@@ -776,6 +776,22 @@ class GameConfig(TimestampMixin, Base):
             "hall": {"costs": [1500, 4000, 8000, 16000, 30000], "hours": [24, 48, 72, 120, 168], "effect": [1, 1, 2, 2, 3]},
         },
     )
+    # --- Trade anti-farming (services/trade_service.py) ---
+    # Giving anything in a trade (coins or cards, on either side) needs an
+    # account at least this many days old that was active on at least this
+    # many distinct days (user_daily_activity). 0 = no requirement.
+    trade_send_min_account_age_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    trade_send_min_active_days: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # Max coins one player may receive through trades per local day (0 = no cap).
+    trade_daily_coins_receive_cap: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
+    # Percent of the coin part of a trade burned on accept, paid by the
+    # side that receives the coins (rounded up; 0 = no tax).
+    trade_coin_tax_pct: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Admin report «suspicious trade flows»: a giver counts as young if their
+    # account was younger than this at trade time; a receiver is listed once
+    # they took value from at least this many distinct young accounts.
+    trade_suspicious_young_days: Mapped[int] = mapped_column(Integer, default=14, nullable=False)
+    trade_suspicious_min_donors: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     # Stars to finish a construction now: per started remaining hour (min 1).
     academy_stars_per_hour: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     # Free scouting report (scout wing >= 1), per scout level: chance of an

@@ -583,6 +583,12 @@ class GameConfigOut(BaseModel):
     artifact_slots: int = 3
     artifact_max_opp_pct: int = 5
     artifact_max_stat: int = 6
+    trade_send_min_account_age_days: int = 3
+    trade_send_min_active_days: int = 2
+    trade_daily_coins_receive_cap: int = 3000
+    trade_coin_tax_pct: int = 0
+    trade_suspicious_young_days: int = 14
+    trade_suspicious_min_donors: int = 3
 
 
 class GameConfigUpdate(BaseModel):
@@ -1000,6 +1006,12 @@ class GameConfigUpdate(BaseModel):
     academy_buildings: Optional[dict[str, dict[str, list[int]]]] = None
     academy_stars_per_hour: Optional[int] = Field(default=None, ge=1, le=100)
     academy_scout_report: Optional[dict[str, list[int]]] = None
+    trade_send_min_account_age_days: Optional[int] = Field(default=None, ge=0, le=365)
+    trade_send_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
+    trade_daily_coins_receive_cap: Optional[int] = Field(default=None, ge=0)
+    trade_coin_tax_pct: Optional[int] = Field(default=None, ge=0, le=90)
+    trade_suspicious_young_days: Optional[int] = Field(default=None, ge=1, le=365)
+    trade_suspicious_min_donors: Optional[int] = Field(default=None, ge=2, le=100)
 
     @field_validator("path_prestige_dupes", "path_prestige_coins")
     @classmethod

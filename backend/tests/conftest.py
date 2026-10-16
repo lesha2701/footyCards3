@@ -61,6 +61,22 @@ async def db_session():
         yield session
 
 
+@pytest_asyncio.fixture
+async def trade_guards_off(_fresh_schema):
+    """Turns off the trade anti-farming rules (new-account give ban, daily
+    coin cap, tax) for tests about other trade behavior: their freshly
+    registered users would otherwise be too young to give anything."""
+    from app.services.game_config_service import get_config
+
+    async with TestSessionLocal() as session:
+        config = await get_config(session)
+        config.trade_send_min_account_age_days = 0
+        config.trade_send_min_active_days = 0
+        config.trade_daily_coins_receive_cap = 0
+        config.trade_coin_tax_pct = 0
+        await session.commit()
+
+
 @pytest.fixture
 def bot_token() -> str:
     return settings.telegram_bot_token

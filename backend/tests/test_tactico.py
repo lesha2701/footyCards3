@@ -98,7 +98,7 @@ async def test_set_squad_success(client, db_session, bot_token):
     assert resp.json()["is_complete"] is True
 
 
-async def test_squad_card_locked_against_trade_offer(client, db_session, bot_token):
+async def test_squad_card_locked_against_trade_offer(client, db_session, bot_token, trade_guards_off):
     headers_a = await _register(client, bot_token, 950005)
     await _register(client, bot_token, 950006)
     user_a = await get_user_by_telegram_id(db_session, 950005)

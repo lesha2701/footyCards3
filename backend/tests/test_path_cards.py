@@ -365,7 +365,7 @@ async def test_path_cards_are_excluded_from_diamond_feeding(client, db_session, 
     assert as_material.status_code == 409
 
 
-async def test_progress_travels_with_the_card_on_a_trade(client, db_session, bot_token):
+async def test_progress_travels_with_the_card_on_a_trade(client, db_session, bot_token, trade_guards_off):
     await _config(db_session)
     headers_a, user_a = await _login(client, db_session, bot_token, 970022)
     headers_b, user_b = await _login(client, db_session, bot_token, 970023)

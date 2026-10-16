@@ -174,7 +174,7 @@ async def test_collection_reward_grants_bonus_pack(client, db_session, bot_token
     assert total_cards == 3  # 1 from the trigger pack + 2 from the bonus pack
 
 
-async def test_trade_accept_completes_collection_for_receiver(client, db_session, bot_token):
+async def test_trade_accept_completes_collection_for_receiver(client, db_session, bot_token, trade_guards_off):
     sender, sender_headers = await _register(client, db_session, 880010, bot_token)
     receiver, receiver_headers = await _register(client, db_session, 880011, bot_token)
 

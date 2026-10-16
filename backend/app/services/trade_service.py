@@ -12,7 +12,7 @@ from app.models.enums import BingoGoalType, NotificationType, Rarity, TradeCardS
 from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.user import User
 from app.schemas.trade import TradeAcceptOut, TradeCreateRequest, TradeOfferOut
-from app.services import bingo_service, task_service
+from app.services import bingo_service, task_service, trade_guard_service
 from app.services.collection_service import grant_collection_rewards_for_new_cards
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
@@ -135,11 +135,21 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
     if not receiver.accept_trades:
         raise ConflictError("This user is not accepting trade offers")
 
+    offered_ids = payload.offered_card_ids or []
+    requested_ids = payload.requested_card_ids or []
+
+    # Anti-farming (see trade_guard_service); re-checked at accept time.
+    config = await get_config(db)
+    if payload.sender_coins > 0 or offered_ids:
+        await trade_guard_service.ensure_can_give(db, sender, config, own=True)
+    if payload.receiver_coins > 0 or requested_ids:
+        await trade_guard_service.ensure_can_give(db, receiver, config, own=False)
+    await trade_guard_service.ensure_receive_cap(db, receiver, payload.sender_coins, config, own=False)
+    await trade_guard_service.ensure_receive_cap(db, sender, payload.receiver_coins, config, own=True)
+
     if payload.sender_coins > sender.balance:
         raise InsufficientBalanceError("You do not have enough coins for this offer")
 
-    offered_ids = payload.offered_card_ids or []
-    requested_ids = payload.requested_card_ids or []
     all_card_ids = list(dict.fromkeys(offered_ids + requested_ids))
     cards_by_id: dict[int, UserCard] = {}
     if all_card_ids:
@@ -282,6 +292,8 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
     trade_cards = trade_cards_result.scalars().all()
     card_ids = sorted({tc.user_card_id for tc in trade_cards})
 
+    # Before the locks: get_config commits when it has to create the row.
+    config = await get_config(db)
     first_id, second_id = sorted([offer.sender_id, offer.receiver_id])
     first_user = await lock_user_for_update(db, first_id)
     second_user = await lock_user_for_update(db, second_id)
@@ -320,6 +332,14 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
         if card.is_in_tactico_squad:
             raise ConflictError(f"Card #{card.serial_number} is currently used in a Tactico squad")
 
+    # Anti-farming, under both user locks: this is the check that counts.
+    if offer.sender_coins > 0 or any(tc.side == TradeCardSide.offered for tc in trade_cards):
+        await trade_guard_service.ensure_can_give(db, sender, config, own=False)
+    if offer.receiver_coins > 0 or any(tc.side == TradeCardSide.requested for tc in trade_cards):
+        await trade_guard_service.ensure_can_give(db, receiver, config, own=True)
+    await trade_guard_service.ensure_receive_cap(db, receiver, offer.sender_coins, config, own=True)
+    await trade_guard_service.ensure_receive_cap(db, sender, offer.receiver_coins, config, own=False)
+
     if offer.sender_coins > 0 and sender.balance < offer.sender_coins:
         raise InsufficientBalanceError("Sender no longer has enough coins for this trade")
     if offer.receiver_coins > 0 and receiver.balance < offer.receiver_coins:
@@ -343,12 +363,18 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
     if sender_new_player_ids:
         await grant_collection_rewards_for_new_cards(db, sender, sender_new_player_ids)
 
-    if offer.sender_coins > 0:
-        await debit_coins(db, sender, offer.sender_coins, TransactionType.trade_coins_sent, "Монеты отправлены при обмене", "trade_offer", offer.id)
-        await credit_coins(db, receiver, offer.sender_coins, TransactionType.trade_coins_received, "Монеты получены при обмене", "trade_offer", offer.id)
-    if offer.receiver_coins > 0:
-        await debit_coins(db, receiver, offer.receiver_coins, TransactionType.trade_coins_sent, "Монеты отправлены при обмене", "trade_offer", offer.id)
-        await credit_coins(db, sender, offer.receiver_coins, TransactionType.trade_coins_received, "Монеты получены при обмене", "trade_offer", offer.id)
+    for payer, payee, amount in ((sender, receiver, offer.sender_coins), (receiver, sender, offer.receiver_coins)):
+        if amount <= 0:
+            continue
+        await debit_coins(db, payer, amount, TransactionType.trade_coins_sent, "Монеты отправлены при обмене", "trade_offer", offer.id)
+        await credit_coins(db, payee, amount, TransactionType.trade_coins_received, "Монеты получены при обмене", "trade_offer", offer.id)
+        tax = trade_guard_service.coin_tax(amount, config)
+        if tax > 0:
+            # Coin sink: the payee was just credited `amount`, so this can't fail.
+            await debit_coins(
+                db, payee, tax, TransactionType.trade_coin_tax,
+                f"Налог на монеты в обмене ({config.trade_coin_tax_pct}%)", "trade_offer", offer.id,
+            )
 
     offer.status = TradeStatus.accepted
     offer.resolved_at = datetime.now(timezone.utc)

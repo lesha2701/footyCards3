@@ -74,6 +74,7 @@ class TransactionType(str, enum.Enum):
     achievement_reward = "achievement_reward"
     trade_coins_sent = "trade_coins_sent"
     trade_coins_received = "trade_coins_received"
+    trade_coin_tax = "trade_coin_tax"
     admin_adjustment = "admin_adjustment"
     task_reward = "task_reward"
     card_upgrade = "card_upgrade"

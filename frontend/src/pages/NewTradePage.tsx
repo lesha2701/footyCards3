@@ -9,7 +9,7 @@ import NumberInput from "@/components/common/NumberInput";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import PlayerCard from "@/components/cards/PlayerCard";
 import { fetchCollection, fetchUserCollection } from "@/api/collection";
-import { createTradeOffer } from "@/api/trades";
+import { createTradeOffer, fetchTradeRules } from "@/api/trades";
 import { searchUsers } from "@/api/profile";
 import { ApiRequestError } from "@/lib/api";
 import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
@@ -43,6 +43,8 @@ export default function NewTradePage() {
     queryKey: ["collection-for-trade", myCardSearch],
     queryFn: () => fetchCollection({ page_size: 100, search: myCardSearch || undefined }),
   });
+
+  const { data: rules } = useQuery({ queryKey: ["trade-rules"], queryFn: fetchTradeRules });
 
   const { data: theirCollection } = useQuery({
     queryKey: ["their-collection", target?.id, theirCardSearch],
@@ -144,6 +146,11 @@ export default function NewTradePage() {
           </div>
 
           {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
+          {rules && !rules.can_give && rules.give_block_reason && (
+            <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+              {rules.give_block_reason} Пока можно только получать карточки и монеты от других игроков.
+            </p>
+          )}
 
           <section>
             <p className="mb-2 text-sm font-semibold text-ink-mist">Твои карточки ({offeredIds.length}/{MAX_TRADE_CARDS_PER_SIDE})</p>
@@ -207,6 +214,12 @@ export default function NewTradePage() {
               onChange={setSenderCoins}
               className="w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk outline-none"
             />
+            {rules && rules.coin_tax_pct > 0 && senderCoins > 0 && (
+              <p className="mt-1 text-caption text-ink-mist-dim">
+                Налог {rules.coin_tax_pct}%: игрок получит{" "}
+                {senderCoins - Math.min(senderCoins, Math.ceil((senderCoins * rules.coin_tax_pct) / 100))} монет
+              </p>
+            )}
           </div>
 
           <div>

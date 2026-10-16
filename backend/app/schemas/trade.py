@@ -57,3 +57,15 @@ class TradeCreateRequest(BaseModel):
         if not self.offered_card_ids and not self.requested_card_ids and not self.sender_coins and not self.receiver_coins:
             raise ValueError("Trade must include at least one card or coin amount")
         return self
+
+
+class TradeRulesOut(BaseModel):
+    """Anti-farming rules as they apply to the current player right now."""
+
+    can_give: bool
+    give_block_reason: Optional[str] = None
+    min_account_age_days: int
+    min_active_days: int
+    daily_coins_receive_cap: int
+    coins_received_today: int
+    coin_tax_pct: int
