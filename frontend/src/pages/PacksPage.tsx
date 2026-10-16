@@ -17,6 +17,8 @@ import { sortPacksByPrice, sortPacksByStarsPrice } from "@/lib/packs";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { useAuthStore } from "@/store/authStore";
 import { usePacksUiStore } from "@/store/packsUiStore";
+import MonetizationEntries from "@/components/shop/MonetizationEntries";
+import { StarterOfferBanner } from "@/components/shop/StarterOffer";
 import type { Pack, PackOpenResult } from "@/types";
 
 // Matches backend's pack_service.MAX_BULK_PACK_QUANTITY — enforced there
@@ -129,6 +131,8 @@ export default function PacksPage() {
         </>
       ) : (
         <>
+          <StarterOfferBanner />
+          <MonetizationEntries />
           <div className="rounded-2xl bg-gradient-to-br from-amber-400/15 to-amber-600/5 p-4 text-center">
             <p className="font-display text-sm font-bold text-amber-300">Поддержи разработчиков ⭐</p>
             <p className="mt-1 text-xs text-ink-mist">

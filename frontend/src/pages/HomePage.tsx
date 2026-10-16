@@ -13,6 +13,7 @@ import AcademyHomeCard from "@/components/home/AcademyHomeCard";
 import ClubHomeCard from "@/components/home/ClubHomeCard";
 import HomeHero from "@/components/home/HomeHero";
 import TodayCard from "@/components/home/TodayCard";
+import { StarterOfferBanner, StarterOfferModal } from "@/components/shop/StarterOffer";
 import { sortPacksByPrice } from "@/lib/packs";
 import {
   IconChat,
@@ -62,6 +63,8 @@ export default function HomePage() {
         claimableTasks={claimableTaskCount}
       />
 
+      <StarterOfferModal />
+      <StarterOfferBanner />
       <TodayCard wheel={flags?.wheel_enabled !== false ? wheelStatus : null} />
 
       <AcademyHomeCard />

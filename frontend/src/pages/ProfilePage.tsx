@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { claimDailyReward, fetchDailyRewardCalendar } from "@/api/dailyRewards";
 import { fetchFeatureFlags } from "@/api/featureFlags";
 import { fetchLeagueStatus } from "@/api/leagues";
 import { fetchMyGifts } from "@/api/gifts";
@@ -14,16 +13,15 @@ import ShareButton from "@/components/common/ShareButton";
 import { UserBadge } from "@/components/common/UserBadge";
 import { MyPlayerEntry } from "@/components/myPlayer/MyPlayerEntry";
 import AcademyShowcase from "@/components/path/AcademyShowcase";
+import LoginCalendar from "@/components/profile/LoginCalendar";
 import ThemeSetting from "@/components/profile/ThemeSetting";
+import MonetizationEntries from "@/components/shop/MonetizationEntries";
 import { BuyCoinsModal } from "@/components/shop/CoinPackages";
-import RewardModal, { RewardCard, RewardCoins, RewardPack } from "@/components/common/RewardModal";
 import {
   IconChevronRight,
   IconCoin,
-  IconCollection,
   IconFire,
   IconGift,
-  IconPack,
   IconScroll,
   IconSwap,
   IconTag,
@@ -32,12 +30,13 @@ import {
   IconUsers,
   type IconProps,
 } from "@/components/icons";
-import { ApiRequestError, staticUrl } from "@/lib/api";
+import { staticUrl } from "@/lib/api";
+import { backgroundClass, frameClass } from "@/lib/cosmetics";
 import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from "@/lib/legalLinks";
 import { TX_TYPE_LABELS } from "@/lib/transactionLabels";
 import { hapticNotify, openLink } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { DailyRewardClaimResult, UserTrophy } from "@/types";
+import type { UserTrophy } from "@/types";
 
 function dayStreakLabel(days: number): string {
   const mod10 = days % 10;
@@ -54,8 +53,6 @@ export default function ProfilePage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showTx, setShowTx] = useState(false);
-  const [claimError, setClaimError] = useState<string | null>(null);
-  const [claimResult, setClaimResult] = useState<DailyRewardClaimResult | null>(null);
   const [showBuyCoins, setShowBuyCoins] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
 
@@ -68,24 +65,10 @@ export default function ProfilePage() {
   const { data: myGifts } = useQuery({ queryKey: ["gifts", "mine"], queryFn: fetchMyGifts });
   const pinnedGifts = myGifts?.filter((g) => g.is_pinned) ?? [];
   const [selectedTrophy, setSelectedTrophy] = useState<UserTrophy | null>(null);
-  const { data: calendar } = useQuery({ queryKey: ["daily-reward-calendar"], queryFn: fetchDailyRewardCalendar });
   const { data: transactions } = useQuery({
     queryKey: ["transactions"],
     queryFn: () => fetchMyTransactions(1),
     enabled: showTx,
-  });
-
-  const claimMutation = useMutation({
-    mutationFn: claimDailyReward,
-    onSuccess: (data) => {
-      updateBalance(data.new_balance);
-      hapticNotify("success");
-      setClaimError(null);
-      setClaimResult(data);
-      queryClient.invalidateQueries({ queryKey: ["daily-reward-calendar"] });
-      queryClient.invalidateQueries({ queryKey: ["collection"] });
-    },
-    onError: (err) => setClaimError(err instanceof ApiRequestError ? err.message : "Не удалось получить награду"),
   });
 
   const settingsMutation = useMutation({
@@ -99,20 +82,31 @@ export default function ProfilePage() {
   });
 
   if (!user || !profile) return null;
+  const frame = frameClass(profile.cosmetics?.frame);
+  const background = backgroundClass(profile.cosmetics?.background);
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="flex flex-col items-center gap-2 rounded-3xl bg-bg-surface p-5 text-center">
-        <img decoding="async" loading="lazy"
-          src={user.avatar_url ?? staticUrl("players/placeholder/player_placeholder.webp")}
-          alt="avatar"
-          className="h-20 w-20 rounded-full ring-2 ring-accent-lime object-cover"
-        />
+      <section
+        className={`flex flex-col items-center gap-2 rounded-3xl p-5 text-center ${background ?? "bg-bg-surface"}`}
+      >
+        <span className={`rounded-full ${frame ? `p-[3px] ${frame}` : ""}`}>
+          <img decoding="async" loading="lazy"
+            src={user.avatar_url ?? staticUrl("players/placeholder/player_placeholder.webp")}
+            alt="avatar"
+            className={`h-20 w-20 rounded-full object-cover ${frame ? "ring-2 ring-bg-base" : "ring-2 ring-accent-lime"}`}
+          />
+        </span>
         <p className="flex items-center gap-1.5 font-display text-xl font-bold text-ink-chalk">
           {user.first_name} {user.last_name}
           <UserBadge badge={user.active_badge} />
         </p>
         {user.username && <p className="text-sm text-ink-mist">@{user.username}</p>}
+        {profile.club_pass_active && (
+          <span className="rounded-full bg-emerald-400/15 px-2.5 py-0.5 text-caption font-semibold text-emerald-300">
+            Клубный абонемент
+          </span>
+        )}
         <p className="text-xs text-ink-mist-dim">С нами с {new Date(user.created_at).toLocaleDateString("ru-RU")}</p>
         {profile.daily_login_streak > 0 && (
           <div className="mt-1 flex items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1">
@@ -211,6 +205,8 @@ export default function ProfilePage() {
         </section>
       )}
 
+      <MonetizationEntries />
+
       <MyPlayerEntry />
       {user && <AcademyShowcase userId={user.id} />}
 
@@ -290,44 +286,7 @@ export default function ProfilePage() {
         </section>
       )}
 
-      <section className="rounded-2xl bg-bg-surface p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="flex items-center gap-1.5 font-display text-base font-bold text-ink-chalk">
-            <IconGift size={16} className="text-accent-lime" />
-            Ежедневная награда
-          </p>
-          <span className="font-mono text-xs text-ink-mist">Серия: день {calendar?.current_streak ?? 1}</span>
-        </div>
-        <div className="grid grid-cols-7 gap-1.5">
-          {calendar?.days.map((d) => {
-            const DayIcon = d.grants_random_card ? IconCollection : d.free_pack_name ? IconPack : IconCoin;
-            return (
-              <div
-                key={d.day}
-                className={`flex flex-col items-center gap-0.5 rounded-lg py-2 text-micro ${
-                  d.is_claimed
-                    ? "bg-accent-green/15 text-accent-green"
-                    : d.is_today
-                      ? "bg-accent-lime/15 text-accent-lime"
-                      : "bg-white/5 text-ink-mist-dim"
-                }`}
-              >
-                <span className="font-mono">Д{d.day}</span>
-                <DayIcon size={13} />
-                <span className="font-mono">{d.coins}</span>
-              </div>
-            );
-          })}
-        </div>
-        {claimError && <p className="mt-2 text-xs text-red-400">{claimError}</p>}
-        <button
-          onClick={() => claimMutation.mutate()}
-          disabled={calendar?.already_claimed_today || claimMutation.isPending}
-          className="mt-3 w-full rounded-2xl bg-floodlight py-3 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-40"
-        >
-          {calendar?.already_claimed_today ? "Уже получено сегодня" : "Забрать награду"}
-        </button>
-      </section>
+      <LoginCalendar />
 
       <section className="rounded-2xl bg-bg-surface p-4">
         <p className="flex items-center gap-1.5 font-display text-base font-bold text-ink-chalk">
@@ -430,7 +389,6 @@ export default function ProfilePage() {
         Документы
       </button>
 
-      {claimResult && <DailyRewardResultModal result={claimResult} onClose={() => setClaimResult(null)} />}
       {selectedTrophy && <TrophyDetailModal trophy={selectedTrophy} onClose={() => setSelectedTrophy(null)} />}
       {showBuyCoins && (
         <BuyCoinsModal
@@ -513,24 +471,6 @@ function TrophyDetailModal({ trophy, onClose }: { trophy: UserTrophy; onClose: (
         </button>
       </motion.div>
     </div>
-  );
-}
-
-function DailyRewardResultModal({ result, onClose }: { result: DailyRewardClaimResult; onClose: () => void }) {
-  const items = [
-    result.coins_awarded > 0 && <RewardCoins key="coins" amount={result.coins_awarded} />,
-    result.granted_pack_name && <RewardPack key="pack" name={result.granted_pack_name} />,
-    result.granted_card && <RewardCard key="card" card={result.granted_card} />,
-  ].filter(Boolean) as JSX.Element[];
-  return (
-    <RewardModal
-      title="Награда получена!"
-      subtitle={`День ${result.streak_day} серии`}
-      icon={<IconGift size={30} />}
-      rarity={result.granted_card?.player.rarity ?? null}
-      items={items}
-      onClose={onClose}
-    />
   );
 }
 

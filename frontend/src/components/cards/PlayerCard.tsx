@@ -1,7 +1,9 @@
 import { memo } from "react";
 
+import { useCardSkin } from "@/lib/cardSkin";
 import PathCardMark from "@/components/path/PathCardMark";
 import { staticUrl } from "@/lib/api";
+import { cardSkinClass } from "@/lib/cosmetics";
 import { pathFrameClass } from "@/lib/pathCards";
 import { prestigeMarks, prestigeStyle } from "@/lib/prestige";
 import { RARITY_GLOW_STATIC, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
@@ -39,6 +41,8 @@ function PlayerCard({
   animated = false,
 }: Props) {
   const isPath = !!player.path_talent_code;
+  // Equipped card skin (cosmetic, own cards only): an extra outline.
+  const skin = cardSkinClass(useCardSkin());
   const frame = isPath
     ? pathFrameClass(pathStage, prestige, animated || selected)
     : `${RARITY_GRADIENTS[player.rarity]} ${RARITY_GLOW_STATIC[player.rarity]}${
@@ -58,7 +62,9 @@ function PlayerCard({
         isPath ? "p-[3px]" : "p-[2px]"
       } transition-transform active:scale-[0.97] ${
         selected ? (player.rarity === "diamond" ? "ring-4 ring-rarity-diamond" : "ring-4 ring-accent-lime") : ""
-      } ${dimmed ? "opacity-40 grayscale" : ""} ${onClick ? "cursor-pointer" : "cursor-default"}`}
+      } ${dimmed ? "opacity-40 grayscale" : ""} ${onClick ? "cursor-pointer" : "cursor-default"}${
+        skin && !selected ? ` ${skin}` : ""
+      }`}
     >
       <div className="flex h-full w-full flex-col overflow-hidden rounded-[14px] bg-bg-surface">
         <div className="relative flex-1 overflow-hidden bg-black/20">

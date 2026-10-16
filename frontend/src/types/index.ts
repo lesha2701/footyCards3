@@ -985,31 +985,152 @@ export interface TacticoOpenChallengePreview {
   is_own_challenge: boolean;
 }
 
-export interface DailyRewardDay {
-  day: number;
+// --- Monetization: reward slots, login calendar, club pass, season pass,
+// starter offer, cosmetics (backend schemas/monetization.py) ---
+
+export type CosmeticKind = "profile_frame" | "profile_background" | "card_skin";
+
+export interface Cosmetic {
+  id: number;
+  kind: CosmeticKind;
+  name: string;
+  description: string | null;
+  style_key: string;
+  coins_price: number;
+  stars_price: number;
+  is_exclusive: boolean;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface CosmeticCatalogItem extends Cosmetic {
+  owned: boolean;
+  equipped: boolean;
+}
+
+export interface EquippedCosmetics {
+  frame: string | null;
+  background: string | null;
+  card_skin: string | null;
+}
+
+export interface CosmeticCatalog {
+  items: CosmeticCatalogItem[];
+  equipped: EquippedCosmetics;
+  balance: number;
+}
+
+/** What one reward slot contains — shown before claiming or paying. */
+export interface RewardBundle {
   coins: number;
-  free_pack_name: string | null;
-  grants_random_card: boolean;
-  is_claimed: boolean;
-  is_today: boolean;
+  pack_id: number | null;
+  pack_name: string | null;
+  card_rarity: Rarity | null;
+  badge: Badge | null;
+  cosmetic: Cosmetic | null;
 }
 
-export interface DailyRewardCalendar {
-  current_streak: number;
-  already_claimed_today: boolean;
-  days: DailyRewardDay[];
-}
-
-export interface DailyRewardClaimResult {
-  streak_day: number;
-  coins_awarded: number;
+export interface GrantedRewards {
+  coins: number;
+  pack_name: string | null;
+  cards: UserCard[];
+  badge: Badge | null;
+  cosmetic: Cosmetic | null;
   new_balance: number;
-  granted_card: UserCard | null;
-  granted_pack_name: string | null;
+}
+
+export type CalendarDayStatus = "claimed" | "today" | "missed" | "future";
+
+export interface CalendarDay {
+  day: number;
+  date: string;
+  reward: RewardBundle;
+  status: CalendarDayStatus;
+  claim_method: string | null;
+  is_big: boolean;
+}
+
+export interface LoginCalendar {
+  month: string;
+  today: string;
+  days: CalendarDay[];
+  claimed_count: number;
+  days_in_month: number;
+  already_claimed_today: boolean;
+  month_bonus: RewardBundle;
+  month_bonus_claimed: boolean;
+  catchup_coins: number;
+  catchup_stars: number;
+  catchups_left: number;
+}
+
+export interface CalendarClaimResult {
+  day: number;
+  granted: GrantedRewards;
+  month_bonus: GrantedRewards | null;
+  new_balance: number;
+}
+
+export interface ClubPassPerks {
+  daily_coins: number;
+  daily_pack: RewardBundle | null;
+  extra_rewarded_attempts: number;
+  frame: Cosmetic | null;
+  badge: Badge | null;
+  ad_free: boolean;
+}
+
+export interface ClubPass {
+  enabled: boolean;
+  stars_price: number;
+  perks: ClubPassPerks;
+  is_active: boolean;
+  expires_at: string | null;
+  auto_renew: boolean;
+  daily_claimed_today: boolean;
+}
+
+export interface SeasonLevel {
+  level: number;
+  xp_required: number;
+  free: RewardBundle;
+  premium: RewardBundle;
+  reached: boolean;
+  free_claimed: boolean;
+  premium_claimed: boolean;
+}
+
+export interface SeasonPass {
+  enabled: boolean;
+  season_id: number | null;
+  name: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  premium_stars: number;
+  xp: number;
+  level: number;
+  next_level_xp: number | null;
+  is_premium: boolean;
+  levels: SeasonLevel[];
+  claimable: number;
+  locked_premium: number;
+  xp_per_game: number;
+  xp_per_daily_claim: number;
+}
+
+export interface StarterOffer {
+  available: boolean;
+  stars_price: number;
+  contents: RewardBundle;
+  expires_at: string | null;
+  seen: boolean;
+  purchased: boolean;
 }
 
 export interface ProfilePublic {
   id: number;
+  cosmetics?: EquippedCosmetics;
+  club_pass_active?: boolean;
   username: string | null;
   first_name: string | null;
   last_name: string | null;

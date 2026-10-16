@@ -51,6 +51,10 @@ const AdminShopPage = lazy(() => import("@/admin/pages/AdminShopPage"));
 const AdminBroadcastsPage = lazy(() => import("@/admin/pages/AdminBroadcastsPage"));
 const AdminLogPage = lazy(() => import("@/admin/pages/AdminLogPage"));
 const WheelPage = lazy(() => import("@/pages/WheelPage"));
+const ClubPassPage = lazy(() => import("@/pages/ClubPassPage"));
+const SeasonPassPage = lazy(() => import("@/pages/SeasonPassPage"));
+const StylePage = lazy(() => import("@/pages/StylePage"));
+const AdminMonetizationPage = lazy(() => import("@/admin/pages/AdminMonetizationPage"));
 const BlackjackPage = lazy(() => import("@/pages/BlackjackPage"));
 const PacksPage = lazy(() => import("@/pages/PacksPage"));
 const PackOpenPage = lazy(() => import("@/pages/PackOpenPage"));
@@ -225,6 +229,7 @@ export default function App() {
         <Route path="transactions" element={<AdminTransactionsPage />} />
         <Route path="bingo" element={<AdminBingoPage />} />
         <Route path="shop" element={<AdminShopPage />} />
+        <Route path="monetization" element={<AdminMonetizationPage />} />
         <Route path="broadcasts" element={<AdminBroadcastsPage />} />
         <Route path="log" element={<AdminLogPage />} />
       </Route>
@@ -289,6 +294,9 @@ export default function App() {
         <Route path="/clubs/tournament/:id/matches/:matchId" element={<TournamentMatchPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/wheel" element={<WheelPage />} />
+        <Route path="/club-pass" element={<ClubPassPage />} />
+        <Route path="/season" element={<SeasonPassPage />} />
+        <Route path="/style" element={<StylePage />} />
         <Route path="/upgrade" element={<UpgradePage />} />
         <Route path="/bingo" element={<BingoPage />} />
         <Route path="/ranking" element={<RankingPage />} />

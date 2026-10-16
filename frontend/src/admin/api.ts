@@ -10,6 +10,7 @@ import type {
   Coach,
   ClubPack,
   CoinPackage,
+  Cosmetic,
   DiamondUpgradeTier,
   Gift,
   GiftSet,
@@ -46,7 +47,8 @@ import type {
   AdminWheelPrize,
   AdminWheelPrizePool,
   CardCollection,
-  DailyRewardOption,
+  AdminSeason,
+  CalendarTemplateDay,
   MagnateBoardConfig,
   Dashboard,
   GameConfig,
@@ -552,15 +554,37 @@ export async function toggleWheelPrizeActive(id: number): Promise<AdminWheelPriz
   return data;
 }
 
-// --- Daily reward options ---
-export async function fetchDailyRewardOptions(): Promise<DailyRewardOption[]> {
-  const { data } = await api.get<DailyRewardOption[]>("/admin/daily-reward-options");
+// --- «Календарь наград» template ---
+export async function fetchCalendarTemplate(): Promise<CalendarTemplateDay[]> {
+  const { data } = await api.get<CalendarTemplateDay[]>("/admin/login-calendar");
   return data;
 }
-export async function updateDailyRewardOptions(
-  options: Omit<DailyRewardOption, "id">[],
-): Promise<DailyRewardOption[]> {
-  const { data } = await api.put<DailyRewardOption[]>("/admin/daily-reward-options", { options });
+export async function updateCalendarTemplate(days: CalendarTemplateDay[]): Promise<CalendarTemplateDay[]> {
+  const { data } = await api.put<CalendarTemplateDay[]>("/admin/login-calendar", { days });
+  return data;
+}
+
+// --- Cosmetics & seasons ---
+export async function fetchAdminCosmetics(): Promise<Cosmetic[]> {
+  const { data } = await api.get<Cosmetic[]>("/admin/cosmetics");
+  return data;
+}
+export async function saveAdminCosmetic(item: Omit<Cosmetic, "id"> & { id?: number }): Promise<Cosmetic> {
+  const { id, ...body } = item;
+  const { data } = id
+    ? await api.put<Cosmetic>(`/admin/cosmetics/${id}`, body)
+    : await api.post<Cosmetic>("/admin/cosmetics", body);
+  return data;
+}
+export async function fetchAdminSeasons(): Promise<AdminSeason[]> {
+  const { data } = await api.get<AdminSeason[]>("/admin/seasons");
+  return data;
+}
+export async function saveAdminSeason(season: AdminSeason): Promise<AdminSeason> {
+  const { id, players: _players, premium_players: _premium, ...body } = season;
+  const { data } = id
+    ? await api.put<AdminSeason>(`/admin/seasons/${id}`, body)
+    : await api.post<AdminSeason>("/admin/seasons", body);
   return data;
 }
 

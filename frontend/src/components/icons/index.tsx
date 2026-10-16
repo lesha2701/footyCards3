@@ -498,3 +498,12 @@ export function IconChat(props: IconProps) {
     </IconBase>
   );
 }
+
+export function IconTicket(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 8a2 2 0 0 0 2-2h12a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H6a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4Z" />
+      <line x1="14" y1="7" x2="14" y2="17" strokeDasharray="1.5 2" />
+    </IconBase>
+  );
+}

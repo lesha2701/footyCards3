@@ -8,30 +8,11 @@ import { claimTask } from "@/api/tasks";
 import { Skeleton } from "@/components/common/Skeleton";
 import { IconCheck, IconClock, IconGift, IconPack, IconTarget, type IconProps } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
+import { grantedExtras, streakLine } from "@/lib/rewards";
 import { hapticNotify } from "@/lib/telegram";
 import { formatClock, useTodayState } from "@/lib/today";
 import { useAuthStore } from "@/store/authStore";
-import type { DailyRewardCalendar, PackOpenResult, Task, WheelStatus } from "@/types";
-
-function dayRewardLabel(day: DailyRewardCalendar["days"][number] | undefined): string | null {
-  if (!day) return null;
-  if (day.free_pack_name) return `пак «${day.free_pack_name}»`;
-  if (day.grants_random_card) return `${day.coins} монет + карточка`;
-  return `${day.coins} монет`;
-}
-
-/** "День 3 из 7 · завтра: пак «Эпик»" — the streak is the reason to come
- * back tomorrow, so it is shown where the reward is collected. */
-function streakLine(calendar: DailyRewardCalendar, readyToday: boolean): string {
-  const total = calendar.days.length;
-  const todayIdx = calendar.days.findIndex((d) => d.is_today);
-  const today = todayIdx >= 0 ? calendar.days[todayIdx] : undefined;
-  const tomorrow = todayIdx >= 0 ? calendar.days[(todayIdx + 1) % Math.max(total, 1)] : undefined;
-  const progress = today && total ? `День ${today.day} из ${total}` : `День ${calendar.current_streak}`;
-  const reward = readyToday ? dayRewardLabel(today) : dayRewardLabel(tomorrow);
-  if (!reward) return readyToday ? progress : "Уже забрано · завтра новая";
-  return readyToday ? `${progress} · сегодня: ${reward}` : `Забрано · завтра: ${reward}`;
-}
+import type { PackOpenResult, Task, WheelStatus } from "@/types";
 
 /** Everything the player can collect today in one place: daily reward,
  * finished tasks, free pack and wheel spins — with one "Забрать всё" button
@@ -59,10 +40,10 @@ export default function TodayCard({ wheel }: { wheel?: WheelStatus | null }) {
       const packs: PackOpenResult[] = [];
       if (daily) {
         const r = await claimDailyReward();
-        coins += r.coins_awarded;
+        coins += r.granted.coins + (r.month_bonus?.coins ?? 0);
         balance = r.new_balance;
-        if (r.granted_card) extras.push(`карточка ${r.granted_card.player.display_name}`);
-        if (r.granted_pack_name) extras.push(`пак «${r.granted_pack_name}»`);
+        extras.push(...grantedExtras(r.granted));
+        if (r.month_bonus) extras.push("бонус за месяц", ...grantedExtras(r.month_bonus));
       }
       for (const task of tasks) {
         const r = await claimTask(task.user_task_id);
@@ -142,7 +123,7 @@ export default function TodayCard({ wheel }: { wheel?: WheelStatus | null }) {
         {calendar && (
           <TodayRow
             Icon={IconGift}
-            title="Ежедневная награда"
+            title="Календарь наград"
             subtitle={streakLine(calendar, dailyReady)}
             ready={dailyReady}
             done={!dailyReady}

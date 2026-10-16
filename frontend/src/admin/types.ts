@@ -114,6 +114,26 @@ export interface AdminActionLog {
 }
 
 export interface GameConfig {
+  calendar_catchup_coins: number;
+  calendar_catchup_stars: number;
+  calendar_catchup_max_per_month: number;
+  club_pass_enabled: boolean;
+  club_pass_stars: number;
+  club_pass_daily_coins: number;
+  club_pass_daily_pack_id: number | null;
+  club_pass_extra_rewarded_attempts: number;
+  club_pass_frame_cosmetic_id: number | null;
+  club_pass_badge_id: number | null;
+  club_pass_ad_free: boolean;
+  season_pass_enabled: boolean;
+  season_xp_per_game: number;
+  season_xp_per_daily_claim: number;
+  starter_offer_enabled: boolean;
+  starter_offer_hours: number;
+  starter_offer_stars: number;
+  starter_offer_coins: number;
+  starter_offer_pack_id: number | null;
+  starter_offer_cosmetic_id: number | null;
   club_creation_cost_coins: number;
   club_daily_reward_coins: number;
   club_tournament_cooldown_hours: number;
@@ -612,13 +632,38 @@ export interface AdminWheelPoolsSummary {
   blackjack_expected_value_coins: number;
 }
 
-export interface DailyRewardOption {
-  id: number;
-  day: number;
-  option_index: number;
+/** One reward slot (calendar day, season level track): any mix of these. */
+export interface RewardBundleInput {
   coins: number;
-  free_pack_slug: string | null;
-  grants_random_card: boolean;
+  pack_id: number | null;
+  card_rarity: Rarity | null;
+  badge_id: number | null;
+  cosmetic_id: number | null;
+}
+
+export const EMPTY_BUNDLE: RewardBundleInput = { coins: 0, pack_id: null, card_rarity: null, badge_id: null, cosmetic_id: null };
+
+export interface CalendarTemplateDay extends RewardBundleInput {
+  day: number;
+}
+
+export interface AdminSeasonLevel {
+  level: number;
+  xp_required: number;
+  free: RewardBundleInput;
+  premium: RewardBundleInput;
+}
+
+export interface AdminSeason {
+  id?: number;
+  name: string;
+  starts_at: string;
+  ends_at: string;
+  premium_stars: number;
+  is_active: boolean;
+  levels: AdminSeasonLevel[];
+  players?: number;
+  premium_players?: number;
 }
 
 export interface TaskDefinition {
