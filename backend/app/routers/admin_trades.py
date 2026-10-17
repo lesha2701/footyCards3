@@ -11,7 +11,7 @@ from app.core.pagination import Page, PageParams
 from app.core.timeutil import app_timezone
 from app.database import get_db
 from app.models.enums import TradeStatus
-from app.models.trade import TradeOffer
+from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.user import User
 from app.schemas.trade import TradeOfferOut
 from app.services.admin_log_service import log_action
@@ -31,12 +31,24 @@ async def list_all_trades(
     username: Optional[str] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    coins_min: Optional[int] = None,
+    coins_max: Optional[int] = None,
+    coins_only: bool = False,
     params: PageParams = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
     """All trade offers, newest first, paginated. date_from / date_to are
-    inclusive local calendar days (settings.timezone) on created_at."""
+    inclusive local calendar days (settings.timezone) on created_at.
+    coins_min / coins_max bound the coins in the offer (both sides summed);
+    coins_only keeps offers without a single card (pure coin transfers)."""
     query = select(TradeOffer)
+    coins_total = TradeOffer.sender_coins + TradeOffer.receiver_coins
+    if coins_min is not None:
+        query = query.where(coins_total >= coins_min)
+    if coins_max is not None:
+        query = query.where(coins_total <= coins_max)
+    if coins_only:
+        query = query.where(~select(TradeOfferCard.id).where(TradeOfferCard.trade_offer_id == TradeOffer.id).exists())
     if status:
         query = query.where(TradeOffer.status == status)
     if date_from:

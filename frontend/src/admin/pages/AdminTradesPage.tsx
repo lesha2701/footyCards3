@@ -22,14 +22,19 @@ export default function AdminTradesPage() {
   const [username, setUsername] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [coinsMin, setCoinsMin] = useState("");
+  const [coinsMax, setCoinsMax] = useState("");
+  const [coinsOnly, setCoinsOnly] = useState(false);
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   // Any filter change starts again from the first page.
-  useEffect(() => setPage(1), [status, username, dateFrom, dateTo]);
+  useEffect(() => setPage(1), [status, username, dateFrom, dateTo, coinsMin, coinsMax, coinsOnly]);
+  const toNumber = (v: string) => (v.trim() === "" ? undefined : Math.max(0, Number(v)));
   const { data, isLoading } = useQuery({
-    queryKey: ["admin-trades", status, username, dateFrom, dateTo, page],
+    queryKey: ["admin-trades", status, username, dateFrom, dateTo, coinsMin, coinsMax, coinsOnly, page],
     queryFn: () => fetchAdminTrades({
       status: status === "all" ? undefined : status, username, date_from: dateFrom, date_to: dateTo,
+      coins_min: toNumber(coinsMin), coins_max: toNumber(coinsMax), coins_only: coinsOnly,
       page, page_size: PAGE_SIZE,
     }),
     placeholderData: keepPreviousData,
@@ -116,6 +121,48 @@ export default function AdminTradesPage() {
             className="rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300"
           >
             Все даты
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1 text-caption text-slate-400">
+          Монет от
+          <input
+            type="number" min={0} inputMode="numeric" value={coinsMin} placeholder="0"
+            onChange={(e) => setCoinsMin(e.target.value)}
+            className="w-32 rounded-lg bg-bg-surface px-3 py-2 text-sm text-slate-100 outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-caption text-slate-400">
+          Монет до
+          <input
+            type="number" min={0} inputMode="numeric" value={coinsMax} placeholder="∞"
+            onChange={(e) => setCoinsMax(e.target.value)}
+            className="w-32 rounded-lg bg-bg-surface px-3 py-2 text-sm text-slate-100 outline-none"
+          />
+        </label>
+        {[["≥ 100 000", "100000"], ["≥ 1 000 000", "1000000"]].map(([label, value]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => { setCoinsMin(value); setCoinsMax(""); }}
+            className="rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300"
+          >
+            {label}
+          </button>
+        ))}
+        <label className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300">
+          <input type="checkbox" checked={coinsOnly} onChange={(e) => setCoinsOnly(e.target.checked)} />
+          Только монеты (без карт)
+        </label>
+        {(coinsMin || coinsMax || coinsOnly) && (
+          <button
+            type="button"
+            onClick={() => { setCoinsMin(""); setCoinsMax(""); setCoinsOnly(false); }}
+            className="rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300"
+          >
+            Любая сумма
           </button>
         )}
       </div>

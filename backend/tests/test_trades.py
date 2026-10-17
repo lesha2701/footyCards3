@@ -375,3 +375,31 @@ async def test_admin_trades_filter_by_date_and_paginate(client, db_session, bot_
     assert page1["total"] == 3 and page1["pages"] == 2
     assert len(page1["items"]) == 2 and len(page2["items"]) == 1
     assert {t["id"] for t in page1["items"] + page2["items"]} == set(ids)
+
+
+async def test_admin_trades_filter_by_coins(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    rich, rich_headers = await _register(client, db_session, 730030, bot_token, username="rich_sender")
+    other, _ = await _register(client, db_session, 730031, bot_token, username="coins_receiver")
+    rich.balance = 2_000_000
+    await db_session.commit()
+
+    big = await client.post("/api/v1/trades/offers", headers=rich_headers,
+                            json={"receiver_id": other.id, "sender_coins": 1_000_000})
+    small = await client.post("/api/v1/trades/offers", headers=rich_headers,
+                              json={"receiver_id": other.id, "receiver_coins": 50})
+    player = await create_player(db_session, rarity=Rarity.common)
+    card = await create_user_card(db_session, rich.id, player.id, CardSource.seed)
+    await db_session.commit()
+    with_card = await client.post("/api/v1/trades/offers", headers=rich_headers,
+                                  json={"receiver_id": other.id, "offered_card_ids": [card.id], "sender_coins": 500_000})
+
+    def ids(resp):
+        return {t["id"] for t in resp.json()["items"]}
+
+    huge = await client.get("/api/v1/admin/trades", headers=auth, params={"coins_min": 100_000})
+    assert ids(huge) == {big.json()["id"], with_card.json()["id"]}
+    pure = await client.get("/api/v1/admin/trades", headers=auth, params={"coins_min": 100_000, "coins_only": True})
+    assert ids(pure) == {big.json()["id"]}
+    cheap = await client.get("/api/v1/admin/trades", headers=auth, params={"coins_max": 100})
+    assert ids(cheap) == {small.json()["id"]}

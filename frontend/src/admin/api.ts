@@ -597,6 +597,11 @@ export interface AdminTradesQuery {
   /** Inclusive local days, YYYY-MM-DD. */
   date_from?: string;
   date_to?: string;
+  /** Coins in the offer, both sides summed. */
+  coins_min?: number;
+  coins_max?: number;
+  /** Only offers without cards (pure coin transfers). */
+  coins_only?: boolean;
   page: number;
   page_size?: number;
 }
@@ -605,7 +610,8 @@ export async function fetchAdminTrades(q: AdminTradesQuery): Promise<Page<TradeO
   const { data } = await api.get<Page<TradeOffer>>("/admin/trades", {
     params: {
       status: q.status, username: q.username || undefined, date_from: q.date_from || undefined,
-      date_to: q.date_to || undefined, page: q.page, page_size: q.page_size ?? 50,
+      date_to: q.date_to || undefined, coins_min: q.coins_min, coins_max: q.coins_max,
+      coins_only: q.coins_only || undefined, page: q.page, page_size: q.page_size ?? 50,
     },
   });
   return data;
