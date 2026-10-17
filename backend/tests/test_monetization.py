@@ -823,3 +823,17 @@ async def test_everything_bought_for_stars_adds_status(client, db_session, bot_t
     body = (await client.get("/api/v1/lifestyle", headers=headers)).json()
     assert body["prestige"] == 122  # +30 for this season's premium track
     assert (await client.get("/api/v1/club-pass", headers=headers)).json()["perks"]["status"] == 50
+
+
+async def test_admin_uploads_artifact_image(client, bot_token, monkeypatch, tmp_path):
+    from app.services import image_service
+
+    monkeypatch.setattr(image_service, "ARTIFACTS_DIR", tmp_path)
+    a = await _artifact(client, bot_token)
+    auth = await _admin(client, bot_token)
+    resp = await client.post(
+        f"/api/v1/admin/artifacts/{a['id']}/image", headers=auth,
+        files={"file": ("shirt.gif", b"GIF89a" + b"\x00" * 20, "image/gif")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["image_path"].startswith("artifacts/uploads/")

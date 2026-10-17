@@ -39,6 +39,7 @@ MAX_SIDE = {
     "card_collections": 768,
     "gift_sets": 512,
     "lifestyle": 512,
+    "artifacts": 512,
     "leagues": 384,
     "badges": 256,
     "trophies": 256,
