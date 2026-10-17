@@ -49,7 +49,7 @@ const baseView: MyPlayerView = {
     streak: 3, streak_days: 7, streak_tokens: 1, streak_left: 4, freshness_bonus: 20,
   },
   cosmetics: {
-    owned: [], accessory: null, background: null, effect: null,
+    owned: [], accessory: null, background: null, effect: null, hair: null,
     catalog: [
       { code: "headband", kind: "accessory", name: "Повязка на голову", price: 300, stars_price: 0, owned: false },
       { code: "fx_fire", kind: "effect", name: "Эффект «Пламя»", price: 0, stars_price: 75, owned: false },
@@ -216,5 +216,18 @@ describe("MyPlayerPage", () => {
     expect(screen.getByTestId("duel-score")).toHaveTextContent("1:0");
     expect(screen.getByText("+30 монет")).toBeInTheDocument();
     vi.useRealTimers();
+  });
+});
+
+describe("premium hairstyles", () => {
+  it("draws the Neymar, Ronaldo and Pogba styles instead of the free hair", async () => {
+    const { default: PlayerAvatar } = await import("@/components/myPlayer/PlayerAvatar");
+    const base = { skin: 0, hair: 1, hair_color: 0, beard: 0, eye_color: 0, kit: 0, kit_pattern: 0 };
+    const { container, rerender } = render(<PlayerAvatar appearance={base} />);
+    expect(container.querySelector("[id^='ney']")).not.toBeNull();  // gradients always defined
+    for (const hair of [14, 15, 16]) {
+      rerender(<PlayerAvatar appearance={{ ...base, hair }} accessory="aviators" />);
+      expect(container.innerHTML).toContain(hair === 15 ? "#241811" : hair === 14 ? "url(#ney" : "url(#pog");
+    }
   });
 });

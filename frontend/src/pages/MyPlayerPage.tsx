@@ -112,10 +112,15 @@ function Overview({
     }
   };
   // The hero card wears what is being tried on in «Раздевалка».
-  const shown = useMemo(
-    () => (tab === "style" ? { ...player, ...preview } : player),
-    [player, preview, tab],
-  );
+  const shown = useMemo(() => {
+    if (tab !== "style") return player;
+    const { hair, ...rest } = preview;
+    const hairIndex = hair ? view.cosmetics.catalog.find((c) => c.code === hair)?.hair_index : null;
+    return {
+      ...player, ...rest,
+      appearance: hairIndex != null ? { ...player.appearance, hair: hairIndex } : player.appearance,
+    };
+  }, [player, preview, tab, view.cosmetics.catalog]);
   const train = useMutation({
     mutationFn: ({ attr, points }: { attr: MyPlayerAttr; points: number }) => trainMyPlayer(attr, points),
     onSuccess: (next) => {

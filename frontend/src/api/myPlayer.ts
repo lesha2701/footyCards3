@@ -37,7 +37,7 @@ export interface MyPlayer {
   country?: string | null;
 }
 
-export type MyPlayerCosmeticKind = "accessory" | "background" | "effect";
+export type MyPlayerCosmeticKind = "accessory" | "background" | "effect" | "hair";
 export type MyPlayerDrill = "shot" | "pass" | "tackle" | "save";
 
 export interface MyPlayerTrophy {
@@ -96,6 +96,10 @@ export interface MyPlayerCosmeticItem {
   price: number;
   stars_price: number;
   owned: boolean;
+  /** «Статус» the item adds (premium style items). */
+  status?: number;
+  /** Premium hairstyle: the appearance hair index it sets. */
+  hair_index?: number | null;
 }
 
 export interface MyPlayerLeaderboardEntry {
@@ -164,6 +168,7 @@ export interface MyPlayerView {
     accessory: string | null;
     background: string | null;
     effect: string | null;
+    hair: string | null;
     catalog: MyPlayerCosmeticItem[];
   };
   freshness: {

@@ -261,13 +261,16 @@ class MyPlayerTrainingStartOut(BaseModel):
 
 class MyPlayerCosmeticItemOut(BaseModel):
     code: str
-    # accessory | background | effect
+    # accessory | background | effect | hair
     kind: str
     name: str
     # Coins / Telegram Stars; 0 = not sold for that currency.
     price: int
     stars_price: int = 0
     owned: bool
+    # «Статус» it adds; premium hairstyle → the appearance hair index it sets.
+    status: int = 0
+    hair_index: Optional[int] = None
 
 
 class MyPlayerCosmeticsOut(BaseModel):
@@ -275,6 +278,7 @@ class MyPlayerCosmeticsOut(BaseModel):
     accessory: Optional[str] = None
     background: Optional[str] = None
     effect: Optional[str] = None
+    hair: Optional[str] = None
     catalog: list[MyPlayerCosmeticItemOut]
 
 

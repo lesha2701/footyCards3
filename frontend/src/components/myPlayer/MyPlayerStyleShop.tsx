@@ -104,7 +104,8 @@ export default function MyPlayerStyleShop({ view, player, preview, onPreview, on
                       className="relative aspect-[5/6] w-full overflow-hidden"
                     >
                       <PlayerAvatar
-                        appearance={player.appearance}
+                        appearance={kind === "hair" && item.hair_index != null
+                          ? { ...player.appearance, hair: item.hair_index } : player.appearance}
                         accessory={kind === "accessory" ? item.code : player.accessory}
                         backdrop={kind === "background" ? item.code : player.background}
                         className="h-full w-full"
@@ -116,6 +117,7 @@ export default function MyPlayerStyleShop({ view, player, preview, onPreview, on
                     </button>
                     <div className="flex flex-1 flex-col p-1.5">
                       <p className="line-clamp-2 min-h-[2rem] text-micro font-semibold leading-tight text-ink-chalk">{item.name}</p>
+                      {!!item.status && <p className="text-micro font-semibold text-amber-300">+{item.status} статуса</p>}
                       {item.owned ? (
                         <button
                           disabled={busy}

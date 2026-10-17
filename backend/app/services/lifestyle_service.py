@@ -75,12 +75,19 @@ async def _owned(db: AsyncSession, user_id: int) -> dict[int, UserLifestyleItem]
     return {r.item_id: r for r in rows}
 
 
+async def cosmetic_prestige(db: AsyncSession, user_id: int) -> int:
+    """«Статус» from premium «Раздевалка» items (hairstyles, accessories)."""
+    from app.services.my_player_service import cosmetic_status, get_my_player
+
+    return cosmetic_status(await get_my_player(db, user_id))
+
+
 async def prestige_of(db: AsyncSession, user_id: int) -> int:
     return int((await db.execute(
         select(func.coalesce(func.sum(LifestyleItem.prestige), 0))
         .join(UserLifestyleItem, UserLifestyleItem.item_id == LifestyleItem.id)
         .where(UserLifestyleItem.user_id == user_id)
-    )).scalar_one())
+    )).scalar_one()) + await cosmetic_prestige(db, user_id)
 
 
 async def effects_of(db: AsyncSession, user_id: int) -> dict[str, int]:
@@ -114,7 +121,8 @@ async def catalog(db: AsyncSession, user: User) -> dict:
     return {
         "categories": [{"code": code, "label": label} for code, label in CATEGORIES.items()],
         "items": [item_out(i, owned.get(i.id), now) for i in items if i.is_active or i.id in owned],
-        "prestige": sum(i.prestige for i in items if i.id in owned),
+        "prestige": sum(i.prestige for i in items if i.id in owned) + await cosmetic_prestige(db, user.id),
+        "style_prestige": await cosmetic_prestige(db, user.id),
         "balance": user.balance,
         "effects": [
             {"effect": code, "value": totals[code], "label": EFFECTS[code].format(v=totals[code])}
@@ -127,7 +135,10 @@ async def catalog(db: AsyncSession, user: User) -> dict:
 async def public_view(db: AsyncSession, user_id: int) -> dict:
     owned = await _owned(db, user_id)
     items = [r.item for r in sorted(owned.values(), key=lambda r: (-r.item.prestige, r.item_id))]
-    return {"items": [item_out(i, owned[i.id]) for i in items], "prestige": sum(i.prestige for i in items)}
+    return {
+        "items": [item_out(i, owned[i.id]) for i in items],
+        "prestige": sum(i.prestige for i in items) + await cosmetic_prestige(db, user_id),
+    }
 
 
 async def _lock_item(db: AsyncSession, item_id: int) -> LifestyleItem:

@@ -100,6 +100,38 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
     10: <circle cx="100" cy="34" r="14" fill={hairFill} />,
   };
 
+  // Premium «Раздевалка» hairstyles (indexes 14+, backend PREMIUM_HAIR) —
+  // fixed colours, whatever hair_color is picked.
+  const premiumHair: Record<number, JSX.Element> = {
+    // 14 — Неймар: shaved sides, platinum mohawk.
+    14: (
+      <>
+        {stubble("M58 100 Q56 60 100 56 Q144 60 142 100 Q132 80 100 78 Q68 80 58 100Z", "ney-sides")}
+        <path d="M80 76 Q76 34 94 22 Q102 14 108 22 Q126 34 120 76 Q100 66 80 76Z" fill={`url(#ney${id})`} />
+        <path d="M90 64 Q92 36 102 24 M100 66 Q104 40 112 30" stroke="#fffbea" strokeWidth="1.6" fill="none" opacity="0.8" strokeLinecap="round" />
+      </>
+    ),
+    // 15 — Роналду: short slick with a side part and gel shine.
+    15: (
+      <>
+        <path d="M57 100 Q52 46 100 40 Q148 46 143 100 Q138 70 124 62 Q114 52 84 56 Q66 64 57 100Z" fill="#241811" />
+        <path d="M84 56 Q96 46 118 50" stroke="#5c4636" strokeWidth="2" fill="none" />
+        <path d="M74 64 Q92 50 112 48 M118 52 Q132 56 138 70" stroke="#ffffff" strokeOpacity="0.35" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+        <path d="M80 60 L88 52" stroke="#000" strokeOpacity="0.5" strokeWidth="1.4" />
+      </>
+    ),
+    // 16 — Погба: skin fade with a shaved line, dyed flat top.
+    16: (
+      <>
+        {stubble("M58 100 Q56 62 100 58 Q144 62 142 100 Q132 82 100 80 Q68 82 58 100Z", "pog-sides")}
+        <path d="M66 80 L68 46 Q100 32 132 46 L134 80 Q100 70 66 80Z" fill={`url(#pog${id})`} />
+        <path d="M62 88 L74 82 M126 82 L138 88" stroke={sk3} strokeWidth="1.6" />
+        <path d="M74 48 Q100 38 126 48" stroke="#fff" strokeOpacity="0.35" strokeWidth="2" fill="none" />
+      </>
+    ),
+  };
+  const premium = premiumHair[a.hair];
+
   const hairFront: Record<number, JSX.Element | null> = {
     0: (
       <>
@@ -267,6 +299,16 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
           <stop offset="0.5" stopColor={hair} />
           <stop offset="1" stopColor={h2} />
         </linearGradient>
+        <linearGradient id={`ney${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff7d1" />
+          <stop offset="0.6" stopColor="#f2d675" />
+          <stop offset="1" stopColor="#b8913a" />
+        </linearGradient>
+        <linearGradient id={`pog${id}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#a5f3fc" />
+          <stop offset="0.5" stopColor="#22d3ee" />
+          <stop offset="1" stopColor="#7c3aed" />
+        </linearGradient>
         <linearGradient id={`kit${id}`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor={shade(kit, 0.22)} />
           <stop offset="0.55" stopColor={kit} />
@@ -330,7 +372,7 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
           </g>
         </>
       )}
-      {hairBack[a.hair]}
+      {!premium && hairBack[a.hair]}
 
       {/* torso + kit */}
       <g clipPath={`url(#torso${id})`}>
@@ -367,6 +409,15 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
 
       {/* neck, ears, head */}
       <path d="M80 126 L80 166 Q100 182 120 166 L120 126Z" fill={`url(#neck${id})`} />
+      {accessory === "diamond_chain" && (
+        <>
+          <path d="M78 148 Q100 180 122 148" fill="none" stroke="#e5e7eb" strokeWidth="3.4" strokeDasharray="2.5 1.2" />
+          <path d="M94 166 L100 158 L106 166 L100 176Z" fill="#a5f3fc" stroke="#e0f2fe" strokeWidth="1" />
+          {[[86, 162], [114, 162], [100, 152]].map(([x, y]) => (
+            <path key={`${x}-${y}`} d={`M${x} ${y - 3} L${x + 1} ${y} L${x} ${y + 3} L${x - 1} ${y}Z`} fill="#fff" />
+          ))}
+        </>
+      )}
       {accessory === "chain" && (
         <>
           <path d="M80 150 Q100 176 120 150" fill="none" stroke="#f5c542" strokeWidth="2.6" strokeDasharray="3 1.5" />
@@ -404,7 +455,7 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
         <path d="M88 134 Q100 141 112 134 Q100 137 88 134Z" fill="#9b4a3a" stroke="#7a3428" strokeWidth="1.5" strokeLinejoin="round" />
       )}
 
-      {hairFront[a.hair] ?? null}
+      {premium ?? hairFront[a.hair] ?? null}
 
       {accessory === "earring" && (
         <>
@@ -422,6 +473,25 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
             </g>
           ))}
           <path d="M93 97 Q100 93 107 97" stroke="#18181b" strokeWidth="3" fill="none" />
+        </>
+      )}
+      {accessory === "aviators" && (
+        <>
+          <path d="M58 94 L70 94 M130 94 L142 94" stroke="#d4a017" strokeWidth="2.5" />
+          {[81, 119].map((x) => (
+            <g key={x}>
+              <path d={`M${x - 12} 91 Q${x} 88 ${x + 12} 91 Q${x + 12} 106 ${x} 107 Q${x - 12} 106 ${x - 12} 91Z`}
+                fill={`url(#avi${id})`} stroke="#d4a017" strokeWidth="2" />
+              <path d={`M${x - 7} 93 Q${x - 3} 91 ${x + 2} 92`} stroke="#fff" strokeWidth="1.4" opacity="0.6" fill="none" />
+            </g>
+          ))}
+          <path d="M93 92 Q100 89 107 92" stroke="#d4a017" strokeWidth="2.2" fill="none" />
+          <defs>
+            <linearGradient id={`avi${id}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#1f2937" />
+              <stop offset="1" stopColor="#7c2d12" />
+            </linearGradient>
+          </defs>
         </>
       )}
       {accessory === "headphones" && (

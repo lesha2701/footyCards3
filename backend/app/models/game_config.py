@@ -410,6 +410,7 @@ class GameConfig(TimestampMixin, Base):
         default=lambda: {
             "crown": 150, "bg_galaxy": 75, "bg_champions": 100,
             "fx_sparkle": 50, "fx_fire": 75, "fx_lightning": 100,
+            "hair_neymar": 120, "hair_cr7": 100, "hair_pogba": 90, "aviators": 60, "diamond_chain": 90,
         },
     )
     # «Карьера игрока»: every completed club objective pays objective_coins

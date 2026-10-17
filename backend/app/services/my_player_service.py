@@ -105,8 +105,19 @@ COSMETICS = {
     "fx_sparkle": ("effect", "Эффект «Искры»"),
     "fx_fire": ("effect", "Эффект «Пламя»"),
     "fx_lightning": ("effect", "Эффект «Молния»"),
+    "aviators": ("accessory", "Очки-авиаторы звезды"),
+    "diamond_chain": ("accessory", "Бриллиантовая цепь"),
+    "hair_neymar": ("hair", "Прическа Неймара"),
+    "hair_cr7": ("hair", "Укладка Роналду"),
+    "hair_pogba": ("hair", "Цветной фейд Погба"),
 }
-COSMETIC_KINDS = ("accessory", "background", "effect")
+COSMETIC_KINDS = ("accessory", "background", "effect", "hair")
+# Premium hairstyles: wearing one sets appearance["hair"] to this index
+# (PlayerAvatar draws 14+ as these styles); the free choices stay 0..13.
+PREMIUM_HAIR = {"hair_neymar": 14, "hair_cr7": 15, "hair_pogba": 16}
+# «Статус» from owned style items — added to the «Имущество» status
+# (lifestyle_service.cosmetic_prestige).
+COSMETIC_STATUS = {"hair_neymar": 30, "hair_cr7": 25, "hair_pogba": 20, "aviators": 15, "diamond_chain": 20}
 
 TRAINING_MAX_HITS = 3
 # A run must take at least this long (three timed attempts) and be finished
@@ -351,7 +362,25 @@ def cosmetics_of(mp: MyPlayer) -> dict:
     for kind in COSMETIC_KINDS:
         code = raw.get(kind)
         out[kind] = code if code in owned and COSMETICS[code][0] == kind else None
+    # The free hairstyle to go back to when a premium one is taken off.
+    out["base_hair"] = int(raw.get("base_hair") or 0)
     return out
+
+
+def _apply_hair(mp: MyPlayer, code: Optional[str], state: dict) -> None:
+    """Puts a premium hairstyle on (or back to the free one)."""
+    appearance = dict(mp.appearance or {})
+    current = int(appearance.get("hair") or 0)
+    if current < APPEARANCE_OPTIONS["hair"]:
+        state["base_hair"] = current
+    appearance["hair"] = PREMIUM_HAIR[code] if code else state.get("base_hair", 0)
+    mp.appearance = appearance
+
+
+def cosmetic_status(mp: Optional[MyPlayer]) -> int:
+    if mp is None:
+        return 0
+    return sum(COSMETIC_STATUS.get(c, 0) for c in cosmetics_of(mp)["owned"])
 
 
 # --- skill ---------------------------------------------------------------------
@@ -640,7 +669,9 @@ def _training_view(mp: Optional[MyPlayer], config) -> dict:
 
 
 def _cosmetics_view(mp: Optional[MyPlayer], config) -> dict:
-    state = cosmetics_of(mp) if mp else {"owned": [], "accessory": None, "background": None, "effect": None}
+    state = cosmetics_of(mp) if mp else {
+        "owned": [], "accessory": None, "background": None, "effect": None, "hair": None, "base_hair": 0,
+    }
     coins = config.my_player_cosmetic_prices or {}
     stars = config.my_player_cosmetic_stars_prices or {}
     return {
@@ -649,6 +680,7 @@ def _cosmetics_view(mp: Optional[MyPlayer], config) -> dict:
             {
                 "code": code, "kind": kind, "name": name, "price": int(coins.get(code) or 0),
                 "stars_price": int(stars.get(code) or 0), "owned": code in state["owned"],
+                "status": COSMETIC_STATUS.get(code, 0), "hair_index": PREMIUM_HAIR.get(code),
             }
             for code, (kind, name) in COSMETICS.items()
             if code in state["owned"] or int(coins.get(code) or 0) > 0 or int(stars.get(code) or 0) > 0
@@ -704,7 +736,18 @@ async def update(
     if number is not None:
         mp.number = clean_number(number)
     if appearance is not None:
-        mp.appearance = clean_appearance(appearance)
+        state = cosmetics_of(mp)
+        premium = PREMIUM_HAIR.get(state["hair"]) if state["hair"] else None
+        incoming = dict(appearance)
+        keep_premium = premium is not None and incoming.get("hair") == premium
+        if keep_premium:
+            incoming["hair"] = state["base_hair"]  # validate the rest, keep the premium style on
+        mp.appearance = clean_appearance(incoming)
+        if keep_premium:
+            mp.appearance = {**mp.appearance, "hair": premium}
+        else:
+            # A free hairstyle picked in the constructor takes the premium one off.
+            mp.cosmetics = {**state, "hair": None, "base_hair": mp.appearance["hair"]}
     if country_set:
         from app.services.player_career_cups import active_cup
 
@@ -943,6 +986,8 @@ def _give_cosmetic(mp: MyPlayer, code: str) -> None:
     """Adds `code` to the owned set and puts it on."""
     state = cosmetics_of(mp)
     owned = state["owned"] if code in state["owned"] else [*state["owned"], code]
+    if COSMETICS[code][0] == "hair":
+        _apply_hair(mp, code, state)
     mp.cosmetics = {**state, "owned": owned, COSMETICS[code][0]: code}
 
 
@@ -978,6 +1023,8 @@ async def equip_cosmetic(db: AsyncSession, user: User, kind: str, code: Optional
     state = cosmetics_of(mp)
     if code is not None and (code not in state["owned"] or COSMETICS[code][0] != kind):
         raise ConflictError("Сначала купи этот предмет")
+    if kind == "hair":
+        _apply_hair(mp, code, state)
     mp.cosmetics = {**state, kind: code}
     await db.commit()
     return await get_view(db, user)

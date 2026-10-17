@@ -35,6 +35,7 @@ export const ATTR_SHORT: Record<MyPlayerAttr, string> = { atk: "АТК", def: "�
 export const DRILL_ICONS: Record<MyPlayerDrill, string> = { shot: "⚽", pass: "🎯", tackle: "🛡️", save: "🧤" };
 
 export const COSMETIC_GROUPS: { kind: MyPlayerCosmeticKind; title: string }[] = [
+  { kind: "hair", title: "Прически звёзд" },
   { kind: "accessory", title: "Аксессуары" },
   { kind: "background", title: "Фон карточки" },
   { kind: "effect", title: "Эффект карточки" },
