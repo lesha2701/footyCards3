@@ -1001,6 +1001,8 @@ export interface Cosmetic {
   is_exclusive: boolean;
   is_active: boolean;
   sort_order: number;
+  /** «Статус» of «Мой игрок» while owned. */
+  status: number;
 }
 
 export interface CosmeticCatalogItem extends Cosmetic {
@@ -1074,6 +1076,8 @@ export interface CalendarClaimResult {
 }
 
 export interface ClubPassPerks {
+  /** «Статус» of «Мой игрок» while the pass is active. */
+  status: number;
   daily_coins: number;
   daily_pack: RewardBundle | null;
   /** Granted with every paid month. */
@@ -1122,6 +1126,7 @@ export interface SeasonPass {
   locked_premium: number;
   xp_per_game: number;
   xp_per_daily_claim: number;
+  premium_status: number;
 }
 
 export type ArtifactTarget = "club" | "my_player";
@@ -1151,6 +1156,8 @@ export interface ArtifactInfo {
   active_label: string;
   coins_price: number;
   stars_price: number;
+  /** «Статус» of «Мой игрок» while owned (once per artifact). */
+  status: number;
   max_supply: number | null;
   left: number | null;
 }

@@ -92,6 +92,7 @@ export default function SeasonPassPage() {
             {season.locked_premium > 0
               ? `Уже заработано премиум-наград: ${season.locked_premium} — открой пропуск и забери их сразу.`
               : "Вторая награда на каждом уровне сезона."}
+            {season.premium_status > 0 && ` И +${season.premium_status} статуса «Моему игроку» на весь сезон.`}
           </p>
           <button
             onClick={() => buy.mutate()}

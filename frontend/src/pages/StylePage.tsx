@@ -96,6 +96,7 @@ export default function StylePage() {
             <CosmeticPreview item={item} avatarUrl={user?.avatar_url ?? undefined} />
             <p className="font-display text-sm font-bold leading-tight text-ink-chalk">{item.name}</p>
             {item.description && <p className="text-micro leading-tight text-ink-mist-dim">{item.description}</p>}
+            {item.status > 0 && <p className="text-micro font-semibold text-amber-300">+{item.status} статуса</p>}
             {item.owned ? (
               <button
                 onClick={() => equip.mutate({ k: item.kind, id: item.equipped ? null : item.id })}

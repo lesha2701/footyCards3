@@ -26,6 +26,7 @@ class CosmeticOut(BaseModel):
     is_exclusive: bool
     is_active: bool
     sort_order: int
+    status: int = 0
 
 
 class CosmeticIn(BaseModel):
@@ -38,6 +39,7 @@ class CosmeticIn(BaseModel):
     is_exclusive: bool = False
     is_active: bool = True
     sort_order: int = 0
+    status: int = Field(default=0, ge=0, le=10000)
 
 
 class CosmeticCatalogItemOut(CosmeticOut):
@@ -156,6 +158,7 @@ class CalendarTemplateDayOut(RewardBundleIn):
 
 
 class ClubPassPerksOut(BaseModel):
+    status: int = 0
     daily_coins: int
     daily_pack: Optional[RewardBundleOut] = None
     # Granted with every paid month.
@@ -207,6 +210,7 @@ class SeasonPassOut(BaseModel):
     locked_premium: int = 0
     xp_per_game: int = 0
     xp_per_daily_claim: int = 0
+    premium_status: int = 0
 
 
 class SeasonClaimIn(BaseModel):
@@ -283,6 +287,7 @@ class ArtifactIn(BaseModel):
     max_supply: Optional[int] = Field(default=None, ge=1)
     is_active: bool = True
     sort_order: int = 0
+    status: int = Field(default=0, ge=0, le=10000)
 
 
 class ArtifactEquipIn(BaseModel):

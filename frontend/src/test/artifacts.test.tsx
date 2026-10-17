@@ -12,7 +12,7 @@ const info = (patch: Partial<ArtifactInfo>): ArtifactInfo => ({
   target: "club", target_label: "Для клуба", effect: "opp_home_pct", effect_value: 1,
   effect_label: "−1% к силе соперника в домашних матчах", link_type: "stadium", link_kind: "стадион", link_name: "Энфилд",
   link_label: "−2% к силе соперника в домашних матчах", link_owned: true, card_player_name: null, card_label: "",
-  active_label: "−2% к силе соперника в домашних матчах", coins_price: 100, stars_price: 20, max_supply: null, left: null,
+  active_label: "−2% к силе соперника в домашних матчах", coins_price: 100, stars_price: 20, status: 20, max_supply: null, left: null,
   ...patch,
 });
 
@@ -81,5 +81,6 @@ describe("artifacts page", () => {
     expect(await screen.findByText(/Копии одного артефакта не суммируются/)).toBeInTheDocument();
     expect(screen.getByText(/Если есть стадион «Энфилд»: −2%/)).toBeInTheDocument();
     expect(screen.getByText("+3 к рейтингу карточек «Марадона»")).toBeInTheDocument();
+    expect(screen.getAllByText("+20 статуса Моему игроку").length).toBeGreaterThan(0);
   });
 });

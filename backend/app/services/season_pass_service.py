@@ -152,6 +152,7 @@ async def get_pass(db: AsyncSession, user: User) -> SeasonPassOut:
         premium_stars=season.premium_stars, xp=xp, level=max(reached_levels, default=0), next_level_xp=next_xp,
         is_premium=is_premium, levels=out_levels, claimable=claimable, locked_premium=locked_premium,
         xp_per_game=config.season_xp_per_game, xp_per_daily_claim=config.season_xp_per_daily_claim,
+        premium_status=config.season_premium_status,
     )
 
 

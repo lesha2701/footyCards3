@@ -111,6 +111,7 @@ async def _perks(db: AsyncSession, config: GameConfig) -> ClubPassPerksOut:
     badge = await db.get(Badge, config.club_pass_badge_id) if config.club_pass_badge_id else None
     monthly = _monthly_bonus(config)
     return ClubPassPerksOut(
+        status=config.club_pass_status,
         daily_coins=config.club_pass_daily_coins,
         daily_pack=await reward_bundle_service.describe(db, Bundle(pack_id=config.club_pass_daily_pack_id))
         if config.club_pass_daily_pack_id else None,

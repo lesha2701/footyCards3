@@ -14,7 +14,7 @@ const input = "w-full rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none";
 const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
 const NEW: AdminArtifact = {
   name: "", description: "", icon: "🏺", rarity: "rare", target: "my_player", effect: "attack", effect_value: 1,
-  link_type: null, link_id: null, link_effect_value: 0, card_player_id: null, card_rating_bonus: 0, coins_price: 0, stars_price: 0, max_supply: null, is_active: true, sort_order: 0,
+  link_type: null, link_id: null, link_effect_value: 0, card_player_id: null, card_rating_bonus: 0, status: 10, coins_price: 0, stars_price: 0, max_supply: null, is_active: true, sort_order: 0,
 };
 const errText = (err: unknown, fallback: string) => (err instanceof ApiRequestError ? err.message : fallback);
 
@@ -62,7 +62,7 @@ export default function AdminArtifactsTab() {
     const set = (patch: Partial<AdminArtifact>) => setEditing({ ...e, ...patch });
     const preview = { ...e, id: e.id ?? 0, image_path: e.image_path ?? null, description: e.description ?? null,
       target_label: data.targets[e.target], effect_label: "", link_kind: "", link_name: null, link_label: "", link_owned: false,
-      card_player_name: null, card_label: "", active_label: "", left: null };
+      card_player_name: null, card_label: "", active_label: "", left: null, status: e.status };
     return (
       <div className="flex flex-col gap-3 rounded-2xl border border-accent/40 bg-bg-surface p-3">
         <div className="flex items-start gap-3">
@@ -105,6 +105,8 @@ export default function AdminArtifactsTab() {
             </select></label>
           <label className="flex flex-col gap-0.5"><span className="text-micro text-slate-500">N</span>
             <input type="number" min={0} value={e.effect_value} onChange={(ev) => set({ effect_value: Number(ev.target.value) })} className={input} /></label>
+          <label className="flex flex-col gap-0.5"><span className="text-micro text-slate-500">+ статуса Моему игроку</span>
+            <input type="number" min={0} value={e.status} onChange={(ev) => set({ status: Number(ev.target.value) })} className={input} /></label>
           <label className="flex flex-col gap-0.5"><span className="text-micro text-slate-500">Порядок</span>
             <input type="number" value={e.sort_order} onChange={(ev) => set({ sort_order: Number(ev.target.value) })} className={input} /></label>
           <label className="flex flex-col gap-0.5"><span className="text-micro text-slate-500">Сильнее, если есть карточка</span>

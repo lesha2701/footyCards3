@@ -181,7 +181,7 @@ def _artifact_out(a: Artifact, names: dict, owned: dict[str, set[int]]) -> dict:
         "card_label": f"+{a.card_rating_bonus} к рейтингу карточек «{card_player}»"
         if card_player and a.card_rating_bonus else "",
         "active_label": label(a.effect, _value(a, owned)),
-        "coins_price": a.coins_price, "stars_price": a.stars_price,
+        "coins_price": a.coins_price, "stars_price": a.stars_price, "status": a.status,
         "max_supply": a.max_supply, "left": None if a.max_supply is None else max(0, a.max_supply - a.sold_count),
     }
 
@@ -412,7 +412,7 @@ def admin_out(a: Artifact) -> dict:
         "link_type": a.link_type, "link_id": a.link_id, "link_effect_value": a.link_effect_value,
         "card_player_id": a.card_player_id, "card_rating_bonus": a.card_rating_bonus, "coins_price": a.coins_price,
         "stars_price": a.stars_price, "max_supply": a.max_supply, "sold_count": a.sold_count, "is_active": a.is_active,
-        "sort_order": a.sort_order,
+        "sort_order": a.sort_order, "status": a.status,
     }
 
 

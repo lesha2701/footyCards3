@@ -76,10 +76,37 @@ async def _owned(db: AsyncSession, user_id: int) -> dict[int, UserLifestyleItem]
 
 
 async def cosmetic_prestige(db: AsyncSession, user_id: int) -> int:
-    """«Статус» from premium «Раздевалка» items (hairstyles, accessories)."""
+    """«Статус» beyond «Имущество» — everything sold for Stars: premium
+    «Раздевалка» items, owned artifacts (once per artifact) and «Стиль»
+    cosmetics, an active «Клубный абонемент» and the current season's
+    premium track."""
+    from app.models.game_config import GameConfig
+    from app.models.monetization import Artifact, Cosmetic, SeasonProgress, UserArtifact, UserCosmetic
+    from app.services import club_pass_service, season_pass_service
     from app.services.my_player_service import cosmetic_status, get_my_player
 
-    return cosmetic_status(await get_my_player(db, user_id))
+    total = cosmetic_status(await get_my_player(db, user_id))
+    total += int((await db.execute(
+        select(func.coalesce(func.sum(Artifact.status), 0)).where(Artifact.id.in_(
+            select(UserArtifact.artifact_id).where(UserArtifact.user_id == user_id)
+        ))
+    )).scalar_one())
+    total += int((await db.execute(
+        select(func.coalesce(func.sum(Cosmetic.status), 0))
+        .join(UserCosmetic, UserCosmetic.cosmetic_id == Cosmetic.id).where(UserCosmetic.user_id == user_id)
+    )).scalar_one())
+    config = await db.get(GameConfig, 1)
+    if config is not None:
+        if config.club_pass_status and await club_pass_service.is_subscriber(db, user_id):
+            total += config.club_pass_status
+        if config.season_premium_status:
+            season = await season_pass_service.active_season(db)
+            if season is not None and (await db.execute(select(SeasonProgress.id).where(
+                SeasonProgress.user_id == user_id, SeasonProgress.season_id == season.id,
+                SeasonProgress.is_premium.is_(True),
+            ))).first():
+                total += config.season_premium_status
+    return total
 
 
 async def prestige_of(db: AsyncSession, user_id: int) -> int:

@@ -116,6 +116,7 @@ function SettingsTab() {
           {pick("club_pass_badge_id", "Значок", badges)}
           {num("club_pass_season_xp_bonus_pct", "+% опыта сезона")}
           {num("club_pass_free_catchups", "Бесплатных догонов календаря в месяц")}
+          {num("club_pass_status", "+ статуса Моему игроку, пока активен")}
         </div>
         <p className="text-micro text-slate-500">Бонус с каждой оплатой (сразу и при каждом продлении):</p>
         <div className={grid}>
@@ -162,6 +163,7 @@ function SettingsTab() {
         <div className={grid}>
           {num("season_xp_per_game", "XP за игру с наградой")}
           {num("season_xp_per_daily_claim", "XP за награду календаря")}
+          {num("season_premium_status", "+ статуса за премиум сезона")}
         </div>
       </section>
       <section className={block}>
@@ -190,7 +192,7 @@ function SettingsTab() {
 type CosmeticDraft = Omit<Cosmetic, "id"> & { id?: number };
 const NEW_COSMETIC: CosmeticDraft = {
   kind: "profile_frame", name: "", description: "", style_key: "gold", coins_price: 0, stars_price: 0,
-  is_exclusive: false, is_active: true, sort_order: 0,
+  is_exclusive: false, is_active: true, sort_order: 0, status: 5,
 };
 
 function CosmeticsTab() {
@@ -239,6 +241,10 @@ function CosmeticsTab() {
             <label className="flex flex-col gap-0.5">
               <span className="text-micro text-slate-500">Название</span>
               <input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className={input} />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="text-micro text-slate-500">+ статуса</span>
+              <input type="number" min={0} value={editing.status} onChange={(e) => setEditing({ ...editing, status: Number(e.target.value) })} className={input} />
             </label>
             <label className="flex flex-col gap-0.5">
               <span className="text-micro text-slate-500">Порядок</span>

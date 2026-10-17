@@ -34,6 +34,8 @@ class Cosmetic(TimestampMixin, Base):
     is_exclusive: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Статус» of «Мой игрок» while owned (lifestyle_service.extra_prestige).
+    status: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
 class UserCosmetic(Base):
@@ -217,6 +219,8 @@ class Artifact(TimestampMixin, Base):
     sold_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Статус» of «Мой игрок» while owned — once per artifact, copies don't add.
+    status: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
 class UserArtifact(Base):

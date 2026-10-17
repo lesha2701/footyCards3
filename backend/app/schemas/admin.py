@@ -564,6 +564,8 @@ class GameConfigOut(BaseModel):
     club_pass_bonus_card_rarity: Optional[str] = None
     club_pass_season_xp_bonus_pct: int = 50
     club_pass_free_catchups: int = 3
+    club_pass_status: int = 50
+    season_premium_status: int = 30
     club_pass_frame_cosmetic_id: Optional[int] = None
     club_pass_badge_id: Optional[int] = None
     club_pass_ad_free: bool = True
@@ -1039,6 +1041,8 @@ class GameConfigUpdate(BaseModel):
     club_pass_bonus_card_rarity: Optional[Literal["", "common", "rare", "epic", "legendary", "diamond"]] = None
     club_pass_season_xp_bonus_pct: Optional[int] = Field(default=None, ge=0, le=500)
     club_pass_free_catchups: Optional[int] = Field(default=None, ge=0, le=31)
+    club_pass_status: Optional[int] = Field(default=None, ge=0, le=10000)
+    season_premium_status: Optional[int] = Field(default=None, ge=0, le=10000)
     club_pass_frame_cosmetic_id: Optional[int] = Field(default=None, ge=0)
     club_pass_badge_id: Optional[int] = Field(default=None, ge=0)
     club_pass_ad_free: Optional[bool] = None

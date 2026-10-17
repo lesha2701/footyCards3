@@ -46,7 +46,7 @@ const clubPass: ClubPass = {
   enabled: true, stars_price: 199, is_active: false, expires_at: null, auto_renew: false, daily_claimed_today: false,
   perks: {
     daily_coins: 150, daily_pack: bundle({ pack_id: 1, pack_name: "Базовый" }), extra_rewarded_attempts: 2, frame: null, badge: null,
-    ad_free: true, monthly_bonus: bundle({ coins: 2000, card_rarity: "epic" }), season_xp_bonus_pct: 50, free_catchups: 3,
+    ad_free: true, status: 50, monthly_bonus: bundle({ coins: 2000, card_rarity: "epic" }), season_xp_bonus_pct: 50, free_catchups: 3,
   },
 };
 let clubPassState = clubPass;
@@ -54,7 +54,7 @@ let clubPassState = clubPass;
 const season: SeasonPass = {
   enabled: true, season_id: 1, name: "Осень", starts_at: "2026-10-01T00:00:00Z", ends_at: "2026-11-01T00:00:00Z",
   premium_stars: 399, xp: 40, level: 1, next_level_xp: 100, is_premium: false, claimable: 1, locked_premium: 1,
-  xp_per_game: 10, xp_per_daily_claim: 25,
+  xp_per_game: 10, xp_per_daily_claim: 25, premium_status: 30,
   levels: [
     { level: 1, xp_required: 10, reached: true, free: bundle({ coins: 100 }), premium: bundle({ coins: 300 }), free_claimed: false, premium_claimed: false },
     { level: 2, xp_required: 100, reached: false, free: bundle({ coins: 200 }), premium: bundle({ card_rarity: "epic" }), free_claimed: false, premium_claimed: false },
@@ -128,6 +128,7 @@ describe("club pass page", () => {
     expect(screen.getByText("Бесплатный пак «Базовый» каждый день")).toBeInTheDocument();
     expect(screen.getByText(/Сразу и каждый месяц: 2000 монет \+ эпическая карточка/i)).toBeInTheDocument();
     expect(screen.getByText("+50% опыта сезонного пропуска")).toBeInTheDocument();
+    expect(screen.getByText("+50 статуса «Моему игроку», пока абонемент активен")).toBeInTheDocument();
     expect(screen.getByText(/Звёзды не выводятся/)).toBeInTheDocument();
   });
 

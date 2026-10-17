@@ -803,6 +803,10 @@ class GameConfig(TimestampMixin, Base):
     # +% season pass XP while subscribed; free calendar catch-ups a month.
     club_pass_season_xp_bonus_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
     club_pass_free_catchups: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # «Статус» of «Мой игрок» while the pass is active / with the current
+    # season's premium track (lifestyle_service.extra_prestige).
+    club_pass_status: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    season_premium_status: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     club_pass_frame_cosmetic_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     club_pass_badge_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Reserved for when ads exist: subscribers won't see them.

@@ -117,7 +117,10 @@ COSMETIC_KINDS = ("accessory", "background", "effect", "hair")
 PREMIUM_HAIR = {"hair_neymar": 14, "hair_cr7": 15, "hair_pogba": 16}
 # «Статус» from owned style items — added to the «Имущество» status
 # (lifestyle_service.cosmetic_prestige).
-COSMETIC_STATUS = {"hair_neymar": 30, "hair_cr7": 25, "hair_pogba": 20, "aviators": 15, "diamond_chain": 20}
+COSMETIC_STATUS = {
+    "hair_neymar": 30, "hair_cr7": 25, "hair_pogba": 20, "aviators": 15, "diamond_chain": 20,
+    "crown": 25, "bg_galaxy": 10, "bg_champions": 15, "fx_sparkle": 8, "fx_fire": 10, "fx_lightning": 15,
+}
 
 TRAINING_MAX_HITS = 3
 # A run must take at least this long (three timed attempts) and be finished

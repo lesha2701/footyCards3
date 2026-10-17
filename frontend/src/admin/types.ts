@@ -127,6 +127,8 @@ export interface GameConfig {
   club_pass_bonus_card_rarity: string | null;
   club_pass_season_xp_bonus_pct: number;
   club_pass_free_catchups: number;
+  club_pass_status: number;
+  season_premium_status: number;
   artifacts_enabled: boolean;
   artifact_slots: number;
   artifact_max_opp_pct: number;
@@ -677,6 +679,7 @@ export interface AdminArtifact {
   sold_count?: number;
   is_active: boolean;
   sort_order: number;
+  status: number;
 }
 
 export interface AdminArtifactCatalog {

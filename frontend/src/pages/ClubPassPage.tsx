@@ -119,6 +119,7 @@ export default function ClubPassPage() {
             />
           )}
           {perks.badge && <Perk icon={<UserBadge badge={perks.badge} />} text={`Значок «${perks.badge.name}»`} />}
+          {perks.status > 0 && <Perk icon={<IconStar size={15} />} text={`+${perks.status} статуса «Моему игроку», пока абонемент активен`} />}
           {perks.ad_free && <Perk icon={<IconStar size={15} />} text="Без рекламы, когда она появится" />}
         </ul>
       </section>

@@ -796,3 +796,30 @@ def test_dribbler_skill_and_artifact_add_up(monkeypatch):
     duelist = SimpleNamespace(skill=skill, boosts={"dribble_pp": 3}, player=SimpleNamespace(display_name="D"))
     m._resolve_stage1_for(1.0, duelist, [])
     assert seen[-1]["bonus_pp"] == 7 and seen[-1]["cap_pp"] == 11
+
+
+async def test_everything_bought_for_stars_adds_status(client, db_session, bot_token):
+    from app.services import lifestyle_service
+
+    frame = await _cosmetic(db_session, status=12)
+    art = await _artifact(client, bot_token, status=30)
+    headers, user = await _register(client, db_session, 720100, bot_token)
+    user.balance = 10_000
+    await db_session.commit()
+    assert await lifestyle_service.prestige_of(db_session, user.id) == 0
+
+    await client.post(f"/api/v1/cosmetics/{frame.id}/buy", headers=headers)
+    await client.post(f"/api/v1/artifacts/{art['id']}/buy", headers=headers)
+    await client.post(f"/api/v1/artifacts/{art['id']}/buy", headers=headers)  # a second copy adds nothing
+    assert await lifestyle_service.prestige_of(db_session, user.id) == 42
+
+    inv = (await client.post("/api/v1/club-pass/stars-invoice", headers=headers)).json()
+    await _pay(client, inv["payload_token"], 720100, 199, "status-pass")
+    assert await lifestyle_service.prestige_of(db_session, user.id) == 92  # +50 while subscribed
+
+    season = await _season(client, bot_token)
+    db_session.add(SeasonProgress(user_id=user.id, season_id=season["id"], xp=0, is_premium=True))
+    await db_session.commit()
+    body = (await client.get("/api/v1/lifestyle", headers=headers)).json()
+    assert body["prestige"] == 122  # +30 for this season's premium track
+    assert (await client.get("/api/v1/club-pass", headers=headers)).json()["perks"]["status"] == 50

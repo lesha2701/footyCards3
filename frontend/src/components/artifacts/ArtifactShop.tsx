@@ -80,6 +80,7 @@ export default function ArtifactShop() {
               </p>
             )}
             {a.card_label && <p className="text-xs text-accent-lime">{a.card_label}</p>}
+            {a.status > 0 && <p className="text-caption font-semibold text-amber-300">+{a.status} статуса Моему игроку</p>}
             {a.description && <p className="text-caption text-ink-mist-dim">{a.description}</p>}
             {a.left !== null && <p className="text-caption text-amber-300">Осталось: {a.left} из {a.max_supply}</p>}
             {a.owned_count > 0 && <p className="text-caption text-ink-mist">У тебя: {a.owned_count}</p>}
