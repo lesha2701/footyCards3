@@ -6,6 +6,7 @@ import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconCoin, IconPlus, IconSwap } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
+import { fetchFeatureFlags } from "@/api/featureFlags";
 import { acceptTradeOffer, cancelTradeOffer, fetchTradeOffers, rejectTradeOffer } from "@/api/trades";
 import { staticUrl } from "@/lib/api";
 import { hapticNotify } from "@/lib/telegram";
@@ -34,6 +35,9 @@ export default function TradesPage() {
   const { data: offers, isLoading } = useQuery({ queryKey: ["trades", tab], queryFn: () => fetchTradeOffers(params) });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["trades"] });
+  // Admin switch: while trades are off, no new offers and no accepting.
+  const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags });
+  const tradesOff = flags?.trades_enabled === false;
 
   const acceptMutation = useMutation({
     mutationFn: acceptTradeOffer,
@@ -48,7 +52,8 @@ export default function TradesPage() {
         <h1 className="font-display text-xl font-bold text-ink-chalk">Обмены</h1>
         <button
           onClick={() => navigate("/trades/new")}
-          className="flex items-center gap-1 rounded-full bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95"
+          disabled={tradesOff}
+          className="flex items-center gap-1 rounded-full bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-40"
         >
           <IconPlus size={13} />
           Новый
@@ -56,6 +61,12 @@ export default function TradesPage() {
       </div>
 
       <CardsSectionTabs />
+
+      {tradesOff && (
+        <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-3 py-2.5 text-xs text-amber-200" role="status">
+          ⏸ Обмены временно отключены. Свои предложения можно отменить, входящие — отклонить.
+        </p>
+      )}
 
       <div className="flex gap-2">
         <TabButton active={tab === "incoming"} label="Входящие" onClick={() => setTab("incoming")} />
@@ -74,6 +85,7 @@ export default function TradesPage() {
             myUserId={userId}
             onOpen={() => navigate(`/trades/${offer.id}`)}
             onAccept={() => acceptMutation.mutate(offer.id)}
+            acceptDisabled={tradesOff}
             onReject={() => rejectMutation.mutate(offer.id)}
             onCancel={() => cancelMutation.mutate(offer.id)}
           />
@@ -99,6 +111,7 @@ function TradeCard({
   myUserId,
   onOpen,
   onAccept,
+  acceptDisabled = false,
   onReject,
   onCancel,
 }: {
@@ -106,6 +119,7 @@ function TradeCard({
   myUserId?: number;
   onOpen: () => void;
   onAccept: () => void;
+  acceptDisabled?: boolean;
   onReject: () => void;
   onCancel: () => void;
 }) {
@@ -134,7 +148,11 @@ function TradeCard({
         <div className="mt-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
           {isReceiver && (
             <>
-              <button onClick={onAccept} className="flex-1 rounded-xl bg-accent-green py-2 text-xs font-bold text-bg-base active:scale-95">
+              <button
+                onClick={onAccept}
+                disabled={acceptDisabled}
+                className="flex-1 rounded-xl bg-accent-green py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-40"
+              >
                 Принять
               </button>
               <button onClick={onReject} className="flex-1 rounded-xl bg-red-500/80 py-2 text-xs font-bold text-white active:scale-95">

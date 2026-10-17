@@ -269,6 +269,7 @@ class GameConfigOut(BaseModel):
     hourly_game_limit: int
     matchmaking_enabled: bool
     wheel_enabled: bool
+    trades_enabled: bool = True
     leagues_enabled: bool
     free_pack_interval_hours: int
     bot_daily_digest_enabled: bool = False
@@ -711,6 +712,7 @@ class GameConfigUpdate(BaseModel):
     hourly_game_limit: Optional[int] = Field(default=None, ge=1)
     matchmaking_enabled: Optional[bool] = None
     wheel_enabled: Optional[bool] = None
+    trades_enabled: Optional[bool] = None
     leagues_enabled: Optional[bool] = None
     free_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     bot_daily_digest_enabled: Optional[bool] = None

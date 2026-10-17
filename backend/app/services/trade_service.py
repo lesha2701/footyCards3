@@ -14,6 +14,7 @@ from app.models.user import User
 from app.schemas.trade import TradeAcceptOut, TradeCreateRequest, TradeOfferOut
 from app.services import bingo_service, task_service
 from app.services.collection_service import grant_collection_rewards_for_new_cards
+from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
@@ -110,7 +111,18 @@ async def _find_receiver(db: AsyncSession, payload: TradeCreateRequest) -> User:
     return receiver
 
 
+TRADES_OFF_MESSAGE = "Обмены временно отключены"
+
+
+async def _assert_trades_enabled(db: AsyncSession) -> None:
+    """Admin switch (GameConfig.trades_enabled): blocks creating and
+    accepting offers; cancelling / rejecting stays possible."""
+    if not (await get_config(db)).trades_enabled:
+        raise ConflictError(TRADES_OFF_MESSAGE, details={"reason": "trades_disabled"})
+
+
 async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateRequest) -> TradeOfferOut:
+    await _assert_trades_enabled(db)
     receiver = await _find_receiver(db, payload)
     if receiver.id == sender.id:
         raise ConflictError("You cannot trade with yourself")
@@ -256,6 +268,7 @@ async def reject_offer(db: AsyncSession, user: User, offer_id: int) -> TradeOffe
 
 
 async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcceptOut:
+    await _assert_trades_enabled(db)
     offer = await _get_offer_or_404(db, offer_id)
     offer = await _expire_if_needed(db, offer)
     if offer.receiver_id != user.id:

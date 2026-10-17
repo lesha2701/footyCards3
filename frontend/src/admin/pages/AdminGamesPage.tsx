@@ -115,6 +115,7 @@ export default function AdminGamesPage() {
     key:
       | "matchmaking_enabled"
       | "wheel_enabled"
+      | "trades_enabled"
       | "blackjack_enabled"
       | "leagues_enabled"
       | "diamond_rating_cap_enabled"
@@ -156,6 +157,7 @@ export default function AdminGamesPage() {
         <div className="flex flex-col gap-2">
           {toggle("matchmaking_enabled", "Показывать кнопку «Играть» (подбор соперника) в Тактико и Пенальти")}
           {toggle("wheel_enabled", "Показывать раздел «Колесо фортуны» на главном экране")}
+          {toggle("trades_enabled", "Обмены между игроками (выкл — нельзя создавать и принимать предложения)")}
           {toggle("blackjack_enabled", "Игра «21: Добавленное время» (новые партии и покупка попыток)")}
           {toggle("leagues_enabled", "Показывать баннер лиг на главном экране и в профиле")}
         </div>

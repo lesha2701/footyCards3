@@ -1,7 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { fetchAdminTrades, forceCancelTrade } from "@/admin/api";
+import { fetchAdminTrades, fetchGameConfig, forceCancelTrade, updateGameConfig } from "@/admin/api";
 import { staticUrl } from "@/lib/api";
 import type { TradeOffer, TradeStatus, UserCard } from "@/types";
 
@@ -40,6 +40,20 @@ export default function AdminTradesPage() {
     placeholderData: keepPreviousData,
   });
   const trades = data?.items;
+
+  // Global switch for player-to-player trades (GameConfig.trades_enabled).
+  const { data: config } = useQuery({ queryKey: ["admin-game-config"], queryFn: fetchGameConfig });
+  const switchMutation = useMutation({
+    mutationFn: (enabled: boolean) => updateGameConfig({ trades_enabled: enabled }),
+    onSuccess: (updated) => queryClient.setQueryData(["admin-game-config"], updated),
+  });
+  const tradesOn = config?.trades_enabled !== false;
+  const flipTrades = () => {
+    const question = tradesOn
+      ? "Выключить обмены для всех игроков? Новые предложения создавать и принимать будет нельзя."
+      : "Включить обмены обратно?";
+    if (confirm(question)) switchMutation.mutate(!tradesOn);
+  };
   const cancelMutation = useMutation({
     mutationFn: forceCancelTrade,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-trades"] }),
@@ -48,6 +62,32 @@ export default function AdminTradesPage() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="font-display text-2xl font-bold">Обмены</h1>
+
+      {config && (
+        <div
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-3 ${
+            tradesOn ? "border-emerald-400/20 bg-emerald-400/5" : "border-red-500/30 bg-red-500/10"
+          }`}
+        >
+          <div>
+            <p className="text-sm font-bold">{tradesOn ? "Обмены включены" : "Обмены выключены"}</p>
+            <p className="text-caption text-slate-400">
+              {tradesOn
+                ? "Игроки могут создавать и принимать предложения."
+                : "Новые предложения создать и принять нельзя; ждущие можно только отменить или отклонить."}
+            </p>
+          </div>
+          <button
+            onClick={flipTrades}
+            disabled={switchMutation.isPending}
+            className={`rounded-lg px-4 py-2 text-xs font-bold disabled:opacity-50 ${
+              tradesOn ? "bg-red-500 text-white" : "bg-accent text-bg-base"
+            }`}
+          >
+            {tradesOn ? "Выключить обмены" : "Включить обмены"}
+          </button>
+        </div>
+      )}
 
       <form
         onSubmit={(e) => { e.preventDefault(); setUsername(usernameInput.trim()); }}

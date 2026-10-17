@@ -403,3 +403,37 @@ async def test_admin_trades_filter_by_coins(client, db_session, bot_token):
     assert ids(pure) == {big.json()["id"]}
     cheap = await client.get("/api/v1/admin/trades", headers=auth, params={"coins_max": 100})
     assert ids(cheap) == {small.json()["id"]}
+
+
+async def test_admin_can_switch_trades_off(client, db_session, bot_token):
+    from app.services.game_config_service import get_config
+
+    auth = await _admin_auth(client, bot_token)
+    sender, sender_headers = await _register(client, db_session, 730040, bot_token, username="switch_sender")
+    receiver, receiver_headers = await _register(client, db_session, 730041, bot_token, username="switch_receiver")
+    receiver_id = receiver.id
+    pending = await client.post("/api/v1/trades/offers", headers=sender_headers,
+                                json={"receiver_id": receiver.id, "sender_coins": 10})
+    assert pending.status_code == 200
+
+    resp = await client.put("/api/v1/admin/games/config", headers=auth, json={"trades_enabled": False})
+    assert resp.status_code == 200 and resp.json()["trades_enabled"] is False
+    flags = await client.get("/api/v1/feature-flags", headers=sender_headers)
+    assert flags.json()["trades_enabled"] is False
+
+    blocked_new = await client.post("/api/v1/trades/offers", headers=sender_headers,
+                                    json={"receiver_id": receiver.id, "sender_coins": 10})
+    assert blocked_new.status_code == 409
+    assert blocked_new.json()["error"]["details"]["reason"] == "trades_disabled"
+    blocked_accept = await client.post(f"/api/v1/trades/offers/{pending.json()['id']}/accept", headers=receiver_headers)
+    assert blocked_accept.status_code == 409
+    # Pending offers can still be withdrawn while trading is off.
+    cancelled = await client.post(f"/api/v1/trades/offers/{pending.json()['id']}/cancel", headers=sender_headers)
+    assert cancelled.status_code == 200
+
+    await client.put("/api/v1/admin/games/config", headers=auth, json={"trades_enabled": True})
+    db_session.expire_all()
+    assert (await get_config(db_session)).trades_enabled is True
+    again = await client.post("/api/v1/trades/offers", headers=sender_headers,
+                              json={"receiver_id": receiver_id, "sender_coins": 10})
+    assert again.status_code == 200

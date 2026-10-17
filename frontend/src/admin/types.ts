@@ -255,6 +255,7 @@ export interface GameConfig {
   hourly_game_limit: number;
   matchmaking_enabled: boolean;
   wheel_enabled: boolean;
+  trades_enabled: boolean;
   leagues_enabled: boolean;
   free_pack_interval_hours: number;
   bot_daily_digest_enabled: boolean;

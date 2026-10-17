@@ -183,6 +183,9 @@ class GameConfig(TimestampMixin, Base):
     # stay available either way.
     matchmaking_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     wheel_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Player-to-player trades (migration 0163): off = no new offers and no
+    # accepting; pending ones can still be cancelled / rejected.
+    trades_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Hides the league banner on the home screen and profile — the rest of
     # the leagues feature (backend rating tracking, reward granting, admin
     # tier management) keeps running either way, same "hide the entry

@@ -816,6 +816,8 @@ export interface Announcement {
 export interface FeatureFlags {
   matchmaking_enabled: boolean;
   wheel_enabled: boolean;
+  /** Admin switch: off = no new trade offers and no accepting. */
+  trades_enabled?: boolean;
   leagues_enabled: boolean;
 }
 
