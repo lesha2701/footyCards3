@@ -271,15 +271,19 @@ async def test_upgrade_rejects_duplicate_card_ids(client, db_session, bot_token)
     assert resp.status_code == 409
 
 
-async def test_upgradeable_cards_excludes_locked_and_wrong_rarity(client, db_session, bot_token):
+async def test_upgradeable_cards_flags_squad_copies_and_hides_frozen_ones(client, db_session, bot_token):
     user = await _register(client, db_session, 900013, bot_token)
     common_player = await create_player(db_session, rarity=Rarity.common)
     rare_player = await create_player(db_session, rarity=Rarity.rare, rating=80)
 
     free_card = await _give_card(db_session, user.id, common_player.id, serial_number=1)
-    locked_card = await _give_card(db_session, user.id, common_player.id, serial_number=2)
-    locked_card.is_in_lineup = True
-    db_session.add(locked_card)
+    squad_card = await _give_card(db_session, user.id, common_player.id, serial_number=2)
+    squad_card.is_in_lineup = True
+    frozen = await _give_card(db_session, user.id, common_player.id, serial_number=3)
+    frozen.is_locked_by_admin = True
+    traded = await _give_card(db_session, user.id, common_player.id, serial_number=4)
+    traded.is_locked_in_trade = True
+    db_session.add_all([squad_card, frozen, traded])
     await db_session.commit()
     # A rare card must never show up when asking for common.
     await _give_card(db_session, user.id, rare_player.id, serial_number=1)
@@ -287,8 +291,10 @@ async def test_upgradeable_cards_excludes_locked_and_wrong_rarity(client, db_ses
     headers = telegram_headers(900013, bot_token)
     resp = await client.get("/api/v1/collection/upgrade-cards", headers=headers, params={"rarity": "common"})
     assert resp.status_code == 200
-    ids = [c["id"] for c in resp.json()]
-    assert ids == [free_card.id]
+    by_id = {c["id"]: c for c in resp.json()}
+    # Squad copies are listed (shaded in the UI); admin-frozen / in-trade ones are not.
+    assert set(by_id) == {free_card.id, squad_card.id}
+    assert by_id[squad_card.id]["is_in_lineup"] is True
 
 
 async def test_upgradeable_cards_lists_each_duplicate_separately(client, db_session, bot_token):

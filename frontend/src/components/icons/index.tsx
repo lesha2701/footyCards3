@@ -222,6 +222,16 @@ export function IconLock(props: IconProps) {
   );
 }
 
+export function IconLockOpen(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="5" y="11" width="14" height="9" rx="2.5" />
+      <path d="M8 11V8a4 4 0 0 1 7.6-1.7" />
+      <circle cx="12" cy="15.2" r="1.1" fill="currentColor" stroke="none" />
+    </IconBase>
+  );
+}
+
 export function IconSearch(props: IconProps) {
   return (
     <IconBase {...props}>

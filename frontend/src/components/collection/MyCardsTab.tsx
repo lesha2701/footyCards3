@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
+import CardFilterBar from "@/components/collection/CardFilterBar";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
-import { IconCoin, IconCollection } from "@/components/icons";
+import { IconCoin, IconCollection, IconLock, IconLockOpen } from "@/components/icons";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import CardUpgradeModal from "@/components/cards/CardUpgradeModal";
 import { losesProgress } from "@/lib/cardStars";
@@ -11,29 +12,26 @@ import PlayerCard from "@/components/cards/PlayerCard";
 import CardDetailModal from "@/components/collection/CardDetailModal";
 import { useCardActions } from "@/components/collection/useCardActions";
 import {
-  fetchCollection, fetchCollectionStats, sellDuplicates, type CollectionFilters, type SellDuplicatesResult,
+  fetchCollection, fetchCollectionStats, sellDuplicates, setCardsLocked, type CollectionFilters, type SellDuplicatesResult,
 } from "@/api/collection";
 import { fetchCollections } from "@/api/collections";
-import { RARITY_LABELS, RARITY_ORDER } from "@/lib/rarity";
+import { cardLockProps, inSquad } from "@/lib/cardLocks";
+import { useCardFilter } from "@/lib/cardFilter";
+import { RARITY_ORDER } from "@/lib/rarity";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import { useSkillUpgradeCheck } from "@/lib/cardSkills";
 import { formatGameError } from "@/lib/errors";
-import { usePersistentState } from "@/lib/usePersistentState";
 import { haptic } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { Rarity, UserCard } from "@/types";
-
-const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
+import type { UserCard } from "@/types";
 
 const PAGE_SIZE = 60;
 
 export default function MyCardsTab() {
-  // Filters and sort survive leaving the tab (and an app restart).
-  const [rarity, setRarity] = usePersistentState<Rarity | null>("collection.rarity", null);
+  // Starts from the player's saved default filter (CardFilterBar saves it).
+  const { filter, setFilter, defaultFilter } = useCardFilter();
   const [collectionId, setCollectionId] = useState<number | undefined>(undefined);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = usePersistentState<CollectionFilters["sort_by"]>("collection.sort", "acquired_at");
-  const [onlySkilled, setOnlySkilled] = usePersistentState("collection.skilled", false);
   const [dupPreview, setDupPreview] = useState<SellDuplicatesResult | null>(null);
   const [dupMessage, setDupMessage] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -52,15 +50,18 @@ export default function MyCardsTab() {
   // "Карточек не найдено" result after narrowing the filters.
   useEffect(() => {
     setPageNum(1);
-  }, [rarity, collectionId, search, sortBy, onlySkilled]);
+  }, [filter, collectionId, search]);
 
   const filters: CollectionFilters = {
-    rarity: rarity ?? undefined,
+    rarity: filter.rarity ?? undefined,
+    country: filter.country ?? undefined,
+    club: filter.club ?? undefined,
+    position: filter.position ?? undefined,
     collection_id: collectionId,
     search: search || undefined,
-    sort_by: sortBy,
+    sort_by: filter.sort_by,
     sort_dir: "desc",
-    has_skill: onlySkilled || undefined,
+    has_skill: filter.has_skill || undefined,
     page: pageNum,
     page_size: PAGE_SIZE,
   };
@@ -99,9 +100,31 @@ export default function MyCardsTab() {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
-  const totalSellValue = (page?.items ?? [])
-    .filter((c) => selected.includes(c.id))
-    .reduce((sum, c) => sum + c.player.quick_sell_price, 0);
+  const selectedCards = (page?.items ?? []).filter((c) => selected.includes(c.id));
+  // Squad copies and the owner's locked ones are never sold.
+  const sellable = selectedCards.filter(
+    (c) => !inSquad(c) && !c.is_user_locked && !c.is_locked_by_admin && !c.is_locked_in_trade,
+  );
+  const totalSellValue = sellable.reduce((sum, c) => sum + c.player.quick_sell_price, 0);
+  const allLocked = selectedCards.length > 0 && selectedCards.every((c) => c.is_user_locked);
+
+  const lockMutation = useMutation({
+    mutationFn: ({ ids, locked }: { ids: number[]; locked: boolean }) => setCardsLocked(ids, locked),
+    onSuccess: (data) => {
+      haptic("light");
+      setDupMessage(
+        data.locked
+          ? `🔒 Замок на ${data.card_ids.length} шт. — их не продать и не сжечь`
+          : `Замок снят с ${data.card_ids.length} шт.`,
+      );
+      setSelected([]);
+      setSelectMode(false);
+      for (const key of [["collection"], ["album-detail"], ["upgrade-cards"]]) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
+    },
+    onError: (err) => setDupMessage(formatGameError(err, "Не удалось поставить замок")),
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -145,23 +168,7 @@ export default function MyCardsTab() {
         className="rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk placeholder:text-ink-mist-dim outline-none"
       />
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        <FilterChip active={rarity === null} label="Все" onClick={() => setRarity(null)} />
-        {RARITIES.map((r) => (
-          <FilterChip key={r} active={rarity === r} label={RARITY_LABELS[r]} onClick={() => setRarity(r)} />
-        ))}
-        <FilterChip active={onlySkilled} label="С навыком" onClick={() => setOnlySkilled((v) => !v)} />
-      </div>
-
-      <select
-        value={sortBy}
-        onChange={(e) => setSortBy(e.target.value as CollectionFilters["sort_by"])}
-        className="rounded-xl bg-bg-surface px-3 py-2 text-sm text-ink-chalk outline-none"
-      >
-        <option value="acquired_at">По дате получения</option>
-        <option value="rating">По рейтингу</option>
-        <option value="rarity">По редкости</option>
-      </select>
+      <CardFilterBar filter={filter} onChange={setFilter} defaultFilter={defaultFilter} />
 
       {!!collections?.length && (
         <select
@@ -187,6 +194,7 @@ export default function MyCardsTab() {
             stars={card.stars}
             pathStage={card.path_stage} prestige={card.prestige} talentOverride={card.talent_override}
             badge={<CardTileBadges card={card} />}
+            {...cardLockProps(card)}
             selected={selectMode && selected.includes(card.id)}
             onClick={() => (selectMode ? toggleSelect(card.id) : setDetailCard(card))}
           />
@@ -215,23 +223,47 @@ export default function MyCardsTab() {
         </div>
       )}
 
+      {selectMode && selected.length === 0 && (
+        <p className="text-center text-xs text-ink-mist">Отметь карточки, чтобы продать их или поставить замок 🔒</p>
+      )}
+
       {selectMode && selected.length > 0 && (
-        <div className="safe-bottom fixed inset-x-0 bottom-16 z-30 mx-auto flex max-w-lg items-center justify-between rounded-2xl border border-white/10 bg-bg-surface px-4 py-3 shadow-xl">
+        <div className="safe-bottom fixed inset-x-0 bottom-16 z-30 mx-auto flex max-w-lg flex-col gap-2 rounded-2xl border border-white/10 bg-bg-surface px-4 py-3 shadow-xl">
           <span className="flex items-center gap-1.5 text-sm text-ink-mist">
-            Выбрано: {selected.length} ·
-            <IconCoin size={13} className="text-accent-lime" />
-            <span className="font-mono text-accent-lime">{totalSellValue}</span>
+            Выбрано: {selected.length}
+            {sellable.length > 0 && (
+              <>
+                {" "}· <IconCoin size={13} className="text-accent-lime" />
+                <span className="font-mono text-accent-lime">{totalSellValue}</span>
+              </>
+            )}
           </span>
-          <button
-            onClick={() => setConfirmSell({
-              ids: selected,
-              lastCopy: false,
-              skillLoss: (page?.items ?? []).some((c) => selected.includes(c.id) && losesProgress(c)),
-            })}
-            className="rounded-full bg-red-500 px-4 py-2 text-xs font-bold text-white active:scale-95"
-          >
-            Продать
-          </button>
+          {sellable.length < selectedCards.length && (
+            <span className="text-micro text-ink-mist-dim">
+              {selectedCards.length - sellable.length} шт. в составе или под замком — не продаются
+            </span>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={() => lockMutation.mutate({ ids: selected, locked: !allLocked })}
+              disabled={lockMutation.isPending}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-amber-400 px-3 py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-50"
+            >
+              {allLocked ? <IconLockOpen size={14} /> : <IconLock size={14} />}
+              {allLocked ? "Снять замок" : "Поставить замок"}
+            </button>
+            <button
+              onClick={() => setConfirmSell({
+                ids: sellable.map((c) => c.id),
+                lastCopy: false,
+                skillLoss: sellable.some((c) => losesProgress(c)),
+              })}
+              disabled={sellable.length === 0}
+              className="flex-1 rounded-full bg-red-500 px-3 py-2 text-xs font-bold text-white active:scale-95 disabled:opacity-40"
+            >
+              Продать{sellable.length > 0 && sellable.length < selectedCards.length ? ` ${sellable.length}` : ""}
+            </button>
+          </div>
         </div>
       )}
 
@@ -257,7 +289,7 @@ export default function MyCardsTab() {
         title={`Продать ${dupPreview?.sold_count ?? 0} дубликатов?`}
         description={
           `Получишь ${dupPreview?.coins_earned ?? 0} монет. По одной карточке каждого игрока остаётся; `
-          + "карточки с навыком, в составах, в обменах и бриллиантовые не продаются."
+          + "карточки с навыком, в составах, в обменах, под замком и бриллиантовые не продаются."
         }
         confirmLabel="Продать"
         onConfirm={() => duplicatesMutation.mutate(false)}
@@ -297,16 +329,5 @@ function CardTileBadges({ card }: { card: UserCard }) {
       )}
       <CardSkillBadge code={card.skill_code} level={card.skill_level} upgradable={canUpgrade(card.skill_code, card.skill_level)} />
     </span>
-  );
-}
-
-function FilterChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${active ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"}`}
-    >
-      {label}
-    </button>
   );
 }

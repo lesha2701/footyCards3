@@ -11,6 +11,7 @@ import {
 import { IconChevronRight, IconStar, IconUpgrade } from "@/components/icons";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import { staticUrl } from "@/lib/api";
+import { inSquad } from "@/lib/cardLocks";
 import { formatGameError } from "@/lib/errors";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
@@ -69,7 +70,9 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
     enabled: !!rarity && phase === "pick" && !isExtensionBand,
   });
 
-  const materialCards = isExtensionBand ? band?.cards : adminTierCards;
+  // The Forge list also shows squad copies and locked ones — never material.
+  const burnable = adminTierCards?.filter((c) => !inSquad(c) && !c.is_user_locked);
+  const materialCards = isExtensionBand ? band?.cards : burnable;
   const materialLoading = isExtensionBand ? bandLoading : adminTierLoading;
 
   const cost = isExtensionBand ? band?.cost ?? null : rarity && tier ? tier[COST_FIELD[rarity]!] : null;

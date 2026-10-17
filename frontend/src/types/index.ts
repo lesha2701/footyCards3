@@ -114,6 +114,10 @@ export interface UserCard {
   is_in_lineup: boolean;
   is_in_tactico_squad: boolean;
   hidden_from_trade: boolean;
+  /** The owner's own «замок»: can't be sold or burned as material. */
+  is_user_locked?: boolean;
+  /** Stands in a player-tournament squad (no flag of its own on the card). */
+  in_personal_squad?: boolean;
   duplicate_count?: number;
   diamond_rating_bonus: number;
   /** This copy's own skill (null = none). See CardSkillBadge / CardSkillPanel. */

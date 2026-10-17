@@ -5,11 +5,19 @@ import { fetchPathState } from "@/api/path";
 import PathSheet from "@/components/path/PathSheet";
 import TalentBlock from "@/components/path/TalentBlock";
 import { levelFraction, shownLevelXp, pathFraction, stageIcon } from "@/lib/pathCards";
-import type { Player } from "@/types";
+import type { Player, UserCard } from "@/types";
 
 /** «Академия» block of the card detail sheet: stage, path progress, the
  * next level, the talent and the button to the full «Путь» screen. */
-export default function PathPanel({ cardId, player }: { cardId: number; player: Player }) {
+export default function PathPanel({
+  cardId, player, card, inArena,
+}: {
+  cardId: number;
+  player: Player;
+  /** The owned copy, so «Путь» can put it into the Card Arena lineup itself. */
+  card?: UserCard;
+  inArena?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const { data: state } = useQuery({ queryKey: ["path", cardId], queryFn: () => fetchPathState(cardId) });
   if (!state) return null;
@@ -46,7 +54,7 @@ export default function PathPanel({ cardId, player }: { cardId: number; player: 
         <p className="mt-2 text-center text-sm font-semibold text-path">Открыть путь →</p>
       </button>
       {state.talent && <TalentBlock talent={state.talent} compact />}
-      {open && <PathSheet cardId={cardId} player={player} onClose={() => setOpen(false)} />}
+      {open && <PathSheet cardId={cardId} player={player} card={card} inArena={inArena} onClose={() => setOpen(false)} />}
     </div>
   );
 }

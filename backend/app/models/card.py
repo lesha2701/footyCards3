@@ -30,6 +30,9 @@ class UserCard(Base):
     is_in_lineup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_in_tactico_squad: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     hidden_from_trade: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # The owner's own «замок» (migration 0161): protects this copy from being
+    # sold or burned as material — it still plays in squads and can be traded.
+    is_user_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Diamond-rarity only: rating points earned by feeding this specific
     # copy other cards (see diamond_upgrade_service.py). Lives on the owned
     # card, not Player.rating, so leveling one copy never affects other
@@ -82,6 +85,12 @@ class UserCard(Base):
 
     def is_locked(self) -> bool:
         return self.is_locked_by_admin or self.is_locked_in_trade or self.is_in_lineup or self.is_in_tactico_squad
+
+    def can_burn(self) -> bool:
+        """May this copy be destroyed as material (stars, diamond feeding,
+        prestige)? Never while it's locked, in a squad, or under the owner's
+        own «замок»."""
+        return not self.is_locked() and not self.is_user_locked
 
     __table_args__ = (
         UniqueConstraint("player_id", "serial_number", name="uq_user_cards_player_serial"),

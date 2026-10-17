@@ -12,6 +12,10 @@ from app.schemas.card import CollectionStatsOut, UserCardOut
 from app.schemas.card_star import CardStarClaimRequest, CardStarFeedRequest, CardStarOperationOut, CardStarStateOut
 from app.schemas.card_upgrade import CardUpgradeResultOut, CardUpgradeRuleOut, UpgradeCardRequest
 from app.schemas.collection import (
+    CardFilterDefault,
+    CardFilterOptionsOut,
+    SetCardsLockedOut,
+    SetCardsLockedRequest,
     AlbumCollectionDetailOut,
     AlbumOverviewOut,
     BulkSellRequest,
@@ -97,6 +101,39 @@ async def set_card_hidden_from_trade(
     return await set_card_hidden(db, user.id, card_id, payload.hidden)
 
 
+@router.patch("/cards/lock", response_model=SetCardsLockedOut)
+async def set_cards_locked(
+    payload: SetCardsLockedRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """The owner's «замок»: a locked copy can't be sold or burned as material."""
+    from app.services.collection_service import set_cards_user_locked
+
+    ids = await set_cards_user_locked(db, user, payload.card_ids, payload.locked)
+    return SetCardsLockedOut(card_ids=ids, locked=payload.locked)
+
+
+@router.get("/filter-options", response_model=CardFilterOptionsOut)
+async def get_filter_options(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    from app.services.collection_service import card_filter_options
+
+    return await card_filter_options(db, user.id)
+
+
+@router.get("/filter-default", response_model=Optional[CardFilterDefault])
+async def get_filter_default(user: User = Depends(get_current_user)):
+    return user.card_filter_default
+
+
+@router.put("/filter-default", response_model=Optional[CardFilterDefault])
+async def put_filter_default(
+    payload: Optional[CardFilterDefault] = None, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """Saves the default filter (null / empty clears it)."""
+    from app.services.collection_service import save_filter_default
+
+    return await save_filter_default(db, user, payload.model_dump(exclude_none=True) if payload else None)
+
+
 @router.get("/stats", response_model=CollectionStatsOut)
 async def get_my_stats(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await collection_stats(db, user.id)
@@ -143,6 +180,7 @@ async def upgrade_my_cards(
 ):
     return await upgrade_card(
         db, user, payload.user_card_ids, payload.to_rarity, payload.idempotency_key, payload.confirm_skill_loss,
+        confirm_leave_squad=payload.confirm_leave_squad,
     )
 
 

@@ -139,6 +139,22 @@ Main features:
   receipt is never delivered and a delivered one never refunded (decided
   under the receipt's row lock). Availability is enforced at pre-checkout,
   not at delivery. The bot also serves `/paysupport` and `/terms`.
+- **Card locks and squads**: `UserCard.is_user_locked` is the owner's own
+  «замок» (`PATCH /collection/cards/lock`, bulk) — a locked copy is never
+  sold or burned as material; it still plays and trades. `UserCard.can_burn()`
+  is the material check (no squad flag, no trade/admin lock, no «замок»);
+  player-tournament squads have no flag on the card, so material/Forge paths
+  also check `collection_service.personal_squad_card_ids`. Improving a card
+  (stars, diamond feeding, path, skill) is allowed while it plays; the Forge
+  destroys the stake, so a squad copy needs `confirm_leave_squad`. Lists
+  (`/collection/cards`, album, `/upgrade-cards`) return squad and locked
+  copies as their own tiles (`in_personal_squad` flag); the UI shades them
+  (`PlayerCard inSquad / userLocked`, `lib/cardLocks.ts`).
+- **Card filter**: `users.card_filter_default` (`GET/PUT
+  /collection/filter-default`) is the saved default for «Мои карты», the
+  album and the Forge (`lib/cardFilter.ts` `useCardFilter`,
+  `CardFilterBar`); `/collection/filter-options` lists the owner's countries
+  and clubs.
 - **Frontend routing**: one React app serves both the Mini App (`/`, `/packs`,
   `/play/*`, `/collection`, …) and the admin panel (`/admin/*`, gated by
   `AdminGuard` client-side and `get_current_admin` server-side). State:

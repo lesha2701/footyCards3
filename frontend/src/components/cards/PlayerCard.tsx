@@ -1,6 +1,7 @@
 import { memo } from "react";
 
 import { useCardSkin } from "@/lib/cardSkin";
+import { IconLock } from "@/components/icons";
 import PathCardMark from "@/components/path/PathCardMark";
 import { staticUrl } from "@/lib/api";
 import { cardSkinClass } from "@/lib/cosmetics";
@@ -27,10 +28,15 @@ interface Props {
   talentOverride?: string | null;
   /** The card is the focus (pack reveal, detail): adds the GPU shine. */
   animated?: boolean;
+  /** This copy plays in a squad: the photo is shaded under a lock. */
+  inSquad?: boolean;
+  /** The owner's «замок» on this copy: a lock mark at the top centre. */
+  userLocked?: boolean;
 }
 
 // One corner = one meaning: top-left rating + status (★ stars / ◆ prestige),
-// top-right position, bottom-left skill (badge slot), bottom-right «Академия».
+// top-right position, bottom-left skill (badge slot), bottom-right «Академия»;
+// the owner's lock sits top-centre, a squad copy is shaded under a lock.
 // The footer keeps only the name (+ club and attack/defence from md up):
 // rarity and «Академия» are already said by the frame, so no repeated text.
 const RATING_TEXT = { sm: "text-[12px]", md: "text-sm", lg: "text-base" } as const;
@@ -38,7 +44,7 @@ const NAME_TEXT = { sm: "text-caption", md: "text-xs", lg: "text-sm" } as const;
 
 function PlayerCard({
   player, size = "md", badge, footer, onClick, selected, dimmed, stars = 0, pathStage, prestige = 0, talentOverride,
-  animated = false,
+  animated = false, inSquad = false, userLocked = false,
 }: Props) {
   const isPath = !!player.path_talent_code;
   // Equipped card skin (cosmetic, own cards only): an extra outline.
@@ -57,7 +63,7 @@ function PlayerCard({
       disabled={!onClick}
       aria-label={`${player.display_name}, ${player.position}, рейтинг ${player.rating}, ${RARITY_LABELS[player.rarity]}${
         isPath ? ", Академия" : ""
-      }`}
+      }${inSquad ? ", в составе" : ""}${userLocked ? ", под замком" : ""}`}
       className={`group relative flex aspect-[3/4] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-b ${frame} ${
         isPath ? "p-[3px]" : "p-[2px]"
       } transition-transform active:scale-[0.97] ${
@@ -92,6 +98,18 @@ function PlayerCard({
           <div className="absolute right-1 top-1 rounded-md bg-black/70 px-1.5 py-0.5 font-display font-semibold leading-none text-white">
             <span className={size === "sm" ? "text-micro" : "text-caption"}>{player.position}</span>
           </div>
+          {inSquad && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50" aria-hidden>
+              <span className="flex items-center gap-1 rounded-full bg-black/75 px-2 py-0.5 text-micro font-bold text-ink-chalk">
+                <IconLock size={11} /> {size === "sm" ? "Состав" : "В составе"}
+              </span>
+            </div>
+          )}
+          {userLocked && (
+            <div className="absolute left-1/2 top-1 -translate-x-1/2 rounded-md bg-amber-400 p-0.5 text-bg-base" aria-hidden>
+              <IconLock size={size === "sm" ? 10 : 12} />
+            </div>
+          )}
           {badge && <div className="absolute bottom-1 left-1">{badge}</div>}
           {isPath && (
             <div className="absolute bottom-1 right-1">

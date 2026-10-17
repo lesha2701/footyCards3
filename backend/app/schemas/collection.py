@@ -22,6 +22,11 @@ class UserCardListItem(BaseModel):
     is_in_lineup: bool
     is_in_tactico_squad: bool
     hidden_from_trade: bool
+    # The owner's own «замок»: no selling, no burning as material.
+    is_user_locked: bool = False
+    # Standing in a player-tournament squad (those don't set a flag on the
+    # card); filled by the endpoints that list cards for picking.
+    in_personal_squad: bool = False
     duplicate_count: int = 1
     diamond_rating_bonus: int = 0
     # «Звёзды карточки» (services/card_star_service.py): earned stars, duplicates
@@ -68,6 +73,7 @@ class UserCardListItem(BaseModel):
             "is_in_lineup": data.is_in_lineup,
             "is_in_tactico_squad": data.is_in_tactico_squad,
             "hidden_from_trade": data.hidden_from_trade,
+            "is_user_locked": bool(getattr(data, "is_user_locked", False)),
             "diamond_rating_bonus": getattr(data, "diamond_rating_bonus", 0) or 0,
             "stars": getattr(data, "stars", 0) or 0,
             "star_progress": getattr(data, "star_progress", 0) or 0,
@@ -128,6 +134,32 @@ class CollectionFilterParams:
 
 class SetCardHiddenRequest(BaseModel):
     hidden: bool
+
+
+class SetCardsLockedRequest(BaseModel):
+    """The owner's «замок» on one or several copies."""
+    card_ids: List[int]
+    locked: bool
+
+
+class SetCardsLockedOut(BaseModel):
+    card_ids: List[int]
+    locked: bool
+
+
+class CardFilterOptionsOut(BaseModel):
+    countries: List[str]
+    clubs: List[str]
+
+
+class CardFilterDefault(BaseModel):
+    """Saved default card filter; every field optional (unset = any)."""
+    rarity: Optional[str] = None
+    country: Optional[str] = None
+    club: Optional[str] = None
+    position: Optional[str] = None
+    sort_by: Optional[str] = None
+    has_skill: Optional[bool] = None
 
 
 class SellCardRequest(BaseModel):

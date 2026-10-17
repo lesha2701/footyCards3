@@ -75,7 +75,7 @@ def reward_for(config, tier: int) -> dict:
 def _plain(card: UserCard) -> bool:
     """Not locked / in a squad / in a trade, no path progress or prestige of
     its own (burning it must never destroy someone's work)."""
-    return not card.is_locked() and not card.has_path_progress()
+    return card.can_burn() and not card.has_path_progress()
 
 
 def ratio(config) -> int:

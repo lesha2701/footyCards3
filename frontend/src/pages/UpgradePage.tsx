@@ -1,15 +1,20 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { fetchUpgradeableCards, fetchUpgradeRules } from "@/api/collection";
+import { fetchUpgradeableCards, fetchUpgradeRules, setCardsLocked } from "@/api/collection";
 import CardUpgradeModal from "@/components/cards/CardUpgradeModal";
 import DiamondFeedModal from "@/components/cards/DiamondFeedModal";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import PlayerCard from "@/components/cards/PlayerCard";
+import CardFilterBar from "@/components/collection/CardFilterBar";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import { IconChevronRight, IconCoin, IconStar, IconUpgrade } from "@/components/icons";
+import { matchesPlayer, useCardFilter } from "@/lib/cardFilter";
+import { cardLockProps } from "@/lib/cardLocks";
 import { effectiveUpgradeChance } from "@/lib/cardUpgrade";
+import { formatGameError } from "@/lib/errors";
 import { RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import type { Rarity, UserCard } from "@/types";
 import CardsSectionTabs from "@/components/layout/CardsSectionTabs";
@@ -31,7 +36,13 @@ export default function UpgradePage() {
   const [rarity, setRarity] = useState<Rarity | null>(null);
   const [selected, setSelected] = useState<UserCard[]>([]);
   const [upgrading, setUpgrading] = useState(false);
-  const effectiveRarity = rarity ?? upgradeableRarities[0] ?? null;
+  // The saved default filter narrows the Forge too (its rarity is picked above).
+  const { filter, setFilter, defaultFilter } = useCardFilter();
+  const queryClient = useQueryClient();
+  const [unlockAsk, setUnlockAsk] = useState<UserCard | null>(null);
+  const [lockError, setLockError] = useState<string | null>(null);
+  const savedRarity = filter.rarity && upgradeableRarities.includes(filter.rarity) ? filter.rarity : null;
+  const effectiveRarity = rarity ?? savedRarity ?? upgradeableRarities[0] ?? null;
   const currentRule = rules?.find((r) => r.from_rarity === effectiveRarity && r.is_active);
 
   // Diamond cards don't go through the common→rare→epic→legendary rule chain
@@ -49,7 +60,27 @@ export default function UpgradePage() {
     setSelected([]);
   };
 
+  const unlockMutation = useMutation({
+    mutationFn: (card: UserCard) => setCardsLocked([card.id], false),
+    onSuccess: (_data, card) => {
+      setUnlockAsk(null);
+      setLockError(null);
+      queryClient.invalidateQueries({ queryKey: ["upgrade-cards"] });
+      queryClient.invalidateQueries({ queryKey: ["collection"] });
+      setSelected((prev) => (prev.length < MAX_STAKED_CARDS ? [...prev, { ...card, is_user_locked: false }] : prev));
+    },
+    onError: (err) => {
+      setUnlockAsk(null);
+      setLockError(formatGameError(err, "Не удалось снять замок"));
+    },
+  });
+
   const toggleCard = (card: UserCard) => {
+    // A locked copy is protected from burning: ask before taking the lock off.
+    if (card.is_user_locked && !selected.some((c) => c.id === card.id)) {
+      setUnlockAsk(card);
+      return;
+    }
     setSelected((prev) => {
       if (prev.some((c) => c.id === card.id)) return prev.filter((c) => c.id !== card.id);
       if (prev.length >= MAX_STAKED_CARDS) return prev;
@@ -62,11 +93,13 @@ export default function UpgradePage() {
   // of the same player each show as their own selectable tile, and locked
   // cards (in a lineup, a Tactico squad, a pending trade, or frozen by an
   // admin) never appear as an option in the first place.
-  const { data: cards, isLoading } = useQuery({
+  const { data: allCards, isLoading } = useQuery({
     queryKey: ["upgrade-cards", effectiveRarity],
     queryFn: () => fetchUpgradeableCards(effectiveRarity!),
     enabled: !!effectiveRarity,
   });
+  const cards = allCards?.filter((c) => matchesPlayer({ ...filter, rarity: null }, c.player));
+  const shownDiamonds = diamondCards?.filter((c) => matchesPlayer({ ...filter, rarity: null }, c.player));
 
   const previewChance = currentRule && selected.length > 0 ? effectiveUpgradeChance(currentRule, selected.length) : null;
   const previewCost = currentRule ? currentRule.coin_cost * Math.max(1, selected.length) : null;
@@ -165,12 +198,24 @@ export default function UpgradePage() {
                 ))}
               </div>
 
+              <CardFilterBar
+                filter={filter} onChange={setFilter} defaultFilter={defaultFilter}
+                showRarity={false} showSort={false} showSkill={false}
+              />
+              <p className="text-micro text-ink-mist-dim">
+                🔒 Затенённые карты играют в составе — их тоже можно поставить, они уйдут из состава. Карты под замком
+                сначала попросят снять замок.
+              </p>
+              {lockError && <p className="text-xs text-red-400">{lockError}</p>}
+
               {isLoading && <CardGridSkeleton count={9} />}
               {!isLoading && !cards?.length && (
                 <EmptyState
                   icon={IconUpgrade}
                   title="Нечего улучшать"
-                  description={`Нет доступных карточек редкости «${RARITY_LABELS[effectiveRarity!]}» — открой паки, или освободи карточки из состава/обмена`}
+                  description={allCards?.length
+                    ? "Под фильтр ничего не подходит — смени или очисти его"
+                    : `Нет карточек редкости «${RARITY_LABELS[effectiveRarity!]}» — открой паки`}
                 />
               )}
 
@@ -180,6 +225,7 @@ export default function UpgradePage() {
                     key={card.id}
                     player={card.player}
                     badge={<CardSkillBadge code={card.skill_code} level={card.skill_level} />}
+                    {...cardLockProps(card)}
                     selected={selected.some((c) => c.id === card.id)}
                     onClick={() => toggleCard(card)}
                   />
@@ -194,7 +240,12 @@ export default function UpgradePage() {
         <>
           <p className="text-xs text-ink-mist">
             Твои диамантовые карточки. Скорми им другие карты, чтобы поднять рейтинг — нажми на карточку, чтобы начать.
+            Карты из состава тоже можно качать: они остаются в составе.
           </p>
+          <CardFilterBar
+            filter={filter} onChange={setFilter} defaultFilter={defaultFilter}
+            showRarity={false} showSort={false} showSkill={false}
+          />
 
           {diamondLoading && <CardGridSkeleton count={9} />}
           {!diamondLoading && !diamondCards?.length && (
@@ -206,11 +257,12 @@ export default function UpgradePage() {
           )}
 
           <div className="grid grid-cols-3 gap-2 pb-20">
-            {diamondCards?.map((card) => (
+            {shownDiamonds?.map((card) => (
               <PlayerCard
                 key={card.id}
                 player={card.player}
                 badge={<CardSkillBadge code={card.skill_code} level={card.skill_level} />}
+                {...cardLockProps(card)}
                 selected={feedingCard?.id === card.id}
                 onClick={() => setFeedingCard(card)}
               />
@@ -220,6 +272,15 @@ export default function UpgradePage() {
       )}
 
       {feedingCard && <DiamondFeedModal card={feedingCard} onClose={() => setFeedingCard(null)} />}
+
+      <ConfirmDialog
+        open={!!unlockAsk}
+        title="Карточка под замком"
+        description={`«${unlockAsk?.player.display_name ?? ""}» защищена замком от сжигания. Снять замок и поставить её в Кузницу?`}
+        confirmLabel="Снять замок"
+        onConfirm={() => unlockAsk && unlockMutation.mutate(unlockAsk)}
+        onCancel={() => setUnlockAsk(null)}
+      />
 
       {tab === "upgrade" && selected.length > 0 && (
         <div className="safe-bottom fixed inset-x-0 bottom-16 z-20 flex justify-center px-4">

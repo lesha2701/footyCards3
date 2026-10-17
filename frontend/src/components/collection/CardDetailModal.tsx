@@ -1,14 +1,20 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { fetchCardStars } from "@/api/collection";
+import { fetchCardStars, setCardsLocked } from "@/api/collection";
+import { fetchActiveLineup, setActiveLineup } from "@/api/lineups";
 import { fetchPathState } from "@/api/path";
-import { IconCoin, IconLock, IconTag, IconUpgrade } from "@/components/icons";
+import DiamondFeedModal from "@/components/cards/DiamondFeedModal";
+import { IconCoin, IconLock, IconLockOpen, IconPlay, IconStar, IconTag, IconUpgrade } from "@/components/icons";
 import CardSkillPanel from "@/components/collection/CardSkillPanel";
 import CardStarPanel from "@/components/collection/CardStarPanel";
 import ShareButton from "@/components/common/ShareButton";
 import PathPanel from "@/components/path/PathPanel";
 import { staticUrl } from "@/lib/api";
+import { squadLabel } from "@/lib/cardLocks";
+import { formatGameError } from "@/lib/errors";
+import { planArenaPlacement } from "@/lib/lineupPlacement";
+import { haptic } from "@/lib/telegram";
 import { pathFrameClass } from "@/lib/pathCards";
 import { prestigeMarks, prestigeStyle } from "@/lib/prestige";
 import { POSITION_LABELS, RARITY_GLOW_STATIC, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
@@ -38,8 +44,53 @@ export default function CardDetailModal({
   const player = card.player;
   const isDiamond = player.rarity === "diamond";
   const isPath = !!player.path_talent_code;
-  const locked = card.is_locked_by_admin || card.is_locked_in_trade || card.is_in_lineup || card.is_in_tactico_squad;
+  const queryClient = useQueryClient();
+  // The `card` prop is a snapshot: these follow what's done from this sheet.
+  const [userLocked, setUserLocked] = useState(!!card.is_user_locked);
+  const [inArena, setInArena] = useState(card.is_in_lineup);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [feeding, setFeeding] = useState(false);
+  const frozen = card.is_locked_by_admin || card.is_locked_in_trade;
+  const squad = squadLabel({ ...card, is_in_lineup: inArena });
+  // Selling needs a free copy: not frozen, not in a squad, not under the lock.
+  const locked = frozen || !!squad || userLocked;
   const [tab, setTab] = useState<Tab>(isPath ? "path" : "overview");
+
+  const refreshLists = () => {
+    for (const key of [["collection"], ["album-detail"], ["upgrade-cards"], ["academy"], ["lineup"], ["lineup-templates"]]) {
+      queryClient.invalidateQueries({ queryKey: key });
+    }
+  };
+
+  const lockMutation = useMutation({
+    mutationFn: (next: boolean) => setCardsLocked([card.id], next),
+    onSuccess: (data) => {
+      haptic("light");
+      setUserLocked(data.locked);
+      setNotice(data.locked ? "🔒 Карточка под замком: её не продать и не сжечь" : "Замок снят");
+      refreshLists();
+    },
+    onError: (err) => setNotice(formatGameError(err, "Не удалось поставить замок")),
+  });
+
+  // «В состав Card Arena» straight from the card: picks the slot itself.
+  const arenaMutation = useMutation({
+    mutationFn: async () => {
+      const plan = planArenaPlacement(await fetchActiveLineup(), card);
+      if (!plan.ok) throw new Error(plan.reason);
+      await setActiveLineup(plan.slots);
+      return plan;
+    },
+    onSuccess: (plan) => {
+      haptic("medium");
+      setInArena(true);
+      setNotice(plan.ok && plan.replaced
+        ? `В составе Card Arena вместо «${plan.replaced.player.display_name}»`
+        : "Поставлена в состав Card Arena");
+      refreshLists();
+    },
+    onError: (err) => setNotice(formatGameError(err, "Не удалось поставить в состав")),
+  });
   // Same cache entry CardStarPanel reads, so feeding duplicates updates the
   // rating shown here right away (the `card` prop is a snapshot).
   const { data: starState } = useQuery({
@@ -151,20 +202,57 @@ export default function CardDetailModal({
                       Коллекция: {player.collection_name}
                     </p>
                   )}
-                  {locked && (
+                  {(frozen || squad) && (
                     <p className="flex items-center gap-1.5 text-xs text-ink-mist">
                       <IconLock size={13} />
-                      Заблокирована {
-                        card.is_in_lineup
-                          ? "(в составе Card Arena)"
-                          : card.is_in_tactico_squad
-                            ? "(в составе Тактико)"
-                            : card.is_locked_in_trade
-                              ? "(в обмене)"
-                              : "(администратором)"
-                      }
+                      {squad
+                        ? `Играет — ${squad}. Качать можно, продать — нет`
+                        : card.is_locked_in_trade ? "Заблокирована (в обмене)" : "Заблокирована администратором"}
                     </p>
                   )}
+
+                  <section className="flex flex-col gap-2 rounded-2xl bg-black/20 p-2.5" aria-label="Прокачка">
+                    <p className="px-0.5 text-micro font-semibold uppercase tracking-wider text-ink-mist-dim">Прокачка</p>
+                    {!inArena && !frozen && (
+                      <ActionButton onClick={() => arenaMutation.mutate()} disabled={arenaMutation.isPending} icon={<IconPlay size={15} />}>
+                        В состав Card Arena
+                      </ActionButton>
+                    )}
+                    {isDiamond && !isPath && (
+                      <ActionButton onClick={() => setFeeding(true)} disabled={frozen} icon={<IconStar size={15} />}>
+                        Поднять рейтинг бриллианта
+                      </ActionButton>
+                    )}
+                    {onUpgrade && (
+                      <ActionButton onClick={onUpgrade} disabled={frozen || userLocked} icon={<IconUpgrade size={15} />}>
+                        {userLocked ? "Кузница: сначала сними замок" : "Апгрейд редкости в Кузнице"}
+                      </ActionButton>
+                    )}
+                    <p className="px-0.5 text-micro text-ink-mist-dim">
+                      {isPath
+                        ? "Путь, попытки и престиж — во вкладке «Путь»; навык — во вкладке «Навык»."
+                        : isDiamond
+                          ? "Навык — во вкладке «Навык»."
+                          : "Звёзды и навык — в своих вкладках выше."}
+                    </p>
+                  </section>
+
+                  <label className="flex min-h-[44px] items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2">
+                    <span className="flex flex-col">
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-ink-chalk">
+                        {userLocked ? <IconLock size={13} className="text-amber-300" /> : <IconLockOpen size={13} />} Замок
+                      </span>
+                      <span className="text-micro text-ink-mist-dim">Защита от продажи и сжигания в прокачке</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={userLocked}
+                      disabled={lockMutation.isPending}
+                      onChange={(e) => lockMutation.mutate(e.target.checked)}
+                      className="h-5 w-5 shrink-0 accent-amber-400"
+                      aria-label="Замок"
+                    />
+                  </label>
                   <label className="flex min-h-[44px] items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2">
                     <span className="text-xs text-ink-mist">Скрыть от предложений обмена</span>
                     <input
@@ -178,24 +266,21 @@ export default function CardDetailModal({
                   {(player.rarity === "legendary" || player.rarity === "diamond") && (
                     <ShareButton kind="card" id={card.id} label="Похвастаться в Telegram" />
                   )}
-                  {onUpgrade && (
-                    <button
-                      onClick={onUpgrade}
-                      disabled={locked}
-                      className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-2xl bg-bg-raised text-sm font-semibold text-accent-lime disabled:opacity-40"
-                    >
-                      <IconUpgrade size={15} />
-                      Апгрейд редкости
-                    </button>
-                  )}
                 </div>
               )}
-              {tab === "path" && isPath && <PathPanel key={`path-${card.id}`} cardId={card.id} player={player} />}
+              {tab === "path" && isPath && (
+                <PathPanel key={`path-${card.id}`} cardId={card.id} player={player} card={card} inArena={inArena} />
+              )}
               {tab === "skill" && <CardSkillPanel key={card.id} cardId={card.id} />}
               {tab === "stars" && <CardStarPanel key={`stars-${card.id}`} cardId={card.id} isDiamond={isDiamond} />}
             </div>
           </div>
 
+          {notice && (
+            <p className="shrink-0 border-t border-white/10 bg-bg-surface px-4 pt-2 text-xs text-accent-lime" role="status">
+              {notice}
+            </p>
+          )}
           <div className="flex shrink-0 gap-2 border-t border-white/10 bg-bg-surface px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
             <button onClick={onClose} className="min-h-[44px] flex-1 rounded-2xl bg-white/5 text-sm font-semibold text-ink-mist">
               Закрыть
@@ -205,13 +290,43 @@ export default function CardDetailModal({
               disabled={locked}
               className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-2xl bg-red-500 text-sm font-semibold text-white disabled:opacity-40"
             >
-              Продать за
-              <IconCoin size={13} />
-              {sellPrice}
+              {userLocked ? (
+                <>
+                  <IconLock size={13} /> Под замком
+                </>
+              ) : (
+                <>
+                  Продать за
+                  <IconCoin size={13} />
+                  {sellPrice}
+                </>
+              )}
             </button>
           </div>
         </div>
       </div>
+      {feeding && <DiamondFeedModal card={card} onClose={() => { setFeeding(false); refreshLists(); }} />}
     </div>
+  );
+}
+
+function ActionButton({
+  onClick, disabled, icon, children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl bg-bg-raised text-sm font-semibold text-accent-lime disabled:opacity-40"
+    >
+      {icon}
+      {children}
+    </button>
   );
 }

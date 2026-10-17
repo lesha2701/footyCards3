@@ -104,13 +104,17 @@ async def feed_cards(
         raise ConflictError("Only a diamond card can be leveled up this way")
     if diamond_card.player.path_talent_code is not None:
         raise ConflictError("Карточки «Академии» растут только по своему пути")
-    if diamond_card.is_locked():
+    # The fed card itself stays (same row), so it may stand in a squad — only
+    # an admin freeze or a pending trade stops it.
+    if diamond_card.is_locked_by_admin or diamond_card.is_locked_in_trade:
         raise ConflictError("This card is locked and cannot be upgraded")
 
     material_cards = [cards[cid] for cid in material_card_ids]
     for card in material_cards:
         if card.owner_id != locked_user.id:
             raise NotFoundError("Card not found")
+        if card.is_user_locked:
+            raise ConflictError(f"«{card.player.display_name}» под твоим замком — сними замок, чтобы сжечь её")
         if card.is_locked():
             raise ConflictError("This card is locked and cannot be used as material")
         if card.player.path_talent_code is not None:
@@ -219,6 +223,7 @@ async def get_material_cards(db: AsyncSession, user_id: int, diamond_card_id: in
             UserCard.is_locked_in_trade.is_(False),
             UserCard.is_in_lineup.is_(False),
             UserCard.is_in_tactico_squad.is_(False),
+            UserCard.is_user_locked.is_(False),
         )
     )
     if band.kind == "same_player_diamond":

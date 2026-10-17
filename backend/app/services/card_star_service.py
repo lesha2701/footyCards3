@@ -102,6 +102,8 @@ def _material_block_reason(card: UserCard, target: UserCard, in_squad: set[int])
         return "Карточка не найдена"
     if card.player_id != target.player_id:
         return "Вкладывать можно только дубли этого же игрока"
+    if card.is_user_locked:
+        return "Карточка под твоим замком — сними замок, чтобы вложить её"
     if card.is_locked() or card.id in in_squad:
         return "Карточка в составе, в обмене или заблокирована"
     if card.has_star_investment():

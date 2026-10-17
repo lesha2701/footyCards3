@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { fetchActiveLineup, setActiveLineup } from "@/api/lineups";
 import { buyPathAttempt, createPathStarsInvoice, fetchPathStarsInvoiceStatus, fetchPathState } from "@/api/path";
 import { IconCoin } from "@/components/icons";
 import PrestigeSection from "@/components/path/PrestigeSection";
@@ -10,10 +11,11 @@ import StageUpCelebration from "@/components/path/StageUpCelebration";
 import TalentBlock from "@/components/path/TalentBlock";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
+import { planArenaPlacement } from "@/lib/lineupPlacement";
 import { levelFraction, shownLevelXp, markStageSeen, pathFraction, seenStage, SOURCE_LABELS, stageIcon } from "@/lib/pathCards";
 import { hapticNotify, openTelegramInvoice } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { PathStage, PathState, Player } from "@/types";
+import type { PathStage, PathState, Player, UserCard } from "@/types";
 
 async function waitForInvoice(token: string): Promise<void> {
   for (let attempt = 0; attempt < 20; attempt++) {
@@ -121,7 +123,14 @@ function StageNode({ stage, isLast, reduced }: { stage: PathStage; isLast: boole
 
 /** «Сегодня»: what can be done right now — attempts left and the closest
  * unfinished task of the current stage — with one button to go and play. */
-function TodayBlock({ state, onPlay }: { state: PathState; onPlay: () => void }) {
+function TodayBlock({
+  state, onPlay, placeFirst = false, pending = false,
+}: {
+  state: PathState;
+  onPlay: () => void;
+  placeFirst?: boolean;
+  pending?: boolean;
+}) {
   const current = state.stages.find((s) => s.current);
   const next = current?.tasks
     .filter((t) => t.applies && !t.done)
@@ -152,10 +161,12 @@ function TodayBlock({ state, onPlay }: { state: PathState; onPlay: () => void })
       <button
         type="button"
         onClick={onPlay}
-        disabled={!state.enabled || attempts <= 0}
+        disabled={!state.enabled || attempts <= 0 || pending}
         className="mt-2 min-h-[44px] w-full rounded-xl bg-floodlight text-sm font-bold text-bg-base disabled:opacity-40"
       >
-        {attempts > 0 ? "Играть в Card Arena" : "Попытки Арены на сегодня закончились"}
+        {attempts <= 0
+          ? "Попытки Арены на сегодня закончились"
+          : placeFirst ? "Поставить в состав и играть" : "Играть в Card Arena"}
       </button>
     </section>
   );
@@ -164,7 +175,16 @@ function TodayBlock({ state, onPlay }: { state: PathState; onPlay: () => void })
 /** «Путь» screen of one «Академия» card: header with the level bar, the
  * road of stages with their tasks, the talent, today's attempts (with
  * purchases) and how experience is earned. Full-screen sheet, mobile-first. */
-export default function PathSheet({ cardId, player, onClose }: { cardId: number; player: Player; onClose: () => void }) {
+export default function PathSheet({
+  cardId, player, card, inArena = true, onClose,
+}: {
+  cardId: number;
+  player: Player;
+  /** The owned copy: lets «Играть» put it into the Card Arena lineup first. */
+  card?: UserCard;
+  inArena?: boolean;
+  onClose: () => void;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const reduced = useReducedMotion();
@@ -173,6 +193,22 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
   const [error, setError] = useState<string | null>(null);
   const [celebrate, setCelebrate] = useState<{ index: number; name: string; talent?: string | null } | null>(null);
   const { data: state, isLoading } = useQuery({ queryKey: ["path", cardId], queryFn: () => fetchPathState(cardId) });
+
+  // Experience only comes from matches the card plays in: a copy outside
+  // the Card Arena lineup is put there first, straight from this screen.
+  const playMutation = useMutation({
+    mutationFn: async () => {
+      if (card && !inArena) {
+        const plan = planArenaPlacement(await fetchActiveLineup(), card);
+        if (!plan.ok) throw new Error(plan.reason);
+        await setActiveLineup(plan.slots);
+        queryClient.invalidateQueries({ queryKey: ["lineup"] });
+        queryClient.invalidateQueries({ queryKey: ["collection"] });
+      }
+    },
+    onSuccess: () => { onClose(); navigate("/play/arena"); },
+    onError: (err) => setError(formatGameError(err, "Не удалось поставить карточку в состав")),
+  });
 
   // A stage reached since the player last looked: celebrate it once.
   useEffect(() => {
@@ -288,7 +324,12 @@ export default function PathSheet({ cardId, player, onClose }: { cardId: number;
               </p>
             )}
 
-            <TodayBlock state={state} onPlay={() => { onClose(); navigate("/play/arena"); }} />
+            <TodayBlock
+              state={state}
+              placeFirst={!!card && !inArena}
+              pending={playMutation.isPending}
+              onPlay={() => playMutation.mutate()}
+            />
 
             <section aria-label="Этапы пути">
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-mist-dim">Путь</h3>

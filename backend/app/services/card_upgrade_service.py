@@ -26,15 +26,16 @@ async def list_rules(db: AsyncSession) -> list[CardUpgradeRule]:
     return list(result.scalars().all())
 
 
-async def list_upgradeable_cards(db: AsyncSession, user_id: int, rarity: Rarity) -> list[UserCard]:
-    """Every individual card of `rarity` the user can actually stake right
-    now — unlike the general collection browse endpoint, this is NOT
-    deduplicated by player: each owned copy is its own stakeable unit
-    (staking several duplicates of the same player is the most natural
-    upgrade-fodder case), and locked cards (in a lineup, a Tactico squad,
-    a pending trade, or frozen by an admin) are excluded outright rather
-    than left for the player to pick and then get rejected at request time.
-    """
+async def list_upgradeable_cards(db: AsyncSession, user_id: int, rarity: Rarity) -> list[UserCardOut]:
+    """Every individual card of `rarity` the user owns — NOT deduplicated by
+    player: each owned copy is its own stakeable unit (staking several
+    duplicates of the same player is the most natural upgrade-fodder case).
+    Copies in a squad or under the owner's «замок» are listed too (flagged,
+    the UI shades them): a squad copy can be staked after confirming it
+    leaves the squad, a locked one after taking the lock off. Copies frozen
+    by an admin or in a pending trade are left out — they can't be staked."""
+    from app.services.collection_service import personal_squad_card_ids
+
     result = await db.execute(
         select(UserCard)
         .join(Player)
@@ -43,13 +44,18 @@ async def list_upgradeable_cards(db: AsyncSession, user_id: int, rarity: Rarity)
             Player.rarity == rarity,
             UserCard.is_locked_by_admin.is_(False),
             UserCard.is_locked_in_trade.is_(False),
-            UserCard.is_in_lineup.is_(False),
-            UserCard.is_in_tactico_squad.is_(False),
         )
         .options(joinedload(UserCard.player))
         .order_by(Player.rating.desc())
     )
-    return list(result.unique().scalars().all())
+    cards = list(result.unique().scalars().all())
+    in_squad = await personal_squad_card_ids(db, [c.id for c in cards])
+    out = []
+    for card in cards:
+        item = UserCardOut.model_validate(card)
+        item.in_personal_squad = card.id in in_squad
+        out.append(item)
+    return out
 
 
 async def _get_active_rule(db: AsyncSession, from_rarity: Rarity, to_rarity: Rarity) -> CardUpgradeRule:
@@ -117,6 +123,7 @@ async def upgrade_card(
     target_rarity: Rarity,
     idempotency_key: Optional[str],
     confirm_skill_loss: bool = False,
+    confirm_leave_squad: bool = False,
 ) -> CardUpgradeResultOut:
     existing = await _existing_attempt(db, user.id, idempotency_key)
     if existing is not None:
@@ -137,11 +144,29 @@ async def upgrade_card(
     # "the first staked card" below is deterministic, not row-order-dependent.
     ordered_cards = [cards[cid] for cid in user_card_ids]
 
+    from app.services.collection_service import personal_squad_card_ids
+
+    in_personal_squad = await personal_squad_card_ids(db, user_card_ids)
+    in_squad: list[UserCard] = []
     for card in ordered_cards:
         if card.owner_id != locked_user.id:
             raise NotFoundError("Card not found")
-        if card.is_locked_by_admin or card.is_locked_in_trade or card.is_in_lineup or card.is_in_tactico_squad:
+        if card.is_locked_by_admin or card.is_locked_in_trade:
             raise ConflictError("This card is locked and cannot be upgraded")
+        if card.is_user_locked:
+            raise ConflictError(
+                f"«{card.player.display_name}» под твоим замком — сними замок, чтобы поставить её в Кузницу",
+                details={"reason": "user_locked", "card_id": card.id},
+            )
+        if card.is_in_lineup or card.is_in_tactico_squad or card.id in in_personal_squad:
+            in_squad.append(card)
+    # Staked copies are destroyed: a copy that plays in a squad leaves it
+    # (its slot empties) — only after the player confirmed exactly that.
+    if in_squad and not confirm_leave_squad:
+        raise ConflictError(
+            "Карточки в составе уйдут из него после Кузницы — подтверди",
+            details={"reason": "in_squad", "card_ids": [c.id for c in in_squad]},
+        )
     # Staked copies are destroyed (the result is a new random card), so a
     # staked copy's skill is lost — never silently.
     require_skill_loss_confirmation(ordered_cards, confirm_skill_loss, "апгрейд редкости")

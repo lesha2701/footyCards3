@@ -7,6 +7,9 @@ import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import CardDetailModal from "@/components/collection/CardDetailModal";
+import CardFilterBar from "@/components/collection/CardFilterBar";
+import { cardLockProps } from "@/lib/cardLocks";
+import { activeCount, matchesPlayer, useCardFilter } from "@/lib/cardFilter";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import PlayerCard from "@/components/cards/PlayerCard";
 import { bestSkilledCopy, useSkillUpgradeCheck } from "@/lib/cardSkills";
@@ -168,6 +171,8 @@ function CollectionSpread({ collection, onClick }: { collection: AlbumCollection
 
 function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: () => void }) {
   const [search, setSearch] = useState("");
+  // Same saved default filter as «Мои карты» (rarity/country/club/position).
+  const { filter, setFilter, defaultFilter } = useCardFilter();
   const { data, isLoading } = useQuery({
     queryKey: ["album-detail", collectionId, search],
     queryFn: () => fetchAlbumCollectionDetail(collectionId, search || undefined),
@@ -177,6 +182,7 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
     detailCard, setDetailCard, confirmSell, setConfirmSell,
     upgradeCard, setUpgradeCard, sellMutation, hideMutation,
   } = useCardActions([["album-detail"], ["album-overview"], ["collection"], ["collection-stats"]]);
+  const visible = (data?.players ?? []).filter((slot) => matchesPlayer(filter, slot.player));
 
   return (
     <div className="flex flex-col gap-4">
@@ -225,13 +231,19 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
         />
       </div>
 
+      <CardFilterBar filter={filter} onChange={setFilter} defaultFilter={defaultFilter} showSort={false} showSkill={false} />
+
       {isLoading && <CardGridSkeleton count={9} />}
-      {!isLoading && !data?.players.length && (
-        <EmptyState icon={IconCollection} title="Никого не найдено" description="Попробуй другой запрос" />
+      {!isLoading && !visible.length && (
+        <EmptyState
+          icon={IconCollection}
+          title="Никого не найдено"
+          description={activeCount(filter) ? "Под этот фильтр никто не подходит — смени или очисти его" : "Попробуй другой запрос"}
+        />
       )}
 
       <div className="grid grid-cols-3 gap-2">
-        {data?.players.map((slot) => (
+        {visible.map((slot) => (
           <AlbumSlot key={slot.player.id} slot={slot} onOpen={() => slot.card && setDetailCard(slot.card)} />
         ))}
       </div>
@@ -300,6 +312,7 @@ function AlbumSlot({ slot, onOpen }: { slot: AlbumPlayer; onOpen: () => void }) 
       pathStage={slot.card.path_stage}
       prestige={slot.card.prestige}
       talentOverride={slot.card.talent_override}
+      {...cardLockProps(slot.card)}
       badge={
         best ? (
           <CardSkillBadge

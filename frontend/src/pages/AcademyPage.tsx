@@ -11,11 +11,13 @@ import {
 } from "@/api/academy";
 import PlayerCard from "@/components/cards/PlayerCard";
 import CardDetailModal from "@/components/collection/CardDetailModal";
+import { useCardActions } from "@/components/collection/useCardActions";
+import { cardLockProps } from "@/lib/cardLocks";
 import { IconCoin } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
 import { hapticNotify, openTelegramInvoice } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { AcademyState, AcademyWing, UserCard } from "@/types";
+import type { AcademyState, AcademyWing } from "@/types";
 
 function useCountdown(endsAt: string | null | undefined): number {
   const [now, setNow] = useState(() => Date.now());
@@ -105,7 +107,8 @@ export default function AcademyPage() {
   const updateBalance = useAuthStore((s) => s.updateBalance);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [detail, setDetail] = useState<UserCard | null>(null);
+  // The card sheet works here like in the collection: lock, hide, «В состав».
+  const { detailCard: detail, setDetailCard: setDetail, hideMutation } = useCardActions([["academy"], ["collection"]]);
   const { data: state, isLoading } = useQuery({ queryKey: ["academy"], queryFn: fetchAcademy, refetchInterval: 30_000 });
   const remaining = useCountdown(state?.construction?.ends_at);
 
@@ -272,6 +275,7 @@ export default function AcademyPage() {
                 pathStage={card.path_stage}
                 prestige={card.prestige}
                 talentOverride={card.talent_override}
+                {...cardLockProps(card)}
                 onClick={() => setDetail(card)}
               />
             ))}
@@ -290,8 +294,8 @@ export default function AcademyPage() {
           card={detail}
           onClose={() => setDetail(null)}
           onSell={() => navigate("/collection?tab=mine")}
-          onToggleHidden={() => {}}
-          hiddenPending
+          onToggleHidden={(hidden) => hideMutation.mutate({ id: detail.id, hidden })}
+          hiddenPending={hideMutation.isPending}
         />
       )}
     </div>
