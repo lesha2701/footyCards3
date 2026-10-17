@@ -455,3 +455,54 @@ async def admin_grant(db: AsyncSession, artifact_id: int, user_id: int) -> dict:
     row = await grant(db, user_id, artifact_id, "admin", force_supply=True)
     await db.commit()
     return {"user_id": user_id, "artifact_id": artifact_id, "serial_number": row.serial_number}
+
+
+async def top_donor_ids(db: AsyncSession, top: int) -> list[int]:
+    """Players by total Stars spent (completed purchases), biggest first —
+    the same ranking as admin Магазин → «Топ донатеров»."""
+    from sqlalchemy import func
+
+    from app.models.pack import StarsInvoice
+
+    rows = await db.execute(
+        select(StarsInvoice.user_id)
+        .where(StarsInvoice.completed_at.is_not(None))
+        .group_by(StarsInvoice.user_id)
+        .order_by(func.sum(StarsInvoice.stars_amount).desc(), StarsInvoice.user_id)
+        .limit(top)
+    )
+    return [r[0] for r in rows.all()]
+
+
+async def gift_to_top_donors(db: AsyncSession, artifact_id: int, top: int, message: Optional[str]) -> dict:
+    """Admin: gives one numbered copy to each of the top-N donors who don't
+    own this artifact yet (so pressing it twice gives nobody a second copy),
+    with a notification. Stops when a limited edition runs out."""
+    from app.services.notification_service import notify
+
+    artifact = await db.get(Artifact, artifact_id)
+    if artifact is None:
+        raise NotFoundError("Артефакт не найден")
+    donors = await top_donor_ids(db, top)
+    owners = {r[0] for r in (await db.execute(
+        select(UserArtifact.user_id).where(UserArtifact.artifact_id == artifact_id)
+    )).all()}
+    granted, already, sold_out = [], 0, 0
+    for place, user_id in enumerate(donors, start=1):
+        if user_id in owners:
+            already += 1
+            continue
+        try:
+            row = await grant(db, user_id, artifact_id, "gift")
+        except ConflictError:
+            sold_out = len(donors) - place + 1
+            break
+        granted.append(user_id)
+        text = message or "Спасибо, что поддерживаешь VICTOR FC! Это подарок для лучших болельщиков игры."
+        await notify(
+            db, user_id, NotificationType.admin_message, f"Подарок: «{artifact.name}» №{row.serial_number}",
+            f"{text}\nТвоё место среди донатеров: {place}. Артефакт уже на твоей полке.",
+            related_object_type="user_artifact", related_object_id=row.id,
+        )
+    await db.commit()
+    return {"donors": len(donors), "granted": len(granted), "already_owned": already, "sold_out": sold_out}

@@ -9,7 +9,7 @@ import app.core.rate_limit as rate_limit_module
 from app.config import get_settings
 from app.models.badge import UserBadge
 from app.models.enums import Rarity, TransactionType
-from app.models.monetization import ClubSubscription, Cosmetic, SeasonProgress, StarterOfferPurchase, UserCosmetic
+from app.models.monetization import ClubSubscription, Cosmetic, SeasonProgress, StarterOfferPurchase, UserArtifact, UserCosmetic
 from app.models.pack import StarsInvoice
 from app.services import (
     admin_analytics_service,
@@ -837,3 +837,37 @@ async def test_admin_uploads_artifact_image(client, bot_token, monkeypatch, tmp_
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["image_path"].startswith("artifacts/uploads/")
+
+
+async def test_admin_gifts_a_limited_artifact_to_top_donors(client, db_session, bot_token):
+    from app.models.notification import Notification
+
+    cup = await _artifact(client, bot_token, name="Кубок основателей", coins_price=0, stars_price=0,
+                          is_active=False, max_supply=2, status=100, effect="team_boost_pct", effect_value=2)
+    users = []
+    for i, stars in enumerate((500, 300, 100)):
+        _, u = await _register(client, db_session, 720200 + i, bot_token)
+        db_session.add(StarsInvoice(user_id=u.id, payload_token=f"top-{i}", stars_amount=stars,
+                                    coins_amount=1, completed_at=datetime.now(timezone.utc)))
+        users.append(u)
+    _, nobody = await _register(client, db_session, 720210, bot_token)  # never paid
+    await db_session.commit()
+    auth = await _admin(client, bot_token)
+
+    resp = await client.post(f"/api/v1/admin/artifacts/{cup['id']}/gift-top-donors", headers=auth,
+                             json={"top": 10, "message": "Спасибо!"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"donors": 3, "granted": 2, "already_owned": 0, "sold_out": 1}  # edition of 2
+    owners = (await db_session.execute(
+        select(UserArtifact.user_id, UserArtifact.serial_number).where(UserArtifact.artifact_id == cup["id"])
+        .order_by(UserArtifact.serial_number)
+    )).all()
+    assert owners == [(users[0].id, 1), (users[1].id, 2)]
+    notes = (await db_session.execute(select(Notification).where(Notification.user_id == users[0].id))).scalars().all()
+    assert any("Кубок основателей" in n.title for n in notes)
+
+    again = await client.post(f"/api/v1/admin/artifacts/{cup['id']}/gift-top-donors", headers=auth, json={"top": 2})
+    assert again.json()["granted"] == 0 and again.json()["already_owned"] == 2
+    # Not sold in the shop.
+    headers = telegram_headers(720210, bot_token)
+    assert all(i["id"] != cup["id"] for i in (await client.get("/api/v1/artifacts", headers=headers)).json()["shop"])

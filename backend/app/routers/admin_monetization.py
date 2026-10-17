@@ -6,7 +6,7 @@ from app.core.exceptions import NotFoundError
 from app.database import get_db
 from app.models.monetization import Artifact
 from app.models.user import User
-from app.schemas.monetization import ArtifactGrantIn, ArtifactIn, CosmeticIn, CosmeticOut, SeasonAdminOut, SeasonIn
+from app.schemas.monetization import ArtifactGrantIn, ArtifactIn, ArtifactTopGiftIn, CosmeticIn, CosmeticOut, SeasonAdminOut, SeasonIn
 from app.services import artifact_service, cosmetic_service, season_pass_service
 from app.services.admin_log_service import log_action
 from app.services.image_service import delete_artifact_image, save_artifact_image
@@ -132,5 +132,17 @@ async def grant_artifact(
 ):
     out = await artifact_service.admin_grant(db, artifact_id, payload.user_id)
     await log_action(db, admin.id, "grant_artifact", "artifact", artifact_id, new_value=out, ip_address=_ip(request))
+    await db.commit()
+    return out
+
+
+@router.post("/artifacts/{artifact_id}/gift-top-donors")
+async def gift_artifact_to_top_donors(
+    artifact_id: int, payload: ArtifactTopGiftIn, request: Request,
+    db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin),
+):
+    out = await artifact_service.gift_to_top_donors(db, artifact_id, payload.top, payload.message)
+    await log_action(db, admin.id, "gift_artifact_top_donors", "artifact", artifact_id,
+                     new_value={**payload.model_dump(), **out}, ip_address=_ip(request))
     await db.commit()
     return out

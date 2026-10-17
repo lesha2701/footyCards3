@@ -298,5 +298,10 @@ class ArtifactGrantIn(BaseModel):
     user_id: int
 
 
+class ArtifactTopGiftIn(BaseModel):
+    top: int = Field(ge=1, le=1000)
+    message: Optional[str] = Field(default=None, max_length=300)
+
+
 class ArtifactGiftIn(BaseModel):
     recipient_id: int

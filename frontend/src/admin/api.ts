@@ -1208,3 +1208,9 @@ export async function grantArtifact(id: number, userId: number): Promise<{ seria
   const { data } = await api.post<{ serial_number: number }>(`/admin/artifacts/${id}/grant`, { user_id: userId });
   return data;
 }
+export async function giftArtifactToTopDonors(
+  id: number, top: number, message: string | null,
+): Promise<{ donors: number; granted: number; already_owned: number; sold_out: number }> {
+  const { data } = await api.post(`/admin/artifacts/${id}/gift-top-donors`, { top, message });
+  return data;
+}

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { fetchAdminArtifacts, grantArtifact, saveAdminArtifact, uploadArtifactImage } from "@/admin/api";
+import { fetchAdminArtifacts, giftArtifactToTopDonors, grantArtifact, saveAdminArtifact, uploadArtifactImage } from "@/admin/api";
 import LinkPicker, { type LinkKind } from "@/admin/components/LinkPicker";
 import { useAdminToastStore } from "@/admin/adminToastStore";
 import type { AdminArtifact } from "@/admin/types";
@@ -24,6 +24,8 @@ export default function AdminArtifactsTab() {
   const { data } = useQuery({ queryKey: ["admin-artifacts"], queryFn: fetchAdminArtifacts });
   const [editing, setEditing] = useState<AdminArtifact | null>(null);
   const [grantUser, setGrantUser] = useState("");
+  const [topN, setTopN] = useState(10);
+  const [topMessage, setTopMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin-artifacts"] });
 
@@ -52,6 +54,28 @@ export default function AdminArtifactsTab() {
       useAdminToastStore.getState().push(`Выдан экземпляр №${r.serial_number}`, "success");
     },
     onError: (err) => setError(errText(err, "Не удалось выдать")),
+  });
+
+  const toggle = useMutation({
+    mutationFn: (a: AdminArtifact) => saveAdminArtifact({ ...a, is_active: !a.is_active }),
+    onSuccess: (saved) => {
+      refresh();
+      useAdminToastStore.getState().push(saved.is_active ? "Артефакт включён — он в магазине" : "Артефакт выключен", "success");
+    },
+    onError: (err) => setError(errText(err, "Не удалось переключить")),
+  });
+  const giftTop = useMutation({
+    mutationFn: ({ id }: { id: number }) => giftArtifactToTopDonors(id, topN, topMessage.trim() || null),
+    onSuccess: (r) => {
+      refresh();
+      useAdminToastStore.getState().push(
+        `Подарено: ${r.granted} из ${r.donors} донатеров` +
+          (r.already_owned ? `, уже было у ${r.already_owned}` : "") +
+          (r.sold_out ? `, не хватило тиража на ${r.sold_out}` : ""),
+        "success",
+      );
+    },
+    onError: (err) => setError(errText(err, "Не удалось подарить")),
   });
 
   if (!data) return <p className="text-sm text-slate-400">Загрузка...</p>;
@@ -161,6 +185,43 @@ export default function AdminArtifactsTab() {
             </span>
           )}
         </div>
+        {e.id && (
+          <div className="flex flex-col gap-2 rounded-xl border border-amber-400/30 bg-amber-400/5 p-3">
+            <p className="text-sm font-semibold text-amber-300">Подарить топ-донатерам</p>
+            <p className="text-micro text-slate-400">
+              Каждый из топа по сумме ⭐ получит один номерной экземпляр и уведомление. У кого артефакт уже есть — не получит второй.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {[10, 100].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setTopN(n)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${topN === n ? "bg-amber-400 text-bg-base" : "bg-white/5"}`}
+                >
+                  Топ-{n}
+                </button>
+              ))}
+              <input
+                type="number" min={1} max={1000} value={topN}
+                onChange={(ev) => setTopN(Math.max(1, Number(ev.target.value) || 1))}
+                className="w-20 rounded-lg bg-bg-base px-2 py-1.5 text-xs"
+              />
+            </div>
+            <input
+              value={topMessage} onChange={(ev) => setTopMessage(ev.target.value)} maxLength={300}
+              placeholder="Текст поздравления (необязательно)" className={input}
+            />
+            <button
+              onClick={() => {
+                if (window.confirm(`Подарить «${e.name}» топ-${topN} донатерам?`)) giftTop.mutate({ id: e.id! });
+              }}
+              disabled={giftTop.isPending}
+              className="self-start rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-bold text-bg-base disabled:opacity-40"
+            >
+              {giftTop.isPending ? "Отправляем..." : `Подарить топ-${topN}`}
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -175,7 +236,8 @@ export default function AdminArtifactsTab() {
         + Новый артефакт
       </button>
       {data.artifacts.map((a) => (
-        <button key={a.id} onClick={() => setEditing(a)} className={`flex items-center gap-3 rounded-xl bg-bg-surface p-2 text-left ${a.is_active ? "" : "opacity-50"}`}>
+        <div key={a.id} className="flex items-center gap-2 rounded-xl bg-bg-surface p-2">
+        <button onClick={() => setEditing(a)} className={`flex min-w-0 flex-1 items-center gap-3 text-left ${a.is_active ? "" : "opacity-50"}`}>
           <ArtifactTile size="sm" artifact={{ ...a, id: a.id!, image_path: a.image_path ?? null, target_label: "", effect_label: "",
             link_kind: "", link_name: null, link_label: "", link_owned: false, card_player_name: null, card_label: "",
             active_label: "", left: null }} />
@@ -187,6 +249,16 @@ export default function AdminArtifactsTab() {
             </span>
           </span>
         </button>
+        <button
+          onClick={() => toggle.mutate(a)}
+          disabled={toggle.isPending}
+          className={`shrink-0 rounded-lg px-2.5 py-1.5 text-micro font-bold disabled:opacity-40 ${
+            a.is_active ? "bg-emerald-500/20 text-emerald-300" : "bg-white/5 text-slate-400"
+          }`}
+        >
+          {a.is_active ? "В продаже" : "Выключен"}
+        </button>
+        </div>
       ))}
     </div>
   );
