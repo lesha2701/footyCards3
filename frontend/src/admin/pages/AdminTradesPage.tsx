@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 
 import { fetchAdminTrades, forceCancelTrade } from "@/admin/api";
 import { staticUrl } from "@/lib/api";
@@ -14,15 +14,27 @@ function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
 }
 
+const PAGE_SIZE = 50;
+
 export default function AdminTradesPage() {
   const [status, setStatus] = useState<TradeStatus | "all">("all");
   const [usernameInput, setUsernameInput] = useState("");
   const [username, setUsername] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
-  const { data: trades, isLoading } = useQuery({
-    queryKey: ["admin-trades", status, username],
-    queryFn: () => fetchAdminTrades(status === "all" ? undefined : status, username || undefined),
+  // Any filter change starts again from the first page.
+  useEffect(() => setPage(1), [status, username, dateFrom, dateTo]);
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-trades", status, username, dateFrom, dateTo, page],
+    queryFn: () => fetchAdminTrades({
+      status: status === "all" ? undefined : status, username, date_from: dateFrom, date_to: dateTo,
+      page, page_size: PAGE_SIZE,
+    }),
+    placeholderData: keepPreviousData,
   });
+  const trades = data?.items;
   const cancelMutation = useMutation({
     mutationFn: forceCancelTrade,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-trades"] }),
@@ -66,6 +78,51 @@ export default function AdminTradesPage() {
         ))}
       </div>
 
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1 text-caption text-slate-400">
+          С даты
+          <input
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="rounded-lg bg-bg-surface px-3 py-2 text-sm text-slate-100 outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-caption text-slate-400">
+          По дату
+          <input
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="rounded-lg bg-bg-surface px-3 py-2 text-sm text-slate-100 outline-none"
+          />
+        </label>
+        {[["Сегодня", 0], ["7 дней", 6], ["30 дней", 29]].map(([label, back]) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => { setDateFrom(daysAgo(back as number)); setDateTo(daysAgo(0)); }}
+            className="rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300"
+          >
+            {label}
+          </button>
+        ))}
+        {(dateFrom || dateTo) && (
+          <button
+            type="button"
+            onClick={() => { setDateFrom(""); setDateTo(""); }}
+            className="rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300"
+          >
+            Все даты
+          </button>
+        )}
+      </div>
+
+      {data && <p className="text-xs text-slate-400">Найдено: {data.total}</p>}
+      <Pager page={page} pages={data?.pages ?? 1} onChange={setPage} />
+
       {isLoading && <p className="text-sm text-slate-400">Загрузка...</p>}
 
       <div className="flex flex-col gap-2">
@@ -74,6 +131,39 @@ export default function AdminTradesPage() {
         ))}
         {!trades?.length && !isLoading && <p className="text-sm text-slate-500">Обменов нет</p>}
       </div>
+
+      <Pager page={page} pages={data?.pages ?? 1} onChange={setPage} />
+    </div>
+  );
+}
+
+/** Local YYYY-MM-DD for `days` days ago (what <input type="date"> uses). */
+function daysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function Pager({ page, pages, onChange }: { page: number; pages: number; onChange: (p: number) => void }) {
+  if (pages <= 1) return null;
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        disabled={page <= 1}
+        onClick={() => onChange(page - 1)}
+        className="rounded-lg bg-white/5 px-3 py-1.5 text-sm disabled:opacity-30"
+      >
+        Назад
+      </button>
+      <span className="text-sm text-slate-400">{page} / {pages}</span>
+      <button
+        disabled={page >= pages}
+        onClick={() => onChange(page + 1)}
+        className="rounded-lg bg-white/5 px-3 py-1.5 text-sm disabled:opacity-30"
+      >
+        Вперёд
+      </button>
     </div>
   );
 }

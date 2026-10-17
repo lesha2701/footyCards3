@@ -591,8 +591,23 @@ export async function saveAdminSeason(season: AdminSeason): Promise<AdminSeason>
 }
 
 // --- Trades ---
-export async function fetchAdminTrades(status?: TradeStatus, username?: string): Promise<TradeOffer[]> {
-  const { data } = await api.get<TradeOffer[]>("/admin/trades", { params: { status, username: username || undefined } });
+export interface AdminTradesQuery {
+  status?: TradeStatus;
+  username?: string;
+  /** Inclusive local days, YYYY-MM-DD. */
+  date_from?: string;
+  date_to?: string;
+  page: number;
+  page_size?: number;
+}
+
+export async function fetchAdminTrades(q: AdminTradesQuery): Promise<Page<TradeOffer>> {
+  const { data } = await api.get<Page<TradeOffer>>("/admin/trades", {
+    params: {
+      status: q.status, username: q.username || undefined, date_from: q.date_from || undefined,
+      date_to: q.date_to || undefined, page: q.page, page_size: q.page_size ?? 50,
+    },
+  });
   return data;
 }
 

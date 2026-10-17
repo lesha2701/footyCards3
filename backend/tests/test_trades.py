@@ -325,15 +325,53 @@ async def test_admin_can_search_trades_by_either_side_username(client, db_sessio
     # Searching for the sender finds their trade.
     by_sender = await client.get("/api/v1/admin/trades", headers=auth, params={"username": "alice"})
     assert by_sender.status_code == 200
-    assert len(by_sender.json()) == 1
-    assert by_sender.json()[0]["sender"]["id"] == sender.id
+    assert by_sender.json()["total"] == 1
+    assert by_sender.json()["items"][0]["sender"]["id"] == sender.id
 
     # Searching for the receiver finds both trades they're party to.
     by_receiver = await client.get("/api/v1/admin/trades", headers=auth, params={"username": "bob_trader"})
     assert by_receiver.status_code == 200
-    assert len(by_receiver.json()) == 2
+    assert len(by_receiver.json()["items"]) == 2
 
     # No match returns an empty list, not an error.
     no_match = await client.get("/api/v1/admin/trades", headers=auth, params={"username": "nobody_at_all"})
     assert no_match.status_code == 200
-    assert no_match.json() == []
+    assert no_match.json()["items"] == [] and no_match.json()["total"] == 0
+
+
+async def test_admin_trades_filter_by_date_and_paginate(client, db_session, bot_token):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.trade import TradeOffer
+
+    auth = await _admin_auth(client, bot_token)
+    sender, sender_headers = await _register(client, db_session, 730020, bot_token, username="dated_sender")
+    receiver, _ = await _register(client, db_session, 730021, bot_token, username="dated_receiver")
+    ids = []
+    for _ in range(3):
+        player = await create_player(db_session, rarity=Rarity.common)
+        card = await create_user_card(db_session, sender.id, player.id, CardSource.seed)
+        await db_session.commit()
+        resp = await client.post(
+            "/api/v1/trades/offers", headers=sender_headers,
+            json={"receiver_id": receiver.id, "offered_card_ids": [card.id]},
+        )
+        ids.append(resp.json()["id"])
+    # Move the first offer 10 days back.
+    old = await db_session.get(TradeOffer, ids[0])
+    old.created_at = datetime.now(timezone.utc) - timedelta(days=10)
+    await db_session.commit()
+
+    today = datetime.now(timezone.utc).date()
+    recent = (await client.get("/api/v1/admin/trades", headers=auth,
+                               params={"date_from": str(today - timedelta(days=2))})).json()
+    assert recent["total"] == 2 and ids[0] not in [t["id"] for t in recent["items"]]
+    older = (await client.get("/api/v1/admin/trades", headers=auth,
+                              params={"date_to": str(today - timedelta(days=5))})).json()
+    assert [t["id"] for t in older["items"]] == [ids[0]]
+
+    page1 = (await client.get("/api/v1/admin/trades", headers=auth, params={"page_size": 2})).json()
+    page2 = (await client.get("/api/v1/admin/trades", headers=auth, params={"page_size": 2, "page": 2})).json()
+    assert page1["total"] == 3 and page1["pages"] == 2
+    assert len(page1["items"]) == 2 and len(page2["items"]) == 1
+    assert {t["id"] for t in page1["items"] + page2["items"]} == set(ids)
