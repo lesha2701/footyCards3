@@ -155,6 +155,15 @@ Main features:
   album and the Forge (`lib/cardFilter.ts` `useCardFilter`,
   `CardFilterBar`); `/collection/filter-options` lists the owner's countries
   and clubs.
+- **Trade anti-farming / «Антифрод»**: `trade_guard_service` gates trades
+  (GameConfig `trade_send_min_*`, `trade_daily_coins_receive_cap` — the cap is
+  what stops a hub collecting millions in one evening — and `trade_coin_tax_pct`);
+  `GameConfig.trades_enabled` switches trading off. Admin «Антифрод»
+  (`admin_antifraud_service`, `/admin/antifraud/scan|ban`) finds hubs (coins
+  from >= N distinct senders), the farm accounts that fed them and
+  registration bursts, and bans in bulk (payers of Stars are flagged, never
+  pre-selected; admins are never banned). Admin adjustments may take a balance
+  below zero (migration 0164) — used to claw back already-spent farm coins.
 - **Frontend routing**: one React app serves both the Mini App (`/`, `/packs`,
   `/play/*`, `/collection`, …) and the admin panel (`/admin/*`, gated by
   `AdminGuard` client-side and `get_current_admin` server-side). State:

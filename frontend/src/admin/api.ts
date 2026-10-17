@@ -57,6 +57,7 @@ import type {
   AdminSkillLedgerEntry,
   PackPreview,
   StarsDonationSummary,
+  AntifraudScan,
   StarsPackPurchase,
   StarsPaymentReceipt,
   StarsReceiptFilter,
@@ -1250,5 +1251,16 @@ export async function giftArtifactToTopDonors(
   id: number, top: number, message: string | null,
 ): Promise<{ donors: number; granted: number; already_owned: number; sold_out: number }> {
   const { data } = await api.post(`/admin/artifacts/${id}/gift-top-donors`, { top, message });
+  return data;
+}
+
+// --- Антифрод ---
+export async function fetchAntifraudScan(params: { min_senders: number; days: number }): Promise<AntifraudScan> {
+  const { data } = await api.get<AntifraudScan>("/admin/antifraud/scan", { params });
+  return data;
+}
+
+export async function banAntifraudUsers(userIds: number[]): Promise<{ banned: number; user_ids: number[] }> {
+  const { data } = await api.post<{ banned: number; user_ids: number[] }>("/admin/antifraud/ban", { user_ids: userIds });
   return data;
 }

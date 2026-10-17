@@ -41,6 +41,7 @@ const AdminWheelPage = lazy(() => import("@/admin/pages/AdminWheelPage"));
 const AdminGamesPage = lazy(() => import("@/admin/pages/AdminGamesPage"));
 const AdminEconomyPage = lazy(() => import("@/admin/pages/AdminEconomyPage"));
 const AdminAnalyticsPage = lazy(() => import("@/admin/pages/AdminAnalyticsPage"));
+const AdminAntifraudPage = lazy(() => import("@/admin/pages/AdminAntifraudPage"));
 const AdminUpgradesPage = lazy(() => import("@/admin/pages/AdminUpgradesPage"));
 const AdminDiamondUpgradesPage = lazy(() => import("@/admin/pages/AdminDiamondUpgradesPage"));
 const AdminCardSkillsPage = lazy(() => import("@/admin/pages/AdminCardSkillsPage"));
@@ -223,6 +224,7 @@ export default function App() {
         <Route path="games" element={<AdminGamesPage />} />
         <Route path="economy" element={<AdminEconomyPage />} />
         <Route path="analytics" element={<AdminAnalyticsPage />} />
+        <Route path="antifraud" element={<AdminAntifraudPage />} />
         <Route path="upgrades" element={<AdminUpgradesPage />} />
         <Route path="diamond-upgrades" element={<AdminDiamondUpgradesPage />} />
         <Route path="card-skills" element={<AdminCardSkillsPage />} />

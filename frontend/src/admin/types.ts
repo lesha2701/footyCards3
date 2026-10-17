@@ -873,3 +873,45 @@ export interface MagnateBoardConfig {
   groups: { name: string; color: string }[];
   cells: MagnateBoardCellConfig[];
 }
+
+// --- Антифрод ---
+export interface AntifraudAccount {
+  id: number;
+  username: string | null;
+  telegram_id: number;
+  balance: number;
+  registered: string;
+  last_seen: string | null;
+  is_banned: boolean;
+  stars_paid: number;
+}
+
+export interface AntifraudHub extends AntifraudAccount {
+  senders: number;
+  coins_in: number;
+  coins_out: number;
+}
+
+export interface AntifraudFarm extends AntifraudAccount {
+  coins_sent: number;
+  hubs: number;
+  is_hub: boolean;
+}
+
+export interface AntifraudSummary {
+  total: number;
+  not_banned: number;
+  not_banned_unpaid: number;
+  coins: number;
+}
+
+export interface AntifraudScan {
+  min_senders: number;
+  days: number;
+  burst_min: number;
+  hubs: AntifraudHub[];
+  hubs_summary: AntifraudSummary;
+  farms: AntifraudFarm[];
+  farms_summary: AntifraudSummary;
+  bursts: { hour: string; registered: number; farm_accounts: number }[];
+}

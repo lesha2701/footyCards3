@@ -32,6 +32,7 @@ from app.routers import (
     admin_players,
     admin_stadiums,
     admin_stars_purchases,
+    admin_antifraud,
     admin_tasks,
     admin_tournaments,
     admin_trades,
@@ -192,6 +193,7 @@ app.include_router(admin_games.router, prefix=API_PREFIX)
 app.include_router(admin_career.router, prefix=API_PREFIX)
 app.include_router(admin_log.router, prefix=API_PREFIX)
 app.include_router(admin_stars_purchases.router, prefix=API_PREFIX)
+app.include_router(admin_antifraud.router, prefix=API_PREFIX)
 app.include_router(internal.router, prefix=API_PREFIX)
 app.include_router(wallet.router, prefix=API_PREFIX)
 app.include_router(monetization.router, prefix=API_PREFIX)

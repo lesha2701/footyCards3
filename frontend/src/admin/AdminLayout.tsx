@@ -6,6 +6,7 @@ import AdminToastContainer from "@/admin/AdminToastContainer";
 import { fetchStarsReceiptProblemCount } from "@/admin/api";
 import {
   IconBall,
+  IconBan,
   IconBrain,
   IconCard,
   IconChart,
@@ -37,6 +38,7 @@ const SECTIONS: { to: string; label: string; Icon: (props: IconProps) => JSX.Ele
   { to: "/admin", label: "Дашборд", Icon: IconChart, end: true },
   { to: "/admin/economy", label: "Экономика", Icon: IconCoin },
   { to: "/admin/analytics", label: "Аналитика", Icon: IconTarget },
+  { to: "/admin/antifraud", label: "Антифрод", Icon: IconBan },
   { to: "/admin/users", label: "Пользователи", Icon: IconUsers },
   { to: "/admin/players", label: "Футболисты", Icon: IconBall },
   { to: "/admin/coaches", label: "Тренеры", Icon: IconShirt },
