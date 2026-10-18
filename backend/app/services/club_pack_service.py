@@ -27,7 +27,7 @@ from app.schemas.club_pack_open import ClubPackOpenResult, OpenedClubPackItemOut
 from app.schemas.club_squad import ClubCardOut, ClubCoachCardOut, ClubStadiumCardOut
 from app.services.club_card_service import create_club_card, create_club_coach_card, create_club_stadium_card
 from app.services.club_budget_service import debit_club_budget
-from app.services.club_service import _lock_club, _require_manager, _require_membership
+from app.services.club_service import _lock_club, _require_membership, require_budget_spender
 from app.services.pack_service import pick_random_coach, pick_random_player, pick_random_stadium, roll_rarities
 
 
@@ -108,7 +108,7 @@ async def _get_result_for_existing_opening(db: AsyncSession, opening: ClubPackOp
 
 async def open_club_pack(db: AsyncSession, user: User, club_pack_id: int, idempotency_key: Optional[str]) -> ClubPackOpenResult:
     membership = await _require_membership(db, user.id)
-    _require_manager(membership)
+    require_budget_spender(membership, await db.get(Club, membership.club_id))
 
     if idempotency_key:
         existing = await db.execute(

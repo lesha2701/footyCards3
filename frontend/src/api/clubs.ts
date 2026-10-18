@@ -24,8 +24,19 @@ import type {
   TournamentMatchDetail,
 } from "@/types";
 
-export async function fetchClubs(search?: string): Promise<ClubSummary[]> {
-  const { data } = await api.get<ClubSummary[]>("/clubs", { params: { search: search || undefined } });
+export interface ClubListFilters {
+  club_type?: "open" | "closed";
+  has_space?: boolean;
+  sort?: "members" | "cups" | "stars" | "new";
+}
+
+export async function fetchClubs(search?: string, filters: ClubListFilters = {}): Promise<ClubSummary[]> {
+  const { data } = await api.get<ClubSummary[]>("/clubs", {
+    params: {
+      search: search || undefined, club_type: filters.club_type, has_space: filters.has_space || undefined,
+      sort: filters.sort && filters.sort !== "members" ? filters.sort : undefined,
+    },
+  });
   return data;
 }
 
@@ -227,5 +238,15 @@ export async function submitClubPositionMatchAttempt(
 
 export async function claimClubPositionMatchReward(sessionId: number): Promise<ClubPositionMatchClaim> {
   const { data } = await api.post<ClubPositionMatchClaim>(`/clubs/me/position-match/${sessionId}/claim`);
+  return data;
+}
+
+export async function setClubMemberRole(userId: number, role: import("@/types").ClubRole): Promise<Club> {
+  const { data } = await api.post<Club>(`/clubs/me/members/${userId}/role`, { role });
+  return data;
+}
+
+export async function setClubBudgetPolicy(treasurerOnly: boolean): Promise<Club> {
+  const { data } = await api.put<Club>("/clubs/me/budget-policy", { treasurer_only: treasurerOnly });
   return data;
 }

@@ -34,7 +34,7 @@ async def notify_club_managers(
     relevant to every member."""
     manager_ids = (
         await db.execute(
-            select(ClubMember.user_id).where(ClubMember.club_id == club_id, ClubMember.role.in_([ClubRole.captain, ClubRole.assistant]))
+            select(ClubMember.user_id).where(ClubMember.club_id == club_id, ClubMember.role.in_([ClubRole.captain, ClubRole.vice_captain, ClubRole.assistant]))
         )
     ).scalars().all()
     for user_id in manager_ids:

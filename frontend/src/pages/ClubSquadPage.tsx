@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useRef, useState } from "react";
+import { isClubManager } from "@/lib/clubRoles";
 
 import ClubCardPickerModal from "@/components/clubs/ClubCardPickerModal";
 import ClubCoachCardPickerModal from "@/components/clubs/ClubCoachCardPickerModal";
@@ -30,7 +31,7 @@ export default function ClubSquadPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: club } = useQuery({ queryKey: ["clubs", "me"], queryFn: fetchMyClub, retry: false });
-  const canEdit = club?.my_role === "captain" || club?.my_role === "assistant";
+  const canEdit = isClubManager(club?.my_role);
   const { data: templates, isLoading: lineupLoading } = useQuery({ queryKey: ["clubs", "lineup-templates"], queryFn: fetchClubLineupTemplates });
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const activeIndex = templates?.find((t) => t.is_active)?.template_index ?? 1;

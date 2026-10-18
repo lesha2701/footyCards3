@@ -80,6 +80,12 @@ class ClubDetailOut(BaseModel):
     # (TransactionType.club_tournament_match_reward) — null for a non-member, 0 if they're a
     # member with no such credits yet. See club_service._personal_match_earnings.
     personal_match_earnings: Optional[int] = None
+    # Captain's switch: only captain / vice-captain / treasurer spend the budget.
+    budget_treasurer_only: bool = False
+    # Whether the requester may spend the budget (packs, emblem, spare cards).
+    can_spend_budget: bool = False
+    # «Стена клуба»: posts the requester hasn't seen yet (null for a non-member).
+    wall_unread: Optional[int] = None
 
 
 class ClubJoinRequestOut(BaseModel):
@@ -102,3 +108,11 @@ class TransferCaptainIn(BaseModel):
 
 class PersonalRewardToggleIn(BaseModel):
     enabled: bool
+
+
+class MemberRoleIn(BaseModel):
+    role: ClubRole
+
+
+class BudgetPolicyIn(BaseModel):
+    treasurer_only: bool

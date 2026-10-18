@@ -22,6 +22,10 @@ from app.services.wallet_service import debit_coins, lock_user_for_update
 
 MAX_MEMBERS = 11
 MAX_ASSISTANTS = 4
+# Squad, packs, join requests, kicks: captain, vice-captain and assistants.
+MANAGER_ROLES = (ClubRole.captain, ClubRole.vice_captain, ClubRole.assistant)
+# Single-holder roles the captain hands out (set_member_role).
+SINGLE_ROLES = (ClubRole.vice_captain, ClubRole.treasurer)
 
 
 def _generate_invite_code() -> str:
@@ -63,8 +67,26 @@ async def _require_membership(db: AsyncSession, user_id: int) -> ClubMember:
 
 
 def _require_manager(membership: ClubMember) -> None:
-    if membership.role not in (ClubRole.captain, ClubRole.assistant):
-        raise ForbiddenError("Только капитан или ассистент может это делать")
+    if membership.role not in MANAGER_ROLES:
+        raise ForbiddenError("Только капитан, вице-капитан или ассистент может это делать")
+
+
+def can_spend_budget(membership: ClubMember, club: Club) -> bool:
+    if membership.role in (ClubRole.captain, ClubRole.vice_captain, ClubRole.treasurer):
+        return True
+    return membership.role == ClubRole.assistant and not club.budget_treasurer_only
+
+
+def require_budget_spender(membership: ClubMember, club: Club) -> None:
+    if not can_spend_budget(membership, club):
+        raise ForbiddenError(
+            "Бюджет клуба тратят капитан, вице-капитан и казначей"
+            + ("" if club.budget_treasurer_only else " (и ассистенты)")
+        )
+
+
+def can_edit_emblem(membership: ClubMember) -> bool:
+    return membership.role in (ClubRole.captain, ClubRole.vice_captain)
 
 
 async def _members_with_users(db: AsyncSession, club_id: int) -> list[ClubMemberOut]:
@@ -135,6 +157,11 @@ async def _club_to_detail(db: AsyncSession, club: Club, requester_user_id: Optio
     personal_match_earnings = (
         await _personal_match_earnings(db, requester_user_id) if is_member and requester_user_id is not None else None
     )
+    wall_unread = None
+    if is_member and requester_user_id is not None:
+        from app.services.club_wall_service import unread_count
+
+        wall_unread = await unread_count(db, await _get_membership(db, requester_user_id))
     return ClubDetailOut(
         id=club.id, name=club.name, description=club.description, club_type=club.club_type,
         logo_shape=club.logo_shape, logo_color=club.logo_color, emblem=emblem_out(club), captain_id=club.captain_id,
@@ -144,6 +171,12 @@ async def _club_to_detail(db: AsyncSession, club: Club, requester_user_id: Optio
         my_role=my_membership.role if my_membership else None,
         daily_reward_seconds_remaining=daily_reward_seconds_remaining,
         personal_match_earnings=personal_match_earnings,
+        budget_treasurer_only=club.budget_treasurer_only,
+        wall_unread=wall_unread,
+        can_spend_budget=bool(my_membership) and (
+            my_membership.role in (ClubRole.captain, ClubRole.vice_captain, ClubRole.treasurer)
+            or (my_membership.role == ClubRole.assistant and not club.budget_treasurer_only)
+        ),
     )
 
 
@@ -181,21 +214,35 @@ async def create_club(db: AsyncSession, user: User, payload: ClubCreate) -> Club
     return await _club_to_detail(db, club, requester_user_id=locked_user.id)
 
 
-async def list_clubs(db: AsyncSession, search: Optional[str]) -> list[ClubSummaryOut]:
+async def list_clubs(
+    db: AsyncSession, search: Optional[str], club_type: Optional[ClubType] = None, has_space: bool = False,
+    sort: str = "members",
+) -> list[ClubSummaryOut]:
     member_count_subq = (
         select(ClubMember.club_id, func.count(ClubMember.id).label("cnt"))
         .group_by(ClubMember.club_id)
         .subquery()
     )
+    members = func.coalesce(member_count_subq.c.cnt, 0)
+    order = {
+        "members": (members.desc(), Club.founded_at.desc()),
+        "cups": (Club.cups_count.desc(), members.desc()),
+        "stars": (Club.stars_count.desc(), members.desc()),
+        "new": (Club.founded_at.desc(),),
+    }.get(sort, (members.desc(), Club.founded_at.desc()))
     query = (
-        select(Club, func.coalesce(member_count_subq.c.cnt, 0))
+        select(Club, members)
         .outerjoin(member_count_subq, member_count_subq.c.club_id == Club.id)
         .where(Club.is_disbanded.is_(False))
-        .order_by(func.coalesce(member_count_subq.c.cnt, 0).desc(), Club.founded_at.desc())
+        .order_by(*order)
         .limit(100)
     )
     if search:
         query = query.where(Club.name.ilike(f"%{search}%"))
+    if club_type is not None:
+        query = query.where(Club.club_type == club_type)
+    if has_space:
+        query = query.where(members < MAX_MEMBERS)
     rows = (await db.execute(query)).all()
     return [
         ClubSummaryOut(
@@ -232,6 +279,7 @@ async def join_open_club(db: AsyncSession, user: User, club_id: int) -> ClubDeta
         raise ConflictError("В клубе нет свободных мест")
 
     db.add(ClubMember(club_id=club.id, user_id=user.id, role=ClubRole.member))
+    await _notify_member_joined(db, club, user)
     try:
         await db.commit()
     except IntegrityError:
@@ -267,7 +315,7 @@ async def create_join_request(db: AsyncSession, user: User, club_id: int) -> Clu
     await db.flush()
 
     managers = await db.execute(
-        select(ClubMember.user_id).where(ClubMember.club_id == club_id, ClubMember.role.in_([ClubRole.captain, ClubRole.assistant]))
+        select(ClubMember.user_id).where(ClubMember.club_id == club_id, ClubMember.role.in_(MANAGER_ROLES))
     )
     for manager_id in managers.scalars().all():
         await notify(
@@ -336,6 +384,13 @@ async def respond_to_join_request(db: AsyncSession, actor: User, request_id: int
 
 
 async def _promote_longest_tenured_assistant(db: AsyncSession, club: Club) -> Optional[ClubMember]:
+    """The captain's successor: the vice-captain if there is one, else the
+    longest-serving assistant."""
+    vice = (await db.execute(
+        select(ClubMember).where(ClubMember.club_id == club.id, ClubMember.role == ClubRole.vice_captain)
+    )).scalar_one_or_none()
+    if vice is not None:
+        return vice
     result = await db.execute(
         select(ClubMember)
         .where(ClubMember.club_id == club.id, ClubMember.role == ClubRole.assistant)
@@ -440,8 +495,8 @@ async def kick_member(db: AsyncSession, actor: User, target_user_id: int) -> Clu
     target = await _get_membership(db, target_user_id)
     if target is None or target.club_id != club.id:
         raise NotFoundError("Игрок не в этом клубе")
-    if target.role != ClubRole.member:
-        raise ForbiddenError("Нельзя исключить капитана или ассистента")
+    if target.role not in (ClubRole.member, ClubRole.treasurer):
+        raise ForbiddenError("Нельзя исключить капитана, вице-капитана или ассистента")
 
     await db.delete(target)
     await db.flush()
@@ -572,6 +627,7 @@ async def join_by_invite(db: AsyncSession, user: User, invite_code: str) -> Club
         raise ConflictError("В клубе нет свободных мест")
 
     db.add(ClubMember(club_id=club.id, user_id=user.id, role=ClubRole.member))
+    await _notify_member_joined(db, club, user)
     try:
         await db.commit()
     except IntegrityError:
@@ -621,3 +677,67 @@ async def claim_daily_reward(db: AsyncSession, user: User) -> ClubDetailOut:
         raise ConflictError("Сегодня награда уже получена")
 
     return await _club_to_detail(db, club, requester_user_id=user.id)
+
+
+ROLE_TITLES = {
+    ClubRole.vice_captain: "вице-капитаном", ClubRole.treasurer: "казначеем", ClubRole.assistant: "ассистентом",
+}
+
+
+async def set_member_role(db: AsyncSession, captain: User, target_user_id: int, role: ClubRole) -> ClubDetailOut:
+    """Captain hands out vice-captain / treasurer / assistant or demotes to
+    member. Vice-captain and treasurer are one per club: giving the role to
+    someone else demotes the previous holder to member."""
+    membership = await _require_membership(db, captain.id)
+    if membership.role != ClubRole.captain:
+        raise ForbiddenError("Роли в клубе назначает капитан")
+    if role == ClubRole.captain:
+        raise ConflictError("Капитанство передаётся отдельной кнопкой")
+    club = await _lock_club(db, membership.club_id)
+    target = await _get_membership(db, target_user_id)
+    if target is None or target.club_id != club.id:
+        raise NotFoundError("Игрок не в этом клубе")
+    if target.role == ClubRole.captain:
+        raise ConflictError("Это капитан")
+    if target.role == role:
+        return await _club_to_detail(db, club, requester_user_id=captain.id)
+
+    if role == ClubRole.assistant:
+        count = (await db.execute(select(func.count(ClubMember.id)).where(
+            ClubMember.club_id == club.id, ClubMember.role == ClubRole.assistant,
+        ))).scalar_one()
+        if count >= MAX_ASSISTANTS:
+            raise ConflictError("Уже назначено максимальное число ассистентов")
+    if role in SINGLE_ROLES:
+        previous = (await db.execute(select(ClubMember).where(
+            ClubMember.club_id == club.id, ClubMember.role == role,
+        ))).scalar_one_or_none()
+        if previous is not None:
+            previous.role = ClubRole.member
+            db.add(previous)
+            await notify(db, previous.user_id, NotificationType.club_role_changed, "Новая роль",
+                         f"Ты больше не {ROLE_TITLES[role]} в «{club.name}»")
+
+    target.role = role
+    db.add(target)
+    text = f"Ты назначен {ROLE_TITLES[role]} в «{club.name}»" if role in ROLE_TITLES else f"Ты теперь участник «{club.name}»"
+    await notify(db, target_user_id, NotificationType.club_role_changed, "Новая роль", text)
+    await db.commit()
+    return await _club_to_detail(db, club, requester_user_id=captain.id)
+
+
+async def set_budget_policy(db: AsyncSession, captain: User, treasurer_only: bool) -> ClubDetailOut:
+    membership = await _require_membership(db, captain.id)
+    if membership.role != ClubRole.captain:
+        raise ForbiddenError("Это решает капитан")
+    club = await _lock_club(db, membership.club_id)
+    club.budget_treasurer_only = treasurer_only
+    db.add(club)
+    await db.commit()
+    return await _club_to_detail(db, club, requester_user_id=captain.id)
+
+
+async def _notify_member_joined(db: AsyncSession, club: Club, user: User) -> None:
+    name = user.username or user.first_name or f"#{user.id}"
+    await notify(db, club.captain_id, NotificationType.club_member_joined, "Новый участник",
+                 f"{name} вступил в «{club.name}»")

@@ -139,6 +139,12 @@ class ClubRole(str, enum.Enum):
     captain = "captain"
     assistant = "assistant"
     member = "member"
+    # One per club: a manager who also edits the emblem and takes over
+    # first when the captain leaves.
+    vice_captain = "vice_captain"
+    # One per club: may spend the club budget (packs, emblem, spare cards)
+    # without squad/membership powers.
+    treasurer = "treasurer"
 
 
 class ClubType(str, enum.Enum):
@@ -334,6 +340,8 @@ class NotificationType(str, enum.Enum):
     trade_offer_expired = "trade_offer_expired"
     trade_wish_available = "trade_wish_available"
     club_donation = "club_donation"
+    club_member_joined = "club_member_joined"
+    club_announcement = "club_announcement"
     daily_reward_available = "daily_reward_available"
     special_pack = "special_pack"
     admin_message = "admin_message"

@@ -27,6 +27,7 @@ from app.models.club_card_availability import ClubCardAvailability
 from app.models.club_coach_card import ClubCoachCard
 from app.models.club_daily_claim import ClubDailyClaim
 from app.models.club_emblem import ClubDonation, ClubEmblemItem, ClubEmblemUnlock
+from app.models.club_wall import ClubPost
 from app.models.club_league import ClubLeagueResult, ClubLeagueWeek
 from app.models.club_lineup import ClubLineup, ClubLineupCard
 from app.models.club_pack import ClubPack, ClubPackRarityProbability
@@ -117,6 +118,7 @@ __all__ = [
     "ClubDonation",
     "ClubEmblemItem",
     "ClubEmblemUnlock",
+    "ClubPost",
     "ClubLeagueResult",
     "ClubLeagueWeek",
     "ClubLineup",

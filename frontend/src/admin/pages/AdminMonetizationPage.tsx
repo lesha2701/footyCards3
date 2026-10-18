@@ -181,6 +181,7 @@ function SettingsTab() {
           {num("club_sponsor_gold_stars", "Золотой меценат, всего ⭐")}
           {num("club_card_sell_pct", "Лишние карты: % от цены быстрой продажи")}
           {num("club_card_exchange_count", "Лишние карты: обмен N → 1")}
+          {num("club_announcement_cooldown_minutes", "Стена: минут между объявлениями")}
           <label className="flex flex-col gap-0.5">
             <span className="text-micro text-slate-500">Суммы пополнения, ⭐ через запятую</span>
             <input

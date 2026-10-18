@@ -8,10 +8,9 @@ import { SponsorBadge } from "@/components/clubs/SponsorBadge";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconBrain, IconChart, IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconShirt, IconStar, IconSwap, IconTarget, IconTrophy, IconUsers } from "@/components/icons";
+import { IconBrain, IconChart, IconChat, IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconShirt, IconStar, IconSwap, IconTarget, IconTrophy, IconUsers } from "@/components/icons";
 import {
   acceptJoinRequest,
-  appointAssistant,
   applyToTournament,
   claimDailyReward,
   createJoinRequest,
@@ -25,16 +24,19 @@ import {
   kickMember,
   leaveClub,
   rejectJoinRequest,
-  removeAssistant,
+  setClubBudgetPolicy,
+  setClubMemberRole,
   setMemberPersonalReward,
   updateClubType,
+  type ClubListFilters,
 } from "@/api/clubs";
 import { fetchMyProfile } from "@/api/profile";
 import { ApiRequestError } from "@/lib/api";
 import { formatCountdown } from "@/lib/format";
-import { hapticNotify } from "@/lib/telegram";
+import { hapticNotify, shareToTelegram } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { Club } from "@/types";
+import { ASSIGNABLE_CLUB_ROLES, CLUB_ROLE_LABELS, isClubManager } from "@/lib/clubRoles";
+import type { Club, ClubRole } from "@/types";
 
 export default function ClubsPage() {
   const { data: myClub, isLoading: loadingMine, error: myClubError } = useQuery({
@@ -57,7 +59,11 @@ function ClubBrowseList() {
   const [requestSentId, setRequestSentId] = useState<number | null>(null);
   const [previewClubId, setPreviewClubId] = useState<number | null>(null);
   const queryClient = useQueryClient();
-  const { data: clubs, isLoading } = useQuery({ queryKey: ["clubs", "list", search], queryFn: () => fetchClubs(search) });
+  const [filters, setFilters] = useState<ClubListFilters>({});
+  const { data: clubs, isLoading } = useQuery({
+    queryKey: ["clubs", "list", search, filters],
+    queryFn: () => fetchClubs(search, filters),
+  });
 
   const joinMutation = useMutation({
     mutationFn: (id: number) => joinClub(id),
@@ -90,6 +96,33 @@ function ClubBrowseList() {
         className="rounded-xl bg-bg-surface px-3 py-2 text-sm text-ink-chalk outline-none"
       />
 
+      <div className="-mt-2 flex flex-wrap gap-1.5">
+        {([
+          ["Открытые", filters.club_type === "open", () => setFilters((f) => ({ ...f, club_type: f.club_type === "open" ? undefined : "open" }))],
+          ["По заявке", filters.club_type === "closed", () => setFilters((f) => ({ ...f, club_type: f.club_type === "closed" ? undefined : "closed" }))],
+          ["Есть места", !!filters.has_space, () => setFilters((f) => ({ ...f, has_space: !f.has_space }))],
+        ] as [string, boolean, () => void][]).map(([label, active, onClick]) => (
+          <button
+            key={label}
+            onClick={onClick}
+            className={`rounded-full px-3 py-1 text-caption font-semibold ${active ? "bg-floodlight text-bg-base" : "bg-bg-surface text-ink-mist"}`}
+          >
+            {label}
+          </button>
+        ))}
+        <select
+          value={filters.sort ?? "members"}
+          onChange={(e) => setFilters((f) => ({ ...f, sort: e.target.value as ClubListFilters["sort"] }))}
+          className="ml-auto rounded-full bg-bg-surface px-3 py-1 text-caption font-semibold text-ink-mist outline-none"
+          aria-label="Сортировка клубов"
+        >
+          <option value="members">По участникам</option>
+          <option value="cups">По кубкам</option>
+          <option value="stars">По звёздам</option>
+          <option value="new">Новые</option>
+        </select>
+      </div>
+
       <button
         onClick={() => navigate("/clubs/leaderboard")}
         className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
@@ -112,7 +145,12 @@ function ClubBrowseList() {
               <ClubLogo shape={c.logo_shape} color={c.logo_color} emblem={c.emblem} size={40} />
               <div className="flex-1">
                 <p className="font-display text-sm font-bold text-ink-chalk">{c.name}</p>
-                <p className="text-xs text-ink-mist-dim">{c.member_count}/11 участников</p>
+                <p className="flex items-center gap-2 text-xs text-ink-mist-dim">
+                  <span>{c.member_count}/11</span>
+                  <span className="flex items-center gap-0.5 text-accent-lime"><IconTrophy size={11} />{c.cups_count}</span>
+                  <span className="flex items-center gap-0.5 text-accent-cyan"><IconStar size={11} />{c.stars_count}</span>
+                  {c.club_type === "closed" && <IconLock size={11} />}
+                </p>
               </div>
             </button>
             {c.club_type === "open" ? (
@@ -144,16 +182,13 @@ function ClubBrowseList() {
   );
 }
 
-const ROLE_LABELS: Record<string, string> = { captain: "Капитан", assistant: "Ассистент", member: "Участник" };
-const MAX_ASSISTANTS = 4;
 
 function ClubHome({ club }: { club: Club }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const userId = useAuthStore((s) => s.user?.id);
-  const isManager = club.my_role === "captain" || club.my_role === "assistant";
+  const isManager = isClubManager(club.my_role);
   const isCaptain = club.my_role === "captain";
-  const assistantCount = club.members.filter((m) => m.role === "assistant").length;
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
   const { data: tournamentCurrent } = useQuery({ queryKey: ["clubs", "tournament", "current"], queryFn: fetchTournamentCurrent });
   const { data: nextOpponent } = useQuery({
@@ -175,14 +210,18 @@ function ClubHome({ club }: { club: Club }) {
   const onActionError = (err: unknown) => setActionError(err instanceof ApiRequestError ? err.message : "Не удалось выполнить действие");
   const leaveMutation = useMutation({ mutationFn: leaveClub, onSuccess: invalidate, onError: onActionError });
   const kickMutation = useMutation({ mutationFn: (id: number) => kickMember(id), onSuccess: invalidate, onError: onActionError });
-  const appointMutation = useMutation({ mutationFn: (id: number) => appointAssistant(id), onSuccess: invalidate, onError: onActionError });
-  const removeAssistantMutation = useMutation({ mutationFn: (id: number) => removeAssistant(id), onSuccess: invalidate, onError: onActionError });
+  const roleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: number; role: ClubRole }) => setClubMemberRole(userId, role),
+    onSuccess: invalidate,
+    onError: onActionError,
+  });
+  const budgetPolicyMutation = useMutation({ mutationFn: setClubBudgetPolicy, onSuccess: invalidate, onError: onActionError });
   const togglePersonalRewardMutation = useMutation({
     mutationFn: ({ userId, enabled }: { userId: number; enabled: boolean }) => setMemberPersonalReward(userId, enabled),
     onSuccess: invalidate,
     onError: onActionError,
   });
-  const [confirmMemberAction, setConfirmMemberAction] = useState<{ type: "appoint" | "kick"; userId: number; name: string } | null>(null);
+  const [confirmMemberAction, setConfirmMemberAction] = useState<{ type: "kick"; userId: number; name: string } | null>(null);
   const clubTypeMutation = useMutation({ mutationFn: updateClubType, onSuccess: invalidate, onError: onActionError });
 
   const [claimError, setClaimError] = useState<string | null>(null);
@@ -215,7 +254,7 @@ function ClubHome({ club }: { club: Club }) {
           </button>
           <div className="flex-1">
             <h1 className="font-display text-xl font-bold text-ink-chalk">{club.name}</h1>
-            <p className="text-xs text-ink-mist-dim">{club.member_count}/11 участников · {ROLE_LABELS[club.my_role ?? "member"]}</p>
+            <p className="text-xs text-ink-mist-dim">{club.member_count}/11 участников · {CLUB_ROLE_LABELS[club.my_role ?? "member"]}</p>
           </div>
         </div>
         <div className="mt-3 flex items-center gap-4 border-t border-white/5 pt-3 text-xs text-ink-mist">
@@ -282,6 +321,17 @@ function ClubHome({ club }: { club: Club }) {
         )}
       </div>
       {claimError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{claimError}</p>}
+
+      <button
+        onClick={() => navigate("/clubs/wall")}
+        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+      >
+        <IconChat size={16} className="text-accent-lime" />
+        <span className="flex-1">Стена клуба</span>
+        {!!club.wall_unread && (
+          <span className="rounded-full bg-accent-lime px-2 py-0.5 text-micro font-bold text-bg-base">{club.wall_unread}</span>
+        )}
+      </button>
 
       <div className="grid grid-cols-2 gap-2">
         <button
@@ -406,11 +456,21 @@ function ClubHome({ club }: { club: Club }) {
                 navigator.clipboard.writeText(`https://t.me/${profile.telegram_bot_username}?start=club_${club.invite_code}`);
                 hapticNotify("success");
               }}
-              className="shrink-0 rounded-lg bg-floodlight px-2 py-1 text-caption font-bold text-bg-base"
+              className="shrink-0 rounded-lg bg-white/10 px-2 py-1 text-caption font-bold text-ink-chalk"
             >
               Копировать
             </button>
           </div>
+          <button
+            onClick={() => {
+              const link = `https://t.me/${profile.telegram_bot_username}?start=club_${club.invite_code}`;
+              const text = `Вступай в мой клуб «${club.name}» в VICTOR FC — вместе играем турниры и лигу!`;
+              void shareToTelegram(null, `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+            }}
+            className="mt-2 w-full rounded-xl bg-floodlight py-2 text-xs font-bold text-bg-base active:scale-95"
+          >
+            Пригласить друга в Telegram
+          </button>
         </div>
       )}
 
@@ -457,7 +517,7 @@ function ClubHome({ club }: { club: Club }) {
         Активность клуба
       </button>
 
-      {isManager && (
+      {club.can_spend_budget && (
         <button
           onClick={() => navigate("/clubs/packs")}
           className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
@@ -522,30 +582,36 @@ function ClubHome({ club }: { club: Club }) {
 
       <div className="flex flex-col gap-2">
         <p className="font-display text-sm font-bold text-ink-chalk">Участники</p>
+        {isCaptain && (
+          <label className="flex items-center gap-2 rounded-xl bg-bg-surface px-3 py-2 text-xs text-ink-mist">
+            <input
+              type="checkbox"
+              checked={!!club.budget_treasurer_only}
+              disabled={budgetPolicyMutation.isPending}
+              onChange={(e) => budgetPolicyMutation.mutate(e.target.checked)}
+            />
+            Бюджет тратят только капитан, вице-капитан и казначей (без ассистентов)
+          </label>
+        )}
         {club.members.map((m) => (
           <div key={m.user_id} className="flex items-center justify-between rounded-xl bg-bg-surface p-3">
             <span className="flex min-w-0 items-center gap-1.5 text-sm text-ink-chalk">
-              <span className="truncate">{m.username ?? m.first_name ?? `#${m.user_id}`} · {ROLE_LABELS[m.role]}</span>
+              <span className="truncate">{m.username ?? m.first_name ?? `#${m.user_id}`} · {CLUB_ROLE_LABELS[m.role]}</span>
               {m.sponsor_tier && <SponsorBadge tier={m.sponsor_tier} />}
             </span>
             <div className="flex gap-2">
-              {isCaptain && m.role === "member" && m.user_id !== userId && assistantCount < MAX_ASSISTANTS && (
-                <button
-                  onClick={() => setConfirmMemberAction({ type: "appoint", userId: m.user_id, name: m.username ?? m.first_name ?? `#${m.user_id}` })}
-                  className="rounded-lg bg-accent-lime/10 px-2 py-1 text-caption text-accent-lime"
+              {isCaptain && m.role !== "captain" && (
+                <select
+                  value={m.role}
+                  onChange={(e) => roleMutation.mutate({ userId: m.user_id, role: e.target.value as ClubRole })}
+                  disabled={roleMutation.isPending}
+                  className="rounded-lg bg-white/5 px-1.5 py-1 text-caption text-ink-mist outline-none"
+                  aria-label="Роль участника"
                 >
-                  Назначить ассистентом
-                </button>
+                  {ASSIGNABLE_CLUB_ROLES.map((r) => <option key={r} value={r}>{CLUB_ROLE_LABELS[r]}</option>)}
+                </select>
               )}
-              {isCaptain && m.role === "assistant" && m.user_id !== userId && (
-                <button
-                  onClick={() => removeAssistantMutation.mutate(m.user_id)}
-                  className="rounded-lg bg-white/5 px-2 py-1 text-caption text-ink-mist"
-                >
-                  Понизить
-                </button>
-              )}
-              {isManager && m.role === "member" && m.user_id !== userId && (
+              {isManager && (m.role === "member" || m.role === "treasurer") && m.user_id !== userId && (
                 <button
                   onClick={() => setConfirmMemberAction({ type: "kick", userId: m.user_id, name: m.username ?? m.first_name ?? `#${m.user_id}` })}
                   className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400"
@@ -603,18 +669,13 @@ function ClubHome({ club }: { club: Club }) {
 
       <ConfirmDialog
         open={!!confirmMemberAction}
-        title={confirmMemberAction?.type === "kick" ? `Исключить ${confirmMemberAction.name}?` : `Назначить ${confirmMemberAction?.name} ассистентом?`}
-        description={
-          confirmMemberAction?.type === "kick"
-            ? "Участник будет удалён из клуба. Это действие нельзя отменить."
-            : "Ассистент сможет управлять составом, паками и заявками на вступление."
-        }
-        danger={confirmMemberAction?.type === "kick"}
-        confirmLabel={confirmMemberAction?.type === "kick" ? "Исключить" : "Назначить"}
+        title={`Исключить ${confirmMemberAction?.name ?? ""}?`}
+        description="Участник будет удалён из клуба. Это действие нельзя отменить."
+        danger
+        confirmLabel="Исключить"
         onConfirm={() => {
           if (!confirmMemberAction) return;
-          if (confirmMemberAction.type === "kick") kickMutation.mutate(confirmMemberAction.userId);
-          else appointMutation.mutate(confirmMemberAction.userId);
+          kickMutation.mutate(confirmMemberAction.userId);
           setConfirmMemberAction(null);
         }}
         onCancel={() => setConfirmMemberAction(null)}

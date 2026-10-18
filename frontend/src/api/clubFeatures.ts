@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { ClubCard, ClubEmblem, ClubEmblemState, ClubLogoShape, ClubSurplus, ClubTreasury, StarsInvoiceCreate } from "@/types";
+import type { ClubCard, ClubEmblem, ClubEmblemState, ClubLogoShape, ClubSurplus, ClubTreasury, ClubWall, StarsInvoiceCreate } from "@/types";
 
 export async function fetchClubEmblem(): Promise<ClubEmblemState> {
   const { data } = await api.get<ClubEmblemState>("/clubs/me/emblem");
@@ -45,5 +45,25 @@ export async function sellClubCards(cardIds: number[]): Promise<{ sold: number; 
 
 export async function exchangeClubCards(cardIds: number[]): Promise<{ card: ClubCard; budget: number }> {
   const { data } = await api.post<{ card: ClubCard; budget: number }>("/clubs/me/surplus/exchange", { card_ids: cardIds });
+  return data;
+}
+
+export async function fetchClubWall(): Promise<ClubWall> {
+  const { data } = await api.get<ClubWall>("/clubs/me/wall");
+  return data;
+}
+
+export async function createClubPost(text: string, announce: boolean): Promise<ClubWall> {
+  const { data } = await api.post<ClubWall>("/clubs/me/wall", { text, announce });
+  return data;
+}
+
+export async function deleteClubPost(postId: number): Promise<ClubWall> {
+  const { data } = await api.delete<ClubWall>(`/clubs/me/wall/${postId}`);
+  return data;
+}
+
+export async function pinClubPost(postId: number): Promise<ClubWall> {
+  const { data } = await api.post<ClubWall>(`/clubs/me/wall/${postId}/pin`);
   return data;
 }

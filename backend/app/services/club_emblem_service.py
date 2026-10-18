@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.models.club import Club, ClubMember
 from app.models.club_emblem import ClubEmblemItem, ClubEmblemUnlock
-from app.models.enums import ClubBudgetTransactionType, ClubRole
+from app.models.enums import ClubBudgetTransactionType
 from app.models.user import User
 from app.schemas.club_emblem import (
     ClubEmblemCatalogItemOut,
@@ -111,8 +111,16 @@ async def _membership(db: AsyncSession, user_id: int) -> ClubMember:
     return membership
 
 
-def _can_spend_budget(membership: ClubMember) -> bool:
-    return membership.role in (ClubRole.captain, ClubRole.assistant)
+def _can_spend_budget(membership: ClubMember, club: Club) -> bool:
+    from app.services.club_service import can_spend_budget
+
+    return can_spend_budget(membership, club)
+
+
+def _can_edit(membership: ClubMember) -> bool:
+    from app.services.club_service import can_edit_emblem
+
+    return can_edit_emblem(membership)
 
 
 async def get_state(db: AsyncSession, user: User) -> ClubEmblemStateOut:
@@ -131,8 +139,8 @@ async def get_state(db: AsyncSession, user: User) -> ClubEmblemStateOut:
             # Switched-off items only stay visible to a club that already owns them.
             if i.is_active or i.id in unlocked
         ],
-        budget=club.budget, can_edit=membership.role == ClubRole.captain,
-        can_spend_budget=_can_spend_budget(membership),
+        budget=club.budget, can_edit=_can_edit(membership),
+        can_spend_budget=_can_spend_budget(membership, club),
     )
 
 
@@ -150,8 +158,9 @@ async def buy_with_budget(db: AsyncSession, user: User, item_id: int) -> ClubEmb
     if not config.club_emblems_enabled:
         raise ConflictError("Конструктор эмблем сейчас недоступен")
     membership = await _membership(db, user.id)
-    if not _can_spend_budget(membership):
-        raise ForbiddenError("Тратить бюджет клуба могут капитан и ассистенты")
+    from app.services.club_service import require_budget_spender
+
+    require_budget_spender(membership, await db.get(Club, membership.club_id))
     item = await db.get(ClubEmblemItem, item_id)
     if item is None:
         raise NotFoundError("Элемент не найден")
@@ -177,8 +186,8 @@ async def buy_with_budget(db: AsyncSession, user: User, item_id: int) -> ClubEmb
 
 async def update_emblem(db: AsyncSession, user: User, payload: ClubEmblemUpdateIn) -> ClubEmblemStateOut:
     membership = await _membership(db, user.id)
-    if membership.role != ClubRole.captain:
-        raise ForbiddenError("Эмблему меняет капитан")
+    if not _can_edit(membership):
+        raise ForbiddenError("Эмблему меняет капитан или вице-капитан")
     club = await _lock_club(db, membership.club_id)
     items = {(i.kind, i.style_key): i for i in await _catalog(db)}
     unlocked = await unlocked_item_ids(db, club.id)

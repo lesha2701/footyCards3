@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { CLUB_ROLE_LABELS } from "@/lib/clubRoles";
 
 import {
   adjustClubBudget,
@@ -10,10 +11,9 @@ import {
   fetchAdminClubTournaments,
 } from "@/admin/api";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
-import type { AdminClub, AdminClubBudgetTransactionType, AdminClubMember } from "@/admin/types";
+import type { AdminClub, AdminClubBudgetTransactionType } from "@/admin/types";
 import { useAuthStore } from "@/store/authStore";
 
-const ROLE_LABELS: Record<AdminClubMember["role"], string> = { captain: "Капитан", assistant: "Ассистент", member: "Участник" };
 
 // Mirrors the backend's _CLUB_BUDGET_ADMIN_TELEGRAM_ID restriction in
 // admin_clubs.py — hides the control for admins who'd get a 403 anyway.
@@ -189,7 +189,7 @@ function ClubDetailModal({ clubId, onClose }: { clubId: number; onClose: () => v
             {members?.map((m) => (
               <div key={m.user_id} className="flex items-center justify-between rounded-lg bg-bg-surface px-3 py-2 text-xs">
                 <span>{m.username ?? m.first_name ?? `#${m.user_id}`}</span>
-                <span className="text-slate-400">{ROLE_LABELS[m.role]}</span>
+                <span className="text-slate-400">{CLUB_ROLE_LABELS[m.role]}</span>
                 <span className="text-slate-500">{new Date(m.joined_at).toLocaleDateString("ru-RU")}</span>
               </div>
             ))}
@@ -244,6 +244,9 @@ const BUDGET_TYPE_LABELS: Record<AdminClubBudgetTransactionType, string> = {
   coach_pack_purchase: "Пак тренеров",
   admin_adjustment: "Корректировка админом",
   league_reward: "Лига клубов",
+  stars_donation: "Казна за Stars",
+  emblem_purchase: "Эмблема",
+  card_sale: "Продажа лишних карт",
 };
 
 /** Paged club budget history (20 per page): every income and spending with

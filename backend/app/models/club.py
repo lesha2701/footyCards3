@@ -44,6 +44,9 @@ class Club(Base):
     # tournament's history for every other club that ever played against it). A club with no
     # tournament history is still hard-deleted exactly as before — see club_service.leave_club.
     is_disbanded: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Captain's switch: only captain / vice-captain / treasurer may spend the
+    # budget (otherwise assistants may too) — club_service.can_spend_budget.
+    budget_treasurer_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     __table_args__ = (CheckConstraint("budget >= 0", name="ck_clubs_budget_non_negative"),)
 
@@ -62,6 +65,8 @@ class ClubMember(Base):
     # this off for a specific member (e.g. an inactive player who shouldn't get a free reward).
     # Applies to any member row, including assistants and the captain's own row.
     personal_reward_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # «Стена клуба»: posts after this are unread for the member (club_wall_service).
+    wall_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ClubJoinRequest(Base):

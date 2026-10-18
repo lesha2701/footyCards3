@@ -1761,7 +1761,7 @@ export interface ApiError {
 }
 
 export type ClubType = "open" | "closed";
-export type ClubRole = "captain" | "assistant" | "member";
+export type ClubRole = "captain" | "vice_captain" | "assistant" | "treasurer" | "member";
 export type ClubLogoShape = "shield" | "circle" | "hexagon" | "star" | "diamond" | "banner" | "crest" | "chevron";
 
 /** Paid layers on top of logo_shape/logo_color (club_emblem_service). */
@@ -1923,6 +1923,9 @@ export interface Club {
   invite_code: string | null;
   my_role: ClubRole | null;
   budget: number;
+  budget_treasurer_only?: boolean;
+  can_spend_budget?: boolean;
+  wall_unread?: number | null;
   cups_count: number;
   stars_count: number;
   daily_reward_seconds_remaining: number | null;
@@ -1951,6 +1954,27 @@ export interface ClubCard {
   acquired_at: string;
   is_in_lineup: boolean;
   availability: ClubCardAvailability | null;
+}
+
+export interface ClubPost {
+  id: number;
+  user_id: number;
+  username: string | null;
+  first_name: string | null;
+  avatar_url: string | null;
+  role: ClubRole | null;
+  text: string;
+  is_announcement: boolean;
+  is_pinned: boolean;
+  created_at: string;
+  can_delete: boolean;
+}
+
+export interface ClubWall {
+  posts: ClubPost[];
+  can_announce: boolean;
+  can_pin: boolean;
+  announce_cooldown_seconds: number;
 }
 
 export interface ClubSurplus {

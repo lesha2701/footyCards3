@@ -15,11 +15,11 @@ here forces a minimum bench."""
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models.club import Club, ClubMember
 from app.models.club_card import ClubCard
 from app.models.club_lineup import ClubLineup, ClubLineupCard
-from app.models.enums import ClubBudgetTransactionType, ClubCardSource, ClubRole, Rarity
+from app.models.enums import ClubBudgetTransactionType, ClubCardSource, Rarity
 from app.models.game_config import GameConfig
 from app.models.player import Player
 from app.models.user import User
@@ -51,8 +51,10 @@ async def _membership(db: AsyncSession, user_id: int) -> ClubMember:
     return membership
 
 
-def _can_manage(membership: ClubMember) -> bool:
-    return membership.role in (ClubRole.captain, ClubRole.assistant)
+def _can_manage(membership: ClubMember, club: Club) -> bool:
+    from app.services.club_service import can_spend_budget
+
+    return can_spend_budget(membership, club)
 
 
 async def protected_card_ids(db: AsyncSession, club_id: int) -> set[int]:
@@ -89,7 +91,7 @@ async def get_surplus(db: AsyncSession, user: User) -> ClubSurplusOut:
     # Protected (squad) cards last, then the most valuable first.
     out.sort(key=lambda s: (s.protected, -s.sell_value))
     return ClubSurplusOut(
-        enabled=config.club_card_market_enabled, can_manage=_can_manage(membership), budget=club.budget,
+        enabled=config.club_card_market_enabled, can_manage=_can_manage(membership, club), budget=club.budget,
         sell_pct=config.club_card_sell_pct, exchange_count=config.club_card_exchange_count,
         cards=out,
         exchange_options=[
@@ -104,8 +106,9 @@ async def _lock_for_change(db: AsyncSession, user: User, card_ids: list[int]) ->
     if not config.club_card_market_enabled:
         raise ConflictError("Продажа и обмен клубных карт сейчас недоступны")
     membership = await _membership(db, user.id)
-    if not _can_manage(membership):
-        raise ForbiddenError("Продавать и обменивать карты клуба могут капитан и ассистенты")
+    from app.services.club_service import require_budget_spender
+
+    require_budget_spender(membership, await db.get(Club, membership.club_id))
     if len(set(card_ids)) != len(card_ids):
         raise ConflictError("Карта указана дважды")
     club = (await db.execute(

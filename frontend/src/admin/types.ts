@@ -142,6 +142,7 @@ export interface GameConfig {
   club_card_market_enabled: boolean;
   club_card_sell_pct: number;
   club_card_exchange_count: number;
+  club_announcement_cooldown_minutes: number;
   club_pass_frame_cosmetic_id: number | null;
   club_pass_badge_id: number | null;
   club_pass_ad_free: boolean;
@@ -832,7 +833,7 @@ export interface AdminClubMember {
   user_id: number;
   username: string | null;
   first_name: string | null;
-  role: "captain" | "assistant" | "member";
+  role: import("@/types").ClubRole;
   joined_at: string;
 }
 
@@ -859,7 +860,10 @@ export type AdminClubBudgetTransactionType =
   | "club_position_match_reward"
   | "coach_pack_purchase"
   | "admin_adjustment"
-  | "league_reward";
+  | "league_reward"
+  | "stars_donation"
+  | "emblem_purchase"
+  | "card_sale";
 
 export interface AdminClubTournament {
   tournament_id: number;

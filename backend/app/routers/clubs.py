@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
@@ -9,7 +9,7 @@ from app.core.exceptions import NotFoundError
 from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.club import Club
-from app.models.enums import TournamentStatus
+from app.models.enums import ClubType, TournamentStatus
 from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_match import TournamentMatch
 from app.models.tournament_queue import TournamentQueueEntry, TournamentQueueState
@@ -90,9 +90,13 @@ router = APIRouter(prefix="/clubs", tags=["clubs"])
 
 @router.get("", response_model=list[ClubSummaryOut])
 async def list_clubs(
-    search: Optional[str] = Query(default=None), db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)
+    search: Optional[str] = Query(default=None),
+    club_type: Optional[ClubType] = Query(default=None),
+    has_space: bool = Query(default=False),
+    sort: Literal["members", "cups", "stars", "new"] = Query(default="members"),
+    db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user),
 ):
-    return await club_service.list_clubs(db, search)
+    return await club_service.list_clubs(db, search, club_type=club_type, has_space=has_space, sort=sort)
 
 
 @router.get("/packs", response_model=list[ClubPackOut])

@@ -950,3 +950,5 @@ class GameConfig(TimestampMixin, Base):
     club_card_market_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     club_card_sell_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     club_card_exchange_count: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # «Стена клуба»: one bot-delivered announcement per club per this many minutes.
+    club_announcement_cooldown_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
