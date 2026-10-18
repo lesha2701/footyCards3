@@ -564,6 +564,14 @@ function ClubHome({ club }: { club: Club }) {
       </button>
 
       <button
+        onClick={() => navigate(`/clubs/${club.id}/trophies`)}
+        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+      >
+        <IconTrophy size={16} className="text-amber-300" />
+        Трофейная комната
+      </button>
+
+      <button
         onClick={() => navigate("/clubs/stats")}
         className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
       >

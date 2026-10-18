@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.timeutil import app_timezone, local_today
 from app.models.club import Club, ClubMember
-from app.models.club_league import ClubLeagueResult, ClubLeagueWeek
+from app.models.club_league import ClubLeagueResult, ClubLeagueWeek, ClubSeasonResult
 from app.models.enums import (
     ClubBudgetTransactionType,
     GameSessionStatus,
@@ -51,6 +51,8 @@ from app.schemas.club_league import (
     ClubLeagueMemberOut,
     ClubLeagueOut,
     ClubLeagueRowOut,
+    ClubSeasonOut,
+    ClubSeasonRowOut,
 )
 from app.services.club_budget_service import credit_club_budget
 from app.services.club_emblem_service import emblem_out
@@ -60,6 +62,10 @@ from app.services.notification_service import notify
 
 TABLE_SIZE = 20
 PODIUM_SIZE = 3
+DIVISION_NAMES = ["Бронзовая лига", "Серебряная лига", "Золотая лига"]
+TOP_DIVISION = len(DIVISION_NAMES) - 1
+# Seasons are counted in whole league weeks from this Monday.
+SEASON_EPOCH = date(2024, 1, 1)
 
 
 def week_start_for(now: Optional[datetime] = None) -> date:
@@ -136,11 +142,21 @@ def _member_points(tally: _Tally, config) -> int:
     return min(raw, config.club_league_member_weekly_cap)
 
 
-async def compute_table(db: AsyncSession, week_start: date, config) -> list[_ClubTally]:
-    """Clubs with points > 0, best first (ties: older club first)."""
+async def compute_table(
+    db: AsyncSession, week_start: date, config, division: Optional[int] = None,
+) -> list[_ClubTally]:
+    """Clubs with points > 0, best first (ties: older club first) — of one
+    division (the clubs' current one) when `division` is given."""
     start, end = week_bounds(week_start)
+    in_division: Optional[set[int]] = None
+    if division is not None:
+        in_division = set((await db.execute(
+            select(Club.id).where(Club.league_division == division, Club.is_disbanded.is_(False))
+        )).scalars())
     clubs: dict[int, _ClubTally] = {}
     for (cid, uid), tally in (await _activity(db, start, end)).items():
+        if in_division is not None and cid not in in_division:
+            continue
         points = _member_points(tally, config)
         club = clubs.setdefault(cid, _ClubTally(club_id=cid))
         club.points += points
@@ -148,9 +164,94 @@ async def compute_table(db: AsyncSession, week_start: date, config) -> list[_Clu
     return sorted((c for c in clubs.values() if c.points > 0), key=lambda c: (-c.points, c.club_id))
 
 
-def _reward_for(rank: int, config) -> int:
+def _reward_for(rank: int, config, division: int = 0) -> int:
     rewards = config.club_league_rewards or []
-    return max(0, int(rewards[rank - 1])) if rank <= len(rewards) else 0
+    base = max(0, int(rewards[rank - 1])) if rank <= len(rewards) else 0
+    pct = list(config.club_league_division_reward_pct or [])
+    multiplier = int(pct[division]) if division < len(pct) else 100
+    return base * max(0, multiplier) // 100
+
+
+def season_week_index(week: date, config) -> tuple[int, int]:
+    """(season number, 0-based week within it) of a league week."""
+    weeks = max(1, config.club_league_season_weeks)
+    n = (week - SEASON_EPOCH).days // 7
+    return n // weeks, n % weeks
+
+
+def season_weeks_of(week: date, config) -> list[date]:
+    """Every league week of the season `week` belongs to, oldest first."""
+    _season, offset = season_week_index(week, config)
+    first = week - timedelta(days=7 * offset)
+    return [first + timedelta(days=7 * i) for i in range(max(1, config.club_league_season_weeks))]
+
+
+def _division_moves(ranked: list[tuple[int, int]], division: int, config) -> dict[int, int]:
+    """club_id -> +1/-1 for a division's final standings [(club_id, points)], best first."""
+    moves: dict[int, int] = {}
+    if division < TOP_DIVISION:
+        for club_id, points in ranked[: max(0, config.club_league_promote_count)]:
+            if points > 0:
+                moves[club_id] = 1
+    if division > 0:
+        count = min(max(0, config.club_league_relegate_count), len(ranked) // 2)
+        for club_id, _points in ranked[len(ranked) - count:] if count else []:
+            moves.setdefault(club_id, -1)
+    return moves
+
+
+async def _season_points(db: AsyncSession, weeks: list[date], division: int) -> dict[int, int]:
+    """Settled season points per club of a division (results earned in it)."""
+    rows = await db.execute(
+        select(ClubLeagueResult.club_id, func.sum(ClubLeagueResult.points))
+        .where(ClubLeagueResult.week_start.in_(weeks), ClubLeagueResult.division == division)
+        .group_by(ClubLeagueResult.club_id)
+    )
+    return {cid: int(total or 0) for cid, total in rows.all()}
+
+
+async def _division_clubs(db: AsyncSession, division: int) -> list[int]:
+    return list((await db.execute(
+        select(Club.id).where(Club.league_division == division, Club.is_disbanded.is_(False)).order_by(Club.id)
+    )).scalars())
+
+
+async def _settle_season(db: AsyncSession, last_week: date, config) -> None:
+    """Final standings, promotion and relegation for the season ending with
+    `last_week` (called inside settle_due's transaction, after its results)."""
+    weeks = season_weeks_of(last_week, config)
+    moved: list[tuple[int, int, int]] = []  # (club_id, from, to)
+    for division in range(len(DIVISION_NAMES)):
+        points = await _season_points(db, weeks, division)
+        ranked = sorted(((cid, points.get(cid, 0)) for cid in await _division_clubs(db, division)),
+                        key=lambda r: (-r[1], r[0]))
+        moves = _division_moves(ranked, division, config)
+        for rank, (club_id, pts) in enumerate(ranked, start=1):
+            move = moves.get(club_id, 0)
+            db.add(ClubSeasonResult(
+                season_end_week=last_week, club_id=club_id, division=division, rank=rank, points=pts, moved=move,
+            ))
+            if move:
+                moved.append((club_id, division, division + move))
+    await db.flush()
+    for club_id, old, new in moved:
+        club = await _lock_club(db, club_id)
+        club.league_division = new
+        db.add(club)
+        member_ids = (await db.execute(select(ClubMember.user_id).where(ClubMember.club_id == club_id))).scalars().all()
+        for uid in member_ids:
+            if new > old:
+                await notify(
+                    db, uid, NotificationType.club_league_promoted, "🏆 Клуб поднялся!",
+                    f"«{club.name}» выходит в {DIVISION_NAMES[new]} — призы недели там больше",
+                    related_object_type="club", related_object_id=club_id,
+                )
+            else:
+                await notify(
+                    db, uid, NotificationType.club_league_relegated, "Клуб опустился в лиге",
+                    f"«{club.name}» переходит в {DIVISION_NAMES[new]}. Новый сезон — новый шанс!",
+                    related_object_type="club", related_object_id=club_id,
+                )
 
 
 async def settle_due(db: AsyncSession, now: Optional[datetime] = None) -> int:
@@ -177,24 +278,32 @@ async def settle_due(db: AsyncSession, now: Optional[datetime] = None) -> int:
         return 0
 
     rewarded = 0
-    for rank, row in enumerate(await compute_table(db, week, config), start=1):
-        reward = _reward_for(rank, config)
-        db.add(ClubLeagueResult(week_start=week, club_id=row.club_id, rank=rank, points=row.points, reward=reward))
-        if reward <= 0:
-            continue
-        club = await _lock_club(db, row.club_id)
-        await credit_club_budget(
-            db, club, reward, ClubBudgetTransactionType.league_reward,
-            f"Лига клубов: {rank} место ({week.strftime('%d.%m')})", related_object_type="club_league_week",
-        )
-        member_ids = (await db.execute(select(ClubMember.user_id).where(ClubMember.club_id == row.club_id))).scalars().all()
-        for uid in member_ids:
-            await notify(
-                db, uid, NotificationType.club_league_reward, "Лига клубов: итоги недели",
-                f"Клуб «{club.name}» занял {rank} место ({row.points} очк.) и получил {reward} монет в бюджет!",
-                related_object_type="club", related_object_id=row.club_id,
+    for division in range(len(DIVISION_NAMES)):
+        for rank, row in enumerate(await compute_table(db, week, config, division=division), start=1):
+            reward = _reward_for(rank, config, division)
+            db.add(ClubLeagueResult(
+                week_start=week, club_id=row.club_id, rank=rank, points=row.points, reward=reward, division=division,
+            ))
+            if reward <= 0:
+                continue
+            club = await _lock_club(db, row.club_id)
+            await credit_club_budget(
+                db, club, reward, ClubBudgetTransactionType.league_reward,
+                f"{DIVISION_NAMES[division]}: {rank} место ({week.strftime('%d.%m')})", related_object_type="club_league_week",
             )
-        rewarded += 1
+            member_ids = (await db.execute(select(ClubMember.user_id).where(ClubMember.club_id == row.club_id))).scalars().all()
+            for uid in member_ids:
+                await notify(
+                    db, uid, NotificationType.club_league_reward, "Лига клубов: итоги недели",
+                    f"Клуб «{club.name}» занял {rank} место в «{DIVISION_NAMES[division]}» ({row.points} очк.) "
+                    f"и получил {reward} монет в бюджет!",
+                    related_object_type="club", related_object_id=row.club_id,
+                )
+            rewarded += 1
+    await db.flush()
+    _season, offset = season_week_index(week, config)
+    if offset == max(1, config.club_league_season_weeks) - 1:
+        await _settle_season(db, week, config)
     await db.commit()
     return rewarded
 
@@ -215,7 +324,9 @@ async def _rows(db: AsyncSession, entries: list[tuple[int, int, int, int]]) -> l
     ]
 
 
-async def _last_week(db: AsyncSession, week: date, my_club_id: Optional[int]) -> Optional[ClubLeagueLastWeekOut]:
+async def _last_week(
+    db: AsyncSession, week: date, my_club_id: Optional[int], division: int = 0,
+) -> Optional[ClubLeagueLastWeekOut]:
     marker = await db.get(ClubLeagueWeek, week)
     if marker is None or marker.is_bootstrap:
         return None
@@ -224,7 +335,10 @@ async def _last_week(db: AsyncSession, week: date, my_club_id: Optional[int]) ->
             select(ClubLeagueResult)
             .where(
                 ClubLeagueResult.week_start == week,
-                or_(ClubLeagueResult.rank <= PODIUM_SIZE, ClubLeagueResult.club_id == my_club_id),
+                or_(
+                    (ClubLeagueResult.rank <= PODIUM_SIZE) & (ClubLeagueResult.division == division),
+                    ClubLeagueResult.club_id == my_club_id,
+                ),
             )
             .order_by(ClubLeagueResult.rank)
         )
@@ -241,13 +355,15 @@ async def get_league(db: AsyncSession, user: User) -> ClubLeagueOut:
     start, end = week_bounds(week)
     membership = await _get_membership(db, user.id)
     my_club_id = membership.club_id if membership else None
+    my_club = await db.get(Club, my_club_id) if my_club_id else None
+    division = my_club.league_division if my_club else 0
 
-    table = await compute_table(db, week, config) if config.club_league_enabled else []
+    table = await compute_table(db, week, config, division=division) if config.club_league_enabled else []
     ranked = [(rank, row) for rank, row in enumerate(table, start=1)]
-    shown = [(rank, row.club_id, row.points, _reward_for(rank, config)) for rank, row in ranked[:TABLE_SIZE]]
+    shown = [(rank, row.club_id, row.points, _reward_for(rank, config, division)) for rank, row in ranked[:TABLE_SIZE]]
     mine = next(((rank, row) for rank, row in ranked if row.club_id == my_club_id), None)
     if mine and mine[0] > TABLE_SIZE:
-        shown.append((mine[0], mine[1].club_id, mine[1].points, _reward_for(mine[0], config)))
+        shown.append((mine[0], mine[1].club_id, mine[1].points, _reward_for(mine[0], config, division)))
     rows = await _rows(db, shown)
 
     members: list[ClubLeagueMemberOut] = []
@@ -268,16 +384,54 @@ async def get_league(db: AsyncSession, user: User) -> ClubLeagueOut:
             )
         members.sort(key=lambda m: (-m.points, m.user_id))
 
+    pct = list(config.club_league_division_reward_pct or [])
     return ClubLeagueOut(
         enabled=config.club_league_enabled,
+        division=division, division_names=DIVISION_NAMES,
+        division_reward_pct=int(pct[division]) if division < len(pct) else 100,
         week_start=week, ends_at=end,
         points_game=config.club_league_points_game, points_pack=config.club_league_points_pack,
         points_task=config.club_league_points_task, member_weekly_cap=config.club_league_member_weekly_cap,
-        rewards=[max(0, int(r)) for r in (config.club_league_rewards or [])],
+        rewards=[_reward_for(i, config, division) for i in range(1, len(config.club_league_rewards or []) + 1)],
         clubs_count=len(table),
         table=rows,
         my_row=next((r for r in rows if r.club_id == my_club_id), None),
         members=members,
-        last_week=await _last_week(db, week - timedelta(days=7), my_club_id),
+        last_week=await _last_week(db, week - timedelta(days=7), my_club_id, division),
+        season=await _season_out(db, week, config, division, table, my_club_id) if config.club_league_enabled else None,
+    )
+
+
+async def _season_out(
+    db: AsyncSession, week: date, config, division: int, live: list[_ClubTally], my_club_id: Optional[int],
+) -> ClubSeasonOut:
+    """Season-to-date standings of a division: settled weeks + this week live."""
+    weeks = season_weeks_of(week, config)
+    settled = await _season_points(db, [w for w in weeks if w < week], division)
+    for row in live:
+        settled[row.club_id] = settled.get(row.club_id, 0) + row.points
+    ranked = sorted(((cid, settled.get(cid, 0)) for cid in await _division_clubs(db, division)), key=lambda r: (-r[1], r[0]))
+    moves = _division_moves(ranked, division, config)
+    entries = [(rank, cid, pts) for rank, (cid, pts) in enumerate(ranked, start=1)]
+    shown = entries[:TABLE_SIZE]
+    mine = next((e for e in entries if e[1] == my_club_id), None)
+    if mine and mine[0] > TABLE_SIZE:
+        shown.append(mine)
+    clubs = {c.id: c for c in (await db.execute(select(Club).where(Club.id.in_([e[1] for e in shown] or [0])))).scalars()}
+    rows = [
+        ClubSeasonRowOut(
+            rank=rank, club_id=cid, name=clubs[cid].name, logo_shape=clubs[cid].logo_shape,
+            logo_color=clubs[cid].logo_color, emblem=emblem_out(clubs[cid]), points=pts,
+            zone={1: "up", -1: "down"}.get(moves.get(cid, 0)),
+        )
+        for rank, cid, pts in shown if cid in clubs
+    ]
+    _season, offset = season_week_index(week, config)
+    _start, season_end = week_bounds(weeks[-1])
+    return ClubSeasonOut(
+        weeks=len(weeks), week_of_season=offset + 1, ends_at=season_end,
+        promote_count=config.club_league_promote_count if division < TOP_DIVISION else 0,
+        relegate_count=config.club_league_relegate_count if division > 0 else 0,
+        standings=rows, my_row=next((r for r in rows if r.club_id == my_club_id), None),
     )
 

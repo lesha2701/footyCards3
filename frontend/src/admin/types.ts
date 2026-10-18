@@ -144,6 +144,10 @@ export interface GameConfig {
   club_card_exchange_count: number;
   club_announcement_cooldown_minutes: number;
   club_quests_enabled: boolean;
+  club_league_season_weeks: number;
+  club_league_promote_count: number;
+  club_league_relegate_count: number;
+  club_league_division_reward_pct: number[];
   club_pass_frame_cosmetic_id: number | null;
   club_pass_badge_id: number | null;
   club_pass_ad_free: boolean;

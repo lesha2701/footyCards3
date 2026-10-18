@@ -954,3 +954,12 @@ class GameConfig(TimestampMixin, Base):
     club_announcement_cooldown_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
     # «Задания недели» клуба (club_quest_service; the quests themselves are club_quest_templates).
     club_quests_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # «Лига клубов» divisions (Бронза → Серебро → Золото): a season is this
+    # many league weeks; at its end the top N of a division go up and the
+    # bottom N go down. Weekly prizes are club_league_rewards x the division %.
+    club_league_season_weeks: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    club_league_promote_count: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    club_league_relegate_count: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    club_league_division_reward_pct: Mapped[list] = mapped_column(
+        JSON, default=lambda: [100, 150, 200], nullable=False,
+    )

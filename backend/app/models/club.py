@@ -47,6 +47,8 @@ class Club(Base):
     # Captain's switch: only captain / vice-captain / treasurer may spend the
     # budget (otherwise assistants may too) — club_service.can_spend_budget.
     budget_treasurer_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # «Лига клубов» division: 0 Бронза, 1 Серебро, 2 Золото (club_league_service).
+    league_division: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     __table_args__ = (CheckConstraint("budget >= 0", name="ck_clubs_budget_non_negative"),)
 

@@ -347,6 +347,8 @@ class NotificationType(str, enum.Enum):
     club_member_joined = "club_member_joined"
     club_announcement = "club_announcement"
     club_reward_available = "club_reward_available"
+    club_league_promoted = "club_league_promoted"
+    club_league_relegated = "club_league_relegated"
     daily_reward_available = "daily_reward_available"
     special_pack = "special_pack"
     admin_message = "admin_message"

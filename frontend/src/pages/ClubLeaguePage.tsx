@@ -6,7 +6,8 @@ import { ClubLogo } from "@/components/clubs/ClubLogo";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronLeft, IconClock, IconCoin, IconTrophy, IconUsers } from "@/components/icons";
-import type { ClubLeagueRow } from "@/types";
+import { DIVISION_STYLES } from "@/lib/clubDivisions";
+import type { ClubLeagueRow, ClubSeasonRow } from "@/types";
 
 function timeLeft(endsAt: string): string {
   const seconds = Math.max(0, (new Date(endsAt).getTime() - Date.now()) / 1000);
@@ -47,6 +48,20 @@ function Row({ row, mine }: { row: ClubLeagueRow; mine: boolean }) {
   );
 }
 
+function SeasonRow({ row, mine }: { row: ClubSeasonRow; mine: boolean }) {
+  const zone = row.zone === "up" ? "border-l-2 border-accent-green" : row.zone === "down" ? "border-l-2 border-red-400" : "";
+  return (
+    <div className={`flex items-center gap-3 rounded-xl px-3 py-2 ${zone} ${mine ? "bg-accent-lime/10 ring-1 ring-accent-lime/40" : "bg-bg-surface"}`}>
+      <span className="w-6 text-center font-mono text-sm font-bold text-ink-mist">{row.rank}</span>
+      <ClubLogo shape={row.logo_shape} color={row.logo_color} emblem={row.emblem} size={24} />
+      <span className="min-w-0 flex-1 truncate text-sm text-ink-chalk">{row.name}</span>
+      {row.zone === "up" && <span className="text-micro font-bold text-accent-green">▲</span>}
+      {row.zone === "down" && <span className="text-micro font-bold text-red-400">▼</span>}
+      <span className="w-12 text-right font-mono text-sm font-bold text-ink-chalk">{row.points}</span>
+    </div>
+  );
+}
+
 /** «Лига клубов»: weekly table of clubs by members' activity; places pay
  * into the club budget. Everything (points, caps, rewards) comes from the
  * server — the page only renders it. */
@@ -60,6 +75,11 @@ export default function ClubLeaguePage() {
         <IconChevronLeft size={18} className="text-ink-chalk" />
       </button>
       <h1 className="font-display text-xl font-bold text-ink-chalk">Лига клубов</h1>
+      {league?.division_names && league.division != null && (
+        <span className={`ml-auto rounded-full px-3 py-1 text-caption font-bold ${(DIVISION_STYLES[league.division] ?? DIVISION_STYLES[0]).badge}`}>
+          {league.division_names[league.division]}
+        </span>
+      )}
     </div>
   );
 
@@ -175,6 +195,25 @@ export default function ClubLeaguePage() {
           </div>
         ))}
       </section>
+
+      {league.season && league.season.standings.length > 0 && (
+        <section className="flex flex-col gap-1.5">
+          <p className="font-mono text-caption uppercase tracking-wider text-ink-mist">
+            Сезон · неделя {league.season.week_of_season} из {league.season.weeks} · до конца {timeLeft(league.season.ends_at)}
+          </p>
+          <p className="text-caption text-ink-mist-dim">
+            {league.season.promote_count > 0 && `▲ Топ-${league.season.promote_count} поднимутся в лигу выше. `}
+            {league.season.relegate_count > 0 && `▼ Последние ${league.season.relegate_count} опустятся. `}
+            Призы недели в этой лиге: {league.division_reward_pct ?? 100}% от базовых.
+          </p>
+          {league.season.standings.map((row, i) => (
+            <div key={row.club_id}>
+              {i > 0 && row.rank > league.season!.standings[i - 1].rank + 1 && <p className="py-1 text-center text-ink-mist-dim">···</p>}
+              <SeasonRow row={row} mine={row.club_id === myId || row.club_id === league.season!.my_row?.club_id} />
+            </div>
+          ))}
+        </section>
+      )}
 
       {inClub && (
         <section className="rounded-2xl bg-bg-surface p-3">

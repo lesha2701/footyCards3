@@ -84,6 +84,7 @@ export default function AdminGamesPage() {
       | "player_career_weekly_coins"
       | "player_career_friends_rewards"
       | "club_league_rewards"
+      | "club_league_division_reward_pct"
       | "magnate_place_rewards"
       | "magnate_stadium_rents"
       | "arena_division_min_points"
@@ -416,6 +417,10 @@ export default function AdminGamesPage() {
           {field("club_league_points_pack", "Очки за покупку пака")}
           {field("club_league_points_task", "Очки за задание")}
           {listField("club_league_rewards", "Награды за места, монеты в бюджет клуба")}
+          {listField("club_league_division_reward_pct", "Множитель наград по лигам Бронза, Серебро, Золото, %")}
+          {field("club_league_season_weeks", "Сезон, недель")}
+          {field("club_league_promote_count", "Повышаются в конце сезона (топ-N)")}
+          {field("club_league_relegate_count", "Вылетают в конце сезона (последние N)")}
         </div>
       </section>
 

@@ -1857,8 +1857,31 @@ export interface ClubLeagueMember {
   points: number;
 }
 
+export interface ClubSeasonRow {
+  rank: number;
+  club_id: number;
+  name: string;
+  logo_shape: ClubLogoShape;
+  logo_color: string;
+  emblem?: ClubEmblem | null;
+  points: number;
+  zone: "up" | "down" | null;
+}
+
 export interface ClubLeague {
   enabled: boolean;
+  division?: number;
+  division_names?: string[];
+  division_reward_pct?: number;
+  season?: {
+    weeks: number;
+    week_of_season: number;
+    ends_at: string;
+    promote_count: number;
+    relegate_count: number;
+    standings: ClubSeasonRow[];
+    my_row: ClubSeasonRow | null;
+  } | null;
   week_start: string;
   ends_at: string;
   points_game: number;
@@ -1993,6 +2016,31 @@ export interface ClubQuests {
   ends_at: string;
   quests: { id: number; title: string; metric: "games" | "packs" | "tasks"; target: number; progress: number; completed: boolean; reward_budget: number; reward: RewardBundle }[];
   members: { user_id: number; name: string; games: number; packs: number; tasks: number }[];
+}
+
+export interface ClubTrophies {
+  club_id: number;
+  name: string;
+  logo_shape: ClubLogoShape;
+  logo_color: string;
+  emblem?: ClubEmblem | null;
+  division: number;
+  division_name: string;
+  cups_count: number;
+  stars_count: number;
+  founded_at: string;
+  seasons: { season_end_week: string; division: number; division_name: string; rank: number; points: number; moved: number }[];
+  league_gold: number;
+  league_silver: number;
+  league_bronze: number;
+  recent_podiums: { week_start: string; division: number; division_name: string; rank: number; points: number }[];
+  tournaments_played: number;
+  tournaments_won: number;
+  best_tournament_rank: number | null;
+  recent_tournaments: { tournament_id: number; final_rank: number; cup: boolean; played_at: string }[];
+  quests_completed: number;
+  wars_played: number;
+  wars_won: number;
 }
 
 export interface ClubShop {

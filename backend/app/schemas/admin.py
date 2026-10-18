@@ -629,6 +629,10 @@ class GameConfigOut(BaseModel):
     club_card_exchange_count: int = 5
     club_announcement_cooldown_minutes: int = 60
     club_quests_enabled: bool = True
+    club_league_season_weeks: int = 4
+    club_league_promote_count: int = 3
+    club_league_relegate_count: int = 3
+    club_league_division_reward_pct: list[int] = []
     trade_send_min_account_age_days: int = 3
     trade_send_min_active_days: int = 2
     trade_daily_coins_receive_cap: int = 3000
@@ -1179,6 +1183,12 @@ class GameConfigUpdate(BaseModel):
     club_card_exchange_count: Optional[int] = Field(default=None, ge=2, le=20)
     club_announcement_cooldown_minutes: Optional[int] = Field(default=None, ge=0, le=10080)
     club_quests_enabled: Optional[bool] = None
+    club_league_season_weeks: Optional[int] = Field(default=None, ge=1, le=52)
+    club_league_promote_count: Optional[int] = Field(default=None, ge=0, le=50)
+    club_league_relegate_count: Optional[int] = Field(default=None, ge=0, le=50)
+    club_league_division_reward_pct: Optional[list[Annotated[int, Field(ge=0, le=1000)]]] = Field(
+        default=None, min_length=3, max_length=3,
+    )
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod

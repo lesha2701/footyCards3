@@ -63,6 +63,8 @@ _TYPE_PATHS = {
     "club_member_joined": "/clubs",
     "club_announcement": "/clubs/wall",
     "club_reward_available": "/clubs/shop",
+    "club_league_promoted": "/clubs/league",
+    "club_league_relegated": "/clubs/league",
     "friend_request": "/friends",
     "friend_accepted": "/friends",
     "trade_wish_available": "/trades/finder",

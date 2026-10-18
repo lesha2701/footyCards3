@@ -1,12 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 
 import { fetchClub } from "@/api/clubs";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import { IconStar, IconTrophy } from "@/components/icons";
 
 export function ClubPreviewPopup({ clubId, onClose }: { clubId: number | null; onClose: () => void }) {
+  const navigate = useNavigate();
   const { data: club, isLoading } = useQuery({
     queryKey: ["clubs", "preview", clubId],
     queryFn: () => fetchClub(clubId!),
@@ -50,6 +52,12 @@ export function ClubPreviewPopup({ clubId, onClose }: { clubId: number | null; o
                   </span>
                 </div>
                 {club.description && <p className="text-sm text-ink-mist">{club.description}</p>}
+                <button
+                  onClick={() => { onClose(); navigate(`/clubs/${club.id}/trophies`); }}
+                  className="rounded-xl bg-amber-400/10 px-4 py-2 text-xs font-bold text-amber-300 active:scale-95"
+                >
+                  Трофейная комната
+                </button>
               </div>
             )}
             <button

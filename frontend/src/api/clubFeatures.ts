@@ -8,6 +8,7 @@ import type {
   ClubShop,
   ClubSurplus,
   ClubTreasury,
+  ClubTrophies,
   ClubWall,
   GrantedRewards,
   StarsInvoiceCreate,
@@ -97,5 +98,10 @@ export async function claimClubReward(grantId: number): Promise<GrantedRewards> 
 
 export async function fetchClubQuests(): Promise<ClubQuests> {
   const { data } = await api.get<ClubQuests>("/clubs/me/quests");
+  return data;
+}
+
+export async function fetchClubTrophies(clubId: number): Promise<ClubTrophies> {
+  const { data } = await api.get<ClubTrophies>(`/clubs/${clubId}/trophies`);
   return data;
 }
