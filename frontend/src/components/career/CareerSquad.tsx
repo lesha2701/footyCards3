@@ -116,9 +116,12 @@ function CardFace({ info, entry, width, children, compact = false, position, off
   );
 }
 
-function PitchCard({ slot, entry, chemPoints, chemMax, onClick }: {
+function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, dimmed = false }: {
   slot: CareerSlot; entry?: CareerSquadCard; chemPoints?: { points: number; on_position: boolean }; chemMax: number;
   onClick: () => void;
+  /** A bench player is picked and can go here: the slot pulses. */
+  target?: boolean;
+  dimmed?: boolean;
 }) {
   const info = infoOf(entry);
   const off = info && !onIdealPosition(info.position, slot.ideal_position);
@@ -126,7 +129,9 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick }: {
     <button
       data-chem-slot={slot.code}
       onClick={onClick}
-      className="relative flex min-w-0 flex-col items-center active:scale-95"
+      className={`relative flex min-w-0 flex-col items-center rounded-[12px] transition active:scale-95 ${
+        target ? "animate-pulse ring-2 ring-accent-lime ring-offset-1 ring-offset-transparent" : ""
+      } ${dimmed ? "opacity-35" : ""}`}
       aria-label={info ? `${slot.code}: ${info.name}` : `${slot.code}: пусто`}
     >
       {info ? (
@@ -170,6 +175,30 @@ function BenchCard({ entry, onClick, gain, selected }: { entry: CareerSquadCard;
   );
 }
 
+/** A small bench tile for the sideways strip: photo, rating, position, surname. */
+function BenchTile({ entry, onClick, selected }: { entry: CareerSquadCard; onClick: () => void; selected: boolean }) {
+  const info = infoOf(entry);
+  if (!info) return null;
+  const out = isOut(entry);
+  return (
+    <button
+      onClick={onClick}
+      disabled={out}
+      aria-pressed={selected}
+      aria-label={`${info.name}, ${info.position}, ${info.rating}`}
+      className={`w-[52px] shrink-0 snap-start rounded-[12px] ${out ? "opacity-45 grayscale" : "active:scale-95"} ${
+        selected ? "ring-2 ring-accent-lime" : ""
+      }`}
+    >
+      <CardFace info={info} entry={entry} width="w-full" compact position={info.position}>
+        <span className="block h-[3px] w-full overflow-hidden rounded-full bg-white/10">
+          <span className={`block h-full ${fatigueTone(entry.fatigue)}`} style={{ width: `${entry.fatigue}%` }} />
+        </span>
+      </CardFace>
+    </button>
+  );
+}
+
 /** Career squad: the XI on a pitch (rows follow the formation) with photos,
  * rarity frames and live chemistry links; the bench as a grid grouped by
  * line so every player is visible; a picker with each candidate's chemistry
@@ -178,6 +207,9 @@ function BenchCard({ entry, onClick, gain, selected }: { entry: CareerSquadCard;
 export default function CareerSquad({ season, onView, onError }: { season: CareerSeason } & Handlers) {
   const [slots, setSlots] = useState<Record<string, number>>(season.lineup);
   const [picking, setPicking] = useState<CareerSlot | null>(null);
+  // Bench strip: line filter and a picked bench player waiting for a slot.
+  const [benchLine, setBenchLine] = useState<"ALL" | "GK" | "DEF" | "MID" | "FWD">("ALL");
+  const [benchPick, setBenchPick] = useState<CareerSquadCard | null>(null);
   const [building, setBuilding] = useState(false);
   // The season squad (заявка) can be rebuilt until round 1 kicks off.
   const squadEditable = season.rounds_played === 0 && (season.tactics_version ?? 0) > 0 && season.status === "active";
@@ -243,8 +275,14 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
     next[slot.code] = entry.card_id;
     setSlots(next);
     setPicking(null);
+    setBenchPick(null);
     haptic("light");
   };
+  const fitsSlot = (slot: CareerSlot, entry: CareerSquadCard) =>
+    CATEGORY_POSITIONS[slot.category as keyof typeof CATEGORY_POSITIONS]?.includes(infoOf(entry)?.position ?? "") ?? false;
+  const benchShown = benchByLine
+    .filter((line) => benchLine === "ALL" || line.category === benchLine)
+    .flatMap((line) => line.entries);
 
   return (
     <section className="flex flex-col gap-3 rounded-3xl bg-bg-surface p-4">
@@ -284,7 +322,9 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
                   entry={byId.get(slots[slot.code])}
                   chemPoints={chemBySlot.get(slot.code)}
                   chemMax={chemMax}
-                  onClick={() => setPicking(slot)}
+                  target={!!benchPick && fitsSlot(slot, benchPick)}
+                  dimmed={!!benchPick && !fitsSlot(slot, benchPick)}
+                  onClick={() => (benchPick ? fitsSlot(slot, benchPick) && put(slot, benchPick) : setPicking(slot))}
                 />
               ))}
             </div>
@@ -292,19 +332,48 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
         </div>
       </div>
 
-      <div className="flex flex-col gap-2.5">
-        <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-2">
           <p className="text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">Запас · {bench.length}</p>
-          <p className="text-micro text-ink-mist-dim">полоска — усталость</p>
-        </div>
-        {benchByLine.map((line) => (
-          <div key={line.category}>
-            <p className="mb-1 text-micro font-semibold text-ink-mist">{line.label} · {line.entries.length}</p>
-            <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-6">
-              {line.entries.map((entry) => <BenchCard key={entry.card_id} entry={entry} />)}
-            </div>
+          <div className="flex gap-1" role="tablist" aria-label="Линия запаса">
+            {([["ALL", "Все"], ["GK", "ВР"], ["DEF", "ЗЩ"], ["MID", "ПЗ"], ["FWD", "НП"]] as const).map(([key, label]) => {
+              const count = key === "ALL" ? bench.length : benchByLine.find((l) => l.category === key)?.entries.length ?? 0;
+              if (key !== "ALL" && count === 0) return null;
+              return (
+                <button
+                  key={key}
+                  role="tab"
+                  aria-selected={benchLine === key}
+                  onClick={() => setBenchLine(key)}
+                  className={`rounded-full px-2 py-0.5 text-micro font-semibold ${
+                    benchLine === key ? "bg-accent-cyan/20 text-accent-cyan" : "bg-white/5 text-ink-mist"
+                  }`}
+                >
+                  {label}{key !== "ALL" ? ` ${count}` : ""}
+                </button>
+              );
+            })}
           </div>
-        ))}
+        </div>
+        {benchPick ? (
+          <p className="flex items-center justify-between gap-2 rounded-xl bg-accent-lime/10 px-3 py-1.5 text-caption text-accent-lime">
+            <span>Нажми на поле, кого заменит {infoOf(benchPick)?.short}</span>
+            <button onClick={() => setBenchPick(null)} className="font-semibold text-ink-mist">Отмена</button>
+          </p>
+        ) : (
+          <p className="text-micro text-ink-mist-dim">Нажми на игрока запаса, потом на позицию на поле · полоска — усталость</p>
+        )}
+        <div className="-mx-1 flex snap-x gap-1.5 overflow-x-auto px-1 pb-1">
+          {benchShown.map((entry) => (
+            <BenchTile
+              key={entry.card_id}
+              entry={entry}
+              selected={benchPick?.card_id === entry.card_id}
+              onClick={() => { haptic("light"); setBenchPick(benchPick?.card_id === entry.card_id ? null : entry); }}
+            />
+          ))}
+          {benchShown.length === 0 && <p className="py-3 text-caption text-ink-mist-dim">В этой линии запасных нет</p>}
+        </div>
       </div>
 
       <p className="text-micro leading-snug text-ink-mist-dim">
