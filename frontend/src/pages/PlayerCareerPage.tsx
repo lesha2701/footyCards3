@@ -22,8 +22,12 @@ import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconCoin, IconLock, IconProfile, IconTrophy } from "@/components/icons";
 import PlayerAvatar from "@/components/myPlayer/PlayerAvatar";
+import { BonusTab, CareerStatus, HallOfFame, NewsFeed, RankingsTab, StoryEvent } from "@/components/playerCareer/CareerLife";
+import FriendsLeagueTab from "@/components/playerCareer/FriendsLeagueTab";
+import KeyMoments from "@/components/playerCareer/KeyMoments";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
+import { useCareerStars } from "@/lib/useCareerStars";
 import { useAuthStore } from "@/store/authStore";
 
 const starsText = (n: number) => "★".repeat(Math.max(1, Math.min(5, n)));
@@ -39,7 +43,10 @@ function formatWhen(iso: string | null): string {
   return `${d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} в ${time}`;
 }
 
-type PageTab = "club" | "cups" | "ball";
+type PageTab = "club" | "cups" | "friends" | "ranks" | "ball" | "bonus";
+const PAGE_TABS: [PageTab, string][] = [
+  ["club", "Клуб"], ["cups", "Кубки"], ["friends", "Лига друзей"], ["ranks", "Рейтинги"], ["ball", "Золотой мяч"], ["bonus", "Бонусы"],
+];
 
 /** «Карьера игрока»: «Мой игрок» signs for a club of the «Карьера тренера»
  * list (divisions = leagues) and plays week-long seasons. Bigger clubs need
@@ -63,7 +70,11 @@ export default function PlayerCareerPage() {
     onSuccess: (v) => { hapticNotify("success"); onView(v); setPicking(false); },
     onError,
   });
-  const start = useMutation({ mutationFn: startPlayerCareerSeason, onSuccess: (v) => { hapticNotify("success"); onView(v); }, onError });
+  const start = useMutation({
+    mutationFn: (fast: boolean) => startPlayerCareerSeason(fast),
+    onSuccess: (v) => { hapticNotify("success"); onView(v); },
+    onError,
+  });
 
   if (isLoading || !data) return <ListSkeleton />;
   if (!data.enabled) return <EmptyState icon={IconTrophy} title="«Карьера игрока» скоро вернётся" />;
@@ -84,6 +95,9 @@ export default function PlayerCareerPage() {
   const expired = !!contract?.expired;
   const openOffers = (season?.status === "finished" ? season.offers : []).filter((o) => o.status === "open");
   const activeCup = data.cups.some((c) => c.status === "active");
+  const tabDot: Partial<Record<PageTab, boolean>> = {
+    cups: activeCup, bonus: !!data.chest?.available || !!data.weekly?.tasks.some((t) => t.done && !t.claimed),
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -98,6 +112,7 @@ export default function PlayerCareerPage() {
         <span className="min-w-0 flex-1">
           <span className="block truncate font-display text-base font-bold text-ink-chalk">
             {data.player?.name} · {data.rating}
+            {data.shop?.pro && <span className="ml-1.5 rounded bg-violet-500 px-1.5 py-0.5 align-middle text-micro font-black text-white">PRO</span>}
           </span>
           <span className="block truncate text-xs text-ink-mist">
             {data.club ? (
@@ -119,15 +134,15 @@ export default function PlayerCareerPage() {
         </span>
       </section>
 
-      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-bg-surface p-1">
-        {([["club", "Клуб"], ["cups", "Кубки"], ["ball", "Золотой мяч"]] as [PageTab, string][]).map(([id, label]) => (
+      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1">
+        {PAGE_TABS.map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`relative rounded-xl py-2 text-caption font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
+            className={`relative shrink-0 rounded-full px-3.5 py-2 text-xs font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "bg-bg-surface text-ink-mist"}`}
           >
             {label}
-            {id === "cups" && activeCup && tab !== id && <span className="absolute right-2 top-1.5 h-2 w-2 rounded-full bg-accent-lime" />}
+            {tabDot[id] && tab !== id && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent-lime" />}
           </button>
         ))}
       </div>
@@ -135,10 +150,16 @@ export default function PlayerCareerPage() {
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
 
       {tab === "cups" && <CupsTab view={data} />}
+      {tab === "friends" && <FriendsLeagueTab hasClub={!!data.club && !expired} />}
+      {tab === "ranks" && <RankingsTab />}
       {tab === "ball" && data.golden_ball && <GoldenBallTab ball={data.golden_ball} />}
+      {tab === "bonus" && <BonusTab view={data} onView={onView} onError={onError} />}
 
       {tab === "club" && (
         <>
+          <KeyMoments view={data} onView={onView} onError={onError} />
+          <StoryEvent view={data} onView={onView} onError={onError} />
+          <CareerStatus view={data} onView={onView} onError={onError} />
           {expired && !active && (
             <section className="rounded-2xl bg-red-500/10 p-4 text-sm text-ink-chalk" data-testid="contract-expired">
               <b>Контракт закончился.</b>{" "}
@@ -173,16 +194,27 @@ export default function PlayerCareerPage() {
                   </p>
                   <button
                     disabled={start.isPending}
-                    onClick={() => start.mutate()}
+                    onClick={() => start.mutate(false)}
                     className="rounded-2xl bg-floodlight py-3 text-sm font-bold text-bg-base disabled:opacity-40 active:scale-[0.99]"
                   >
                     {season ? "Новый сезон" : "Начать сезон"} за «{data.club.name}»
                   </button>
+                  {!!data.shop?.fast_enabled && (data.shop?.fast_season_credits ?? 0) > 0 && (
+                    <button
+                      disabled={start.isPending}
+                      onClick={() => start.mutate(true)}
+                      className="rounded-2xl bg-violet-500 py-2.5 text-sm font-bold text-white disabled:opacity-40"
+                    >
+                      ⏩ Ускоренный сезон (осталось {data.shop?.fast_season_credits})
+                    </button>
+                  )}
                   <p className="text-center text-caption text-ink-mist-dim">
                     Сменить клуб можно по предложению в трансферное окно — после сезона
                   </p>
                 </section>
               )}
+              <NewsFeed news={data.news} />
+              <HallOfFame view={data} />
               {data.history.length > 0 && <CareerTimeline history={data.history} />}
             </>
           )}
@@ -247,7 +279,11 @@ function ClubPicker({
             </span>
             <span className="block text-micro text-accent-lime">
               Зарплата {club.salary} за сезон{club.reputation_needed > 0 && ` · престиж от ${club.reputation_needed}`}
+              {!club.locked_reason && club.expected_role === "bench" && <span className="text-amber-300"> · будешь запасным</span>}
             </span>
+            {club.legend && (
+              <span className="block truncate text-micro text-ink-mist">🏛 Легенда: {club.legend.player_name} · ⚽ {club.legend.goals}</span>
+            )}
           </span>
           {club.locked_reason ? (
             <span className="flex max-w-[7rem] shrink-0 items-center gap-1 text-right text-micro text-ink-mist"><IconLock size={12} /> {club.locked_reason}</span>
@@ -491,7 +527,9 @@ function TransferWindow({
     },
     onError,
   });
-  const busy = accept.isPending || counter.isPending;
+  const stars = useCareerStars(onError);
+  const shop = view.shop;
+  const busy = accept.isPending || counter.isPending || !!stars.busy;
   const STATUS: Record<PlayerCareerOffer["status"], string> = { open: "", accepted: "Подписано", closed: "Закрыто", withdrawn: "Клуб ушёл" };
   return (
     <div className="flex flex-col gap-2 rounded-xl bg-accent-lime/10 p-3" data-testid="transfer-window">
@@ -499,6 +537,18 @@ function TransferWindow({
       <p className="text-caption text-ink-mist">
         Прими предложение или поторгуйся: чем больше просишь, тем выше риск, что клуб уйдёт. Торговаться можно до {view.max_counters} раз.
       </p>
+      {season.agent ? (
+        <p className="rounded-lg bg-bg-surface px-3 py-2 text-xs text-ink-chalk">🤝 Агент работает: +1 предложение и +{shop?.agent_haggle_bonus}% к шансу в торге</p>
+      ) : shop && shop.agent_stars > 0 && (
+        <button
+          disabled={busy}
+          onClick={() => stars.buy("agent")}
+          className="flex items-center justify-between rounded-lg bg-bg-surface px-3 py-2 text-left text-xs text-ink-chalk disabled:opacity-40"
+        >
+          <span>🤝 Нанять агента: ещё предложение и +{shop.agent_haggle_bonus}% в торге</span>
+          <span className="rounded bg-amber-400 px-2 py-0.5 font-bold text-bg-base">⭐ {shop.agent_stars}</span>
+        </button>
+      )}
       {result && (
         <p className={`rounded-lg px-3 py-2 text-xs font-semibold ${result.agreed ? "bg-accent-lime/15 text-accent-lime" : "bg-red-500/15 text-red-400"}`}>
           {result.agreed ? `«${result.club}» согласился на твои условия!` : `«${result.club}» отказался и ушёл.`}
@@ -525,6 +575,15 @@ function TransferWindow({
               <span className="block text-micro text-ink-mist">бонус за подпись</span>
             </span>
           </div>
+          {o.status === "withdrawn" && !season.saved && shop && shop.save_offer_stars > 0 && (
+            <button
+              disabled={busy}
+              onClick={() => stars.buy("save_offer", o.key)}
+              className="mt-2 w-full rounded-lg bg-amber-400 py-2 text-xs font-bold text-bg-base disabled:opacity-40"
+            >
+              Вернуть клуб · ⭐ {shop.save_offer_stars}
+            </button>
+          )}
           {o.status === "open" && (
             <div className="mt-2 flex gap-1.5">
               <button

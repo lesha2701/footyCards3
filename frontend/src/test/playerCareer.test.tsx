@@ -10,12 +10,22 @@ const fetchPlayerCareer = vi.fn<() => Promise<PlayerCareerView>>();
 const signPlayerCareerContract = vi.fn();
 const counterPlayerCareerOffer = vi.fn();
 const acceptPlayerCareerOffer = vi.fn();
+const playPlayerCareerMoment = vi.fn();
+const answerPlayerCareerEvent = vi.fn();
+const openPlayerCareerChest = vi.fn();
+const fetchFriendsLeague = vi.fn();
+const createFriendsLeague = vi.fn();
 vi.mock("@/api/playerCareer", async (orig) => ({
   ...(await orig<typeof import("@/api/playerCareer")>()),
   fetchPlayerCareer: () => fetchPlayerCareer(),
   signPlayerCareerContract: (...args: unknown[]) => signPlayerCareerContract(...args),
   counterPlayerCareerOffer: (...args: unknown[]) => counterPlayerCareerOffer(...args),
   acceptPlayerCareerOffer: (...args: unknown[]) => acceptPlayerCareerOffer(...args),
+  playPlayerCareerMoment: (...args: unknown[]) => playPlayerCareerMoment(...args),
+  answerPlayerCareerEvent: (...args: unknown[]) => answerPlayerCareerEvent(...args),
+  openPlayerCareerChest: () => openPlayerCareerChest(),
+  fetchFriendsLeague: () => fetchFriendsLeague(),
+  createFriendsLeague: (...args: unknown[]) => createFriendsLeague(...args),
 }));
 
 const top = { id: 1, name: "Высшая лига", level: 1 };
@@ -24,10 +34,11 @@ const clubs: PlayerCareerClub[] = [
   {
     key: "cc:1", name: "Барселона", rating: 86, is_demo: false, real_cards: 12, reputation_needed: 450,
     locked_reason: "Нужен престиж 450", stars: ["Месси"], salary: 3600, league: top, level: 1, club_stars: 5,
+    legend: { player_name: "Легенда", goals: 47, seasons: 5 }, expected_role: "bench",
   },
   {
     key: "cc:9", name: "Юность", rating: 52, is_demo: true, real_cards: 0, reputation_needed: 0,
-    locked_reason: null, stars: [], salary: 150, league: low, level: 5, club_stars: 1,
+    locked_reason: null, stars: [], salary: 150, league: low, level: 5, club_stars: 1, legend: null, expected_role: "starter",
   },
 ];
 
@@ -39,13 +50,22 @@ const base: PlayerCareerView = {
   history: [], freshness: { value: 88, per_match: 15 }, contract: null,
   national: { country: null, prestige_needed: 150, called_up: false }, cups: [], golden_ball: null,
   haggle_steps: [10, 20, 30], max_counters: 2,
+  role: null, role_label: null, trust: 50, trust_starter: 70, trust_captain: 85, injury_rounds: 0, pending: null,
+  event: null, news: [], legends: [], chest: { available: true, coins_min: 50, coins_max: 200, token_pct: 10 },
+  weekly: { week: "2026-W42", tasks: [] },
+  shop: {
+    pro_stars: 299, pro_days: 30, pro_xp_pct: 50, agent_stars: 50, agent_haggle_bonus: 15, refresh_coins: 300, refresh_stars: 15,
+    heal_coins: 500, heal_stars: 20, save_offer_stars: 30, fast_enabled: false, fast_stars: 100, fast_round_minutes: 120, pro: false, pro_until: null,
+    agent_credits: 0, fast_season_credits: 0,
+  },
+  fast: false,
 };
 
 const finished: PlayerCareerSeason = {
   id: 1, status: "finished", rounds_played: 14, total_rounds: 14, next_round_at: null,
   teams: [{ index: 0, name: "Юность", rating: 52, is_mine: true }, { index: 1, name: "Заря", rating: 52, is_mine: false }],
   table: [], rounds: [], stats: { matches: 14, goals: 9, assists: 4, avg_rating: 7.6 }, scorers: [],
-  final_place: 1, coins_earned: 1400, awards: ["Чемпион лиги", "Игрок сезона"], league: low,
+  final_place: 1, coins_earned: 1400, awards: ["Чемпион лиги", "Игрок сезона"], league: low, agent: false, saved: false,
   offers: [
     {
       key: "cc:9", name: "Юность", rating: 52, club_stars: 1, league: "Любительская лига", level: 5, salary: 160, bonus: 30,
@@ -173,5 +193,80 @@ describe("PlayerCareerPage", () => {
     expect(ball).toHaveTextContent("Сентябрь 2026: Вася");
     expect(screen.getByTestId("golden-ball-weights")).toHaveTextContent("Вратарь: гол 6 · пас 3 · на ноль 7");
     expect(ball).toHaveTextContent("🧱 6");
+  });
+
+  it("plays a key moment: action, timing, result", async () => {
+    const active: PlayerCareerSeason = {
+      ...finished, status: "active", rounds_played: 1, final_place: null, offers: [],
+      rounds: [{ index: 0, at: null, home: 0, away: 1, hs: 1, away_score: 1, me: { played: true, goals: 0, assists: 0, rating: null, own: 1, opp: 1, opponent: "Заря" } }],
+    };
+    const pending = {
+      round: 0, deadline: "2099-01-01T12:00:00Z", line: "FWD",
+      moments: [{
+        i: 0, kind: "attack" as const, minute: 34, text: "Ты получаешь мяч у штрафной — момент!", status: "open" as const,
+        choice: null, hit: null, success: null, auto: false,
+        options: [{ code: "shot", label: "Удар по воротам", chance: 45, chance_hit: 63 }, { code: "pass", label: "Пас под удар", chance: 55, chance_hit: 73 }],
+      }],
+    };
+    const view = { ...base, club: clubs[1], season: active, pending, contract: { salary: 150, seasons_left: 1, expired: false, free_agent_level: 4 } };
+    fetchPlayerCareer.mockResolvedValue(view);
+    playPlayerCareerMoment.mockResolvedValue({
+      ...view, pending: null, moment_result: { i: 0, kind: "attack", choice: "shot", success: true, chance: 63 },
+    });
+    renderPage();
+    const block = await screen.findByTestId("key-moments");
+    expect(block).toHaveTextContent("«Заря» · пока 1:1");
+    fireEvent.click(screen.getByRole("button", { name: "Играть" }));
+    fireEvent.click(screen.getByRole("button", { name: /Удар по воротам/ }));
+    expect(screen.getByTestId("moment-bar")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Сейчас!" }));
+    await waitFor(() => expect(playPlayerCareerMoment).toHaveBeenCalled());
+    expect(playPlayerCareerMoment.mock.calls[0].slice(0, 2)).toEqual([0, "shot"]);
+    expect(await screen.findByText("ГОЛ!")).toBeInTheDocument();
+  });
+
+  it("answers a story event and shows role, trust and an injury", async () => {
+    const view = {
+      ...base, club: { ...clubs[1] }, role: "bench" as const, role_label: "Запасной", trust: 40, injury_rounds: 2,
+      contract: { salary: 150, seasons_left: 1, expired: false, free_agent_level: 4 },
+      event: {
+        id: 1, code: "ad", title: "Рекламный контракт", text: "Бренд зовёт на съёмку", status: "open",
+        choices: [{ key: "sign", label: "Согласиться", effects: { coins: 300, freshness: -15 } }, { key: "rest", label: "Отдохнуть", effects: { freshness: 15 } }],
+      },
+      news: [{ round: 3, headline: "Хет-трик Виктора!" }],
+      legends: [{ place: 1, user_name: "Петя", player_name: "Легенда", is_me: false, seasons: 4, matches: 50, goals: 30, assists: 5, titles: 1 }],
+    };
+    fetchPlayerCareer.mockResolvedValue(view);
+    answerPlayerCareerEvent.mockResolvedValue({ ...view, event: null });
+    renderPage();
+    const event = await screen.findByTestId("story-event");
+    expect(event).toHaveTextContent("+300 монет · -15 свежесть");
+    expect(screen.getByTestId("career-status")).toHaveTextContent("Запасной");
+    expect(screen.getByTestId("injury")).toHaveTextContent("пропустит ещё 2 тура");
+    expect(screen.getByTestId("news")).toHaveTextContent("Хет-трик Виктора!");
+    expect(screen.getByTestId("hall-of-fame")).toHaveTextContent("Легенда");
+    fireEvent.click(screen.getByRole("button", { name: /Согласиться/ }));
+    await waitFor(() => expect(answerPlayerCareerEvent).toHaveBeenCalledWith(1, "sign"));
+  });
+
+  it("opens the daily chest and shows Pro in the bonus tab; invites friends", async () => {
+    fetchPlayerCareer.mockResolvedValue({ ...base, club: clubs[1], contract: { salary: 150, seasons_left: 1, expired: false, free_agent_level: 4 } });
+    openPlayerCareerChest.mockResolvedValue({ coins: 120, token: null, balance: 1000 });
+    fetchFriendsLeague.mockResolvedValue({
+      league: null, invites: [], can_create: true, derby_multiplier: 2, rewards: [800, 500, 300],
+      friends: [{ user_id: 7, name: "Петя", player_name: "Пётр" }],
+    });
+    createFriendsLeague.mockResolvedValue({ league: null, invites: [], can_create: false, friends: [], derby_multiplier: 2, rewards: [] });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Бонусы" }));
+    expect(screen.getByTestId("career-pro")).toHaveTextContent("Подключить на 30 дней · ⭐ 299");
+    fireEvent.click(screen.getByRole("button", { name: "Открыть" }));
+    expect(await screen.findByText("+120 монет")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Лига друзей" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Пётр/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Позвать (1)" }));
+    await waitFor(() => expect(createFriendsLeague).toHaveBeenCalled());
+    expect(createFriendsLeague.mock.calls[0][0]).toEqual([7]);
   });
 });

@@ -73,6 +73,19 @@ class MyPlayer(Base):
     contract_seasons_left: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # National team (Player.country values); NULL = not chosen.
     country: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # Coach's trust at the current club, 0-100 (sets the role: bench /
+    # starter / captain; reset to 50 at a new club).
+    trust: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    # League rounds still to miss through injury.
+    injury_rounds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # «Карьера Pro» pass active until; the day its bonus training was last granted.
+    pro_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    pro_bonus_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # Bought, not yet used: an agent for a transfer window, a fast season.
+    agent_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    fast_season_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Local day the daily career chest was opened.
+    chest_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 

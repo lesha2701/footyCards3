@@ -387,6 +387,41 @@ class GameConfigOut(BaseModel):
     player_career_golden_ball_min_matches: int = 8
     player_career_golden_ball_coins: int = 3000
     player_career_golden_ball_prestige: int = 50
+    player_career_moments: int = 2
+    player_career_moment_hit_pct: int = 18
+    player_career_moment_window_hours: int = 6
+    player_career_bench_gap: int = 3
+    player_career_bench_play_pct: int = 40
+    player_career_trust_starter: int = 70
+    player_career_trust_captain: int = 85
+    player_career_captain_salary_pct: int = 10
+    player_career_injury_freshness: int = 40
+    player_career_injury_max_pct: int = 20
+    player_career_heal_coins: int = 500
+    player_career_heal_stars: int = 20
+    player_career_refresh_coins: int = 300
+    player_career_refresh_stars: int = 15
+    player_career_event_every: int = 3
+    player_career_event_coins: int = 100
+    player_career_event_prestige: int = 5
+    player_career_derby_multiplier: int = 2
+    player_career_pro_stars: int = 299
+    player_career_pro_days: int = 30
+    player_career_pro_xp_pct: int = 50
+    player_career_agent_stars: int = 50
+    player_career_agent_haggle_bonus: int = 15
+    player_career_save_offer_stars: int = 30
+    player_career_fast_season_enabled: bool = False
+    player_career_fast_season_stars: int = 100
+    player_career_fast_round_minutes: int = 120
+    player_career_chest_coins_min: int = 50
+    player_career_chest_coins_max: int = 200
+    player_career_chest_token_pct: int = 10
+    player_career_weekly_goals: int = 5
+    player_career_weekly_matches: int = 10
+    player_career_weekly_rating_x10: int = 70
+    player_career_weekly_coins: list[int] = []
+    player_career_friends_rewards: list[int] = []
     player_career_objective_coins: int = 150
     player_career_objective_rep: int = 5
     player_career_enabled: bool = True
@@ -840,6 +875,41 @@ class GameConfigUpdate(BaseModel):
     player_career_golden_ball_min_matches: Optional[int] = Field(default=None, ge=1, le=200)
     player_career_golden_ball_coins: Optional[int] = Field(default=None, ge=0)
     player_career_golden_ball_prestige: Optional[int] = Field(default=None, ge=0, le=10000)
+    player_career_moments: Optional[int] = Field(default=None, ge=0, le=5)
+    player_career_moment_hit_pct: Optional[int] = Field(default=None, ge=0, le=60)
+    player_career_moment_window_hours: Optional[int] = Field(default=None, ge=1, le=48)
+    player_career_bench_gap: Optional[int] = Field(default=None, ge=0, le=30)
+    player_career_bench_play_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_trust_starter: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_trust_captain: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_captain_salary_pct: Optional[int] = Field(default=None, ge=0, le=200)
+    player_career_injury_freshness: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_injury_max_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_heal_coins: Optional[int] = Field(default=None, ge=0, le=1000000)
+    player_career_heal_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_refresh_coins: Optional[int] = Field(default=None, ge=0, le=1000000)
+    player_career_refresh_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_event_every: Optional[int] = Field(default=None, ge=1, le=14)
+    player_career_event_coins: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_event_prestige: Optional[int] = Field(default=None, ge=0, le=1000)
+    player_career_derby_multiplier: Optional[int] = Field(default=None, ge=1, le=10)
+    player_career_pro_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_pro_days: Optional[int] = Field(default=None, ge=1, le=365)
+    player_career_pro_xp_pct: Optional[int] = Field(default=None, ge=0, le=500)
+    player_career_agent_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_agent_haggle_bonus: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_save_offer_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_fast_season_enabled: Optional[bool] = None
+    player_career_fast_season_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_fast_round_minutes: Optional[int] = Field(default=None, ge=15, le=1440)
+    player_career_chest_coins_min: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_chest_coins_max: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_chest_token_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_weekly_goals: Optional[int] = Field(default=None, ge=1, le=200)
+    player_career_weekly_matches: Optional[int] = Field(default=None, ge=1, le=200)
+    player_career_weekly_rating_x10: Optional[int] = Field(default=None, ge=10, le=100)
+    player_career_weekly_coins: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    player_career_friends_rewards: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
     player_career_objective_coins: Optional[int] = Field(default=None, ge=0)
     player_career_objective_rep: Optional[int] = Field(default=None, ge=0, le=1000)
     player_career_enabled: Optional[bool] = None

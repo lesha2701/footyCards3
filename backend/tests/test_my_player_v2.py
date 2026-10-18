@@ -353,7 +353,8 @@ async def test_player_career_salary_objectives_history_and_fatigue(client, db_se
     view = (await client.get(f"{API}/player-career", headers=headers)).json()
     assert len(view["history"]) == 1
     entry = view["history"][0]
-    assert entry["club"] == club["name"] and entry["matches"] == 14 and entry["place"] == row.final_place
+    played = sum(1 for v in row.state["my_rounds"].values() if v["played"])
+    assert entry["club"] == club["name"] and entry["matches"] == played and entry["place"] == row.final_place
     finished = view["season"]
     assert finished["salary"] == row.state["salary"]
     assert sum(1 for o in finished["objectives"] if o["met"]) == len(done)

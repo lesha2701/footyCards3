@@ -32,11 +32,13 @@ class MyPlayerSkillIn(BaseModel):
 
 class MyPlayerStarsInvoiceIn(BaseModel):
     # "training" (one extra training) | "item" (an «Имущество» item, item_id)
-    # | "cosmetic" (code) | "role" (line change to `position`).
+    # | "cosmetic" (code) | "role" (line change to `position`) | "career"
+    # (code = pro | agent | refresh | heal | save_offer | fast; `position`
+    # carries the club key for save_offer).
     purchase: str
     item_id: Optional[int] = None
     code: Optional[str] = Field(default=None, max_length=32)
-    position: Optional[str] = Field(default=None, max_length=8)
+    position: Optional[str] = Field(default=None, max_length=96)
 
 
 class MyPlayerRoleIn(BaseModel):
@@ -83,7 +85,10 @@ class MyPlayerOut(BaseModel):
     accessory: Optional[str] = None
     background: Optional[str] = None
     effect: Optional[str] = None
+    celebration: Optional[str] = None
     country: Optional[str] = None
+    # «Карьера Pro» is active.
+    pro: bool = False
 
 
 class MyPlayerLevelUpOut(BaseModel):
@@ -279,6 +284,7 @@ class MyPlayerCosmeticsOut(BaseModel):
     background: Optional[str] = None
     effect: Optional[str] = None
     hair: Optional[str] = None
+    celebration: Optional[str] = None
     catalog: list[MyPlayerCosmeticItemOut]
 
 

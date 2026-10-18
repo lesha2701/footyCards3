@@ -12,6 +12,11 @@ from app.models.player_career import (
     PlayerCareerGoldenBall,
     PlayerCareerMonthStat,
     PlayerCareerSeason,
+    PlayerCareerClubRecord,
+    PlayerCareerFriendLeague,
+    PlayerCareerFriendMember,
+    PlayerCareerWeekStat,
+    PlayerCareerWeeklyClaim,
 )
 from app.models.card_collection import CardCollection, UserCollectionReward
 from app.models.card_upgrade import CardUpgradeAttempt, CardUpgradeRule
@@ -200,4 +205,9 @@ __all__ = [
     "PlayerCareerCup",
     "PlayerCareerMonthStat",
     "PlayerCareerGoldenBall",
+    "PlayerCareerClubRecord",
+    "PlayerCareerFriendLeague",
+    "PlayerCareerFriendMember",
+    "PlayerCareerWeekStat",
+    "PlayerCareerWeeklyClaim",
 ]

@@ -24,13 +24,20 @@ the player accepts or haggles (each counter-offer may make the club walk
 away). When the contract has run out and no deal is signed, only the lower
 divisions remain (free agent).
 
-Cups and the «Золотой мяч» live in player_career_cups.
+Key moments (player_career_moments) — after each round the player's own
+match waits for his decisions; it is finalized (score, rating, rewards)
+when he has played them or at the deadline (then the AI decides).
+
+Role, coach's trust, injuries, story events, headlines, the Hall of Fame,
+rankings, weekly tasks, the chest and «Карьера Pro» live in
+player_career_life; cups and the «Золотой мяч» in player_career_cups; the
+friends' league in player_career_friends.
 
 Every number comes from GameConfig.player_career_*.
 """
 import copy
 import random
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Optional
 
@@ -39,13 +46,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.core.timeutil import ensure_aware
+from app.core.timeutil import app_timezone, ensure_aware
 from app.models.enums import NotificationType, Position, Rarity, TransactionType
 from app.models.my_player import MyPlayer
 from app.models.player_career import PlayerCareerSeason
 from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.user import User
 from app.services import my_player_service, player_career_clubs as pcc, player_career_cups as cups, tournament_match_engine, wallet_service
+from app.services import player_career_life as life
+from app.services import player_career_moments as moments
 from app.services.career_service import ROUNDS, build_schedule, double_round_robin, standings
 from app.services.player_career_clubs import club_access, club_catalog, find_club, market_salary, prestige_needed
 from app.services.club_formation_service import get_formation_slots
@@ -78,6 +87,8 @@ def _club_brief(club: dict, mp: MyPlayer, rating: int, config, free_agent: bool 
         "club_stars": club["stars"], "reputation_needed": prestige_needed(club, config),
         "salary": market_salary(club, mp.reputation or 0, config),
         "locked_reason": club_access(club, rating, mp.reputation or 0, config, free_agent),
+        # Role he'd have there today with a new coach (trust 50).
+        "expected_role": "bench" if rating - club["rating"] < -config.player_career_bench_gap else "starter",
         "stars": [p["name"] for p in sorted(club["squad"], key=lambda p: -p["rating"]) if not p.get("academy")][:3],
     }
 
@@ -126,7 +137,7 @@ def make_objectives(category: str, my_rank: int) -> list[dict]:
 
 def _objective_progress(objective: dict, state: dict, place: Optional[int]) -> tuple[float, bool]:
     """(current value, met so far) — the place only counts at the finish."""
-    played = [v for v in (state.get("my_rounds") or {}).values() if v.get("played")]
+    played = [v for v in (state.get("my_rounds") or {}).values() if v.get("played") and v.get("rating") is not None]
     code, target = objective["code"], objective["target"]
     if code == "place":
         return (place or 0), place is not None and place <= target
@@ -170,7 +181,7 @@ def _season_out(season: PlayerCareerSeason) -> dict:
             "hs": mine["hs"] if mine else None, "away_score": mine["as"] if mine else None,
             "me": (state.get("my_rounds") or {}).get(str(r)),
         })
-    my_rounds = [v for v in (state.get("my_rounds") or {}).values() if v.get("played")]
+    my_rounds = [v for v in (state.get("my_rounds") or {}).values() if v.get("played") and v.get("rating") is not None]
     scorers = sorted((state.get("scorers") or {}).values(), key=lambda s: (-s["goals"], s["name"]))[:10]
     table = standings(state) if teams else []
     return {
@@ -188,6 +199,7 @@ def _season_out(season: PlayerCareerSeason) -> dict:
         "final_place": season.final_place, "coins_earned": season.coins_earned,
         "awards": state.get("awards") or [],
         "offers": [o for o in state.get("offers") or [] if "salary" in o],
+        "agent": bool(state.get("agent")), "saved": bool(state.get("saved")),
         "league": state.get("league"),
         "objectives": _objectives_out(season, state, table),
         "salary": state.get("salary") or 0,
@@ -197,7 +209,7 @@ def _season_out(season: PlayerCareerSeason) -> dict:
 
 def _history_entry(season: PlayerCareerSeason) -> dict:
     state = season.state or {}
-    played = [v for v in (state.get("my_rounds") or {}).values() if v.get("played")]
+    played = [v for v in (state.get("my_rounds") or {}).values() if v.get("played") and v.get("rating") is not None]
     teams = state.get("teams") or []
     return {
         "id": season.id, "club": teams[0]["name"] if teams else season.club_key,
@@ -249,6 +261,7 @@ async def get_view(db: AsyncSession, user: User) -> dict:
             mp.contract_salary, mp.contract_seasons_left = 0, 0
         await db.commit()
     expired = contract_expired(mp)
+    legends = await life.top_legends(db)
     view.update({
         "balance": (await db.get(User, user.id)).balance,
         "player": my_player_service.player_out(mp, config),
@@ -265,11 +278,12 @@ async def get_view(db: AsyncSession, user: User) -> dict:
         "career": {"seasons": 0, "matches": 0, "goals": 0, "assists": 0, "titles": 0, "top_scorer": 0, "mvp": 0,
                    **(mp.career_stats or {})},
         "club": _club_brief(club, mp, rating, config) if club else None,
-        "clubs": [_club_brief(c, mp, rating, config, free_agent=expired) for c in clubs],
+        "clubs": [{**_club_brief(c, mp, rating, config, free_agent=expired), "legend": legends.get(c["key"])} for c in clubs],
         "season": _season_out(shown) if shown else None,
         # Picking a club freely: the first contract, or after the old one ran out.
         "can_change_club": (season is None or season.status != "active") and (not mp.club_key or expired),
         "haggle_steps": list(HAGGLE_STEPS), "max_counters": MAX_COUNTERS,
+        **(await season_extras(db, user, mp, shown, club, config)),
         "rewards": {
             "win": config.player_career_match_reward_win, "draw": config.player_career_match_reward_draw,
             "goal": config.player_career_goal_reward, "xp": config.player_career_match_xp,
@@ -294,6 +308,8 @@ def _require_enabled(config) -> None:
 
 
 def _sign(mp: MyPlayer, club: dict, salary: int, config) -> None:
+    if mp.club_key != club["key"]:
+        mp.trust = life.TRUST_START
     mp.club_key = club["key"]
     mp.contract_salary = salary
     mp.contract_seasons_left = max(1, config.player_career_contract_seasons)
@@ -337,7 +353,14 @@ def _team_from_club(index: int, club: dict) -> dict:
     }
 
 
-async def start_season(db: AsyncSession, user: User, now: Optional[datetime] = None) -> dict:
+def fast_schedule(now: datetime, config) -> list[str]:
+    """A paid fast season: a round every config.player_career_fast_round_minutes."""
+    step = timedelta(minutes=max(15, config.player_career_fast_round_minutes))
+    first = ensure_aware(now) + timedelta(minutes=5)
+    return [(first + step * i).isoformat() for i in range(ROUNDS)]
+
+
+async def start_season(db: AsyncSession, user: User, now: Optional[datetime] = None, fast: bool = False) -> dict:
     config = await get_config(db)
     _require_enabled(config)
     now = now or datetime.now(timezone.utc)
@@ -352,6 +375,12 @@ async def start_season(db: AsyncSession, user: User, now: Optional[datetime] = N
         raise ConflictError("Сезон уже идёт")
     if await cups.active_cup(db, user.id, "cl"):
         raise ConflictError("Сначала доиграй Лигу чемпионов")
+    if fast:
+        if not config.player_career_fast_season_enabled:
+            raise ConflictError("Ускоренный сезон сейчас недоступен")
+        if (mp.fast_season_credits or 0) <= 0:
+            raise ConflictError("Ускоренный сезон нужно сначала купить")
+        mp.fast_season_credits -= 1
     clubs = await club_catalog(db, config)
     mine = find_club(clubs, mp.club_key)
     if mine is None:
@@ -368,8 +397,9 @@ async def start_season(db: AsyncSession, user: User, now: Optional[datetime] = N
     my_rank = 1 + sum(1 for c in league[1:] if c["rating"] > mine["rating"])
     season = PlayerCareerSeason(
         user_id=user.id, club_key=mine["key"], status="active",
-        state={"teams": teams, "fixtures": double_round_robin(TEAMS), "schedule": build_schedule(now),
-               "results": [], "my_rounds": {}, "scorers": {}, "league": mine["league"],
+        state={"teams": teams, "fixtures": double_round_robin(TEAMS),
+               "schedule": fast_schedule(now, config) if fast else build_schedule(now), "fast": fast,
+               "results": [], "my_rounds": {}, "scorers": {}, "league": mine["league"], "events": [],
                "objectives": make_objectives(my_player_service.category_of(mp.position), my_rank)},
     )
     db.add(season)
@@ -461,10 +491,34 @@ async def _credit(db: AsyncSession, user_id: int, amount: int, description: str,
     return amount
 
 
+async def _locked_mp(db: AsyncSession, user_id: int) -> Optional[MyPlayer]:
+    return (await db.execute(
+        select(MyPlayer).where(MyPlayer.user_id == user_id).with_for_update().execution_options(populate_existing=True)
+    )).scalar_one_or_none()
+
+
+def _round_at(state: dict, round_index: int) -> datetime:
+    schedule = state.get("schedule") or []
+    return ensure_aware(datetime.fromisoformat(schedule[round_index])) if round_index < len(schedule) else datetime.now(timezone.utc)
+
+
 async def _play_round(db: AsyncSession, season: PlayerCareerSeason, round_index: int, config) -> None:
+    """Simulates the round. The player's own match then waits for his key
+    moments (state["pending"]) or is finalized right away."""
     state = copy.deepcopy(season.state)
     teams = state["teams"]
-    mine = await my_player_service.engine_card(db, season.user_id, config)
+    mp = await _locked_mp(db, season.user_id)
+    at = _round_at(state, round_index)
+    rng = random.Random(season.id * 31337 + round_index)
+    injured = bool(mp and (mp.injury_rounds or 0) > 0)
+    if injured:
+        mp.injury_rounds -= 1
+    mine = None if injured else await my_player_service.engine_card(db, season.user_id, config)
+    role = None
+    if mine is not None and mp is not None:
+        role = life.role_of(mp, mine.player.rating, teams[0]["rating"], config)
+        if role == "bench" and rng.random() * 100 >= config.player_career_bench_play_pct:
+            mine = None
     my_id = mine.id if mine is not None else None
     from app.services import artifact_service
 
@@ -488,65 +542,243 @@ async def _play_round(db: AsyncSession, season: PlayerCareerSeason, round_index:
                 row["goals"] += 1
         entry = {"home": home, "away": away, "hs": match.score_a, "as": match.score_b}
         if 0 in (home, away):
-            my_match = (entry, match.event_log, "a" if home == 0 else "b")
+            my_match = (len(results), match.event_log, "a" if home == 0 else "b")
         results.append(entry)
     state["results"].append(results)
 
-    entry, events, my_side = my_match
+    index, events, my_side = my_match
+    entry = results[index]
     own, opp = (entry["hs"], entry["as"]) if my_side == "a" else (entry["as"], entry["hs"])
     goals = sum(1 for e in events if e.get("event_type") == "goal" and e.get("team") == my_side
                 and (e.get("payload") or {}).get("shooter_id") == my_id and my_id is not None)
     assists = sum(1 for e in events if e.get("event_type") == "goal" and e.get("team") == my_side
                   and (e.get("payload") or {}).get("assist_id") == my_id and my_id is not None)
     played = mine is not None
-    rng = random.Random(season.id * 31337 + round_index)
-    line = my_player_service.category_of(mine.player.position) if mine is not None else "FWD"
-    rating = _match_rating(goals, assists, own, opp, rng, line) if played else None
-    opponent = teams[entry["away"] if my_side == "a" else entry["home"]]["name"]
+    line = my_player_service.category_of(mine.player.position) if mine is not None else (
+        my_player_service.category_of(mp.position) if mp else "FWD")
     state["my_rounds"][str(round_index)] = {
-        "played": played, "goals": goals, "assists": assists, "rating": rating, "own": own, "opp": opp,
-        "opponent": opponent,
+        "played": played, "goals": goals, "assists": assists, "rating": None, "own": own, "opp": opp,
+        "opponent": teams[entry["away"] if my_side == "a" else entry["home"]]["name"],
+        "injured": injured, "role": role, "sub": played and role == "bench", "line": line, "stops": 0,
     }
+    count = 0
+    if played and mp is not None:
+        count = config.player_career_moments + (1 if life.is_pro(mp) else 0)
+        if role == "bench":
+            count = min(count, 1)
+    season.rounds_played = round_index + 1
+    if count > 0:
+        stats = await my_player_service.match_stats(db, mp, config, at)
+        schedule = state.get("schedule") or []
+        next_at = ensure_aware(datetime.fromisoformat(schedule[round_index + 1])) if round_index + 1 < len(schedule) else None
+        deadline = moments.deadline_for(at, next_at, config)
+        state["pending"] = {
+            "round": round_index, "entry_index": index, "my_side": my_side, "line": line,
+            "deadline": deadline.isoformat(), "stats": {"attack": stats["attack"], "defense": stats["defense"]},
+            "moments": moments.make_moments(line, count, rng),
+        }
+        season.state = state
+        flag_modified(season, "state")
+        await notify(
+            db, season.user_id, NotificationType.player_career_round_result,
+            f"Карьера игрока, тур {round_index + 1}: ключевые моменты!",
+            f"Матч с «{state['my_rounds'][str(round_index)]['opponent']}» ждёт твоих решений — успей до "
+            f"{deadline.astimezone(app_timezone()).strftime('%H:%M')}, иначе решит тренер",
+            related_object_type="player_career_season", related_object_id=season.id,
+        )
+        return
+    await _finalize_my_round(db, season, state, round_index, config, mp, at)
+
+
+async def _finalize_my_round(
+    db: AsyncSession, season: PlayerCareerSeason, state: dict, round_index: int, config,
+    mp: Optional[MyPlayer], at: datetime,
+) -> None:
+    """Applies the key moments (open ones go to the AI), then the player's
+    rating, rewards, prestige, trust, XP, freshness, injury, stats, headline
+    and a possible story event. Writes season.state; may finish the season."""
+    me = state["my_rounds"][str(round_index)]
+    pending = state.get("pending") if (state.get("pending") or {}).get("round") == round_index else None
+    rng = random.Random(season.id * 7919 + round_index)
+    if pending is not None:
+        for m in pending["moments"]:
+            if m["status"] == "open":
+                moments.resolve(m, moments.best_option(m["kind"], pending["stats"], config), None, pending["stats"], config, rng, auto=True)
+        t = moments.totals(pending["moments"])
+        entry = state["results"][round_index][pending["entry_index"]]
+        if pending["my_side"] == "a":
+            entry["hs"] += t["own"]
+            entry["as"] += t["opp"]
+        else:
+            entry["as"] += t["own"]
+            entry["hs"] += t["opp"]
+        me["own"] += t["own"]
+        me["opp"] += t["opp"]
+        me["goals"] += t["goals"]
+        me["assists"] += t["assists"]
+        me["stops"] = t["stops"]
+        me["moments"] = pending["moments"]
+        me["moment_bonus"] = round(t["rating"], 2)
+        if t["goals"] and mp is not None:
+            key = f"0:{mp.name}"
+            row = state["scorers"].setdefault(key, {"name": mp.name, "team": state["teams"][0]["name"], "goals": 0})
+            row["goals"] += t["goals"]
+        state.pop("pending", None)
+    own, opp, goals, assists = me["own"], me["opp"], me["goals"], me["assists"]
+    played = me["played"]
+    line = me.get("line") or "FWD"
+    rating = None
+    if played:
+        rating = _match_rating(goals, assists, own, opp, rng, line) + (me.get("moment_bonus") or 0) - (0.3 if me.get("sub") else 0)
+        rating = round(max(4.0, min(10.0, rating)), 1)
+    me["rating"] = rating
 
     reward = config.player_career_match_reward_win if own > opp else config.player_career_match_reward_draw if own == opp else 0
     reward += goals * config.player_career_goal_reward
     season.coins_earned += await _credit(db, season.user_id, reward, f"Карьера игрока: тур {round_index + 1}", season.id)
-    mp = (await db.execute(select(MyPlayer).where(MyPlayer.user_id == season.user_id).with_for_update())).scalar_one_or_none()
     if mp is not None and played:
         locked = await wallet_service.lock_user_for_update(db, season.user_id)
         my_player_service.add_xp(
             locked, config.player_career_match_xp, config,
-            bonus_pct=await my_player_service.xp_bonus_pct(db, season.user_id),
+            bonus_pct=await my_player_service.xp_bonus_pct(db, season.user_id) + life.career_xp_bonus(mp, config),
         )
         mp.reputation = (mp.reputation or 0) + goals * config.player_career_rep_per_goal \
-            + assists * config.player_career_rep_per_assist + (config.player_career_rep_per_win if own > opp else 0)
+            + assists * config.player_career_rep_per_assist + (config.player_career_rep_per_win if own > opp else 0) \
+            + (1 if own > opp and me.get("role") == "captain" else 0)
+        life.move_trust(mp, life.trust_after_match(rating))
         stats = {**(mp.career_stats or {})}
         for k, v in (("matches", 1), ("goals", goals), ("assists", assists)):
             stats[k] = stats.get(k, 0) + v
         mp.career_stats = stats
         # Fatigue as of the round's own kick-off, so rounds resolved late in a
         # batch still get the recovery between them.
-        schedule = state.get("schedule") or []
-        at = ensure_aware(datetime.fromisoformat(schedule[round_index])) if round_index < len(schedule) else datetime.now(timezone.utc)
-        if mp.freshness_at is not None and ensure_aware(mp.freshness_at) > at:
-            at = ensure_aware(mp.freshness_at)
-        fresh = my_player_service.freshness_now(mp, config, at, await my_player_service.regen_bonus(db, season.user_id))
-        my_player_service.set_freshness(mp, fresh - config.my_player_freshness_per_match, at)
+        when = at
+        if mp.freshness_at is not None and ensure_aware(mp.freshness_at) > when:
+            when = ensure_aware(mp.freshness_at)
+        fresh = my_player_service.freshness_now(mp, config, when, await my_player_service.regen_bonus(db, season.user_id))
+        drain = config.my_player_freshness_per_match // (2 if me.get("sub") else 1)
+        my_player_service.set_freshness(mp, fresh - drain, when)
+        out = life.injury_roll(fresh, config, rng)
+        if out:
+            mp.injury_rounds = out
+            me["injury"] = out
+            await notify(
+                db, season.user_id, NotificationType.player_career_event, "Травма 🤕",
+                f"{mp.name} сыграл уставшим и выбывает на {out} {'тур' if out == 1 else 'тура'}. Вылечить можно сразу.",
+                related_object_type="player_career_season", related_object_id=season.id,
+            )
         await cups.record_match(db, season.user_id, at, goals, assists, rating, clean_sheet=opp == 0, line=line)
+    celebration = my_player_service.cosmetics_of(mp)["celebration"] if mp else None
+    me["headline"] = life.headline(mp.name if mp else "Игрок", state["teams"][0]["name"], me["opponent"], own, opp, me, celebration)
+    event = life.maybe_new_event(state, round_index, config, rng) if mp is not None else None
     outcome = "Победа" if own > opp else "Ничья" if own == opp else "Поражение"
     personal = f" · голы: {goals}" if goals else ""
     personal += f" · передачи: {assists}" if assists else ""
     personal += f" · оценка {rating}" if rating is not None else ""
     await notify(
         db, season.user_id, NotificationType.player_career_round_result, f"Карьера игрока, тур {round_index + 1}: {outcome}",
-        f"{own}:{opp} против «{opponent}»{personal}" + (f" · +{reward} монет" if reward else ""),
+        f"{own}:{opp} против «{me['opponent']}»{personal}" + (f" · +{reward} монет" if reward else "")
+        + (f" · новое событие: {life.EVENTS[event['code']]['title']}" if event else ""),
         related_object_type="player_career_season", related_object_id=season.id,
     )
     season.state = state
     flag_modified(season, "state")
-    season.rounds_played = round_index + 1
-    if season.rounds_played >= ROUNDS:
+    if season.rounds_played >= ROUNDS and not state.get("pending"):
         await _finish(db, season, config)
+
+
+async def _settle_pending(db: AsyncSession, season: PlayerCareerSeason, config) -> None:
+    state = copy.deepcopy(season.state)
+    pending = state.get("pending")
+    if not pending:
+        return
+    mp = await _locked_mp(db, season.user_id)
+    await _finalize_my_round(db, season, state, pending["round"], config, mp, _round_at(state, pending["round"]))
+
+
+async def play_moment(
+    db: AsyncSession, user: User, moment_index: int, option: str, hit: bool, rng: Optional[random.Random] = None,
+) -> dict:
+    """The player's decision in a key moment of his pending match."""
+    config = await get_config(db)
+    _require_enabled(config)
+    await wallet_service.lock_user_for_update(db, user.id)
+    active = await _active_season(db, user.id)
+    if active is None:
+        raise ConflictError("Нет активного сезона")
+    season = await _lock_season(db, active.id)
+    state = copy.deepcopy(season.state)
+    pending = state.get("pending")
+    if not pending:
+        raise ConflictError("Сейчас нет ключевых моментов")
+    if datetime.now(timezone.utc) >= ensure_aware(datetime.fromisoformat(pending["deadline"])):
+        raise ConflictError("Время вышло — момент уже разыграл тренер")
+    moment = next((m for m in pending["moments"] if m["i"] == moment_index), None)
+    if moment is None:
+        raise NotFoundError("Момент не найден")
+    if moment["status"] != "open":
+        raise ConflictError("Этот момент уже сыгран")
+    if option not in {o["code"] for o in moment["options"]}:
+        raise ConflictError("Такого действия нет")
+    moments.resolve(moment, option, bool(hit), pending["stats"], config, rng or random.Random())
+    result = dict(moment)
+    if all(m["status"] == "done" for m in pending["moments"]):
+        mp = await _locked_mp(db, user.id)
+        await _finalize_my_round(db, season, state, pending["round"], config, mp, _round_at(state, pending["round"]))
+    else:
+        season.state = state
+        flag_modified(season, "state")
+    await db.commit()
+    view = await get_view(db, user)
+    view["moment_result"] = result
+    return view
+
+
+async def answer_event(db: AsyncSession, user: User, event_id: int, choice: str) -> dict:
+    """A story-event choice: prestige, trust, coins, freshness, XP."""
+    config = await get_config(db)
+    _require_enabled(config)
+    locked = await wallet_service.lock_user_for_update(db, user.id)
+    last = await _last_season(db, user.id)
+    if last is None:
+        raise NotFoundError("Событие не найдено")
+    season = await _lock_season(db, last.id)
+    state = copy.deepcopy(season.state)
+    event = next((e for e in state.get("events") or [] if e["id"] == event_id), None)
+    if event is None:
+        raise NotFoundError("Событие не найдено")
+    if event["status"] != "open":
+        raise ConflictError("На это событие ты уже ответил")
+    spec = next((c for c in life.EVENTS[event["code"]]["choices"] if c[0] == choice), None)
+    if spec is None:
+        raise ConflictError("Такого варианта нет")
+    effects = life.scale(spec[2], config)
+    mp = await _locked_mp(db, user.id)
+    coins = effects.get("coins", 0)
+    if coins > 0:
+        await wallet_service.credit_coins(
+            db, locked, coins, TransactionType.player_career_reward, f"Карьера игрока: {life.EVENTS[event['code']]['title']}",
+            related_object_type="player_career_season", related_object_id=season.id,
+        )
+    elif coins < 0:
+        await wallet_service.debit_coins(
+            db, locked, -coins, TransactionType.player_career_reward, f"Карьера игрока: {life.EVENTS[event['code']]['title']}",
+            related_object_type="player_career_season", related_object_id=season.id,
+        )
+    mp.reputation = max(0, (mp.reputation or 0) + effects.get("prestige", 0))
+    life.move_trust(mp, effects.get("trust", 0))
+    if effects.get("freshness"):
+        now = datetime.now(timezone.utc)
+        fresh = my_player_service.freshness_now(mp, config, now, await my_player_service.regen_bonus(db, user.id))
+        my_player_service.set_freshness(mp, fresh + effects["freshness"], now)
+    if effects.get("xp"):
+        my_player_service.add_xp(locked, effects["xp"], config, capped=False)
+    event["status"] = "answered"
+    event["answer"] = choice
+    season.state = state
+    flag_modified(season, "state")
+    await db.commit()
+    return await get_view(db, user)
 
 
 async def _grant_trophy(db: AsyncSession, user_id: int, code: str, message: str) -> Optional[str]:
@@ -572,7 +804,7 @@ async def _finish(db: AsyncSession, season: PlayerCareerSeason, config) -> None:
     )
     season.coins_earned += coins
 
-    my_rounds = [v for v in state["my_rounds"].values() if v.get("played")]
+    my_rounds = [v for v in state["my_rounds"].values() if v.get("played") and v.get("rating") is not None]
     my_goals = sum(v["goals"] for v in my_rounds)
     avg = sum(v["rating"] for v in my_rounds) / len(my_rounds) if my_rounds else 0
     club = state["teams"][0]["name"]
@@ -592,6 +824,10 @@ async def _finish(db: AsyncSession, season: PlayerCareerSeason, config) -> None:
     clubs = await club_catalog(db, config)
     my_club = find_club(clubs, season.club_key)
     contract_salary = (mp.contract_salary if mp else 0) or (market_salary(my_club, mp.reputation or 0, config) if my_club and mp else 0)
+    captain_rounds = sum(1 for v in my_rounds if v.get("role") == "captain")
+    captain = bool(my_rounds) and captain_rounds * 2 >= len(my_rounds)
+    if captain:
+        contract_salary = contract_salary * (100 + config.player_career_captain_salary_pct) // 100
     salary = contract_salary if my_rounds else 0
     season.coins_earned += await _credit(db, season.user_id, salary, f"Карьера игрока: зарплата за сезон в «{club}»", season.id)
     objectives_done = [o["code"] for o in state.get("objectives") or [] if _objective_progress(o, state, place)[1]]
@@ -602,8 +838,15 @@ async def _finish(db: AsyncSession, season: PlayerCareerSeason, config) -> None:
     season.coins_earned += objective_coins
 
     offers: list[dict] = []
+    agent = False
     if mp is not None:
         mp.reputation = (mp.reputation or 0) + len(objectives_done) * config.player_career_objective_rep
+        failed = len(state.get("objectives") or []) - len(objectives_done)
+        life.move_trust(mp, 5 * len(objectives_done) - 4 * failed)
+        await life.add_club_record(
+            db, season.user_id, season.club_key, club, len(my_rounds), my_goals,
+            sum(v["assists"] for v in my_rounds), place == 1,
+        )
         stats = {**(mp.career_stats or {})}
         stats["seasons"] = stats.get("seasons", 0) + 1
         if place == 1:
@@ -616,13 +859,19 @@ async def _finish(db: AsyncSession, season: PlayerCareerSeason, config) -> None:
         mp.career_stats = stats
         if mp.club_key == season.club_key:
             mp.contract_seasons_left = max(0, (mp.contract_seasons_left or 0) - 1)
-        offers = make_offers(clubs, my_club, mp, config, random.Random(season.id * 92821))
+        agent = (mp.agent_credits or 0) > 0
+        if agent:
+            mp.agent_credits -= 1
+        offers = make_offers(clubs, my_club, mp, config, random.Random(season.id * 92821), extra=1 if agent else 0)
         league = state.get("league") or {}
         if my_club and league.get("level") == 1 and place <= config.player_career_cl_places:
             await cups.create_cl(db, season.user_id, season.id, my_club, config, datetime.now(timezone.utc))
+    for event in state.get("events") or []:
+        if event["status"] == "open":
+            event["status"] = "expired"
     state = {
-        **state, "awards": awards, "offers": offers,
-        "salary": salary, "objectives_done": objectives_done, "objective_coins": objective_coins,
+        **state, "awards": awards, "offers": offers, "agent": agent,
+        "salary": salary, "captain": captain, "objectives_done": objectives_done, "objective_coins": objective_coins,
     }
     season.state = state
     flag_modified(season, "state")
@@ -650,9 +899,17 @@ async def resolve_due(db: AsyncSession, season_id: int, now: Optional[datetime] 
     season = await _lock_season(db, season_id)
     played = 0
     schedule = (season.state or {}).get("schedule") or []
-    while season.status == "active" and season.rounds_played < ROUNDS:
-        at = ensure_aware(datetime.fromisoformat(schedule[season.rounds_played])) if season.rounds_played < len(schedule) else None
-        if at is None or at > now:
+    while season.status == "active":
+        pending = (season.state or {}).get("pending")
+        next_at = ensure_aware(datetime.fromisoformat(schedule[season.rounds_played])) \
+            if season.rounds_played < len(schedule) and season.rounds_played < ROUNDS else None
+        if pending:
+            deadline = ensure_aware(datetime.fromisoformat(pending["deadline"]))
+            if now >= deadline or (next_at is not None and next_at <= now):
+                await _settle_pending(db, season, config)
+                continue
+            break
+        if season.rounds_played >= ROUNDS or next_at is None or next_at > now:
             break
         await _play_round(db, season, season.rounds_played, config)
         played += 1
@@ -675,7 +932,9 @@ def _offer(club: dict, salary: int, bonus: int, renewal: bool) -> dict:
     }
 
 
-def make_offers(clubs: list[dict], current: Optional[dict], mp: MyPlayer, config, rng: random.Random) -> list[dict]:
+def make_offers(
+    clubs: list[dict], current: Optional[dict], mp: MyPlayer, config, rng: random.Random, extra: int = 0,
+) -> list[dict]:
     """End-of-season offers: stronger clubs the player can now sign for, and
     the current club's renewal once the contract has run out."""
     rating = my_player_service.rating_of(mp, config)
@@ -690,7 +949,7 @@ def make_offers(clubs: list[dict], current: Optional[dict], mp: MyPlayer, config
         and (current is None or (c["rating"], c["stars"], -c["level"]) > (current["rating"], current["stars"], -current["level"]))
         and club_access(c, rating, prestige, config) is None
     ]
-    room = max(0, config.player_career_offers_max - len(offers))
+    room = max(0, config.player_career_offers_max + extra - len(offers))
     for club in rng.sample(better[: room * 3], min(room, len(better[: room * 3]))):
         salary = round(market_salary(club, prestige, config) * rng.uniform(0.9, 1.15) / 10) * 10
         offers.append(_offer(club, salary, round(salary * rng.uniform(0.3, 0.8) / 10) * 10, False))
@@ -763,6 +1022,7 @@ async def counter_offer(db: AsyncSession, user: User, club_key: str, raise_pct: 
     chance = (
         config.player_career_haggle_base - raise_pct * config.player_career_haggle_raise_penalty
         - offer["counters"] * config.player_career_haggle_repeat_penalty + min(15, (mp.reputation or 0) // 20)
+        + (config.player_career_agent_haggle_bonus if state.get("agent") else 0)
     )
     chance = max(5, min(95, chance))
     agreed = (rng or random.Random()).random() * 100 < chance
@@ -783,5 +1043,61 @@ async def counter_offer(db: AsyncSession, user: User, club_key: str, raise_pct: 
 
 
 async def resolve_everything_due(db: AsyncSession, now: Optional[datetime] = None) -> int:
-    """League rounds, cup rounds, the monthly «Золотой мяч» (bot scheduler)."""
-    return await resolve_all_due(db, now) + await cups.resolve_all_due(db, now)
+    """League rounds (and overdue key moments), cup rounds, friends' leagues,
+    the monthly «Золотой мяч» (bot scheduler)."""
+    from app.services import player_career_friends as friends
+
+    return await resolve_all_due(db, now) + await cups.resolve_all_due(db, now) + await friends.resolve_all_due(db, now)
+
+
+def _pending_out(pending: Optional[dict], config) -> Optional[dict]:
+    """Open key moments with the odds of each option (with and without a
+    good timing), so the player can choose."""
+    if not pending:
+        return None
+    stats = pending["stats"]
+    return {
+        "round": pending["round"], "deadline": pending["deadline"], "line": pending["line"],
+        "moments": [
+            {
+                **{k: m[k] for k in ("i", "kind", "minute", "text", "status", "choice", "hit", "success", "auto")},
+                "options": [
+                    {**o, "chance": moments.chance(m["kind"], o["code"], stats, False, config),
+                     "chance_hit": moments.chance(m["kind"], o["code"], stats, True, config)}
+                    for o in m["options"]
+                ],
+            }
+            for m in pending["moments"]
+        ],
+    }
+
+
+async def season_extras(db: AsyncSession, user: User, mp: MyPlayer, season: Optional[PlayerCareerSeason], club: Optional[dict], config) -> dict:
+    """Role, trust, injury, key moments, story event, news, legends, chest,
+    weekly tasks and the paid extras for the career page."""
+    from app.services import player_career_shop as shop
+
+    state = (season.state or {}) if season else {}
+    role = None
+    if club is not None:
+        stats = await my_player_service.match_stats(db, mp, config)
+        role = life.role_of(mp, stats["rating"], club["rating"], config)
+    news = [
+        {"round": int(r), "headline": v["headline"]}
+        for r, v in sorted((state.get("my_rounds") or {}).items(), key=lambda kv: -int(kv[0])) if v.get("headline")
+    ][:8]
+    event = next((e for e in state.get("events") or [] if e["status"] == "open"), None) if season and season.status == "active" else None
+    return {
+        "role": role, "role_label": life.ROLE_LABELS.get(role) if role else None, "trust": mp.trust if mp.trust is not None else life.TRUST_START,
+        "trust_starter": config.player_career_trust_starter, "trust_captain": config.player_career_trust_captain,
+        "injury_rounds": mp.injury_rounds or 0,
+        "pending": _pending_out(state.get("pending"), config) if season and season.status == "active" else None,
+        "event": life.event_out(event, config) if event else None,
+        "news": news,
+        "legends": await life.hall_of_fame(db, club["key"], user.id) if club else [],
+        "chest": {"available": life.chest_available(mp), "coins_min": config.player_career_chest_coins_min,
+                  "coins_max": config.player_career_chest_coins_max, "token_pct": config.player_career_chest_token_pct},
+        "weekly": await life.weekly_tasks(db, user.id, config),
+        "shop": shop.view(mp, config),
+        "fast": bool(state.get("fast")),
+    }

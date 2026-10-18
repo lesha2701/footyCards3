@@ -414,6 +414,8 @@ class GameConfig(TimestampMixin, Base):
             "crown": 150, "bg_galaxy": 75, "bg_champions": 100,
             "fx_sparkle": 50, "fx_fire": 75, "fx_lightning": 100,
             "hair_neymar": 120, "hair_cr7": 100, "hair_pogba": 90, "aviators": 60, "diamond_chain": 90,
+            "bg_goal": 75, "bg_national": 75,
+            "cel_siu": 100, "cel_plane": 75, "cel_heart": 50, "cel_dance": 150,
         },
     )
     # «Карьера игрока»: every completed club objective pays objective_coins
@@ -456,6 +458,76 @@ class GameConfig(TimestampMixin, Base):
     player_career_golden_ball_min_matches: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     player_career_golden_ball_coins: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
     player_career_golden_ball_prestige: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    # Key moments in the player's league match (+1 with «Карьера Pro»).
+    player_career_moments: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # Key moment: +% success for a good timing hit.
+    player_career_moment_hit_pct: Mapped[int] = mapped_column(Integer, default=18, nullable=False)
+    # Key moments wait at most this long (or until the next round).
+    player_career_moment_window_hours: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    # Rating this far below the club average = bench (unless the coach trusts him).
+    player_career_bench_gap: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # A bench player comes on in this % of matches.
+    player_career_bench_play_pct: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    # Coach's trust that guarantees a starting place.
+    player_career_trust_starter: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
+    # Coach's trust for the captain's armband (a starter at or above the club average).
+    player_career_trust_captain: Mapped[int] = mapped_column(Integer, default=85, nullable=False)
+    # Captain's salary bonus, %.
+    player_career_captain_salary_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Below this freshness a match can injure him.
+    player_career_injury_freshness: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    # Injury chance at 0 freshness, % (linear to 0 at the threshold).
+    player_career_injury_max_pct: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    # Heal an injury: coins (0 = not sold).
+    player_career_heal_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
+    # Heal an injury: Telegram Stars (0 = not sold).
+    player_career_heal_stars: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    # Full freshness: coins (0 = not sold).
+    player_career_refresh_coins: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
+    # Full freshness: Telegram Stars (0 = not sold).
+    player_career_refresh_stars: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    # Story events: at most one per this many rounds.
+    player_career_event_every: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Story events: base coins (choices pay multiples).
+    player_career_event_coins: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    # Story events: base prestige (choices give multiples).
+    player_career_event_prestige: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # Friends' league: reward multiplier for a derby (friend v friend).
+    player_career_derby_multiplier: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # «Карьера Pro» pass: Telegram Stars (0 = not sold).
+    player_career_pro_stars: Mapped[int] = mapped_column(Integer, default=299, nullable=False)
+    # «Карьера Pro» pass length, days.
+    player_career_pro_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    # «Карьера Pro»: +% XP from career matches.
+    player_career_pro_xp_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    # Agent for one transfer window: Telegram Stars (0 = not sold).
+    player_career_agent_stars: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    # Agent: +% chance per counter-offer.
+    player_career_agent_haggle_bonus: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    # Bring back a club that walked away: Telegram Stars (0 = not sold).
+    player_career_save_offer_stars: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    # Fast season on sale at all (off until the admin decides).
+    player_career_fast_season_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Fast season: Telegram Stars (0 = not sold).
+    player_career_fast_season_stars: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    # Fast season: minutes between rounds.
+    player_career_fast_round_minutes: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
+    # Daily career chest: coins from.
+    player_career_chest_coins_min: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    # Daily career chest: coins up to.
+    player_career_chest_coins_max: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    # Daily career chest: % chance of a skill token.
+    player_career_chest_token_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Weekly task: goals.
+    player_career_weekly_goals: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # Weekly task: matches.
+    player_career_weekly_matches: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Weekly task: average rating x10 (70 = 7.0) over 5+ matches.
+    player_career_weekly_rating_x10: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
+    # Weekly tasks rewards: goals, matches, rating.
+    player_career_weekly_coins: Mapped[list] = mapped_column(JSON, default=lambda: [300, 200, 400], nullable=False)
+    # Friends' league: coins for places 1-3 (friends only).
+    player_career_friends_rewards: Mapped[list] = mapped_column(JSON, default=lambda: [800, 500, 300], nullable=False)
     free_pack_pack_slug: Mapped[str] = mapped_column(String, default="basic", nullable=False)
 
     # "вкарта" command in group chats — reuses free_pack_pack_slug's pack but

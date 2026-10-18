@@ -24,6 +24,12 @@ const MY_PLAYER_COSMETICS: [string, string][] = [
   ["fx_sparkle", "Эффект «Искры»"],
   ["fx_fire", "Эффект «Пламя»"],
   ["fx_lightning", "Эффект «Молния»"],
+  ["bg_goal", "Фон «Ворота»"],
+  ["bg_national", "Фон «Флаг сборной»"],
+  ["cel_siu", "Празднование «Сиу!»"],
+  ["cel_plane", "Празднование «Самолётик»"],
+  ["cel_heart", "Празднование «Сердечко»"],
+  ["cel_dance", "Празднование «Танец у флажка»"],
 ];
 
 export default function AdminGamesPage() {
@@ -75,6 +81,8 @@ export default function AdminGamesPage() {
       | "player_career_star_prestige"
       | "player_career_cl_rewards"
       | "player_career_national_rewards"
+      | "player_career_weekly_coins"
+      | "player_career_friends_rewards"
       | "club_league_rewards"
       | "magnate_place_rewards"
       | "magnate_stadium_rents"
@@ -130,6 +138,7 @@ export default function AdminGamesPage() {
       | "career_digest_enabled"
       | "my_player_enabled"
       | "player_career_enabled"
+      | "player_career_fast_season_enabled"
       | "chemistry_enabled"
       | "card_stars_enabled",
     label: string,
@@ -602,6 +611,41 @@ export default function AdminGamesPage() {
           {field("player_career_golden_ball_min_matches", "Золотой мяч: минимум матчей")}
           {field("player_career_golden_ball_coins", "Золотой мяч: монеты")}
           {field("player_career_golden_ball_prestige", "Золотой мяч: престиж")}
+          {field("player_career_moments", "Ключевых моментов в матче")}
+          {field("player_career_moment_hit_pct", "Момент: +% шанса за тайминг")}
+          {field("player_career_moment_window_hours", "Момент: ждать решения, часов")}
+          {field("player_career_bench_gap", "Скамейка: рейтинг ниже клуба больше чем на")}
+          {field("player_career_bench_play_pct", "Запасной выходит в % матчей")}
+          {field("player_career_trust_starter", "Доверие для основы")}
+          {field("player_career_trust_captain", "Доверие для капитанства")}
+          {field("player_career_captain_salary_pct", "Капитан: +% к зарплате")}
+          {field("player_career_injury_freshness", "Травмы: ниже этой свежести")}
+          {field("player_career_injury_max_pct", "Травмы: шанс при 0% свежести, %")}
+          {field("player_career_heal_coins", "Лечение, монеты (0 — нет)")}
+          {field("player_career_heal_stars", "Лечение, звёзды ⭐ (0 — нет)")}
+          {field("player_career_refresh_coins", "Полная свежесть, монеты (0 — нет)")}
+          {field("player_career_refresh_stars", "Полная свежесть, звёзды ⭐ (0 — нет)")}
+          {field("player_career_event_every", "События: не чаще раза в N туров")}
+          {field("player_career_event_coins", "События: базовые монеты")}
+          {field("player_career_event_prestige", "События: базовый престиж")}
+          {field("player_career_derby_multiplier", "Лига друзей: множитель дерби")}
+          {field("player_career_pro_stars", "Карьера Pro, звёзды ⭐ (0 — нет)")}
+          {field("player_career_pro_days", "Карьера Pro, дней")}
+          {field("player_career_pro_xp_pct", "Карьера Pro: +% опыта")}
+          {field("player_career_agent_stars", "Агент, звёзды ⭐ (0 — нет)")}
+          {field("player_career_agent_haggle_bonus", "Агент: +% к шансу торга")}
+          {field("player_career_save_offer_stars", "Вернуть клуб, звёзды ⭐ (0 — нет)")}
+          {toggle("player_career_fast_season_enabled", "Ускоренный сезон в продаже")}
+          {field("player_career_fast_season_stars", "Ускоренный сезон, звёзды ⭐ (0 — нет)")}
+          {field("player_career_fast_round_minutes", "Ускоренный сезон: минут между турами")}
+          {field("player_career_chest_coins_min", "Сундук дня: монет от")}
+          {field("player_career_chest_coins_max", "Сундук дня: монет до")}
+          {field("player_career_chest_token_pct", "Сундук дня: шанс жетона, %")}
+          {field("player_career_weekly_goals", "Задание недели: голов")}
+          {field("player_career_weekly_matches", "Задание недели: матчей")}
+          {field("player_career_weekly_rating_x10", "Задание недели: оценка ×10 (70 = 7.0)")}
+          {listField("player_career_weekly_coins", "Задания недели: монеты (голы, матчи, оценка)")}
+          {listField("player_career_friends_rewards", "Лига друзей: монеты за 1–3 места")}
           {listField("player_career_place_rewards", "Награда за места 1–8, монеты")}
         </div>
       </section>

@@ -11,6 +11,29 @@ class PlayerCareerContractIn(BaseModel):
     club_key: str
 
 
+class PlayerCareerStartIn(BaseModel):
+    # Use a bought fast season.
+    fast: bool = False
+
+
+class PlayerCareerMomentIn(BaseModel):
+    option: str
+    # The timing mini-game was hit.
+    hit: bool = False
+
+
+class PlayerCareerEventIn(BaseModel):
+    choice: str
+
+
+class PlayerCareerFriendsCreateIn(BaseModel):
+    invite_ids: list[int]
+
+
+class PlayerCareerFriendsRespondIn(BaseModel):
+    accept: bool
+
+
 class PlayerCareerCounterIn(BaseModel):
     # +10 / +20 / +30 percent salary and bonus.
     raise_pct: int
@@ -40,6 +63,10 @@ class PlayerCareerClubOut(BaseModel):
     level: int = 1
     # Club prestige, 1-5.
     club_stars: int = 1
+    # The club's top legend {player_name, goals, seasons} (Hall of Fame).
+    legend: Optional[dict] = None
+    # bench | starter — his role there today with a new coach.
+    expected_role: str = "starter"
 
 
 class PlayerCareerMyRoundOut(BaseModel):
@@ -125,6 +152,9 @@ class PlayerCareerSeasonOut(BaseModel):
     coins_earned: int
     awards: list[str] = []
     offers: list[PlayerCareerOfferOut] = []
+    # Transfer window: an agent works for it / a walked-away club was brought back.
+    agent: bool = False
+    saved: bool = False
     league: Optional[PlayerCareerLeagueOut] = None
     objectives: list[PlayerCareerObjectiveOut] = []
     salary: int = 0
@@ -299,3 +329,25 @@ class PlayerCareerViewOut(BaseModel):
     max_counters: int = 2
     # Only on the counter-offer response.
     haggle: Optional[PlayerCareerHaggleOut] = None
+    # bench | starter | captain (for the next match) and the coach's trust.
+    role: Optional[str] = None
+    role_label: Optional[str] = None
+    trust: int = 50
+    trust_starter: int = 70
+    trust_captain: int = 85
+    injury_rounds: int = 0
+    # Key moments of the pending match: {round, deadline, line, moments: [...]}.
+    pending: Optional[dict] = None
+    # Only on the key-moment response: how it went.
+    moment_result: Optional[dict] = None
+    # The open story event {id, code, title, text, choices: [{key, label, effects}]}.
+    event: Optional[dict] = None
+    # Headlines of the shown season, newest first.
+    news: list[dict] = []
+    # The club's Hall of Fame (top 5).
+    legends: list[dict] = []
+    chest: Optional[dict] = None
+    weekly: Optional[dict] = None
+    # Paid extras: prices, Pro status, unused agent / fast-season credits.
+    shop: Optional[dict] = None
+    fast: bool = False

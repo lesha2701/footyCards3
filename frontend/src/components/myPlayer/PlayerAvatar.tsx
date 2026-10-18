@@ -14,9 +14,32 @@ interface Props {
   /** Equipped cosmetics (shop codes): headband | earring | chain | goggles |
    * captain | headphones | crown. */
   accessory?: string | null;
-  /** bg_sunset | bg_neon | bg_gold | bg_night | bg_galaxy | bg_champions;
-   * anything else = the default stadium. */
+  /** bg_sunset | bg_neon | bg_gold | bg_night | bg_galaxy | bg_champions |
+   * bg_goal | bg_national | bg_pro; anything else = the default stadium. */
   backdrop?: string | null;
+  /** National team, for the «Флаг сборной» background. */
+  country?: string | null;
+}
+
+// Flag stripes for «Флаг сборной» (top to bottom); unknown countries get a
+// stable colour pair from the name.
+const FLAGS: Record<string, string[]> = {
+  "Россия": ["#ffffff", "#1c3f94", "#d52b1e"], "Германия": ["#000000", "#dd0000", "#ffce00"],
+  "Франция": ["#0055a4", "#ffffff", "#ef4135"], "Италия": ["#009246", "#ffffff", "#ce2b37"],
+  "Испания": ["#aa151b", "#f1bf00", "#aa151b"], "Бразилия": ["#009c3b", "#ffdf00", "#002776"],
+  "Аргентина": ["#74acdf", "#ffffff", "#74acdf"], "Нидерланды": ["#ae1c28", "#ffffff", "#21468b"],
+  "Португалия": ["#006600", "#ff0000", "#ff0000"], "Англия": ["#ffffff", "#ce1124", "#ffffff"],
+  "Бельгия": ["#000000", "#fdda24", "#ef3340"], "Хорватия": ["#ff0000", "#ffffff", "#171796"],
+  "Уругвай": ["#ffffff", "#0038a8", "#ffffff"], "Украина": ["#0057b7", "#ffd700"], "Беларусь": ["#c8313e", "#4aa657"],
+  "Казахстан": ["#00afca", "#fec50c", "#00afca"], "Польша": ["#ffffff", "#dc143c"], "Япония": ["#ffffff", "#bc002d", "#ffffff"],
+  "Марокко": ["#c1272d", "#006233", "#c1272d"], "Сенегал": ["#00853f", "#fdef42", "#e31b23"], "США": ["#b22234", "#ffffff", "#3c3b6e"],
+}
+
+function flagOf(country?: string | null): string[] {
+  if (country && FLAGS[country]) return FLAGS[country];
+  const n = [...(country ?? "Victor")].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const hues = [n % 360, (n * 7) % 360];
+  return [`hsl(${hues[0]} 70% 45%)`, "#ffffff", `hsl(${hues[1]} 70% 40%)`];
 }
 
 // Radial backdrop colours (centre, middle, edge) per background code.
@@ -61,7 +84,7 @@ const MOUSTACHE = "M84 126 Q100 118 116 126 Q100 124 84 126Z";
 /** The constructor's footballer: a shaded head-and-shoulders SVG drawn from
  * option indexes (no uploaded photos — nothing to moderate). Option counts
  * must match backend my_player_service.APPEARANCE_OPTIONS. */
-export default function PlayerAvatar({ appearance: a, number, className, background = true, accessory, backdrop }: Props) {
+export default function PlayerAvatar({ appearance: a, number, className, background = true, accessory, backdrop, country }: Props) {
   const id = useId().replace(/:/g, "");
   const skin = SKIN_TONES[a.skin] ?? SKIN_TONES[0];
   const hair = HAIR_COLORS[a.hair_color] ?? HAIR_COLORS[0];
@@ -357,6 +380,32 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
               <ellipse cx="160" cy="110" rx="60" ry="26" fill="#22d3ee" opacity="0.14" transform="rotate(25 160 110)" />
               {GALAXY_STARS.map(([x, y, r]) => <circle key={`${x}-${y}`} cx={x} cy={y} r={r} fill="#fff" opacity="0.85" />)}
             </>
+          )}
+          {backdrop === "bg_goal" && (
+            <g>
+              <rect width="200" height="240" fill="#14532d" />
+              <g stroke="#e2e8f0" strokeOpacity="0.35" strokeWidth="1">
+                {Array.from({ length: 21 }, (_, i) => <path key={`v${i}`} d={`M${i * 10} 0 V240`} />)}
+                {Array.from({ length: 25 }, (_, i) => <path key={`h${i}`} d={`M0 ${i * 10} H200`} />)}
+              </g>
+              <path d="M6 0 V240 M194 0 V240 M0 6 H200" stroke="#f8fafc" strokeWidth="8" opacity="0.9" />
+            </g>
+          )}
+          {backdrop === "bg_national" && (
+            <g>
+              {flagOf(country).map((color, i, all) => (
+                <rect key={i} y={(240 / all.length) * i} width="200" height={240 / all.length + 1} fill={color} />
+              ))}
+              <rect width="200" height="240" fill="#000" opacity="0.28" />
+            </g>
+          )}
+          {backdrop === "bg_pro" && (
+            <g>
+              <rect width="200" height="240" fill="#1e0b3a" />
+              <circle cx="100" cy="80" r="110" fill="#7c3aed" opacity="0.35" />
+              <circle cx="100" cy="80" r="60" fill="#c084fc" opacity="0.25" />
+              <text x="100" y="40" textAnchor="middle" fontSize="34" fontWeight="900" fontFamily="system-ui, sans-serif" fill="#e9d5ff" opacity="0.25">PRO</text>
+            </g>
           )}
           {backdrop === "bg_champions" && (
             <g fill="#f8fafc" opacity="0.28">

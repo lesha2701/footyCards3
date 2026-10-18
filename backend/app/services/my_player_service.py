@@ -110,8 +110,17 @@ COSMETICS = {
     "hair_neymar": ("hair", "Прическа Неймара"),
     "hair_cr7": ("hair", "Укладка Роналду"),
     "hair_pogba": ("hair", "Цветной фейд Погба"),
+    "bg_goal": ("background", "Фон «Ворота»"),
+    "bg_national": ("background", "Фон «Флаг сборной»"),
+    # Granted with «Карьера Pro», never sold.
+    "bg_pro": ("background", "Фон «Pro»"),
+    # Shown in key moments and the headlines after a goal.
+    "cel_siu": ("celebration", "Празднование «Сиу!»"),
+    "cel_plane": ("celebration", "Празднование «Самолётик»"),
+    "cel_heart": ("celebration", "Празднование «Сердечко»"),
+    "cel_dance": ("celebration", "Празднование «Танец у флажка»"),
 }
-COSMETIC_KINDS = ("accessory", "background", "effect", "hair")
+COSMETIC_KINDS = ("accessory", "background", "effect", "hair", "celebration")
 # Premium hairstyles: wearing one sets appearance["hair"] to this index
 # (PlayerAvatar draws 14+ as these styles); the free choices stay 0..13.
 PREMIUM_HAIR = {"hair_neymar": 14, "hair_cr7": 15, "hair_pogba": 16}
@@ -424,8 +433,10 @@ def player_out(mp: MyPlayer, config) -> dict:
         "accessory": cosmetics["accessory"],
         "background": cosmetics["background"],
         "effect": cosmetics["effect"],
+        "celebration": cosmetics["celebration"],
         "tier": tier, "tier_label": TIER_LABELS[tier],
         "country": mp.country,
+        "pro": bool(mp.pro_until and ensure_aware(mp.pro_until) > datetime.now(timezone.utc)),
     }
 
 
@@ -520,6 +531,12 @@ async def get_view(db: AsyncSession, user: User) -> dict:
         changed = migrate_legacy(mp)
         if not mp.level_seen:
             mp.level_seen = level  # start tracking without a retroactive level-up screen
+            changed = True
+        today = local_today()
+        if mp.pro_until and ensure_aware(mp.pro_until) > datetime.now(timezone.utc) and mp.pro_bonus_day != today:
+            # «Карьера Pro»: one more training every day.
+            mp.extra_training_credits += 1
+            mp.pro_bonus_day = today
             changed = True
         if changed:
             await db.commit()
@@ -674,6 +691,7 @@ def _training_view(mp: Optional[MyPlayer], config) -> dict:
 def _cosmetics_view(mp: Optional[MyPlayer], config) -> dict:
     state = cosmetics_of(mp) if mp else {
         "owned": [], "accessory": None, "background": None, "effect": None, "hair": None, "base_hair": 0,
+        "celebration": None,
     }
     coins = config.my_player_cosmetic_prices or {}
     stars = config.my_player_cosmetic_stars_prices or {}
@@ -1293,8 +1311,10 @@ async def create_stars_invoice(
     code: Optional[str] = None, position: Optional[str] = None,
 ) -> dict:
     """Telegram Stars invoice for one extra training ("training"), an
-    «Имущество» item ("item"), a cosmetic ("cosmetic") or a line change
-    ("role"). The price is frozen on the invoice."""
+    «Имущество» item ("item"), a cosmetic ("cosmetic"), a line change
+    ("role") or a «Карьера игрока» extra ("career": code = pro | agent |
+    refresh | heal | save_offer | fast, position carries the club key for
+    save_offer). The price is frozen on the invoice."""
     import secrets
 
     from app.models.lifestyle import LifestyleItem
@@ -1307,7 +1327,11 @@ async def create_stars_invoice(
     mp = await get_my_player(db, user.id)
     if purchase in ("training", "cosmetic", "role") and mp is None:
         raise NotFoundError("Игрок ещё не создан")
-    if purchase == "training":
+    if purchase == "career":
+        from app.services import player_career_shop
+
+        key, title, description, stars = await player_career_shop.stars_order(db, user.id, code or "", position, config)
+    elif purchase == "training":
         stars = config.my_player_extra_training_stars
         if stars <= 0:
             raise ConflictError("За звёзды дополнительные тренировки не продаются")
@@ -1377,6 +1401,10 @@ async def validate_stars_purchase(db: AsyncSession, invoice) -> tuple[bool, str]
         if code in cosmetics_of(mp)["owned"]:
             return False, "Уже куплено"
         return True, ""
+    if purchase.startswith("career:"):
+        from app.services import player_career_shop
+
+        return await player_career_shop.validate_stars(db, invoice, config)
     if purchase.startswith("role:"):
         if mp is None or config.my_player_role_change_stars != invoice.stars_amount:
             return False, "Цена смены амплуа изменилась — открой покупку заново"
@@ -1408,6 +1436,10 @@ async def deliver_stars_purchase(db: AsyncSession, user: User, invoice) -> dict:
         if code in COSMETICS:
             _give_cosmetic(mp, code)
         return {"kind": "cosmetic", "name": COSMETICS.get(code, ("", code))[1]}
+    if purchase.startswith("career:"):
+        from app.services import player_career_shop
+
+        return await player_career_shop.deliver_stars(db, user, invoice, config)
     if purchase.startswith("role:"):
         mp = await _locked_player(db, user.id)
         pos = Position(purchase.split(":", 1)[1])

@@ -100,6 +100,9 @@ async def record_match(
     row.clean_sheets = (row.clean_sheets or 0) + int(clean_sheet)
     row.rating_sum += float(rating)
     row.line = line
+    from app.services.player_career_life import record_week
+
+    await record_week(db, user_id, at, goals, assists, rating, clean_sheet)
 
 
 def score_of(row: PlayerCareerMonthStat) -> float:

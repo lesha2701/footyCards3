@@ -34,7 +34,7 @@ export default function MyPlayerCard({ player, level, size = "md" }: Props) {
             {level != null && <span className="block font-mono text-micro text-ink-mist">ур. {level}</span>}
           </div>
           <PlayerAvatar
-            appearance={player.appearance} number={player.number} accessory={player.accessory} backdrop={player.background}
+            appearance={player.appearance} number={player.number} accessory={player.accessory} backdrop={player.background} country={player.country}
             className="absolute inset-0 h-full w-full"
           />
         </div>
@@ -80,7 +80,7 @@ function HeroCard({ player, level }: { player: MyPlayer; level?: number | null }
       >
         <div className="relative h-full w-full overflow-hidden rounded-[18px] bg-bg-surface">
           <PlayerAvatar
-            appearance={player.appearance} number={player.number} accessory={player.accessory} backdrop={player.background}
+            appearance={player.appearance} number={player.number} accessory={player.accessory} backdrop={player.background} country={player.country}
             className="absolute inset-0 h-full w-full"
           />
           <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />

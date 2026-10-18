@@ -35,9 +35,13 @@ export interface MyPlayer {
   effect?: string | null;
   /** National team. */
   country?: string | null;
+  /** Goal celebration (cosmetic). */
+  celebration?: string | null;
+  /** «Карьера Pro» is active. */
+  pro?: boolean;
 }
 
-export type MyPlayerCosmeticKind = "accessory" | "background" | "effect" | "hair";
+export type MyPlayerCosmeticKind = "accessory" | "background" | "effect" | "hair" | "celebration";
 export type MyPlayerDrill = "shot" | "pass" | "tackle" | "save";
 
 export interface MyPlayerTrophy {
@@ -169,6 +173,7 @@ export interface MyPlayerView {
     background: string | null;
     effect: string | null;
     hair: string | null;
+    celebration: string | null;
     catalog: MyPlayerCosmeticItem[];
   };
   freshness: {
@@ -283,14 +288,15 @@ export type MyPlayerStarsPurchase =
   | { purchase: "training" }
   | { purchase: "item"; itemId: number }
   | { purchase: "cosmetic"; code: string }
-  | { purchase: "role"; position: string };
+  | { purchase: "role"; position: string }
+  | { purchase: "career"; code: "pro" | "agent" | "refresh" | "heal" | "save_offer" | "fast"; arg?: string };
 
 export async function createMyPlayerStarsInvoice(order: MyPlayerStarsPurchase): Promise<MyPlayerStarsInvoice> {
   const { data } = await api.post<MyPlayerStarsInvoice>("/my-player/stars-invoice", {
     purchase: order.purchase,
     item_id: order.purchase === "item" ? order.itemId : null,
-    code: order.purchase === "cosmetic" ? order.code : null,
-    position: order.purchase === "role" ? order.position : null,
+    code: order.purchase === "cosmetic" || order.purchase === "career" ? order.code : null,
+    position: order.purchase === "role" ? order.position : order.purchase === "career" ? order.arg ?? null : null,
   });
   return data;
 }

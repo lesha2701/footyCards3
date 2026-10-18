@@ -49,7 +49,7 @@ const baseView: MyPlayerView = {
     streak: 3, streak_days: 7, streak_tokens: 1, streak_left: 4, freshness_bonus: 20,
   },
   cosmetics: {
-    owned: [], accessory: null, background: null, effect: null, hair: null,
+    owned: [], accessory: null, background: null, effect: null, hair: null, celebration: null,
     catalog: [
       { code: "headband", kind: "accessory", name: "Повязка на голову", price: 300, stars_price: 0, owned: false },
       { code: "fx_fire", kind: "effect", name: "Эффект «Пламя»", price: 0, stars_price: 75, owned: false },

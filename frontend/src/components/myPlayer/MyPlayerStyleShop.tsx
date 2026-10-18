@@ -11,7 +11,7 @@ import {
 } from "@/api/myPlayer";
 import { IconCoin } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
-import { COSMETIC_GROUPS } from "@/lib/myPlayer";
+import { CELEBRATION_EMOJI, COSMETIC_GROUPS } from "@/lib/myPlayer";
 import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { haptic, hapticNotify } from "@/lib/telegram";
 
@@ -108,9 +108,15 @@ export default function MyPlayerStyleShop({ view, player, preview, onPreview, on
                           ? { ...player.appearance, hair: item.hair_index } : player.appearance}
                         accessory={kind === "accessory" ? item.code : player.accessory}
                         backdrop={kind === "background" ? item.code : player.background}
+                        country={player.country}
                         className="h-full w-full"
                       />
                       {kind === "effect" && <CardEffect effect={item.code} />}
+                      {kind === "celebration" && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-5xl">
+                          {CELEBRATION_EMOJI[item.code] ?? "🎉"}
+                        </span>
+                      )}
                       {item.stars_price > 0 && !item.owned && (
                         <span className="absolute right-1 top-1 rounded-full bg-amber-400 px-1.5 text-micro font-bold text-bg-base">⭐</span>
                       )}

@@ -21,6 +21,78 @@ export interface PlayerCareerClub {
   level: number;
   /** Club prestige 1-5. */
   club_stars: number;
+  /** The club's top legend (Hall of Fame). */
+  legend: { player_name: string; goals: number; seasons: number } | null;
+  /** His role there today with a new coach. */
+  expected_role: "bench" | "starter";
+}
+
+export type PlayerCareerRole = "bench" | "starter" | "captain";
+
+export interface PlayerCareerMoment {
+  i: number;
+  kind: "attack" | "defense" | "save";
+  minute: number;
+  text: string;
+  status: "open" | "done";
+  choice: string | null;
+  hit: boolean | null;
+  success: boolean | null;
+  auto: boolean;
+  /** chance — without a timing hit, chance_hit — with one (percent). */
+  options: { code: string; label: string; chance: number; chance_hit: number }[];
+}
+
+export interface PlayerCareerEvent {
+  id: number;
+  code: string;
+  title: string;
+  text: string;
+  status: string;
+  choices: { key: string; label: string; effects: Partial<Record<"prestige" | "trust" | "coins" | "freshness" | "xp", number>> }[];
+}
+
+export interface PlayerCareerLegend {
+  place: number;
+  user_name: string;
+  player_name: string;
+  is_me: boolean;
+  seasons: number;
+  matches: number;
+  goals: number;
+  assists: number;
+  titles: number;
+}
+
+export interface PlayerCareerShop {
+  pro_stars: number;
+  pro_days: number;
+  pro_xp_pct: number;
+  agent_stars: number;
+  agent_haggle_bonus: number;
+  refresh_coins: number;
+  refresh_stars: number;
+  heal_coins: number;
+  heal_stars: number;
+  save_offer_stars: number;
+  /** Fast seasons are on sale (admin switch). */
+  fast_enabled: boolean;
+  fast_stars: number;
+  fast_round_minutes: number;
+  pro: boolean;
+  pro_until: string | null;
+  agent_credits: number;
+  fast_season_credits: number;
+}
+
+export interface PlayerCareerWeeklyTask {
+  code: string;
+  label: string;
+  target: number;
+  coins: number;
+  value: number;
+  done: boolean;
+  claimed: boolean;
 }
 
 export interface PlayerCareerLeague {
@@ -155,6 +227,9 @@ export interface PlayerCareerSeason {
   coins_earned: number;
   awards: string[];
   offers: PlayerCareerOffer[];
+  /** Transfer window: an agent works for it / a walked-away club was brought back. */
+  agent: boolean;
+  saved: boolean;
   league: PlayerCareerLeague | null;
   objectives: PlayerCareerObjective[];
   salary: number;
@@ -188,6 +263,71 @@ export interface PlayerCareerView {
   max_counters: number;
   /** Only on the counter-offer response. */
   haggle?: { club: string; agreed: boolean; chance: number } | null;
+  role: PlayerCareerRole | null;
+  role_label: string | null;
+  trust: number;
+  trust_starter: number;
+  trust_captain: number;
+  injury_rounds: number;
+  pending: { round: number; deadline: string; line: string; moments: PlayerCareerMoment[] } | null;
+  /** Only on the key-moment response. */
+  moment_result?: { i: number; kind: string; choice: string; success: boolean; chance: number } | null;
+  event: PlayerCareerEvent | null;
+  news: { round: number; headline: string }[];
+  legends: PlayerCareerLegend[];
+  chest: { available: boolean; coins_min: number; coins_max: number; token_pct: number } | null;
+  weekly: { week: string; tasks: PlayerCareerWeeklyTask[] } | null;
+  shop: PlayerCareerShop | null;
+  fast: boolean;
+}
+
+export interface PlayerCareerRankingEntry {
+  place: number;
+  user_id: number;
+  user_name: string;
+  is_me: boolean;
+  value: number;
+  matches?: number;
+  player_name?: string;
+}
+
+export interface PlayerCareerRankings {
+  week: string;
+  scorers: PlayerCareerRankingEntry[];
+  ratings: PlayerCareerRankingEntry[];
+  prestige: PlayerCareerRankingEntry[];
+}
+
+export interface FriendsLeague {
+  id: number;
+  status: "lobby" | "active" | "finished" | "cancelled";
+  is_owner: boolean;
+  owner_name: string;
+  rounds_played: number;
+  total_rounds: number;
+  next_round_at: string | null;
+  members: { user_id: number; name: string; status: "invited" | "accepted" | "declined" }[];
+  table: (CareerTableRow & { name: string; owner_name: string | null; is_me: boolean; is_friend: boolean })[];
+  rounds: {
+    index: number;
+    at: string | null;
+    matches: {
+      home: string; away: string; home_owner: string | null; away_owner: string | null;
+      derby: boolean; mine: boolean; hs?: number; away_score?: number;
+    }[];
+  }[];
+  players: { name: string; team: string; is_me: boolean; matches: number; goals: number; assists: number; avg_rating: number | null }[];
+  h2h: { name: string; won: number; drawn: number; lost: number }[];
+  champion: string | null;
+}
+
+export interface FriendsLeagueView {
+  league: FriendsLeague | null;
+  invites: { id: number; owner_name: string }[];
+  can_create: boolean;
+  friends: { user_id: number; name: string; player_name: string }[];
+  derby_multiplier: number;
+  rewards: number[];
 }
 
 export async function fetchPlayerCareer(): Promise<PlayerCareerView> {
@@ -200,8 +340,8 @@ export async function signPlayerCareerContract(clubKey: string): Promise<PlayerC
   return data;
 }
 
-export async function startPlayerCareerSeason(): Promise<PlayerCareerView> {
-  const { data } = await api.post<PlayerCareerView>("/player-career/seasons");
+export async function startPlayerCareerSeason(fast = false): Promise<PlayerCareerView> {
+  const { data } = await api.post<PlayerCareerView>("/player-career/seasons", { fast });
   return data;
 }
 
@@ -219,5 +359,62 @@ export async function counterPlayerCareerOffer(clubKey: string, raisePct: number
   const { data } = await api.post<PlayerCareerView>(`/player-career/offers/${encodeURIComponent(clubKey)}/counter`, {
     raise_pct: raisePct,
   });
+  return data;
+}
+
+export async function playPlayerCareerMoment(index: number, option: string, hit: boolean): Promise<PlayerCareerView> {
+  const { data } = await api.post<PlayerCareerView>(`/player-career/moments/${index}`, { option, hit });
+  return data;
+}
+
+export async function answerPlayerCareerEvent(eventId: number, choice: string): Promise<PlayerCareerView> {
+  const { data } = await api.post<PlayerCareerView>(`/player-career/events/${eventId}`, { choice });
+  return data;
+}
+
+export async function openPlayerCareerChest(): Promise<{
+  coins: number; token: { code: string; name: string; icon: string } | null; balance: number;
+}> {
+  const { data } = await api.post("/player-career/chest");
+  return data;
+}
+
+export async function claimPlayerCareerWeekly(code: string): Promise<PlayerCareerView> {
+  const { data } = await api.post<PlayerCareerView>(`/player-career/weekly/${code}/claim`);
+  return data;
+}
+
+export async function fetchPlayerCareerRankings(): Promise<PlayerCareerRankings> {
+  const { data } = await api.get<PlayerCareerRankings>("/player-career/rankings");
+  return data;
+}
+
+export async function buyPlayerCareerWithCoins(code: "refresh" | "heal"): Promise<PlayerCareerView> {
+  const { data } = await api.post<PlayerCareerView>(`/player-career/shop/${code}`);
+  return data;
+}
+
+export async function fetchFriendsLeague(): Promise<FriendsLeagueView> {
+  const { data } = await api.get<FriendsLeagueView>("/player-career/friends");
+  return data;
+}
+
+export async function createFriendsLeague(inviteIds: number[]): Promise<FriendsLeagueView> {
+  const { data } = await api.post<FriendsLeagueView>("/player-career/friends", { invite_ids: inviteIds });
+  return data;
+}
+
+export async function respondFriendsLeague(leagueId: number, accept: boolean): Promise<FriendsLeagueView> {
+  const { data } = await api.post<FriendsLeagueView>(`/player-career/friends/${leagueId}/respond`, { accept });
+  return data;
+}
+
+export async function startFriendsLeague(leagueId: number): Promise<FriendsLeagueView> {
+  const { data } = await api.post<FriendsLeagueView>(`/player-career/friends/${leagueId}/start`);
+  return data;
+}
+
+export async function cancelFriendsLeague(leagueId: number): Promise<FriendsLeagueView> {
+  const { data } = await api.post<FriendsLeagueView>(`/player-career/friends/${leagueId}/cancel`);
   return data;
 }
