@@ -1953,6 +1953,16 @@ export interface ClubCard {
   availability: ClubCardAvailability | null;
 }
 
+export interface ClubSurplus {
+  enabled: boolean;
+  can_manage: boolean;
+  budget: number;
+  sell_pct: number;
+  exchange_count: number;
+  cards: { card: ClubCard; protected: boolean; sell_value: number }[];
+  exchange_options: { rarity: Rarity; target_rarity: Rarity; available: number }[];
+}
+
 export interface ClubLineupSlot {
   slot_code: string;
   category: string;

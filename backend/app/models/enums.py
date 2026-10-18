@@ -171,6 +171,7 @@ class ClubBudgetTransactionType(str, enum.Enum):
     league_reward = "league_reward"
     stars_donation = "stars_donation"
     emblem_purchase = "emblem_purchase"
+    card_sale = "card_sale"
 
 
 class TournamentQueueStatus(str, enum.Enum):
@@ -191,6 +192,7 @@ class ClubCardAvailabilityReason(str, enum.Enum):
 class ClubCardSource(str, enum.Enum):
     starter_seed = "starter_seed"
     club_pack = "club_pack"
+    exchange = "exchange"
 
 
 class ClubCoachCardSource(str, enum.Enum):

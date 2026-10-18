@@ -8,7 +8,7 @@ import { SponsorBadge } from "@/components/clubs/SponsorBadge";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconBrain, IconChart, IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconShirt, IconStar, IconTarget, IconTrophy, IconUsers } from "@/components/icons";
+import { IconBrain, IconChart, IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconShirt, IconStar, IconSwap, IconTarget, IconTrophy, IconUsers } from "@/components/icons";
 import {
   acceptJoinRequest,
   appointAssistant,
@@ -420,6 +420,15 @@ function ClubHome({ club }: { club: Club }) {
       >
         <IconGoal size={16} className="text-accent-lime" />
         {isManager ? "Управление составом" : "Состав клуба"}
+      </button>
+
+      <button
+        onClick={() => navigate("/clubs/surplus")}
+        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
+      >
+        <IconSwap size={16} className="text-accent-lime" />
+        <span className="flex-1">Лишние карты</span>
+        <span className="text-caption font-normal text-ink-mist-dim">продать или обменять</span>
       </button>
 
       {league?.enabled && (

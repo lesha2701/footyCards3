@@ -139,6 +139,9 @@ export interface GameConfig {
   club_donation_star_options: number[];
   club_sponsor_silver_stars: number;
   club_sponsor_gold_stars: number;
+  club_card_market_enabled: boolean;
+  club_card_sell_pct: number;
+  club_card_exchange_count: number;
   club_pass_frame_cosmetic_id: number | null;
   club_pass_badge_id: number | null;
   club_pass_ad_free: boolean;

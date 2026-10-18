@@ -1,6 +1,7 @@
-"""Club emblem constructor and «Казна за Stars» (club_emblem_service /
-club_treasury_service). Separate from routers/clubs.py only to keep that
-file from growing further; same /clubs prefix, all under /clubs/me/."""
+"""Club emblem constructor, «Казна за Stars» and «Лишние карты»
+(club_emblem_service / club_treasury_service / club_market_service).
+Separate from routers/clubs.py only to keep that file from growing
+further; same /clubs prefix, all under /clubs/me/."""
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,8 +9,9 @@ from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.club_emblem import ClubDonationInvoiceIn, ClubEmblemStateOut, ClubEmblemUpdateIn, ClubTreasuryOut
+from app.schemas.club_market import ClubSurplusOut, SurplusCardIdsIn, SurplusExchangeOut, SurplusSellOut
 from app.schemas.stars import StarsInvoiceCreateOut
-from app.services import club_emblem_service, club_treasury_service, shop_product_service
+from app.services import club_emblem_service, club_market_service, club_treasury_service, shop_product_service
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
 
@@ -42,3 +44,18 @@ async def get_treasury(db: AsyncSession = Depends(get_db), user: User = Depends(
 @router.post("/me/treasury/stars-invoice", response_model=StarsInvoiceCreateOut)
 async def treasury_invoice(payload: ClubDonationInvoiceIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await shop_product_service.create_invoice(db, user, *await club_treasury_service.stars_order(db, user, payload.stars))
+
+
+@router.get("/me/surplus", response_model=ClubSurplusOut)
+async def get_surplus(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_market_service.get_surplus(db, user)
+
+
+@router.post("/me/surplus/sell", response_model=SurplusSellOut)
+async def sell_surplus(payload: SurplusCardIdsIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_market_service.sell_cards(db, user, payload.card_ids)
+
+
+@router.post("/me/surplus/exchange", response_model=SurplusExchangeOut)
+async def exchange_surplus(payload: SurplusCardIdsIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_market_service.exchange_cards(db, user, payload.card_ids)

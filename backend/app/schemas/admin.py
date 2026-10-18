@@ -624,6 +624,9 @@ class GameConfigOut(BaseModel):
     club_donation_star_options: list[int] = []
     club_sponsor_silver_stars: int = 250
     club_sponsor_gold_stars: int = 1000
+    club_card_market_enabled: bool = True
+    club_card_sell_pct: int = 100
+    club_card_exchange_count: int = 5
     trade_send_min_account_age_days: int = 3
     trade_send_min_active_days: int = 2
     trade_daily_coins_receive_cap: int = 3000
@@ -1169,6 +1172,9 @@ class GameConfigUpdate(BaseModel):
     )
     club_sponsor_silver_stars: Optional[int] = Field(default=None, ge=1, le=1000000)
     club_sponsor_gold_stars: Optional[int] = Field(default=None, ge=1, le=1000000)
+    club_card_market_enabled: Optional[bool] = None
+    club_card_sell_pct: Optional[int] = Field(default=None, ge=0, le=1000)
+    club_card_exchange_count: Optional[int] = Field(default=None, ge=2, le=20)
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod

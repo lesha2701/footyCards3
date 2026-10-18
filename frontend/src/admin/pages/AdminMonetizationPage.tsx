@@ -171,13 +171,16 @@ function SettingsTab() {
         </div>
       </section>
       <section className={block}>
-        <p className="font-display text-sm font-bold">Клубы: эмблемы и «Казна за Stars»</p>
+        <p className="font-display text-sm font-bold">Клубы: эмблемы, «Казна за Stars», лишние карты</p>
         {flag("club_emblems_enabled", "Магазин элементов эмблем открыт (цены — вкладка «Эмблемы»)")}
         {flag("club_donation_enabled", "Пополнение казны клуба звёздами (запуск)")}
+        {flag("club_card_market_enabled", "«Лишние карты»: продажа в казну и обмен")}
         <div className={grid}>
           {num("club_donation_coins_per_star", "Монет в казну за 1 ⭐")}
           {num("club_sponsor_silver_stars", "Серебряный меценат, всего ⭐")}
           {num("club_sponsor_gold_stars", "Золотой меценат, всего ⭐")}
+          {num("club_card_sell_pct", "Лишние карты: % от цены быстрой продажи")}
+          {num("club_card_exchange_count", "Лишние карты: обмен N → 1")}
           <label className="flex flex-col gap-0.5">
             <span className="text-micro text-slate-500">Суммы пополнения, ⭐ через запятую</span>
             <input

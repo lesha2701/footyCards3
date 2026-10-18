@@ -944,3 +944,9 @@ class GameConfig(TimestampMixin, Base):
     )
     club_sponsor_silver_stars: Mapped[int] = mapped_column(Integer, default=250, nullable=False)
     club_sponsor_gold_stars: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    # «Лишние карты» клуба (club_market_service): sell a non-squad club card
+    # into the budget for Player.quick_sell_price x this %, or exchange N of
+    # one rarity for one of the next.
+    club_card_market_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    club_card_sell_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    club_card_exchange_count: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
