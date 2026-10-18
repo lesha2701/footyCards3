@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useRef } from "react";
 
 import { useCardSkin } from "@/lib/cardSkin";
 import { IconLock } from "@/components/icons";
@@ -32,7 +32,11 @@ interface Props {
   inSquad?: boolean;
   /** The owner's «замок» on this copy: a lock mark at the top centre. */
   userLocked?: boolean;
+  /** Press and hold (~0.45 s): quick actions without opening the card. */
+  onLongPress?: () => void;
 }
+
+const LONG_PRESS_MS = 450;
 
 // One corner = one meaning: top-left rating + status (★ stars / ◆ prestige),
 // top-right position, bottom-left skill (badge slot), bottom-right «Академия»;
@@ -44,8 +48,47 @@ const NAME_TEXT = { sm: "text-caption", md: "text-xs", lg: "text-sm" } as const;
 
 function PlayerCard({
   player, size = "md", badge, footer, onClick, selected, dimmed, stars = 0, pathStage, prestige = 0, talentOverride,
-  animated = false, inSquad = false, userLocked = false,
+  animated = false, inSquad = false, userLocked = false, onLongPress,
 }: Props) {
+  // Long press: a timer started on pointer down; moving the finger (scroll)
+  // or lifting it early cancels it, and the click that follows a fired long
+  // press is swallowed so the card doesn't also open.
+  const pressTimer = useRef<number | null>(null);
+  const pressStart = useRef<{ x: number; y: number } | null>(null);
+  const longPressed = useRef(false);
+  const cancelPress = () => {
+    if (pressTimer.current !== null) window.clearTimeout(pressTimer.current);
+    pressTimer.current = null;
+  };
+  const pressHandlers = onLongPress
+    ? {
+        onPointerDown: (e: React.PointerEvent) => {
+          longPressed.current = false;
+          pressStart.current = { x: e.clientX, y: e.clientY };
+          cancelPress();
+          pressTimer.current = window.setTimeout(() => {
+            longPressed.current = true;
+            pressTimer.current = null;
+            onLongPress();
+          }, LONG_PRESS_MS);
+        },
+        onPointerMove: (e: React.PointerEvent) => {
+          const s = pressStart.current;
+          if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) > 10) cancelPress();
+        },
+        onPointerUp: cancelPress,
+        onPointerLeave: cancelPress,
+        onPointerCancel: cancelPress,
+        onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+      }
+    : {};
+  const handleClick = () => {
+    if (longPressed.current) {
+      longPressed.current = false;
+      return;
+    }
+    onClick?.();
+  };
   const isPath = !!player.path_talent_code;
   // Equipped card skin (cosmetic, own cards only): an extra outline.
   const skin = cardSkinClass(useCardSkin());
@@ -59,12 +102,13 @@ function PlayerCard({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={handleClick}
+      {...pressHandlers}
       disabled={!onClick}
       aria-label={`${player.display_name}, ${player.position}, рейтинг ${player.rating}, ${RARITY_LABELS[player.rarity]}${
         isPath ? ", Академия" : ""
       }${inSquad ? ", в составе" : ""}${userLocked ? ", под замком" : ""}`}
-      className={`group relative flex aspect-[3/4] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-b ${frame} ${
+      className={`group relative flex select-none [-webkit-touch-callout:none] aspect-[3/4] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-b ${frame} ${
         isPath ? "p-[3px]" : "p-[2px]"
       } transition-transform active:scale-[0.97] ${
         selected ? (player.rarity === "diamond" ? "ring-4 ring-rarity-diamond" : "ring-4 ring-accent-lime") : ""
