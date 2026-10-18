@@ -1,5 +1,6 @@
 import { IconCoin, IconTrophy } from "@/components/icons";
 import { TACTIC_LABELS, TACTICS } from "@/lib/formation";
+import { formationLabel } from "@/lib/formationLayout";
 import type {
   ArenaChances,
   ArenaDivision,
@@ -138,6 +139,10 @@ export function ArenaOpponentCard({
           <p className="text-caption text-ink-mist">
             {preview.opponent_is_bot ? "Бот вашего уровня" : `Дивизион ${preview.opponent_division} · ${preview.opponent_points} очков`}
           </p>
+          <p className="text-caption text-ink-mist">
+            Схема: <span className="font-semibold text-ink-chalk">{formationLabel(preview.opponent_formation)}</span>
+            <span className="text-ink-mist-dim"> · ваша {formationLabel(preview.user_formation)}</span>
+          </p>
         </div>
         <div className="shrink-0 text-right">
           <p className="font-mono text-sm font-bold text-ink-chalk">
@@ -210,6 +215,7 @@ export function ArenaMatchupLine({ match }: { match: Match }) {
       <span className={matchupClass(arena.matchup)}>
         {TACTIC_LABELS[arena.user_style]} vs {TACTIC_LABELS[arena.opponent_style]}
       </span>
+      {arena.user_formation && <> · {formationLabel(arena.user_formation)} vs {formationLabel(arena.opponent_formation)}</>}
       {arena.chances && <> · шанс на победу ≈{arena.chances.win}%</>}
     </p>
   );

@@ -48,6 +48,12 @@ export async function setLineupTemplate(
   return data;
 }
 
+/** Another formation; cards stay in their lines where there's room. */
+export async function setLineupTemplateFormation(templateIndex: number, formation: string): Promise<Lineup> {
+  const { data } = await api.post<Lineup>(`/lineups/templates/${templateIndex}/formation`, { formation });
+  return data;
+}
+
 export async function setLineupTemplateTactic(templateIndex: number, tactic: LineupTactic): Promise<Lineup> {
   const { data } = await api.post<Lineup>(`/lineups/templates/${templateIndex}/tactic`, { tactic });
   return data;

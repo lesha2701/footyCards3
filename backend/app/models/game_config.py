@@ -141,6 +141,9 @@ class GameConfig(TimestampMixin, Base):
     arena_shot_exponent: Mapped[float] = mapped_column(Numeric(4, 2), default=0.8, nullable=False)
     arena_edge_rating_per_10pct: Mapped[float] = mapped_column(Numeric(4, 2), default=2.0, nullable=False)
     arena_edge_rating_max: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
+    # Scale of arena_tactics.FORMATION_SHIFT (100 = as tabled, 0 = formations
+    # only matter through positions and chemistry).
+    arena_formation_effect_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     # Card Arena divisions (arena_ladder_service): Elo-like points, division
     # N = index N-1 of these parallel lists (first threshold is always 0).
     arena_points_k: Mapped[int] = mapped_column(Integer, default=40, nullable=False)

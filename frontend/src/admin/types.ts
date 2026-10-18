@@ -258,6 +258,7 @@ export interface GameConfig {
   arena_shot_exponent: number;
   arena_edge_rating_per_10pct: number;
   arena_edge_rating_max: number;
+  arena_formation_effect_pct: number;
   arena_points_k: number;
   arena_points_scale: number;
   arena_shield_matches: number;

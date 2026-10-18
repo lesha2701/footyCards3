@@ -107,8 +107,10 @@ class ArenaPreviewOut(BaseModel):
     opponent_division: int
     opponent_strength: int
     opponent_style: str
+    opponent_formation: str = "4-3-3"
     user_strength: int
     user_style: str
+    user_formation: str = "4-3-3"
     matchup: Literal["win", "loss", "neutral"]
     matchup_bonus_pct: int
     matchup_text: str

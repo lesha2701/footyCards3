@@ -37,7 +37,8 @@ import {
   activateLineupTemplate,
   autoFillLineupTemplate,
   fetchLineupBenchUpgrades, fetchLineupTemplates, fetchUserCoachCards, fetchUserStadiumCards,
-  renameLineupTemplate, setLineupTemplate, setLineupTemplateCoach, setLineupTemplateStadium, setLineupTemplateTactic,
+  renameLineupTemplate, setLineupTemplate, setLineupTemplateCoach, setLineupTemplateFormation, setLineupTemplateStadium,
+  setLineupTemplateTactic,
   type BenchUpgrade,
 } from "@/api/lineups";
 import { actMatch, fetchArenaOpponent, fetchArenaStats, fetchMatchHistory, forfeitMatch, playMatch } from "@/api/matches";
@@ -45,6 +46,7 @@ import { staticUrl } from "@/lib/api";
 import { BOOST_TYPE_LABELS } from "@/lib/coaches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, TACTIC_LABELS, TACTICS, type FormationSlot } from "@/lib/formation";
 import { formatGameError } from "@/lib/errors";
+import { FORMATION_LABELS, formationLabel, inRow, pitchRows } from "@/lib/formationLayout";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
@@ -109,6 +111,12 @@ export default function ArenaPage() {
   const setTacticMutation = useMutation({
     mutationFn: (tactic: LineupTactic) => setLineupTemplateTactic(viewedIndex, tactic),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["lineup-templates"] }),
+  });
+
+  const setFormationMutation = useMutation({
+    mutationFn: (formation: string) => setLineupTemplateFormation(viewedIndex, formation),
+    onSuccess: () => { haptic("light"); setLineupError(null); queryClient.invalidateQueries({ queryKey: ["lineup-templates"] }); },
+    onError: (err) => setLineupError(formatGameError(err, "Не удалось сменить схему")),
   });
 
   // The next opponent is found once on the server and kept until that match
@@ -395,7 +403,7 @@ export default function ArenaPage() {
       <section className="rounded-2xl bg-bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <p className="font-display text-base font-bold text-ink-chalk">Состав 4-3-3</p>
+            <p className="font-display text-base font-bold text-ink-chalk">Состав {formationLabel(lineup?.formation ?? "4-3-3")}</p>
             {lineupSkills.length > 0 && (
               <p className="text-caption text-ink-mist">
                 Навыки: действуют {activeLineupSkills.length} из {lineupSkills.length}
@@ -424,6 +432,7 @@ export default function ArenaPage() {
           <div className="mb-3 rounded-xl bg-white/5 px-3 py-2 text-caption leading-relaxed text-ink-mist">
             <p className="mb-1 font-semibold text-ink-chalk">Что влияет на силу состава:</p>
             <p>· Позиция игрока: 100% рейтинга на своей позиции, 90% на смежной, 75% не по профилю</p>
+            <p>· Схема: определяет позиции и соседей для химии; атакующие схемы (3-4-3, 4-4-2) чуть усиливают атаку и ослабляют защиту, оборонительные (5-3-2, 4-3-3 с опорником) — наоборот</p>
             {chemistryOn ? (
               <p>· Химия: связи с соседями по схеме — каждое очко химии игрока добавляет рейтинг в матче</p>
             ) : (
@@ -450,14 +459,30 @@ export default function ArenaPage() {
             </span>
           )}
         </p>
+        <div className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
+          {Object.keys(FORMATION_LABELS).map((code) => {
+            const active = (lineup?.formation ?? "4-3-3") === code;
+            return (
+              <button
+                key={code}
+                onClick={() => !active && setFormationMutation.mutate(code)}
+                disabled={setFormationMutation.isPending}
+                className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-[11px] font-bold disabled:opacity-60 ${
+                  active ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
+                }`}
+              >
+                {FORMATION_LABELS[code]}
+              </button>
+            );
+          })}
+        </div>
         <div ref={pitchRef} className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
           <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
           <div className="pointer-events-none absolute inset-x-3 top-1/2 h-px -translate-y-1/2 bg-white/10" />
           <div className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
-          {(["FWD", "MID", "DEF", "GK"] as const).map((category) => (
-            <div key={category} className="relative flex justify-evenly gap-2">
-              {lineup?.slots
-                .filter((slot) => slot.category === category)
+          {pitchRows(lineup?.formation, (lineup?.slots ?? []).map((s) => s.slot_code)).map((row) => (
+            <div key={row.key} className="relative flex justify-evenly gap-2">
+              {inRow(row, lineup?.slots ?? [])
                 .map((slot) => {
                   const formationSlot = { code: slot.slot_code, category: slot.category as FormationSlot["category"], idealPosition: slot.ideal_position };
                   return (
@@ -496,7 +521,7 @@ export default function ArenaPage() {
                     </button>
                   );
                 })}
-              {category === "GK" && (
+              {row.category === "GK" && (
                 <button
                   onClick={() => setCoachPickerOpen(true)}
                   disabled={setCoachMutation.isPending}
@@ -520,7 +545,7 @@ export default function ArenaPage() {
                   )}
                 </button>
               )}
-              {category === "GK" && (
+              {row.category === "GK" && (
                 <button
                   onClick={() => setStadiumPickerOpen(true)}
                   disabled={setStadiumMutation.isPending}

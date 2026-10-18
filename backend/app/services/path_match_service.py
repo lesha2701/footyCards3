@@ -42,7 +42,7 @@ class ArenaKickoff:
 
 async def arena_kickoff(db: AsyncSession, lineup, *, user_strength: int, opponent_strength: int, config) -> Optional[ArenaKickoff]:
     """None when the lineup has no «Академия» card (nothing changes)."""
-    from app.services.lineup_service import ARENA_FORMATION, SLOTS_BY_CODE, calculate_base_strength
+    from app.services.lineup_service import arena_formation, arena_slots_by_code, calculate_base_strength
 
     path_ids = [s.card.id for s in lineup.slots if s.card is not None and _player_is_path(s.card.player)]
     if not path_ids:
@@ -54,7 +54,9 @@ async def arena_kickoff(db: AsyncSession, lineup, *, user_strength: int, opponen
         select(LineupCard, UserCard).join(UserCard, UserCard.id == LineupCard.user_card_id)
         .options(joinedload(UserCard.player)).where(LineupCard.lineup_id == lineup.id)
     )).unique().all()
-    pairs = [(card, SLOTS_BY_CODE[lc.slot_code]) for lc, card in rows if lc.slot_code in SLOTS_BY_CODE]
+    formation = arena_formation(getattr(lineup, "formation", None))
+    slots_by_code = arena_slots_by_code(formation)
+    pairs = [(card, slots_by_code[lc.slot_code]) for lc, card in rows if lc.slot_code in slots_by_code]
     catalog = await path_service.load_catalog(db)
     talents = {c.id: snap for c, _ in pairs if (snap := talent_snapshot(c, catalog, config, "arena"))}
     if not talents:
@@ -69,7 +71,7 @@ async def arena_kickoff(db: AsyncSession, lineup, *, user_strength: int, opponen
     coach_country = getattr(lineup.coach, "country", None) if lineup.coach else None
     stadium_club = getattr(lineup.stadium, "club", None) if lineup.stadium else None
     plan = plan_static(
-        pairs, talents, config, formation=ARENA_FORMATION,
+        pairs, talents, config, formation=formation,
         opponent_ratio=(opponent_strength / user_strength) if user_strength else None,
         coach_country=coach_country, stadium_club=stadium_club, hunger=hunger, chemistry_on=rules is not None,
     )
@@ -79,7 +81,7 @@ async def arena_kickoff(db: AsyncSession, lineup, *, user_strength: int, opponen
         if rules is None:
             return None
         return chemistry_service.compute_chemistry(
-            pairs, ARENA_FORMATION, rules, slot_count=len(SLOTS_BY_CODE),
+            pairs, formation, rules, slot_count=len(slots_by_code),
             coach_country=chemistry_service.coach_country_of(lineup.coach),
             stadium_club=chemistry_service.stadium_club_of(lineup.stadium), **(hooks or {}),
         )

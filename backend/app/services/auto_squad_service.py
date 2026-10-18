@@ -223,7 +223,9 @@ async def auto_arena_lineup(db: AsyncSession, user: User, template_index: int):
     from app.services.game_config_service import get_config
 
     config = await get_config(db)
-    slots = [SlotSpec(s.code, s.category, s.ideal_position) for s in lineup_service.FORMATION_SLOTS]
+    current = await lineup_service.get_active_lineup(db, user, template_index)
+    formation = lineup_service.arena_formation(current.formation)
+    slots = [SlotSpec(s.code, s.category, s.ideal_position) for s in lineup_service.arena_slots(formation)]
     cards = await owned_cards(db, user.id)
     chosen = pick_cards(
         slots, cards, "arena", max_diamonds=config.match_max_diamond_cards, max_path=config.match_max_path_cards,
@@ -231,9 +233,8 @@ async def auto_arena_lineup(db: AsyncSession, user: User, template_index: int):
     require_any(chosen)
     rules = chemistry_service.active_rules(config)
     if rules is not None:
-        current = await lineup_service.get_active_lineup(db, user, template_index)
         chosen = improve_for_chemistry(
-            chosen, slots, cards, lineup_service.ARENA_FORMATION, rules, max_diamonds=config.match_max_diamond_cards,
+            chosen, slots, cards, formation, rules, max_diamonds=config.match_max_diamond_cards,
             max_path=config.match_max_path_cards,
             coach_country=current.coach.country if current.coach else None,
             stadium_club=current.stadium.club if current.stadium else None,
@@ -336,7 +337,7 @@ async def arena_bench_upgrades(db: AsyncSession, user: User, template_index: int
 
     lineup = await lineup_service.get_active_lineup(db, user, template_index)
     config = await get_config(db)
-    slots = [SlotSpec(s.code, s.category, s.ideal_position) for s in lineup_service.FORMATION_SLOTS]
+    slots = [SlotSpec(s.code, s.category, s.ideal_position) for s in lineup_service.arena_slots(lineup.formation)]
     current = {s.slot_code: (s.card.id if s.card else None) for s in lineup.slots}
     return bench_upgrades(
         slots, current, await owned_cards(db, user.id), max_diamonds=config.match_max_diamond_cards,

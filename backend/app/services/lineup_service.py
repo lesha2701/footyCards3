@@ -69,10 +69,31 @@ FORMATION_SLOTS: list[FormationSlot] = [
     FormationSlot("FWD3", "FWD", Position.RW),
 ]
 SLOTS_BY_CODE = {s.code: s for s in FORMATION_SLOTS}
-# Card Arena lineups only ever use FORMATION_SLOTS (Lineup.formation is always
-# "4-3-3"); its codes match club_formation_service's 4-3-3, which is what
-# chemistry_service.FORMATION_LINKS is keyed by.
+# The default Card Arena formation; its codes match club_formation_service's
+# 4-3-3, which is what chemistry_service.FORMATION_LINKS is keyed by.
 ARENA_FORMATION = "4-3-3"
+# Every Card Arena lineup picks one of the club formations (same slot codes,
+# same chemistry links); 4-3-3 keeps FORMATION_SLOTS for byte-for-byte
+# compatibility with lineups saved before formations existed.
+ARENA_FORMATIONS = ("4-3-3", "4-3-3H", "4-4-2", "4-2-3-1", "3-5-2", "5-3-2", "3-4-3")
+
+
+def arena_formation(formation: str | None) -> str:
+    return formation if formation in ARENA_FORMATIONS else ARENA_FORMATION
+
+
+def arena_slots(formation: str | None) -> list[FormationSlot]:
+    formation = arena_formation(formation)
+    if formation == ARENA_FORMATION:
+        return FORMATION_SLOTS
+    # Deferred: club_formation_service imports FormationSlot from here.
+    from app.services.club_formation_service import CLUB_FORMATIONS
+
+    return CLUB_FORMATIONS[formation]
+
+
+def arena_slots_by_code(formation: str | None) -> dict[str, FormationSlot]:
+    return {s.code: s for s in arena_slots(formation)}
 
 # tactic -> (attack_multiplier, defense_multiplier)
 # The attack/defense split of each Card Arena style lives in
@@ -274,9 +295,11 @@ async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
 
     by_slot_code = {lc.slot_code: cards_by_id.get(lc.user_card_id) for lc in lineup_cards}
 
+    formation = arena_formation(lineup.formation)
+    formation_slots = arena_slots(formation)
     slots_out = []
     cards_with_slots = []
-    for slot in FORMATION_SLOTS:
+    for slot in formation_slots:
         card = by_slot_code.get(slot.code)
         slots_out.append(
             LineupSlotOut(
@@ -289,14 +312,14 @@ async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
         if card is not None:
             cards_with_slots.append((card, slot))
 
-    is_complete = len(cards_with_slots) == len(FORMATION_SLOTS)
+    is_complete = len(cards_with_slots) == len(formation_slots)
     coach = lineup.user_coach_card.coach if lineup.user_coach_card else None
     stadium_multiplier = 1.0 + float(lineup.user_stadium_card.stadium.boost_pct) if lineup.user_stadium_card else 1.0
     config = await get_config(db)
     rules = chemistry_service.active_rules(config)
     chemistry = (
         chemistry_service.compute_chemistry(
-            cards_with_slots, ARENA_FORMATION, rules, slot_count=len(FORMATION_SLOTS),
+            cards_with_slots, formation, rules, slot_count=len(formation_slots),
             coach_country=chemistry_service.coach_country_of(coach),
             # Arena has no home/away: the stadium's strength boost always
             # applies, so its «домашний стадион» extra does too.
@@ -319,7 +342,7 @@ async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
         # bonus either).
         strength_bonus = strength - calculate_base_strength(
             cards_with_slots, coach=coach, tactic=lineup.tactic, stadium_multiplier=stadium_multiplier,
-            chemistry=ChemistryResult(formation=ARENA_FORMATION),
+            chemistry=ChemistryResult(formation=formation),
         )
 
     stadium = None
@@ -329,7 +352,7 @@ async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
 
     return LineupOut(
         id=lineup.id, template_index=lineup.template_index, name=lineup.name, is_active=lineup.is_active,
-        formation=lineup.formation, tactic=arena_tactics.resolve_style(lineup.tactic), is_complete=is_complete,
+        formation=formation, tactic=arena_tactics.resolve_style(lineup.tactic), is_complete=is_complete,
         team_strength=strength, max_diamond=config.match_max_diamond_cards, max_path=config.match_max_path_cards,
         coach=EquippedCoachOut(
             id=coach.id, display_name=coach.display_name, rarity=coach.rarity.value,
@@ -347,6 +370,75 @@ async def set_tactic(db: AsyncSession, user: User, tactic: str, template_index: 
     lineup = await _get_template_row(db, user.id, template_index)
     lineup.tactic = tactic
     db.add(lineup)
+    await db.commit()
+    return await get_active_lineup(db, user, lineup.template_index)
+
+
+async def set_formation(db: AsyncSession, user: User, formation: str, template_index: int | None = None) -> LineupOut:
+    """Switches a template to another formation. Every card stays on the
+    pitch when its line still has room: same slot code if it still exists in
+    that line, else a free slot of its line (its ideal position first); a
+    card whose line shrank past it goes back to the bench."""
+    if formation not in ARENA_FORMATIONS:
+        raise ConflictError(f"Неизвестная схема: {formation}")
+    lineup = await _get_template_row(db, user.id, template_index)
+    await db.execute(select(Lineup).where(Lineup.id == lineup.id).with_for_update(of=Lineup))
+    if arena_formation(lineup.formation) == formation:
+        return await get_active_lineup(db, user, lineup.template_index)
+
+    new_slots = arena_slots(formation)
+    rows = (await db.execute(
+        select(LineupCard, UserCard).join(UserCard, UserCard.id == LineupCard.user_card_id)
+        .options(joinedload(UserCard.player)).where(LineupCard.lineup_id == lineup.id)
+    )).unique().all()
+    taken: set[str] = set()
+    moves: dict[int, str | None] = {}
+    by_code = {s.code: s for s in new_slots}
+
+    def fits(card, slot) -> bool:
+        return card.player.position in CATEGORY_POSITIONS[slot.category]
+
+    def ideal(card, slot) -> bool:
+        return on_ideal_position(card.player.position, slot.ideal_position)
+
+    def assign(pick) -> None:
+        for lc, card in rows:
+            if lc.id in moves:
+                continue
+            slot = pick(lc, card)
+            if slot is not None:
+                moves[lc.id] = slot.code
+                taken.add(slot.code)
+
+    def free(card, want_ideal: bool):
+        return next((s for s in new_slots if s.code not in taken and fits(card, s) and (not want_ideal or ideal(card, s))), None)
+
+    # Ideal positions first (own code, then any free one), then the card's
+    # own code in its line, then any free slot of its line — so a right-back
+    # becomes the right wing-back, not the left one that shares his old code.
+    same = lambda lc: by_code.get(lc.slot_code) if lc.slot_code not in taken else None  # noqa: E731
+    assign(lambda lc, card: slot if (slot := same(lc)) is not None and fits(card, slot) and ideal(card, slot) else None)
+    assign(lambda lc, card: free(card, want_ideal=True))
+    assign(lambda lc, card: slot if (slot := same(lc)) is not None and fits(card, slot) else None)
+    assign(lambda lc, card: free(card, want_ideal=False))
+    for lc, _card in rows:
+        moves.setdefault(lc.id, None)
+
+    # Re-insert rather than update in place: swapping two cards' codes
+    # row by row would trip the (lineup_id, slot_code) unique constraint.
+    placed = [(card, moves[lc.id]) for lc, card in rows]
+    for lc, card in rows:
+        if moves[lc.id] is None and lineup.is_active:
+            card.is_in_lineup = False
+            db.add(card)
+        await db.delete(lc)
+    await db.flush()
+    for card, code in placed:
+        if code is not None:
+            db.add(LineupCard(lineup_id=lineup.id, user_card_id=card.id, slot_code=code))
+    # The row is already persistent: no db.add(lineup), whose save-update
+    # cascade would reach the LineupCard rows just deleted above.
+    lineup.formation = formation
     await db.commit()
     return await get_active_lineup(db, user, lineup.template_index)
 
@@ -426,10 +518,12 @@ async def rename_template(db: AsyncSession, user: User, template_index: int, nam
 async def set_lineup(
     db: AsyncSession, user: User, payload: LineupSetRequest, template_index: int | None = None
 ) -> LineupOut:
+    lineup = await _get_template_row(db, user.id, template_index)
+    slots_by_code = arena_slots_by_code(lineup.formation)
     slot_codes_seen = set()
     card_ids_seen = set()
     for slot_in in payload.slots:
-        if slot_in.slot_code not in SLOTS_BY_CODE:
+        if slot_in.slot_code not in slots_by_code:
             raise ConflictError(f"Unknown formation slot: {slot_in.slot_code}")
         if slot_in.slot_code in slot_codes_seen:
             raise ConflictError(f"Duplicate slot in request: {slot_in.slot_code}")
@@ -448,7 +542,7 @@ async def set_lineup(
     player_ids_seen: set[int] = set()
     for slot_in in payload.slots:
         card = cards_by_id[slot_in.user_card_id]
-        slot = SLOTS_BY_CODE[slot_in.slot_code]
+        slot = slots_by_code[slot_in.slot_code]
         if card.owner_id != user.id:
             raise ForbiddenError("You can only use your own cards in your lineup")
         if card.is_locked_by_admin or card.is_locked_in_trade:
@@ -471,8 +565,6 @@ async def set_lineup(
     path_count = sum(1 for card in cards_by_id.values() if _is_path(card))
     if path_count > config.match_max_path_cards:
         raise ConflictError(f"Максимум {config.match_max_path_cards} карт «Академии» в составе")
-
-    lineup = await _get_template_row(db, user.id, template_index)
 
     # Locks the lineup row so two overlapping PUTs for the same template
     # (e.g. tapping a second slot before the first pick's request has

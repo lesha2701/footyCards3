@@ -876,6 +876,7 @@ export default function AdminGamesPage() {
           {field("arena_shot_exponent", "Степень частоты опасных моментов")}
           {field("arena_edge_rating_per_10pct", "Очков рейтинга в каждом розыгрыше за +10% силы")}
           {field("arena_edge_rating_max", "Максимум этих очков")}
+          {field("arena_formation_effect_pct", "Влияние схемы на атаку/защиту, % (100 — 3-4-3 даёт +4%/−4%, 0 — выкл.)")}
         </div>
       </section>
 

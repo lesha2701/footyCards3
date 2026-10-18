@@ -716,6 +716,8 @@ export interface ArenaChances {
 export interface MatchArenaInfo {
   user_style: LineupTactic;
   opponent_style: LineupTactic;
+  user_formation?: string;
+  opponent_formation?: string;
   matchup: ArenaMatchup;
   matchup_bonus_pct: number;
   chances: ArenaChances | null;
@@ -778,8 +780,10 @@ export interface ArenaPreview {
   opponent_division: number;
   opponent_strength: number;
   opponent_style: LineupTactic;
+  opponent_formation: string;
   user_strength: number;
   user_style: LineupTactic;
+  user_formation: string;
   matchup: ArenaMatchup;
   matchup_bonus_pct: number;
   matchup_text: string;

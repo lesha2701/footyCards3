@@ -81,6 +81,8 @@ class Match(Base):
         return {
             "user_style": balance["user_style"],
             "opponent_style": balance["opponent_style"],
+            "user_formation": balance.get("user_formation", "4-3-3"),
+            "opponent_formation": balance.get("opponent_formation", "4-3-3"),
             "matchup": balance["matchup"],
             "matchup_bonus_pct": balance.get("matchup_bonus_pct", 0),
             "chances": state.get("chances"),

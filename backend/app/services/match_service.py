@@ -828,6 +828,15 @@ def _pct_diff(a: float, b: float) -> int:
     return round(abs(a / b - 1) * 100) if b else 0
 
 
+def _tilt_text(formation: str) -> str:
+    attack, _defense = arena_tactics.FORMATION_SHIFT.get(formation, (0, 0))
+    if attack > 0:
+        return "атакующая"
+    if attack < 0:
+        return "оборонительная"
+    return "сбалансированная"
+
+
 def build_report(match: Match, state: dict, events: list, result: MatchResult, forfeited: bool) -> Optional[dict]:
     """The «Разбор матча»: chances before kickoff, both line-ups, the style
     matchup, how the chances went, and a one-line verdict with its reasons.
@@ -884,6 +893,15 @@ def build_report(match: Match, state: dict, events: list, result: MatchResult, f
             + f" ({sign}{balance['matchup_bonus_pct']}% к силе)."
         )
 
+    user_formation = balance.get("user_formation", "4-3-3")
+    opponent_formation = balance.get("opponent_formation", "4-3-3")
+    if user_formation != opponent_formation:
+        reasons.append(
+            f"Схемы: ваша {arena_tactics.formation_label(user_formation)}"
+            f" ({_tilt_text(user_formation)}), у соперника {arena_tactics.formation_label(opponent_formation)}"
+            f" ({_tilt_text(opponent_formation)})."
+        )
+
     gaps = [
         (lines["opponent"].get(key, 0) - lines["user"].get(key, 0), label, key)
         for key, label in _LINES if key in lines["user"] and key in lines["opponent"]
@@ -914,6 +932,8 @@ def build_report(match: Match, state: dict, events: list, result: MatchResult, f
         "opponent_strength": opponent_strength,
         "user_style": balance["user_style"],
         "opponent_style": balance["opponent_style"],
+        "user_formation": user_formation,
+        "opponent_formation": opponent_formation,
         "matchup": balance["matchup"],
         "matchup_bonus_pct": balance["matchup_bonus_pct"],
         "lines": [
@@ -1009,6 +1029,7 @@ class _ArenaOpponent:
     style: str
     lineup: Optional[LineupOut]
     lines: dict
+    formation: str = "4-3-3"
 
 
 async def _resolve_opponent(db: AsyncSession, pending: dict, user_strength: int, user_lines: dict) -> _ArenaOpponent:
@@ -1023,7 +1044,7 @@ async def _resolve_opponent(db: AsyncSession, pending: dict, user_strength: int,
                     user=opponent, name=pending["name"], avatar_url=pending.get("avatar_url"),
                     points=int(pending.get("points", 0)), strength=opponent_lineup.team_strength,
                     style=arena_tactics.resolve_style(opponent_lineup.tactic), lineup=opponent_lineup,
-                    lines=_lines_of(opponent_lineup),
+                    lines=_lines_of(opponent_lineup), formation=opponent_lineup.formation,
                 )
     strength = max(1, round(user_strength * float(pending.get("bot_ratio", 1.0))))
     fwd, defense, gk = _synthesize_bot_ratings(user_lines["FWD"], user_lines["DEF"], user_lines["GK"], strength, user_strength)
@@ -1033,6 +1054,7 @@ async def _resolve_opponent(db: AsyncSession, pending: dict, user_strength: int,
         points=int(pending.get("points", 0)), strength=strength,
         style=arena_tactics.resolve_style(pending.get("bot_style")), lineup=None,
         lines={"GK": gk, "DEF": defense, "MID": mid, "FWD": fwd},
+        formation=pending.get("bot_formation") or "4-3-3",
     )
 
 
@@ -1051,14 +1073,17 @@ async def preview_opponent(db: AsyncSession, user: User) -> ArenaPreviewOut:
     config = await get_config(db)
     lineup = await get_active_lineup(db, user)
     if not lineup.is_complete:
-        raise ConflictError("Complete your starting XI (4-3-3) before playing a match")
+        raise ConflictError("Complete your starting XI before playing a match")
     locked_user = await lock_user_for_update(db, user.id)
     pending = await _pending_opponent(db, locked_user, config)
     await db.commit()
 
     user_lines = _lines_of(lineup)
     opponent = await _resolve_opponent(db, pending, lineup.team_strength, user_lines)
-    balance = arena_tactics.compute_balance(lineup.team_strength, lineup.tactic, opponent.strength, opponent.style, config)
+    balance = arena_tactics.compute_balance(
+        lineup.team_strength, lineup.tactic, opponent.strength, opponent.style, config,
+        user_formation=lineup.formation, opponent_formation=opponent.formation,
+    )
     division = arena_ladder_service.division_info(locked_user, config)
     return ArenaPreviewOut(
         opponent_name=opponent.name,
@@ -1068,8 +1093,10 @@ async def preview_opponent(db: AsyncSession, user: User) -> ArenaPreviewOut:
         opponent_division=arena_ladder_service.division_of(opponent.points, config),
         opponent_strength=opponent.strength,
         opponent_style=opponent.style,
+        opponent_formation=opponent.formation,
         user_strength=lineup.team_strength,
         user_style=balance["user_style"],
+        user_formation=lineup.formation,
         matchup=balance["matchup"],
         matchup_bonus_pct=balance["matchup_bonus_pct"],
         matchup_text=arena_tactics.matchup_text(balance["user_style"], opponent.style),
@@ -1088,7 +1115,7 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
 
     lineup = await get_active_lineup(db, user)
     if not lineup.is_complete:
-        raise ConflictError("Complete your starting XI (4-3-3) before playing a match")
+        raise ConflictError("Complete your starting XI before playing a match")
 
     locked_user = await lock_user_for_update(db, user.id)
     await _ensure_hourly_reset(db, locked_user)
@@ -1131,7 +1158,10 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
         user_gk = kickoff.ratings.get("GK", user_gk)
         user_lines = {**user_lines, "FWD": user_fwd, "DEF": user_def, "GK": user_gk}
 
-    balance = arena_tactics.compute_balance(user_strength, lineup.tactic, opponent_strength, opponent.style, config)
+    balance = arena_tactics.compute_balance(
+        user_strength, lineup.tactic, opponent_strength, opponent.style, config,
+        user_formation=lineup.formation, opponent_formation=opponent.formation,
+    )
     user_attack, _user_defense = split_strength(user_strength, balance["user_style"])
     opponent_attack, _opponent_defense = split_strength(opponent_strength, balance["opponent_style"])
 

@@ -231,3 +231,66 @@ async def test_opponent_is_found_among_arena_players_by_points(client, db_sessio
     assert preview["opponent_name"] == near.full_display_name()
     assert not preview["opponent_is_bot"]
     assert preview["opponent_points"] == 520
+
+
+# --- formations ---------------------------------------------------------------
+
+def test_formation_tilts_chances_but_not_the_strength_edge():
+    config = _config()
+    attacking = arena_tactics.compute_balance(900, "possession", 900, "possession", config, user_formation="3-4-3")
+    defensive = arena_tactics.compute_balance(900, "possession", 900, "possession", config, user_formation="5-3-2")
+    assert attacking["user_shot_weight"] > defensive["user_shot_weight"]
+    assert attacking["opponent_shot_weight"] > defensive["opponent_shot_weight"]
+    assert attacking["edge"] == defensive["edge"] == 0
+    off = arena_tactics.compute_balance(
+        900, "possession", 900, "possession", _config(arena_formation_effect_pct=0), user_formation="3-4-3",
+    )
+    assert off["share"] == pytest.approx(0.5)
+
+
+async def test_changing_formation_keeps_players_in_their_lines(client, db_session, bot_token):
+    headers, user = await _make_user(client, db_session, bot_token, 760010)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    resp = await client.post("/api/v1/lineups/templates/1/formation", headers=headers, json={"formation": "3-5-2"})
+    assert resp.status_code == 200
+    lineup = resp.json()
+    assert lineup["formation"] == "3-5-2"
+    filled = [s for s in lineup["slots"] if s["card"]]
+    by_cat = {cat: sum(1 for s in filled if s["category"] == cat) for cat in ("GK", "DEF", "MID", "FWD")}
+    # 4 DEF -> 3 slots, 3 MID -> all kept (5 slots), 3 FWD -> 2 slots
+    assert by_cat == {"GK": 1, "DEF": 3, "MID": 3, "FWD": 2}
+    assert not lineup["is_complete"] and len(lineup["slots"]) == 11
+
+    # Back to 4-3-3: the kept players return to their lines.
+    back = (await client.post("/api/v1/lineups/templates/1/formation", headers=headers, json={"formation": "4-3-3"})).json()
+    assert back["formation"] == "4-3-3"
+    assert sum(1 for s in back["slots"] if s["card"]) == 9
+
+    # 3-4-3 from the full 4-3-3: the right-back takes the right wing-back
+    # slot, not the left one that shares his old code.
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+    wide = (await client.post("/api/v1/lineups/templates/1/formation", headers=headers, json={"formation": "3-4-3"})).json()
+    by_ideal = {s["ideal_position"]: s["card"] for s in wide["slots"]}
+    assert by_ideal["RWB"] is not None and by_ideal["RWB"]["player"]["position"] == "RB"
+    assert by_ideal["LWB"] is not None and by_ideal["LWB"]["player"]["position"] == "LB"
+
+    bad = await client.post("/api/v1/lineups/templates/1/formation", headers=headers, json={"formation": "2-2-6"})
+    assert bad.status_code == 409
+
+
+async def test_match_and_preview_carry_the_formations(client, db_session, bot_token):
+    headers, user = await _make_user(client, db_session, bot_token, 760011)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+    await client.post("/api/v1/lineups/templates/1/formation", headers=headers, json={"formation": "4-3-3H"})
+    lineup = (await client.get("/api/v1/lineups/active", headers=headers)).json()
+    assert lineup["is_complete"]  # 4-3-3H has the same lines as 4-3-3
+
+    preview = (await client.post("/api/v1/matches/opponent", headers=headers)).json()
+    assert preview["user_formation"] == "4-3-3H"
+    assert preview["opponent_formation"] in arena_tactics.FORMATION_SHIFT
+    match = await _play_to_completion(client, headers)
+    assert match["arena"]["user_formation"] == "4-3-3H"
+    assert match["report"]["user_formation"] == "4-3-3H"

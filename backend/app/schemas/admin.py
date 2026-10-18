@@ -246,6 +246,7 @@ class GameConfigOut(BaseModel):
     arena_shot_exponent: float = 0.8
     arena_edge_rating_per_10pct: float = 2.0
     arena_edge_rating_max: int = 12
+    arena_formation_effect_pct: int = 100
     arena_points_k: int = 40
     arena_points_scale: int = 400
     arena_shield_matches: int = 3
@@ -746,6 +747,7 @@ class GameConfigUpdate(BaseModel):
     arena_shot_exponent: Optional[float] = Field(default=None, ge=0, le=5)
     arena_edge_rating_per_10pct: Optional[float] = Field(default=None, ge=0, le=10)
     arena_edge_rating_max: Optional[int] = Field(default=None, ge=0, le=40)
+    arena_formation_effect_pct: Optional[int] = Field(default=None, ge=0, le=300)
     arena_points_k: Optional[int] = Field(default=None, ge=1, le=200)
     arena_points_scale: Optional[int] = Field(default=None, ge=50, le=2000)
     arena_shield_matches: Optional[int] = Field(default=None, ge=0, le=20)

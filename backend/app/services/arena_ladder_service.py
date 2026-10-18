@@ -175,6 +175,7 @@ async def find_opponent(db: AsyncSession, user: User, config) -> dict:
     # incomplete): strength relative to yours, its own random style.
     pending["bot_ratio"] = round(random.uniform(0.9, 1.1), 3)
     pending["bot_style"] = random.choice(("attacking", "possession", "defensive", "counter"))
+    pending["bot_formation"] = random.choice(("4-3-3", "4-3-3H", "4-4-2", "4-2-3-1", "3-5-2", "5-3-2", "3-4-3"))
     pending["found_at"] = datetime.now(timezone.utc).isoformat()
     return pending
 

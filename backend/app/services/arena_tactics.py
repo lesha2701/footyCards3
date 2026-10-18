@@ -50,6 +50,33 @@ STYLE_SPLIT: dict[str, tuple[float, float]] = {
     "counter": (0.95, 1.05),
 }
 
+# Formation tilt (attack %, defense %) at arena_formation_effect_pct = 100:
+# more forwards / wing-backs up front — a little more attack, a little less
+# cover; a back five or a holding midfielder — the other way round. Always a
+# trade-off (the two numbers cancel out), never a free bonus.
+FORMATION_SHIFT: dict[str, tuple[int, int]] = {
+    "4-3-3": (0, 0),
+    "3-4-3": (4, -4),
+    "4-4-2": (2, -2),
+    "3-5-2": (1, -1),
+    "4-2-3-1": (-1, 1),
+    "4-3-3H": (-2, 2),
+    "5-3-2": (-4, 4),
+}
+FORMATION_LABELS = {"4-3-3H": "4-3-3 (опорник)"}
+
+
+def formation_label(formation: Optional[str]) -> str:
+    return FORMATION_LABELS.get(formation or "4-3-3", formation or "4-3-3")
+
+
+def formation_shift(formation: Optional[str], config) -> tuple[float, float]:
+    """(attack %, defense %) of a formation, scaled by the admin setting."""
+    attack, defense = FORMATION_SHIFT.get(formation or "4-3-3", (0, 0))
+    scale = float(getattr(config, "arena_formation_effect_pct", 100)) / 100
+    return attack * scale, defense * scale
+
+
 # Shot-chance weight of the moment queue at parity (the old fixed weight).
 BASE_SHOT_WEIGHT = 26
 
@@ -76,6 +103,7 @@ def split(strength: float, style: Optional[str]) -> tuple[float, float]:
 
 def compute_balance(
     user_strength: int, user_style: Optional[str], opponent_strength: int, opponent_style: Optional[str], config,
+    user_formation: Optional[str] = None, opponent_formation: Optional[str] = None,
 ) -> dict:
     """Everything the engine needs to make the stronger side win as often as
     it should, frozen at kickoff:
@@ -86,6 +114,10 @@ def compute_balance(
       moment is a real chance (vs flavor) — again attack vs defense;
     - `edge`: rating points added to every user roll and taken from every
       opponent roll, from the overall strength ratio after the matchup.
+
+    The formations tilt each side's attack/defense split a few percent
+    (FORMATION_SHIFT) — they change who gets the chances, not the overall
+    strength ratio behind the rating edge.
     """
     user_style, opponent_style = resolve_style(user_style), resolve_style(opponent_style)
     result = matchup(user_style, opponent_style)
@@ -97,6 +129,12 @@ def compute_balance(
 
     user_attack, user_defense = split(user_eff, user_style)
     opponent_attack, opponent_defense = split(opponent_eff, opponent_style)
+    user_shift = formation_shift(user_formation, config)
+    opponent_shift = formation_shift(opponent_formation, config)
+    user_attack *= 1 + user_shift[0] / 100
+    user_defense *= 1 + user_shift[1] / 100
+    opponent_attack *= 1 + opponent_shift[0] / 100
+    opponent_defense *= 1 + opponent_shift[1] / 100
     user_ratio = user_attack / opponent_defense
     opponent_ratio = opponent_attack / user_defense
 
@@ -115,6 +153,8 @@ def compute_balance(
 
     return {
         "user_style": user_style,
+        "user_formation": user_formation or "4-3-3",
+        "opponent_formation": opponent_formation or "4-3-3",
         "opponent_style": opponent_style,
         "matchup": result,
         "matchup_bonus_pct": int(config.arena_style_matchup_bonus_pct) if result != "neutral" else 0,

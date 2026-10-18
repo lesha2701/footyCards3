@@ -9,11 +9,11 @@ from app.schemas.chemistry import ChemistryOut, ChemistryPreviewRequest
 from app.schemas.lineup import (
     BenchUpgradeOut,
     LineupCoachSetRequest, LineupOut, LineupRenameRequest, LineupSetRequest, LineupStadiumSetRequest,
-    LineupTacticRequest, UserCoachCardOut, UserStadiumCardOut,
+    LineupFormationRequest, LineupTacticRequest, UserCoachCardOut, UserStadiumCardOut,
 )
 from app.services.lineup_service import (
     activate_template, get_active_lineup, preview_chemistry, list_templates, list_user_coach_cards, list_user_stadium_cards,
-    rename_template, set_lineup, set_lineup_coach, set_lineup_stadium, set_tactic,
+    rename_template, set_formation, set_lineup, set_lineup_coach, set_lineup_stadium, set_tactic,
 )
 
 router = APIRouter(prefix="/lineups", tags=["lineups"])
@@ -104,6 +104,15 @@ async def update_template_tactic(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await set_tactic(db, user, payload.tactic, template_index)
+
+
+@router.post("/templates/{template_index}/formation", response_model=LineupOut)
+async def update_template_formation(
+    template_index: int, payload: LineupFormationRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """Another formation; cards stay in their lines where there's room."""
+    return await set_formation(db, user, payload.formation, template_index)
 
 
 @router.put("/templates/{template_index}/coach", response_model=LineupOut)

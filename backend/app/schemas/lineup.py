@@ -75,6 +75,10 @@ class LineupTacticRequest(BaseModel):
     tactic: str
 
 
+class LineupFormationRequest(BaseModel):
+    formation: str
+
+
 class LineupCoachSetRequest(BaseModel):
     user_coach_card_id: Optional[int] = None
 
