@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 import {
   fetchAdminBadges,
   fetchAdminClubEmblemItems,
+  fetchAdminClubShopItems,
   fetchAdminCosmetics,
   fetchAdminPacks,
   fetchAdminSeasons,
   fetchGameConfig,
   saveAdminClubEmblemItem,
+  saveAdminClubShopItem,
+  type AdminClubShopItem,
   saveAdminCosmetic,
   saveAdminSeason,
   updateGameConfig,
@@ -24,7 +27,7 @@ import { RARITY_LABELS } from "@/lib/rarity";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import type { ClubEmblemItem, ClubEmblemKind, Cosmetic, CosmeticKind } from "@/types";
 
-type Tab = "settings" | "cosmetics" | "seasons" | "artifacts" | "emblems";
+type Tab = "settings" | "cosmetics" | "seasons" | "artifacts" | "emblems" | "club_shop";
 const input = "w-full rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none";
 const toast = (msg: string) => useAdminToastStore.getState().push(msg, "success");
 const errText = (err: unknown, fallback: string) => (err instanceof ApiRequestError ? err.message : fallback);
@@ -37,7 +40,7 @@ export default function AdminMonetizationPage() {
     <div className="flex flex-col gap-4">
       <h1 className="font-display text-2xl font-bold">Абонемент, сезон, стиль</h1>
       <div className="flex gap-1 rounded-xl bg-bg-surface p-1">
-        {([["settings", "Настройки"], ["cosmetics", "Косметика"], ["seasons", "Сезоны"], ["artifacts", "Артефакты"], ["emblems", "Эмблемы"]] as [Tab, string][]).map(([id, label]) => (
+        {([["settings", "Настройки"], ["cosmetics", "Косметика"], ["seasons", "Сезоны"], ["artifacts", "Артефакты"], ["emblems", "Эмблемы"], ["club_shop", "Клуб. магазин"]] as [Tab, string][]).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
@@ -52,6 +55,7 @@ export default function AdminMonetizationPage() {
       {tab === "seasons" && <SeasonsTab />}
       {tab === "artifacts" && <AdminArtifactsTab />}
       {tab === "emblems" && <ClubEmblemsTab />}
+      {tab === "club_shop" && <ClubShopTab />}
     </div>
   );
 }
@@ -534,6 +538,86 @@ function ClubEmblemsTab() {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// --- «Клубный магазин» ---------------------------------------------------------------
+
+const NEW_SHOP_ITEM: AdminClubShopItem = {
+  name: "", description: "", price: 5000, weekly_limit: 1, reward: { ...EMPTY_BUNDLE }, is_active: true, sort_order: 0,
+};
+
+function ClubShopTab() {
+  const queryClient = useQueryClient();
+  const { data: items } = useQuery({ queryKey: ["admin-club-shop-items"], queryFn: fetchAdminClubShopItems });
+  const [draft, setDraft] = useState<AdminClubShopItem | null>(null);
+  const save = useMutation({
+    mutationFn: saveAdminClubShopItem,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-club-shop-items"] });
+      setDraft(null);
+      toast("Сохранено");
+    },
+    onError: (err) => useAdminToastStore.getState().push(errText(err, "Не удалось сохранить"), "error"),
+  });
+  if (!items) return <p className="text-sm text-slate-400">Загрузка...</p>;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-slate-400">
+        Клуб покупает товар за свой бюджет, награду (на каждого участника) забирает каждый, кто был в клубе на момент покупки.
+        Лимит — сколько раз в неделю один клуб может купить товар.
+      </p>
+      {items.map((item) => (
+        <button
+          key={item.id}
+          onClick={() => setDraft(item)}
+          className="flex items-center gap-3 rounded-xl border border-white/5 bg-bg-surface p-3 text-left text-sm"
+        >
+          <span className="flex-1 font-semibold">{item.name}</span>
+          <span className="text-xs text-slate-400">{item.price} монет · {item.weekly_limit}/нед.</span>
+          {!item.is_active && <span className="text-xs text-red-400">выкл</span>}
+        </button>
+      ))}
+      <button onClick={() => setDraft({ ...NEW_SHOP_ITEM, reward: { ...EMPTY_BUNDLE } })} className="self-start rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-bg-base">
+        + Товар
+      </button>
+      {draft && (
+        <div className="flex flex-col gap-2 rounded-2xl border border-accent/30 bg-bg-surface p-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Название" className={input} />
+            <input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Описание" className={input} />
+            <label className="flex flex-col gap-0.5">
+              <span className="text-micro text-slate-500">Цена (бюджет клуба)</span>
+              <input type="number" min={1} value={draft.price} onChange={(e) => setDraft({ ...draft, price: Number(e.target.value) })} className={input} />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="text-micro text-slate-500">Покупок в неделю</span>
+              <input type="number" min={1} value={draft.weekly_limit} onChange={(e) => setDraft({ ...draft, weekly_limit: Number(e.target.value) })} className={input} />
+            </label>
+          </div>
+          <p className="text-micro text-slate-500">Награда каждому участнику:</p>
+          <RewardBundleEditor value={draft.reward} onChange={(reward) => setDraft({ ...draft, reward })} />
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1 text-xs">
+              <input type="checkbox" checked={draft.is_active} onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })} /> продаётся
+            </label>
+            <label className="flex items-center gap-1 text-xs text-slate-500">
+              порядок
+              <input type="number" value={draft.sort_order} onChange={(e) => setDraft({ ...draft, sort_order: Number(e.target.value) })} className={`${input} w-16`} />
+            </label>
+            <button onClick={() => setDraft(null)} className="ml-auto rounded-lg bg-white/5 px-3 py-1.5 text-xs">Отмена</button>
+            <button
+              onClick={() => save.mutate(draft)}
+              disabled={!draft.name || save.isPending}
+              className="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-bg-base disabled:opacity-40"
+            >
+              Сохранить
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -66,6 +66,7 @@ import type {
   SuspiciousMatch,
   SuspiciousMemorySession,
   TaskDefinition,
+  RewardBundleInput,
 } from "@/admin/types";
 
 export async function fetchDashboard(): Promise<Dashboard> {
@@ -595,6 +596,29 @@ export async function saveAdminClubEmblemItem(item: ClubEmblemItem): Promise<Clu
   const { data } = await api.put<ClubEmblemItem>(`/admin/club-emblem-items/${id}`, {
     name, coins_price, stars_price, is_active, sort_order,
   });
+  return data;
+}
+
+// --- «Клубный магазин» ---
+export interface AdminClubShopItem {
+  id?: number;
+  name: string;
+  description: string;
+  price: number;
+  weekly_limit: number;
+  reward: RewardBundleInput;
+  is_active: boolean;
+  sort_order: number;
+}
+export async function fetchAdminClubShopItems(): Promise<AdminClubShopItem[]> {
+  const { data } = await api.get<AdminClubShopItem[]>("/admin/club-shop-items");
+  return data;
+}
+export async function saveAdminClubShopItem(item: AdminClubShopItem): Promise<AdminClubShopItem> {
+  const { id, ...body } = item;
+  const { data } = id
+    ? await api.put<AdminClubShopItem>(`/admin/club-shop-items/${id}`, body)
+    : await api.post<AdminClubShopItem>("/admin/club-shop-items", body);
   return data;
 }
 

@@ -102,6 +102,7 @@ const ClubEmblemPage = lazy(() => import("@/pages/ClubEmblemPage"));
 const ClubTreasuryPage = lazy(() => import("@/pages/ClubTreasuryPage"));
 const ClubSurplusPage = lazy(() => import("@/pages/ClubSurplusPage"));
 const ClubWallPage = lazy(() => import("@/pages/ClubWallPage"));
+const ClubShopPage = lazy(() => import("@/pages/ClubShopPage"));
 const ClubSquadPage = lazy(() => import("@/pages/ClubSquadPage"));
 const ClubPacksPage = lazy(() => import("@/pages/ClubPacksPage"));
 const ClubPackOpenPage = lazy(() => import("@/pages/ClubPackOpenPage"));
@@ -297,6 +298,7 @@ export default function App() {
         <Route path="/clubs/treasury" element={<ClubTreasuryPage />} />
         <Route path="/clubs/surplus" element={<ClubSurplusPage />} />
         <Route path="/clubs/wall" element={<ClubWallPage />} />
+        <Route path="/clubs/shop" element={<ClubShopPage />} />
         <Route path="/clubs/packs" element={<ClubPacksPage />} />
         <Route path="/clubs/packs/:packId/open" element={<ClubPackOpenPage />} />
         <Route path="/clubs/games" element={<ClubGamesPage />} />

@@ -86,6 +86,8 @@ class ClubDetailOut(BaseModel):
     can_spend_budget: bool = False
     # «Стена клуба»: posts the requester hasn't seen yet (null for a non-member).
     wall_unread: Optional[int] = None
+    # Club rewards (shop, quests, wars) the requester can still claim.
+    rewards_unclaimed: Optional[int] = None
 
 
 class ClubJoinRequestOut(BaseModel):

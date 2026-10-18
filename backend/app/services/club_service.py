@@ -158,10 +158,15 @@ async def _club_to_detail(db: AsyncSession, club: Club, requester_user_id: Optio
         await _personal_match_earnings(db, requester_user_id) if is_member and requester_user_id is not None else None
     )
     wall_unread = None
+    rewards_unclaimed = None
     if is_member and requester_user_id is not None:
         from app.services.club_wall_service import unread_count
 
-        wall_unread = await unread_count(db, await _get_membership(db, requester_user_id))
+        from app.services.club_reward_service import unclaimed_count
+
+        requester_membership = await _get_membership(db, requester_user_id)
+        wall_unread = await unread_count(db, requester_membership)
+        rewards_unclaimed = await unclaimed_count(db, requester_membership)
     return ClubDetailOut(
         id=club.id, name=club.name, description=club.description, club_type=club.club_type,
         logo_shape=club.logo_shape, logo_color=club.logo_color, emblem=emblem_out(club), captain_id=club.captain_id,
@@ -173,6 +178,7 @@ async def _club_to_detail(db: AsyncSession, club: Club, requester_user_id: Optio
         personal_match_earnings=personal_match_earnings,
         budget_treasurer_only=club.budget_treasurer_only,
         wall_unread=wall_unread,
+        rewards_unclaimed=rewards_unclaimed,
         can_spend_budget=bool(my_membership) and (
             my_membership.role in (ClubRole.captain, ClubRole.vice_captain, ClubRole.treasurer)
             or (my_membership.role == ClubRole.assistant and not club.budget_treasurer_only)

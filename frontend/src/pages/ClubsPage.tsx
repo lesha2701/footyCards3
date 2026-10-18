@@ -8,7 +8,7 @@ import { SponsorBadge } from "@/components/clubs/SponsorBadge";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconBrain, IconChart, IconChat, IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconShirt, IconStar, IconSwap, IconTarget, IconTrophy, IconUsers } from "@/components/icons";
+import { IconBrain, IconChart, IconChat, IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconShirt, IconShop, IconStar, IconSwap, IconTarget, IconTrophy, IconUsers } from "@/components/icons";
 import {
   acceptJoinRequest,
   applyToTournament,
@@ -321,6 +321,17 @@ function ClubHome({ club }: { club: Club }) {
         )}
       </div>
       {claimError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{claimError}</p>}
+
+      <button
+        onClick={() => navigate("/clubs/shop")}
+        className={`flex items-center gap-2 rounded-2xl p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99] ${club.rewards_unclaimed ? "bg-gradient-to-r from-accent-lime/20 to-bg-surface" : "bg-bg-surface"}`}
+      >
+        <IconShop size={16} className="text-accent-lime" />
+        <span className="flex-1">Клубный магазин</span>
+        {!!club.rewards_unclaimed && (
+          <span className="rounded-full bg-accent-lime px-2 py-0.5 text-micro font-bold text-bg-base">🎁 {club.rewards_unclaimed}</span>
+        )}
+      </button>
 
       <button
         onClick={() => navigate("/clubs/wall")}

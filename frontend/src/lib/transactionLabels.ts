@@ -12,6 +12,7 @@ export const TX_TYPE_LABELS: Record<string, string> = {
   club_pass_reward: "Клубный абонемент",
   season_pass_reward: "Сезонный пропуск",
   starter_offer_reward: "Стартовое предложение",
+  club_reward: "Награда клуба",
   pack_purchase: "Покупка пака",
   card_sale: "Продажа карточки",
   game_reward: "Награда за игру",

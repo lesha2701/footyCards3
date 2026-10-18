@@ -1926,6 +1926,7 @@ export interface Club {
   budget_treasurer_only?: boolean;
   can_spend_budget?: boolean;
   wall_unread?: number | null;
+  rewards_unclaimed?: number | null;
   cups_count: number;
   stars_count: number;
   daily_reward_seconds_remaining: number | null;
@@ -1975,6 +1976,23 @@ export interface ClubWall {
   can_announce: boolean;
   can_pin: boolean;
   announce_cooldown_seconds: number;
+}
+
+export interface ClubReward {
+  id: number;
+  source: string;
+  title: string;
+  reward: RewardBundle;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface ClubShop {
+  budget: number;
+  can_buy: boolean;
+  member_count: number;
+  items: { id: number; name: string; description: string; price: number; weekly_limit: number; bought_this_week: number; reward: RewardBundle }[];
+  rewards: ClubReward[];
 }
 
 export interface ClubSurplus {

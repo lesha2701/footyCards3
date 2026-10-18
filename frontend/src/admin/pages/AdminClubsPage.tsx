@@ -247,6 +247,7 @@ const BUDGET_TYPE_LABELS: Record<AdminClubBudgetTransactionType, string> = {
   stars_donation: "Казна за Stars",
   emblem_purchase: "Эмблема",
   card_sale: "Продажа лишних карт",
+  shop_purchase: "Клубный магазин",
 };
 
 /** Paged club budget history (20 per page): every income and spending with

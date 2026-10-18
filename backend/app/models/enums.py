@@ -62,6 +62,7 @@ class CardSource(str, enum.Enum):
     gift = "gift"
     wheel = "wheel"
     league_reward = "league_reward"
+    club_reward = "club_reward"
 
 
 class TransactionType(str, enum.Enum):
@@ -128,6 +129,7 @@ class TransactionType(str, enum.Enum):
     season_pass_reward = "season_pass_reward"
     starter_offer_reward = "starter_offer_reward"
     artifact_purchase = "artifact_purchase"
+    club_reward = "club_reward"
 
 
 class GiftKind(str, enum.Enum):
@@ -178,6 +180,7 @@ class ClubBudgetTransactionType(str, enum.Enum):
     stars_donation = "stars_donation"
     emblem_purchase = "emblem_purchase"
     card_sale = "card_sale"
+    shop_purchase = "shop_purchase"
 
 
 class TournamentQueueStatus(str, enum.Enum):
@@ -342,6 +345,7 @@ class NotificationType(str, enum.Enum):
     club_donation = "club_donation"
     club_member_joined = "club_member_joined"
     club_announcement = "club_announcement"
+    club_reward_available = "club_reward_available"
     daily_reward_available = "daily_reward_available"
     special_pack = "special_pack"
     admin_message = "admin_message"

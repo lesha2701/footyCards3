@@ -62,6 +62,7 @@ _TYPE_PATHS = {
     "club_captain_transferred": "/clubs",
     "club_member_joined": "/clubs",
     "club_announcement": "/clubs/wall",
+    "club_reward_available": "/clubs/shop",
     "friend_request": "/friends",
     "friend_accepted": "/friends",
     "trade_wish_available": "/trades/finder",

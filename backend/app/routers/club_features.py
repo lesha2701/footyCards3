@@ -11,13 +11,17 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.club import BudgetPolicyIn, ClubDetailOut, MemberRoleIn
 from app.schemas.club_emblem import ClubDonationInvoiceIn, ClubEmblemStateOut, ClubEmblemUpdateIn, ClubTreasuryOut
+from app.schemas.club_reward import ClubShopOut
 from app.schemas.club_wall import ClubPostIn, ClubWallOut
+from app.schemas.monetization import GrantedRewardsOut
 from app.schemas.club_market import ClubSurplusOut, SurplusCardIdsIn, SurplusExchangeOut, SurplusSellOut
 from app.schemas.stars import StarsInvoiceCreateOut
 from app.services import (
     club_emblem_service,
     club_market_service,
+    club_reward_service,
     club_service,
+    club_shop_service,
     club_treasury_service,
     club_wall_service,
     shop_product_service,
@@ -102,3 +106,18 @@ async def delete_wall_post(post_id: int, db: AsyncSession = Depends(get_db), use
 @router.post("/me/wall/{post_id}/pin", response_model=ClubWallOut)
 async def pin_wall_post(post_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_wall_service.toggle_pin(db, user, post_id)
+
+
+@router.get("/me/shop", response_model=ClubShopOut)
+async def get_shop(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_shop_service.get_shop(db, user)
+
+
+@router.post("/me/shop/{item_id}/buy", response_model=ClubShopOut)
+async def buy_shop_item(item_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_shop_service.buy(db, user, item_id)
+
+
+@router.post("/me/rewards/{grant_id}/claim", response_model=GrantedRewardsOut)
+async def claim_club_reward(grant_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_reward_service.claim(db, user, grant_id)

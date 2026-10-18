@@ -8,7 +8,8 @@ from app.models.monetization import Artifact
 from app.models.user import User
 from app.schemas.monetization import ArtifactGrantIn, ArtifactIn, ArtifactTopGiftIn, CosmeticIn, CosmeticOut, SeasonAdminOut, SeasonIn
 from app.schemas.club_emblem import ClubEmblemItemIn, ClubEmblemItemOut
-from app.services import artifact_service, club_emblem_service, cosmetic_service, season_pass_service
+from app.schemas.club_reward import ClubShopItemAdminOut, ClubShopItemIn
+from app.services import artifact_service, club_emblem_service, club_shop_service, cosmetic_service, season_pass_service
 from app.services.admin_log_service import log_action
 from app.services.image_service import delete_artifact_image, save_artifact_image
 
@@ -164,6 +165,37 @@ async def update_club_emblem_item(
 ):
     out = await club_emblem_service.admin_update(db, item_id, payload)
     await log_action(db, admin.id, "update_club_emblem_item", "club_emblem_item", item_id,
+                     new_value=payload.model_dump(mode="json"), ip_address=_ip(request))
+    await db.commit()
+    return out
+
+
+# --- «Клубный магазин» ----------------------------------------------------------------
+
+
+@router.get("/club-shop-items", response_model=list[ClubShopItemAdminOut])
+async def list_club_shop_items(db: AsyncSession = Depends(get_db)):
+    return await club_shop_service.admin_list(db)
+
+
+@router.post("/club-shop-items", response_model=ClubShopItemAdminOut)
+async def create_club_shop_item(
+    payload: ClubShopItemIn, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin),
+):
+    out = await club_shop_service.admin_save(db, None, payload)
+    await log_action(db, admin.id, "create_club_shop_item", "club_shop_item", out.id,
+                     new_value=payload.model_dump(mode="json"), ip_address=_ip(request))
+    await db.commit()
+    return out
+
+
+@router.put("/club-shop-items/{item_id}", response_model=ClubShopItemAdminOut)
+async def update_club_shop_item(
+    item_id: int, payload: ClubShopItemIn, request: Request,
+    db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin),
+):
+    out = await club_shop_service.admin_save(db, item_id, payload)
+    await log_action(db, admin.id, "update_club_shop_item", "club_shop_item", item_id,
                      new_value=payload.model_dump(mode="json"), ip_address=_ip(request))
     await db.commit()
     return out

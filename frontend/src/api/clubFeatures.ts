@@ -1,5 +1,16 @@
 import { api } from "@/lib/api";
-import type { ClubCard, ClubEmblem, ClubEmblemState, ClubLogoShape, ClubSurplus, ClubTreasury, ClubWall, StarsInvoiceCreate } from "@/types";
+import type {
+  ClubCard,
+  ClubEmblem,
+  ClubEmblemState,
+  ClubLogoShape,
+  ClubShop,
+  ClubSurplus,
+  ClubTreasury,
+  ClubWall,
+  GrantedRewards,
+  StarsInvoiceCreate,
+} from "@/types";
 
 export async function fetchClubEmblem(): Promise<ClubEmblemState> {
   const { data } = await api.get<ClubEmblemState>("/clubs/me/emblem");
@@ -65,5 +76,20 @@ export async function deleteClubPost(postId: number): Promise<ClubWall> {
 
 export async function pinClubPost(postId: number): Promise<ClubWall> {
   const { data } = await api.post<ClubWall>(`/clubs/me/wall/${postId}/pin`);
+  return data;
+}
+
+export async function fetchClubShop(): Promise<ClubShop> {
+  const { data } = await api.get<ClubShop>("/clubs/me/shop");
+  return data;
+}
+
+export async function buyClubShopItem(itemId: number): Promise<ClubShop> {
+  const { data } = await api.post<ClubShop>(`/clubs/me/shop/${itemId}/buy`);
+  return data;
+}
+
+export async function claimClubReward(grantId: number): Promise<GrantedRewards> {
+  const { data } = await api.post<GrantedRewards>(`/clubs/me/rewards/${grantId}/claim`);
   return data;
 }

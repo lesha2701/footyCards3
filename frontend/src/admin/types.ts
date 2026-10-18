@@ -863,7 +863,8 @@ export type AdminClubBudgetTransactionType =
   | "league_reward"
   | "stars_donation"
   | "emblem_purchase"
-  | "card_sale";
+  | "card_sale"
+  | "shop_purchase";
 
 export interface AdminClubTournament {
   tournament_id: number;
