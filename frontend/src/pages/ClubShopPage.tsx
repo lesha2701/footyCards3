@@ -73,7 +73,7 @@ export default function ClubShopPage() {
                 <p className="text-micro text-ink-mist-dim">
                   {SOURCE_LABELS[r.source] ?? "Клуб"} · до {new Date(r.expires_at).toLocaleDateString("ru-RU")}
                 </p>
-                <div className="mt-1"><RewardBundleChips bundle={r.reward} compact /></div>
+                <div className="mt-1"><RewardBundleChips bundle={r.reward} /></div>
               </div>
               <button
                 onClick={() => claim.mutate({ id: r.id, title: r.title })}
@@ -104,7 +104,7 @@ export default function ClubShopPage() {
               <div className="min-w-0 flex-1">
                 <p className="font-display text-sm font-bold text-ink-chalk">{item.name}</p>
                 {item.description && <p className="text-caption text-ink-mist">{item.description}</p>}
-                <div className="mt-1.5"><RewardBundleChips bundle={item.reward} compact /></div>
+                <div className="mt-1.5"><RewardBundleChips bundle={item.reward} /></div>
                 <p className="mt-1 text-micro text-ink-mist-dim">
                   каждому участнику · на этой неделе {item.bought_this_week}/{item.weekly_limit}
                 </p>

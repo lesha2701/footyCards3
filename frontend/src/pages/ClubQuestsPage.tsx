@@ -56,7 +56,7 @@ export default function ClubQuestsPage() {
                 </span>
               )}
               <span>каждому:</span>
-              <RewardBundleChips bundle={q.reward} compact />
+              <RewardBundleChips bundle={q.reward} />
             </div>
           </div>
         );

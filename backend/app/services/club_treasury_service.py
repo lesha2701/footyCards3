@@ -63,12 +63,19 @@ async def get_treasury(db: AsyncSession, user: User) -> ClubTreasuryOut:
     member_ids = set((await db.execute(
         select(ClubMember.user_id).where(ClubMember.club_id == club.id)
     )).scalars())
+    # Aggregate first, then join: User eager-joins its badge, which a GROUP BY
+    # over the users row would reject on Postgres.
+    totals = (
+        select(
+            ClubDonation.user_id, func.sum(ClubDonation.stars).label("stars"),
+            func.sum(ClubDonation.coins).label("coins"), func.min(ClubDonation.id).label("first_id"),
+        )
+        .where(ClubDonation.club_id == club.id).group_by(ClubDonation.user_id).subquery()
+    )
     patron_rows = (await db.execute(
-        select(User, func.sum(ClubDonation.stars).label("stars"), func.sum(ClubDonation.coins))
-        .join(ClubDonation, ClubDonation.user_id == User.id)
-        .where(ClubDonation.club_id == club.id)
-        .group_by(User.id)
-        .order_by(func.sum(ClubDonation.stars).desc(), func.min(ClubDonation.id))
+        select(User, totals.c.stars, totals.c.coins)
+        .join(totals, totals.c.user_id == User.id)
+        .order_by(totals.c.stars.desc(), totals.c.first_id)
         .limit(PATRONS_LIMIT)
     )).all()
     patrons = [
