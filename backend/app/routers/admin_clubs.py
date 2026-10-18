@@ -26,6 +26,7 @@ from app.schemas.admin_clubs import (
 )
 from app.services.admin_log_service import log_action
 from app.services.club_budget_service import credit_club_budget, debit_club_budget
+from app.services.club_emblem_service import emblem_out
 from app.services.club_service import _lock_club
 
 router = APIRouter(prefix="/admin/clubs", tags=["admin"], dependencies=[Depends(get_current_admin)])
@@ -59,7 +60,7 @@ async def list_clubs(search: Optional[str] = None, params: PageParams = Depends(
     items = [
         AdminClubSummaryOut(
             id=c.id, name=c.name, club_type=c.club_type, logo_shape=c.logo_shape, logo_color=c.logo_color,
-            captain_id=c.captain_id, member_count=count, budget=c.budget, cups_count=c.cups_count,
+            emblem=emblem_out(c), captain_id=c.captain_id, member_count=count, budget=c.budget, cups_count=c.cups_count,
             stars_count=c.stars_count, founded_at=c.founded_at, is_disbanded=c.is_disbanded,
         )
         for c, count in rows
@@ -84,7 +85,7 @@ async def get_club(club_id: int, db: AsyncSession = Depends(get_db)):
     count = await _member_count(db, club_id)
     return AdminClubDetailOut(
         id=club.id, name=club.name, club_type=club.club_type, logo_shape=club.logo_shape, logo_color=club.logo_color,
-        captain_id=club.captain_id, member_count=count, budget=club.budget, cups_count=club.cups_count,
+        emblem=emblem_out(club), captain_id=club.captain_id, member_count=count, budget=club.budget, cups_count=club.cups_count,
         stars_count=club.stars_count, founded_at=club.founded_at, is_disbanded=club.is_disbanded,
         description=club.description, invite_code=club.invite_code,
         last_tournament_applied_at=club.last_tournament_applied_at,

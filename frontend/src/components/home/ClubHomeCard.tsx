@@ -43,7 +43,7 @@ export default function ClubHomeCard() {
   return (
     <section className="rounded-3xl bg-bg-surface p-4">
       <button onClick={() => navigate("/clubs")} className="flex w-full items-center gap-3 text-left">
-        <ClubLogo shape={club.logo_shape} color={club.logo_color} size={44} />
+        <ClubLogo shape={club.logo_shape} color={club.logo_color} emblem={club.emblem} size={44} />
         <span className="min-w-0 flex-1">
           <span className="block font-mono text-micro uppercase tracking-wider text-ink-mist">Мой клуб</span>
           <span className="block truncate font-display text-base font-bold text-ink-chalk">{club.name}</span>

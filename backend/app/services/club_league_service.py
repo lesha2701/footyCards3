@@ -53,6 +53,7 @@ from app.schemas.club_league import (
     ClubLeagueRowOut,
 )
 from app.services.club_budget_service import credit_club_budget
+from app.services.club_emblem_service import emblem_out
 from app.services.club_service import _get_membership, _lock_club
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
@@ -207,7 +208,7 @@ async def _rows(db: AsyncSession, entries: list[tuple[int, int, int, int]]) -> l
     return [
         ClubLeagueRowOut(
             rank=rank, club_id=cid, name=clubs[cid].name, logo_shape=clubs[cid].logo_shape,
-            logo_color=clubs[cid].logo_color, points=points, reward=reward,
+            logo_color=clubs[cid].logo_color, emblem=emblem_out(clubs[cid]), points=points, reward=reward,
         )
         for rank, cid, points, reward in entries
         if cid in clubs

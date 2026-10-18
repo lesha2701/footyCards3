@@ -3,10 +3,12 @@ import { useEffect, useState } from "react";
 
 import {
   fetchAdminBadges,
+  fetchAdminClubEmblemItems,
   fetchAdminCosmetics,
   fetchAdminPacks,
   fetchAdminSeasons,
   fetchGameConfig,
+  saveAdminClubEmblemItem,
   saveAdminCosmetic,
   saveAdminSeason,
   updateGameConfig,
@@ -19,9 +21,10 @@ import CosmeticPreview from "@/components/shop/CosmeticPreview";
 import { ApiRequestError } from "@/lib/api";
 import { KIND_LABELS, STYLE_OPTIONS } from "@/lib/cosmetics";
 import { RARITY_LABELS } from "@/lib/rarity";
-import type { Cosmetic, CosmeticKind } from "@/types";
+import { ClubLogo } from "@/components/clubs/ClubLogo";
+import type { ClubEmblemItem, ClubEmblemKind, Cosmetic, CosmeticKind } from "@/types";
 
-type Tab = "settings" | "cosmetics" | "seasons" | "artifacts";
+type Tab = "settings" | "cosmetics" | "seasons" | "artifacts" | "emblems";
 const input = "w-full rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none";
 const toast = (msg: string) => useAdminToastStore.getState().push(msg, "success");
 const errText = (err: unknown, fallback: string) => (err instanceof ApiRequestError ? err.message : fallback);
@@ -34,7 +37,7 @@ export default function AdminMonetizationPage() {
     <div className="flex flex-col gap-4">
       <h1 className="font-display text-2xl font-bold">Абонемент, сезон, стиль</h1>
       <div className="flex gap-1 rounded-xl bg-bg-surface p-1">
-        {([["settings", "Настройки"], ["cosmetics", "Косметика"], ["seasons", "Сезоны"], ["artifacts", "Артефакты"]] as [Tab, string][]).map(([id, label]) => (
+        {([["settings", "Настройки"], ["cosmetics", "Косметика"], ["seasons", "Сезоны"], ["artifacts", "Артефакты"], ["emblems", "Эмблемы"]] as [Tab, string][]).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
@@ -48,6 +51,7 @@ export default function AdminMonetizationPage() {
       {tab === "cosmetics" && <CosmeticsTab />}
       {tab === "seasons" && <SeasonsTab />}
       {tab === "artifacts" && <AdminArtifactsTab />}
+      {tab === "emblems" && <ClubEmblemsTab />}
     </div>
   );
 }
@@ -164,6 +168,26 @@ function SettingsTab() {
           {num("season_xp_per_game", "XP за игру с наградой")}
           {num("season_xp_per_daily_claim", "XP за награду календаря")}
           {num("season_premium_status", "+ статуса за премиум сезона")}
+        </div>
+      </section>
+      <section className={block}>
+        <p className="font-display text-sm font-bold">Клубы: эмблемы и «Казна за Stars»</p>
+        {flag("club_emblems_enabled", "Магазин элементов эмблем открыт (цены — вкладка «Эмблемы»)")}
+        {flag("club_donation_enabled", "Пополнение казны клуба звёздами (запуск)")}
+        <div className={grid}>
+          {num("club_donation_coins_per_star", "Монет в казну за 1 ⭐")}
+          {num("club_sponsor_silver_stars", "Серебряный меценат, всего ⭐")}
+          {num("club_sponsor_gold_stars", "Золотой меценат, всего ⭐")}
+          <label className="flex flex-col gap-0.5">
+            <span className="text-micro text-slate-500">Суммы пополнения, ⭐ через запятую</span>
+            <input
+              defaultValue={(value("club_donation_star_options") as number[]).join(", ")}
+              onBlur={(e) =>
+                set("club_donation_star_options", e.target.value.split(",").map((v) => Number(v.trim())).filter((v) => v > 0))
+              }
+              className={input}
+            />
+          </label>
         </div>
       </section>
       <section className={block}>
@@ -424,6 +448,88 @@ function SeasonsTab() {
         </button>
       ))}
       {seasons && !seasons.length && <p className="text-sm text-slate-400">Сезонов пока нет</p>}
+    </div>
+  );
+}
+
+// --- club emblem catalog -------------------------------------------------------------
+
+const EMBLEM_KIND_LABELS: Record<ClubEmblemKind, string> = {
+  color2: "Второй цвет", pattern: "Узор", letters: "Буквы", symbol: "Символ", outline: "Обводка", effect: "Анимация",
+};
+
+function ClubEmblemsTab() {
+  const queryClient = useQueryClient();
+  const { data: items } = useQuery({ queryKey: ["admin-club-emblem-items"], queryFn: fetchAdminClubEmblemItems });
+  const [drafts, setDrafts] = useState<Record<number, ClubEmblemItem>>({});
+  const save = useMutation({
+    mutationFn: saveAdminClubEmblemItem,
+    onSuccess: (item) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-club-emblem-items"] });
+      setDrafts((d) => {
+        const next = { ...d };
+        delete next[item.id];
+        return next;
+      });
+      toast("Сохранено");
+    },
+    onError: (err) => useAdminToastStore.getState().push(errText(err, "Не удалось сохранить"), "error"),
+  });
+  if (!items) return <p className="text-sm text-slate-400">Загрузка...</p>;
+  const edit = (item: ClubEmblemItem, patch: Partial<ClubEmblemItem>) =>
+    setDrafts((d) => ({ ...d, [item.id]: { ...(d[item.id] ?? item), ...patch } }));
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-slate-400">
+        Цена в монетах списывается из бюджета клуба (капитан или ассистент), в звёздах — платит любой участник.
+        Укажи одну из цен, другую оставь 0. Внешний вид элементов задан в коде.
+      </p>
+      {items.map((item) => {
+        const d = drafts[item.id] ?? item;
+        return (
+          <div key={item.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-white/5 bg-bg-surface p-2">
+            <ClubLogo
+              shape="shield"
+              color="#3B82F6"
+              size={36}
+              emblem={{
+                color2: item.kind === "color2" ? "#F97316" : null,
+                pattern: item.kind === "pattern" ? item.style_key : null,
+                symbol: item.kind === "symbol" ? item.style_key : null,
+                letters: item.kind === "letters" ? "ФК" : null,
+                outline: item.kind === "outline" ? item.style_key : null,
+                outline_thin: false,
+                effect: item.kind === "effect" ? item.style_key : null,
+              }}
+            />
+            <span className="w-24 text-micro text-slate-500">{EMBLEM_KIND_LABELS[item.kind]}</span>
+            <input value={d.name} onChange={(e) => edit(item, { name: e.target.value })} className={`${input} w-40`} />
+            <label className="flex items-center gap-1 text-micro text-slate-500">
+              монеты
+              <input type="number" min={0} value={d.coins_price} onChange={(e) => edit(item, { coins_price: Number(e.target.value) })} className={`${input} w-24`} />
+            </label>
+            <label className="flex items-center gap-1 text-micro text-slate-500">
+              ⭐
+              <input type="number" min={0} value={d.stars_price} onChange={(e) => edit(item, { stars_price: Number(e.target.value) })} className={`${input} w-20`} />
+            </label>
+            <label className="flex items-center gap-1 text-micro text-slate-500">
+              порядок
+              <input type="number" value={d.sort_order} onChange={(e) => edit(item, { sort_order: Number(e.target.value) })} className={`${input} w-16`} />
+            </label>
+            <label className="flex items-center gap-1 text-xs">
+              <input type="checkbox" checked={d.is_active} onChange={(e) => edit(item, { is_active: e.target.checked })} /> продаётся
+            </label>
+            <button
+              onClick={() => save.mutate(d)}
+              disabled={!drafts[item.id] || save.isPending}
+              className="ml-auto rounded-lg bg-accent px-3 py-1 text-xs font-bold text-bg-base disabled:opacity-40"
+            >
+              Сохранить
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

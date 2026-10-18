@@ -21,6 +21,15 @@ class Club(Base):
     )
     # Hex color string, e.g. "#3B82F6" — validated by ClubCreate/ClubUpdate schemas, not here.
     logo_color: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Emblem constructor (club_emblem_service): each one needs its catalog item
+    # unlocked; null = not used. logo_outline_thin is a free variant of an outline.
+    logo_color2: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    logo_pattern: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    logo_symbol: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    logo_letters: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
+    logo_outline: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    logo_outline_thin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    logo_effect: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     captain_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     # Permanent, unique deep-link token — see club_service.join_by_invite.
     invite_code: Mapped[str] = mapped_column(String(16), unique=True, nullable=False, index=True)

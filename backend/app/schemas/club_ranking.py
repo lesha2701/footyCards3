@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from app.models.enums import ClubLogoShape
+from app.schemas.club_emblem import ClubEmblemOut
 
 
 class ClubRankingMetric(str, enum.Enum):
@@ -17,6 +18,7 @@ class ClubRankingEntry(BaseModel):
     name: str
     logo_shape: ClubLogoShape
     logo_color: str
+    emblem: Optional[ClubEmblemOut] = None
     value: int
 
 

@@ -55,6 +55,7 @@ _TYPE_PATHS = {
     "player_career_event": "/play/player-career",
     "my_player_duel": "/my-player",
     "club_league_reward": "/clubs/league",
+    "club_donation": "/clubs/treasury",
     "friend_request": "/friends",
     "friend_accepted": "/friends",
     "trade_wish_available": "/trades/finder",

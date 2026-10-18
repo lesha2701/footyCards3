@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.models.enums import ClubJoinRequestStatus, ClubLogoShape, ClubRole, ClubType
+from app.schemas.club_emblem import ClubEmblemOut, SponsorTier
 
 
 class ClubCreationCostOut(BaseModel):
@@ -36,6 +37,8 @@ class ClubMemberOut(BaseModel):
     role: ClubRole
     joined_at: datetime
     personal_reward_enabled: bool
+    # «Казна за Stars»: bronze/silver/gold patron of this club, null = never donated.
+    sponsor_tier: Optional[SponsorTier] = None
 
 
 class ClubSummaryOut(BaseModel):
@@ -44,6 +47,7 @@ class ClubSummaryOut(BaseModel):
     club_type: ClubType
     logo_shape: ClubLogoShape
     logo_color: str
+    emblem: Optional[ClubEmblemOut] = None
     member_count: int
     cups_count: int
     stars_count: int
@@ -56,6 +60,7 @@ class ClubDetailOut(BaseModel):
     club_type: ClubType
     logo_shape: ClubLogoShape
     logo_color: str
+    emblem: Optional[ClubEmblemOut] = None
     captain_id: int
     founded_at: datetime
     member_count: int

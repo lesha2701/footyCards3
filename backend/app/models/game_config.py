@@ -931,3 +931,16 @@ class GameConfig(TimestampMixin, Base):
     artifact_slots: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     artifact_max_opp_pct: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     artifact_max_stat: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    # Club emblem constructor (club_emblem_service): prices live on the
+    # club_emblem_items catalog; this only switches the shop off.
+    club_emblems_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # «Казна за Stars»: any member tops up the club budget. Coins per Star,
+    # the Stars amounts offered, and the total Stars for the silver / gold
+    # sponsor badge (any donation at all = bronze). Off until launched.
+    club_donation_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    club_donation_coins_per_star: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    club_donation_star_options: Mapped[list] = mapped_column(
+        JSON, default=lambda: [25, 50, 100, 250, 500], nullable=False,
+    )
+    club_sponsor_silver_stars: Mapped[int] = mapped_column(Integer, default=250, nullable=False)
+    club_sponsor_gold_stars: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)

@@ -169,3 +169,29 @@ body {
   0%, 55% { transform: translateX(-130%); }
   100% { transform: translateX(130%); }
 }
+
+/* Club emblem effects (components/clubs/ClubLogo.tsx) — bought with Stars.
+   SVG-only, transform/opacity animations; static under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .emblem-shine-band { animation: emblem-shine 3.2s ease-in-out infinite; }
+  .emblem-flame { transform-box: fill-box; transform-origin: 50% 100%; animation: emblem-flame 0.9s ease-in-out infinite alternate; }
+  .emblem-flame-2 { transform-box: fill-box; transform-origin: 50% 100%; animation: emblem-flame 0.7s ease-in-out infinite alternate-reverse; }
+  .emblem-sparkle { transform-box: fill-box; transform-origin: center; animation: emblem-sparkle 1.8s ease-in-out infinite; }
+  .emblem-neon { animation: emblem-neon 2.4s ease-in-out infinite; }
+}
+@keyframes emblem-shine {
+  0%, 50% { transform: translateX(-120px); }
+  100% { transform: translateX(120px); }
+}
+@keyframes emblem-flame {
+  0% { transform: scaleY(0.82) scaleX(1.04); opacity: 0.75; }
+  100% { transform: scaleY(1.12) scaleX(0.96); opacity: 1; }
+}
+@keyframes emblem-sparkle {
+  0%, 100% { transform: scale(0.2); opacity: 0; }
+  50% { transform: scale(1); opacity: 1; }
+}
+@keyframes emblem-neon {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}

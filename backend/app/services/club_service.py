@@ -14,6 +14,7 @@ from app.models.enums import ClubBudgetTransactionType, ClubJoinRequestStatus, C
 from app.models.user import User
 from app.schemas.club import ClubCreate, ClubDetailOut, ClubJoinRequestOut, ClubMemberOut, ClubSummaryOut
 from app.services.club_budget_service import credit_club_budget
+from app.services.club_emblem_service import emblem_out
 from app.services.club_squad_service import seed_starting_squad
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
@@ -67,6 +68,10 @@ def _require_manager(membership: ClubMember) -> None:
 
 
 async def _members_with_users(db: AsyncSession, club_id: int) -> list[ClubMemberOut]:
+    from app.services.club_treasury_service import stars_by_user, tier_for
+
+    config = await get_config(db)
+    donated = await stars_by_user(db, club_id)
     rows = (
         await db.execute(
             select(ClubMember, User)
@@ -79,6 +84,7 @@ async def _members_with_users(db: AsyncSession, club_id: int) -> list[ClubMember
         ClubMemberOut(
             user_id=u.id, username=u.username, first_name=u.first_name, avatar_url=u.avatar_url,
             role=m.role, joined_at=m.joined_at, personal_reward_enabled=m.personal_reward_enabled,
+            sponsor_tier=tier_for(donated.get(u.id, 0), config),
         )
         for m, u in rows
     ]
@@ -131,7 +137,7 @@ async def _club_to_detail(db: AsyncSession, club: Club, requester_user_id: Optio
     )
     return ClubDetailOut(
         id=club.id, name=club.name, description=club.description, club_type=club.club_type,
-        logo_shape=club.logo_shape, logo_color=club.logo_color, captain_id=club.captain_id,
+        logo_shape=club.logo_shape, logo_color=club.logo_color, emblem=emblem_out(club), captain_id=club.captain_id,
         founded_at=club.founded_at, member_count=len(members), budget=club.budget,
         cups_count=club.cups_count, stars_count=club.stars_count, members=members,
         invite_code=club.invite_code if is_member else None,
@@ -194,7 +200,7 @@ async def list_clubs(db: AsyncSession, search: Optional[str]) -> list[ClubSummar
     return [
         ClubSummaryOut(
             id=c.id, name=c.name, club_type=c.club_type, logo_shape=c.logo_shape,
-            logo_color=c.logo_color, member_count=count,
+            logo_color=c.logo_color, emblem=emblem_out(c), member_count=count,
             cups_count=c.cups_count, stars_count=c.stars_count,
         )
         for c, count in rows

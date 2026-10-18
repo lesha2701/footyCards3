@@ -34,7 +34,7 @@ function Row({ row, mine }: { row: ClubLeagueRow; mine: boolean }) {
       <span className={`w-6 text-center font-mono text-sm font-bold ${row.rank <= 3 ? "text-accent-lime" : "text-ink-mist"}`}>
         {row.rank}
       </span>
-      <ClubLogo shape={row.logo_shape} color={row.logo_color} size={28} />
+      <ClubLogo shape={row.logo_shape} color={row.logo_color} emblem={row.emblem} size={28} />
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-chalk">{row.name}</span>
       {row.reward > 0 && (
         <span className="flex items-center gap-0.5 font-mono text-caption text-ink-mist">

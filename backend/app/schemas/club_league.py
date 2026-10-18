@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from app.models.enums import ClubLogoShape
+from app.schemas.club_emblem import ClubEmblemOut
 
 
 class ClubLeagueRowOut(BaseModel):
@@ -12,6 +13,7 @@ class ClubLeagueRowOut(BaseModel):
     name: str
     logo_shape: ClubLogoShape
     logo_color: str
+    emblem: Optional[ClubEmblemOut] = None
     points: int
     # Budget reward for this place (projected for the current week, paid for a past one).
     reward: int

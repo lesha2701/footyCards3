@@ -10,6 +10,7 @@ import type {
   Coach,
   ClubPack,
   CoinPackage,
+  ClubEmblemItem,
   Cosmetic,
   DiamondUpgradeTier,
   Gift,
@@ -581,6 +582,19 @@ export async function fetchCalendarTemplate(): Promise<CalendarTemplateDay[]> {
 }
 export async function updateCalendarTemplate(days: CalendarTemplateDay[]): Promise<CalendarTemplateDay[]> {
   const { data } = await api.put<CalendarTemplateDay[]>("/admin/login-calendar", { days });
+  return data;
+}
+
+// --- Club emblem constructor catalog ---
+export async function fetchAdminClubEmblemItems(): Promise<ClubEmblemItem[]> {
+  const { data } = await api.get<ClubEmblemItem[]>("/admin/club-emblem-items");
+  return data;
+}
+export async function saveAdminClubEmblemItem(item: ClubEmblemItem): Promise<ClubEmblemItem> {
+  const { id, name, coins_price, stars_price, is_active, sort_order } = item;
+  const { data } = await api.put<ClubEmblemItem>(`/admin/club-emblem-items/${id}`, {
+    name, coins_price, stars_price, is_active, sort_order,
+  });
   return data;
 }
 

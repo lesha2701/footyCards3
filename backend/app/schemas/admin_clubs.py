@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 from app.core.pagination import Page
 
 from app.models.enums import ClubBudgetTransactionType, ClubLogoShape, ClubRole, ClubType, TournamentStatus
+from app.schemas.club_emblem import ClubEmblemOut
 
 
 class AdminClubSummaryOut(BaseModel):
@@ -14,6 +15,7 @@ class AdminClubSummaryOut(BaseModel):
     club_type: ClubType
     logo_shape: ClubLogoShape
     logo_color: str
+    emblem: Optional[ClubEmblemOut] = None
     captain_id: int
     member_count: int
     budget: int

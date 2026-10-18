@@ -34,7 +34,7 @@ export function ClubPreviewPopup({ clubId, onClose }: { clubId: number | null; o
             {isLoading && <p className="text-sm text-ink-mist">Загрузка...</p>}
             {club && (
               <div className="flex flex-col items-center gap-3 text-center">
-                <ClubLogo shape={club.logo_shape} color={club.logo_color} size={64} />
+                <ClubLogo shape={club.logo_shape} color={club.logo_color} emblem={club.emblem} size={64} />
                 <p className="font-display text-lg font-bold text-ink-chalk">{club.name}</p>
                 <p className="text-xs text-ink-mist-dim">
                   С {new Date(club.founded_at).toLocaleDateString("ru-RU")} · {club.member_count}/11 участников

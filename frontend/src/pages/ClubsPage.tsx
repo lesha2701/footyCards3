@@ -4,10 +4,11 @@ import { useNavigate } from "react-router-dom";
 
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import { ClubPreviewPopup } from "@/components/clubs/ClubPreviewPopup";
+import { SponsorBadge } from "@/components/clubs/SponsorBadge";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconBrain, IconChart, IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconStar, IconTarget, IconTrophy, IconUsers } from "@/components/icons";
+import { IconBrain, IconChart, IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconShirt, IconStar, IconTarget, IconTrophy, IconUsers } from "@/components/icons";
 import {
   acceptJoinRequest,
   appointAssistant,
@@ -108,7 +109,7 @@ function ClubBrowseList() {
               onClick={() => setPreviewClubId(c.id)}
               className="flex flex-1 items-center gap-3 text-left"
             >
-              <ClubLogo shape={c.logo_shape} color={c.logo_color} size={40} />
+              <ClubLogo shape={c.logo_shape} color={c.logo_color} emblem={c.emblem} size={40} />
               <div className="flex-1">
                 <p className="font-display text-sm font-bold text-ink-chalk">{c.name}</p>
                 <p className="text-xs text-ink-mist-dim">{c.member_count}/11 участников</p>
@@ -209,7 +210,9 @@ function ClubHome({ club }: { club: Club }) {
     <div className="flex flex-col gap-4">
       <div className="rounded-2xl bg-bg-surface p-4">
         <div className="flex items-center gap-3">
-          <ClubLogo shape={club.logo_shape} color={club.logo_color} size={56} />
+          <button onClick={() => navigate("/clubs/emblem")} className="shrink-0 active:scale-95" aria-label="Эмблема клуба">
+            <ClubLogo shape={club.logo_shape} color={club.logo_color} emblem={club.emblem} size={56} />
+          </button>
           <div className="flex-1">
             <h1 className="font-display text-xl font-bold text-ink-chalk">{club.name}</h1>
             <p className="text-xs text-ink-mist-dim">{club.member_count}/11 участников · {ROLE_LABELS[club.my_role ?? "member"]}</p>
@@ -279,6 +282,29 @@ function ClubHome({ club }: { club: Club }) {
         )}
       </div>
       {claimError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{claimError}</p>}
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => navigate("/clubs/treasury")}
+          className="flex items-center gap-2 rounded-2xl bg-gradient-to-br from-amber-400/15 to-bg-surface p-3 text-left active:scale-[0.99]"
+        >
+          <IconStar size={16} className="shrink-0 text-amber-300" />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-ink-chalk">Казна</span>
+            <span className="block text-caption text-ink-mist">Пополнить звёздами</span>
+          </span>
+        </button>
+        <button
+          onClick={() => navigate("/clubs/emblem")}
+          className="flex items-center gap-2 rounded-2xl bg-gradient-to-br from-accent-cyan/15 to-bg-surface p-3 text-left active:scale-[0.99]"
+        >
+          <IconShirt size={16} className="shrink-0 text-accent-cyan" />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-ink-chalk">Эмблема</span>
+            <span className="block text-caption text-ink-mist">{isCaptain ? "Конструктор" : "Посмотреть"}</span>
+          </span>
+        </button>
+      </div>
 
       {(tournamentCurrent?.status === "active" || tournamentCurrent?.status === "completed") && tournamentCurrent.tournament_id && (
         <button
@@ -489,7 +515,10 @@ function ClubHome({ club }: { club: Club }) {
         <p className="font-display text-sm font-bold text-ink-chalk">Участники</p>
         {club.members.map((m) => (
           <div key={m.user_id} className="flex items-center justify-between rounded-xl bg-bg-surface p-3">
-            <span className="text-sm text-ink-chalk">{m.username ?? m.first_name ?? `#${m.user_id}`} · {ROLE_LABELS[m.role]}</span>
+            <span className="flex min-w-0 items-center gap-1.5 text-sm text-ink-chalk">
+              <span className="truncate">{m.username ?? m.first_name ?? `#${m.user_id}`} · {ROLE_LABELS[m.role]}</span>
+              {m.sponsor_tier && <SponsorBadge tier={m.sponsor_tier} />}
+            </span>
             <div className="flex gap-2">
               {isCaptain && m.role === "member" && m.user_id !== userId && assistantCount < MAX_ASSISTANTS && (
                 <button

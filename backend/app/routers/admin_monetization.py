@@ -7,7 +7,8 @@ from app.database import get_db
 from app.models.monetization import Artifact
 from app.models.user import User
 from app.schemas.monetization import ArtifactGrantIn, ArtifactIn, ArtifactTopGiftIn, CosmeticIn, CosmeticOut, SeasonAdminOut, SeasonIn
-from app.services import artifact_service, cosmetic_service, season_pass_service
+from app.schemas.club_emblem import ClubEmblemItemIn, ClubEmblemItemOut
+from app.services import artifact_service, club_emblem_service, cosmetic_service, season_pass_service
 from app.services.admin_log_service import log_action
 from app.services.image_service import delete_artifact_image, save_artifact_image
 
@@ -144,5 +145,25 @@ async def gift_artifact_to_top_donors(
     out = await artifact_service.gift_to_top_donors(db, artifact_id, payload.top, payload.message)
     await log_action(db, admin.id, "gift_artifact_top_donors", "artifact", artifact_id,
                      new_value={**payload.model_dump(), **out}, ip_address=_ip(request))
+    await db.commit()
+    return out
+
+
+# --- club emblem constructor catalog ---------------------------------------------------
+
+
+@router.get("/club-emblem-items", response_model=list[ClubEmblemItemOut])
+async def list_club_emblem_items(db: AsyncSession = Depends(get_db)):
+    return await club_emblem_service.admin_list(db)
+
+
+@router.put("/club-emblem-items/{item_id}", response_model=ClubEmblemItemOut)
+async def update_club_emblem_item(
+    item_id: int, payload: ClubEmblemItemIn, request: Request,
+    db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin),
+):
+    out = await club_emblem_service.admin_update(db, item_id, payload)
+    await log_action(db, admin.id, "update_club_emblem_item", "club_emblem_item", item_id,
+                     new_value=payload.model_dump(mode="json"), ip_address=_ip(request))
     await db.commit()
     return out

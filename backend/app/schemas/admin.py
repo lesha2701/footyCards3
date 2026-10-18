@@ -618,6 +618,12 @@ class GameConfigOut(BaseModel):
     artifact_slots: int = 3
     artifact_max_opp_pct: int = 5
     artifact_max_stat: int = 6
+    club_emblems_enabled: bool = True
+    club_donation_enabled: bool = False
+    club_donation_coins_per_star: int = 15
+    club_donation_star_options: list[int] = []
+    club_sponsor_silver_stars: int = 250
+    club_sponsor_gold_stars: int = 1000
     trade_send_min_account_age_days: int = 3
     trade_send_min_active_days: int = 2
     trade_daily_coins_receive_cap: int = 3000
@@ -1155,6 +1161,14 @@ class GameConfigUpdate(BaseModel):
     artifact_slots: Optional[int] = Field(default=None, ge=0, le=10)
     artifact_max_opp_pct: Optional[int] = Field(default=None, ge=0, le=50)
     artifact_max_stat: Optional[int] = Field(default=None, ge=0, le=50)
+    club_emblems_enabled: Optional[bool] = None
+    club_donation_enabled: Optional[bool] = None
+    club_donation_coins_per_star: Optional[int] = Field(default=None, ge=1, le=10000)
+    club_donation_star_options: Optional[list[Annotated[int, Field(ge=1, le=10000)]]] = Field(
+        default=None, min_length=1, max_length=8,
+    )
+    club_sponsor_silver_stars: Optional[int] = Field(default=None, ge=1, le=1000000)
+    club_sponsor_gold_stars: Optional[int] = Field(default=None, ge=1, le=1000000)
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod

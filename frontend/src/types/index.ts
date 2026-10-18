@@ -1764,6 +1764,68 @@ export type ClubType = "open" | "closed";
 export type ClubRole = "captain" | "assistant" | "member";
 export type ClubLogoShape = "shield" | "circle" | "hexagon" | "star" | "diamond" | "banner" | "crest" | "chevron";
 
+/** Paid layers on top of logo_shape/logo_color (club_emblem_service). */
+export interface ClubEmblem {
+  color2: string | null;
+  pattern: string | null;
+  symbol: string | null;
+  letters: string | null;
+  outline: string | null;
+  outline_thin: boolean;
+  effect: string | null;
+}
+
+export type ClubEmblemKind = "color2" | "pattern" | "letters" | "symbol" | "outline" | "effect";
+export type ClubSponsorTier = "bronze" | "silver" | "gold";
+
+export interface ClubEmblemItem {
+  id: number;
+  kind: ClubEmblemKind;
+  style_key: string;
+  name: string;
+  coins_price: number;
+  stars_price: number;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface ClubEmblemState {
+  enabled: boolean;
+  club_id: number;
+  logo_shape: ClubLogoShape;
+  logo_color: string;
+  emblem: ClubEmblem;
+  items: (ClubEmblemItem & { unlocked: boolean })[];
+  budget: number;
+  can_edit: boolean;
+  can_spend_budget: boolean;
+}
+
+export interface ClubPatron {
+  user_id: number;
+  username: string | null;
+  first_name: string | null;
+  avatar_url: string | null;
+  stars: number;
+  coins: number;
+  tier: ClubSponsorTier;
+  is_member: boolean;
+}
+
+export interface ClubTreasury {
+  enabled: boolean;
+  club_id: number;
+  budget: number;
+  coins_per_star: number;
+  star_options: number[];
+  silver_stars: number;
+  gold_stars: number;
+  my_stars: number;
+  my_tier: ClubSponsorTier | null;
+  patrons: ClubPatron[];
+  recent: { user_id: number; username: string | null; first_name: string | null; stars: number; coins: number; created_at: string }[];
+}
+
 export interface ClubMember {
   user_id: number;
   username: string | null;
@@ -1772,6 +1834,7 @@ export interface ClubMember {
   role: ClubRole;
   joined_at: string;
   personal_reward_enabled: boolean;
+  sponsor_tier?: ClubSponsorTier | null;
 }
 
 export interface ClubLeagueRow {
@@ -1780,6 +1843,7 @@ export interface ClubLeagueRow {
   name: string;
   logo_shape: ClubLogoShape;
   logo_color: string;
+  emblem?: ClubEmblem | null;
   points: number;
   reward: number;
 }
@@ -1838,6 +1902,7 @@ export interface ClubSummary {
   club_type: ClubType;
   logo_shape: ClubLogoShape;
   logo_color: string;
+  emblem?: ClubEmblem | null;
   member_count: number;
   cups_count: number;
   stars_count: number;
@@ -1850,6 +1915,7 @@ export interface Club {
   club_type: ClubType;
   logo_shape: ClubLogoShape;
   logo_color: string;
+  emblem?: ClubEmblem | null;
   captain_id: number;
   founded_at: string;
   member_count: number;
@@ -1962,6 +2028,7 @@ export interface ClubRankingEntry {
   name: string;
   logo_shape: ClubLogoShape;
   logo_color: string;
+  emblem?: ClubEmblem | null;
   value: number;
 }
 

@@ -133,6 +133,12 @@ export interface GameConfig {
   artifact_slots: number;
   artifact_max_opp_pct: number;
   artifact_max_stat: number;
+  club_emblems_enabled: boolean;
+  club_donation_enabled: boolean;
+  club_donation_coins_per_star: number;
+  club_donation_star_options: number[];
+  club_sponsor_silver_stars: number;
+  club_sponsor_gold_stars: number;
   club_pass_frame_cosmetic_id: number | null;
   club_pass_badge_id: number | null;
   club_pass_ad_free: boolean;
@@ -803,6 +809,7 @@ export interface AdminClub {
   club_type: "open" | "closed";
   logo_shape: "shield" | "circle" | "hexagon" | "star" | "diamond" | "banner" | "crest" | "chevron";
   logo_color: string;
+  emblem?: import("@/types").ClubEmblem | null;
   captain_id: number;
   member_count: number;
   budget: number;

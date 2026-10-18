@@ -169,6 +169,8 @@ class ClubBudgetTransactionType(str, enum.Enum):
     admin_adjustment = "admin_adjustment"
     club_position_match_reward = "club_position_match_reward"
     league_reward = "league_reward"
+    stars_donation = "stars_donation"
+    emblem_purchase = "emblem_purchase"
 
 
 class TournamentQueueStatus(str, enum.Enum):
@@ -329,6 +331,7 @@ class NotificationType(str, enum.Enum):
     trade_offer_cancelled = "trade_offer_cancelled"
     trade_offer_expired = "trade_offer_expired"
     trade_wish_available = "trade_wish_available"
+    club_donation = "club_donation"
     daily_reward_available = "daily_reward_available"
     special_pack = "special_pack"
     admin_message = "admin_message"

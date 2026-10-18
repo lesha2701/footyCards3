@@ -49,6 +49,7 @@ from app.routers import (
     path,
     academy,
     career,
+    club_features,
     clubs,
     player_tournaments,
     collection,
@@ -160,6 +161,7 @@ app.include_router(share.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(leaderboard.router, prefix=API_PREFIX)
 app.include_router(leagues.router, prefix=API_PREFIX)
+app.include_router(club_features.router, prefix=API_PREFIX)
 app.include_router(clubs.router, prefix=API_PREFIX)
 app.include_router(player_tournaments.router, prefix=API_PREFIX)
 app.include_router(notifications.router, prefix=API_PREFIX)

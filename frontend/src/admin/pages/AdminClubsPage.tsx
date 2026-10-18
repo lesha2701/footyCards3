@@ -55,7 +55,7 @@ export default function AdminClubsPage() {
               <tr key={c.id} className="border-t border-white/5">
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <ClubLogo shape={c.logo_shape} color={c.logo_color} size={24} />
+                    <ClubLogo shape={c.logo_shape} color={c.logo_color} emblem={c.emblem} size={24} />
                     {c.name}
                   </div>
                 </td>
