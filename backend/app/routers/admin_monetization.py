@@ -8,8 +8,16 @@ from app.models.monetization import Artifact
 from app.models.user import User
 from app.schemas.monetization import ArtifactGrantIn, ArtifactIn, ArtifactTopGiftIn, CosmeticIn, CosmeticOut, SeasonAdminOut, SeasonIn
 from app.schemas.club_emblem import ClubEmblemItemIn, ClubEmblemItemOut
+from app.schemas.club_quest import ClubQuestAdminOut, ClubQuestIn
 from app.schemas.club_reward import ClubShopItemAdminOut, ClubShopItemIn
-from app.services import artifact_service, club_emblem_service, club_shop_service, cosmetic_service, season_pass_service
+from app.services import (
+    artifact_service,
+    club_emblem_service,
+    club_quest_service,
+    club_shop_service,
+    cosmetic_service,
+    season_pass_service,
+)
 from app.services.admin_log_service import log_action
 from app.services.image_service import delete_artifact_image, save_artifact_image
 
@@ -196,6 +204,37 @@ async def update_club_shop_item(
 ):
     out = await club_shop_service.admin_save(db, item_id, payload)
     await log_action(db, admin.id, "update_club_shop_item", "club_shop_item", item_id,
+                     new_value=payload.model_dump(mode="json"), ip_address=_ip(request))
+    await db.commit()
+    return out
+
+
+# --- «Задания недели» клуба ---------------------------------------------------------
+
+
+@router.get("/club-quests", response_model=list[ClubQuestAdminOut])
+async def list_club_quests(db: AsyncSession = Depends(get_db)):
+    return await club_quest_service.admin_list(db)
+
+
+@router.post("/club-quests", response_model=ClubQuestAdminOut)
+async def create_club_quest(
+    payload: ClubQuestIn, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin),
+):
+    out = await club_quest_service.admin_save(db, None, payload)
+    await log_action(db, admin.id, "create_club_quest", "club_quest_template", out.id,
+                     new_value=payload.model_dump(mode="json"), ip_address=_ip(request))
+    await db.commit()
+    return out
+
+
+@router.put("/club-quests/{template_id}", response_model=ClubQuestAdminOut)
+async def update_club_quest(
+    template_id: int, payload: ClubQuestIn, request: Request,
+    db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin),
+):
+    out = await club_quest_service.admin_save(db, template_id, payload)
+    await log_action(db, admin.id, "update_club_quest", "club_quest_template", template_id,
                      new_value=payload.model_dump(mode="json"), ip_address=_ip(request))
     await db.commit()
     return out

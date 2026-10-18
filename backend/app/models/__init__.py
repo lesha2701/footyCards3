@@ -29,6 +29,7 @@ from app.models.club_daily_claim import ClubDailyClaim
 from app.models.club_emblem import ClubDonation, ClubEmblemItem, ClubEmblemUnlock
 from app.models.club_wall import ClubPost
 from app.models.club_reward import ClubRewardClaim, ClubRewardGrant, ClubShopItem, ClubShopPurchase
+from app.models.club_quest import ClubQuestCompletion, ClubQuestTemplate
 from app.models.club_league import ClubLeagueResult, ClubLeagueWeek
 from app.models.club_lineup import ClubLineup, ClubLineupCard
 from app.models.club_pack import ClubPack, ClubPackRarityProbability
@@ -120,6 +121,8 @@ __all__ = [
     "ClubEmblemItem",
     "ClubEmblemUnlock",
     "ClubPost",
+    "ClubQuestCompletion",
+    "ClubQuestTemplate",
     "ClubRewardClaim",
     "ClubRewardGrant",
     "ClubShopItem",

@@ -143,6 +143,7 @@ export interface GameConfig {
   club_card_sell_pct: number;
   club_card_exchange_count: number;
   club_announcement_cooldown_minutes: number;
+  club_quests_enabled: boolean;
   club_pass_frame_cosmetic_id: number | null;
   club_pass_badge_id: number | null;
   club_pass_ad_free: boolean;
@@ -864,7 +865,8 @@ export type AdminClubBudgetTransactionType =
   | "stars_donation"
   | "emblem_purchase"
   | "card_sale"
-  | "shop_purchase";
+  | "shop_purchase"
+  | "quest_reward";
 
 export interface AdminClubTournament {
   tournament_id: number;

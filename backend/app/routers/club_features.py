@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.club import BudgetPolicyIn, ClubDetailOut, MemberRoleIn
 from app.schemas.club_emblem import ClubDonationInvoiceIn, ClubEmblemStateOut, ClubEmblemUpdateIn, ClubTreasuryOut
+from app.schemas.club_quest import ClubQuestsOut
 from app.schemas.club_reward import ClubShopOut
 from app.schemas.club_wall import ClubPostIn, ClubWallOut
 from app.schemas.monetization import GrantedRewardsOut
@@ -19,6 +20,7 @@ from app.schemas.stars import StarsInvoiceCreateOut
 from app.services import (
     club_emblem_service,
     club_market_service,
+    club_quest_service,
     club_reward_service,
     club_service,
     club_shop_service,
@@ -121,3 +123,8 @@ async def buy_shop_item(item_id: int, db: AsyncSession = Depends(get_db), user: 
 @router.post("/me/rewards/{grant_id}/claim", response_model=GrantedRewardsOut)
 async def claim_club_reward(grant_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_reward_service.claim(db, user, grant_id)
+
+
+@router.get("/me/quests", response_model=ClubQuestsOut)
+async def get_quests(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_quest_service.get_quests(db, user)

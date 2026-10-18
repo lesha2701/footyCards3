@@ -1987,6 +1987,14 @@ export interface ClubReward {
   expires_at: string;
 }
 
+export interface ClubQuests {
+  enabled: boolean;
+  week_start: string;
+  ends_at: string;
+  quests: { id: number; title: string; metric: "games" | "packs" | "tasks"; target: number; progress: number; completed: boolean; reward_budget: number; reward: RewardBundle }[];
+  members: { user_id: number; name: string; games: number; packs: number; tasks: number }[];
+}
+
 export interface ClubShop {
   budget: number;
   can_buy: boolean;

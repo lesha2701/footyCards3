@@ -628,6 +628,7 @@ class GameConfigOut(BaseModel):
     club_card_sell_pct: int = 100
     club_card_exchange_count: int = 5
     club_announcement_cooldown_minutes: int = 60
+    club_quests_enabled: bool = True
     trade_send_min_account_age_days: int = 3
     trade_send_min_active_days: int = 2
     trade_daily_coins_receive_cap: int = 3000
@@ -1177,6 +1178,7 @@ class GameConfigUpdate(BaseModel):
     club_card_sell_pct: Optional[int] = Field(default=None, ge=0, le=1000)
     club_card_exchange_count: Optional[int] = Field(default=None, ge=2, le=20)
     club_announcement_cooldown_minutes: Optional[int] = Field(default=None, ge=0, le=10080)
+    club_quests_enabled: Optional[bool] = None
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod

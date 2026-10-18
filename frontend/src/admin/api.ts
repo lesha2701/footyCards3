@@ -622,6 +622,29 @@ export async function saveAdminClubShopItem(item: AdminClubShopItem): Promise<Ad
   return data;
 }
 
+// --- «Задания недели» клуба ---
+export interface AdminClubQuest {
+  id?: number;
+  title: string;
+  metric: "games" | "packs" | "tasks";
+  target_per_member: number;
+  reward_budget: number;
+  reward: RewardBundleInput;
+  is_active: boolean;
+  sort_order: number;
+}
+export async function fetchAdminClubQuests(): Promise<AdminClubQuest[]> {
+  const { data } = await api.get<AdminClubQuest[]>("/admin/club-quests");
+  return data;
+}
+export async function saveAdminClubQuest(item: AdminClubQuest): Promise<AdminClubQuest> {
+  const { id, ...body } = item;
+  const { data } = id
+    ? await api.put<AdminClubQuest>(`/admin/club-quests/${id}`, body)
+    : await api.post<AdminClubQuest>("/admin/club-quests", body);
+  return data;
+}
+
 // --- Cosmetics & seasons ---
 export async function fetchAdminCosmetics(): Promise<Cosmetic[]> {
   const { data } = await api.get<Cosmetic[]>("/admin/cosmetics");

@@ -4,13 +4,16 @@ import { useEffect, useState } from "react";
 import {
   fetchAdminBadges,
   fetchAdminClubEmblemItems,
+  fetchAdminClubQuests,
   fetchAdminClubShopItems,
   fetchAdminCosmetics,
   fetchAdminPacks,
   fetchAdminSeasons,
   fetchGameConfig,
   saveAdminClubEmblemItem,
+  saveAdminClubQuest,
   saveAdminClubShopItem,
+  type AdminClubQuest,
   type AdminClubShopItem,
   saveAdminCosmetic,
   saveAdminSeason,
@@ -27,7 +30,7 @@ import { RARITY_LABELS } from "@/lib/rarity";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import type { ClubEmblemItem, ClubEmblemKind, Cosmetic, CosmeticKind } from "@/types";
 
-type Tab = "settings" | "cosmetics" | "seasons" | "artifacts" | "emblems" | "club_shop";
+type Tab = "settings" | "cosmetics" | "seasons" | "artifacts" | "emblems" | "club_shop" | "club_quests";
 const input = "w-full rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none";
 const toast = (msg: string) => useAdminToastStore.getState().push(msg, "success");
 const errText = (err: unknown, fallback: string) => (err instanceof ApiRequestError ? err.message : fallback);
@@ -40,7 +43,7 @@ export default function AdminMonetizationPage() {
     <div className="flex flex-col gap-4">
       <h1 className="font-display text-2xl font-bold">Абонемент, сезон, стиль</h1>
       <div className="flex gap-1 rounded-xl bg-bg-surface p-1">
-        {([["settings", "Настройки"], ["cosmetics", "Косметика"], ["seasons", "Сезоны"], ["artifacts", "Артефакты"], ["emblems", "Эмблемы"], ["club_shop", "Клуб. магазин"]] as [Tab, string][]).map(([id, label]) => (
+        {([["settings", "Настройки"], ["cosmetics", "Косметика"], ["seasons", "Сезоны"], ["artifacts", "Артефакты"], ["emblems", "Эмблемы"], ["club_shop", "Клуб. магазин"], ["club_quests", "Клуб. задания"]] as [Tab, string][]).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
@@ -56,6 +59,7 @@ export default function AdminMonetizationPage() {
       {tab === "artifacts" && <AdminArtifactsTab />}
       {tab === "emblems" && <ClubEmblemsTab />}
       {tab === "club_shop" && <ClubShopTab />}
+      {tab === "club_quests" && <ClubQuestsTab />}
     </div>
   );
 }
@@ -179,6 +183,7 @@ function SettingsTab() {
         {flag("club_emblems_enabled", "Магазин элементов эмблем открыт (цены — вкладка «Эмблемы»)")}
         {flag("club_donation_enabled", "Пополнение казны клуба звёздами (запуск)")}
         {flag("club_card_market_enabled", "«Лишние карты»: продажа в казну и обмен")}
+        {flag("club_quests_enabled", "Задания недели клубов (сами задания — вкладка «Клуб. задания»)")}
         <div className={grid}>
           {num("club_donation_coins_per_star", "Монет в казну за 1 ⭐")}
           {num("club_sponsor_silver_stars", "Серебряный меценат, всего ⭐")}
@@ -613,6 +618,81 @@ function ClubShopTab() {
               disabled={!draft.name || save.isPending}
               className="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-bg-base disabled:opacity-40"
             >
+              Сохранить
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- «Задания недели» клуба ----------------------------------------------------------
+
+const QUEST_METRICS: Record<AdminClubQuest["metric"], string> = { games: "Игры / матчи", packs: "Платные паки", tasks: "Задания" };
+const NEW_QUEST: AdminClubQuest = {
+  title: "", metric: "games", target_per_member: 5, reward_budget: 1000, reward: { ...EMPTY_BUNDLE }, is_active: true, sort_order: 0,
+};
+
+function ClubQuestsTab() {
+  const queryClient = useQueryClient();
+  const { data: quests } = useQuery({ queryKey: ["admin-club-quests"], queryFn: fetchAdminClubQuests });
+  const [draft, setDraft] = useState<AdminClubQuest | null>(null);
+  const save = useMutation({
+    mutationFn: saveAdminClubQuest,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-club-quests"] });
+      setDraft(null);
+      toast("Сохранено");
+    },
+    onError: (err) => useAdminToastStore.getState().push(errText(err, "Не удалось сохранить"), "error"),
+  });
+  if (!quests) return <p className="text-sm text-slate-400">Загрузка...</p>;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-slate-400">
+        Каждое активное задание — общее для каждого клуба на неделю лиги. Цель = «на участника» × число участников клуба.
+        Считается та же активность, что и в лиге клубов. Выполнили — бюджет клуба получает награду, а каждый участник забирает свою.
+      </p>
+      {quests.map((q) => (
+        <button key={q.id} onClick={() => setDraft(q)} className="flex items-center gap-3 rounded-xl border border-white/5 bg-bg-surface p-3 text-left text-sm">
+          <span className="flex-1 font-semibold">{q.title}</span>
+          <span className="text-xs text-slate-400">{QUEST_METRICS[q.metric]} · {q.target_per_member}/участника · казна +{q.reward_budget}</span>
+          {!q.is_active && <span className="text-xs text-red-400">выкл</span>}
+        </button>
+      ))}
+      <button onClick={() => setDraft({ ...NEW_QUEST, reward: { ...EMPTY_BUNDLE } })} className="self-start rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-bg-base">
+        + Задание
+      </button>
+      {draft && (
+        <div className="flex flex-col gap-2 rounded-2xl border border-accent/30 bg-bg-surface p-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="Название" className={input} />
+            <select value={draft.metric} onChange={(e) => setDraft({ ...draft, metric: e.target.value as AdminClubQuest["metric"] })} className={input}>
+              {Object.entries(QUEST_METRICS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            <label className="flex flex-col gap-0.5">
+              <span className="text-micro text-slate-500">Цель на участника</span>
+              <input type="number" min={1} value={draft.target_per_member} onChange={(e) => setDraft({ ...draft, target_per_member: Number(e.target.value) })} className={input} />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="text-micro text-slate-500">В бюджет клуба</span>
+              <input type="number" min={0} value={draft.reward_budget} onChange={(e) => setDraft({ ...draft, reward_budget: Number(e.target.value) })} className={input} />
+            </label>
+          </div>
+          <p className="text-micro text-slate-500">Награда каждому участнику:</p>
+          <RewardBundleEditor value={draft.reward} onChange={(reward) => setDraft({ ...draft, reward })} />
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1 text-xs">
+              <input type="checkbox" checked={draft.is_active} onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })} /> активно
+            </label>
+            <label className="flex items-center gap-1 text-xs text-slate-500">
+              порядок
+              <input type="number" value={draft.sort_order} onChange={(e) => setDraft({ ...draft, sort_order: Number(e.target.value) })} className={`${input} w-16`} />
+            </label>
+            <button onClick={() => setDraft(null)} className="ml-auto rounded-lg bg-white/5 px-3 py-1.5 text-xs">Отмена</button>
+            <button onClick={() => save.mutate(draft)} disabled={!draft.title || save.isPending} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-bg-base disabled:opacity-40">
               Сохранить
             </button>
           </div>

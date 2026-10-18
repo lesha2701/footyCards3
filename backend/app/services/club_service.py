@@ -261,7 +261,11 @@ async def list_clubs(
 
 
 async def get_my_club_detail(db: AsyncSession, user: User) -> ClubDetailOut:
+    from app.services.club_quest_service import sync as sync_quests
+
     membership = await _require_membership(db, user.id)
+    # Weekly quests complete lazily, whenever a member opens the club.
+    await sync_quests(db, membership.club_id)
     club = await db.get(Club, membership.club_id)
     return await _club_to_detail(db, club, requester_user_id=user.id)
 

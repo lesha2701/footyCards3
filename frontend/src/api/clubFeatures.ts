@@ -4,6 +4,7 @@ import type {
   ClubEmblem,
   ClubEmblemState,
   ClubLogoShape,
+  ClubQuests,
   ClubShop,
   ClubSurplus,
   ClubTreasury,
@@ -91,5 +92,10 @@ export async function buyClubShopItem(itemId: number): Promise<ClubShop> {
 
 export async function claimClubReward(grantId: number): Promise<GrantedRewards> {
   const { data } = await api.post<GrantedRewards>(`/clubs/me/rewards/${grantId}/claim`);
+  return data;
+}
+
+export async function fetchClubQuests(): Promise<ClubQuests> {
+  const { data } = await api.get<ClubQuests>("/clubs/me/quests");
   return data;
 }
