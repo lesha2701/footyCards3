@@ -111,9 +111,9 @@ function MatchRow({ label, cards, empty }: { label: string; cards: TradeMatch["t
       {cards.length === 0 ? (
         <p className="text-caption text-ink-mist-dim">{empty}</p>
       ) : (
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 py-1">
+        <div className="grid grid-cols-3 gap-2">
           {cards.map((c) => (
-            <div key={c.card_id} className="w-20 shrink-0">
+            <div key={c.card_id}>
               <PlayerCard player={c.player} size="sm" />
               {c.marked_to_give && <p className="mt-0.5 text-center text-micro text-accent-lime">готов отдать</p>}
             </div>
