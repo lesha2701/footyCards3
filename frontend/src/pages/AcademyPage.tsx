@@ -1,3 +1,5 @@
+import FirstVisitHint from "@/components/common/FirstVisitHint";
+import { useMarkSeen } from "@/lib/seenSections";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -101,6 +103,7 @@ function Campus({ state, onPick }: { state: AcademyState; onPick: (code: string)
 }
 
 export default function AcademyPage() {
+  useMarkSeen("academy");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const balance = useAuthStore((s) => s.user?.balance ?? 0);
@@ -171,6 +174,16 @@ export default function AcademyPage() {
           <p className="text-micro uppercase tracking-wider text-ink-mist">уровень из {state.max_level}</p>
         </div>
       </header>
+
+      <FirstVisitHint
+        id="academy"
+        title="Как растёт Академия"
+        lines={[
+          "Карты Академии растут сами — за матчи, в которых стоят в составе.",
+          "Корпуса за монеты дают бонусы всем картам Академии: опыт, попытки, задания.",
+          "Открой карту → вкладка «Путь»: этапы, задания и покупка попыток.",
+        ]}
+      />
 
       <section className="rounded-3xl border border-path/25 bg-bg-surface p-3">
         <Campus state={state} onPick={(code) => document.getElementById(`wing-${code}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} />

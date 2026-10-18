@@ -234,8 +234,10 @@ function GameCard({
       onClick={onClick}
       className={`flex items-center gap-3 rounded-2xl bg-bg-surface p-4 text-left active:scale-[0.98] ${used ? "opacity-60" : ""}`}
     >
-      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${game.badgeClass}`}>
-        <Icon size={22} className="text-bg-base" />
+      {/* One icon style for every mode: a glossy tile with a soft glow. */}
+      <span className={`relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl shadow-[0_6px_16px_-6px_rgba(0,0,0,0.6)] ${game.badgeClass}`}>
+        <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/35 to-transparent" aria-hidden />
+        <Icon size={22} className="relative text-bg-base drop-shadow-sm" />
       </span>
       <div className="min-w-0 flex-1">
         <p className="font-display text-sm font-bold text-ink-chalk">{game.title}</p>

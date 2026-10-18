@@ -1,3 +1,4 @@
+import { ListSkeleton } from "@/components/common/Skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -78,7 +79,7 @@ export function CoinPackagesPanel({
   return (
     <div className="flex flex-col gap-2">
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
-      {isLoading && <p className="text-xs text-ink-mist">Загрузка...</p>}
+      {isLoading && <ListSkeleton count={3} />}
       {!isLoading && !packages?.length && <p className="text-xs text-ink-mist">Пакетов монет пока нет</p>}
       {(packages ?? []).map((pkg) => (
         <button

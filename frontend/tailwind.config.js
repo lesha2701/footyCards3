@@ -73,8 +73,20 @@ export default {
         "goal-flash": "goalFlash 1.1s ease-out forwards",
         "legendary-pulse": "legendaryPulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "diamond-shimmer": "diamondShimmer 2.2s ease-in-out infinite",
+        // A ready reward button gently glows so it gets noticed.
+        "claim-glow": "claimGlow 2.4s ease-in-out infinite",
+        // Grid tiles fade/slide in (delay set per tile).
+        "card-in": "cardIn 0.32s ease-out both",
       },
       keyframes: {
+        claimGlow: {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(200, 242, 76, 0)" },
+          "50%": { boxShadow: "0 0 14px 2px rgba(200, 242, 76, 0.55)" },
+        },
+        cardIn: {
+          "0%": { opacity: "0", transform: "translateY(8px) scale(0.98)" },
+          "100%": { opacity: "1", transform: "none" },
+        },
         shimmer: {
           "0%": { backgroundPosition: "-500px 0" },
           "100%": { backgroundPosition: "500px 0" },

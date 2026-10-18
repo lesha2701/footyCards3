@@ -1,3 +1,4 @@
+import NewBadge from "@/components/common/NewBadge";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
@@ -5,7 +6,7 @@ import { fetchArtifacts, fetchClubPass, fetchSeasonPass } from "@/api/monetizati
 import { IconChevronRight, IconStar, IconTicket, IconTrophy, type IconProps } from "@/components/icons";
 
 function Entry({
-  Icon, iconClass, title, subtitle, badge, onClick,
+  Icon, iconClass, title, subtitle, badge, onClick, section,
 }: {
   Icon: (props: IconProps) => JSX.Element;
   iconClass: string;
@@ -13,6 +14,8 @@ function Entry({
   subtitle: string;
   badge?: string | null;
   onClick: () => void;
+  /** «Новое» until the player opens this section once (lib/seenSections). */
+  section?: string;
 }) {
   return (
     <button
@@ -23,7 +26,9 @@ function Entry({
         <Icon size={18} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block font-display text-sm font-bold text-ink-chalk">{title}</span>
+        <span className="block font-display text-sm font-bold text-ink-chalk">
+          {title} {section && <NewBadge section={section} className="ml-1" />}
+        </span>
         <span className="block truncate text-xs text-ink-mist">{subtitle}</span>
       </span>
       {badge && (
@@ -75,6 +80,7 @@ export default function MonetizationEntries({ showStyle = true }: { showStyle?: 
           title="Артефакты"
           subtitle={`Активных ${artifacts.active_count}/${artifacts.slots} · на полке ${artifacts.shelf.length - artifacts.active_count}`}
           onClick={() => navigate("/artifacts")}
+          section="artifacts"
         />
       )}
       {showStyle && (
@@ -84,6 +90,7 @@ export default function MonetizationEntries({ showStyle = true }: { showStyle?: 
           title="Стиль"
           subtitle="Рамки, фоны профиля и скины карточек"
           onClick={() => navigate("/style")}
+          section="style"
         />
       )}
     </div>

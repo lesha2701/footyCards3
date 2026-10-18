@@ -1,3 +1,4 @@
+import NewBadge from "@/components/common/NewBadge";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
@@ -29,7 +30,7 @@ export default function AcademyHomeCard() {
       <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-path/15 text-2xl" aria-hidden>🌱</span>
       <span className="min-w-0 flex-1">
         <span className="block font-display text-sm font-bold text-ink-chalk">
-          Академия{data ? ` · ур. ${data.level}` : ""}
+          Академия{data ? ` · ур. ${data.level}` : ""} <NewBadge section="academy" className="ml-1" />
         </span>
         <span className={`block truncate text-xs ${data?.scout_report?.available ? "font-semibold text-path" : "text-ink-mist"}`}>
           {status}

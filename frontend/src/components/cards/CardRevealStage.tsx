@@ -1,10 +1,11 @@
 import { motion, useReducedMotion } from "framer-motion";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import { IconGlobe, IconHelp, IconStadium, IconTag } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { pathFrameClass, talentByCode, usePathCatalog } from "@/lib/pathCards";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
+import { playSound } from "@/lib/sound";
 import type { Player } from "@/types";
 import { STAGES, type Stage } from "@/components/cards/revealStages";
 export type { Stage } from "@/components/cards/revealStages";
@@ -39,6 +40,10 @@ export function RevealStage({
   const revealed = showFrom("reveal");
   // «Академия»: its own frame, a sprouting reveal and the talent name.
   const isAcademy = !!player.path_talent_code;
+  // A short chime as the card turns over; a longer one for the big pulls.
+  useEffect(() => {
+    if (revealed) playSound(player.rarity === "legendary" || player.rarity === "diamond" ? "rare" : "reveal");
+  }, [revealed, player.rarity]);
 
   return (
     <div

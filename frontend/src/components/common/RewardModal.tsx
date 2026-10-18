@@ -1,3 +1,4 @@
+import { playSound } from "@/lib/sound";
 import { motion } from "framer-motion";
 import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -43,6 +44,7 @@ export default function RewardModal({
   useEffect(() => {
     if (special) haptic("heavy");
     hapticNotify("success");
+    playSound(special ? "rare" : "reward");
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };

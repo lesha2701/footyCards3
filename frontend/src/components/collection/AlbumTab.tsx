@@ -246,14 +246,15 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
       )}
 
       <div className="grid grid-cols-3 gap-2">
-        {visible.map((slot) => (
-          <AlbumSlot
-            key={slot.player.id}
-            slot={slot}
-            onOpen={() => slot.card && setDetailCard(slot.card)}
-            wanted={want.wanted.has(slot.player.id)}
-            onToggleWant={() => want.toggle(slot.player.id)}
-          />
+        {visible.map((slot, i) => (
+          <div key={slot.player.id} className="animate-card-in" style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }}>
+            <AlbumSlot
+              slot={slot}
+              onOpen={() => slot.card && setDetailCard(slot.card)}
+              wanted={want.wanted.has(slot.player.id)}
+              onToggleWant={() => want.toggle(slot.player.id)}
+            />
+          </div>
         ))}
       </div>
 

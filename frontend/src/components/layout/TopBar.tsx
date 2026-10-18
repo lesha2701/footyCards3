@@ -1,3 +1,4 @@
+import AnimatedNumber from "@/components/common/AnimatedNumber";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -67,7 +68,7 @@ export default function TopBar() {
             className="flex items-center gap-1.5 rounded-full border border-white/5 bg-bg-raised px-3 py-1.5 active:scale-95"
           >
             <IconCoin size={15} className="text-accent-lime" />
-            <span className="font-mono text-[13px] font-semibold text-ink-chalk">{user?.balance ?? 0}</span>
+            <AnimatedNumber value={user?.balance ?? 0} className="font-mono text-[13px] font-semibold text-ink-chalk" />
           </button>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import CardFilterBar from "@/components/collection/CardFilterBar";
+import CardQuickActions from "@/components/collection/CardQuickActions";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { IconCoin, IconCollection, IconLock, IconLockOpen } from "@/components/icons";
@@ -39,6 +40,9 @@ export default function MyCardsTab() {
   const [pageNum, setPageNum] = useState(1);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Long-pressed card: quick actions without opening the full sheet.
+  const [quickCard, setQuickCard] = useState<UserCard | null>(null);
 
   const {
     detailCard, setDetailCard, confirmSell, setConfirmSell,
@@ -127,69 +131,89 @@ export default function MyCardsTab() {
   });
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-end gap-2">
-        <button
-          onClick={() => duplicatesMutation.mutate(true)}
-          disabled={duplicatesMutation.isPending}
-          className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-ink-mist disabled:opacity-50"
-        >
-          Продать дубликаты
-        </button>
+    <div className="flex flex-col gap-3">
+      {/* One toolbar: search, select mode and the rarely used actions in «⋯». */}
+      <div className="flex items-center gap-2">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Поиск по имени…"
+          aria-label="Поиск по имени"
+          className="min-w-0 flex-1 rounded-xl bg-bg-surface px-3.5 py-2.5 text-sm text-ink-chalk placeholder:text-ink-mist-dim outline-none"
+        />
         <button
           onClick={() => { setSelectMode((v) => !v); setSelected([]); }}
-          className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-ink-mist"
+          className={`shrink-0 rounded-xl px-3 py-2.5 text-xs font-semibold ${
+            selectMode ? "bg-accent-lime text-bg-base" : "bg-bg-surface text-ink-mist"
+          }`}
         >
-          {selectMode ? "Отмена" : "Выбрать"}
+          {selectMode ? "Готово" : "Выбрать"}
         </button>
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="Ещё действия"
+            aria-expanded={menuOpen}
+            className="rounded-xl bg-bg-surface px-3 py-2.5 text-sm font-bold leading-none text-ink-mist"
+          >
+            ⋯
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-full z-20 mt-1 w-52 overflow-hidden rounded-xl border border-white/10 bg-bg-raised shadow-xl">
+              <button
+                onClick={() => { setMenuOpen(false); duplicatesMutation.mutate(true); }}
+                disabled={duplicatesMutation.isPending}
+                className="block w-full px-3 py-2.5 text-left text-sm text-ink-chalk hover:bg-white/5 disabled:opacity-50"
+              >
+                Продать дубликаты
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
+      <CardFilterBar
+        filter={filter}
+        onChange={setFilter}
+        defaultFilter={defaultFilter}
+        extraActive={collectionId !== undefined ? 1 : 0}
+        extraPanel={!!collections?.length && (
+          <label className="col-span-2 flex flex-col gap-1">
+            <span className="text-micro text-ink-mist-dim">Коллекция</span>
+            <select
+              value={collectionId ?? ""}
+              onChange={(e) => setCollectionId(e.target.value ? Number(e.target.value) : undefined)}
+              className="rounded-xl bg-bg-raised px-2.5 py-2 text-xs text-ink-chalk outline-none"
+            >
+              <option value="">Все коллекции</option>
+              {collections.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
+      />
 
       {dupMessage && (
         <p className="rounded-xl bg-bg-surface px-3 py-2 text-xs text-ink-mist" role="status">{dupMessage}</p>
       )}
 
       {stats && (
-        <div className="grid grid-cols-2 gap-x-3 rounded-2xl bg-bg-surface p-4">
-          <div>
-            <p className="font-display text-2xl font-bold text-ink-chalk">{stats.unique_players}</p>
-            <p className="mt-0.5 text-caption text-ink-mist">Уникальных</p>
-          </div>
-          <div>
-            <p className="font-display text-2xl font-bold text-ink-chalk">{stats.total_cards}</p>
-            <p className="mt-0.5 text-caption text-ink-mist">Всего карточек</p>
-          </div>
-        </div>
-      )}
-
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Поиск по имени..."
-        className="rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk placeholder:text-ink-mist-dim outline-none"
-      />
-
-      <CardFilterBar filter={filter} onChange={setFilter} defaultFilter={defaultFilter} />
-
-      {!!collections?.length && (
-        <select
-          value={collectionId ?? ""}
-          onChange={(e) => setCollectionId(e.target.value ? Number(e.target.value) : undefined)}
-          className="rounded-xl bg-bg-surface px-3 py-2 text-sm text-ink-chalk outline-none"
-        >
-          <option value="">Все коллекции</option>
-          {collections.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
+        <p className="flex justify-between text-caption text-ink-mist-dim">
+          <span>
+            <b className="text-ink-mist">{stats.unique_players}</b> уникальных · <b className="text-ink-mist">{stats.total_cards}</b> всего
+          </span>
+          {!selectMode && <span>Удерживай карту — быстрые действия</span>}
+        </p>
       )}
 
       {isLoading && <CardGridSkeleton count={9} />}
       {!isLoading && !page?.items.length && <EmptyState icon={IconCollection} title="Карточек не найдено" description="Открой паки, чтобы собрать коллекцию" />}
 
       <div className="grid grid-cols-3 gap-2">
-        {page?.items.map((card) => (
+        {page?.items.map((card, i) => (
+          <div key={card.id} className="animate-card-in" style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }}>
           <PlayerCard
-            key={card.id}
             player={card.player}
             stars={card.stars}
             pathStage={card.path_stage} prestige={card.prestige} talentOverride={card.talent_override}
@@ -197,7 +221,9 @@ export default function MyCardsTab() {
             {...cardLockProps(card)}
             selected={selectMode && selected.includes(card.id)}
             onClick={() => (selectMode ? toggleSelect(card.id) : setDetailCard(card))}
+            onLongPress={selectMode ? undefined : () => { haptic("medium"); setQuickCard(card); }}
           />
+          </div>
         ))}
       </div>
 
@@ -279,6 +305,15 @@ export default function MyCardsTab() {
               ? () => { setUpgradeCard(detailCard); setDetailCard(null); }
               : undefined
           }
+        />
+      )}
+
+      {quickCard && (
+        <CardQuickActions
+          card={quickCard}
+          onClose={() => setQuickCard(null)}
+          onOpen={() => setDetailCard(quickCard)}
+          onSell={() => setConfirmSell({ ids: [quickCard.id], lastCopy: false, skillLoss: losesProgress(quickCard) })}
         />
       )}
 

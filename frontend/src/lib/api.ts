@@ -1,6 +1,7 @@
 import axios, { AxiosError } from "axios";
 
 import { useAuthStore } from "@/store/authStore";
+import { friendlyMessage } from "@/lib/friendlyErrors";
 import { getRawInitData, isInsideTelegram } from "@/lib/telegram";
 import type { ApiError } from "@/types";
 
@@ -38,12 +39,15 @@ export class ApiRequestError extends Error {
   code: string;
   details?: Record<string, unknown>;
   status?: number;
+  /** The server's own text (may be English); `message` is the player-facing one. */
+  serverMessage: string;
 
-  constructor(message: string, code: string, status?: number, details?: Record<string, unknown>) {
+  constructor(message: string, code: string, status?: number, details?: Record<string, unknown>, serverMessage?: string) {
     super(message);
     this.code = code;
     this.status = status;
     this.details = details;
+    this.serverMessage = serverMessage ?? message;
   }
 }
 
@@ -51,10 +55,16 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiError>) => {
     const body = error.response?.data;
+    const status = error.response?.status;
+    // The admin panel keeps the server's exact text (it's for debugging).
+    const isAdmin = !!error.config?.url?.startsWith("/admin");
     if (body?.error) {
-      throw new ApiRequestError(body.error.message, body.error.code, error.response?.status, body.error.details);
+      const shown = isAdmin ? body.error.message : friendlyMessage(body.error.message, status, true);
+      throw new ApiRequestError(shown, body.error.code, status, body.error.details, body.error.message);
     }
-    throw new ApiRequestError(error.message, "network_error", error.response?.status);
+    // No JSON error body: a network failure (no response) or a proxy / server
+    // crash — never show axios' «Request failed with status code 500».
+    throw new ApiRequestError(friendlyMessage(undefined, status, false), "network_error", status, undefined, error.message);
   },
 );
 

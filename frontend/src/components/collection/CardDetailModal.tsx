@@ -14,6 +14,7 @@ import { staticUrl } from "@/lib/api";
 import { squadLabel } from "@/lib/cardLocks";
 import { formatGameError } from "@/lib/errors";
 import { planArenaPlacement } from "@/lib/lineupPlacement";
+import { useSwipeDownToClose } from "@/lib/useSwipe";
 import { haptic } from "@/lib/telegram";
 import { pathFrameClass } from "@/lib/pathCards";
 import { prestigeMarks, prestigeStyle } from "@/lib/prestige";
@@ -55,6 +56,8 @@ export default function CardDetailModal({
   // Selling needs a free copy: not frozen, not in a squad, not under the lock.
   const locked = frozen || !!squad || userLocked;
   const [tab, setTab] = useState<Tab>(isPath ? "path" : "overview");
+  // Pull the grab handle / header down to close the sheet.
+  const swipeDown = useSwipeDownToClose(onClose);
 
   const refreshLists = () => {
     for (const key of [["collection"], ["album-detail"], ["upgrade-cards"], ["academy"], ["lineup"], ["lineup-templates"]]) {
@@ -135,6 +138,7 @@ export default function CardDetailModal({
       >
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-[21px] bg-bg-surface sm:rounded-[21px]">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3">
+            <div {...swipeDown}>
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/15 sm:hidden" aria-hidden />
             <div className="flex gap-3">
               <div className="relative w-28 shrink-0">
@@ -169,6 +173,7 @@ export default function CardDetailModal({
                 {starBonus > 0 && <p className="text-xs text-amber-300">+{starBonus} от звёзд</p>}
                 {!!card.path_rating_bonus && <p className="text-xs text-path">+{card.path_rating_bonus} от пути 🌱</p>}
               </div>
+            </div>
             </div>
 
             {tabs.length > 1 && (

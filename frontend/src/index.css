@@ -82,6 +82,8 @@ body,
 }
 
 body {
+  /* Digits of equal width: balances, ratings and timers don't jump. */
+  font-variant-numeric: tabular-nums;
   @apply bg-bg-base text-slate-100 font-body antialiased;
   margin: 0;
   -webkit-tap-highlight-color: transparent;

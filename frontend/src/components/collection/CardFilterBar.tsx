@@ -20,6 +20,8 @@ export default function CardFilterBar({
   showRarity = true,
   showSort = true,
   showSkill = true,
+  extraPanel,
+  extraActive = 0,
 }: {
   filter: CardFilter;
   onChange: (next: CardFilter) => void;
@@ -27,6 +29,10 @@ export default function CardFilterBar({
   showRarity?: boolean;
   showSort?: boolean;
   showSkill?: boolean;
+  /** More fields shown inside the «Фильтры» panel (e.g. the collection picker). */
+  extraPanel?: React.ReactNode;
+  /** How many of those extra fields are set (counts in the «Фильтры» badge). */
+  extraActive?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -44,7 +50,7 @@ export default function CardFilterBar({
   });
 
   const extra = [filter.country, filter.club, filter.position ? POSITION_LABELS[filter.position] : null].filter(Boolean);
-  const count = activeCount(filter);
+  const count = activeCount(filter) + extraActive;
   const isDefault = sameFilter(filter, defaultFilter);
 
   return (
@@ -88,6 +94,7 @@ export default function CardFilterBar({
               options={(options?.clubs ?? withCurrent(filter.club)).map((c) => [c, c])} />
             <Select label="Позиция" value={filter.position} onChange={(v) => set({ position: v })}
               options={POSITIONS.map((p) => [p, `${p} · ${POSITION_LABELS[p]}`])} />
+            {extraPanel}
             {showSort && (
               <label className="flex flex-col gap-1">
                 <span className="text-micro text-ink-mist-dim">Сортировка</span>
