@@ -32,9 +32,9 @@ const GAME_TITLES: Record<string, string> = {
 };
 
 /** The top of the home screen: who you are and where you stand (avatar,
- * streak, league progress) plus the four shortcuts that are NOT
- * already in the bottom nav — the last game, clubs, tasks and the
- * leaderboard. The league row replaces the separate league banner. */
+ * streak, league progress as a ring around the avatar plus one short line
+ * under the name) and the four shortcuts that are NOT already in the
+ * bottom nav — the last game, clubs, tasks and the leaderboard. */
 export default function HomeHero({
   profile,
   league,
@@ -59,7 +59,6 @@ export default function HomeHero({
             <Skeleton className="h-5 w-40" />
           </div>
         </div>
-        <Skeleton className="h-12 w-full rounded-2xl" />
         <div className="grid grid-cols-4 gap-2">
           {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-16 rounded-2xl" />)}
         </div>
@@ -75,24 +74,78 @@ export default function HomeHero({
     : 100;
   const continueTitle = lastGame ? GAME_TITLES[lastGame] : undefined;
 
+  const showLeague = leaguesEnabled && !!league && !!tier;
+  // League progress is drawn as a ring around the avatar (tap = /league).
+  const RING = 2 * Math.PI * 30;
+
   return (
     <section className="relative overflow-hidden rounded-3xl bg-bg-surface p-5">
       <div className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-accent-lime/10 blur-3xl" />
 
       <div className="relative flex items-center gap-3">
-        <div className="relative shrink-0">
+        <button
+          type="button"
+          onClick={() => showLeague && navigate("/league")}
+          disabled={!showLeague}
+          className="relative h-16 w-16 shrink-0 active:scale-95"
+          aria-label={showLeague ? `Лига: ${league!.current_league?.name ?? "пока вне лиги"}, прогресс ${progress}%` : undefined}
+        >
+          {showLeague && (
+            <svg viewBox="0 0 64 64" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden>
+              <circle cx="32" cy="32" r="30" fill="none" strokeWidth="3" className="stroke-white/10" />
+              <circle
+                cx="32" cy="32" r="30" fill="none" strokeWidth="3" strokeLinecap="round"
+                className="stroke-accent-lime transition-[stroke-dashoffset] duration-700"
+                strokeDasharray={RING}
+                strokeDashoffset={RING * (1 - progress / 100)}
+              />
+            </svg>
+          )}
           <img decoding="async"
             src={profile.avatar_url ?? "/brand/victor-fc-crest.jpg"}
             alt=""
-            className="h-14 w-14 rounded-full object-cover ring-2 ring-accent-lime/60"
+            className={`absolute inset-[5px] h-[54px] w-[54px] rounded-full object-cover ${showLeague ? "" : "ring-2 ring-accent-lime/60"}`}
           />
-        </div>
+          {showLeague && (
+            <span
+              className={`absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border-2 border-bg-surface bg-bg-raised ${
+                league!.current_league ? "" : "opacity-50"
+              }`}
+            >
+              {tier!.image_path ? (
+                <img decoding="async" src={staticUrl(tier!.image_path) ?? undefined} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <IconTrophy size={12} style={{ color: tier!.color }} />
+              )}
+            </span>
+          )}
+          {showLeague && league!.unseen_rewards.length > 0 && (
+            <span className="absolute -left-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-micro font-bold text-bg-base">
+              {league!.unseen_rewards.length}
+            </span>
+          )}
+        </button>
         <div className="min-w-0 flex-1">
           <p className="font-mono text-micro uppercase tracking-wider text-ink-mist">С возвращением</p>
           <p className="flex items-center gap-1.5 truncate font-display text-lg font-bold text-ink-chalk">
             <span className="truncate">{name}</span>
             <UserBadge badge={profile.active_badge} />
           </p>
+          {showLeague && (
+            <button
+              type="button"
+              onClick={() => navigate("/league")}
+              className="flex max-w-full items-center gap-1 truncate text-left text-caption text-ink-mist active:opacity-70"
+            >
+              <span className="truncate font-semibold text-ink-chalk">
+                {league!.current_league ? league!.current_league.name : "Вне лиги"}
+              </span>
+              {league!.next_league && (
+                <span className="shrink-0 text-ink-mist-dim">· ещё {league!.points_to_next}</span>
+              )}
+              <IconChevronRight size={12} className="shrink-0 text-ink-mist-dim" />
+            </button>
+          )}
         </div>
         {profile.daily_login_streak > 0 && (
           <span
@@ -104,44 +157,6 @@ export default function HomeHero({
           </span>
         )}
       </div>
-
-      {leaguesEnabled && league && tier && (
-        <button
-          onClick={() => navigate("/league")}
-          className="relative mt-4 flex w-full items-center gap-3 rounded-2xl bg-bg-raised/60 px-3 py-2.5 text-left active:scale-[0.99]"
-        >
-          <span
-            className={`relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-bg-raised ${
-              league.current_league ? "" : "opacity-40"
-            }`}
-          >
-            {tier.image_path ? (
-              <img decoding="async" src={staticUrl(tier.image_path) ?? undefined} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <IconTrophy size={18} style={{ color: tier.color }} />
-            )}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex items-baseline justify-between gap-2">
-              <span className="truncate font-display text-sm font-bold text-ink-chalk">
-                {league.current_league ? league.current_league.name : "Пока вне лиги"}
-              </span>
-              <span className="shrink-0 font-mono text-micro text-ink-mist">
-                {league.next_league ? `ещё ${league.points_to_next} до «${league.next_league.name}»` : "высшая лига"}
-              </span>
-            </span>
-            <span className="mt-1.5 block h-1.5 w-full overflow-hidden rounded-full bg-white/5">
-              <span className="block h-full rounded-full bg-accent-lime" style={{ width: `${progress}%` }} />
-            </span>
-          </span>
-          {league.unseen_rewards.length > 0 && (
-            <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-micro font-bold text-bg-base">
-              {league.unseen_rewards.length}
-            </span>
-          )}
-          <IconChevronRight size={14} className="shrink-0 text-ink-mist-dim" />
-        </button>
-      )}
 
       <div className="relative mt-4 grid grid-cols-4 gap-2">
         <QuickAction

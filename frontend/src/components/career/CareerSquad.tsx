@@ -33,18 +33,28 @@ interface Info {
   mine: boolean;
 }
 
+/** Short label for a tile: the last word of the name (surname), never empty
+ * — trailing spaces or a one-word name fall back to the whole name. */
+function shortName(...names: (string | null | undefined)[]): string {
+  for (const n of names) {
+    const words = (n ?? "").trim().split(/\s+/).filter(Boolean);
+    if (words.length) return words[words.length - 1];
+  }
+  return "";
+}
+
 function infoOf(entry: CareerSquadCard | undefined): Info | null {
   if (!entry) return null;
   if (entry.card) {
     const p = entry.card.player;
     return {
-      name: p.display_name, short: p.display_name.split(" ").slice(-1)[0], position: p.position, rating: p.rating,
+      name: p.display_name, short: shortName(p.display_name, p.last_name, p.first_name), position: p.position, rating: p.rating,
       club: p.club, country: p.country, image: staticUrl(p.image_path ?? PLACEHOLDER), rarity: p.rarity, mine: false,
     };
   }
   if (entry.my_player) {
     const m = entry.my_player;
-    return { name: m.name, short: m.name.split(" ").slice(-1)[0], position: m.position, rating: m.rating,
+    return { name: m.name, short: shortName(m.name), position: m.position, rating: m.rating,
       club: m.club ?? "", country: m.country ?? "", image: staticUrl(PLACEHOLDER), rarity: "epic", mine: true };
   }
   return null;
@@ -74,18 +84,30 @@ function StatusBadge({ entry }: { entry: CareerSquadCard }) {
   return null;
 }
 
-/** A player card in a rarity frame: photo, rating, position, name. */
-function CardFace({ info, entry, width, children }: { info: Info; entry?: CareerSquadCard; width: string; children?: ReactNode }) {
+/** A player card in a rarity frame: photo, rating, position, name.
+ * `compact` (the pitch): a shorter photo with the position on it, so the
+ * whole XI fits on one phone screen. */
+function CardFace({ info, entry, width, children, compact = false, position, offPosition = false }: {
+  info: Info; entry?: CareerSquadCard; width: string; children?: ReactNode;
+  compact?: boolean; position?: string; offPosition?: boolean;
+}) {
   return (
     <div className={`${width} rounded-[11px] bg-gradient-to-b p-[1.5px] ${RARITY_GRADIENTS[info.rarity]} ${RARITY_GLOW_STATIC[info.rarity]}`}>
-      <div className="flex flex-col items-center gap-0.5 rounded-[10px] bg-bg-surface/95 p-1">
-        <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-gradient-to-b from-white/10 to-black/40">
+      <div className={`flex flex-col items-center gap-0.5 rounded-[10px] bg-bg-surface/95 ${compact ? "p-0.5" : "p-1"}`}>
+        <div className={`relative w-full overflow-hidden rounded-lg bg-gradient-to-b from-white/10 to-black/40 ${compact ? "aspect-[5/4]" : "aspect-square"}`}>
           <img decoding="async" src={info.image} alt="" className="h-full w-full object-cover" loading="lazy" />
           <span className="absolute left-0.5 top-0.5 rounded-md bg-black/75 px-1 font-mono text-micro font-bold leading-tight text-accent-lime">
             {info.rating}
           </span>
           {info.mine && <span className="absolute right-0.5 top-0.5 rounded bg-accent-lime px-0.5 text-micro font-black text-bg-base">Я</span>}
           {entry && <span className="absolute bottom-0.5 left-0.5"><StatusBadge entry={entry} /></span>}
+          {position && (
+            <span className={`absolute bottom-0.5 right-0.5 rounded px-0.5 font-mono text-micro font-bold leading-tight ${
+              offPosition ? "bg-red-500/90 text-white" : "bg-black/75 text-accent-cyan"
+            }`}>
+              {position}
+            </span>
+          )}
         </div>
         <span className="w-full truncate text-center text-micro font-semibold leading-tight text-ink-chalk">{info.short}</span>
         {children}
@@ -108,10 +130,7 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick }: {
       aria-label={info ? `${slot.code}: ${info.name}` : `${slot.code}: пусто`}
     >
       {info ? (
-        <CardFace info={info} entry={entry} width="w-[62px]">
-          <span className={`rounded-full px-1.5 font-mono text-micro font-bold leading-tight ${off ? "bg-red-500/25 text-red-300" : "bg-white/10 text-accent-cyan"}`}>
-            {info.position}
-          </span>
+        <CardFace info={info} entry={entry} width="w-[54px] min-[400px]:w-[60px]" compact position={info.position} offPosition={!!off}>
           {chemPoints && <ChemistryDiamonds points={chemPoints.points} max={chemMax} onPosition={chemPoints.on_position} />}
           {entry && (
             <span className="block h-[3px] w-full overflow-hidden rounded-full bg-white/10" title={`Усталость ${entry.fatigue}%`}>
@@ -120,7 +139,7 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick }: {
           )}
         </CardFace>
       ) : (
-        <div className="flex w-[62px] flex-col items-center gap-1 rounded-xl border border-dashed border-white/25 bg-black/30 p-2">
+        <div className="flex w-[54px] flex-col items-center gap-1 rounded-xl border border-dashed border-white/25 bg-black/30 p-2 min-[400px]:w-[60px]">
           <span className="text-lg leading-none text-ink-mist-dim">+</span>
           <span className="font-mono text-micro text-ink-mist-dim">{slot.ideal_position}</span>
         </div>
@@ -137,8 +156,7 @@ function BenchCard({ entry, onClick, gain, selected }: { entry: CareerSquadCard;
     <button onClick={onClick} disabled={!onClick || out}
       className={`relative flex min-w-0 flex-col items-center ${out ? "opacity-45 grayscale" : "active:scale-95"} ${selected ? "rounded-[12px] ring-2 ring-accent-lime" : ""}`}
     >
-      <CardFace info={info} entry={entry} width="w-full">
-        <span className="font-mono text-micro font-bold leading-tight text-accent-cyan">{info.position}</span>
+      <CardFace info={info} entry={entry} width="w-full" compact position={info.position}>
         <span className="block h-[3px] w-full overflow-hidden rounded-full bg-white/10">
           <span className={`block h-full ${fatigueTone(entry.fatigue)}`} style={{ width: `${entry.fatigue}%` }} />
         </span>
@@ -251,14 +269,14 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
 
       <div
         ref={pitchRef}
-        className="relative overflow-hidden rounded-[22px] px-1 py-4 ring-1 ring-white/10"
+        className="relative overflow-hidden rounded-[22px] px-1 py-3 ring-1 ring-white/10"
         style={PITCH_STYLE}
       >
         <PitchBackground />
         <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
-        <div className="relative flex flex-col gap-2.5">
+        <div className="relative flex flex-col gap-1.5">
           {rows.map((row) => (
-            <div key={row.key} className="flex justify-evenly gap-1">
+            <div key={row.key} className="flex justify-evenly gap-0.5">
               {inRow(row, season.slots).map((slot) => (
                 <PitchCard
                   key={slot.code}
@@ -282,7 +300,7 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
         {benchByLine.map((line) => (
           <div key={line.category}>
             <p className="mb-1 text-micro font-semibold text-ink-mist">{line.label} · {line.entries.length}</p>
-            <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
+            <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-6">
               {line.entries.map((entry) => <BenchCard key={entry.card_id} entry={entry} />)}
             </div>
           </div>
@@ -312,7 +330,7 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
             <p className="font-display text-base font-bold text-ink-chalk">Позиция {picking.ideal_position}</p>
             <p className="mb-3 text-caption text-ink-mist">Цифра под карточкой — как изменится химия состава</p>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-5 gap-1.5">
               {candidates.map((entry) => {
                 const info = infoOf(entry)!;
                 const gain = chemistry?.enabled

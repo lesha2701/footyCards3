@@ -55,7 +55,7 @@ export default function HomePage() {
   // renders below the lowest tier so a new player can still reach it.
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <HomeHero
         profile={profile}
         league={leagueStatus}
@@ -127,17 +127,6 @@ export default function HomePage() {
         </section>
       )}
 
-      {profile && (
-        <section className="rounded-2xl bg-bg-surface p-4">
-          <h2 className="mb-4 font-mono text-caption font-medium uppercase tracking-wider text-ink-mist">Твоя статистика</h2>
-          <div className="grid grid-cols-2 gap-y-4">
-            <Stat label="Уникальных карточек" value={profile.unique_cards} />
-            <Stat label="Всего карточек" value={profile.total_cards} />
-            <Stat label="Паков открыто" value={profile.packs_opened} />
-            <Stat label="Место в рейтинге" value={`#${profile.arena_rank}`} accent />
-          </div>
-        </section>
-      )}
     </div>
   );
 }
@@ -235,20 +224,5 @@ function NoticeCard({
         {TrailingIcon ? <TrailingIcon size={16} /> : <IconChevronRight size={16} />}
       </span>
     </button>
-  );
-}
-
-function Stat({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
-  return (
-    <div>
-      <p
-        className={`font-display text-2xl font-bold ${
-          accent ? "bg-floodlight bg-clip-text text-transparent" : "text-ink-chalk"
-        }`}
-      >
-        {value}
-      </p>
-      <p className="mt-0.5 text-caption text-ink-mist">{label}</p>
-    </div>
   );
 }
