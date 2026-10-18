@@ -13,7 +13,7 @@ export function formatGameError(err: unknown, fallback: string): string {
         ? `Лимит ${hourlyLimit} игры в час исчерпан. Попробуй через ${minutes} мин.`
         : `Лимит ${hourlyLimit} игры в час исчерпан. Попробуй чуть позже.`;
     }
-    if (err.message === "This match is not in progress") {
+    if (err.serverMessage === "This match is not in progress") {
       // Surfaces when the opponent forfeited (or the match otherwise
       // resolved server-side) between our last poll and this action —
       // the caller also refetches the match so the real result replaces

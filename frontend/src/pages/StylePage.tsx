@@ -1,3 +1,4 @@
+import { useMarkSeen } from "@/lib/seenSections";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -17,6 +18,7 @@ const KINDS: CosmeticKind[] = ["profile_frame", "profile_background", "card_skin
  * only, bought for coins or ⭐ or earned in the calendar, club pass, season
  * pass and starter offer. */
 export default function StylePage() {
+  useMarkSeen("style");
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const updateBalance = useAuthStore((s) => s.updateBalance);

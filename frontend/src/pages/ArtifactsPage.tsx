@@ -1,3 +1,5 @@
+import FirstVisitHint from "@/components/common/FirstVisitHint";
+import { useMarkSeen } from "@/lib/seenSections";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { useState } from "react";
@@ -17,6 +19,7 @@ type Tab = "shelf" | "shop";
 /** «Артефакты»: the active slots (only these give bonuses), the shelf
  * with every owned copy, and the shop. */
 export default function ArtifactsPage() {
+  useMarkSeen("artifacts");
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("shelf");
   const [selected, setSelected] = useState<ArtifactCopy | null>(null);
@@ -59,6 +62,14 @@ export default function ArtifactsPage() {
       <h1 className="flex items-center gap-2 font-display text-xl font-bold text-ink-chalk">
         <IconTrophy size={20} className="text-amber-300" /> Артефакты
       </h1>
+      <FirstVisitHint
+        id="artifacts"
+        title="Что такое артефакты"
+        lines={[
+          "Редкие памятные предметы с небольшими бонусами в матчах.",
+          "Активных одновременно — ограниченное число слотов, остальные стоят на полке.",
+        ]}
+      />
       <div className="grid grid-cols-2 gap-1 rounded-2xl bg-bg-surface p-1">
         {([["shelf", "Моя полка"], ["shop", "Магазин"]] as [Tab, string][]).map(([id, label]) => (
           <button

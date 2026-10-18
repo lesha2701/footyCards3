@@ -1,3 +1,4 @@
+import FirstVisitHint from "@/components/common/FirstVisitHint";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -107,6 +108,15 @@ export default function UpgradePage() {
   return (
     <div className="flex flex-col gap-5">
       <CardsSectionTabs />
+      <FirstVisitHint
+        id="forge"
+        title="Как работает Кузница"
+        lines={[
+          "Выбери редкость и поставь одну или несколько карт — чем больше, тем выше шанс.",
+          "Успех — получишь случайную карту редкостью выше. Неудача — карты и монеты сгорают.",
+          "Карты под замком и в составе защищены: перед ставкой игра спросит.",
+        ]}
+      />
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500/25 via-orange-600/10 to-bg-surface p-5">
         <ForgeSparks />
         <div className="relative flex items-center gap-3">
