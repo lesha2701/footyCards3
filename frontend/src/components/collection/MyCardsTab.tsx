@@ -211,9 +211,9 @@ export default function MyCardsTab() {
       {!isLoading && !page?.items.length && <EmptyState icon={IconCollection} title="Карточек не найдено" description="Открой паки, чтобы собрать коллекцию" />}
 
       <div className="grid grid-cols-3 gap-2">
-        {page?.items.map((card) => (
+        {page?.items.map((card, i) => (
+          <div key={card.id} className="animate-card-in" style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }}>
           <PlayerCard
-            key={card.id}
             player={card.player}
             stars={card.stars}
             pathStage={card.path_stage} prestige={card.prestige} talentOverride={card.talent_override}
@@ -223,6 +223,7 @@ export default function MyCardsTab() {
             onClick={() => (selectMode ? toggleSelect(card.id) : setDetailCard(card))}
             onLongPress={selectMode ? undefined : () => { haptic("medium"); setQuickCard(card); }}
           />
+          </div>
         ))}
       </div>
 

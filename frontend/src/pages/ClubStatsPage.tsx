@@ -1,3 +1,4 @@
+import { ListSkeleton } from "@/components/common/Skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
@@ -29,7 +30,7 @@ export default function ClubStatsPage() {
         </h1>
       </div>
 
-      {isLoading && <p className="text-sm text-ink-mist-dim">Загрузка...</p>}
+      {isLoading && <ListSkeleton count={3} />}
 
       {stats && (
         <>

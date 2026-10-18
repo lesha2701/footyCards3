@@ -1,3 +1,4 @@
+import { ListSkeleton } from "@/components/common/Skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -56,7 +57,7 @@ export default function ClubActivityPage() {
 
       {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
 
-      {isLoading && <p className="text-sm text-ink-mist-dim">Загрузка...</p>}
+      {isLoading && <ListSkeleton count={3} />}
 
       {!isLoading && !sorted.length && (
         <EmptyState icon={IconUsers} title="Нет данных" description="В клубе пока никого нет" />

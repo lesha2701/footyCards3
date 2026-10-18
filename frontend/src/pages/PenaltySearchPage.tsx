@@ -1,3 +1,4 @@
+import { ListSkeleton } from "@/components/common/Skeleton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -183,7 +184,7 @@ export default function PenaltySearchPage({ userCardId }: { userCardId: number }
             <p className="text-sm text-ink-mist">Рейтинг Пенальти: {opponent.penalty_rating}</p>
           </>
         ) : (
-          <p className="text-sm text-ink-mist">Загрузка...</p>
+          <ListSkeleton count={3} />
         )}
         <p className="animate-pulse text-xs text-ink-mist-dim">Матч начинается...</p>
       </div>

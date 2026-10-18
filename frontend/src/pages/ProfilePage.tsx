@@ -1,3 +1,4 @@
+import SoundSetting from "@/components/profile/SoundSetting";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { useState } from "react";
@@ -349,6 +350,7 @@ export default function ProfilePage() {
       </section>
 
       <ThemeSetting />
+      <SoundSetting />
 
       <section>
         <button onClick={() => setShowTx((v) => !v)} className="w-full rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-mist">

@@ -112,7 +112,7 @@ export default function TodayCard({ wheel }: { wheel?: WheelStatus | null }) {
           <button
             onClick={() => claimAll.mutate({ daily: dailyReady, tasks: claimableTasks })}
             disabled={busy}
-            className="rounded-full bg-accent-lime px-3 py-1.5 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-60"
+            className="animate-claim-glow rounded-full bg-accent-lime px-3 py-1.5 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-60"
           >
             {claimAll.isPending ? "Забираем..." : "Забрать всё"}
           </button>

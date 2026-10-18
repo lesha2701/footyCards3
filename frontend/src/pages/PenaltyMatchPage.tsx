@@ -1,3 +1,4 @@
+import { ListSkeleton } from "@/components/common/Skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -167,7 +168,7 @@ export default function PenaltyMatchPage() {
   }, [match?.status, id]);
 
   if (isLoading || !match) {
-    return <p className="text-sm text-ink-mist">Загрузка...</p>;
+    return <ListSkeleton count={3} />;
   }
 
   if (match.status === "pending_accept") {

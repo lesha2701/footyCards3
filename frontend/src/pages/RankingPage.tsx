@@ -1,3 +1,4 @@
+import { ListSkeleton } from "@/components/common/Skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -51,7 +52,7 @@ export default function RankingPage() {
         ))}
       </div>
 
-      {isLoading && <p className="text-sm text-ink-mist">Загрузка...</p>}
+      {isLoading && <ListSkeleton count={3} />}
 
       {!isLoading && !data?.top.length ? (
         <EmptyState icon={IconTrophy} title="Пока никто не набрал очков" description="Стань первым!" />
