@@ -5,6 +5,7 @@ from app.core.dependencies import verify_internal_secret
 from app.database import get_db
 from app.schemas.chat_pack import ChatPackOpenIn
 from app.schemas.club_league import ClubLeagueSettleResult
+from app.schemas.club_war import ClubWarSweepResult
 from app.schemas.magnate import MagnateSweepResult
 from app.schemas.pack import PackOpenResult
 from app.schemas.stars import (
@@ -111,6 +112,16 @@ async def settle_club_league(slot_key: str | None = None, db: AsyncSession = Dep
     """Called by the bot at its career slots: pays out last week's «Лига
     клубов» once. Repeated calls are no-ops (club_league_weeks primary key)."""
     return ClubLeagueSettleResult(clubs_rewarded=await club_league_service.settle_due(db))
+
+
+@router.post("/clubs/wars/sweep", response_model=ClubWarSweepResult)
+async def sweep_club_wars(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Called by the bot every few minutes: pairs this week's «Клубные войны»
+    once their start time comes and settles finished ones (both idempotent)."""
+    from app.services import club_war_service
+
+    started, settled = await club_war_service.sweep(db)
+    return ClubWarSweepResult(started=started, settled=settled)
 
 
 @router.post("/career/reminders", response_model=PlayerTournamentReminderResult)

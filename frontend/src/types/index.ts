@@ -2043,6 +2043,37 @@ export interface ClubTrophies {
   wars_won: number;
 }
 
+export interface ClubWarSide {
+  club_id: number;
+  name: string;
+  logo_shape: ClubLogoShape;
+  logo_color: string;
+  emblem?: ClubEmblem | null;
+  war_rating: number;
+  score: number;
+  members: { user_id: number; name: string; games: number; packs: number; tasks: number; points: number }[];
+}
+
+export interface ClubWar {
+  enabled: boolean;
+  state: "none" | "upcoming" | "active" | "finished";
+  starts_at: string;
+  ends_at: string;
+  duration_hours: number;
+  min_members: number;
+  member_count: number;
+  war_rating: number;
+  win_budget: number;
+  draw_budget: number;
+  loss_budget: number;
+  win_member_coins: number;
+  war_id: number | null;
+  me: ClubWarSide | null;
+  opponent: ClubWarSide | null;
+  result: "win" | "loss" | "draw" | null;
+  history: { war_id: number; opponent_name: string; my_score: number; opponent_score: number; result: "win" | "loss" | "draw"; ended_at: string }[];
+}
+
 export interface ClubShop {
   budget: number;
   can_buy: boolean;

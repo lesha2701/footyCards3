@@ -633,6 +633,16 @@ class GameConfigOut(BaseModel):
     club_league_promote_count: int = 3
     club_league_relegate_count: int = 3
     club_league_division_reward_pct: list[int] = []
+    club_war_enabled: bool = True
+    club_war_start_weekday: int = 4
+    club_war_start_hour: int = 18
+    club_war_duration_hours: int = 48
+    club_war_min_members: int = 3
+    club_war_member_cap: int = 100
+    club_war_win_budget: int = 3000
+    club_war_draw_budget: int = 1500
+    club_war_loss_budget: int = 500
+    club_war_win_member_coins: int = 200
     trade_send_min_account_age_days: int = 3
     trade_send_min_active_days: int = 2
     trade_daily_coins_receive_cap: int = 3000
@@ -1189,6 +1199,16 @@ class GameConfigUpdate(BaseModel):
     club_league_division_reward_pct: Optional[list[Annotated[int, Field(ge=0, le=1000)]]] = Field(
         default=None, min_length=3, max_length=3,
     )
+    club_war_enabled: Optional[bool] = None
+    club_war_start_weekday: Optional[int] = Field(default=None, ge=0, le=6)
+    club_war_start_hour: Optional[int] = Field(default=None, ge=0, le=23)
+    club_war_duration_hours: Optional[int] = Field(default=None, ge=1, le=168)
+    club_war_min_members: Optional[int] = Field(default=None, ge=1, le=11)
+    club_war_member_cap: Optional[int] = Field(default=None, ge=1, le=100000)
+    club_war_win_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
+    club_war_draw_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
+    club_war_loss_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
+    club_war_win_member_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod

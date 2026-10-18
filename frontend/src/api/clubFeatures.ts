@@ -10,6 +10,7 @@ import type {
   ClubTreasury,
   ClubTrophies,
   ClubWall,
+  ClubWar,
   GrantedRewards,
   StarsInvoiceCreate,
 } from "@/types";
@@ -103,5 +104,10 @@ export async function fetchClubQuests(): Promise<ClubQuests> {
 
 export async function fetchClubTrophies(clubId: number): Promise<ClubTrophies> {
   const { data } = await api.get<ClubTrophies>(`/clubs/${clubId}/trophies`);
+  return data;
+}
+
+export async function fetchClubWar(): Promise<ClubWar> {
+  const { data } = await api.get<ClubWar>("/clubs/me/war");
   return data;
 }

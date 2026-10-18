@@ -963,3 +963,16 @@ class GameConfig(TimestampMixin, Base):
     club_league_division_reward_pct: Mapped[list] = mapped_column(
         JSON, default=lambda: [100, 150, 200], nullable=False,
     )
+    # «Клубные войны» (club_war_service): weekly 48-hour club-vs-club, start
+    # weekday 0=Mon..6=Sun / hour in the app timezone; prizes into the budget,
+    # winners' members each claim `club_war_win_member_coins`.
+    club_war_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    club_war_start_weekday: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    club_war_start_hour: Mapped[int] = mapped_column(Integer, default=18, nullable=False)
+    club_war_duration_hours: Mapped[int] = mapped_column(Integer, default=48, nullable=False)
+    club_war_min_members: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    club_war_member_cap: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    club_war_win_budget: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
+    club_war_draw_budget: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
+    club_war_loss_budget: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
+    club_war_win_member_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)

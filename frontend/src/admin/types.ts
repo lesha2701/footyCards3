@@ -148,6 +148,16 @@ export interface GameConfig {
   club_league_promote_count: number;
   club_league_relegate_count: number;
   club_league_division_reward_pct: number[];
+  club_war_enabled: boolean;
+  club_war_start_weekday: number;
+  club_war_start_hour: number;
+  club_war_duration_hours: number;
+  club_war_min_members: number;
+  club_war_member_cap: number;
+  club_war_win_budget: number;
+  club_war_draw_budget: number;
+  club_war_loss_budget: number;
+  club_war_win_member_coins: number;
   club_pass_frame_cosmetic_id: number | null;
   club_pass_badge_id: number | null;
   club_pass_ad_free: boolean;
@@ -870,7 +880,8 @@ export type AdminClubBudgetTransactionType =
   | "emblem_purchase"
   | "card_sale"
   | "shop_purchase"
-  | "quest_reward";
+  | "quest_reward"
+  | "war_reward";
 
 export interface AdminClubTournament {
   tournament_id: number;

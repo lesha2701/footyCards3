@@ -127,6 +127,7 @@ export default function AdminGamesPage() {
       | "trades_enabled"
       | "trade_coins_enabled"
       | "trade_cards_both_sides"
+      | "club_war_enabled"
       | "blackjack_enabled"
       | "leagues_enabled"
       | "diamond_rating_cap_enabled"
@@ -421,6 +422,27 @@ export default function AdminGamesPage() {
           {field("club_league_season_weeks", "Сезон, недель")}
           {field("club_league_promote_count", "Повышаются в конце сезона (топ-N)")}
           {field("club_league_relegate_count", "Вылетают в конце сезона (последние N)")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Клубные войны</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Раз в неделю клубы (от N участников) получают соперника с ближайшим рейтингом (Эло). В окне войны очки
+          считаются как в лиге клубов (игры, паки, задания) с личным потолком. День недели: 0 — пн … 6 — вс, час — по
+          времени сервера (часовой пояс приложения).
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("club_war_enabled", "Войны включены")}
+          {field("club_war_start_weekday", "День старта (0 пн … 6 вс)")}
+          {field("club_war_start_hour", "Час старта")}
+          {field("club_war_duration_hours", "Длительность, ч")}
+          {field("club_war_min_members", "Минимум участников в клубе")}
+          {field("club_war_member_cap", "Максимум очков с игрока за войну")}
+          {field("club_war_win_budget", "Победа: в бюджет клуба")}
+          {field("club_war_draw_budget", "Ничья: в бюджет клуба")}
+          {field("club_war_loss_budget", "Поражение: в бюджет клуба")}
+          {field("club_war_win_member_coins", "Победа: монет каждому участнику")}
         </div>
       </section>
 

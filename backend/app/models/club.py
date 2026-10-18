@@ -49,6 +49,8 @@ class Club(Base):
     budget_treasurer_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # «Лига клубов» division: 0 Бронза, 1 Серебро, 2 Золото (club_league_service).
     league_division: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Клубные войны» Elo rating — wars pair clubs closest by it (club_war_service).
+    war_rating: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
 
     __table_args__ = (CheckConstraint("budget >= 0", name="ck_clubs_budget_non_negative"),)
 

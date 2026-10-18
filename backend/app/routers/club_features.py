@@ -13,6 +13,7 @@ from app.schemas.club import BudgetPolicyIn, ClubDetailOut, MemberRoleIn
 from app.schemas.club_emblem import ClubDonationInvoiceIn, ClubEmblemStateOut, ClubEmblemUpdateIn, ClubTreasuryOut
 from app.schemas.club_quest import ClubQuestsOut
 from app.schemas.club_trophy import ClubTrophiesOut
+from app.schemas.club_war import ClubWarOut
 from app.schemas.club_reward import ClubShopOut
 from app.schemas.club_wall import ClubPostIn, ClubWallOut
 from app.schemas.monetization import GrantedRewardsOut
@@ -28,6 +29,7 @@ from app.services import (
     club_treasury_service,
     club_trophy_service,
     club_wall_service,
+    club_war_service,
     shop_product_service,
 )
 
@@ -135,3 +137,8 @@ async def get_quests(db: AsyncSession = Depends(get_db), user: User = Depends(ge
 @router.get("/{club_id}/trophies", response_model=ClubTrophiesOut)
 async def get_trophies(club_id: int, db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
     return await club_trophy_service.get_trophies(db, club_id)
+
+
+@router.get("/me/war", response_model=ClubWarOut)
+async def get_war(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_war_service.get_war(db, user)

@@ -83,3 +83,20 @@ async def run_club_league_loop() -> None:
     settles a week at most once (and the Mini App settles lazily too), so
     every fire after the first one on a Monday is a no-op."""
     await _run("/clubs/league/settle", "Club league", 0)
+
+
+CLUB_WAR_SWEEP_SECONDS = 300
+
+
+async def run_club_war_loop() -> None:
+    """«Клубные войны»: every few minutes, pairs this week's wars once their
+    start time comes and settles finished ones. Both steps are idempotent
+    backend-side (and also run lazily when a player opens the war screen)."""
+    while True:
+        try:
+            data = await _post_internal("/clubs/wars/sweep", datetime.now(ZoneInfo(settings.timezone)).isoformat())
+            if data.get("started") or data.get("settled"):
+                logger.info("Club wars sweep: %s", data)
+        except Exception:  # noqa: BLE001 - keep the loop alive across transient HTTP/network errors
+            logger.exception("Club wars loop iteration failed")
+        await asyncio.sleep(CLUB_WAR_SWEEP_SECONDS)

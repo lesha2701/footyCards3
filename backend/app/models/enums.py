@@ -182,6 +182,7 @@ class ClubBudgetTransactionType(str, enum.Enum):
     card_sale = "card_sale"
     shop_purchase = "shop_purchase"
     quest_reward = "quest_reward"
+    war_reward = "war_reward"
 
 
 class TournamentQueueStatus(str, enum.Enum):
@@ -349,6 +350,8 @@ class NotificationType(str, enum.Enum):
     club_reward_available = "club_reward_available"
     club_league_promoted = "club_league_promoted"
     club_league_relegated = "club_league_relegated"
+    club_war_started = "club_war_started"
+    club_war_finished = "club_war_finished"
     daily_reward_available = "daily_reward_available"
     special_pack = "special_pack"
     admin_message = "admin_message"

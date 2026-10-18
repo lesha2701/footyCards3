@@ -19,6 +19,7 @@ from services.career_scheduler import (
     run_career_reminder_loop,
     run_career_round_loop,
     run_club_league_loop,
+    run_club_war_loop,
 )
 from services.daily_reminder import run_daily_reward_reminder
 from services.free_pack_notifier import run_free_pack_notifier
@@ -68,6 +69,7 @@ async def run_polling() -> None:
         asyncio.create_task(run_lineup_reminder_loop()),
         asyncio.create_task(run_player_tournament_simulation_loop()),
         asyncio.create_task(run_player_tournament_reminder_loop()),
+        asyncio.create_task(run_club_war_loop()),
         asyncio.create_task(run_career_round_loop()),
         asyncio.create_task(run_career_reminder_loop()),
         asyncio.create_task(run_career_live_loop()),

@@ -323,6 +323,18 @@ function ClubHome({ club }: { club: Club }) {
       {claimError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{claimError}</p>}
 
       <button
+        onClick={() => navigate("/clubs/war")}
+        className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-red-500/15 to-bg-surface p-3 text-left active:scale-[0.99]"
+      >
+        <span className="text-lg">⚔️</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-ink-chalk">Клубная война</span>
+          <span className="block text-caption text-ink-mist">Раз в неделю: 48 часов клуб против клуба</span>
+        </span>
+        <IconChevronRight size={16} className="shrink-0 text-ink-mist-dim" />
+      </button>
+
+      <button
         onClick={() => navigate("/clubs/quests")}
         className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
       >
