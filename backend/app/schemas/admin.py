@@ -622,6 +622,8 @@ class GameConfigOut(BaseModel):
     trade_send_min_active_days: int = 2
     trade_daily_coins_receive_cap: int = 3000
     trade_coin_tax_pct: int = 0
+    trade_coins_enabled: bool = False
+    trade_cards_both_sides: bool = True
     trade_suspicious_young_days: int = 14
     trade_suspicious_min_donors: int = 3
 
@@ -1080,6 +1082,8 @@ class GameConfigUpdate(BaseModel):
     trade_send_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_daily_coins_receive_cap: Optional[int] = Field(default=None, ge=0)
     trade_coin_tax_pct: Optional[int] = Field(default=None, ge=0, le=90)
+    trade_coins_enabled: Optional[bool] = None
+    trade_cards_both_sides: Optional[bool] = None
     trade_suspicious_young_days: Optional[int] = Field(default=None, ge=1, le=365)
     trade_suspicious_min_donors: Optional[int] = Field(default=None, ge=2, le=100)
 

@@ -85,13 +85,19 @@ export default function NewTradePage() {
     setError(null);
   };
 
+  const coinsEnabled = rules?.coins_enabled ?? true;
+  const coins = coinsEnabled ? senderCoins : 0;
+  const canSubmit = rules?.cards_both_sides
+    ? offeredIds.length > 0 && requestedIds.length > 0
+    : offeredIds.length > 0 || requestedIds.length > 0 || coins > 0;
+
   const submit = () => {
     if (!target) return;
     createMutation.mutate({
       receiver_id: target.id,
       offered_card_ids: offeredIds,
       requested_card_ids: requestedIds,
-      sender_coins: senderCoins,
+      sender_coins: coins,
       message: message || undefined,
     });
   };
@@ -100,7 +106,7 @@ export default function NewTradePage() {
     text: "Отправить предложение",
     onClick: submit,
     visible: !!target,
-    enabled: offeredIds.length > 0 || requestedIds.length > 0 || senderCoins > 0,
+    enabled: canSubmit,
     loading: createMutation.isPending,
   });
 
@@ -206,7 +212,15 @@ export default function NewTradePage() {
             )}
           </section>
 
-          <div>
+          {rules && (!rules.coins_enabled || rules.cards_both_sides) && (
+            <p className="text-caption text-ink-mist-dim">
+              {rules.cards_both_sides
+                ? "Обмен — «карточка на карточку»: выбери хотя бы одну свою карточку и одну карточку игрока."
+                : "Монеты в обменах сейчас отключены."}
+            </p>
+          )}
+
+          {coinsEnabled && <div>
             <label className="mb-1 block text-sm font-semibold text-ink-mist">Добавить монет со своей стороны</label>
             <NumberInput
               min={0}
@@ -220,7 +234,7 @@ export default function NewTradePage() {
                 {senderCoins - Math.min(senderCoins, Math.ceil((senderCoins * rules.coin_tax_pct) / 100))} монет
               </p>
             )}
-          </div>
+          </div>}
 
           <div>
             <label className="mb-1 block text-sm font-semibold text-ink-mist">Сообщение (необязательно)</label>
@@ -235,7 +249,7 @@ export default function NewTradePage() {
           <button
             onClick={submit}
             hidden={nativeSubmit}
-            disabled={createMutation.isPending || (offeredIds.length === 0 && requestedIds.length === 0 && senderCoins === 0)}
+            disabled={createMutation.isPending || !canSubmit}
             className="rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-40"
           >
             {createMutation.isPending ? "Отправка..." : "Отправить предложение"}

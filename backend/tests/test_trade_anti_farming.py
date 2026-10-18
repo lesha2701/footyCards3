@@ -1,13 +1,15 @@
-"""Trade anti-farming rules (services/trade_guard_service.py): new accounts
-can't give value, a daily cap on coins received through trades, the coin tax,
-and the admin «suspicious trade flows» report."""
+"""Trade anti-farming rules (services/trade_guard_service.py): card-for-card
+mode, new accounts can't give value, a daily cap on coins received through
+trades, the coin tax, and the admin «suspicious trade flows» report."""
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import select
 
 import app.core.rate_limit as rate_limit_module
 from app.models.enums import CardSource, Rarity, TradeStatus, TransactionType
+from app.models.game_config import GameConfig
 from app.models.trade import TradeOffer
 from app.models.transaction import CoinTransaction
 from app.models.user import User
@@ -25,6 +27,13 @@ API = "/api/v1"
 def _reset_rate_limits():
     rate_limit_module._hits.clear()
     yield
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _coins_and_gifts_allowed(db_session):
+    """Most rules below are about coins and one-way gifts, which the default
+    card-for-card mode forbids; the card-for-card tests switch it back on."""
+    await _set_config(db_session, trade_coins_enabled=True, trade_cards_both_sides=False)
 
 
 async def _register(client, db_session, telegram_id, bot_token):
@@ -240,6 +249,81 @@ async def test_no_tax_by_default(client, db_session, bot_token):
     offer = await client.post(f"{API}/trades/offers", headers=headers, json={"receiver_id": receiver.id, "sender_coins": 100})
     resp = await client.post(f"{API}/trades/offers/{offer.json()['id']}/accept", headers=receiver_headers)
     assert resp.json()["new_balance"] == 100
+
+
+# --- card-for-card mode (the defaults) -----------------------------------------------------
+
+
+async def _card_for_card_mode(db_session):
+    await _set_config(db_session, trade_coins_enabled=False, trade_cards_both_sides=True)
+
+
+async def test_card_for_card_mode_rejects_coins(client, db_session, bot_token):
+    sender, headers = await _register(client, db_session, 760201, bot_token)
+    receiver, _ = await _register(client, db_session, 760202, bot_token)
+    await _make_veteran(db_session, sender)
+    await _make_veteran(db_session, receiver)
+    mine, theirs = await _card(db_session, sender.id), await _card(db_session, receiver.id)
+    await _card_for_card_mode(db_session)
+
+    for extra in ({"sender_coins": 100}, {"receiver_coins": 100}):
+        resp = await client.post(f"{API}/trades/offers", headers=headers, json={
+            "receiver_id": receiver.id, "offered_card_ids": [mine.id], "requested_card_ids": [theirs.id], **extra,
+        })
+        assert resp.status_code == 409
+        assert resp.json()["error"]["details"]["rule"] == "trade_coins_disabled"
+        assert "карточка на карточку" in resp.json()["error"]["message"]
+
+
+async def test_card_for_card_mode_rejects_one_way_gifts(client, db_session, bot_token):
+    sender, headers = await _register(client, db_session, 760211, bot_token)
+    receiver, _ = await _register(client, db_session, 760212, bot_token)
+    await _make_veteran(db_session, sender)
+    await _make_veteran(db_session, receiver)
+    mine, theirs = await _card(db_session, sender.id), await _card(db_session, receiver.id)
+    await _card_for_card_mode(db_session)
+
+    for body in ({"offered_card_ids": [mine.id]}, {"requested_card_ids": [theirs.id]}):
+        resp = await client.post(f"{API}/trades/offers", headers=headers, json={"receiver_id": receiver.id, **body})
+        assert resp.status_code == 409
+        assert resp.json()["error"]["details"]["rule"] == "trade_cards_both_sides"
+
+
+async def test_card_for_card_trade_goes_through(client, db_session, bot_token):
+    sender, headers = await _register(client, db_session, 760221, bot_token)
+    receiver, receiver_headers = await _register(client, db_session, 760222, bot_token)
+    await _make_veteran(db_session, sender)
+    await _make_veteran(db_session, receiver)
+    mine, theirs = await _card(db_session, sender.id), await _card(db_session, receiver.id)
+    await _card_for_card_mode(db_session)
+
+    offer = await client.post(f"{API}/trades/offers", headers=headers, json={
+        "receiver_id": receiver.id, "offered_card_ids": [mine.id], "requested_card_ids": [theirs.id],
+    })
+    assert offer.status_code == 200
+    assert (await client.post(f"{API}/trades/offers/{offer.json()['id']}/accept", headers=receiver_headers)).status_code == 200
+    await db_session.refresh(mine)
+    await db_session.refresh(theirs)
+    assert (mine.owner_id, theirs.owner_id) == (receiver.id, sender.id)
+
+
+async def test_pending_coin_offer_is_refused_once_coins_are_switched_off(client, db_session, bot_token):
+    sender, headers = await _register(client, db_session, 760231, bot_token)
+    receiver, receiver_headers = await _register(client, db_session, 760232, bot_token)
+    await _make_veteran(db_session, sender)
+    offer = await client.post(f"{API}/trades/offers", headers=headers, json={"receiver_id": receiver.id, "sender_coins": 100})
+    assert offer.status_code == 200
+
+    await _card_for_card_mode(db_session)
+    resp = await client.post(f"{API}/trades/offers/{offer.json()['id']}/accept", headers=receiver_headers)
+    assert resp.status_code == 409
+    assert resp.json()["error"]["details"]["rule"] == "trade_coins_disabled"
+
+
+def test_card_for_card_is_the_default():
+    columns = GameConfig.__table__.c
+    assert columns.trade_coins_enabled.default.arg is False
+    assert columns.trade_cards_both_sides.default.arg is True
 
 
 # --- player-facing rules ---------------------------------------------------------------------

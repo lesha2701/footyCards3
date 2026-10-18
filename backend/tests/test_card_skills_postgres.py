@@ -158,6 +158,7 @@ async def test_assign_racing_a_trade_offer_never_loses_tokens(pg, monkeypatch):
         return None
 
     monkeypatch.setattr(trade_guard_service, "give_block_reason", _no_block)
+    monkeypatch.setattr(trade_guard_service, "ensure_trade_shape", lambda *_args, **_kwargs: None)
     sender_id = await _user(pg)
     receiver_id = await _user(pg)
     async with pg() as s:

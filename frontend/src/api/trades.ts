@@ -20,6 +20,8 @@ export interface TradeRules {
   daily_coins_receive_cap: number;
   coins_received_today: number;
   coin_tax_pct: number;
+  coins_enabled: boolean;
+  cards_both_sides: boolean;
 }
 
 export async function fetchTradeRules(): Promise<TradeRules> {

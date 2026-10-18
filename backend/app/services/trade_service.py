@@ -140,6 +140,10 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
 
     # Anti-farming (see trade_guard_service); re-checked at accept time.
     config = await get_config(db)
+    trade_guard_service.ensure_trade_shape(
+        config, payload.sender_coins, payload.receiver_coins,
+        len(set(offered_ids)), len(set(requested_ids)),
+    )
     if payload.sender_coins > 0 or offered_ids:
         await trade_guard_service.ensure_can_give(db, sender, config, own=True)
     if payload.receiver_coins > 0 or requested_ids:
@@ -332,7 +336,13 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
         if card.is_in_tactico_squad:
             raise ConflictError(f"Card #{card.serial_number} is currently used in a Tactico squad")
 
-    # Anti-farming, under both user locks: this is the check that counts.
+    # Anti-farming, under both user locks: this is the check that counts
+    # (offers created before a rule was switched on can't slip through).
+    trade_guard_service.ensure_trade_shape(
+        config, offer.sender_coins, offer.receiver_coins,
+        sum(1 for tc in trade_cards if tc.side == TradeCardSide.offered),
+        sum(1 for tc in trade_cards if tc.side == TradeCardSide.requested),
+    )
     if offer.sender_coins > 0 or any(tc.side == TradeCardSide.offered for tc in trade_cards):
         await trade_guard_service.ensure_can_give(db, sender, config, own=False)
     if offer.receiver_coins > 0 or any(tc.side == TradeCardSide.requested for tc in trade_cards):

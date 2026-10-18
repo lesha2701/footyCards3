@@ -69,3 +69,5 @@ class TradeRulesOut(BaseModel):
     daily_coins_receive_cap: int
     coins_received_today: int
     coin_tax_pct: int
+    coins_enabled: bool
+    cards_both_sides: bool

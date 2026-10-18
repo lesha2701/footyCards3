@@ -74,6 +74,8 @@ async def trade_guards_off(_fresh_schema):
         config.trade_send_min_active_days = 0
         config.trade_daily_coins_receive_cap = 0
         config.trade_coin_tax_pct = 0
+        config.trade_coins_enabled = True
+        config.trade_cards_both_sides = False
         await session.commit()
 
 

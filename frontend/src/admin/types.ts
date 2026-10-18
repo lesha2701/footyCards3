@@ -581,6 +581,8 @@ export interface GameConfig {
   trade_send_min_active_days: number;
   trade_daily_coins_receive_cap: number;
   trade_coin_tax_pct: number;
+  trade_coins_enabled: boolean;
+  trade_cards_both_sides: boolean;
   trade_suspicious_young_days: number;
   trade_suspicious_min_donors: number;
 }

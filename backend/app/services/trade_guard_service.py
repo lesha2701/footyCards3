@@ -33,6 +33,22 @@ from app.models.user import User
 from app.models.user_activity import UserDailyActivity
 
 
+def ensure_trade_shape(
+    config: GameConfig, sender_coins: int, receiver_coins: int, offered_cards: int, requested_cards: int,
+) -> None:
+    """Card-for-card mode: no coins, and (optionally) cards on both sides."""
+    if not config.trade_coins_enabled and (sender_coins > 0 or receiver_coins > 0):
+        raise ConflictError(
+            "Сейчас обмены только «карточка на карточку» — монеты в обмен добавлять нельзя.",
+            details={"rule": "trade_coins_disabled"},
+        )
+    if config.trade_cards_both_sides and (offered_cards == 0 or requested_cards == 0):
+        raise ConflictError(
+            "В обмене должны быть карточки с обеих сторон: выбери хотя бы одну свою и одну карточку игрока.",
+            details={"rule": "trade_cards_both_sides"},
+        )
+
+
 async def active_days(db: AsyncSession, user_id: int) -> int:
     return int((await db.execute(
         select(func.count()).select_from(UserDailyActivity).where(UserDailyActivity.user_id == user_id)
@@ -129,4 +145,6 @@ async def rules_for(db: AsyncSession, user: User, config: GameConfig) -> dict:
         "daily_coins_receive_cap": config.trade_daily_coins_receive_cap,
         "coins_received_today": await coins_received_today(db, user.id),
         "coin_tax_pct": config.trade_coin_tax_pct,
+        "coins_enabled": config.trade_coins_enabled,
+        "cards_both_sides": config.trade_cards_both_sides,
     }

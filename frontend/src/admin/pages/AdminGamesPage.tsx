@@ -124,6 +124,8 @@ export default function AdminGamesPage() {
       | "matchmaking_enabled"
       | "wheel_enabled"
       | "trades_enabled"
+      | "trade_coins_enabled"
+      | "trade_cards_both_sides"
       | "blackjack_enabled"
       | "leagues_enabled"
       | "diamond_rating_cap_enabled"
@@ -726,6 +728,10 @@ export default function AdminGamesPage() {
           текущие сутки (МСК). Налог списывается с получателя монет и сжигается. 0 — правило выключено. Последние два
           поля — пороги блока «Подозрительные обмены» на странице «Аналитика».
         </p>
+        <div className="mb-3 flex flex-col gap-2">
+          {toggle("trade_coins_enabled", "Монеты в обменах (выкл — только «карточка на карточку»)")}
+          {toggle("trade_cards_both_sides", "Карточки обязательны с обеих сторон (без подарков в одну сторону)")}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           {field("trade_send_min_account_age_days", "Мин. возраст аккаунта, дней")}
           {field("trade_send_min_active_days", "Мин. дней активности")}
