@@ -177,6 +177,7 @@ async def _club_to_detail(db: AsyncSession, club: Club, requester_user_id: Optio
         daily_reward_seconds_remaining=daily_reward_seconds_remaining,
         personal_match_earnings=personal_match_earnings,
         budget_treasurer_only=club.budget_treasurer_only,
+        star_balance=club.star_balance,
         wall_unread=wall_unread,
         rewards_unclaimed=rewards_unclaimed,
         can_spend_budget=bool(my_membership) and (

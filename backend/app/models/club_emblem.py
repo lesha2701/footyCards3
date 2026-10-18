@@ -62,3 +62,19 @@ class ClubDonation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     __table_args__ = (UniqueConstraint("invoice_id", name="uq_club_donations_invoice_id"),)
+
+
+class ClubStarTransaction(Base):
+    """Ledger of a club's «Звёзды клуба» balance: + a patron's Stars top-up,
+    - a purchase from it (club_treasury_service)."""
+    __tablename__ = "club_star_transactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    # "donation" | "emblem_purchase" | "admin"
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    description: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)

@@ -139,7 +139,7 @@ async def get_state(db: AsyncSession, user: User) -> ClubEmblemStateOut:
             # Switched-off items only stay visible to a club that already owns them.
             if i.is_active or i.id in unlocked
         ],
-        budget=club.budget, can_edit=_can_edit(membership),
+        budget=club.budget, star_balance=club.star_balance, can_edit=_can_edit(membership),
         can_spend_budget=_can_spend_budget(membership, club),
     )
 
@@ -220,6 +220,34 @@ async def update_emblem(db: AsyncSession, user: User, payload: ClubEmblemUpdateI
     club.logo_outline_thin = payload.outline_thin
     db.add(club)
     await db.commit()
+    return await get_state(db, user)
+
+
+async def buy_with_club_stars(db: AsyncSession, user: User, item_id: int) -> ClubEmblemStateOut:
+    """A Stars layer paid from the club's «Звёзды клуба» balance (budget spenders)."""
+    from app.services.club_service import require_budget_spender
+    from app.services.club_treasury_service import change_star_balance
+
+    config = await get_config(db)
+    if not config.club_emblems_enabled:
+        raise ConflictError("Конструктор эмблем сейчас недоступен")
+    membership = await _membership(db, user.id)
+    item = await db.get(ClubEmblemItem, item_id)
+    if item is None:
+        raise NotFoundError("Элемент не найден")
+    if not item.is_active or item.stars_price <= 0:
+        raise ConflictError("Этот элемент не продаётся за звёзды")
+    club = await _lock_club(db, membership.club_id)
+    require_budget_spender(membership, club)
+    if item.id in await unlocked_item_ids(db, club.id):
+        raise ConflictError("Уже открыто")
+    await change_star_balance(db, club, -item.stars_price, "emblem_purchase", f"Эмблема: {item.name}", user.id)
+    db.add(ClubEmblemUnlock(club_id=club.id, item_id=item.id, source="club_stars", user_id=user.id))
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise ConflictError("Уже открыто")
     return await get_state(db, user)
 
 

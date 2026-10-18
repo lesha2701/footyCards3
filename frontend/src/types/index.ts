@@ -1797,6 +1797,7 @@ export interface ClubEmblemState {
   emblem: ClubEmblem;
   items: (ClubEmblemItem & { unlocked: boolean })[];
   budget: number;
+  star_balance: number;
   can_edit: boolean;
   can_spend_budget: boolean;
 }
@@ -1816,6 +1817,7 @@ export interface ClubTreasury {
   enabled: boolean;
   club_id: number;
   budget: number;
+  star_balance: number;
   coins_per_star: number;
   star_options: number[];
   silver_stars: number;
@@ -1947,6 +1949,7 @@ export interface Club {
   my_role: ClubRole | null;
   budget: number;
   budget_treasurer_only?: boolean;
+  star_balance?: number;
   can_spend_budget?: boolean;
   wall_unread?: number | null;
   rewards_unclaimed?: number | null;
@@ -2089,7 +2092,7 @@ export interface ClubSurplus {
   sell_pct: number;
   exchange_count: number;
   cards: { card: ClubCard; protected: boolean; sell_value: number }[];
-  exchange_options: { rarity: Rarity; target_rarity: Rarity; available: number }[];
+  exchange_pack: ClubPack | null;
 }
 
 export interface ClubLineupSlot {

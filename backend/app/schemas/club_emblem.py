@@ -46,6 +46,8 @@ class ClubEmblemStateOut(BaseModel):
     emblem: ClubEmblemOut
     items: list[ClubEmblemCatalogItemOut]
     budget: int
+    # «Звёзды клуба» — Stars items can be bought from it by budget spenders.
+    star_balance: int = 0
     can_edit: bool
     can_spend_budget: bool
 
@@ -96,6 +98,7 @@ class ClubTreasuryOut(BaseModel):
     enabled: bool
     club_id: int
     budget: int
+    star_balance: int = 0
     coins_per_star: int
     star_options: list[int]
     silver_stars: int
@@ -108,3 +111,5 @@ class ClubTreasuryOut(BaseModel):
 
 class ClubDonationInvoiceIn(BaseModel):
     stars: int = Field(ge=1, le=100_000)
+    # "stars": onto the club's Stars balance; "coins": converted into the budget.
+    target: Literal["stars", "coins"] = "coins"

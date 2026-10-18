@@ -627,6 +627,7 @@ class GameConfigOut(BaseModel):
     club_card_market_enabled: bool = True
     club_card_sell_pct: int = 100
     club_card_exchange_count: int = 5
+    club_card_exchange_pack_id: Optional[int] = None
     club_announcement_cooldown_minutes: int = 60
     club_quests_enabled: bool = True
     club_league_season_weeks: int = 4
@@ -1191,6 +1192,7 @@ class GameConfigUpdate(BaseModel):
     club_card_market_enabled: Optional[bool] = None
     club_card_sell_pct: Optional[int] = Field(default=None, ge=0, le=1000)
     club_card_exchange_count: Optional[int] = Field(default=None, ge=2, le=20)
+    club_card_exchange_pack_id: Optional[int] = Field(default=None, ge=0)
     club_announcement_cooldown_minutes: Optional[int] = Field(default=None, ge=0, le=10080)
     club_quests_enabled: Optional[bool] = None
     club_league_season_weeks: Optional[int] = Field(default=None, ge=1, le=52)

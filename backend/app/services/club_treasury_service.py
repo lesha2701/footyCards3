@@ -1,7 +1,10 @@
-"""«Казна за Stars»: any member tops up their club's budget with Telegram
-Stars ("club_donation:<club_id>:<coins>" through shop_product_service — the
+"""«Казна за Stars»: any member tops up their club with Telegram Stars —
+either into the budget as coins ("club_donation:<club_id>:<coins>"; the
 coins are frozen into the product at invoice time, so an admin changing the
-rate mid-payment can't change what was bought). Every donation is a
+rate mid-payment can't change what was bought) or 1:1 onto the club's
+«Звёзды клуба» balance ("club_stars:<club_id>"), which budget spenders then
+spend on the club's Stars goods (emblem layers) — both through
+shop_product_service. Every donation is a
 `ClubDonation` row; the «Доска меценатов» and the members' sponsor badges
 (bronze for any donation, silver/gold from GameConfig thresholds) are sums
 over those rows."""
@@ -12,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.club import Club, ClubMember
-from app.models.club_emblem import ClubDonation
+from app.models.club_emblem import ClubDonation, ClubStarTransaction
 from app.models.enums import ClubBudgetTransactionType, ClubRole, NotificationType
 from app.models.game_config import GameConfig
 from app.models.pack import StarsInvoice
@@ -91,7 +94,7 @@ async def get_treasury(db: AsyncSession, user: User) -> ClubTreasuryOut:
     )).all()
     my_stars = (await stars_by_user(db, club.id)).get(user.id, 0)
     return ClubTreasuryOut(
-        enabled=config.club_donation_enabled, club_id=club.id, budget=club.budget,
+        enabled=config.club_donation_enabled, club_id=club.id, budget=club.budget, star_balance=club.star_balance,
         coins_per_star=config.club_donation_coins_per_star, star_options=_star_options(config),
         silver_stars=config.club_sponsor_silver_stars, gold_stars=config.club_sponsor_gold_stars,
         my_stars=my_stars, my_tier=tier_for(my_stars, config), patrons=patrons,
@@ -108,7 +111,7 @@ async def get_treasury(db: AsyncSession, user: User) -> ClubTreasuryOut:
 # --- Stars ("club_donation:<club_id>:<coins>", see shop_product_service) -------------------
 
 
-async def stars_order(db: AsyncSession, user: User, stars: int) -> tuple[str, int, str, str]:
+async def stars_order(db: AsyncSession, user: User, stars: int, target: str = "coins") -> tuple[str, int, str, str]:
     config = await get_config(db)
     if not config.club_donation_enabled:
         raise ConflictError("Пополнение казны сейчас недоступно")
@@ -116,6 +119,12 @@ async def stars_order(db: AsyncSession, user: User, stars: int) -> tuple[str, in
         raise ConflictError("Такой суммы нет — выбери из предложенных")
     membership = await _membership(db, user.id)
     club = await db.get(Club, membership.club_id)
+    if target == "stars":
+        return (
+            f"club_stars:{club.id}", stars, "Звёзды клуба",
+            f"{stars} ⭐ на звёздный баланс клуба «{club.name}» — на эмблему и другие покупки клуба за звёзды. "
+            "Ты попадёшь на «Доску меценатов».",
+        )
     coins = stars * config.club_donation_coins_per_star
     return (
         f"club_donation:{club.id}:{coins}", stars, "Казна клуба",
@@ -173,3 +182,61 @@ async def deliver_stars(db: AsyncSession, user: User, invoice: StarsInvoice) -> 
             f"{donor} пополнил бюджет «{club.name}» на {coins} монет",
         )
     return {"kind": "club_donation", "coins": coins, "club_name": club.name}
+
+
+# --- «Звёзды клуба» ("club_stars:<club_id>") ------------------------------------------------
+
+
+async def validate_club_stars(db: AsyncSession, user_id: int, arg: str) -> tuple[bool, str]:
+    club_id = int(arg)
+    config = await get_config(db)
+    if not config.club_donation_enabled:
+        return False, "Пополнение казны сейчас недоступно"
+    club = await db.get(Club, club_id)
+    if club is None or club.is_disbanded:
+        return False, "Клуб не найден"
+    membership = (await db.execute(select(ClubMember).where(ClubMember.user_id == user_id))).scalar_one_or_none()
+    if membership is None or membership.club_id != club_id:
+        return False, "Ты больше не в этом клубе"
+    return True, ""
+
+
+async def change_star_balance(
+    db: AsyncSession, club: Club, amount: int, kind: str, description: str, user_id: int | None = None,
+) -> None:
+    """`club` must be row-locked. Raises when a debit would go below zero."""
+    if club.star_balance + amount < 0:
+        raise ConflictError(
+            "На звёздном балансе клуба не хватает звёзд",
+            details={"star_balance": club.star_balance, "required": -amount},
+        )
+    club.star_balance += amount
+    db.add(ClubStarTransaction(
+        club_id=club.id, amount=amount, balance_after=club.star_balance, kind=kind, description=description, user_id=user_id,
+    ))
+    db.add(club)
+
+
+async def deliver_club_stars(db: AsyncSession, user: User, invoice: StarsInvoice) -> dict:
+    """Under the invoice row lock; payment already taken. ClubDonation's
+    unique invoice_id makes a duplicate delivery fail instead of crediting twice."""
+    club_id = int(invoice.shop_product.partition(":")[2])
+    club = (await db.execute(
+        select(Club).where(Club.id == club_id).with_for_update().execution_options(populate_existing=True)
+    )).scalar_one_or_none()
+    if club is None:
+        raise NotFoundError("Клуб не найден")
+    donor = user.username or user.first_name or f"#{user.id}"
+    await change_star_balance(db, club, invoice.stars_amount, "donation", f"Пополнение от {donor}", user.id)
+    db.add(ClubDonation(club_id=club.id, user_id=user.id, stars=invoice.stars_amount, coins=0, invoice_id=invoice.id))
+    managers = (await db.execute(
+        select(ClubMember.user_id).where(
+            ClubMember.club_id == club.id, ClubMember.role == ClubRole.captain, ClubMember.user_id != user.id,
+        )
+    )).scalars().all()
+    for manager_id in managers:
+        await notify(
+            db, manager_id, NotificationType.club_donation, "Звёзды клуба пополнены",
+            f"{donor} добавил {invoice.stars_amount} ⭐ на звёздный баланс «{club.name}»",
+        )
+    return {"kind": "club_stars", "stars": invoice.stars_amount, "club_name": club.name}

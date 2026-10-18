@@ -1,6 +1,8 @@
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
-from app.models.enums import Rarity
+from app.schemas.club_pack import ClubPackOut
 from app.schemas.club_squad import ClubCardOut
 
 
@@ -11,12 +13,6 @@ class SurplusCardOut(BaseModel):
     sell_value: int
 
 
-class SurplusExchangeOptionOut(BaseModel):
-    rarity: Rarity
-    target_rarity: Rarity
-    available: int
-
-
 class ClubSurplusOut(BaseModel):
     enabled: bool
     can_manage: bool
@@ -24,7 +20,8 @@ class ClubSurplusOut(BaseModel):
     sell_pct: int
     exchange_count: int
     cards: list[SurplusCardOut]
-    exchange_options: list[SurplusExchangeOptionOut]
+    # The club pack `exchange_count` spare cards are burned for (None: no active pack).
+    exchange_pack: Optional[ClubPackOut] = None
 
 
 class SurplusCardIdsIn(BaseModel):
@@ -36,7 +33,3 @@ class SurplusSellOut(BaseModel):
     coins: int
     budget: int
 
-
-class SurplusExchangeOut(BaseModel):
-    card: ClubCardOut
-    budget: int

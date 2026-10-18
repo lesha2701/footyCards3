@@ -295,6 +295,12 @@ function ClubHome({ club }: { club: Club }) {
           <p className="flex items-center gap-1 font-mono text-lg font-bold text-accent-lime">
             <IconCoin size={16} />
             {club.budget}
+            {!!club.star_balance && (
+              <span className="ml-2 flex items-center gap-1 text-base text-amber-300">
+                <IconStar size={14} />
+                {club.star_balance}
+              </span>
+            )}
           </p>
           {club.personal_match_earnings != null && (
             <p className="text-xs text-ink-mist-dim">

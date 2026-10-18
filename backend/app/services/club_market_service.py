@@ -4,8 +4,9 @@ lineup templates can be
 - sold into the club budget for `Player.quick_sell_price` ×
   `club_card_sell_pct` % (the same per-player price admins already tune for
   personal quick-sell), or
-- exchanged, `club_card_exchange_count` of one rarity for one random club
-  card of the next rarity (common → rare → epic → legendary).
+- burned, `club_card_exchange_count` cards of any rarity, for one free
+  opening of a club pack (`club_card_exchange_pack_id`, or the cheapest
+  active club pack when unset).
 
 Cards in any lineup template are protected. The club's lineup rows are
 locked first, so a sale can't race a captain putting the same card into a
@@ -13,31 +14,26 @@ lineup (set_club_lineup locks the template row it edits). Bench cards do
 stand in for suspended starters in tournaments — the UI says so; nothing
 here forces a minimum bench."""
 from sqlalchemy import delete, select
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.club import Club, ClubMember
 from app.models.club_card import ClubCard
+from app.models.club_pack import ClubPack
 from app.models.club_lineup import ClubLineup, ClubLineupCard
-from app.models.enums import ClubBudgetTransactionType, ClubCardSource, Rarity
+from app.models.enums import ClubBudgetTransactionType
 from app.models.game_config import GameConfig
 from app.models.player import Player
 from app.models.user import User
-from app.schemas.club_market import (
-    ClubSurplusOut,
-    SurplusCardOut,
-    SurplusExchangeOptionOut,
-    SurplusExchangeOut,
-    SurplusSellOut,
-)
+from app.schemas.club_market import ClubSurplusOut, SurplusCardOut, SurplusSellOut
+from app.schemas.club_pack import ClubPackOut
+from app.schemas.club_pack_open import ClubPackOpenResult
 from app.schemas.club_squad import ClubCardOut
 from app.schemas.player import PlayerOut
 from app.services.club_budget_service import credit_club_budget
-from app.services.club_card_service import create_club_card
 from app.services.game_config_service import get_config
-from app.services.pack_service import pick_random_player
-
-NEXT_RARITY = {Rarity.common: Rarity.rare, Rarity.rare: Rarity.epic, Rarity.epic: Rarity.legendary}
+from app.services.club_pack_service import mint_opening
 
 
 def sell_value(player: Player, config: GameConfig) -> int:
@@ -55,6 +51,17 @@ def _can_manage(membership: ClubMember, club: Club) -> bool:
     from app.services.club_service import can_spend_budget
 
     return can_spend_budget(membership, club)
+
+
+async def exchange_pack(db: AsyncSession, config: GameConfig) -> ClubPack | None:
+    """The club pack spare cards are burned for: the configured one, else the
+    cheapest active club pack."""
+    query = select(ClubPack).options(joinedload(ClubPack.rarity_probabilities)).where(ClubPack.is_active.is_(True))
+    if config.club_card_exchange_pack_id:
+        query = query.where(ClubPack.id == config.club_card_exchange_pack_id)
+    else:
+        query = query.order_by(ClubPack.price, ClubPack.id)
+    return (await db.execute(query.limit(1))).unique().scalar_one_or_none()
 
 
 async def protected_card_ids(db: AsyncSession, club_id: int) -> set[int]:
@@ -76,11 +83,8 @@ async def get_surplus(db: AsyncSession, user: User) -> ClubSurplusOut:
     )).scalars().all()
 
     out: list[SurplusCardOut] = []
-    free_by_rarity: dict[Rarity, int] = {}
     for c in cards:
         is_protected = c.id in protected
-        if not is_protected:
-            free_by_rarity[c.player.rarity] = free_by_rarity.get(c.player.rarity, 0) + 1
         out.append(SurplusCardOut(
             card=ClubCardOut(
                 id=c.id, serial_number=c.serial_number, player=PlayerOut.model_validate(c.player),
@@ -94,10 +98,7 @@ async def get_surplus(db: AsyncSession, user: User) -> ClubSurplusOut:
         enabled=config.club_card_market_enabled, can_manage=_can_manage(membership, club), budget=club.budget,
         sell_pct=config.club_card_sell_pct, exchange_count=config.club_card_exchange_count,
         cards=out,
-        exchange_options=[
-            SurplusExchangeOptionOut(rarity=r, target_rarity=t, available=free_by_rarity.get(r, 0))
-            for r, t in NEXT_RARITY.items()
-        ],
+        exchange_pack=ClubPackOut.model_validate(pack) if (pack := await exchange_pack(db, config)) else None,
     )
 
 
@@ -139,29 +140,12 @@ async def sell_cards(db: AsyncSession, user: User, card_ids: list[int]) -> Surpl
     return SurplusSellOut(sold=len(cards), coins=coins, budget=club.budget)
 
 
-async def exchange_cards(db: AsyncSession, user: User, card_ids: list[int]) -> SurplusExchangeOut:
+async def exchange_cards(db: AsyncSession, user: User, card_ids: list[int]) -> ClubPackOpenResult:
     club, cards, config = await _lock_for_change(db, user, card_ids)
     if len(cards) != config.club_card_exchange_count:
         raise ConflictError(f"Для обмена нужно ровно {config.club_card_exchange_count} карт")
-    rarities = {c.player.rarity for c in cards}
-    if len(rarities) != 1:
-        raise ConflictError("Все карты для обмена должны быть одной редкости")
-    target = NEXT_RARITY.get(rarities.pop())
-    if target is None:
-        raise ConflictError("Карты этой редкости не обмениваются")
-    # pick_random_player falls back to any rarity when the target one is empty —
-    # an exchange must never hand back a lower card, so refuse instead.
-    player = await pick_random_player(db, target)
-    if player is None or player.rarity != target:
-        raise ConflictError("Сейчас нет карт нужной редкости для обмена")
+    pack = await exchange_pack(db, config)
+    if pack is None:
+        raise ConflictError("Сейчас нет клубного пака для обмена")
     await db.execute(delete(ClubCard).where(ClubCard.id.in_(card_ids)))
-    card = await create_club_card(db, club.id, player.id, ClubCardSource.exchange)
-    await db.commit()
-    await db.refresh(card)
-    return SurplusExchangeOut(
-        card=ClubCardOut(
-            id=card.id, serial_number=card.serial_number, player=PlayerOut.model_validate(card.player),
-            acquired_at=card.acquired_at, is_in_lineup=False,
-        ),
-        budget=club.budget,
-    )
+    return await mint_opening(db, club, pack, user.id, 0, None)

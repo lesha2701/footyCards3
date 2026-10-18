@@ -82,6 +82,8 @@ class ClubDetailOut(BaseModel):
     personal_match_earnings: Optional[int] = None
     # Captain's switch: only captain / vice-captain / treasurer spend the budget.
     budget_treasurer_only: bool = False
+    # «Звёзды клуба» balance (patrons' Stars, spent on the club's Stars goods).
+    star_balance: int = 0
     # Whether the requester may spend the budget (packs, emblem, spare cards).
     can_spend_budget: bool = False
     # «Стена клуба»: posts the requester hasn't seen yet (null for a non-member).

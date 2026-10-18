@@ -23,7 +23,7 @@ const state: ClubEmblemState = {
     item(5, "outline", "gold", "Золотая обводка", 0, 100),
     item(6, "effect", "sparkle", "Звёздное мерцание", 0, 150),
   ],
-  budget: 5000, can_edit: true, can_spend_budget: true,
+  budget: 5000, star_balance: 0, can_edit: true, can_spend_budget: true,
 };
 
 vi.mock("@/api/clubFeatures", () => ({

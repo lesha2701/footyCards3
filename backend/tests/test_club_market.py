@@ -1,5 +1,5 @@
-"""«Лишние карты» клуба: sell non-squad club cards into the budget, exchange
-N of one rarity for one of the next."""
+"""«Лишние карты» клуба: sell non-squad club cards into the budget, or burn
+N of them for a club pack."""
 import pytest
 from sqlalchemy import select
 
@@ -7,6 +7,8 @@ import app.core.rate_limit as rate_limit_module
 from app.models.club import Club
 from app.models.club_budget import ClubBudgetTransaction
 from app.models.club_card import ClubCard
+from app.models.club_pack import ClubPack, ClubPackRarityProbability
+from app.models.club_pack_opening import ClubPackOpening
 from app.models.enums import ClubBudgetTransactionType, ClubCardSource, Position, Rarity
 from app.services.club_card_service import create_club_card
 from app.services.game_config_service import get_config
@@ -60,8 +62,7 @@ async def test_surplus_lists_squad_cards_as_protected(client, db_session, bot_to
     by_id = {c["card"]["id"]: c for c in body["cards"]}
     assert all(not by_id[i]["protected"] and by_id[i]["sell_value"] == 50 for i in extra)
     assert any(c["protected"] for c in body["cards"])  # the seeded starting squad
-    rare = next(o for o in body["exchange_options"] if o["rarity"] == "rare")
-    assert rare["target_rarity"] == "epic" and rare["available"] >= 2
+    assert body["exchange_pack"] is None  # no club pack exists in this test
 
 
 async def test_sell_credits_budget_and_removes_cards(client, db_session, bot_token):
@@ -99,41 +100,54 @@ async def test_squad_cards_cannot_be_sold(client, db_session, bot_token):
     assert resp.status_code == 409
 
 
-async def test_exchange_five_for_one_of_next_rarity(client, db_session, bot_token):
-    club_id, cap_h, _mem_h = await _club(client, db_session, bot_token, 870030)
-    commons = await _extra_cards(db_session, club_id, Rarity.common, 5)
-    await create_player(db_session, rarity=Rarity.rare)
+async def _club_pack(db_session, slug, price, count=3, active=True):
+    pack = ClubPack(slug=slug, name=f"Пак {slug}", price=price, card_count=count, is_active=active)
+    pack.rarity_probabilities = [ClubPackRarityProbability(rarity=Rarity.common, probability=1.0)]
+    db_session.add(pack)
+    await db_session.commit()
+    return pack
 
-    assert (await client.post("/api/v1/clubs/me/surplus/exchange", headers=cap_h, json={"card_ids": commons[:4]})).status_code == 409
+
+async def test_burn_five_spare_cards_for_a_club_pack(client, db_session, bot_token):
+    club_id, cap_h, _mem_h = await _club(client, db_session, bot_token, 870030)
+    spare = await _extra_cards(db_session, club_id, Rarity.common, 3) + await _extra_cards(db_session, club_id, Rarity.epic, 2)
+    await _club_pack(db_session, "big", price=900, count=5)
+    cheap = await _club_pack(db_session, "cheap", price=100, count=3)
+    budget = (await db_session.get(Club, club_id)).budget
+
+    body = (await client.get("/api/v1/clubs/me/surplus", headers=cap_h)).json()
+    assert body["exchange_pack"]["id"] == cheap.id  # no pack configured → the cheapest
+    assert (await client.post("/api/v1/clubs/me/surplus/exchange", headers=cap_h, json={"card_ids": spare[:4]})).status_code == 409
 
     before = set((await db_session.execute(select(ClubCard.id).where(ClubCard.club_id == club_id))).scalars())
-    resp = await client.post("/api/v1/clubs/me/surplus/exchange", headers=cap_h, json={"card_ids": commons})
+    resp = await client.post("/api/v1/clubs/me/surplus/exchange", headers=cap_h, json={"card_ids": spare})
     assert resp.status_code == 200, resp.text
-    new_card = resp.json()["card"]
-    assert new_card["player"]["rarity"] == "rare"
+    body = resp.json()
+    assert body["pack"]["id"] == cheap.id and len(body["cards"]) == 3
+    assert body["new_budget"] == budget  # free: paid with the cards, not the budget
     remaining = set((await db_session.execute(select(ClubCard.id).where(ClubCard.club_id == club_id))).scalars())
-    # SQLite may hand the new card a just-freed id, so compare the rest.
-    assert new_card["id"] in remaining and not ((set(commons) - {new_card["id"]}) & remaining)
-    assert len(remaining) == len(before) - 4
-    row = await db_session.get(ClubCard, new_card["id"])
-    assert row.source == ClubCardSource.exchange
+    assert len(remaining) == len(before) - 5 + 3
+    opening = (await db_session.execute(select(ClubPackOpening))).scalar_one()
+    assert opening.price_paid == 0
 
 
-async def test_exchange_refuses_mixed_rarity_or_empty_target_pool(client, db_session, bot_token):
+async def test_burn_uses_configured_pack_or_refuses_without_one(client, db_session, bot_token):
     club_id, cap_h, _mem_h = await _club(client, db_session, bot_token, 870040)
-    mixed = await _extra_cards(db_session, club_id, Rarity.common, 4) + await _extra_cards(db_session, club_id, Rarity.rare, 1)
-    assert (await client.post("/api/v1/clubs/me/surplus/exchange", headers=cap_h, json={"card_ids": mixed})).status_code == 409
-
-    # No legendary players exist at all → refuse, and nothing is destroyed.
-    epics = await _extra_cards(db_session, club_id, Rarity.epic, 5)
-    resp = await client.post("/api/v1/clubs/me/surplus/exchange", headers=cap_h, json={"card_ids": epics})
+    spare = await _extra_cards(db_session, club_id, Rarity.common, 5)
+    # No active club pack at all → refuse, nothing destroyed.
+    await _club_pack(db_session, "off", price=10, active=False)
+    resp = await client.post("/api/v1/clubs/me/surplus/exchange", headers=cap_h, json={"card_ids": spare})
     assert resp.status_code == 409
     remaining = set((await db_session.execute(select(ClubCard.id).where(ClubCard.club_id == club_id))).scalars())
-    assert set(epics) <= remaining
+    assert set(spare) <= remaining
 
-    legend = await _extra_cards(db_session, club_id, Rarity.legendary, 5)
-    resp = await client.post("/api/v1/clubs/me/surplus/exchange", headers=cap_h, json={"card_ids": legend})
-    assert resp.status_code == 409
+    await _club_pack(db_session, "cheap", price=10)
+    chosen = await _club_pack(db_session, "chosen", price=500, count=2)
+    config = await get_config(db_session)
+    config.club_card_exchange_pack_id = chosen.id
+    await db_session.commit()
+    resp = await client.post("/api/v1/clubs/me/surplus/exchange", headers=cap_h, json={"card_ids": spare})
+    assert resp.status_code == 200 and resp.json()["pack"]["id"] == chosen.id
 
 
 async def test_market_switch_off(client, db_session, bot_token):

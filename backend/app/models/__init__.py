@@ -26,7 +26,7 @@ from app.models.club_card import ClubCard
 from app.models.club_card_availability import ClubCardAvailability
 from app.models.club_coach_card import ClubCoachCard
 from app.models.club_daily_claim import ClubDailyClaim
-from app.models.club_emblem import ClubDonation, ClubEmblemItem, ClubEmblemUnlock
+from app.models.club_emblem import ClubDonation, ClubEmblemItem, ClubEmblemUnlock, ClubStarTransaction
 from app.models.club_wall import ClubPost
 from app.models.club_reward import ClubRewardClaim, ClubRewardGrant, ClubShopItem, ClubShopPurchase
 from app.models.club_quest import ClubQuestCompletion, ClubQuestTemplate
@@ -121,6 +121,7 @@ __all__ = [
     "ClubDonation",
     "ClubEmblemItem",
     "ClubEmblemUnlock",
+    "ClubStarTransaction",
     "ClubPost",
     "ClubWar",
     "ClubWarRound",

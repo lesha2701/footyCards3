@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   fetchAdminBadges,
   fetchAdminClubEmblemItems,
+  fetchAdminClubPacks,
   fetchAdminClubQuests,
   fetchAdminClubShopItems,
   fetchAdminCosmetics,
@@ -74,6 +75,7 @@ function SettingsTab() {
   const { data: packs } = useQuery({ queryKey: ["admin-packs"], queryFn: fetchAdminPacks });
   const { data: badges } = useQuery({ queryKey: ["admin-badges"], queryFn: fetchAdminBadges });
   const { data: cosmetics } = useQuery({ queryKey: ["admin-cosmetics"], queryFn: fetchAdminCosmetics });
+  const { data: clubPacks } = useQuery({ queryKey: ["admin-club-packs"], queryFn: fetchAdminClubPacks });
   const [draft, setDraft] = useState<Partial<GameConfig>>({});
   const [error, setError] = useState<string | null>(null);
   const save = useMutation({
@@ -189,7 +191,8 @@ function SettingsTab() {
           {num("club_sponsor_silver_stars", "Серебряный меценат, всего ⭐")}
           {num("club_sponsor_gold_stars", "Золотой меценат, всего ⭐")}
           {num("club_card_sell_pct", "Лишние карты: % от цены быстрой продажи")}
-          {num("club_card_exchange_count", "Лишние карты: обмен N → 1")}
+          {num("club_card_exchange_count", "Лишние карты: сколько слить за пак")}
+          {pick("club_card_exchange_pack_id", "Лишние карты: клубный пак (нет — самый дешёвый)", clubPacks)}
           {num("club_announcement_cooldown_minutes", "Стена: минут между объявлениями")}
           <label className="flex flex-col gap-0.5">
             <span className="text-micro text-slate-500">Суммы пополнения, ⭐ через запятую</span>

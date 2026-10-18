@@ -142,6 +142,7 @@ export interface GameConfig {
   club_card_market_enabled: boolean;
   club_card_sell_pct: number;
   club_card_exchange_count: number;
+  club_card_exchange_pack_id: number | null;
   club_announcement_cooldown_minutes: number;
   club_quests_enabled: boolean;
   club_league_season_weeks: number;

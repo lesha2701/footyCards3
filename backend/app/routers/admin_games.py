@@ -40,7 +40,7 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
         config.shop_daily_offer_pack_id = None  # 0 from the admin form = rotate by date
     if config.club_pass_bonus_card_rarity == "":
         config.club_pass_bonus_card_rarity = None
-    for key in ("club_pass_daily_pack_id", "club_pass_bonus_pack_id", "club_pass_frame_cosmetic_id", "club_pass_badge_id",
+    for key in ("club_card_exchange_pack_id", "club_pass_daily_pack_id", "club_pass_bonus_pack_id", "club_pass_frame_cosmetic_id", "club_pass_badge_id",
                 "starter_offer_pack_id", "starter_offer_cosmetic_id"):
         if getattr(config, key) == 0:
             setattr(config, key, None)  # 0 from the admin form = none

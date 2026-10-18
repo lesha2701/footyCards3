@@ -17,7 +17,8 @@ from app.schemas.club_war import ClubWarOut
 from app.schemas.club_reward import ClubShopOut
 from app.schemas.club_wall import ClubPostIn, ClubWallOut
 from app.schemas.monetization import GrantedRewardsOut
-from app.schemas.club_market import ClubSurplusOut, SurplusCardIdsIn, SurplusExchangeOut, SurplusSellOut
+from app.schemas.club_market import ClubSurplusOut, SurplusCardIdsIn, SurplusSellOut
+from app.schemas.club_pack_open import ClubPackOpenResult
 from app.schemas.stars import StarsInvoiceCreateOut
 from app.services import (
     club_emblem_service,
@@ -63,7 +64,7 @@ async def get_treasury(db: AsyncSession = Depends(get_db), user: User = Depends(
 
 @router.post("/me/treasury/stars-invoice", response_model=StarsInvoiceCreateOut)
 async def treasury_invoice(payload: ClubDonationInvoiceIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    return await shop_product_service.create_invoice(db, user, *await club_treasury_service.stars_order(db, user, payload.stars))
+    return await shop_product_service.create_invoice(db, user, *await club_treasury_service.stars_order(db, user, payload.stars, payload.target))
 
 
 @router.get("/me/surplus", response_model=ClubSurplusOut)
@@ -76,7 +77,7 @@ async def sell_surplus(payload: SurplusCardIdsIn, db: AsyncSession = Depends(get
     return await club_market_service.sell_cards(db, user, payload.card_ids)
 
 
-@router.post("/me/surplus/exchange", response_model=SurplusExchangeOut)
+@router.post("/me/surplus/exchange", response_model=ClubPackOpenResult)
 async def exchange_surplus(payload: SurplusCardIdsIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_market_service.exchange_cards(db, user, payload.card_ids)
 
@@ -142,3 +143,8 @@ async def get_trophies(club_id: int, db: AsyncSession = Depends(get_db), _user: 
 @router.get("/me/war", response_model=ClubWarOut)
 async def get_war(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_war_service.get_war(db, user)
+
+
+@router.post("/me/emblem/items/{item_id}/buy-club-stars", response_model=ClubEmblemStateOut)
+async def buy_emblem_item_club_stars(item_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_emblem_service.buy_with_club_stars(db, user, item_id)

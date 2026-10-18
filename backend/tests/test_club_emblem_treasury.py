@@ -294,3 +294,43 @@ async def test_admin_edits_emblem_prices(client, db_session, bot_token):
     _club_id, cap_h, *_ = await _club_with_member(client, db_session, bot_token, 860080)
     body = (await client.get("/api/v1/clubs/me/emblem", headers=cap_h)).json()
     assert all(i["style_key"] != "lion" for i in body["items"])
+
+
+async def test_patron_tops_up_club_stars_and_spenders_buy_stars_layers(client, db_session, bot_token):
+    from app.models.club_emblem import ClubStarTransaction
+
+    club_id, cap_h, _captain, mem_h, member = await _club_with_member(client, db_session, bot_token, 860090)
+    await _enable_donations(db_session)
+    await client.get("/api/v1/clubs/me/emblem", headers=cap_h)
+    crown_id = (await _item(db_session, "symbol", "crown")).id  # 75 ⭐
+
+    # Not enough on the club balance yet; a plain member can't spend it at all.
+    assert (await client.post(f"/api/v1/clubs/me/emblem/items/{crown_id}/buy-club-stars", headers=cap_h)).status_code == 409
+    assert (await client.post(f"/api/v1/clubs/me/emblem/items/{crown_id}/buy-club-stars", headers=mem_h)).status_code == 403
+
+    resp = await client.post("/api/v1/clubs/me/treasury/stars-invoice", headers=mem_h, json={"stars": 100, "target": "stars"})
+    assert resp.status_code == 200, resp.text
+    token = resp.json()["payload_token"]
+    budget = (await db_session.get(Club, club_id)).budget
+    pre, delivered = await _pay(client, token, 860091, 100, "charge-club-stars-1")
+    assert pre["ok"] is True
+    assert delivered.json()["shop_result"] == {"kind": "club_stars", "stars": 100, "club_name": "Клуб 860090"}
+    await _pay(client, token, 860091, 100, "charge-club-stars-1")  # redelivery: no double credit
+
+    db_session.expire_all()
+    club = await db_session.get(Club, club_id)
+    assert club.star_balance == 100 and club.budget == budget
+    treasury = (await client.get("/api/v1/clubs/me/treasury", headers=mem_h)).json()
+    assert treasury["star_balance"] == 100 and treasury["my_stars"] == 100
+    assert treasury["patrons"][0]["coins"] == 0
+
+    resp = await client.post(f"/api/v1/clubs/me/emblem/items/{crown_id}/buy-club-stars", headers=cap_h)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["star_balance"] == 25
+    assert next(i for i in resp.json()["items"] if i["id"] == crown_id)["unlocked"]
+    assert (await client.post(f"/api/v1/clubs/me/emblem/items/{crown_id}/buy-club-stars", headers=cap_h)).status_code == 409
+    ledger = (await db_session.execute(select(ClubStarTransaction).order_by(ClubStarTransaction.id))).scalars().all()
+    assert [(t.amount, t.balance_after, t.kind) for t in ledger] == [(100, 100, "donation"), (-75, 25, "emblem_purchase")]
+    # Coin-priced items are never sold for club stars.
+    checker = await _item(db_session, "pattern", "checker")
+    assert (await client.post(f"/api/v1/clubs/me/emblem/items/{checker.id}/buy-club-stars", headers=cap_h)).status_code == 409

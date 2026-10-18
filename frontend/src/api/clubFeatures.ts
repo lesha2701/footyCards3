@@ -1,6 +1,6 @@
 import { api } from "@/lib/api";
 import type {
-  ClubCard,
+  ClubPackOpenResult,
   ClubEmblem,
   ClubEmblemState,
   ClubLogoShape,
@@ -42,8 +42,13 @@ export async function fetchClubTreasury(): Promise<ClubTreasury> {
   return data;
 }
 
-export async function createClubDonationInvoice(stars: number): Promise<StarsInvoiceCreate> {
-  const { data } = await api.post<StarsInvoiceCreate>("/clubs/me/treasury/stars-invoice", { stars });
+export async function createClubDonationInvoice(stars: number, target: "stars" | "coins"): Promise<StarsInvoiceCreate> {
+  const { data } = await api.post<StarsInvoiceCreate>("/clubs/me/treasury/stars-invoice", { stars, target });
+  return data;
+}
+
+export async function buyClubEmblemItemWithClubStars(itemId: number): Promise<ClubEmblemState> {
+  const { data } = await api.post<ClubEmblemState>(`/clubs/me/emblem/items/${itemId}/buy-club-stars`);
   return data;
 }
 
@@ -57,8 +62,8 @@ export async function sellClubCards(cardIds: number[]): Promise<{ sold: number; 
   return data;
 }
 
-export async function exchangeClubCards(cardIds: number[]): Promise<{ card: ClubCard; budget: number }> {
-  const { data } = await api.post<{ card: ClubCard; budget: number }>("/clubs/me/surplus/exchange", { card_ids: cardIds });
+export async function exchangeClubCards(cardIds: number[]): Promise<ClubPackOpenResult> {
+  const { data } = await api.post<ClubPackOpenResult>("/clubs/me/surplus/exchange", { card_ids: cardIds });
   return data;
 }
 

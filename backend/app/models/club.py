@@ -51,8 +51,15 @@ class Club(Base):
     league_division: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # «Клубные войны» Elo rating — wars pair clubs closest by it (club_war_service).
     war_rating: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    # «Звёзды клуба»: Telegram Stars patrons put into the club (club_treasury_service);
+    # budget spenders buy the club's Stars goods (emblem layers) from it.
+    # Not to be confused with stars_count (tournament stars).
+    star_balance: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    __table_args__ = (CheckConstraint("budget >= 0", name="ck_clubs_budget_non_negative"),)
+    __table_args__ = (
+        CheckConstraint("budget >= 0", name="ck_clubs_budget_non_negative"),
+        CheckConstraint("star_balance >= 0", name="ck_clubs_star_balance_non_negative"),
+    )
 
 
 class ClubMember(Base):

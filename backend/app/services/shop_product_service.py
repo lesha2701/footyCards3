@@ -7,7 +7,8 @@ invoice's row lock) → admin Магазин → Платежи Stars.
 Keys: "calendar_catchup:<YYYY-MM-DD>", "cosmetic:<id>", "club_pass",
 "club_pass_renewal" (created by delivery for each auto-renewal),
 "season_premium:<season_id>", "starter_offer",
-"club_emblem:<club_id>:<item_id>", "club_donation:<club_id>:<coins>"."""
+"club_emblem:<club_id>:<item_id>", "club_donation:<club_id>:<coins>",
+"club_stars:<club_id>"."""
 import secrets
 from datetime import date
 from typing import Optional
@@ -34,6 +35,7 @@ LABELS = {
     "artifact": "Артефакты",
     "club_emblem": "Эмблема клуба",
     "club_donation": "Казна клуба",
+    "club_stars": "Звёзды клуба",
 }
 
 
@@ -109,6 +111,10 @@ async def validate(db: AsyncSession, invoice: StarsInvoice) -> tuple[bool, str]:
         from app.services import club_treasury_service
 
         return await club_treasury_service.validate_stars(db, invoice.user_id, arg, invoice.stars_amount)
+    if kind == "club_stars":
+        from app.services import club_treasury_service
+
+        return await club_treasury_service.validate_club_stars(db, invoice.user_id, arg)
     return False, "Unknown order"
 
 
@@ -152,4 +158,8 @@ async def deliver(
         from app.services import club_treasury_service
 
         return await club_treasury_service.deliver_stars(db, user, invoice)
+    if kind == "club_stars":
+        from app.services import club_treasury_service
+
+        return await club_treasury_service.deliver_club_stars(db, user, invoice)
     raise NotFoundError("Unknown product")

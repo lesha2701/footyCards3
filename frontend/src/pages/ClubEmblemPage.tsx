@@ -2,7 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { buyClubEmblemItem, createClubEmblemInvoice, fetchClubEmblem, saveClubEmblem } from "@/api/clubFeatures";
+import {
+  buyClubEmblemItem,
+  buyClubEmblemItemWithClubStars,
+  createClubEmblemInvoice,
+  fetchClubEmblem,
+  saveClubEmblem,
+} from "@/api/clubFeatures";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import { CLUB_LOGO_COLORS, CLUB_LOGO_SHAPES } from "@/components/clubs/clubLogoOptions";
 import { ListSkeleton } from "@/components/common/Skeleton";
@@ -57,6 +63,11 @@ export default function ClubEmblemPage() {
     },
     onError,
   });
+  const buyClubStars = useMutation({
+    mutationFn: (item: Item) => buyClubEmblemItemWithClubStars(item.id),
+    onSuccess: (data, item) => { onState(data); hapticNotify("success"); setNotice(`«${item.name}» открыт за звёзды клуба`); },
+    onError,
+  });
   const save = useMutation({
     mutationFn: () => saveClubEmblem(draft!),
     onSuccess: (data) => { onState(data); hapticNotify("success"); setNotice("Эмблема сохранена"); },
@@ -82,11 +93,23 @@ export default function ClubEmblemPage() {
   const dirty =
     JSON.stringify(draft) !== JSON.stringify({ ...state.emblem, logo_shape: state.logo_shape, logo_color: state.logo_color });
   const set = (patch: Partial<Draft>) => { setDraft((d) => (d ? { ...d, ...patch } : d)); setNotice(null); };
-  const busy = buyCoins.isPending || buyStars.isPending;
+  const busy = buyCoins.isPending || buyStars.isPending || buyClubStars.isPending;
 
   const priceButton = (item: Item) => {
     if (item.unlocked) return null;
     if (item.stars_price > 0) {
+      if (state.can_spend_budget && state.star_balance >= item.stars_price) {
+        return (
+          <button
+            onClick={() => buyClubStars.mutate(item)}
+            disabled={busy || !state.enabled}
+            title="Со звёздного баланса клуба"
+            className="flex items-center justify-center gap-1 rounded-lg bg-amber-400 px-2 py-1 text-caption font-bold text-bg-base active:scale-95 disabled:opacity-40"
+          >
+            <IconStar size={11} /> {item.stars_price} клуба
+          </button>
+        );
+      }
       return (
         <button
           onClick={() => buyStars.mutate(item)}
@@ -162,8 +185,11 @@ export default function ClubEmblemPage() {
           </span>
         )}
         <p className="flex items-center gap-1 text-caption text-ink-mist-dim">
-          Бюджет клуба: <IconCoin size={12} className="text-accent-lime" />
+          Бюджет: <IconCoin size={12} className="text-accent-lime" />
           <span className="font-mono font-bold text-accent-lime">{state.budget}</span>
+          <span className="mx-1">·</span>
+          Звёзды клуба: <IconStar size={12} className="text-amber-300" />
+          <span className="font-mono font-bold text-amber-300">{state.star_balance}</span>
         </p>
       </div>
 

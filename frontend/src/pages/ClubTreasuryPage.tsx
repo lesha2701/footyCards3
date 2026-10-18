@@ -20,14 +20,19 @@ export default function ClubTreasuryPage() {
   const { data: treasury, isLoading } = useQuery({ queryKey: ["clubs", "treasury"], queryFn: fetchClubTreasury });
   const [error, setError] = useState<string | null>(null);
   const [thanks, setThanks] = useState<string | null>(null);
+  const [target, setTarget] = useState<"stars" | "coins">("stars");
 
   const donate = useMutation({
-    mutationFn: (stars: number) => payShopWithStars(() => createClubDonationInvoice(stars)),
+    mutationFn: (stars: number) => payShopWithStars(() => createClubDonationInvoice(stars, target)),
     onSuccess: (status, stars) => {
       if (status !== "paid") return;
       hapticNotify("success");
       setError(null);
-      setThanks(`Спасибо! Казна пополнена на ${stars * (treasury?.coins_per_star ?? 0)} монет`);
+      setThanks(
+        target === "stars"
+          ? `Спасибо! На звёздный баланс клуба +${stars} ⭐`
+          : `Спасибо! Казна пополнена на ${stars * (treasury?.coins_per_star ?? 0)} монет`,
+      );
       queryClient.invalidateQueries({ queryKey: ["clubs"] });
     },
     onError: (err) => setError(formatGameError(err, "Не удалось пополнить казну")),
@@ -52,13 +57,24 @@ export default function ClubTreasuryPage() {
 
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-400/20 via-accent-lime/10 to-bg-surface p-5">
         <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-amber-300/20 blur-2xl" />
-        <p className="text-xs text-ink-mist">Бюджет клуба</p>
-        <p className="flex items-center gap-1.5 font-mono text-3xl font-bold text-accent-lime">
-          <IconCoin size={24} /> {treasury.budget}
-        </p>
+        <div className="flex items-end gap-6">
+          <div>
+            <p className="text-xs text-ink-mist">Звёзды клуба</p>
+            <p className="flex items-center gap-1.5 font-mono text-3xl font-bold text-amber-300">
+              <IconStar size={24} /> {treasury.star_balance}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-ink-mist">Бюджет</p>
+            <p className="flex items-center gap-1 font-mono text-xl font-bold text-accent-lime">
+              <IconCoin size={18} /> {treasury.budget}
+            </p>
+          </div>
+        </div>
         <p className="mt-2 text-xs leading-snug text-ink-mist">
-          Звёзды превращаются в монеты казны: 1 <IconStar size={11} className="inline align-[-1px] text-amber-300" /> ={" "}
-          {treasury.coins_per_star} монет. На них клуб открывает паки и элементы эмблемы, а ты попадаешь на «Доску меценатов».
+          Звёзды клуба тратят капитан, вице-капитан и казначей — на символы, обводки и анимации эмблемы. Или пополни бюджет
+          монетами: 1 <IconStar size={11} className="inline align-[-1px] text-amber-300" /> = {treasury.coins_per_star} монет.
+          Любое пополнение — место на «Доске меценатов».
         </p>
         <div className="mt-3 flex items-center gap-2 text-xs text-ink-chalk">
           {treasury.my_tier ? (
@@ -74,6 +90,20 @@ export default function ClubTreasuryPage() {
         )}
       </div>
 
+      {treasury.enabled && (
+        <div className="flex gap-1 rounded-xl bg-bg-surface p-1">
+          {([["stars", "⭐ Звёзды клуба"], ["coins", "Монеты в казну"]] as ["stars" | "coins", string][]).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setTarget(id)}
+              className={`flex-1 rounded-lg py-2 text-xs font-semibold ${target === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {treasury.enabled ? (
         <div className="grid grid-cols-3 gap-2">
           {treasury.star_options.map((stars) => (
@@ -86,8 +116,8 @@ export default function ClubTreasuryPage() {
               <span className="flex items-center gap-1 font-display text-base font-bold text-amber-300">
                 <IconStar size={14} /> {stars}
               </span>
-              <span className="flex items-center gap-1 text-caption text-accent-lime">
-                +{stars * treasury.coins_per_star} <IconCoin size={11} />
+              <span className={`flex items-center gap-1 text-caption ${target === "stars" ? "text-amber-200" : "text-accent-lime"}`}>
+                {target === "stars" ? <>+{stars} клубу</> : <>+{stars * treasury.coins_per_star} <IconCoin size={11} /></>}
               </span>
             </button>
           ))}
@@ -132,7 +162,8 @@ export default function ClubTreasuryPage() {
             <div key={i} className="flex items-center justify-between rounded-lg bg-bg-surface px-3 py-2 text-xs">
               <span className="text-ink-mist">{name(d)}</span>
               <span className="text-ink-mist-dim">
-                {new Date(d.created_at).toLocaleDateString("ru-RU")} · <span className="text-accent-lime">+{d.coins}</span>
+                {new Date(d.created_at).toLocaleDateString("ru-RU")} ·{" "}
+                {d.coins > 0 ? <span className="text-accent-lime">+{d.coins}</span> : <span className="text-amber-300">+{d.stars} ⭐</span>}
               </span>
             </div>
           ))}

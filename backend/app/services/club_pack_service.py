@@ -126,7 +126,15 @@ async def open_club_pack(db: AsyncSession, user: User, club_pack_id: int, idempo
     await debit_club_budget(db, club, pack.price, ClubBudgetTransactionType.pack_purchase, f"Открытие пака «{pack.name}»", "club_pack", pack.id,
         actor_user_id=user.id,
     )
+    return await mint_opening(db, club, pack, user.id, pack.price, idempotency_key)
 
+
+async def mint_opening(
+    db: AsyncSession, club: Club, pack: ClubPack, user_id: int, price_paid: int, idempotency_key: Optional[str],
+) -> ClubPackOpenResult:
+    """Rolls and creates the cards of one club pack opening and commits.
+    The caller has locked the club row and charged for it (budget, or spare
+    cards — club_market_service); `pack` has its rarity_probabilities loaded."""
     # Captured as a plain int (not a `club.id` attribute access) for reuse in the
     # `except IntegrityError` fallback below — `await db.rollback()` there expires every ORM
     # object still attached to this session, and touching an expired attribute via a bare
@@ -135,7 +143,7 @@ async def open_club_pack(db: AsyncSession, user: User, club_pack_id: int, idempo
     # against real Postgres that hit exactly that crash before this was captured up front.
     club_id = club.id
 
-    opening = ClubPackOpening(club_id=club_id, club_pack_id=pack.id, opened_by_user_id=user.id, price_paid=pack.price, idempotency_key=idempotency_key)
+    opening = ClubPackOpening(club_id=club_id, club_pack_id=pack.id, opened_by_user_id=user_id, price_paid=price_paid, idempotency_key=idempotency_key)
 
     try:
         db.add(opening)
