@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { TradeOffer } from "@/types";
+import type { Page, Player, TradeOffer, UserPublic } from "@/types";
 
 export interface CreateTradePayload {
   receiver_id?: number;
@@ -27,6 +27,54 @@ export interface TradeRules {
 export async function fetchTradeRules(): Promise<TradeRules> {
   const { data } = await api.get<TradeRules>("/trades/rules");
   return data;
+}
+
+// --- «Поиск обменов» (backend trade_finder_service) ---
+export type TradeWishKind = "want" | "give";
+
+export interface TradeWishes {
+  wants: Player[];
+  gives: Player[];
+  max_wants: number;
+  max_gives: number;
+}
+
+export interface TradeMatchCard {
+  card_id: number;
+  player: Player;
+  marked_to_give: boolean;
+}
+
+export interface TradeMatch {
+  user: UserPublic;
+  mutual: boolean;
+  they_have: TradeMatchCard[];
+  they_want: TradeMatchCard[];
+}
+
+export async function fetchTradeWishes(): Promise<TradeWishes> {
+  const { data } = await api.get<TradeWishes>("/trades/finder/wishes");
+  return data;
+}
+
+export async function addTradeWish(kind: TradeWishKind, playerId: number): Promise<TradeWishes> {
+  const { data } = await api.put<TradeWishes>("/trades/finder/wishes", { kind, player_id: playerId });
+  return data;
+}
+
+export async function removeTradeWish(kind: TradeWishKind, playerId: number): Promise<TradeWishes> {
+  const { data } = await api.delete<TradeWishes>(`/trades/finder/wishes/${kind}/${playerId}`);
+  return data;
+}
+
+export async function fetchTradeMatches(): Promise<TradeMatch[]> {
+  const { data } = await api.get<TradeMatch[]>("/trades/finder/matches");
+  return data;
+}
+
+export async function searchPlayers(search: string): Promise<Player[]> {
+  const { data } = await api.get<Page<Player>>("/players", { params: { search, page_size: 30 } });
+  return data.items;
 }
 
 export async function fetchTradeOffers(params: { status?: string; direction?: "incoming" | "outgoing" } = {}): Promise<TradeOffer[]> {

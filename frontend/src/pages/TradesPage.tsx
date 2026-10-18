@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
-import { IconCoin, IconPlus, IconSwap } from "@/components/icons";
+import { IconCoin, IconPlus, IconSearch, IconSwap } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchFeatureFlags } from "@/api/featureFlags";
 import { acceptTradeOffer, cancelTradeOffer, fetchTradeOffers, rejectTradeOffer } from "@/api/trades";
@@ -50,14 +50,23 @@ export default function TradesPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-xl font-bold text-ink-chalk">Обмены</h1>
-        <button
-          onClick={() => navigate("/trades/new")}
-          disabled={tradesOff}
-          className="flex items-center gap-1 rounded-full bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-40"
-        >
-          <IconPlus size={13} />
-          Новый
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => navigate("/trades/finder")}
+            className="flex items-center gap-1 rounded-full bg-white/5 px-4 py-2 text-xs font-bold text-ink-chalk active:scale-95"
+          >
+            <IconSearch size={13} />
+            Поиск
+          </button>
+          <button
+            onClick={() => navigate("/trades/new")}
+            disabled={tradesOff}
+            className="flex items-center gap-1 rounded-full bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-40"
+          >
+            <IconPlus size={13} />
+            Новый
+          </button>
+        </div>
       </div>
 
       <CardsSectionTabs />

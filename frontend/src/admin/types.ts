@@ -583,6 +583,9 @@ export interface GameConfig {
   trade_coin_tax_pct: number;
   trade_coins_enabled: boolean;
   trade_cards_both_sides: boolean;
+  trade_finder_max_wants: number;
+  trade_finder_max_gives: number;
+  trade_finder_active_days: number;
   trade_suspicious_young_days: number;
   trade_suspicious_min_donors: number;
 }

@@ -21,12 +21,14 @@ export default function NewTradePage() {
   const navigate = useNavigate();
   // "Предложить обмен" on a public profile opens this page with the
   // receiver already picked.
-  const prefilled = (useLocation().state as { target?: UserPublic } | null)?.target ?? null;
+  // «Поиск обменов» also passes the cards it matched.
+  const state = useLocation().state as { target?: UserPublic; offeredIds?: number[]; requestedIds?: number[] } | null;
+  const prefilled = state?.target ?? null;
 
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState<UserPublic | null>(prefilled);
-  const [offeredIds, setOfferedIds] = useState<number[]>([]);
-  const [requestedIds, setRequestedIds] = useState<number[]>([]);
+  const [offeredIds, setOfferedIds] = useState<number[]>(state?.offeredIds ?? []);
+  const [requestedIds, setRequestedIds] = useState<number[]>(state?.requestedIds ?? []);
   const [senderCoins, setSenderCoins] = useState(0);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);

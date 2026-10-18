@@ -853,6 +853,11 @@ class GameConfig(TimestampMixin, Base):
     # in at least one card (off = one-way card gifts allowed).
     trade_coins_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     trade_cards_both_sides: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # «Поиск обменов» (services/trade_finder_service.py): list sizes and how
+    # recently a partner must have played to be suggested.
+    trade_finder_max_wants: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    trade_finder_max_gives: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    trade_finder_active_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
     # Giving anything in a trade (coins or cards, on either side) needs an
     # account at least this many days old that was active on at least this
     # many distinct days (user_daily_activity). 0 = no requirement.

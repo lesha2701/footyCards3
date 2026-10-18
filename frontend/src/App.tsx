@@ -104,6 +104,7 @@ const ClubPackOpenPage = lazy(() => import("@/pages/ClubPackOpenPage"));
 const CollectionPage = lazy(() => import("@/pages/CollectionPage"));
 const TradesPage = lazy(() => import("@/pages/TradesPage"));
 const NewTradePage = lazy(() => import("@/pages/NewTradePage"));
+const TradeFinderPage = lazy(() => import("@/pages/TradeFinderPage"));
 const TradeDetailPage = lazy(() => import("@/pages/TradeDetailPage"));
 const TasksPage = lazy(() => import("@/pages/TasksPage"));
 const UpgradePage = lazy(() => import("@/pages/UpgradePage"));
@@ -280,6 +281,7 @@ export default function App() {
         <Route path="/collection" element={<CollectionPage />} />
         <Route path="/trades" element={<TradesPage />} />
         <Route path="/trades/new" element={<NewTradePage />} />
+        <Route path="/trades/finder" element={<TradeFinderPage />} />
         <Route path="/trades/:id" element={<TradeDetailPage />} />
         <Route path="/clubs" element={<ClubsPage />} />
         <Route path="/clubs/create" element={<ClubCreatePage />} />

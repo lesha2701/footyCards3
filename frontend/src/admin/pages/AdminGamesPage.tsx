@@ -739,6 +739,9 @@ export default function AdminGamesPage() {
           {field("trade_coin_tax_pct", "Налог на монеты, %")}
           {field("trade_suspicious_young_days", "«Молодой» аккаунт — младше, дней")}
           {field("trade_suspicious_min_donors", "Мин. молодых доноров для флага")}
+          {field("trade_finder_max_wants", "Поиск обменов: карточек в «Ищу»")}
+          {field("trade_finder_max_gives", "Поиск обменов: карточек в «Отдаю»")}
+          {field("trade_finder_active_days", "Поиск: партнёр заходил за N дней")}
         </div>
       </section>
 

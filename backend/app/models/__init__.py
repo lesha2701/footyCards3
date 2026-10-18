@@ -57,7 +57,7 @@ from app.models.tournament_match import TournamentMatch
 from app.models.tournament_standing import TournamentClubStanding
 from app.models.tournament_result import TournamentClubResult
 from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLog
-from app.models.trade import TradeOffer, TradeOfferCard
+from app.models.trade import TradeOffer, TradeOfferCard, TradeWish
 from app.models.transaction import CoinTransaction
 from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.wheel import WheelPrize, WheelSpin
@@ -158,6 +158,7 @@ __all__ = [
     "UserTask",
     "TradeOffer",
     "TradeOfferCard",
+    "TradeWish",
     "TournamentQueue",
     "TournamentQueueEntry",
     "TournamentQueueState",
