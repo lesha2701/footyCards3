@@ -12,7 +12,7 @@ from app.models.enums import BingoGoalType, NotificationType, Rarity, TradeCardS
 from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.user import User
 from app.schemas.trade import TradeAcceptOut, TradeCreateRequest, TradeOfferOut
-from app.services import bingo_service, task_service, trade_guard_service
+from app.services import bingo_service, task_service, trade_finder_service, trade_guard_service
 from app.services.collection_service import grant_collection_rewards_for_new_cards
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
@@ -363,6 +363,7 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
         card.owner_id = new_owner_id
         card.is_locked_in_trade = False
         db.add(card)
+        await trade_finder_service.notify_wanted_card(db, new_owner_id, card.player_id)
         if new_owner_id == offer.receiver_id:
             receiver_new_player_ids.append(card.player_id)
         else:

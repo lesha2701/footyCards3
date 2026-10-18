@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
@@ -10,7 +10,7 @@ import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import PlayerCard from "@/components/cards/PlayerCard";
 import { fetchCollection, fetchUserCollection } from "@/api/collection";
 import { createTradeOffer, fetchTradeRules } from "@/api/trades";
-import { searchUsers } from "@/api/profile";
+import { fetchPublicProfile, searchUsers } from "@/api/profile";
 import { ApiRequestError } from "@/lib/api";
 import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
 import type { UserPublic } from "@/types";
@@ -27,6 +27,17 @@ export default function NewTradePage() {
 
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState<UserPublic | null>(prefilled);
+  // «Поделиться в чат» link from «Поиск обменов»: /trades/new?to=<user id>.
+  const [searchParams] = useSearchParams();
+  const toId = Number(searchParams.get("to")) || null;
+  const { data: linkedTarget } = useQuery({
+    queryKey: ["trade-link-target", toId],
+    queryFn: () => fetchPublicProfile(toId!),
+    enabled: !!toId && !prefilled,
+  });
+  useEffect(() => {
+    if (linkedTarget && !target) setTarget(linkedTarget);
+  }, [linkedTarget, target]);
   const [offeredIds, setOfferedIds] = useState<number[]>(state?.offeredIds ?? []);
   const [requestedIds, setRequestedIds] = useState<number[]>(state?.requestedIds ?? []);
   const [senderCoins, setSenderCoins] = useState(0);

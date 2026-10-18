@@ -627,6 +627,7 @@ class GameConfigOut(BaseModel):
     trade_finder_max_wants: int = 10
     trade_finder_max_gives: int = 20
     trade_finder_active_days: int = 7
+    trade_finder_notify_hours: int = 24
     trade_suspicious_young_days: int = 14
     trade_suspicious_min_donors: int = 3
 
@@ -1090,6 +1091,7 @@ class GameConfigUpdate(BaseModel):
     trade_finder_max_wants: Optional[int] = Field(default=None, ge=0, le=100)
     trade_finder_max_gives: Optional[int] = Field(default=None, ge=0, le=100)
     trade_finder_active_days: Optional[int] = Field(default=None, ge=1, le=90)
+    trade_finder_notify_hours: Optional[int] = Field(default=None, ge=0, le=720)
     trade_suspicious_young_days: Optional[int] = Field(default=None, ge=1, le=365)
     trade_suspicious_min_donors: Optional[int] = Field(default=None, ge=2, le=100)
 

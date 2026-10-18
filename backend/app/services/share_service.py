@@ -39,7 +39,7 @@ settings = get_settings()
 
 SHARE_DIR = STATIC_DIR / "share"
 SHAREABLE_RARITIES = {Rarity.legendary, Rarity.diamond}
-KINDS = ("card", "match", "trophy", "my_player")
+KINDS = ("card", "match", "trophy", "my_player", "trade_wishes")
 
 
 def referral_link(user: User) -> str:
@@ -136,6 +136,33 @@ async def _my_player(db: AsyncSession, user: User) -> tuple[str, str]:
     return path, f"Мой игрок {out['name']}: рейтинг {out['rating']}, {out['tier_label'].lower()}! ⚽ Создай своего в Victor FC"
 
 
+def trade_link(user: User) -> str:
+    """Opens the bot, which answers with «Предложить обмен» → /trades/new?to=<id>."""
+    return f"https://t.me/{settings.telegram_bot_username}?start=trade_{user.id}"
+
+
+async def _trade_wishes(db: AsyncSession, user: User) -> str:
+    """«Ищу / Отдаю» from the «Поиск обменов» lists, as plain text."""
+    from app.services import trade_finder_service
+    from app.services.game_config_service import get_config
+
+    wishes = await trade_finder_service.list_wishes(db, user, await get_config(db))
+    if not wishes["wants"] and not wishes["gives"]:
+        raise ConflictError("Сначала добавь карточки в «Ищу» или «Отдаю»")
+
+    def names(players) -> str:
+        shown = ", ".join(f"{p.display_name} ({p.rating})" for p in players[:8])
+        return shown + (f" и ещё {len(players) - 8}" if len(players) > 8 else "")
+
+    lines = ["🔄 Ищу обмен в Victor FC"]
+    if wishes["wants"]:
+        lines.append(f"🔎 Ищу: {names(wishes['wants'])}")
+    if wishes["gives"]:
+        lines.append(f"🎁 Отдаю: {names(wishes['gives'])}")
+    lines.append("Жми «Предложить обмен» — откроется обмен со мной 👇")
+    return "\n".join(lines)
+
+
 def _can_prepare_messages() -> bool:
     """Telegram must be able to download the photo (public HTTPS) and the
     bot must be real — neither holds in local dev."""
@@ -172,7 +199,46 @@ async def _save_prepared_message(user: User, photo_url: str, caption: str, link:
     return data["result"]["id"]
 
 
+async def _save_prepared_text(user: User, text: str, link: str) -> Optional[str]:
+    """Text-only prepared message with a «Предложить обмен» button; None on failure."""
+    body = {
+        "user_id": user.telegram_id,
+        "result": {
+            "type": "article",
+            "id": uuid.uuid4().hex,
+            "title": "Ищу обмен",
+            "input_message_content": {"message_text": text},
+            "reply_markup": {"inline_keyboard": [[{"text": "🔄 Предложить обмен", "url": link}]]},
+        },
+        "allow_user_chats": True,
+        "allow_group_chats": True,
+        "allow_channel_chats": True,
+    }
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/savePreparedInlineMessage"
+    try:
+        async with httpx.AsyncClient(timeout=10, proxy=settings.telegram_proxy_url or None) as client:
+            data = (await client.post(url, json=body)).json()
+    except (httpx.HTTPError, ValueError):
+        logger.warning("savePreparedInlineMessage request failed", exc_info=True)
+        return None
+    if not data.get("ok"):
+        logger.warning("savePreparedInlineMessage rejected: %s", data.get("description"))
+        return None
+    return data["result"]["id"]
+
+
 async def prepare_share(db: AsyncSession, user: User, kind: str, object_id: int) -> dict:
+    if kind == "trade_wishes":
+        text = await _trade_wishes(db, user)
+        link = trade_link(user)
+        prepared_id = await _save_prepared_text(user, text, link) if _can_prepare_messages() else None
+        return {
+            "prepared_message_id": prepared_id,
+            "image_url": None,
+            "caption": text,
+            "link": link,
+            "share_url": f"https://t.me/share/url?url={quote(link, safe='')}&text={quote(text, safe='')}",
+        }
     if kind == "card":
         path, caption = await _card(db, user, object_id)
     elif kind == "match":

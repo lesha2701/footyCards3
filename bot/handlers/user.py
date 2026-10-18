@@ -94,6 +94,18 @@ async def cmd_start(message: Message) -> None:
         keyboard = (
             open_app_keyboard(path=f"/play/magnate/room/{code}") if code.isalnum() else open_app_keyboard()
         )
+    elif payload and payload.startswith("trade_"):
+        # «Поделиться в чат» from «Поиск обменов»: open a trade with the sharer.
+        partner_id = payload[len("trade_"):]
+        text = (
+            f"Привет, {message.from_user.first_name}! 👋\n\n"
+            "🔄 Тебе предлагают обмен карточками в <b>VICTOR FC</b>!\n\n"
+            "Нажми кнопку ниже, чтобы выбрать карточки для обмена 👇"
+        )
+        keyboard = (
+            open_app_keyboard(path="/trades/new", query=f"?to={partner_id}", text="🔄 Предложить обмен")
+            if partner_id.isdigit() else open_app_keyboard()
+        )
     elif payload == "chatpack":
         # Deep link from the "вкарта" group-chat button — the card is
         # already granted, this is just getting them into the Mini App to see it.

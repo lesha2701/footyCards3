@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
+import ShareButton from "@/components/common/ShareButton";
 import { UserBadge } from "@/components/common/UserBadge";
 import PlayerCard from "@/components/cards/PlayerCard";
 import { IconClose, IconSearch, IconSwap } from "@/components/icons";
@@ -177,7 +178,19 @@ function Lists() {
   return (
     <div className="flex flex-col gap-3">
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
+      {(wishes.wants.length > 0 || wishes.gives.length > 0) && (
+        <div className="flex flex-col gap-1">
+          <ShareButton kind="trade_wishes" id={0} label="Поделиться в чат" />
+          <p className="text-center text-caption text-ink-mist-dim">
+            Списки уйдут сообщением с кнопкой «Предложить обмен» — она откроет обмен с тобой.
+          </p>
+        </div>
+      )}
       {section("want", "Ищу", "Карточки, которых тебе не хватает.", wishes.wants, wishes.max_wants)}
+      <p className="text-caption text-ink-mist-dim">
+        Недостающих футболистов можно добавлять в «Ищу» прямо из альбома. Когда у кого-то появится карточка из
+        «Ищу», придёт уведомление.
+      </p>
       {section(
         "give",
         "Отдаю",

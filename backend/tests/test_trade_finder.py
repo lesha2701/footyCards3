@@ -159,3 +159,80 @@ async def test_partner_filters(client, db_session, bot_token):
 async def test_no_wishes_no_matches(client, db_session, bot_token):
     _user, headers = await _register(client, db_session, 780131, bot_token)
     assert (await client.get(f"{API}/matches", headers=headers)).json() == []
+
+
+# --- «нашлась карточка» notification ----------------------------------------------------------
+
+
+async def _notifications(db_session, user_id):
+    from sqlalchemy import select
+
+    from app.models.notification import Notification
+
+    return (await db_session.execute(
+        select(Notification).where(Notification.user_id == user_id, Notification.type == "trade_wish_available")
+    )).scalars().all()
+
+
+async def test_new_copy_notifies_wanters_once_per_cooldown(client, db_session, bot_token):
+    alice, alice_headers = await _register(client, db_session, 780201, bot_token)
+    bob, _ = await _register(client, db_session, 780202, bot_token)
+    wanted = await create_player(db_session, rarity=Rarity.rare)
+    await _wish(client, alice_headers, "want", wanted.id)
+
+    await _card(db_session, bob, player=wanted)
+    rows = await _notifications(db_session, alice.id)
+    assert len(rows) == 1
+    assert wanted.display_name in rows[0].body and rows[0].related_object_id == bob.id
+
+    await _card(db_session, bob, player=wanted)  # within the cooldown: no second ping
+    assert len(await _notifications(db_session, alice.id)) == 1
+
+
+async def test_no_notification_from_a_partner_who_cannot_trade(client, db_session, bot_token):
+    alice, alice_headers = await _register(client, db_session, 780211, bot_token)
+    newbie, _ = await _register(client, db_session, 780212, bot_token, veteran=False)
+    wanted = await create_player(db_session, rarity=Rarity.rare)
+    await _wish(client, alice_headers, "want", wanted.id)
+
+    await _card(db_session, newbie, player=wanted)
+    await _card(db_session, alice, player=wanted)  # own copy never notifies yourself
+    assert await _notifications(db_session, alice.id) == []
+
+
+async def test_notifications_off_with_zero_hours(client, db_session, bot_token):
+    alice, alice_headers = await _register(client, db_session, 780221, bot_token)
+    bob, _ = await _register(client, db_session, 780222, bot_token)
+    config = await get_config(db_session)
+    config.trade_finder_notify_hours = 0
+    await db_session.commit()
+    wanted = await create_player(db_session, rarity=Rarity.rare)
+    await _wish(client, alice_headers, "want", wanted.id)
+
+    await _card(db_session, bob, player=wanted)
+    assert await _notifications(db_session, alice.id) == []
+
+
+# --- «Поделиться в чат» -------------------------------------------------------------------------
+
+
+async def test_share_wishes_as_text_with_a_trade_link(client, db_session, bot_token):
+    alice, headers = await _register(client, db_session, 780231, bot_token)
+    wanted = await create_player(db_session, rarity=Rarity.rare)
+    mine = await _card(db_session, alice)
+    await _wish(client, headers, "want", wanted.id)
+    await _wish(client, headers, "give", mine.player_id)
+
+    resp = await client.post("/api/v1/share/prepare", headers=headers, json={"kind": "trade_wishes"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["image_url"] is None
+    assert "Ищу:" in body["caption"] and wanted.display_name in body["caption"] and "Отдаю:" in body["caption"]
+    assert body["link"].endswith(f"?start=trade_{alice.id}")
+    assert body["share_url"].startswith("https://t.me/share/url?url=")
+
+
+async def test_share_needs_some_wishes(client, db_session, bot_token):
+    _alice, headers = await _register(client, db_session, 780241, bot_token)
+    resp = await client.post("/api/v1/share/prepare", headers=headers, json={"kind": "trade_wishes"})
+    assert resp.status_code == 409

@@ -57,6 +57,7 @@ _TYPE_PATHS = {
     "club_league_reward": "/clubs/league",
     "friend_request": "/friends",
     "friend_accepted": "/friends",
+    "trade_wish_available": "/trades/finder",
 }
 
 

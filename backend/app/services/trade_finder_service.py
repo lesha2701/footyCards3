@@ -14,6 +14,11 @@ days, accept trades, aren't banned and pass the trade give rules (a new
 account can't give anything, so suggesting it would only lead to an error).
 Mutual matches come first. The offer itself still goes through
 trade_service.create_offer with every usual check.
+
+When a card lands with a new owner (create_user_card, an accepted trade),
+everyone who has that player in «Ищу» gets a «нашлась карточка»
+notification — at most once per wish per `trade_finder_notify_hours`, and
+only if the new owner could actually trade it.
 """
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -23,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.card import UserCard
-from app.models.enums import Rarity
+from app.models.enums import NotificationType, Rarity
 from app.models.game_config import GameConfig
 from app.models.player import Player
 from app.models.trade import TradeWish
@@ -31,6 +36,7 @@ from app.models.user import User
 from app.schemas.player import PlayerOut
 from app.schemas.user import UserPublicOut
 from app.services import trade_guard_service
+from app.services.notification_service import notify
 
 WANT = "want"
 GIVE = "give"
@@ -229,3 +235,39 @@ async def find_matches(db: AsyncSession, user: User, config: GameConfig) -> list
         if len(matches) >= MAX_MATCHES:
             break
     return matches
+
+
+async def notify_wanted_card(db: AsyncSession, owner_id: int, player_id: int) -> int:
+    """Tell players looking for `player_id` that `owner_id` now has a copy.
+    Adds Notification rows only; the caller commits. Returns how many."""
+    config = await db.get(GameConfig, 1)  # identity map; never creates the row
+    if config is None or config.trade_finder_notify_hours <= 0:
+        return 0
+    now = datetime.now(timezone.utc)
+    cooldown_start = now - timedelta(hours=config.trade_finder_notify_hours)
+    wishes = (await db.execute(
+        select(TradeWish).where(
+            TradeWish.player_id == player_id, TradeWish.kind == WANT, TradeWish.user_id != owner_id,
+            or_(TradeWish.notified_at.is_(None), TradeWish.notified_at < cooldown_start),
+        ).order_by(TradeWish.id).limit(50)
+    )).scalars().all()
+    if not wishes:
+        return 0
+    player = await db.get(Player, player_id)
+    owner = await db.get(User, owner_id)
+    if player is None or owner is None or (player.rarity == Rarity.diamond and player.path_talent_code is None):
+        return 0
+    if owner.is_banned or owner.is_trade_banned or not owner.accept_trades:
+        return 0
+    if await trade_guard_service.give_block_reason(db, owner, config) is not None:
+        return 0
+    for wish in wishes:
+        await notify(
+            db, wish.user_id, NotificationType.trade_wish_available,
+            "Нашлась карточка из «Ищу»",
+            f"У игрока {owner.full_display_name()} появилась карточка {player.display_name}. "
+            "Предложи обмен в «Поиске обменов»!",
+            "user", owner_id,
+        )
+        wish.notified_at = now
+    return len(wishes)

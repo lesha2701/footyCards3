@@ -328,6 +328,7 @@ class NotificationType(str, enum.Enum):
     trade_offer_rejected = "trade_offer_rejected"
     trade_offer_cancelled = "trade_offer_cancelled"
     trade_offer_expired = "trade_offer_expired"
+    trade_wish_available = "trade_wish_available"
     daily_reward_available = "daily_reward_available"
     special_pack = "special_pack"
     admin_message = "admin_message"

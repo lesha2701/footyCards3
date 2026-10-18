@@ -858,6 +858,9 @@ class GameConfig(TimestampMixin, Base):
     trade_finder_max_wants: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     trade_finder_max_gives: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
     trade_finder_active_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
+    # «У игрока появилась карточка из твоего «Ищу»»: at most one per wish per
+    # this many hours (0 = notifications off).
+    trade_finder_notify_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
     # Giving anything in a trade (coins or cards, on either side) needs an
     # account at least this many days old that was active on at least this
     # many distinct days (user_daily_activity). 0 = no requirement.

@@ -1,4 +1,5 @@
-"""«Поиск обменов»: per-player «Ищу» / «Отдаю» lists and their limits.
+"""«Поиск обменов»: per-player «Ищу» / «Отдаю» lists, their limits and the
+«у игрока появилась карточка из твоего «Ищу»» notification.
 
 Revision ID: 0167
 Revises: 0166
@@ -18,16 +19,19 @@ COLUMNS = (
     ("trade_finder_max_wants", "10"),
     ("trade_finder_max_gives", "20"),
     ("trade_finder_active_days", "7"),
+    ("trade_finder_notify_hours", "24"),
 )
 
 
 def upgrade() -> None:
+    op.execute("ALTER TYPE notification_type_enum ADD VALUE IF NOT EXISTS 'trade_wish_available'")
     op.create_table(
         "trade_wishes",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("player_id", sa.Integer(), sa.ForeignKey("players.id", ondelete="CASCADE"), nullable=False),
         sa.Column("kind", sa.String(8), nullable=False),
+        sa.Column("notified_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.UniqueConstraint("user_id", "player_id", "kind", name="uq_trade_wishes_user_player_kind"),
     )
@@ -41,3 +45,4 @@ def downgrade() -> None:
         op.drop_column("game_config", column)
     op.drop_index("ix_trade_wishes_player_kind", table_name="trade_wishes")
     op.drop_table("trade_wishes")
+    # The enum value stays: Postgres can't drop enum values.

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { losesProgress } from "@/lib/cardStars";
 import { useState } from "react";
 
@@ -16,7 +16,8 @@ import { bestSkilledCopy, useSkillUpgradeCheck } from "@/lib/cardSkills";
 import { useCardActions } from "@/components/collection/useCardActions";
 import { IconChevronLeft, IconChevronRight, IconCoin, IconCollection, IconParty, IconSearch } from "@/components/icons";
 import { fetchAlbumCollectionDetail, fetchAlbumOverview } from "@/api/album";
-import { staticUrl } from "@/lib/api";
+import { addTradeWish, fetchTradeWishes, removeTradeWish } from "@/api/trades";
+import { ApiRequestError, staticUrl } from "@/lib/api";
 import { POSITION_LABELS, RARITY_ORDER } from "@/lib/rarity";
 import type { AlbumCollectionSummary, AlbumPlayer } from "@/types";
 
@@ -183,6 +184,7 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
     upgradeCard, setUpgradeCard, sellMutation, hideMutation,
   } = useCardActions([["album-detail"], ["album-overview"], ["collection"], ["collection-stats"]]);
   const visible = (data?.players ?? []).filter((slot) => matchesPlayer(filter, slot.player));
+  const want = useWantToggle();
 
   return (
     <div className="flex flex-col gap-4">
@@ -233,6 +235,7 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
 
       <CardFilterBar filter={filter} onChange={setFilter} defaultFilter={defaultFilter} showSort={false} showSkill={false} />
 
+      {want.error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{want.error}</p>}
       {isLoading && <CardGridSkeleton count={9} />}
       {!isLoading && !visible.length && (
         <EmptyState
@@ -244,7 +247,13 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
 
       <div className="grid grid-cols-3 gap-2">
         {visible.map((slot) => (
-          <AlbumSlot key={slot.player.id} slot={slot} onOpen={() => slot.card && setDetailCard(slot.card)} />
+          <AlbumSlot
+            key={slot.player.id}
+            slot={slot}
+            onOpen={() => slot.card && setDetailCard(slot.card)}
+            wanted={want.wanted.has(slot.player.id)}
+            onToggleWant={() => want.toggle(slot.player.id)}
+          />
         ))}
       </div>
 
@@ -285,11 +294,51 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
   );
 }
 
-function AlbumSlot({ slot, onOpen }: { slot: AlbumPlayer; onOpen: () => void }) {
+/** «Ищу» of «Поиск обменов», toggled from missing album slots. */
+function useWantToggle() {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const { data: wishes } = useQuery({ queryKey: ["trade-wishes"], queryFn: fetchTradeWishes });
+  const wanted = new Set((wishes?.wants ?? []).map((p) => p.id));
+  const mutation = useMutation({
+    mutationFn: (playerId: number) => (wanted.has(playerId) ? removeTradeWish("want", playerId) : addTradeWish("want", playerId)),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["trade-wishes"], data);
+      queryClient.invalidateQueries({ queryKey: ["trade-matches"] });
+      setError(null);
+    },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось обновить «Ищу»"),
+  });
+  return { wanted, toggle: (playerId: number) => mutation.mutate(playerId), error };
+}
+
+function AlbumSlot({
+  slot,
+  onOpen,
+  wanted,
+  onToggleWant,
+}: {
+  slot: AlbumPlayer;
+  onOpen: () => void;
+  wanted: boolean;
+  onToggleWant: () => void;
+}) {
   const canUpgrade = useSkillUpgradeCheck();
   if (!slot.owned || !slot.card) {
+    // Diamonds never trade (except «Академия»), so they can't be in «Ищу».
+    const wantable = slot.player.rarity !== "diamond" || !!slot.player.path_talent_code;
     return (
-      <div className="flex aspect-[3/4] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/15 bg-black/10 p-2 text-center">
+      <div className="relative flex aspect-[3/4] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/15 bg-black/10 p-2 text-center">
+        {wantable && (
+          <button
+            onClick={onToggleWant}
+            className={`absolute inset-x-1.5 bottom-1.5 rounded-lg py-1 text-micro font-bold active:scale-95 ${
+              wanted ? "bg-accent-lime/20 text-accent-lime" : "bg-white/10 text-ink-mist"
+            }`}
+          >
+            {wanted ? "✓ Ищу" : "+ Ищу"}
+          </button>
+        )}
         <svg viewBox="0 0 24 24" fill="none" className="w-7 opacity-30">
           <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.6" />
           <path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="1.6" />
