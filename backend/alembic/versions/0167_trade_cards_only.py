@@ -1,7 +1,7 @@
 """Trades: switch off coins and require cards on both sides.
 
-Revision ID: 0166
-Revises: 0165
+Revision ID: 0167
+Revises: 0166
 Create Date: 2026-10-18
 
 For now trades are card-for-card only: coins in trades (either side) and
@@ -13,8 +13,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0166"
-down_revision: Union[str, None] = "0165"
+revision: str = "0167"
+down_revision: Union[str, None] = "0166"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

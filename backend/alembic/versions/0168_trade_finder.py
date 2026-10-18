@@ -1,8 +1,8 @@
 """«Поиск обменов»: per-player «Ищу» / «Отдаю» lists, their limits and the
 «у игрока появилась карточка из твоего «Ищу»» notification.
 
-Revision ID: 0167
-Revises: 0166
+Revision ID: 0168
+Revises: 0167
 Create Date: 2026-10-18
 """
 from typing import Sequence, Union
@@ -10,8 +10,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0167"
-down_revision: Union[str, None] = "0166"
+revision: str = "0168"
+down_revision: Union[str, None] = "0167"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
