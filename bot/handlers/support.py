@@ -23,7 +23,7 @@ logger = logging.getLogger("footycards.bot.support")
 # Same documents as frontend/src/lib/legalLinks.ts.
 PACK_PURCHASE_TERMS_URL = "https://telegra.ph/Usloviya-pokupki-cifrovyh-pakov--VICTOR-FC-08-12"
 PRIVACY_POLICY_URL = "https://telegra.ph/Politika-obrabotki-personalnyh-dannyh--VICTOR-FC-08-12"
-USER_AGREEMENT_URL = "https://telegra.ph/Polzovatelskoe-soglashenie--VICTOR-FC-08-12"
+USER_AGREEMENT_URL = "https://telegra.ph/Polzovatelskoe-soglashenie--VICTOR-FC-10-18"
 
 TERMS_TEXT = (
     "📄 <b>Документы VICTOR FC</b>\n\n"
