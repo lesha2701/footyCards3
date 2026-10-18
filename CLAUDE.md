@@ -24,6 +24,14 @@ Main features:
   4-seat economic board game — `magnate_engine.py` is the pure, seeded
   rules engine + bot, `magnate_service.py` the lobbies/rooms, turn timers,
   limits and rewards; see "Turn-based game state" below);
+- clubs: squad/tournaments/league plus emblem constructor (`club_emblem_service`,
+  paid layers for budget coins or Stars), «Казна за Stars» (`club_treasury_service`),
+  spare-card sale/exchange (`club_market_service`), roles (vice-captain, treasurer),
+  wall, shop / weekly quests / wars whose member rewards go through one claim
+  mechanism (`club_reward_service`), league divisions with seasons and a trophy
+  room. Quests, wars and league settlement have no scheduler of their own: they
+  run lazily on reads and from bot sweeps (`/internal/clubs/...`), idempotent via
+  unique rows;
 - player-to-player card exchanges;
 - tasks/achievements, referrals, leaderboards and profile;
 - Telegram bot (notifications/reminders) and a React-based administrative panel.
