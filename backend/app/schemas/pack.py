@@ -49,6 +49,11 @@ class PackOut(BaseModel):
     # Average quick-sell value of the cards inside (pack_value_service);
     # filled for the shop listing only.
     expected_value: Optional[float] = None
+    # Shop listing, per player: paid packs left until the guaranteed
+    # legendary (None = pity off or this pack has no legendary chance), and
+    # the discount on opening 10+ at once (GameConfig, 0 = none).
+    pity_left: Optional[int] = None
+    bulk10_discount_pct: int = 0
 
 
 class PackRarityProbabilityIn(BaseModel):

@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -22,6 +22,8 @@ import ErrorScreen from "@/components/common/ErrorScreen";
 import PlayerCard from "@/components/cards/PlayerCard";
 import ShareButton from "@/components/common/ShareButton";
 import LoadingScreen from "@/components/common/LoadingScreen";
+import { BuyCoinsModal } from "@/components/shop/CoinPackages";
+import TopUpButton from "@/components/shop/TopUpButton";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconCoin, IconHandshake, IconTag } from "@/components/icons";
 import { openPack, openPackBulk } from "@/api/packs";
@@ -29,6 +31,7 @@ import { useStarsPackPurchase } from "@/hooks/useStarsPackPurchase";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
+import { useTopUpStars } from "@/lib/useTopUp";
 import { useAuthStore } from "@/store/authStore";
 import type { OpenedCard, OpenedCoachCard, OpenedStadiumCard, PackBulkOpenResult, PackOpenResult } from "@/types";
 
@@ -263,6 +266,28 @@ function SinglePackOpenView() {
     else reopenCoinPack();
   };
 
+  // Right after a pull is the best moment to sell the next one: ×5 when
+  // the balance allows it, otherwise a top-up that keeps the player here.
+  const [topUp, setTopUp] = useState(false);
+  const topUpStars = useTopUpStars();
+  const coinPrice = result && !isStarsPack ? result.pack.price : 0;
+  const upsell =
+    !result || isStarsPack || queue.length > 0 ? undefined : balance >= coinPrice * 5 ? (
+      <button
+        onClick={() => navigate(`/packs/${result.pack.id}/open`, { replace: true, state: { quantity: 5 } })}
+        className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-sm font-bold text-ink-chalk ring-1 ring-white/10 active:scale-95"
+      >
+        Открыть сразу ×5 · <IconCoin size={13} className="text-accent-lime" /> {(coinPrice * 5).toLocaleString("ru-RU")}
+      </button>
+    ) : !canAffordAgain ? (
+      <TopUpButton
+        need={coinPrice - balance}
+        stars={topUpStars(coinPrice - balance)}
+        onClick={() => setTopUp(true)}
+        className="rounded-2xl py-3 text-sm"
+      />
+    ) : undefined;
+
   useEffect(() => {
     if (phase !== "tokens" || tokenRevealed) return;
     const timer = setTimeout(() => setTokenRevealed(true), TOKEN_STAGE_DURATION_MS);
@@ -377,6 +402,7 @@ function SinglePackOpenView() {
                   onDone={finish}
                   onOpenAnother={handleOpenAnother}
                   canOpenAnother={canAffordAgain}
+                  more={upsell}
                   busy={isStarsPack && buyingStarsPackAgain}
                   error={isStarsPack ? buyStarsPackAgainError : null}
                 />
@@ -399,10 +425,13 @@ function SinglePackOpenView() {
           onDone={finish}
           onOpenAnother={handleOpenAnother}
           canOpenAnother={canAffordAgain}
+          more={upsell}
           busy={isStarsPack && buyingStarsPackAgain}
           error={isStarsPack ? buyStarsPackAgainError : null}
         />
       )}
+
+      {topUp && <BuyCoinsModal onClose={() => setTopUp(false)} onPurchased={updateBalance} />}
     </div>
   );
 }
@@ -741,12 +770,15 @@ function ReopenActions({
   canOpenAnother,
   busy,
   error,
+  more,
 }: {
   onDone: () => void;
   onOpenAnother: () => void;
   canOpenAnother: boolean;
   busy: boolean;
   error: string | null;
+  /** Upsell under the buttons: «Ещё ×5» or «Докупить» when short. */
+  more?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -766,6 +798,7 @@ function ReopenActions({
           {busy ? "Открываем..." : "Открыть ещё"}
         </button>
       </div>
+      {more}
     </div>
   );
 }
@@ -793,6 +826,7 @@ function Summary({
   canOpenAnother,
   busy,
   error,
+  more,
 }: {
   result: PackOpenResult;
   onDone: () => void;
@@ -800,6 +834,7 @@ function Summary({
   canOpenAnother: boolean;
   busy: boolean;
   error: string | null;
+  more?: ReactNode;
 }) {
   // A single-card pack's one card was already fully shown during the reveal
   // stage — re-displaying it here (and the generic "Pack opened" heading)
@@ -927,6 +962,7 @@ function Summary({
           canOpenAnother={canOpenAnother}
           busy={busy}
           error={error}
+          more={more}
         />
       </div>
     </div>

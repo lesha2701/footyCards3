@@ -283,6 +283,10 @@ export interface Pack {
   is_available_now: boolean;
   /** Average quick-sell value of the cards inside (shop listing only). */
   expected_value?: number | null;
+  /** Paid packs left until the guaranteed legendary (null = off / no legendary here). */
+  pity_left?: number | null;
+  /** Discount on opening 10+ at once, % (0 = none). */
+  bulk10_discount_pct?: number;
 }
 
 export interface OpenedCard {
@@ -462,6 +466,8 @@ export interface CoinPackage {
   coins_amount: number;
   is_active: boolean;
   sort_order: number;
+  /** Extra coins on this player's first coin purchase (0 once they have bought). */
+  first_purchase_bonus_coins?: number;
 }
 
 export interface MemoryStart {

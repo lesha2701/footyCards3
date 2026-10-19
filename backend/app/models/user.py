@@ -184,6 +184,9 @@ class User(TimestampMixin, Base):
     # DailyReward.streak_day (which cycles 1-7 to pick a reward tier), this
     # keeps counting up so the profile can show an uncapped "days in a row".
     daily_login_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Paid coin packs (with a legendary chance) opened since the last
+    # legendary — GameConfig.pity_packs guarantees one (migration 0183).
+    pity_counter: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     wheel_free_spins_used_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     wheel_spins_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

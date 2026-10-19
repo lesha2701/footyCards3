@@ -627,6 +627,9 @@ export interface GameConfig {
   trade_suspicious_young_days: number;
   trade_suspicious_min_donors: number;
   stake_max_coins: number;
+  pity_packs: number;
+  bulk10_discount_pct: number;
+  first_coin_purchase_bonus_pct: number;
   stake_pair_daily_limit: number;
   stake_daily_profit_cap: number;
 }

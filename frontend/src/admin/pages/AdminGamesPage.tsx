@@ -788,6 +788,21 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Магазин: ускорители продаж</p>
+        <p className="mb-3 text-xs text-slate-500">
+          0 — выключено. Гарант: платный пак за монеты с шансом на легендарку, который идёт после N−1 таких паков без
+          легендарки, даёт легендарку; игрок видит «гарантирована через N паков». Скидка ×10 — на открытие 10+ одинаковых
+          паков разом. Бонус первой покупки — процент сверху на первую покупку монет за Stars (раз на игрока).
+          Рекомендуем начать с гаранта 40, скидки 10% и бонуса 100%.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("pity_packs", "Гарант легендарки: паков")}
+          {field("bulk10_discount_pct", "Скидка на ×10, %")}
+          {field("first_coin_purchase_bonus_pct", "Бонус первой покупки монет, %")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Рефералы</p>
         <div className="grid grid-cols-2 gap-3">
           {field("referral_referred_reward", "Награда приглашённому")}

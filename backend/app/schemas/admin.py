@@ -671,6 +671,10 @@ class GameConfigOut(BaseModel):
     equipment_max_rating: int = 3
     equipment_max_pp: int = 8
     equipment_max_chemistry: int = 1
+    pity_packs: int = 0
+    bulk10_discount_pct: int = 0
+    first_coin_purchase_bonus_pct: int = 0
+
 
 class GameConfigUpdate(BaseModel):
     club_creation_cost_coins: Optional[int] = Field(default=None, ge=0)
@@ -1148,6 +1152,9 @@ class GameConfigUpdate(BaseModel):
     stake_max_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
     stake_pair_daily_limit: Optional[int] = Field(default=None, ge=0, le=100)
     stake_daily_profit_cap: Optional[int] = Field(default=None, ge=0)
+    pity_packs: Optional[int] = Field(default=None, ge=0, le=1000)
+    bulk10_discount_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    first_coin_purchase_bonus_pct: Optional[int] = Field(default=None, ge=0, le=300)
 
     @field_validator("path_prestige_dupes", "path_prestige_coins")
     @classmethod

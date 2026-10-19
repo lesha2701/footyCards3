@@ -79,7 +79,10 @@ describe("artifacts page", () => {
     wrap(<ArtifactsPage />);
     fireEvent.click(await screen.findByText("Магазин"));
     expect(await screen.findByText(/Копии одного артефакта не суммируются/)).toBeInTheDocument();
+    // Details open on a tap on the tile.
+    fireEvent.click(screen.getAllByLabelText(/: подробнее$/)[0]);
     expect(screen.getByText(/Если есть стадион «Энфилд»: −2%/)).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Футболка Марадоны: подробнее"));
     expect(screen.getByText("+3 к рейтингу карточек «Марадона»")).toBeInTheDocument();
     expect(screen.getAllByText("+20 статуса Моему игроку").length).toBeGreaterThan(0);
   });

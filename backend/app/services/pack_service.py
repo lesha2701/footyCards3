@@ -350,6 +350,33 @@ async def _duplicate_stadium_counts_snapshot(db: AsyncSession, user_id: int) -> 
     return {stadium_id: count for stadium_id, count in result.all()}
 
 
+def pity_eligible(pack: Pack) -> bool:
+    """The legendary pity counts only coin packs that can drop a legendary
+    at all — a starter pack without one never forces it."""
+    return pack.stars_price is None and any(
+        rp.rarity == Rarity.legendary and float(rp.probability) > 0 for rp in pack.rarity_probabilities
+    )
+
+
+def apply_pity(user: User, pack: Pack, rolled: list[Rarity], pity_packs: int) -> list[Rarity]:
+    """GameConfig.pity_packs > 0: the paid eligible pack that comes after
+    pity_packs - 1 such packs without a legendary turns its lowest slot
+    legendary. Any legendary (or better) resets User.pity_counter; `user`
+    must be the row-locked buyer — the counter changes in the same
+    transaction as the debit."""
+    if pity_packs <= 0 or not pity_eligible(pack):
+        return rolled
+    legendary = RARITY_ORDER[Rarity.legendary]
+    hit = any(RARITY_ORDER[r] >= legendary for r in rolled)
+    if not hit and (user.pity_counter or 0) + 1 >= pity_packs and rolled:
+        rolled = list(rolled)
+        lowest = min(range(len(rolled)), key=lambda i: RARITY_ORDER[rolled[i]])
+        rolled[lowest] = Rarity.legendary
+        hit = True
+    user.pity_counter = 0 if hit else (user.pity_counter or 0) + 1
+    return rolled
+
+
 async def roll_and_create_cards(
     db: AsyncSession,
     user: User,
@@ -357,6 +384,7 @@ async def roll_and_create_cards(
     opening: PackOpening,
     dup_counts: dict[int, int],
     source: CardSource,
+    pity_packs: int = 0,
 ) -> tuple[list[OpenedCardOut], list[OpenedCoachCardOut], list[OpenedStadiumCardOut], list[OpenedSkillTokenOut]]:
     seen_this_opening: set[int] = set()
     seen_coaches_this_opening: set[int] = set()
@@ -371,6 +399,8 @@ async def roll_and_create_cards(
         bonus = (await user_effects(db, user.id, await _get_config(db)))["scout"] / 100
         probabilities = scout_adjusted(probabilities, bonus)
     rolled_rarities = roll_rarities(probabilities, pack.card_count, pack.guaranteed_min_rarity)
+    # Paid opens only (open_pack / open_pack_bulk pass pity_packs).
+    rolled_rarities = apply_pity(user, pack, rolled_rarities, pity_packs)
 
     # Each slot is an independent coin flip against the pack's coach_drop_chance
     # and stadium_drop_chance — not a fixed count of coach/stadium slots — mirrors
@@ -651,7 +681,7 @@ async def open_pack(
 
     dup_counts = await _duplicate_counts_snapshot(db, locked_user.id)
     opened_items, opened_coach_items, opened_stadium_items, opened_token_items = await roll_and_create_cards(
-        db, locked_user, pack, opening, dup_counts, CardSource.pack,
+        db, locked_user, pack, opening, dup_counts, CardSource.pack, pity_packs=(await get_config(db)).pity_packs,
     )
     await track_pack_opened_tasks(db, locked_user, dup_counts)
     collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(
@@ -714,6 +744,18 @@ async def open_pack(
         referral_bonus_coins=referral_bonus_coins,
         collection_rewards=collection_rewards,
     )
+
+
+BULK_DISCOUNT_MIN_QUANTITY = 10
+
+
+def bulk_total_price(price: int, quantity: int, discount_pct: int) -> tuple[int, int]:
+    """(total, applied %) for opening `quantity` copies at once —
+    GameConfig.bulk10_discount_pct applies from 10 copies, rounded down in
+    the player's favour."""
+    pct = discount_pct if quantity >= BULK_DISCOUNT_MIN_QUANTITY and discount_pct > 0 else 0
+    gross = price * quantity
+    return gross - gross * pct // 100, pct
 
 
 def _bulk_sub_key(idempotency_key: Optional[str], index: int) -> Optional[str]:
@@ -809,12 +851,16 @@ async def open_pack_bulk(
         locked_user = await lock_user_for_update(db, user.id)
         pre_locked_referrer = None
 
-    total_price = pack.price * quantity
+    config = await get_config(db)
+    total_price, discount_pct = bulk_total_price(pack.price, quantity, config.bulk10_discount_pct)
     await debit_coins(
         db, locked_user, total_price, TransactionType.pack_purchase,
-        f"Открытие {quantity}× пака «{pack.name}»",
+        f"Открытие {quantity}× пака «{pack.name}»" + (f" (скидка {discount_pct}%)" if discount_pct else ""),
         related_object_type="pack", related_object_id=pack.id,
     )
+    # Each opening records its share of the (possibly discounted) total;
+    # the first one takes the rounding remainder so they sum exactly.
+    share, remainder = divmod(total_price, quantity)
 
     dup_counts = await _duplicate_counts_snapshot(db, locked_user.id)
     opening_ids: list[int] = []
@@ -824,14 +870,14 @@ async def open_pack_bulk(
     all_opened_token_items: list[OpenedSkillTokenOut] = []
     for i in range(quantity):
         opening = PackOpening(
-            user_id=locked_user.id, pack_id=pack.id, price_paid=pack.price,
+            user_id=locked_user.id, pack_id=pack.id, price_paid=share + (remainder if i == 0 else 0),
             idempotency_key=_bulk_sub_key(idempotency_key, i),
             created_at=datetime.now(timezone.utc),
         )
         db.add(opening)
         await db.flush()
         opened_items, opened_coach_items, opened_stadium_items, opened_token_items = await roll_and_create_cards(
-            db, locked_user, pack, opening, dup_counts, CardSource.pack,
+            db, locked_user, pack, opening, dup_counts, CardSource.pack, pity_packs=config.pity_packs,
         )
         opening_ids.append(opening.id)
         all_opened_items.extend(opened_items)
@@ -908,6 +954,10 @@ async def list_available_packs(db: AsyncSession, user_id: Optional[int] = None) 
 
     averages = await rarity_quick_sell_averages(db)
     pool_ready = await path_pool_ready(db) if any(_needs_path_pool(p) for p in packs) else True
+    config = await get_config(db)
+    pity_counter = 0
+    if user_id is not None and config.pity_packs > 0:
+        pity_counter = (await db.execute(select(User.pity_counter).where(User.id == user_id))).scalar_one_or_none() or 0
     out = []
     for pack in packs:
         purchase_count = 0
@@ -933,6 +983,9 @@ async def list_available_packs(db: AsyncSession, user_id: Optional[int] = None) 
         item.is_available_now = is_available_now
         item.unavailable_reason = unavailable_reason
         item.expected_value = pack_rarity_breakdown(pack, averages)[0]
+        item.bulk10_discount_pct = config.bulk10_discount_pct if pack.stars_price is None else 0
+        if user_id is not None and config.pity_packs > 0 and pity_eligible(pack):
+            item.pity_left = max(1, config.pity_packs - pity_counter)
         out.append(item)
     return out
 

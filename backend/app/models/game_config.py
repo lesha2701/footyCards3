@@ -954,6 +954,16 @@ class GameConfig(TimestampMixin, Base):
     stake_max_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
     stake_pair_daily_limit: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     stake_daily_profit_cap: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
+    # Shop sales boosters (migration 0183), 0 = off:
+    # - pity_packs: a paid coin pack with a legendary chance that comes after
+    #   this many such packs without a legendary turns one card legendary
+    #   (User.pity_counter, pack_service.apply_pity);
+    # - bulk10_discount_pct: discount on opening 10+ copies of a pack at once;
+    # - first_coin_purchase_bonus_pct: extra coins on the player's first coin
+    #   purchase for Stars (stars_payment_service).
+    pity_packs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    bulk10_discount_pct: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    first_coin_purchase_bonus_pct: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Stars to finish a construction now: per started remaining hour (min 1).
     academy_stars_per_hour: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     # Free scouting report (scout wing >= 1), per scout level: chance of an

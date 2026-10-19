@@ -42,7 +42,21 @@ function Entry({
 
 /** Entry points to «Клубный абонемент», «Сезонный пропуск» and «Стиль»
  * (profile and shop). */
-export default function MonetizationEntries({ showStyle = true }: { showStyle?: boolean }) {
+export default function MonetizationEntries({
+  showStyle = true,
+  showArtifacts = true,
+  showClubPass = true,
+  showSeason = true,
+  showEquipment = true,
+}: {
+  /** Off in the shop, which has its own «Экипировка» tab. */
+  showEquipment?: boolean;
+  showStyle?: boolean;
+  showClubPass?: boolean;
+  showSeason?: boolean;
+  /** Off in the shop, which has its own «Артефакты» tab. */
+  showArtifacts?: boolean;
+}) {
   const navigate = useNavigate();
   const { data: clubPass } = useQuery({ queryKey: ["club-pass"], queryFn: fetchClubPass });
   const { data: season } = useQuery({ queryKey: ["season-pass"], queryFn: fetchSeasonPass });
@@ -51,7 +65,7 @@ export default function MonetizationEntries({ showStyle = true }: { showStyle?: 
 
   return (
     <div className="flex flex-col gap-2">
-      {clubPass?.enabled && (
+      {showClubPass && clubPass?.enabled && (
         <Entry
           Icon={IconTicket}
           iconClass="bg-emerald-400/15 text-emerald-300"
@@ -65,7 +79,7 @@ export default function MonetizationEntries({ showStyle = true }: { showStyle?: 
           onClick={() => navigate("/club-pass")}
         />
       )}
-      {season?.enabled && (
+      {showSeason && season?.enabled && (
         <Entry
           Icon={IconTrophy}
           iconClass="bg-purple-400/15 text-purple-300"
@@ -75,7 +89,7 @@ export default function MonetizationEntries({ showStyle = true }: { showStyle?: 
           onClick={() => navigate("/season")}
         />
       )}
-      {artifacts?.enabled && (
+      {showArtifacts && artifacts?.enabled && (
         <Entry
           Icon={IconTrophy}
           iconClass="bg-amber-400/15 text-amber-300"
@@ -85,7 +99,7 @@ export default function MonetizationEntries({ showStyle = true }: { showStyle?: 
           section="artifacts"
         />
       )}
-      {equipment?.enabled && (
+      {showEquipment && equipment?.enabled && (
         <Entry
           Icon={IconStar}
           iconClass="bg-lime-400/15 text-lime-300"

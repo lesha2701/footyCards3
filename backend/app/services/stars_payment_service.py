@@ -16,6 +16,7 @@ from app.models.coin_package import CoinPackage
 from app.models.enums import CardSource, GiftKind, TransactionType, WheelSpinSource
 from app.models.gift import Gift, GiftSet
 from app.models.pack import Pack, PackOpening, StarsInvoice
+from app.models.transaction import CoinTransaction
 from app.models.user import User
 from app.models.wheel import WheelPrize, WheelSpin
 from app.schemas.badge import BadgeOut
@@ -36,11 +37,33 @@ settings = get_settings()
 logger = logging.getLogger(__name__)
 
 
-async def list_active_coin_packages(db: AsyncSession) -> list[CoinPackageOut]:
+async def _first_coin_purchase_bonus(db: AsyncSession, user_id: int, coins: int) -> int:
+    """GameConfig.first_coin_purchase_bonus_pct of `coins` for a player who
+    has never bought coins for Stars yet (0 otherwise or when it's off)."""
+    from app.services.game_config_service import get_config
+
+    pct = (await get_config(db)).first_coin_purchase_bonus_pct
+    if pct <= 0:
+        return 0
+    bought_before = (
+        await db.execute(
+            select(CoinTransaction.id)
+            .where(CoinTransaction.user_id == user_id, CoinTransaction.type == TransactionType.stars_coin_purchase)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return 0 if bought_before is not None else coins * pct // 100
+
+
+async def list_active_coin_packages(db: AsyncSession, user: User | None = None) -> list[CoinPackageOut]:
     result = await db.execute(
         select(CoinPackage).where(CoinPackage.is_active.is_(True)).order_by(CoinPackage.sort_order)
     )
-    return [CoinPackageOut.model_validate(p) for p in result.scalars().all()]
+    out = [CoinPackageOut.model_validate(p) for p in result.scalars().all()]
+    if user is not None:
+        for item in out:
+            item.first_purchase_bonus_coins = await _first_coin_purchase_bonus(db, user.id, item.coins_amount)
+    return out
 
 
 async def _get_invoice_or_404(db: AsyncSession, payload_token: str) -> StarsInvoice:
@@ -531,11 +554,17 @@ async def deliver_payment(
         if invoice.stars_amount != total_amount:
             raise ConflictError("Stars amount does not match the invoice")
         user = await lock_user_for_update(db, user.id)
+        # First coin purchase bonus: decided at delivery under the user lock
+        # (not when the invoice was made), so several unpaid invoices can't
+        # all carry it. The invoice records what was actually credited.
+        bonus = await _first_coin_purchase_bonus(db, user.id, invoice.coins_amount)
         await credit_coins(
-            db, user, invoice.coins_amount, TransactionType.stars_coin_purchase,
-            f"Покупка {invoice.coins_amount} монет за {invoice.stars_amount} ⭐",
+            db, user, invoice.coins_amount + bonus, TransactionType.stars_coin_purchase,
+            f"Покупка {invoice.coins_amount} монет за {invoice.stars_amount} ⭐"
+            + (f" + {bonus} бонус за первую покупку" if bonus else ""),
             related_object_type="stars_invoice", related_object_id=invoice.id,
         )
+        invoice.coins_amount += bonus
 
     invoice.telegram_payment_charge_id = telegram_payment_charge_id
     invoice.completed_at = datetime.now(timezone.utc)

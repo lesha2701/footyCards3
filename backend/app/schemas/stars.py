@@ -46,6 +46,9 @@ class CoinPackageOut(BaseModel):
     coins_amount: int
     is_active: bool
     sort_order: int
+    # Extra coins this player gets on it as their first coin purchase
+    # (GameConfig.first_coin_purchase_bonus_pct; 0 once they have bought).
+    first_purchase_bonus_coins: int = 0
 
 
 class StarsPreCheckoutValidateIn(BaseModel):
