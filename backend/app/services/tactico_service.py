@@ -34,7 +34,7 @@ from app.schemas.tactico import (
     TacticoSquadOut,
     TacticoStatsOut,
 )
-from app.services import bingo_service, league_service, ranking_service
+from app.services import bingo_service, league_service, ranking_service, stake_guard_service
 from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS
 from app.services.match_service import BOT_NAMES
@@ -565,6 +565,7 @@ async def create_open_challenge(db: AsyncSession, sender: User, stake_coins: int
     squad = await get_squad(db, sender)
     if not squad.is_complete:
         raise ConflictError(f"Build a full {SQUAD_SIZE}-card Tactico squad before challenging a friend")
+    await stake_guard_service.ensure_can_create(db, sender, stake_coins, config)
     if stake_coins > 0 and sender.balance < stake_coins:
         raise ConflictError("Не хватает монет для такой ставки")
 
@@ -638,8 +639,12 @@ async def accept_open_challenge(db: AsyncSession, user: User, match_id: int) -> 
     if not receiver_squad.is_complete:
         raise ConflictError(f"Build a full {SQUAD_SIZE}-card Tactico squad before accepting")
 
-    creator = await lock_user_for_update(db, match.user_id)
-    acceptor = await lock_user_for_update(db, user.id)
+    first_id, second_id = sorted([match.user_id, user.id])
+    first = await lock_user_for_update(db, first_id)
+    second = await lock_user_for_update(db, second_id)
+    creator = first if first.id == match.user_id else second
+    acceptor = first if first.id == user.id else second
+    await stake_guard_service.ensure_can_accept(db, creator, acceptor, match.stake_coins, config)
     if match.stake_coins > 0:
         if creator.balance < match.stake_coins:
             raise ConflictError("У создателя вызова больше не хватает монет на ставку")

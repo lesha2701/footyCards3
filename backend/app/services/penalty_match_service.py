@@ -22,7 +22,7 @@ from app.models.enums import (
 from app.models.penalty import PenaltyMatch, PenaltyQueueEntry
 from app.models.user import User
 from app.schemas.penalty_match import PenaltyMatchOut, PenaltyOpenChallengePreviewOut, PenaltyRoundOut
-from app.services import bingo_service, league_service
+from app.services import bingo_service, league_service, stake_guard_service
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 from app.services.penalty_service import PENALTY_ZONES, _resolve_shot
@@ -147,6 +147,7 @@ async def create_open_challenge(db: AsyncSession, sender: User, user_card_id: in
     if await _has_active_match(db, sender.id):
         raise ConflictError("У тебя уже есть матч в Пенальти в процессе — заверши его, прежде чем начать новый")
     await _load_owned_card(db, sender, user_card_id)
+    await stake_guard_service.ensure_can_create(db, sender, stake_coins, config)
     if stake_coins > 0 and sender.balance < stake_coins:
         raise ConflictError("Не хватает монет для такой ставки")
 
@@ -211,8 +212,13 @@ async def accept_open_challenge(db: AsyncSession, user: User, match_id: int, use
 
     await _load_owned_card(db, user, user_card_id)
 
-    creator = await lock_user_for_update(db, match.user_id)
-    acceptor = await lock_user_for_update(db, user.id)
+    config = await get_config(db)  # before the locks: it commits when it creates the row
+    first_id, second_id = sorted([match.user_id, user.id])
+    first = await lock_user_for_update(db, first_id)
+    second = await lock_user_for_update(db, second_id)
+    creator = first if first.id == match.user_id else second
+    acceptor = first if first.id == user.id else second
+    await stake_guard_service.ensure_can_accept(db, creator, acceptor, match.stake_coins, config)
     if match.stake_coins > 0:
         if creator.balance < match.stake_coins:
             raise ConflictError("У создателя вызова больше не хватает монет на ставку")

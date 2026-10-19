@@ -58,7 +58,7 @@ from app.schemas.stratego import (
     StrategoSquadSlotOut,
     StrategoStatsOut,
 )
-from app.services import my_player_service, ranking_service
+from app.services import my_player_service, ranking_service, stake_guard_service
 from app.services import stratego_engine as engine
 from app.services import stratego_puzzles
 from app.services.game_config_service import get_config
@@ -723,6 +723,7 @@ async def create_open_challenge(db: AsyncSession, sender: User, stake_coins: int
     config = await get_config(db)
     if await _has_active_match(db, sender.id):
         raise ConflictError(_ACTIVE_MATCH_MSG)
+    await stake_guard_service.ensure_can_create(db, sender, stake_coins, config)
     if stake_coins > 0 and sender.balance < stake_coins:
         raise ConflictError("Не хватает монет для такой ставки")
     state = _new_state(config)
@@ -784,6 +785,7 @@ async def accept_open_challenge(db: AsyncSession, user: User, match_id: int) -> 
     second = await lock_user_for_update(db, second_id)
     creator = first if first.id == match.user_id else second
     acceptor = await _consume_hourly_slot(db, user.id, config)
+    await stake_guard_service.ensure_can_accept(db, creator, acceptor, match.stake_coins, config)
     if match.stake_coins > 0:
         if creator.balance < match.stake_coins:
             raise ConflictError("У автора вызова больше не хватает монет на ставку")

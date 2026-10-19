@@ -55,6 +55,7 @@ async def test_feature_flags_default_enabled_and_toggle_hides_them(client, db_se
     assert resp.status_code == 200
     assert resp.json() == {
         "matchmaking_enabled": True, "wheel_enabled": True, "trades_enabled": True, "leagues_enabled": True,
+        "stake_max_coins": 500,
     }
 
     admin_headers = telegram_headers(999000001, bot_token)
@@ -71,6 +72,7 @@ async def test_feature_flags_default_enabled_and_toggle_hides_them(client, db_se
     resp2 = await client.get("/api/v1/feature-flags", headers=user_headers)
     assert resp2.json() == {
         "matchmaking_enabled": False, "wheel_enabled": False, "trades_enabled": True, "leagues_enabled": False,
+        "stake_max_coins": 500,
     }
 
 

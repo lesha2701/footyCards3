@@ -622,6 +622,9 @@ export interface GameConfig {
   trade_finder_active_days: number;
   trade_suspicious_young_days: number;
   trade_suspicious_min_donors: number;
+  stake_max_coins: number;
+  stake_pair_daily_limit: number;
+  stake_daily_profit_cap: number;
 }
 
 export interface AdminPathTalent {

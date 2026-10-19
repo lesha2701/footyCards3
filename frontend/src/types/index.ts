@@ -823,6 +823,8 @@ export interface FeatureFlags {
   /** Admin switch: off = no new trade offers and no accepting. */
   trades_enabled?: boolean;
   leagues_enabled: boolean;
+  /** Largest stake per side in open chat challenges; 0 = stakes off. */
+  stake_max_coins?: number;
 }
 
 export interface GameLimits {

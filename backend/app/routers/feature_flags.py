@@ -18,4 +18,5 @@ async def read_feature_flags(db: AsyncSession = Depends(get_db), _user: User = D
         wheel_enabled=config.wheel_enabled,
         trades_enabled=config.trades_enabled,
         leagues_enabled=config.leagues_enabled,
+        stake_max_coins=config.stake_max_coins,
     )
