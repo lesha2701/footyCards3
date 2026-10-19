@@ -431,7 +431,7 @@ async def test_a_season_started_before_the_base_gets_nothing(client, db_session,
     resp = await client.post(f"{API}/career/seasons", headers=headers, json={"difficulty": "amateur"})
     season_id = resp.json()["season"]["id"]
     part = (await db_session.execute(select(CareerParticipant).where(CareerParticipant.season_id == season_id))).scalar_one()
-    part.base_effects = {}  # what migration 0179 writes for seasons already under way
+    part.base_effects = {}  # what migration 0180 writes for seasons already under way
     await db_session.commit()
     await _set_levels(db_session, user_id, {"hq": 25, "stadium": 25})
     await career_service.resolve_due(db_session, season_id, now=datetime.now(timezone.utc) + timedelta(days=8))

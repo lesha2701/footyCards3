@@ -8,7 +8,7 @@ from app.database import Base
 from app.models.mixins import TimestampMixin
 
 # «Клубная база» defaults (GameConfig.club_base_buildings / club_base_caps;
-# the 0179 migration writes the same values). Lists are per level.
+# the 0180 migration writes the same values). Lists are per level.
 # 25 levels like the whole «Академия»: costs and build hours grow smoothly,
 # effects go linearly from level 1 to level 25 (the caps below still apply).
 _LEVELS = 25

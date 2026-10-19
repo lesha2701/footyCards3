@@ -8,7 +8,7 @@ develop it alone (it is not the shared club of `clubs/*`).
 Code: `backend/app/services/club_base_service.py`,
 `models/club_base.py` (`user_club_bases`, `club_base_ledger`),
 `routers/club_base.py` (`/club-base`), `routers/admin_club_base.py`
-(`/admin/club-base/art|ledger`), migration `0179_club_base`, bot loop
+(`/admin/club-base/art|ledger`), migration `0180_club_base`, bot loop
 `bot/services/club_base_scheduler.py`; frontend `pages/ClubBasePage.tsx`,
 `components/base/BaseMap.tsx`, `components/home/BaseHomeCard.tsx`,
 `admin/pages/AdminClubBasePage.tsx`.
@@ -16,7 +16,7 @@ Code: `backend/app/services/club_base_service.py`,
 ## Buildings
 
 25 levels each, like the whole «Академия» (5 wings × 5). Defaults come from
-formulas in `models/game_config.py` (copied into migration 0179): costs
+formulas in `models/game_config.py` (copied into migration 0180): costs
 grow as L^1.9, build hours as L^2, effects go linearly from level 1 to 25.
 A regular building costs 800 → 100 000 coins per level (≈ 925 000 in all)
 and takes 3 h → 190 h (≈ 72 days in all); the HQ 700 → 75 000 and
@@ -72,7 +72,7 @@ costs, hours, effects, caps, Stars per hour, days of income — is in
   `game_rewards_blocked` gets 0.
 - **Career effects are frozen per season**: `CareerParticipant.base_effects`
   is taken from the base at the participant's first round. Seasons running
-  when 0179 was applied got `{}` — no base effects until the next season.
+  when 0180 was applied got `{}` — no base effects until the next season.
 - Money: every coin movement is under `wallet_service.lock_user_for_update`
   with its own transaction type (`club_base_upgrade`, `club_base_income`,
   `club_base_matchday`); every operation is journaled in `club_base_ledger`

@@ -4,8 +4,8 @@ sponsor/merchandise income, the journal, GameConfig tuning and the career
 season's frozen base effects. Additive only; seasons already running get
 base_effects = {} (no effects until their next season).
 
-Revision ID: 0179
-Revises: 0178
+Revision ID: 0180
+Revises: 0179
 Create Date: 2026-10-19
 
 """
@@ -15,8 +15,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0179"
-down_revision: Union[str, None] = "0178"
+revision: str = "0180"
+down_revision: Union[str, None] = "0179"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

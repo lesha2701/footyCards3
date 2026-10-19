@@ -96,7 +96,7 @@ class CareerParticipant(Base):
     coins_earned: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # «Клубная база» effects this season plays with (club_base_service.
     # career_effects): taken from the base at the participant's first round
-    # and kept for the whole season; {} = none (seasons started before 0179).
+    # and kept for the whole season; {} = none (seasons started before 0180).
     base_effects: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
