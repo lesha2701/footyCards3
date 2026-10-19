@@ -323,8 +323,7 @@ export default function ClubBasePage() {
       <section className="flex flex-col gap-2" aria-label="Корпуса">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-mist-dim">Корпуса</h2>
         {core.map(row)}
-        <h2 className="mt-2 text-xs font-semibold uppercase tracking-wider text-ink-mist-dim">💼 Финансовый департамент</h2>
-        {finance.map(row)}
+        <h2 className="mt-2 text-xs font-semibold uppercase tracking-wider text-ink-mist-dim">🌱 Академия</h2>
         <button type="button" onClick={() => navigate("/academy")}
                 className="flex min-h-[56px] items-center gap-3 rounded-2xl border border-path/25 bg-path/5 p-2.5 text-left">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-path/15 text-xl" aria-hidden>🌱</span>
@@ -336,6 +335,8 @@ export default function ClubBasePage() {
             <span className="block text-caption text-ink-mist">Скауты, тренировки, интернат, штаб и зал славы →</span>
           </span>
         </button>
+        <h2 className="mt-2 text-xs font-semibold uppercase tracking-wider text-ink-mist-dim">💼 Финансовый департамент</h2>
+        {finance.map(row)}
       </section>
 
       <button type="button" onClick={() => navigate("/ranking?metric=base_level")}

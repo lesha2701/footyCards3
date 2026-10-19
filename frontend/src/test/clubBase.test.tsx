@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
+import { visualLevel } from "@/components/base/artMetrics";
 import BaseHomeCard from "@/components/home/BaseHomeCard";
 import { formatBuildTime, hoursLabel, upgradeBlocker } from "@/lib/clubBase";
 import ClubBasePage from "@/pages/ClubBasePage";
@@ -62,6 +63,12 @@ describe("Клубная база", () => {
     expect(screen.getByRole("button", { name: "Академия" })).toBeInTheDocument();
   });
 
+  it("the Academy is its own section, not part of the finance department", async () => {
+    wrap(<ClubBasePage />);
+    const headings = (await screen.findAllByRole("heading", { level: 2 })).map((h) => h.textContent);
+    expect(headings).toEqual(["Корпуса", "🌱 Академия", "💼 Финансовый департамент"]);
+  });
+
   it("a building sheet explains why it cannot be upgraded now", async () => {
     wrap(<ClubBasePage />);
     fireEvent.click(await screen.findByRole("button", { name: /Медцентр, уровень 0/ }));
@@ -89,5 +96,7 @@ describe("Клубная база", () => {
     expect(upgradeBlocker(free, hotel, 100)).toBe("Не хватает монет");
     expect(upgradeBlocker(free, hotel, 10_000)).toBeNull();
     expect(upgradeBlocker({ ...free, enabled: false }, hotel, 10_000)).toBe("База временно закрыта");
+    // 25 levels drawn on 10 visual steps; only the top level is the landmark.
+    expect([0, 1, 13, 24, 25].map((l) => visualLevel(l, 25))).toEqual([0, 1, 6, 9, 10]);
   });
 });

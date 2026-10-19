@@ -9,28 +9,42 @@ from app.models.mixins import TimestampMixin
 
 # «Клубная база» defaults (GameConfig.club_base_buildings / club_base_caps;
 # the 0179 migration writes the same values). Lists are per level.
-_BASE_COSTS = [1500, 3500, 7000, 12000, 20000, 32000, 48000, 70000, 100000, 140000]
-_BASE_HOURS = [12, 24, 36, 48, 72, 96, 120, 168, 216, 288]
+# 25 levels like the whole «Академия»: costs and build hours grow smoothly,
+# effects go linearly from level 1 to level 25 (the caps below still apply).
+_LEVELS = 25
+
+
+def _nice(v: float) -> int:
+    step = 100 if v < 10000 else 500 if v < 100000 else 1000
+    return int(round(v / step) * step)
+
+
+def _costs(base: int, k: float) -> list[int]:
+    return [_nice(base + k * lv ** 1.9) for lv in range(1, _LEVELS + 1)]
+
+
+def _hours(base: float, k: float) -> list[int]:
+    return [int(round(base + k * lv ** 2)) for lv in range(1, _LEVELS + 1)]
+
+
+def _line(first: int, last: int, step: int = 1) -> list[int]:
+    return [int(round((first + (last - first) * (lv - 1) / (_LEVELS - 1)) / step) * step) for lv in range(1, _LEVELS + 1)]
+
+
+_BASE_COSTS, _BASE_HOURS = _costs(600, 220), _hours(3, 0.3)
 DEFAULT_CLUB_BASE_BUILDINGS: dict = {
-    "hq": {"costs": [1000, 2500, 5000, 9000, 15000, 24000, 36000, 52000, 75000, 105000],
-           "hours": [4, 12, 24, 36, 60, 84, 108, 144, 192, 240], "cap": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]},
-    "stadium": {"costs": [3000, 7000, 14000, 24000, 40000, 60000, 85000, 120000, 165000, 220000],
-                "hours": [24, 36, 48, 72, 96, 120, 168, 216, 264, 336],
-                "matchday": [12, 22, 32, 45, 58, 72, 88, 105, 125, 150],
-                "capacity": [5000, 10000, 16000, 23000, 31000, 40000, 50000, 61000, 73000, 86000]},
-    "hotel": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "matchday_pct": [5, 10, 15, 20, 25, 30, 36, 42, 48, 55]},
-    "training": {"costs": _BASE_COSTS, "hours": _BASE_HOURS,
-                 "familiarity_pct": [5, 10, 15, 20, 25, 30, 36, 42, 48, 55],
-                 "my_player_xp_pct": [3, 5, 8, 10, 13, 15, 18, 20, 23, 25]},
-    "medical": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "injury_pct": [5, 10, 14, 18, 22, 26, 30, 34, 38, 42],
-                "recovery": [2, 3, 4, 5, 6, 7, 8, 10, 12, 14]},
-    "analytics": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "prep_pct": [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]},
-    "media": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "rep_pct": [3, 5, 8, 10, 13, 15, 18, 20, 23, 25]},
-    "marketing": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "daily": [30, 50, 75, 100, 130, 160, 190, 225, 260, 300],
-                  "matchday_pct": [3, 5, 8, 10, 13, 15, 18, 20, 23, 25]},
-    "shop": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "daily": [20, 35, 50, 70, 90, 110, 135, 160, 185, 210],
-             "sell_pct": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]},
-    "accounting": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "discount_pct": [2, 3, 5, 6, 8, 9, 11, 12, 14, 15]},
+    "hq": {"costs": _costs(500, 165), "hours": _hours(2, 0.25), "cap": list(range(1, _LEVELS + 1))},
+    "stadium": {"costs": _costs(1500, 350), "hours": _hours(6, 0.45), "matchday": _line(10, 150),
+                "capacity": _line(3000, 90000, 500)},
+    "hotel": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "matchday_pct": _line(2, 55)},
+    "training": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "familiarity_pct": _line(2, 55),
+                 "my_player_xp_pct": _line(1, 25)},
+    "medical": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "injury_pct": _line(2, 42), "recovery": _line(1, 14)},
+    "analytics": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "prep_pct": _line(1, 20)},
+    "media": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "rep_pct": _line(1, 25)},
+    "marketing": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "daily": _line(20, 300), "matchday_pct": _line(1, 25)},
+    "shop": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "daily": _line(15, 210), "sell_pct": _line(1, 10)},
+    "accounting": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "discount_pct": _line(1, 15)},
 }
 DEFAULT_CLUB_BASE_CAPS: dict = {
     "matchday_pct": 100, "injury_pct": 50, "recovery": 15, "familiarity_pct": 60, "my_player_xp_pct": 30,

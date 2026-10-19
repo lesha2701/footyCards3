@@ -3,6 +3,15 @@
 export const DX = 8;
 export const DY = 6;
 
+/** The drawings are made for 10 visual steps; a building with any number
+ * of levels (25 by default) maps onto them — the top level always looks
+ * like the finished landmark. */
+export function visualLevel(level: number, maxLevel: number): number {
+  if (level <= 0) return 0;
+  if (level >= maxLevel) return 10;
+  return Math.min(9, Math.max(1, Math.ceil((level * 10) / Math.max(1, maxLevel))));
+}
+
 export function tier(level: number): 0 | 1 | 2 | 3 {
   if (level >= 10) return 3;
   if (level >= 7) return 2;

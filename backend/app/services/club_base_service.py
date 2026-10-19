@@ -93,9 +93,9 @@ _NOT_EFFECTS = {"costs", "hours", "cap", "capacity"}
 
 # Stadium look: seat colours are free; the rest needs the stadium level.
 SEAT_COLORS = ("red", "blue", "sky", "green", "yellow", "white", "black", "purple", "orange")
-ROOF_LEVEL = {"none": 0, "canopy": 3, "full": 7}
-LIGHTS_LEVEL = 5
-SCREEN_LEVEL = 9
+ROOF_LEVEL = {"none": 0, "canopy": 5, "full": 15}
+LIGHTS_LEVEL = 10
+SCREEN_LEVEL = 20
 DEFAULT_LOOK = {"seats": "red", "roof": "none", "lights": False, "screen": False}
 
 
@@ -136,8 +136,8 @@ def validate_buildings(raw: dict) -> dict:
         if not isinstance(cfg, dict):
             raise ValueError(f"{code}: нужен объект")
         costs = cfg.get("costs") or []
-        if not 1 <= len(costs) <= 10:
-            raise ValueError(f"{code}: от 1 до 10 уровней")
+        if not 1 <= len(costs) <= 30:
+            raise ValueError(f"{code}: от 1 до 30 уровней")
         lists: dict[str, list[int]] = {}
         for name, values in cfg.items():
             if name not in ("costs", "hours") and name not in BUILDINGS[code].effects:

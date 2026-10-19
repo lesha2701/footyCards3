@@ -2,7 +2,7 @@ import { staticUrl } from "@/lib/api";
 import { SEAT_COLORS } from "@/lib/clubBase";
 import type { ClubBaseBuilding, ClubBaseCode, ClubBaseLook, ClubBaseState } from "@/types";
 
-import { DX, artHeight, tier } from "./artMetrics";
+import { DX, artHeight, tier, visualLevel } from "./artMetrics";
 import { ART } from "./buildingArt";
 
 /** «Клубная база» as an illustrated campus seen from above at an angle:
@@ -248,7 +248,9 @@ function pillAt(b: ClubBaseBuilding, spot: Spot, art?: string): [number, number]
   if (b.level <= 0) return null;
   const { x, y, w } = spot;
   if (art) return [x + w + DX, y - w - 6];
-  return [x + w + DX + 1, y - artHeight(b.code, b.level) - 2];
+  // The training hall sits right under the HQ: its badge goes on its left.
+  if (b.code === "training") return [x - 6, y - 22];
+  return [x + w + DX + 1, y - artHeight(b.code, visualLevel(b.level, b.max_level)) - 2];
 }
 
 function Building({ b, spot, art }: { b: ClubBaseBuilding; spot: Spot; art?: string }) {
@@ -263,10 +265,11 @@ function Building({ b, spot, art }: { b: ClubBaseBuilding; spot: Spot; art?: str
   }
   if (b.level === 0) return <Plot b={b} spot={spot} />;
   const Art = ART[b.code];
-  const top = y - artHeight(b.code, b.level);
+  const vl = visualLevel(b.level, b.max_level);
+  const top = y - artHeight(b.code, vl);
   return (
     <g>
-      <Art x={x} y={y} w={w} level={b.level} />
+      <Art x={x} y={y} w={w} level={vl} />
       {b.building && (
         <>
           <g stroke="rgb(var(--c-legend))" strokeWidth="0.6" opacity="0.85">
@@ -308,8 +311,9 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
       </g>
     );
   }
-  const t = tier(b.level);
-  const stand = 6 + b.level * 1.8;
+  const vl = visualLevel(b.level, b.max_level);
+  const t = tier(vl);
+  const stand = 6 + vl * 1.8;
   const seat = SEAT_COLORS[look.seats] ?? SEAT_COLORS.red;
   const irx = rx - stand;
   const iry = ry - stand * 0.66;
@@ -340,7 +344,7 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
       })}
       <ellipse cx={cx} cy={cy} rx={rx - 2} ry={ry - 2} fill={seat} />
       <ellipse cx={cx} cy={cy} rx={rx - 2} ry={ry - 2} fill="url(#base-seats)" opacity="0.5" />
-      {Array.from({ length: Math.min(9, b.level + 1) }).map((_, i) => (
+      {Array.from({ length: Math.min(9, vl + 1) }).map((_, i) => (
         <ellipse key={i} cx={cx} cy={cy} rx={rx - 4 - i * (stand / 9)} ry={ry - 4 - i * (stand / 13)} fill="none" stroke="#000" strokeOpacity="0.15" strokeWidth="0.6" />
       ))}
       {/* vomitories */}

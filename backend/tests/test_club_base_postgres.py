@@ -74,7 +74,7 @@ async def test_concurrent_upgrades_start_one_construction_and_charge_once(pg):
     assert results.count("ok") == 1
     async with pg() as s:
         user = await s.get(User, uid)
-        assert user.balance == 100_000 - 1_000
+        assert user.balance == 100_000 - 700
     assert await _count(pg, ClubBaseLedger, ClubBaseLedger.user_id == uid, ClubBaseLedger.kind == "upgrade") == 1
 
 
@@ -85,7 +85,7 @@ async def test_same_idempotency_key_is_charged_once(pg):
     ])
     assert set(results) == {"ok"}  # the rest replay the first
     async with pg() as s:
-        assert (await s.get(User, uid)).balance == 99_000
+        assert (await s.get(User, uid)).balance == 99_300
     assert await _count(pg, CoinTransaction, CoinTransaction.user_id == uid,
                         CoinTransaction.type == TransactionType.club_base_upgrade) == 1
 
@@ -109,7 +109,7 @@ async def test_concurrent_income_claims_pay_once(pg):
     ])
     assert results.count("ok") == 1
     async with pg() as s:
-        assert (await s.get(User, uid)).balance == 100
+        assert (await s.get(User, uid)).balance == 70
     assert await _count(pg, CoinTransaction, CoinTransaction.user_id == uid,
                         CoinTransaction.type == TransactionType.club_base_income) == 1
 
