@@ -63,6 +63,13 @@ class UserCard(Base):
     path_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     path_stage: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     path_rating_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Артефакты» (services/artifact_service.py): rating an active artifact of
+    # the owner adds to this player's cards (e.g. Maldini's armband), kept in
+    # sync by artifact_service.refresh_card_bonuses. Counts only while
+    # artifact_bonus_owner_id == owner_id, so a traded card drops the old
+    # owner's bonus at once.
+    artifact_rating_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    artifact_bonus_owner_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # «Академия» prestige (services/path_prestige_service.py): tier 0..max
     # bought with duplicates of the same player — status, not power. The top
     # tier gets a global «Икона» number (unique) and one talent reforge,

@@ -27,7 +27,7 @@ card of that player in the owner's «Карьера тренера» squad (Mara
 shirt → +3 to the owner's Maradona cards); see `card_bonuses`."""
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
@@ -167,6 +167,63 @@ async def card_bonuses(db: AsyncSession, user_id: int, config: Optional[GameConf
     return {pid: min(v, config.artifact_max_stat) for pid, v in totals.items()}
 
 
+async def refresh_card_bonuses(db: AsyncSession, user_id: int, config: Optional[GameConfig] = None) -> None:
+    """Writes the owner's current artifact card bonuses onto their card rows
+    (UserCard.artifact_rating_bonus), so every mode and the collection see
+    them through card_rating_bonus. Call after anything that changes which
+    artifacts are active or which cards the user owns. The caller commits."""
+    config = config or await db.get(GameConfig, 1)
+    bonuses = await card_bonuses(db, user_id, config) if config is not None else {}
+    for player_id, bonus in bonuses.items():
+        await db.execute(
+            update(UserCard)
+            .where(UserCard.owner_id == user_id, UserCard.player_id == player_id)
+            .values(artifact_rating_bonus=bonus, artifact_bonus_owner_id=user_id)
+            .execution_options(synchronize_session="fetch")
+        )
+    stale = [UserCard.owner_id == user_id, UserCard.artifact_rating_bonus != 0]
+    if bonuses:
+        stale.append(UserCard.player_id.not_in(list(bonuses)))
+    await db.execute(
+        update(UserCard).where(*stale).values(artifact_rating_bonus=0, artifact_bonus_owner_id=None)
+        .execution_options(synchronize_session="fetch")
+    )
+
+
+async def refresh_card_bonuses_for_artifact(db: AsyncSession, artifact_id: Optional[int] = None) -> None:
+    """refresh_card_bonuses for every owner of an active copy of `artifact_id`
+    (None = of any artifact with a card bonus) — after an admin edit or a
+    switch of artifacts_enabled / artifact_max_stat. The caller commits."""
+    query = select(UserArtifact.user_id).where(UserArtifact.equipped.is_(True)).distinct()
+    if artifact_id is not None:
+        query = query.where(UserArtifact.artifact_id == artifact_id)
+    user_ids = list((await db.execute(query)).scalars().all())
+    # Owners whose bonus must drop (artifact disabled / card bonus removed).
+    user_ids += list((await db.execute(
+        select(UserCard.owner_id).where(UserCard.artifact_rating_bonus != 0).distinct()
+    )).scalars().all())
+    config = await db.get(GameConfig, 1)
+    for user_id in sorted(set(user_ids)):
+        await refresh_card_bonuses(db, user_id, config)
+
+
+async def apply_card_bonus(db: AsyncSession, card: UserCard) -> None:
+    """Sets the owner's artifact bonus on one new card (create_user_card).
+    One cheap query; nothing to do for the usual card without one."""
+    has_one = (await db.execute(
+        select(UserArtifact.id).join(Artifact, Artifact.id == UserArtifact.artifact_id).where(
+            UserArtifact.user_id == card.owner_id, UserArtifact.equipped.is_(True),
+            Artifact.card_player_id == card.player_id, Artifact.card_rating_bonus > 0,
+        ).limit(1)
+    )).scalar_one_or_none()
+    if has_one is None:
+        return
+    bonus = (await card_bonuses(db, card.owner_id)).get(card.player_id, 0)
+    if bonus:
+        card.artifact_rating_bonus = bonus
+        card.artifact_bonus_owner_id = card.owner_id
+
+
 def _artifact_out(a: Artifact, names: dict, owned: dict[str, set[int]]) -> dict:
     link_name = names.get((a.link_type, a.link_id)) if a.link_type else None
     card_player = names.get(("player", a.card_player_id)) if a.card_player_id else None
@@ -287,6 +344,8 @@ async def grant(db: AsyncSession, user_id: int, artifact_id: int, source: str, *
     )
     db.add(row)
     await db.flush()
+    if row.equipped:
+        await refresh_card_bonuses(db, user_id, config)
     return row
 
 
@@ -309,7 +368,10 @@ async def buy_with_coins(db: AsyncSession, user: User, artifact_id: int) -> dict
 
 async def _own_copy(db: AsyncSession, user_id: int, copy_id: int) -> UserArtifact:
     row = (await db.execute(
-        select(UserArtifact).where(UserArtifact.id == copy_id).with_for_update().execution_options(populate_existing=True)
+        select(UserArtifact).where(UserArtifact.id == copy_id)
+        # of=: the copy eager-loads its artifact with an outer join, and
+        # Postgres rejects FOR UPDATE on the nullable side of one.
+        .with_for_update(of=UserArtifact).execution_options(populate_existing=True)
     )).scalar_one_or_none()
     if row is None or row.user_id != user_id:
         raise NotFoundError("Этого артефакта у тебя нет")
@@ -330,6 +392,8 @@ async def set_active(db: AsyncSession, user: User, copy_id: int, active: bool) -
         if sum(1 for c in copies if c.equipped) >= config.artifact_slots:
             raise ConflictError(f"Активных артефактов может быть не больше {config.artifact_slots} — сначала убери один на полку")
     row.equipped = active
+    await db.flush()
+    await refresh_card_bonuses(db, user.id, config)
     await db.commit()
     return await catalog(db, user)
 
@@ -361,6 +425,9 @@ async def gift(db: AsyncSession, user: User, copy_id: int, recipient_id: int) ->
         f"{user.full_display_name()} подарил(а) тебе артефакт «{row.artifact.name}» №{row.serial_number}.",
         related_object_type="user_artifact", related_object_id=row.id,
     )
+    await db.flush()
+    await refresh_card_bonuses(db, user.id, config)
+    await refresh_card_bonuses(db, recipient_id, config)
     await db.commit()
     return await catalog(db, user)
 
@@ -444,6 +511,10 @@ async def admin_save(db: AsyncSession, data: dict, artifact_id: Optional[int] = 
             raise NotFoundError("Артефакт не найден")
     for key, value in data.items():
         setattr(artifact, key, value)
+    await db.flush()
+    if artifact_id is not None:
+        # The card bonus (player / amount) may have changed for every owner.
+        await refresh_card_bonuses_for_artifact(db, artifact.id)
     await db.commit()
     await db.refresh(artifact)
     return admin_out(artifact)

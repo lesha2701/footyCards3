@@ -12,7 +12,7 @@ from app.models.enums import BingoGoalType, NotificationType, Rarity, TradeCardS
 from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.user import User
 from app.schemas.trade import TradeAcceptOut, TradeCreateRequest, TradeOfferOut
-from app.services import bingo_service, task_service, trade_finder_service, trade_guard_service
+from app.services import artifact_service, bingo_service, task_service, trade_finder_service, trade_guard_service
 from app.services.collection_service import grant_collection_rewards_for_new_cards
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
@@ -369,6 +369,12 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
         else:
             sender_new_player_ids.append(card.player_id)
 
+    if trade_cards:
+        # «Артефакты» card bonuses belong to the owner: the moved cards drop
+        # the old owner's and pick up the new owner's.
+        await db.flush()
+        await artifact_service.refresh_card_bonuses(db, sender.id, config)
+        await artifact_service.refresh_card_bonuses(db, receiver.id, config)
     if receiver_new_player_ids:
         await grant_collection_rewards_for_new_cards(db, receiver, receiver_new_player_ids)
     if sender_new_player_ids:
