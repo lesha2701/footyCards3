@@ -879,6 +879,12 @@ class GameConfig(TimestampMixin, Base):
     # they took value from at least this many distinct young accounts.
     trade_suspicious_young_days: Mapped[int] = mapped_column(Integer, default=14, nullable=False)
     trade_suspicious_min_donors: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Stakes in open chat challenges (services/stake_guard_service.py): max
+    # stake per side (0 = no stakes), staked matches the same pair may start
+    # per day, and the daily cap on a player's net stake winnings (0 = off).
+    stake_max_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
+    stake_pair_daily_limit: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    stake_daily_profit_cap: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
     # Stars to finish a construction now: per started remaining hour (min 1).
     academy_stars_per_hour: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     # Free scouting report (scout wing >= 1), per scout level: chance of an

@@ -1695,3 +1695,8 @@ async def test_open_challenge_expires_and_cannot_be_accepted(client, db_session,
 
     resp = await client.get(f"/api/v1/tactico/matches/open/{match_id}", headers=headers_b)
     assert resp.json()["status"] == "expired"
+
+
+# Stake tests here are about stake mechanics; the anti-farming limits have
+# their own file (test_stake_guard.py).
+pytestmark = pytest.mark.usefixtures("stake_guards_off")

@@ -79,6 +79,22 @@ async def trade_guards_off(_fresh_schema):
         await session.commit()
 
 
+@pytest_asyncio.fixture
+async def stake_guards_off(_fresh_schema):
+    """Turns off the stake anti-farming rules (max stake, new-account ban,
+    pair and daily-profit limits) for tests about other stake behavior."""
+    from app.services.game_config_service import get_config
+
+    async with TestSessionLocal() as session:
+        config = await get_config(session)
+        config.stake_max_coins = 10_000_000
+        config.stake_pair_daily_limit = 0
+        config.stake_daily_profit_cap = 0
+        config.trade_send_min_account_age_days = 0
+        config.trade_send_min_active_days = 0
+        await session.commit()
+
+
 @pytest.fixture
 def bot_token() -> str:
     return settings.telegram_bot_token

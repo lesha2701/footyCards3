@@ -1317,3 +1317,8 @@ async def test_admin_sets_role_caps(client, db_session, bot_token):
     assert resp.status_code == 200
     assert resp.json()["stratego_provocateur_max_rarity"] == "legendary"
     assert resp.json()["stratego_speedster_max_rarity"] == "rare"
+
+
+# Stake tests here are about stake mechanics; the anti-farming limits have
+# their own file (test_stake_guard.py).
+pytestmark = pytest.mark.usefixtures("stake_guards_off")

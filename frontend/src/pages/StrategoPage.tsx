@@ -23,6 +23,7 @@ import StrategoRulesModal from "@/components/stratego/StrategoRulesModal";
 import { formatGameError } from "@/lib/errors";
 import { openTelegramLink } from "@/lib/telegram";
 import type { StrategoMatch, UserPublic } from "@/types";
+import { clampStake, stakeLabel, useStakeMax } from "@/lib/stakes";
 
 type Tab = "pending" | "active" | "history";
 
@@ -352,7 +353,8 @@ function ChallengeSheet({ onClose, onPick }: { onClose: () => void; onPick: (use
 
 function ChatInviteSheet({ busy, onClose, onCreate }: { busy: boolean; onClose: () => void; onCreate: (stakeCoins: number) => void }) {
   const [stake, setStake] = useState("0");
-  const stakeCoins = Math.max(0, Math.floor(Number(stake) || 0));
+  const maxStake = useStakeMax();
+  const stakeCoins = clampStake(stake, maxStake);
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={onClose}>
       <div className="safe-bottom w-full rounded-t-3xl bg-bg-base p-5" onClick={(e) => e.stopPropagation()}>
@@ -360,12 +362,14 @@ function ChatInviteSheet({ busy, onClose, onCreate }: { busy: boolean; onClose: 
         <p className="mb-3 text-xs text-ink-mist">
           Создадим вызов и откроем «Поделиться» — выбери чат. Первый, кто примет вызов, станет твоим соперником.
         </p>
-        <label className="mb-1 block text-xs text-ink-mist-dim">Ставка, монеты (0 — без ставки)</label>
+        <label className="mb-1 block text-xs text-ink-mist-dim">{stakeLabel(maxStake)}</label>
         <input
           type="number"
           min={0}
           inputMode="numeric"
           value={stake}
+        max={maxStake || undefined}
+        disabled={maxStake === 0}
           onChange={(e) => setStake(e.target.value)}
           className="mb-3 w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk outline-none"
         />

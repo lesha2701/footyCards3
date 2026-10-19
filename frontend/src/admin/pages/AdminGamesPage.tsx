@@ -773,6 +773,21 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Ставки в вызовах через чат</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Тактико, Стратего и Пенальти. Ставка — это перевод монет между игроками, поэтому для неё действуют те же
+          возраст аккаунта и дни активности, что и для обменов. Лимит пары — сколько матчей на ставку двое игроков
+          могут начать за сутки (во всех трёх играх вместе). Лимит выигрыша — сколько игрок может чисто выиграть на
+          ставках за сутки. 0 в «Макс. ставке» отключает ставки, в остальных полях — снимает ограничение.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("stake_max_coins", "Макс. ставка с каждой стороны")}
+          {field("stake_pair_daily_limit", "Матчей на ставку с одним игроком в день")}
+          {field("stake_daily_profit_cap", "Лимит выигрыша на ставках в день")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Рефералы</p>
         <div className="grid grid-cols-2 gap-3">
           {field("referral_referred_reward", "Награда приглашённому")}

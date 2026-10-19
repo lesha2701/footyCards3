@@ -1118,3 +1118,8 @@ async def test_penalty_open_challenge_expires_and_cannot_be_accepted(client, db_
 
     resp = await client.get(f"/api/v1/games/penalty/challenges/open/{match_id}", headers=acceptor_headers)
     assert resp.json()["status"] == "expired"
+
+
+# Stake tests here are about stake mechanics; the anti-farming limits have
+# their own file (test_stake_guard.py).
+pytestmark = pytest.mark.usefixtures("stake_guards_off")

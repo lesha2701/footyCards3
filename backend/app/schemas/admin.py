@@ -657,6 +657,9 @@ class GameConfigOut(BaseModel):
     trade_finder_notify_hours: int = 24
     trade_suspicious_young_days: int = 14
     trade_suspicious_min_donors: int = 3
+    stake_max_coins: int = 500
+    stake_pair_daily_limit: int = 2
+    stake_daily_profit_cap: int = 2000
 
 
 class GameConfigUpdate(BaseModel):
@@ -1122,6 +1125,9 @@ class GameConfigUpdate(BaseModel):
     trade_finder_notify_hours: Optional[int] = Field(default=None, ge=0, le=720)
     trade_suspicious_young_days: Optional[int] = Field(default=None, ge=1, le=365)
     trade_suspicious_min_donors: Optional[int] = Field(default=None, ge=2, le=100)
+    stake_max_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    stake_pair_daily_limit: Optional[int] = Field(default=None, ge=0, le=100)
+    stake_daily_profit_cap: Optional[int] = Field(default=None, ge=0)
 
     @field_validator("path_prestige_dupes", "path_prestige_coins")
     @classmethod
