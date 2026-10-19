@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
-import AcademyHomeCard from "@/components/home/AcademyHomeCard";
+import ModesGrid from "@/components/home/ModesGrid";
 import AcademyPage from "@/pages/AcademyPage";
 import type { AcademyState } from "@/types";
 
@@ -25,6 +25,18 @@ vi.mock("@/api/academy", () => ({
   fetchAcademy: vi.fn(async () => state),
   upgradeAcademyWing: vi.fn(), claimScoutReport: vi.fn(), createAcademySpeedupInvoice: vi.fn(), fetchAcademyInvoiceStatus: vi.fn(),
 }));
+// The home strip also asks the other modes for their status.
+vi.mock("@/api/clubBase", () => ({
+  fetchClubBase: vi.fn(async () => ({ enabled: true, total_level: 3, construction: null, income: { daily: 0, pending: 0, cap: 0, max_days: 3 } })),
+}));
+vi.mock("@/api/clubs", () => ({
+  fetchMyClub: vi.fn(async () => { throw new Error("no club"); }),
+  fetchTournamentCurrent: vi.fn(), fetchNextOpponent: vi.fn(), claimDailyReward: vi.fn(),
+}));
+vi.mock("@/api/career", () => ({ fetchCareer: vi.fn(async () => ({ enabled: true, season: null, invite: null })) }));
+vi.mock("@/api/myPlayer", () => ({ fetchMyPlayer: vi.fn(async () => ({ enabled: true, player: null })) }));
+vi.mock("@/api/matches", () => ({ fetchArenaStats: vi.fn(async () => ({ arena_rating: 1000, division: null })) }));
+vi.mock("@/api/personalTournament", () => ({ fetchPlayerTournamentCurrent: vi.fn(async () => ({ status: "not_queued" })) }));
 
 function wrap(node: React.ReactNode) {
   return render(<QueryClientProvider client={new QueryClient()}><MemoryRouter>{node}</MemoryRouter></QueryClientProvider>);
@@ -40,9 +52,9 @@ describe("Академия", () => {
     expect(screen.getByText("Получить")).toBeEnabled();
   });
 
-  it("home tile invites to claim the scouting report", async () => {
-    wrap(<AcademyHomeCard />);
+  it("the base tile on the home grid invites to claim the Academy's scouting report", async () => {
+    wrap(<ModesGrid />);
     expect(await screen.findByText(/Скаутский отчёт готов/)).toBeInTheDocument();
-    expect(screen.getByText(/Академия · ур\. 3/)).toBeInTheDocument();
+    expect(screen.getByText(/Клубная база/)).toBeInTheDocument();
   });
 });

@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { visualLevel } from "@/components/base/artMetrics";
-import BaseHomeCard from "@/components/home/BaseHomeCard";
+import ModesGrid from "@/components/home/ModesGrid";
 import { formatBuildTime, hoursLabel, upgradeBlocker } from "@/lib/clubBase";
 import ClubBasePage from "@/pages/ClubBasePage";
 import type { ClubBaseBuilding, ClubBaseCode, ClubBaseState } from "@/types";
@@ -48,6 +48,17 @@ vi.mock("@/api/clubBase", () => ({
   createClubBaseSpeedupInvoice: vi.fn(), fetchClubBaseInvoiceStatus: vi.fn(),
 }));
 
+// The home modes grid also asks the other modes for their status.
+vi.mock("@/api/academy", () => ({ fetchAcademy: vi.fn(async () => ({ enabled: true, scout_report: null })) }));
+vi.mock("@/api/clubs", () => ({
+  fetchMyClub: vi.fn(async () => { throw new Error("no club"); }),
+  fetchTournamentCurrent: vi.fn(), fetchNextOpponent: vi.fn(), claimDailyReward: vi.fn(),
+}));
+vi.mock("@/api/career", () => ({ fetchCareer: vi.fn(async () => ({ enabled: true, season: null, invite: null })) }));
+vi.mock("@/api/myPlayer", () => ({ fetchMyPlayer: vi.fn(async () => ({ enabled: true, player: null })) }));
+vi.mock("@/api/matches", () => ({ fetchArenaStats: vi.fn(async () => ({ arena_rating: 1000, division: null })) }));
+vi.mock("@/api/personalTournament", () => ({ fetchPlayerTournamentCurrent: vi.fn(async () => ({ status: "not_queued" })) }));
+
 function wrap(node: React.ReactNode) {
   return render(<QueryClientProvider client={new QueryClient()}><MemoryRouter>{node}</MemoryRouter></QueryClientProvider>);
 }
@@ -77,10 +88,11 @@ describe("Клубная база", () => {
     expect(screen.getByText(/Построить ·/).closest("button")).toBeDisabled();
   });
 
-  it("home tile invites to collect the income", async () => {
-    wrap(<BaseHomeCard />);
+  it("the home modes grid has the base in place of the Academy and invites to collect the income", async () => {
+    wrap(<ModesGrid />);
     expect(await screen.findByText(/Доход готов: \+120/)).toBeInTheDocument();
-    expect(screen.getByText(/Клубная база · ур\. 7/)).toBeInTheDocument();
+    expect(screen.getByText(/Клубная база/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Академия/)).toBeNull();
   });
 
   it("helpers: time left, build hours and the upgrade blocker", () => {

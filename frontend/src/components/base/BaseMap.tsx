@@ -3,6 +3,7 @@ import { SEAT_COLORS } from "@/lib/clubBase";
 import type { ClubBaseBuilding, ClubBaseCode, ClubBaseLook, ClubBaseState } from "@/types";
 
 import { DX, artHeight, tier, visualLevel } from "./artMetrics";
+import { Box, Windows } from "./BaseArt";
 import { ART } from "./buildingArt";
 
 /** «Клубная база» as an illustrated campus seen from above at an angle:
@@ -29,7 +30,7 @@ const SPOTS: Record<Exclude<ClubBaseCode, "stadium">, Spot> = {
   accounting: { x: 282, y: 296, w: 30 },
 };
 
-const STADIUM = { cx: 180, cy: 184, rx: 72, ry: 46 };
+const STADIUM = { cx: 180, cy: 184, rx: 60, ry: 38 };
 
 const ROUND_TREES: [number, number, number][] = [
   [100, 18, 6], [116, 26, 5], [222, 16, 6], [238, 24, 5], [250, 120, 5], [262, 110, 6],
@@ -38,7 +39,7 @@ const ROUND_TREES: [number, number, number][] = [
 ];
 const PINES: [number, number, number][] = [
   [8, 60, 9], [20, 70, 8], [32, 62, 7], [6, 84, 7], [334, 20, 9], [348, 36, 8], [320, 30, 7],
-  [346, 94, 8], [354, 112, 7], [338, 300, 8], [352, 290, 7], [84, 252, 6], [158, 34, 6], [210, 30, 6],
+  [346, 94, 8], [354, 112, 7], [338, 300, 8], [352, 290, 7], [158, 34, 6], [210, 30, 6],
 ];
 const CARS = ["#d6443a", "#2f6fd6", "#f2c230", "#eef0ea", "#2a2d2b", "#2f9e58", "#8a4fd6", "#f08a2f"];
 
@@ -99,26 +100,45 @@ function Terrain() {
   );
 }
 
+const ROADS: [string, number][] = [
+  ["M180 306 V236", 9],
+  ["M180 132 V82", 6],
+  ["M104 184 C 80 184, 62 196, 56 210", 5],
+  ["M256 188 C 288 188, 300 204, 312 224", 5],
+  ["M246 132 C 268 112, 282 90, 290 66", 5],
+  ["M256 156 L 300 144", 5],
+  ["M180 262 C 200 272, 232 282, 262 296", 5],
+  ["M180 262 C 160 270, 150 278, 142 284", 5],
+  ["M128 132 L 130 116", 4],
+];
+
 function Roads() {
-  const r = { fill: "none", stroke: "rgb(var(--map-road))", strokeLinecap: "round" as const };
+  const ring = {
+    x: STADIUM.cx - STADIUM.rx - 16, y: STADIUM.cy - STADIUM.ry - 14,
+    width: (STADIUM.rx + 16) * 2, height: (STADIUM.ry + 14) * 2, rx: 22,
+  };
   return (
-    <g>
-      <ellipse cx={STADIUM.cx} cy={STADIUM.cy} rx={STADIUM.rx + 18} ry={STADIUM.ry + 16} {...r} strokeWidth="7" />
-      <ellipse cx={STADIUM.cx} cy={STADIUM.cy} rx={STADIUM.rx + 18} ry={STADIUM.ry + 16} fill="none" stroke="#fff"
-               strokeOpacity="0.25" strokeWidth="0.5" strokeDasharray="3 3" />
-      <path d="M180 306 V246" {...r} strokeWidth="9" />
-      <path d="M180 306 V246" fill="none" stroke="#fff" strokeOpacity="0.35" strokeWidth="0.6" strokeDasharray="3 3" />
-      <path d="M180 122 V80" {...r} strokeWidth="6" />
-      <path d="M100 166 C 72 166, 60 192, 54 210" {...r} strokeWidth="5" />
-      <path d="M260 176 C 292 176, 302 204, 312 224" {...r} strokeWidth="5" />
-      <path d="M250 142 C 272 120, 282 92, 290 66" {...r} strokeWidth="5" />
-      <path d="M250 152 L 302 142" {...r} strokeWidth="5" />
-      <path d="M180 246 C 190 272, 230 280, 270 296" {...r} strokeWidth="5" />
-      <path d="M180 246 C 160 272, 120 280, 80 296" {...r} strokeWidth="5" />
-      <path d="M126 142 L 130 116" {...r} strokeWidth="4" />
-      {/* lamp posts along the main road */}
-      {[256, 272, 288].map((y) => (
-        <g key={y}>
+    <g fill="none" strokeLinecap="round">
+      {/* kerbs first, asphalt on top */}
+      <rect {...ring} stroke="#000" strokeOpacity="0.22" strokeWidth="9" />
+      {ROADS.map(([d, w]) => <path key={`k${d}`} d={d} stroke="#000" strokeOpacity="0.22" strokeWidth={w + 2} />)}
+      <rect {...ring} stroke="rgb(var(--map-road))" strokeWidth="7" />
+      {ROADS.map(([d, w]) => <path key={d} d={d} stroke="rgb(var(--map-road))" strokeWidth={w} />)}
+      <rect {...ring} stroke="#fff" strokeOpacity="0.22" strokeWidth="0.5" strokeDasharray="3 3" />
+      <path d="M180 306 V272" stroke="#fff" strokeOpacity="0.3" strokeWidth="0.6" strokeDasharray="3 3" />
+      {/* main entrance plaza with a fountain */}
+      <circle cx="180" cy="262" r="12" fill="rgb(var(--map-road))" stroke="#000" strokeOpacity="0.15" />
+      <circle cx="180" cy="262" r="7" fill="rgb(var(--map-wall))" />
+      <circle cx="180" cy="262" r="5.6" fill="url(#base-water)" />
+      <circle cx="180" cy="262" r="1.6" fill="#fff" opacity="0.8">
+        <animate attributeName="r" values="1.2;2.2;1.2" dur="2.4s" repeatCount="indefinite" />
+      </circle>
+      {[0, 1, 2, 3, 4, 5].map((i) => {
+        const a = (i / 6) * Math.PI * 2;
+        return <circle key={i} cx={180 + Math.cos(a) * 10} cy={262 + Math.sin(a) * 10} r="1.4" fill="rgb(var(--map-tree))" />;
+      })}
+      {[280, 294].map((y) => (
+        <g key={y} stroke="none">
           <circle cx="173" cy={y} r="0.9" fill="#fff7c2" />
           <circle cx="187" cy={y} r="0.9" fill="#fff7c2" />
         </g>
@@ -298,10 +318,14 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
       </g>
     );
   }
+  const x0 = cx - rx;
+  const y0 = cy - ry;
+  const W = rx * 2;
+  const H = ry * 2;
   if (b.level === 0) {
     return (
       <g>
-        <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="#a38a5c" opacity="0.35" stroke="rgb(var(--c-ink-mist))" strokeDasharray="4 3" />
+        <rect x={x0} y={y0} width={W} height={H} rx="10" fill="#a38a5c" opacity="0.35" stroke="rgb(var(--c-ink-mist))" strokeDasharray="4 3" />
         <rect x={cx - 34} y={cy - 18} width="68" height="30" rx="2" fill="#3c9a4f" opacity="0.5" />
         <text x={cx} y={cy - 2} textAnchor="middle" fontSize="16">🏟️</text>
         <text x={cx} y={cy + 14} textAnchor="middle" fontSize="8" fill="rgb(var(--c-ink-chalk))">
@@ -311,123 +335,134 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
       </g>
     );
   }
+  // A rectangular football ground: four stands right up to the pitch
+  // (no running track), filled corners, a membrane roof over the stands.
   const vl = visualLevel(b.level, b.max_level);
   const t = tier(vl);
-  const stand = 6 + vl * 1.8;
   const seat = SEAT_COLORS[look.seats] ?? SEAT_COLORS.red;
-  const irx = rx - stand;
-  const iry = ry - stand * 0.66;
-  const masts: [number, number][] = [[cx - rx + 6, cy - ry + 8], [cx + rx - 6, cy - ry + 8], [cx - rx + 6, cy + ry - 8], [cx + rx - 6, cy + ry - 8]];
-  const ribs = 28;
+  const ends = 5 + vl * 1.0; // depth of the stands behind the goals
+  const sides = 4 + vl * 0.8; // depth of the long-side stands
+  const px0 = x0 + ends;
+  const py0 = y0 + sides;
+  const pw = W - ends * 2;
+  const ph = H - sides * 2;
+  const pitchLine = { fill: "none", stroke: "#fff", strokeOpacity: 0.85, strokeWidth: 0.8 };
+  const boxW = pw * 0.14;
+  const boxH = ph * 0.5;
+  // Membrane roof: the outer 60% of every covered stand.
+  const rs = sides * 0.55;
+  const re = ends * 0.55;
+  const roofs: [number, number, number, number, "h" | "v"][] = look.roof === "none" ? [] : look.roof === "canopy"
+    ? [[x0 + ends, y0, W - ends * 2, rs, "h"], [x0 + ends, y0 + H - rs, W - ends * 2, rs, "h"]]
+    : [[x0, y0, W, rs, "h"], [x0, y0 + H - rs, W, rs, "h"], [x0, y0 + rs, re, H - rs * 2, "v"], [x0 + W - re, y0 + rs, re, H - rs * 2, "v"]];
+  const masts: [number, number][] = [[x0 + 2, y0 + 2], [x0 + W - 2, y0 + 2], [x0 + 2, y0 + H - 2], [x0 + W - 2, y0 + H - 2]];
   return (
     <g>
       <defs>
-        <clipPath id="base-pitch-clip"><ellipse cx={cx} cy={cy} rx={irx} ry={iry} /></clipPath>
+        <pattern id="base-seat-h" width="2.4" height="1.9" patternUnits="userSpaceOnUse">
+          <rect width="2.4" height="1.9" fill="#2b3036" />
+          <rect x="0.25" y="0.35" width="1.9" height="1.1" rx="0.3" fill={seat} />
+        </pattern>
+        <pattern id="base-seat-v" width="2.4" height="1.9" patternUnits="userSpaceOnUse" patternTransform="rotate(90)">
+          <rect width="2.4" height="1.9" fill="#2b3036" />
+          <rect x="0.25" y="0.35" width="1.9" height="1.1" rx="0.3" fill={seat} />
+        </pattern>
         <radialGradient id="base-light-glow">
           <stop offset="0" stopColor="#fff7c2" stopOpacity="0.9" />
           <stop offset="1" stopColor="#fff7c2" stopOpacity="0" />
         </radialGradient>
-        <radialGradient id="base-seats" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0.6" stopColor={seat} />
-          <stop offset="1" stopColor="#000" stopOpacity="0.35" />
-        </radialGradient>
       </defs>
-      <ellipse cx={cx + 3} cy={cy + 8} rx={rx + 3} ry={ry + 3} fill="#000" opacity="0.28" />
-      {/* outer facade */}
-      <ellipse cx={cx} cy={cy + 4} rx={rx} ry={ry} fill="rgb(var(--map-wall))" />
-      <ellipse cx={cx} cy={cy + 4} rx={rx} ry={ry} fill="#000" opacity="0.25" />
-      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="rgb(var(--map-wall))" />
-      {t >= 1 && Array.from({ length: ribs }).map((_, i) => {
-        const a = (i / ribs) * Math.PI * 2;
-        return <line key={i} x1={cx + Math.cos(a) * rx} y1={cy + Math.sin(a) * ry} x2={cx + Math.cos(a) * rx} y2={cy + Math.sin(a) * ry + 4}
-                     stroke="#000" strokeOpacity="0.25" strokeWidth="0.6" />;
-      })}
-      <ellipse cx={cx} cy={cy} rx={rx - 2} ry={ry - 2} fill={seat} />
-      <ellipse cx={cx} cy={cy} rx={rx - 2} ry={ry - 2} fill="url(#base-seats)" opacity="0.5" />
-      {/* seat rows (faint) and radial aisles that cut the stands into sectors */}
-      {Array.from({ length: Math.min(9, vl + 1) }).map((_, i) => (
-        <ellipse key={i} cx={cx} cy={cy} rx={rx - 4 - i * (stand / 9)} ry={ry - 4 - i * (stand / 13)} fill="none" stroke="#000" strokeOpacity="0.08" strokeWidth="0.4" />
-      ))}
-      {Array.from({ length: 24 }).map((_, i) => {
-        const a = (i / 24) * Math.PI * 2;
-        return <line key={`aisle${i}`} x1={cx + Math.cos(a) * irx} y1={cy + Math.sin(a) * iry} x2={cx + Math.cos(a) * (rx - 2)}
-                     y2={cy + Math.sin(a) * (ry - 2)} stroke="#f4f1ea" strokeOpacity="0.55" strokeWidth="0.7" />;
-      })}
-      {/* vomitories */}
-      {[0.25, 0.75, 1.25, 1.75].map((f) => (
-        <rect key={f} x={cx + Math.cos(f * Math.PI) * (rx - stand / 2) - 1.5} y={cy + Math.sin(f * Math.PI) * (ry - stand / 3) - 1.5}
-              width="3" height="3" fill="#000" opacity="0.4" />
-      ))}
-      <g clipPath="url(#base-pitch-clip)">
-        <rect x={cx - irx} y={cy - iry} width={irx * 2} height={iry * 2} fill="#3c9a4f" />
-        {Array.from({ length: 10 }).map((_, i) => (
-          <rect key={i} x={cx - irx + (i * irx) / 5} y={cy - iry} width={irx / 10} height={iry * 2} fill="#fff" opacity="0.07" />
-        ))}
-        <g fill="none" stroke="#fff" strokeOpacity="0.8" strokeWidth="0.8">
-          <rect x={cx - irx + 7} y={cy - iry + 5} width={irx * 2 - 14} height={iry * 2 - 10} />
-          <line x1={cx} y1={cy - iry + 5} x2={cx} y2={cy + iry - 5} />
-          <circle cx={cx} cy={cy} r={iry / 3.2} />
-          <rect x={cx - irx + 7} y={cy - iry / 2.4} width={irx / 5} height={iry / 1.2} />
-          <rect x={cx + irx - 7 - irx / 5} y={cy - iry / 2.4} width={irx / 5} height={iry / 1.2} />
-        </g>
-        <circle cx={cx + 6} cy={cy + 3} r="1.3" fill="#fff" />
+      <rect x={x0 + 3} y={y0 + 8} width={W} height={H} rx="9" fill="#000" opacity="0.28" />
+      {/* facade with a little depth */}
+      <rect x={x0} y={y0 + 4} width={W} height={H} rx="9" fill="rgb(var(--map-wall))" />
+      <rect x={x0} y={y0 + 4} width={W} height={H} rx="9" fill="#000" opacity="0.28" />
+      <rect x={x0} y={y0} width={W} height={H} rx="9" fill="rgb(var(--map-wall))" />
+      {/* seats: rows of single seats on concrete terraces */}
+      <polygon points={`${x0 + 2},${y0 + 2} ${x0 + W - 2},${y0 + 2} ${px0 + pw},${py0} ${px0},${py0}`} fill="url(#base-seat-h)" />
+      <polygon points={`${x0 + 2},${y0 + H - 2} ${x0 + W - 2},${y0 + H - 2} ${px0 + pw},${py0 + ph} ${px0},${py0 + ph}`} fill="url(#base-seat-h)" />
+      <polygon points={`${x0 + 2},${y0 + 2} ${px0},${py0} ${px0},${py0 + ph} ${x0 + 2},${y0 + H - 2}`} fill="url(#base-seat-v)" />
+      <polygon points={`${x0 + W - 2},${y0 + 2} ${px0 + pw},${py0} ${px0 + pw},${py0 + ph} ${x0 + W - 2},${y0 + H - 2}`} fill="url(#base-seat-v)" />
+      {/* stairways cut the stands into sectors */}
+      <g stroke="#d9d6cf" strokeOpacity="0.75" strokeWidth="0.6">
+        {Array.from({ length: Math.floor(pw / 16) + 1 }).map((_, i) => {
+          const x = px0 + (i * pw) / Math.floor(pw / 16);
+          return (
+            <g key={`v${i}`}>
+              <line x1={x} y1={y0 + 2} x2={x} y2={py0} />
+              <line x1={x} y1={py0 + ph} x2={x} y2={y0 + H - 2} />
+            </g>
+          );
+        })}
+        {Array.from({ length: Math.floor(ph / 14) + 1 }).map((_, i) => {
+          const y = py0 + (i * ph) / Math.floor(ph / 14);
+          return (
+            <g key={`h${i}`}>
+              <line x1={x0 + 2} y1={y} x2={px0} y2={y} />
+              <line x1={px0 + pw} y1={y} x2={x0 + W - 2} y2={y} />
+            </g>
+          );
+        })}
       </g>
-      {look.roof !== "none" && (() => {
-        // A light membrane roof over the outer part of the stands, on
-        // radial trusses; the canopy covers only the two long sides.
-        const ro = { x: rx + 1, y: ry + 1 };
-        const ri = { x: rx - stand * 0.62, y: ry - stand * 0.42 };
-        const pt = (r: { x: number; y: number }, a: number) => `${(cx + Math.cos(a) * r.x).toFixed(1)},${(cy + Math.sin(a) * r.y).toFixed(1)}`;
-        const band = (a0: number, a1: number) => {
-          const steps = 24;
-          const outer = Array.from({ length: steps + 1 }, (_, i) => pt(ro, a0 + ((a1 - a0) * i) / steps));
-          const inner = Array.from({ length: steps + 1 }, (_, i) => pt(ri, a1 - ((a1 - a0) * i) / steps));
-          return `M${outer.join(" L")} L${inner.join(" L")} Z`;
-        };
-        const arcs: [number, number][] = look.roof === "full"
-          ? [[0, Math.PI * 2]]
-          : [[Math.PI * 1.13, Math.PI * 1.87], [Math.PI * 0.13, Math.PI * 0.87]];
-        const trusses = look.roof === "full" ? 32 : 12;
-        return (
-          <g>
-            {arcs.map(([a0, a1]) => (
-              <g key={a0}>
-                <path d={band(a0, a1)} fill="#000" opacity="0.18" transform="translate(0 2.5)" />
-                <path d={band(a0, a1)} fill="#eef1f3" opacity="0.92" stroke="#8d969c" strokeWidth="0.6" />
-                {Array.from({ length: trusses + 1 }).map((_, i) => {
-                  const a = a0 + ((a1 - a0) * i) / trusses;
-                  return <line key={i} x1={cx + Math.cos(a) * ri.x} y1={cy + Math.sin(a) * ri.y} x2={cx + Math.cos(a) * ro.x}
-                               y2={cy + Math.sin(a) * ro.y} stroke="#aab3b9" strokeWidth="0.5" />;
-                })}
-              </g>
+      {/* corner stands are separate blocks */}
+      <g stroke="rgb(var(--map-wall))" strokeWidth="1">
+        <line x1={px0} y1={py0} x2={x0 + 3} y2={y0 + 3} />
+        <line x1={px0 + pw} y1={py0} x2={x0 + W - 3} y2={y0 + 3} />
+        <line x1={px0} y1={py0 + ph} x2={x0 + 3} y2={y0 + H - 3} />
+        <line x1={px0 + pw} y1={py0 + ph} x2={x0 + W - 3} y2={y0 + H - 3} />
+      </g>
+      {/* pitch */}
+      <rect x={px0} y={py0} width={pw} height={ph} fill="#3c9a4f" />
+      {Array.from({ length: 10 }).map((_, i) => (
+        <rect key={i} x={px0 + (i * pw) / 10} y={py0} width={pw / 20} height={ph} fill="#fff" opacity="0.07" />
+      ))}
+      <g {...pitchLine}>
+        <rect x={px0 + 4} y={py0 + 3.5} width={pw - 8} height={ph - 7} />
+        <line x1={cx} y1={py0 + 3} x2={cx} y2={py0 + ph - 3} />
+        <circle cx={cx} cy={cy} r={ph / 6} />
+        <rect x={px0 + 3} y={cy - boxH / 2} width={boxW} height={boxH} />
+        <rect x={px0 + pw - 3 - boxW} y={cy - boxH / 2} width={boxW} height={boxH} />
+        <rect x={px0 + 3} y={cy - boxH / 4} width={boxW / 2.4} height={boxH / 2} />
+        <rect x={px0 + pw - 3 - boxW / 2.4} y={cy - boxH / 4} width={boxW / 2.4} height={boxH / 2} />
+      </g>
+      {/* advertising boards around the pitch */}
+      <rect x={px0 + 0.6} y={py0 + 0.6} width={pw - 1.2} height={ph - 1.2} fill="none" stroke="#16204a" strokeWidth="1.2" />
+      <rect x={px0 + 0.6} y={py0 + 0.6} width={pw - 1.2} height={ph - 1.2} fill="none" stroke="#f2c230" strokeWidth="1.2" strokeDasharray="5 9" />
+      <rect x={px0 + 1} y={cy - 3} width="2" height="6" fill="#fff" />
+      <rect x={px0 + pw - 3} y={cy - 3} width="2" height="6" fill="#fff" />
+      <circle cx={cx + 6} cy={cy + 3} r="1.3" fill="#fff" />
+      {/* membrane roof on trusses */}
+      {roofs.map(([x, y, w, h, dir]) => (
+        <g key={`${x}-${y}`}>
+          <rect x={x} y={y + 2} width={w} height={h} fill="#000" opacity="0.16" />
+          <rect x={x} y={y} width={w} height={h} rx="2" fill="#eef1f3" opacity="0.93" stroke="#8d969c" strokeWidth="0.6" />
+          {dir === "h"
+            ? Array.from({ length: Math.floor(w / 8) }).map((_, i) => (
+              <line key={i} x1={x + 4 + i * 8} y1={y} x2={x + 4 + i * 8} y2={y + h} stroke="#aab3b9" strokeWidth="0.5" />
+            ))
+            : Array.from({ length: Math.floor(h / 8) }).map((_, i) => (
+              <line key={i} x1={x} y1={y + 4 + i * 8} x2={x + w} y2={y + 4 + i * 8} stroke="#aab3b9" strokeWidth="0.5" />
             ))}
-          </g>
-        );
-      })()}
+        </g>
+      ))}
       {look.screen && (
         <g>
-          <rect x={cx - 15} y={cy - ry - 10} width="30" height="12" rx="1.5" fill="#101418" stroke="rgb(var(--map-wall))" strokeWidth="0.8" />
-          <text x={cx} y={cy - ry - 1.5} textAnchor="middle" fontSize="7" fontWeight="800" fill="#7cf0b0">2 : 1</text>
+          <rect x={cx - 15} y={y0 - 10} width="30" height="12" rx="1.5" fill="#101418" stroke="rgb(var(--map-wall))" strokeWidth="0.8" />
+          <text x={cx} y={y0 - 1.5} textAnchor="middle" fontSize="7" fontWeight="800" fill="#7cf0b0">2 : 1</text>
         </g>
       )}
-      {t >= 2 && Array.from({ length: 8 }).map((_, i) => {
-        const a = (i / 8) * Math.PI * 2 + 0.2;
-        const fx = cx + Math.cos(a) * (rx + 6);
-        const fy = cy + Math.sin(a) * (ry + 5);
-        return (
-          <g key={i}>
-            <line x1={fx} y1={fy} x2={fx} y2={fy - 8} stroke="#9aa59e" strokeWidth="0.6" />
-            <polygon points={`${fx},${fy - 8} ${fx + 5},${fy - 6.5} ${fx},${fy - 5}`} fill={i % 2 ? seat : "#fff"} />
-          </g>
-        );
-      })}
+      {t >= 2 && [0.2, 0.4, 0.6, 0.8].flatMap((f) => [[x0 + W * f, y0 + H + 12], [x0 + W * f, y0 - 2]]).map(([fx, fy], i) => (
+        <g key={i}>
+          <line x1={fx} y1={fy} x2={fx} y2={fy - 8} stroke="#9aa59e" strokeWidth="0.6" />
+          <polygon points={`${fx},${fy - 8} ${fx + 5},${fy - 6.5} ${fx},${fy - 5}`} fill={i % 2 ? seat : "#fff"} />
+        </g>
+      ))}
       {look.lights && masts.map(([mx, my]) => (
         <g key={`${mx}-${my}`}>
           <circle cx={mx} cy={my} r="15" fill="url(#base-light-glow)" />
           <rect x={mx - 3.5} y={my - 2.5} width="7" height="3.5" rx="0.8" fill="#fffbe0" stroke="#8a8f8b" strokeWidth="0.4" />
         </g>
       ))}
-      {t >= 3 && <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="#f2c230" strokeWidth="1.4" />}
+      {t >= 3 && <rect x={x0} y={y0} width={W} height={H} rx="9" fill="none" stroke="#f2c230" strokeWidth="1.4" />}
       {b.building && <Crane x={cx + rx + 4} top={cy - ry} />}
       <LevelPill x={cx + rx - 4} y={cy - ry - 2} level={b.level} />
     </g>
@@ -435,31 +470,26 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
 }
 
 function AcademyDistrict({ level, maxLevel, busy }: { level: number; maxLevel: number; busy: boolean }) {
-  const houses = 5;
-  const lit = maxLevel ? Math.round((level / maxLevel) * houses * 3) : 0;
+  const vl = visualLevel(level, maxLevel);
+  const floors = 1 + Math.ceil(vl / 3.4);
+  const h = floors * 7 + 5;
   return (
     <g>
-      <rect x="24" y="252" width="118" height="54" rx="8" fill="rgb(var(--c-path))" opacity="0.12"
-            stroke="rgb(var(--c-path))" strokeOpacity="0.45" strokeDasharray="3 2" />
-      <rect x="30" y="296" width="106" height="4" rx="2" fill="#3c9a4f" opacity="0.7" />
-      {Array.from({ length: houses }).map((_, i) => {
-        const x = 30 + i * 22;
-        const h = 14 + ((i * 7) % 3) * 4;
-        return (
-          <g key={i}>
-            <rect x={x} y={296 - h} width="16" height={h} fill="rgb(var(--map-wall))" />
-            <rect x={x + 16} y={296 - h} width="3" height={h} fill="#000" opacity="0.2" />
-            <polygon points={`${x - 2},${296 - h} ${x + 9},${287 - h} ${x + 20},${296 - h}`} fill="rgb(var(--c-path))" opacity="0.9" />
-            {[0, 1, 2].map((r) => (
-              <rect key={r} x={x + 4} y={292 - h + 6 + r * 4} width="8" height="2" rx="0.5"
-                    fill="rgb(var(--c-legend))" opacity={i * 3 + r < lit ? 0.9 : 0.15} />
-            ))}
-          </g>
-        );
-      })}
-      <rect x="44" y="255" width="86" height="11" rx="5.5" fill="rgb(var(--c-bg-base))" opacity="0.75" />
-      <text x="87" y="263" textAnchor="middle" fontSize="7.5" fontWeight="800" fill="rgb(var(--c-path))">🌱 Академия · {level}</text>
-      {busy && <Crane x={142} top={262} />}
+      <rect x="22" y="248" width="122" height="52" rx="10" fill="rgb(var(--c-path))" opacity="0.08" />
+      <rect x="22" y="248" width="122" height="52" rx="10" fill="none" stroke="rgb(var(--c-path))" strokeOpacity="0.35" />
+      <Pitch x={84} y={253} w={54} h={20} />
+      <Pitch x={84} y={277} w={54} h={20} />
+      {vl >= 7 && [[84, 253], [138, 253], [84, 297], [138, 297]].map(([x, y]) => (
+        <circle key={`${x}-${y}`} cx={x} cy={y} r="1.3" fill="#fff7c2" />
+      ))}
+      <ellipse cx="54" cy="299" rx="28" ry="4" fill="#000" opacity="0.2" />
+      <Box x={30} y={298} w={40} h={h} front="#f1efe6" roof="rgb(var(--c-path))" />
+      <Windows x={32} y={296} w={36} rows={floors} cols={5} rowH={7} seed={9} />
+      <rect x={46} y={290} width="8" height="8" fill="#2d4a3c" />
+      <rect x={34} y={298 - h + 1.5} width="32" height="5" rx="1" fill="rgb(var(--c-path))" />
+      <text x={50} y={298 - h + 5.2} textAnchor="middle" fontSize="3.6" fontWeight="900" fill="#fff" letterSpacing="0.3">АКАДЕМИЯ</text>
+      <text x={50 + DX / 2} y={298 - h - 8} textAnchor="middle" fontSize="8">🌱</text>
+      {busy && <Crane x={78} top={298 - h} />}
     </g>
   );
 }
@@ -500,7 +530,6 @@ export default function BaseMap({
           <Roads />
           <Parking />
           <Pitch x={20} y={96} w={78} h={44} />
-          <Pitch x={60} y={44} w={40} h={22} />
           <Trees />
         </>
       )}
@@ -516,6 +545,10 @@ export default function BaseMap({
         const at = byCode[code] && pillAt(byCode[code], SPOTS[code], art.buildings[code]);
         return at ? <g key={`pill-${code}`} pointerEvents="none"><LevelPill x={at[0]} y={at[1]} level={byCode[code].level} /></g> : null;
       })}
+      <rect x="34" y="301" width="84" height="12" rx="6" fill="rgb(var(--c-bg-base))" opacity="0.75" />
+      <text x="76" y="309.5" textAnchor="middle" fontSize="7.5" fontWeight="800" fill="rgb(var(--c-path))">
+        🌱 Академия · {state.academy_level}
+      </text>
       <rect x="198" y="300" width="114" height="12" rx="6" fill="rgb(var(--c-bg-base))" opacity="0.75" />
       <text x="255" y="308.5" textAnchor="middle" fontSize="7.5" fontWeight="800" fill="rgb(var(--c-ink-chalk))">
         💼 Финансовый департамент

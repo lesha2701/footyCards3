@@ -1,149 +1,65 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { claimDailyReward } from "@/api/dailyRewards";
-import { claimFreePack } from "@/api/freePack";
-import { claimTask } from "@/api/tasks";
 import { Skeleton } from "@/components/common/Skeleton";
-import { IconCheck, IconClock, IconGift, IconPack, IconTarget, type IconProps } from "@/components/icons";
-import { formatGameError } from "@/lib/errors";
-import { grantedExtras, streakLine } from "@/lib/rewards";
-import { hapticNotify } from "@/lib/telegram";
+import { IconGift, IconPack, IconTarget, type IconProps } from "@/components/icons";
+import { useTodayClaims } from "@/components/home/useTodayClaims";
 import { formatClock, useTodayState } from "@/lib/today";
-import { useAuthStore } from "@/store/authStore";
-import type { PackOpenResult, Task, WheelStatus } from "@/types";
+import type { WheelStatus } from "@/types";
 
-/** Everything the player can collect today in one place: daily reward,
- * finished tasks, free pack and wheel spins — with one "Забрать всё" button
- * instead of a profile trip plus a tasks trip plus a banner tap. */
+/** «Сегодня» in one compact card: a summary line with «Забрать всё» and
+ * four small items (calendar, tasks, free pack, wheel). A ready item
+ * claims on tap; the rest open their page. */
 export default function TodayCard({ wheel }: { wheel?: WheelStatus | null }) {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const updateBalance = useAuthStore((s) => s.updateBalance);
   const { calendar, taskList, freePack, claimableTasks, dailyReady, freePackReady } = useTodayState();
-  const [summary, setSummary] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-
-  const refresh = () => {
-    for (const key of [["daily-reward-calendar"], ["tasks"], ["collection"], ["card-skills"]]) {
-      queryClient.invalidateQueries({ queryKey: key });
-    }
-  };
-
-  const claimAll = useMutation({
-    mutationFn: async ({ daily, tasks }: { daily: boolean; tasks: Task[] }) => {
-      let coins = 0;
-      let balance: number | null = null;
-      const extras: string[] = [];
-      const packs: PackOpenResult[] = [];
-      if (daily) {
-        const r = await claimDailyReward();
-        coins += r.granted.coins + (r.month_bonus?.coins ?? 0);
-        balance = r.new_balance;
-        extras.push(...grantedExtras(r.granted));
-        if (r.month_bonus) extras.push("бонус за месяц", ...grantedExtras(r.month_bonus));
-      }
-      for (const task of tasks) {
-        const r = await claimTask(task.user_task_id);
-        coins += r.reward_coins;
-        balance = r.new_balance;
-        if (r.granted_skill_tokens) extras.push(`жетоны ×${r.granted_skill_tokens.quantity}`);
-        if (r.granted_pack) packs.push(r.granted_pack);
-      }
-      return { coins, balance, extras, packs };
-    },
-    onSuccess: ({ coins, balance, extras, packs }) => {
-      if (balance !== null) updateBalance(balance);
-      hapticNotify("success");
-      setError(null);
-      setSummary(["Забрано", coins ? `+${coins} монет` : null, ...extras].filter(Boolean).join(" · "));
-      refresh();
-      // Pack rewards play their opening animation one after another.
-      if (packs.length) {
-        navigate(`/packs/${packs[0].pack.id}/open`, { state: { result: packs[0], queue: packs.slice(1) } });
-      }
-    },
-    onError: (err) => {
-      setError(formatGameError(err, "Не удалось забрать награды"));
-      refresh();
-    },
-  });
-
-  const freePackMutation = useMutation({
-    mutationFn: claimFreePack,
-    onSuccess: (data) => {
-      updateBalance(data.new_balance);
-      hapticNotify("success");
-      queryClient.invalidateQueries({ queryKey: ["free-pack-status"] });
-      queryClient.invalidateQueries({ queryKey: ["collection"] });
-      navigate(`/packs/${data.pack.id}/open`, { state: { result: data } });
-    },
-    onError: (err) => setError(formatGameError(err, "Не удалось получить пак")),
-  });
+  const { claimAll, freePack: freePackMutation, summary, error, busy } = useTodayClaims();
 
   if (!calendar && !taskList && !freePack) {
-    return (
-      <section className="flex flex-col gap-3 rounded-3xl bg-bg-surface p-4" aria-busy="true">
-        <Skeleton className="h-5 w-24" />
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="flex items-center gap-3">
-            <Skeleton className="h-9 w-9 rounded-full" />
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Skeleton className="h-3.5 w-1/2" />
-              <Skeleton className="h-3 w-3/4" />
-            </div>
-          </div>
-        ))}
-      </section>
-    );
+    return <Skeleton className="h-[116px] rounded-3xl" />;
   }
 
-  const instantReady = dailyReady || claimableTasks.length > 0;
   const tasksInProgress = [...(taskList?.regular ?? []), ...(taskList?.premium ?? [])].filter((t) => !t.is_completed).length;
-  const busy = claimAll.isPending || freePackMutation.isPending;
+  const wheelReady = !!wheel && wheel.free_spins_remaining > 0;
+  const instant = (dailyReady ? 1 : 0) + claimableTasks.length;
+  const readyCount = instant + (freePackReady ? 1 : 0) + (wheelReady ? 1 : 0);
 
   return (
-    <section className="rounded-3xl bg-bg-surface p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="font-display text-base font-bold text-ink-chalk">Сегодня</h2>
-        {instantReady && (
+    <section className="rounded-3xl bg-bg-surface p-3">
+      <div className="mb-2.5 flex items-center justify-between gap-2 px-1">
+        <div>
+          <h2 className="font-display text-base font-bold text-ink-chalk">Сегодня</h2>
+          <p className="text-xs text-ink-mist">
+            {readyCount ? `Готово к получению: ${readyCount}` : "Всё забрано — загляни позже"}
+          </p>
+        </div>
+        {instant > 0 && (
           <button
             onClick={() => claimAll.mutate({ daily: dailyReady, tasks: claimableTasks })}
             disabled={busy}
-            className="animate-claim-glow rounded-full bg-accent-lime px-3 py-1.5 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-60"
+            className="animate-claim-glow shrink-0 rounded-full bg-floodlight px-3.5 py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-60"
           >
             {claimAll.isPending ? "Забираем..." : "Забрать всё"}
           </button>
         )}
       </div>
 
-      <div className="flex flex-col divide-y divide-white/5">
+      <div className="grid auto-cols-fr grid-flow-col gap-1.5">
         {calendar && (
-          <TodayRow
+          <TodayItem
             Icon={IconGift}
-            title="Календарь наград"
-            subtitle={streakLine(calendar, dailyReady)}
+            label="Вход"
+            status={dailyReady ? "Забрать" : `${calendar.claimed_count}/${calendar.days_in_month}`}
             ready={dailyReady}
-            done={!dailyReady}
             onClick={() => (dailyReady ? claimAll.mutate({ daily: true, tasks: [] }) : navigate("/profile"))}
             disabled={busy}
           />
         )}
         {taskList && (
-          <TodayRow
+          <TodayItem
             Icon={IconTarget}
-            title="Задания"
-            subtitle={
-              claimableTasks.length
-                ? `Готово к получению: ${claimableTasks.length}`
-                : tasksInProgress
-                  ? `В процессе: ${tasksInProgress}`
-                  : "Все выполнены"
-            }
+            label="Задания"
+            status={claimableTasks.length ? `${claimableTasks.length} готово` : tasksInProgress ? `${tasksInProgress} в работе` : "Все"}
             ready={claimableTasks.length > 0}
-            done={!claimableTasks.length && !tasksInProgress}
             onClick={() =>
               claimableTasks.length ? claimAll.mutate({ daily: false, tasks: claimableTasks }) : navigate("/tasks")
             }
@@ -151,40 +67,28 @@ export default function TodayCard({ wheel }: { wheel?: WheelStatus | null }) {
           />
         )}
         {freePack && (
-          <TodayRow
+          <TodayItem
             Icon={IconPack}
-            title="Бесплатный пак"
-            subtitle={
-              freePackReady
-                ? freePackMutation.isPending ? "Открываем..." : "Готов — открой сейчас"
-                : `Снова в ${formatClock(freePack.available_at)}`
-            }
+            label="Пак"
+            status={freePackReady ? (freePackMutation.isPending ? "..." : "Открыть") : formatClock(freePack.available_at)}
             ready={freePackReady}
-            waiting={!freePackReady}
             onClick={() => freePackReady && freePackMutation.mutate()}
             disabled={busy || !freePackReady}
-            actionLabel="Открыть"
           />
         )}
         {wheel && (
-          <TodayRow
+          <TodayItem
             Icon={IconGift}
-            title="Колесо фортуны"
-            subtitle={
-              wheel.free_spins_remaining > 0
-                ? `Бесплатных прокруток: ${wheel.free_spins_remaining}`
-                : `Бесплатные снова в ${formatClock(wheel.next_free_spin_reset_at)}`
-            }
-            ready={wheel.free_spins_remaining > 0}
-            waiting={wheel.free_spins_remaining === 0}
+            label="Колесо"
+            status={wheelReady ? `×${wheel.free_spins_remaining}` : formatClock(wheel.next_free_spin_reset_at)}
+            ready={wheelReady}
             onClick={() => navigate("/wheel")}
-            actionLabel="Крутить"
           />
         )}
       </div>
 
       {(summary || error) && (
-        <p role="status" className={`mt-2 text-xs ${error ? "text-red-400" : "text-accent-lime"}`}>
+        <p role="status" className={`mt-2 px-1 text-xs ${error ? "text-red-400" : "text-accent-lime"}`}>
           {error ?? summary}
         </p>
       )}
@@ -192,51 +96,31 @@ export default function TodayCard({ wheel }: { wheel?: WheelStatus | null }) {
   );
 }
 
-function TodayRow({
-  Icon, title, subtitle, ready, done, waiting, onClick, disabled, actionLabel = "Забрать", badge,
+function TodayItem({
+  Icon, label, status, ready, onClick, disabled,
 }: {
   Icon: (props: IconProps) => JSX.Element;
-  title: string;
-  subtitle: string;
+  label: string;
+  status: string;
   ready?: boolean;
-  done?: boolean;
-  waiting?: boolean;
   onClick: () => void;
   disabled?: boolean;
-  actionLabel?: string;
-  badge?: number;
 }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled && ready}
-      className="flex items-center gap-3 py-2.5 text-left active:opacity-70"
+      className={`flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1 py-2 active:scale-95 ${
+        ready ? "bg-accent-lime/10 ring-1 ring-accent-lime/30" : "bg-bg-raised/60"
+      }`}
     >
-      <span
-        className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-          ready ? "bg-accent-lime/15 text-accent-lime" : "bg-bg-raised text-ink-mist"
-        }`}
-      >
-        <Icon size={17} />
-        {!!badge && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-micro font-bold text-bg-base">
-            {badge}
-          </span>
-        )}
+      <span className={ready ? "text-accent-lime" : "text-ink-mist"}>
+        <Icon size={18} />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block font-display text-sm font-bold text-ink-chalk">{title}</span>
-        <span className="block text-xs text-ink-mist">{subtitle}</span>
+      <span className="w-full truncate text-center text-caption font-semibold text-ink-chalk">{label}</span>
+      <span className={`w-full truncate text-center text-micro ${ready ? "font-bold text-accent-lime" : "text-ink-mist"}`}>
+        {status}
       </span>
-      {ready ? (
-        <span className="rounded-full bg-accent-lime/15 px-2.5 py-1 text-caption font-semibold text-accent-lime">
-          {actionLabel}
-        </span>
-      ) : done ? (
-        <IconCheck size={16} className="text-ink-mist-dim" />
-      ) : waiting ? (
-        <IconClock size={16} className="text-ink-mist-dim" />
-      ) : null}
     </button>
   );
 }
