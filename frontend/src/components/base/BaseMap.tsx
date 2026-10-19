@@ -7,7 +7,7 @@ import type { ClubBaseBuilding, ClubBaseCode, ClubBaseLook, ClubBaseState } from
 import { AcademyArt, GroundEllipse, IsoBox, IsoPitch, Pine, Quad, Tree } from "./BaseArt";
 import { tier, topZ, visualLevel } from "./artMetrics";
 import { ART } from "./buildingArt";
-import { GRID, type Pt, VIEW_H, VIEW_W, pt, pts, shade } from "./iso";
+import { GRID, type Pt, pt, pts, shade } from "./iso";
 
 /** «Клубная база» as an isometric island: a grass board with an earth
  * edge, contour-line hills, a pond and a river with a bridge; roads with
@@ -45,6 +45,10 @@ const ROADS: Foot[] = [
   { x: 18.5, y: 10, w: 2, d: 0.9 }, // analytics
   { x: 18.5, y: 7.6, w: 2.5, d: 0.9 }, // media
   { x: 18.5, y: 16.6, w: 2, d: 0.9 }, // hotel
+  // district streets round the club's grounds, running off the map
+  { x: -1.6, y: -30, w: 1.1, d: 90 }, { x: -30, y: -1.6, w: 54.3, d: 1.1 }, { x: -30, y: 26.6, w: 54.3, d: 1.1 },
+  { x: 26.3, y: 12, w: 20, d: 1 }, // the avenue beyond the bridge
+  { x: 26.3, y: -1.6, w: 20, d: 1.1 }, { x: 26.3, y: 26.6, w: 20, d: 1.1 },
 ];
 
 const TREES: [number, number, number][] = [
@@ -54,14 +58,37 @@ const TREES: [number, number, number][] = [
 ];
 const PINES: [number, number, number][] = [
   [0.8, 4.4, 1], [1.8, 5.6, 0.9], [0.6, 17.4, 1], [1, 25, 0.9], [4, 24.6, 1], [21.8, 24, 0.9], [22.8, 4.4, 1],
-  [16, 24.6, 0.9], [7.4, 0.8, 0.9], [18.6, 0.9, 1], [23.6, 18.8, 0.9], [11.6, 24.8, 0.8],
+  [16, 24.6, 0.9], [7.4, 0.8, 0.9], [18.8, 0.1, 1], [23.4, 23, 0.9], [11.6, 24.8, 0.8],
 ];
 const CARS = ["#d6443a", "#2f6fd6", "#f2c230", "#eef0ea", "#2a2d2b", "#2f9e58", "#8a4fd6", "#f08a2f"];
 const FACADES: Record<string, string> = { concrete: "#c9cbc4", brick: "#b5634b", glass: "#8fc3e8", gold: "#e2b84a" };
 
+// The frame shows the club's grounds inside a bigger district: the map
+// continues past every edge (roads, the river, neighbours' houses, fields).
+const VB = { x: 18, y: 14, w: 328, h: 220 };
+
+// Neighbourhood around the club: [x, y, w, d, h, wall, roof].
+const NEIGHBOURS: [number, number, number, number, number, string, string][] = [
+  [-4.5, 3, 2, 2, 1.1, "#e9e2d4", "#a5543f"], [-4.5, 7, 2, 1.6, 0.9, "#ece6da", "#5f7f9f"], [-7.5, 5, 2, 2, 1.3, "#e4dccb", "#7a8a5a"],
+  [-4.5, 13, 2, 2, 1.2, "#efe8dc", "#a5543f"], [-7.5, 11, 2, 2, 0.9, "#e9e2d4", "#5f7f9f"], [-4.5, 21, 2.4, 2, 1.4, "#e4dccb", "#8a5a8a"],
+  [4, -4.5, 2, 2, 1.0, "#ece6da", "#a5543f"], [8, -4.5, 2.2, 2, 1.3, "#e9e2d4", "#5f7f9f"], [13, -5, 2, 2.4, 1.1, "#efe8dc", "#7a8a5a"],
+  [17, -4.5, 2, 2, 0.9, "#e4dccb", "#a5543f"], [6, -8, 2, 2, 1.0, "#ece6da", "#8a5a8a"],
+  [5, 29, 2, 2, 1.1, "#e9e2d4", "#5f7f9f"], [9, 29, 2.2, 2, 1.3, "#efe8dc", "#a5543f"], [13, 29.5, 2, 2, 1.0, "#e4dccb", "#7a8a5a"],
+  [28.5, 3, 2, 2, 1.2, "#ece6da", "#a5543f"], [28.5, 8, 2, 2.4, 1.4, "#e9e2d4", "#5f7f9f"], [28.5, 16, 2.2, 2, 1.1, "#efe8dc", "#8a5a8a"],
+  [31.5, 14.2, 2, 2, 1.0, "#e4dccb", "#7a8a5a"],
+];
+const OUTER_TREES: [number, number, number][] = [
+  [-2.5, 1, 0.9], [-3, 10, 0.8], [-2.6, 18, 0.9], [-6, 16, 0.8], [-3.6, 24.6, 0.9], [2, -2.6, 0.9], [11, -2.6, 0.8],
+  [20, -3, 0.9], [22.6, -3.6, 0.8], [2, 28.5, 0.8], [17, 28.6, 0.9], [18.4, 31, 0.8], [27.4, 21, 0.9], [27.6, 5.6, 0.8], [31, 7, 0.8],
+];
+// Fields: [x, y, w, d, colour].
+const FIELDS: [number, number, number, number, string][] = [
+  [-9, 17, 4, 5, "#7aa35a"], [-9, 22.5, 4, 4, "#a7b85c"], [19, -9, 5, 4, "#a7b85c"], [26.8, -9, 4, 4, "#7aa35a"],
+  [19.6, 28.5, 4, 4, "#7aa35a"], [29, 20.5, 4, 5, "#a7b85c"],
+];
+
 function Ground() {
   const n = GRID;
-  const edge = 1.2;
   return (
     <g>
       <defs>
@@ -74,25 +101,32 @@ function Ground() {
           <stop offset="1" stopColor="#4aa3c9" />
         </linearGradient>
       </defs>
-      {/* earth edge under the board */}
-      <polygon points={pts([pt(0, n, 0), pt(n, n, 0), pt(n, n, -edge), pt(0, n, -edge)])} fill="#7a5a3a" />
-      <polygon points={pts([pt(n, 0, 0), pt(n, n, 0), pt(n, n, -edge), pt(n, 0, -edge)])} fill="#5e432a" />
-      <polygon points={pts([pt(0, 0), pt(n, 0), pt(n, n), pt(0, n)])} fill="url(#base-land)" />
-      <clipPath id="base-board"><polygon points={pts([pt(0, 0), pt(n, 0), pt(n, n), pt(0, n)])} /></clipPath>
-      <g clipPath="url(#base-board)">
-      {/* grass patches and contour-line hills */}
-      <GroundEllipse cx={5} cy={4} r={4} fill="rgb(var(--map-tree))" opacity={0.15} />
-      <GroundEllipse cx={22} cy={20} r={4} fill="rgb(var(--map-tree))" opacity={0.15} />
-      {[1.4, 2.4, 3.4].map((r) => <GroundEllipse key={`a${r}`} cx={2} cy={24} r={r} fill="none" stroke="rgb(var(--map-contour))" opacity={0.45} />)}
-      {[1.2, 2.2, 3.2].map((r) => <GroundEllipse key={`b${r}`} cx={24.5} cy={2.5} r={r} fill="none" stroke="rgb(var(--map-contour))" opacity={0.45} />)}
-      </g>
+      {/* the whole district */}
+      <rect x={VB.x - 2} y={VB.y - 2} width={VB.w + 4} height={VB.h + 4} fill="url(#base-land)" />
+      {FIELDS.map(([x, y, w, d, c]) => (
+        <g key={`${x}-${y}`}>
+          <Quad x={x} y={y} w={w} d={d} fill={c} opacity={0.35} />
+          {Array.from({ length: 5 }).map((_, i) => (
+            <polyline key={i} points={pts([pt(x + 0.3, y + ((i + 0.5) * d) / 5), pt(x + w - 0.3, y + ((i + 0.5) * d) / 5)])}
+                      stroke="#000" strokeOpacity="0.12" strokeWidth="0.4" fill="none" />
+          ))}
+        </g>
+      ))}
+      {[1.4, 2.4, 3.4].map((r) => <GroundEllipse key={`a${r}`} cx={-8} cy={2} r={r} fill="none" stroke="rgb(var(--map-contour))" opacity={0.4} />)}
+      {[1.2, 2.2, 3.2].map((r) => <GroundEllipse key={`b${r}`} cx={31} cy={28} r={r} fill="none" stroke="rgb(var(--map-contour))" opacity={0.4} />)}
+      {/* the club's grounds: lighter grass inside a hedge */}
+      <polygon points={pts([pt(0, 0), pt(n, 0), pt(n, n), pt(0, n)])} fill="rgb(var(--map-land-2))" opacity="0.55" />
+      <polygon points={pts([pt(0, 0), pt(24, 0), pt(24, n), pt(0, n)])} fill="none" stroke="rgb(var(--map-tree))" strokeWidth="1.6" strokeLinejoin="round" />
+      <GroundEllipse cx={5} cy={4} r={3.5} fill="rgb(var(--map-tree))" opacity={0.12} />
+      <GroundEllipse cx={22} cy={20} r={3.5} fill="rgb(var(--map-tree))" opacity={0.12} />
       {/* pond */}
       <GroundEllipse cx={8.4} cy={1.6} r={1.1} fill="url(#base-water)" stroke="#ffffff" />
-      {/* river along the east edge, with a bridge on the avenue */}
-      <polygon points={pts([pt(24.3, 0), pt(n, 0), pt(n, n), pt(24.3, n)])} fill="url(#base-water)" />
-      <polygon points={pts([pt(n, 0, 0), pt(n, n, 0), pt(n, n, -edge), pt(n, 0, -edge)])} fill="#3b7fa6" opacity="0.6" />
-      {[3, 9, 17, 22].map((y) => (
-        <polyline key={y} points={pts([pt(24.8, y), pt(25.5, y + 1)])} stroke="#fff" strokeOpacity="0.35" strokeWidth="0.5" fill="none" />
+      {/* the river runs through the whole district */}
+      <polygon points={pts([pt(24.3, -30), pt(26.3, -30), pt(26.3, 60), pt(24.3, 60)])} fill="url(#base-water)" />
+      <polyline points={pts([pt(24.3, -30), pt(24.3, 60)])} stroke="#e9e2cf" strokeOpacity="0.5" strokeWidth="0.8" fill="none" />
+      <polyline points={pts([pt(26.3, -30), pt(26.3, 60)])} stroke="#e9e2cf" strokeOpacity="0.5" strokeWidth="0.8" fill="none" />
+      {[-6, 3, 9, 17, 22, 30].map((y) => (
+        <polyline key={y} points={pts([pt(24.9, y), pt(25.6, y + 1)])} stroke="#fff" strokeOpacity="0.35" strokeWidth="0.5" fill="none" />
       ))}
     </g>
   );
@@ -104,8 +138,11 @@ function Roads() {
       {ROADS.map((r) => <Quad key={`k${r.x}-${r.y}`} x={r.x - 0.08} y={r.y - 0.08} w={r.w + 0.16} d={r.d + 0.16} fill="#000" opacity={0.2} />)}
       {ROADS.map((r) => <Quad key={`${r.x}-${r.y}`} x={r.x} y={r.y} w={r.w} d={r.d} fill="rgb(var(--map-road))" />)}
       {/* dashed centre line on the avenue and the bridge */}
-      <polyline points={pts([pt(18.6, 12.5), pt(24.2, 12.5)])} stroke="#fff" strokeOpacity="0.35" strokeWidth="0.5" strokeDasharray="2 2" fill="none" />
-      <IsoBox x={24.2} y={11.8} w={1.9} d={1.4} h={0.25} color="#b8b0a0" top="rgb(var(--map-road))" />
+      <polyline points={pts([pt(18.6, 12.5), pt(46, 12.5)])} stroke="#fff" strokeOpacity="0.35" strokeWidth="0.5" strokeDasharray="2 2" fill="none" />
+      {[-1.05, 27.15].map((y) => (
+        <IsoBox key={y} x={24.2} y={y - 0.6} w={2.2} d={1.2} h={0.25} color="#b8b0a0" top="rgb(var(--map-road))" />
+      ))}
+      <IsoBox x={24.2} y={11.8} w={2.2} d={1.4} h={0.25} color="#b8b0a0" top="rgb(var(--map-road))" />
       {/* fountain plaza on the avenue */}
       <GroundEllipse cx={21.2} cy={12.5} r={1.15} fill="rgb(var(--map-road))" stroke="#000" />
       <GroundEllipse cx={21.2} cy={12.5} r={0.75} fill="#d9d4c7" />
@@ -388,6 +425,17 @@ export default function BaseMap({
     ),
   });
   if (!art.background) {
+    NEIGHBOURS.forEach(([x, y, w, d, h, wall, roof]) => items.push({
+      key: `n${x}-${y}`, depth: x + w + y + d,
+      node: (
+        <g>
+          <IsoBox x={x} y={y} w={w} d={d} h={h} color={wall} />
+          <polygon points={pts([pt(x, y + d, h), pt(x + w, y + d, h), pt(x + w, y + d / 2, h + 0.7), pt(x, y + d / 2, h + 0.7)])} fill={roof} />
+          <polygon points={pts([pt(x + w, y, h), pt(x + w, y + d, h), pt(x + w, y + d / 2, h + 0.7)])} fill={shade(roof, 0.7)} />
+        </g>
+      ),
+    }));
+    OUTER_TREES.forEach(([x, y, sz]) => items.push({ key: `o${x}-${y}`, depth: x + y + 0.2, node: <Tree x={x} y={y} s={sz} /> }));
     TREES.forEach(([x, y, s]) => items.push({ key: `t${x}-${y}`, depth: x + y + 0.2, node: <Tree x={x} y={y} s={s} /> }));
     PINES.forEach(([x, y, s]) => items.push({ key: `p${x}-${y}`, depth: x + y + 0.2, node: <Pine x={x} y={y} s={s} /> }));
   }
@@ -407,7 +455,7 @@ export default function BaseMap({
   }
 
   return (
-    <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="w-full rounded-2xl" role="img"
+    <svg viewBox={`${VB.x} ${VB.y} ${VB.w} ${VB.h}`} className="w-full rounded-2xl" role="img"
          aria-label={`Клубная база, уровень ${state.total_level}`}>
       <defs>
         <radialGradient id="base-vignette" cx="0.5" cy="0.5" r="0.75">
@@ -416,7 +464,7 @@ export default function BaseMap({
         </radialGradient>
       </defs>
       {art.background ? (
-        <image href={staticUrl(art.background)} x="0" y="0" width={VIEW_W} height={VIEW_H} preserveAspectRatio="xMidYMid slice" />
+        <image href={staticUrl(art.background)} x={VB.x} y={VB.y} width={VB.w} height={VB.h} preserveAspectRatio="xMidYMid slice" />
       ) : (
         <>
           <Ground />
@@ -437,11 +485,11 @@ export default function BaseMap({
       {state.academy_level > 0 && (
         <LevelPill at={[academyTop[0], academyTop[1] - 6]} level={state.academy_level} gold={state.academy_level >= state.academy_max_level} />
       )}
-      {!art.background && <rect x="0" y="0" width={VIEW_W} height={VIEW_H} fill="url(#base-vignette)" pointerEvents="none" />}
+      {!art.background && <rect x={VB.x} y={VB.y} width={VB.w} height={VB.h} fill="url(#base-vignette)" pointerEvents="none" />}
       {hint && (() => {
         const w = hint.text.length * 4.4 + 12;
-        const hx = Math.min(VIEW_W - 4 - w, Math.max(4, hint.x - w / 2));
-        const hy = Math.max(4, hint.y - 24);
+        const hx = Math.min(VB.x + VB.w - 4 - w, Math.max(VB.x + 4, hint.x - w / 2));
+        const hy = Math.max(VB.y + 4, hint.y - 24);
         return (
           <g pointerEvents="none">
             <rect x={hx} y={hy} width={w} height="14" rx="7" fill="rgb(var(--c-bg-base))" opacity="0.92" stroke="rgb(var(--c-path))" strokeOpacity="0.6" />

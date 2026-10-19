@@ -82,7 +82,7 @@ costs, hours, effects, caps, Stars per hour, days of income — is in
 
 ## Map art
 
-The map is an isometric (2:1) island drawn in SVG: `components/base/iso.ts`
+The map is an isometric (2:1) district drawn in SVG — the club's hedged grounds inside a town that runs off every edge of the frame (streets, the river with bridges, neighbours' houses, fields): `components/base/iso.ts`
 (projection, shading), `BaseArt.tsx` (box / wall windows / pitch / trees and
 one illustration per building — glass HQ tower, hotel with a neon strip and
 pool, barrel-roofed training hall, clinic with a helipad and ambulance,
