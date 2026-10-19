@@ -1,8 +1,5 @@
 /** Geometry shared by the «Клубная база» map and its building art. */
 
-export const DX = 8;
-export const DY = 6;
-
 /** The drawings are made for 10 visual steps; a building with any number
  * of levels (25 by default) maps onto them — the top level always looks
  * like the finished landmark. */
@@ -19,18 +16,20 @@ export function tier(level: number): 0 | 1 | 2 | 3 {
   return 0;
 }
 
-/** How tall the drawn building is (for the crane and the level badge). */
-export function artHeight(code: string, level: number): number {
+/** Height (iso z units) of the top of a drawn building at a visual level —
+ * where the crane and the level badge go. Mirrors BaseArt.tsx. */
+export function topZ(code: string, vl: number): number {
   switch (code) {
-    case "hq": return 7 + (2 + Math.ceil(level / 2)) * 6 + 2 + 14;
-    case "hotel": return (2 + Math.ceil(level * 0.6)) * 5.5 + 4;
-    case "training": return 8 + level * 1.4 + 18;
-    case "medical": return (1 + Math.ceil(level / 2.5)) * 6 + 8;
-    case "analytics": return 12 + level * 2.6 + 6;
-    case "media": return 12 + level * 2.2 + 8;
-    case "marketing": return 10 + level * 2.2 + 18;
-    case "shop": return 12 + level * 1.8 + 4;
-    case "accounting": return 12 + level * 1.8 + 7;
-    default: return 30;
+    case "hq": return 0.8 + 1.6 + vl * 0.5 + 2;
+    case "hotel": return 1.6 + vl * 0.55;
+    case "training": return 0.8 + vl * 0.1 + 1;
+    case "medical": return 1.2 + vl * 0.32;
+    case "analytics": return 1.4 + vl * 0.38 + 0.8;
+    case "media": return 1.2 + vl * 0.3 + 1;
+    case "marketing": return 1 + vl * 0.25 + 2;
+    case "shop": return 1 + vl * 0.22;
+    case "accounting": return 1.15 + vl * 0.22 + 0.6;
+    case "academy": return 0.9 + vl * 0.28;
+    default: return 2;
   }
 }

@@ -82,18 +82,21 @@ costs, hours, effects, caps, Stars per hour, days of income — is in
 
 ## Map art
 
-The map is drawn in SVG (`components/base/BaseMap.tsx` — meadow with
-contour-line hills, pond, forest, river with a bridge, roads, car park,
-pitches; `BaseArt.tsx` — an illustration per building: glass HQ tower,
-hotel with a neon sign and pool, vaulted training hall, clinic with a
-helipad and ambulance, analytics data wall and dome, TV studio with dishes
-and a mast, billboard office, club shop with an awning, a classical bank).
+The map is an isometric (2:1) island drawn in SVG: `components/base/iso.ts`
+(projection, shading), `BaseArt.tsx` (box / wall windows / pitch / trees and
+one illustration per building — glass HQ tower, hotel with a neon strip and
+pool, barrel-roofed training hall, clinic with a helipad and ambulance,
+analytics data wall and dome, TV studio with dishes and a lattice mast,
+billboard office, club shop with an awning, a classical bank, the
+«Академия» school with two pitches) and `BaseMap.tsx` (ground with an earth
+edge, river with a bridge, roads, fountain plaza, car park, the stadium bowl
+— stands sloping to the pitch, the facade, membrane roof, floodlight masts
+and screen from the stadium look — and everything drawn back to front).
 Buildings grow with the share of their max level (10 visual steps,
-`artMetrics.visualLevel`; only the top level gets the gold trim);
-a crane stands over a construction; the stadium shows seat colour, roof,
-floodlights and screen from its look. An admin can upload a background and a picture per building
-(`static/club_base/uploads`); levels and the crane are drawn on top.
-Player-uploaded photos are deliberately not supported (moderation).
+`artMetrics.visualLevel`; the top level gets a gold rim). No captions: the
+name and level show on hover / focus, a tap opens the sheet. An admin can
+upload a background and a picture per building (`static/club_base/uploads`)
+that replace the drawn ones; levels and the crane are drawn on top.
 
 ## Leaderboard
 
