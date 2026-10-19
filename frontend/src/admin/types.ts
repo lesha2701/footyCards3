@@ -610,6 +610,7 @@ export interface GameConfig {
   club_base_stars_per_hour: number;
   club_base_income_max_days: number;
   club_base_art: { background?: string | null; buildings?: Record<string, string> };
+  club_base_cosmetics: AdminStadiumCosmetic[];
   trade_send_min_account_age_days: number;
   trade_send_min_active_days: number;
   trade_daily_coins_receive_cap: number;
@@ -1015,4 +1016,16 @@ export interface AdminClubBaseLedgerEntry {
   stars_spent: number;
   result: Record<string, unknown>;
   created_at: string;
+}
+
+// «Клубная база» stadium shop item (GameConfig.club_base_cosmetics).
+export interface AdminStadiumCosmetic {
+  code: string;
+  kind: "seats" | "roof" | "lights" | "screen" | "pitch" | "facade";
+  value: string;
+  name: string;
+  coins: number;
+  stars: number;
+  min_level: number;
+  enabled: boolean;
 }

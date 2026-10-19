@@ -3111,8 +3111,24 @@ export interface ClubBaseBuilding {
 export interface ClubBaseLook {
   seats: string;
   roof: "none" | "canopy" | "full";
-  lights: boolean;
-  screen: boolean;
+  lights: "on" | "off";
+  screen: "on" | "off";
+  pitch: "stripes" | "checks" | "diagonal";
+  facade: "concrete" | "brick" | "glass" | "gold";
+}
+
+/** A stadium cosmetics shop item (GameConfig.club_base_cosmetics). */
+export interface ClubBaseCosmetic {
+  code: string;
+  kind: keyof ClubBaseLook;
+  value: string;
+  name: string;
+  coins: number;
+  stars: number;
+  min_level: number;
+  owned: boolean;
+  free: boolean;
+  usable: boolean;
 }
 
 export interface ClubBaseState {
@@ -3139,8 +3155,8 @@ export interface ClubBaseState {
     capacity: number;
     matchday_income: number;
     look: ClubBaseLook;
-    seat_colors: string[];
-    unlocks: { roof_canopy: number; roof_full: number; lights: number; screen: number };
+    defaults: ClubBaseLook;
+    cosmetics: ClubBaseCosmetic[];
   };
   effects: Record<string, number>;
   art: { background: string | null; buildings: Partial<Record<ClubBaseCode, string>> };

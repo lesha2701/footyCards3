@@ -30,3 +30,13 @@ export async function fetchClubBaseInvoiceStatus(payloadToken: string): Promise<
   const { data } = await api.get<StarsInvoiceStatus>(`/club-base/stars-invoices/${payloadToken}`);
   return data;
 }
+
+export async function buyStadiumCosmetic(code: string, idempotencyKey: string): Promise<ClubBaseState> {
+  const { data } = await api.post<ClubBaseState>(`/club-base/cosmetics/${code}/buy`, { idempotency_key: idempotencyKey });
+  return data;
+}
+
+export async function createStadiumCosmeticInvoice(code: string): Promise<StarsInvoiceCreate> {
+  const { data } = await api.post<StarsInvoiceCreate>(`/club-base/cosmetics/${code}/stars-invoice`);
+  return data;
+}

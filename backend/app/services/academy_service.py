@@ -323,6 +323,8 @@ async def deliver_speedup(db: AsyncSession, user: User, invoice) -> dict:
     A "base:" invoice is a «Клубная база» construction."""
     if (invoice.academy_speedup or "").startswith(club_base_service.SPEEDUP_PREFIX):
         return await club_base_service.deliver_speedup(db, user, invoice)
+    if (invoice.academy_speedup or "").startswith(club_base_service.COSMETIC_PREFIX):
+        return await club_base_service.deliver_cosmetic(db, user, invoice)
     academy = await _get_academy(db, user.id, lock=True)
     code, _, level = (invoice.academy_speedup or "").partition(":")
     finished = None

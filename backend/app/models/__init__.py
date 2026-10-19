@@ -6,7 +6,7 @@ from app.models.card_path import AcademyLedger, UserAcademy, CardPath, PathAttem
 from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
 from app.models.career import CareerClub, CareerParticipant, CareerProfile, CareerSeason, Friendship
 from app.models.lifestyle import LifestyleItem, UserLifestyleItem
-from app.models.club_base import ClubBaseLedger, UserClubBase
+from app.models.club_base import ClubBaseLedger, UserBaseCosmetic, UserClubBase
 from app.models.my_player import MyPlayer, MyPlayerDuel
 from app.models.player_career import (
     PlayerCareerCup,
@@ -104,6 +104,7 @@ __all__ = [
     "UserAcademy",
     "UserClubBase",
     "ClubBaseLedger",
+    "UserBaseCosmetic",
     "AcademyLedger",
     "PathStage",
     "PathStageTask",

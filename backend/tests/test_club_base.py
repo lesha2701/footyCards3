@@ -273,17 +273,82 @@ async def test_sweep_completes_and_notifies_once(client, db_session, bot_token):
     assert (await _base(db_session, user.id)).levels == {"hq": 1}
 
 
-async def test_stadium_look_is_unlocked_by_level(client, db_session, bot_token):
+async def test_stadium_look_needs_the_item_and_its_level(client, db_session, bot_token):
     await _config(db_session)
-    headers, user = await _login(client, db_session, bot_token, 970107)
+    headers, user = await _login(client, db_session, bot_token, 970107, balance=100_000)
     assert (await client.put(f"{API}/club-base/stadium/look", headers=headers, json={"seats": "blue"})).status_code == 409
     await _set_levels(db_session, user.id, {"hq": 12, "stadium": 12})
-    ok = await client.put(f"{API}/club-base/stadium/look", headers=headers,
-                          json={"seats": "blue", "roof": "canopy", "lights": True})
-    assert ok.status_code == 200, ok.text
-    assert ok.json()["stadium"]["look"] == {"seats": "blue", "roof": "canopy", "lights": True, "screen": False}
-    for bad in ({"roof": "full"}, {"screen": True}, {"seats": "gold"}):
+    # Blue seats are free, purple seats and the canopy must be bought first.
+    ok = await client.put(f"{API}/club-base/stadium/look", headers=headers, json={"seats": "blue"})
+    assert ok.status_code == 200 and ok.json()["stadium"]["look"]["seats"] == "blue"
+    for bad in ({"seats": "purple"}, {"roof": "canopy"}, {"seats": "gold"}):
         assert (await client.put(f"{API}/club-base/stadium/look", headers=headers, json=bad)).status_code in (409, 422)
+
+    buy = await client.post(f"{API}/club-base/cosmetics/roof_canopy/buy", headers=headers, json={"idempotency_key": "c1"})
+    assert buy.status_code == 200, buy.text
+    assert buy.json()["new_balance"] == 85_000
+    replay = await client.post(f"{API}/club-base/cosmetics/roof_canopy/buy", headers=headers, json={"idempotency_key": "c1"})
+    assert replay.status_code == 200 and replay.json()["new_balance"] == 85_000
+    again = await client.post(f"{API}/club-base/cosmetics/roof_canopy/buy", headers=headers, json={})
+    assert again.status_code == 409  # already owned
+    # The full roof needs stadium 15.
+    assert (await client.post(f"{API}/club-base/cosmetics/roof_full/buy", headers=headers, json={})).status_code == 409
+
+    ok = await client.put(f"{API}/club-base/stadium/look", headers=headers, json={"roof": "canopy", "lights": "off"})
+    assert ok.status_code == 200, ok.text
+    stadium = ok.json()["stadium"]
+    assert stadium["look"] == {"seats": "blue", "roof": "canopy", "lights": "off", "screen": "off",
+                               "pitch": "stripes", "facade": "concrete"}
+    canopy = next(c for c in stadium["cosmetics"] if c["code"] == "roof_canopy")
+    assert canopy["owned"] and canopy["usable"]
+    tx = (await db_session.execute(select(func.count(CoinTransaction.id)).where(
+        CoinTransaction.user_id == user.id, CoinTransaction.type == TransactionType.club_base_cosmetic,
+    ))).scalar_one()
+    assert tx == 1
+
+
+async def test_stadium_cosmetic_for_stars_is_granted_once(client, db_session, bot_token, monkeypatch):
+    from app.models.club_base import UserBaseCosmetic
+    from app.services import stars_payment_service
+
+    async def fake_link(*args, **kwargs):
+        return "https://t.me/invoice/x"
+
+    monkeypatch.setattr(stars_payment_service, "_request_telegram_invoice_link", fake_link)
+    await _config(db_session)
+    headers, user = await _login(client, db_session, bot_token, 970111)
+    await _set_levels(db_session, user.id, {"hq": 20, "stadium": 20})
+    inv = await client.post(f"{API}/club-base/cosmetics/screen/stars-invoice", headers=headers)
+    assert inv.status_code == 200, inv.text
+    token, stars = inv.json()["payload_token"], inv.json()["stars_amount"]
+    assert stars == 180
+    ok, _ = await stars_payment_service.validate_pre_checkout(db_session, token, stars)
+    assert ok
+    await stars_payment_service.deliver_payment(db_session, token, user.telegram_id, "ch-cos-1", stars)
+    await stars_payment_service.deliver_payment(db_session, token, user.telegram_id, "ch-cos-1", stars)
+    owned = (await db_session.execute(select(UserBaseCosmetic.item_code).where(UserBaseCosmetic.user_id == user.id))).scalars().all()
+    assert owned == ["screen"]
+    status = await client.get(f"{API}/club-base/stars-invoices/{token}", headers=headers)
+    assert status.json()["path_result"]["kind"] == "base_cosmetic"
+    look = await client.put(f"{API}/club-base/stadium/look", headers=headers, json={"screen": "on"})
+    assert look.status_code == 200 and look.json()["stadium"]["look"]["screen"] == "on"
+    # Owned already: no second invoice.
+    assert (await client.post(f"{API}/club-base/cosmetics/screen/stars-invoice", headers=headers)).status_code == 409
+
+
+async def test_admin_edits_the_stadium_shop(client, db_session, bot_token):
+    await _config(db_session)
+    auth = await _admin(client, bot_token)
+    bad = {"club_base_cosmetics": [{"code": "x", "kind": "seats", "value": "gold", "name": "?", "coins": 1, "stars": 0}]}
+    assert (await client.put(f"{API}/admin/games/config", headers=auth, json=bad)).status_code == 409
+    shop = [{"code": "seats_purple", "kind": "seats", "value": "purple", "name": "Фиолетовые", "coins": 0, "stars": 0,
+             "min_level": 1}]
+    resp = await client.put(f"{API}/admin/games/config", headers=auth, json={"club_base_cosmetics": shop})
+    assert resp.status_code == 200, resp.text
+    headers, user = await _login(client, db_session, bot_token, 970112)
+    await _set_levels(db_session, user.id, {"hq": 1, "stadium": 1})
+    ok = await client.put(f"{API}/club-base/stadium/look", headers=headers, json={"seats": "purple"})
+    assert ok.status_code == 200 and ok.json()["stadium"]["look"]["seats"] == "purple"  # made free by the admin
 
 
 async def test_leaderboard_counts_base_and_academy(client, db_session, bot_token):

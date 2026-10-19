@@ -36,6 +36,22 @@ class UserClubBase(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 
+class UserBaseCosmetic(Base):
+    """A stadium cosmetic the user bought (GameConfig.club_base_cosmetics
+    item code), forever. Unique per (user, item) — a repeated purchase or a
+    re-delivered Stars payment never grants it twice."""
+
+    __tablename__ = "user_base_cosmetics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[str] = mapped_column(String(8), nullable=False)  # coins | stars
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "item_code", name="uq_user_base_cosmetics_item"),)
+
+
 class ClubBaseLedger(Base):
     """Every base operation: upgrade start (coins), Stars speed-up,
     completion, income claim, stadium look. `(user_id, idempotency_key)`
@@ -45,7 +61,7 @@ class ClubBaseLedger(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # upgrade | speedup | complete | income | look
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # upgrade | speedup | complete | income | cosmetic
     building_code: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     to_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     coins_spent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

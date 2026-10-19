@@ -32,6 +32,10 @@ const SPOTS: Record<Exclude<ClubBaseCode, "stadium">, Spot> = {
   accounting: { x: 282, y: 296, w: 30 },
 };
 
+const FACADES: Record<string, string> = {
+  concrete: "rgb(var(--map-wall))", brick: "#b5634b", glass: "#8fc3e8", gold: "#e2b84a",
+};
+
 const STADIUM = { cx: 180, cy: 184, rx: 60, ry: 38 };
 
 const ROUND_TREES: [number, number, number][] = [
@@ -351,6 +355,7 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
   const vl = visualLevel(b.level, b.max_level);
   const t = tier(vl);
   const seat = SEAT_COLORS[look.seats] ?? SEAT_COLORS.red;
+  const facade = FACADES[look.facade] ?? FACADES.concrete;
   const ends = 5 + vl * 1.0; // depth of the stands behind the goals
   const sides = 4 + vl * 0.8; // depth of the long-side stands
   const px0 = x0 + ends;
@@ -378,6 +383,7 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
           <rect width="2.4" height="1.9" fill="#2b3036" />
           <rect x="0.25" y="0.35" width="1.9" height="1.1" rx="0.3" fill={seat} />
         </pattern>
+        <clipPath id="base-pitch-rect"><rect x={px0} y={py0} width={pw} height={ph} /></clipPath>
         <radialGradient id="base-light-glow">
           <stop offset="0" stopColor="#fff7c2" stopOpacity="0.9" />
           <stop offset="1" stopColor="#fff7c2" stopOpacity="0" />
@@ -385,9 +391,9 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
       </defs>
       <rect x={x0 + 3} y={y0 + 8} width={W} height={H} rx="9" fill="#000" opacity="0.28" />
       {/* facade with a little depth */}
-      <rect x={x0} y={y0 + 4} width={W} height={H} rx="9" fill="rgb(var(--map-wall))" />
+      <rect x={x0} y={y0 + 4} width={W} height={H} rx="9" fill={facade} />
       <rect x={x0} y={y0 + 4} width={W} height={H} rx="9" fill="#000" opacity="0.28" />
-      <rect x={x0} y={y0} width={W} height={H} rx="9" fill="rgb(var(--map-wall))" />
+      <rect x={x0} y={y0} width={W} height={H} rx="9" fill={facade} />
       {/* seats: rows of single seats on concrete terraces */}
       <polygon points={`${x0 + 2},${y0 + 2} ${x0 + W - 2},${y0 + 2} ${px0 + pw},${py0} ${px0},${py0}`} fill="url(#base-seat-h)" />
       <polygon points={`${x0 + 2},${y0 + H - 2} ${x0 + W - 2},${y0 + H - 2} ${px0 + pw},${py0 + ph} ${px0},${py0 + ph}`} fill="url(#base-seat-h)" />
@@ -423,9 +429,22 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
       </g>
       {/* pitch */}
       <rect x={px0} y={py0} width={pw} height={ph} fill="#3c9a4f" />
-      {Array.from({ length: 10 }).map((_, i) => (
-        <rect key={i} x={px0 + (i * pw) / 10} y={py0} width={pw / 20} height={ph} fill="#fff" opacity="0.07" />
-      ))}
+      {look.pitch === "checks" ? (
+        Array.from({ length: 10 }).flatMap((_, i) => Array.from({ length: 6 }).map((__, j) => (i + j) % 2 ? null : (
+          <rect key={`${i}-${j}`} x={px0 + (i * pw) / 10} y={py0 + (j * ph) / 6} width={pw / 10} height={ph / 6} fill="#fff" opacity="0.07" />
+        )))
+      ) : look.pitch === "diagonal" ? (
+        <g clipPath="url(#base-pitch-rect)">
+          {Array.from({ length: 16 }).map((_, i) => (
+            <polygon key={i} fill="#fff" opacity="0.07"
+                     points={`${px0 - ph + i * 12},${py0 + ph} ${px0 - ph + i * 12 + 6},${py0 + ph} ${px0 + i * 12 + 6},${py0} ${px0 + i * 12},${py0}`} />
+          ))}
+        </g>
+      ) : (
+        Array.from({ length: 10 }).map((_, i) => (
+          <rect key={i} x={px0 + (i * pw) / 10} y={py0} width={pw / 20} height={ph} fill="#fff" opacity="0.07" />
+        ))
+      )}
       <g {...pitchLine}>
         <rect x={px0 + 4} y={py0 + 3.5} width={pw - 8} height={ph - 7} />
         <line x1={cx} y1={py0 + 3} x2={cx} y2={py0 + ph - 3} />
@@ -435,12 +454,9 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
         <rect x={px0 + 3} y={cy - boxH / 4} width={boxW / 2.4} height={boxH / 2} />
         <rect x={px0 + pw - 3 - boxW / 2.4} y={cy - boxH / 4} width={boxW / 2.4} height={boxH / 2} />
       </g>
-      {/* advertising boards around the pitch */}
-      <rect x={px0 + 0.6} y={py0 + 0.6} width={pw - 1.2} height={ph - 1.2} fill="none" stroke="#16204a" strokeWidth="1.2" />
-      <rect x={px0 + 0.6} y={py0 + 0.6} width={pw - 1.2} height={ph - 1.2} fill="none" stroke="#f2c230" strokeWidth="1.2" strokeDasharray="5 9" />
       <rect x={px0 + 1} y={cy - 3} width="2" height="6" fill="#fff" />
       <rect x={px0 + pw - 3} y={cy - 3} width="2" height="6" fill="#fff" />
-      <circle cx={cx + 6} cy={cy + 3} r="1.3" fill="#fff" />
+      <circle cx={cx} cy={cy} r="1" fill="#fff" />
       {/* membrane roof on trusses */}
       {roofs.map(([x, y, w, h, dir]) => (
         <g key={`${x}-${y}`}>
@@ -455,7 +471,7 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
             ))}
         </g>
       ))}
-      {look.screen && (
+      {look.screen === "on" && (
         <g>
           <rect x={cx - 15} y={y0 - 10} width="30" height="12" rx="1.5" fill="#101418" stroke="rgb(var(--map-wall))" strokeWidth="0.8" />
           <text x={cx} y={y0 - 1.5} textAnchor="middle" fontSize="7" fontWeight="800" fill="#7cf0b0">2 : 1</text>
@@ -467,7 +483,7 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
           <polygon points={`${fx},${fy - 8} ${fx + 5},${fy - 6.5} ${fx},${fy - 5}`} fill={i % 2 ? seat : "#fff"} />
         </g>
       ))}
-      {look.lights && masts.map(([mx, my]) => (
+      {look.lights === "on" && masts.map(([mx, my]) => (
         <g key={`${mx}-${my}`}>
           <circle cx={mx} cy={my} r="15" fill="url(#base-light-glow)" />
           <rect x={mx - 3.5} y={my - 2.5} width="7" height="3.5" rx="0.8" fill="#fffbe0" stroke="#8a8f8b" strokeWidth="0.4" />

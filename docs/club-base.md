@@ -36,8 +36,17 @@ speed-up costs 2 ⭐ per started hour (`club_base_stars_per_hour`).
 | `shop` | Клубный магазин | merchandise +15 … 210 coins a day; +1 … 10 % quick-sell price |
 | `accounting` | Бухгалтерия | −1 … 15 % to every construction cost (base and «Академия») |
 
-Stadium look unlocks: seats any level, canopies 5, floodlights 10, full
-roof 15, video screen 20.
+Stadium look = a shop (`GameConfig.club_base_cosmetics`, Админка → Клубная
+база → «Магазин стадиона»): seats colour, roof (canopies / full), floodlights,
+video screen, pitch pattern (stripes / checks / diagonal) and facade (concrete
+/ brick / glass / gold). The defaults are free; every other option is an item
+with a coin price and/or a Stars price (0 = not sold for it, both 0 = free)
+and a min stadium level. Bought items are kept forever in
+`user_base_cosmetics` (unique per user and item): coins under the user lock
+(`buy_cosmetic`, ledger kind `cosmetic`, `TransactionType.club_base_cosmetic`),
+Stars through a StarsInvoice with `academy_speedup = "basecos:<code>"`
+(`deliver_cosmetic`). `set_look` accepts only defaults, owned or free items at
+their level.
 
 Marketing, shop and accounting form the «Финансовый департамент».
 Effects are summed by name and clamped by `GameConfig.club_base_caps`

@@ -9,7 +9,7 @@ import {
   updateGameConfig,
   uploadClubBaseArt,
 } from "@/admin/api";
-import type { GameConfig } from "@/admin/types";
+import type { AdminStadiumCosmetic, GameConfig } from "@/admin/types";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 
 const BUILDING_NAMES: Record<string, string> = {
@@ -26,7 +26,7 @@ const FIELD_NAMES: Record<string, string> = {
 };
 
 const KIND_NAMES: Record<string, string> = {
-  upgrade: "Стройка", speedup: "Ускорение ⭐", complete: "Готово", income: "Доход",
+  upgrade: "Стройка", speedup: "Ускорение ⭐", complete: "Готово", income: "Доход", cosmetic: "Магазин стадиона",
 };
 
 function errorText(err: unknown) {
@@ -37,7 +37,21 @@ function parseList(value: string): number[] {
   return value.split(",").map((v) => Number(v.trim())).filter((v) => !Number.isNaN(v));
 }
 
-type Form = Pick<GameConfig, "club_base_enabled" | "club_base_buildings" | "club_base_caps" | "club_base_stars_per_hour" | "club_base_income_max_days">;
+type Form = Pick<GameConfig, "club_base_enabled" | "club_base_buildings" | "club_base_caps" | "club_base_stars_per_hour"
+  | "club_base_income_max_days" | "club_base_cosmetics">;
+
+// Kind -> values that can be sold (the first value of each kind is the free default).
+const COSMETIC_VALUES: Record<AdminStadiumCosmetic["kind"], string[]> = {
+  seats: ["blue", "sky", "green", "yellow", "white", "black", "purple", "orange"],
+  roof: ["canopy", "full"],
+  lights: ["on"],
+  screen: ["on"],
+  pitch: ["checks", "diagonal"],
+  facade: ["brick", "glass", "gold"],
+};
+const COSMETIC_KIND_NAMES: Record<AdminStadiumCosmetic["kind"], string> = {
+  seats: "Кресла", roof: "Крыша", lights: "Прожекторы", screen: "Табло", pitch: "Газон", facade: "Фасад",
+};
 
 export default function AdminClubBasePage() {
   const queryClient = useQueryClient();
@@ -57,6 +71,7 @@ export default function AdminClubBasePage() {
       club_base_caps: config.club_base_caps,
       club_base_stars_per_hour: config.club_base_stars_per_hour,
       club_base_income_max_days: config.club_base_income_max_days,
+      club_base_cosmetics: config.club_base_cosmetics ?? [],
     });
   }, [config]);
 
@@ -145,6 +160,74 @@ export default function AdminClubBasePage() {
         <button type="button" disabled={save.isPending} onClick={() => save.mutate()}
                 className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black disabled:opacity-50">
           Сохранить настройки
+        </button>
+      </section>
+
+      <section className="rounded-xl bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Магазин стадиона</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Косметика стадиона за монеты и/или звёзды (0 — не продаётся за эту валюту, обе 0 — бесплатно). Купленное
+          остаётся у игрока навсегда; уровень — минимальный уровень стадиона. Сохраняется кнопкой «Сохранить настройки».
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="text-slate-400">
+              <tr><th className="pr-2">Код</th><th className="pr-2">Вид</th><th className="pr-2">Вариант</th><th className="pr-2">Название</th>
+                <th className="pr-2">Монеты</th><th className="pr-2">⭐</th><th className="pr-2">Ур.</th><th className="pr-2">Вкл.</th><th /></tr>
+            </thead>
+            <tbody>
+              {form.club_base_cosmetics.map((item, index) => {
+                const patch = (next: Partial<AdminStadiumCosmetic>) => setForm({
+                  ...form,
+                  club_base_cosmetics: form.club_base_cosmetics.map((c, i) => (i === index ? { ...c, ...next } : c)),
+                });
+                const input = "rounded bg-bg-base px-2 py-1 outline-none";
+                return (
+                  <tr key={index} className="border-t border-white/5">
+                    <td className="py-1 pr-2"><input value={item.code} onChange={(e) => patch({ code: e.target.value })} className={`${input} w-28`} /></td>
+                    <td className="pr-2">
+                      <select value={item.kind} className={input}
+                              onChange={(e) => {
+                                const kind = e.target.value as AdminStadiumCosmetic["kind"];
+                                patch({ kind, value: COSMETIC_VALUES[kind][0] });
+                              }}>
+                        {Object.entries(COSMETIC_KIND_NAMES).map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+                      </select>
+                    </td>
+                    <td className="pr-2">
+                      <select value={item.value} onChange={(e) => patch({ value: e.target.value })} className={input}>
+                        {COSMETIC_VALUES[item.kind].map((v) => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </td>
+                    <td className="pr-2"><input value={item.name} onChange={(e) => patch({ name: e.target.value })} className={`${input} w-40`} /></td>
+                    {(["coins", "stars", "min_level"] as const).map((key) => (
+                      <td key={key} className="pr-2">
+                        <input type="number" min={key === "min_level" ? 1 : 0} value={item[key]}
+                               onChange={(e) => patch({ [key]: Number(e.target.value) })} className={`${input} w-20`} />
+                      </td>
+                    ))}
+                    <td className="pr-2"><input type="checkbox" checked={item.enabled} onChange={(e) => patch({ enabled: e.target.checked })} /></td>
+                    <td>
+                      <button type="button" className="rounded bg-red-500/10 px-2 py-1 text-red-400"
+                              onClick={() => setForm({ ...form, club_base_cosmetics: form.club_base_cosmetics.filter((_, i) => i !== index) })}>
+                        Удалить
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <button type="button" className="mt-2 rounded-lg bg-white/10 px-3 py-1.5 text-xs"
+                onClick={() => setForm({
+                  ...form,
+                  club_base_cosmetics: [...form.club_base_cosmetics, {
+                    code: `item_${form.club_base_cosmetics.length + 1}`, kind: "seats", value: "blue", name: "Новый товар",
+                    coins: 1000, stars: 10, min_level: 1, enabled: true,
+                  }],
+                })}>
+          + Добавить товар
         </button>
       </section>
 

@@ -135,3 +135,16 @@ async def test_sweeps_and_a_read_complete_a_construction_once(pg):
     assert await _count(pg, ClubBaseLedger, ClubBaseLedger.user_id == uid, ClubBaseLedger.kind == "complete") == 1
     assert await _count(pg, Notification, Notification.user_id == uid,
                         Notification.type == NotificationType.club_base_built) <= 1
+
+
+async def test_concurrent_cosmetic_purchases_charge_once(pg):
+    from app.models.club_base import UserBaseCosmetic
+
+    uid = await _user(pg, levels={"hq": 12, "stadium": 12})
+    results = await asyncio.gather(*[
+        _call(pg, club_base_service.buy_cosmetic, uid, "roof_canopy", f"k{i}") for i in range(6)
+    ])
+    assert results.count("ok") == 1
+    async with pg() as s:
+        assert (await s.get(User, uid)).balance == 100_000 - 15_000
+    assert await _count(pg, UserBaseCosmetic, UserBaseCosmetic.user_id == uid) == 1

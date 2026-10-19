@@ -160,13 +160,6 @@ export function TrainingArt({ x, y, w, level }: Art) {
         <line key={i} x1={x + 3 + i * ((w - 6) / Math.max(2, Math.floor(w / 6)))} x2={x + 3 + i * ((w - 6) / Math.max(2, Math.floor(w / 6)))}
               y1={y - h + 2} y2={y - 2} stroke="#8fb79c" strokeWidth="0.5" />
       ))}
-      {t >= 2 && (
-        <g>
-          <rect x={x + w + DX + 3} y={y - 9} width="16" height="9" rx="1" fill="#3c9a4f" />
-          <rect x={x + w + DX + 4} y={y - 8} width="14" height="7" fill="none" stroke="#fff" strokeOpacity="0.7" strokeWidth="0.5" />
-          <rect x={x + w + DX + 17.5} y={y - 6} width="1.5" height="3" fill="#fff" />
-        </g>
-      )}
       {t >= 3 && <GoldTrim x={x} y={y - h} w={w} />}
     </g>
   );

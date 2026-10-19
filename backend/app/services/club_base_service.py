@@ -41,9 +41,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.timeutil import ensure_aware
 from app.models.card_path import UserAcademy
-from app.models.club_base import ClubBaseLedger, UserClubBase
+from app.models.club_base import ClubBaseLedger, UserBaseCosmetic, UserClubBase
 from app.models.enums import NotificationType, TransactionType
-from app.models.game_config import DEFAULT_CLUB_BASE_BUILDINGS, DEFAULT_CLUB_BASE_CAPS
+from app.models.game_config import DEFAULT_CLUB_BASE_BUILDINGS, DEFAULT_CLUB_BASE_CAPS, DEFAULT_CLUB_BASE_COSMETICS
 from app.models.user import User
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
@@ -91,12 +91,20 @@ BUILDINGS: dict[str, Building] = {b.code: b for b in (
 # Not effects: what a level costs, takes, or only shows.
 _NOT_EFFECTS = {"costs", "hours", "cap", "capacity"}
 
-# Stadium look: seat colours are free; the rest needs the stadium level.
-SEAT_COLORS = ("red", "blue", "sky", "green", "yellow", "white", "black", "purple", "orange")
-ROOF_LEVEL = {"none": 0, "canopy": 5, "full": 15}
-LIGHTS_LEVEL = 10
-SCREEN_LEVEL = 20
-DEFAULT_LOOK = {"seats": "red", "roof": "none", "lights": False, "screen": False}
+# Stadium look. Every option that is not the default is an item of the
+# cosmetics shop (GameConfig.club_base_cosmetics): bought for coins and/or
+# Stars, kept forever, usable from its min stadium level. An item with both
+# prices 0 is free.
+COSMETIC_KINDS: dict[str, tuple[str, ...]] = {
+    "seats": ("red", "blue", "sky", "green", "yellow", "white", "black", "purple", "orange"),
+    "roof": ("none", "canopy", "full"),
+    "lights": ("off", "on"),
+    "screen": ("off", "on"),
+    "pitch": ("stripes", "checks", "diagonal"),
+    "facade": ("concrete", "brick", "glass", "gold"),
+}
+DEFAULT_LOOK = {"seats": "red", "roof": "none", "lights": "off", "screen": "off", "pitch": "stripes", "facade": "concrete"}
+COSMETIC_PREFIX = "basecos:"
 
 
 def _now() -> datetime:
@@ -348,20 +356,63 @@ def art_out(config) -> dict:
     return {"background": art.get("background"), "buildings": dict(art.get("buildings") or {})}
 
 
-def _look(base: UserClubBase, stadium_level: int) -> dict:
-    """The saved look with anything the stadium level no longer allows
-    switched off (admin may have shortened the level list)."""
-    look = {**DEFAULT_LOOK, **(base.appearance or {})}
-    if ROOF_LEVEL.get(look["roof"], 99) > stadium_level:
-        look["roof"] = "none"
-    look["lights"] = bool(look["lights"]) and stadium_level >= LIGHTS_LEVEL
-    look["screen"] = bool(look["screen"]) and stadium_level >= SCREEN_LEVEL
-    if look["seats"] not in SEAT_COLORS:
-        look["seats"] = DEFAULT_LOOK["seats"]
+def cosmetics_catalog(config) -> list[dict]:
+    raw = config.club_base_cosmetics
+    return [dict(i) for i in (DEFAULT_CLUB_BASE_COSMETICS if raw is None else raw)]
+
+
+def validate_cosmetics(raw: list) -> list[dict]:
+    """Admin input for GameConfig.club_base_cosmetics."""
+    out, codes = [], set()
+    for item in raw or []:
+        code = str(item.get("code") or "").strip()
+        kind, value = item.get("kind"), item.get("value")
+        if not code or len(code) > 24 or code in codes:
+            raise ValueError(f"код «{code}» пустой, длиннее 24 символов или повторяется")
+        if kind not in COSMETIC_KINDS or value not in COSMETIC_KINDS[kind]:
+            raise ValueError(f"{code}: неизвестный вид «{kind}» / значение «{value}»")
+        if value == DEFAULT_LOOK[kind]:
+            raise ValueError(f"{code}: «{value}» — значение по умолчанию, оно и так бесплатно")
+        coins, stars, min_level = int(item.get("coins") or 0), int(item.get("stars") or 0), int(item.get("min_level") or 1)
+        if coins < 0 or stars < 0 or min_level < 1:
+            raise ValueError(f"{code}: цены не могут быть отрицательными, уровень — от 1")
+        codes.add(code)
+        out.append({"code": code, "kind": kind, "value": value, "name": str(item.get("name") or code)[:64],
+                    "coins": coins, "stars": stars, "min_level": min_level, "enabled": bool(item.get("enabled", True))})
+    return out
+
+
+def _free(item: dict) -> bool:
+    return not item["coins"] and not item["stars"]
+
+
+def _usable(item: dict, owned: set, stadium_level: int) -> bool:
+    return (item["code"] in owned or (_free(item) and item["enabled"])) and stadium_level >= item["min_level"]
+
+
+async def owned_cosmetics(db: AsyncSession, user_id: int) -> set[str]:
+    return set((await db.execute(
+        select(UserBaseCosmetic.item_code).where(UserBaseCosmetic.user_id == user_id)
+    )).scalars().all())
+
+
+def _look(base: UserClubBase, stadium_level: int, config, owned: set) -> dict:
+    """The saved look with anything not owned (or below its level) back to
+    the default — the admin may have changed the shop meanwhile."""
+    saved = {**DEFAULT_LOOK, **(base.appearance or {})}
+    items = {(i["kind"], i["value"]): i for i in cosmetics_catalog(config)}
+    look = {}
+    for kind, default in DEFAULT_LOOK.items():
+        value = saved.get(kind)
+        if isinstance(value, bool):  # looks saved before the shop: lights/screen were booleans
+            value = "on" if value else "off"
+        item = items.get((kind, value))
+        look[kind] = value if value == default or (item and _usable(item, owned, stadium_level)) else default
     return look
 
 
-def state_out(base: UserClubBase, academy: Optional[UserAcademy], config, now: Optional[datetime] = None) -> dict:
+def state_out(base: UserClubBase, academy: Optional[UserAcademy], config, now: Optional[datetime] = None,
+              owned: frozenset | set = frozenset()) -> dict:
     from app.services import academy_service
 
     now = now or _now()
@@ -434,10 +485,13 @@ def state_out(base: UserClubBase, academy: Optional[UserAcademy], config, now: O
             "level": stadium_level,
             "capacity": value_at(config, "stadium", "capacity", stadium_level),
             "matchday_income": matchday_income(effects),
-            "look": _look(base, stadium_level),
-            "seat_colors": list(SEAT_COLORS),
-            "unlocks": {"roof_canopy": ROOF_LEVEL["canopy"], "roof_full": ROOF_LEVEL["full"],
-                        "lights": LIGHTS_LEVEL, "screen": SCREEN_LEVEL},
+            "look": _look(base, stadium_level, config, set(owned)),
+            "defaults": dict(DEFAULT_LOOK),
+            "cosmetics": [
+                {**{k: i[k] for k in ("code", "kind", "value", "name", "coins", "stars", "min_level")},
+                 "owned": i["code"] in owned, "free": _free(i), "usable": _usable(i, set(owned), stadium_level)}
+                for i in cosmetics_catalog(config) if i["enabled"] or i["code"] in owned
+            ],
         },
         "effects": effects,
         "art": art_out(config),
@@ -459,7 +513,7 @@ async def get_state(db: AsyncSession, user: User) -> dict:
         base = UserClubBase(user_id=user.id, levels={}, total_level=0, appearance=dict(DEFAULT_LOOK),
                             income_accrued=0, income_since=None)
     academy = await db.get(UserAcademy, user.id)
-    return state_out(base, academy, config)
+    return state_out(base, academy, config, owned=await owned_cosmetics(db, user.id))
 
 
 def _ledger_complete(user_id: int, done: dict) -> ClubBaseLedger:
@@ -560,7 +614,8 @@ async def claim_income(db: AsyncSession, user: User, idempotency_key: Optional[s
 
 
 async def set_look(db: AsyncSession, user: User, look: dict) -> dict:
-    """Stadium look — free, but roof/lights/screen need the stadium level."""
+    """Stadium look: defaults always, anything else needs the item (bought
+    or free) and its stadium level."""
     config = await get_config(db)
     _require_enabled(config)
     base = await _get_base(db, user.id, lock=True)
@@ -568,26 +623,114 @@ async def set_look(db: AsyncSession, user: User, look: dict) -> dict:
     level = int((base.levels or {}).get("stadium", 0))
     if level <= 0:
         raise ConflictError("Сначала построй стадион")
-    new = {**DEFAULT_LOOK, **(base.appearance or {})}
-    if "seats" in look:
-        if look["seats"] not in SEAT_COLORS:
-            raise ConflictError("Такого цвета кресел нет")
-        new["seats"] = look["seats"]
-    if "roof" in look:
-        if look["roof"] not in ROOF_LEVEL:
-            raise ConflictError("Такой крыши нет")
-        if ROOF_LEVEL[look["roof"]] > level:
-            raise ConflictError(f"Эта крыша откроется на {ROOF_LEVEL[look['roof']]} уровне стадиона")
-        new["roof"] = look["roof"]
-    for key, need in (("lights", LIGHTS_LEVEL), ("screen", SCREEN_LEVEL)):
-        if key in look:
-            if look[key] and level < need:
-                raise ConflictError(f"Откроется на {need} уровне стадиона")
-            new[key] = bool(look[key])
+    owned = await owned_cosmetics(db, user.id)
+    items = {(i["kind"], i["value"]): i for i in cosmetics_catalog(config)}
+    new = _look(base, level, config, owned)
+    for kind, value in look.items():
+        if kind not in COSMETIC_KINDS:
+            continue
+        if isinstance(value, bool):
+            value = "on" if value else "off"
+        if value not in COSMETIC_KINDS[kind]:
+            raise ConflictError("Такого варианта нет")
+        if value != DEFAULT_LOOK[kind]:
+            item = items.get((kind, value))
+            if item is None or not (item["code"] in owned or _free(item)):
+                raise ConflictError("Сначала купи это в магазине стадиона")
+            if level < item["min_level"]:
+                raise ConflictError(f"Откроется на {item['min_level']} уровне стадиона")
+        new[kind] = value
     base.appearance = new
     db.add(base)
     await db.commit()
     return await get_state(db, user)
+
+
+def _shop_item(config, code: str) -> dict:
+    item = next((i for i in cosmetics_catalog(config) if i["code"] == code), None)
+    if item is None or not item["enabled"]:
+        raise NotFoundError("Такого товара нет")
+    return item
+
+
+async def _stadium_level_for(db: AsyncSession, user_id: int, item: dict, config) -> None:
+    levels = effective_levels(await db.get(UserClubBase, user_id))
+    if levels.get("stadium", 0) < item["min_level"]:
+        raise ConflictError(f"Нужен стадион {item['min_level']} уровня")
+
+
+async def buy_cosmetic(db: AsyncSession, user: User, code: str, idempotency_key: Optional[str]) -> dict:
+    """Buys a stadium cosmetic for coins (once; it stays forever)."""
+    config = await get_config(db)
+    _require_enabled(config)
+    item = _shop_item(config, code)
+    if item["coins"] <= 0:
+        raise ConflictError("Это продаётся только за звёзды" if item["stars"] else "Это и так бесплатно")
+    locked_user = await lock_user_for_update(db, user.id)
+    if await _replay(db, user.id, idempotency_key):
+        return {**await get_state(db, user), "new_balance": locked_user.balance}
+    await _stadium_level_for(db, user.id, item, config)
+    if code in await owned_cosmetics(db, user.id):
+        raise ConflictError("Уже куплено")
+    await debit_coins(db, locked_user, item["coins"], TransactionType.club_base_cosmetic,
+                      f"Стадион: {item['name']}")
+    db.add_all([
+        UserBaseCosmetic(user_id=user.id, item_code=code, source="coins"),
+        ClubBaseLedger(user_id=user.id, kind="cosmetic", building_code="stadium", coins_spent=item["coins"],
+                       result={"item": code}, idempotency_key=idempotency_key),
+    ])
+    await db.commit()
+    return {**await get_state(db, user), "new_balance": locked_user.balance}
+
+
+async def create_cosmetic_invoice(db: AsyncSession, user: User, code: str) -> dict:
+    """Telegram Stars invoice for a stadium cosmetic; the price is frozen on
+    it (StarsInvoice.academy_speedup = "basecos:<code>")."""
+    from app.models.pack import StarsInvoice
+    from app.services.stars_payment_service import _request_telegram_invoice_link
+
+    config = await get_config(db)
+    _require_enabled(config)
+    item = _shop_item(config, code)
+    if item["stars"] <= 0:
+        raise ConflictError("Это продаётся только за монеты" if item["coins"] else "Это и так бесплатно")
+    await _stadium_level_for(db, user.id, item, config)
+    if code in await owned_cosmetics(db, user.id):
+        raise ConflictError("Уже куплено")
+    token = secrets.token_urlsafe(16)
+    db.add(StarsInvoice(user_id=user.id, payload_token=token, stars_amount=item["stars"],
+                        academy_speedup=f"{COSMETIC_PREFIX}{code}"))
+    await db.flush()
+    link = await _request_telegram_invoice_link(token, item["name"], f"Клубная база: {item['name']}", item["stars"])
+    await db.commit()
+    return {"invoice_link": link, "payload_token": token, "stars_amount": item["stars"]}
+
+
+async def validate_cosmetic_invoice(db: AsyncSession, invoice) -> tuple[bool, str]:
+    config = await get_config(db)
+    code = (invoice.academy_speedup or "")[len(COSMETIC_PREFIX):]
+    item = next((i for i in cosmetics_catalog(config) if i["code"] == code), None)
+    if not config.club_base_enabled or item is None or not item["enabled"]:
+        return False, "Этот товар больше не продаётся"
+    if code in await owned_cosmetics(db, invoice.user_id):
+        return False, "Уже куплено"
+    return True, ""
+
+
+async def deliver_cosmetic(db: AsyncSession, user: User, invoice) -> dict:
+    """Called through academy_service.deliver_speedup under the invoice
+    lock: grants the item once (unique per user and item)."""
+    code = (invoice.academy_speedup or "")[len(COSMETIC_PREFIX):]
+    await lock_user_for_update(db, user.id)
+    granted = code not in await owned_cosmetics(db, user.id)
+    if granted:
+        db.add(UserBaseCosmetic(user_id=user.id, item_code=code, source="stars"))
+    db.add(ClubBaseLedger(
+        user_id=user.id, kind="cosmetic", building_code="stadium", stars_spent=invoice.stars_amount,
+        result={"item": code, "granted": granted}, idempotency_key=f"stars-{invoice.payload_token}",
+    ))
+    await db.flush()
+    return {"kind": "base_cosmetic", "item": code, "granted": granted}
 
 
 # --- Stars speed-up ------------------------------------------------------------------------------

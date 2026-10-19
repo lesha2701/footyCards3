@@ -5,8 +5,10 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 
 import {
+  buyStadiumCosmetic,
   claimClubBaseIncome,
   createClubBaseSpeedupInvoice,
+  createStadiumCosmeticInvoice,
   fetchClubBase,
   fetchClubBaseInvoiceStatus,
   setStadiumLook,
@@ -15,12 +17,12 @@ import {
 import BaseMap from "@/components/base/BaseMap";
 import FirstVisitHint from "@/components/common/FirstVisitHint";
 import { IconClose, IconCoin } from "@/components/icons";
-import { SEAT_COLOR_NAMES, SEAT_COLORS, formatBuildTime, hoursLabel, upgradeBlocker } from "@/lib/clubBase";
+import { SEAT_COLORS, formatBuildTime, hoursLabel, upgradeBlocker } from "@/lib/clubBase";
 import { formatGameError } from "@/lib/errors";
 import { useMarkSeen } from "@/lib/seenSections";
 import { hapticNotify, openTelegramInvoice } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { ClubBaseBuilding, ClubBaseCode, ClubBaseLook, ClubBaseState } from "@/types";
+import type { ClubBaseBuilding, ClubBaseCode, ClubBaseCosmetic, ClubBaseLook, ClubBaseState } from "@/types";
 
 function useCountdown(endsAt: string | null | undefined): number {
   const [now, setNow] = useState(() => Date.now());
@@ -32,55 +34,106 @@ function useCountdown(endsAt: string | null | undefined): number {
   return endsAt ? Math.max(0, Math.round((new Date(endsAt).getTime() - now) / 1000)) : 0;
 }
 
-function LookEditor({ state, onSave, pending }: { state: ClubBaseState; onSave: (look: Partial<ClubBaseLook>) => void; pending: boolean }) {
-  const { look, level, unlocks } = state.stadium;
-  const roofs: { value: ClubBaseLook["roof"]; label: string; need: number }[] = [
-    { value: "none", label: "Без крыши", need: 0 },
-    { value: "canopy", label: "Козырьки", need: unlocks.roof_canopy },
-    { value: "full", label: "Крыша по кругу", need: unlocks.roof_full },
-  ];
-  const chip = (active: boolean, locked: boolean) =>
-    `min-h-[36px] rounded-xl px-3 text-xs font-semibold ${active ? "bg-path text-bg-base" : "bg-white/5 text-ink-chalk"} ${locked ? "opacity-40" : ""}`;
+const KIND_LABELS: Record<keyof ClubBaseLook, string> = {
+  seats: "Кресла", roof: "Крыша", lights: "Прожекторы", screen: "Табло", pitch: "Газон", facade: "Фасад",
+};
+const DEFAULT_NAMES: Record<keyof ClubBaseLook, string> = {
+  seats: "Красные кресла", roof: "Без крыши", lights: "Выключены", screen: "Без табло", pitch: "Полосы", facade: "Бетон",
+};
+
+function priceLabel(c: ClubBaseCosmetic): string {
+  const parts = [];
+  if (c.coins) parts.push(`🪙 ${c.coins.toLocaleString("ru-RU")}`);
+  if (c.stars) parts.push(`⭐ ${c.stars}`);
+  return parts.join(" · ");
+}
+
+/** The stadium look and its shop: defaults and bought/free items are picked
+ * at once, the rest is bought for coins or Stars (prices from the admin). */
+function LookEditor({
+  state, onSave, onBuyCoins, onBuyStars, pending,
+}: {
+  state: ClubBaseState; onSave: (look: Partial<ClubBaseLook>) => void;
+  onBuyCoins: (code: string) => void; onBuyStars: (code: string) => void; pending: boolean;
+}) {
+  const { look, level, defaults, cosmetics } = state.stadium;
+  const [offer, setOffer] = useState<ClubBaseCosmetic | null>(null);
+  const kinds = Object.keys(KIND_LABELS) as (keyof ClubBaseLook)[];
   return (
-    <div className="mt-3 flex flex-col gap-2.5 rounded-2xl bg-white/5 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wider text-ink-mist-dim">Внешний вид</p>
-      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Цвет кресел">
-        {state.stadium.seat_colors.map((c) => (
-          <button
-            key={c} type="button" role="radio" aria-checked={look.seats === c} aria-label={SEAT_COLOR_NAMES[c] ?? c}
-            disabled={pending} onClick={() => onSave({ seats: c })}
-            className={`h-9 w-9 rounded-full border-2 ${look.seats === c ? "border-path" : "border-white/15"}`}
-            style={{ background: SEAT_COLORS[c] }}
-          />
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {roofs.map((r) => (
-          <button key={r.value} type="button" disabled={pending || level < r.need} onClick={() => onSave({ roof: r.value })}
-                  className={chip(look.roof === r.value, level < r.need)}>
-            {r.label}{level < r.need ? ` · ур. ${r.need}` : ""}
-          </button>
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <button type="button" disabled={pending || level < unlocks.lights} onClick={() => onSave({ lights: !look.lights })}
-                className={chip(look.lights, level < unlocks.lights)}>
-          💡 Подсветка{level < unlocks.lights ? ` · ур. ${unlocks.lights}` : ""}
-        </button>
-        <button type="button" disabled={pending || level < unlocks.screen} onClick={() => onSave({ screen: !look.screen })}
-                className={chip(look.screen, level < unlocks.screen)}>
-          📺 Табло{level < unlocks.screen ? ` · ур. ${unlocks.screen}` : ""}
-        </button>
-      </div>
+    <div className="mt-3 flex flex-col gap-3 rounded-2xl bg-white/5 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wider text-ink-mist-dim">Внешний вид и магазин стадиона</p>
+      {kinds.map((kind) => {
+        const items = cosmetics.filter((c) => c.kind === kind);
+        if (!items.length) return null;
+        const pick = (value: string) => onSave({ [kind]: value } as Partial<ClubBaseLook>);
+        const options = [{ value: defaults[kind], name: DEFAULT_NAMES[kind], item: null as ClubBaseCosmetic | null },
+          ...items.map((c) => ({ value: c.value, name: c.name, item: c }))];
+        return (
+          <div key={kind}>
+            <p className="mb-1.5 text-caption text-ink-mist">{KIND_LABELS[kind]}</p>
+            <div className="flex flex-wrap gap-2">
+              {options.map(({ value, name, item }) => {
+                const active = look[kind] === value;
+                const lockedByLevel = !!item && level < item.min_level;
+                const forSale = !!item && !item.usable && !lockedByLevel;
+                const onClick = () => {
+                  if (forSale) setOffer(item);
+                  else if (!lockedByLevel) { setOffer(null); pick(value); }
+                };
+                if (kind === "seats") {
+                  return (
+                    <button key={value} type="button" disabled={pending || lockedByLevel} onClick={onClick}
+                            aria-label={`${name}${forSale ? `, ${priceLabel(item!)}` : ""}`} aria-pressed={active}
+                            className={`relative h-9 w-9 rounded-full border-2 ${active ? "border-path" : "border-white/15"} ${lockedByLevel ? "opacity-40" : ""}`}
+                            style={{ background: SEAT_COLORS[value] }}>
+                      {(forSale || lockedByLevel) && (
+                        <span className="absolute -bottom-1 -right-1 grid h-4 w-4 place-items-center rounded-full bg-bg-base text-[9px]">
+                          {lockedByLevel ? "🔒" : "🛒"}
+                        </span>
+                      )}
+                    </button>
+                  );
+                }
+                return (
+                  <button key={value} type="button" disabled={pending || lockedByLevel} onClick={onClick}
+                          className={`min-h-[36px] rounded-xl px-3 text-xs font-semibold ${active ? "bg-path text-bg-base" : "bg-white/5 text-ink-chalk"} ${lockedByLevel ? "opacity-40" : ""}`}>
+                    {name}
+                    {lockedByLevel ? ` · ур. ${item!.min_level}` : forSale ? ` · ${priceLabel(item!)}` : ""}
+                  </button>
+                );
+              })}
+            </div>
+            {offer && offer.kind === kind && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-legend/30 bg-legend/5 p-2">
+                <p className="min-w-0 flex-1 text-xs text-ink-chalk">Купить «{offer.name}» навсегда?</p>
+                {offer.coins > 0 && (
+                  <button type="button" disabled={pending} onClick={() => { onBuyCoins(offer.code); setOffer(null); }}
+                          className="min-h-[36px] rounded-xl bg-floodlight px-3 text-xs font-bold text-bg-base disabled:opacity-40">
+                    🪙 {offer.coins.toLocaleString("ru-RU")}
+                  </button>
+                )}
+                {offer.stars > 0 && (
+                  <button type="button" disabled={pending} onClick={() => { onBuyStars(offer.code); setOffer(null); }}
+                          className="min-h-[36px] rounded-xl bg-amber-400 px-3 text-xs font-bold text-black disabled:opacity-40">
+                    ⭐ {offer.stars}
+                  </button>
+                )}
+                <button type="button" onClick={() => setOffer(null)} className="min-h-[36px] px-2 text-xs text-ink-mist">Отмена</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 function BuildingSheet({
-  state, building, balance, onClose, onUpgrade, upgrading, onLook, lookPending,
+  state, building, balance, onClose, onUpgrade, upgrading, onLook, onBuyCoins, onBuyStars, lookPending,
 }: {
   state: ClubBaseState; building: ClubBaseBuilding | null; balance: number; onClose: () => void;
-  onUpgrade: (code: ClubBaseCode) => void; upgrading: boolean; onLook: (look: Partial<ClubBaseLook>) => void; lookPending: boolean;
+  onUpgrade: (code: ClubBaseCode) => void; upgrading: boolean; onLook: (look: Partial<ClubBaseLook>) => void;
+  onBuyCoins: (code: string) => void; onBuyStars: (code: string) => void; lookPending: boolean;
 }) {
   return createPortal(
     <AnimatePresence>
@@ -152,7 +205,7 @@ function BuildingSheet({
               <p className="mt-4 text-center text-sm font-semibold text-legend">Максимальный уровень</p>
             )}
             {building.code === "stadium" && building.level > 0 && (
-              <LookEditor state={state} onSave={onLook} pending={lookPending} />
+              <LookEditor state={state} onSave={onLook} onBuyCoins={onBuyCoins} onBuyStars={onBuyStars} pending={lookPending} />
             )}
           </motion.div>
         </motion.div>
@@ -201,6 +254,26 @@ export default function ClubBasePage() {
     onError: fail,
   });
   const look = useMutation({ mutationFn: setStadiumLook, onSuccess: apply, onError: fail });
+  const buyCoins = useMutation({
+    mutationFn: (code: string) => buyStadiumCosmetic(code, crypto.randomUUID()),
+    onSuccess: (data) => { apply(data); setNotice("Куплено — выбери новинку в «Внешний вид» 🏟️"); },
+    onError: fail,
+  });
+  const buyStars = useMutation({
+    mutationFn: async (code: string) => {
+      const invoice = await createStadiumCosmeticInvoice(code);
+      const status = await openTelegramInvoice(invoice.invoice_link);
+      if (status === "cancelled") return null;
+      if (status === "failed") throw new Error("Платёж не прошёл");
+      for (let i = 0; i < 20; i++) {
+        if ((await fetchClubBaseInvoiceStatus(invoice.payload_token)).status === "completed") return fetchClubBase();
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      throw new Error("Оплата ещё обрабатывается — загляни через минуту");
+    },
+    onSuccess: (data) => { if (data) { apply(data); setNotice("Куплено за звёзды ⭐"); } },
+    onError: fail,
+  });
   const speedup = useMutation({
     mutationFn: async () => {
       const invoice = await createClubBaseSpeedupInvoice();
@@ -347,7 +420,8 @@ export default function ClubBasePage() {
       <BuildingSheet
         state={state} building={building} balance={balance} onClose={() => setPicked(null)}
         onUpgrade={(code) => upgrade.mutate(code)} upgrading={upgrade.isPending}
-        onLook={(next) => look.mutate(next)} lookPending={look.isPending}
+        onLook={(next) => look.mutate(next)} lookPending={look.isPending || buyCoins.isPending || buyStars.isPending}
+        onBuyCoins={(code) => buyCoins.mutate(code)} onBuyStars={(code) => buyStars.mutate(code)}
       />
     </div>
   );

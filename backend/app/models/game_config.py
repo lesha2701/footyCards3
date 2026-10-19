@@ -46,6 +46,31 @@ DEFAULT_CLUB_BASE_BUILDINGS: dict = {
     "shop": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "daily": _line(15, 210), "sell_pct": _line(1, 10)},
     "accounting": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "discount_pct": _line(1, 15)},
 }
+# Stadium cosmetics shop: one item per look option that is not the default.
+# coins/stars 0 = not sold for that currency (both 0 = free); min_level =
+# stadium level needed to buy and to use it.
+def _cosmetic(code: str, kind: str, value: str, name: str, coins: int, stars: int, min_level: int = 1) -> dict:
+    return {"code": code, "kind": kind, "value": value, "name": name, "coins": coins, "stars": stars,
+            "min_level": min_level, "enabled": True}
+
+
+DEFAULT_CLUB_BASE_COSMETICS: list = [
+    _cosmetic("seats_blue", "seats", "blue", "Синие кресла", 0, 0),
+    *[_cosmetic(f"seats_{v}", "seats", v, n, 3000, 20) for v, n in (
+        ("sky", "Голубые кресла"), ("green", "Зелёные кресла"), ("yellow", "Жёлтые кресла"),
+        ("white", "Белые кресла"), ("black", "Чёрные кресла"), ("purple", "Фиолетовые кресла"),
+        ("orange", "Оранжевые кресла"))],
+    _cosmetic("roof_canopy", "roof", "canopy", "Козырьки над трибунами", 15000, 75, 5),
+    _cosmetic("roof_full", "roof", "full", "Крыша по кругу", 60000, 250, 15),
+    _cosmetic("lights", "lights", "on", "Прожекторы", 25000, 120, 10),
+    _cosmetic("screen", "screen", "on", "Видеотабло", 40000, 180, 20),
+    _cosmetic("pitch_checks", "pitch", "checks", "Газон в клетку", 5000, 30),
+    _cosmetic("pitch_diagonal", "pitch", "diagonal", "Газон по диагонали", 8000, 45, 5),
+    _cosmetic("facade_brick", "facade", "brick", "Кирпичный фасад", 6000, 35, 3),
+    _cosmetic("facade_glass", "facade", "glass", "Стеклянный фасад", 15000, 75, 10),
+    _cosmetic("facade_gold", "facade", "gold", "Золотой фасад", 100000, 500, 25),
+]
+
 DEFAULT_CLUB_BASE_CAPS: dict = {
     "matchday_pct": 100, "injury_pct": 50, "recovery": 15, "familiarity_pct": 60, "my_player_xp_pct": 30,
     "prep_pct": 25, "rep_pct": 30, "sell_pct": 15, "discount_pct": 25, "daily": 600,
@@ -955,6 +980,11 @@ class GameConfig(TimestampMixin, Base):
     # Admin art: {"background": path, "buildings": {code: path}} (static/
     # club_base/uploads); empty = the built-in drawn map.
     club_base_art: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Stadium cosmetics shop (club_base_service.COSMETIC_KINDS): items bought
+    # for coins and/or Stars; see DEFAULT_CLUB_BASE_COSMETICS.
+    club_base_cosmetics: Mapped[list] = mapped_column(
+        JSON, nullable=False, default=lambda: [dict(i) for i in DEFAULT_CLUB_BASE_COSMETICS],
+    )
 
     # --- Monetization (models/monetization.py) ---------------------------
     # Monthly login calendar: catching up a missed day of the current month.

@@ -20,8 +20,10 @@ class KeyRequest(BaseModel):
 class LookRequest(BaseModel):
     seats: Optional[str] = Field(default=None, max_length=16)
     roof: Optional[Literal["none", "canopy", "full"]] = None
-    lights: Optional[bool] = None
-    screen: Optional[bool] = None
+    lights: Optional[Literal["on", "off"]] = None
+    screen: Optional[Literal["on", "off"]] = None
+    pitch: Optional[str] = Field(default=None, max_length=16)
+    facade: Optional[str] = Field(default=None, max_length=16)
 
 
 @router.get("")
@@ -43,6 +45,17 @@ async def claim_income(payload: KeyRequest, db: AsyncSession = Depends(get_db), 
 @router.put("/stadium/look")
 async def set_look(payload: LookRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await club_base_service.set_look(db, user, payload.model_dump(exclude_none=True))
+
+
+@router.post("/cosmetics/{code}/buy")
+async def buy_cosmetic(code: str, payload: KeyRequest, db: AsyncSession = Depends(get_db),
+                       user: User = Depends(get_current_user)):
+    return await club_base_service.buy_cosmetic(db, user, code, payload.idempotency_key)
+
+
+@router.post("/cosmetics/{code}/stars-invoice")
+async def cosmetic_invoice(code: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await club_base_service.create_cosmetic_invoice(db, user, code)
 
 
 @router.post("/speedup-invoice")

@@ -1,5 +1,5 @@
 """«Клубная база»: the player's own campus around the «Академия» — buildings
-with timed upgrades (one queue with the «Академия» wings), the stadium look,
+with timed upgrades (one queue with the «Академия» wings), the stadium look and its cosmetics shop,
 sponsor/merchandise income, the journal, GameConfig tuning and the career
 season's frozen base effects. Additive only; seasons already running get
 base_effects = {} (no effects until their next season).
@@ -66,8 +66,32 @@ _CAPS = {
 }
 
 
+def _cosmetic(code, kind, value, name, coins, stars, min_level=1):
+    return {"code": code, "kind": kind, "value": value, "name": name, "coins": coins, "stars": stars,
+            "min_level": min_level, "enabled": True}
+
+
+# Same as app.models.game_config.DEFAULT_CLUB_BASE_COSMETICS.
+_COSMETICS = [
+    _cosmetic("seats_blue", "seats", "blue", "Синие кресла", 0, 0),
+    *[_cosmetic(f"seats_{v}", "seats", v, n, 3000, 20) for v, n in (
+        ("sky", "Голубые кресла"), ("green", "Зелёные кресла"), ("yellow", "Жёлтые кресла"),
+        ("white", "Белые кресла"), ("black", "Чёрные кресла"), ("purple", "Фиолетовые кресла"),
+        ("orange", "Оранжевые кресла"))],
+    _cosmetic("roof_canopy", "roof", "canopy", "Козырьки над трибунами", 15000, 75, 5),
+    _cosmetic("roof_full", "roof", "full", "Крыша по кругу", 60000, 250, 15),
+    _cosmetic("lights", "lights", "on", "Прожекторы", 25000, 120, 10),
+    _cosmetic("screen", "screen", "on", "Видеотабло", 40000, 180, 20),
+    _cosmetic("pitch_checks", "pitch", "checks", "Газон в клетку", 5000, 30),
+    _cosmetic("pitch_diagonal", "pitch", "diagonal", "Газон по диагонали", 8000, 45, 5),
+    _cosmetic("facade_brick", "facade", "brick", "Кирпичный фасад", 6000, 35, 3),
+    _cosmetic("facade_glass", "facade", "glass", "Стеклянный фасад", 15000, 75, 10),
+    _cosmetic("facade_gold", "facade", "gold", "Золотой фасад", 100000, 500, 25),
+]
+
+
 def upgrade() -> None:
-    for value in ("club_base_upgrade", "club_base_income", "club_base_matchday"):
+    for value in ("club_base_upgrade", "club_base_income", "club_base_matchday", "club_base_cosmetic"):
         op.execute(f"ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS '{value}'")
     op.execute("ALTER TYPE notification_type_enum ADD VALUE IF NOT EXISTS 'club_base_built'")
 
@@ -116,10 +140,24 @@ def upgrade() -> None:
     op.add_column("game_config", sa.Column("club_base_stars_per_hour", sa.Integer(), nullable=False, server_default="2"))
     op.add_column("game_config", sa.Column("club_base_income_max_days", sa.Integer(), nullable=False, server_default="3"))
     op.add_column("game_config", sa.Column("club_base_art", sa.JSON(), nullable=False, server_default="{}"))
+    op.add_column("game_config", sa.Column("club_base_cosmetics", sa.JSON(), nullable=False,
+                                           server_default=json.dumps(_COSMETICS, ensure_ascii=False)))
+    op.create_table(
+        "user_base_cosmetics",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("item_code", sa.String(32), nullable=False),
+        sa.Column("source", sa.String(8), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.UniqueConstraint("user_id", "item_code", name="uq_user_base_cosmetics_item"),
+    )
+    op.create_index("ix_user_base_cosmetics_user_id", "user_base_cosmetics", ["user_id"])
 
 
 def downgrade() -> None:
-    for name in ("club_base_art", "club_base_income_max_days", "club_base_stars_per_hour", "club_base_caps",
+    op.drop_index("ix_user_base_cosmetics_user_id", table_name="user_base_cosmetics")
+    op.drop_table("user_base_cosmetics")
+    for name in ("club_base_cosmetics", "club_base_art", "club_base_income_max_days", "club_base_stars_per_hour", "club_base_caps",
                  "club_base_buildings", "club_base_enabled"):
         op.drop_column("game_config", name)
     op.drop_column("career_participants", "base_effects")

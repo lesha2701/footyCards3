@@ -122,6 +122,7 @@ class TransactionType(str, enum.Enum):
     club_base_upgrade = "club_base_upgrade"
     club_base_income = "club_base_income"
     club_base_matchday = "club_base_matchday"
+    club_base_cosmetic = "club_base_cosmetic"
     arena_division_reward = "arena_division_reward"
     my_player_duel_reward = "my_player_duel_reward"
     my_player_role_change = "my_player_role_change"

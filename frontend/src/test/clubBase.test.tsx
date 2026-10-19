@@ -35,8 +35,14 @@ const state: ClubBaseState = {
   },
   income: { daily: 80, pending: 120, cap: 240, max_days: 3 },
   stadium: {
-    level: 1, capacity: 8000, matchday_income: 20, look: { seats: "blue", roof: "none", lights: false, screen: false },
-    seat_colors: ["red", "blue"], unlocks: { roof_canopy: 2, roof_full: 4, lights: 3, screen: 5 },
+    level: 1, capacity: 8000, matchday_income: 20,
+    look: { seats: "blue", roof: "none", lights: "off", screen: "off", pitch: "stripes", facade: "concrete" },
+    defaults: { seats: "red", roof: "none", lights: "off", screen: "off", pitch: "stripes", facade: "concrete" },
+    cosmetics: [
+      { code: "seats_blue", kind: "seats", value: "blue", name: "Синие кресла", coins: 0, stars: 0, min_level: 1, owned: false, free: true, usable: true },
+      { code: "pitch_checks", kind: "pitch", value: "checks", name: "Газон в клетку", coins: 5000, stars: 30, min_level: 1, owned: false, free: false, usable: false },
+      { code: "roof_full", kind: "roof", value: "full", name: "Крыша по кругу", coins: 60000, stars: 250, min_level: 15, owned: false, free: false, usable: false },
+    ],
   },
   effects: { matchday: 20, daily: 80 },
   art: { background: null, buildings: {} },
@@ -86,6 +92,17 @@ describe("Клубная база", () => {
     const dialog = await screen.findByRole("dialog", { name: "Медцентр" });
     expect(dialog).toHaveTextContent("Бригада занята: Стадион");
     expect(screen.getByText(/Построить ·/).closest("button")).toBeDisabled();
+  });
+
+  it("the stadium sheet sells cosmetics for coins and Stars and locks them by level", async () => {
+    wrap(<ClubBasePage />);
+    fireEvent.click(await screen.findByRole("button", { name: /Стадион, уровень 1/ }));
+    expect(await screen.findByText(/Газон в клетку · 🪙 5 000 · ⭐ 30/)).toBeInTheDocument();
+    expect(screen.getByText(/Крыша по кругу · ур\. 15/).closest("button")).toBeDisabled();
+    fireEvent.click(screen.getByText(/Газон в клетку/));
+    expect(screen.getByText(/Купить «Газон в клетку» навсегда/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^🪙 5\s000$/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^⭐ 30$/ })).toBeEnabled();
   });
 
   it("the home modes grid has the base in place of the Academy and invites to collect the income", async () => {
