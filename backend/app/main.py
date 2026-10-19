@@ -28,6 +28,7 @@ from app.routers import (
     admin_lifestyle,
     admin_club_base,
     admin_log,
+    admin_equipment,
     admin_monetization,
     admin_packs,
     admin_players,
@@ -63,6 +64,7 @@ from app.routers import (
     gifts,
     internal,
     leaderboard,
+    equipment,
     monetization,
     leagues,
     lineups,
@@ -203,6 +205,8 @@ app.include_router(admin_antifraud.router, prefix=API_PREFIX)
 app.include_router(internal.router, prefix=API_PREFIX)
 app.include_router(wallet.router, prefix=API_PREFIX)
 app.include_router(monetization.router, prefix=API_PREFIX)
+app.include_router(equipment.router, prefix=API_PREFIX)
+app.include_router(admin_equipment.router, prefix=API_PREFIX)
 app.include_router(admin_monetization.router, prefix=API_PREFIX)
 
 

@@ -22,6 +22,7 @@ import {
 } from "@/admin/api";
 import { useAdminToastStore } from "@/admin/adminToastStore";
 import AdminArtifactsTab from "@/admin/components/AdminArtifactsTab";
+import AdminEquipmentTab from "@/admin/components/AdminEquipmentTab";
 import RewardBundleEditor from "@/admin/components/RewardBundleEditor";
 import { EMPTY_BUNDLE, type AdminSeason, type GameConfig } from "@/admin/types";
 import CosmeticPreview from "@/components/shop/CosmeticPreview";
@@ -31,7 +32,7 @@ import { RARITY_LABELS } from "@/lib/rarity";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import type { ClubEmblemItem, ClubEmblemKind, Cosmetic, CosmeticKind } from "@/types";
 
-type Tab = "settings" | "cosmetics" | "seasons" | "artifacts" | "emblems" | "club_shop" | "club_quests";
+type Tab = "settings" | "cosmetics" | "seasons" | "artifacts" | "equipment" | "emblems" | "club_shop" | "club_quests";
 const input = "w-full rounded-lg bg-bg-base px-2 py-1.5 text-sm outline-none";
 const toast = (msg: string) => useAdminToastStore.getState().push(msg, "success");
 const errText = (err: unknown, fallback: string) => (err instanceof ApiRequestError ? err.message : fallback);
@@ -44,7 +45,7 @@ export default function AdminMonetizationPage() {
     <div className="flex flex-col gap-4">
       <h1 className="font-display text-2xl font-bold">Абонемент, сезон, стиль</h1>
       <div className="flex gap-1 rounded-xl bg-bg-surface p-1">
-        {([["settings", "Настройки"], ["cosmetics", "Косметика"], ["seasons", "Сезоны"], ["artifacts", "Артефакты"], ["emblems", "Эмблемы"], ["club_shop", "Клуб. магазин"], ["club_quests", "Клуб. задания"]] as [Tab, string][]).map(([id, label]) => (
+        {([["settings", "Настройки"], ["cosmetics", "Косметика"], ["seasons", "Сезоны"], ["artifacts", "Артефакты"], ["equipment", "Экипировка"], ["emblems", "Эмблемы"], ["club_shop", "Клуб. магазин"], ["club_quests", "Клуб. задания"]] as [Tab, string][]).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
@@ -58,6 +59,7 @@ export default function AdminMonetizationPage() {
       {tab === "cosmetics" && <CosmeticsTab />}
       {tab === "seasons" && <SeasonsTab />}
       {tab === "artifacts" && <AdminArtifactsTab />}
+      {tab === "equipment" && <AdminEquipmentTab />}
       {tab === "emblems" && <ClubEmblemsTab />}
       {tab === "club_shop" && <ClubShopTab />}
       {tab === "club_quests" && <ClubQuestsTab />}

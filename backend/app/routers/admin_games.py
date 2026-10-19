@@ -47,8 +47,16 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
     if updates.get("club_base_caps") is not None:
         if any(v < 0 for v in updates["club_base_caps"].values()):
             raise ConflictError("Клубная база: потолки не могут быть отрицательными")
+    artifact_keys = {"artifacts_enabled", "artifact_max_stat"}
+    artifacts_before = {k: getattr(config, k) for k in artifact_keys}
     for key, value in updates.items():
         setattr(config, key, value)
+    if any(getattr(config, k) != v for k, v in artifacts_before.items()):
+        # Artifact card bonuses are stored on the cards: recompute them.
+        from app.services import artifact_service
+
+        await db.flush()
+        await artifact_service.refresh_card_bonuses_for_artifact(db)
     if config.shop_daily_offer_pack_id == 0:
         config.shop_daily_offer_pack_id = None  # 0 from the admin form = rotate by date
     if config.club_pass_bonus_card_rarity == "":
@@ -72,6 +80,12 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
         await db.rollback()
         raise ConflictError("Стратего: все фишки должны помещаться в два ряда поля")
     db.add(config)
+    if any(key.startswith("equipment_") for key in updates):
+        # The switch or a ceiling changed: rewrite what worn things give.
+        from app.services import equipment_service
+
+        await db.flush()
+        await equipment_service.recompute_all(db)
     await log_action(db, admin.id, "update_game_config", "game_config", config.id, old_value=old_value, new_value=updates, ip_address=request.client.host if request.client else None)
     await db.commit()
     await db.refresh(config)

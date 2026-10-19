@@ -1355,3 +1355,45 @@ export async function fetchClubBaseLedger(userId?: number): Promise<AdminClubBas
   });
   return data;
 }
+
+// --- «Экипировка» ---
+const ITEM_FIELDS = [
+  "name", "description", "icon", "slot", "rarity", "collection_id", "effect", "effect_value", "cond_club",
+  "cond_country", "coins_price", "stars_price", "is_active", "sort_order",
+] as const;
+const COLLECTION_FIELDS = ["name", "description", "set_size", "set_bonus_rating", "is_active", "sort_order"] as const;
+const pick = <T extends object>(obj: T, keys: readonly string[]) =>
+  Object.fromEntries(keys.map((k) => [k, (obj as Record<string, unknown>)[k]]));
+
+export async function fetchAdminEquipment(): Promise<import("@/admin/types").AdminEquipmentCatalog> {
+  const { data } = await api.get("/admin/equipment");
+  return data;
+}
+export async function saveAdminEquipmentItem(
+  item: import("@/admin/types").AdminEquipmentItem,
+): Promise<import("@/admin/types").AdminEquipmentItem> {
+  const body = pick(item, ITEM_FIELDS);
+  const { data } = item.id ? await api.put(`/admin/equipment/items/${item.id}`, body) : await api.post("/admin/equipment/items", body);
+  return data;
+}
+export async function saveAdminEquipmentCollection(
+  collection: import("@/admin/types").AdminEquipmentCollection,
+): Promise<import("@/admin/types").AdminEquipmentCollection> {
+  const body = pick(collection, COLLECTION_FIELDS);
+  const { data } = collection.id
+    ? await api.put(`/admin/equipment/collections/${collection.id}`, body)
+    : await api.post("/admin/equipment/collections", body);
+  return data;
+}
+export async function uploadAdminEquipmentImage(kind: "items" | "collections", id: number, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post(`/admin/equipment/${kind}/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+export async function grantAdminEquipment(itemId: number, userId: number): Promise<{ copy_id: number }> {
+  const { data } = await api.post(`/admin/equipment/items/${itemId}/grant`, { user_id: userId });
+  return data;
+}

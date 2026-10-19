@@ -33,6 +33,7 @@ LABELS = {
     "season_premium": "Сезонный пропуск",
     "starter_offer": "Стартовое предложение",
     "artifact": "Артефакты",
+    "equipment": "Экипировка",
     "club_emblem": "Эмблема клуба",
     "club_donation": "Казна клуба",
     "club_stars": "Звёзды клуба",
@@ -103,6 +104,10 @@ async def validate(db: AsyncSession, invoice: StarsInvoice) -> tuple[bool, str]:
         from app.services import artifact_service
 
         return await artifact_service.validate_stars(db, invoice.user_id, int(arg), invoice.stars_amount)
+    if kind == "equipment":
+        from app.services import equipment_service
+
+        return await equipment_service.validate_stars(db, invoice.user_id, int(arg), invoice.stars_amount)
     if kind == "club_emblem":
         from app.services import club_emblem_service
 
@@ -150,6 +155,10 @@ async def deliver(
         from app.services import artifact_service
 
         return await artifact_service.deliver_stars(db, user, int(arg))
+    if kind == "equipment":
+        from app.services import equipment_service
+
+        return await equipment_service.deliver_stars(db, user, int(arg))
     if kind == "club_emblem":
         from app.services import club_emblem_service
 

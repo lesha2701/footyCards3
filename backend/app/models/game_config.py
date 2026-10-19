@@ -1084,3 +1084,11 @@ class GameConfig(TimestampMixin, Base):
     club_war_draw_budget: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
     club_war_loss_budget: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
     club_war_win_member_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+
+    # --- «Экипировка» (services/equipment_service.py) ---
+    # Off = the shop and equipping are closed and worn things give nothing.
+    equipment_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Ceilings on what all things worn by ONE card add up to (set bonus included).
+    equipment_max_rating: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    equipment_max_pp: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    equipment_max_chemistry: Mapped[int] = mapped_column(Integer, default=1, nullable=False)

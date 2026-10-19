@@ -69,6 +69,8 @@ def _engine_card(
         skill["player"] = p.display_name
     return _EngineCard(
         id=card.id, player_id=card.player_id, skill=skill, talent=talent,
+        # «Экипировка» boosts (shot_pp / dribble_pp) read by the engine per chance.
+        boosts=getattr(card, "equipment_boosts", None) or None,
         # No diamond/star bonus fields on the adapter itself: the bonus is
         # already folded into player.rating, and calculate_base_strength would
         # add it again via card_rating_bonus(card).

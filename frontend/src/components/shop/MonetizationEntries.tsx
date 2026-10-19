@@ -2,6 +2,7 @@ import NewBadge from "@/components/common/NewBadge";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
+import { fetchEquipmentInventory } from "@/api/equipment";
 import { fetchArtifacts, fetchClubPass, fetchSeasonPass } from "@/api/monetization";
 import { IconChevronRight, IconStar, IconTicket, IconTrophy, type IconProps } from "@/components/icons";
 
@@ -46,6 +47,7 @@ export default function MonetizationEntries({ showStyle = true }: { showStyle?: 
   const { data: clubPass } = useQuery({ queryKey: ["club-pass"], queryFn: fetchClubPass });
   const { data: season } = useQuery({ queryKey: ["season-pass"], queryFn: fetchSeasonPass });
   const { data: artifacts } = useQuery({ queryKey: ["artifacts"], queryFn: fetchArtifacts });
+  const { data: equipment } = useQuery({ queryKey: ["equipment-inventory"], queryFn: fetchEquipmentInventory });
 
   return (
     <div className="flex flex-col gap-2">
@@ -81,6 +83,15 @@ export default function MonetizationEntries({ showStyle = true }: { showStyle?: 
           subtitle={`Активных ${artifacts.active_count}/${artifacts.slots} · на полке ${artifacts.shelf.length - artifacts.active_count}`}
           onClick={() => navigate("/artifacts")}
           section="artifacts"
+        />
+      )}
+      {equipment?.enabled && (
+        <Entry
+          Icon={IconStar}
+          iconClass="bg-lime-400/15 text-lime-300"
+          title="Экипировка"
+          subtitle={`Бутсы, форма, артефакты для карточек · в инвентаре ${equipment.items.length}`}
+          onClick={() => navigate("/equipment")}
         />
       )}
       {showStyle && (

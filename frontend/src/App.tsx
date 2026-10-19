@@ -57,6 +57,7 @@ const ClubPassPage = lazy(() => import("@/pages/ClubPassPage"));
 const SeasonPassPage = lazy(() => import("@/pages/SeasonPassPage"));
 const StylePage = lazy(() => import("@/pages/StylePage"));
 const ArtifactsPage = lazy(() => import("@/pages/ArtifactsPage"));
+const EquipmentPage = lazy(() => import("@/pages/EquipmentPage"));
 const AdminMonetizationPage = lazy(() => import("@/admin/pages/AdminMonetizationPage"));
 const BlackjackPage = lazy(() => import("@/pages/BlackjackPage"));
 const PacksPage = lazy(() => import("@/pages/PacksPage"));
@@ -323,6 +324,7 @@ export default function App() {
         <Route path="/season" element={<SeasonPassPage />} />
         <Route path="/style" element={<StylePage />} />
         <Route path="/artifacts" element={<ArtifactsPage />} />
+        <Route path="/equipment" element={<EquipmentPage />} />
         <Route path="/upgrade" element={<UpgradePage />} />
         <Route path="/bingo" element={<BingoPage />} />
         <Route path="/ranking" element={<RankingPage />} />

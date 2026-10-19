@@ -42,8 +42,10 @@ async def create_user_card(
     )
     db.add(card)
     await db.flush()
+    from app.services.artifact_service import apply_card_bonus
     from app.services.trade_finder_service import notify_wanted_card
 
+    await apply_card_bonus(db, card)
     await notify_wanted_card(db, owner_id, player_id)
     return card
 

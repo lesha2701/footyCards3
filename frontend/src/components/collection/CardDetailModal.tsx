@@ -8,6 +8,7 @@ import DiamondFeedModal from "@/components/cards/DiamondFeedModal";
 import { IconCoin, IconLock, IconLockOpen, IconPlay, IconStar, IconTag, IconUpgrade } from "@/components/icons";
 import CardSkillPanel from "@/components/collection/CardSkillPanel";
 import CardStarPanel from "@/components/collection/CardStarPanel";
+import CardEquipmentPanel from "@/components/equipment/CardEquipmentPanel";
 import ShareButton from "@/components/common/ShareButton";
 import PathPanel from "@/components/path/PathPanel";
 import { staticUrl } from "@/lib/api";
@@ -21,7 +22,7 @@ import { prestigeMarks, prestigeStyle } from "@/lib/prestige";
 import { POSITION_LABELS, RARITY_GLOW_STATIC, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import type { UserCard } from "@/types";
 
-type Tab = "overview" | "path" | "skill" | "stars";
+type Tab = "overview" | "path" | "skill" | "stars" | "equipment";
 
 /** Card detail sheet: a compact header (image, name, rating), tabs instead of
  * one long scroll (Обзор / Путь / Навык / Звёзды — only the ones that apply
@@ -115,6 +116,7 @@ export default function CardDetailModal({
     ...(isPath ? ([["path", "Путь"]] as [Tab, string][]) : []),
     ["skill", "Навык"],
     ...(!isDiamond ? ([["stars", "Звёзды"]] as [Tab, string][]) : []),
+    ["equipment", "Вещи"],
   ];
   // The sheet keeps a static frame: a shine band would sweep over its text.
   const frame = isPath
@@ -172,6 +174,7 @@ export default function CardDetailModal({
                 </p>
                 {starBonus > 0 && <p className="text-xs text-amber-300">+{starBonus} от звёзд</p>}
                 {!!card.path_rating_bonus && <p className="text-xs text-path">+{card.path_rating_bonus} от пути 🌱</p>}
+                {!!card.equipment_rating_bonus && <p className="text-xs text-accent-lime">+{card.equipment_rating_bonus} от экипировки</p>}
               </div>
             </div>
             </div>
@@ -278,6 +281,7 @@ export default function CardDetailModal({
               )}
               {tab === "skill" && <CardSkillPanel key={card.id} cardId={card.id} />}
               {tab === "stars" && <CardStarPanel key={`stars-${card.id}`} cardId={card.id} isDiamond={isDiamond} />}
+              {tab === "equipment" && <CardEquipmentPanel key={`equipment-${card.id}`} cardId={card.id} />}
             </div>
           </div>
 
