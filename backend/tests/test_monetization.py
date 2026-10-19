@@ -774,7 +774,9 @@ async def test_coach_link_and_player_card_bonus(client, db_session, bot_token):
     run = SimpleNamespace(boost=1.0, on_pitch=[mine, other], bench=[])
     bot = SimpleNamespace(boost=1.0, on_pitch=[], bench=[])
     await career_service._apply_club_artifacts(db_session, [{"user_id": user.id}, {"user_id": None}], 0, 1, run, bot, config)
-    assert mine.base_rating == 91 and other.base_rating == 70 and run.boost == pytest.approx(1.03)
+    # The card bonus is already in base_rating via card_rating_bonus (it is
+    # stored on the card row), so the career must not add it a second time.
+    assert mine.base_rating == 88 and other.base_rating == 70 and run.boost == pytest.approx(1.03)
 
 
 def test_dribbler_skill_and_artifact_add_up(monkeypatch):
