@@ -22,6 +22,7 @@ GIFT_SETS_DIR = STATIC_DIR / "gift_sets" / "uploads"
 LEAGUE_TIERS_DIR = STATIC_DIR / "leagues" / "uploads"
 LIFESTYLE_DIR = STATIC_DIR / "lifestyle" / "uploads"
 ARTIFACTS_DIR = STATIC_DIR / "artifacts" / "uploads"
+CLUB_BASE_DIR = STATIC_DIR / "club_base" / "uploads"
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
@@ -40,6 +41,8 @@ MAX_SIDE = {
     "gift_sets": 512,
     "lifestyle": 512,
     "artifacts": 512,
+    # «Клубная база»: the map background is wide, buildings are small.
+    "club_base": 1600,
     "leagues": 384,
     "badges": 256,
     "trophies": 256,
@@ -221,4 +224,13 @@ async def save_artifact_image(upload: UploadFile, name: str) -> str:
 
 
 def delete_artifact_image(relative_path: str | None) -> None:
+    _delete_static(relative_path)
+
+
+async def save_club_base_image(upload: UploadFile, name: str) -> str:
+    """Validates and stores «Клубная база» art (map background or a building); returns the relative path."""
+    return await _save_upload(upload, CLUB_BASE_DIR, "club_base/uploads", name, "club_base")
+
+
+def delete_club_base_image(relative_path: str | None) -> None:
     _delete_static(relative_path)

@@ -57,6 +57,19 @@ async def get_ranking(db: AsyncSession, metric: RankingMetric, current_user: Use
             .where(User.is_banned.is_(False), User.is_admin.is_(False), UserAcademy.total_level > 0)
             .order_by(UserAcademy.total_level.desc())
         )
+    elif metric == RankingMetric.base_level:
+        # «Уровень базы»: the «Клубная база» buildings plus the «Академия» wings.
+        from app.models.card_path import UserAcademy
+        from app.models.club_base import UserClubBase
+
+        value_expr = func.coalesce(UserClubBase.total_level, 0) + func.coalesce(UserAcademy.total_level, 0)
+        stmt = (
+            select(User, value_expr)
+            .outerjoin(UserClubBase, UserClubBase.user_id == User.id)
+            .outerjoin(UserAcademy, UserAcademy.user_id == User.id)
+            .where(User.is_banned.is_(False), User.is_admin.is_(False), value_expr > 0)
+            .order_by(value_expr.desc())
+        )
     elif metric == RankingMetric.academy_prestige:
         # «Престиж Академии»: total prestige tiers of the user's copies.
         value_expr = func.coalesce(func.sum(UserCard.prestige), 0)

@@ -240,7 +240,7 @@ async def _describe(db: AsyncSession, invoice: Optional[StarsInvoice]) -> str:
     if invoice.path_user_card_id is not None:
         return "Попытка «Академии»"
     if invoice.academy_speedup:
-        return "Ускорение Академии"
+        return "Ускорение Клубной базы" if invoice.academy_speedup.startswith("base:") else "Ускорение Академии"
     if invoice.shop_product:
         from app.services.shop_product_service import label
 

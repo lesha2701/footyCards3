@@ -7,6 +7,31 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 from app.models.mixins import TimestampMixin
 
+# «Клубная база» defaults (GameConfig.club_base_buildings / club_base_caps;
+# the 0179 migration writes the same values). Lists are per level.
+_BASE_COSTS = [1500, 4000, 9000, 18000, 35000]
+_BASE_HOURS = [8, 24, 48, 72, 96]
+DEFAULT_CLUB_BASE_BUILDINGS: dict = {
+    "hq": {"costs": [1000, 3000, 7000, 15000, 30000], "hours": [2, 12, 24, 48, 72], "cap": [1, 2, 3, 4, 5]},
+    "stadium": {"costs": [3000, 8000, 16000, 32000, 60000], "hours": [12, 24, 48, 72, 120],
+                "matchday": [20, 35, 55, 80, 110], "capacity": [8000, 20000, 35000, 55000, 80000]},
+    "hotel": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "matchday_pct": [10, 20, 30, 40, 50]},
+    "training": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "familiarity_pct": [10, 20, 30, 40, 50],
+                 "my_player_xp_pct": [5, 10, 15, 20, 25]},
+    "medical": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "injury_pct": [10, 15, 20, 30, 40],
+                "recovery": [3, 5, 7, 9, 12]},
+    "analytics": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "prep_pct": [4, 8, 12, 16, 20]},
+    "media": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "rep_pct": [5, 10, 15, 20, 25]},
+    "marketing": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "daily": [50, 90, 140, 200, 260],
+                  "matchday_pct": [5, 10, 15, 20, 25]},
+    "shop": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "daily": [30, 60, 90, 130, 170], "sell_pct": [2, 4, 6, 8, 10]},
+    "accounting": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "discount_pct": [3, 6, 9, 12, 15]},
+}
+DEFAULT_CLUB_BASE_CAPS: dict = {
+    "matchday_pct": 100, "injury_pct": 50, "recovery": 15, "familiarity_pct": 60, "my_player_xp_pct": 30,
+    "prep_pct": 25, "rep_pct": 30, "sell_pct": 15, "discount_pct": 25, "daily": 600,
+}
+
 
 class GameConfig(TimestampMixin, Base):
     """Singleton row (id=1) holding admin-tunable game economy settings."""
@@ -888,6 +913,29 @@ class GameConfig(TimestampMixin, Base):
         default=lambda: {"chance_pct": [10, 12, 14, 16, 20], "cooldown_days": [10, 9, 8, 8, 7],
                          "consolation_coins": [100, 150, 200, 250, 300]},
     )
+    # «Клубная база» (services/club_base_service.py): per building — coin
+    # cost, build hours and named effect lists (index = level - 1). One
+    # construction queue for the whole base, the «Академия» wings included.
+    # Effects (see club_base_service.BUILDINGS): hq.cap — max level of every
+    # other base building; stadium.matchday — coins per home league match of
+    # «Карьера тренера» (capacity is shown only); hotel/marketing — +% to that
+    # matchday income; training — +% familiarity growth (career) and +% XP of
+    # «Мой игрок» trainings; medical — −% injury chance, +fatigue recovery;
+    # analytics — +% to the «Разбор соперника»/«Стандарты» training effect;
+    # media — +% positive reputation; marketing/shop — coins a day (sponsors,
+    # merchandise); shop.sell_pct — +% quick-sell price; accounting — −% to
+    # every construction cost. club_base_caps clamps each summed effect.
+    club_base_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    club_base_buildings: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=lambda: {k: dict(v) for k, v in DEFAULT_CLUB_BASE_BUILDINGS.items()},
+    )
+    club_base_caps: Mapped[dict] = mapped_column(JSON, nullable=False, default=lambda: dict(DEFAULT_CLUB_BASE_CAPS))
+    club_base_stars_per_hour: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Sponsors/merchandise accrue at most this many days of income unclaimed.
+    club_base_income_max_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Admin art: {"background": path, "buildings": {code: path}} (static/
+    # club_base/uploads); empty = the built-in drawn map.
+    club_base_art: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     # --- Monetization (models/monetization.py) ---------------------------
     # Monthly login calendar: catching up a missed day of the current month.

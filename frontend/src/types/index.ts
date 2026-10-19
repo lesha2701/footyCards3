@@ -857,6 +857,7 @@ export interface ArenaLeaderboardEntry {
 
 export type RankingMetric =
   | "academy_level"
+  | "base_level"
   | "academy_prestige"
   | "arena_rating"
   | "matches_won"
@@ -3083,4 +3084,66 @@ export interface AcademyState {
   cards: UserCard[];
   new_balance?: number;
   report?: { coins?: number; card_id?: number; player_name?: string } | null;
+}
+
+// «Клубная база» (GET /club-base) — see backend club_base_service.state_out.
+export type ClubBaseCode =
+  | "hq" | "stadium" | "hotel" | "training" | "medical" | "analytics" | "media" | "marketing" | "shop" | "accounting";
+
+export interface ClubBaseBuilding {
+  code: ClubBaseCode;
+  name: string;
+  emoji: string;
+  about: string;
+  group: "core" | "finance";
+  level: number;
+  max_level: number;
+  cap_level: number;
+  effects: string[];
+  next_effects: string[];
+  next_cost: number | null;
+  next_cost_full: number | null;
+  next_hours: number | null;
+  locked: boolean;
+  building: boolean;
+}
+
+export interface ClubBaseLook {
+  seats: string;
+  roof: "none" | "canopy" | "full";
+  lights: boolean;
+  screen: boolean;
+}
+
+export interface ClubBaseState {
+  enabled: boolean;
+  level: number;
+  max_level: number;
+  academy_level: number;
+  academy_max_level: number;
+  total_level: number;
+  buildings: ClubBaseBuilding[];
+  construction: {
+    owner: "base" | "academy";
+    building_code: string;
+    name: string;
+    emoji: string;
+    to_level: number;
+    ends_at: string;
+    remaining_seconds: number;
+    speedup_stars: number;
+  } | null;
+  income: { daily: number; pending: number; cap: number; max_days: number };
+  stadium: {
+    level: number;
+    capacity: number;
+    matchday_income: number;
+    look: ClubBaseLook;
+    seat_colors: string[];
+    unlocks: { roof_canopy: number; roof_full: number; lights: number; screen: number };
+  };
+  effects: Record<string, number>;
+  art: { background: string | null; buildings: Partial<Record<ClubBaseCode, string>> };
+  new_balance?: number;
+  claimed?: number;
 }

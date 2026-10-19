@@ -604,6 +604,12 @@ export interface GameConfig {
   academy_buildings: Record<string, { costs: number[]; hours: number[]; effect: number[] }>;
   academy_stars_per_hour: number;
   academy_scout_report: { chance_pct: number[]; cooldown_days: number[]; consolation_coins: number[] };
+  club_base_enabled: boolean;
+  club_base_buildings: Record<string, Record<string, number[]>>;
+  club_base_caps: Record<string, number>;
+  club_base_stars_per_hour: number;
+  club_base_income_max_days: number;
+  club_base_art: { background?: string | null; buildings?: Record<string, string> };
   trade_send_min_account_age_days: number;
   trade_send_min_active_days: number;
   trade_daily_coins_receive_cap: number;
@@ -988,4 +994,25 @@ export interface AntifraudScan {
   farms: AntifraudFarm[];
   farms_summary: AntifraudSummary;
   bursts: { hour: string; registered: number; farm_accounts: number }[];
+}
+
+// «Клубная база» admin (GET /admin/club-base/art, /admin/club-base/ledger).
+export interface AdminClubBaseArt {
+  art: { background: string | null; buildings: Record<string, string> };
+  slots?: { code: string; name: string }[];
+}
+
+export interface AdminClubBaseLedgerEntry {
+  id: number;
+  user_id: number;
+  user_name: string;
+  kind: "upgrade" | "speedup" | "complete" | "income" | string;
+  building_code: string | null;
+  building_name: string | null;
+  to_level: number | null;
+  coins_spent: number;
+  coins_earned: number;
+  stars_spent: number;
+  result: Record<string, unknown>;
+  created_at: string;
 }

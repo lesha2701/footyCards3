@@ -273,6 +273,14 @@ async def _assert_sellable(db: AsyncSession, user_id: int, card: UserCard, confi
         )
 
 
+async def _with_shop_bonus(db: AsyncSession, user_id: int, coins: int, config=None) -> int:
+    """«Клубная база» club shop: +sell_pct % to a quick sale."""
+    from app.services import club_base_service
+
+    pct = (await club_base_service.user_effects(db, user_id, config)).get("sell_pct", 0)
+    return coins + coins * pct // 100
+
+
 async def sell_cards(
     db: AsyncSession, user: User, user_card_ids: List[int], confirm_last_copy: bool, confirm_skill_loss: bool = False,
 ) -> dict:
@@ -295,6 +303,7 @@ async def sell_cards(
         # «Академия» prestige raises a copy's quick-sell price.
         total_value += sell_price(card, config)
     require_skill_loss_confirmation(list(cards), confirm_skill_loss, "продажа")
+    total_value = await _with_shop_bonus(db, user.id, total_value, config)
 
     for card in cards:
         await db.delete(card)
@@ -362,7 +371,7 @@ async def sell_duplicates(
     db: AsyncSession, user: User, preview: bool, include_diamond: bool = False, include_star_material: bool = False,
 ) -> dict:
     plan = await duplicate_sale_plan(db, user.id, include_diamond, include_star_material)
-    coins = sum(c.player.quick_sell_price for c in plan)
+    coins = await _with_shop_bonus(db, user.id, sum(c.player.quick_sell_price for c in plan))
     by_rarity: dict[str, int] = {}
     for card in plan:
         by_rarity[card.player.rarity.value] = by_rarity.get(card.player.rarity.value, 0) + 1

@@ -298,6 +298,10 @@ export default function AcademyPage() {
         )}
       </section>
 
+      <button type="button" onClick={() => navigate("/base")} className="min-h-[44px] rounded-2xl border border-legend/25 bg-legend/5 text-xs font-semibold text-ink-chalk">
+        🏟️ Академия — часть Клубной базы: стадион, медцентр, финансы →
+      </button>
+
       <button type="button" onClick={() => navigate("/ranking")} className="min-h-[44px] rounded-2xl bg-white/5 text-xs font-semibold text-ink-mist">
         Рейтинг: уровень и престиж Академии →
       </button>

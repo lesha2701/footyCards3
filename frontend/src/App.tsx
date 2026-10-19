@@ -46,6 +46,7 @@ const AdminUpgradesPage = lazy(() => import("@/admin/pages/AdminUpgradesPage"));
 const AdminDiamondUpgradesPage = lazy(() => import("@/admin/pages/AdminDiamondUpgradesPage"));
 const AdminCardSkillsPage = lazy(() => import("@/admin/pages/AdminCardSkillsPage"));
 const AdminPathPage = lazy(() => import("@/admin/pages/AdminPathPage"));
+const AdminClubBasePage = lazy(() => import("@/admin/pages/AdminClubBasePage"));
 const AdminTransactionsPage = lazy(() => import("@/admin/pages/AdminTransactionsPage"));
 const AdminBingoPage = lazy(() => import("@/admin/pages/AdminBingoPage"));
 const AdminShopPage = lazy(() => import("@/admin/pages/AdminShopPage"));
@@ -64,6 +65,7 @@ const PlayPage = lazy(() => import("@/pages/PlayPage"));
 const MemoryGamePage = lazy(() => import("@/pages/MemoryGamePage"));
 const ArenaPage = lazy(() => import("@/pages/ArenaPage"));
 const AcademyPage = lazy(() => import("@/pages/AcademyPage"));
+const ClubBasePage = lazy(() => import("@/pages/ClubBasePage"));
 const TacticoMatchesPage = lazy(() => import("@/pages/TacticoMatchesPage"));
 const TacticoMatchPage = lazy(() => import("@/pages/TacticoMatchPage"));
 const TacticoOpenChallengePage = lazy(() => import("@/pages/TacticoOpenChallengePage"));
@@ -238,6 +240,7 @@ export default function App() {
         <Route path="diamond-upgrades" element={<AdminDiamondUpgradesPage />} />
         <Route path="card-skills" element={<AdminCardSkillsPage />} />
         <Route path="path" element={<AdminPathPage />} />
+        <Route path="club-base" element={<AdminClubBasePage />} />
         <Route path="transactions" element={<AdminTransactionsPage />} />
         <Route path="bingo" element={<AdminBingoPage />} />
         <Route path="shop" element={<AdminShopPage />} />
@@ -255,6 +258,7 @@ export default function App() {
         <Route path="/play/memory" element={<MemoryGamePage />} />
         <Route path="/play/arena" element={<ArenaPage />} />
         <Route path="/academy" element={<AcademyPage />} />
+        <Route path="/base" element={<ClubBasePage />} />
         <Route path="/play/tactico" element={<TacticoMatchesPage />} />
         <Route path="/play/career" element={<CareerPage />} />
         <Route path="/play/career/seasons/:seasonId/rounds/:round/matches/:match" element={<CareerMatchPage />} />

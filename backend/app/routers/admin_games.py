@@ -10,7 +10,7 @@ from app.models.game import GameSession
 from app.models.match import Match
 from app.models.user import User
 from app.schemas.admin import GameConfigOut, GameConfigUpdate, SuspiciousMatchOut, SuspiciousMemorySessionOut
-from app.services import magnate_engine
+from app.services import club_base_service, magnate_engine
 from app.services.admin_log_service import log_action
 from app.services.game_config_service import get_config
 
@@ -34,6 +34,14 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
             updates["magnate_cards"] = magnate_engine.validate_cards(updates["magnate_cards"])
     except magnate_engine.EngineError as exc:
         raise ConflictError(f"Футбольный магнат: {exc}")
+    if updates.get("club_base_buildings") is not None:
+        try:
+            updates["club_base_buildings"] = club_base_service.validate_buildings(updates["club_base_buildings"])
+        except ValueError as exc:
+            raise ConflictError(f"Клубная база: {exc}")
+    if updates.get("club_base_caps") is not None:
+        if any(v < 0 for v in updates["club_base_caps"].values()):
+            raise ConflictError("Клубная база: потолки не могут быть отрицательными")
     for key, value in updates.items():
         setattr(config, key, value)
     if config.shop_daily_offer_pack_id == 0:

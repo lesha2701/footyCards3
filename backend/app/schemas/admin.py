@@ -588,6 +588,12 @@ class GameConfigOut(BaseModel):
     academy_buildings: dict = {}
     academy_stars_per_hour: int = 2
     academy_scout_report: dict = {}
+    club_base_enabled: bool = True
+    club_base_buildings: dict = {}
+    club_base_caps: dict = {}
+    club_base_stars_per_hour: int = 1
+    club_base_income_max_days: int = 3
+    club_base_art: dict = {}
     calendar_catchup_coins: int = 150
     calendar_catchup_stars: int = 10
     calendar_catchup_max_per_month: int = 5
@@ -1110,6 +1116,11 @@ class GameConfigUpdate(BaseModel):
     academy_buildings: Optional[dict[str, dict[str, list[int]]]] = None
     academy_stars_per_hour: Optional[int] = Field(default=None, ge=1, le=100)
     academy_scout_report: Optional[dict[str, list[int]]] = None
+    club_base_enabled: Optional[bool] = None
+    club_base_buildings: Optional[dict[str, dict[str, list[int]]]] = None
+    club_base_caps: Optional[dict[str, int]] = None
+    club_base_stars_per_hour: Optional[int] = Field(default=None, ge=1, le=100)
+    club_base_income_max_days: Optional[int] = Field(default=None, ge=1, le=30)
     trade_send_min_account_age_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_send_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_daily_coins_receive_cap: Optional[int] = Field(default=None, ge=0)

@@ -13,6 +13,10 @@ Main features:
   matches along staged gates and carry a situational talent
   (`path_service.py` / `path_talent_effects.py` / `path_match_service.py`,
   see docs/path-cards.md);
+- «Клубная база»: the player's own campus (stadium, HQ, medical, finance
+  department, …) around the «Академия», one construction queue with it,
+  career effects frozen per season (`club_base_service.py`, see
+  docs/club-base.md);
 - game currency, daily rewards and a free periodic pack;
 - mini-games: Memory Sequence, Card Arena, Саботёр (Saboteur), Пенальти,
   Штрафной удар (Free Kick), Футбольные буквы (a football-themed word-guessing

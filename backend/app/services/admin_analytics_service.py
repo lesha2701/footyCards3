@@ -340,7 +340,7 @@ def _product(inv: StarsInvoice) -> str:
     if inv.path_user_card_id is not None:
         return "Академия: попытки"
     if inv.academy_speedup:
-        return "Академия: ускорение"
+        return "Клубная база: ускорение" if inv.academy_speedup.startswith("base:") else "Академия: ускорение"
     if inv.shop_product:
         from app.services.shop_product_service import label
 

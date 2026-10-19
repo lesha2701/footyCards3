@@ -32,6 +32,8 @@ import type {
 } from "@/types";
 import type {
   AdminPathOverview,
+  AdminClubBaseArt,
+  AdminClubBaseLedgerEntry,
   AdminPathTask,
   AdminLifestyleItem,
   AdminActionLog,
@@ -1323,5 +1325,33 @@ export async function fetchAntifraudScan(params: { min_senders: number; days: nu
 
 export async function banAntifraudUsers(userIds: number[]): Promise<{ banned: number; user_ids: number[] }> {
   const { data } = await api.post<{ banned: number; user_ids: number[] }>("/admin/antifraud/ban", { user_ids: userIds });
+  return data;
+}
+
+// --- «Клубная база» ---
+
+export async function fetchClubBaseArt(): Promise<AdminClubBaseArt> {
+  const { data } = await api.get<AdminClubBaseArt>("/admin/club-base/art");
+  return data;
+}
+
+export async function uploadClubBaseArt(slot: string, file: File): Promise<AdminClubBaseArt> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<AdminClubBaseArt>(`/admin/club-base/art/${slot}`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function deleteClubBaseArt(slot: string): Promise<AdminClubBaseArt> {
+  const { data } = await api.delete<AdminClubBaseArt>(`/admin/club-base/art/${slot}`);
+  return data;
+}
+
+export async function fetchClubBaseLedger(userId?: number): Promise<AdminClubBaseLedgerEntry[]> {
+  const { data } = await api.get<AdminClubBaseLedgerEntry[]>("/admin/club-base/ledger", {
+    params: { limit: 200, ...(userId ? { user_id: userId } : {}) },
+  });
   return data;
 }

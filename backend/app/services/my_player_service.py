@@ -965,9 +965,13 @@ async def training_finish(db: AsyncSession, user: User, hits: int, now: Optional
     if (now - started).total_seconds() < TRAINING_MIN_SECONDS:
         raise ConflictError("Слишком быстро — пройди тренировку целиком")
     hits = max(0, min(TRAINING_MAX_HITS, int(hits)))
+    from app.services import club_base_service
+
+    # «Клубная база»: the training centre adds to trainings only.
+    base_pct = (await club_base_service.user_effects(db, user.id, config)).get("my_player_xp_pct", 0)
     xp = add_xp(
         locked, config.my_player_training_xp_base + config.my_player_training_xp_per_hit * hits, config,
-        capped=False, bonus_pct=await xp_bonus_pct(db, user.id),
+        capped=False, bonus_pct=await xp_bonus_pct(db, user.id) + base_pct,
     )
     bonus = await regen_bonus(db, user.id)
     set_freshness(mp, freshness_now(mp, config, now, bonus) + config.my_player_freshness_training, now)

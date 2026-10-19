@@ -34,7 +34,7 @@ from app.services import career_achievements_service as achievements
 from app.services import career_league_service as league_service
 from app.services import career_tactics_service as tactics
 from app.services import chemistry_service
-from app.services import my_player_service, path_match_service, tournament_match_engine, wallet_service
+from app.services import club_base_service, my_player_service, path_match_service, tournament_match_engine, wallet_service
 from app.services.auto_squad_service import SlotSpec, owned_cards, pick_cards
 from app.services.club_formation_service import CLUB_FORMATIONS, get_formation_slots
 from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES, build_side
@@ -1486,6 +1486,7 @@ def _human_runner(
     part: CareerParticipant, cards: list, config, chem_rules, label: str, team_name: str, *,
     avail_round: int, rotate: bool = False, training: Optional[str] = None, profile=None,
     marking: Optional[dict] = None,
+    base_fx: Optional[dict] = None,
 ):
     """The human side for a match: XI (holes filled out of position), bench,
     pre-match fatigue / form, club tenure, familiarity and the plan.
@@ -1522,8 +1523,10 @@ def _human_runner(
         [live(c, slot) for c, slot in pairs], [live(c) for c in bench], config,
         familiarity=familiarity, plan=copy.deepcopy(part.match_plan), chem_rules=chem_rules,
         set_pieces=part.set_pieces, training=training, roles=part.roles, marking=marking,
-        boost=tr["opponent_boost"] if training == "opponent" else 1.0,
-        set_piece_boost=tr["set_piece_boost"] if training == "set_pieces" else 1.0,
+        # «Клубная база» analytics centre makes these two trainings stronger.
+        boost=club_base_service.prep_boost(tr["opponent_boost"], base_fx or {}) if training == "opponent" else 1.0,
+        set_piece_boost=club_base_service.prep_boost(tr["set_piece_boost"], base_fx or {})
+        if training == "set_pieces" else 1.0,
     )
     return runner, pairs, base_familiarity
 
@@ -1579,6 +1582,11 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             if p.status == "accepted":
                 profiles[ti] = await get_profile(db, p.user_id, config)
     used_familiarity: dict[int, int] = {}
+    # «Клубная база»: effects frozen on the participant for the season.
+    base_fx: dict[int, dict] = {}
+    for ti, p in humans.items():
+        if p.status == "accepted":
+            base_fx[ti] = await club_base_service.career_effects(db, p, config)
 
     async def human_cards(part: CareerParticipant) -> list:
         if part.user_id not in cards_cache:
@@ -1633,6 +1641,8 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         if training:
             # Training load / recovery before kick-off, kept in the condition.
             delta = tr["recovery_fatigue"] if training == "recovery" else tr["load_fatigue"]
+            if training == "recovery":  # «Клубная база» medical centre
+                delta -= int(base_fx.get(team_index, {}).get("recovery", 0))
             condition = dict(part.condition or {})
             for cid in _squad_ids(part, by_id):
                 entry = {**_FRESH, **condition.get(str(cid), {})}
@@ -1648,6 +1658,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             rotate=cup and bool(((state.get("cup") or {}).get("rotation") or {}).get(str(team_index))),
             training=training, profile=profiles.get(team_index),
             marking=part.marking if not cup and (part.marking or {}).get("round") == round_index else None,
+            base_fx=base_fx.get(team_index),
         )
         if runner is None:
             return None  # fewer than 11 fit players in the whole collection
@@ -1782,17 +1793,29 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         gains = await path_match_service.career_fatigue_gains(db, gains, own_cards, config)
         report = _after_match(
             part, played.get(team_index, set()), own, opp, round_index, config, rng, names, _squad_ids(part, own_cards),
-            gains=gains,
+            gains=gains, base_fx=base_fx.get(team_index),
             card_mult=tactics.tuning_of(config)["foul"][_my_tactic(part).get("tackling", "normal")] if v1 else 1.0,
         )
         reports[str(team_index)] = report
         flag_modified(part, "condition")
         if team_index in used_familiarity and team_index in minutes_by_team:
-            part.familiarity = tactics.familiarity_after_match(used_familiarity[team_index], config)
+            part.familiarity = tactics.familiarity_after_match(
+                used_familiarity[team_index], config,
+                bonus_pct=int(base_fx.get(team_index, {}).get("familiarity_pct", 0)),
+            )
             part.familiar_formation, part.familiar_tactic = part.formation, _my_tactic(part)
 
         reward = config.career_match_reward_win if own > opp else config.career_match_reward_draw if own == opp else 0
         part.coins_earned += await _credit(db, part.user_id, reward, f"Карьера: тур {round_index + 1}", season.id)
+        # «Клубная база»: the stadium (+ hotel, ticket prices) earns on home matches.
+        matchday = club_base_service.matchday_income(base_fx.get(team_index, {})) if is_home else 0
+        if matchday > 0:
+            locked = await wallet_service.lock_user_for_update(db, part.user_id)
+            await wallet_service.credit_coins(
+                db, locked, matchday, TransactionType.club_base_matchday, f"Стадион: домашний матч, тур {round_index + 1}",
+                related_object_type="career_season", related_object_id=season.id,
+            )
+            part.coins_earned += matchday
         # «Академия»: experience for the path cards that played this league
         # round (own daily cap per card; idempotent per card and round).
         await path_match_service.award_side(
@@ -1809,7 +1832,8 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         outcome = "Победа" if own > opp else "Ничья" if own == opp else "Поражение"
         await notify(
             db, part.user_id, NotificationType.career_round_result, f"Карьера, тур {round_index + 1}: {outcome}",
-            f"{own}:{opp} против «{opponent}»" + (f" · +{reward} монет" if reward else "") + _report_line(report)
+            f"{own}:{opp} против «{opponent}»" + (f" · +{reward} монет" if reward else "")
+            + (f" · стадион +{matchday}" if matchday else "") + _report_line(report)
             + unlocked_text,
             related_object_type="career_season", related_object_id=season.id,
         )
@@ -1871,6 +1895,7 @@ async def _play_cup_round(db, season, state, round_index, config, humans, runner
                     rng, {cid: c.player.display_name for cid, c in own_cards.items()}, _squad_ids(part, own_cards),
                     gains=runner.fatigue_gained(),
                     card_mult=tactics.tuning_of(config)["foul"][_my_tactic(part).get("tackling", "normal")],
+                    base_fx=part.base_effects,
                 )
                 state.setdefault("cup_reports", {}).setdefault(str(k), {})[str(index)] = report
                 flag_modified(part, "condition")
@@ -1903,7 +1928,7 @@ async def _play_cup_round(db, season, state, round_index, config, humans, runner
             if k == len(cup["rounds"]) - 1 and won:
                 coins = await _credit(db, part.user_id, rewards[0] if rewards else 0, "Карьера: победа в кубке", season.id)
                 profile = await get_profile(db, part.user_id, config)
-                profile.reputation += int(config.career_rep_cup)
+                profile.reputation += club_base_service.reputation_gain(int(config.career_rep_cup), part.base_effects or {})
                 text = "Кубок твой!"
             elif not won and k in stage_reward:
                 coins = await _credit(db, part.user_id, stage_reward[k], f"Карьера: {CUP_ROUND_NAMES[k]} кубка", season.id)
@@ -1921,7 +1946,7 @@ async def _play_cup_round(db, season, state, round_index, config, humans, runner
 def _after_match(
     part: CareerParticipant, played_ids: set[int], own: int, opp: int, round_index: int, config,
     rng: random.Random, names: dict[int, str], squad_ids: Optional[list[int]] = None,
-    gains: Optional[dict[int, int]] = None, card_mult: float = 1.0,
+    gains: Optional[dict[int, int]] = None, card_mult: float = 1.0, base_fx: Optional[dict] = None,
 ) -> dict:
     """Fatigue, injuries, yellow/red cards and form for one human squad after
     a round. Returns the round report (player names per event) shown in the
@@ -1939,7 +1964,8 @@ def _after_match(
             if gains is not None:
                 gain = gains.get(card_id, gain)
             entry["fatigue"] = min(100, entry["fatigue"] + gain)
-            if rng.random() * 100 < config.career_injury_chance_pct * (2 if tired else 1):
+            injury_pct = club_base_service.injury_chance(config.career_injury_chance_pct, base_fx or {})
+            if rng.random() * 100 < injury_pct * (2 if tired else 1):
                 entry["injured_until"] = round_index + 1 + rng.randint(1, 2)
                 report["injured"].append(name)
             # Discipline: a straight red, or the Nth yellow, = one round out.
@@ -1966,7 +1992,8 @@ def _after_match(
             elif entry["form"] < 0:
                 report["form_down"].append(name)
         else:
-            entry["fatigue"] = max(0, entry["fatigue"] - config.career_fatigue_recovery)
+            recovery = config.career_fatigue_recovery + int((base_fx or {}).get("recovery", 0))
+            entry["fatigue"] = max(0, entry["fatigue"] - recovery)
             entry["form"] = 0
         condition[str(card_id)] = entry
     part.condition = condition
@@ -2041,6 +2068,7 @@ async def _finish(db: AsyncSession, season: CareerSeason, config) -> None:
                 else:
                     rep += int((config.career_ambition_rep_fail or [0, 0, 0])[i])
                     move += f"\nЗадача «{target['label']}» провалена"
+            rep = club_base_service.reputation_gain(rep, part.base_effects or {})  # «Клубная база» media centre
             profile.reputation = max(0, profile.reputation + rep)
             profile.division = part.next_division
             if rep:

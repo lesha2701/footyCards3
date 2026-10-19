@@ -26,6 +26,7 @@ from app.routers import (
     admin_gifts,
     admin_leagues,
     admin_lifestyle,
+    admin_club_base,
     admin_log,
     admin_monetization,
     admin_packs,
@@ -48,6 +49,7 @@ from app.routers import (
     card_skills,
     path,
     academy,
+    club_base,
     career,
     club_features,
     clubs,
@@ -132,6 +134,7 @@ app.include_router(collection.router, prefix=API_PREFIX)
 app.include_router(card_skills.router, prefix=API_PREFIX)
 app.include_router(path.router, prefix=API_PREFIX)
 app.include_router(academy.router, prefix=API_PREFIX)
+app.include_router(club_base.router, prefix=API_PREFIX)
 app.include_router(bingo.router, prefix=API_PREFIX)
 app.include_router(packs.router, prefix=API_PREFIX)
 app.include_router(free_pack.router, prefix=API_PREFIX)
@@ -190,6 +193,7 @@ app.include_router(admin_trophies.router, prefix=API_PREFIX)
 app.include_router(admin_gifts.router, prefix=API_PREFIX)
 app.include_router(admin_leagues.router, prefix=API_PREFIX)
 app.include_router(admin_lifestyle.router, prefix=API_PREFIX)
+app.include_router(admin_club_base.router, prefix=API_PREFIX)
 app.include_router(admin_wheel.router, prefix=API_PREFIX)
 app.include_router(admin_games.router, prefix=API_PREFIX)
 app.include_router(admin_career.router, prefix=API_PREFIX)

@@ -144,3 +144,14 @@ async def magnate_sweep(slot_key: str | None = None, db: AsyncSession = Depends(
     lazy sweep on reads — each match is taken with SKIP LOCKED and its
     deadline re-checked under the lock."""
     return MagnateSweepResult(advanced=await magnate_service.sweep_due(db))
+
+
+@router.post("/club-base/sweep")
+async def club_base_sweep(db: AsyncSession = Depends(get_db)):
+    """Called by the bot every minute: completes «Клубная база»
+    constructions whose timer ran out and notifies the player. Safe
+    alongside the lazy completion on reads — each base is taken with SKIP
+    LOCKED and re-checked under the lock."""
+    from app.services import club_base_service
+
+    return {"completed": await club_base_service.sweep_due(db)}

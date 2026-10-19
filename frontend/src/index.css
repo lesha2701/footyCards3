@@ -35,6 +35,15 @@
   --c-path: 110 231 183;
   --c-legend: 252 211 77;
   --c-prestige: 240 171 252;
+  /* «Клубная база» drawn map: an evening campus on the dark theme. */
+  --map-land: 24 46 30;
+  --map-land-2: 31 58 37;
+  --map-contour: 120 170 120;
+  --map-water: 34 82 110;
+  --map-road: 70 82 72;
+  --map-tree: 38 92 52;
+  --map-wall: 58 66 60;
+  --map-roof: 92 104 94;
 }
 
 /* Light theme (Telegram light mode, or chosen in Профиль → Тема). The app's
@@ -51,6 +60,14 @@
   --c-path: 4 120 87;
   --c-legend: 180 83 9;
   --c-prestige: 162 28 175;
+  --map-land: 196 222 178;
+  --map-land-2: 178 210 160;
+  --map-contour: 92 130 80;
+  --map-water: 120 184 214;
+  --map-road: 226 220 200;
+  --map-tree: 86 150 92;
+  --map-wall: 236 232 220;
+  --map-roof: 150 120 100;
 }
 /* "text-bg-base" is always dark text on a bright fill (lime/floodlight). */
 :root[data-theme="light"] .text-bg-base { color: rgb(7 9 10); }

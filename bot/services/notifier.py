@@ -67,6 +67,7 @@ _TYPE_PATHS = {
     "club_league_relegated": "/clubs/league",
     "club_war_started": "/clubs/war",
     "club_war_finished": "/clubs/war",
+    "club_base_built": "/base",
     "friend_request": "/friends",
     "friend_accepted": "/friends",
     "trade_wish_available": "/trades/finder",

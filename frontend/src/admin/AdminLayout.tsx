@@ -61,6 +61,7 @@ const SECTIONS: { to: string; label: string; Icon: (props: IconProps) => JSX.Ele
   { to: "/admin/diamond-upgrades", label: "Диамант", Icon: IconCard },
   { to: "/admin/card-skills", label: "Навыки карточек", Icon: IconBrain },
   { to: "/admin/path", label: "Академия", Icon: IconUpgrade },
+  { to: "/admin/club-base", label: "Клубная база", Icon: IconStadium },
   { to: "/admin/bingo", label: "Бинго недели", Icon: IconTag },
   { to: "/admin/shop", label: "Магазин", Icon: IconCoin },
   { to: "/admin/monetization", label: "Абонемент, сезон, стиль", Icon: IconStar },

@@ -32,6 +32,7 @@ from app.core.timeutil import ensure_aware
 from app.models.card_path import AcademyLedger, UserAcademy
 from app.models.enums import CardSource, Rarity, TransactionType
 from app.models.user import User
+from app.services import club_base_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
@@ -151,7 +152,9 @@ def _scout(config, level: int) -> dict:
     return {"chance_pct": at("chance_pct"), "cooldown_days": at("cooldown_days"), "consolation_coins": at("consolation_coins")}
 
 
-def state_out(academy: UserAcademy, config, academy_cards: int = 0, now: Optional[datetime] = None) -> dict:
+def state_out(academy: UserAcademy, config, academy_cards: int = 0, now: Optional[datetime] = None,
+              discount_pct: int = 0) -> dict:
+    """`discount_pct` — the «Клубная база» accounting discount on costs."""
     now = now or _now()
     levels = effective_levels(academy, now)
     building = academy.building_code if academy.building_code and academy.build_ends_at and \
@@ -165,7 +168,7 @@ def state_out(academy: UserAcademy, config, academy_cards: int = 0, now: Optiona
             "level": level, "max_level": top,
             "effect": wing.effect_text.format(value=effect_at(config, code, level)) if level else None,
             "next_effect": wing.effect_text.format(value=effect_at(config, code, level + 1)) if level < top else None,
-            "next_cost": cfg["costs"][level] if level < top else None,
+            "next_cost": cfg["costs"][level] - cfg["costs"][level] * discount_pct // 100 if level < top else None,
             "next_hours": cfg["hours"][level] if level < top and level < len(cfg["hours"]) else None,
             "building": code == building,
         })
@@ -232,7 +235,8 @@ async def get_state(db: AsyncSession, user: User) -> dict:
     if academy is None:
         academy = UserAcademy(user_id=user.id, levels={}, total_level=0)
     cards = await _academy_card_list(db, user.id)
-    return {**state_out(academy, config, len(cards)), "cards": cards}
+    discount = await club_base_service.construction_discount_pct(db, user.id, config)
+    return {**state_out(academy, config, len(cards), discount_pct=discount), "cards": cards}
 
 
 async def _replay(db: AsyncSession, user_id: int, key: Optional[str]) -> bool:
@@ -257,11 +261,17 @@ async def start_upgrade(db: AsyncSession, user: User, code: str, idempotency_key
     if academy.building_code:
         raise ConflictError(f"Сейчас строится «{WINGS[academy.building_code].name}» — дождись или ускорь",
                             details={"building_code": academy.building_code})
+    # «Клубная база»: one construction queue for the whole base.
+    busy = await club_base_service.base_busy(db, user.id)
+    if busy:
+        raise ConflictError(f"Сейчас на базе строится «{busy}» — у базы одна бригада")
     cfg = _wing_config(config, code)
     level = int((academy.levels or {}).get(code, 0))
     if level >= len(cfg["costs"]):
         raise ConflictError("Корпус уже на максимальном уровне")
-    cost = cfg["costs"][level]
+    cost = club_base_service.discounted(
+        cfg["costs"][level], await club_base_service.construction_discount_pct(db, user.id, config),
+    )
     hours = cfg["hours"][level] if level < len(cfg["hours"]) else 0
     if cost:
         await debit_coins(db, locked_user, cost, TransactionType.academy_upgrade,
@@ -309,7 +319,10 @@ async def create_speedup_invoice(db: AsyncSession, user: User) -> dict:
 async def deliver_speedup(db: AsyncSession, user: User, invoice) -> dict:
     """Called by stars_payment_service.deliver_payment under the invoice
     lock. Finishes that exact construction; if it already finished on its
-    own meanwhile, the payment is still recorded (nothing left to speed up)."""
+    own meanwhile, the payment is still recorded (nothing left to speed up).
+    A "base:" invoice is a «Клубная база» construction."""
+    if (invoice.academy_speedup or "").startswith(club_base_service.SPEEDUP_PREFIX):
+        return await club_base_service.deliver_speedup(db, user, invoice)
     academy = await _get_academy(db, user.id, lock=True)
     code, _, level = (invoice.academy_speedup or "").partition(":")
     finished = None

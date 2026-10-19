@@ -546,8 +546,10 @@ def familiarity_for(stored: int, last_formation: Optional[str], last_tactic: Opt
     return value
 
 
-def familiarity_after_match(used: int, config) -> int:
-    return min(int(config.career_familiarity_max_tenths), used + int(config.career_familiarity_step_tenths))
+def familiarity_after_match(used: int, config, bonus_pct: int = 0) -> int:
+    """`bonus_pct` — the «Клубная база» training centre speeds the growth up."""
+    step = int(config.career_familiarity_step_tenths) * (100 + bonus_pct) // 100
+    return min(int(config.career_familiarity_max_tenths), used + step)
 
 
 # --- match plan ------------------------------------------------------------------------------
