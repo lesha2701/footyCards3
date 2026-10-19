@@ -136,6 +136,8 @@ export interface UserCard {
   path_level?: number;
   path_stage?: number;
   path_rating_bonus?: number;
+  /** «Экипировка» it wears (already included in player.rating). */
+  equipment_rating_bonus?: number;
   /** «Академия» prestige tier, its «Икона» number and the reforged talent. */
   prestige?: number;
   prestige_icon_number?: number | null;

@@ -70,6 +70,7 @@ from app.models.wheel import WheelPrize, WheelSpin
 from app.models.user import User
 from app.models.user_activity import UserDailyActivity
 from app.models.stars_payment_receipt import StarsPaymentReceipt
+from app.models.equipment import EquipmentCollection, EquipmentItem, UserEquipment
 from app.models.monetization import (
     Artifact,
     ClubSubscription,
@@ -211,6 +212,9 @@ __all__ = [
     "UserCosmetic",
     "Artifact",
     "UserArtifact",
+    "EquipmentCollection",
+    "EquipmentItem",
+    "UserEquipment",
     "UserCoachCard",
     "Stadium",
     "UserStadiumCard",

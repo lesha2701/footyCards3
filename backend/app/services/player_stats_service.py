@@ -43,17 +43,18 @@ def compute_default_attack_defense(rating: int, position: Position) -> tuple[int
 def card_rating_bonus(card) -> int:
     """Everything a specific owned copy adds to its player's rating: the
     diamond upgrade (diamond cards only), earned stars (non-diamond only,
-    services/card_star_service.py) and «Академия» levels (path cards
-    only, services/path_service.py) and the owner's active «Артефакты»
+    services/card_star_service.py), «Академия» levels (path cards
+    only, services/path_service.py), the owner's active «Артефакты»
     (artifact_service.refresh_card_bonuses — only while computed for the
-    current owner). All are fixed on the card row. getattr: also called with ClubCard rows and lightweight
+    current owner) and the «Экипировка» it wears (equipment_service). All
+    are fixed on the card row. getattr: also called with ClubCard rows and lightweight
     stand-ins that carry none of these columns."""
     artifact = getattr(card, "artifact_rating_bonus", 0) or 0
     if artifact and getattr(card, "artifact_bonus_owner_id", None) != getattr(card, "owner_id", None):
         artifact = 0  # computed for a previous owner (traded away)
     return (
         (getattr(card, "diamond_rating_bonus", 0) or 0) + (getattr(card, "star_rating_bonus", 0) or 0)
-        + (getattr(card, "path_rating_bonus", 0) or 0) + artifact
+        + (getattr(card, "path_rating_bonus", 0) or 0) + artifact + (getattr(card, "equipment_rating_bonus", 0) or 0)
     )
 
 

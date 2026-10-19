@@ -80,6 +80,12 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
         await db.rollback()
         raise ConflictError("Стратего: все фишки должны помещаться в два ряда поля")
     db.add(config)
+    if any(key.startswith("equipment_") for key in updates):
+        # The switch or a ceiling changed: rewrite what worn things give.
+        from app.services import equipment_service
+
+        await db.flush()
+        await equipment_service.recompute_all(db)
     await log_action(db, admin.id, "update_game_config", "game_config", config.id, old_value=old_value, new_value=updates, ip_address=request.client.host if request.client else None)
     await db.commit()
     await db.refresh(config)

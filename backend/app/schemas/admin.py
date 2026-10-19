@@ -667,7 +667,10 @@ class GameConfigOut(BaseModel):
     stake_max_coins: int = 500
     stake_pair_daily_limit: int = 2
     stake_daily_profit_cap: int = 2000
-
+    equipment_enabled: bool = False
+    equipment_max_rating: int = 3
+    equipment_max_pp: int = 8
+    equipment_max_chemistry: int = 1
 
 class GameConfigUpdate(BaseModel):
     club_creation_cost_coins: Optional[int] = Field(default=None, ge=0)
@@ -765,6 +768,10 @@ class GameConfigUpdate(BaseModel):
     arena_division_min_points: Optional[list[int]] = Field(default=None, min_length=1, max_length=30)
     arena_division_reward_coins: Optional[list[int]] = Field(default=None, min_length=1, max_length=30)
     arena_division_coin_pct: Optional[list[int]] = Field(default=None, min_length=1, max_length=30)
+    equipment_enabled: Optional[bool] = None
+    equipment_max_rating: Optional[int] = Field(default=None, ge=0, le=10)
+    equipment_max_pp: Optional[int] = Field(default=None, ge=0, le=30)
+    equipment_max_chemistry: Optional[int] = Field(default=None, ge=0, le=3)
 
     @field_validator("arena_division_min_points")
     @classmethod

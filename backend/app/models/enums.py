@@ -133,6 +133,7 @@ class TransactionType(str, enum.Enum):
     season_pass_reward = "season_pass_reward"
     starter_offer_reward = "starter_offer_reward"
     artifact_purchase = "artifact_purchase"
+    equipment_purchase = "equipment_purchase"
     club_reward = "club_reward"
 
 

@@ -302,9 +302,11 @@ def compute_chemistry(
             if stadium_club is not None and _group_key(card.player.club) == stadium_club:
                 stadium_extra = max(0, rules.stadium_club_points)
         talent_extra = (extra_points or {}).get(slot.code, 0) if on_position else 0
+        # «Экипировка» (equipment_service): points the card's worn things add.
+        equipment_extra = (getattr(card, "equipment_chemistry", 0) or 0) if on_position else 0
         pts = (
-            min(max(0, rules.player_max), base + coach_extra + stadium_extra + talent_extra)
-            if (coach_extra or stadium_extra or talent_extra) else base
+            min(max(0, rules.player_max), base + coach_extra + stadium_extra + talent_extra + equipment_extra)
+            if (coach_extra or stadium_extra or talent_extra or equipment_extra) else base
         )
         bonus = pts * rules.rating_per_point - (0 if on_position else rules.off_position_penalty)
         result.players[slot.code] = PlayerChemistry(

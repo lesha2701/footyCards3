@@ -570,6 +570,10 @@ export interface GameConfig {
   card_star_coin_cost: Record<string, number[]>;
   card_star_rating_per_star: number;
   card_star_bonus_cap: number;
+  equipment_enabled: boolean;
+  equipment_max_rating: number;
+  equipment_max_pp: number;
+  equipment_max_chemistry: number;
   // «Академия»
   path_enabled: boolean;
   path_title: string;
@@ -1031,4 +1035,43 @@ export interface AdminStadiumCosmetic {
   stars: number;
   min_level: number;
   enabled: boolean;
+}
+
+/** «Экипировка» catalog for the admin panel (backend equipment_service.admin_catalog). */
+export interface AdminEquipmentItem {
+  id?: number;
+  name: string;
+  description: string | null;
+  image_path?: string | null;
+  icon: string;
+  slot: string;
+  rarity: string;
+  collection_id: number | null;
+  effect: string;
+  effect_value: number;
+  cond_club: string | null;
+  cond_country: string | null;
+  coins_price: number;
+  stars_price: number;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface AdminEquipmentCollection {
+  id?: number;
+  name: string;
+  description: string | null;
+  image_path?: string | null;
+  set_size: number;
+  set_bonus_rating: number;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface AdminEquipmentCatalog {
+  slots: { code: string; label: string }[];
+  effects: { code: string; label: string }[];
+  rarities: string[];
+  collections: AdminEquipmentCollection[];
+  items: AdminEquipmentItem[];
 }

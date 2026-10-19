@@ -12,7 +12,7 @@ from app.models.enums import BingoGoalType, NotificationType, Rarity, TradeCardS
 from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.user import User
 from app.schemas.trade import TradeAcceptOut, TradeCreateRequest, TradeOfferOut
-from app.services import artifact_service, bingo_service, task_service, trade_finder_service, trade_guard_service
+from app.services import artifact_service, bingo_service, equipment_service, task_service, trade_finder_service, trade_guard_service
 from app.services.collection_service import grant_collection_rewards_for_new_cards
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
@@ -357,6 +357,8 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
 
     receiver_new_player_ids: list[int] = []
     sender_new_player_ids: list[int] = []
+    # «Экипировка» stays with its owner: take it off before the cards move.
+    await equipment_service.detach_from_cards(db, [tc.user_card_id for tc in trade_cards])
     for tc in trade_cards:
         card = cards_by_id[tc.user_card_id]
         new_owner_id = offer.receiver_id if tc.side == TradeCardSide.offered else offer.sender_id
