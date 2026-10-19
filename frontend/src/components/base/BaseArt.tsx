@@ -127,12 +127,14 @@ export function HotelArt({ x, y, w, level }: Art) {
       <rect x={x + mw / 2 - 6} y={y - 8} width="12" height="2" fill="#b8862f" />
       {/* neon sign */}
       <rect x={x - 3} y={y - h + 2} width="5" height={Math.min(h - 8, 24)} rx="1" fill="#2a1630" />
-      {"HOTEL".split("").slice(0, Math.max(3, Math.floor(Math.min(h - 8, 24) / 4.6))).map((ch, i) => (
-        <text key={i} x={x - 0.5} y={y - h + 6.5 + i * 4.6} textAnchor="middle" fontSize="4.2" fontWeight="800" fill="#ff5fb0">{ch}</text>
-      ))}
-      {t >= 3 && (
-        <text x={x + mw / 2 + DX / 2} y={y - h - DY - 2} textAnchor="middle" fontSize="8" fill={GOLD}>★★★★★</text>
-      )}
+      <rect x={x - 2.2} y={y - h + 3} width="3" height={Math.min(h - 8, 24) - 2} rx="1" fill="#ff5fb0" opacity="0.9" />
+      <rect x={x - 3.2} y={y - h + 2} width="5" height={Math.min(h - 8, 24)} rx="1.5" fill="#ff5fb0" opacity="0.25" />
+      {t >= 3 && [0, 1, 2, 3, 4].map((i) => {
+        const sx = x + mw / 2 + DX / 2 - 12 + i * 6;
+        const sy = y - h - DY - 4;
+        return <polygon key={i} fill={GOLD}
+                        points={`${sx},${sy - 2.4} ${sx + 0.7},${sy - 0.7} ${sx + 2.4},${sy - 0.7} ${sx + 1},${sy + 0.4} ${sx + 1.5},${sy + 2.2} ${sx},${sy + 1.1} ${sx - 1.5},${sy + 2.2} ${sx - 1},${sy + 0.4} ${sx - 2.4},${sy - 0.7} ${sx - 0.7},${sy - 0.7}`} />;
+      })}
     </g>
   );
 }
@@ -268,7 +270,8 @@ export function MediaArt({ x, y, w, level }: Art) {
       <Windows x={x + 2} y={y - 2} w={w - 4} rows={Math.max(1, Math.floor((h - 4) / 6))} cols={Math.max(3, Math.floor(w / 7))} seed={6} />
       <rect x={x + 3} y={y - h + 2} width="14" height="5" rx="1" fill="#1a1a1a" />
       <circle cx={x + 6} cy={y - h + 4.5} r="1.3" fill="#ff3b3b" />
-      <text x={x + 12} y={y - h + 6} textAnchor="middle" fontSize="3.6" fontWeight="800" fill="#fff">LIVE</text>
+      <rect x={x + 9} y={y - h + 3.6} width="6" height="1" fill="#fff" opacity="0.8" />
+      <rect x={x + 9} y={y - h + 5.2} width="4" height="1" fill="#fff" opacity="0.5" />
       {Array.from({ length: dishes }).map((_, i) => {
         const cx = x + 8 + i * Math.min(10, (w - 6) / dishes) + DX / 2;
         const cy = y - h - DY / 2;
@@ -300,8 +303,8 @@ export function MarketingArt({ x, y, w, level }: Art) {
       <rect x={x + 2} y={y - h - 18} width={bw} height="11" rx="1" fill="#fff" stroke="#333" strokeWidth="0.6" />
       <rect x={x + 3} y={y - h - 17} width={bw / 3} height="9" fill="#d9762b" />
       <rect x={x + 3 + bw / 3} y={y - h - 17} width={bw / 3} height="9" fill="#2f6fd6" />
-      <text x={x + 3 + bw * 0.83} y={y - h - 10.5} textAnchor="middle" fontSize="5" fontWeight="900" fill="#222">%</text>
-      {t >= 1 && <text x={x + 3 + bw / 6} y={y - h - 10.5} textAnchor="middle" fontSize="5" fill="#fff">★</text>}
+      <circle cx={x + 3 + bw * 0.83} cy={y - h - 12.5} r="2.6" fill="#f2c230" />
+      {t >= 1 && <circle cx={x + 3 + bw / 6} cy={y - h - 12.5} r="1.6" fill="#fff" />}
       {t >= 2 && Array.from({ length: 3 }).map((_, i) => (
         <circle key={i} cx={x + 6 + i * (bw / 3)} cy={y - h - 19} r="0.9" fill="#fff7c2">
           <animate attributeName="opacity" values="1;0.3;1" dur={`${1 + i * 0.3}s`} repeatCount="indefinite" />
@@ -325,7 +328,6 @@ export function ShopArt({ x, y, w, level }: Art) {
       {/* shop window with a shirt */}
       <rect x={x + 2} y={y - 9} width={w * 0.55} height="8" fill="#bfe6f5" stroke="#8aa" strokeWidth="0.4" />
       <path d={`M${x + 6} ${y - 7.5} l2 -1 h3 l2 1 l1.4 2 l-1.6 0.8 v4 h-6.6 v-4 l-1.6 -0.8 z`} fill="#cf3f6a" />
-      <text x={x + 9.5} y={y - 3} textAnchor="middle" fontSize="2.6" fontWeight="800" fill="#fff">10</text>
       <rect x={x + w * 0.66} y={y - 8} width={w * 0.24} height="8" fill="#5a2a2a" />
       {/* awning */}
       {Array.from({ length: stripes }).map((_, i) => (
@@ -335,7 +337,6 @@ export function ShopArt({ x, y, w, level }: Art) {
       ))}
       <path d={`M${x} ${y - 10} ${Array.from({ length: stripes }).map(() => `q ${w / stripes / 2} 2 ${w / stripes} 0`).join(" ")}`}
             fill="none" stroke="#cf3f6a" strokeWidth="0.8" />
-      {t >= 1 && <text x={x + w / 2 + DX / 2} y={y - h - DY - 1} textAnchor="middle" fontSize="6">👕</text>}
       {t >= 3 && <GoldTrim x={x} y={y - h} w={w} />}
     </g>
   );

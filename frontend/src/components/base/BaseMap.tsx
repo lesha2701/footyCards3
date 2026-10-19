@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { staticUrl } from "@/lib/api";
 import { SEAT_COLORS } from "@/lib/clubBase";
 import type { ClubBaseBuilding, ClubBaseCode, ClubBaseLook, ClubBaseState } from "@/types";
@@ -108,7 +110,8 @@ const ROADS: [string, number][] = [
   ["M246 132 C 268 112, 282 90, 290 66", 5],
   ["M256 156 L 300 144", 5],
   ["M180 262 C 200 272, 232 282, 262 296", 5],
-  ["M180 262 C 160 270, 150 278, 142 284", 5],
+  ["M118 236 V246", 5],
+  ["M158 287 H176", 4],
   ["M128 132 L 130 116", 4],
 ];
 
@@ -150,17 +153,19 @@ function Roads() {
 function Parking() {
   return (
     <g>
-      <rect x="146" y="254" width="24" height="42" rx="2" fill="rgb(var(--map-road))" opacity="0.9" />
+      <rect x="136" y="258" width="24" height="40" rx="2.5" fill="rgb(var(--map-road))" />
+      <rect x="136" y="258" width="24" height="40" rx="2.5" fill="none" stroke="#000" strokeOpacity="0.2" />
       {Array.from({ length: 6 }).map((_, i) => (
-        <line key={i} x1="146" x2="158" y1={258 + i * 6.5} y2={258 + i * 6.5} stroke="#fff" strokeOpacity="0.5" strokeWidth="0.4" />
+        <line key={i} x1="136" x2="146" y1={262 + i * 6} y2={262 + i * 6} stroke="#fff" strokeOpacity="0.45" strokeWidth="0.4" />
       ))}
       {Array.from({ length: 5 }).map((_, i) => (
-        <rect key={i} x="148" y={259.5 + i * 6.5} width="8" height="4" rx="1.2" fill={CARS[i % CARS.length]} />
+        <rect key={i} x="137.5" y={263.2 + i * 6} width="7.5" height="3.8" rx="1.2" fill={CARS[i % CARS.length]} />
       ))}
       {Array.from({ length: 4 }).map((_, i) => (
-        <rect key={`b${i}`} x="160" y={262 + i * 8} width="8" height="4" rx="1.2" fill={CARS[(i + 5) % CARS.length]} />
+        <rect key={`b${i}`} x="151" y={264 + i * 8} width="7.5" height="3.8" rx="1.2" fill={CARS[(i + 5) % CARS.length]} />
       ))}
-      <text x="158" y="252" textAnchor="middle" fontSize="5" fontWeight="800" fill="#fff" opacity="0.7">P</text>
+      <rect x="146" y="250" width="5" height="5" rx="1" fill="#2f6fd6" />
+      <rect x="148" y="251.2" width="1.2" height="2.6" fill="#fff" />
     </g>
   );
 }
@@ -251,11 +256,21 @@ function Plot({ b, spot }: { b: ClubBaseBuilding; spot: Spot }) {
       {Array.from({ length: Math.floor((w + DX) / 6) + 1 }).map((_, i) => (
         <line key={i} x1={x + i * 6} y1={y} x2={x + i * 6} y2={y - 3} stroke="#c9b48a" strokeWidth="0.6" />
       ))}
-      <rect x={x + (w + DX) / 2 - 9} y={y - 26} width="18" height="10" rx="1.5" fill="rgb(var(--c-bg-base))" opacity="0.85" />
-      <line x1={x + (w + DX) / 2} y1={y - 16} x2={x + (w + DX) / 2} y2={y - 8} stroke="#9aa59e" strokeWidth="0.8" />
-      <text x={x + (w + DX) / 2} y={y - 18.5} textAnchor="middle" fontSize="7" opacity={b.locked ? 0.5 : 1}>{b.locked ? "🔒" : b.emoji}</text>
-      {!b.building && !b.locked && (
-        <text x={x + (w + DX) / 2} y={y - 3} textAnchor="middle" fontSize="7" fontWeight="800" fill="rgb(var(--c-path))">+</text>
+      <line x1={x + (w + DX) / 2 - 5} y1={y - 6} x2={x + (w + DX) / 2 - 5} y2={y - 16} stroke="#9aa59e" strokeWidth="0.8" />
+      <line x1={x + (w + DX) / 2 + 5} y1={y - 6} x2={x + (w + DX) / 2 + 5} y2={y - 16} stroke="#9aa59e" strokeWidth="0.8" />
+      {b.locked ? (
+        <g opacity="0.8">
+          <rect x={x + (w + DX) / 2 - 4} y={y - 20} width="8" height="6" rx="1" fill="#9aa59e" />
+          <path d={`M${x + (w + DX) / 2 - 2.4} ${y - 20} v-2 a2.4 2.4 0 0 1 4.8 0 v2`} fill="none" stroke="#9aa59e" strokeWidth="1" />
+        </g>
+      ) : (
+        <g>
+          <rect x={x + (w + DX) / 2 - 7} y={y - 20} width="14" height="6" rx="1" fill="#f2c230" />
+          {[0, 1, 2].map((i) => (
+            <polygon key={i} fill="#2a2d2b"
+                     points={`${x + (w + DX) / 2 - 6 + i * 5},${y - 14} ${x + (w + DX) / 2 - 3.5 + i * 5},${y - 20} ${x + (w + DX) / 2 - 1.5 + i * 5},${y - 20} ${x + (w + DX) / 2 - 4 + i * 5},${y - 14}`} />
+          ))}
+        </g>
       )}
       {b.building && <Crane x={x + w + DX + 4} top={y - 34} />}
     </g>
@@ -327,10 +342,6 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
       <g>
         <rect x={x0} y={y0} width={W} height={H} rx="10" fill="#a38a5c" opacity="0.35" stroke="rgb(var(--c-ink-mist))" strokeDasharray="4 3" />
         <rect x={cx - 34} y={cy - 18} width="68" height="30" rx="2" fill="#3c9a4f" opacity="0.5" />
-        <text x={cx} y={cy - 2} textAnchor="middle" fontSize="16">🏟️</text>
-        <text x={cx} y={cy + 14} textAnchor="middle" fontSize="8" fill="rgb(var(--c-ink-chalk))">
-          {b.building ? "строится" : "участок под стадион"}
-        </text>
         {b.building && <Crane x={cx + rx - 6} top={cy - ry + 10} />}
       </g>
     );
@@ -475,21 +486,20 @@ function AcademyDistrict({ level, maxLevel, busy }: { level: number; maxLevel: n
   const h = floors * 7 + 5;
   return (
     <g>
-      <rect x="22" y="248" width="122" height="52" rx="10" fill="rgb(var(--c-path))" opacity="0.08" />
-      <rect x="22" y="248" width="122" height="52" rx="10" fill="none" stroke="rgb(var(--c-path))" strokeOpacity="0.35" />
-      <Pitch x={84} y={253} w={54} h={20} />
-      <Pitch x={84} y={277} w={54} h={20} />
-      {vl >= 7 && [[84, 253], [138, 253], [84, 297], [138, 297]].map(([x, y]) => (
+      <rect x="22" y="246" width="108" height="56" rx="10" fill="rgb(var(--map-tree))" opacity="0.14" />
+      <Pitch x={88} y={250} w={34} h={22} />
+      <Pitch x={88} y={276} w={34} h={22} />
+      {vl >= 7 && [[87, 249], [123, 249], [87, 299], [123, 299]].map(([x, y]) => (
         <circle key={`${x}-${y}`} cx={x} cy={y} r="1.3" fill="#fff7c2" />
       ))}
       <ellipse cx="54" cy="299" rx="28" ry="4" fill="#000" opacity="0.2" />
       <Box x={30} y={298} w={40} h={h} front="#f1efe6" roof="rgb(var(--c-path))" />
       <Windows x={32} y={296} w={36} rows={floors} cols={5} rowH={7} seed={9} />
       <rect x={46} y={290} width="8" height="8" fill="#2d4a3c" />
-      <rect x={34} y={298 - h + 1.5} width="32" height="5" rx="1" fill="rgb(var(--c-path))" />
-      <text x={50} y={298 - h + 5.2} textAnchor="middle" fontSize="3.6" fontWeight="900" fill="#fff" letterSpacing="0.3">АКАДЕМИЯ</text>
-      <text x={50 + DX / 2} y={298 - h - 8} textAnchor="middle" fontSize="8">🌱</text>
+      <rect x={34} y={298 - h + 1.5} width="32" height="3" rx="1" fill="rgb(var(--c-path))" />
+      <circle cx={50 + DX / 2} cy={298 - h - 6} r="2.2" fill="rgb(var(--c-path))" />
       {busy && <Crane x={78} top={298 - h} />}
+      {level > 0 && <LevelPill x={80} y={298 - h - 8} level={level} />}
     </g>
   );
 }
@@ -499,6 +509,19 @@ export default function BaseMap({
 }: { state: ClubBaseState; onPick: (code: ClubBaseCode) => void; onAcademy: () => void }) {
   const byCode = Object.fromEntries(state.buildings.map((b) => [b.code, b])) as Record<ClubBaseCode, ClubBaseBuilding>;
   const art = state.art ?? { background: null, buildings: {} };
+  const [hint, setHint] = useState<{ x: number; y: number; text: string } | null>(null);
+  const hover = (x: number, y: number, text: string) => ({
+    onMouseEnter: () => setHint({ x, y, text }),
+    onMouseLeave: () => setHint(null),
+    onFocus: () => setHint({ x, y, text }),
+    onBlur: () => setHint(null),
+  });
+  const anchor = (code: ClubBaseCode): [number, number] => {
+    if (code === "stadium") return [STADIUM.cx, STADIUM.cy - STADIUM.ry - 14];
+    const b = byCode[code];
+    const spot = SPOTS[code];
+    return pillAt(b, spot, art.buildings[code]) ?? [spot.x + spot.w / 2, spot.y - 26];
+  };
   const interactive = (code: ClubBaseCode, label: string, node: React.ReactNode) => (
     <g
       key={code}
@@ -508,6 +531,7 @@ export default function BaseMap({
       className="cursor-pointer outline-none [&:focus-visible]:opacity-80"
       onClick={() => onPick(code)}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onPick(code)}
+      {...hover(...anchor(code), byCode[code] ? `${byCode[code].name} · ${byCode[code].level}` : label)}
     >
       {node}
     </g>
@@ -529,7 +553,7 @@ export default function BaseMap({
           <Terrain />
           <Roads />
           <Parking />
-          <Pitch x={20} y={96} w={78} h={44} />
+          <Pitch x={30} y={100} w={60} h={38} />
           <Trees />
         </>
       )}
@@ -538,22 +562,27 @@ export default function BaseMap({
         <Stadium b={stadium} look={state.stadium.look} art={art.buildings.stadium} />)}
       {order.filter((code) => SPOTS[code].y >= STADIUM.cy).map(building)}
       <g role="button" tabIndex={0} aria-label="Академия" className="cursor-pointer outline-none" onClick={onAcademy}
-         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onAcademy()}>
+         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onAcademy()}
+         {...hover(60, 250, `Академия · ${state.academy_level}`)}>
         <AcademyDistrict level={state.academy_level} maxLevel={state.academy_max_level} busy={academyBusy} />
       </g>
       {order.map((code) => {
         const at = byCode[code] && pillAt(byCode[code], SPOTS[code], art.buildings[code]);
         return at ? <g key={`pill-${code}`} pointerEvents="none"><LevelPill x={at[0]} y={at[1]} level={byCode[code].level} /></g> : null;
       })}
-      <rect x="34" y="301" width="84" height="12" rx="6" fill="rgb(var(--c-bg-base))" opacity="0.75" />
-      <text x="76" y="309.5" textAnchor="middle" fontSize="7.5" fontWeight="800" fill="rgb(var(--c-path))">
-        🌱 Академия · {state.academy_level}
-      </text>
-      <rect x="198" y="300" width="114" height="12" rx="6" fill="rgb(var(--c-bg-base))" opacity="0.75" />
-      <text x="255" y="308.5" textAnchor="middle" fontSize="7.5" fontWeight="800" fill="rgb(var(--c-ink-chalk))">
-        💼 Финансовый департамент
-      </text>
+
       {!art.background && <rect x="0" y="0" width="360" height="330" fill="url(#base-vignette)" pointerEvents="none" />}
+      {hint && (() => {
+        const w = hint.text.length * 4.4 + 12;
+        const x = Math.min(356 - w, Math.max(4, hint.x - w / 2));
+        const y = Math.max(4, hint.y - 22);
+        return (
+          <g pointerEvents="none">
+            <rect x={x} y={y} width={w} height="14" rx="7" fill="rgb(var(--c-bg-base))" opacity="0.92" stroke="rgb(var(--c-path))" strokeOpacity="0.6" />
+            <text x={x + w / 2} y={y + 9.6} textAnchor="middle" fontSize="7.5" fontWeight="700" fill="rgb(var(--c-ink-chalk))">{hint.text}</text>
+          </g>
+        );
+      })()}
     </svg>
   );
 }
