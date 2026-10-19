@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
-import AcademyHomeCard from "@/components/home/AcademyHomeCard";
+import ModesGrid from "@/components/home/ModesGrid";
 import AcademyPage from "@/pages/AcademyPage";
 import type { AcademyState } from "@/types";
 
@@ -25,6 +25,15 @@ vi.mock("@/api/academy", () => ({
   fetchAcademy: vi.fn(async () => state),
   upgradeAcademyWing: vi.fn(), claimScoutReport: vi.fn(), createAcademySpeedupInvoice: vi.fn(), fetchAcademyInvoiceStatus: vi.fn(),
 }));
+// The home strip also asks the other modes for their status.
+vi.mock("@/api/clubs", () => ({
+  fetchMyClub: vi.fn(async () => { throw new Error("no club"); }),
+  fetchTournamentCurrent: vi.fn(), fetchNextOpponent: vi.fn(), claimDailyReward: vi.fn(),
+}));
+vi.mock("@/api/career", () => ({ fetchCareer: vi.fn(async () => ({ enabled: true, season: null, invite: null })) }));
+vi.mock("@/api/myPlayer", () => ({ fetchMyPlayer: vi.fn(async () => ({ enabled: true, player: null })) }));
+vi.mock("@/api/matches", () => ({ fetchArenaStats: vi.fn(async () => ({ arena_rating: 1000, division: null })) }));
+vi.mock("@/api/personalTournament", () => ({ fetchPlayerTournamentCurrent: vi.fn(async () => ({ status: "not_queued" })) }));
 
 function wrap(node: React.ReactNode) {
   return render(<QueryClientProvider client={new QueryClient()}><MemoryRouter>{node}</MemoryRouter></QueryClientProvider>);
@@ -41,8 +50,8 @@ describe("Академия", () => {
   });
 
   it("home tile invites to claim the scouting report", async () => {
-    wrap(<AcademyHomeCard />);
+    wrap(<ModesGrid />);
     expect(await screen.findByText(/Скаутский отчёт готов/)).toBeInTheDocument();
-    expect(screen.getByText(/Академия · ур\. 3/)).toBeInTheDocument();
+    expect(screen.getByText(/Академия/)).toBeInTheDocument();
   });
 });

@@ -65,20 +65,30 @@ export default function BottomNav() {
             >
               {({ isActive: routeActive }) => {
                 const isActive = routeActive || (to === "/collection" && cardsSection);
+                // «Играть» is the main action: a raised floodlight circle.
+                const play = to === "/play";
                 return (
                   <>
-                    <span className="relative">
-                      <Icon size={20} className={isActive ? "text-accent-lime" : ""} />
+                    <span
+                      className={
+                        play
+                          ? `relative -mt-6 flex h-14 w-14 items-center justify-center rounded-full border-4 border-bg-base bg-floodlight text-bg-base shadow-lg shadow-accent-lime/20 transition-transform ${
+                              isActive ? "scale-105" : ""
+                            }`
+                          : "relative"
+                      }
+                    >
+                      <Icon size={play ? 24 : 20} className={!play && isActive ? "text-accent-lime" : ""} />
                       {badge > 0 && (
                         <span
                           aria-label={`${BADGE_LABELS[to]}: ${badge}`}
-                          className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-micro font-bold text-bg-base"
+                          className={`absolute flex ${play ? "-right-1 -top-1" : "-right-2 -top-1"} h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 font-mono text-micro font-bold text-bg-base ${play ? "ring-2 ring-bg-base" : ""}`}
                         >
                           {badge > 9 ? "9+" : badge}
                         </span>
                       )}
                     </span>
-                    <span>{label}</span>
+                    <span className={play ? "-mt-0.5 text-ink-chalk" : ""}>{label}</span>
                   </>
                 );
               }}
