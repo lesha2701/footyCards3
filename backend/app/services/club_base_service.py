@@ -93,9 +93,9 @@ _NOT_EFFECTS = {"costs", "hours", "cap", "capacity"}
 
 # Stadium look: seat colours are free; the rest needs the stadium level.
 SEAT_COLORS = ("red", "blue", "sky", "green", "yellow", "white", "black", "purple", "orange")
-ROOF_LEVEL = {"none": 0, "canopy": 2, "full": 4}
-LIGHTS_LEVEL = 3
-SCREEN_LEVEL = 5
+ROOF_LEVEL = {"none": 0, "canopy": 3, "full": 7}
+LIGHTS_LEVEL = 5
+SCREEN_LEVEL = 9
 DEFAULT_LOOK = {"seats": "red", "roof": "none", "lights": False, "screen": False}
 
 

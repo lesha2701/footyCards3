@@ -15,18 +15,26 @@ Code: `backend/app/services/club_base_service.py`,
 
 ## Buildings
 
-| Code | Building | Effect per level (defaults, levels 1→5) |
+Ten levels each. Build time grows from 12 h to 12 days (HQ 4 h → 10 days,
+stadium 1 → 14 days); a Stars speed-up costs 2 ⭐ per started hour
+(`club_base_stars_per_hour`). Costs: a regular building 1 500 → 140 000
+coins per level, the HQ 1 000 → 105 000, the stadium 3 000 → 220 000.
+
+| Code | Building | Effect per level (defaults, levels 1→10) |
 |---|---|---|
 | `hq` | Штаб-квартира | every other base building is capped at the HQ level |
-| `stadium` | Стадион | +20/35/55/80/110 coins per home league match of «Карьера тренера»; capacity and the look are cosmetic |
-| `hotel` | Клубный отель | +10…50 % matchday income |
-| `training` | Тренировочный центр | +10…50 % familiarity growth (career), +5…25 % XP of «Мой игрок» trainings |
-| `medical` | Медцентр | −10/15/20/30/40 % injury chance, +3…12 fatigue recovery (rest and the «Восстановление» training) |
-| `analytics` | Аналитический центр | «Разбор соперника» / «Стандарты» trainings +4…20 % stronger (the part above ×1.0) |
-| `media` | Медиацентр | +5…25 % to positive career reputation |
-| `marketing` | Отдел маркетинга | sponsors +50…260 coins a day; ticket prices +5…25 % matchday income |
-| `shop` | Клубный магазин | merchandise +30…170 coins a day; +2…10 % quick-sell price |
-| `accounting` | Бухгалтерия | −3…15 % to every construction cost (base and «Академия») |
+| `stadium` | Стадион | +12 … 150 coins per home league match of «Карьера тренера»; capacity 5 000 → 86 000 and the look are cosmetic |
+| `hotel` | Клубный отель | +5 … 55 % matchday income |
+| `training` | Тренировочный центр | +5 … 55 % familiarity growth (career), +3 … 25 % XP of «Мой игрок» trainings |
+| `medical` | Медцентр | −5 … 42 % injury chance, +2 … 14 fatigue recovery (rest and the «Восстановление» training) |
+| `analytics` | Аналитический центр | «Разбор соперника» / «Стандарты» trainings +2 … 20 % stronger (the part above ×1.0) |
+| `media` | Медиацентр | +3 … 25 % to positive career reputation |
+| `marketing` | Отдел маркетинга | sponsors +30 … 300 coins a day; ticket prices +3 … 25 % matchday income |
+| `shop` | Клубный магазин | merchandise +20 … 210 coins a day; +1 … 10 % quick-sell price |
+| `accounting` | Бухгалтерия | −2 … 15 % to every construction cost (base and «Академия») |
+
+Stadium look unlocks: seats any level, canopies 3, floodlights 5, full
+roof 7, video screen 9.
 
 Marketing, shop and accounting form the «Финансовый департамент».
 Effects are summed by name and clamped by `GameConfig.club_base_caps`
@@ -62,10 +70,15 @@ costs, hours, effects, caps, Stars per hour, days of income — is in
 
 ## Map art
 
-The map is drawn in SVG (contour-line terrain, river, roads, pitches,
-buildings with a floor of lit windows per level, crane over a
-construction, stadium with seat colour / roof / lights / screen from its
-look). An admin can upload a background and a picture per building
+The map is drawn in SVG (`components/base/BaseMap.tsx` — meadow with
+contour-line hills, pond, forest, river with a bridge, roads, car park,
+pitches; `BaseArt.tsx` — an illustration per building: glass HQ tower,
+hotel with a neon sign and pool, vaulted training hall, clinic with a
+helipad and ambulance, analytics data wall and dome, TV studio with dishes
+and a mast, billboard office, club shop with an awning, a classical bank).
+Buildings grow with the level (tiers 1–3 / 4–6 / 7–9 / 10 with gold trim);
+a crane stands over a construction; the stadium shows seat colour, roof,
+floodlights and screen from its look. An admin can upload a background and a picture per building
 (`static/club_base/uploads`); levels and the crane are drawn on top.
 Player-uploaded photos are deliberately not supported (moderation).
 

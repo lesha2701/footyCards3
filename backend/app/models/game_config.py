@@ -9,23 +9,28 @@ from app.models.mixins import TimestampMixin
 
 # «Клубная база» defaults (GameConfig.club_base_buildings / club_base_caps;
 # the 0179 migration writes the same values). Lists are per level.
-_BASE_COSTS = [1500, 4000, 9000, 18000, 35000]
-_BASE_HOURS = [8, 24, 48, 72, 96]
+_BASE_COSTS = [1500, 3500, 7000, 12000, 20000, 32000, 48000, 70000, 100000, 140000]
+_BASE_HOURS = [12, 24, 36, 48, 72, 96, 120, 168, 216, 288]
 DEFAULT_CLUB_BASE_BUILDINGS: dict = {
-    "hq": {"costs": [1000, 3000, 7000, 15000, 30000], "hours": [2, 12, 24, 48, 72], "cap": [1, 2, 3, 4, 5]},
-    "stadium": {"costs": [3000, 8000, 16000, 32000, 60000], "hours": [12, 24, 48, 72, 120],
-                "matchday": [20, 35, 55, 80, 110], "capacity": [8000, 20000, 35000, 55000, 80000]},
-    "hotel": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "matchday_pct": [10, 20, 30, 40, 50]},
-    "training": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "familiarity_pct": [10, 20, 30, 40, 50],
-                 "my_player_xp_pct": [5, 10, 15, 20, 25]},
-    "medical": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "injury_pct": [10, 15, 20, 30, 40],
-                "recovery": [3, 5, 7, 9, 12]},
-    "analytics": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "prep_pct": [4, 8, 12, 16, 20]},
-    "media": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "rep_pct": [5, 10, 15, 20, 25]},
-    "marketing": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "daily": [50, 90, 140, 200, 260],
-                  "matchday_pct": [5, 10, 15, 20, 25]},
-    "shop": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "daily": [30, 60, 90, 130, 170], "sell_pct": [2, 4, 6, 8, 10]},
-    "accounting": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "discount_pct": [3, 6, 9, 12, 15]},
+    "hq": {"costs": [1000, 2500, 5000, 9000, 15000, 24000, 36000, 52000, 75000, 105000],
+           "hours": [4, 12, 24, 36, 60, 84, 108, 144, 192, 240], "cap": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]},
+    "stadium": {"costs": [3000, 7000, 14000, 24000, 40000, 60000, 85000, 120000, 165000, 220000],
+                "hours": [24, 36, 48, 72, 96, 120, 168, 216, 264, 336],
+                "matchday": [12, 22, 32, 45, 58, 72, 88, 105, 125, 150],
+                "capacity": [5000, 10000, 16000, 23000, 31000, 40000, 50000, 61000, 73000, 86000]},
+    "hotel": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "matchday_pct": [5, 10, 15, 20, 25, 30, 36, 42, 48, 55]},
+    "training": {"costs": _BASE_COSTS, "hours": _BASE_HOURS,
+                 "familiarity_pct": [5, 10, 15, 20, 25, 30, 36, 42, 48, 55],
+                 "my_player_xp_pct": [3, 5, 8, 10, 13, 15, 18, 20, 23, 25]},
+    "medical": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "injury_pct": [5, 10, 14, 18, 22, 26, 30, 34, 38, 42],
+                "recovery": [2, 3, 4, 5, 6, 7, 8, 10, 12, 14]},
+    "analytics": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "prep_pct": [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]},
+    "media": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "rep_pct": [3, 5, 8, 10, 13, 15, 18, 20, 23, 25]},
+    "marketing": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "daily": [30, 50, 75, 100, 130, 160, 190, 225, 260, 300],
+                  "matchday_pct": [3, 5, 8, 10, 13, 15, 18, 20, 23, 25]},
+    "shop": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "daily": [20, 35, 50, 70, 90, 110, 135, 160, 185, 210],
+             "sell_pct": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]},
+    "accounting": {"costs": _BASE_COSTS, "hours": _BASE_HOURS, "discount_pct": [2, 3, 5, 6, 8, 9, 11, 12, 14, 15]},
 }
 DEFAULT_CLUB_BASE_CAPS: dict = {
     "matchday_pct": 100, "injury_pct": 50, "recovery": 15, "familiarity_pct": 60, "my_player_xp_pct": 30,
@@ -930,7 +935,7 @@ class GameConfig(TimestampMixin, Base):
         JSON, nullable=False, default=lambda: {k: dict(v) for k, v in DEFAULT_CLUB_BASE_BUILDINGS.items()},
     )
     club_base_caps: Mapped[dict] = mapped_column(JSON, nullable=False, default=lambda: dict(DEFAULT_CLUB_BASE_CAPS))
-    club_base_stars_per_hour: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    club_base_stars_per_hour: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     # Sponsors/merchandise accrue at most this many days of income unclaimed.
     club_base_income_max_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     # Admin art: {"background": path, "buildings": {code: path}} (static/

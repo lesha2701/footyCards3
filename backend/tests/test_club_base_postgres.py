@@ -109,7 +109,7 @@ async def test_concurrent_income_claims_pay_once(pg):
     ])
     assert results.count("ok") == 1
     async with pg() as s:
-        assert (await s.get(User, uid)).balance == 160
+        assert (await s.get(User, uid)).balance == 100
     assert await _count(pg, CoinTransaction, CoinTransaction.user_id == uid,
                         CoinTransaction.type == TransactionType.club_base_income) == 1
 

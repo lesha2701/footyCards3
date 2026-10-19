@@ -91,7 +91,7 @@ async def test_hq_first_then_timer_idempotency_and_lazy_completion(client, db_se
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["construction"]["building_code"] == "hq" and body["construction"]["to_level"] == 1
-    assert body["construction"]["speedup_stars"] == 2 and body["new_balance"] == 9_000  # 2 h × 1 Star; 1000 coins
+    assert body["construction"]["speedup_stars"] == 8 and body["new_balance"] == 9_000  # 4 h × 2 Stars; 1000 coins
     replay = await client.post(f"{API}/club-base/buildings/hq/upgrade", headers=headers, json={"idempotency_key": "b1"})
     assert replay.status_code == 200 and replay.json()["new_balance"] == 9_000
     busy = await client.post(f"{API}/club-base/buildings/hq/upgrade", headers=headers, json={})
@@ -130,7 +130,7 @@ async def test_one_queue_with_the_academy(client, db_session, bot_token):
 async def test_accounting_discount_on_base_and_academy(client, db_session, bot_token):
     await _config(db_session)
     headers, user = await _login(client, db_session, bot_token, 970103, balance=100_000)
-    await _set_levels(db_session, user.id, {"hq": 5, "accounting": 5})  # −15%
+    await _set_levels(db_session, user.id, {"hq": 10, "accounting": 10})  # −15%
     state = (await client.get(f"{API}/club-base", headers=headers)).json()
     assert _building(state, "stadium")["next_cost"] == 2_550 and _building(state, "stadium")["next_cost_full"] == 3_000
     resp = await client.post(f"{API}/club-base/buildings/stadium/upgrade", headers=headers, json={})
@@ -151,19 +151,19 @@ async def test_income_accrues_is_capped_and_claimed_once(client, db_session, bot
     await _set_levels(db_session, user.id, {"hq": 1, "marketing": 1, "shop": 1},
                       income_since=now - timedelta(days=2, minutes=1))
     state = (await client.get(f"{API}/club-base", headers=headers)).json()
-    assert state["income"]["daily"] == 80 and state["income"]["pending"] == 160 and state["income"]["cap"] == 240
+    assert state["income"]["daily"] == 50 and state["income"]["pending"] == 100 and state["income"]["cap"] == 150
     claim = await client.post(f"{API}/club-base/income/claim", headers=headers, json={"idempotency_key": "i1"})
     assert claim.status_code == 200, claim.text
-    assert claim.json()["claimed"] == 160 and claim.json()["new_balance"] == 160
+    assert claim.json()["claimed"] == 100 and claim.json()["new_balance"] == 100
     again = await client.post(f"{API}/club-base/income/claim", headers=headers, json={"idempotency_key": "i1"})
-    assert again.status_code == 200 and again.json()["new_balance"] == 160  # replay, not paid twice
+    assert again.status_code == 200 and again.json()["new_balance"] == 100  # replay, not paid twice
     assert (await client.post(f"{API}/club-base/income/claim", headers=headers, json={})).status_code == 409
 
     base = await _base(db_session, user.id)
     base.income_since = now - timedelta(days=10)
     await db_session.commit()
     claim = await client.post(f"{API}/club-base/income/claim", headers=headers, json={})
-    assert claim.json()["claimed"] == 240  # three days at most
+    assert claim.json()["claimed"] == 150  # three days at most
     tx = (await db_session.execute(select(func.count(CoinTransaction.id)).where(
         CoinTransaction.user_id == user.id, CoinTransaction.type == TransactionType.club_base_income,
     ))).scalar_one()
@@ -178,18 +178,18 @@ def test_income_settles_at_the_old_rate_when_a_building_finishes():
                         building_code="marketing", building_to_level=2, build_started_at=start,
                         build_ends_at=start + timedelta(days=1))
     club_base_service._finish(base, config)
-    assert base.levels["marketing"] == 2 and base.income_accrued == 50  # one day at level 1
-    assert club_base_service.pending_income(base, 90, config, datetime.now(timezone.utc)) == 50 + 90
+    assert base.levels["marketing"] == 2 and base.income_accrued == 30  # one day at level 1
+    assert club_base_service.pending_income(base, 50, config, datetime.now(timezone.utc)) == 30 + 50
 
 
 def test_effects_sum_and_are_capped():
     config = NS(club_base_enabled=True, club_base_caps={"injury_pct": 50, "daily": 100},
                 club_base_buildings={**DEFAULT_CLUB_BASE_BUILDINGS,
                                      "medical": {"costs": [1], "hours": [1], "injury_pct": [90], "recovery": [3]}})
-    fx = club_base_service.effects_from_levels({"medical": 1, "marketing": 5, "shop": 5, "hotel": 5}, config)
+    fx = club_base_service.effects_from_levels({"medical": 1, "marketing": 10, "shop": 10, "hotel": 10}, config)
     assert fx["injury_pct"] == 50 and fx["recovery"] == 3
-    assert fx["daily"] == 100  # 260 + 170 clamped
-    assert fx["matchday_pct"] == 75  # hotel 50 + tickets 25
+    assert fx["daily"] == 100  # 300 + 210 clamped
+    assert fx["matchday_pct"] == 80  # hotel 55 + tickets 25
     assert "cap" not in fx and "capacity" not in fx
     config.club_base_enabled = False
     assert club_base_service.effects_from_levels({"medical": 1}, config) == {}
@@ -242,7 +242,7 @@ async def test_stars_speedup_finishes_a_base_construction(client, db_session, bo
     inv = await client.post(f"{API}/club-base/speedup-invoice", headers=headers)
     assert inv.status_code == 200, inv.text
     token, stars = inv.json()["payload_token"], inv.json()["stars_amount"]
-    assert stars == 12
+    assert stars == 48  # 24 h × 2 Stars
     ok, _ = await stars_payment_service.validate_pre_checkout(db_session, token, stars)
     assert ok
     await stars_payment_service.deliver_payment(db_session, token, user.telegram_id, "ch-base-1", stars)
@@ -277,7 +277,7 @@ async def test_stadium_look_is_unlocked_by_level(client, db_session, bot_token):
     await _config(db_session)
     headers, user = await _login(client, db_session, bot_token, 970107)
     assert (await client.put(f"{API}/club-base/stadium/look", headers=headers, json={"seats": "blue"})).status_code == 409
-    await _set_levels(db_session, user.id, {"hq": 3, "stadium": 3})
+    await _set_levels(db_session, user.id, {"hq": 6, "stadium": 6})
     ok = await client.put(f"{API}/club-base/stadium/look", headers=headers,
                           json={"seats": "blue", "roof": "canopy", "lights": True})
     assert ok.status_code == 200, ok.text
@@ -302,7 +302,7 @@ async def test_quick_sell_and_training_get_the_base_bonus(client, db_session, bo
 
     await _config(db_session)
     headers, user = await _login(client, db_session, bot_token, 970109, balance=0)
-    await _set_levels(db_session, user.id, {"hq": 5, "shop": 5})  # +10%
+    await _set_levels(db_session, user.id, {"hq": 10, "shop": 10})  # +10%
     player = await create_player(db_session, rating=60, position=Position.ST)
     player.quick_sell_price = 100
     _serial["n"] += 1
@@ -340,22 +340,22 @@ async def _matchday_total(db_session, user_id) -> tuple[int, int]:
 async def test_stadium_pays_every_home_match_with_effects_frozen_at_the_start(client, db_session, bot_token):
     await _config(db_session)
     user_id, headers = await _career_player(client, db_session, bot_token, 970201)
-    await _set_levels(db_session, user_id, {"hq": 5, "stadium": 5, "hotel": 5, "marketing": 5})
+    await _set_levels(db_session, user_id, {"hq": 10, "stadium": 10, "hotel": 10, "marketing": 10})
     resp = await client.post(f"{API}/career/seasons", headers=headers, json={"difficulty": "amateur"})
     assert resp.status_code == 200, resp.text
     season_id = resp.json()["season"]["id"]
     first = datetime.fromisoformat(resp.json()["season"]["schedule"][0])
     await career_service.resolve_due(db_session, season_id, now=first + timedelta(minutes=30))
     # The base changes after the first round: this season keeps its effects.
-    await _set_levels(db_session, user_id, {"hq": 5})
+    await _set_levels(db_session, user_id, {"hq": 10})
     later = datetime.now(timezone.utc) + timedelta(days=8)
     await career_service.resolve_due(db_session, season_id, now=later)
 
     db_session.expire_all()
     part = (await db_session.execute(select(CareerParticipant).where(CareerParticipant.season_id == season_id))).scalar_one()
-    assert part.base_effects["matchday"] == 110 and part.base_effects["matchday_pct"] == 75
+    assert part.base_effects["matchday"] == 150 and part.base_effects["matchday_pct"] == 80
     count, total = await _matchday_total(db_session, user_id)
-    assert count == 7 and total == 7 * 192  # 7 home league matches × 110 × 1.75
+    assert count == 7 and total == 7 * 270  # 7 home league matches × 150 × 1.8
     season = await db_session.get(CareerSeason, season_id)
     assert season.status == "finished"
 
@@ -368,7 +368,7 @@ async def test_a_season_started_before_the_base_gets_nothing(client, db_session,
     part = (await db_session.execute(select(CareerParticipant).where(CareerParticipant.season_id == season_id))).scalar_one()
     part.base_effects = {}  # what migration 0179 writes for seasons already under way
     await db_session.commit()
-    await _set_levels(db_session, user_id, {"hq": 5, "stadium": 5})
+    await _set_levels(db_session, user_id, {"hq": 10, "stadium": 10})
     await career_service.resolve_due(db_session, season_id, now=datetime.now(timezone.utc) + timedelta(days=8))
     assert await _matchday_total(db_session, user_id) == (0, 0)
 

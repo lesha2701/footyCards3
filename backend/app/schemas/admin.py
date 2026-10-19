@@ -591,7 +591,7 @@ class GameConfigOut(BaseModel):
     club_base_enabled: bool = True
     club_base_buildings: dict = {}
     club_base_caps: dict = {}
-    club_base_stars_per_hour: int = 1
+    club_base_stars_per_hour: int = 2
     club_base_income_max_days: int = 3
     club_base_art: dict = {}
     calendar_catchup_coins: int = 150
