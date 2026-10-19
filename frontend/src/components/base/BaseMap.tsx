@@ -344,9 +344,15 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
       })}
       <ellipse cx={cx} cy={cy} rx={rx - 2} ry={ry - 2} fill={seat} />
       <ellipse cx={cx} cy={cy} rx={rx - 2} ry={ry - 2} fill="url(#base-seats)" opacity="0.5" />
+      {/* seat rows (faint) and radial aisles that cut the stands into sectors */}
       {Array.from({ length: Math.min(9, vl + 1) }).map((_, i) => (
-        <ellipse key={i} cx={cx} cy={cy} rx={rx - 4 - i * (stand / 9)} ry={ry - 4 - i * (stand / 13)} fill="none" stroke="#000" strokeOpacity="0.15" strokeWidth="0.6" />
+        <ellipse key={i} cx={cx} cy={cy} rx={rx - 4 - i * (stand / 9)} ry={ry - 4 - i * (stand / 13)} fill="none" stroke="#000" strokeOpacity="0.08" strokeWidth="0.4" />
       ))}
+      {Array.from({ length: 24 }).map((_, i) => {
+        const a = (i / 24) * Math.PI * 2;
+        return <line key={`aisle${i}`} x1={cx + Math.cos(a) * irx} y1={cy + Math.sin(a) * iry} x2={cx + Math.cos(a) * (rx - 2)}
+                     y2={cy + Math.sin(a) * (ry - 2)} stroke="#f4f1ea" strokeOpacity="0.55" strokeWidth="0.7" />;
+      })}
       {/* vomitories */}
       {[0.25, 0.75, 1.25, 1.75].map((f) => (
         <rect key={f} x={cx + Math.cos(f * Math.PI) * (rx - stand / 2) - 1.5} y={cy + Math.sin(f * Math.PI) * (ry - stand / 3) - 1.5}
@@ -366,20 +372,38 @@ function Stadium({ b, look, art }: { b: ClubBaseBuilding; look: ClubBaseLook; ar
         </g>
         <circle cx={cx + 6} cy={cy + 3} r="1.3" fill="#fff" />
       </g>
-      {look.roof === "canopy" && (
-        <g fill="none" stroke="rgb(var(--map-roof))" strokeOpacity="0.85" strokeWidth={stand * 0.8}>
-          <path d={`M ${cx - rx * 0.7} ${cy - ry * 0.74} A ${rx - stand / 2} ${ry - stand / 3} 0 0 1 ${cx + rx * 0.7} ${cy - ry * 0.74}`} />
-          <path d={`M ${cx - rx * 0.7} ${cy + ry * 0.74} A ${rx - stand / 2} ${ry - stand / 3} 0 0 0 ${cx + rx * 0.7} ${cy + ry * 0.74}`} />
-        </g>
-      )}
-      {look.roof === "full" && (
-        <g>
-          <ellipse cx={cx} cy={cy} rx={rx - stand * 0.32} ry={ry - stand * 0.22} fill="none" stroke="rgb(var(--map-roof))"
-                   strokeOpacity="0.7" strokeWidth={stand * 0.55} />
-          <ellipse cx={cx} cy={cy} rx={rx - stand * 0.32} ry={ry - stand * 0.22} fill="none" stroke="#fff" strokeOpacity="0.25"
-                   strokeWidth="0.6" strokeDasharray="2 3" />
-        </g>
-      )}
+      {look.roof !== "none" && (() => {
+        // A light membrane roof over the outer part of the stands, on
+        // radial trusses; the canopy covers only the two long sides.
+        const ro = { x: rx + 1, y: ry + 1 };
+        const ri = { x: rx - stand * 0.62, y: ry - stand * 0.42 };
+        const pt = (r: { x: number; y: number }, a: number) => `${(cx + Math.cos(a) * r.x).toFixed(1)},${(cy + Math.sin(a) * r.y).toFixed(1)}`;
+        const band = (a0: number, a1: number) => {
+          const steps = 24;
+          const outer = Array.from({ length: steps + 1 }, (_, i) => pt(ro, a0 + ((a1 - a0) * i) / steps));
+          const inner = Array.from({ length: steps + 1 }, (_, i) => pt(ri, a1 - ((a1 - a0) * i) / steps));
+          return `M${outer.join(" L")} L${inner.join(" L")} Z`;
+        };
+        const arcs: [number, number][] = look.roof === "full"
+          ? [[0, Math.PI * 2]]
+          : [[Math.PI * 1.13, Math.PI * 1.87], [Math.PI * 0.13, Math.PI * 0.87]];
+        const trusses = look.roof === "full" ? 32 : 12;
+        return (
+          <g>
+            {arcs.map(([a0, a1]) => (
+              <g key={a0}>
+                <path d={band(a0, a1)} fill="#000" opacity="0.18" transform="translate(0 2.5)" />
+                <path d={band(a0, a1)} fill="#eef1f3" opacity="0.92" stroke="#8d969c" strokeWidth="0.6" />
+                {Array.from({ length: trusses + 1 }).map((_, i) => {
+                  const a = a0 + ((a1 - a0) * i) / trusses;
+                  return <line key={i} x1={cx + Math.cos(a) * ri.x} y1={cy + Math.sin(a) * ri.y} x2={cx + Math.cos(a) * ro.x}
+                               y2={cy + Math.sin(a) * ro.y} stroke="#aab3b9" strokeWidth="0.5" />;
+                })}
+              </g>
+            ))}
+          </g>
+        );
+      })()}
       {look.screen && (
         <g>
           <rect x={cx - 15} y={cy - ry - 10} width="30" height="12" rx="1.5" fill="#101418" stroke="rgb(var(--map-wall))" strokeWidth="0.8" />
