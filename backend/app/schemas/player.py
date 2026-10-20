@@ -55,10 +55,40 @@ class PlayerOut(BaseModel):
         return result
 
 
+def split_display_name(display_name: str) -> tuple[str, str]:
+    """first_name / last_name from the display name — the admin only edits
+    the display name now; the two legacy NOT NULL columns follow it. One
+    word fills both («Пеле» → «Пеле», «Пеле»); longer names split after the
+    first word («Лионель Месси» → «Лионель», «Месси»)."""
+    parts = display_name.strip().split(maxsplit=1)
+    if not parts:
+        return "", ""
+    first = parts[0][:64]
+    last = (parts[1] if len(parts) > 1 else parts[0])[:64]
+    return first, last
+
+
+def _fill_names_from_display(data):
+    """Before-validator for create/update: blank first/last names follow the
+    display name (older clients and CSV files may still send them)."""
+    if not isinstance(data, dict) or not (data.get("display_name") or "").strip():
+        return data
+    if (data.get("first_name") or "").strip() and (data.get("last_name") or "").strip():
+        return data
+    first, last = split_display_name(data["display_name"])
+    return {**data, "first_name": first, "last_name": last}
+
+
 class PlayerCreate(BaseModel):
-    first_name: str
-    last_name: str
-    display_name: str
+    first_name: str = ""
+    last_name: str = ""
+    display_name: str = Field(min_length=1)
+
+
+    @model_validator(mode="before")
+    @classmethod
+    def _names(cls, data):
+        return _fill_names_from_display(data)
     rating: int = Field(ge=1, le=99)
     attack_rating: Optional[int] = Field(default=None, ge=1, le=99)
     defense_rating: Optional[int] = Field(default=None, ge=1, le=99)
@@ -76,7 +106,13 @@ class PlayerCreate(BaseModel):
 class PlayerUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
-    display_name: Optional[str] = None
+    display_name: Optional[str] = Field(default=None, min_length=1)
+
+
+    @model_validator(mode="before")
+    @classmethod
+    def _names(cls, data):
+        return _fill_names_from_display(data)
     rating: Optional[int] = Field(default=None, ge=1, le=99)
     attack_rating: Optional[int] = Field(default=None, ge=1, le=99)
     defense_rating: Optional[int] = Field(default=None, ge=1, le=99)

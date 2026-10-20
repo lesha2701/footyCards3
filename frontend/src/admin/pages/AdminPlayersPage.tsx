@@ -24,7 +24,7 @@ const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
 const POSITIONS: Position[] = ["GK", "LB", "CB", "RB", "LWB", "RWB", "CDM", "CM", "CAM", "LM", "RM", "LW", "RW", "ST"];
 
 const emptyForm = {
-  first_name: "", last_name: "", display_name: "", rating: 70, rarity: "common" as Rarity,
+  display_name: "", rating: 70, rarity: "common" as Rarity,
   country: "", club: "", position: "ST" as Position, quick_sell_price: 10, is_active: true,
   is_pack_droppable: true,
   collection_id: "" as number | "",
@@ -89,7 +89,7 @@ export default function AdminPlayersPage() {
   const openEdit = (p: Player) => {
     setEditing(p);
     setForm({
-      first_name: p.first_name, last_name: p.last_name, display_name: p.display_name, rating: p.rating,
+      display_name: p.display_name, rating: p.rating,
       rarity: p.rarity, country: p.country, club: p.club, position: p.position,
       quick_sell_price: p.quick_sell_price, is_active: p.is_active,
       is_pack_droppable: p.is_pack_droppable,
@@ -202,8 +202,6 @@ export default function AdminPlayersPage() {
             <p className="mb-4 font-display text-lg font-bold">{editing ? "Редактировать игрока" : "Новый игрок"}</p>
             {error && <p className="mb-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
             <div className="flex flex-col gap-2 text-sm">
-              <TextField label="Имя" value={form.first_name} onChange={(v) => setForm({ ...form, first_name: v })} />
-              <TextField label="Фамилия" value={form.last_name} onChange={(v) => setForm({ ...form, last_name: v })} />
               <TextField label="Отображаемое имя" value={form.display_name} onChange={(v) => setForm({ ...form, display_name: v })} />
               <TextField label="Страна" value={form.country} onChange={(v) => setForm({ ...form, country: v })} />
               <TextField label="Клуб" value={form.club} onChange={(v) => setForm({ ...form, club: v })} />
