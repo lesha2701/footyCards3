@@ -18,10 +18,15 @@ const toast = (text: string) => useAdminToastStore.getState().push(text, "succes
 const NEW_ITEM: AdminEquipmentItem = {
   name: "", description: "", icon: "👕", slot: "boots", rarity: "rare", collection_id: null, effect: "rating",
   effect_value: 1, cond_club: null, cond_country: null, coins_price: 0, stars_price: 0, is_active: true, sort_order: 0,
+  max_supply: null, available_from: null, available_until: null,
 };
 const NEW_COLLECTION: AdminEquipmentCollection = {
-  name: "", description: "", set_size: 3, set_bonus_rating: 1, is_active: true, sort_order: 0,
+  name: "", description: "", set_size: 3, set_bonus_rating: 1, set_team_country: null, set_team_chemistry: 0,
+  is_active: true, sort_order: 0,
 };
+// <input type="date"> value <-> ISO timestamp (UTC midnight).
+const dateValue = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
+const isoOf = (value: string) => (value ? `${value}T00:00:00+00:00` : null);
 
 /** «Экипировка»: switch and ceilings, collections, things (photo, effect,
  * prices), handing a thing to a player. */
@@ -67,6 +72,8 @@ export default function AdminEquipmentTab() {
           <Field label="Описание" wide><input value={collection.description ?? ""} onChange={(e) => setCollection({ ...collection, description: e.target.value })} className={input} /></Field>
           <Field label="Вещей для комплекта"><input type="number" min={1} value={collection.set_size} onChange={(e) => setCollection({ ...collection, set_size: Number(e.target.value) })} className={input} /></Field>
           <Field label="+ рейтинга за комплект"><input type="number" min={0} value={collection.set_bonus_rating} onChange={(e) => setCollection({ ...collection, set_bonus_rating: Number(e.target.value) })} className={input} /></Field>
+          <Field label="Сборная: страна (комплект)"><input value={collection.set_team_country ?? ""} placeholder="нет" onChange={(e) => setCollection({ ...collection, set_team_country: e.target.value || null })} className={input} /></Field>
+          <Field label="+ химии её игрокам в составе"><input type="number" min={0} max={3} value={collection.set_team_chemistry} onChange={(e) => setCollection({ ...collection, set_team_chemistry: Number(e.target.value) })} className={input} /></Field>
           <Field label="Порядок"><input type="number" value={collection.sort_order} onChange={(e) => setCollection({ ...collection, sort_order: Number(e.target.value) })} className={input} /></Field>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={collection.is_active} onChange={(e) => setCollection({ ...collection, is_active: e.target.checked })} /> В магазине</label>
         </Editor>
@@ -92,6 +99,11 @@ export default function AdminEquipmentTab() {
           <Field label="Только для страны"><input value={item.cond_country ?? ""} placeholder="любая" onChange={(e) => setItem({ ...item, cond_country: e.target.value || null })} className={input} /></Field>
           <Field label="Цена, монеты (0 — нет)"><input type="number" min={0} value={item.coins_price} onChange={(e) => setItem({ ...item, coins_price: Number(e.target.value) })} className={input} /></Field>
           <Field label="Цена, звёзды ⭐ (0 — нет)"><input type="number" min={0} value={item.stars_price} onChange={(e) => setItem({ ...item, stars_price: Number(e.target.value) })} className={input} /></Field>
+          <Field label={`Тираж (пусто — без ограничений)${item.sold_count ? `, продано ${item.sold_count}` : ""}`}>
+            <input type="number" min={1} value={item.max_supply ?? ""} onChange={(e) => setItem({ ...item, max_supply: e.target.value ? Number(e.target.value) : null })} className={input} />
+          </Field>
+          <Field label="В продаже с"><input type="date" value={dateValue(item.available_from)} onChange={(e) => setItem({ ...item, available_from: isoOf(e.target.value) })} className={input} /></Field>
+          <Field label="В продаже до"><input type="date" value={dateValue(item.available_until)} onChange={(e) => setItem({ ...item, available_until: isoOf(e.target.value) })} className={input} /></Field>
           <Field label="Порядок"><input type="number" value={item.sort_order} onChange={(e) => setItem({ ...item, sort_order: Number(e.target.value) })} className={input} /></Field>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={item.is_active} onChange={(e) => setItem({ ...item, is_active: e.target.checked })} /> В магазине</label>
         </Editor>
@@ -209,7 +221,7 @@ function SettingsBlock() {
   });
   if (!config) return null;
   const value = <K extends keyof GameConfig>(k: K) => (k in draft ? draft[k] : config[k]) as GameConfig[K];
-  const num = (k: "equipment_max_rating" | "equipment_max_pp" | "equipment_max_chemistry", label: string) => (
+  const num = (k: "equipment_max_rating" | "equipment_max_pp" | "equipment_max_chemistry" | "equipment_max_talisman_pct", label: string) => (
     <Field label={label}>
       <input type="number" min={0} value={value(k)} onChange={(e) => setDraft({ ...draft, [k]: Number(e.target.value) })} className={input} />
     </Field>
@@ -225,10 +237,11 @@ function SettingsBlock() {
         <input type="checkbox" checked={value("equipment_enabled")} onChange={(e) => setDraft({ ...draft, equipment_enabled: e.target.checked })} />
         Включить экипировку
       </label>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {num("equipment_max_rating", "Потолок + рейтинга")}
         {num("equipment_max_pp", "Потолок % удара/обыгрыша")}
         {num("equipment_max_chemistry", "Потолок + химии")}
+        {num("equipment_max_talisman_pct", "Потолок талисманов, % (опыт, монеты)")}
       </div>
       <button onClick={() => save.mutate()} disabled={!Object.keys(draft).length || save.isPending}
         className="mt-2 rounded-lg bg-accent-lime px-4 py-1.5 text-sm font-semibold text-bg-base disabled:opacity-40">

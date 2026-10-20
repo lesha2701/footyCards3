@@ -410,6 +410,7 @@ def _human_side(part: CareerParticipant, pairs: list, config):
             "club_card_id": c.id, "player_id": c.player_id, "name": c.player.display_name,
             "rating": c.player.rating, "position": c.player.position.value, "category": slot.category,
             **({"skill": c.skill} if c.skill else {}),
+            **({"boosts": c.boosts} if getattr(c, "boosts", None) else {}),
         }
         for c, slot in with_slots
     ]

@@ -8,6 +8,7 @@ import uuid
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import select
 
 from app.core.exceptions import AppError
 from app.models.card import UserCard
@@ -96,3 +97,22 @@ async def test_concurrent_equips_of_one_copy_end_consistent(real_pg):
     # Exactly the card that ends up wearing it carries the bonus.
     assert worn_on in (a, b)
     assert bonuses[worn_on] == 1 and sum(bonuses.values()) == 1
+
+
+async def test_concurrent_buys_never_oversell_a_limited_edition(real_pg):
+    async with real_pg() as s:
+        item = EquipmentItem(name=f"Тираж {uuid.uuid4().hex[:6]}", slot="boots", effect="shot_pp", effect_value=6,
+                             coins_price=10, max_supply=3)
+        s.add(item)
+        users = [User(telegram_id=int(uuid.uuid4().int % 10**12), first_name="Eq", balance=1000) for _ in range(6)]
+        s.add_all(users)
+        await s.commit()
+        item_id, user_ids = item.id, [u.id for u in users]
+    results = await asyncio.gather(*[
+        _as(real_pg, uid, lambda s, u: equipment_service.buy_with_coins(s, u, item_id)) for uid in user_ids
+    ])
+    assert sum(1 for r in results if not isinstance(r, AppError)) == 3
+    async with real_pg() as s:
+        copies = (await s.execute(select(UserEquipment).where(UserEquipment.item_id == item_id))).unique().scalars().all()
+        assert sorted(c.serial_number for c in copies) == [1, 2, 3]
+        assert (await s.get(EquipmentItem, item_id)).sold_count == 3

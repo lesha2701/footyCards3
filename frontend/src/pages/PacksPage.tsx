@@ -145,12 +145,7 @@ export default function PacksPage() {
           <MonetizationEntries showStyle={false} showArtifacts={false} showEquipment={false} />
         </>
       ) : tab === "equipment" ? (
-        <>
-          <button onClick={() => navigate("/equipment")} className="self-end text-xs font-semibold text-accent-lime">
-            Мой инвентарь →
-          </button>
-          <EquipmentShop />
-        </>
+        <EquipmentShop />
       ) : tab === "artifacts" ? (
         <ArtifactShop />
       ) : tab === "gifts" ? (

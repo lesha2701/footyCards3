@@ -35,7 +35,7 @@ export default function EquipmentPage() {
           </button>
         ))}
       </div>
-      {tab === "inventory" ? <Inventory onShop={() => setTab("shop")} /> : <EquipmentShop />}
+      {tab === "inventory" ? <Inventory onShop={() => setTab("shop")} /> : <EquipmentShop showInventoryLink={false} />}
     </div>
   );
 }
@@ -67,14 +67,16 @@ function Inventory({ onShop }: { onShop: () => void }) {
   return (
     <div className="flex flex-col gap-2">
       {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
-      {data.items.map(({ copy_id, item, card_name }) => (
+      {data.items.map(({ copy_id, item, card_name, serial_number }) => (
         <div key={copy_id} className="flex items-center gap-3 rounded-2xl bg-bg-surface p-3">
           <EquipmentTile item={item} size="sm" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-ink-chalk">{item.name}</p>
             <p className="text-xs text-accent-lime">{item.effect_label}</p>
             <p className="truncate text-micro text-ink-mist">
-              {item.slot_label} · {card_name ? `надета: ${card_name}` : "свободна"}
+              {item.slot_label}
+              {serial_number && item.max_supply ? ` · №${serial_number} из ${item.max_supply}` : ""}
+              {" · "}{card_name ? `надета: ${card_name}` : "свободна"}
             </p>
           </div>
           {card_name && (

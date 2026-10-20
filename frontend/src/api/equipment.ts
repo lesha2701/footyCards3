@@ -21,6 +21,11 @@ export interface EquipmentItem {
   coins_price: number;
   stars_price: number;
   owned?: number;
+  /** Limited edition: total copies (null = unlimited) and copies left. */
+  max_supply?: number | null;
+  left?: number | null;
+  /** Seasonal: on sale until this moment (ISO, null = always). */
+  available_until?: string | null;
 }
 
 export interface EquipmentCollection {
@@ -30,20 +35,23 @@ export interface EquipmentCollection {
   image_path: string | null;
   set_size: number;
   set_bonus_rating: number;
+  /** «Комплект сборной»: the full set gives +N chemistry to this country's players in the squad. */
+  set_team_country?: string | null;
+  set_team_chemistry?: number;
   items: EquipmentItem[];
 }
 
 export interface EquipmentShop {
   enabled: boolean;
   slots: { code: string; label: string }[];
-  caps: { rating: number; pp: number; chemistry: number };
+  caps: { rating: number; pp: number; chemistry: number; talisman_pct?: number };
   collections: EquipmentCollection[];
   singles: EquipmentItem[];
 }
 
 export interface EquipmentInventory {
   enabled: boolean;
-  items: { copy_id: number; item: EquipmentItem; user_card_id: number | null; card_name: string | null }[];
+  items: { copy_id: number; item: EquipmentItem; serial_number?: number | null; user_card_id: number | null; card_name: string | null }[];
 }
 
 export interface CardEquipmentSlot {
@@ -59,7 +67,10 @@ export interface CardEquipment {
   card_id: number;
   rating_bonus: number;
   chemistry: number;
-  boosts: { shot_pp?: number; dribble_pp?: number };
+  boosts: {
+    shot_pp?: number; dribble_pp?: number; save_pp?: number; tackle_pp?: number; pass_pp?: number;
+    xp_pct?: number; coins_pct?: number; team_country?: string; team_chemistry?: number;
+  };
   slots: CardEquipmentSlot[];
 }
 

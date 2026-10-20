@@ -138,6 +138,9 @@ export interface UserCard {
   path_rating_bonus?: number;
   /** «Экипировка» it wears (already included in player.rating). */
   equipment_rating_bonus?: number;
+  /** Its worn things: +chemistry and the boosts (shot/save/…, a national-team set). */
+  equipment_chemistry?: number;
+  equipment_boosts?: Record<string, unknown> | null;
   /** «Академия» prestige tier, its «Икона» number and the reforged talent. */
   prestige?: number;
   prestige_icon_number?: number | null;

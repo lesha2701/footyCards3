@@ -12,8 +12,21 @@ small effect (EFFECTS):
   * dribble_pp — +N pp to its 1-on-1 dribble there; in Card Arena it lowers
                  the ball carrier's failure chance in one-on-one and
                  flank-run moments;
+  * save_pp    — +N pp to the save chance when this card keeps goal (Card
+                 Arena and the tournament engine);
+  * tackle_pp  — −N pp to the foul chance of this card's tackles (and, in
+                 Card Arena, to its failed blocks);
+  * pass_pp    — −N pp to the fail chance of this card's passes;
   * chemistry  — +N chemistry points when the card stands on its position
-                 (chemistry_service).
+                 (chemistry_service);
+  * xp_pct / coins_pct — talismans, no match power: +N% «Академия»
+                 experience for this card (path_service.award_match) and +N%
+                 coins for a won Card Arena match (summed over the lineup).
+A collection may also give a squad-wide bonus: its full set on one card adds
+`set_team_chemistry` to every on-position player of `set_team_country` in
+that card's squad (boosts["team_country"/"team_chemistry"], chemistry_service).
+A thing may be a limited edition (`max_supply`, copies numbered by
+`sold_count`) or seasonal (`available_from`/`available_until`).
 A thing may be limited to a club / country (`cond_club`/`cond_country`:
 «родная форма») — on another player it is worn but gives nothing. Wearing
 `set_size` things of one collection on one card adds the collection's
@@ -31,6 +44,7 @@ longer owns), and a trade takes the things off before the card changes hands
 purchases/equips; coin purchases are idempotent via
 (user_id, purchase_key).
 """
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select
@@ -59,8 +73,15 @@ EFFECTS: dict[str, str] = {
     "rating": "+{v} к рейтингу",
     "shot_pp": "+{v}% к точности удара",
     "dribble_pp": "+{v}% к обыгрышу 1 на 1",
+    "save_pp": "+{v}% к сейвам вратаря",
+    "tackle_pp": "+{v}% к чистому отбору",
+    "pass_pp": "+{v}% к точности паса",
     "chemistry": "+{v} к химии",
+    "xp_pct": "+{v}% опыта «Академии»",
+    "coins_pct": "+{v}% монет за победу в Арене",
 }
+PP_EFFECTS = ("shot_pp", "dribble_pp", "save_pp", "tackle_pp", "pass_pp")
+TALISMAN_EFFECTS = ("xp_pct", "coins_pct")
 RARITIES = ("common", "rare", "epic", "legendary")
 GK_ONLY_SLOTS = {"gloves"}
 
@@ -89,7 +110,7 @@ def compute_effects(player, items: list[EquipmentItem], config: GameConfig) -> t
     """(rating, chemistry, boosts) of everything one card wears, capped."""
     if not config.equipment_enabled:
         return 0, 0, None
-    totals = {"rating": 0, "shot_pp": 0, "dribble_pp": 0, "chemistry": 0}
+    totals = {effect: 0 for effect in EFFECTS}
     per_collection: dict[int, int] = {}
     collections: dict[int, EquipmentCollection] = {}
     for item in items:
@@ -100,16 +121,25 @@ def compute_effects(player, items: list[EquipmentItem], config: GameConfig) -> t
         if item.collection_id is not None and item.collection is not None and item.collection.is_active:
             per_collection[item.collection_id] = per_collection.get(item.collection_id, 0) + 1
             collections[item.collection_id] = item.collection
+    team: Optional[tuple[str, int]] = None
     for collection_id, count in per_collection.items():
         collection = collections[collection_id]
         if count >= max(1, collection.set_size):
             totals["rating"] += max(0, collection.set_bonus_rating)
+            team_country = getattr(collection, "set_team_country", None)
+            team_points = int(getattr(collection, "set_team_chemistry", 0) or 0)
+            if team_country and team_points > 0 and team is None:
+                team = (team_country, team_points)
     rating = min(totals["rating"], max(0, config.equipment_max_rating))
     chemistry = min(totals["chemistry"], max(0, config.equipment_max_chemistry))
-    boosts = {
-        effect: min(totals[effect], max(0, config.equipment_max_pp))
-        for effect in ("shot_pp", "dribble_pp") if totals[effect] > 0
+    boosts: dict = {
+        effect: min(totals[effect], max(0, config.equipment_max_pp)) for effect in PP_EFFECTS if totals[effect] > 0
     }
+    talisman_cap = max(0, int(getattr(config, "equipment_max_talisman_pct", 0) or 0))
+    boosts.update({effect: min(totals[effect], talisman_cap) for effect in TALISMAN_EFFECTS if totals[effect] > 0 and talisman_cap})
+    if team is not None and config.equipment_max_chemistry > 0:
+        boosts["team_country"] = team[0]
+        boosts["team_chemistry"] = min(team[1], max(0, config.equipment_max_chemistry))
     return rating, chemistry, (boosts or None)
 
 
@@ -177,6 +207,21 @@ async def detach_from_cards(db: AsyncSession, card_ids: list[int]) -> None:
 # --- read --------------------------------------------------------------------------------
 
 
+def on_sale(item: EquipmentItem, now: Optional[datetime] = None) -> bool:
+    now = now or datetime.now(timezone.utc)
+    if item.available_from is not None and now < _aware(item.available_from):
+        return False
+    return item.available_until is None or now < _aware(item.available_until)
+
+
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
+def _left(item: EquipmentItem) -> Optional[int]:
+    return max(0, item.max_supply - item.sold_count) if item.max_supply is not None else None
+
+
 def item_out(item: EquipmentItem) -> dict:
     return {
         "id": item.id, "name": item.name, "description": item.description, "image_path": item.image_path,
@@ -185,6 +230,8 @@ def item_out(item: EquipmentItem) -> dict:
         "effect": item.effect, "effect_value": item.effect_value, "effect_label": effect_label(item.effect, item.effect_value),
         "cond_club": item.cond_club, "cond_country": item.cond_country,
         "coins_price": item.coins_price, "stars_price": item.stars_price,
+        "max_supply": item.max_supply, "left": _left(item),
+        "available_until": _aware(item.available_until).isoformat() if item.available_until else None,
     }
 
 
@@ -192,6 +239,7 @@ def collection_out(collection: EquipmentCollection) -> dict:
     return {
         "id": collection.id, "name": collection.name, "description": collection.description,
         "image_path": collection.image_path, "set_size": collection.set_size, "set_bonus_rating": collection.set_bonus_rating,
+        "set_team_country": collection.set_team_country, "set_team_chemistry": collection.set_team_chemistry,
     }
 
 
@@ -223,11 +271,15 @@ async def shop(db: AsyncSession, user: User) -> dict:
     owned: dict[int, int] = {}
     for row in await _owned(db, user.id):
         owned[row.item_id] = owned.get(row.item_id, 0) + 1
-    sellable = [i for i in items if i.coins_price > 0 or i.stars_price > 0]
+    now = datetime.now(timezone.utc)
+    sellable = [i for i in items if (i.coins_price > 0 or i.stars_price > 0) and on_sale(i, now)]
     return {
         "enabled": bool(config.equipment_enabled),
         "slots": [{"code": code, "label": label} for code, label in SLOTS.items()],
-        "caps": {"rating": config.equipment_max_rating, "pp": config.equipment_max_pp, "chemistry": config.equipment_max_chemistry},
+        "caps": {
+            "rating": config.equipment_max_rating, "pp": config.equipment_max_pp,
+            "chemistry": config.equipment_max_chemistry, "talisman_pct": config.equipment_max_talisman_pct,
+        },
         "collections": [
             {**collection_out(c), "items": [{**item_out(i), "owned": owned.get(i.id, 0)} for i in sellable if i.collection_id == c.id]}
             for c in collections
@@ -251,7 +303,10 @@ async def inventory(db: AsyncSession, user: User) -> dict:
     return {
         "enabled": bool((await get_config(db)).equipment_enabled),
         "items": [
-            {"copy_id": r.id, "item": item_out(r.item), "user_card_id": r.user_card_id, "card_name": names.get(r.user_card_id)}
+            {
+                "copy_id": r.id, "item": item_out(r.item), "serial_number": r.serial_number,
+                "user_card_id": r.user_card_id, "card_name": names.get(r.user_card_id),
+            }
             for r in rows
         ],
     }
@@ -320,9 +375,36 @@ async def _own_copy(db: AsyncSession, user_id: int, copy_id: int) -> UserEquipme
 def _check_buyable(item: Optional[EquipmentItem]) -> EquipmentItem:
     if item is None:
         raise NotFoundError("Вещь не найдена")
-    if not item.is_active:
+    if not item.is_active or not on_sale(item):
         raise ConflictError("Эта вещь не продаётся")
+    if item.max_supply is not None and item.sold_count >= item.max_supply:
+        raise ConflictError("Тираж этой вещи распродан")
     return item
+
+
+async def _lock_item(db: AsyncSession, item_id: int) -> Optional[EquipmentItem]:
+    # of=EquipmentItem: the item eager-loads its collection with an outer
+    # join, which Postgres refuses to lock.
+    return (await db.execute(
+        select(EquipmentItem).where(EquipmentItem.id == item_id)
+        .with_for_update(of=EquipmentItem).execution_options(populate_existing=True)
+    )).unique().scalar_one_or_none()
+
+
+async def _grant(
+    db: AsyncSession, user_id: int, item: EquipmentItem, source: str, purchase_key: Optional[str] = None,
+) -> UserEquipment:
+    """One new numbered copy (serial = sale order; the item row is locked by
+    the caller, so serials are unique and max_supply holds). Caller commits."""
+    item.sold_count += 1
+    if item.max_supply is not None and item.sold_count > item.max_supply:
+        item.max_supply = item.sold_count  # a paid Stars order that raced the last copy
+    row = UserEquipment(
+        user_id=user_id, item_id=item.id, source=source, purchase_key=purchase_key, serial_number=item.sold_count,
+    )
+    db.add_all([item, row])
+    await db.flush()
+    return row
 
 
 async def buy_with_coins(db: AsyncSession, user: User, item_id: int, purchase_key: Optional[str] = None) -> dict:
@@ -336,15 +418,18 @@ async def buy_with_coins(db: AsyncSession, user: User, item_id: int, purchase_ke
             await db.refresh(user)
             return {"copy_id": existing.id, "new_balance": user.balance, "replayed": True}
     locked = await lock_user_for_update(db, user.id)
-    item = _check_buyable(await db.get(EquipmentItem, item_id))
+    item = _check_buyable(await _lock_item(db, item_id))
     if item.coins_price <= 0:
         raise ConflictError("Эта вещь продаётся только за звёзды")
     await debit_coins(
         db, locked, item.coins_price, TransactionType.equipment_purchase, f"Экипировка «{item.name}»",
         related_object_type="equipment_item", related_object_id=item.id,
     )
-    row = UserEquipment(user_id=locked.id, item_id=item.id, source="coins", purchase_key=purchase_key)
-    db.add(row)
+    try:
+        row = await _grant(db, locked.id, item, "coins", purchase_key)
+    except IntegrityError:
+        await db.rollback()
+        return await buy_with_coins(db, user, item_id, purchase_key)
     try:
         await db.commit()
     except IntegrityError:
@@ -433,25 +518,33 @@ async def validate_stars(db: AsyncSession, user_id: int, item_id: int, stars_amo
     if not (await get_config(db)).equipment_enabled:
         return False, "Экипировка сейчас недоступна"
     item = await db.get(EquipmentItem, item_id)
-    if item is None or not item.is_active or item.stars_price != stars_amount:
+    if item is None or item.stars_price <= 0 or item.stars_price != stars_amount:
         return False, "Эта вещь больше не продаётся"
+    try:
+        _check_buyable(item)
+    except (ConflictError, NotFoundError) as exc:
+        return False, exc.message
     return True, ""
 
 
 async def deliver_stars(db: AsyncSession, user: User, item_id: int) -> dict:
     """Already paid: the copy is delivered even if the thing was switched
     off meanwhile. The caller commits."""
-    item = await db.get(EquipmentItem, item_id)
-    db.add(UserEquipment(user_id=user.id, item_id=item_id, source="stars"))
-    await db.flush()
-    return {"kind": "equipment", "name": item.name if item else "Экипировка"}
+    item = await _lock_item(db, item_id)
+    if item is None:
+        return {"kind": "equipment", "name": "Экипировка"}
+    row = await _grant(db, user.id, item, "stars")
+    return {"kind": "equipment", "name": item.name, "serial_number": row.serial_number}
 
 
 # --- admin -------------------------------------------------------------------------------
 
 
 def admin_item_out(item: EquipmentItem) -> dict:
-    return {**item_out(item), "is_active": item.is_active, "sort_order": item.sort_order}
+    return {
+        **item_out(item), "is_active": item.is_active, "sort_order": item.sort_order, "sold_count": item.sold_count,
+        "available_from": _aware(item.available_from).isoformat() if item.available_from else None,
+    }
 
 
 def admin_collection_out(collection: EquipmentCollection) -> dict:
@@ -520,11 +613,11 @@ async def admin_save_collection(db: AsyncSession, data: dict, collection_id: Opt
 
 
 async def admin_grant(db: AsyncSession, item_id: int, user_id: int) -> dict:
-    if await db.get(EquipmentItem, item_id) is None:
-        raise NotFoundError("Вещь не найдена")
     if await db.get(User, user_id) is None:
         raise NotFoundError("Пользователь не найден")
-    row = UserEquipment(user_id=user_id, item_id=item_id, source="admin")
-    db.add(row)
+    item = await _lock_item(db, item_id)
+    if item is None:
+        raise NotFoundError("Вещь не найдена")
+    row = await _grant(db, user_id, item, "admin")
     await db.commit()
-    return {"copy_id": row.id}
+    return {"copy_id": row.id, "serial_number": row.serial_number}

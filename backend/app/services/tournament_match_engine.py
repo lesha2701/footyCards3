@@ -140,6 +140,21 @@ def _clamp_rating(rating: float) -> int:
     return max(58, min(99, round(rating)))
 
 
+def _boost(actor: dict | None, key: str) -> int:
+    """An actor's «Экипировка» / artifact boost in percentage points (0 = none)."""
+    return int(((actor or {}).get("boosts") or {}).get(key) or 0)
+
+
+def _less(chance: float, pp: int) -> float:
+    """A failure chance lowered by a boost: −pp, never below 2% (untouched without one)."""
+    return max(0.02, chance - pp / 100) if pp > 0 and chance > 0.02 else chance
+
+
+def _more(chance: float, pp: int) -> float:
+    """A success chance raised by a boost: +pp, capped at 98% (untouched without one)."""
+    return min(0.98, chance + pp / 100) if pp > 0 and chance < 0.98 else chance
+
+
 def _resolve_shot_continuation(
     missed: bool, shot_type: str, config, blocker_rating, keeper_rating,
     keeper: dict | None = None, notes: list | None = None, one_on_one: bool = False,
@@ -150,7 +165,11 @@ def _resolve_shot_continuation(
         blocked = random.random() < _lerp_chance(blocker_rating, float(config.match_defender_block_chance_min), float(config.match_defender_block_chance_max))
     if not missed and not blocked:
         saved, save_notes = skill_roll(
-            _lerp_chance_positive(keeper_rating, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
+            # The keeper's «Экипировка» save bonus (save_pp).
+            _more(
+                _lerp_chance_positive(keeper_rating, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
+                _boost(keeper, "save_pp"),
+            ),
             # A keeper has one skill, so at most one of these is ever active.
             [_skill(keeper, "reflexes", 1)] + ([_skill(keeper, "one_on_one", 1)] if one_on_one else []),
         )
@@ -277,7 +296,10 @@ def _resolve_shot_action(
         # One roll, two opposing skills: the passer's "playmaker" lowers the
         # fail chance, the duel defender's "interceptor" raises it.
         pass_failed, roll_notes = skill_roll(
-            _lerp_chance(eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max)),
+            _less(
+                _lerp_chance(eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max)),
+                _boost(shooter, "pass_pp"),
+            ),
             [_skill(shooter, "playmaker", -1), _skill(defender, "interceptor", 1)],
         )
         notes.extend(roll_notes)
@@ -325,7 +347,10 @@ def _resolve_defense_tackle(
     is_box = moment["is_box"]
     shot_type = moment["shot_type"]
 
-    foul_chance = _lerp_chance(defender["rating"], float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max))
+    foul_chance = _less(
+        _lerp_chance(defender["rating"], float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max)),
+        _boost(defender, "tackle_pp"),
+    )
     if foul_mult != 1.0:  # career tackling style (career_tactics_service)
         foul_chance = min(0.95, foul_chance * foul_mult)
     foul = random.random() < foul_chance
@@ -358,7 +383,10 @@ def _resolve_defense_tackle(
                 penalty_talents.append(dynamic_note(keeper["talent"], keeper_bonus))
         eff_gk = _clamp_rating(defender["rating"] + keeper_bonus - config.match_penalty_gk_rating_penalty)
         saved, save_notes = skill_roll(
-            _lerp_chance_positive(eff_gk, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
+            _more(
+                _lerp_chance_positive(eff_gk, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
+                _boost(keeper, "save_pp"),
+            ),
             [_skill(keeper, "reflexes", 1)],
         )
         outcome = "save" if saved else "goal"

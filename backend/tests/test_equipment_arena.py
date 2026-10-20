@@ -35,20 +35,20 @@ def test_shot_and_dribble_bonuses_lower_the_failure_chance():
     notes: list = []
     adjust = match_service._equipment_adjusted
     # Shot accuracy: always on a shot.
-    assert adjust(_state({"shot_pp": 5}), actor, 0.40, PLAIN, shot=True, notes=notes) == pytest.approx(0.35)
+    assert adjust(_state({"shot_pp": 5}), actor, 0.40, PLAIN, own="shot_pp", notes=notes) == pytest.approx(0.35)
     assert notes == [{"player": "Игрок", "effect": "shot_pp", "bonus_pp": 5}]
     # «Обыгрыш»: only where the carrier beats a man (one-on-one, flank run).
-    assert adjust(_state({"shot_pp": 5, "dribble_pp": 4}), actor, 0.40, ONE_ON_ONE, shot=True, notes=[]) == pytest.approx(0.31)
-    assert adjust(_state({"dribble_pp": 4}), actor, 0.40, PLAIN, shot=True, notes=[]) == 0.40
+    assert adjust(_state({"shot_pp": 5, "dribble_pp": 4}), actor, 0.40, ONE_ON_ONE, own="shot_pp", notes=[]) == pytest.approx(0.31)
+    assert adjust(_state({"dribble_pp": 4}), actor, 0.40, PLAIN, own="shot_pp", notes=[]) == 0.40
     # A pass from the flank: dribble yes, shot accuracy no.
-    assert adjust(_state({"shot_pp": 5, "dribble_pp": 4}), actor, 0.30, FLANK, shot=False, notes=[]) == pytest.approx(0.26)
+    assert adjust(_state({"shot_pp": 5, "dribble_pp": 4}), actor, 0.30, FLANK, own="pass_pp", notes=[]) == pytest.approx(0.26)
     # Floor 2%, and a chance already at/below it is left alone.
-    assert adjust(_state({"shot_pp": 50}), actor, 0.10, PLAIN, shot=True, notes=[]) == 0.02
-    assert adjust(_state({"shot_pp": 5}), actor, 0.01, PLAIN, shot=True, notes=[]) == 0.01
+    assert adjust(_state({"shot_pp": 50}), actor, 0.10, PLAIN, own="shot_pp", notes=[]) == 0.02
+    assert adjust(_state({"shot_pp": 5}), actor, 0.01, PLAIN, own="shot_pp", notes=[]) == 0.01
     # Another card's things, or none at all: untouched.
     other = {"user_card_id": 8, "name": "Другой"}
-    assert adjust(_state({"shot_pp": 5}), other, 0.40, PLAIN, shot=True, notes=[]) == 0.40
-    assert adjust({}, actor, 0.40, PLAIN, shot=True, notes=[]) == 0.40
+    assert adjust(_state({"shot_pp": 5}), other, 0.40, PLAIN, own="shot_pp", notes=[]) == 0.40
+    assert adjust({}, actor, 0.40, PLAIN, own="shot_pp", notes=[]) == 0.40
 
 
 def _attack_moment(situation_id: str) -> dict:

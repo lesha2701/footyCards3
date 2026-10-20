@@ -1359,9 +1359,11 @@ export async function fetchClubBaseLedger(userId?: number): Promise<AdminClubBas
 // --- «Экипировка» ---
 const ITEM_FIELDS = [
   "name", "description", "icon", "slot", "rarity", "collection_id", "effect", "effect_value", "cond_club",
-  "cond_country", "coins_price", "stars_price", "is_active", "sort_order",
+  "cond_country", "coins_price", "stars_price", "is_active", "sort_order", "max_supply", "available_from", "available_until",
 ] as const;
-const COLLECTION_FIELDS = ["name", "description", "set_size", "set_bonus_rating", "is_active", "sort_order"] as const;
+const COLLECTION_FIELDS = [
+  "name", "description", "set_size", "set_bonus_rating", "set_team_country", "set_team_chemistry", "is_active", "sort_order",
+] as const;
 const pick = <T extends object>(obj: T, keys: readonly string[]) =>
   Object.fromEntries(keys.map((k) => [k, (obj as Record<string, unknown>)[k]]));
 

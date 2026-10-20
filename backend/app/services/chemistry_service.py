@@ -274,6 +274,14 @@ def compute_chemistry(
     extra_points — slot -> extra chemistry points when on position."""
     pairs = list(cards_with_slots)
     by_code = {slot.code: card for card, slot in pairs}
+    # «Комплект сборной» (equipment_service): a card wearing a national-team
+    # set gives +N to every on-position player of that country in this squad.
+    team_country_points: dict[str, int] = {}
+    for card, _slot in pairs:
+        boosts = getattr(card, "equipment_boosts", None) or {}
+        country = _group_key(boosts.get("team_country"))
+        if country and boosts.get("team_chemistry"):
+            team_country_points[country] = max(team_country_points.get(country, 0), int(boosts["team_chemistry"]))
     coach_country, stadium_club = _group_key(coach_country), _group_key(stadium_club)
     result = ChemistryResult(formation=formation, coach_country=coach_country, stadium_club=stadium_club)
     link_sums = {code: 0 for code in by_code}
@@ -303,7 +311,10 @@ def compute_chemistry(
                 stadium_extra = max(0, rules.stadium_club_points)
         talent_extra = (extra_points or {}).get(slot.code, 0) if on_position else 0
         # «Экипировка» (equipment_service): points the card's worn things add.
-        equipment_extra = (getattr(card, "equipment_chemistry", 0) or 0) if on_position else 0
+        equipment_extra = (
+            (getattr(card, "equipment_chemistry", 0) or 0) + team_country_points.get(_group_key(card.player.country), 0)
+            if on_position else 0
+        )
         pts = (
             min(max(0, rules.player_max), base + coach_extra + stadium_extra + talent_extra + equipment_extra)
             if (coach_extra or stadium_extra or talent_extra or equipment_extra) else base

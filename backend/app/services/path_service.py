@@ -365,6 +365,8 @@ async def award_match(
         # Prestige: +experience % per tier, capped (status bonus, not rating).
         bonus_pct = min(int(config.path_prestige_xp_cap_pct), tier * int(config.path_prestige_xp_pct))
         bonus_pct += academy["training"]  # «Тренировочная база», on top of the prestige cap
+        # «Экипировка» talisman worn by this card (capped per card by equipment_max_talisman_pct).
+        bonus_pct += int((getattr(card, "equipment_boosts", None) or {}).get("xp_pct") or 0)
         xp += xp * bonus_pct // 100
         event = PathXpEvent(
             user_card_id=card.id, user_id=user_id, source_type=source_type, source_id=str(source_id), xp=xp,

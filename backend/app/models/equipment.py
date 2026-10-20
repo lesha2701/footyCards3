@@ -32,6 +32,11 @@ class EquipmentCollection(TimestampMixin, Base):
     # Things of this collection worn by ONE card needed for the set bonus.
     set_size: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     set_bonus_rating: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # «Комплект сборной»: the full set on one card also gives +N chemistry to
+    # every on-position player of this country in that card's squad
+    # (chemistry_service). NULL = no team bonus.
+    set_team_country: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    set_team_chemistry: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
@@ -50,7 +55,8 @@ class EquipmentItem(TimestampMixin, Base):
     collection_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("equipment_collections.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    # rating | shot_pp | dribble_pp | chemistry (equipment_service.EFFECTS)
+    # equipment_service.EFFECTS: rating | shot_pp | dribble_pp | save_pp |
+    # tackle_pp | pass_pp | chemistry | xp_pct | coins_pct
     effect: Mapped[str] = mapped_column(String(16), default="rating", nullable=False)
     effect_value: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     # Effect only for a player of this club / country (NULL = anyone):
@@ -62,6 +68,13 @@ class EquipmentItem(TimestampMixin, Base):
     stars_price: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Limited edition: at most max_supply copies ever sold (NULL = unlimited);
+    # sold_count is also the next copy's serial number.
+    max_supply: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sold_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Seasonal: on sale only inside this window (either end NULL = open).
+    available_from: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    available_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     collection: Mapped[Optional["EquipmentCollection"]] = relationship(lazy="joined")
 
@@ -78,6 +91,8 @@ class UserEquipment(Base):
     # The item's slot, copied at equip time (the unique key below needs it).
     slot: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     source: Mapped[str] = mapped_column(String(16), nullable=False)  # coins | stars | admin
+    # «№7 из 50»: the item's sale order (copies sold before serials existed: NULL).
+    serial_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Coin purchases: a retried request with the same key is a no-op.
     purchase_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     acquired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)

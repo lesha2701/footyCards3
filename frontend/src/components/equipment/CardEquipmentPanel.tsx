@@ -53,6 +53,14 @@ export default function CardEquipmentPanel({ cardId }: { cardId: number }) {
     data.chemistry ? `+${data.chemistry} к химии` : null,
     data.boosts.shot_pp ? `+${data.boosts.shot_pp}% к удару` : null,
     data.boosts.dribble_pp ? `+${data.boosts.dribble_pp}% к обыгрышу` : null,
+    data.boosts.pass_pp ? `+${data.boosts.pass_pp}% к пасу` : null,
+    data.boosts.tackle_pp ? `+${data.boosts.tackle_pp}% к отбору` : null,
+    data.boosts.save_pp ? `+${data.boosts.save_pp}% к сейвам` : null,
+    data.boosts.xp_pct ? `+${data.boosts.xp_pct}% опыта` : null,
+    data.boosts.coins_pct ? `+${data.boosts.coins_pct}% монет за победу` : null,
+    data.boosts.team_country && data.boosts.team_chemistry
+      ? `комплект сборной: +${data.boosts.team_chemistry} химии игрокам страны ${data.boosts.team_country}`
+      : null,
   ].filter(Boolean);
 
   return (

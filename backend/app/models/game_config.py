@@ -1102,3 +1102,5 @@ class GameConfig(TimestampMixin, Base):
     equipment_max_rating: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     equipment_max_pp: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     equipment_max_chemistry: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Ceiling on what talismans add per card (+% «Академия» experience, +% coins for an Arena win).
+    equipment_max_talisman_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)

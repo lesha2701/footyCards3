@@ -358,7 +358,11 @@ def _apply_red_card_debuff(state: dict, config: GameConfig) -> None:
 def _resolve_shot_continuation(
     missed: bool, shot_type: str, config: GameConfig, blocker_rating: Optional[int], keeper_rating: int,
     keeper_effect: Optional[dict] | list = None, notes: Optional[list] = None,
+    save_pp: int = 0, save_player: Optional[str] = None, equipment_notes: Optional[list] = None,
 ) -> tuple[str, dict]:
+    """save_pp: the defending keeper's «Экипировка» save bonus (user side in
+    Card Arena), +N pp to the save chance, capped at 98%; noted in
+    `equipment_notes` only when a save roll actually happens."""
     blocked = False
     saved = False
     if not missed and shot_type == "long_range" and blocker_rating is not None:
@@ -366,10 +370,15 @@ def _resolve_shot_continuation(
             blocker_rating, float(config.match_defender_block_chance_min), float(config.match_defender_block_chance_max)
         )
     if not missed and not blocked:
+        save_base = _lerp_chance_positive(
+            keeper_rating, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)
+        )
+        if save_pp > 0 and save_base < _SAVE_CEILING:
+            save_base = min(_SAVE_CEILING, save_base + save_pp / 100)
+            if equipment_notes is not None:
+                equipment_notes.append({"player": save_player, "effect": "save_pp", "bonus_pp": save_pp})
         saved, save_notes = skill_roll(
-            _lerp_chance_positive(
-                keeper_rating, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)
-            ),
+            save_base,
             [(e, 1, e.get("player")) for e in (keeper_effect if isinstance(keeper_effect, list) else [keeper_effect]) if e],
         )
         if notes is not None:
@@ -401,26 +410,35 @@ def _card_effect(state: dict, actor: dict, code: str) -> Optional[dict]:
 _DRIBBLE_TAGS = frozenset({"one_on_one", "flank"})
 _NO_TAGS = SimpleNamespace(tags=())
 _EQUIPMENT_FLOOR = 0.02
+_SAVE_CEILING = 0.98
 
 
-def _equipment_adjusted(state: dict, actor: dict, base: float, situation, *, shot: bool, notes: list) -> float:
+def _equipment_adjusted(state: dict, actor: dict, base: float, situation, *, own: str, notes: list) -> float:
     """The actor's frozen «Экипировка» boosts (state["equipment"]) applied to
-    one failure chance (shot miss or pass failure) the way the tournament
-    engine applies them: minus N percentage points, never below 2%. `shot`:
-    the shot accuracy bonus counts; the dribble bonus counts only in
-    _DRIBBLE_TAGS situations. Without boosts the chance is returned untouched,
-    so the roll draws exactly as before."""
+    one failure chance (shot miss, pass failure, tackle foul, failed block)
+    the way the tournament engine applies them: minus N percentage points,
+    never below 2%. `own`: the boost of this action (shot_pp / pass_pp /
+    tackle_pp); the dribble bonus adds to a shot or a pass only in
+    _DRIBBLE_TAGS situations. Without boosts the chance is returned
+    untouched, so the roll draws exactly as before."""
     boosts = (state.get("equipment") or {}).get(str(actor.get("user_card_id"))) or {}
     parts = []
-    if shot and boosts.get("shot_pp"):
-        parts.append(("shot_pp", int(boosts["shot_pp"])))
-    if boosts.get("dribble_pp") and _DRIBBLE_TAGS & set(situation.tags):
+    if boosts.get(own):
+        parts.append((own, int(boosts[own])))
+    if own in ("shot_pp", "pass_pp") and boosts.get("dribble_pp") and _DRIBBLE_TAGS & set(situation.tags):
         parts.append(("dribble_pp", int(boosts["dribble_pp"])))
     total = sum(pp for _, pp in parts)
     if total <= 0 or base <= _EQUIPMENT_FLOOR:
         return base
     notes.extend({"player": actor.get("name"), "effect": effect, "bonus_pp": pp} for effect, pp in parts)
     return max(_EQUIPMENT_FLOOR, base - total / 100)
+
+
+def _user_save_pp(state: dict) -> tuple[int, Optional[str]]:
+    """The user keeper's frozen «Экипировка» save bonus (pp) and his name."""
+    gk = state.get("equipment_gk") or {}
+    boosts = (state.get("equipment") or {}).get(str(gk.get("id"))) or {}
+    return int(boosts.get("save_pp") or 0), gk.get("name")
 
 
 def _with_equipment_notes(payload: dict, notes: list) -> dict:
@@ -499,7 +517,7 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
                 _lerp_chance(
                     eff_rating, float(config.match_attack_shoot_miss_chance_min), float(config.match_attack_shoot_miss_chance_max)
                 ),
-                situation, shot=True, notes=equipment_notes,
+                situation, own="shot_pp", notes=equipment_notes,
             ),
             [(_card_effect(state, shooter, "sniper"), -1, shooter["name"])],
         )
@@ -526,7 +544,7 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
         _equipment_adjusted(
             state, shooter,
             _lerp_chance(eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max)),
-            situation, shot=False, notes=equipment_notes,
+            situation, own="pass_pp", notes=equipment_notes,
         ),
         # A passer has one skill: playmaker on any pass, or crosser when the
         # pass is a cross/cut-back from the flank.
@@ -555,7 +573,7 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
             _lerp_chance(
                 receiver_rating, float(config.match_receiver_shot_miss_chance_min), float(config.match_receiver_shot_miss_chance_max)
             ),
-            _NO_TAGS, shot=True, notes=equipment_notes,
+            _NO_TAGS, own="shot_pp", notes=equipment_notes,
         ),
         [(_card_effect(state, pass_target, "sniper"), -1, pass_target["name"])],
     )
@@ -588,22 +606,28 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
     edge = _edge(state)
 
     last_line = _card_effect(state, defender, "last_line") if "breakaway" in situation.tags else None
+    equipment_notes: list = []
+    save_pp, save_player = _user_save_pp(state)
     if action in ("tackle", "block"):
         # The defender plays this roll himself (not the keeper's «keeper» action).
         defender_rating = path_match_service.arena_actor_rating(state, defender, minute, "defender", talent_notes) + edge
     if action == "tackle":
         foul, tackle_notes = skill_roll(
-            _lerp_chance(defender_rating, float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max)),
+            _equipment_adjusted(
+                state, defender,
+                _lerp_chance(defender_rating, float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max)),
+                _NO_TAGS, own="tackle_pp", notes=equipment_notes,
+            ),
             [(last_line, -1, defender["name"])],
         )
         if not foul:
             event = {
                 "minute": moment["minute"], "event_type": "tackle_won", "team": "opponent",
                 "description": _describe_event("tackle_won", "opponent", opponent_name),
-                "payload": _with_talent_notes(
+                "payload": _with_equipment_notes(_with_talent_notes(
                     _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"]}, tackle_notes),
                     talent_notes,
-                ),
+                ), equipment_notes),
             }
             return event, None
 
@@ -618,19 +642,22 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
             keeper_bonus = path_match_service.arena_keeper_bonus(state, minute, talent_notes, penalty=True)
             eff_gk = _clamp_rating(ratings["user_gk"] + keeper_bonus + edge - config.match_penalty_gk_rating_penalty)
             keeper = _keeper_effect(state, "user")
-            saved, save_notes = skill_roll(
-                _lerp_chance_positive(eff_gk, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
-                [(keeper, 1, keeper.get("player") if keeper else None)],
+            penalty_base = _lerp_chance_positive(
+                eff_gk, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)
             )
+            if save_pp > 0 and penalty_base < _SAVE_CEILING:
+                penalty_base = min(_SAVE_CEILING, penalty_base + save_pp / 100)
+                equipment_notes.append({"player": save_player, "effect": "save_pp", "bonus_pp": save_pp})
+            saved, save_notes = skill_roll(penalty_base, [(keeper, 1, keeper.get("player") if keeper else None)])
             outcome = "save" if saved else "goal"
             prefix = "🟥 Красная карточка, пенальти! " if card == "red" else "🟨 Жёлтая карточка, пенальти! "
             event = {
                 "minute": moment["minute"], "event_type": outcome, "team": "opponent",
                 "description": prefix + _describe_event(outcome, "opponent", opponent_name),
-                "payload": _with_talent_notes(_with_skill_notes({
+                "payload": _with_equipment_notes(_with_talent_notes(_with_skill_notes({
                     "shot_type": shot_type, "action": action, "defender": defender["name"],
                     "card": card, "is_penalty": True,
-                }, save_notes), talent_notes),
+                }, save_notes), talent_notes), equipment_notes),
             }
             return event, "opponent" if outcome == "goal" else None
 
@@ -638,10 +665,10 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
         event = {
             "minute": moment["minute"], "event_type": "foul_stopped", "team": "opponent",
             "description": prefix + _describe_event("foul_stopped", "opponent", opponent_name),
-            "payload": {
+            "payload": _with_equipment_notes({
                 "shot_type": shot_type, "action": action, "defender": defender["name"],
                 "card": card, "is_penalty": False,
-            },
+            }, equipment_notes),
         }
         return event, None
 
@@ -650,7 +677,11 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
         # aerial duel — the defender's own aerial_master lowers the fail chance.
         aerial = _card_effect(state, defender, "aerial_master") if "aerial" in situation.tags else None
         fail, block_notes = skill_roll(
-            _lerp_chance(defender_rating, float(config.match_block_fail_chance_min), float(config.match_block_fail_chance_max)),
+            _equipment_adjusted(
+                state, defender,
+                _lerp_chance(defender_rating, float(config.match_block_fail_chance_min), float(config.match_block_fail_chance_max)),
+                _NO_TAGS, own="tackle_pp", notes=equipment_notes,
+            ),
             # A defender has one skill: aerial_master on crosses, last_line
             # when he's the last man against a breakaway.
             [(aerial, -1, defender["name"]), (last_line, -1, defender["name"])],
@@ -659,10 +690,10 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
             event = {
                 "minute": moment["minute"], "event_type": "blocked", "team": "opponent",
                 "description": _describe_event("blocked", "opponent", opponent_name),
-                "payload": _with_talent_notes(_with_skill_notes(
+                "payload": _with_equipment_notes(_with_talent_notes(_with_skill_notes(
                     {"shot_type": shot_type, "action": action, "defender": defender["name"], "missed": False, "blocked": True},
                     block_notes,
-                ), talent_notes),
+                ), talent_notes), equipment_notes),
             }
             return event, None
         missed = random.random() < _lerp_chance(
@@ -676,16 +707,17 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
         outcome, extra = _resolve_shot_continuation(
             missed, shot_type, config, blocker_rating=None, keeper_rating=keeper_rating,
             keeper_effect=_keeper_effects(state, "user", "one_on_one" in situation.tags), notes=notes,
+            save_pp=save_pp, save_player=save_player, equipment_notes=equipment_notes,
         )
         if outcome in ("save", "goal"):  # the keeper's talent only counts if he had a save to make
             talent_notes.extend(keeper_notes)
         event = {
             "minute": moment["minute"], "event_type": outcome, "team": "opponent",
             "description": _describe_event(outcome, "opponent", opponent_name),
-            "payload": _with_talent_notes(
+            "payload": _with_equipment_notes(_with_talent_notes(
                 _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"], **extra}, notes),
                 talent_notes,
-            ),
+            ), equipment_notes),
         }
         return event, "opponent" if outcome == "goal" else None
 
@@ -701,16 +733,17 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
     outcome, extra = _resolve_shot_continuation(
         missed, shot_type, config, blocker_rating=None, keeper_rating=keeper_rating,
         keeper_effect=_keeper_effects(state, "user", "one_on_one" in situation.tags), notes=notes,
+        save_pp=save_pp, save_player=save_player, equipment_notes=equipment_notes,
     )
     if outcome in ("save", "goal"):  # the keeper's talent only counts if he had a save to make
         talent_notes.extend(keeper_notes)
     event = {
         "minute": moment["minute"], "event_type": outcome, "team": "opponent",
         "description": _describe_event(outcome, "opponent", opponent_name),
-        "payload": _with_talent_notes(
+        "payload": _with_equipment_notes(_with_talent_notes(
             _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"], **extra}, notes),
             talent_notes,
-        ),
+        ), equipment_notes),
     }
     return event, "opponent" if outcome == "goal" else None
 
@@ -836,6 +869,10 @@ async def _finalize_match(
     reward = 0 if locked_user.game_rewards_blocked else round(
         reward_base[result] * difficulty_multiplier[match.difficulty] * division_pct / 100 + user_score * 5
     )
+    # «Экипировка»: coin talismans of the lineup, frozen at kickoff, on a win only.
+    coins_pct = int((match.server_state or {}).get("equipment_coins_pct") or 0)
+    if reward > 0 and result == MatchResult.win and coins_pct > 0:
+        reward = round(reward * (100 + coins_pct) / 100)
 
     match.result = result
     match.reward_coins = reward
@@ -1046,6 +1083,20 @@ def build_equipment_snapshot(lineup: LineupOut) -> Optional[dict]:
     return boosts or None
 
 
+def equipment_gk_snapshot(lineup: LineupOut) -> Optional[dict]:
+    """Who keeps the user's goal (his «Экипировка» save bonus is in the
+    equipment snapshot under his card id)."""
+    gk = _lineup_gk(lineup)
+    return {"id": gk.id, "name": gk.player.display_name} if gk is not None and gk.equipment_boosts else None
+
+
+def equipment_coins_pct(lineup: LineupOut, config: GameConfig) -> int:
+    """+% coins for a won match: the lineup's coin talismans summed, capped
+    by equipment_max_talisman_pct (frozen at kickoff)."""
+    total = sum(int((slot.card.equipment_boosts or {}).get("coins_pct") or 0) for slot in lineup.slots if slot.card is not None)
+    return min(total, max(0, int(getattr(config, "equipment_max_talisman_pct", 0) or 0)))
+
+
 _LINES = (("GK", "Вратарь"), ("DEF", "Защита"), ("MID", "Полузащита"), ("FWD", "Атака"))
 _BALANCE_TABLE: Optional[list] = None
 
@@ -1242,6 +1293,8 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
         "red_card_applied": False,
         "skills": build_skill_snapshot(lineup, opponent_lineup, config),
         "equipment": build_equipment_snapshot(lineup),
+        "equipment_gk": equipment_gk_snapshot(lineup),
+        "equipment_coins_pct": equipment_coins_pct(lineup, config),
         # Audit only: the chemistry already sits inside the frozen strengths
         # and ratings above, nothing re-reads it mid-match.
         "chemistry": {

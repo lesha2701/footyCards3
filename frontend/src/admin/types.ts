@@ -574,6 +574,7 @@ export interface GameConfig {
   equipment_max_rating: number;
   equipment_max_pp: number;
   equipment_max_chemistry: number;
+  equipment_max_talisman_pct: number;
   // «Академия»
   path_enabled: boolean;
   path_title: string;
@@ -1058,6 +1059,10 @@ export interface AdminEquipmentItem {
   stars_price: number;
   is_active: boolean;
   sort_order: number;
+  max_supply: number | null;
+  sold_count?: number;
+  available_from: string | null;
+  available_until: string | null;
 }
 
 export interface AdminEquipmentCollection {
@@ -1067,6 +1072,8 @@ export interface AdminEquipmentCollection {
   image_path?: string | null;
   set_size: number;
   set_bonus_rating: number;
+  set_team_country: string | null;
+  set_team_chemistry: number;
   is_active: boolean;
   sort_order: number;
 }

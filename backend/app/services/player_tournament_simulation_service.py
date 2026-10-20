@@ -164,6 +164,8 @@ async def _build_side(
             "rating": c.player.rating, "position": c.player.position.value, "category": slot.category,
             **({"skill": c.skill} if c.skill else {}),
             **({"talent": c.talent} if c.talent else {}),
+            # «Экипировка» (the keeper's save bonus is read off the lineup).
+            **({"boosts": c.boosts} if c.boosts else {}),
         }
         for c, slot in with_slots
     ]

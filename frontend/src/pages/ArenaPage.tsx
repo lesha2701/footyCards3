@@ -18,7 +18,7 @@ import { ArenaDivisionCard, ArenaMatchReport, ArenaMatchupLine, ArenaOpponentCar
 import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
 import BenchUpgradeHints from "@/components/squad/BenchUpgradeHints";
 import { ChemistryDiamonds, ChemistryHints, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
-import { chemistryGain, chemistrySwapHints, type ChemistrySwapHint } from "@/lib/chemistry";
+import { chemistryGain, chemistrySwapHints, equipmentChemistryOf, type ChemistrySwapHint } from "@/lib/chemistry";
 import {
   IconBall,
   IconBoot,
@@ -285,7 +285,10 @@ export default function ArenaPage() {
   const chemistry = lineup?.chemistry;
   const chemistryOn = !!chemistry?.enabled;
   const chemBySlot = new Map((chemistry?.players ?? []).map((p) => [p.slot_code, p]));
-  const chemSlots = (lineup?.slots ?? []).map((s) => ({ slot_code: s.slot_code, ideal_position: s.ideal_position, player: s.card?.player ?? null }));
+  const chemSlots = (lineup?.slots ?? []).map((s) => ({
+    slot_code: s.slot_code, ideal_position: s.ideal_position, player: s.card?.player ?? null,
+    equipment: s.card ? equipmentChemistryOf(s.card) : null,
+  }));
   const diamondsOutside = (slotCode: string) =>
     (lineup?.slots ?? []).filter((s) => s.card && s.slot_code !== slotCode && isPlainDiamond(s.card.player)).length;
   const pathOutside = (slotCode: string) =>
@@ -309,7 +312,7 @@ export default function ArenaPage() {
   };
   const pickerChemistryNote = (card: UserCard) => {
     if (!chemistryOn || !pickerSlot) return null;
-    const gain = chemistryGain(chemistry, chemSlots, pickerSlot.code, card.player);
+    const gain = chemistryGain(chemistry, chemSlots, pickerSlot.code, { ...card.player, ...equipmentChemistryOf(card) });
     if (gain == null) return null;
     return (
       <span className={`font-mono text-micro font-bold ${gain > 0 ? "text-accent-green" : gain < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>

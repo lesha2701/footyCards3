@@ -671,6 +671,7 @@ class GameConfigOut(BaseModel):
     equipment_max_rating: int = 3
     equipment_max_pp: int = 8
     equipment_max_chemistry: int = 1
+    equipment_max_talisman_pct: int = 15
     pity_packs: int = 0
     bulk10_discount_pct: int = 0
     first_coin_purchase_bonus_pct: int = 0
@@ -776,6 +777,7 @@ class GameConfigUpdate(BaseModel):
     equipment_max_rating: Optional[int] = Field(default=None, ge=0, le=10)
     equipment_max_pp: Optional[int] = Field(default=None, ge=0, le=30)
     equipment_max_chemistry: Optional[int] = Field(default=None, ge=0, le=3)
+    equipment_max_talisman_pct: Optional[int] = Field(default=None, ge=0, le=100)
 
     @field_validator("arena_division_min_points")
     @classmethod

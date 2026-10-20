@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -31,6 +32,9 @@ class EquipmentItemIn(BaseModel):
     stars_price: int = Field(default=0, ge=0, le=100_000)
     is_active: bool = True
     sort_order: int = 0
+    max_supply: Optional[int] = Field(default=None, ge=1, le=1_000_000)
+    available_from: Optional[datetime] = None
+    available_until: Optional[datetime] = None
 
 
 class EquipmentCollectionIn(BaseModel):
@@ -38,6 +42,8 @@ class EquipmentCollectionIn(BaseModel):
     description: Optional[str] = Field(default=None, max_length=255)
     set_size: int = Field(default=3, ge=1, le=6)
     set_bonus_rating: int = Field(default=1, ge=0, le=10)
+    set_team_country: Optional[str] = Field(default=None, max_length=64)
+    set_team_chemistry: int = Field(default=0, ge=0, le=3)
     is_active: bool = True
     sort_order: int = 0
 

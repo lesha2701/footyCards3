@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import EquipmentShop from "@/components/shop/EquipmentShop";
@@ -27,7 +28,9 @@ describe("Экипировка в магазине", () => {
   it("shows collections as tiles with a price and the effect in the sheet", async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <EquipmentShop />
+        <MemoryRouter>
+          <EquipmentShop />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
     expect(await screen.findByText("«Ретро-70»")).toBeInTheDocument();

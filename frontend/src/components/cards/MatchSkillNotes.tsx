@@ -1,6 +1,15 @@
 import { SkillIcon } from "@/components/icons/skills";
 import type { MatchEvent, MatchSkillNote, MatchTalentNote } from "@/types";
 
+// «Экипировка» note per effect: icon and what it improved.
+const EQUIPMENT_NOTE: Record<string, [string, string]> = {
+  shot_pp: ["👟", "к точности удара"],
+  dribble_pp: ["⚡", "к обыгрышу"],
+  pass_pp: ["🎯", "к точности паса"],
+  tackle_pp: ["🛡️", "к чистому отбору"],
+  save_pp: ["🧤", "к сейву"],
+};
+
 /** Skill lines under one match-log event. The server only attaches a note
  * when a skill actually took part in that event's roll; "decisive" is set
  * only when the same random draw would have gone the other way without the
@@ -25,8 +34,8 @@ export default function MatchSkillNotes({ event }: { event: MatchEvent }) {
       ))}
       {equipment.map((e, i) => (
         <span key={`e${i}`} className="mt-0.5 block pl-6 text-micro text-accent-cyan/80">
-          <span className="mr-1" aria-hidden>{e.effect === "shot_pp" ? "👟" : "⚡"}</span>
-          Экипировка{e.player ? ` (${e.player})` : ""}: +{e.bonus_pp}% {e.effect === "shot_pp" ? "к точности удара" : "к обыгрышу"}
+          <span className="mr-1" aria-hidden>{EQUIPMENT_NOTE[e.effect]?.[0] ?? "⚡"}</span>
+          Экипировка{e.player ? ` (${e.player})` : ""}: +{e.bonus_pp}% {EQUIPMENT_NOTE[e.effect]?.[1] ?? "к действию"}
         </span>
       ))}
       {notes.map((note, i) => (
