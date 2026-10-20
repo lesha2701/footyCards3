@@ -63,3 +63,15 @@ describe("CardEquipmentPanel", () => {
     expect(screen.getByText("Этот слот только для вратаря")).toBeInTheDocument();
   });
 });
+
+describe("Arena match log", () => {
+  it("shows a worn thing's bonus under the event", async () => {
+    const { default: MatchSkillNotes } = await import("@/components/cards/MatchSkillNotes");
+    render(
+      <MatchSkillNotes
+        event={{ minute: 12, event_type: "goal", team: "user", description: "", payload: { equipment: [{ player: "Бомбардир", effect: "shot_pp", bonus_pp: 5 }] } }}
+      />,
+    );
+    expect(screen.getByText(/Экипировка \(Бомбардир\): \+5% к точности удара/)).toBeInTheDocument();
+  });
+});

@@ -43,6 +43,8 @@ class UserCardOut(BaseModel):
     path_rating_bonus: int = 0
     # «Экипировка» it wears (services/equipment_service.py; rating already in player.rating).
     equipment_rating_bonus: int = 0
+    # Its worn things' {"shot_pp", "dribble_pp"} (Card Arena / tournaments read it).
+    equipment_boosts: Optional[dict] = None
     # «Академия» prestige tier, its «Икона» number and the reforged talent.
     prestige: int = 0
     prestige_icon_number: Optional[int] = None
@@ -90,6 +92,7 @@ class UserCardOut(BaseModel):
             "path_stage": getattr(data, "path_stage", 0) or 0,
             "path_rating_bonus": getattr(data, "path_rating_bonus", 0) or 0,
             "equipment_rating_bonus": getattr(data, "equipment_rating_bonus", 0) or 0,
+            "equipment_boosts": getattr(data, "equipment_boosts", None) or None,
             "prestige": getattr(data, "prestige", 0) or 0,
             "prestige_icon_number": getattr(data, "prestige_icon_number", None),
             "talent_override": getattr(data, "talent_override", None),

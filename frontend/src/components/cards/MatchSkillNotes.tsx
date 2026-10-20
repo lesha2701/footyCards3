@@ -11,7 +11,9 @@ export default function MatchSkillNotes({ event }: { event: MatchEvent }) {
   // «Академия»: a talent line appears only when the talent really changed
   // this event's roll (the server attaches nothing otherwise).
   const talents = (event.payload?.talents as MatchTalentNote[] | undefined) ?? [];
-  if (!notes.length && !talents.length) return null;
+  // «Экипировка» (Card Arena): a line per worn-thing bonus this roll counted.
+  const equipment = (event.payload?.equipment as { player?: string; effect: string; bonus_pp: number }[] | undefined) ?? [];
+  if (!notes.length && !talents.length && !equipment.length) return null;
   return (
     <>
       {talents.map((t, i) => (
@@ -20,6 +22,12 @@ export default function MatchSkillNotes({ event }: { event: MatchEvent }) {
           Талант «{t.name}» {t.level_label}
           {t.player ? ` (${t.player})` : ""}: +{t.bonus} к рейтингу
         </span></span>
+      ))}
+      {equipment.map((e, i) => (
+        <span key={`e${i}`} className="mt-0.5 block pl-6 text-micro text-accent-cyan/80">
+          <span className="mr-1" aria-hidden>{e.effect === "shot_pp" ? "👟" : "⚡"}</span>
+          Экипировка{e.player ? ` (${e.player})` : ""}: +{e.bonus_pp}% {e.effect === "shot_pp" ? "к точности удара" : "к обыгрышу"}
+        </span>
       ))}
       {notes.map((note, i) => (
         <span key={i} className="mt-0.5 block pl-6 text-micro text-accent-lime/80">

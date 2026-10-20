@@ -179,7 +179,7 @@ export default function EquipmentShop() {
       )}
       <p className="text-micro text-ink-mist-dim">
         На одной карточке вещи дают не больше +{data.caps.rating} к рейтингу, +{data.caps.pp}% к удару или обыгрышу и +
-        {data.caps.chemistry} к химии. Точность удара и обыгрыш действуют в турнирах игроков и карьере.
+        {data.caps.chemistry} к химии. Точность удара и обыгрыш действуют в Card Arena, турнирах игроков и карьере (в Арене обыгрыш — в выходах один на один и проходах по флангу).
       </p>
     </div>
   );

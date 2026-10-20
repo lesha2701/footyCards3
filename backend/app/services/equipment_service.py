@@ -7,8 +7,11 @@ small effect (EFFECTS):
   * rating     — +N to the card's rating in every mode (like the diamond/star
                  bonuses, player_stats_service.card_rating_bonus);
   * shot_pp    — +N percentage points to the shot accuracy of this card in
-                 the tournament engine (player tournaments, careers);
-  * dribble_pp — +N pp to its 1-on-1 dribble there;
+                 the tournament engine (player tournaments, careers) and in
+                 Card Arena (match_service._equipment_adjusted);
+  * dribble_pp — +N pp to its 1-on-1 dribble there; in Card Arena it lowers
+                 the ball carrier's failure chance in one-on-one and
+                 flank-run moments;
   * chemistry  — +N chemistry points when the card stands on its position
                  (chemistry_service).
 A thing may be limited to a club / country (`cond_club`/`cond_country`:

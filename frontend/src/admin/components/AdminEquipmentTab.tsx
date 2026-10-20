@@ -219,7 +219,7 @@ function SettingsBlock() {
       <p className="font-display text-base font-bold">Экипировка: настройки</p>
       <p className="mb-2 text-xs text-slate-400">
         Выключено — магазин и надевание закрыты, надетые вещи ничего не дают. Потолки — сколько все вещи одной карточки дают вместе
-        (с бонусом комплекта). Удар и обыгрыш действуют в турнирах игроков и карьере.
+        (с бонусом комплекта). Удар и обыгрыш действуют в Card Arena, турнирах игроков и карьере.
       </p>
       <label className="mb-2 flex items-center gap-2 text-sm">
         <input type="checkbox" checked={value("equipment_enabled")} onChange={(e) => setDraft({ ...draft, equipment_enabled: e.target.checked })} />

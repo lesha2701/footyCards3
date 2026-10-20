@@ -1,6 +1,7 @@
 import json
 import math
 import random
+from types import SimpleNamespace
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -394,6 +395,40 @@ def _card_effect(state: dict, actor: dict, code: str) -> Optional[dict]:
     return effect_of(_skills(state).get("cards", {}).get(str(actor.get("user_card_id"))), code)
 
 
+# «Экипировка» in Card Arena: situations where the ball carrier has to beat a
+# man (clean through on the keeper, a run down the flank) — the thing's
+# «обыгрыш» bonus lowers the chance his action fails there.
+_DRIBBLE_TAGS = frozenset({"one_on_one", "flank"})
+_NO_TAGS = SimpleNamespace(tags=())
+_EQUIPMENT_FLOOR = 0.02
+
+
+def _equipment_adjusted(state: dict, actor: dict, base: float, situation, *, shot: bool, notes: list) -> float:
+    """The actor's frozen «Экипировка» boosts (state["equipment"]) applied to
+    one failure chance (shot miss or pass failure) the way the tournament
+    engine applies them: minus N percentage points, never below 2%. `shot`:
+    the shot accuracy bonus counts; the dribble bonus counts only in
+    _DRIBBLE_TAGS situations. Without boosts the chance is returned untouched,
+    so the roll draws exactly as before."""
+    boosts = (state.get("equipment") or {}).get(str(actor.get("user_card_id"))) or {}
+    parts = []
+    if shot and boosts.get("shot_pp"):
+        parts.append(("shot_pp", int(boosts["shot_pp"])))
+    if boosts.get("dribble_pp") and _DRIBBLE_TAGS & set(situation.tags):
+        parts.append(("dribble_pp", int(boosts["dribble_pp"])))
+    total = sum(pp for _, pp in parts)
+    if total <= 0 or base <= _EQUIPMENT_FLOOR:
+        return base
+    notes.extend({"player": actor.get("name"), "effect": effect, "bonus_pp": pp} for effect, pp in parts)
+    return max(_EQUIPMENT_FLOOR, base - total / 100)
+
+
+def _with_equipment_notes(payload: dict, notes: list) -> dict:
+    if notes:
+        payload["equipment"] = notes
+    return payload
+
+
 def _keeper_effect(state: dict, side: str, code: str = "reflexes") -> Optional[dict]:
     return effect_of(_skills(state).get(f"{side}_gk"), code)
 
@@ -448,6 +483,7 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
     pass_target = moment["actors"]["pass_target"]
 
     notes: list = []
+    equipment_notes: list = []
     minute = moment["minute"]
     one_on_one = "one_on_one" in situation.tags
     edge = _edge(state)
@@ -458,8 +494,12 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
         )
         eff_rating = _clamp_rating(shooter_rating + situation.bias + edge)
         missed, shot_notes = skill_roll(
-            _lerp_chance(
-                eff_rating, float(config.match_attack_shoot_miss_chance_min), float(config.match_attack_shoot_miss_chance_max)
+            _equipment_adjusted(
+                state, shooter,
+                _lerp_chance(
+                    eff_rating, float(config.match_attack_shoot_miss_chance_min), float(config.match_attack_shoot_miss_chance_max)
+                ),
+                situation, shot=True, notes=equipment_notes,
             ),
             [(_card_effect(state, shooter, "sniper"), -1, shooter["name"])],
         )
@@ -469,10 +509,10 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
             keeper_rating=ratings["opponent_gk"] - edge,
             keeper_effect=_keeper_effects(state, "opponent", "one_on_one" in situation.tags), notes=notes,
         )
-        payload = _with_skill_notes({
+        payload = _with_equipment_notes(_with_skill_notes({
             "shot_type": shot_type, "action": action, "shooter": shooter["name"],
             "shooter_id": shooter.get("user_card_id"), **extra,
-        }, notes)
+        }, notes), equipment_notes)
         event = {
             "minute": moment["minute"], "event_type": outcome, "team": "user",
             "description": _describe_event(outcome, "user", opponent_name), "payload": payload,
@@ -483,7 +523,11 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
     passer_rating = path_match_service.arena_actor_rating(state, shooter, minute, "passer", notes)
     eff_passer_rating = _clamp_rating(passer_rating - situation.bias + edge)
     pass_failed, pass_notes = skill_roll(
-        _lerp_chance(eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max)),
+        _equipment_adjusted(
+            state, shooter,
+            _lerp_chance(eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max)),
+            situation, shot=False, notes=equipment_notes,
+        ),
         # A passer has one skill: playmaker on any pass, or crosser when the
         # pass is a cross/cut-back from the flank.
         [(_card_effect(state, shooter, "playmaker"), -1, shooter["name"])]
@@ -494,16 +538,24 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
         event = {
             "minute": moment["minute"], "event_type": "pass_failed", "team": "user",
             "description": _describe_event("pass_failed", "user", opponent_name),
-            "payload": _with_skill_notes({"shot_type": shot_type, "action": action, "passer": shooter["name"]}, notes),
+            "payload": _with_equipment_notes(
+                _with_skill_notes({"shot_type": shot_type, "action": action, "passer": shooter["name"]}, notes), equipment_notes,
+            ),
         }
         return event, None
 
     receiver_rating = path_match_service.arena_actor_rating(
         state, pass_target, minute, "shooter", notes, one_on_one=one_on_one,
     ) + edge
+    # The receiver finishes the pass: only his shot accuracy counts (the
+    # «обыгрыш» was the passer's, above).
     missed, shot_notes = skill_roll(
-        _lerp_chance(
-            receiver_rating, float(config.match_receiver_shot_miss_chance_min), float(config.match_receiver_shot_miss_chance_max)
+        _equipment_adjusted(
+            state, pass_target,
+            _lerp_chance(
+                receiver_rating, float(config.match_receiver_shot_miss_chance_min), float(config.match_receiver_shot_miss_chance_max)
+            ),
+            _NO_TAGS, shot=True, notes=equipment_notes,
         ),
         [(_card_effect(state, pass_target, "sniper"), -1, pass_target["name"])],
     )
@@ -513,11 +565,11 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
         keeper_rating=ratings["opponent_gk"] - edge,
         keeper_effect=_keeper_effects(state, "opponent", "one_on_one" in situation.tags), notes=notes,
     )
-    payload = _with_skill_notes(
+    payload = _with_equipment_notes(_with_skill_notes(
         {"shot_type": shot_type, "action": action, "shooter": pass_target["name"], "assisted_by": shooter["name"],
          "shooter_id": pass_target.get("user_card_id"), "assist_id": shooter.get("user_card_id"), **extra},
         notes,
-    )
+    ), equipment_notes)
     event = {
         "minute": moment["minute"], "event_type": outcome, "team": "user",
         "description": _describe_event(outcome, "user", opponent_name), "payload": payload,
@@ -982,6 +1034,18 @@ def build_skill_snapshot(lineup: LineupOut, opponent_lineup: Optional[LineupOut]
     }
 
 
+def build_equipment_snapshot(lineup: LineupOut) -> Optional[dict]:
+    """card id -> {"shot_pp", "dribble_pp"} of the user's own cards, frozen at
+    kickoff into Match.server_state["equipment"] (equipment_service keeps the
+    capped sums on each card; empty while the mechanic is off). Only the
+    user's cards act individually in Card Arena, so the opponent has none."""
+    boosts = {
+        str(slot.card.id): dict(slot.card.equipment_boosts)
+        for slot in lineup.slots if slot.card is not None and slot.card.equipment_boosts
+    }
+    return boosts or None
+
+
 _LINES = (("GK", "Вратарь"), ("DEF", "Защита"), ("MID", "Полузащита"), ("FWD", "Атака"))
 _BALANCE_TABLE: Optional[list] = None
 
@@ -1177,6 +1241,7 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
         "cards": {},
         "red_card_applied": False,
         "skills": build_skill_snapshot(lineup, opponent_lineup, config),
+        "equipment": build_equipment_snapshot(lineup),
         # Audit only: the chemistry already sits inside the frozen strengths
         # and ratings above, nothing re-reads it mid-match.
         "chemistry": {
