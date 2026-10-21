@@ -16,7 +16,7 @@ from app.models.player_tournament import (
 from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLog
 from app.models.user import User
 from app.services import (
-    card_skill_service, chemistry_service, path_match_service, path_service, personal_squad_service,
+    card_skill_service, chemistry_service, manager_tactics, path_match_service, path_service, personal_squad_service,
     tournament_match_engine, wallet_service,
 )
 from app.services.path_talent_effects import override_positions, with_bonus
@@ -56,13 +56,15 @@ class _EngineCard:
 
 def _engine_card(
     card: UserCard, config=None, chemistry_bonus: int = 0, talent: dict | None = None, talent_bonus: int = 0,
+    tactic_pct: float = 0,
 ) -> _EngineCard:
     """chemistry_bonus: this card's neighbour-link chemistry bonus
     (chemistry_service, 0 while the mechanic is off) — folded into the match
     rating the engine reads, after the diamond/star bonus and before any zone
     profile / coach / stadium math. talent_bonus: its static «Академия»
     talents (kickoff), added on top; `talent` is the snapshot whose dynamic
-    part the engine applies per chance."""
+    part the engine applies per chance. tactic_pct: the line's % from the
+    tactics (manager_tactics.modifiers), applied last."""
     p = card.player
     skill = effect_for_card(card.skill_code, card.skill_level, p.position, config) if config is not None else None
     if skill is not None:
@@ -76,9 +78,9 @@ def _engine_card(
         # add it again via card_rating_bonus(card).
         player=SimpleNamespace(
             display_name=p.display_name, position=p.position,
-            rating=with_bonus(
+            rating=manager_tactics.apply(with_bonus(
                 chemistry_service.boosted_rating(min(99, p.rating + card_rating_bonus(card)), chemistry_bonus), talent_bonus,
-            ),
+            ), "line", {"line": tactic_pct}),
             rarity=p.rarity, club=p.club, country=p.country,
             attack_rating=getattr(p, "attack_rating", None), defense_rating=getattr(p, "defense_rating", None),
         ),
@@ -107,13 +109,14 @@ class _Side:
 
 async def _build_side(
     db: AsyncSession, user_id: int, *, is_home: bool, config=None, chemistry_rules: ChemistryRules | None = None,
-    catalog=None, opponent_avg: float | None = None, with_talents: bool = False,
+    catalog=None, opponent_avg: float | None = None, with_talents: bool = False, tactics: dict | None = None,
 ) -> _Side | None:
     """None when the player cannot field a full starting XI (cards sold or
     traded away since applying). Stadium boost only applies to the home side
     (see player_tournament_fixture_service.generate_fixtures: user_a_id is
     always home for a given fixture row) — the away side gets no stadium
-    bonus regardless of what stadium it owns."""
+    bonus regardless of what stadium it owns. `tactics`: % per line for this
+    match (manager_tactics.modifiers against the opponent's style)."""
     squad, pairs = await personal_squad_service.resolve_active_squad(db, user_id)
     if len(pairs) != len(get_formation_slots(squad.formation)):
         return None
@@ -149,6 +152,7 @@ async def _build_side(
                 c, config, chemistry.rating_bonus(slot.code) if chemistry is not None else 0,
                 talent=plan.talents.get(c.id) if plan is not None else None,
                 talent_bonus=plan.static.get(c.id, 0) if plan is not None else 0,
+                tactic_pct=(tactics or {}).get(slot.category, 0),
             ),
             slot,
         )
@@ -157,7 +161,11 @@ async def _build_side(
     stadium_multiplier = (
         1.0 + float(squad.user_stadium_card.stadium.boost_pct) if is_home and squad.user_stadium_card else 1.0
     )
-    side = build_side(with_slots, squad.mentality, squad.playstyle, coach=coach, stadium_multiplier=stadium_multiplier)
+    # Tactics are the transparent layer above; the engine plays neutral.
+    side = build_side(
+        with_slots, manager_tactics.ENGINE_MENTALITY, manager_tactics.ENGINE_PLAYSTYLE,
+        coach=coach, stadium_multiplier=stadium_multiplier,
+    )
     lineup = [
         {
             "club_card_id": c.id, "player_id": c.player_id, "name": c.player.display_name,
@@ -226,8 +234,16 @@ async def _play_match(
     in this one call, so nothing can change it mid-match; it is stored on the
     match row so the applied skills stay auditable after cards change."""
     catalog = await path_service.load_catalog(db) if config is not None and config.path_enabled else None
-    side_a = await _build_side(db, user_a_id, is_home=True, config=config, chemistry_rules=chemistry_rules, catalog=catalog)
-    side_b = await _build_side(db, user_b_id, is_home=False, config=config, chemistry_rules=chemistry_rules, catalog=catalog)
+    style_a, formation_a = await personal_squad_service.active_tactics(db, user_a_id)
+    style_b, formation_b = await personal_squad_service.active_tactics(db, user_b_id)
+    tactics_a = manager_tactics.modifiers(style_a, formation_a, style_b, config, "ptour") if config is not None else None
+    tactics_b = manager_tactics.modifiers(style_b, formation_b, style_a, config, "ptour") if config is not None else None
+    side_a = await _build_side(
+        db, user_a_id, is_home=True, config=config, chemistry_rules=chemistry_rules, catalog=catalog, tactics=tactics_a,
+    )
+    side_b = await _build_side(
+        db, user_b_id, is_home=False, config=config, chemistry_rules=chemistry_rules, catalog=catalog, tactics=tactics_b,
+    )
     if side_a is not None and side_b is not None and (side_a.talented or side_b.talented):
         # Rebuild the side(s) with talents, each against the other's plain
         # average rating («Большие матчи»).
@@ -235,12 +251,12 @@ async def _play_match(
         if side_a.talented:
             side_a = await _build_side(
                 db, user_a_id, is_home=True, config=config, chemistry_rules=chemistry_rules, catalog=catalog,
-                opponent_avg=avg_b, with_talents=True,
+                opponent_avg=avg_b, with_talents=True, tactics=tactics_a,
             )
         if side_b.talented:
             side_b = await _build_side(
                 db, user_b_id, is_home=False, config=config, chemistry_rules=chemistry_rules, catalog=catalog,
-                opponent_avg=avg_a, with_talents=True,
+                opponent_avg=avg_a, with_talents=True, tactics=tactics_b,
             )
     if side_a is not None and side_b is not None:
         result = tournament_match_engine.simulate_match(

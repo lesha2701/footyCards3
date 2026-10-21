@@ -798,6 +798,10 @@ class GameConfig(TimestampMixin, Base):
     ptour_match_reward_win: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     ptour_match_reward_draw: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
     ptour_match_reward_loss: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    # Tactics (Card Arena's, manager_tactics): the edge of the style that
+    # beats the opponent's, % to every player, and the formation tilt, %.
+    ptour_style_edge_pct: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    ptour_formation_effect_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     # Index 0 = 1st place ... index 15 = 16th place.
     ptour_place_rewards: Mapped[list] = mapped_column(
         JSON, default=lambda: [3000, 2000, 1500, 1000, 750, 500, 400, 300, 250, 200, 150, 100, 75, 50, 25, 0], nullable=False,

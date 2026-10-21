@@ -57,6 +57,10 @@ Main features:
   Tactics (`manager_tactics.py`): a club formation plus one of four styles
   in a circle (Card Arena's); the engine runs with neutral settings and the
   tactics are a transparent % on each line's ratings for the match.
+  «Личный турнир» plays the same layer (`personal_squads.style`, GameConfig
+  `ptour_style_edge_pct` / `ptour_formation_effect_pct`, `GET
+  /player-tournaments/tactics` shows the next opponent's style); its old
+  mentality / playstyle columns are kept but no longer played.
   The style shop / merchandise / «Менеджер Pro» are cosmetics and
   convenience only (Stars via my_player_service, key "manager:<code>");
 - player-to-player card exchanges;

@@ -64,12 +64,13 @@ def edge(style: str, opponent_style: str) -> str:
     return "even"
 
 
-def modifiers(style: str, formation: str, opponent_style: str, config) -> dict[str, float]:
-    """% on the rating of each line for one match."""
+def modifiers(style: str, formation: str, opponent_style: str, config, prefix: str = "manager") -> dict[str, float]:
+    """% on the rating of each line for one match. `prefix` picks the
+    GameConfig numbers: "manager" or "ptour" («Личный турнир»)."""
     style, formation = clean_style(style), clean_formation(formation)
-    scale = getattr(config, "manager_formation_effect_pct", 100) / 100
+    scale = getattr(config, f"{prefix}_formation_effect_pct", 100) / 100
     attack, defense = FORMATION_SHIFT.get(formation, (0, 0))
-    bonus = getattr(config, "manager_style_edge_pct", 4) if edge(style, opponent_style) == "win" else 0
+    bonus = getattr(config, f"{prefix}_style_edge_pct", 4) if edge(style, opponent_style) == "win" else 0
     return {
         line: LINE_BOOST[style][line] + (attack if line in ATTACK_LINES else defense) * scale + bonus
         for line in ("GK", "DEF", "MID", "FWD")
@@ -80,8 +81,8 @@ def apply(rating: int, line: str, mods: dict[str, float]) -> int:
     return max(1, round(rating * (100 + mods.get(line, 0)) / 100))
 
 
-def rules_out(config) -> dict:
-    scale = getattr(config, "manager_formation_effect_pct", 100) / 100
+def rules_out(config, prefix: str = "manager") -> dict:
+    scale = getattr(config, f"{prefix}_formation_effect_pct", 100) / 100
     return {
         "styles": [
             {"value": s, "label": STYLE_LABELS[s], "about": STYLE_ABOUT[s], "beats": BEATS[s],
@@ -93,5 +94,5 @@ def rules_out(config) -> dict:
              "defense": round(FORMATION_SHIFT.get(f, (0, 0))[1] * scale, 1)}
             for f in FORMATIONS
         ],
-        "edge_pct": getattr(config, "manager_style_edge_pct", 4),
+        "edge_pct": getattr(config, f"{prefix}_style_edge_pct", 4),
     }

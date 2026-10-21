@@ -16,8 +16,11 @@ class PersonalSquadSetRequest(BaseModel):
 
 class PersonalSquadTacticsRequest(BaseModel):
     formation: str
-    mentality: str
-    playstyle: str
+    # Card Arena style; None keeps the current one.
+    style: str | None = None
+    # Legacy knobs (old clients); stored, no longer played.
+    mentality: str = "BALANCED"
+    playstyle: str = "CENTRAL_PLAY"
 
 
 class PersonalSquadCoachRequest(BaseModel):
@@ -51,6 +54,7 @@ class PersonalSquadOut(BaseModel):
     formation: str
     mentality: str
     playstyle: str
+    style: str = "possession"
     slots: list[PersonalSquadSlotOut]
     coach: EquippedCoachOut | None = None
     stadium: EquippedStadiumOut | None = None

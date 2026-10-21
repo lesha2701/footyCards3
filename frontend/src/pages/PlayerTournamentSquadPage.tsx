@@ -16,11 +16,13 @@ import { ChemistryDiamonds, ChemistryFrozenNote, ChemistryHints, ChemistryLinksO
 import { chemistryGain, chemistrySwapHints, type ChemistrySwapHint } from "@/lib/chemistry";
 import {
   activatePersonalSquad, autoFillPersonalSquad, fetchPersonalSquadBenchUpgrades, fetchPersonalSquadCoachCards, fetchPersonalSquads, fetchPersonalSquadStadiumCards,
+  fetchPersonalTournamentTactics,
   renamePersonalSquad, setPersonalSquadCards, setPersonalSquadCoach, setPersonalSquadStadium, setPersonalSquadTactics,
 } from "@/api/personalTournament";
 import { staticUrl } from "@/lib/api";
 import { BOOST_TYPE_LABELS } from "@/lib/coaches";
-import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
+import type { ManagerStyle } from "@/api/manager";
+import TacticsPanel from "@/components/manager/TacticsPanel";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
 import { inRow, pitchRows, PITCH_STYLE } from "@/lib/formationLayout";
 import PitchBackground from "@/components/squad/PitchBackground";
@@ -48,6 +50,7 @@ export default function PlayerTournamentSquadPage() {
     queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc", search: pickerSearch || undefined }),
   });
   const { data: coachCards } = useQuery({ queryKey: ["player-tournament", "coach-cards"], queryFn: fetchPersonalSquadCoachCards });
+  const { data: tactics } = useQuery({ queryKey: ["player-tournament", "tactics"], queryFn: fetchPersonalTournamentTactics });
   const { data: stadiumCards } = useQuery({ queryKey: ["player-tournament", "stadium-cards"], queryFn: fetchPersonalSquadStadiumCards });
 
   const [pickerSlot, setPickerSlot] = useState<PersonalSquadSlot | null>(null);
@@ -74,8 +77,12 @@ export default function PlayerTournamentSquadPage() {
   });
 
   const setTacticsMutation = useMutation({
-    mutationFn: (payload: { formation: string; mentality: string; playstyle: string }) => setPersonalSquadTactics(viewedIndex, payload),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] }); queryClient.invalidateQueries({ queryKey: ["player-tournament", "current"] }); },
+    mutationFn: (payload: { formation: string; style: ManagerStyle }) => setPersonalSquadTactics(viewedIndex, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] });
+      queryClient.invalidateQueries({ queryKey: ["player-tournament", "current"] });
+      queryClient.invalidateQueries({ queryKey: ["player-tournament", "tactics"] });
+    },
     onError: (err) => setError(formatGameError(err, "Не удалось обновить тактику")),
   });
 
@@ -104,9 +111,9 @@ export default function PlayerTournamentSquadPage() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] }); setRenamingTemplate(false); },
   });
 
-  const updateTactics = (patch: Partial<{ formation: string; mentality: string; playstyle: string }>) => {
+  const updateTactics = (patch: { formation?: string; style?: ManagerStyle }) => {
     if (!squad) return;
-    setTacticsMutation.mutate({ formation: squad.formation, mentality: squad.mentality, playstyle: squad.playstyle, ...patch });
+    setTacticsMutation.mutate({ formation: squad.formation, style: squad.style, ...patch });
   };
 
   const { data: benchUpgrades } = useQuery({
@@ -287,29 +294,22 @@ export default function PlayerTournamentSquadPage() {
         <ChemistrySummary chemistry={chemistry} />
         <ChemistryHints hints={chemistryHints} onApply={applyChemistryHint} busy={setCardsMutation.isPending} />
 
-        <div className="mb-3 flex flex-col gap-1.5">
-          <TacticSelect
-            label="Схема"
-            options={FORMATIONS}
-            value={squad?.formation ?? "4-3-3"}
-            disabled={!squad || setTacticsMutation.isPending}
-            onChange={(value) => updateTactics({ formation: value })}
-          />
-          <TacticSelect
-            label="Настрой"
-            options={MENTALITIES}
-            value={squad?.mentality ?? "BALANCED"}
-            disabled={!squad || setTacticsMutation.isPending}
-            onChange={(value) => updateTactics({ mentality: value })}
-          />
-          <TacticSelect
-            label="Стиль игры"
-            options={PLAYSTYLES}
-            value={squad?.playstyle ?? "CENTRAL_PLAY"}
-            disabled={!squad || setTacticsMutation.isPending}
-            onChange={(value) => updateTactics({ playstyle: value })}
-          />
-        </div>
+        {tactics && (
+          <div className="mb-3">
+            <TacticsPanel
+              style={squad?.style ?? "possession"} formation={squad?.formation ?? "4-3-3"} rules={tactics.rules}
+              next={tactics.next && squad?.is_active ? { ...tactics.next, detail: `тур ${tactics.next.round}` } : null}
+              busy={!squad || setTacticsMutation.isPending} onChange={updateTactics}
+              note="Тактика действует со следующего тура. Смена схемы убирает с поля тех, кому нет места."
+              help={<>
+                <p>1. <b className="text-ink-chalk">Состав.</b> Твои 11 карточек по схеме; химия, тренер, стадион (дома), навыки и таланты работают как раньше.</p>
+                <p>2. <b className="text-ink-chalk">Тактика — как в Card Arena.</b> Стиль даёт % к рейтингу своих линий, схема — небольшой крен в атаку или защиту. Если твой стиль бьёт стиль соперника, все твои игроки получают +{tactics.rules.edge_pct}%.</p>
+                <p>3. <b className="text-ink-chalk">Игра.</b> Движок разыгрывает владение и моменты по рейтингам с учётом тактики: полузащита борется за мяч, нападающие — с защитниками, удары — против вратаря.</p>
+                <p>4. <b className="text-ink-chalk">Случай.</b> Слабый иногда побеждает, но на дистанции 30 туров решают сила и тактика.</p>
+              </>}
+            />
+          </div>
+        )}
 
         <div ref={pitchRef} style={PITCH_STYLE} className="relative flex flex-col gap-3 overflow-hidden rounded-[22px] p-3 ring-1 ring-white/10">
           <PitchBackground />
@@ -450,37 +450,6 @@ export default function PlayerTournamentSquadPage() {
         onSelect={(card) => setStadiumMutation.mutate(card ? card.id : null)}
         onClose={() => setStadiumPickerOpen(false)}
       />
-    </div>
-  );
-}
-
-function TacticSelect({
-  label, options, value, disabled, onChange,
-}: {
-  label: string;
-  options: { value: string; label: string }[];
-  value: string;
-  disabled: boolean;
-  onChange: (value: string) => void;
-}) {
-  const selected = options.find((o) => o.value === value);
-  return (
-    <div className={`relative flex items-center justify-between gap-3 rounded-xl bg-white/5 px-3 py-2.5 ${disabled ? "opacity-60" : ""}`}>
-      <span className="shrink-0 text-micro uppercase tracking-wide text-ink-mist-dim">{label}</span>
-      <span className="flex min-w-0 items-center gap-1.5">
-        <span className="truncate text-sm font-semibold text-ink-chalk">{selected?.label ?? value}</span>
-      </span>
-      <select
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={label}
-        className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 disabled:cursor-default"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
     </div>
   );
 }

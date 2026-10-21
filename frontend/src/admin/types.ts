@@ -444,6 +444,8 @@ export interface GameConfig {
   manager_promote: number;
   manager_preseason_hours: number;
   manager_style_edge_pct: number;
+  ptour_style_edge_pct: number;
+  ptour_formation_effect_pct: number;
   manager_formation_effect_pct: number;
   manager_wage_pct: number;
   manager_loan_fee_pct: number;

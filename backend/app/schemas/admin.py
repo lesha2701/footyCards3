@@ -433,6 +433,8 @@ class GameConfigOut(BaseModel):
     manager_promote: int = 2
     manager_preseason_hours: int = 72
     manager_style_edge_pct: int = 4
+    ptour_style_edge_pct: int = 4
+    ptour_formation_effect_pct: int = 100
     manager_formation_effect_pct: int = 100
     manager_wage_pct: int = 10
     manager_loan_fee_pct: int = 20
@@ -1021,6 +1023,8 @@ class GameConfigUpdate(BaseModel):
     manager_promote: Optional[int] = Field(default=None, ge=1, le=4)
     manager_preseason_hours: Optional[int] = Field(default=None, ge=1, le=150)
     manager_style_edge_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    ptour_style_edge_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    ptour_formation_effect_pct: Optional[int] = Field(default=None, ge=0, le=300)
     manager_formation_effect_pct: Optional[int] = Field(default=None, ge=0, le=300)
     manager_wage_pct: Optional[int] = Field(default=None, ge=0, le=100)
     manager_loan_fee_pct: Optional[int] = Field(default=None, ge=0, le=100)

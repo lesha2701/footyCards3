@@ -279,7 +279,21 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
         </section>
       )}
 
-      <TacticsPanel club={club} rules={rules.tactics} busy={patch.isPending} onChange={(p) => patch.mutate(p)} />
+      <TacticsPanel
+        style={club.style} formation={club.formation} rules={rules.tactics} busy={patch.isPending} onChange={(p) => patch.mutate(p)}
+        next={club.next_match && {
+          ...club.next_match,
+          detail: [club.next_match.owner_name, club.next_match.rating != null ? `рейтинг ${club.next_match.rating}` : null].filter(Boolean).join(" · "),
+        }}
+        note="Тактику можно менять и во время сезона — она действует со следующего тура."
+        help={<>
+          <p>1. <b className="text-ink-chalk">Состав.</b> 11 игроков по схеме: твой «Мой игрок» и игрок академии всегда в старте, остальные — сильнейшие по позиции. Игрок не на своей позиции играет слабее.</p>
+          <p>2. <b className="text-ink-chalk">Тактика.</b> Стиль даёт % к рейтингу своих линий, схема — небольшой крен в атаку или защиту. Если твой стиль бьёт стиль соперника, все твои игроки получают +{rules.tactics.edge_pct}%.</p>
+          <p>3. <b className="text-ink-chalk">Игра.</b> Движок разыгрывает владение и моменты: полузащита борется за мяч, нападающие — с защитниками в дуэлях, удары — против вратаря. Чем выше рейтинги в нужной зоне, тем больше и опаснее моменты. Навыки и артефакты «Моих игроков» тоже работают.</p>
+          <p>4. <b className="text-ink-chalk">Случай.</b> Футбол есть футбол: слабый иногда побеждает, но на дистанции сезона решает сила и тактика.</p>
+          <p>5. <b className="text-ink-chalk">Итог.</b> 3 очка за победу, 1 за ничью. Клуб получает € за результат и билеты на домашних матчах, «Мои игроки» — опыт и статистику для «Золотого мяча».</p>
+        </>}
+      />
 
       <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
         <h2 className="font-display text-base font-bold text-ink-chalk">🎓 Игрок академии</h2>

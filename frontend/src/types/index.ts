@@ -1,3 +1,4 @@
+import type { ManagerStyle } from "@/api/manager";
 export type Rarity = "common" | "rare" | "epic" | "legendary" | "diamond";
 export type Position = "GK" | "LB" | "CB" | "RB" | "LWB" | "RWB" | "CDM" | "CM" | "CAM" | "LM" | "RM" | "LW" | "RW" | "ST";
 export type TradeStatus = "pending" | "accepted" | "rejected" | "cancelled" | "expired";
@@ -2283,6 +2284,8 @@ export interface PersonalSquad {
   formation: string;
   mentality: string;
   playstyle: string;
+  /** Card Arena style the tournament plays with. */
+  style: ManagerStyle;
   slots: PersonalSquadSlot[];
   coach: EquippedCoach | null;
   stadium: EquippedStadium | null;

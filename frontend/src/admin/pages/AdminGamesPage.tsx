@@ -708,6 +708,18 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">«Личный турнир»: тактика</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Как в Card Arena: схема + один из 4 стилей по кругу (Атака › Оборона › Владение › Контратака › Атака).
+          Стиль даёт % к рейтингам своих линий, схема — крен в атаку или защиту.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {field("ptour_style_edge_pct", "Бонус ко всем игрокам стилю, который бьёт стиль соперника, %")}
+          {field("ptour_formation_effect_pct", "Сила крена схем в атаку/защиту, %")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-1 font-display text-base font-bold">«Менеджер»</p>
         <p className="mb-3 text-xs text-slate-400">
           Свой клуб у каждого: «Мой игрок» и игрок академии всегда в составе, до N «Моих игроков» других
