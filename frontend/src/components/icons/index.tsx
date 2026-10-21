@@ -517,3 +517,77 @@ export function IconTicket(props: IconProps) {
     </IconBase>
   );
 }
+
+/** «Клубная база»: a small campus — main building with a flag and a wing. */
+export function IconCampus(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M3 20h18" />
+      <rect x="5" y="10" width="8" height="10" rx="1" />
+      <rect x="13" y="13" width="6" height="7" rx="1" />
+      <line x1="9" y1="10" x2="9" y2="4" />
+      <path d="M9 4h4l-1 1.5 1 1.5H9" strokeLinejoin="round" />
+      <line x1="8" y1="14" x2="10" y2="14" />
+    </IconBase>
+  );
+}
+
+/** Tactics board: a pitch outline with an X, an O and an arrow. */
+export function IconTactics(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M7 8l2.5 2.5M9.5 8L7 10.5" />
+      <circle cx="16" cy="15" r="1.8" />
+      <path d="M9 15c2.5 0 4-1.5 5-4" />
+      <path d="M12.5 10.5l1.6.4.3-1.6" strokeLinejoin="round" />
+    </IconBase>
+  );
+}
+
+/** Dice: a board game (Футбольный магнат). */
+export function IconDice(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <circle cx="9" cy="9" r="1" fill="currentColor" />
+      <circle cx="15" cy="15" r="1" fill="currentColor" />
+      <circle cx="15" cy="9" r="1" fill="currentColor" />
+      <circle cx="9" cy="15" r="1" fill="currentColor" />
+    </IconBase>
+  );
+}
+
+/** Whistle: the coach (Карьера тренера). */
+export function IconWhistle(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M3 11h9.5a5 5 0 1 1-4.6 7H7a4 4 0 0 1-4-4Z" strokeLinejoin="round" />
+      <path d="M12.5 11V8h6" />
+      <circle cx="12.5" cy="15.5" r="1.5" />
+    </IconBase>
+  );
+}
+
+/** Letters: the word game (Футбольные буквы). */
+export function IconLetters(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="3" y="6" width="8" height="12" rx="1.5" />
+      <rect x="13" y="6" width="8" height="12" rx="1.5" />
+      <path d="M5 15l2-6 2 6M5.7 13h2.6" />
+      <path d="M15.5 9h2a1.5 1.5 0 0 1 0 3h-2V9Zm0 3h2.3a1.5 1.5 0 0 1 0 3h-2.3v-3Z" />
+    </IconBase>
+  );
+}
+
+/** Two matching cards (Найди пару). */
+export function IconPairs(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="3" y="5" width="9" height="13" rx="1.5" transform="rotate(-8 7.5 11.5)" />
+      <rect x="12" y="6" width="9" height="13" rx="1.5" transform="rotate(8 16.5 12.5)" />
+      <path d="M7.5 11.5l.9 1.8M16.5 12.5l-.9 1.8" />
+    </IconBase>
+  );
+}

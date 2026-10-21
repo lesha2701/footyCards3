@@ -334,7 +334,7 @@ async def list_club_stadium_cards(db: AsyncSession = Depends(get_db), user: User
 @router.post("/me/packs/{club_pack_id}/open", response_model=ClubPackOpenResult)
 async def open_club_pack(club_pack_id: int, payload: OpenClubPackRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"open_club_pack:{user.id}", max_calls=10, window_seconds=60)
-    return await club_pack_service.open_club_pack(db, user, club_pack_id, payload.idempotency_key)
+    return await club_pack_service.open_club_pack_bulk(db, user, club_pack_id, payload.quantity, payload.idempotency_key)
 
 
 @router.post("/me/game/start", response_model=ClubGameStartOut)

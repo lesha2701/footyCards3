@@ -11,7 +11,7 @@ import { fetchMyPlayer } from "@/api/myPlayer";
 import { fetchPlayerTournamentCurrent } from "@/api/personalTournament";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import NewBadge from "@/components/common/NewBadge";
-import { IconBall, IconFlagCheckered, IconStar, IconTrophy, IconUsers } from "@/components/icons";
+import { IconBall, IconCampus, IconProfile, IconTrophy, IconUsers, IconWhistle } from "@/components/icons";
 import { hapticNotify } from "@/lib/telegram";
 
 function careerPlace(season: CareerSeason): number | null {
@@ -85,7 +85,7 @@ export default function ModesGrid() {
         {career?.enabled !== false && (
           <ModeTile
             tint="cyan"
-            icon={<IconTrophy size={18} />}
+            icon={<IconWhistle size={18} />}
             title="Карьера"
             status={
               career?.invite
@@ -125,12 +125,9 @@ export default function ModesGrid() {
         {base?.enabled !== false && (
           <ModeTile
             tint="path"
-            icon={<span className="text-base" aria-hidden>🏟️</span>}
-            title={
-              <>
-                Клубная база <NewBadge section="club-base" />
-              </>
-            }
+            icon={<IconCampus size={18} />}
+            title="Клубная база"
+            corner={<NewBadge section="club-base" />}
             status={
               !base
                 ? "Стадион, корпуса, Академия"
@@ -151,7 +148,7 @@ export default function ModesGrid() {
         {myPlayer?.enabled !== false && (
           <ModeTile
             tint="lime"
-            icon={<IconStar size={18} />}
+            icon={<IconProfile size={18} />}
             title="Мой игрок"
             status={
               myPlayer?.player
@@ -166,7 +163,7 @@ export default function ModesGrid() {
         )}
         <ModeTile
           tint="violet"
-          icon={<IconFlagCheckered size={18} />}
+          icon={<IconTrophy size={18} />}
           title="Турнир"
           status={
             tournament?.status === "queued"
@@ -194,13 +191,15 @@ export default function ModesGrid() {
 }
 
 function ModeTile({
-  tint, icon, title, status, alert, onClick,
+  tint, icon, title, status, alert, corner, onClick,
 }: {
   tint: keyof typeof TINTS;
   icon: ReactNode;
   title: ReactNode;
   status: string;
   alert?: boolean;
+  /** Small label in the top-right corner (e.g. «Новое»), hidden under the alert dot. */
+  corner?: ReactNode;
   onClick: () => void;
 }) {
   const t = TINTS[tint];
@@ -210,11 +209,13 @@ function ModeTile({
       className={`relative flex min-h-[88px] flex-col justify-between gap-2 rounded-2xl p-3 text-left ring-1 active:scale-[0.97] ${t.box}`}
     >
       <span className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl ${t.icon}`}>{icon}</span>
-      {alert && (
+      {alert ? (
         <span className="absolute right-3 top-3 h-2.5 w-2.5 animate-pulse rounded-full bg-accent-lime" aria-label="Есть действие" />
+      ) : (
+        corner && <span className="absolute right-2.5 top-2.5">{corner}</span>
       )}
       <span className="min-w-0">
-        <span className="flex min-w-0 items-center gap-1 whitespace-nowrap font-display text-sm font-bold text-ink-chalk">{title}</span>
+        <span className="block truncate font-display text-sm font-bold text-ink-chalk">{title}</span>
         <span className={`block truncate text-xs ${alert ? `font-semibold ${t.text}` : "text-ink-mist"}`}>{status}</span>
       </span>
     </button>

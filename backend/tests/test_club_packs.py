@@ -362,3 +362,58 @@ async def test_open_club_pack_concurrent_same_idempotency_key_no_double_debit(re
             assert final_club.budget == 150, "club budget must reflect exactly one debit, not two"
     finally:
         await setup.close()
+
+
+async def _bulk_pack(client, db_session, bot_token, slug, price):
+    admin_auth = await _admin_auth(client, bot_token)
+    for _ in range(5):
+        await create_player(db_session)
+    resp = await client.post(
+        "/api/v1/admin/club-packs", headers=admin_auth,
+        json={
+            "slug": slug, "name": "Пак пачкой", "price": price, "card_count": 1,
+            "rarity_probabilities": [{"rarity": "common", "probability": 1.0}],
+        },
+    )
+    return resp.json()["id"]
+
+
+async def test_open_several_club_packs_at_once(client, db_session, bot_token):
+    pack_id = await _bulk_pack(client, db_session, bot_token, "club-bulk-pack", 40)
+    club, headers = await _create_club(client, bot_token, 820410, "Клуб пачкой")
+    await client.post("/api/v1/clubs/me/daily-claim", headers=headers)  # budget 200
+
+    resp = await client.post(
+        f"/api/v1/clubs/me/packs/{pack_id}/open", headers=headers, json={"idempotency_key": "bulk-1", "quantity": 4}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["cards"]) == 4
+    assert body["new_budget"] == 200 - 160
+
+    # A retried request returns the same batch without charging again.
+    again = await client.post(
+        f"/api/v1/clubs/me/packs/{pack_id}/open", headers=headers, json={"idempotency_key": "bulk-1", "quantity": 4}
+    )
+    assert again.status_code == 200
+    assert len(again.json()["cards"]) == 4
+    cards = (await client.get("/api/v1/clubs/me/cards", headers=headers)).json()
+    assert len(cards) == 15 + 4
+
+
+async def test_bulk_club_open_charges_nothing_without_budget_for_all(client, db_session, bot_token):
+    pack_id = await _bulk_pack(client, db_session, bot_token, "club-bulk-poor", 60)
+    club, headers = await _create_club(client, bot_token, 820411, "Бедный клуб")
+    await client.post("/api/v1/clubs/me/daily-claim", headers=headers)  # budget 200 < 4 × 60
+
+    resp = await client.post(f"/api/v1/clubs/me/packs/{pack_id}/open", headers=headers, json={"quantity": 4})
+    assert resp.status_code in (400, 402, 409)
+    cards = (await client.get("/api/v1/clubs/me/cards", headers=headers)).json()
+    assert len(cards) == 15
+
+
+async def test_bulk_club_open_rejects_too_many(client, db_session, bot_token):
+    pack_id = await _bulk_pack(client, db_session, bot_token, "club-bulk-many", 1)
+    club, headers = await _create_club(client, bot_token, 820412, "Жадный клуб")
+    resp = await client.post(f"/api/v1/clubs/me/packs/{pack_id}/open", headers=headers, json={"quantity": 21})
+    assert resp.status_code == 422

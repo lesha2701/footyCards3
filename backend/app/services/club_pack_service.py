@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models.club import Club
 from app.models.club_card import ClubCard
 from app.models.club_coach_card import ClubCoachCard
@@ -131,10 +131,13 @@ async def open_club_pack(db: AsyncSession, user: User, club_pack_id: int, idempo
 
 async def mint_opening(
     db: AsyncSession, club: Club, pack: ClubPack, user_id: int, price_paid: int, idempotency_key: Optional[str],
+    commit: bool = True,
 ) -> ClubPackOpenResult:
     """Rolls and creates the cards of one club pack opening and commits.
     The caller has locked the club row and charged for it (budget, or spare
-    cards — club_market_service); `pack` has its rarity_probabilities loaded."""
+    cards — club_market_service); `pack` has its rarity_probabilities loaded.
+    commit=False (bulk opening) leaves the commit — and a duplicate-key race —
+    to the caller."""
     # Captured as a plain int (not a `club.id` attribute access) for reuse in the
     # `except IntegrityError` fallback below — `await db.rollback()` there expires every ORM
     # object still attached to this session, and touching an expired attribute via a bare
@@ -200,8 +203,11 @@ async def mint_opening(
                 db.add(ClubPackOpeningCard(opening_id=opening.id, club_card_id=club_card.id, club_coach_card_id=None, club_stadium_card_id=None, is_new=is_new))
                 opened_cards.append(_player_item(club_card, is_new))
 
-        await db.commit()
+        if commit:
+            await db.commit()
     except IntegrityError:
+        if not commit:
+            raise
         # Postgres enforces the (club_id, idempotency_key) unique constraint at INSERT/flush
         # time, not at COMMIT time — so a genuine concurrent duplicate can raise here as early
         # as `db.flush()` above, not just from the final `db.commit()`. The try block must
@@ -223,5 +229,85 @@ async def mint_opening(
         )
         return await _get_result_for_existing_opening(db, existing.scalar_one())
 
-    await db.refresh(club)
+    if commit:
+        await db.refresh(club)
     return ClubPackOpenResult(opening_id=opening.id, pack=ClubPackOut.model_validate(pack), cards=opened_cards, new_budget=club.budget)
+
+
+MAX_CLUB_PACK_BULK = 20
+
+
+def _bulk_key(idempotency_key: Optional[str], index: int) -> Optional[str]:
+    return f"{idempotency_key}:{index}" if idempotency_key else None
+
+
+async def _existing_bulk_result(
+    db: AsyncSession, club_id: int, idempotency_key: str, quantity: int,
+) -> Optional[ClubPackOpenResult]:
+    """The already-committed batch for this key (a retried request)."""
+    keys = [_bulk_key(idempotency_key, i) for i in range(quantity)]
+    openings = (
+        await db.execute(
+            select(ClubPackOpening)
+            .where(ClubPackOpening.club_id == club_id, ClubPackOpening.idempotency_key.in_(keys))
+            .order_by(ClubPackOpening.id)
+        )
+    ).scalars().all()
+    if not openings:
+        return None
+    results = [await _get_result_for_existing_opening(db, o) for o in openings]
+    return ClubPackOpenResult(
+        opening_id=results[0].opening_id, pack=results[0].pack,
+        cards=[c for r in results for c in r.cards], new_budget=results[-1].new_budget,
+    )
+
+
+async def open_club_pack_bulk(
+    db: AsyncSession, user: User, club_pack_id: int, quantity: int, idempotency_key: Optional[str],
+) -> ClubPackOpenResult:
+    """Opens `quantity` copies of a club pack: one budget debit for all of
+    them and one commit — all or nothing. Each copy is its own opening row
+    (history and per-opening idempotency stay as for a single open)."""
+    if quantity == 1:
+        return await open_club_pack(db, user, club_pack_id, idempotency_key)
+    if quantity < 1 or quantity > MAX_CLUB_PACK_BULK:
+        raise ConflictError(f"Можно открыть от 1 до {MAX_CLUB_PACK_BULK} паков за раз")
+    membership = await _require_membership(db, user.id)
+    require_budget_spender(membership, await db.get(Club, membership.club_id))
+    club_id = membership.club_id
+
+    if idempotency_key:
+        done = await _existing_bulk_result(db, club_id, idempotency_key, quantity)
+        if done is not None:
+            return done
+
+    pack = await db.get(ClubPack, club_pack_id, options=[joinedload(ClubPack.rarity_probabilities)])
+    if pack is None or not pack.is_active:
+        raise NotFoundError("Клубный пак не найден")
+
+    club = await _lock_club(db, club_id)
+    await debit_club_budget(
+        db, club, pack.price * quantity, ClubBudgetTransactionType.pack_purchase,
+        f"Открытие {quantity}× пака «{pack.name}»", "club_pack", pack.id, actor_user_id=user.id,
+    )
+    results: list[ClubPackOpenResult] = []
+    try:
+        for i in range(quantity):
+            results.append(
+                await mint_opening(db, club, pack, user.id, pack.price, _bulk_key(idempotency_key, i), commit=False)
+            )
+        await db.commit()
+    except IntegrityError:
+        # A concurrent duplicate of this very batch won: return its result.
+        await db.rollback()
+        if not idempotency_key:
+            raise
+        done = await _existing_bulk_result(db, club_id, idempotency_key, quantity)
+        if done is None:
+            raise
+        return done
+    await db.refresh(club)
+    return ClubPackOpenResult(
+        opening_id=results[0].opening_id, pack=results[0].pack,
+        cards=[c for r in results for c in r.cards], new_budget=club.budget,
+    )

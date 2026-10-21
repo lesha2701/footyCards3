@@ -1,14 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { IconChevronLeft, IconCoin } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { fetchClubPacks } from "@/api/clubPacks";
+import { fetchMyClub } from "@/api/clubs";
+import QuantitySheet from "@/components/shop/QuantitySheet";
+import type { ClubPack } from "@/types";
 import { staticUrl } from "@/lib/api";
 
 export default function ClubPacksPage() {
   const navigate = useNavigate();
   const { data: packs, isLoading } = useQuery({ queryKey: ["clubs", "packs"], queryFn: fetchClubPacks });
+  const { data: club } = useQuery({ queryKey: ["clubs", "me"], queryFn: fetchMyClub, retry: false });
+  const [choosing, setChoosing] = useState<ClubPack | null>(null);
+  const budget = club?.budget ?? 0;
 
   if (isLoading) return <ListSkeleton />;
 
@@ -35,7 +42,7 @@ export default function ClubPacksPage() {
               </p>
             </div>
             <button
-              onClick={() => navigate(`/clubs/packs/${pack.id}/open`)}
+              onClick={() => setChoosing(pack)}
               className="rounded-xl bg-accent-green px-3 py-2 text-xs font-bold text-bg-base active:scale-95"
             >
               Открыть
@@ -43,6 +50,23 @@ export default function ClubPacksPage() {
           </div>
         ))}
       </div>
+
+      {choosing && (
+        <QuantitySheet
+          name={choosing.name}
+          unitPrice={choosing.price}
+          balance={budget}
+          balanceLabel="в бюджете клуба"
+          maxQuantity={20}
+          note={`До 20 за раз · бюджет клуба: ${budget.toLocaleString("ru-RU")}`}
+          onClose={() => setChoosing(null)}
+          onConfirm={(quantity) => {
+            const pack = choosing;
+            setChoosing(null);
+            navigate(`/clubs/packs/${pack.id}/open`, quantity > 1 ? { state: { quantity } } : undefined);
+          }}
+        />
+      )}
     </div>
   );
 }

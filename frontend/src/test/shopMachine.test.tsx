@@ -79,17 +79,17 @@ describe("Плитка пака", () => {
     <PackTile pack={pack({})} open={open} onToggle={vi.fn()} balance={balance} onOpen={onOpen} onNeedCoins={vi.fn()} topUpStars={() => 25} onStarsPurchased={vi.fn()} />
   );
 
-  it("shows the price on the cover and ×1 / ×5 / ×10 with chances in the sheet", () => {
+  it("shows the price on the cover and ×1 / ×10 with chances in the sheet", () => {
     const onOpen = vi.fn();
     const { rerender } = render(tile(false, onOpen));
     expect(screen.getByText("100")).toBeInTheDocument();
-    expect(screen.queryByText("×5")).not.toBeInTheDocument();
+    expect(screen.queryByText("×10")).not.toBeInTheDocument();
     rerender(tile(true, onOpen));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("Обычная")).toBeInTheDocument();
     expect(screen.getByText("75%")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("×5"));
-    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), 5);
+    fireEvent.click(screen.getByText("×1"));
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), 1);
     expect(screen.getByText("×10").closest("button")).toBeDisabled();
   });
 });

@@ -7,12 +7,12 @@ import { staticUrl } from "@/lib/api";
 import { packBlocked, packEndsIn, packRemaining, packsWord, packTotal } from "@/lib/packOdds";
 import type { Pack, PackOpenResult } from "@/types";
 
-const QUANTITIES = [1, 5, 10];
+const QUANTITIES = [1, 10];
 
 /** A pack in the «Все паки» grid: the cover with a price chip; a tap opens
- * the sheet with every chance, the average value and ×1 / ×5 / ×10. */
+ * the sheet with every chance, the average value and ×1 / ×10 / any number. */
 export default function PackTile({
-  pack, open, onToggle, isNew, balance, onOpen, onNeedCoins, topUpStars, onStarsPurchased,
+  pack, open, onToggle, isNew, balance, onOpen, onCustom, onNeedCoins, topUpStars, onStarsPurchased,
 }: {
   pack: Pack;
   isNew?: boolean;
@@ -20,6 +20,8 @@ export default function PackTile({
   onToggle: () => void;
   balance: number;
   onOpen: (pack: Pack, quantity: number) => void;
+  /** «Своё…»: the quantity sheet for any number. */
+  onCustom?: (pack: Pack) => void;
   onNeedCoins: () => void;
   topUpStars: (need: number) => number | null;
   onStarsPurchased: (pack: Pack, result: PackOpenResult) => void;
@@ -99,6 +101,15 @@ export default function PackTile({
                 </button>
               );
             })}
+            {onCustom && (
+              <button
+                onClick={() => onCustom(pack)}
+                className="flex flex-col items-center justify-center rounded-2xl bg-white/5 text-ink-chalk ring-1 ring-white/10 active:scale-95"
+              >
+                <span className="font-display text-base font-bold leading-none">×?</span>
+                <span className="mt-1 text-micro font-semibold text-ink-mist">своё</span>
+              </button>
+            )}
           </div>
         )
       }

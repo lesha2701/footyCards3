@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
   COACH_STAGES,
@@ -31,6 +31,7 @@ function stagesFor(item: OpenedClubPackItem) {
 export default function ClubPackOpenPage() {
   const { packId } = useParams<{ packId: string }>();
   const navigate = useNavigate();
+  const quantity = Math.max(1, Number((useLocation().state as { quantity?: number } | null)?.quantity ?? 1));
 
   const [phase, setPhase] = useState<"packshot" | "revealing" | "summary">("packshot");
   const [cardIndex, setCardIndex] = useState(0);
@@ -50,7 +51,7 @@ export default function ClubPackOpenPage() {
     if (hasStartedRef.current) return;
     hasStartedRef.current = true;
 
-    openClubPack(Number(packId), idempotencyKeyRef.current!)
+    openClubPack(Number(packId), idempotencyKeyRef.current!, quantity)
       .then((data) => setRequestState({ status: "success", data }))
       .catch((err: unknown) => {
         setRequestState({
