@@ -30,6 +30,7 @@ from app.models.manager_club import ManagerClub
 from app.models.match import Match
 from app.models.pack import PackOpening, StarsInvoice
 from app.models.penalty import PenaltyMatch
+from app.models.player_career import PlayerCareerSeason
 from app.models.player_tournament import PlayerTournament, PlayerTournamentParticipant
 from app.models.stratego import StrategoMatch
 from app.models.mordoboi import MordoboiMatch
@@ -107,6 +108,7 @@ MODE_SOURCES: tuple[_Source, ...] = (
         game_key=PlayerTournamentParticipant.tournament_id,
     ),
     _Source("career", "Карьера тренера (сезоны)", CareerParticipant, CareerParticipant.created_at, (CareerParticipant.user_id,)),
+    _Source("player_career", "Карьера игрока (сезоны)", PlayerCareerSeason, PlayerCareerSeason.created_at, (PlayerCareerSeason.user_id,)),
     _Source("manager", "Менеджер (клубы)", ManagerClub, ManagerClub.created_at, (ManagerClub.owner_id,)),
     _Source("wheel", "Колесо фортуны", WheelSpin, WheelSpin.created_at, (WheelSpin.user_id,)),
 )

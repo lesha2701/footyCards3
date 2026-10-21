@@ -136,6 +136,8 @@ async def _get_session(db: AsyncSession, user_id: int, session_id: int) -> GameS
 async def resolve_kick(db: AsyncSession, user: User, session_id: int, elapsed_ms: int) -> FreeKickKickOut:
     config = await get_config(db)
     session = await _get_session(db, user.id, session_id)
+    # Two concurrent taps on one kick: the second waits here and sees it resolved.
+    await db.refresh(session, with_for_update=True)
     if session.status != GameSessionStatus.in_progress:
         raise ConflictError("This game session has already finished")
 

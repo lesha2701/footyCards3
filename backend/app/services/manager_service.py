@@ -1176,7 +1176,9 @@ async def ensure_season(db: AsyncSession, now: Optional[datetime] = None) -> boo
     if await db.get(ManagerSeason, key) is not None:
         return False
     await pcc.prepare(db, config)  # commits — before any lock
-    starts = preseason_end(now, config)
+    # In UTC: SQLite compares timestamps as text, so a local-offset bound
+    # would let clubs founded after the preseason into this season.
+    starts = preseason_end(now, config).astimezone(timezone.utc)
     club_ids = (await db.execute(
         select(ManagerClub.id).where(ManagerClub.created_at < starts).order_by(ManagerClub.id)
     )).scalars().all()
