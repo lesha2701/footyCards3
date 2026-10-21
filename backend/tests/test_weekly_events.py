@@ -161,12 +161,12 @@ async def test_raid_daily_limit_and_boss_defeated_once(client, db_session, bot_t
     club_id = await _club(client, cap_h, "Рейдеры")
     config = await get_config(db_session)
     config.club_raid_attacks_per_day = 2
-    config.club_raid_hp_per_member = 100  # 3 members minimum → 300 HP
+    config.club_raid_hp_per_member = 1000  # 3 members minimum → 3000 HP: two attacks (≤ 699 each) never finish it
     config.club_raid_reward_budget = 500
     await db_session.commit()
 
     view = (await client.get(f"{API}/clubs/me/raid", headers=cap_h)).json()
-    assert view["hp"] == 300 and view["damage"] == 0 and view["attacks_left"] == 2 and not view["defeated"]
+    assert view["hp"] == 3000 and view["damage"] == 0 and view["attacks_left"] == 2 and not view["defeated"]
     budget = (await db_session.get(Club, club_id)).budget
 
     first = await client.post(f"{API}/clubs/me/raid/attack", headers=cap_h)
