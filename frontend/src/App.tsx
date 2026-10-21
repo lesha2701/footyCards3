@@ -59,6 +59,7 @@ const StylePage = lazy(() => import("@/pages/StylePage"));
 const ArtifactsPage = lazy(() => import("@/pages/ArtifactsPage"));
 const EquipmentPage = lazy(() => import("@/pages/EquipmentPage"));
 const AdminMonetizationPage = lazy(() => import("@/admin/pages/AdminMonetizationPage"));
+const AdminMatchDayPage = lazy(() => import("@/admin/pages/AdminMatchDayPage"));
 const BlackjackPage = lazy(() => import("@/pages/BlackjackPage"));
 const PacksPage = lazy(() => import("@/pages/PacksPage"));
 const PackOpenPage = lazy(() => import("@/pages/PackOpenPage"));
@@ -112,6 +113,9 @@ const ClubShopPage = lazy(() => import("@/pages/ClubShopPage"));
 const ClubQuestsPage = lazy(() => import("@/pages/ClubQuestsPage"));
 const ClubTrophiesPage = lazy(() => import("@/pages/ClubTrophiesPage"));
 const ClubWarPage = lazy(() => import("@/pages/ClubWarPage"));
+const ClubRaidPage = lazy(() => import("@/pages/ClubRaidPage"));
+const WeeklyCupPage = lazy(() => import("@/pages/WeeklyCupPage"));
+const MatchDayPage = lazy(() => import("@/pages/MatchDayPage"));
 const ClubSquadPage = lazy(() => import("@/pages/ClubSquadPage"));
 const ClubPacksPage = lazy(() => import("@/pages/ClubPacksPage"));
 const ClubPackOpenPage = lazy(() => import("@/pages/ClubPackOpenPage"));
@@ -250,6 +254,7 @@ export default function App() {
         <Route path="bingo" element={<AdminBingoPage />} />
         <Route path="shop" element={<AdminShopPage />} />
         <Route path="monetization" element={<AdminMonetizationPage />} />
+        <Route path="match-day" element={<AdminMatchDayPage />} />
         <Route path="broadcasts" element={<AdminBroadcastsPage />} />
         <Route path="log" element={<AdminLogPage />} />
       </Route>
@@ -318,6 +323,9 @@ export default function App() {
         <Route path="/clubs/quests" element={<ClubQuestsPage />} />
         <Route path="/clubs/:id/trophies" element={<ClubTrophiesPage />} />
         <Route path="/clubs/war" element={<ClubWarPage />} />
+        <Route path="/clubs/raid" element={<ClubRaidPage />} />
+        <Route path="/weekly-cup" element={<WeeklyCupPage />} />
+        <Route path="/match-day" element={<MatchDayPage />} />
         <Route path="/clubs/packs" element={<ClubPacksPage />} />
         <Route path="/clubs/packs/:packId/open" element={<ClubPackOpenPage />} />
         <Route path="/clubs/games" element={<ClubGamesPage />} />

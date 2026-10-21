@@ -62,7 +62,7 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
     if config.club_pass_bonus_card_rarity == "":
         config.club_pass_bonus_card_rarity = None
     for key in ("club_card_exchange_pack_id", "club_pass_daily_pack_id", "club_pass_bonus_pack_id", "club_pass_frame_cosmetic_id", "club_pass_badge_id",
-                "starter_offer_pack_id", "starter_offer_cosmetic_id"):
+                "starter_offer_pack_id", "starter_offer_cosmetic_id", "club_raid_reward_pack_id"):
         if getattr(config, key) == 0:
             setattr(config, key, None)  # 0 from the admin form = none
     if config.card_skill_probability_floor_pct >= config.card_skill_probability_ceiling_pct:

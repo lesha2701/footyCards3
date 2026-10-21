@@ -141,6 +141,8 @@ class TransactionType(str, enum.Enum):
     artifact_purchase = "artifact_purchase"
     equipment_purchase = "equipment_purchase"
     club_reward = "club_reward"
+    weekly_cup_prize = "weekly_cup_prize"
+    match_day_reward = "match_day_reward"
 
 
 class GiftKind(str, enum.Enum):
@@ -194,6 +196,7 @@ class ClubBudgetTransactionType(str, enum.Enum):
     shop_purchase = "shop_purchase"
     quest_reward = "quest_reward"
     war_reward = "war_reward"
+    raid_reward = "raid_reward"
 
 
 class TournamentQueueStatus(str, enum.Enum):
@@ -436,6 +439,8 @@ class NotificationType(str, enum.Enum):
     my_player_duel = "my_player_duel"
     player_career_event = "player_career_event"
     manager_event = "manager_event"
+    weekly_cup_result = "weekly_cup_result"
+    match_day_result = "match_day_result"
 
 
 class TradeCardSide(str, enum.Enum):

@@ -29,6 +29,13 @@ vi.mock("@/api/mordoboi", () => ({
 vi.mock("@/api/blackjack", () => ({ fetchBlackjackStatus: vi.fn(async () => ({ enabled: false })) }));
 vi.mock("@/api/personalTournament", () => ({ fetchPlayerTournamentCurrent: vi.fn(async () => ({ status: "not_queued" })) }));
 vi.mock("@/api/career", () => ({ fetchCareer: vi.fn(async () => ({ enabled: true, season: null, invite: null })) }));
+vi.mock("@/api/events", () => ({
+  fetchWeeklyCup: vi.fn(async () => ({ enabled: true, title: "Найди пару", me: { place: 3, points: 120, games: 2 }, prizes: [5000], unclaimed_coins: 0 })),
+  fetchMatchDay: vi.fn(async () => ({
+    enabled: true, unclaimed: 0, rewards: { exact: 1000, diff: 400, outcome: 200 }, recent: [],
+    current: { id: 1, home: "Спартак", away: "ЦСКА", open: true, prediction: null },
+  })),
+}));
 
 const show = () =>
   render(
@@ -54,6 +61,12 @@ describe("вкладка «Играть»", () => {
     fireEvent.click(screen.getByRole("tab", { name: "🧠 Тактика" }));
     expect(screen.getByText("Мордобой")).toBeInTheDocument();
     expect(await screen.findByText("Рейтинг 12")).toBeInTheDocument();
+  });
+
+  it("shows the week's cup and the match of the day", async () => {
+    show();
+    expect(await screen.findByText("3 место · 120 очк.")).toBeInTheDocument();
+    expect(screen.getAllByText("Спартак — ЦСКА").length).toBeGreaterThan(0);
   });
 
   it("filters by group and keeps favourites", async () => {

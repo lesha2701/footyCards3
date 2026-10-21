@@ -712,6 +712,22 @@ class GameConfigOut(BaseModel):
     club_war_draw_budget: int = 1500
     club_war_loss_budget: int = 500
     club_war_win_member_coins: int = 200
+    weekly_cup_enabled: bool = True
+    weekly_cup_games: list[str] = []
+    weekly_cup_best_of: int = 5
+    weekly_cup_prizes: list[int] = []
+    match_day_enabled: bool = True
+    match_day_exact_coins: int = 1000
+    match_day_diff_coins: int = 400
+    match_day_outcome_coins: int = 200
+    club_raid_enabled: bool = True
+    club_raid_hp_per_member: int = 3000
+    club_raid_attacks_per_day: int = 3
+    club_raid_shots: int = 6
+    club_raid_damage_per_goal: int = 100
+    club_raid_reward_coins: int = 1000
+    club_raid_reward_pack_id: Optional[int] = None
+    club_raid_reward_budget: int = 2000
     trade_send_min_account_age_days: int = 3
     trade_send_min_active_days: int = 2
     trade_daily_coins_receive_cap: int = 3000
@@ -1368,6 +1384,24 @@ class GameConfigUpdate(BaseModel):
     club_war_draw_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
     club_war_loss_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
     club_war_win_member_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
+    weekly_cup_enabled: Optional[bool] = None
+    weekly_cup_games: Optional[list[Literal["penalty", "free_kick", "memory", "saboteur", "pairs"]]] = Field(
+        default=None, min_length=1, max_length=10,
+    )
+    weekly_cup_best_of: Optional[int] = Field(default=None, ge=1, le=50)
+    weekly_cup_prizes: Optional[list[Annotated[int, Field(ge=0, le=10000000)]]] = Field(default=None, max_length=100)
+    match_day_enabled: Optional[bool] = None
+    match_day_exact_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
+    match_day_diff_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
+    match_day_outcome_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
+    club_raid_enabled: Optional[bool] = None
+    club_raid_hp_per_member: Optional[int] = Field(default=None, ge=1, le=10000000)
+    club_raid_attacks_per_day: Optional[int] = Field(default=None, ge=1, le=50)
+    club_raid_shots: Optional[int] = Field(default=None, ge=1, le=20)
+    club_raid_damage_per_goal: Optional[int] = Field(default=None, ge=0, le=1000000)
+    club_raid_reward_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
+    club_raid_reward_pack_id: Optional[int] = Field(default=None, ge=0)
+    club_raid_reward_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod

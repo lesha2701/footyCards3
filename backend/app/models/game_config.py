@@ -1171,3 +1171,32 @@ class GameConfig(TimestampMixin, Base):
     equipment_max_chemistry: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     # Ceiling on what talismans add per card (+% «Академия» experience, +% coins for an Arena win).
     equipment_max_talisman_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+
+    # --- «Неделя мини-игры» (services/weekly_cup_service.py) ---
+    weekly_cup_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Rotation by week: penalty | free_kick | memory | saboteur | pairs.
+    weekly_cup_games: Mapped[list] = mapped_column(
+        JSON, default=lambda: ["penalty", "free_kick", "memory", "saboteur", "pairs"], nullable=False,
+    )
+    # The score is the sum of a player's N best games of the week.
+    weekly_cup_best_of: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # Coins for places 1, 2, 3, …
+    weekly_cup_prizes: Mapped[list] = mapped_column(
+        JSON, default=lambda: [5000, 3000, 2000, 1000, 1000, 500, 500, 500, 500, 500], nullable=False,
+    )
+
+    # --- «Матч дня» (services/match_day_service.py) ---
+    match_day_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    match_day_exact_coins: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    match_day_diff_coins: Mapped[int] = mapped_column(Integer, default=400, nullable=False)
+    match_day_outcome_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+
+    # --- «Клубный рейд» (services/club_raid_service.py) ---
+    club_raid_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    club_raid_hp_per_member: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
+    club_raid_attacks_per_day: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    club_raid_shots: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    club_raid_damage_per_goal: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    club_raid_reward_coins: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    club_raid_reward_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    club_raid_reward_budget: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)

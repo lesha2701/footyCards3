@@ -41,6 +41,14 @@ from app.models.club_emblem import ClubDonation, ClubEmblemItem, ClubEmblemUnloc
 from app.models.club_wall import ClubPost
 from app.models.club_reward import ClubRewardClaim, ClubRewardGrant, ClubShopItem, ClubShopPurchase
 from app.models.club_quest import ClubQuestCompletion, ClubQuestTemplate
+from app.models.weekly_event import (
+    ClubRaid,
+    ClubRaidAttack,
+    MatchDayFixture,
+    MatchDayPrediction,
+    WeeklyCupResult,
+    WeeklyCupWeek,
+)
 from app.models.club_war import ClubWar, ClubWarRound
 from app.models.club_league import ClubLeagueResult, ClubLeagueWeek, ClubSeasonResult
 from app.models.club_lineup import ClubLineup, ClubLineupCard
@@ -153,6 +161,12 @@ __all__ = [
     "ClubWarRound",
     "ClubSeasonResult",
     "ClubQuestCompletion",
+    "ClubRaid",
+    "ClubRaidAttack",
+    "MatchDayFixture",
+    "MatchDayPrediction",
+    "WeeklyCupResult",
+    "WeeklyCupWeek",
     "ClubQuestTemplate",
     "ClubRewardClaim",
     "ClubRewardGrant",

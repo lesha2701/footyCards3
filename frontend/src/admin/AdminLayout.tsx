@@ -57,6 +57,7 @@ const SECTIONS: { to: string; label: string; Icon: (props: IconProps) => JSX.Ele
   { to: "/admin/wheel", label: "Колесо фортуны", Icon: IconGlobe },
   { to: "/admin/daily-rewards", label: "Календарь наград", Icon: IconClock },
   { to: "/admin/games", label: "Игры", Icon: IconPlay },
+  { to: "/admin/match-day", label: "Матч дня", Icon: IconPlay },
   { to: "/admin/upgrades", label: "Апгрейд", Icon: IconUpgrade },
   { to: "/admin/diamond-upgrades", label: "Диамант", Icon: IconCard },
   { to: "/admin/card-skills", label: "Навыки карточек", Icon: IconBrain },

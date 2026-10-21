@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { fetchBlackjackStatus } from "@/api/blackjack";
 import { fetchCareer } from "@/api/career";
+import { fetchMatchDay, fetchWeeklyCup } from "@/api/events";
 import { fetchGameLimits, fetchPenaltyStats } from "@/api/games";
 import { fetchArenaStats } from "@/api/matches";
 import { fetchMordoboiInfo, fetchMordoboiMatches, fetchMordoboiStats } from "@/api/mordoboi";
@@ -117,6 +118,8 @@ export default function PlayPage() {
   // Same keys as the Tactico and career pages — shared caches.
   const { data: tacticoMatches } = useQuery({ queryKey: ["tactico-matches"], queryFn: fetchTacticoMatches });
   const { data: career } = useQuery({ queryKey: ["career"], queryFn: fetchCareer, staleTime: 60_000 });
+  const { data: weeklyCup } = useQuery({ queryKey: ["weekly-cup"], queryFn: fetchWeeklyCup, staleTime: 60_000 });
+  const { data: matchDay } = useQuery({ queryKey: ["match-day"], queryFn: fetchMatchDay, staleTime: 60_000 });
 
   const blackjackEntries = blackjack ? blackjack.free_remaining + blackjack.replay_entries + blackjack.paid_entries : 0;
   const games: GameDef[] = [
@@ -260,6 +263,14 @@ export default function PlayPage() {
   if (blackjack?.active_match) {
     now.push({ key: "bj", kicker: "Партия идёт", title: "21: Добавленное время", tone: "bg-rose-500/15 text-rose-200 ring-rose-400/30", to: "/play/blackjack" });
   }
+  if (weeklyCup?.unclaimed_coins) {
+    now.push({ key: "wc", kicker: "Приз недели", title: `Забрать ${weeklyCup.unclaimed_coins} монет`, tone: "bg-amber-400/15 text-amber-200 ring-amber-400/30", to: "/weekly-cup" });
+  }
+  if (matchDay?.unclaimed) {
+    now.push({ key: "mdc", kicker: "Матч дня", title: "Забери награду за прогноз", tone: "bg-emerald-500/15 text-emerald-200 ring-emerald-400/30", to: "/match-day" });
+  } else if (matchDay?.enabled && matchDay.current?.open && !matchDay.current.prediction) {
+    now.push({ key: "md", kicker: "Матч дня", title: `${matchDay.current.home} — ${matchDay.current.away}`, tone: "bg-emerald-500/15 text-emerald-200 ring-emerald-400/30", to: "/match-day" });
+  }
   const last = games.find((g) => g.path === lastGame);
   if (last && !exhausted(last)) {
     now.push({ key: "last", kicker: "Продолжить", title: last.title, tone: "bg-accent-lime/15 text-accent-lime ring-accent-lime/30", to: last.path });
@@ -293,6 +304,39 @@ export default function PlayPage() {
               </button>
             ))}
           </div>
+        </section>
+      )}
+
+      {(weeklyCup?.enabled || matchDay?.enabled) && (
+        <section className="grid grid-cols-2 gap-2">
+          {weeklyCup?.enabled && (
+            <button
+              onClick={() => navigate("/weekly-cup")}
+              className="flex min-w-0 flex-col gap-1 rounded-2xl bg-gradient-to-br from-orange-500/25 to-bg-surface p-3 text-left ring-1 ring-orange-400/25 active:scale-[0.98]"
+            >
+              <span className="text-micro font-bold uppercase tracking-wider text-orange-200">🏆 Неделя</span>
+              <span className="line-clamp-2 font-display text-sm font-bold leading-tight text-ink-chalk">{weeklyCup.title}</span>
+              <span className="truncate text-caption text-ink-mist">
+                {weeklyCup.me ? `${weeklyCup.me.place} место · ${weeklyCup.me.points} очк.` : `Приз за 1 место — ${weeklyCup.prizes[0] ?? 0}`}
+              </span>
+            </button>
+          )}
+          {matchDay?.enabled && (
+            <button
+              onClick={() => navigate("/match-day")}
+              className="flex min-w-0 flex-col gap-1 rounded-2xl bg-gradient-to-br from-emerald-600/25 to-bg-surface p-3 text-left ring-1 ring-emerald-400/25 active:scale-[0.98]"
+            >
+              <span className="text-micro font-bold uppercase tracking-wider text-emerald-200">⚽ Матч дня</span>
+              <span className="line-clamp-2 font-display text-sm font-bold leading-tight text-ink-chalk">
+                {matchDay.current ? `${matchDay.current.home} — ${matchDay.current.away}` : "Скоро"}
+              </span>
+              <span className="truncate text-caption text-ink-mist">
+                {matchDay.current?.prediction
+                  ? `Прогноз ${matchDay.current.prediction.home}:${matchDay.current.prediction.away}`
+                  : matchDay.current?.open ? `Угадай счёт — до ${matchDay.rewards.exact} монет` : "Ждём результат"}
+              </span>
+            </button>
+          )}
         </section>
       )}
 

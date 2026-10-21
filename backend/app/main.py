@@ -65,6 +65,7 @@ from app.routers import (
     internal,
     leaderboard,
     equipment,
+    events,
     monetization,
     leagues,
     lineups,
@@ -210,6 +211,8 @@ app.include_router(internal.router, prefix=API_PREFIX)
 app.include_router(wallet.router, prefix=API_PREFIX)
 app.include_router(monetization.router, prefix=API_PREFIX)
 app.include_router(equipment.router, prefix=API_PREFIX)
+app.include_router(events.router, prefix=API_PREFIX)
+app.include_router(events.admin_router, prefix=API_PREFIX)
 app.include_router(admin_equipment.router, prefix=API_PREFIX)
 app.include_router(admin_monetization.router, prefix=API_PREFIX)
 

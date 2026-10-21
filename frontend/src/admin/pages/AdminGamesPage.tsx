@@ -97,7 +97,8 @@ export default function AdminGamesPage() {
       | "magnate_stadium_rents"
       | "arena_division_min_points"
       | "arena_division_reward_coins"
-      | "arena_division_coin_pct",
+      | "arena_division_coin_pct"
+      | "weekly_cup_prizes",
     label: string,
   ) => (
     <label className="col-span-2 flex flex-col gap-1">
@@ -115,7 +116,7 @@ export default function AdminGamesPage() {
     </label>
   );
 
-  const textListField = (key: "career_division_bot_level", label: string) => (
+  const textListField = (key: "career_division_bot_level" | "weekly_cup_games", label: string) => (
     <label className="col-span-2 flex flex-col gap-1">
       <span className="text-xs text-slate-400">{label}</span>
       <input
@@ -173,7 +174,10 @@ export default function AdminGamesPage() {
       | "player_career_fast_season_enabled"
       | "manager_enabled"
       | "chemistry_enabled"
-      | "card_stars_enabled",
+      | "card_stars_enabled"
+      | "weekly_cup_enabled"
+      | "match_day_enabled"
+      | "club_raid_enabled",
     label: string,
   ) => (
     <label className="flex items-center gap-2 text-sm">
@@ -472,6 +476,53 @@ export default function AdminGamesPage() {
           {field("club_war_draw_budget", "Ничья: в бюджет клуба")}
           {field("club_war_loss_budget", "Поражение: в бюджет клуба")}
           {field("club_war_win_member_coins", "Победа: монет каждому участнику")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Неделя мини-игры</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Каждую неделю — одна мини-игра по кругу из списка (penalty, free_kick, memory, saboteur, pairs). Очки игрока — сумма
+          N лучших игр недели. Призы — монеты за 1, 2, 3… места; итоги подводятся в ночь на понедельник, приз игрок забирает сам.
+          Игра недели фиксируется при первом заходе на неделе.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("weekly_cup_enabled", "Турнир включён")}
+          {field("weekly_cup_best_of", "Лучших игр в зачёт")}
+          {textListField("weekly_cup_games", "Игры по неделям, через запятую")}
+          {listField("weekly_cup_prizes", "Призы за места, монет через запятую")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Матч дня</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Матчи добавляются в разделе «Матч дня». Награда — одна, самая высокая из угаданных.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("match_day_enabled", "Матч дня включён")}
+          {field("match_day_exact_coins", "Точный счёт, монет")}
+          {field("match_day_diff_coins", "Разница голов, монет")}
+          {field("match_day_outcome_coins", "Исход, монет")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Клубный рейд</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Босс недели для каждого клуба. HP = «HP на участника» × участников (минимум 3), фиксируется при открытии рейда.
+          Атака — серия ударов, шанс гола от силы 11 лучших карт игрока; урон = голы × «урон за гол» + сила состава. Лимит атак
+          в день общий для всех клубов игрока. Победа: в казну клуба и награда каждому участнику (забирают в клубном магазине).
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("club_raid_enabled", "Рейды включены")}
+          {field("club_raid_hp_per_member", "HP на участника")}
+          {field("club_raid_attacks_per_day", "Атак в день")}
+          {field("club_raid_shots", "Ударов в атаке")}
+          {field("club_raid_damage_per_goal", "Урон за гол")}
+          {field("club_raid_reward_budget", "Победа: в казну клуба")}
+          {field("club_raid_reward_coins", "Победа: монет каждому")}
+          {field("club_raid_reward_pack_id", "Победа: пак каждому (ID, 0 — нет)")}
         </div>
       </section>
 

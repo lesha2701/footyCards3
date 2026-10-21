@@ -341,6 +341,18 @@ function ClubHome({ club }: { club: Club }) {
       </button>
 
       <button
+        onClick={() => navigate("/clubs/raid")}
+        className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-orange-500/15 to-bg-surface p-3 text-left active:scale-[0.99]"
+      >
+        <span className="text-lg">👹</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-ink-chalk">Клубный рейд</span>
+          <span className="block text-caption text-ink-mist">Босс недели — бейте его вместе, урон суммируется</span>
+        </span>
+        <IconChevronRight size={16} className="shrink-0 text-ink-mist-dim" />
+      </button>
+
+      <button
         onClick={() => navigate("/clubs/quests")}
         className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
       >
