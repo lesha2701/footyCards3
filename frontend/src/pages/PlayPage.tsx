@@ -267,7 +267,7 @@ export default function PlayPage() {
     now.push({ key: "wc", kicker: "Приз недели", title: `Забрать ${weeklyCup.unclaimed_coins} монет`, tone: "bg-amber-400/15 text-amber-200 ring-amber-400/30", to: "/weekly-cup" });
   }
   if (matchDay?.unclaimed) {
-    now.push({ key: "mdc", kicker: "Матч дня", title: "Забери награду за прогноз", tone: "bg-emerald-500/15 text-emerald-200 ring-emerald-400/30", to: "/match-day" });
+    now.push({ key: "mdc", kicker: "Матч дня", title: "Награда ждёт", tone: "bg-emerald-500/15 text-emerald-200 ring-emerald-400/30", to: "/match-day" });
   } else if (matchDay?.enabled && matchDay.current?.open && !matchDay.current.prediction) {
     now.push({ key: "md", kicker: "Матч дня", title: `${matchDay.current.home} — ${matchDay.current.away}`, tone: "bg-emerald-500/15 text-emerald-200 ring-emerald-400/30", to: "/match-day" });
   }
