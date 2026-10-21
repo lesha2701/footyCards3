@@ -72,6 +72,7 @@ from app.routers import (
     lifestyle,
     magnate,
     matches,
+    manager,
     my_player,
     player_career,
     notifications,
@@ -146,6 +147,7 @@ app.include_router(gifts.router, prefix=API_PREFIX)
 app.include_router(lineups.router, prefix=API_PREFIX)
 app.include_router(career.router, prefix=API_PREFIX)
 app.include_router(friends.router, prefix=API_PREFIX)
+app.include_router(manager.router, prefix=API_PREFIX)
 app.include_router(my_player.router, prefix=API_PREFIX)
 app.include_router(lifestyle.router, prefix=API_PREFIX)
 app.include_router(player_career.router, prefix=API_PREFIX)

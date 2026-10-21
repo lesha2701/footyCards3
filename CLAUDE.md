@@ -36,6 +36,29 @@ Main features:
   room. Quests, wars and league settlement have no scheduler of their own: they
   run lazily on reads and from bot sweeps (`/internal/clubs/...`), idempotent via
   unique rows;
+- «Менеджер» (`manager_service.py`, `manager_shop.py`): every user's own club.
+  Squad: his «Мой игрок» and one «Академия» card (both always start), up to
+  `manager_max_live` other users' «Мои игроки» on contracts for seasons (sign
+  a free agent, or buy / loan from another club — the player and the selling
+  club both consent) and catalog footballers bought or loaned (`manager_npc`,
+  one club at a time, partial unique index). Club money is euros (BigInteger,
+  never converted to coins): a season grant by division plus a capped
+  «Клубная база» bonus (stadium tickets, marketing, shop, accounting), match
+  income, prizes, fans' merchandise; values follow the Transfermarkt-like
+  curve `manager_value_ratings` / `manager_value_eur`. A ×2 pyramid of
+  `manager_divisions` (leagues of `manager_league_size`, new clubs at the
+  bottom, one division a season); a weekly season keyed by ISO week:
+  preseason transfer window, then `ensure_season` (once, `manager_seasons`
+  PK) pays wages, auto-loans footballers into empty slots, freezes the XIs
+  and draws leagues by strength; rounds at `manager_slots`, one evening
+  digest a day, `_settle` moves clubs when every league is over. Runs lazily
+  and from the bot's manager sweep (`/internal/manager/sweep`). A club whose
+  league runs can't trade. Users' wages are coins, capped per season.
+  Tactics (`manager_tactics.py`): a club formation plus one of four styles
+  in a circle (Card Arena's); the engine runs with neutral settings and the
+  tactics are a transparent % on each line's ratings for the match.
+  The style shop / merchandise / «Менеджер Pro» are cosmetics and
+  convenience only (Stars via my_player_service, key "manager:<code>");
 - player-to-player card exchanges;
 - tasks/achievements, referrals, leaderboards and profile;
 - Telegram bot (notifications/reminders) and a React-based administrative panel.

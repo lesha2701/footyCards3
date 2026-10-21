@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import JSON, Date, DateTime, Enum, ForeignKey, Index, Integer, String
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -86,6 +86,8 @@ class MyPlayer(Base):
     fast_season_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # Local day the daily career chest was opened.
     chest_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # «Менеджер»: listed on the free-agent market (any manager may offer a contract).
+    market_open: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 

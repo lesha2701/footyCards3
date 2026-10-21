@@ -56,4 +56,7 @@ export const TX_TYPE_LABELS: Record<string, string> = {
   lifestyle_income: "Имущество: доход",
   my_player_duel_reward: "Дуэль игроков",
   my_player_role_change: "Мой игрок: смена амплуа",
+  manager_club_found: "Менеджер: основание клуба",
+  manager_salary: "Менеджер: зарплата",
+  manager_reward: "Менеджер: призовые",
 };

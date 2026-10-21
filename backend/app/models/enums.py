@@ -126,6 +126,11 @@ class TransactionType(str, enum.Enum):
     arena_division_reward = "arena_division_reward"
     my_player_duel_reward = "my_player_duel_reward"
     my_player_role_change = "my_player_role_change"
+    manager_club_found = "manager_club_found"
+    manager_salary = "manager_salary"
+    manager_reward = "manager_reward"
+    manager_cosmetic = "manager_cosmetic"
+    manager_merch = "manager_merch"
     lifestyle_income = "lifestyle_income"
     calendar_catchup = "calendar_catchup"
     cosmetic_purchase = "cosmetic_purchase"
@@ -410,6 +415,7 @@ class NotificationType(str, enum.Enum):
     stratego_match_finished = "stratego_match_finished"
     my_player_duel = "my_player_duel"
     player_career_event = "player_career_event"
+    manager_event = "manager_event"
 
 
 class TradeCardSide(str, enum.Enum):

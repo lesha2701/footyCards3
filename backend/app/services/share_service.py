@@ -136,6 +136,76 @@ async def _my_player(db: AsyncSession, user: User) -> tuple[str, str]:
     return path, f"Мой игрок {out['name']}: рейтинг {out['rating']}, {out['tier_label'].lower()}! ⚽ Создай своего в Victor FC"
 
 
+async def _manager_frame(db: AsyncSession, owner_id: Optional[int]) -> str:
+    from app.models.manager_club import ManagerClub
+    from app.services import manager_shop
+
+    club = (await db.execute(select(ManagerClub).where(ManagerClub.owner_id == owner_id))).scalar_one_or_none() if owner_id else None
+    return manager_shop.resolve_look(club)["frame"] if club else "classic"
+
+
+async def _manager_player(db: AsyncSession, user: User) -> tuple[str, str]:
+    """«Мой игрок» with his transfer value («Менеджер»)."""
+    from app.models.manager_club import ManagerClub
+    from app.services import manager_service, my_player_service
+    from app.services.game_config_service import get_config
+
+    config = await get_config(db)
+    mp = await my_player_service.get_my_player(db, user.id) if config.my_player_enabled else None
+    if mp is None:
+        raise NotFoundError("Сначала создай своего игрока")
+    out = my_player_service.player_out(mp, config)
+    contract = await manager_service._active_contract(db, user.id)
+    club = await db.get(ManagerClub, contract.club_id) if contract else         (await db.execute(select(ManagerClub).where(ManagerClub.owner_id == user.id))).scalar_one_or_none()
+    value = manager_service.live_value(out["rating"], contract, config)
+    trend = (await manager_service.value_trends(db, [user.id], {user.id: value}))[user.id]
+    club_line = f"{club.name} · {manager_service.division_name(club.division)}" if club else "Свободный агент"
+    stats_line = f"Голы {contract.goals} · Передачи {contract.assists} · Матчи {contract.matches_played}" if contract         else f"Рейтинг {out['rating']} · {out['tier_label']}"
+    frame = await _manager_frame(db, club.owner_id if club else None)
+    value_text = manager_service.money(value)
+    image = share_card_service.render_manager_player(
+        name=out["name"], number=out["number"], position=out["position"], rating=out["rating"], value_text=value_text,
+        trend_pct=trend, club_line=club_line, stats_line=stats_line, appearance=out["appearance"], frame=frame,
+        bot_username=settings.telegram_bot_username,
+    )
+    fingerprint = f"mgr|{out['name']}|{out['rating']}|{value}|{trend}|{club_line}|{stats_line}|{frame}|{sorted(out['appearance'].items())}"
+    path = _store(image, "manager_player", mp.id, fingerprint)
+    return path, f"{out['name']}: трансферная стоимость {value_text}! ⚽ Собери свой клуб в «Менеджере» Victor FC"
+
+
+async def _manager_transfer(db: AsyncSession, user: User, contract_id: int) -> tuple[str, str]:
+    """«Here we go!» for a done deal; only its player and the clubs' owners may share it."""
+    from app.models.manager_club import ManagerClub, ManagerContract
+    from app.services import manager_service, my_player_service
+    from app.services.game_config_service import get_config
+
+    config = await get_config(db)
+    contract = await db.get(ManagerContract, contract_id)
+    if contract is None or contract.status not in ("active", "ended", "on_loan"):
+        raise NotFoundError("Сделка не найдена")
+    buyer = await db.get(ManagerClub, contract.club_id)
+    parent = await db.get(ManagerContract, contract.from_contract_id) if contract.from_contract_id else None
+    seller = await db.get(ManagerClub, parent.club_id) if parent else None
+    if user.id not in {contract.user_id, buyer.owner_id, seller.owner_id if seller else None}:
+        raise NotFoundError("Сделка не найдена")
+    mp = await my_player_service.get_my_player(db, contract.user_id)
+    if mp is None:
+        raise NotFoundError("Игрок не найден")
+    out = my_player_service.player_out(mp, config)
+    fee_text = manager_service.money(contract.fee) if contract.fee else "Свободный трансфер"
+    kind_label = {"sign": f"Контракт на {contract.seasons_total} сез.", "transfer": f"Трансфер · контракт на {contract.seasons_total} сез.",
+                  "loan": "Аренда на сезон"}[contract.kind]
+    frame = await _manager_frame(db, buyer.owner_id)
+    image = share_card_service.render_transfer(
+        player_name=out["name"], number=out["number"], position=out["position"], rating=out["rating"],
+        from_club=seller.name if seller else "", to_club=buyer.name, fee_text=fee_text, kind_label=kind_label,
+        appearance=out["appearance"], frame=frame, bot_username=settings.telegram_bot_username,
+    )
+    fingerprint = f"{contract.id}|{out['name']}|{out['rating']}|{fee_text}|{buyer.name}|{seller.name if seller else ''}|{frame}"
+    path = _store(image, "manager_transfer", contract.id, fingerprint)
+    return path, f"Here we go! {out['name']} → «{buyer.name}», {fee_text} ⚽ «Менеджер» в Victor FC"
+
+
 def trade_link(user: User) -> str:
     """Opens the bot, which answers with «Предложить обмен» → /trades/new?to=<id>."""
     return f"https://t.me/{settings.telegram_bot_username}?start=trade_{user.id}"
@@ -247,6 +317,10 @@ async def prepare_share(db: AsyncSession, user: User, kind: str, object_id: int)
         path, caption = await _trophy(db, user, object_id)
     elif kind == "my_player":
         path, caption = await _my_player(db, user)
+    elif kind == "manager_player":
+        path, caption = await _manager_player(db, user)
+    elif kind == "manager_transfer":
+        path, caption = await _manager_transfer(db, user, object_id)
     else:
         raise NotFoundError("Нечем поделиться")
 

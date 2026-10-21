@@ -83,6 +83,14 @@ export default function AdminGamesPage() {
       | "player_career_national_rewards"
       | "player_career_weekly_coins"
       | "player_career_friends_rewards"
+      | "manager_value_ratings"
+      | "manager_value_eur"
+      | "manager_division_budget"
+      | "manager_division_income_pct"
+      | "manager_division_wage_pct"
+      | "manager_division_rating"
+      | "manager_place_rewards"
+      | "manager_place_budget"
       | "club_league_rewards"
       | "club_league_division_reward_pct"
       | "magnate_place_rewards"
@@ -120,6 +128,25 @@ export default function AdminGamesPage() {
     </label>
   );
 
+  const jsonField = (key: "manager_slots" | "manager_cosmetics" | "manager_merch", label: string) => (
+    <label className="col-span-2 flex flex-col gap-1">
+      <span className="text-xs text-slate-400">{label}</span>
+      <textarea
+        rows={key === "manager_slots" ? 1 : 6}
+        defaultValue={JSON.stringify(form[key] ?? [], null, key === "manager_slots" ? 0 : 1)}
+        onBlur={(e) => {
+          try {
+            setForm({ ...form, [key]: JSON.parse(e.target.value || "[]") });
+            e.target.classList.remove("ring-1", "ring-red-500");
+          } catch {
+            e.target.classList.add("ring-1", "ring-red-500");
+          }
+        }}
+        className="rounded-lg bg-bg-surface px-3 py-2 font-mono text-xs outline-none"
+      />
+    </label>
+  );
+
   const toggle = (
     key:
       | "matchmaking_enabled"
@@ -143,6 +170,7 @@ export default function AdminGamesPage() {
       | "my_player_enabled"
       | "player_career_enabled"
       | "player_career_fast_season_enabled"
+      | "manager_enabled"
       | "chemistry_enabled"
       | "card_stars_enabled",
     label: string,
@@ -676,6 +704,62 @@ export default function AdminGamesPage() {
           {listField("player_career_weekly_coins", "Задания недели: монеты (голы, матчи, оценка)")}
           {listField("player_career_friends_rewards", "Лига друзей: монеты за 1–3 места")}
           {listField("player_career_place_rewards", "Награда за места 1–8, монеты")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">«Менеджер»</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Свой клуб у каждого: «Мой игрок» и игрок академии всегда в составе, до N «Моих игроков» других
+          пользователей и футболисты каталога. Деньги клуба — евро, только внутри режима (в монеты не
+          превращаются). Пирамида ×2 до 10 дивизионов, неделя = предсезонка + 15 туров. Бюджет: грант дивизиона
+          + бонус «Клубной базы» (стадион, маркетинг, магазин, бухгалтерия) с потолком.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("manager_enabled", "Режим включён")}
+          {field("manager_found_cost", "Основание клуба, монет")}
+          {field("manager_min_level", "Мин. уровень «Моего игрока» (менеджер и игроки)")}
+          {field("manager_max_live", "«Моих игроков» других пользователей в клубе, максимум")}
+          {field("manager_squad_max", "Заявка: живые + футболисты, максимум")}
+          {field("manager_league_size", "Клубов в лиге (чётное; туров = клубов − 1)")}
+          {field("manager_divisions", "Дивизионов, максимум (пирамида ×2)")}
+          {field("manager_promote", "Повышаются из лиги при заполненной пирамиде (вылетают вдвое больше)")}
+          {field("manager_preseason_hours", "Предсезонка (трансферное окно): часов от понедельника 00:00 (72 = старт в четверг)")}
+          {field("manager_style_edge_pct", "Тактика: бонус к рейтингам стилю, который бьёт стиль соперника, %")}
+          {field("manager_formation_effect_pct", "Тактика: сила крена схем в атаку/защиту, %")}
+          {field("manager_wage_pct", "Зарплата футболиста за сезон, % стоимости (база)")}
+          {field("manager_loan_fee_pct", "Аренда футболиста на сезон, % стоимости")}
+          {field("manager_sell_back_pct", "Продажа купленного футболиста системе, % стоимости")}
+          {field("manager_live_wage_max", "Антифрод: зарплата живому игроку за сезон, максимум монет")}
+          {field("manager_wage_eur_per_coin", "Сколько € бюджета стоит 1 монета зарплаты живому игроку")}
+          {field("manager_form_bonus_pct", "Стоимость живого игрока: +% за гол или передачу в клубе")}
+          {field("manager_form_bonus_cap", "…максимум, %")}
+          {field("manager_income_win", "€ за победу (× % дивизиона)")}
+          {field("manager_income_draw", "€ за ничью")}
+          {field("manager_income_loss", "€ за поражение")}
+          {field("manager_ticket_eur_per_level", "Билеты: € за домашний матч за уровень стадиона базы")}
+          {field("manager_sponsor_eur_per_level", "Спонсоры: € за сезон за уровень отдела маркетинга")}
+          {field("manager_merch_eur_per_level", "Мерч: € за сезон за уровень клубного магазина")}
+          {field("manager_budget_per_base_level", "€ за сезон за каждый уровень «Клубной базы» (здания + академия)")}
+          {field("manager_base_bonus_cap_pct", "Бонус базы за сезон не больше, % гранта дивизиона")}
+          {field("manager_promotion_bonus_pct", "Бонус за повышение, % гранта нового дивизиона")}
+          {field("manager_parachute_pct", "Компенсация за вылет, % разницы грантов")}
+          {field("manager_match_xp", "Опыт «Моему игроку» за матч")}
+          {field("manager_freshness_cost", "Свежесть «Моего игрока» за матч (0 = не устаёт)")}
+          {field("manager_merch_cap_eur", "Мерч: € одному клубу за сезон, максимум")}
+          {field("manager_pro_stars", "«Менеджер Pro»: цена, звёзды (0 = не продаётся)")}
+          {field("manager_pro_days", "«Менеджер Pro»: дней")}
+          {listField("manager_value_ratings", "Шкала стоимости: рейтинги")}
+          {listField("manager_value_eur", "…стоимость при этих рейтингах, €")}
+          {listField("manager_division_budget", "Грант на сезон по дивизионам, € (1, 2, 3…)")}
+          {listField("manager_division_income_pct", "Доход матчей и призы по дивизионам, %")}
+          {listField("manager_division_wage_pct", "Зарплаты футболистов по дивизионам, %")}
+          {listField("manager_division_rating", "Ориентир рейтинга по дивизионам (автодокупка, боты без живых)")}
+          {listField("manager_place_rewards", "Монеты менеджеру за 1–3 места (× % дивизиона)")}
+          {listField("manager_place_budget", "€ в бюджет за 1–3 места (× % дивизиона)")}
+          {jsonField("manager_slots", "Время туров (местное), по порядку")}
+          {jsonField("manager_cosmetics", "Магазин стиля клуба: kind = shape | symbol | kit | frame | theme | stadium_name; coins / stars 0 = не продаётся за них, оба 0 = бесплатно")}
+          {jsonField("manager_merch", "Мерч для болельщиков: coins сгорают, eur идут в бюджет клуба")}
         </div>
       </section>
 

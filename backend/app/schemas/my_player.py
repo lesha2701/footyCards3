@@ -34,7 +34,8 @@ class MyPlayerStarsInvoiceIn(BaseModel):
     # "training" (one extra training) | "item" (an «Имущество» item, item_id)
     # | "cosmetic" (code) | "role" (line change to `position`) | "career"
     # (code = pro | agent | refresh | heal | save_offer | fast; `position`
-    # carries the club key for save_offer).
+    # carries the club key for save_offer) | "manager" (code = pro | a club
+    # style item of GameConfig.manager_cosmetics).
     purchase: str
     item_id: Optional[int] = None
     code: Optional[str] = Field(default=None, max_length=32)

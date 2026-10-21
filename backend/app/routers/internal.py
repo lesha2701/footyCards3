@@ -146,6 +146,18 @@ async def magnate_sweep(slot_key: str | None = None, db: AsyncSession = Depends(
     return MagnateSweepResult(advanced=await magnate_service.sweep_due(db))
 
 
+@router.post("/manager/sweep", response_model=SimulateRoundResult)
+async def manager_sweep(db: AsyncSession = Depends(get_db)):
+    """Called by the bot every couple of minutes: starts the «Менеджер»
+    season when the preseason closes and plays every due round (the manager
+    slots differ from the career ones). Idempotent — the season start is
+    guarded by its primary key, each league row is locked and a round is
+    played once (rounds_played advances)."""
+    from app.services import manager_service
+
+    return SimulateRoundResult(matches_simulated=await manager_service.resolve_all_due(db))
+
+
 @router.post("/club-base/sweep")
 async def club_base_sweep(db: AsyncSession = Depends(get_db)):
     """Called by the bot every minute: completes «Клубная база»

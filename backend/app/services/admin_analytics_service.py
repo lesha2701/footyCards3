@@ -26,6 +26,7 @@ from app.models.blackjack import BlackjackMatch
 from app.models.career import CareerParticipant
 from app.models.game import GameSession
 from app.models.magnate import MagnateSeat
+from app.models.manager_club import ManagerClub
 from app.models.match import Match
 from app.models.pack import PackOpening, StarsInvoice
 from app.models.penalty import PenaltyMatch
@@ -101,6 +102,7 @@ MODE_SOURCES: tuple[_Source, ...] = (
         game_key=PlayerTournamentParticipant.tournament_id,
     ),
     _Source("career", "Карьера тренера (сезоны)", CareerParticipant, CareerParticipant.created_at, (CareerParticipant.user_id,)),
+    _Source("manager", "Менеджер (клубы)", ManagerClub, ManagerClub.created_at, (ManagerClub.owner_id,)),
     _Source("wheel", "Колесо фортуны", WheelSpin, WheelSpin.created_at, (WheelSpin.user_id,)),
 )
 

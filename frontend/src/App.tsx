@@ -137,6 +137,7 @@ const CareerMatchPage = lazy(() => import("@/pages/CareerMatchPage"));
 const FriendsPage = lazy(() => import("@/pages/FriendsPage"));
 const MyPlayerPage = lazy(() => import("@/pages/MyPlayerPage"));
 const PlayerCareerPage = lazy(() => import("@/pages/PlayerCareerPage"));
+const ManagerPage = lazy(() => import("@/pages/ManagerPage"));
 
 function PenaltySearchRoute() {
   const location = useLocation();
@@ -268,6 +269,7 @@ export default function App() {
         <Route path="/friends" element={<FriendsPage />} />
         <Route path="/my-player" element={<MyPlayerPage />} />
         <Route path="/play/player-career" element={<PlayerCareerPage />} />
+        <Route path="/play/manager" element={<ManagerPage />} />
         <Route path="/play/tactico/squad" element={<TacticoSquadPage />} />
         <Route path="/play/tactico/search" element={<TacticoSearchPage />} />
         <Route path="/play/tactico/matches/:matchId" element={<TacticoMatchPage />} />

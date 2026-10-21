@@ -21,6 +21,7 @@ import {
   IconStar,
   IconTarget,
   IconTrophy,
+  IconUsers,
   type IconProps,
 } from "@/components/icons";
 import { Skeleton } from "@/components/common/Skeleton";
@@ -104,6 +105,11 @@ export default function PlayPage() {
       path: "/play/player-career", Icon: IconStar, badgeClass: "bg-accent-lime", title: "Карьера игрока",
       description: "Твой игрок в клубе из реальных карточек: голы, оценки, трансферы в клубы сильнее",
       rightLabel: "Мой игрок",
+    },
+    {
+      path: "/play/manager", Icon: IconUsers, badgeClass: "bg-accent-cyan", title: "Менеджер",
+      description: "Свой клуб: трансферы игроков, стоимость в миллионах, 10 дивизионов и сезон каждую неделю",
+      rightLabel: "Новое",
     },
     {
       path: "/player-tournament", Icon: IconFlagCheckered, badgeClass: "bg-accent-lime", title: "Личный турнир",

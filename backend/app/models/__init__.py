@@ -7,6 +7,16 @@ from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
 from app.models.career import CareerClub, CareerParticipant, CareerProfile, CareerSeason, Friendship
 from app.models.lifestyle import LifestyleItem, UserLifestyleItem
 from app.models.club_base import ClubBaseLedger, UserBaseCosmetic, UserClubBase
+from app.models.manager_club import (
+    ManagerClub,
+    ManagerContract,
+    ManagerCosmetic,
+    ManagerLeague,
+    ManagerMerch,
+    ManagerNpc,
+    ManagerSeason,
+    ManagerValueHistory,
+)
 from app.models.my_player import MyPlayer, MyPlayerDuel
 from app.models.player_career import (
     PlayerCareerCup,
@@ -91,6 +101,14 @@ from app.models.user_stadium_card import UserStadiumCard
 from app.models.club_stadium_card import ClubStadiumCard
 
 __all__ = [
+    "ManagerClub",
+    "ManagerContract",
+    "ManagerLeague",
+    "ManagerNpc",
+    "ManagerSeason",
+    "ManagerCosmetic",
+    "ManagerMerch",
+    "ManagerValueHistory",
     "AdminAction",
     "BlackjackMatch",
     "StrategoMatch",

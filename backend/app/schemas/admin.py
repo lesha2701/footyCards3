@@ -423,6 +423,50 @@ class GameConfigOut(BaseModel):
     player_career_weekly_rating_x10: int = 70
     player_career_weekly_coins: list[int] = []
     player_career_friends_rewards: list[int] = []
+    manager_enabled: bool = True
+    manager_found_cost: int = 3000
+    manager_min_level: int = 3
+    manager_max_live: int = 5
+    manager_squad_max: int = 22
+    manager_league_size: int = 16
+    manager_divisions: int = 10
+    manager_promote: int = 2
+    manager_preseason_hours: int = 72
+    manager_style_edge_pct: int = 4
+    manager_formation_effect_pct: int = 100
+    manager_wage_pct: int = 10
+    manager_loan_fee_pct: int = 20
+    manager_sell_back_pct: int = 50
+    manager_live_wage_max: int = 3000
+    manager_wage_eur_per_coin: int = 1000
+    manager_form_bonus_pct: int = 5
+    manager_form_bonus_cap: int = 50
+    manager_income_win: int = 300000
+    manager_income_draw: int = 150000
+    manager_income_loss: int = 60000
+    manager_ticket_eur_per_level: int = 20000
+    manager_sponsor_eur_per_level: int = 100000
+    manager_merch_eur_per_level: int = 60000
+    manager_budget_per_base_level: int = 20000
+    manager_base_bonus_cap_pct: int = 60
+    manager_promotion_bonus_pct: int = 50
+    manager_parachute_pct: int = 33
+    manager_match_xp: int = 30
+    manager_freshness_cost: int = 0
+    manager_merch_cap_eur: int = 15000000
+    manager_pro_stars: int = 299
+    manager_pro_days: int = 30
+    manager_value_ratings: list[int] = []
+    manager_value_eur: list[int] = []
+    manager_division_budget: list[int] = []
+    manager_division_income_pct: list[int] = []
+    manager_division_wage_pct: list[int] = []
+    manager_division_rating: list[int] = []
+    manager_place_rewards: list[int] = []
+    manager_place_budget: list[int] = []
+    manager_slots: list[str] = []
+    manager_cosmetics: list[dict] = []
+    manager_merch: list[dict] = []
     player_career_objective_coins: int = 150
     player_career_objective_rep: int = 5
     player_career_enabled: bool = True
@@ -967,6 +1011,50 @@ class GameConfigUpdate(BaseModel):
     player_career_weekly_rating_x10: Optional[int] = Field(default=None, ge=10, le=100)
     player_career_weekly_coins: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
     player_career_friends_rewards: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    manager_enabled: Optional[bool] = None
+    manager_found_cost: Optional[int] = Field(default=None, ge=0, le=1000000)
+    manager_min_level: Optional[int] = Field(default=None, ge=1, le=500)
+    manager_max_live: Optional[int] = Field(default=None, ge=0, le=11)
+    manager_squad_max: Optional[int] = Field(default=None, ge=11, le=40)
+    manager_league_size: Optional[int] = Field(default=None, ge=4, le=20)
+    manager_divisions: Optional[int] = Field(default=None, ge=1, le=12)
+    manager_promote: Optional[int] = Field(default=None, ge=1, le=4)
+    manager_preseason_hours: Optional[int] = Field(default=None, ge=1, le=150)
+    manager_style_edge_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    manager_formation_effect_pct: Optional[int] = Field(default=None, ge=0, le=300)
+    manager_wage_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    manager_loan_fee_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    manager_sell_back_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    manager_live_wage_max: Optional[int] = Field(default=None, ge=0, le=1000000)
+    manager_wage_eur_per_coin: Optional[int] = Field(default=None, ge=0, le=1000000)
+    manager_form_bonus_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    manager_form_bonus_cap: Optional[int] = Field(default=None, ge=0, le=500)
+    manager_income_win: Optional[int] = Field(default=None, ge=0, le=100000000)
+    manager_income_draw: Optional[int] = Field(default=None, ge=0, le=100000000)
+    manager_income_loss: Optional[int] = Field(default=None, ge=0, le=100000000)
+    manager_ticket_eur_per_level: Optional[int] = Field(default=None, ge=0, le=10000000)
+    manager_sponsor_eur_per_level: Optional[int] = Field(default=None, ge=0, le=100000000)
+    manager_merch_eur_per_level: Optional[int] = Field(default=None, ge=0, le=100000000)
+    manager_budget_per_base_level: Optional[int] = Field(default=None, ge=0, le=100000000)
+    manager_base_bonus_cap_pct: Optional[int] = Field(default=None, ge=0, le=1000)
+    manager_promotion_bonus_pct: Optional[int] = Field(default=None, ge=0, le=500)
+    manager_parachute_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    manager_match_xp: Optional[int] = Field(default=None, ge=0, le=10000)
+    manager_freshness_cost: Optional[int] = Field(default=None, ge=0, le=100)
+    manager_merch_cap_eur: Optional[int] = Field(default=None, ge=0, le=2000000000)
+    manager_pro_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    manager_pro_days: Optional[int] = Field(default=None, ge=1, le=365)
+    manager_value_ratings: Optional[list[int]] = Field(default=None, min_length=2, max_length=30)
+    manager_value_eur: Optional[list[int]] = Field(default=None, min_length=2, max_length=30)
+    manager_division_budget: Optional[list[int]] = Field(default=None, min_length=1, max_length=12)
+    manager_division_income_pct: Optional[list[int]] = Field(default=None, min_length=1, max_length=12)
+    manager_division_wage_pct: Optional[list[int]] = Field(default=None, min_length=1, max_length=12)
+    manager_division_rating: Optional[list[int]] = Field(default=None, min_length=1, max_length=12)
+    manager_place_rewards: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    manager_place_budget: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    manager_slots: Optional[list[str]] = Field(default=None, min_length=1, max_length=8)
+    manager_cosmetics: Optional[list[dict]] = Field(default=None, max_length=200)
+    manager_merch: Optional[list[dict]] = Field(default=None, max_length=20)
     player_career_objective_coins: Optional[int] = Field(default=None, ge=0)
     player_career_objective_rep: Optional[int] = Field(default=None, ge=0, le=1000)
     player_career_enabled: Optional[bool] = None

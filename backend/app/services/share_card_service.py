@@ -306,3 +306,112 @@ def render_my_player(
     _center(draw, 592, title, _fit(draw, title, FONT_HEAVY, 40, SIZE - 80), WHITE)
     _center(draw, 646, f"АТК {attack} · ЗЩТ {defense} · уровень {level}", _font(FONT_BOLD, 26), color)
     return _jpeg(img)
+
+
+# --- «Менеджер» ---------------------------------------------------------------------------
+
+# Share-card frames of the club style shop (manager_shop): border + accent.
+MANAGER_FRAMES = {
+    "classic": ((198, 230, 58), (62, 209, 126)),
+    "retro": ((245, 158, 11), (234, 88, 12)),
+    "neon": ((34, 211, 238), (232, 121, 249)),
+    "gold": ((250, 204, 21), (253, 230, 138)),
+    "ruby": ((225, 29, 72), (251, 113, 133)),
+    "ice": ((125, 211, 252), (224, 242, 254)),
+    "fire": ((249, 115, 22), (250, 204, 21)),
+    "galaxy": ((139, 92, 246), (236, 72, 153)),
+}
+RED = (248, 113, 113)
+
+
+def _triangle(draw: ImageDraw.ImageDraw, x: float, y: float, size: int, up: bool, fill) -> None:
+    if up:
+        draw.polygon([(x, y + size), (x + size, y + size), (x + size / 2, y)], fill=fill)
+    else:
+        draw.polygon([(x, y), (x + size, y), (x + size / 2, y + size)], fill=fill)
+
+
+def _arrow(draw: ImageDraw.ImageDraw, x: float, y: float, length: int, fill) -> None:
+    draw.line([(x, y), (x + length - 14, y)], fill=fill, width=6)
+    draw.polygon([(x + length - 18, y - 12), (x + length, y), (x + length - 18, y + 12)], fill=fill)
+
+
+def _manager_avatar_box(img: Image.Image, frame: str, appearance: dict, number: int, top: int, height: int) -> tuple:
+    border, _accent = MANAGER_FRAMES.get(frame, MANAGER_FRAMES["classic"])
+    box = (SIZE // 2 - height * 4 // 10, top, SIZE // 2 + height * 4 // 10, top + height)
+    glow = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    for i, alpha in enumerate((70, 44, 24)):
+        pad = 8 + i * 8
+        gd.rounded_rectangle([box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad], radius=34 + pad, outline=border + (alpha,), width=8)
+    img.paste(glow, (0, 0), glow)
+    draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle(box, radius=30, fill=(22, 32, 44), outline=border, width=7)
+    # _draw_avatar is laid out for the 340×410 box of render_my_player: draw
+    # it at that size and scale it into this (smaller) frame.
+    full = Image.new("RGB", (340, 410), (22, 32, 44))
+    _draw_avatar(full, (8, 8, 332, 402), appearance, number)
+    _paste_rounded(img, full, (box[0] + 8, box[1] + 8, box[2] - 8, box[3] - 8), 24)
+    return box
+
+
+def _rating_badge(draw: ImageDraw.ImageDraw, box: tuple, rating: int, position: str, color) -> None:
+    draw.rounded_rectangle([box[0] + 14, box[1] + 14, box[0] + 100, box[1] + 100], radius=18, fill=(8, 12, 10))
+    rating_font = _font(FONT_HEAVY, 40)
+    rw = draw.textlength(str(rating), font=rating_font)
+    draw.text((box[0] + 57 - rw / 2, box[1] + 22), str(rating), font=rating_font, fill=color)
+    pos_font = _font(FONT_BOLD, 18)
+    pw = draw.textlength(position, font=pos_font)
+    draw.text((box[0] + 57 - pw / 2, box[1] + 70), position, font=pos_font, fill=WHITE)
+
+
+def render_manager_player(
+    *, name: str, number: int, position: str, rating: int, value_text: str, trend_pct: Optional[int], club_line: str,
+    stats_line: str, appearance: dict, frame: str, bot_username: str,
+) -> bytes:
+    """«Мой игрок» with his transfer value in millions and the weekly trend."""
+    img, draw = _base("Моя трансферная стоимость", bot_username)
+    border, accent = MANAGER_FRAMES.get(frame, MANAGER_FRAMES["classic"])
+    box = _manager_avatar_box(img, frame, appearance, number, 140, 280)
+    draw = ImageDraw.Draw(img)
+    _rating_badge(draw, box, rating, position, border)
+    title = f"{name} #{number}"
+    _center(draw, 436, title, _fit(draw, title, FONT_HEAVY, 34, SIZE - 80), WHITE)
+    value_font = _fit(draw, value_text, FONT_HEAVY, 72, SIZE - 120, 40)
+    _center(draw, 480, value_text, value_font, border)
+    if trend_pct:  # None (no history yet) or 0 — nothing to show
+        up = trend_pct >= 0
+        text = f"{'+' if up else ''}{trend_pct}% за неделю"
+        font = _font(FONT_BOLD, 26)
+        w = draw.textlength(text, font=font) + 34
+        x = (SIZE - w) / 2
+        _triangle(draw, x, 576, 22, up, GREEN if up else RED)
+        draw.text((x + 34, 570), text, font=font, fill=GREEN if up else RED)
+    _center(draw, 614, club_line, _fit(draw, club_line, FONT_BOLD, 26, SIZE - 80), WHITE)
+    _center(draw, 652, stats_line, _fit(draw, stats_line, FONT_BOLD, 22, SIZE - 80), accent)
+    return _jpeg(img)
+
+
+def render_transfer(
+    *, player_name: str, number: int, position: str, rating: int, from_club: str, to_club: str, fee_text: str,
+    kind_label: str, appearance: dict, frame: str, bot_username: str,
+) -> bytes:
+    """«Here we go!» — a transfer of the transfer market of «Менеджер»."""
+    img, draw = _base("HERE WE GO!", bot_username)
+    border, accent = MANAGER_FRAMES.get(frame, MANAGER_FRAMES["classic"])
+    box = _manager_avatar_box(img, frame, appearance, number, 140, 280)
+    draw = ImageDraw.Draw(img)
+    _rating_badge(draw, box, rating, position, border)
+    _center(draw, 436, player_name, _fit(draw, player_name, FONT_HEAVY, 40, SIZE - 80), WHITE)
+    font = _font(FONT_BOLD, 28)
+    left = from_club or "Свободный агент"
+    lw = min(draw.textlength(left, font=font), 300)
+    rw = min(draw.textlength(to_club, font=font), 300)
+    total = lw + 80 + rw
+    x = (SIZE - total) / 2
+    draw.text((x, 490), left, font=_fit(draw, left, FONT_BOLD, 28, 300), fill=MIST)
+    _arrow(draw, x + lw + 12, 508, 56, accent)
+    draw.text((x + lw + 80, 490), to_club, font=_fit(draw, to_club, FONT_BOLD, 28, 300), fill=WHITE)
+    _center(draw, 540, fee_text, _fit(draw, fee_text, FONT_HEAVY, 66, SIZE - 120, 36), border)
+    _center(draw, 630, kind_label, _font(FONT_BOLD, 24), accent)
+    return _jpeg(img)

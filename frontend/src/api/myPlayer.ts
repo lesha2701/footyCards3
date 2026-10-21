@@ -289,13 +289,14 @@ export type MyPlayerStarsPurchase =
   | { purchase: "item"; itemId: number }
   | { purchase: "cosmetic"; code: string }
   | { purchase: "role"; position: string }
-  | { purchase: "career"; code: "pro" | "agent" | "refresh" | "heal" | "save_offer" | "fast"; arg?: string };
+  | { purchase: "career"; code: "pro" | "agent" | "refresh" | "heal" | "save_offer" | "fast"; arg?: string }
+  | { purchase: "manager"; code: string };
 
 export async function createMyPlayerStarsInvoice(order: MyPlayerStarsPurchase): Promise<MyPlayerStarsInvoice> {
   const { data } = await api.post<MyPlayerStarsInvoice>("/my-player/stars-invoice", {
     purchase: order.purchase,
     item_id: order.purchase === "item" ? order.itemId : null,
-    code: order.purchase === "cosmetic" || order.purchase === "career" ? order.code : null,
+    code: order.purchase === "cosmetic" || order.purchase === "career" || order.purchase === "manager" ? order.code : null,
     position: order.purchase === "role" ? order.position : order.purchase === "career" ? order.arg ?? null : null,
   });
   return data;

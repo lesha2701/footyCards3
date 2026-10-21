@@ -1316,9 +1316,10 @@ async def create_stars_invoice(
 ) -> dict:
     """Telegram Stars invoice for one extra training ("training"), an
     «Имущество» item ("item"), a cosmetic ("cosmetic"), a line change
-    ("role") or a «Карьера игрока» extra ("career": code = pro | agent |
+    ("role"), a «Карьера игрока» extra ("career": code = pro | agent |
     refresh | heal | save_offer | fast, position carries the club key for
-    save_offer). The price is frozen on the invoice."""
+    save_offer) or a «Менеджер» purchase ("manager": code = pro | a style
+    item). The price is frozen on the invoice."""
     import secrets
 
     from app.models.lifestyle import LifestyleItem
@@ -1335,6 +1336,10 @@ async def create_stars_invoice(
         from app.services import player_career_shop
 
         key, title, description, stars = await player_career_shop.stars_order(db, user.id, code or "", position, config)
+    elif purchase == "manager":
+        from app.services import manager_shop
+
+        key, title, description, stars = await manager_shop.stars_order(db, user.id, code or "", config)
     elif purchase == "training":
         stars = config.my_player_extra_training_stars
         if stars <= 0:
@@ -1409,6 +1414,10 @@ async def validate_stars_purchase(db: AsyncSession, invoice) -> tuple[bool, str]
         from app.services import player_career_shop
 
         return await player_career_shop.validate_stars(db, invoice, config)
+    if purchase.startswith("manager:"):
+        from app.services import manager_shop
+
+        return await manager_shop.validate_stars(db, invoice, config)
     if purchase.startswith("role:"):
         if mp is None or config.my_player_role_change_stars != invoice.stars_amount:
             return False, "Цена смены амплуа изменилась — открой покупку заново"
@@ -1444,6 +1453,10 @@ async def deliver_stars_purchase(db: AsyncSession, user: User, invoice) -> dict:
         from app.services import player_career_shop
 
         return await player_career_shop.deliver_stars(db, user, invoice, config)
+    if purchase.startswith("manager:"):
+        from app.services import manager_shop
+
+        return await manager_shop.deliver_stars(db, user, invoice, config)
     if purchase.startswith("role:"):
         mp = await _locked_player(db, user.id)
         pos = Position(purchase.split(":", 1)[1])
