@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,10 +41,13 @@ async def get_npc_catalog(
     line: Optional[str] = Query(default=None, max_length=3),
     q: Optional[str] = Query(default=None, max_length=40),
     offset: int = Query(default=0, ge=0, le=5000),
+    afford: Optional[Literal["loan", "buy"]] = Query(default=None),
+    sort: Literal["rating", "cheap"] = Query(default="rating"),
+    free_only: bool = Query(default=False),
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     """Footballers of the game catalog with value, wage and loan price."""
-    return await manager_service.npc_catalog(db, user, line, q, offset)
+    return await manager_service.npc_catalog(db, user, line, q, offset, afford, sort, free_only)
 
 
 @router.post("/club")

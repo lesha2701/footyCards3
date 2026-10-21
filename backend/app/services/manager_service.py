@@ -881,21 +881,51 @@ async def _taken_players(db: AsyncSession) -> dict[int, int]:
     )).all()}
 
 
-async def npc_catalog(db: AsyncSession, user: User, line: Optional[str], query: Optional[str], offset: int = 0) -> dict:
+CATALOG_PAGE = 40
+
+
+def affordable_rating(budget: int, deal: str, config, division: Optional[int], discount_pct: int) -> int:
+    """The highest rating whose price (the fee + a season's wage) fits the
+    budget; 0 when nobody does. Prices only grow with the rating."""
+    best = 0
+    for rating in range(1, 100):
+        terms = npc_terms(rating, config, division, discount_pct)
+        if (terms["value"] if deal == "buy" else terms["loan_fee"]) + terms["wage_now"] > budget:
+            break
+        best = rating
+    return best
+
+
+async def npc_catalog(
+    db: AsyncSession, user: User, line: Optional[str], query: Optional[str], offset: int = 0,
+    afford: Optional[str] = None, sort: str = "rating", free_only: bool = False,
+) -> dict:
+    """The game's footballers with their prices for this club. `afford`
+    ("loan" / "buy") keeps only those the club's budget pays for, `sort`
+    "cheap" starts from the weakest, `free_only` hides those other clubs hold."""
     config = await get_config(db)
+    mine = await _owned_club(db, user.id)
+    discount = (await base_snapshot(db, mine.owner_id, config))["discount_pct"] if mine else 0
+    taken = await _taken_players(db)
     stmt = select(Player).where(Player.is_active.is_(True), Player.path_talent_code.is_(None))
     if line in LINES:
         stmt = stmt.where(Player.position.in_(CATEGORY_POSITIONS[line]))
     if query:
         stmt = stmt.where(Player.display_name.ilike(f"%{query.strip()[:40]}%"))
-    rows = (await db.execute(stmt.order_by(Player.rating.desc(), Player.id).offset(max(0, offset)).limit(40))).scalars().all()
-    taken = await _taken_players(db)
+    max_rating = None
+    if afford in ("loan", "buy") and mine:
+        max_rating = affordable_rating(mine.budget, afford, config, mine.division, discount)
+        stmt = stmt.where(Player.rating <= max_rating)
+    if free_only and taken:
+        stmt = stmt.where(Player.id.notin_(list(taken)))
+    order = (Player.rating.asc(), Player.id) if sort == "cheap" else (Player.rating.desc(), Player.id)
+    rows = (await db.execute(stmt.order_by(*order).offset(max(0, offset)).limit(CATALOG_PAGE + 1))).scalars().all()
+    more = len(rows) > CATALOG_PAGE
+    rows = rows[:CATALOG_PAGE]
     club_names = {c.id: c.name for c in (await db.execute(
         select(ManagerClub).where(ManagerClub.id.in_(set(taken.values()) or {0}))
     )).scalars().all()}
-    mine = await _owned_club(db, user.id)
-    discount = (await base_snapshot(db, mine.owner_id, config))["discount_pct"] if mine else 0
-    return {"players": [
+    return {"max_rating": max_rating, "more": more, "players": [
         {"player_id": p.id, "name": p.display_name, "position": p.position.value, "rating": p.rating, "club": p.club,
          "country": p.country, **npc_terms(p.rating, config, mine.division if mine else None, discount),
          "taken_by": club_names.get(taken[p.id]) if p.id in taken else None,

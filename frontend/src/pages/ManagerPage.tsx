@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -17,6 +17,7 @@ import {
   setManagerMarket,
   signManagerNpc,
   updateManagerClub,
+  type ManagerCatalogFilter,
   type ManagerCatalogPlayer,
   type ManagerClub,
   type ManagerLeague,
@@ -544,24 +545,37 @@ function Scout({ club }: { club: ManagerClub }) {
   return <div className="flex flex-col gap-2">{data.players.map((p) => <MarketRow key={p.user_id} p={p} />)}</div>;
 }
 
+const AFFORD: [ManagerCatalogFilter["afford"], string][] = [["loan", "💶 По карману: аренда"], ["buy", "💶 По карману: покупка"], [null, "Все цены"]];
+
 function Catalog({ club, onView, onError }: { club: ManagerClub; onView: (v: ManagerView) => void; onError: (e: unknown) => void }) {
   const queryClient = useQueryClient();
   const [line, setLine] = useState<ManagerLine | null>(null);
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
+  const [afford, setAfford] = useState<ManagerCatalogFilter["afford"]>("loan");
+  const [sort, setSort] = useState<ManagerCatalogFilter["sort"]>("rating");
+  const [freeOnly, setFreeOnly] = useState(true);
   const [open, setOpen] = useState<number | null>(null);
   const [seasons, setSeasons] = useState(1);
   useEffect(() => { const t = setTimeout(() => setQuery(q), 350); return () => clearTimeout(t); }, [q]);
-  const { data, isLoading } = useQuery({
-    queryKey: ["manager", "catalog", line, query], queryFn: () => fetchManagerCatalog(line, query), placeholderData: keepPreviousData,
+  const filter: ManagerCatalogFilter = { line, q: query, afford, sort, freeOnly };
+  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
+    queryKey: ["manager", "catalog", filter, club.budget],
+    queryFn: ({ pageParam }) => fetchManagerCatalog(filter, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) => (last.more ? pages.reduce((n, p) => n + p.players.length, 0) : undefined),
+    placeholderData: keepPreviousData,
   });
   const sign = useMutation({
     mutationFn: ({ id, kind }: { id: number; kind: "buy" | "loan" }) => signManagerNpc(id, kind, seasons),
     onSuccess: (v) => { hapticNotify("success"); onView(v); setOpen(null); void queryClient.invalidateQueries({ queryKey: ["manager", "catalog"] }); },
     onError,
   });
+  const players = data?.pages.flatMap((p) => p.players) ?? [];
+  const maxRating = data?.pages[0]?.max_rating;
+  const chip = (on: boolean) => `shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${on ? "bg-accent-cyan text-bg-base" : "bg-bg-surface text-ink-mist"}`;
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2" data-testid="catalog">
       <label className="flex items-center gap-2 rounded-xl bg-bg-surface px-3 py-2">
         <IconSearch className="h-4 w-4 text-ink-mist" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Имя футболиста"
@@ -569,17 +583,39 @@ function Catalog({ club, onView, onError }: { club: ManagerClub; onView: (v: Man
       </label>
       <div className="flex gap-1.5 overflow-x-auto">
         {([null, "GK", "DEF", "MID", "FWD"] as const).map((l) => (
-          <button key={l ?? "all"} onClick={() => setLine(l)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${line === l ? "bg-accent-cyan text-bg-base" : "bg-bg-surface text-ink-mist"}`}>
-            {l ? LINE_LABEL[l] : "Все"}
-          </button>
+          <button key={l ?? "all"} onClick={() => setLine(l)} className={chip(line === l)}>{l ? LINE_LABEL[l] : "Все"}</button>
         ))}
       </div>
-      {isLoading || !data ? <ListSkeleton /> : data.players.map((p) => (
+      <div className="flex gap-1.5 overflow-x-auto">
+        {AFFORD.map(([value, label]) => (
+          <button key={value ?? "any"} onClick={() => setAfford(value)} className={chip(afford === value)}>{label}</button>
+        ))}
+      </div>
+      <div className="flex gap-1.5 overflow-x-auto">
+        <button onClick={() => setSort("rating")} className={chip(sort === "rating")}>Сильнейшие</button>
+        <button onClick={() => setSort("cheap")} className={chip(sort === "cheap")}>Дешёвые</button>
+        <button onClick={() => setFreeOnly(!freeOnly)} className={chip(freeOnly)}>{freeOnly ? "✓ " : ""}Только свободные</button>
+      </div>
+      {afford && maxRating != null && (
+        <p className="px-1 text-micro text-ink-mist">
+          {maxRating > 0
+            ? <>Бюджет {eur(club.budget)} — {afford === "loan" ? "аренда" : "покупка"} с зарплатой за сезон до рейтинга <b className="text-ink-chalk">{maxRating}</b></>
+            : <>Бюджета {eur(club.budget)} не хватает ни на кого — дождись бюджета нового сезона или продай игрока.</>}
+        </p>
+      )}
+      {isLoading || !data ? <ListSkeleton /> : players.length === 0 ? (
+        <p className="py-6 text-center text-sm text-ink-mist">Никого не нашлось — смени фильтры</p>
+      ) : players.map((p) => (
         <CatalogRow key={p.player_id} p={p} club={club} open={open === p.player_id} seasons={seasons} busy={sign.isPending}
           onToggle={() => setOpen(open === p.player_id ? null : p.player_id)} onSeasons={setSeasons}
           onSign={(kind) => sign.mutate({ id: p.player_id, kind })} />
       ))}
+      {hasNextPage && (
+        <button disabled={isFetchingNextPage} onClick={() => void fetchNextPage()}
+          className="rounded-xl bg-bg-surface py-2.5 text-sm font-semibold text-ink-chalk disabled:opacity-50">
+          {isFetchingNextPage ? "Загрузка…" : "Показать ещё"}
+        </button>
+      )}
     </div>
   );
 }

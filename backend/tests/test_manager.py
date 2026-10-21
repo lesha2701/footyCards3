@@ -430,3 +430,37 @@ async def test_tactics_formation_style_and_the_style_circle(client, db_session, 
     # The own player's picture data for the pitch.
     own = next(p for p in club["squad"]["xi"] if p["kind"] == "own")
     assert own["appearance"] and own["number"] == 9
+
+
+async def test_catalog_filters_by_budget_price_and_free(client, db_session, bot_token):
+    """«По карману» keeps only those the budget pays for (fee + a season's
+    wage), «Дешёвые» starts from the weakest, «Только свободные» hides
+    footballers other clubs hold; pages go on with offset."""
+    a_id, a_headers = await _player(client, db_session, bot_token, 880301)
+    await _club(client, a_headers)
+    config = await get_config(db_session)
+    club = (await db_session.execute(select(ManagerClub).where(ManagerClub.owner_id == a_id))).scalar_one()
+    terms_of = {r: manager_service.npc_terms(r, config, club.division) for r in (50, 60, 70, 80)}
+    club.budget = terms_of[60]["loan_fee"] + terms_of[60]["wage_now"]
+    await db_session.commit()
+    for rating in (50, 60, 70, 80):
+        await create_player(db_session, rating=rating, display_name=f"Фильтр {rating}")
+    await db_session.commit()
+
+    def names(resp):
+        return [p["name"] for p in resp.json()["players"] if p["name"].startswith("Фильтр")]
+
+    loan = await client.get(f"{API}/manager/npc", headers=a_headers, params={"q": "Фильтр", "afford": "loan"})
+    assert loan.status_code == 200, loan.text
+    assert names(loan) == ["Фильтр 60", "Фильтр 50"] and 60 <= loan.json()["max_rating"] < 70
+    buy = await client.get(f"{API}/manager/npc", headers=a_headers, params={"q": "Фильтр", "afford": "buy"})
+    assert len(names(buy)) < 2 or buy.json()["max_rating"] < loan.json()["max_rating"]
+    cheap = await client.get(f"{API}/manager/npc", headers=a_headers, params={"q": "Фильтр", "sort": "cheap"})
+    assert names(cheap) == ["Фильтр 50", "Фильтр 60", "Фильтр 70", "Фильтр 80"] and cheap.json()["max_rating"] is None
+
+    star = (await db_session.execute(select(Player).where(Player.display_name == "Фильтр 50"))).scalar_one()
+    signed = await client.post(f"{API}/manager/npc", headers=a_headers, json={"player_id": star.id, "kind": "loan"})
+    assert signed.status_code == 200, signed.text
+    free = await client.get(f"{API}/manager/npc", headers=a_headers, params={"q": "Фильтр", "sort": "cheap", "free_only": True})
+    assert names(free) == ["Фильтр 60", "Фильтр 70", "Фильтр 80"]
+    assert (await client.get(f"{API}/manager/npc", headers=a_headers, params={"afford": "cheap"})).status_code == 422

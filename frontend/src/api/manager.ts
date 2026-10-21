@@ -319,9 +319,29 @@ export async function fetchManagerScout(): Promise<{ players: ManagerMarketPlaye
   return data;
 }
 
-export async function fetchManagerCatalog(line: ManagerLine | null, q: string, offset = 0): Promise<{ players: ManagerCatalogPlayer[] }> {
-  const { data } = await api.get<{ players: ManagerCatalogPlayer[] }>("/manager/npc", {
-    params: { ...(line ? { line } : {}), ...(q.trim() ? { q: q.trim() } : {}), offset },
+export interface ManagerCatalogFilter {
+  line: ManagerLine | null;
+  q: string;
+  /** Only those my budget pays for (the fee + a season's wage). */
+  afford: "loan" | "buy" | null;
+  sort: "rating" | "cheap";
+  freeOnly: boolean;
+}
+
+export interface ManagerCatalogPage {
+  players: ManagerCatalogPlayer[];
+  /** With `afford`: the highest rating the budget pays for (0 = nobody). */
+  max_rating: number | null;
+  more: boolean;
+}
+
+export async function fetchManagerCatalog(filter: ManagerCatalogFilter, offset = 0): Promise<ManagerCatalogPage> {
+  const { line, q, afford, sort, freeOnly } = filter;
+  const { data } = await api.get<ManagerCatalogPage>("/manager/npc", {
+    params: {
+      ...(line ? { line } : {}), ...(q.trim() ? { q: q.trim() } : {}), ...(afford ? { afford } : {}),
+      sort, ...(freeOnly ? { free_only: true } : {}), offset,
+    },
   });
   return data;
 }

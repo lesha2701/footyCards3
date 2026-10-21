@@ -185,12 +185,22 @@ describe("ManagerPage", () => {
         player_id: 77, name: "Каталожный Форвард", position: "ST", rating: 68, club: "ФК", country: "", value: 2_400_000, wage: 240_000,
         wage_now: 240_000, loan_fee: 480_000, sell_back: 1_200_000, taken_by: null, mine: false,
       }],
+      max_rating: 70, more: true,
     });
     signManagerNpc.mockResolvedValue({ ...base, club });
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Трансферы" }));
     fireEvent.click(screen.getByRole("button", { name: /Футболисты/ }));
-    fireEvent.click(await screen.findByText("Каталожный Форвард"));
+    // By default: what the budget pays for on loan, free ones, the strongest first.
+    await waitFor(() => expect(fetchManagerCatalog).toHaveBeenCalledWith(
+      { line: null, q: "", afford: "loan", sort: "rating", freeOnly: true }, 0,
+    ));
+    expect(await screen.findByTestId("catalog")).toHaveTextContent("до рейтинга 70");
+    fireEvent.click(screen.getByRole("button", { name: "Показать ещё" }));
+    await waitFor(() => expect(fetchManagerCatalog).toHaveBeenCalledWith(expect.objectContaining({ afford: "loan" }), 1));
+    fireEvent.click(screen.getByRole("button", { name: "Дешёвые" }));
+    await waitFor(() => expect(fetchManagerCatalog).toHaveBeenCalledWith(expect.objectContaining({ sort: "cheap" }), 0));
+    fireEvent.click((await screen.findAllByText("Каталожный Форвард"))[0]);
     fireEvent.click(screen.getByRole("button", { name: /Аренда · €480 тыс/ }));
     await waitFor(() => expect(signManagerNpc).toHaveBeenCalledWith(77, "loan", 1));
   });
