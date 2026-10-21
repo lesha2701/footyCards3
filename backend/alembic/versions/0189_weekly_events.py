@@ -28,7 +28,7 @@ INT_COLUMNS = (
     ("club_raid_reward_coins", "1000"),
     ("club_raid_reward_budget", "2000"),
 )
-FLAGS = ("weekly_cup_enabled", "match_day_enabled", "club_raid_enabled")
+FLAGS = ("weekly_cup_enabled", "club_raid_enabled")
 
 
 def upgrade() -> None:
@@ -108,6 +108,8 @@ def upgrade() -> None:
 
     for name in FLAGS:
         op.add_column("game_config", sa.Column(name, sa.Boolean(), nullable=False, server_default=sa.true()))
+    # Off until an admin turns it on (matches are entered by hand).
+    op.add_column("game_config", sa.Column("match_day_enabled", sa.Boolean(), nullable=False, server_default=sa.false()))
     for name, default in INT_COLUMNS:
         op.add_column("game_config", sa.Column(name, sa.Integer(), nullable=False, server_default=default))
     op.add_column("game_config", sa.Column("club_raid_reward_pack_id", sa.Integer(), nullable=True))
@@ -122,7 +124,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    for name in ("weekly_cup_prizes", "weekly_cup_games", "club_raid_reward_pack_id", *[n for n, _ in INT_COLUMNS], *FLAGS):
+    for name in ("weekly_cup_prizes", "weekly_cup_games", "club_raid_reward_pack_id", "match_day_enabled", *[n for n, _ in INT_COLUMNS], *FLAGS):
         op.drop_column("game_config", name)
     op.drop_index("ix_club_raid_attacks_user_day", table_name="club_raid_attacks")
     for table in ("club_raid_attacks", "club_raids", "match_day_predictions", "match_day_fixtures",

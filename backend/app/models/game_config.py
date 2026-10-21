@@ -1186,7 +1186,7 @@ class GameConfig(TimestampMixin, Base):
     )
 
     # --- «Матч дня» (services/match_day_service.py) ---
-    match_day_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    match_day_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     match_day_exact_coins: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
     match_day_diff_coins: Mapped[int] = mapped_column(Integer, default=400, nullable=False)
     match_day_outcome_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)

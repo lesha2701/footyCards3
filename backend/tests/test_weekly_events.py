@@ -109,6 +109,8 @@ async def test_match_day_predict_until_kickoff_and_claim_tiers(client, db_sessio
     b_h, _b = await _register(client, db_session, 920022, bot_token)
     c_h, _c = await _register(client, db_session, 920023, bot_token)
     token = (await client.post(f"{API}/auth/session", headers=telegram_headers(999000001, bot_token))).json()["admin_token"]
+    (await get_config(db_session)).match_day_enabled = True  # off by default
+    await db_session.commit()
     admin_h = {"Authorization": f"Bearer {token}"}
     kickoff = datetime.now(timezone.utc) + timedelta(hours=3)
     created = await client.post(f"{API}/admin/match-day", headers=admin_h,

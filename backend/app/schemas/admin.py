@@ -716,7 +716,7 @@ class GameConfigOut(BaseModel):
     weekly_cup_games: list[str] = []
     weekly_cup_best_of: int = 5
     weekly_cup_prizes: list[int] = []
-    match_day_enabled: bool = True
+    match_day_enabled: bool = False
     match_day_exact_coins: int = 1000
     match_day_diff_coins: int = 400
     match_day_outcome_coins: int = 200
