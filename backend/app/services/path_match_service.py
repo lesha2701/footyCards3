@@ -278,7 +278,8 @@ async def career_apply_talents(db: AsyncSession, runners, cards_by_id: dict, con
         talents = {}
         for p in runner.on_pitch + runner.bench:
             card = cards_by_id.get(p.card.id)
-            if card is None or card.owner_id is None:
+            # «Мой игрок» rides as a duck-typed engine card with no owner and no talent.
+            if card is None or getattr(card, "owner_id", None) is None:
                 continue
             snap = talent_snapshot(card, catalog, config, "career")
             if snap is not None:

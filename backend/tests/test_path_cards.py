@@ -790,6 +790,29 @@ async def test_career_applies_static_and_dynamic_talents(db_session):
     assert all(p.talent_static == 0 and not getattr(p.card, "talent", None) for p in away.on_pitch)
 
 
+async def test_career_talents_with_my_player_in_the_squad(db_session):
+    """«Мой игрок» rides as a duck-typed engine card without owner_id; next to
+    an academy card it used to crash the round (500 on GET /career)."""
+    from tests.test_career_tactics import _defaults, _runner
+
+    config = await _config(db_session)
+    await path_service.ensure_catalog(db_session)
+    cfg = _defaults(path_enabled=True, path_talent_cap=8)
+    home, away = _runner("a", config=cfg, rating=70), _runner("b", config=cfg, offset=200, rating=80)
+    striker = next(p for p in home.on_pitch if p.slot.code == "FWD2")
+    mine = next(p for p in home.on_pitch if p.slot.category == "GK")
+    cards = {
+        striker.card.id: NS(id=striker.card.id, owner_id=1, path_stage=2, talent_override=None,
+                            player=NS(display_name="x", path_talent_code="big_matches")),
+        # The «Мой игрок» stand-in, as my_player_service.engine_card builds it.
+        mine.card.id: NS(id=mine.card.id, player_id=mine.card.id, is_my_player=True,
+                         player=NS(display_name="Я", club="Мой игрок", country="")),
+    }
+    await path_match_service.career_apply_talents(db_session, (home, away), cards, config)
+    assert striker.talent_static == 3
+    assert mine.talent_static == 0 and not getattr(mine.card, "talent", None)
+
+
 async def test_career_talents_off_when_mechanic_disabled(db_session):
     from tests.test_career_tactics import _defaults, _runner
 
