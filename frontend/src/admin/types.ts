@@ -189,6 +189,8 @@ export interface GameConfig {
   starter_offer_coins: number;
   starter_offer_pack_id: number | null;
   starter_offer_cosmetic_id: number | null;
+  starter_offer_for_all: boolean;
+  starter_offer_all_since: string | null;
   club_creation_cost_coins: number;
   club_daily_reward_coins: number;
   club_tournament_cooldown_hours: number;

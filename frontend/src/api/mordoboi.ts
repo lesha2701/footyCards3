@@ -4,6 +4,7 @@ import type {
   MordoboiBoxer,
   MordoboiInfo,
   MordoboiMatch,
+  MordoboiOpenChallengePreview,
   MordoboiSearchStatus,
   MordoboiStats,
 } from "@/types";
@@ -85,4 +86,24 @@ export async function fetchMordoboiSearchStatus(): Promise<MordoboiSearchStatus>
 
 export async function cancelMordoboiSearch(): Promise<void> {
   await api.post("/mordoboi/matchmaking/cancel");
+}
+
+export async function createMordoboiOpenChallenge(stakeCoins: number): Promise<MordoboiMatch> {
+  const { data } = await api.post<MordoboiMatch>("/mordoboi/matches/open-challenge", { stake_coins: stakeCoins });
+  return data;
+}
+
+export async function fetchMordoboiOpenChallenge(id: number): Promise<MordoboiOpenChallengePreview> {
+  const { data } = await api.get<MordoboiOpenChallengePreview>(`/mordoboi/matches/open/${id}`);
+  return data;
+}
+
+export async function acceptMordoboiOpenChallenge(id: number): Promise<MordoboiMatch> {
+  const { data } = await api.post<MordoboiMatch>(`/mordoboi/matches/open/${id}/accept`);
+  return data;
+}
+
+export async function applyMordoboiBrutality(id: number, cosmeticId: number): Promise<MordoboiMatch> {
+  const { data } = await api.post<MordoboiMatch>(`/mordoboi/matches/${id}/brutality`, { cosmetic_id: cosmeticId });
+  return data;
 }

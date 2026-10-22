@@ -1,5 +1,6 @@
-"""Cosmetics without power: profile frames, profile backgrounds and card frame
-skins. Bought for coins or Stars, or granted by the calendar, club pass,
+"""Cosmetics without power: profile frames, profile backgrounds, card frame
+skins and «Мордобой» finishers («Бруталити», kind "brutality", never
+equipped — used after a win, see mordoboi_service.apply_brutality). Bought for coins or Stars, or granted by the calendar, club pass,
 season pass and starter offer. Nothing here is read by match or rating
 code — equipping only changes how things look."""
 from typing import Optional
@@ -124,7 +125,9 @@ async def buy_with_coins(db: AsyncSession, user: User, cosmetic_id: int) -> Cosm
 
 
 async def equip(db: AsyncSession, user: User, kind: str, cosmetic_id: Optional[int]) -> CosmeticCatalogOut:
-    slot = SLOT_BY_KIND[kind]
+    slot = SLOT_BY_KIND.get(kind)
+    if slot is None:
+        raise ConflictError("Это не надевается — применяется после победы в «Мордобое»")
     if cosmetic_id is not None:
         cosmetic = await db.get(Cosmetic, cosmetic_id)
         if cosmetic is None or cosmetic.kind != kind:
@@ -181,6 +184,18 @@ async def admin_create(db: AsyncSession, data: CosmeticIn) -> CosmeticOut:
     await db.commit()
     await db.refresh(cosmetic)
     return CosmeticOut.model_validate(cosmetic)
+
+
+async def admin_set_image(db: AsyncSession, cosmetic_id: int, image_path: Optional[str]) -> tuple[CosmeticOut, Optional[str]]:
+    """Returns the updated item and the previous path (for the caller to delete)."""
+    cosmetic = await db.get(Cosmetic, cosmetic_id)
+    if cosmetic is None:
+        raise NotFoundError("Предмет не найден")
+    old = cosmetic.image_path
+    cosmetic.image_path = image_path
+    await db.commit()
+    await db.refresh(cosmetic)
+    return CosmeticOut.model_validate(cosmetic), old
 
 
 async def admin_update(db: AsyncSession, cosmetic_id: int, data: CosmeticIn) -> CosmeticOut:

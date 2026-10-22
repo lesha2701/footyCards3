@@ -24,6 +24,7 @@ LIFESTYLE_DIR = STATIC_DIR / "lifestyle" / "uploads"
 ARTIFACTS_DIR = STATIC_DIR / "artifacts" / "uploads"
 CLUB_BASE_DIR = STATIC_DIR / "club_base" / "uploads"
 EQUIPMENT_DIR = STATIC_DIR / "equipment" / "uploads"
+COSMETICS_DIR = STATIC_DIR / "cosmetics" / "uploads"
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
@@ -45,6 +46,7 @@ MAX_SIDE = {
     # «Клубная база»: the map background is wide, buildings are small.
     "club_base": 1600,
     "equipment": 512,
+    "cosmetics": 512,
     "leagues": 384,
     "badges": 256,
     "trophies": 256,
@@ -244,4 +246,13 @@ async def save_equipment_image(upload: UploadFile, name: str) -> str:
 
 
 def delete_equipment_image(relative_path: str | None) -> None:
+    _delete_static(relative_path)
+
+
+async def save_cosmetic_image(upload: UploadFile, name: str) -> str:
+    """Validates and stores an uploaded cosmetic picture («Бруталити» etc.)."""
+    return await _save_upload(upload, COSMETICS_DIR, "cosmetics/uploads", name, "cosmetics")
+
+
+def delete_cosmetic_image(relative_path: str | None) -> None:
     _delete_static(relative_path)

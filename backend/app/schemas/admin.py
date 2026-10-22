@@ -682,6 +682,8 @@ class GameConfigOut(BaseModel):
     starter_offer_coins: int = 1000
     starter_offer_pack_id: Optional[int] = None
     starter_offer_cosmetic_id: Optional[int] = None
+    starter_offer_for_all: bool = False
+    starter_offer_all_since: Optional[datetime] = None
     artifacts_enabled: bool = False
     artifact_slots: int = 3
     artifact_max_opp_pct: int = 5
@@ -1352,6 +1354,7 @@ class GameConfigUpdate(BaseModel):
     starter_offer_coins: Optional[int] = Field(default=None, ge=0)
     starter_offer_pack_id: Optional[int] = Field(default=None, ge=0)
     starter_offer_cosmetic_id: Optional[int] = Field(default=None, ge=0)
+    starter_offer_for_all: Optional[bool] = None
     artifacts_enabled: Optional[bool] = None
     artifact_slots: Optional[int] = Field(default=None, ge=0, le=10)
     artifact_max_opp_pct: Optional[int] = Field(default=None, ge=0, le=50)

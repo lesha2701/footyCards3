@@ -19,6 +19,8 @@ import {
   saveAdminCosmetic,
   saveAdminSeason,
   updateGameConfig,
+  deleteCosmeticImage,
+  uploadCosmeticImage,
 } from "@/admin/api";
 import { useAdminToastStore } from "@/admin/adminToastStore";
 import AdminArtifactsTab from "@/admin/components/AdminArtifactsTab";
@@ -26,7 +28,7 @@ import AdminEquipmentTab from "@/admin/components/AdminEquipmentTab";
 import RewardBundleEditor from "@/admin/components/RewardBundleEditor";
 import { EMPTY_BUNDLE, type AdminSeason, type GameConfig } from "@/admin/types";
 import CosmeticPreview from "@/components/shop/CosmeticPreview";
-import { ApiRequestError } from "@/lib/api";
+import { ApiRequestError, staticUrl } from "@/lib/api";
 import { KIND_LABELS, STYLE_OPTIONS } from "@/lib/cosmetics";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
@@ -155,11 +157,18 @@ function SettingsTab() {
         {flag("club_pass_ad_free", "Без рекламы (на будущее)")}
       </section>
       <section className={block}>
-        <p className="font-display text-sm font-bold">Стартовое предложение (один раз, новичкам)</p>
+        <p className="font-display text-sm font-bold">Стартовое предложение (один раз на аккаунт)</p>
         {flag("starter_offer_enabled", "Включено (запуск)")}
+        {flag("starter_offer_for_all", "Для всех, кто ещё не купил (а не только новичкам)")}
+        <p className="text-micro text-slate-500">
+          Новичкам окно — часы после регистрации. С галочкой «для всех» старые игроки тоже получают предложение
+          (полный экран один раз) — их окно отсчитывается от момента включения галочки
+          {value("starter_offer_all_since") ? ` (${new Date(value("starter_offer_all_since") as string).toLocaleString("ru-RU")})` : ""}.
+          Снять и снова поставить галочку — новая волна.
+        </p>
         <div className={grid}>
           {num("starter_offer_stars", "Цена, ⭐")}
-          {num("starter_offer_hours", "Доступно часов после регистрации")}
+          {num("starter_offer_hours", "Окно, часов (с регистрации или с включения «для всех»)")}
           {num("starter_offer_coins", "Монеты")}
           {pick("starter_offer_pack_id", "Пак", packs)}
           {pick("starter_offer_cosmetic_id", "Эксклюзивная рамка", frames)}
@@ -232,6 +241,29 @@ function SettingsTab() {
 // --- cosmetics -----------------------------------------------------------------------
 
 type CosmeticDraft = Omit<Cosmetic, "id"> & { id?: number };
+function CosmeticImageField({ id, imagePath, onChange }: { id: number; imagePath: string | null; onChange: (c: Cosmetic) => void }) {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const done = (c: Cosmetic) => {
+    setError(null);
+    onChange(c);
+    queryClient.invalidateQueries({ queryKey: ["admin-cosmetics"] });
+  };
+  const upload = useMutation({ mutationFn: (file: File) => uploadCosmeticImage(id, file), onSuccess: done, onError: (e) => setError(errText(e, "Не удалось загрузить")) });
+  const remove = useMutation({ mutationFn: () => deleteCosmeticImage(id), onSuccess: done, onError: (e) => setError(errText(e, "Не удалось удалить")) });
+  return (
+    <div className="flex items-center gap-3 text-xs">
+      {imagePath ? <img src={staticUrl(imagePath)} alt="" className="h-14 w-14 rounded-xl object-cover" /> : <span className="text-slate-500">Без картинки — используется встроенный вид</span>}
+      <label className="cursor-pointer rounded-lg bg-white/5 px-3 py-1.5">
+        {upload.isPending ? "Загрузка…" : "Загрузить картинку"}
+        <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => e.target.files?.[0] && upload.mutate(e.target.files[0])} />
+      </label>
+      {imagePath && <button onClick={() => remove.mutate()} className="rounded-lg bg-white/5 px-3 py-1.5 text-red-300">Убрать</button>}
+      {error && <span className="text-red-400">{error}</span>}
+    </div>
+  );
+}
+
 const NEW_COSMETIC: CosmeticDraft = {
   kind: "profile_frame", name: "", description: "", style_key: "gold", coins_price: 0, stars_price: 0,
   is_exclusive: false, is_active: true, sort_order: 0, status: 5,
@@ -304,7 +336,18 @@ function CosmeticsTab() {
               <span className="text-micro text-slate-500">Цена, ⭐ (0 — нет)</span>
               <input type="number" min={0} value={editing.stars_price} onChange={(e) => setEditing({ ...editing, stars_price: Number(e.target.value) })} className={input} />
             </label>
+            {editing.kind === "brutality" && (
+              <label className="flex flex-col gap-0.5">
+                <span className="text-micro text-slate-500">+ монет к победе при применении</span>
+                <input type="number" min={0} value={editing.win_bonus_coins ?? 0} onChange={(e) => setEditing({ ...editing, win_bonus_coins: Number(e.target.value) })} className={input} />
+              </label>
+            )}
           </div>
+          {editing.id ? (
+            <CosmeticImageField id={editing.id} imagePath={editing.image_path ?? null} onChange={(c) => setEditing({ ...editing, image_path: c.image_path })} />
+          ) : (
+            <p className="text-micro text-slate-500">Картинку можно загрузить после сохранения.</p>
+          )}
           <div className="flex items-center gap-4 text-sm">
             <CosmeticPreview item={editing} />
             <label className="flex items-center gap-1.5"><input type="checkbox" checked={editing.is_exclusive} onChange={(e) => setEditing({ ...editing, is_exclusive: e.target.checked })} /> Эксклюзив (только в наградах)</label>

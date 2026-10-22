@@ -1,25 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { fetchFeatureFlags } from "@/api/featureFlags";
 import {
   createMordoboiBotMatch,
   createMordoboiChallenge,
+  createMordoboiOpenChallenge,
   fetchMordoboiBoxer,
   fetchMordoboiInfo,
   fetchMordoboiMatches,
   fetchMordoboiStats,
   saveMordoboiBoxer,
 } from "@/api/mordoboi";
-import { searchUsers } from "@/api/profile";
+import { fetchMyProfile, fetchPublicProfile, searchUsers } from "@/api/profile";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconBoxingGlove, IconHelp, IconPlay, IconTrophy, IconUsers } from "@/components/icons";
+import { IconBoxingGlove, IconChat, IconCoin, IconHelp, IconPlay, IconTrophy, IconUsers } from "@/components/icons";
 import { ACTION_META, ACTION_ORDER } from "@/components/mordoboi/mordoboiMeta";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
 import { RARITY_GRADIENTS } from "@/lib/rarity";
+import { clampStake, stakeLabel, useStakeMax } from "@/lib/stakes";
+import { openTelegramLink } from "@/lib/telegram";
 import type { MordoboiBoxerOption, MordoboiInfo, MordoboiMatch, Rarity, UserPublic } from "@/types";
 
 type Tab = "pending" | "active" | "history";
@@ -28,7 +31,7 @@ const STATUS_LABELS: Record<string, string> = {
   pending_accept: "Ожидает ответа", in_progress: "Идёт", finished: "Завершён",
   declined: "Отклонён", cancelled: "Отменён", expired: "Истёк",
 };
-const OPPONENT_LABELS: Record<string, string> = { bot: "Против бота", friend: "Против друга", online: "Онлайн" };
+const OPPONENT_LABELS: Record<string, string> = { bot: "Против бота", friend: "Против друга", online: "Онлайн", chat: "Вызов из чата" };
 const RESULT_LABELS: Record<string, string> = { win: "Победа", draw: "Ничья", loss: "Поражение" };
 
 export default function MordoboiPage() {
@@ -36,7 +39,14 @@ export default function MordoboiPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("active");
   const [error, setError] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<null | "bot" | "friend" | "boxer" | "rules">(null);
+  const [sheet, setSheet] = useState<null | "bot" | "friend" | "boxer" | "rules" | "chat">(null);
+  // «Сыграть против меня» link from a shared win: ?vs=<user id>.
+  const [params, setParams] = useSearchParams();
+  const vsId = Number(params.get("vs")) || null;
+  const { data: vsUser } = useQuery({
+    queryKey: ["public-profile", vsId], queryFn: () => fetchPublicProfile(vsId!), enabled: vsId !== null,
+  });
+  const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
 
   const { data: info } = useQuery({ queryKey: ["mordoboi-info"], queryFn: fetchMordoboiInfo });
   const { data: stats } = useQuery({ queryKey: ["mordoboi-stats"], queryFn: fetchMordoboiStats });
@@ -59,6 +69,20 @@ export default function MordoboiPage() {
     mutationFn: (receiverId: number) => createMordoboiChallenge(receiverId),
     onSuccess: onCreated,
     onError: (err) => setError(formatGameError(err, "Не удалось отправить вызов")),
+  });
+  const chatInvite = useMutation({
+    mutationFn: (stakeCoins: number) => createMordoboiOpenChallenge(stakeCoins),
+    onSuccess: (match) => {
+      if (profile?.telegram_bot_username) {
+        const link = `https://t.me/${profile.telegram_bot_username}?start=mordoboi_open_${match.id}`;
+        const text = match.stake_coins > 0
+          ? `🥊 Вызываю на «Мордобой»! Ставка: ${match.stake_coins} монет`
+          : "🥊 Вызываю на «Мордобой»! Кто смелый?";
+        openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+      }
+      onCreated(match);
+    },
+    onError: (err) => setError(formatGameError(err, "Не удалось создать вызов")),
   });
   const chooseBoxer = useMutation({
     mutationFn: (cardId: number) => saveMordoboiBoxer(cardId),
@@ -157,6 +181,14 @@ export default function MordoboiPage() {
               Вызвать друга
             </button>
           </div>
+          <button
+            onClick={() => setSheet("chat")}
+            disabled={disabled || !boxer?.selected}
+            className="flex items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95 disabled:opacity-50"
+          >
+            <IconChat size={14} />
+            Вызвать соперника через чат
+          </button>
           <p className="-mt-1 text-center text-caption text-ink-mist-dim">Онлайн-бой даёт рейтинг ×2, бой с другом — без рейтинга</p>
         </>
       )}
@@ -184,10 +216,11 @@ export default function MordoboiPage() {
             className="flex items-center justify-between rounded-2xl bg-bg-surface p-4 text-left active:scale-[0.98]"
           >
             <div className="min-w-0">
-              <p className="truncate font-display text-sm font-bold text-ink-chalk">{m.opponent_name}</p>
+              <p className="truncate font-display text-sm font-bold text-ink-chalk">{m.opponent_name || "Открытый вызов"}</p>
               <p className="mt-0.5 text-caption text-ink-mist">
                 {OPPONENT_LABELS[m.opponent_type]} · {STATUS_LABELS[m.status]}
                 {m.status === "in_progress" && (m.can_pick ? " · твой удар" : " · ждём соперника")}
+                {m.stake_coins > 0 && ` · ставка ${m.stake_coins}`}
               </p>
             </div>
             {m.result && <span className="text-xs font-bold text-ink-chalk">{RESULT_LABELS[m.result]}</span>}
@@ -233,7 +266,64 @@ export default function MordoboiPage() {
         </Sheet>
       )}
       {sheet === "rules" && <RulesSheet info={info} onClose={() => setSheet(null)} />}
+      {sheet === "chat" && (
+        <ChatInviteSheet
+          busy={chatInvite.isPending}
+          onClose={() => setSheet(null)}
+          onCreate={(stake) => { setSheet(null); chatInvite.mutate(stake); }}
+        />
+      )}
+      {vsId !== null && vsUser && !activeMatch && (
+        <Sheet onClose={() => setParams({}, { replace: true })} title="Тебя зовут на ринг 🥊">
+          <p className="text-sm text-ink-mist">
+            {vsUser.username ?? vsUser.first_name ?? "Игрок"} хвастается победой в «Мордобое». Брось вызов — и посмотрим, кто кого.
+          </p>
+          <button
+            onClick={() => { setParams({}, { replace: true }); challenge.mutate(vsId); }}
+            disabled={challenge.isPending || disabled || !boxer?.selected}
+            className="rounded-2xl bg-yellow-500 py-3 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-50"
+          >
+            Вызвать на бой
+          </button>
+        </Sheet>
+      )}
     </div>
+  );
+}
+
+function ChatInviteSheet({ busy, onClose, onCreate }: { busy: boolean; onClose: () => void; onCreate: (stakeCoins: number) => void }) {
+  const [stake, setStake] = useState("0");
+  const maxStake = useStakeMax();
+  const stakeCoins = clampStake(stake, maxStake);
+  return (
+    <Sheet onClose={onClose} title="Вызов через чат">
+      <p className="-mt-1 text-xs text-ink-mist">
+        Создадим вызов и откроем «Поделиться» — выбери чат. Первый, кто примет вызов, выйдет с тобой на ринг.
+      </p>
+      <label className="text-xs text-ink-mist-dim">{stakeLabel(maxStake)}</label>
+      <input
+        type="number"
+        min={0}
+        inputMode="numeric"
+        value={stake}
+        max={maxStake || undefined}
+        disabled={maxStake === 0}
+        onChange={(e) => setStake(e.target.value)}
+        className="w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk outline-none"
+      />
+      {stakeCoins > 0 && (
+        <p className="flex items-center gap-1 text-caption text-ink-mist-dim">
+          Победитель заберёт {stakeCoins * 2} <IconCoin size={11} /> — по {stakeCoins} с каждой стороны, ничья вернёт ставки.
+        </p>
+      )}
+      <button
+        onClick={() => onCreate(stakeCoins)}
+        disabled={busy}
+        className="w-full rounded-xl bg-yellow-500 py-3 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-50"
+      >
+        {busy ? "Создаём..." : "Создать и поделиться"}
+      </button>
+    </Sheet>
   );
 }
 

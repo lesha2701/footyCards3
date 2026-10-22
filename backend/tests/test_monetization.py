@@ -873,3 +873,43 @@ async def test_admin_gifts_a_limited_artifact_to_top_donors(client, db_session, 
     # Not sold in the shop.
     headers = telegram_headers(720210, bot_token)
     assert all(i["id"] != cup["id"] for i in (await client.get("/api/v1/artifacts", headers=headers)).json()["shop"])
+
+
+async def test_starter_offer_for_all_reaches_old_players_once(client, db_session, bot_token):
+    headers, user = await _register(client, db_session, 720032, bot_token)
+    user.created_at = datetime.now(timezone.utc) - timedelta(days=30)
+    user.starter_offer_seen_at = datetime.now(timezone.utc) - timedelta(days=29)  # saw it as a newcomer
+    await db_session.commit()
+    assert (await client.get("/api/v1/starter-offer", headers=headers)).json()["available"] is False
+
+    admin = await _admin(client, bot_token)
+    resp = await client.put("/api/v1/admin/games/config", headers=admin, json={"starter_offer_for_all": True})
+    assert resp.status_code == 200 and resp.json()["starter_offer_all_since"] is not None
+    since = datetime.fromisoformat(resp.json()["starter_offer_all_since"].replace("Z", "+00:00"))
+    if since.tzinfo is None:
+        since = since.replace(tzinfo=timezone.utc)
+
+    offer = (await client.get("/api/v1/starter-offer", headers=headers)).json()
+    assert offer["available"] and not offer["seen"]  # full-screen once more
+    expires = datetime.fromisoformat(offer["expires_at"].replace("Z", "+00:00"))
+    assert abs((expires - since).total_seconds() - 48 * 3600) < 5
+    assert (await client.post("/api/v1/starter-offer/seen", headers=headers)).json()["seen"]
+
+    # Saving the config again does not restart the campaign.
+    again = await client.put("/api/v1/admin/games/config", headers=admin, json={"starter_offer_for_all": True})
+    assert again.json()["starter_offer_all_since"] == resp.json()["starter_offer_all_since"]
+
+    inv = (await client.post("/api/v1/starter-offer/stars-invoice", headers=headers)).json()
+    pre, paid = await _pay(client, inv["payload_token"], 720032, 50, "starter-all-1")
+    assert pre["ok"] and paid.status_code == 200
+    assert (await client.get("/api/v1/starter-offer", headers=headers)).json()["available"] is False
+
+
+async def test_starter_offer_for_all_window_runs_out(client, db_session, bot_token):
+    headers, user = await _register(client, db_session, 720033, bot_token)
+    user.created_at = datetime.now(timezone.utc) - timedelta(days=30)
+    config = await get_config(db_session)
+    config.starter_offer_for_all = True
+    config.starter_offer_all_since = datetime.now(timezone.utc) - timedelta(hours=49)
+    await db_session.commit()
+    assert (await client.get("/api/v1/starter-offer", headers=headers)).json()["available"] is False

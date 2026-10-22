@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { describeExchange, exchangeWinner, pct } from "@/components/mordoboi/mordoboiMeta";
+import { BRUTALITY_EMOJI, KIND_LABELS, STYLE_OPTIONS } from "@/lib/cosmetics";
 import type { MordoboiExchange } from "@/types";
 
 const exchange = (over: Partial<MordoboiExchange> = {}): MordoboiExchange => ({
@@ -34,5 +35,13 @@ describe("Мордобой: подписи обменов", () => {
     expect(pct(50, 100)).toBe(50);
     expect(pct(-5, 100)).toBe(0);
     expect(pct(5, 0)).toBe(0);
+  });
+});
+
+describe("Бруталити в магазине «Стиль»", () => {
+  it("is a cosmetic kind of its own with a look for every finisher", () => {
+    expect(KIND_LABELS.brutality).toBe("Бруталити");
+    expect(STYLE_OPTIONS.brutality).toEqual(expect.arrayContaining(["underpants", "fart", "flick", "clown"]));
+    expect(BRUTALITY_EMOJI.underpants).toBe("🩲");
   });
 });

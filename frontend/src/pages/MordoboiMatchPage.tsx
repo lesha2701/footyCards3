@@ -3,8 +3,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { fetchCosmetics } from "@/api/monetization";
+import { fetchMyProfile } from "@/api/profile";
 import {
   acceptMordoboiChallenge,
+  applyMordoboiBrutality,
   cancelMordoboiChallenge,
   createMordoboiBotMatch,
   createMordoboiChallenge,
@@ -16,15 +19,39 @@ import {
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
+import ShareButton from "@/components/common/ShareButton";
 import { IconChevronLeft, IconCoin } from "@/components/icons";
 import BoxingRing from "@/components/mordoboi/BoxingRing";
+import BrutalityShow from "@/components/mordoboi/BrutalityShow";
 import { ACTION_META, ACTION_ORDER, WIN_REASON_LABELS, describeExchange } from "@/components/mordoboi/mordoboiMeta";
 import { formatGameError } from "@/lib/errors";
-import { haptic, hapticNotify } from "@/lib/telegram";
+import { staticUrl } from "@/lib/api";
+import { BRUTALITY_EMOJI } from "@/lib/cosmetics";
+import { haptic, hapticNotify, openTelegramLink } from "@/lib/telegram";
+import { useAuthStore } from "@/store/authStore";
 import type { MordoboiAction, MordoboiExchange, MordoboiMatch } from "@/types";
 
 const RESULT_TITLES: Record<string, string> = { win: "Победа!", draw: "Ничья", loss: "Поражение" };
-const OPPONENT_LABELS: Record<string, string> = { bot: "Бот", friend: "Друг", online: "Онлайн" };
+const OPPONENT_LABELS: Record<string, string> = { bot: "Бот", friend: "Друг", online: "Онлайн", chat: "Вызов из чата" };
+// Beaten side: the finisher scene is shown once per bout on this device.
+const SEEN_BRUTALITY_KEY = "mordoboi.seenBrutality";
+
+function brutalitySeen(id: number): boolean {
+  try {
+    return (localStorage.getItem(SEEN_BRUTALITY_KEY) ?? "").split(",").includes(String(id));
+  } catch {
+    return true;
+  }
+}
+
+function markBrutalitySeen(id: number): void {
+  try {
+    const ids = (localStorage.getItem(SEEN_BRUTALITY_KEY) ?? "").split(",").filter(Boolean).slice(-50);
+    localStorage.setItem(SEEN_BRUTALITY_KEY, [...ids, String(id)].join(","));
+  } catch {
+    // storage unavailable — the scene may show again, harmless
+  }
+}
 
 export default function MordoboiMatchPage() {
   const { matchId } = useParams();
@@ -35,6 +62,8 @@ export default function MordoboiMatchPage() {
   const [hit, setHit] = useState<MordoboiExchange | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [confirmForfeit, setConfirmForfeit] = useState(false);
+  const [brutalityPicker, setBrutalityPicker] = useState(false);
+  const [brutalityOpen, setBrutalityOpen] = useState(false);
   const seenN = useRef<number | null>(null);
   const seenStatus = useRef<string | null>(null);
 
@@ -78,16 +107,35 @@ export default function MordoboiMatchPage() {
     seenStatus.current = match.status;
   }, [match]);
 
+  // The beaten side sees the finisher once, whenever they open the bout.
+  useEffect(() => {
+    if (match?.brutality && !match.brutality.by_me && !brutalitySeen(match.id)) {
+      markBrutalitySeen(match.id);
+      setShowResult(false);
+      setBrutalityOpen(true);
+      hapticNotify("error");
+    }
+  }, [match?.brutality, match?.id]);
+
+  const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
+  const { data: cosmetics } = useQuery({
+    queryKey: ["cosmetics"], queryFn: fetchCosmetics, enabled: !!match?.can_brutality,
+  });
+  const ownedBrutalities = (cosmetics?.items ?? []).filter((c) => c.kind === "brutality" && c.owned);
+
   useEffect(() => {
     if (!hit) return;
     const t = setTimeout(() => setHit(null), 1600);
     return () => clearTimeout(t);
   }, [hit]);
 
+  const updateBalance = useAuthStore((s) => s.updateBalance);
   const setMatch = (m: MordoboiMatch) => {
     queryClient.setQueryData(["mordoboi-match", id], m);
     queryClient.invalidateQueries({ queryKey: ["mordoboi-matches"] });
     if (m.status === "finished") {
+      // Rewards, stakes and the finisher bonus land in the wallet: refresh the header.
+      fetchMyProfile().then((p) => updateBalance(p.balance)).catch(() => undefined);
       queryClient.invalidateQueries({ queryKey: ["mordoboi-info"] });
       queryClient.invalidateQueries({ queryKey: ["mordoboi-stats"] });
     }
@@ -105,6 +153,17 @@ export default function MordoboiMatchPage() {
     mutationFn: (kind: "accept" | "decline" | "cancel" | "forfeit") =>
       ({ accept: acceptMordoboiChallenge, decline: declineMordoboiChallenge, cancel: cancelMordoboiChallenge, forfeit: forfeitMordoboiMatch })[kind](id),
     onSuccess: (m) => { setError(null); setMatch(m); queryClient.invalidateQueries({ queryKey: ["game-limits"] }); },
+    onError: (err) => setError(formatGameError(err, "Не получилось")),
+  });
+  const finish = useMutation({
+    mutationFn: (cosmeticId: number) => applyMordoboiBrutality(id, cosmeticId),
+    onSuccess: (m) => {
+      setMatch(m);
+      setBrutalityPicker(false);
+      setShowResult(false);
+      setBrutalityOpen(true);
+      hapticNotify("success");
+    },
     onError: (err) => setError(formatGameError(err, "Не получилось")),
   });
   const rematch = useMutation({
@@ -138,7 +197,8 @@ export default function MordoboiMatchPage() {
         </button>
         <span className="rounded-full bg-white/5 px-2.5 py-1 text-micro font-semibold text-ink-mist">
           {OPPONENT_LABELS[match.opponent_type]}
-          {match.difficulty === "easy" ? " · лёгкий" : ""} · {match.opponent_name}
+          {match.difficulty === "easy" ? " · лёгкий" : ""} · {match.opponent_name || "ждём соперника"}
+          {match.stake_coins > 0 ? ` · ставка ${match.stake_coins}` : ""}
         </span>
       </div>
 
@@ -183,7 +243,21 @@ export default function MordoboiMatchPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4 text-center">
-            <p className="text-sm text-ink-chalk">Ждём, когда {match.opponent_name} примет вызов…</p>
+            <p className="text-sm text-ink-chalk">
+              {match.opponent_type === "chat" ? "Ждём, кто из чата примет вызов…" : `Ждём, когда ${match.opponent_name} примет вызов…`}
+            </p>
+            {match.opponent_type === "chat" && profile?.telegram_bot_username && (
+              <button
+                onClick={() => {
+                  const link = `https://t.me/${profile.telegram_bot_username}?start=mordoboi_open_${match.id}`;
+                  const text = match.stake_coins > 0 ? `🥊 Вызываю на «Мордобой»! Ставка: ${match.stake_coins} монет` : "🥊 Вызываю на «Мордобой»!";
+                  openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+                }}
+                className="rounded-xl bg-[#2AABEE] py-2.5 text-sm font-semibold text-white active:scale-95"
+              >
+                Отправить вызов в чат ещё раз
+              </button>
+            )}
             <button onClick={() => action.mutate("cancel")} disabled={action.isPending} className="text-xs text-ink-mist underline">
               Отменить вызов
             </button>
@@ -255,9 +329,24 @@ export default function MordoboiMatchPage() {
         </button>
       )}
       {!inPlay && !pending && !showResult && match.status === "finished" && (
-        <button onClick={() => setShowResult(true)} className="rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-mist active:scale-95">
-          Итог боя
-        </button>
+        <div className="flex flex-col gap-2">
+          {match.can_brutality && (
+            <button
+              onClick={() => setBrutalityPicker(true)}
+              className="rounded-2xl bg-gradient-to-r from-red-600 to-yellow-500 py-3 text-sm font-black uppercase tracking-wide text-white active:scale-95"
+            >
+              😈 Сделать бруталити
+            </button>
+          )}
+          {match.brutality && (
+            <button onClick={() => setBrutalityOpen(true)} className="rounded-2xl bg-red-500/10 px-4 py-3 text-left text-sm text-red-200 active:scale-[0.98]">
+              {match.brutality.emoji} Бруталити: {match.brutality.by_me ? "ты" : "соперник"} {match.brutality.text}
+            </button>
+          )}
+          <button onClick={() => setShowResult(true)} className="rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-mist active:scale-95">
+            Итог боя
+          </button>
+        </div>
       )}
 
       <ConfirmDialog
@@ -269,6 +358,52 @@ export default function MordoboiMatchPage() {
         onConfirm={() => { setConfirmForfeit(false); action.mutate("forfeit"); }}
         onCancel={() => setConfirmForfeit(false)}
       />
+
+      {brutalityPicker && (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={() => setBrutalityPicker(false)}>
+          <div className="safe-bottom flex w-full flex-col gap-2 rounded-t-3xl bg-bg-base p-5" onClick={(e) => e.stopPropagation()}>
+            <p className="font-display text-base font-bold text-ink-chalk">Добить соперника 😈</p>
+            <p className="-mt-1 text-caption text-ink-mist">Шутка для победителя: результат и рейтинг не меняет, но добавляет монет к выигрышу.</p>
+            {ownedBrutalities.length ? (
+              <div className="grid grid-cols-3 gap-2">
+                {ownedBrutalities.map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={() => finish.mutate(b.id)}
+                    disabled={finish.isPending}
+                    className="flex flex-col items-center gap-1 rounded-2xl bg-white/5 p-3 active:scale-95 disabled:opacity-50"
+                  >
+                    {b.image_path ? (
+                      <img src={staticUrl(b.image_path)} alt="" className="h-12 w-12 rounded-xl object-cover" />
+                    ) : (
+                      <span className="text-4xl">{BRUTALITY_EMOJI[b.style_key] ?? "🥊"}</span>
+                    )}
+                    <span className="text-center text-micro font-semibold text-ink-chalk">{b.name}</span>
+                    {(b.win_bonus_coins ?? 0) > 0 && <span className="text-micro text-accent-lime">+{b.win_bonus_coins} монет</span>}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-xl bg-white/5 px-3 py-3 text-sm text-ink-mist">Пока нечем — бруталити продаются в магазине.</p>
+            )}
+            <button
+              onClick={() => navigate("/packs?tab=style")}
+              className="rounded-xl bg-white/5 py-2.5 text-sm font-semibold text-accent-lime active:scale-95"
+            >
+              Магазин бруталити →
+            </button>
+          </div>
+        </div>
+      )}
+      {match.brutality && (
+        <BrutalityShow
+          open={brutalityOpen}
+          brutality={match.brutality}
+          victimName={match.opponent_name}
+          matchId={match.id}
+          onClose={() => setBrutalityOpen(false)}
+        />
+      )}
 
       <AnimatePresence>
         {showResult && match.status === "finished" && (
@@ -302,8 +437,19 @@ export default function MordoboiMatchPage() {
                   </span>
                 )}
               </div>
-              <div className="mt-5 flex gap-2">
-                {match.opponent_type !== "online" && (
+              {match.can_brutality && (
+                <button
+                  onClick={() => { setShowResult(false); setBrutalityPicker(true); }}
+                  className="mt-4 w-full rounded-2xl bg-gradient-to-r from-red-600 to-yellow-500 py-3 text-sm font-black uppercase tracking-wide text-white active:scale-95"
+                >
+                  😈 Сделать бруталити
+                </button>
+              )}
+              {match.result === "win" && (
+                <ShareButton kind="mordoboi_win" id={match.id} label="Похвастаться в чате" className="mt-2" />
+              )}
+              <div className="mt-3 flex gap-2">
+                {match.opponent_type !== "online" && match.opponent_type !== "chat" && (
                   <button
                     onClick={() => rematch.mutate(match)}
                     disabled={rematch.isPending}

@@ -1108,6 +1108,12 @@ class GameConfig(TimestampMixin, Base):
     starter_offer_coins: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
     starter_offer_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     starter_offer_cosmetic_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # «Для всех, кто не купил»: also players older than starter_offer_hours get
+    # it, with their window counted from starter_offer_all_since (stamped by
+    # the admin endpoint when the switch goes on), so a launch is one
+    # campaign with one deadline for the existing players.
+    starter_offer_for_all: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    starter_offer_all_since: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # «Артефакты» (club / «Мой игрок»): off until an admin launches them; active slots
     # and per-effect caps on the summed bonus (see artifact_service.EFFECTS).
     artifacts_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

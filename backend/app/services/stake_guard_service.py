@@ -1,5 +1,5 @@
 """Anti-farming rules for coin stakes in open chat challenges (Тактико,
-Стратего, Пенальти).
+Стратего, Пенальти, Мордобой).
 
 A stake is a coin transfer in disguise: a main account challenges its own
 alt for a big stake, the alt accepts and loses on purpose, and the pot lands
@@ -27,6 +27,7 @@ from app.core.exceptions import ConflictError
 from app.core.timeutil import app_timezone, local_today
 from app.models.enums import TransactionType
 from app.models.game_config import GameConfig
+from app.models.mordoboi import MordoboiMatch
 from app.models.penalty import PenaltyMatch
 from app.models.stratego import StrategoMatch
 from app.models.tactico import TacticoMatch
@@ -38,8 +39,9 @@ STAKE_TX_TYPES = (
     TransactionType.tactico_stake_lock, TransactionType.tactico_stake_win, TransactionType.tactico_stake_refund,
     TransactionType.penalty_stake_lock, TransactionType.penalty_stake_win, TransactionType.penalty_stake_refund,
     TransactionType.stratego_stake_lock, TransactionType.stratego_stake_win, TransactionType.stratego_stake_refund,
+    TransactionType.mordoboi_stake_lock, TransactionType.mordoboi_stake_win, TransactionType.mordoboi_stake_refund,
 )
-STAKED_MATCH_MODELS = (TacticoMatch, PenaltyMatch, StrategoMatch)
+STAKED_MATCH_MODELS = (TacticoMatch, PenaltyMatch, StrategoMatch, MordoboiMatch)
 
 
 def _today_start_utc() -> datetime:

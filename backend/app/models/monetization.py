@@ -36,6 +36,10 @@ class Cosmetic(TimestampMixin, Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # «Статус» of «Мой игрок» while owned (lifestyle_service.extra_prestige).
     status: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Optional uploaded picture (shown instead of the style's built-in look).
+    image_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # «Бруталити» only: coins added to the win when it is applied.
+    win_bonus_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
 class UserCosmetic(Base):

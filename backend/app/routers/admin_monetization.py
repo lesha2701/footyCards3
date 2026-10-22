@@ -19,7 +19,12 @@ from app.services import (
     season_pass_service,
 )
 from app.services.admin_log_service import log_action
-from app.services.image_service import delete_artifact_image, save_artifact_image
+from app.services.image_service import (
+    delete_artifact_image,
+    delete_cosmetic_image,
+    save_artifact_image,
+    save_cosmetic_image,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(get_current_admin)])
 
@@ -53,6 +58,32 @@ async def update_cosmetic(
     await log_action(db, admin.id, "update_cosmetic", "cosmetic", cosmetic_id, new_value=payload.model_dump(mode="json"),
                      ip_address=_ip(request))
     await db.commit()
+    return out
+
+
+@router.post("/cosmetics/{cosmetic_id}/image", response_model=CosmeticOut)
+async def upload_cosmetic_image(
+    cosmetic_id: int, request: Request, file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin),
+):
+    path = await save_cosmetic_image(file, f"cosmetic-{cosmetic_id}")
+    out, old = await cosmetic_service.admin_set_image(db, cosmetic_id, path)
+    await log_action(db, admin.id, "upload_cosmetic_image", "cosmetic", cosmetic_id, new_value={"image_path": path},
+                     ip_address=_ip(request))
+    await db.commit()
+    if old and old != path:
+        delete_cosmetic_image(old)
+    return out
+
+
+@router.delete("/cosmetics/{cosmetic_id}/image", response_model=CosmeticOut)
+async def delete_cosmetic_image_endpoint(
+    cosmetic_id: int, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin),
+):
+    out, old = await cosmetic_service.admin_set_image(db, cosmetic_id, None)
+    await log_action(db, admin.id, "delete_cosmetic_image", "cosmetic", cosmetic_id, ip_address=_ip(request))
+    await db.commit()
+    delete_cosmetic_image(old)
     return out
 
 

@@ -112,6 +112,10 @@ class TransactionType(str, enum.Enum):
     stratego_stake_win = "stratego_stake_win"
     stratego_stake_refund = "stratego_stake_refund"
     mordoboi_reward = "mordoboi_reward"
+    mordoboi_stake_lock = "mordoboi_stake_lock"
+    mordoboi_stake_win = "mordoboi_stake_win"
+    mordoboi_stake_refund = "mordoboi_stake_refund"
+    mordoboi_brutality_bonus = "mordoboi_brutality_bonus"
     blackjack_consolation = "blackjack_consolation"
     magnate_reward = "magnate_reward"
     card_star_upgrade = "card_star_upgrade"
@@ -346,6 +350,8 @@ class MordoboiOpponentType(str, enum.Enum):
     bot = "bot"
     friend = "friend"
     online = "online"
+    # Open challenge shared into a Telegram chat: whoever accepts first plays.
+    chat = "chat"
 
 
 class MordoboiMatchStatus(str, enum.Enum):
@@ -436,6 +442,7 @@ class NotificationType(str, enum.Enum):
     mordoboi_challenge_accepted = "mordoboi_challenge_accepted"
     mordoboi_your_turn = "mordoboi_your_turn"
     mordoboi_match_finished = "mordoboi_match_finished"
+    mordoboi_brutality = "mordoboi_brutality"
     my_player_duel = "my_player_duel"
     player_career_event = "player_career_event"
     manager_event = "manager_event"

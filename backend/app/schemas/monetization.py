@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.badge import BadgeOut
 from app.schemas.card import UserCardOut
 
-CosmeticKind = Literal["profile_frame", "profile_background", "card_skin"]
+CosmeticKind = Literal["profile_frame", "profile_background", "card_skin", "brutality"]
 RarityName = Literal["common", "rare", "epic", "legendary", "diamond"]
 
 
@@ -27,6 +27,8 @@ class CosmeticOut(BaseModel):
     is_active: bool
     sort_order: int
     status: int = 0
+    image_path: Optional[str] = None
+    win_bonus_coins: int = 0
 
 
 class CosmeticIn(BaseModel):
@@ -40,6 +42,7 @@ class CosmeticIn(BaseModel):
     is_active: bool = True
     sort_order: int = 0
     status: int = Field(default=0, ge=0, le=10000)
+    win_bonus_coins: int = Field(default=0, ge=0, le=100000)
 
 
 class CosmeticCatalogItemOut(CosmeticOut):

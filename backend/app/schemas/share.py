@@ -4,9 +4,12 @@ from pydantic import BaseModel
 
 
 class SharePrepareIn(BaseModel):
-    kind: Literal["card", "match", "trophy", "my_player", "trade_wishes", "manager_player", "manager_transfer"]
+    kind: Literal[
+        "card", "match", "trophy", "my_player", "trade_wishes", "manager_player", "manager_transfer", "mordoboi_win",
+    ]
     # Ignored for "my_player", "manager_player" and "trade_wishes" (always the
-    # caller's own); "manager_transfer" = the manager contract id.
+    # caller's own); "manager_transfer" = the manager contract id;
+    # "mordoboi_win" = a won «Мордобой» bout (with its «Бруталити», if any).
     id: int = 0
 
 

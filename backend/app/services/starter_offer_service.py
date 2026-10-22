@@ -1,6 +1,10 @@
 """«Стартовое предложение»: a one-time Stars bundle (coins + a pack + an
 exclusive cosmetic, all GameConfig.starter_offer_*) for new players during
-their first `starter_offer_hours` hours. It is shown full-screen once
+their first `starter_offer_hours` hours. With `starter_offer_for_all` on,
+every player who hasn't bought it gets it too: the window then starts at
+the later of registration and `starter_offer_all_since` (the moment the
+switch went on), and a player who saw it before that sees it full-screen
+once more. It is shown full-screen once
 (`users.starter_offer_seen_at`), then stays as a banner with a countdown
 until it is bought or runs out. One purchase per player
 (starter_offer_purchases.user_id is unique; pre-checkout refuses a second)."""
@@ -32,8 +36,25 @@ def _bundle(config: GameConfig) -> Bundle:
     )
 
 
+def _all_since(config: GameConfig) -> Optional[datetime]:
+    if config.starter_offer_for_all and config.starter_offer_all_since is not None:
+        return ensure_aware(config.starter_offer_all_since)
+    return None
+
+
 def expires_at(user: User, config: GameConfig) -> datetime:
-    return ensure_aware(user.created_at) + timedelta(hours=config.starter_offer_hours)
+    start = ensure_aware(user.created_at)
+    since = _all_since(config)
+    if since is not None and since > start:
+        start = since
+    return start + timedelta(hours=config.starter_offer_hours)
+
+
+def _seen(user: User, config: GameConfig) -> bool:
+    if user.starter_offer_seen_at is None:
+        return False
+    since = _all_since(config)
+    return since is None or ensure_aware(user.starter_offer_seen_at) >= since
 
 
 async def _purchased(db: AsyncSession, user_id: int) -> bool:
@@ -55,12 +76,12 @@ async def get_status(db: AsyncSession, user: User) -> StarterOfferOut:
     return StarterOfferOut(
         available=True, stars_price=config.starter_offer_stars,
         contents=await reward_bundle_service.describe(db, _bundle(config)),
-        expires_at=expires_at(user, config), seen=user.starter_offer_seen_at is not None,
+        expires_at=expires_at(user, config), seen=_seen(user, config),
     )
 
 
 async def mark_seen(db: AsyncSession, user: User) -> StarterOfferOut:
-    if user.starter_offer_seen_at is None:
+    if not _seen(user, await get_config(db)):
         user.starter_offer_seen_at = datetime.now(timezone.utc)
         db.add(user)
         await db.commit()
@@ -80,7 +101,7 @@ async def stars_order(db: AsyncSession, user: User) -> tuple[str, int, str, str]
         parts.append(f"эксклюзивная рамка «{contents.cosmetic.name}»")
     return (
         "starter_offer", config.starter_offer_stars, "Стартовое предложение",
-        "Один раз для новичков: " + (", ".join(parts) or "набор новичка") + ".",
+        "Один раз на аккаунт: " + (", ".join(parts) or "набор новичка") + ".",
     )
 
 

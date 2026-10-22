@@ -37,6 +37,7 @@ from app.models.enums import (
     TransactionType,
 )
 from app.models.game_config import GameConfig
+from app.models.monetization import Cosmetic, UserCosmetic
 from app.models.mordoboi import MordoboiMatch, MordoboiQueueEntry
 from app.models.player import Player
 from app.models.user import User
@@ -44,22 +45,25 @@ from app.schemas.mordoboi import (
     MordoboiBoxerOptionOut,
     MordoboiBoxerOut,
     MordoboiBoxerStatsOut,
+    MordoboiBrutalityOut,
     MordoboiCardOut,
     MordoboiExchangeOut,
     MordoboiFighterOut,
     MordoboiInfoOut,
     MordoboiMatchOut,
+    MordoboiOpenChallengePreviewOut,
     MordoboiScorecardOut,
     MordoboiStatsOut,
 )
 from app.schemas.ranking import RankingMetric
+from app.services import mordoboi_brutality as brutality
 from app.services import mordoboi_engine as engine
-from app.services import ranking_service
+from app.services import ranking_service, stake_guard_service
 from app.services.game_config_service import get_config
 from app.services.match_service import BOT_NAMES
 from app.services.notification_service import notify
 from app.services.player_stats_service import card_rating_bonus, effective_card_stats
-from app.services.wallet_service import credit_coins, lock_user_for_update
+from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 MATCHMAKING_TIMEOUT_SECONDS = 60
 LOG_IN_RESPONSE = 40
@@ -70,7 +74,12 @@ RELATED = "mordoboi_match"
 _FLIP = {MatchResult.win: MatchResult.loss, MatchResult.loss: MatchResult.win, MatchResult.draw: MatchResult.draw}
 # Same base deltas as Tactico / Stratego.
 _BASE_RATING_DELTA = {MatchResult.win: 3, MatchResult.loss: -1, MatchResult.draw: 1}
-_RATING_MULTIPLIER = {MordoboiOpponentType.friend: 0, MordoboiOpponentType.online: 2, MordoboiOpponentType.bot: 1}
+_RATING_MULTIPLIER = {
+    MordoboiOpponentType.friend: 0, MordoboiOpponentType.online: 2,
+    MordoboiOpponentType.bot: 1, MordoboiOpponentType.chat: 1,
+}
+# Async bouts between two people: «твой ход» nudges and the long deadline.
+_ASYNC_PVP = (MordoboiOpponentType.friend, MordoboiOpponentType.chat)
 
 _ACTIVE_MATCH_MSG = "У тебя уже идёт бой в «Мордобое» — доиграй его или сдайся"
 
@@ -326,6 +335,178 @@ async def create_challenge(db: AsyncSession, sender: User, receiver_id: int) -> 
     return await _hydrate_match(db, match, sender)
 
 
+async def create_open_challenge(db: AsyncSession, sender: User, stake_coins: int) -> MordoboiMatchOut:
+    """A challenge with no pre-picked opponent, shared as a bot deep link
+    (`mordoboi_open_<id>`) into a Telegram chat; whoever accepts first
+    boxes. Stakes move only at acceptance (see accept_open_challenge), so a
+    never-accepted or cancelled challenge has nothing to refund."""
+    if stake_coins < 0:
+        raise ConflictError("Stake cannot be negative")
+    config = await get_config(db)
+    _require_enabled(config)
+    if await _has_active_match(db, sender.id):
+        raise ConflictError(_ACTIVE_MATCH_MSG)
+    await stake_guard_service.ensure_can_create(db, sender, stake_coins, config)
+    if stake_coins > 0 and sender.balance < stake_coins:
+        raise ConflictError("Не хватает монет для такой ставки")
+    me = _card_fighter(await _boxer_card(db, sender), config)
+    sender = await _consume_hourly_slot(db, sender.id, config)
+    match = MordoboiMatch(
+        user_id=sender.id, opponent_user_id=None, opponent_name="",
+        opponent_type=MordoboiOpponentType.chat, status=MordoboiMatchStatus.pending_accept,
+        stake_coins=stake_coins,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=config.mordoboi_challenge_expiry_hours),
+        server_state=_new_state(config, me, None),
+    )
+    db.add(match)
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, sender)
+
+
+async def preview_open_challenge(db: AsyncSession, viewer: User, match_id: int) -> MordoboiOpenChallengePreviewOut:
+    match = await _get_match_or_404(db, match_id)
+    if match.opponent_type != MordoboiOpponentType.chat:
+        raise NotFoundError("Match not found")
+    creator = await db.get(User, match.user_id)
+    status = match.status
+    if status == MordoboiMatchStatus.pending_accept and ensure_aware(match.expires_at) <= datetime.now(timezone.utc):
+        status = MordoboiMatchStatus.expired
+    return MordoboiOpenChallengePreviewOut(
+        id=match.id, creator_name=creator.full_display_name() if creator else "Игрок",
+        stake_coins=match.stake_coins, status=status, is_own_challenge=match.user_id == viewer.id,
+    )
+
+
+async def accept_open_challenge(db: AsyncSession, user: User, match_id: int) -> MordoboiMatchOut:
+    match = await _lock_match(db, match_id)
+    if match.opponent_type != MordoboiOpponentType.chat:
+        raise NotFoundError("Match not found")
+    if match.status != MordoboiMatchStatus.pending_accept:
+        raise ConflictError("Этот вызов уже недоступен")
+    if match.user_id == user.id:
+        raise ConflictError("You cannot accept your own challenge")
+    if _expire_if_due(match):
+        match.version += 1
+        db.add(match)
+        await db.commit()
+        raise ConflictError("This challenge has expired")
+    config = await get_config(db)
+    _require_enabled(config)
+    if await _has_active_match(db, match.user_id, exclude_match_id=match.id):
+        raise ConflictError("Автор вызова сейчас на другом ринге — попробуй позже")
+    fighter = _card_fighter(await _boxer_card(db, user), config)
+
+    # Both rows locked in id order (deadlock-safe); the acceptor's hourly
+    # slot and active-bout check then run under that lock.
+    first_id, second_id = sorted([match.user_id, user.id])
+    first = await lock_user_for_update(db, first_id)
+    second = await lock_user_for_update(db, second_id)
+    creator = first if first.id == match.user_id else second
+    acceptor = await _consume_hourly_slot(db, user.id, config, exclude_match_id=match.id)
+    await stake_guard_service.ensure_can_accept(db, creator, acceptor, match.stake_coins, config)
+    if match.stake_coins > 0:
+        if creator.balance < match.stake_coins:
+            raise ConflictError("У автора вызова больше не хватает монет на ставку")
+        if acceptor.balance < match.stake_coins:
+            raise ConflictError("Не хватает монет для такой ставки")
+        for payer, text in ((creator, "Ставка за вызов в «Мордобой»"), (acceptor, "Ставка за принятый вызов в «Мордобой»")):
+            await debit_coins(db, payer, match.stake_coins, TransactionType.mordoboi_stake_lock, text, RELATED, match.id)
+
+    state = dict(match.server_state)
+    state["fighters"] = {**state["fighters"], "opponent": fighter}
+    state["last_activity_at"] = datetime.now(timezone.utc).isoformat()
+    _start_deadline(state, config)
+    _save_state(match, state)
+    match.opponent_user_id = acceptor.id
+    match.opponent_name = acceptor.full_display_name()
+    match.status = MordoboiMatchStatus.in_progress
+    match.version += 1
+    db.add(match)
+    await notify(
+        db, creator.id, NotificationType.mordoboi_challenge_accepted,
+        "Вызов принят", f"{acceptor.full_display_name()} вышел(а) на ринг — выбирай первый удар.", RELATED, match.id,
+    )
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, acceptor)
+
+
+async def apply_brutality(db: AsyncSession, user: User, match_id: int, cosmetic_id: int) -> MordoboiMatchOut:
+    """The winner finishes the beaten boxer off with an owned «Бруталити» —
+    once per bout, purely for laughs (nothing about the result changes)."""
+    match = await _lock_match(db, match_id)
+    side = _side_of(match, user)
+    if match.status != MordoboiMatchStatus.finished or match.result is None:
+        raise ConflictError("Бруталити — только после боя")
+    won = match.result == (MatchResult.win if side == "user" else MatchResult.loss)
+    if not won:
+        raise ConflictError("Бруталити делает только победитель")
+    state = dict(match.server_state or {})
+    if state.get("brutality"):
+        raise ConflictError("Бруталити в этом бою уже сделано")
+    cosmetic = await db.get(Cosmetic, cosmetic_id)
+    if cosmetic is None or cosmetic.kind != brutality.KIND:
+        raise NotFoundError("Бруталити не найдено")
+    owned = (await db.execute(
+        select(UserCosmetic.id).where(UserCosmetic.user_id == user.id, UserCosmetic.cosmetic_id == cosmetic.id)
+    )).first()
+    if not owned:
+        raise ConflictError("Сначала купи это бруталити в магазине «Стиль»")
+    bonus = cosmetic.win_bonus_coins if cosmetic.win_bonus_coins > 0 else 0
+    locked = await lock_user_for_update(db, user.id)
+    if locked.game_rewards_blocked:
+        bonus = 0
+    if bonus:
+        await credit_coins(
+            db, locked, bonus, TransactionType.mordoboi_brutality_bonus,
+            f"Бруталити «{cosmetic.name}» в «Мордобое»", RELATED, match.id,
+        )
+        db.add(locked)
+        if side == "user":
+            match.user_reward_coins += bonus
+        else:
+            match.opponent_reward_coins += bonus
+    state["brutality"] = {
+        "side": side, "style_key": cosmetic.style_key, "name": cosmetic.name,
+        "image_path": cosmetic.image_path, "bonus": bonus,
+    }
+    _save_state(match, state)
+    match.version += 1
+    db.add(match)
+    loser_uid = _uid(match, engine.other_side(side)) if match.opponent_type != MordoboiOpponentType.bot else None
+    if loser_uid:
+        await notify(
+            db, loser_uid, NotificationType.mordoboi_brutality,
+            f"Бруталити! {brutality.emoji(cosmetic.style_key)}",
+            f"{user.full_display_name()} {brutality.phrase(cosmetic.style_key, cosmetic.name, True)}. Отыграешься?",
+            RELATED, match.id,
+        )
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, user)
+
+
+def brutality_share_text(match: MordoboiMatch, user: User, opponent_name: str) -> str:
+    """«Я победил игрока Виктор в «Мордобое» и сделал ему Бруталити: …»."""
+    side = "user" if user.id == match.user_id else "opponent"
+    done = (match.server_state or {}).get("brutality")
+    base = f"🥊 Я победил игрока {opponent_name} в «Мордобое»"
+    if done and done.get("side") == side:
+        return (
+            f"{base} и сделал ему Бруталити: {brutality.phrase(done['style_key'], done['name'], False)} "
+            f"{brutality.emoji(done['style_key'])}"
+        )
+    return base + "!"
+
+
+async def opponent_name_for(db: AsyncSession, match: MordoboiMatch, user: User) -> str:
+    if user.id == match.user_id:
+        return match.opponent_name
+    creator = await db.get(User, match.user_id)
+    return creator.full_display_name() if creator else match.opponent_name
+
+
 async def _get_match_or_404(db: AsyncSession, match_id: int) -> MordoboiMatch:
     match = await db.get(MordoboiMatch, match_id)
     if not match:
@@ -439,7 +620,7 @@ def _uid(match: MordoboiMatch, side: str) -> Optional[int]:
 
 async def _nudge(db: AsyncSession, match: MordoboiMatch, state: dict, side: str, body: str) -> None:
     """«Твой ход» for a friend bout, at most once per NUDGE_COOLDOWN."""
-    if match.opponent_type != MordoboiOpponentType.friend or state.get("live"):
+    if match.opponent_type not in _ASYNC_PVP or state.get("live"):
         return
     uid = _uid(match, side)
     if uid is None:
@@ -614,6 +795,23 @@ async def _finish_match(
         else:
             match.opponent_reward_coins, match.opponent_rating_delta = reward, delta
 
+    # Open-challenge stakes were paid into the pot at accept time: a draw
+    # refunds each side, otherwise the winner takes both stakes (also when
+    # the other side quit — that's what a forfeit costs).
+    if match.stake_coins > 0 and match.opponent_user_id:
+        pot = {"user": 0, "opponent": 0}
+        if winner == "draw":
+            pot = {"user": match.stake_coins, "opponent": match.stake_coins}
+            tx_type, text = TransactionType.mordoboi_stake_refund, "Возврат ставки — ничья в «Мордобое»"
+        else:
+            pot[winner] = match.stake_coins * 2
+            tx_type, text = TransactionType.mordoboi_stake_win, "Выигрыш ставки в «Мордобое»"
+        for side, amount in pot.items():
+            if amount:
+                await credit_coins(db, locked[side_uid[side]], amount, tx_type, text, RELATED, match.id)
+        match.user_reward_coins += pot["user"]
+        match.opponent_reward_coins += pot["opponent"]
+
     if not is_bot and match.opponent_user_id:
         labels = {MatchResult.win: "победа", MatchResult.draw: "ничья", MatchResult.loss: "поражение"}
         for side in engine.SIDES:
@@ -765,6 +963,15 @@ async def _hydrate_match(db: AsyncSession, match: MordoboiMatch, viewer_user: Us
     if in_play and match.opponent_type != MordoboiOpponentType.bot and state.get("deadline"):
         deadline = ensure_aware(datetime.fromisoformat(state["deadline"]))
     result = match.result if viewer == "user" or match.result is None else _FLIP[match.result]
+    done = state.get("brutality")
+    brutality_out = None
+    if done:
+        by_me = done["side"] == viewer
+        brutality_out = MordoboiBrutalityOut(
+            by_me=by_me, style_key=done["style_key"], name=done["name"], emoji=brutality.emoji(done["style_key"]),
+            image_path=done.get("image_path"), bonus_coins=done.get("bonus", 0),
+            text=brutality.phrase(done["style_key"], done["name"], not by_me),
+        )
     return MordoboiMatchOut(
         id=match.id, version=match.version, opponent_type=match.opponent_type, opponent_name=opponent_name,
         opponent_user_id=opponent_user_id, status=match.status, viewer_side=viewer,
@@ -784,6 +991,9 @@ async def _hydrate_match(db: AsyncSession, match: MordoboiMatch, viewer_user: Us
         result=result, win_reason=match.win_reason,
         reward_coins=match.user_reward_coins if viewer == "user" else match.opponent_reward_coins,
         rating_delta=match.user_rating_delta if viewer == "user" else match.opponent_rating_delta,
+        stake_coins=match.stake_coins,
+        brutality=brutality_out,
+        can_brutality=match.status == MordoboiMatchStatus.finished and result == MatchResult.win and not done,
         created_at=match.created_at, expires_at=match.expires_at, resolved_at=match.resolved_at,
     )
 

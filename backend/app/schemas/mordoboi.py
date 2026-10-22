@@ -83,6 +83,24 @@ class MordoboiScorecardOut(BaseModel):
     opponent: int
 
 
+class MordoboiBrutalityOut(BaseModel):
+    """A joke finisher the winner did after the bout."""
+
+    by_me: bool
+    style_key: str
+    name: str
+    emoji: str
+    image_path: Optional[str] = None
+    # Coins it added to the winner's reward.
+    bonus_coins: int = 0
+    # From the viewer's side: «надел ему труханы на голову» / «…тебе…».
+    text: str
+
+
+class MordoboiBrutalityRequest(BaseModel):
+    cosmetic_id: int
+
+
 class MordoboiMatchOut(BaseModel):
     id: int
     version: int
@@ -113,6 +131,10 @@ class MordoboiMatchOut(BaseModel):
     win_reason: Optional[str] = None
     reward_coins: int = 0
     rating_delta: int = 0
+    stake_coins: int = 0
+    brutality: Optional[MordoboiBrutalityOut] = None
+    # The viewer won and hasn't finished the opponent off yet.
+    can_brutality: bool = False
     created_at: datetime
     expires_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
@@ -150,6 +172,18 @@ class MordoboiBotMatchRequest(BaseModel):
 
 class MordoboiChallengeRequest(BaseModel):
     receiver_id: int
+
+
+class MordoboiOpenChallengeRequest(BaseModel):
+    stake_coins: int = 0
+
+
+class MordoboiOpenChallengePreviewOut(BaseModel):
+    id: int
+    creator_name: str
+    stake_coins: int
+    status: MordoboiMatchStatus
+    is_own_challenge: bool
 
 
 class MordoboiPickRequest(BaseModel):

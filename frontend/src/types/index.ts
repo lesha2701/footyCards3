@@ -1015,7 +1015,7 @@ export interface TacticoOpenChallengePreview {
 // --- Monetization: reward slots, login calendar, club pass, season pass,
 // starter offer, cosmetics (backend schemas/monetization.py) ---
 
-export type CosmeticKind = "profile_frame" | "profile_background" | "card_skin";
+export type CosmeticKind = "profile_frame" | "profile_background" | "card_skin" | "brutality";
 
 export interface Cosmetic {
   id: number;
@@ -1030,6 +1030,10 @@ export interface Cosmetic {
   sort_order: number;
   /** «Статус» of «Мой игрок» while owned. */
   status: number;
+  /** Uploaded picture (shown instead of the style's built-in look). */
+  image_path?: string | null;
+  /** «Бруталити»: coins added to the win when applied. */
+  win_bonus_coins?: number;
 }
 
 export interface CosmeticCatalogItem extends Cosmetic {
@@ -3188,7 +3192,7 @@ export type MordoboiAction = "jab" | "hook" | "uppercut" | "block" | "dodge";
 /** Per side, what happened to its own action in the exchange. */
 export type MordoboiOutcome = "landed" | "beaten" | "blocked" | "slipped" | "caught" | "counter" | "none";
 export type MordoboiMatchStatus = "pending_accept" | "in_progress" | "finished" | "declined" | "cancelled" | "expired";
-export type MordoboiOpponentType = "bot" | "friend" | "online";
+export type MordoboiOpponentType = "bot" | "friend" | "online" | "chat";
 
 export interface MordoboiCard {
   user_card_id: number | null;
@@ -3274,9 +3278,31 @@ export interface MordoboiMatch {
   win_reason: string | null;
   reward_coins: number;
   rating_delta: number;
+  stake_coins: number;
+  brutality: MordoboiBrutality | null;
+  can_brutality: boolean;
   created_at: string;
   expires_at: string | null;
   resolved_at: string | null;
+}
+
+export interface MordoboiBrutality {
+  by_me: boolean;
+  style_key: string;
+  name: string;
+  emoji: string;
+  image_path: string | null;
+  bonus_coins: number;
+  /** From the viewer's side: «надел ему труханы на голову» / «…тебе…». */
+  text: string;
+}
+
+export interface MordoboiOpenChallengePreview {
+  id: number;
+  creator_name: string;
+  stake_coins: number;
+  status: MordoboiMatchStatus;
+  is_own_challenge: boolean;
 }
 
 export interface MordoboiInfo {

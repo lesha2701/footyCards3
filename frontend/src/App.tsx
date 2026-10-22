@@ -77,6 +77,7 @@ const StrategoPage = lazy(() => import("@/pages/StrategoPage"));
 const MordoboiPage = lazy(() => import("@/pages/MordoboiPage"));
 const MordoboiSearchPage = lazy(() => import("@/pages/MordoboiSearchPage"));
 const MordoboiMatchPage = lazy(() => import("@/pages/MordoboiMatchPage"));
+const MordoboiOpenChallengePage = lazy(() => import("@/pages/MordoboiOpenChallengePage"));
 const StrategoSquadPage = lazy(() => import("@/pages/StrategoSquadPage"));
 const StrategoSearchPage = lazy(() => import("@/pages/StrategoSearchPage"));
 const StrategoMatchPage = lazy(() => import("@/pages/StrategoMatchPage"));
@@ -286,6 +287,7 @@ export default function App() {
         <Route path="/play/mordoboi" element={<MordoboiPage />} />
         <Route path="/play/mordoboi/search" element={<MordoboiSearchPage />} />
         <Route path="/play/mordoboi/matches/:matchId" element={<MordoboiMatchPage />} />
+        <Route path="/play/mordoboi/open/:matchId" element={<MordoboiOpenChallengePage />} />
         <Route path="/play/stratego/squad" element={<StrategoSquadPage />} />
         <Route path="/play/stratego/search" element={<StrategoSearchPage />} />
         <Route path="/play/stratego/matches/:matchId" element={<StrategoMatchPage />} />

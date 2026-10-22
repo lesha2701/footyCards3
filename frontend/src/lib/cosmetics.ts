@@ -32,16 +32,37 @@ export const CARD_SKIN_STYLES: Record<string, string> = {
   emerald: "ring-2 ring-emerald-300/80 shadow-[0_0_10px_rgba(110,231,183,0.5)]",
 };
 
+/** «Бруталити» finishers for «Мордобой» (the joke texts live on the backend,
+ * mordoboi_brutality.py; components/mordoboi/brutality.ts animates them). */
+export const BRUTALITY_EMOJI: Record<string, string> = {
+  flick: "👉",
+  fart: "💨",
+  underpants: "🩲",
+  wet_willy: "👂",
+  sock: "🧦",
+  armpit: "🤢",
+  cake: "🎂",
+  diaper: "🍼",
+  chicken: "🐔",
+  clown: "🤡",
+  tickle: "🪶",
+  bucket: "🪣",
+  lipstick: "💋",
+  baby_song: "🎶",
+};
+
 export const STYLE_OPTIONS: Record<CosmeticKind, string[]> = {
   profile_frame: Object.keys(FRAME_STYLES),
   profile_background: Object.keys(BACKGROUND_STYLES),
   card_skin: Object.keys(CARD_SKIN_STYLES),
+  brutality: Object.keys(BRUTALITY_EMOJI),
 };
 
 export const KIND_LABELS: Record<CosmeticKind, string> = {
   profile_frame: "Рамки профиля",
   profile_background: "Фоны профиля",
   card_skin: "Скины карточек",
+  brutality: "Бруталити",
 };
 
 export function frameClass(styleKey: string | null | undefined): string | null {

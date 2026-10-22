@@ -39,6 +39,10 @@ class MordoboiMatch(Base):
     opponent_reward_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     user_rating_delta: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     opponent_rating_delta: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Open (chat-link) challenges only: coins each side puts up, debited from
+    # both at accept time and paid out as a pot at finish — same scheme as
+    # StrategoMatch.stake_coins. Always 0 for other opponent types.
+    stake_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     server_state: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

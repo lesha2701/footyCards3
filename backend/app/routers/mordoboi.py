@@ -7,11 +7,14 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.mordoboi import (
     MordoboiBotMatchRequest,
+    MordoboiBrutalityRequest,
     MordoboiBoxerOut,
     MordoboiBoxerSetRequest,
     MordoboiChallengeRequest,
     MordoboiInfoOut,
     MordoboiMatchOut,
+    MordoboiOpenChallengePreviewOut,
+    MordoboiOpenChallengeRequest,
     MordoboiPickRequest,
     MordoboiSearchStatusOut,
     MordoboiStatsOut,
@@ -60,6 +63,24 @@ async def create_challenge(
     return await mordoboi_service.create_challenge(db, user, payload.receiver_id)
 
 
+@router.post("/matches/open-challenge", response_model=MordoboiMatchOut)
+async def create_open_challenge(
+    payload: MordoboiOpenChallengeRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    await check_rate_limit(f"mordoboi_open_challenge:{user.id}", max_calls=10, window_seconds=60)
+    return await mordoboi_service.create_open_challenge(db, user, payload.stake_coins)
+
+
+@router.get("/matches/open/{match_id}", response_model=MordoboiOpenChallengePreviewOut)
+async def preview_open_challenge(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await mordoboi_service.preview_open_challenge(db, user, match_id)
+
+
+@router.post("/matches/open/{match_id}/accept", response_model=MordoboiMatchOut)
+async def accept_open_challenge(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await mordoboi_service.accept_open_challenge(db, user, match_id)
+
+
 @router.post("/matches/{match_id}/accept", response_model=MordoboiMatchOut)
 async def accept_challenge(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await mordoboi_service.accept_challenge(db, user, match_id)
@@ -87,6 +108,14 @@ async def submit_pick(
 ):
     await check_rate_limit(f"mordoboi_pick:{user.id}", max_calls=120, window_seconds=60)
     return await mordoboi_service.submit_pick(db, user, match_id, payload.action, payload.version)
+
+
+@router.post("/matches/{match_id}/brutality", response_model=MordoboiMatchOut)
+async def apply_brutality(
+    match_id: int, payload: MordoboiBrutalityRequest,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    return await mordoboi_service.apply_brutality(db, user, match_id, payload.cosmetic_id)
 
 
 @router.get("/matches", response_model=list[MordoboiMatchOut])

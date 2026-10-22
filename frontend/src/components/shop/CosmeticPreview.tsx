@@ -1,5 +1,5 @@
 import { staticUrl } from "@/lib/api";
-import { backgroundClass, cardSkinClass, frameClass } from "@/lib/cosmetics";
+import { BRUTALITY_EMOJI, backgroundClass, cardSkinClass, frameClass } from "@/lib/cosmetics";
 import type { CosmeticCatalogItem } from "@/types";
 
 /** A small picture of what an item looks like; `lg` for shop tiles and the
@@ -7,11 +7,21 @@ import type { CosmeticCatalogItem } from "@/types";
 export default function CosmeticPreview({
   item, avatarUrl, size = "md",
 }: {
-  item: Pick<CosmeticCatalogItem, "kind" | "style_key">;
+  item: Pick<CosmeticCatalogItem, "kind" | "style_key"> & { image_path?: string | null };
   avatarUrl?: string;
   size?: "md" | "lg";
 }) {
   const lg = size === "lg";
+  if (item.kind === "brutality") {
+    if (item.image_path) {
+      return <img src={staticUrl(item.image_path)} alt="" className={`rounded-2xl object-cover ${lg ? "h-20 w-20" : "h-12 w-12"}`} />;
+    }
+    return (
+      <span className={`flex items-center justify-center rounded-2xl bg-gradient-to-br from-red-600/40 via-yellow-500/20 to-transparent ${lg ? "h-20 w-20 text-5xl" : "h-12 w-12 text-3xl"}`}>
+        {BRUTALITY_EMOJI[item.style_key] ?? "🥊"}
+      </span>
+    );
+  }
   if (item.kind === "card_skin") {
     return (
       <span className={`block aspect-[3/4] rounded-lg bg-gradient-to-b from-slate-400 to-slate-600 p-[2px] ${lg ? "w-20" : "w-12"} ${cardSkinClass(item.style_key) ?? ""}`}>

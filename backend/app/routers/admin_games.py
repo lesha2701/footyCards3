@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,12 +51,16 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
     if updates.get("club_base_caps") is not None:
         if any(v < 0 for v in updates["club_base_caps"].values()):
             raise ConflictError("Клубная база: потолки не могут быть отрицательными")
+    # Switched on now: existing players' window starts from this moment.
+    starter_for_all_started = bool(updates.get("starter_offer_for_all")) and not config.starter_offer_for_all
     artifact_keys = {"artifacts_enabled", "artifact_max_stat"}
     artifacts_before = {k: getattr(config, k) for k in artifact_keys}
     xp_curve_keys = ("my_player_xp_level_base", "my_player_xp_level_step")
     xp_curve_before = SimpleNamespace(**{k: getattr(config, k) for k in xp_curve_keys})
     for key, value in updates.items():
         setattr(config, key, value)
+    if starter_for_all_started:
+        config.starter_offer_all_since = datetime.now(timezone.utc)
     if any(getattr(config, k) != getattr(xp_curve_before, k) for k in xp_curve_keys):
         # «Мой игрок»: levels are derived from XP — keep everyone's level.
         from app.services import my_player_service

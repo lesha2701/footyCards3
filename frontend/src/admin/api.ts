@@ -659,6 +659,18 @@ export async function saveAdminCosmetic(item: Omit<Cosmetic, "id"> & { id?: numb
     : await api.post<Cosmetic>("/admin/cosmetics", body);
   return data;
 }
+export async function uploadCosmeticImage(id: number, file: File): Promise<Cosmetic> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<Cosmetic>(`/admin/cosmetics/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+export async function deleteCosmeticImage(id: number): Promise<Cosmetic> {
+  const { data } = await api.delete<Cosmetic>(`/admin/cosmetics/${id}/image`);
+  return data;
+}
 export async function fetchAdminSeasons(): Promise<AdminSeason[]> {
   const { data } = await api.get<AdminSeason[]>("/admin/seasons");
   return data;

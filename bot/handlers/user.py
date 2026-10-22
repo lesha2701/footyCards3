@@ -74,6 +74,26 @@ async def cmd_start(message: Message) -> None:
         keyboard = (
             open_app_keyboard(path=f"/play/stratego/open/{match_id}") if match_id.isdigit() else open_app_keyboard()
         )
+    elif payload and payload.startswith("mordoboi_vs_"):
+        user_id = payload[len("mordoboi_vs_"):]
+        text = (
+            f"Привет, {message.from_user.first_name}! 👋\n\n"
+            "🥊 Тебя зовут на ринг в «Мордобое»!\n\n"
+            "Нажми кнопку ниже — вызов уйдёт тому, кто тебя позвал 👇"
+        )
+        keyboard = (
+            open_app_keyboard(path="/play/mordoboi", query=f"?vs={user_id}") if user_id.isdigit() else open_app_keyboard()
+        )
+    elif payload and payload.startswith("mordoboi_open_"):
+        match_id = payload[len("mordoboi_open_"):]
+        text = (
+            f"Привет, {message.from_user.first_name}! 👋\n\n"
+            "🥊 Тебя вызвали на ринг в «Мордобое»!\n\n"
+            "Нажми кнопку ниже, чтобы посмотреть детали вызова и принять его 👇"
+        )
+        keyboard = (
+            open_app_keyboard(path=f"/play/mordoboi/open/{match_id}") if match_id.isdigit() else open_app_keyboard()
+        )
     elif payload and payload.startswith("penalty_open_"):
         match_id = payload[len("penalty_open_"):]
         text = (

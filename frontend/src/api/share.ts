@@ -1,6 +1,6 @@
 import { api } from "@/lib/api";
 
-export type ShareKind = "card" | "match" | "trophy" | "my_player" | "trade_wishes" | "manager_player" | "manager_transfer";
+export type ShareKind = "card" | "match" | "trophy" | "my_player" | "trade_wishes" | "manager_player" | "manager_transfer" | "mordoboi_win";
 
 export interface SharePrepared {
   /** Telegram prepared inline message (send with WebApp.shareMessage); null in dev / on failure. */

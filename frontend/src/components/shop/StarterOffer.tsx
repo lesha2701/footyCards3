@@ -57,7 +57,7 @@ function OfferBody({ offer, onBuy, busy, error }: { offer: StarterOffer; onBuy: 
       >
         {busy ? "Оплата..." : `Забрать за ${offer.stars_price} ⭐`}
       </button>
-      <p className="mt-2 text-center text-caption text-ink-mist-dim">Один раз для новичков. Звёзды не выводятся.</p>
+      <p className="mt-2 text-center text-caption text-ink-mist-dim">Звёзды не выводятся.</p>
     </>
   );
 }
@@ -93,7 +93,7 @@ export function StarterOfferModal() {
           <IconGift size={30} />
         </span>
         <p className="mt-3 font-display text-lg font-bold text-ink-chalk">Стартовый набор</p>
-        <p className="text-xs text-ink-mist">Только в первые дни в игре</p>
+        <p className="text-xs text-ink-mist">Ограниченное предложение — один раз на аккаунт</p>
         <OfferBody offer={offer} onBuy={() => buy.mutate()} busy={buy.isPending} error={error} />
       </motion.div>
     </div>,

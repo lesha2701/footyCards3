@@ -39,7 +39,7 @@ settings = get_settings()
 
 SHARE_DIR = STATIC_DIR / "share"
 SHAREABLE_RARITIES = {Rarity.legendary, Rarity.diamond}
-KINDS = ("card", "match", "trophy", "my_player", "trade_wishes")
+KINDS = ("card", "match", "trophy", "my_player", "trade_wishes", "mordoboi_win")
 
 
 def referral_link(user: User) -> str:
@@ -206,6 +206,27 @@ async def _manager_transfer(db: AsyncSession, user: User, contract_id: int) -> t
     return path, f"Here we go! {out['name']} → «{buyer.name}», {fee_text} ⚽ «Менеджер» в Victor FC"
 
 
+def mordoboi_link(user: User) -> str:
+    """Opens the bot, which answers with «Выйти на ринг» → /play/mordoboi?vs=<id>."""
+    return f"https://t.me/{settings.telegram_bot_username}?start=mordoboi_vs_{user.id}"
+
+
+async def _mordoboi_win(db: AsyncSession, user: User, match_id: int) -> str:
+    from app.models.enums import MordoboiMatchStatus
+    from app.models.mordoboi import MordoboiMatch
+    from app.services import mordoboi_service
+
+    match = await db.get(MordoboiMatch, match_id)
+    if match is None or user.id not in (match.user_id, match.opponent_user_id):
+        raise NotFoundError("Бой не найден")
+    side_won = MatchResult.win if user.id == match.user_id else MatchResult.loss
+    if match.status != MordoboiMatchStatus.finished or match.result != side_won:
+        raise ConflictError("Поделиться можно только победой")
+    opponent = await mordoboi_service.opponent_name_for(db, match, user)
+    text = mordoboi_service.brutality_share_text(match, user, opponent)
+    return f"{text}\nДумаешь, ты крепче? Жми «Сыграть против меня» 👇"
+
+
 def trade_link(user: User) -> str:
     """Opens the bot, which answers with «Предложить обмен» → /trades/new?to=<id>."""
     return f"https://t.me/{settings.telegram_bot_username}?start=trade_{user.id}"
@@ -269,16 +290,18 @@ async def _save_prepared_message(user: User, photo_url: str, caption: str, link:
     return data["result"]["id"]
 
 
-async def _save_prepared_text(user: User, text: str, link: str) -> Optional[str]:
-    """Text-only prepared message with a «Предложить обмен» button; None on failure."""
+async def _save_prepared_text(
+    user: User, text: str, link: str, title: str = "Ищу обмен", button: str = "🔄 Предложить обмен",
+) -> Optional[str]:
+    """Text-only prepared message with one link button; None on failure."""
     body = {
         "user_id": user.telegram_id,
         "result": {
             "type": "article",
             "id": uuid.uuid4().hex,
-            "title": "Ищу обмен",
+            "title": title,
             "input_message_content": {"message_text": text},
-            "reply_markup": {"inline_keyboard": [[{"text": "🔄 Предложить обмен", "url": link}]]},
+            "reply_markup": {"inline_keyboard": [[{"text": button, "url": link}]]},
         },
         "allow_user_chats": True,
         "allow_group_chats": True,
@@ -298,10 +321,14 @@ async def _save_prepared_text(user: User, text: str, link: str) -> Optional[str]
 
 
 async def prepare_share(db: AsyncSession, user: User, kind: str, object_id: int) -> dict:
-    if kind == "trade_wishes":
-        text = await _trade_wishes(db, user)
-        link = trade_link(user)
-        prepared_id = await _save_prepared_text(user, text, link) if _can_prepare_messages() else None
+    if kind in ("trade_wishes", "mordoboi_win"):
+        if kind == "trade_wishes":
+            text, link = await _trade_wishes(db, user), trade_link(user)
+            labels = {}
+        else:
+            text, link = await _mordoboi_win(db, user, object_id), mordoboi_link(user)
+            labels = {"title": "Бой в «Мордобое»", "button": "🥊 Сыграть против меня"}
+        prepared_id = await _save_prepared_text(user, text, link, **labels) if _can_prepare_messages() else None
         return {
             "prepared_message_id": prepared_id,
             "image_url": None,

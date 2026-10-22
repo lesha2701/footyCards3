@@ -503,3 +503,194 @@ async def test_stats_and_ranking(client, db_session, bot_token):
     assert stats["mordoboi_rating"] == 0
     ranking = await client.get("/api/v1/leaderboard/ranking?metric=mordoboi_rating", headers=headers)
     assert ranking.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Open (chat-link) challenges with stakes
+# ---------------------------------------------------------------------------
+
+@pytest.mark.usefixtures("stake_guards_off")
+async def test_open_challenge_with_stake_pays_the_pot(client, db_session, bot_token):
+    await _set_config(db_session, mordoboi_rounds=1, mordoboi_exchanges_per_round=1)
+    headers_a, user_a, _ = await _player(client, db_session, bot_token, 980050)
+    headers_b, user_b, _ = await _player(client, db_session, bot_token, 980051)
+    start_a, start_b = user_a.balance, user_b.balance
+    created = (await client.post(f"{API}/matches/open-challenge", headers=headers_a, json={"stake_coins": 100})).json()
+    assert created["opponent_type"] == "chat" and created["stake_coins"] == 100 and created["status"] == "pending_accept"
+    preview = (await client.get(f"{API}/matches/open/{created['id']}", headers=headers_b)).json()
+    assert preview["stake_coins"] == 100 and not preview["is_own_challenge"] and preview["status"] == "pending_accept"
+    assert (await client.get(f"{API}/matches/open/{created['id']}", headers=headers_a)).json()["is_own_challenge"]
+    assert (await client.post(f"{API}/matches/open/{created['id']}/accept", headers=headers_a)).status_code == 409
+
+    match = (await client.post(f"{API}/matches/open/{created['id']}/accept", headers=headers_b)).json()
+    assert match["status"] == "in_progress" and match["viewer_side"] == "opponent" and match["deadline"]
+    again = await client.post(f"{API}/matches/open/{created['id']}/accept", headers=headers_b)
+    assert again.status_code == 409  # one acceptor, stakes debited once
+
+    # Both block the only exchange: an even bout, a draw, stakes refunded.
+    await _pick(client, headers_a, match, "block")
+    end = (await _pick(client, headers_b, match, "block")).json()
+    assert end["status"] == "finished" and end["result"] == "draw"
+    db_session.expire_all()
+    a = await get_user_by_telegram_id(db_session, 980050)
+    b = await get_user_by_telegram_id(db_session, 980051)
+    config = await db_session.get(GameConfig, 1)
+    assert a.balance == start_a + config.mordoboi_reward_draw and b.balance == start_b + config.mordoboi_reward_draw
+
+
+@pytest.mark.usefixtures("stake_guards_off")
+async def test_forfeit_in_staked_bout_gives_the_pot_to_the_other_side(client, db_session, bot_token):
+    headers_a, user_a, _ = await _player(client, db_session, bot_token, 980052)
+    headers_b, user_b, _ = await _player(client, db_session, bot_token, 980053)
+    start_a, start_b = user_a.balance, user_b.balance
+    created = (await client.post(f"{API}/matches/open-challenge", headers=headers_a, json={"stake_coins": 50})).json()
+    await client.post(f"{API}/matches/open/{created['id']}/accept", headers=headers_b)
+    end = (await client.post(f"{API}/matches/{created['id']}/forfeit", headers=headers_b)).json()
+    assert end["result"] == "loss" and end["reward_coins"] == 0
+    db_session.expire_all()
+    a = await get_user_by_telegram_id(db_session, 980052)
+    b = await get_user_by_telegram_id(db_session, 980053)
+    config = await db_session.get(GameConfig, 1)
+    assert b.balance == start_b - 50
+    assert a.balance == start_a + 50 + config.mordoboi_reward_win
+    stakes = (await db_session.execute(
+        select(CoinTransaction).where(CoinTransaction.type == TransactionType.mordoboi_stake_lock)
+    )).scalars().all()
+    assert len([t for t in stakes if t.user_id in (a.id, b.id)]) == 2
+
+
+async def test_open_challenge_rejects_unaffordable_stake_and_can_be_cancelled(client, db_session, bot_token):
+    headers, user, _ = await _player(client, db_session, bot_token, 980054)
+    await _set_config(db_session, stake_max_coins=10_000_000, trade_send_min_account_age_days=0, trade_send_min_active_days=0)
+    too_much = await client.post(f"{API}/matches/open-challenge", headers=headers, json={"stake_coins": user.balance + 1})
+    assert too_much.status_code == 409
+    created = (await client.post(f"{API}/matches/open-challenge", headers=headers, json={"stake_coins": 0})).json()
+    assert (await client.post(f"{API}/matches/{created['id']}/cancel", headers=headers)).json()["status"] == "cancelled"
+    other_headers, _, _ = await _player(client, db_session, bot_token, 980055)
+    assert (await client.post(f"{API}/matches/open/{created['id']}/accept", headers=other_headers)).status_code == 409
+
+
+async def test_open_challenge_expires_unaccepted(client, db_session, bot_token):
+    headers_a, _, _ = await _player(client, db_session, bot_token, 980056)
+    headers_b, _, _ = await _player(client, db_session, bot_token, 980057)
+    created = (await client.post(f"{API}/matches/open-challenge", headers=headers_a, json={"stake_coins": 0})).json()
+    m = await _load_match(db_session, created["id"])
+    m.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    await db_session.commit()
+    assert (await client.get(f"{API}/matches/open/{created['id']}", headers=headers_b)).json()["status"] == "expired"
+    assert (await client.post(f"{API}/matches/open/{created['id']}/accept", headers=headers_b)).status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# «Бруталити» and sharing a win
+# ---------------------------------------------------------------------------
+
+async def _brutality(db_session, style_key="underpants", name="Труханы на голову", coins=500):
+    from app.models.monetization import Cosmetic
+
+    item = Cosmetic(kind="brutality", name=name, style_key=style_key, coins_price=coins, stars_price=0, win_bonus_coins=10)
+    db_session.add(item)
+    await db_session.commit()
+    return item.id
+
+
+async def _won_friend_bout(client, db_session, bot_token, a, b):
+    """A friend bout the challenger (a) has won by KO."""
+    await _set_config(db_session, mordoboi_rounds=1, mordoboi_exchanges_per_round=1)
+    headers_a, headers_b, user_a, user_b, match = await _friend_bout(client, db_session, bot_token, a, b)
+    ids = (user_a.id, user_b.id)
+    await _rewrite_state(db_session, match["id"], _ko_ready)
+    await _pick(client, headers_a, match, "jab")
+    end = (await _pick(client, headers_b, match, "block")).json()
+    assert end["result"] == "loss"
+    won = (await client.get(f"{API}/matches/{match['id']}", headers=headers_a)).json()
+    assert won["result"] == "win" and won["can_brutality"]
+    assert end["can_brutality"] is False
+    return headers_a, headers_b, ids[0], ids[1], won
+
+
+async def test_brutality_is_bought_in_the_style_shop_and_applied_once_by_the_winner(client, db_session, bot_token):
+    item_id = await _brutality(db_session)
+    headers_a, headers_b, _, user_b_id, match = await _won_friend_bout(client, db_session, bot_token, 980060, 980061)
+    url = f"{API}/matches/{match['id']}/brutality"
+
+    not_owned = await client.post(url, headers=headers_a, json={"cosmetic_id": item_id})
+    assert not_owned.status_code == 409
+
+    catalog = (await client.get("/api/v1/cosmetics", headers=headers_a)).json()
+    assert any(i["id"] == item_id and i["kind"] == "brutality" for i in catalog["items"])
+    bought = await client.post(f"/api/v1/cosmetics/{item_id}/buy", headers=headers_a)
+    assert bought.status_code == 200
+    assert (await client.post("/api/v1/cosmetics/equip", headers=headers_a, json={"kind": "brutality", "cosmetic_id": item_id})).status_code == 409
+
+    assert (await client.post(url, headers=headers_b, json={"cosmetic_id": item_id})).status_code == 409  # the loser can't
+    before = (await client.get("/api/v1/profile/me", headers=headers_a)).json()["balance"]
+    done = (await client.post(url, headers=headers_a, json={"cosmetic_id": item_id})).json()
+    assert done["brutality"]["by_me"] and done["brutality"]["text"] == "надел ему труханы на голову"
+    assert done["brutality"]["bonus_coins"] == 10 and done["reward_coins"] == match["reward_coins"] + 10
+    assert (await client.get("/api/v1/profile/me", headers=headers_a)).json()["balance"] == before + 10
+    assert done["can_brutality"] is False and done["version"] == match["version"] + 1
+    assert (await client.post(url, headers=headers_a, json={"cosmetic_id": item_id})).status_code == 409  # once
+
+    seen_by_loser = (await client.get(f"{API}/matches/{match['id']}", headers=headers_b)).json()
+    assert seen_by_loser["brutality"]["text"] == "надел тебе труханы на голову" and not seen_by_loser["brutality"]["by_me"]
+    notes = (await db_session.execute(
+        select(Notification).where(Notification.user_id == user_b_id, Notification.type == NotificationType.mordoboi_brutality)
+    )).scalars().all()
+    assert len(notes) == 1 and "труханы" in notes[0].body
+
+
+async def test_brutality_only_after_a_finished_bout(client, db_session, bot_token):
+    item_id = await _brutality(db_session, style_key="fart", name="Газовая атака")
+    headers, user, _ = await _player(client, db_session, bot_token, 980062)
+    match = (await client.post(f"{API}/matches/bot", headers=headers)).json()
+    assert (await client.post(f"{API}/matches/{match['id']}/brutality", headers=headers, json={"cosmetic_id": item_id})).status_code == 409
+
+
+async def test_share_a_win_with_brutality_and_a_play_me_link(client, db_session, bot_token):
+    item_id = await _brutality(db_session)
+    headers_a, headers_b, user_a_id, _, match = await _won_friend_bout(client, db_session, bot_token, 980063, 980064)
+    await client.post(f"/api/v1/cosmetics/{item_id}/buy", headers=headers_a)
+    await client.post(f"{API}/matches/{match['id']}/brutality", headers=headers_a, json={"cosmetic_id": item_id})
+
+    shared = (await client.post("/api/v1/share/prepare", headers=headers_a, json={"kind": "mordoboi_win", "id": match["id"]})).json()
+    assert "Я победил игрока" in shared["caption"] and "сделал ему Бруталити: надел ему труханы на голову" in shared["caption"]
+    assert shared["link"].endswith(f"start=mordoboi_vs_{user_a_id}")
+    loser = await client.post("/api/v1/share/prepare", headers=headers_b, json={"kind": "mordoboi_win", "id": match["id"]})
+    assert loser.status_code == 409
+
+
+def test_brutality_phrases_read_right_from_both_sides():
+    from app.services import mordoboi_brutality as b
+
+    assert b.phrase("chicken", "Курица", False) == "заставил его кудахтать курицей на весь стадион"
+    assert b.phrase("chicken", "Курица", True) == "заставил тебя кудахтать курицей на весь стадион"
+    assert b.phrase("bucket", "Ведро", False) == "вылил на него ведро ледяной воды"
+    assert b.phrase("baby_song", "Колыбельная", True).endswith("пока ты лежал")
+    assert b.phrase("unknown", "Сюрприз", False) == "сделал ему «Сюрприз»"
+    assert all(key in b.BRUTALITIES for key, *_ in b.SEED)
+    assert sum(1 for *_, coins, stars, _ in b.SEED if coins) == 1
+    assert all(stars >= 100 for *_, coins, stars, _ in b.SEED if not coins)
+
+
+async def test_admin_uploads_a_picture_for_a_brutality(client, db_session, bot_token):
+    import io
+
+    from PIL import Image
+
+    item_id = await _brutality(db_session)
+    resp = await client.post("/api/v1/auth/session", headers=telegram_headers(999000001, bot_token))
+    admin = {"Authorization": f"Bearer {resp.json()['admin_token']}"}
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 40), (200, 50, 50)).save(buf, format="PNG")
+    up = await client.post(
+        f"/api/v1/admin/cosmetics/{item_id}/image", headers=admin,
+        files={"file": ("b.png", buf.getvalue(), "image/png")},
+    )
+    assert up.status_code == 200 and up.json()["image_path"].startswith("cosmetics/uploads/")
+    edited = await client.put(f"/api/v1/admin/cosmetics/{item_id}", headers=admin, json={
+        "kind": "brutality", "name": "Труханы", "style_key": "underpants", "stars_price": 100, "win_bonus_coins": 25,
+    })
+    assert edited.json()["win_bonus_coins"] == 25 and edited.json()["image_path"] == up.json()["image_path"]
+    gone = await client.delete(f"/api/v1/admin/cosmetics/{item_id}/image", headers=admin)
+    assert gone.json()["image_path"] is None

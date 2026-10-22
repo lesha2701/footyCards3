@@ -15,7 +15,7 @@ import { useSeenItems } from "@/lib/useSeenItems";
 import { useAuthStore } from "@/store/authStore";
 import type { CosmeticCatalog, CosmeticCatalogItem, CosmeticKind } from "@/types";
 
-const KINDS: CosmeticKind[] = ["profile_frame", "profile_background", "card_skin"];
+const KINDS: CosmeticKind[] = ["profile_frame", "profile_background", "card_skin", "brutality"];
 
 /** Owned first-to-buy order: what you can buy now, then the rest, then
  * what you already have. */
@@ -150,7 +150,11 @@ export default function StyleShop() {
               }
               details={
                 <>
-                  <span className="text-caption text-ink-mist">{KIND_LABELS[item.kind]} · только внешний вид</span>
+                  <span className="text-caption text-ink-mist">
+                    {item.kind === "brutality"
+                      ? "Добивание после победы в «Мордобое» — шутка, на бой не влияет"
+                      : `${KIND_LABELS[item.kind]} · только внешний вид`}
+                  </span>
                   {!item.owned && !rewardOnly && (
                     <span className="flex flex-wrap items-center gap-x-2 font-mono text-xs font-bold">
                       {item.coins_price > 0 && (
@@ -164,6 +168,11 @@ export default function StyleShop() {
                   )}
                   {item.description && <span className="text-xs text-ink-mist">{item.description}</span>}
                   {item.status > 0 && <span className="text-xs font-semibold text-amber-300">+{item.status} статуса Моему игроку</span>}
+                  {item.kind === "brutality" && (item.win_bonus_coins ?? 0) > 0 && (
+                    <span className="flex items-center gap-1 text-xs font-semibold text-accent-lime">
+                      +{item.win_bonus_coins} <IconCoin size={11} /> к выигрышу каждый раз, когда применяешь
+                    </span>
+                  )}
                   {item.is_exclusive && <span className="text-caption text-path">Эксклюзив</span>}
                   {rewardOnly && !item.owned && (
                     <span className="text-xs text-ink-mist">Не продаётся — выпадает в календаре, пропусках и стартовом наборе.</span>
@@ -171,7 +180,9 @@ export default function StyleShop() {
                 </>
               }
               action={
-                item.owned ? (
+                item.owned && item.kind === "brutality" ? (
+                  <span className="text-center text-caption text-ink-mist">Есть — применяй на экране итога боя</span>
+                ) : item.owned ? (
                   <button
                     onClick={() => equip.mutate({ k: item.kind, id: item.equipped ? null : item.id })}
                     disabled={busy}
