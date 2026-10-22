@@ -565,7 +565,7 @@ class GameConfigOut(BaseModel):
     blackjack_stars_cost: int = 10
     blackjack_paid_daily_limit: int = 10
     blackjack_consolation_coins: int = 25
-    mordoboi_enabled: bool = False
+    mordoboi_enabled: bool = True
     mordoboi_rounds: int = 3
     mordoboi_exchanges_per_round: int = 4
     mordoboi_base_hp: int = 100

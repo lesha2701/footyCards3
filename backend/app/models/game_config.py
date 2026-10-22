@@ -793,7 +793,7 @@ class GameConfig(TimestampMixin, Base):
     blackjack_consolation_coins: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
 
     # «Мордобой» (mordoboi_service.py): boxing on one card. Off by default.
-    mordoboi_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mordoboi_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     mordoboi_rounds: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     mordoboi_exchanges_per_round: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     mordoboi_base_hp: Mapped[int] = mapped_column(Integer, default=100, nullable=False)

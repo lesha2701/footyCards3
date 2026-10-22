@@ -214,6 +214,8 @@ def _ko_ready(state):
 
 async def test_disabled_flag_blocks_new_bouts(client, db_session, bot_token):
     headers, _, _ = await _player(client, db_session, bot_token, 980001)
+    await _set_config(db_session, mordoboi_enabled=False)
+    await db_session.commit()
     assert (await client.get(f"{API}/info", headers=headers)).json()["enabled"] is False
     resp = await client.post(f"{API}/matches/bot", headers=headers)
     assert resp.status_code == 409 and resp.json()["error"]["details"]["reason"] == "disabled"
