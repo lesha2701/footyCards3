@@ -3,7 +3,8 @@ transaction types), «Бруталити» (cosmetic kind "brutality" + the star
 set of finishers, cosmetics.image_path / win_bonus_coins, notification and
 transaction types) and «Стартовое предложение» for everyone who hasn't
 bought it: starter_offer_for_all / starter_offer_all_since, switched on
-together with the offer for the launch (the window of existing players
+together with the offer for the launch (50 ⭐: 10 000 coins, «Академия»
+pack, «Рамка новичка») (the window of existing players
 starts now; admins can switch either off in «Монетизация»).
 
 Revision ID: 0193
@@ -70,9 +71,14 @@ def upgrade() -> None:
 
     op.add_column("game_config", sa.Column("starter_offer_for_all", sa.Boolean(), nullable=False, server_default=sa.false()))
     op.add_column("game_config", sa.Column("starter_offer_all_since", sa.DateTime(timezone=True), nullable=True))
+    # Launch contents: 50 ⭐ → 10 000 coins + the «Академия» pack + «Рамка
+    # новичка» (one purchase per player — starter_offer_purchases.user_id).
     op.execute(
         "UPDATE game_config SET starter_offer_enabled = true, starter_offer_for_all = true, "
-        "starter_offer_all_since = now()"
+        "starter_offer_all_since = now(), starter_offer_stars = 50, starter_offer_coins = 10000, "
+        "starter_offer_pack_id = COALESCE((SELECT id FROM packs WHERE slug = 'path-start' LIMIT 1), starter_offer_pack_id), "
+        "starter_offer_cosmetic_id = COALESCE("
+        "(SELECT id FROM cosmetics WHERE style_key = 'starter' AND kind = 'profile_frame' LIMIT 1), starter_offer_cosmetic_id)"
     )
 
 
