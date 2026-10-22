@@ -82,6 +82,7 @@ XP_TX_TYPES = frozenset({
     TransactionType.tactico_reward, TransactionType.career_reward, TransactionType.task_reward,
     TransactionType.bingo_reward, TransactionType.player_tournament_match_reward,
     TransactionType.club_tournament_match_reward, TransactionType.stratego_reward,
+    TransactionType.mordoboi_reward,
 })
 
 # Cosmetics catalog (what exists and where it is drawn); prices live in

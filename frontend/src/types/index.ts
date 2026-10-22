@@ -851,6 +851,7 @@ export interface GameLimits {
   pairs: number;
   stratego: number;
   magnate: number;
+  mordoboi: number;
   /** Exhausted games only: when the hourly cap frees up again. */
   resets_at?: Partial<Record<string, string>>;
 }
@@ -882,6 +883,7 @@ export type RankingMetric =
   | "penalty_rating"
   | "stratego_rating"
   | "stratego_puzzles"
+  | "mordoboi_rating"
   | "league_rating";
 
 export interface RankingEntry {
@@ -3178,4 +3180,131 @@ export interface ClubBaseState {
   art: { background: string | null; buildings: Partial<Record<ClubBaseCode, string>> };
   new_balance?: number;
   claimed?: number;
+}
+
+// --- «Мордобой» ---
+
+export type MordoboiAction = "jab" | "hook" | "uppercut" | "block" | "dodge";
+/** Per side, what happened to its own action in the exchange. */
+export type MordoboiOutcome = "landed" | "beaten" | "blocked" | "slipped" | "caught" | "counter" | "none";
+export type MordoboiMatchStatus = "pending_accept" | "in_progress" | "finished" | "declined" | "cancelled" | "expired";
+export type MordoboiOpponentType = "bot" | "friend" | "online";
+
+export interface MordoboiCard {
+  user_card_id: number | null;
+  player_id: number;
+  display_name: string;
+  position: string;
+  image_path: string | null;
+  rarity: string;
+  rating: number;
+}
+
+export interface MordoboiBoxerStats {
+  power: number;
+  speed: number;
+  guard: number;
+  max_hp: number;
+  max_stamina: number;
+}
+
+export interface MordoboiBoxerOption {
+  card: MordoboiCard;
+  stats: MordoboiBoxerStats;
+}
+
+export interface MordoboiBoxer {
+  selected: MordoboiBoxerOption | null;
+  options: MordoboiBoxerOption[];
+}
+
+export interface MordoboiFighter extends MordoboiBoxerStats {
+  name: string;
+  card: MordoboiCard | null;
+  hp: number;
+  stamina: number;
+  landed: number;
+  damage_dealt: number;
+}
+
+export interface MordoboiExchange {
+  n: number;
+  round: number;
+  exchange: number;
+  my_action: MordoboiAction;
+  opponent_action: MordoboiAction;
+  my_outcome: MordoboiOutcome;
+  opponent_outcome: MordoboiOutcome;
+  my_damage: number;
+  opponent_damage: number;
+  my_hp: number;
+  opponent_hp: number;
+  my_auto: boolean;
+  opponent_auto: boolean;
+  round_end: boolean;
+  end: string | null;
+}
+
+export interface MordoboiMatch {
+  id: number;
+  version: number;
+  opponent_type: MordoboiOpponentType;
+  opponent_name: string;
+  opponent_user_id: number | null;
+  status: MordoboiMatchStatus;
+  viewer_side: "user" | "opponent";
+  difficulty: string | null;
+  live: boolean;
+  rounds: number;
+  exchanges_per_round: number;
+  round: number;
+  exchange: number;
+  me: MordoboiFighter | null;
+  opponent: MordoboiFighter | null;
+  my_pick: MordoboiAction | null;
+  opponent_ready: boolean;
+  can_pick: boolean;
+  available_actions: MordoboiAction[];
+  deadline: string | null;
+  my_auto_moves: number;
+  max_auto_moves: number;
+  log: MordoboiExchange[];
+  scorecards: { mine: number; opponent: number }[];
+  result: "win" | "draw" | "loss" | null;
+  win_reason: string | null;
+  reward_coins: number;
+  rating_delta: number;
+  created_at: string;
+  expires_at: string | null;
+  resolved_at: string | null;
+}
+
+export interface MordoboiInfo {
+  enabled: boolean;
+  rounds: number;
+  exchanges_per_round: number;
+  base_hp: number;
+  reward_win: number;
+  reward_draw: number;
+  reward_loss: number;
+  reward_ko_bonus: number;
+  daily_limit: number;
+  rewarded_today: number;
+  easy_reward_pct: number;
+  move_timeout_hours: number;
+  live_move_seconds: number;
+  challenge_expiry_hours: number;
+  max_auto_moves: number;
+  stamina_cost: Record<MordoboiAction, number>;
+  damage: Partial<Record<MordoboiAction, number>>;
+}
+
+export interface MordoboiStats {
+  mordoboi_rating: number;
+  mordoboi_rank: number | null;
+}
+
+export interface MordoboiSearchStatus {
+  status: "not_searching" | "searching" | "matched" | "timeout";
+  match_id: number | null;
 }

@@ -591,3 +591,15 @@ export function IconPairs(props: IconProps) {
     </IconBase>
   );
 }
+
+/** Boxing glove (Мордобой). */
+export function IconBoxingGlove(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M7.5 13.5V9a5 5 0 0 1 5-5h1.5a5 5 0 0 1 5 5v3a5 5 0 0 1-5 5H9.5a2 2 0 0 1-2-2Z" strokeLinejoin="round" />
+      <path d="M7.5 11H6a2 2 0 0 0-2 2v.3A2.7 2.7 0 0 0 6.7 16h.8" strokeLinejoin="round" />
+      <rect x="8.5" y="17" width="9" height="3.5" rx="1" />
+      <path d="M11 8.5c1.5-.8 3.5-.8 5 .3" />
+    </IconBase>
+  );
+}

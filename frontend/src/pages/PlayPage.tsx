@@ -5,11 +5,13 @@ import { fetchBlackjackStatus } from "@/api/blackjack";
 import { fetchCareer } from "@/api/career";
 import { fetchGameLimits, fetchPenaltyStats } from "@/api/games";
 import { fetchArenaStats } from "@/api/matches";
+import { fetchMordoboiInfo, fetchMordoboiMatches, fetchMordoboiStats } from "@/api/mordoboi";
 import { fetchPlayerTournamentCurrent } from "@/api/personalTournament";
 import { fetchStrategoStats } from "@/api/stratego";
 import { fetchTacticoMatches, fetchTacticoStats } from "@/api/tactico";
 import {
   IconBall,
+  IconBoxingGlove,
   IconBrain,
   IconCard,
   IconChart,
@@ -101,6 +103,13 @@ export default function PlayPage() {
   const { data: penaltyStats } = useQuery({ queryKey: ["penalty-stats"], queryFn: fetchPenaltyStats });
   const { data: limits } = useQuery({ queryKey: ["game-limits"], queryFn: fetchGameLimits });
   const { data: blackjack } = useQuery({ queryKey: ["blackjack-status"], queryFn: fetchBlackjackStatus });
+  const { data: mordoboi } = useQuery({ queryKey: ["mordoboi-info"], queryFn: fetchMordoboiInfo });
+  const { data: mordoboiStats } = useQuery({
+    queryKey: ["mordoboi-stats"], queryFn: fetchMordoboiStats, enabled: !!mordoboi?.enabled,
+  });
+  const { data: mordoboiMatches } = useQuery({
+    queryKey: ["mordoboi-matches"], queryFn: fetchMordoboiMatches, enabled: !!mordoboi?.enabled,
+  });
   const { data: playerTournamentCurrent } = useQuery({
     queryKey: ["player-tournament", "current"],
     queryFn: fetchPlayerTournamentCurrent,
@@ -166,6 +175,14 @@ export default function PlayPage() {
       description: "Скрытая расстановка: найди и захвати Кубок соперника",
       stat: `Рейтинг ${strategoStats?.stratego_rating ?? 0}`, limitKey: "stratego",
     },
+    ...(mordoboi?.enabled
+      ? [{
+        path: "/play/mordoboi", Icon: IconBoxingGlove, tint: "bg-yellow-500", title: "Мордобой", group: "tactics" as Group,
+        time: "5 мин", bot: true, friend: true,
+        description: "Боксёрский поединок карточек: угадай удар соперника",
+        stat: `Рейтинг ${mordoboiStats?.mordoboi_rating ?? 0}`, limitKey: "mordoboi" as LimitKey,
+      }]
+      : []),
     {
       path: "/play/magnate", Icon: IconDice, tint: "bg-violet-500", title: "Футбольный магнат", group: "tactics", time: "15 мин", bot: true, friend: true,
       description: "Клубы, стадионы и аренда — 4 игрока, онлайн или с ботами", limitKey: "magnate",
@@ -220,6 +237,13 @@ export default function PlayPage() {
       now.push({ key: `t${m.id}`, kicker: "Твой ход", title: `Тактико · ${m.opponent_name}`, tone: "bg-sky-500/15 text-sky-200 ring-sky-400/30", to: `/play/tactico/matches/${m.id}` });
     } else if (m.status === "pending_accept" && m.viewer_side === "opponent") {
       now.push({ key: `c${m.id}`, kicker: "Вызов", title: `Тактико · ${m.opponent_name}`, tone: "bg-amber-400/15 text-amber-200 ring-amber-400/30", to: "/play/tactico" });
+    }
+  }
+  for (const m of mordoboiMatches ?? []) {
+    if (m.status === "in_progress" && m.can_pick && m.opponent_type !== "bot") {
+      now.push({ key: `m${m.id}`, kicker: "Твой удар", title: `Мордобой · ${m.opponent_name}`, tone: "bg-yellow-500/15 text-yellow-200 ring-yellow-400/30", to: `/play/mordoboi/matches/${m.id}` });
+    } else if (m.status === "pending_accept" && m.viewer_side === "opponent") {
+      now.push({ key: `mc${m.id}`, kicker: "Вызов на ринг", title: `Мордобой · ${m.opponent_name}`, tone: "bg-amber-400/15 text-amber-200 ring-amber-400/30", to: `/play/mordoboi/matches/${m.id}` });
     }
   }
   if (career?.invite) {

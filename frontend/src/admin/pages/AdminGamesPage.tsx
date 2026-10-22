@@ -156,6 +156,7 @@ export default function AdminGamesPage() {
       | "trade_cards_both_sides"
       | "club_war_enabled"
       | "blackjack_enabled"
+      | "mordoboi_enabled"
       | "leagues_enabled"
       | "diamond_rating_cap_enabled"
       | "bot_daily_digest_enabled"
@@ -1121,6 +1122,31 @@ export default function AdminGamesPage() {
           {field("stratego_reward_draw", "Награда за ничью")}
           {field("stratego_reward_loss", "Награда за поражение")}
           {field("stratego_daily_limit", "Лимит наградных матчей/день")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Мордобой</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Боксёрский поединок на одной карточке: раунды из обменов, в каждом оба тайно выбирают действие. Число раундов,
+          обменов и HP применяются к новым боям. Награда — в пределах дневного лимита игрока; за нокаут победитель
+          получает бонус; сдавшийся или пропустивший удары получает 0. Бой с другом рейтинг не двигает, онлайн — ×2.
+        </p>
+        <div className="mb-3">{toggle("mordoboi_enabled", "Режим включён (выкл — нельзя начинать новые бои, плитка скрыта)")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("mordoboi_rounds", "Раундов")}
+          {field("mordoboi_exchanges_per_round", "Обменов в раунде")}
+          {field("mordoboi_base_hp", "HP боксёра")}
+          {field("mordoboi_reward_win", "Награда за победу")}
+          {field("mordoboi_reward_draw", "Награда за ничью")}
+          {field("mordoboi_reward_loss", "Награда за поражение")}
+          {field("mordoboi_reward_ko_bonus", "Бонус за нокаут")}
+          {field("mordoboi_daily_limit", "Лимит наградных боёв/день")}
+          {field("mordoboi_bot_easy_reward_pct", "Лёгкий бот: % от награды")}
+          {field("mordoboi_challenge_expiry_hours", "Срок жизни вызова, часы")}
+          {field("mordoboi_move_timeout_hours", "С другом: часов на удар")}
+          {field("mordoboi_live_move_seconds", "Онлайн: секунд на удар")}
+          {field("mordoboi_max_auto_moves", "Автоударов подряд до поражения")}
         </div>
       </section>
 

@@ -34,6 +34,7 @@ _MATCH_PATH_PREFIXES = {
     "penalty_match": "/play/penalty/matches",
     "tactico_match": "/play/tactico/matches",
     "stratego_match": "/play/stratego/matches",
+    "mordoboi_match": "/play/mordoboi/matches",
     "club_match": "/clubs/tournament",
 }
 

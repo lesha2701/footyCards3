@@ -129,6 +129,16 @@ class User(TimestampMixin, Base):
     # Stale/missing entries are auto-filled lazily; None = fully auto.
     stratego_squad: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
+    # «Мордобой»: rating, the usual hourly/daily counter pairs and the saved
+    # boxer (a user_card id; checked for ownership whenever it is used,
+    # stale ids fall back to the strongest card).
+    mordoboi_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    mordoboi_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    mordoboi_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    mordoboi_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    mordoboi_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    mordoboi_card_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     # Футбольный магнат
     magnate_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     magnate_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

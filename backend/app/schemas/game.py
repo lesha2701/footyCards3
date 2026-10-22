@@ -196,6 +196,7 @@ class GameLimitsOut(BaseModel):
     pairs: int
     stratego: int
     magnate: int
+    mordoboi: int
     # When a game's hourly cap is used up: the moment it frees up again
     # (key = the field name above). Games with plays left are absent.
     resets_at: dict[str, datetime] = {}

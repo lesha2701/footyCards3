@@ -32,6 +32,7 @@ from app.models.pack import PackOpening, StarsInvoice
 from app.models.penalty import PenaltyMatch
 from app.models.player_tournament import PlayerTournament, PlayerTournamentParticipant
 from app.models.stratego import StrategoMatch
+from app.models.mordoboi import MordoboiMatch
 from app.models.tactico import TacticoMatch
 from app.models.user import User
 from app.models.user_activity import UserDailyActivity
@@ -85,6 +86,10 @@ MODE_SOURCES: tuple[_Source, ...] = (
     _Source(
         "stratego", "Стратего", StrategoMatch, StrategoMatch.created_at,
         (StrategoMatch.user_id, StrategoMatch.opponent_user_id),
+    ),
+    _Source(
+        "mordoboi", "Мордобой", MordoboiMatch, MordoboiMatch.created_at,
+        (MordoboiMatch.user_id, MordoboiMatch.opponent_user_id),
     ),
     _Source(
         "penalty_pvp", "Пенальти PvP", PenaltyMatch, PenaltyMatch.created_at,

@@ -111,6 +111,7 @@ class TransactionType(str, enum.Enum):
     stratego_stake_lock = "stratego_stake_lock"
     stratego_stake_win = "stratego_stake_win"
     stratego_stake_refund = "stratego_stake_refund"
+    mordoboi_reward = "mordoboi_reward"
     blackjack_consolation = "blackjack_consolation"
     magnate_reward = "magnate_reward"
     card_star_upgrade = "card_star_upgrade"
@@ -338,6 +339,21 @@ class StrategoMatchStatus(str, enum.Enum):
     expired = "expired"
 
 
+class MordoboiOpponentType(str, enum.Enum):
+    bot = "bot"
+    friend = "friend"
+    online = "online"
+
+
+class MordoboiMatchStatus(str, enum.Enum):
+    pending_accept = "pending_accept"
+    in_progress = "in_progress"
+    finished = "finished"
+    declined = "declined"
+    cancelled = "cancelled"
+    expired = "expired"
+
+
 class PenaltyMatchStatus(str, enum.Enum):
     pending_accept = "pending_accept"
     in_progress = "in_progress"
@@ -413,6 +429,10 @@ class NotificationType(str, enum.Enum):
     stratego_challenge_accepted = "stratego_challenge_accepted"
     stratego_your_turn = "stratego_your_turn"
     stratego_match_finished = "stratego_match_finished"
+    mordoboi_challenge_received = "mordoboi_challenge_received"
+    mordoboi_challenge_accepted = "mordoboi_challenge_accepted"
+    mordoboi_your_turn = "mordoboi_your_turn"
+    mordoboi_match_finished = "mordoboi_match_finished"
     my_player_duel = "my_player_duel"
     player_career_event = "player_career_event"
     manager_event = "manager_event"

@@ -9,7 +9,7 @@ vi.mock("@/api/matches", () => ({ fetchArenaStats: vi.fn(async () => ({ arena_ra
 vi.mock("@/api/games", () => ({
   fetchPenaltyStats: vi.fn(async () => ({ penalty_rating: 0 })),
   fetchGameLimits: vi.fn(async () => ({
-    hourly_limit: 5, memory: 5, arena: 3, saboteur: 5, penalty: 0, free_kick: 5, hangman: 5, tactico: 5, pairs: 5, stratego: 5, magnate: 5,
+    hourly_limit: 5, memory: 5, arena: 3, saboteur: 5, penalty: 0, free_kick: 5, hangman: 5, tactico: 5, pairs: 5, stratego: 5, magnate: 5, mordoboi: 5,
   })),
 }));
 vi.mock("@/api/tactico", () => ({
@@ -19,6 +19,13 @@ vi.mock("@/api/tactico", () => ({
   ]),
 }));
 vi.mock("@/api/stratego", () => ({ fetchStrategoStats: vi.fn(async () => ({ stratego_rating: 0 })) }));
+vi.mock("@/api/mordoboi", () => ({
+  fetchMordoboiInfo: vi.fn(async () => ({ enabled: true })),
+  fetchMordoboiStats: vi.fn(async () => ({ mordoboi_rating: 12, mordoboi_rank: null })),
+  fetchMordoboiMatches: vi.fn(async () => [
+    { id: 3, status: "in_progress", can_pick: true, opponent_type: "friend", opponent_name: "Петя", viewer_side: "opponent" },
+  ]),
+}));
 vi.mock("@/api/blackjack", () => ({ fetchBlackjackStatus: vi.fn(async () => ({ enabled: false })) }));
 vi.mock("@/api/personalTournament", () => ({ fetchPlayerTournamentCurrent: vi.fn(async () => ({ status: "not_queued" })) }));
 vi.mock("@/api/career", () => ({ fetchCareer: vi.fn(async () => ({ enabled: true, season: null, invite: null })) }));
@@ -39,6 +46,14 @@ describe("вкладка «Играть»", () => {
     show();
     expect(await screen.findByText("Твой ход")).toBeInTheDocument();
     expect(screen.getByText("Тактико · Миша")).toBeInTheDocument();
+  });
+
+  it("shows «Мордобой» in the tactics group when it is on, with the friend's pending punch", async () => {
+    show();
+    expect(await screen.findByText("Мордобой · Петя")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "🧠 Тактика" }));
+    expect(screen.getByText("Мордобой")).toBeInTheDocument();
+    expect(await screen.findByText("Рейтинг 12")).toBeInTheDocument();
   });
 
   it("filters by group and keeps favourites", async () => {

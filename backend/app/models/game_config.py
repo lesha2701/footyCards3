@@ -792,6 +792,22 @@ class GameConfig(TimestampMixin, Base):
     blackjack_paid_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     blackjack_consolation_coins: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
 
+    # «Мордобой» (mordoboi_service.py): boxing on one card. Off by default.
+    mordoboi_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mordoboi_rounds: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    mordoboi_exchanges_per_round: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    mordoboi_base_hp: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    mordoboi_reward_win: Mapped[int] = mapped_column(Integer, default=80, nullable=False)
+    mordoboi_reward_draw: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    mordoboi_reward_loss: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    mordoboi_reward_ko_bonus: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    mordoboi_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    mordoboi_bot_easy_reward_pct: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    mordoboi_challenge_expiry_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
+    mordoboi_move_timeout_hours: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
+    mordoboi_live_move_seconds: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    mordoboi_max_auto_moves: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+
     bingo_reward_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     bingo_reward_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 

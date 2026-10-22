@@ -565,6 +565,20 @@ class GameConfigOut(BaseModel):
     blackjack_stars_cost: int = 10
     blackjack_paid_daily_limit: int = 10
     blackjack_consolation_coins: int = 25
+    mordoboi_enabled: bool = False
+    mordoboi_rounds: int = 3
+    mordoboi_exchanges_per_round: int = 4
+    mordoboi_base_hp: int = 100
+    mordoboi_reward_win: int = 80
+    mordoboi_reward_draw: int = 40
+    mordoboi_reward_loss: int = 25
+    mordoboi_reward_ko_bonus: int = 20
+    mordoboi_daily_limit: int = 10
+    mordoboi_bot_easy_reward_pct: int = 60
+    mordoboi_challenge_expiry_hours: int = 24
+    mordoboi_move_timeout_hours: int = 12
+    mordoboi_live_move_seconds: int = 30
+    mordoboi_max_auto_moves: int = 3
     bingo_reward_coins: int
     bingo_reward_pack_id: Optional[int] = None
     card_skills_enabled: bool = True
@@ -1156,6 +1170,20 @@ class GameConfigUpdate(BaseModel):
     blackjack_stars_cost: Optional[int] = Field(default=None, ge=1, le=10000)
     blackjack_paid_daily_limit: Optional[int] = Field(default=None, ge=0, le=100)
     blackjack_consolation_coins: Optional[int] = Field(default=None, ge=0)
+    mordoboi_enabled: Optional[bool] = None
+    mordoboi_rounds: Optional[int] = Field(default=None, ge=1, le=12)
+    mordoboi_exchanges_per_round: Optional[int] = Field(default=None, ge=1, le=10)
+    mordoboi_base_hp: Optional[int] = Field(default=None, ge=20, le=1000)
+    mordoboi_reward_win: Optional[int] = Field(default=None, ge=0)
+    mordoboi_reward_draw: Optional[int] = Field(default=None, ge=0)
+    mordoboi_reward_loss: Optional[int] = Field(default=None, ge=0)
+    mordoboi_reward_ko_bonus: Optional[int] = Field(default=None, ge=0)
+    mordoboi_daily_limit: Optional[int] = Field(default=None, ge=0)
+    mordoboi_bot_easy_reward_pct: Optional[int] = Field(default=None, ge=0, le=200)
+    mordoboi_challenge_expiry_hours: Optional[int] = Field(default=None, ge=1)
+    mordoboi_move_timeout_hours: Optional[int] = Field(default=None, ge=1)
+    mordoboi_live_move_seconds: Optional[int] = Field(default=None, ge=10, le=3600)
+    mordoboi_max_auto_moves: Optional[int] = Field(default=None, ge=0, le=50)
     bingo_reward_coins: Optional[int] = Field(default=None, ge=0)
     bingo_reward_pack_id: Optional[int] = Field(default=None)
     card_skills_enabled: Optional[bool] = None
