@@ -10,6 +10,17 @@ async function fetchFixtures(): Promise<AdminFixture[]> {
   return data;
 }
 
+interface AutoStatus {
+  enabled: boolean;
+  has_key: boolean;
+  status: string | null;
+}
+
+async function fetchAuto(): Promise<AutoStatus> {
+  const { data } = await api.get<AutoStatus>("/admin/match-day/auto");
+  return data;
+}
+
 /** A local `datetime-local` value → an ISO instant. */
 function toIso(local: string): string {
   return new Date(local).toISOString();
@@ -21,6 +32,7 @@ export default function AdminMatchDayPage() {
   const [form, setForm] = useState({ home: "", away: "", league: "", kickoff: "" });
   const [error, setError] = useState<string | null>(null);
   const { data: fixtures = [] } = useQuery({ queryKey: ["admin", "match-day"], queryFn: fetchFixtures });
+  const { data: auto } = useQuery({ queryKey: ["admin", "match-day", "auto"], queryFn: fetchAuto });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin", "match-day"] });
   const onError = (err: unknown) => setError(formatGameError(err, "Не получилось"));
 
@@ -43,6 +55,14 @@ export default function AdminMatchDayPage() {
     },
     onError,
   });
+  const sync = useMutation({
+    mutationFn: () => api.post("/admin/match-day/sync"),
+    onSuccess: () => {
+      setError(null);
+      refresh();
+    },
+    onError,
+  });
   const remove = useMutation({
     mutationFn: (id: number) => api.delete(`/admin/match-day/${id}`),
     onSuccess: refresh,
@@ -58,6 +78,31 @@ export default function AdminMatchDayPage() {
         уведомление и заберут монеты (точный счёт / разница голов / исход — суммы в «Игры» → «Матч дня»). Результат можно
         исправить, пока никто не забрал награду. На экране игрока — ближайший не начавшийся матч.
       </p>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="font-display text-base font-bold">Автоматически (API-Football)</p>
+          <span className={`rounded-full px-2 py-0.5 text-xs ${auto?.enabled ? "bg-accent-green/20 text-accent-green" : "bg-white/10 text-slate-400"}`}>
+            {auto?.enabled ? "включено" : "выключено"}
+          </span>
+          <button
+            onClick={() => sync.mutate()}
+            disabled={sync.isPending || !auto?.has_key}
+            className="ml-auto rounded-xl bg-white/10 px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
+          >
+            {sync.isPending ? "Обновляю…" : "Обновить сейчас"}
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-slate-400">
+          {auto && !auto.has_key
+            ? "На сервере нет ключа API_FOOTBALL_KEY — добавь его в .env и пересобери backend."
+            : auto?.status ?? "Ещё не запускалось."}
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          Включается в «Игры» → «Матч дня» (там же лиги по приоритету). Бот проверяет раз в 30 минут: берёт лучший матч
+          сегодня/завтра и сам записывает счёт основного времени. Ручные матчи он не трогает.
+        </p>
+      </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Новый матч</p>
@@ -111,6 +156,7 @@ function FixtureRow({
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/5 bg-bg-surface p-3 text-sm">
       <div className="min-w-[200px] flex-1">
         <p className="font-semibold">
+          {f.auto && <span className="mr-1 rounded bg-sky-500/20 px-1.5 py-0.5 text-xs text-sky-300">авто</span>}
           {f.home} — {f.away} {hasResult && <span className="font-mono text-accent-lime">{f.home_score}:{f.away_score}</span>}
         </p>
         <p className="text-xs text-slate-400">

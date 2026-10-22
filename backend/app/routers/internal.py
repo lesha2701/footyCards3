@@ -17,6 +17,7 @@ from app.schemas.stars import (
 from app.schemas.player_tournament import PlayerTournamentReminderResult
 from app.schemas.tournament import LineupReminderResult, SimulateRoundResult
 from app.services import (
+    match_day_auto,
     career_service,
     chat_pack_service,
     club_league_service,
@@ -167,3 +168,11 @@ async def club_base_sweep(db: AsyncSession = Depends(get_db)):
     from app.services import club_base_service
 
     return {"completed": await club_base_service.sweep_due(db)}
+
+
+@router.post("/match-day/sync")
+async def match_day_sync(db: AsyncSession = Depends(get_db)):
+    """Called by the bot every half hour: the automatic «Матч дня» —
+    results of the bot's matches and a new one when none is open
+    (match_day_auto; nothing happens while it is switched off)."""
+    return await match_day_auto.sync(db)

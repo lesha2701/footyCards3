@@ -169,7 +169,7 @@ async def admin_list(db: AsyncSession) -> list[dict]:
     rows = (await db.execute(select(MatchDayFixture).order_by(MatchDayFixture.kickoff_at.desc()).limit(60))).scalars()
     return [
         {"id": f.id, "home": f.home, "away": f.away, "league": f.league, "kickoff_at": _aware(f.kickoff_at),
-         "home_score": f.home_score, "away_score": f.away_score, "predictions": counts.get(f.id, 0),
+         "home_score": f.home_score, "away_score": f.away_score, "predictions": counts.get(f.id, 0), "auto": f.external_id is not None,
          "claimed": claimed.get(f.id, 0)}
         for f in rows
     ]
@@ -218,15 +218,28 @@ async def admin_update(
         else:
             if not (0 <= home_score <= MAX_GOALS and 0 <= away_score <= MAX_GOALS):
                 raise ConflictError(f"Счёт — от 0 до {MAX_GOALS}")
-            fixture.home_score, fixture.away_score, fixture.result_at = home_score, away_score, _now()
-            if first:
-                for uid in (await db.execute(
-                    select(MatchDayPrediction.user_id).where(MatchDayPrediction.fixture_id == fixture_id)
-                )).scalars():
-                    await notify(db, uid, NotificationType.match_day_result, f"⚽ {fixture.home} {home_score}:{away_score} {fixture.away}",
-                                 "Матч дня закончился — проверь свой прогноз и забери награду")
+            await set_result(db, fixture, home_score, away_score, notify_players=first)
     await db.commit()
     return {"ok": True}
+
+
+async def set_result(db: AsyncSession, fixture: MatchDayFixture, home: int, away: int, notify_players: bool = True) -> None:
+    """Writes the score (the fixture row is locked by the caller) and tells
+    every guesser; the caller commits."""
+    fixture.home_score, fixture.away_score, fixture.result_at = home, away, _now()
+    if not notify_players:
+        return
+    for uid in (await db.execute(
+        select(MatchDayPrediction.user_id).where(MatchDayPrediction.fixture_id == fixture.id)
+    )).scalars():
+        await notify(db, uid, NotificationType.match_day_result, f"⚽ {fixture.home} {home}:{away} {fixture.away}",
+                     "Матч дня закончился — проверь свой прогноз и забери награду")
+
+
+async def drop_fixture(db: AsyncSession, fixture: MatchDayFixture) -> None:
+    """A postponed / cancelled match: gone with its guesses; the caller commits."""
+    await db.execute(delete(MatchDayPrediction).where(MatchDayPrediction.fixture_id == fixture.id))
+    await db.delete(fixture)
 
 
 async def admin_delete(db: AsyncSession, fixture_id: int) -> dict:

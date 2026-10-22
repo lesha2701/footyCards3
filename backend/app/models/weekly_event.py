@@ -54,6 +54,8 @@ class MatchDayFixture(Base):
     home_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     away_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     result_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # API-Football fixture id of a match the bot picked itself (match_day_auto); NULL = entered by hand.
+    external_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 

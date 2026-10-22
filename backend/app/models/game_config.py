@@ -1200,3 +1200,12 @@ class GameConfig(TimestampMixin, Base):
     club_raid_reward_coins: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
     club_raid_reward_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     club_raid_reward_budget: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
+    # Automatic matches from API-Football (services/match_day_auto.py, key in API_FOOTBALL_KEY):
+    # the bot picks the best upcoming match by league priority and fetches its score.
+    match_day_auto_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # API-Football league ids, most wanted first (2 ЛЧ, 39 АПЛ, 140 Ла Лига, 235 РПЛ, …).
+    match_day_leagues: Mapped[list] = mapped_column(
+        JSON, default=lambda: [2, 39, 140, 235, 135, 78, 61, 3, 848, 1, 4], nullable=False,
+    )
+    match_day_auto_status: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    match_day_auto_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

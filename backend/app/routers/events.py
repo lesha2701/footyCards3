@@ -10,7 +10,9 @@ from app.core.dependencies import get_current_admin, get_current_user
 from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.user import User
-from app.services import club_raid_service, match_day_service, weekly_cup_service
+from app.services import club_raid_service, match_day_auto, match_day_service, weekly_cup_service
+from app.services.game_config_service import get_config
+from app.config import get_settings
 from app.services.admin_log_service import log_action
 
 router = APIRouter(tags=["events"])
@@ -105,3 +107,20 @@ async def admin_update_fixture(
 async def admin_delete_fixture(fixture_id: int, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
     await log_action(db, admin.id, "delete_match_day", "match_day_fixture", fixture_id)
     return await match_day_service.admin_delete(db, fixture_id)
+
+
+@admin_router.get("/auto")
+async def admin_auto_status(db: AsyncSession = Depends(get_db), _admin: User = Depends(get_current_admin)):
+    config = await get_config(db)
+    return {
+        "enabled": bool(config.match_day_enabled and config.match_day_auto_enabled),
+        "has_key": bool(get_settings().api_football_key),
+        "status": config.match_day_auto_status,
+    }
+
+
+@admin_router.post("/sync")
+async def admin_sync(db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
+    """«Обновить сейчас»: one pass right away, even when the automatic mode is off."""
+    await log_action(db, admin.id, "sync_match_day", "match_day_fixture")
+    return await match_day_auto.sync(db, force=True)

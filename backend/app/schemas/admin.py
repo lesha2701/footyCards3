@@ -720,6 +720,8 @@ class GameConfigOut(BaseModel):
     match_day_exact_coins: int = 1000
     match_day_diff_coins: int = 400
     match_day_outcome_coins: int = 200
+    match_day_auto_enabled: bool = False
+    match_day_leagues: list[int] = []
     club_raid_enabled: bool = True
     club_raid_hp_per_member: int = 3000
     club_raid_attacks_per_day: int = 3
@@ -1394,6 +1396,8 @@ class GameConfigUpdate(BaseModel):
     match_day_exact_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
     match_day_diff_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
     match_day_outcome_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
+    match_day_auto_enabled: Optional[bool] = None
+    match_day_leagues: Optional[list[Annotated[int, Field(ge=1, le=100000)]]] = Field(default=None, min_length=1, max_length=30)
     club_raid_enabled: Optional[bool] = None
     club_raid_hp_per_member: Optional[int] = Field(default=None, ge=1, le=10000000)
     club_raid_attacks_per_day: Optional[int] = Field(default=None, ge=1, le=50)

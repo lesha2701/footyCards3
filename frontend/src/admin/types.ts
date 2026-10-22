@@ -167,6 +167,8 @@ export interface GameConfig {
   match_day_exact_coins: number;
   match_day_diff_coins: number;
   match_day_outcome_coins: number;
+  match_day_auto_enabled: boolean;
+  match_day_leagues: number[];
   club_raid_enabled: boolean;
   club_raid_hp_per_member: number;
   club_raid_attacks_per_day: number;

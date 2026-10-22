@@ -98,7 +98,8 @@ export default function AdminGamesPage() {
       | "arena_division_min_points"
       | "arena_division_reward_coins"
       | "arena_division_coin_pct"
-      | "weekly_cup_prizes",
+      | "weekly_cup_prizes"
+      | "match_day_leagues",
     label: string,
   ) => (
     <label className="col-span-2 flex flex-col gap-1">
@@ -177,6 +178,7 @@ export default function AdminGamesPage() {
       | "card_stars_enabled"
       | "weekly_cup_enabled"
       | "match_day_enabled"
+      | "match_day_auto_enabled"
       | "club_raid_enabled",
     label: string,
   ) => (
@@ -497,13 +499,15 @@ export default function AdminGamesPage() {
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-1 font-display text-base font-bold">Матч дня</p>
         <p className="mb-3 text-xs text-slate-400">
-          Матчи добавляются в разделе «Матч дня». Награда — одна, самая высокая из угаданных.
+          Матчи добавляются в разделе «Матч дня» вручную или автоматически: бот раз в полчаса берёт лучший матч сегодня/завтра по приоритету лиг и сам записывает счёт (основное время). Нужен ключ API_FOOTBALL_KEY на сервере. Награда — одна, самая высокая из угаданных.
         </p>
         <div className="grid grid-cols-2 items-end gap-3">
           {toggle("match_day_enabled", "Матч дня включён")}
           {field("match_day_exact_coins", "Точный счёт, монет")}
           {field("match_day_diff_coins", "Разница голов, монет")}
           {field("match_day_outcome_coins", "Исход, монет")}
+          {toggle("match_day_auto_enabled", "Автоматически: матчи и счёт из API-Football")}
+          {listField("match_day_leagues", "Лиги по приоритету (ID API-Football): 2 ЛЧ, 39 АПЛ, 140 Ла Лига, 235 РПЛ, 135 Серия А, 78 Бундеслига, 61 Лига 1, 3 ЛЕ, 848 ЛК, 1 ЧМ, 4 Евро")}
         </div>
       </section>
 

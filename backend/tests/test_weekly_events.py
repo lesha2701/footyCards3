@@ -223,3 +223,103 @@ def test_week_rotation_is_stable():
     assert weekly_cup_service.game_of_week(week, config) == weekly_cup_service.game_of_week(week, config)
     assert {weekly_cup_service.game_of_week(week + timedelta(days=7 * i), config) for i in range(2)} == {"penalty", "memory"}
     assert week_bounds(date(2026, 10, 19))[1] - week_bounds(date(2026, 10, 19))[0] == timedelta(days=7)
+
+
+# --- automatic «Матч дня» (API-Football) ---------------------------------------------------------
+
+def _api_fixture(fid, league, home, away, kickoff, status="NS", score=None):
+    return {
+        "fixture": {"id": fid, "date": kickoff.isoformat().replace("+00:00", "Z"), "status": {"short": status}},
+        "league": {"id": league, "name": f"League {league}"},
+        "teams": {"home": {"name": home}, "away": {"name": away}},
+        "goals": {"home": score[0] if score else None, "away": score[1] if score else None},
+        "score": {"fulltime": {"home": score[0] if score else None, "away": score[1] if score else None}},
+    }
+
+
+async def test_auto_match_day_picks_best_league_then_scores_it(client, db_session, bot_token):
+    from app.services import match_day_auto
+
+    a_h, a = await _register(client, db_session, 920051, bot_token)
+    config = await get_config(db_session)
+    config.match_day_enabled = config.match_day_auto_enabled = True
+    config.match_day_leagues = [2, 235, 39]
+    await db_session.commit()
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    calls = []
+    board = [
+        _api_fixture(11, 39, "Arsenal", "Chelsea", now + timedelta(hours=5)),
+        _api_fixture(12, 235, "Spartak Moscow", "CSKA Moscow", now + timedelta(hours=8)),
+        _api_fixture(13, 235, "Zenit Saint Petersburg", "Rubin", now + timedelta(minutes=30)),  # too soon
+        _api_fixture(14, 999, "Nobody", "Cares", now + timedelta(hours=2)),  # league not in the list
+    ]
+
+    async def fetch(path, params):
+        calls.append(params)
+        return board if "date" in params else []
+
+    out = await match_day_auto.sync(db_session, fetch=fetch, now=now)
+    assert "Спартак — ЦСКА" in out["status"]
+    fixture = (await db_session.execute(select(MatchDayFixture))).scalar_one()
+    assert (fixture.home, fixture.away, fixture.league, fixture.external_id) == ("Спартак", "ЦСКА", "РПЛ", 12)
+    assert len(calls) == 2  # today and tomorrow
+
+    # While that match is open, nothing is fetched.
+    calls.clear()
+    await match_day_auto.sync(db_session, fetch=fetch, now=now + timedelta(hours=1))
+    assert calls == []
+
+    assert (await client.put(f"{API}/match-day/{fixture.id}/prediction", headers=a_h, json={"home": 2, "away": 1})).status_code == 200
+
+    # Two hours after kickoff: the score after 90 minutes (extra time doesn't count).
+    finished = _api_fixture(12, 235, "Spartak Moscow", "CSKA Moscow", fixture.kickoff_at, status="AET", score=(1, 1))
+    finished["goals"] = {"home": 2, "away": 1}
+
+    async def fetch_result(path, params):
+        calls.append(params)
+        return [finished] if params.get("ids") == "12" else []
+
+    await match_day_auto.sync(db_session, fetch=fetch_result, now=now + timedelta(hours=10))  # kickoff + 2 h
+    await db_session.refresh(fixture)
+    assert (fixture.home_score, fixture.away_score) == (1, 1)
+    note = (await db_session.execute(select(Notification).where(Notification.type == NotificationType.match_day_result))).scalar_one()
+    assert note.user_id == a.id
+    claim = (await client.post(f"{API}/match-day/{fixture.id}/claim", headers=a_h)).json()
+    assert claim["coins"] == 0  # 2:1 vs 1:1 — miss
+
+
+async def test_auto_match_day_drops_postponed_and_reports_api_errors(db_session):
+    from app.services import match_day_auto
+
+    config = await get_config(db_session)
+    config.match_day_enabled = config.match_day_auto_enabled = True
+    now = datetime.now(timezone.utc)
+    db_session.add(MatchDayFixture(home="A", away="B", kickoff_at=now - timedelta(hours=3), external_id=77))
+    db_session.add(MatchDayFixture(home="Ручной", away="Матч", kickoff_at=now - timedelta(hours=3)))
+    await db_session.commit()
+
+    async def fetch(path, params):
+        if "ids" in params:
+            return [_api_fixture(77, 235, "A", "B", now - timedelta(hours=3), status="PST")]
+        raise match_day_auto.ApiError("Free plans do not have access to this season")
+
+    out = await match_day_auto.sync(db_session, fetch=fetch, now=now)
+    assert "Ошибка API-Football" in out["status"] and "this season" in out["status"]
+    left = (await db_session.execute(select(MatchDayFixture.home))).scalars().all()
+    # The error rolled the whole pass back — the postponed match goes on the next good pass.
+    assert sorted(left) == ["A", "Ручной"]
+
+    async def fetch_ok(path, params):
+        return [_api_fixture(77, 235, "A", "B", now - timedelta(hours=3), status="PST")] if "ids" in params else []
+
+    await match_day_auto.sync(db_session, fetch=fetch_ok, now=now)
+    assert (await db_session.execute(select(MatchDayFixture.home))).scalars().all() == ["Ручной"]
+
+
+async def test_auto_match_day_off_does_nothing(db_session):
+    from app.services import match_day_auto
+
+    async def fetch(path, params):
+        raise AssertionError("must not be called")
+
+    assert (await match_day_auto.sync(db_session, fetch=fetch))["status"] == "выключено"

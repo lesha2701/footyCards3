@@ -124,4 +124,5 @@ export interface AdminFixture {
   away_score: number | null;
   predictions: number;
   claimed: number;
+  auto: boolean;
 }

@@ -66,6 +66,7 @@ def upgrade() -> None:
         sa.Column("home_score", sa.Integer(), nullable=True),
         sa.Column("away_score", sa.Integer(), nullable=True),
         sa.Column("result_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("external_id", sa.Integer(), nullable=True, unique=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
     )
     op.create_table(
@@ -110,6 +111,13 @@ def upgrade() -> None:
         op.add_column("game_config", sa.Column(name, sa.Boolean(), nullable=False, server_default=sa.true()))
     # Off until an admin turns it on (matches are entered by hand).
     op.add_column("game_config", sa.Column("match_day_enabled", sa.Boolean(), nullable=False, server_default=sa.false()))
+    op.add_column("game_config", sa.Column("match_day_auto_enabled", sa.Boolean(), nullable=False, server_default=sa.false()))
+    op.add_column("game_config", sa.Column(
+        "match_day_leagues", sa.JSON(), nullable=False,
+        server_default=sa.text("'[2, 39, 140, 235, 135, 78, 61, 3, 848, 1, 4]'::json"),
+    ))
+    op.add_column("game_config", sa.Column("match_day_auto_status", sa.String(255), nullable=True))
+    op.add_column("game_config", sa.Column("match_day_auto_checked_at", sa.DateTime(timezone=True), nullable=True))
     for name, default in INT_COLUMNS:
         op.add_column("game_config", sa.Column(name, sa.Integer(), nullable=False, server_default=default))
     op.add_column("game_config", sa.Column("club_raid_reward_pack_id", sa.Integer(), nullable=True))
@@ -124,7 +132,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    for name in ("weekly_cup_prizes", "weekly_cup_games", "club_raid_reward_pack_id", "match_day_enabled", *[n for n, _ in INT_COLUMNS], *FLAGS):
+    for name in ("weekly_cup_prizes", "weekly_cup_games", "club_raid_reward_pack_id", "match_day_enabled", "match_day_auto_enabled", "match_day_leagues",
+                 "match_day_auto_status", "match_day_auto_checked_at", *[n for n, _ in INT_COLUMNS], *FLAGS):
         op.drop_column("game_config", name)
     op.drop_index("ix_club_raid_attacks_user_day", table_name="club_raid_attacks")
     for table in ("club_raid_attacks", "club_raids", "match_day_predictions", "match_day_fixtures",
