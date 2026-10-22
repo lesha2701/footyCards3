@@ -432,3 +432,49 @@ async def test_premium_hairstyle_for_stars_sets_appearance_and_status(client, db
     assert (await client.get(f"{API}/lifestyle", headers=headers)).json()["prestige"] == 30
     # A premium index can't be picked without owning it.
     assert (await client.patch(f"{API}/my-player", headers=headers, json={"appearance": {**LOOK, "hair": 15}})).status_code == 409
+
+
+def test_rebased_xp_keeps_the_level_and_its_share():
+    from types import SimpleNamespace
+
+    old = SimpleNamespace(my_player_xp_level_base=100, my_player_xp_level_step=20)
+    new = SimpleNamespace(my_player_xp_level_base=200, my_player_xp_level_step=50)
+    xp = my_player_service.xp_to_reach(10, old) + 140  # level 10, 140 of 280
+    assert my_player_service.level_info(xp, old)[:2] == (10, 140)
+    moved = my_player_service.rebased_xp(xp, old, new)
+    level, into, need = my_player_service.level_info(moved, new)
+    assert (level, into, need) == (10, 325, 650)  # same level, the same half of it
+    assert my_player_service.rebased_xp(0, old, new) == 0
+
+
+async def test_admin_xp_curve_change_keeps_levels_and_points(client, db_session, bot_token):
+    user_id, headers = await _login(client, db_session, bot_token, 870090)
+    await _create(client, headers)
+    config = await get_config(db_session)
+    per_level = config.my_player_points_per_level
+    user = await db_session.get(User, user_id)
+    user.my_player_xp = my_player_service.xp_to_reach(6, config) + 10
+    await db_session.commit()
+    view = (await client.get(f"{API}/my-player", headers=headers)).json()
+    assert view["level"] == 6
+    spend = await client.post(f"{API}/my-player/train", headers=headers, json={"attr": "atk", "points": 5 * per_level})
+    assert spend.status_code == 200, spend.text
+
+    admin = await client.post(f"{API}/auth/session", headers=telegram_headers(999000001, bot_token))
+    admin_headers = {"Authorization": f"Bearer {admin.json()['admin_token']}"}
+    resp = await client.put(
+        f"{API}/admin/games/config", headers=admin_headers,
+        json={"my_player_xp_level_base": config.my_player_xp_level_base * 3, "my_player_xp_level_step": 60},
+    )
+    assert resp.status_code == 200, resp.text
+
+    view = (await client.get(f"{API}/my-player", headers=headers)).json()
+    assert view["level"] == 6 and view["points_available"] == 0
+    # The next level gives its points again.
+    await db_session.refresh(user)
+    config = await get_config(db_session)
+    await db_session.refresh(config)
+    user.my_player_xp = my_player_service.xp_to_reach(7, config)
+    await db_session.commit()
+    view = (await client.get(f"{API}/my-player", headers=headers)).json()
+    assert view["level"] == 7 and view["points_available"] == per_level

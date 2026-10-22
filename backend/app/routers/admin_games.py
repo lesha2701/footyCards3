@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,8 +51,15 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
             raise ConflictError("Клубная база: потолки не могут быть отрицательными")
     artifact_keys = {"artifacts_enabled", "artifact_max_stat"}
     artifacts_before = {k: getattr(config, k) for k in artifact_keys}
+    xp_curve_keys = ("my_player_xp_level_base", "my_player_xp_level_step")
+    xp_curve_before = SimpleNamespace(**{k: getattr(config, k) for k in xp_curve_keys})
     for key, value in updates.items():
         setattr(config, key, value)
+    if any(getattr(config, k) != getattr(xp_curve_before, k) for k in xp_curve_keys):
+        # «Мой игрок»: levels are derived from XP — keep everyone's level.
+        from app.services import my_player_service
+
+        await my_player_service.rebase_xp_curve(db, xp_curve_before, config)
     if any(getattr(config, k) != v for k, v in artifacts_before.items()):
         # Artifact card bonuses are stored on the cards: recompute them.
         from app.services import artifact_service

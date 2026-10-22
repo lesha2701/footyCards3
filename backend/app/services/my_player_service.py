@@ -238,6 +238,34 @@ def level_info(xp: int, config) -> tuple[int, int, int]:
     return level, left, xp_for_next(level, config)
 
 
+def xp_to_reach(level: int, config) -> int:
+    """Total XP at the start of `level`."""
+    return sum(xp_for_next(lvl, config) for lvl in range(1, max(1, level)))
+
+
+def rebased_xp(xp: int, old, new) -> int:
+    """The same level and the same share of it under the `new` XP curve, so
+    changing the curve in the admin never takes levels away (the points spent
+    on them stay spent) — it only changes how fast the next ones come."""
+    level, into, need = level_info(xp, old)
+    return xp_to_reach(level, new) + into * xp_for_next(level, new) // need
+
+
+async def rebase_xp_curve(db: AsyncSession, old, new) -> int:
+    """Rewrites every player's XP after the admin changed the level curve
+    (`old` holds the previous base/step). The caller commits. Returns the
+    number of rewritten rows."""
+    from sqlalchemy import update
+
+    rows = (await db.execute(select(User.id, User.my_player_xp).where(User.my_player_xp > 0))).all()
+    changes = [
+        {"id": uid, "my_player_xp": moved} for uid, xp in rows if (moved := rebased_xp(xp, old, new)) != xp
+    ]
+    if changes:
+        await db.execute(update(User), changes)
+    return len(changes)
+
+
 def add_xp(
     user: User, amount: int, config, today: Optional[date] = None, capped: bool = True, bonus_pct: int = 0,
 ) -> int:
