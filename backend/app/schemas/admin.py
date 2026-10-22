@@ -579,6 +579,10 @@ class GameConfigOut(BaseModel):
     mordoboi_move_timeout_hours: int = 12
     mordoboi_live_move_seconds: int = 30
     mordoboi_max_auto_moves: int = 3
+    mordoboi_legend_rating: int = 90
+    mordoboi_legend_reward: int = 150
+    club_ring_win_points: int = 30
+    club_ring_member_cap: int = 300
     bingo_reward_coins: int
     bingo_reward_pack_id: Optional[int] = None
     card_skills_enabled: bool = True
@@ -1204,6 +1208,10 @@ class GameConfigUpdate(BaseModel):
     mordoboi_move_timeout_hours: Optional[int] = Field(default=None, ge=1)
     mordoboi_live_move_seconds: Optional[int] = Field(default=None, ge=10, le=3600)
     mordoboi_max_auto_moves: Optional[int] = Field(default=None, ge=0, le=50)
+    mordoboi_legend_rating: Optional[int] = Field(default=None, ge=40, le=99)
+    mordoboi_legend_reward: Optional[int] = Field(default=None, ge=0)
+    club_ring_win_points: Optional[int] = Field(default=None, ge=0)
+    club_ring_member_cap: Optional[int] = Field(default=None, ge=0)
     bingo_reward_coins: Optional[int] = Field(default=None, ge=0)
     bingo_reward_pack_id: Optional[int] = Field(default=None)
     card_skills_enabled: Optional[bool] = None

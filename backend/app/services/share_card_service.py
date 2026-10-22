@@ -415,3 +415,125 @@ def render_transfer(
     _center(draw, 540, fee_text, _fit(draw, fee_text, FONT_HEAVY, 66, SIZE - 120, 36), border)
     _center(draw, 630, kind_label, _font(FONT_BOLD, 24), accent)
     return _jpeg(img)
+
+
+# --- «Мордобой»: a knockout GIF -------------------------------------------------------
+
+GIF_SIZE = 480
+RED = (229, 57, 53)
+YELLOW = (250, 204, 21)
+
+
+def _gif_card(name: str, rating: int, rarity: str, image: Optional[Path]) -> Image.Image:
+    """A small portrait card (RGBA) — the boxer in the ring."""
+    w, h = 150, 200
+    card = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(card)
+    color = RARITY_COLORS.get(rarity, RARITY_COLORS["common"])
+    draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=16, fill=color)
+    draw.rounded_rectangle([5, 5, w - 6, h - 6], radius=12, fill=(14, 22, 18))
+    art = _load(image)
+    if art is not None:
+        _paste_rounded(card, art, (5, 5, w - 5, h - 52), 12)
+    else:
+        initials = "".join(part[:1] for part in name.split()[:2]).upper() or "?"
+        f = _font(FONT_HEAVY, 54)
+        tw = draw.textlength(initials, font=f)
+        draw.text(((w - tw) / 2, 50), initials, font=f, fill=MIST)
+    draw.rounded_rectangle([8, 8, 52, 38], radius=8, fill=(0, 0, 0))
+    draw.text((14, 10), str(rating), font=_font(FONT_HEAVY, 22), fill=WHITE)
+    nf = _fit(draw, name, FONT_BOLD, 18, w - 16, min_size=11)
+    nw = draw.textlength(name, font=nf)
+    draw.text(((w - nw) / 2, h - 40), name, font=nf, fill=WHITE)
+    return card
+
+
+def _glove(size: int = 64) -> Image.Image:
+    g = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(g)
+    d.ellipse([4, 4, size - 10, size - 14], fill=RED, outline=(120, 20, 20), width=3)
+    d.ellipse([size - 26, size // 2 - 6, size - 4, size // 2 + 14], fill=RED, outline=(120, 20, 20), width=3)  # thumb
+    d.rectangle([10, size - 18, size - 22, size - 4], fill=WHITE, outline=(120, 20, 20), width=2)  # cuff
+    return g
+
+
+def _burst(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int) -> None:
+    import math
+
+    points = []
+    for i in range(16):
+        rad = r if i % 2 == 0 else r * 0.45
+        a = math.pi * 2 * i / 16
+        points.append((cx + rad * math.cos(a), cy + rad * math.sin(a)))
+    draw.polygon(points, fill=YELLOW, outline=(200, 120, 0))
+
+
+def render_knockout_gif(
+    *, winner_name: str, winner_rating: int, winner_rarity: str, winner_image: Optional[Path],
+    loser_name: str, loser_rating: int, loser_rarity: str, loser_image: Optional[Path],
+    headline: str, bot_username: str,
+) -> tuple[bytes, bytes]:
+    """(GIF bytes, JPEG thumbnail of the last frame): the winner's glove
+    flies across the ring, the other card falls, «НОКАУТ!»."""
+    left = _gif_card(winner_name, winner_rating, winner_rarity, winner_image)
+    right = _gif_card(loser_name, loser_rating, loser_rarity, loser_image)
+    glove = _glove()
+
+    def base() -> tuple[Image.Image, ImageDraw.ImageDraw]:
+        img = Image.new("RGB", (GIF_SIZE, GIF_SIZE), BG_TOP)
+        draw = ImageDraw.Draw(img)
+        for y in range(GIF_SIZE):
+            t = y / GIF_SIZE
+            draw.line([(0, y), (GIF_SIZE, y)], fill=tuple(int(BG_TOP[i] + (BG_BOTTOM[i] - BG_TOP[i]) * t) for i in range(3)))
+        for i, color in enumerate(((200, 40, 40), (230, 230, 230), (40, 90, 200))):  # ring ropes
+            draw.line([(0, 120 + i * 14), (GIF_SIZE, 120 + i * 14)], fill=color, width=3)
+        brand = _font(FONT_HEAVY, 24)
+        w1, w2 = draw.textlength("МОРДОБОЙ · VICTOR ", font=brand), draw.textlength("FC", font=brand)
+        x = (GIF_SIZE - w1 - w2) / 2
+        draw.text((x, 18), "МОРДОБОЙ · VICTOR ", font=brand, fill=WHITE)
+        draw.text((x + w1, 18), "FC", font=brand, fill=LIME)
+        foot = _font(FONT_BOLD, 16)
+        tag = f"@{bot_username}"
+        draw.text(((GIF_SIZE - draw.textlength(tag, font=foot)) / 2, GIF_SIZE - 30), tag, font=foot, fill=LIME)
+        return img, draw
+
+    frames: list[Image.Image] = []
+    durations: list[int] = []
+    lx, ly, rx, ry = 40, 170, 290, 170
+
+    def frame(glove_x: Optional[int] = None, angle: float = 0, drop: int = 0, burst: bool = False,
+              title: Optional[str] = None, ms: int = 110) -> None:
+        img, draw = base()
+        img.paste(left, (lx, ly), left)
+        rot = right.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC) if angle else right
+        img.paste(rot, (rx + (right.width - rot.width) // 2, ry + drop + (right.height - rot.height) // 2), rot)
+        if glove_x is not None:
+            img.paste(glove, (glove_x, ly + 60), glove)
+        if burst:
+            _burst(draw, rx + 20, ly + 80, 46)
+            f = _font(FONT_HEAVY, 26)
+            draw.text((rx - 8, ly + 66), "БАМ!", font=f, fill=(120, 20, 20))
+        if title:
+            f = _font(FONT_HEAVY, 64)
+            tw = draw.textlength(title, font=f)
+            draw.text(((GIF_SIZE - tw) / 2 + 3, 384 + 3), title, font=f, fill=(0, 0, 0))
+            draw.text(((GIF_SIZE - tw) / 2, 384), title, font=f, fill=RED)
+            sub = _font(FONT_BOLD, 16)
+            for i, line in enumerate(_wrap(draw, headline, sub, GIF_SIZE - 40, max_lines=2)):
+                draw.text(((GIF_SIZE - draw.textlength(line, font=sub)) / 2, 62 + i * 22), line, font=sub, fill=WHITE)
+        frames.append(img.convert("P", palette=Image.Palette.ADAPTIVE, colors=128))
+        durations.append(ms)
+
+    frame(ms=400)
+    for x in range(lx + 120, rx - 30, 40):
+        frame(glove_x=x, ms=70)
+    frame(glove_x=rx - 30, burst=True, ms=220)
+    for step, angle in enumerate((-12, -30, -55, -80, -90), start=1):
+        frame(angle=angle, drop=step * 12, ms=90)
+    frame(angle=-90, drop=60, title="НОКАУТ!", ms=1800)
+
+    out = io.BytesIO()
+    frames[0].save(out, format="GIF", save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2)
+    thumb = io.BytesIO()
+    frames[-1].convert("RGB").save(thumb, format="JPEG", quality=85)
+    return out.getvalue(), thumb.getvalue()

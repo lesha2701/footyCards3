@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { describeExchange, exchangeWinner, pct } from "@/components/mordoboi/mordoboiMeta";
-import { BRUTALITY_EMOJI, KIND_LABELS, STYLE_OPTIONS } from "@/lib/cosmetics";
+import { BRUTALITY_EMOJI, ENTRANCE_EMOJI, GLOVE_FILTERS, KIND_LABELS, SHORTS_STYLES, STYLE_OPTIONS } from "@/lib/cosmetics";
 import type { MordoboiExchange } from "@/types";
 
 const exchange = (over: Partial<MordoboiExchange> = {}): MordoboiExchange => ({
@@ -43,5 +43,15 @@ describe("Бруталити в магазине «Стиль»", () => {
     expect(KIND_LABELS.brutality).toBe("Бруталити");
     expect(STYLE_OPTIONS.brutality).toEqual(expect.arrayContaining(["underpants", "fart", "flick", "clown"]));
     expect(BRUTALITY_EMOJI.underpants).toBe("🩲");
+  });
+});
+
+describe("Выход на ринг и Каска", () => {
+  it("has a look for every seeded ring item", () => {
+    for (const key of ["pink", "steel", "toxic", "fire", "ice", "neon", "gold"]) expect(GLOVE_FILTERS[key]).toBeTruthy();
+    for (const key of ["black", "white", "blue", "green", "gold", "stars"]) expect(SHORTS_STYLES[key]).toBeTruthy();
+    for (const key of ["confetti", "spotlight", "smoke", "fireworks", "lightning"]) expect(ENTRANCE_EMOJI[key]).toBeTruthy();
+    expect(STYLE_OPTIONS.helmet).toEqual(["helmet"]);
+    expect(KIND_LABELS.ring_entrance).toBe("Выход на ринг");
   });
 });

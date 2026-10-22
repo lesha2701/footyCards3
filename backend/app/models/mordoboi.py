@@ -44,6 +44,9 @@ class MordoboiMatch(Base):
     # StrategoMatch.stake_coins. Always 0 for other opponent types.
     stake_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # normal = a real bout (limits, rewards, rating); legend = «Легенда ринга»
+    # (daily boss bot, its own once-a-day reward, never blocks a real bout).
+    mode: Mapped[str] = mapped_column(String(16), default="normal", nullable=False)
     server_state: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)

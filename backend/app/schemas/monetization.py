@@ -6,7 +6,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.badge import BadgeOut
 from app.schemas.card import UserCardOut
 
-CosmeticKind = Literal["profile_frame", "profile_background", "card_skin", "brutality"]
+CosmeticKind = Literal[
+    "profile_frame", "profile_background", "card_skin", "brutality",
+    "ring_gloves", "ring_shorts", "ring_entrance", "helmet",
+]
 RarityName = Literal["common", "rare", "epic", "legendary", "diamond"]
 
 

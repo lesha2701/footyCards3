@@ -51,11 +51,46 @@ export const BRUTALITY_EMOJI: Record<string, string> = {
   baby_song: "🎶",
 };
 
+/** «Выход на ринг» — gloves recolour the 🥊 with a CSS filter. */
+export const GLOVE_FILTERS: Record<string, string> = {
+  pink: "hue-rotate(300deg) saturate(1.4)",
+  steel: "grayscale(1) brightness(1.3)",
+  toxic: "hue-rotate(95deg) saturate(2) drop-shadow(0 0 6px #4ade80)",
+  fire: "saturate(1.6) drop-shadow(0 0 8px #f97316)",
+  ice: "hue-rotate(185deg) saturate(1.3) drop-shadow(0 0 6px #67e8f9)",
+  neon: "hue-rotate(250deg) saturate(2) drop-shadow(0 0 8px #e879f9)",
+  gold: "sepia(1) saturate(4) hue-rotate(5deg) brightness(1.15) drop-shadow(0 0 6px #fbbf24)",
+};
+
+/** Shorts: a band under the boxer's card. */
+export const SHORTS_STYLES: Record<string, string> = {
+  red: "bg-gradient-to-r from-red-700 via-red-500 to-red-700",
+  black: "bg-gradient-to-r from-zinc-900 via-zinc-700 to-zinc-900",
+  white: "bg-gradient-to-r from-slate-200 via-white to-slate-200",
+  blue: "bg-gradient-to-r from-blue-800 via-blue-500 to-blue-800",
+  green: "bg-gradient-to-r from-emerald-800 via-emerald-500 to-emerald-800",
+  gold: "bg-gradient-to-r from-amber-600 via-yellow-300 to-amber-600",
+  stars: "bg-gradient-to-r from-indigo-800 via-blue-600 to-indigo-800",
+};
+
+/** Entrance animations (components/mordoboi/RingEntrance.tsx). */
+export const ENTRANCE_EMOJI: Record<string, string> = {
+  confetti: "🎊",
+  spotlight: "🔦",
+  smoke: "🌫️",
+  fireworks: "🎆",
+  lightning: "⚡",
+};
+
 export const STYLE_OPTIONS: Record<CosmeticKind, string[]> = {
   profile_frame: Object.keys(FRAME_STYLES),
   profile_background: Object.keys(BACKGROUND_STYLES),
   card_skin: Object.keys(CARD_SKIN_STYLES),
   brutality: Object.keys(BRUTALITY_EMOJI),
+  ring_gloves: Object.keys(GLOVE_FILTERS),
+  ring_shorts: Object.keys(SHORTS_STYLES).filter((k) => k !== "red"),
+  ring_entrance: Object.keys(ENTRANCE_EMOJI),
+  helmet: ["helmet"],
 };
 
 export const KIND_LABELS: Record<CosmeticKind, string> = {
@@ -63,6 +98,10 @@ export const KIND_LABELS: Record<CosmeticKind, string> = {
   profile_background: "Фоны профиля",
   card_skin: "Скины карточек",
   brutality: "Бруталити",
+  ring_gloves: "Перчатки",
+  ring_shorts: "Трусы для ринга",
+  ring_entrance: "Выход на ринг",
+  helmet: "Каска",
 };
 
 export function frameClass(styleKey: string | null | undefined): string | null {

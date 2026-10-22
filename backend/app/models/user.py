@@ -138,6 +138,21 @@ class User(TimestampMixin, Base):
     mordoboi_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     mordoboi_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     mordoboi_card_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # «Легенда ринга»: local day of the last rewarded legend win, lifetime wins.
+    mordoboi_legend_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    mordoboi_legend_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Выход на ринг»: a preset nickname (mordoboi_look.NICKNAMES) and the
+    # equipped ring cosmetics (kinds ring_gloves / ring_shorts / ring_entrance).
+    mordoboi_nickname: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    equipped_ring_gloves_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
+    equipped_ring_shorts_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
+    equipped_ring_entrance_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Футбольный магнат
     magnate_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

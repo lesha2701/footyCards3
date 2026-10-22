@@ -8,6 +8,7 @@ import { fetchMyProfile } from "@/api/profile";
 import {
   acceptMordoboiChallenge,
   applyMordoboiBrutality,
+  startMordoboiLegend,
   cancelMordoboiChallenge,
   createMordoboiBotMatch,
   createMordoboiChallenge,
@@ -23,6 +24,7 @@ import ShareButton from "@/components/common/ShareButton";
 import { IconChevronLeft, IconCoin } from "@/components/icons";
 import BoxingRing from "@/components/mordoboi/BoxingRing";
 import BrutalityShow from "@/components/mordoboi/BrutalityShow";
+import RingEntrance from "@/components/mordoboi/RingEntrance";
 import { ACTION_META, ACTION_ORDER, WIN_REASON_LABELS, describeExchange } from "@/components/mordoboi/mordoboiMeta";
 import { formatGameError } from "@/lib/errors";
 import { staticUrl } from "@/lib/api";
@@ -35,10 +37,22 @@ const RESULT_TITLES: Record<string, string> = { win: "Победа!", draw: "Н�
 const OPPONENT_LABELS: Record<string, string> = { bot: "Бот", friend: "Друг", online: "Онлайн", chat: "Вызов из чата" };
 // Beaten side: the finisher scene is shown once per bout on this device.
 const SEEN_BRUTALITY_KEY = "mordoboi.seenBrutality";
+const SEEN_ENTRANCE_KEY = "mordoboi.seenEntrance";
 
 function brutalitySeen(id: number): boolean {
   try {
     return (localStorage.getItem(SEEN_BRUTALITY_KEY) ?? "").split(",").includes(String(id));
+  } catch {
+    return true;
+  }
+}
+
+function seenOnce(key: string, id: number): boolean {
+  try {
+    const ids = (localStorage.getItem(key) ?? "").split(",").filter(Boolean);
+    if (ids.includes(String(id))) return true;
+    localStorage.setItem(key, [...ids.slice(-50), String(id)].join(","));
+    return false;
   } catch {
     return true;
   }
@@ -64,6 +78,7 @@ export default function MordoboiMatchPage() {
   const [confirmForfeit, setConfirmForfeit] = useState(false);
   const [brutalityPicker, setBrutalityPicker] = useState(false);
   const [brutalityOpen, setBrutalityOpen] = useState(false);
+  const [entranceOpen, setEntranceOpen] = useState(false);
   const seenN = useRef<number | null>(null);
   const seenStatus = useRef<string | null>(null);
 
@@ -106,6 +121,13 @@ export default function MordoboiMatchPage() {
     }
     seenStatus.current = match.status;
   }, [match]);
+
+  // «Выход на ринг»: once per bout, when it starts with both boxers in.
+  useEffect(() => {
+    if (match?.status === "in_progress" && match.opponent && match.log.length === 0 && !seenOnce(SEEN_ENTRANCE_KEY, match.id)) {
+      setEntranceOpen(true);
+    }
+  }, [match?.status, match?.opponent, match?.log.length, match?.id]);
 
   // The beaten side sees the finisher once, whenever they open the bout.
   useEffect(() => {
@@ -168,7 +190,9 @@ export default function MordoboiMatchPage() {
   });
   const rematch = useMutation({
     mutationFn: (m: MordoboiMatch) =>
-      m.opponent_type === "friend" && m.opponent_user_id
+      m.mode === "legend"
+        ? startMordoboiLegend()
+        : m.opponent_type === "friend" && m.opponent_user_id
         ? createMordoboiChallenge(m.opponent_user_id)
         : createMordoboiBotMatch(m.difficulty === "easy" ? "easy" : "hard"),
     onSuccess: (m) => {
@@ -205,6 +229,7 @@ export default function MordoboiMatchPage() {
       <div className="flex items-center justify-between">
         <h1 className="font-display text-lg font-bold text-ink-chalk">
           {inPlay ? `Раунд ${match.round} из ${match.rounds}` : pending ? "Вызов" : "Бой окончен"}
+          {match.mode === "legend" && <span className="ml-2 text-sm text-yellow-400">· Легенда ринга</span>}
         </h1>
         {inPlay && (
           <div className="flex gap-1" aria-label={`Обмен ${match.exchange} из ${match.exchanges_per_round}`}>
@@ -215,7 +240,13 @@ export default function MordoboiMatchPage() {
         )}
       </div>
 
+      {match.legend_tagline && (
+        <p className="rounded-2xl bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200">👑 {match.legend_tagline}</p>
+      )}
       <BoxingRing me={match.me} opponent={match.opponent} hit={hit} />
+      {match.opponent && (
+        <RingEntrance open={entranceOpen} me={match.me} opponent={match.opponent} onDone={() => setEntranceOpen(false)} />
+      )}
 
       {match.scorecards.length > 0 && (
         <div className="flex items-center justify-between rounded-2xl bg-bg-surface px-4 py-2 text-xs text-ink-mist">
@@ -446,16 +477,21 @@ export default function MordoboiMatchPage() {
                 </button>
               )}
               {match.result === "win" && (
-                <ShareButton kind="mordoboi_win" id={match.id} label="Похвастаться в чате" className="mt-2" />
+                <ShareButton
+                  kind="mordoboi_win"
+                  id={match.id}
+                  label={match.win_reason === "ko" ? "Поделиться гифкой нокаута" : "Похвастаться в чате"}
+                  className="mt-2"
+                />
               )}
               <div className="mt-3 flex gap-2">
-                {match.opponent_type !== "online" && match.opponent_type !== "chat" && (
+                {(match.mode === "legend" || (match.opponent_type !== "online" && match.opponent_type !== "chat")) && (
                   <button
                     onClick={() => rematch.mutate(match)}
                     disabled={rematch.isPending}
                     className="flex-1 rounded-2xl bg-yellow-500 py-3 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-50"
                   >
-                    Реванш
+                    {match.mode === "legend" ? "Ещё раз" : "Реванш"}
                   </button>
                 )}
                 <button onClick={() => navigate("/play/mordoboi")} className="flex-1 rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-mist active:scale-95">

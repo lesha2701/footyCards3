@@ -280,7 +280,37 @@ def _counter_to(action: str) -> list[str]:
     }[action]
 
 
-def bot_choose(state: dict, side: str, rng: random.Random, difficulty: str = "hard") -> str:
+# «Легенда ринга» styles: a fixed habit the player can read and beat.
+# Each maps to base weights; "copy" / "counter" react to the opponent's
+# previous action instead.
+STYLE_WEIGHTS: dict[str, dict[str, float]] = {
+    "hooker": {"hook": 6, "jab": 1, "uppercut": 1, "block": 1, "dodge": 0.5},
+    "wall": {"block": 6, "uppercut": 1.5, "jab": 1, "hook": 0.5, "dodge": 0.5},
+    "moth": {"dodge": 5, "jab": 2.5, "hook": 0.5, "uppercut": 0.3, "block": 1},
+    "machinegun": {"jab": 6, "hook": 1, "block": 1, "uppercut": 0.5, "dodge": 0.5},
+    "hammer": {"uppercut": 5, "block": 2, "hook": 1, "jab": 0.5, "dodge": 0.3},
+}
+STYLES = (*STYLE_WEIGHTS, "copy", "counter")
+
+
+def _style_weights(state: dict, side: str, style: str, options: list[str]) -> dict[str, float]:
+    opp = other_side(side)
+    last = state["log"][-1]["actions"][opp] if state["log"] else None
+    if style == "copy":
+        base = {a: 1.0 for a in options}
+        if last in base:
+            base[last] += 6  # mirrors the opponent's previous move
+        return base
+    if style == "counter":
+        base = {a: 1.0 for a in options}
+        for a in _counter_to(last) if last else ():
+            if a in base:
+                base[a] += 4
+        return base
+    return {a: STYLE_WEIGHTS[style].get(a, 1.0) for a in options}
+
+
+def bot_choose(state: dict, side: str, rng: random.Random, difficulty: str = "hard", style: Optional[str] = None) -> str:
     """Picks from what the opponent did before — never from its current
     (secret) pick, which the bot is not given."""
     me = state["fighters"][side]
@@ -288,7 +318,11 @@ def bot_choose(state: dict, side: str, rng: random.Random, difficulty: str = "ha
     them = state["fighters"][opp]
     options = available_actions(me)
     weights = {a: 1.0 for a in options}
-    if difficulty != "easy":
+    if style in STYLES:
+        weights = _style_weights(state, side, style, options)
+        if them["hp"] <= 15 and "uppercut" in weights:
+            weights["uppercut"] += 2  # every legend goes for the finish
+    elif difficulty != "easy":
         recent = [e["actions"][opp] for e in state["log"][-4:]]
         if recent:
             favourite = max(set(recent), key=recent.count)

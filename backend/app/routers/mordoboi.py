@@ -11,6 +11,9 @@ from app.schemas.mordoboi import (
     MordoboiBoxerOut,
     MordoboiBoxerSetRequest,
     MordoboiChallengeRequest,
+    MordoboiClubRingOut,
+    MordoboiLegendOut,
+    MordoboiNicknameRequest,
     MordoboiInfoOut,
     MordoboiMatchOut,
     MordoboiOpenChallengePreviewOut,
@@ -44,6 +47,29 @@ async def set_boxer(
     payload: MordoboiBoxerSetRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     return await mordoboi_service.set_boxer(db, user, payload.user_card_id)
+
+
+@router.put("/nickname", response_model=MordoboiBoxerOut)
+async def set_nickname(
+    payload: MordoboiNicknameRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await mordoboi_service.set_nickname(db, user, payload.nickname)
+
+
+@router.get("/legend", response_model=MordoboiLegendOut)
+async def get_legend(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await mordoboi_service.get_legend(db, user)
+
+
+@router.post("/legend/start", response_model=MordoboiMatchOut)
+async def start_legend(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"mordoboi_legend:{user.id}", max_calls=20, window_seconds=60)
+    return await mordoboi_service.start_legend(db, user)
+
+
+@router.get("/club-ring", response_model=MordoboiClubRingOut)
+async def get_club_ring(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await mordoboi_service.get_club_ring(db, user)
 
 
 @router.post("/matches/bot", response_model=MordoboiMatchOut)

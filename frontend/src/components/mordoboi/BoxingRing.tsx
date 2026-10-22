@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 
 import { staticUrl } from "@/lib/api";
+import { GLOVE_FILTERS, SHORTS_STYLES } from "@/lib/cosmetics";
 import { RARITY_GRADIENTS } from "@/lib/rarity";
 import type { MordoboiExchange, MordoboiFighter, Rarity } from "@/types";
 
@@ -88,6 +89,11 @@ function Corner({ fighter, side, hit }: { fighter: MordoboiFighter; side: "left"
             )}
           </div>
         </motion.div>
+        {/* «Выход на ринг»: the boxer's shorts under the card */}
+        <span
+          className={`absolute inset-x-8 bottom-0 h-2.5 rounded-full shadow ${SHORTS_STYLES[fighter.look?.shorts ?? "red"] ?? SHORTS_STYLES.red}`}
+          aria-hidden
+        />
 
         {/* the glove flies toward the other corner */}
         <AnimatePresence>
@@ -95,7 +101,10 @@ function Corner({ fighter, side, hit }: { fighter: MordoboiFighter; side: "left"
             <motion.span
               key={`glove-${hit.n}`}
               className="absolute top-12 z-10 text-4xl drop-shadow-lg"
-              style={mine ? { right: 0 } : { left: 0, transform: "scaleX(-1)" }}
+              style={{
+                ...(mine ? { right: 0 } : { left: 0, transform: "scaleX(-1)" }),
+                filter: fighter.look?.gloves ? GLOVE_FILTERS[fighter.look.gloves] : undefined,
+              }}
               initial={{ x: 0, scale: 0.6, opacity: 0 }}
               animate={{
                 x: [0, 70 * dir, 55 * dir, 40 * dir],
@@ -134,6 +143,11 @@ function Corner({ fighter, side, hit }: { fighter: MordoboiFighter; side: "left"
         </AnimatePresence>
       </div>
 
+      {fighter.look?.nickname && (
+        <p className="-mb-2 w-full truncate text-center text-micro font-black uppercase tracking-wider text-yellow-400">
+          «{fighter.look.nickname}»
+        </p>
+      )}
       <p className="w-full truncate text-center font-display text-sm font-bold text-ink-chalk">
         {fighter.card?.display_name ?? fighter.name}
       </p>

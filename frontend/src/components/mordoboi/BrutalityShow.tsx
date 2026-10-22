@@ -62,7 +62,7 @@ export default function BrutalityShow({ open, brutality, victimName, matchId, on
             animate={{ scale: 1, opacity: 1, rotate: -4 }}
             transition={{ type: "spring", stiffness: 300, damping: 12 }}
           >
-            Бруталити!
+            {brutality.reflected ? "Каска! 🪖" : "Бруталити!"}
           </motion.p>
 
           <div className="relative mt-6 flex h-56 w-56 items-center justify-center">
@@ -72,7 +72,7 @@ export default function BrutalityShow({ open, brutality, victimName, matchId, on
               animate={{ rotate: [0, -12, 10, -6, 0], scale: [1, 0.92, 1.05, 1] }}
               transition={{ delay: 0.55, duration: 0.8 }}
             >
-              {brutality.by_me ? "😵" : "😵‍💫"}
+              {brutality.reflected ? (brutality.by_me ? "😱" : "😎") : brutality.by_me ? "😵" : "😵‍💫"}
             </motion.span>
             {/* the prop */}
             <motion.span
@@ -116,17 +116,19 @@ export default function BrutalityShow({ open, brutality, victimName, matchId, on
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1 }}
           >
-            {brutality.by_me ? `Ты ${brutality.text}` : `Соперник ${brutality.text}`}
+            {brutality.reflected ? brutality.text : brutality.by_me ? `Ты ${brutality.text}` : `Соперник ${brutality.text}`}
           </motion.p>
           <p className="mt-1 text-caption text-ink-mist">
-            {brutality.by_me ? `${victimName} это запомнит.` : "Отыграйся — и ответь своим бруталити."} «{brutality.name}»
+            {brutality.reflected
+              ? brutality.by_me ? "Бумеранг! Купи себе Каску в магазине «Стиль»." : `${victimName} такого не ожидал.`
+              : brutality.by_me ? `${victimName} это запомнит.` : "Отыграйся — и ответь своим бруталити."} «{brutality.name}»
           </p>
           {brutality.by_me && brutality.bonus_coins > 0 && (
             <p className="mt-1 font-mono text-sm font-bold text-accent-lime">+{brutality.bonus_coins} монет к выигрышу</p>
           )}
 
           <div className="mt-5 flex w-full max-w-xs flex-col gap-2" onClick={(e) => e.stopPropagation()}>
-            {brutality.by_me && <ShareButton kind="mordoboi_win" id={matchId} label="Похвастаться в чате" />}
+            {brutality.by_me !== brutality.reflected && <ShareButton kind="mordoboi_win" id={matchId} label="Похвастаться в чате" />}
             <button onClick={onClose} className="rounded-xl bg-white/10 py-2.5 text-sm font-semibold text-ink-mist active:scale-95">
               Закрыть
             </button>

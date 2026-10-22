@@ -42,6 +42,10 @@ from app.models.mordoboi import MordoboiMatch, MordoboiQueueEntry
 from app.models.player import Player
 from app.models.user import User
 from app.schemas.mordoboi import (
+    MordoboiClubRingOpponentOut,
+    MordoboiClubRingOut,
+    MordoboiLegendOut,
+    MordoboiLookOut,
     MordoboiBoxerOptionOut,
     MordoboiBoxerOut,
     MordoboiBoxerStatsOut,
@@ -57,6 +61,8 @@ from app.schemas.mordoboi import (
 )
 from app.schemas.ranking import RankingMetric
 from app.services import mordoboi_brutality as brutality
+from app.services import mordoboi_legends as legends
+from app.services import mordoboi_look as look_service
 from app.services import mordoboi_engine as engine
 from app.services import ranking_service, stake_guard_service
 from app.services.game_config_service import get_config
@@ -107,6 +113,13 @@ def _player_fighter(player: Player, config: GameConfig, user_card_id: Optional[i
     return engine.new_fighter(stats, _card_snapshot(player, user_card_id, rating))
 
 
+async def _human_fighter(db: AsyncSession, user: User, config: GameConfig) -> dict:
+    """The user's saved boxer as a fighter, with their ring look snapshotted."""
+    fighter = _card_fighter(await _boxer_card(db, user), config)
+    fighter["look"] = await look_service.look_for(db, user)
+    return fighter
+
+
 def _card_fighter(card: UserCard, config: GameConfig) -> dict:
     return _player_fighter(card.player, config, card.id, card_rating_bonus(card))
 
@@ -141,10 +154,21 @@ async def get_boxer(db: AsyncSession, user: User) -> MordoboiBoxerOut:
     config = await get_config(db)
     cards = await _usable_cards(db, user.id)
     options = [_option(_card_fighter(c, config)) for c in cards]
+    look = MordoboiLookOut(**await look_service.look_for(db, user))
+    nicknames = list(look_service.NICKNAMES)
     if not cards:
-        return MordoboiBoxerOut(selected=None, options=[])
+        return MordoboiBoxerOut(selected=None, options=[], look=look, nickname_options=nicknames)
     chosen = next((o for o in options if o.card.user_card_id == user.mordoboi_card_id), options[0])
-    return MordoboiBoxerOut(selected=chosen, options=options)
+    return MordoboiBoxerOut(selected=chosen, options=options, look=look, nickname_options=nicknames)
+
+
+async def set_nickname(db: AsyncSession, user: User, nickname: Optional[str]) -> MordoboiBoxerOut:
+    if nickname is not None and nickname not in look_service.NICKNAMES:
+        raise ConflictError("Выбери кличку из списка")
+    user.mordoboi_nickname = nickname
+    db.add(user)
+    await db.commit()
+    return await get_boxer(db, user)
 
 
 async def set_boxer(db: AsyncSession, user: User, user_card_id: int) -> MordoboiBoxerOut:
@@ -188,6 +212,7 @@ async def get_info(db: AsyncSession, user: User) -> MordoboiInfoOut:
         move_timeout_hours=config.mordoboi_move_timeout_hours, live_move_seconds=config.mordoboi_live_move_seconds,
         challenge_expiry_hours=config.mordoboi_challenge_expiry_hours, max_auto_moves=config.mordoboi_max_auto_moves,
         stamina_cost=dict(engine.STAMINA_COST), damage=dict(engine.BASE_DAMAGE),
+        legend_reward=config.mordoboi_legend_reward,
     )
 
 
@@ -227,6 +252,7 @@ async def _has_active_match(db: AsyncSession, user_id: int, exclude_match_id: Op
     conditions = [
         or_(MordoboiMatch.user_id == user_id, MordoboiMatch.opponent_user_id == user_id),
         MordoboiMatch.status == MordoboiMatchStatus.in_progress,
+        MordoboiMatch.mode == "normal",
     ]
     if exclude_match_id is not None:
         conditions.append(MordoboiMatch.id != exclude_match_id)
@@ -289,7 +315,7 @@ async def create_bot_match(db: AsyncSession, user: User, difficulty: str = "hard
     _require_enabled(config)
     if await _has_active_match(db, user.id):
         raise ConflictError(_ACTIVE_MATCH_MSG)
-    me = _card_fighter(await _boxer_card(db, user), config)
+    me = await _human_fighter(db, user, config)
     bot = await _bot_fighter(db, me["card"]["rating"], config)
     locked = await _consume_hourly_slot(db, user.id, config)
     state = _new_state(config, me, bot)
@@ -316,7 +342,7 @@ async def create_challenge(db: AsyncSession, sender: User, receiver_id: int) -> 
         raise ConflictError("You cannot challenge yourself")
     if receiver.is_banned:
         raise ConflictError("This user is banned and cannot be challenged")
-    me = _card_fighter(await _boxer_card(db, sender), config)
+    me = await _human_fighter(db, sender, config)
     sender = await _consume_hourly_slot(db, sender.id, config)
     match = MordoboiMatch(
         user_id=sender.id, opponent_user_id=receiver.id, opponent_name=receiver.full_display_name(),
@@ -349,7 +375,7 @@ async def create_open_challenge(db: AsyncSession, sender: User, stake_coins: int
     await stake_guard_service.ensure_can_create(db, sender, stake_coins, config)
     if stake_coins > 0 and sender.balance < stake_coins:
         raise ConflictError("Не хватает монет для такой ставки")
-    me = _card_fighter(await _boxer_card(db, sender), config)
+    me = await _human_fighter(db, sender, config)
     sender = await _consume_hourly_slot(db, sender.id, config)
     match = MordoboiMatch(
         user_id=sender.id, opponent_user_id=None, opponent_name="",
@@ -395,7 +421,7 @@ async def accept_open_challenge(db: AsyncSession, user: User, match_id: int) -> 
     _require_enabled(config)
     if await _has_active_match(db, match.user_id, exclude_match_id=match.id):
         raise ConflictError("Автор вызова сейчас на другом ринге — попробуй позже")
-    fighter = _card_fighter(await _boxer_card(db, user), config)
+    fighter = await _human_fighter(db, user, config)
 
     # Both rows locked in id order (deadlock-safe); the acceptor's hourly
     # slot and active-bout check then run under that lock.
@@ -467,15 +493,26 @@ async def apply_brutality(db: AsyncSession, user: User, match_id: int, cosmetic_
             match.user_reward_coins += bonus
         else:
             match.opponent_reward_coins += bonus
+    loser_uid = _uid(match, engine.other_side(side)) if match.opponent_type != MordoboiOpponentType.bot else None
+    # The beaten side's «Каска» bounces it back — and is used up.
+    helmet = await look_service.helmet_of(db, loser_uid) if loser_uid else None
+    if helmet is not None:
+        await db.delete(helmet)
     state["brutality"] = {
         "side": side, "style_key": cosmetic.style_key, "name": cosmetic.name,
-        "image_path": cosmetic.image_path, "bonus": bonus,
+        "image_path": cosmetic.image_path, "bonus": bonus, "reflected": helmet is not None,
     }
     _save_state(match, state)
     match.version += 1
     db.add(match)
-    loser_uid = _uid(match, engine.other_side(side)) if match.opponent_type != MordoboiOpponentType.bot else None
-    if loser_uid:
+    if loser_uid and helmet is not None:
+        await notify(
+            db, loser_uid, NotificationType.mordoboi_helmet, "Каска сработала! 🪖",
+            f"{user.full_display_name()} хотел(а) сделать тебе бруталити «{cosmetic.name}», "
+            "но Каска отразила его обратно. Похвастайся в чате!",
+            RELATED, match.id,
+        )
+    elif loser_uid:
         await notify(
             db, loser_uid, NotificationType.mordoboi_brutality,
             f"Бруталити! {brutality.emoji(cosmetic.style_key)}",
@@ -488,9 +525,17 @@ async def apply_brutality(db: AsyncSession, user: User, match_id: int, cosmetic_
 
 
 def brutality_share_text(match: MordoboiMatch, user: User, opponent_name: str) -> str:
-    """«Я победил игрока Виктор в «Мордобое» и сделал ему Бруталити: …»."""
+    """«Я победил игрока Виктор в «Мордобое» и сделал ему Бруталити: …»
+    (or, for the beaten side whose «Каска» bounced it, the comeback line)."""
     side = "user" if user.id == match.user_id else "opponent"
     done = (match.server_state or {}).get("brutality")
+    if done and done.get("reflected"):
+        if done.get("side") == side:
+            return f"🥊 Я победил игрока {opponent_name} в «Мордобое», но его Каска отразила моё бруталити «{done['name']}» 🪖"
+        return (
+            f"🪖 {opponent_name} хотел сделать мне Бруталити «{done['name']}», но моя Каска отразила его обратно — "
+            f"получил сам! {brutality.emoji(done['style_key'])}"
+        )
     base = f"🥊 Я победил игрока {opponent_name} в «Мордобое»"
     if done and done.get("side") == side:
         return (
@@ -545,7 +590,7 @@ async def accept_challenge(db: AsyncSession, user: User, match_id: int) -> Mordo
     _require_enabled(config)
     if await _has_active_match(db, match.user_id, exclude_match_id=match.id):
         raise ConflictError("Соперник сейчас на другом ринге — попробуй позже")
-    fighter = _card_fighter(await _boxer_card(db, user), config)
+    fighter = await _human_fighter(db, user, config)
     locked = await _consume_hourly_slot(db, user.id, config, exclude_match_id=match.id)
 
     state = dict(match.server_state)
@@ -666,7 +711,10 @@ async def submit_pick(db: AsyncSession, user: User, match_id: int, action: str, 
     state["last_activity_at"] = now.isoformat()
     other = engine.other_side(side)
     if match.opponent_type == MordoboiOpponentType.bot:
-        bot_action = engine.bot_choose(state, other, _rng(match.id, state, "bot"), state.get("difficulty", "hard"))
+        bot_action = engine.bot_choose(
+            state, other, _rng(match.id, state, "bot"), state.get("difficulty", "hard"),
+            style=(state.get("legend") or {}).get("style"),
+        )
         _record_pick(state, other, bot_action)
 
     if state["picks"][other] is None:
@@ -765,6 +813,9 @@ async def _finish_match(
     match.status = MordoboiMatchStatus.finished
     match.resolved_at = datetime.now(timezone.utc)
     state["deadline"] = None
+    if match.mode == "legend":
+        await _finish_legend(db, match, state, config, winner, quitters)
+        return
 
     is_bot = match.opponent_type == MordoboiOpponentType.bot
     side_uid = {"user": match.user_id, "opponent": None if is_bot else match.opponent_user_id}
@@ -822,6 +873,165 @@ async def _finish_match(
     _save_state(match, state)
     db.add(match)
     await db.commit()
+
+
+async def _finish_legend(
+    db: AsyncSession, match: MordoboiMatch, state: dict, config: GameConfig, winner: str, quitters,
+) -> None:
+    """«Легенда ринга»: a win pays the legend reward once per local day;
+    nothing else (no rating, limits or regular rewards)."""
+    if winner == "user" and "user" not in quitters:
+        user = await lock_user_for_update(db, match.user_id)
+        user.mordoboi_legend_wins += 1
+        if user.mordoboi_legend_day != local_today():
+            user.mordoboi_legend_day = local_today()
+            reward = 0 if user.game_rewards_blocked else config.mordoboi_legend_reward
+            if reward > 0:
+                await credit_coins(
+                    db, user, reward, TransactionType.mordoboi_legend_reward,
+                    f"Победа над «Легендой ринга» {state.get('legend', {}).get('name', '')}".strip(), RELATED, match.id,
+                )
+            match.user_reward_coins = reward
+        db.add(user)
+    _save_state(match, state)
+    db.add(match)
+    await db.commit()
+
+
+def _legend_fighter(legend: dict, config: GameConfig) -> dict:
+    rating = config.mordoboi_legend_rating
+    stats = engine.boxer_stats(rating, rating + 2, rating - 2, legend["position"], config.mordoboi_base_hp)
+    card = {
+        "user_card_id": None, "player_id": 0, "display_name": legend["name"], "position": legend["position"],
+        "image_path": None, "rarity": "legendary", "rating": rating,
+    }
+    fighter = engine.new_fighter(stats, card)
+    fighter["look"] = dict(legend["look"])
+    return fighter
+
+
+async def _active_legend_id(db: AsyncSession, user_id: int) -> Optional[int]:
+    result = await db.execute(
+        select(MordoboiMatch.id).where(
+            MordoboiMatch.user_id == user_id, MordoboiMatch.mode == "legend",
+            MordoboiMatch.status == MordoboiMatchStatus.in_progress,
+        ).order_by(MordoboiMatch.id.desc()).limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_legend(db: AsyncSession, user: User) -> MordoboiLegendOut:
+    await _sweep(db)
+    config = await get_config(db)
+    legend = legends.legend_for(local_today())
+    return MordoboiLegendOut(
+        code=legend["code"], name=legend["name"], nickname=legend["nickname"], tagline=legend["tagline"],
+        position=legend["position"], rating=config.mordoboi_legend_rating, reward=config.mordoboi_legend_reward,
+        beaten_today=user.mordoboi_legend_day == local_today(), wins_total=user.mordoboi_legend_wins,
+        active_match_id=await _active_legend_id(db, user.id), look=MordoboiLookOut(**legend["look"]),
+    )
+
+
+async def start_legend(db: AsyncSession, user: User) -> MordoboiMatchOut:
+    """Today's legend bout — resumes the one already going. No hourly slot,
+    never counts as the «one active bout»."""
+    config = await get_config(db)
+    _require_enabled(config)
+    locked = await lock_user_for_update(db, user.id)
+    active = await _active_legend_id(db, locked.id)
+    if active is not None:
+        await db.commit()
+        return await get_match(db, locked, active)
+    legend = legends.legend_for(local_today())
+    me = await _human_fighter(db, locked, config)
+    state = _new_state(config, me, _legend_fighter(legend, config))
+    state["legend"] = {k: legend[k] for k in ("code", "name", "nickname", "style", "tagline")}
+    state["difficulty"] = "legend"
+    match = MordoboiMatch(
+        user_id=locked.id, opponent_user_id=None, opponent_name=f"«{legend['nickname']}» {legend['name']}",
+        opponent_type=MordoboiOpponentType.bot, status=MordoboiMatchStatus.in_progress, mode="legend",
+        server_state=state,
+    )
+    db.add(match)
+    await db.commit()
+    await db.refresh(match)
+    return await _hydrate_match(db, match, locked)
+
+
+# ---------------------------------------------------------------------------
+# «Клубный ринг» — Mordoboi bouts between clubs at war
+# ---------------------------------------------------------------------------
+
+async def ring_wins(db: AsyncSession, starts_at: datetime, ends_at: datetime, club_a: int, club_b: int) -> dict[int, int]:
+    """user_id -> «Мордобой» wins over a member of the other club, bouts
+    finished inside [starts_at, ends_at). Membership is the current one."""
+    from app.models.club import ClubMember
+
+    members = dict((await db.execute(
+        select(ClubMember.user_id, ClubMember.club_id).where(ClubMember.club_id.in_([club_a, club_b]))
+    )).all())
+    if not members:
+        return {}
+    rows = (await db.execute(
+        select(MordoboiMatch.user_id, MordoboiMatch.opponent_user_id, MordoboiMatch.result).where(
+            MordoboiMatch.status == MordoboiMatchStatus.finished, MordoboiMatch.mode == "normal",
+            MordoboiMatch.opponent_user_id.is_not(None), MordoboiMatch.opponent_type != MordoboiOpponentType.bot,
+            MordoboiMatch.resolved_at >= starts_at, MordoboiMatch.resolved_at < ends_at,
+            MordoboiMatch.user_id.in_(members.keys()), MordoboiMatch.opponent_user_id.in_(members.keys()),
+        )
+    )).all()
+    wins: dict[int, int] = {}
+    for a, b, result in rows:
+        if members.get(a) == members.get(b) or result not in (MatchResult.win, MatchResult.loss):
+            continue
+        winner = a if result == MatchResult.win else b
+        wins[winner] = wins.get(winner, 0) + 1
+    return wins
+
+
+def ring_points(wins: int, config: GameConfig) -> int:
+    return min(wins * max(0, config.club_ring_win_points), max(0, config.club_ring_member_cap))
+
+
+async def get_club_ring(db: AsyncSession, user: User) -> MordoboiClubRingOut:
+    from app.models.club import Club, ClubMember
+    from app.models.club_war import ClubWar
+    from app.services.club_league_service import week_start_for
+
+    config = await get_config(db)
+    out = MordoboiClubRingOut(
+        active=False, win_points=config.club_ring_win_points, member_cap=config.club_ring_member_cap,
+    )
+    membership = (await db.execute(select(ClubMember).where(ClubMember.user_id == user.id))).scalar_one_or_none()
+    if membership is None or not config.club_war_enabled:
+        return out
+    club_id = membership.club_id
+    war = (await db.execute(
+        select(ClubWar).where(
+            ClubWar.week_start == week_start_for(), ClubWar.status == "active",
+            or_(ClubWar.club_a_id == club_id, ClubWar.club_b_id == club_id),
+        )
+    )).scalar_one_or_none()
+    now = datetime.now(timezone.utc)
+    if war is None or ensure_aware(war.ends_at) <= now:
+        return out
+    other_id = war.club_b_id if war.club_a_id == club_id else war.club_a_id
+    mine, theirs = await db.get(Club, club_id), await db.get(Club, other_id)
+    wins = await ring_wins(db, ensure_aware(war.starts_at), now, war.club_a_id, war.club_b_id)
+    members = dict((await db.execute(
+        select(ClubMember.user_id, ClubMember.club_id).where(ClubMember.club_id.in_([club_id, other_id]))
+    )).all())
+    opponents = (await db.execute(
+        select(User).join(ClubMember, ClubMember.user_id == User.id)
+        .where(ClubMember.club_id == other_id, User.is_banned.is_(False)).order_by(User.id).limit(50)
+    )).scalars().all()
+    out.active = True
+    out.my_club, out.opponent_club, out.ends_at = mine.name, theirs.name, ensure_aware(war.ends_at)
+    out.my_points = ring_points(wins.get(user.id, 0), config)
+    out.my_club_points = sum(ring_points(w, config) for uid, w in wins.items() if members.get(uid) == club_id)
+    out.opponent_club_points = sum(ring_points(w, config) for uid, w in wins.items() if members.get(uid) == other_id)
+    out.opponents = [MordoboiClubRingOpponentOut(user_id=u.id, name=u.full_display_name()) for u in opponents]
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -920,6 +1130,7 @@ def _fighter_out(fighter: Optional[dict], name: str) -> Optional[MordoboiFighter
         return None
     return MordoboiFighterOut(
         name=name, card=MordoboiCardOut(**fighter["card"]) if fighter.get("card") else None,
+        look=MordoboiLookOut(**(fighter.get("look") or {})),
         **{k: fighter[k] for k in (
             "power", "speed", "guard", "hp", "max_hp", "stamina", "max_stamina", "landed", "damage_dealt",
         )},
@@ -967,13 +1178,22 @@ async def _hydrate_match(db: AsyncSession, match: MordoboiMatch, viewer_user: Us
     brutality_out = None
     if done:
         by_me = done["side"] == viewer
+        reflected = bool(done.get("reflected"))
+        if reflected:
+            text = (
+                f"Каска соперника отразила твоё бруталити «{done['name']}» — досталось тебе" if by_me
+                else f"Твоя Каска отразила бруталити «{done['name']}» — досталось сопернику"
+            )
+        else:
+            text = brutality.phrase(done["style_key"], done["name"], not by_me)
         brutality_out = MordoboiBrutalityOut(
             by_me=by_me, style_key=done["style_key"], name=done["name"], emoji=brutality.emoji(done["style_key"]),
-            image_path=done.get("image_path"), bonus_coins=done.get("bonus", 0),
-            text=brutality.phrase(done["style_key"], done["name"], not by_me),
+            image_path=done.get("image_path"), bonus_coins=done.get("bonus", 0), reflected=reflected,
+            text=text,
         )
     return MordoboiMatchOut(
         id=match.id, version=match.version, opponent_type=match.opponent_type, opponent_name=opponent_name,
+        mode=match.mode, legend_tagline=(state.get("legend") or {}).get("tagline"),
         opponent_user_id=opponent_user_id, status=match.status, viewer_side=viewer,
         difficulty=state.get("difficulty"), live=bool(state.get("live")),
         rounds=state.get("rounds", 0), exchanges_per_round=state.get("exchanges_per_round", 0),
@@ -993,7 +1213,10 @@ async def _hydrate_match(db: AsyncSession, match: MordoboiMatch, viewer_user: Us
         rating_delta=match.user_rating_delta if viewer == "user" else match.opponent_rating_delta,
         stake_coins=match.stake_coins,
         brutality=brutality_out,
-        can_brutality=match.status == MordoboiMatchStatus.finished and result == MatchResult.win and not done,
+        can_brutality=(
+            match.status == MordoboiMatchStatus.finished and result == MatchResult.win and not done
+            and match.mode == "normal"
+        ),
         created_at=match.created_at, expires_at=match.expires_at, resolved_at=match.resolved_at,
     )
 
@@ -1002,7 +1225,10 @@ async def list_matches(db: AsyncSession, user: User) -> list[MordoboiMatchOut]:
     await _sweep(db)
     result = await db.execute(
         select(MordoboiMatch)
-        .where(or_(MordoboiMatch.user_id == user.id, MordoboiMatch.opponent_user_id == user.id))
+        .where(
+            or_(MordoboiMatch.user_id == user.id, MordoboiMatch.opponent_user_id == user.id),
+            MordoboiMatch.mode == "normal",
+        )
         .order_by(MordoboiMatch.created_at.desc()).limit(30)
     )
     return [await _hydrate_match(db, m, user) for m in result.scalars().all()]
@@ -1109,7 +1335,7 @@ async def get_search_status(db: AsyncSession, user: User) -> tuple[str, Optional
         try:
             if await _has_active_match(db, u.id) or u.mordoboi_hourly_attempts >= config.hourly_game_limit:
                 raise ConflictError("stale")
-            fighters[side] = _card_fighter(await _boxer_card(db, u), config)
+            fighters[side] = await _human_fighter(db, u, config)
         except ConflictError:
             stale.append(entry)
     if stale:

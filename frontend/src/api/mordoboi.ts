@@ -2,7 +2,9 @@ import { api } from "@/lib/api";
 import type {
   MordoboiAction,
   MordoboiBoxer,
+  MordoboiClubRing,
   MordoboiInfo,
+  MordoboiLegend,
   MordoboiMatch,
   MordoboiOpenChallengePreview,
   MordoboiSearchStatus,
@@ -105,5 +107,25 @@ export async function acceptMordoboiOpenChallenge(id: number): Promise<MordoboiM
 
 export async function applyMordoboiBrutality(id: number, cosmeticId: number): Promise<MordoboiMatch> {
   const { data } = await api.post<MordoboiMatch>(`/mordoboi/matches/${id}/brutality`, { cosmetic_id: cosmeticId });
+  return data;
+}
+
+export async function setMordoboiNickname(nickname: string | null): Promise<MordoboiBoxer> {
+  const { data } = await api.put<MordoboiBoxer>("/mordoboi/nickname", { nickname });
+  return data;
+}
+
+export async function fetchMordoboiLegend(): Promise<MordoboiLegend> {
+  const { data } = await api.get<MordoboiLegend>("/mordoboi/legend");
+  return data;
+}
+
+export async function startMordoboiLegend(): Promise<MordoboiMatch> {
+  const { data } = await api.post<MordoboiMatch>("/mordoboi/legend/start");
+  return data;
+}
+
+export async function fetchMordoboiClubRing(): Promise<MordoboiClubRing> {
+  const { data } = await api.get<MordoboiClubRing>("/mordoboi/club-ring");
   return data;
 }

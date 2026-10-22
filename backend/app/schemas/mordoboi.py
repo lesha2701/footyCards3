@@ -20,6 +20,15 @@ class MordoboiCardOut(BaseModel):
     rating: int
 
 
+class MordoboiLookOut(BaseModel):
+    """«Выход на ринг»: style keys of the equipped ring cosmetics."""
+
+    nickname: Optional[str] = None
+    gloves: Optional[str] = None
+    shorts: Optional[str] = None
+    entrance: Optional[str] = None
+
+
 class MordoboiBoxerStatsOut(BaseModel):
     power: int
     speed: int
@@ -38,6 +47,48 @@ class MordoboiBoxerOut(BaseModel):
 
     selected: Optional[MordoboiBoxerOptionOut] = None
     options: list[MordoboiBoxerOptionOut]
+    look: MordoboiLookOut = MordoboiLookOut()
+    nickname_options: list[str] = []
+
+
+class MordoboiNicknameRequest(BaseModel):
+    # None clears it; anything else must be one of nickname_options.
+    nickname: Optional[str] = None
+
+
+class MordoboiLegendOut(BaseModel):
+    code: str
+    name: str
+    nickname: str
+    tagline: str
+    position: str
+    rating: int
+    reward: int
+    beaten_today: bool
+    wins_total: int
+    active_match_id: Optional[int] = None
+    look: MordoboiLookOut
+
+
+class MordoboiClubRingOpponentOut(BaseModel):
+    user_id: int
+    name: str
+
+
+class MordoboiClubRingOut(BaseModel):
+    """«Клубный ринг»: while the player's club is at war, wins over the other
+    club's members score war points."""
+
+    active: bool
+    my_club: Optional[str] = None
+    opponent_club: Optional[str] = None
+    ends_at: Optional[datetime] = None
+    win_points: int = 0
+    member_cap: int = 0
+    my_points: int = 0
+    my_club_points: int = 0
+    opponent_club_points: int = 0
+    opponents: list[MordoboiClubRingOpponentOut] = []
 
 
 class MordoboiBoxerSetRequest(BaseModel):
@@ -47,6 +98,7 @@ class MordoboiBoxerSetRequest(BaseModel):
 class MordoboiFighterOut(BaseModel):
     name: str
     card: Optional[MordoboiCardOut] = None
+    look: MordoboiLookOut = MordoboiLookOut()
     power: int
     speed: int
     guard: int
@@ -93,6 +145,8 @@ class MordoboiBrutalityOut(BaseModel):
     image_path: Optional[str] = None
     # Coins it added to the winner's reward.
     bonus_coins: int = 0
+    # The beaten side's «Каска» bounced it back onto the winner.
+    reflected: bool = False
     # From the viewer's side: «надел ему труханы на голову» / «…тебе…».
     text: str
 
@@ -104,6 +158,9 @@ class MordoboiBrutalityRequest(BaseModel):
 class MordoboiMatchOut(BaseModel):
     id: int
     version: int
+    mode: str = "normal"
+    # «Легенда ринга»: the boss's habit, told up front.
+    legend_tagline: Optional[str] = None
     opponent_type: MordoboiOpponentType
     opponent_name: str
     opponent_user_id: Optional[int] = None
@@ -159,6 +216,7 @@ class MordoboiInfoOut(BaseModel):
     # Rules numbers for the help screen (engine constants).
     stamina_cost: dict[str, int]
     damage: dict[str, int]
+    legend_reward: int = 0
 
 
 class MordoboiStatsOut(BaseModel):

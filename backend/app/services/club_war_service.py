@@ -64,12 +64,23 @@ def _member_points(tally, config: GameConfig) -> int:
 
 
 async def _scores(db: AsyncSession, war: ClubWar, config: GameConfig) -> dict[int, dict[int, tuple]]:
-    """club_id -> {user_id: (games, packs, tasks, points)} for the war window so far."""
+    """club_id -> {user_id: (games, packs, tasks, points, ring_points)} for the
+    war window so far. `points` includes the «Клубный ринг» points: «Мордобой»
+    wins over the other club's members (their own per-member cap)."""
+    from app.services.mordoboi_service import ring_points, ring_wins
+
     end = min(_aware(war.ends_at), _now())
     out: dict[int, dict[int, tuple]] = {war.club_a_id: {}, war.club_b_id: {}}
+    wins = await ring_wins(db, _aware(war.starts_at), end, war.club_a_id, war.club_b_id)
     for club_id in (war.club_a_id, war.club_b_id):
-        for (_cid, uid), tally in (await _activity(db, _aware(war.starts_at), end, club_id=club_id)).items():
-            out[club_id][uid] = (tally.games, tally.packs, tally.tasks, _member_points(tally, config))
+        activity = await _activity(db, _aware(war.starts_at), end, club_id=club_id)
+        member_ids = set((await db.execute(select(ClubMember.user_id).where(ClubMember.club_id == club_id))).scalars())
+        for (_cid, uid), tally in activity.items():
+            ring = ring_points(wins.get(uid, 0), config)
+            out[club_id][uid] = (tally.games, tally.packs, tally.tasks, _member_points(tally, config) + ring, ring)
+        for uid in member_ids & set(wins) - {uid for (_c, uid) in activity}:
+            ring = ring_points(wins[uid], config)
+            out[club_id][uid] = (0, 0, 0, ring, ring)
     return out
 
 
@@ -264,8 +275,9 @@ async def get_war(db: AsyncSession, user: User) -> ClubWarOut:
         if per_club is None:
             return []
         return sorted(
-            (ClubWarMemberOut(user_id=uid, name=names_by_id.get(uid) or f"#{uid}", games=g, packs=p, tasks=t, points=pts)
-             for uid, (g, p, t, pts) in per_club[cid].items()),
+            (ClubWarMemberOut(
+                user_id=uid, name=names_by_id.get(uid) or f"#{uid}", games=g, packs=p, tasks=t, points=pts, ring_points=ring,
+            ) for uid, (g, p, t, pts, ring) in per_club[cid].items()),
             key=lambda m: -m.points,
         )
 

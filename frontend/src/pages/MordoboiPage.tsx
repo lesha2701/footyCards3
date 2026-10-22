@@ -8,10 +8,14 @@ import {
   createMordoboiChallenge,
   createMordoboiOpenChallenge,
   fetchMordoboiBoxer,
+  fetchMordoboiClubRing,
   fetchMordoboiInfo,
+  fetchMordoboiLegend,
   fetchMordoboiMatches,
   fetchMordoboiStats,
   saveMordoboiBoxer,
+  setMordoboiNickname,
+  startMordoboiLegend,
 } from "@/api/mordoboi";
 import { fetchMyProfile, fetchPublicProfile, searchUsers } from "@/api/profile";
 import EmptyState from "@/components/common/EmptyState";
@@ -39,7 +43,7 @@ export default function MordoboiPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("active");
   const [error, setError] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<null | "bot" | "friend" | "boxer" | "rules" | "chat">(null);
+  const [sheet, setSheet] = useState<null | "bot" | "friend" | "boxer" | "rules" | "chat" | "nickname">(null);
   // «Сыграть против меня» link from a shared win: ?vs=<user id>.
   const [params, setParams] = useSearchParams();
   const vsId = Number(params.get("vs")) || null;
@@ -84,6 +88,18 @@ export default function MordoboiPage() {
     },
     onError: (err) => setError(formatGameError(err, "Не удалось создать вызов")),
   });
+  const { data: legend } = useQuery({ queryKey: ["mordoboi-legend"], queryFn: fetchMordoboiLegend });
+  const { data: ring } = useQuery({ queryKey: ["mordoboi-club-ring"], queryFn: fetchMordoboiClubRing });
+  const legendStart = useMutation({
+    mutationFn: startMordoboiLegend,
+    onSuccess: (m) => navigate(`/play/mordoboi/matches/${m.id}`),
+    onError: (err) => setError(formatGameError(err, "Не удалось выйти против легенды")),
+  });
+  const nickname = useMutation({
+    mutationFn: (value: string | null) => setMordoboiNickname(value),
+    onSuccess: (b) => { queryClient.setQueryData(["mordoboi-boxer"], b); setSheet(null); },
+    onError: (err) => setError(formatGameError(err, "Не удалось сменить кличку")),
+  });
   const chooseBoxer = useMutation({
     mutationFn: (cardId: number) => saveMordoboiBoxer(cardId),
     onSuccess: (b) => { queryClient.setQueryData(["mordoboi-boxer"], b); setSheet(null); },
@@ -118,7 +134,9 @@ export default function MordoboiPage() {
 
       {boxer?.selected ? (
         <button onClick={() => setSheet("boxer")} className="rounded-3xl bg-gradient-to-br from-yellow-500/20 to-bg-surface p-3 text-left active:scale-[0.99]">
-          <span className="mb-2 block font-mono text-micro uppercase tracking-wider text-yellow-300">Твой боксёр · сменить</span>
+          <span className="mb-2 block font-mono text-micro uppercase tracking-wider text-yellow-300">
+            {boxer.look.nickname ? `«${boxer.look.nickname}» · ` : ""}Твой боксёр · сменить
+          </span>
           <BoxerRow option={boxer.selected} />
         </button>
       ) : boxer ? (
@@ -141,6 +159,68 @@ export default function MordoboiPage() {
         <p className="text-caption text-ink-mist-dim">
           Наградных боёв сегодня: {info.rewarded_today}/{info.daily_limit} · победа {info.reward_win} монет, нокаут +{info.reward_ko_bonus}
         </p>
+      )}
+
+      {boxer?.selected && (
+        <div className="-mt-2 flex gap-2">
+          <button
+            onClick={() => setSheet("nickname")}
+            className="flex-1 rounded-xl bg-white/5 py-2 text-xs font-semibold text-ink-mist active:scale-95"
+          >
+            🏷️ {boxer.look.nickname ? `«${boxer.look.nickname}»` : "Кличка"}
+          </button>
+          <button
+            onClick={() => navigate("/packs?tab=style")}
+            className="flex-1 rounded-xl bg-white/5 py-2 text-xs font-semibold text-ink-mist active:scale-95"
+          >
+            🥊 Выход на ринг
+          </button>
+        </div>
+      )}
+
+      {legend && info?.enabled && (
+        <button
+          onClick={() => legendStart.mutate()}
+          disabled={legendStart.isPending || !boxer?.selected}
+          className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-yellow-400/25 via-red-500/15 to-bg-surface p-4 text-left ring-1 ring-yellow-400/30 active:scale-[0.99] disabled:opacity-50"
+        >
+          <span className="block font-mono text-micro uppercase tracking-wider text-yellow-300">👑 Легенда ринга · сегодня</span>
+          <span className="mt-1 block font-display text-lg font-black text-ink-chalk">«{legend.nickname}» {legend.name}</span>
+          <span className="block text-xs text-ink-mist">{legend.tagline}</span>
+          <span className="mt-2 flex items-center gap-3 text-caption">
+            <span className="font-mono text-ink-chalk">⭐ {legend.rating}</span>
+            <span className={legend.beaten_today ? "text-accent-green" : "text-accent-lime"}>
+              {legend.beaten_today ? "Побеждена сегодня ✓" : `+${legend.reward} монет за победу`}
+            </span>
+            <span className="ml-auto font-bold text-yellow-300">{legend.active_match_id ? "Продолжить →" : "На ринг →"}</span>
+          </span>
+        </button>
+      )}
+
+      {ring?.active && (
+        <section className="rounded-3xl bg-bg-surface p-4 ring-1 ring-red-500/25">
+          <p className="font-mono text-micro uppercase tracking-wider text-red-300">⚔️ Клубный ринг</p>
+          <p className="mt-1 font-display text-base font-bold text-ink-chalk">
+            {ring.my_club} <span className="font-mono">{ring.my_club_points}</span> : <span className="font-mono">{ring.opponent_club_points}</span> {ring.opponent_club}
+          </p>
+          <p className="text-caption text-ink-mist">
+            Победа над бойцом «{ring.opponent_club}» — +{ring.win_points} очков в клубную войну (до {ring.member_cap} с игрока). У тебя: {ring.my_points}.
+          </p>
+          <div className="mt-2 flex max-h-40 flex-col gap-1.5 overflow-y-auto">
+            {ring.opponents.map((o) => (
+              <div key={o.user_id} className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2">
+                <span className="truncate text-sm text-ink-chalk">{o.name}</span>
+                <button
+                  onClick={() => challenge.mutate(o.user_id)}
+                  disabled={challenge.isPending || disabled || !boxer?.selected || !!activeMatch}
+                  className="rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white active:scale-95 disabled:opacity-40"
+                >
+                  Вызвать
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {activeMatch ? (
@@ -266,6 +346,28 @@ export default function MordoboiPage() {
         </Sheet>
       )}
       {sheet === "rules" && <RulesSheet info={info} onClose={() => setSheet(null)} />}
+      {sheet === "nickname" && boxer && (
+        <Sheet onClose={() => setSheet(null)} title="Кличка на ринге">
+          <p className="-mt-1 text-caption text-ink-mist">Её видят соперники при выходе на ринг и в гифке нокаута.</p>
+          <div className="flex max-h-[50vh] flex-wrap gap-2 overflow-y-auto">
+            {boxer.nickname_options.map((n) => (
+              <button
+                key={n}
+                onClick={() => nickname.mutate(n)}
+                disabled={nickname.isPending}
+                className={`rounded-full px-3 py-1.5 text-xs font-bold active:scale-95 ${
+                  boxer.look.nickname === n ? "bg-yellow-500 text-bg-base" : "bg-white/5 text-ink-chalk"
+                }`}
+              >
+                «{n}»
+              </button>
+            ))}
+          </div>
+          {boxer.look.nickname && (
+            <button onClick={() => nickname.mutate(null)} className="text-xs text-ink-mist underline">Убрать кличку</button>
+          )}
+        </Sheet>
+      )}
       {sheet === "chat" && (
         <ChatInviteSheet
           busy={chatInvite.isPending}

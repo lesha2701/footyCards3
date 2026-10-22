@@ -14,6 +14,8 @@ class ClubWarMemberOut(BaseModel):
     packs: int
     tasks: int
     points: int
+    # «Клубный ринг»: «Мордобой» wins over the other club's members (in points).
+    ring_points: int = 0
 
 
 class ClubWarSideOut(BaseModel):

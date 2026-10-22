@@ -1015,7 +1015,15 @@ export interface TacticoOpenChallengePreview {
 // --- Monetization: reward slots, login calendar, club pass, season pass,
 // starter offer, cosmetics (backend schemas/monetization.py) ---
 
-export type CosmeticKind = "profile_frame" | "profile_background" | "card_skin" | "brutality";
+export type CosmeticKind =
+  | "profile_frame"
+  | "profile_background"
+  | "card_skin"
+  | "brutality"
+  | "ring_gloves"
+  | "ring_shorts"
+  | "ring_entrance"
+  | "helmet";
 
 export interface Cosmetic {
   id: number;
@@ -2079,7 +2087,7 @@ export interface ClubWarSide {
   emblem?: ClubEmblem | null;
   war_rating: number;
   score: number;
-  members: { user_id: number; name: string; games: number; packs: number; tasks: number; points: number }[];
+  members: { user_id: number; name: string; games: number; packs: number; tasks: number; points: number; ring_points?: number }[];
 }
 
 export interface ClubWar {
@@ -3220,11 +3228,49 @@ export interface MordoboiBoxerOption {
 export interface MordoboiBoxer {
   selected: MordoboiBoxerOption | null;
   options: MordoboiBoxerOption[];
+  look: MordoboiLook;
+  nickname_options: string[];
+}
+
+export interface MordoboiLegend {
+  code: string;
+  name: string;
+  nickname: string;
+  tagline: string;
+  position: string;
+  rating: number;
+  reward: number;
+  beaten_today: boolean;
+  wins_total: number;
+  active_match_id: number | null;
+  look: MordoboiLook;
+}
+
+export interface MordoboiClubRing {
+  active: boolean;
+  my_club: string | null;
+  opponent_club: string | null;
+  ends_at: string | null;
+  win_points: number;
+  member_cap: number;
+  my_points: number;
+  my_club_points: number;
+  opponent_club_points: number;
+  opponents: { user_id: number; name: string }[];
+}
+
+/** «Выход на ринг»: style keys of the equipped ring cosmetics. */
+export interface MordoboiLook {
+  nickname: string | null;
+  gloves: string | null;
+  shorts: string | null;
+  entrance: string | null;
 }
 
 export interface MordoboiFighter extends MordoboiBoxerStats {
   name: string;
   card: MordoboiCard | null;
+  look: MordoboiLook;
   hp: number;
   stamina: number;
   landed: number;
@@ -3252,6 +3298,8 @@ export interface MordoboiExchange {
 export interface MordoboiMatch {
   id: number;
   version: number;
+  mode: "normal" | "legend";
+  legend_tagline: string | null;
   opponent_type: MordoboiOpponentType;
   opponent_name: string;
   opponent_user_id: number | null;
@@ -3293,6 +3341,8 @@ export interface MordoboiBrutality {
   emoji: string;
   image_path: string | null;
   bonus_coins: number;
+  /** The beaten side's «Каска» bounced it back onto the winner. */
+  reflected: boolean;
   /** From the viewer's side: «надел ему труханы на голову» / «…тебе…». */
   text: string;
 }
@@ -3323,6 +3373,7 @@ export interface MordoboiInfo {
   max_auto_moves: number;
   stamina_cost: Record<MordoboiAction, number>;
   damage: Partial<Record<MordoboiAction, number>>;
+  legend_reward: number;
 }
 
 export interface MordoboiStats {

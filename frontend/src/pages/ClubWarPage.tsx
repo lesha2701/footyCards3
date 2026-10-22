@@ -99,7 +99,10 @@ export default function ClubWarPage() {
           {war.me.members.map((m) => (
             <div key={m.user_id} className="flex items-center gap-2 rounded-lg bg-bg-surface px-3 py-2 text-xs">
               <span className="min-w-0 flex-1 truncate text-ink-chalk">{m.name}</span>
-              <span className="text-ink-mist-dim">🎮 {m.games} · 📦 {m.packs} · ✅ {m.tasks}</span>
+              <span className="text-ink-mist-dim">
+                🎮 {m.games} · 📦 {m.packs} · ✅ {m.tasks}
+                {m.ring_points ? ` · 🥊 ${m.ring_points}` : ""}
+              </span>
               <span className="w-10 text-right font-mono font-bold text-accent-lime">{m.points}</span>
             </div>
           ))}

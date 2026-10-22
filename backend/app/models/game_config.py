@@ -807,6 +807,13 @@ class GameConfig(TimestampMixin, Base):
     mordoboi_move_timeout_hours: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
     mordoboi_live_move_seconds: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     mordoboi_max_auto_moves: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # «Легенда ринга»: the daily boss's rating and its once-a-day win reward.
+    mordoboi_legend_rating: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
+    mordoboi_legend_reward: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    # «Клубный ринг»: war points for a «Мордобой» win over a member of the
+    # club you're at war with, capped per member per war.
+    club_ring_win_points: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    club_ring_member_cap: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
 
     bingo_reward_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     bingo_reward_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

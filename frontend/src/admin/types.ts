@@ -611,6 +611,10 @@ export interface GameConfig {
   mordoboi_move_timeout_hours: number;
   mordoboi_live_move_seconds: number;
   mordoboi_max_auto_moves: number;
+  mordoboi_legend_rating: number;
+  mordoboi_legend_reward: number;
+  club_ring_win_points: number;
+  club_ring_member_cap: number;
   bingo_reward_coins: number;
   bingo_reward_pack_id: number | null;
   card_skills_enabled: boolean;

@@ -26,6 +26,10 @@ SLOT_BY_KIND = {
     "profile_frame": "equipped_frame_id",
     "profile_background": "equipped_background_id",
     "card_skin": "equipped_card_skin_id",
+    # «Мордобой» — «Выход на ринг» (shown on the boxer in every bout).
+    "ring_gloves": "equipped_ring_gloves_id",
+    "ring_shorts": "equipped_ring_shorts_id",
+    "ring_entrance": "equipped_ring_entrance_id",
 }
 
 
@@ -87,7 +91,7 @@ async def equipped(db: AsyncSession, user: User) -> EquippedCosmeticsOut:
 async def catalog(db: AsyncSession, user: User) -> CosmeticCatalogOut:
     owned = await owned_ids(db, user.id)
     rows = (await db.execute(select(Cosmetic).order_by(Cosmetic.kind, Cosmetic.sort_order, Cosmetic.id))).scalars()
-    equipped_ids = {user.equipped_frame_id, user.equipped_background_id, user.equipped_card_skin_id}
+    equipped_ids = {getattr(user, slot) for slot in SLOT_BY_KIND.values()}
     items = [
         CosmeticCatalogItemOut(
             **CosmeticOut.model_validate(c).model_dump(), owned=c.id in owned, equipped=c.id in equipped_ids,
@@ -108,6 +112,8 @@ def _check_buyable(cosmetic: Optional[Cosmetic]) -> Cosmetic:
 
 
 async def buy_with_coins(db: AsyncSession, user: User, cosmetic_id: int) -> CosmeticCatalogOut:
+    # A «Каска» (kind "helmet") is a one-shot: it is taken back when it
+    # reflects a «Бруталити», after which it can be bought again.
     cosmetic = _check_buyable(await db.get(Cosmetic, cosmetic_id))
     if cosmetic.coins_price <= 0:
         raise ConflictError("Этот предмет продаётся только за звёзды")
@@ -127,7 +133,7 @@ async def buy_with_coins(db: AsyncSession, user: User, cosmetic_id: int) -> Cosm
 async def equip(db: AsyncSession, user: User, kind: str, cosmetic_id: Optional[int]) -> CosmeticCatalogOut:
     slot = SLOT_BY_KIND.get(kind)
     if slot is None:
-        raise ConflictError("Это не надевается — применяется после победы в «Мордобое»")
+        raise ConflictError("Это не надевается — срабатывает само в «Мордобое»")
     if cosmetic_id is not None:
         cosmetic = await db.get(Cosmetic, cosmetic_id)
         if cosmetic is None or cosmetic.kind != kind:

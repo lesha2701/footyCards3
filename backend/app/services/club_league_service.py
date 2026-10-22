@@ -35,12 +35,14 @@ from app.models.enums import (
     ClubBudgetTransactionType,
     GameSessionStatus,
     MatchStatus,
+    MordoboiMatchStatus,
     NotificationType,
     PenaltyMatchStatus,
     TacticoMatchStatus,
 )
 from app.models.game import GameSession
 from app.models.match import Match
+from app.models.mordoboi import MordoboiMatch
 from app.models.pack import PackOpening, StarsInvoice
 from app.models.penalty import PenaltyMatch
 from app.models.tactico import TacticoMatch
@@ -127,6 +129,8 @@ async def _activity(
         await add("games", user_col, PenaltyMatch.resolved_at, PenaltyMatch.status == PenaltyMatchStatus.finished)
     for user_col in (TacticoMatch.user_id, TacticoMatch.opponent_user_id):
         await add("games", user_col, TacticoMatch.resolved_at, TacticoMatch.status == TacticoMatchStatus.finished)
+    for user_col in (MordoboiMatch.user_id, MordoboiMatch.opponent_user_id):
+        await add("games", user_col, MordoboiMatch.resolved_at, MordoboiMatch.status == MordoboiMatchStatus.finished)
     await add("packs", PackOpening.user_id, PackOpening.created_at, PackOpening.price_paid > 0)
     await add("packs", StarsInvoice.user_id, StarsInvoice.completed_at, StarsInvoice.pack_id.is_not(None))
     await add("tasks", UserTask.user_id, UserTask.completed_at)

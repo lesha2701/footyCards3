@@ -478,6 +478,8 @@ export default function AdminGamesPage() {
           {field("club_war_draw_budget", "Ничья: в бюджет клуба")}
           {field("club_war_loss_budget", "Поражение: в бюджет клуба")}
           {field("club_war_win_member_coins", "Победа: монет каждому участнику")}
+          {field("club_ring_win_points", "«Клубный ринг»: очков за победу в «Мордобое»")}
+          {field("club_ring_member_cap", "«Клубный ринг»: максимум очков с игрока")}
         </div>
       </section>
 
@@ -1202,6 +1204,8 @@ export default function AdminGamesPage() {
           {field("mordoboi_move_timeout_hours", "С другом: часов на удар")}
           {field("mordoboi_live_move_seconds", "Онлайн: секунд на удар")}
           {field("mordoboi_max_auto_moves", "Автоударов подряд до поражения")}
+          {field("mordoboi_legend_rating", "«Легенда ринга»: рейтинг босса")}
+          {field("mordoboi_legend_reward", "«Легенда ринга»: награда (раз в день)")}
         </div>
       </section>
 

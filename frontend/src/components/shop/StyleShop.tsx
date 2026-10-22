@@ -15,7 +15,21 @@ import { useSeenItems } from "@/lib/useSeenItems";
 import { useAuthStore } from "@/store/authStore";
 import type { CosmeticCatalog, CosmeticCatalogItem, CosmeticKind } from "@/types";
 
-const KINDS: CosmeticKind[] = ["profile_frame", "profile_background", "card_skin", "brutality"];
+const KIND_GROUPS: { title: string; kinds: CosmeticKind[] }[] = [
+  { title: "Профиль", kinds: ["profile_frame", "profile_background", "card_skin"] },
+  { title: "Мордобой", kinds: ["brutality", "ring_gloves", "ring_shorts", "ring_entrance", "helmet"] },
+];
+
+const SHORT_LABELS: Record<CosmeticKind, string> = {
+  profile_frame: "Рамки",
+  profile_background: "Фоны",
+  card_skin: "Скины карт",
+  brutality: "Бруталити",
+  ring_gloves: "Перчатки",
+  ring_shorts: "Трусы",
+  ring_entrance: "Выход",
+  helmet: "Каска",
+};
 
 /** Owned first-to-buy order: what you can buy now, then the rest, then
  * what you already have. */
@@ -90,19 +104,25 @@ export default function StyleShop() {
         </section>
       )}
 
-      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none]">
-        {KINDS.map((k) => (
-          <button
-            key={k}
-            onClick={() => setKind(k)}
-            className={`shrink-0 rounded-full px-3.5 py-2 text-xs font-semibold active:scale-95 ${
-              kind === k ? "bg-floodlight text-bg-base" : "bg-bg-surface text-ink-mist"
-            }`}
-          >
-            {KIND_LABELS[k]}
-          </button>
-        ))}
-      </div>
+      {/* Every section visible at once (no sideways scroller): two labelled groups. */}
+      {KIND_GROUPS.map((group) => (
+        <div key={group.title} className="flex flex-col gap-1.5">
+          <span className="font-mono text-micro uppercase tracking-wider text-ink-mist-dim">{group.title}</span>
+          <div className="grid grid-cols-3 gap-1.5">
+            {group.kinds.map((k) => (
+              <button
+                key={k}
+                onClick={() => setKind(k)}
+                className={`min-w-0 truncate rounded-full px-2 py-2 text-xs font-semibold active:scale-95 ${
+                  kind === k ? "bg-floodlight text-bg-base" : "bg-bg-surface text-ink-mist"
+                }`}
+              >
+                {SHORT_LABELS[k]}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
 
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
 
@@ -153,7 +173,11 @@ export default function StyleShop() {
                   <span className="text-caption text-ink-mist">
                     {item.kind === "brutality"
                       ? "Добивание после победы в «Мордобое» — шутка, на бой не влияет"
-                      : `${KIND_LABELS[item.kind]} · только внешний вид`}
+                      : item.kind === "helmet"
+                        ? "Одноразовая: отразит чужое бруталити, потом можно купить снова"
+                        : item.kind.startsWith("ring_")
+                          ? `${KIND_LABELS[item.kind]} · вид твоего боксёра в «Мордобое»`
+                          : `${KIND_LABELS[item.kind]} · только внешний вид`}
                   </span>
                   {!item.owned && !rewardOnly && (
                     <span className="flex flex-wrap items-center gap-x-2 font-mono text-xs font-bold">
@@ -182,6 +206,8 @@ export default function StyleShop() {
               action={
                 item.owned && item.kind === "brutality" ? (
                   <span className="text-center text-caption text-ink-mist">Есть — применяй на экране итога боя</span>
+                ) : item.owned && item.kind === "helmet" ? (
+                  <span className="text-center text-caption text-ink-mist">Надета — сработает сама 🪖</span>
                 ) : item.owned ? (
                   <button
                     onClick={() => equip.mutate({ k: item.kind, id: item.equipped ? null : item.id })}

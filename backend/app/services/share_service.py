@@ -53,6 +53,16 @@ def _static_path(relative: Optional[str]) -> Optional[Path]:
     return full if STATIC_DIR.resolve() in full.parents and full.is_file() else None
 
 
+def _store_bytes(data: bytes, kind: str, object_id: int, fingerprint: str, extension: str) -> str:
+    digest = hashlib.sha1(fingerprint.encode()).hexdigest()[:12]
+    name = f"{kind}_{object_id}_{digest}.{extension}"
+    SHARE_DIR.mkdir(parents=True, exist_ok=True)
+    target = SHARE_DIR / name
+    if not target.exists():
+        target.write_bytes(data)
+    return f"share/{name}"
+
+
 def _store(image: bytes, kind: str, object_id: int, fingerprint: str) -> str:
     """Write once per distinct content; returns the path under /static."""
     digest = hashlib.sha1(fingerprint.encode()).hexdigest()[:12]
@@ -211,7 +221,10 @@ def mordoboi_link(user: User) -> str:
     return f"https://t.me/{settings.telegram_bot_username}?start=mordoboi_vs_{user.id}"
 
 
-async def _mordoboi_win(db: AsyncSession, user: User, match_id: int) -> str:
+async def _mordoboi_win(db: AsyncSession, user: User, match_id: int) -> tuple[str, Optional[tuple[str, str]]]:
+    """(text, (gif path, thumbnail path) for a knockout won by the sharer or
+    None). The beaten side may share too, but only when their «Каска»
+    bounced the winner's «Бруталити»."""
     from app.models.enums import MordoboiMatchStatus
     from app.models.mordoboi import MordoboiMatch
     from app.services import mordoboi_service
@@ -219,12 +232,34 @@ async def _mordoboi_win(db: AsyncSession, user: User, match_id: int) -> str:
     match = await db.get(MordoboiMatch, match_id)
     if match is None or user.id not in (match.user_id, match.opponent_user_id):
         raise NotFoundError("Бой не найден")
-    side_won = MatchResult.win if user.id == match.user_id else MatchResult.loss
-    if match.status != MordoboiMatchStatus.finished or match.result != side_won:
+    side = "user" if user.id == match.user_id else "opponent"
+    side_won = MatchResult.win if side == "user" else MatchResult.loss
+    done = (match.server_state or {}).get("brutality") or {}
+    reflected_for_me = bool(done.get("reflected")) and done.get("side") != side
+    if match.status != MordoboiMatchStatus.finished or (match.result != side_won and not reflected_for_me):
         raise ConflictError("Поделиться можно только победой")
     opponent = await mordoboi_service.opponent_name_for(db, match, user)
     text = mordoboi_service.brutality_share_text(match, user, opponent)
-    return f"{text}\nДумаешь, ты крепче? Жми «Сыграть против меня» 👇"
+    text = f"{text}\nДумаешь, ты крепче? Жми «Сыграть против меня» 👇"
+    gif = None
+    fighters = (match.server_state or {}).get("fighters") or {}
+    if match.win_reason == "ko" and match.result == side_won and all(fighters.get(s) for s in ("user", "opponent")):
+        me, them = fighters[side], fighters["opponent" if side == "user" else "user"]
+        mc, tc = me.get("card") or {}, them.get("card") or {}
+        nick = (me.get("look") or {}).get("nickname")
+        headline = f"«{nick}» {user.full_display_name()} отправил в нокаут {opponent}" if nick \
+            else f"{user.full_display_name()} отправил в нокаут {opponent}"
+        gif_bytes, thumb = share_card_service.render_knockout_gif(
+            winner_name=mc.get("display_name", "?"), winner_rating=mc.get("rating", 0), winner_rarity=mc.get("rarity", "common"),
+            winner_image=_static_path(mc.get("image_path")),
+            loser_name=tc.get("display_name", "?"), loser_rating=tc.get("rating", 0), loser_rarity=tc.get("rarity", "common"),
+            loser_image=_static_path(tc.get("image_path")),
+            headline=headline, bot_username=settings.telegram_bot_username,
+        )
+        fingerprint = f"ko|{match.id}|{side}|{headline}"
+        gif = (_store_bytes(gif_bytes, "mordoboi_ko", match.id, fingerprint, "gif"),
+               _store_bytes(thumb, "mordoboi_ko_thumb", match.id, fingerprint, "jpg"))
+    return text, gif
 
 
 def trade_link(user: User) -> str:
@@ -320,14 +355,52 @@ async def _save_prepared_text(
     return data["result"]["id"]
 
 
+async def _save_prepared_gif(user: User, gif_url: str, thumb_url: str, caption: str, link: str) -> Optional[str]:
+    """Knockout GIF with a «Сыграть против меня» button; None on failure."""
+    body = {
+        "user_id": user.telegram_id,
+        "result": {
+            "type": "gif", "id": uuid.uuid4().hex, "gif_url": gif_url, "thumbnail_url": thumb_url,
+            "caption": f"{caption}\n{link}",
+            "reply_markup": {"inline_keyboard": [[{"text": "🥊 Сыграть против меня", "url": link}]]},
+        },
+        "allow_user_chats": True, "allow_group_chats": True, "allow_channel_chats": True,
+    }
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/savePreparedInlineMessage"
+    try:
+        async with httpx.AsyncClient(timeout=10, proxy=settings.telegram_proxy_url or None) as client:
+            data = (await client.post(url, json=body)).json()
+    except (httpx.HTTPError, ValueError):
+        logger.warning("savePreparedInlineMessage (gif) request failed", exc_info=True)
+        return None
+    if not data.get("ok"):
+        logger.warning("savePreparedInlineMessage (gif) rejected: %s", data.get("description"))
+        return None
+    return data["result"]["id"]
+
+
 async def prepare_share(db: AsyncSession, user: User, kind: str, object_id: int) -> dict:
-    if kind in ("trade_wishes", "mordoboi_win"):
+    if kind == "mordoboi_win":
+        text, gif = await _mordoboi_win(db, user, object_id)
+        link = mordoboi_link(user)
+        prepared_id = None
+        if _can_prepare_messages():
+            base = settings.mini_app_url.rstrip("/")
+            prepared_id = (
+                await _save_prepared_gif(user, f"{base}/static/{gif[0]}", f"{base}/static/{gif[1]}", text, link) if gif
+                else await _save_prepared_text(user, text, link, title="Бой в «Мордобое»", button="🥊 Сыграть против меня")
+            )
+        return {
+            "prepared_message_id": prepared_id,
+            "image_url": f"/static/{gif[0]}" if gif else None,
+            "caption": text,
+            "link": link,
+            "share_url": f"https://t.me/share/url?url={quote(link, safe='')}&text={quote(text, safe='')}",
+        }
+    if kind in ("trade_wishes",):
         if kind == "trade_wishes":
             text, link = await _trade_wishes(db, user), trade_link(user)
             labels = {}
-        else:
-            text, link = await _mordoboi_win(db, user, object_id), mordoboi_link(user)
-            labels = {"title": "Бой в «Мордобое»", "button": "🥊 Сыграть против меня"}
         prepared_id = await _save_prepared_text(user, text, link, **labels) if _can_prepare_messages() else None
         return {
             "prepared_message_id": prepared_id,
