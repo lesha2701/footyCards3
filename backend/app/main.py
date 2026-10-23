@@ -29,6 +29,7 @@ from app.routers import (
     admin_club_base,
     admin_log,
     admin_equipment,
+    admin_muses,
     admin_monetization,
     admin_packs,
     admin_players,
@@ -65,6 +66,7 @@ from app.routers import (
     internal,
     leaderboard,
     equipment,
+    muses,
     events,
     monetization,
     leagues,
@@ -211,9 +213,11 @@ app.include_router(internal.router, prefix=API_PREFIX)
 app.include_router(wallet.router, prefix=API_PREFIX)
 app.include_router(monetization.router, prefix=API_PREFIX)
 app.include_router(equipment.router, prefix=API_PREFIX)
+app.include_router(muses.router, prefix=API_PREFIX)
 app.include_router(events.router, prefix=API_PREFIX)
 app.include_router(events.admin_router, prefix=API_PREFIX)
 app.include_router(admin_equipment.router, prefix=API_PREFIX)
+app.include_router(admin_muses.router, prefix=API_PREFIX)
 app.include_router(admin_monetization.router, prefix=API_PREFIX)
 
 

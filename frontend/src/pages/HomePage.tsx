@@ -36,7 +36,7 @@ export default function HomePage() {
       <HomeHero profile={profile} league={leagueStatus} leaguesEnabled={flags?.leagues_enabled !== false} />
 
       <StarterOfferModal />
-      <StarterOfferBanner />
+      <StarterOfferBanner hideable />
       {profile?.referral_reward_pending && (
         <NoticeCard
           Icon={IconHandshake}

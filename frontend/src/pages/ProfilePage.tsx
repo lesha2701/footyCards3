@@ -12,6 +12,7 @@ import {
 } from "@/api/profile";
 import ShareButton from "@/components/common/ShareButton";
 import { UserBadge } from "@/components/common/UserBadge";
+import ProfileMuse from "@/components/muses/ProfileMuse";
 import { MyPlayerEntry } from "@/components/myPlayer/MyPlayerEntry";
 import AcademyShowcase from "@/components/path/AcademyShowcase";
 import LoginCalendar from "@/components/profile/LoginCalendar";
@@ -209,6 +210,7 @@ export default function ProfilePage() {
       <MonetizationEntries />
 
       <MyPlayerEntry />
+      <ProfileMuse />
       {user && <AcademyShowcase userId={user.id} />}
 
       <button

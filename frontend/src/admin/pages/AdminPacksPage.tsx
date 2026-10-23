@@ -28,6 +28,7 @@ interface PackForm {
   coach_drop_chance: number;
   stadium_drop_chance: number;
   skill_token_drop_chance: number;
+  muse_drop_chance: number;
   /** "path" = the «Академия» pack: diamond slots drop only path cards. */
   player_pool: "default" | "path";
   guaranteed_min_rarity: Rarity | "";
@@ -51,6 +52,7 @@ function packToForm(p?: Pack): PackForm {
     coach_drop_chance: (p?.coach_drop_chance ?? 0) * 100,
     stadium_drop_chance: (p?.stadium_drop_chance ?? 0) * 100,
     skill_token_drop_chance: (p?.skill_token_drop_chance ?? 0) * 100,
+    muse_drop_chance: (p?.muse_drop_chance ?? 0) * 100,
     player_pool: (p?.player_pool as PackForm["player_pool"]) ?? "default",
     guaranteed_min_rarity: p?.guaranteed_min_rarity ?? "",
     is_active: p?.is_active ?? true,
@@ -98,6 +100,7 @@ export default function AdminPacksPage() {
     coach_drop_chance: form.coach_drop_chance / 100,
     stadium_drop_chance: form.stadium_drop_chance / 100,
     skill_token_drop_chance: form.skill_token_drop_chance / 100,
+    muse_drop_chance: form.muse_drop_chance / 100,
     player_pool: form.player_pool,
     guaranteed_min_rarity: form.guaranteed_min_rarity || null,
     is_active: form.is_active,
@@ -193,6 +196,7 @@ export default function AdminPacksPage() {
               <NumField label="Шанс тренера вместо игрока (%) — 0 = только игроки" value={form.coach_drop_chance} min={0} max={100} onChange={(v) => setForm({ ...form, coach_drop_chance: v })} />
               <NumField label="Шанс стадиона вместо игрока (%) — 0 = только игроки" value={form.stadium_drop_chance} min={0} max={100} onChange={(v) => setForm({ ...form, stadium_drop_chance: v })} />
               <NumField label="Шанс жетона навыка вместо игрока (%) — 100 = пак навыков; что выпадает — в «Навыки карточек»" value={form.skill_token_drop_chance} min={0} max={100} onChange={(v) => setForm({ ...form, skill_token_drop_chance: v })} />
+              <NumField label="Шанс музы вместо игрока (%) — пак «Музы»: 10; кто выпадает — в «Музы»" value={form.muse_drop_chance} min={0} max={100} onChange={(v) => setForm({ ...form, muse_drop_chance: v })} />
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Пул игроков</span>
                 <select
@@ -204,8 +208,8 @@ export default function AdminPacksPage() {
                   <option value="path">«Академия» — бриллиантовый слот = карта пути</option>
                 </select>
               </label>
-              {form.coach_drop_chance + form.stadium_drop_chance + form.skill_token_drop_chance > 100 && (
-                <p className="text-xs text-amber-300">Сумма шансов тренера, стадиона и жетона больше 100% — один бросок на слот, жетоны получат только остаток.</p>
+              {form.coach_drop_chance + form.stadium_drop_chance + form.skill_token_drop_chance + form.muse_drop_chance > 100 && (
+                <p className="text-xs text-amber-300">Сумма шансов тренера, стадиона, жетона и музы больше 100% — один бросок на слот, последние получат только остаток.</p>
               )}
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Цена в звёздах ⭐ (если указано — пак покупается ТОЛЬКО за звёзды, цена в монетах игнорируется)</span>

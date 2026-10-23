@@ -90,6 +90,7 @@ from app.models.user import User
 from app.models.user_activity import UserDailyActivity
 from app.models.stars_payment_receipt import StarsPaymentReceipt
 from app.models.equipment import EquipmentCollection, EquipmentItem, UserEquipment
+from app.models.muse import Muse, MuseAccessory, MuseCollection, MuseDailyClaim, MuseDate, UserMuse, UserMuseAccessory
 from app.models.monetization import (
     Artifact,
     ClubSubscription,

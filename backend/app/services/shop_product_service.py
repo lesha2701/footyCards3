@@ -8,7 +8,7 @@ Keys: "calendar_catchup:<YYYY-MM-DD>", "cosmetic:<id>", "club_pass",
 "club_pass_renewal" (created by delivery for each auto-renewal),
 "season_premium:<season_id>", "starter_offer",
 "club_emblem:<club_id>:<item_id>", "club_donation:<club_id>:<coins>",
-"club_stars:<club_id>"."""
+"club_stars:<club_id>", "muse_accessory:<user_muse_id>:<accessory_id>"."""
 import secrets
 from datetime import date
 from typing import Optional
@@ -34,6 +34,7 @@ LABELS = {
     "starter_offer": "Стартовое предложение",
     "artifact": "Артефакты",
     "equipment": "Экипировка",
+    "muse_accessory": "Подарки музам",
     "club_emblem": "Эмблема клуба",
     "club_donation": "Казна клуба",
     "club_stars": "Звёзды клуба",
@@ -108,6 +109,10 @@ async def validate(db: AsyncSession, invoice: StarsInvoice) -> tuple[bool, str]:
         from app.services import equipment_service
 
         return await equipment_service.validate_stars(db, invoice.user_id, int(arg), invoice.stars_amount)
+    if kind == "muse_accessory":
+        from app.services import muse_service
+
+        return await muse_service.validate_stars(db, invoice.user_id, arg, invoice.stars_amount)
     if kind == "club_emblem":
         from app.services import club_emblem_service
 
@@ -159,6 +164,10 @@ async def deliver(
         from app.services import equipment_service
 
         return await equipment_service.deliver_stars(db, user, int(arg))
+    if kind == "muse_accessory":
+        from app.services import muse_service
+
+        return await muse_service.deliver_stars(db, user, arg)
     if kind == "club_emblem":
         from app.services import club_emblem_service
 

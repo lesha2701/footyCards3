@@ -1185,6 +1185,28 @@ class GameConfig(TimestampMixin, Base):
     # Ceiling on what talismans add per card (+% «Академия» experience, +% coins for an Arena win).
     equipment_max_talisman_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
 
+    # --- «Музы» (services/muse_service.py) ---
+    # Off = Muse bonuses stop, gifts and the daily claim close, the pack drops footballers only.
+    muses_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Ceilings on the active Muse's bonus (accessories included).
+    muse_max_stat: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    muse_max_pp: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
+    muse_max_xp_pct: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    muse_max_daily_coins: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    # Ceiling on what all gifts of one Muse add, in percent.
+    muse_max_accessory_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    # «Свидание»: once a day a random mini-game with the Muse on an extra
+    # attempt (no hourly / daily limits burnt, any result counts).
+    muse_date_games: Mapped[list] = mapped_column(JSON, default=lambda: ["memory", "pairs", "hangman"], nullable=False)
+    muse_date_coins: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    # On = her bonus works only while inspired by a date (for this many hours).
+    muse_date_required: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    muse_inspiration_hours: Mapped[int] = mapped_column(Integer, default=36, nullable=False)
+    # Coins for one spare copy of a Muse, by rarity.
+    muse_spare_coins: Mapped[dict] = mapped_column(
+        JSON, default=lambda: {"common": 150, "rare": 400, "epic": 1000, "legendary": 3000}, nullable=False,
+    )
+
     # --- «Неделя мини-игры» (services/weekly_cup_service.py) ---
     weekly_cup_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Rotation by week: penalty | free_kick | memory | saboteur | pairs.

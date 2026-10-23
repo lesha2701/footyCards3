@@ -18,6 +18,8 @@ import { CoachRevealStage } from "@/components/cards/CoachRevealStage";
 import { SkillTokenRevealStage } from "@/components/cards/SkillTokenRevealStage";
 import SkillTokenTile from "@/components/cards/SkillTokenTile";
 import { StadiumRevealStage } from "@/components/cards/StadiumRevealStage";
+import { MuseRevealStage } from "@/components/muses/MuseRevealStage";
+import MuseTile from "@/components/muses/MuseTile";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import PlayerCard from "@/components/cards/PlayerCard";
 import ShareButton from "@/components/common/ShareButton";
@@ -33,7 +35,7 @@ import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useTopUpStars } from "@/lib/useTopUp";
 import { useAuthStore } from "@/store/authStore";
-import type { OpenedCard, OpenedCoachCard, OpenedStadiumCard, PackBulkOpenResult, PackOpenResult } from "@/types";
+import type { OpenedCard, OpenedCoachCard, OpenedMuse, OpenedStadiumCard, PackBulkOpenResult, PackOpenResult } from "@/types";
 
 // Bulk reveal walks player cards, coach cards and stadium cards as one
 // combined sequence (backend keeps them as three separate arrays, same
@@ -44,10 +46,11 @@ type BulkRevealItem =
   | { kind: "player"; item: OpenedCard }
   | { kind: "coach"; item: OpenedCoachCard }
   | { kind: "stadium"; item: OpenedStadiumCard }
-  | { kind: "token"; item: { skill_code: string; quantity: number } };
+  | { kind: "token"; item: { skill_code: string; quantity: number } }
+  | { kind: "muse"; item: OpenedMuse };
 
 function bulkStagesFor(entry: BulkRevealItem) {
-  if (entry.kind === "token") return { stages: TOKEN_STAGES as readonly string[], duration: TOKEN_STAGE_DURATION_MS };
+  if (entry.kind === "token" || entry.kind === "muse") return { stages: TOKEN_STAGES as readonly string[], duration: TOKEN_STAGE_DURATION_MS };
   if (entry.kind === "coach") return { stages: COACH_STAGES as readonly string[], duration: COACH_STAGE_DURATION_MS };
   if (entry.kind === "stadium") return { stages: STADIUM_STAGES as readonly string[], duration: STADIUM_STAGE_DURATION_MS };
   return { stages: STAGES as readonly string[], duration: STAGE_DURATION_MS };
@@ -91,10 +94,12 @@ function SinglePackOpenView() {
     }
   };
 
-  const [phase, setPhase] = useState<"packshot" | "revealing" | "tokens" | "summary">("packshot");
+  const [phase, setPhase] = useState<"packshot" | "revealing" | "tokens" | "muses" | "summary">("packshot");
   const [cardIndex, setCardIndex] = useState(0);
   const [tokenIndex, setTokenIndex] = useState(0);
   const [tokenRevealed, setTokenRevealed] = useState(false);
+  const [museIndex, setMuseIndex] = useState(0);
+  const [museRevealed, setMuseRevealed] = useState(false);
   const [stageIndex, setStageIndex] = useState(0);
   // Set when a single-card, no-bonus pack finishes its reveal — that path
   // normally skips straight to "/packs" (see the comment in nextCard below),
@@ -182,6 +187,7 @@ function SinglePackOpenView() {
       result.coach_cards.length === 0 &&
       result.stadium_cards.length === 0 &&
       (result.skill_tokens ?? []).length === 0 &&
+      (result.muses ?? []).length === 0 &&
       !result.referral_bonus_coins &&
       result.collection_rewards.length === 0 &&
       !result.pack.bonus_coins &&
@@ -202,6 +208,33 @@ function SinglePackOpenView() {
       setPhase("tokens");
       return;
     }
+    goToMusesOrSummary();
+  };
+
+  // «Музы» slots get the same short reveal, after the tokens.
+  const goToMusesOrSummary = () => {
+    if (result && (result.muses ?? []).length > 0) {
+      setMuseIndex(0);
+      setMuseRevealed(false);
+      setPhase("muses");
+      return;
+    }
+    setPhase("summary");
+  };
+
+  const nextMuse = () => {
+    if (!result) return;
+    haptic("light");
+    if (!museRevealed) {
+      setMuseRevealed(true);
+      return;
+    }
+    if (museIndex < (result.muses ?? []).length - 1) {
+      setMuseIndex((i) => i + 1);
+      setMuseRevealed(false);
+      return;
+    }
+    hapticNotify("success");
     setPhase("summary");
   };
 
@@ -218,8 +251,7 @@ function SinglePackOpenView() {
       setTokenRevealed(false);
       return;
     }
-    hapticNotify("success");
-    setPhase("summary");
+    goToMusesOrSummary();
   };
 
   const isStarsPack = result ? result.pack.stars_price != null : false;
@@ -295,6 +327,12 @@ function SinglePackOpenView() {
   }, [phase, tokenIndex, tokenRevealed]);
 
   useEffect(() => {
+    if (phase !== "muses" || museRevealed) return;
+    const timer = setTimeout(() => setMuseRevealed(true), TOKEN_STAGE_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [phase, museIndex, museRevealed]);
+
+  useEffect(() => {
     if (phase !== "revealing" || stageIndex >= STAGES.length - 1) return;
     timerRef.current = setTimeout(advance, STAGE_DURATION_MS);
     return () => {
@@ -305,6 +343,12 @@ function SinglePackOpenView() {
 
   const skipAll = () => {
     if (!result) return;
+    // Past the cards already (token / «Муза» reveals): straight to the recap.
+    if (phase === "tokens" || phase === "muses") {
+      hapticNotify("success");
+      setPhase("summary");
+      return;
+    }
     // Fast-forwards through the staged reveal animation only — always lands
     // on the last card fully revealed, same as advancing through it
     // naturally, so the player still sees what they got. It must never jump
@@ -379,6 +423,29 @@ function SinglePackOpenView() {
                 className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95"
               >
                 {tokenIndex < (result.skill_tokens ?? []).length - 1 ? "Следующий жетон" : "Готово"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {phase === "muses" && (result.muses ?? [])[museIndex] && (
+        <div className="flex flex-1 flex-col">
+          <MuseRevealStage
+            key={`muse-${museIndex}-${museRevealed}`}
+            opened={(result.muses ?? [])[museIndex]}
+            stage={museRevealed ? "reveal" : "glow"}
+            index={museIndex}
+            total={(result.muses ?? []).length}
+            onTap={nextMuse}
+          />
+          {museRevealed && (
+            <div className="safe-bottom px-6 pb-6 pt-2">
+              <button
+                onClick={nextMuse}
+                className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95"
+              >
+                {museIndex < (result.muses ?? []).length - 1 ? "Следующая карта" : "Готово"}
               </button>
             </div>
           )}
@@ -494,6 +561,7 @@ function BulkPackOpenView({ quantity }: { quantity: number }) {
         ...result.coach_cards.map((item): BulkRevealItem => ({ kind: "coach", item })),
         ...result.stadium_cards.map((item): BulkRevealItem => ({ kind: "stadium", item })),
         ...(result.skill_tokens ?? []).map((item): BulkRevealItem => ({ kind: "token", item })),
+        ...(result.muses ?? []).map((item): BulkRevealItem => ({ kind: "muse", item })),
       ]
     : [];
   const currentItem = revealItems[cardIndex] ?? null;
@@ -605,7 +673,16 @@ function BulkPackOpenView({ quantity }: { quantity: number }) {
       )}
 
       {phase === "revealing" && currentItem && currentStages && (
-        currentItem.kind === "token" ? (
+        currentItem.kind === "muse" ? (
+          <MuseRevealStage
+            key={`${cardIndex}-${stageIndex}`}
+            opened={currentItem.item}
+            stage={(TOKEN_STAGES[stageIndex] ?? TOKEN_STAGES[TOKEN_STAGES.length - 1])}
+            index={cardIndex}
+            total={revealItems.length}
+            onTap={advanceOnTap}
+          />
+        ) : currentItem.kind === "token" ? (
           <SkillTokenRevealStage
             key={`${cardIndex}-${stageIndex}`}
             token={currentItem.item}
@@ -668,7 +745,8 @@ function BulkSummary({
   canOpenAnother: boolean;
 }) {
   const totalOpened =
-    result.cards.length + result.coach_cards.length + result.stadium_cards.length + (result.skill_tokens ?? []).length;
+    result.cards.length + result.coach_cards.length + result.stadium_cards.length + (result.skill_tokens ?? []).length +
+    (result.muses ?? []).length;
   return (
     <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
       <h2 className="text-center font-display text-2xl font-bold text-ink-chalk">
@@ -729,6 +807,9 @@ function BulkSummary({
         ))}
         {(result.skill_tokens ?? []).map((token, i) => (
           <SkillTokenTile key={`token-${i}`} skillCode={token.skill_code} quantity={token.quantity} />
+        ))}
+        {(result.muses ?? []).map((opened, i) => (
+          <MuseTile key={`muse-${i}`} opened={opened} />
         ))}
         {result.stadium_cards.map((opened) => (
           <div
@@ -844,12 +925,14 @@ function Summary({
   // any coach card always earns the recap — otherwise an all-coach pack
   // (result.cards.length === 0) would never show its coach card anywhere.
   const showRecap =
-    result.coach_cards.length > 0 || result.stadium_cards.length > 0 || (result.skill_tokens ?? []).length > 0 || result.cards.length > 1;
+    result.coach_cards.length > 0 || result.stadium_cards.length > 0 || (result.skill_tokens ?? []).length > 0 ||
+    (result.muses ?? []).length > 0 || result.cards.length > 1;
   // grid-cols-2 leaves a lone card pinned to the left column instead of
   // centered — only matters when the recap shows exactly one card (e.g. a
   // pack that granted a single coach card and nothing else).
   const totalOpened =
-    result.cards.length + result.coach_cards.length + result.stadium_cards.length + (result.skill_tokens ?? []).length;
+    result.cards.length + result.coach_cards.length + result.stadium_cards.length + (result.skill_tokens ?? []).length +
+    (result.muses ?? []).length;
   const singleCardWidthClass = totalOpened === 1 ? "w-2/5" : "";
   return (
     <div className="safe-bottom flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-16">
@@ -925,6 +1008,11 @@ function Summary({
           {(result.skill_tokens ?? []).map((token, i) => (
             <div key={`token-${i}`} className={singleCardWidthClass}>
               <SkillTokenTile skillCode={token.skill_code} quantity={token.quantity} />
+            </div>
+          ))}
+          {(result.muses ?? []).map((opened, i) => (
+            <div key={`muse-${i}`} className={singleCardWidthClass}>
+              <MuseTile opened={opened} />
             </div>
           ))}
           {result.stadium_cards.map((opened) => (

@@ -3,13 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { Skeleton } from "@/components/common/Skeleton";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconFire, IconTrophy } from "@/components/icons";
+import { HeroMusePortrait } from "@/components/muses/HeroMuse";
 import { staticUrl } from "@/lib/api";
 import type { LeagueStatus, ProfilePrivate } from "@/types";
 
 /** The top of the home screen: who you are and where you stand. League
  * progress is a ring around the avatar (tap = /league) with the league
  * emblem on it, the login streak sits on the photo above the emblem, and
- * the rating chip on the right opens the leaderboard. */
+ * the rating chip opens the leaderboard. The active «Муза» stands on the
+ * right (hover / tap — her status and today's date). */
 export default function HomeHero({
   profile,
   league,
@@ -44,8 +46,11 @@ export default function HomeHero({
   const RING = 2 * Math.PI * 30;
 
   return (
-    <section className="relative overflow-hidden rounded-3xl bg-bg-surface p-4">
-      <div className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-accent-lime/10 blur-3xl" />
+    <section className="relative z-10 rounded-3xl bg-bg-surface p-4">
+      {/* Only the glow is clipped — the Muse's card may hang below the hero. */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl">
+        <div className="absolute -right-10 -top-12 h-40 w-40 rounded-full bg-accent-lime/10 blur-3xl" />
+      </div>
 
       <div className="relative flex items-center gap-3">
         <button
@@ -125,6 +130,7 @@ export default function HomeHero({
             <span className="text-micro uppercase tracking-wider text-ink-mist">рейтинг</span>
           </button>
         )}
+        <HeroMusePortrait />
       </div>
     </section>
   );

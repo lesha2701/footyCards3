@@ -659,6 +659,18 @@ export interface GameConfig {
   equipment_max_pp: number;
   equipment_max_chemistry: number;
   equipment_max_talisman_pct: number;
+  // «Музы»
+  muses_enabled: boolean;
+  muse_max_stat: number;
+  muse_max_pp: number;
+  muse_max_xp_pct: number;
+  muse_max_daily_coins: number;
+  muse_max_accessory_pct: number;
+  muse_spare_coins: Record<string, number>;
+  muse_date_games: string[];
+  muse_date_coins: number;
+  muse_date_required: boolean;
+  muse_inspiration_hours: number;
   // «Академия»
   path_enabled: boolean;
   path_title: string;
@@ -1168,4 +1180,56 @@ export interface AdminEquipmentCatalog {
   rarities: string[];
   collections: AdminEquipmentCollection[];
   items: AdminEquipmentItem[];
+}
+
+/** «Музы» admin catalog (backend muse_service.admin_*). */
+export interface AdminMuseCollection {
+  id?: number;
+  name: string;
+  description: string | null;
+  image_path?: string | null;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface AdminMuse {
+  id?: number;
+  name: string;
+  title: string | null;
+  description: string | null;
+  icon: string;
+  image_path?: string | null;
+  rarity: string;
+  collection_id: number | null;
+  effect: string;
+  effect_value: number;
+  effect_label?: string;
+  drop_weight: number;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface AdminMuseAccessory {
+  id?: number;
+  name: string;
+  description: string | null;
+  icon: string;
+  image_path?: string | null;
+  kind: string;
+  kind_label?: string;
+  rarity: string;
+  boost_pct: number;
+  coins_price: number;
+  stars_price: number;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface AdminMuseCatalog {
+  effects: { code: string; label: string }[];
+  kinds: { code: string; label: string }[];
+  rarities: string[];
+  collections: AdminMuseCollection[];
+  muses: AdminMuse[];
+  accessories: AdminMuseAccessory[];
 }

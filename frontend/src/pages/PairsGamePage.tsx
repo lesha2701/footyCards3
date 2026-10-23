@@ -6,7 +6,9 @@ import { claimPairsReward, flipPairsCard, startPairs } from "@/api/games";
 import { IconCard, IconCoin, IconTrophy } from "@/components/icons";
 import PrimaryActionButton from "@/components/common/PrimaryActionButton";
 import { staticUrl } from "@/lib/api";
+import MuseDateBanner from "@/components/muses/MuseDateBanner";
 import { formatGameError } from "@/lib/errors";
+import { useMuseDate } from "@/lib/museDate";
 import { RARITY_GRADIENTS, RARITY_GLOW } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -36,17 +38,19 @@ export default function PairsGamePage() {
   const [claimResult, setClaimResult] = useState<PairsClaimResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const museDate = useMuseDate();
   const claimMutation = useMutation({
     mutationFn: () => claimPairsReward(sessionId!),
     onSuccess: (data) => {
       updateBalance(data.new_balance);
       hapticNotify("success");
       setClaimResult(data);
+      if (museDate.active) museDate.done();
     },
   });
 
   const startMutation = useMutation({
-    mutationFn: startPairs,
+    mutationFn: () => startPairs(museDate.active),
     onSuccess: (data) => {
       setSessionId(data.session_id);
       setBoardSize(data.board_size);
@@ -116,6 +120,7 @@ export default function PairsGamePage() {
     return (
       <div className="flex flex-col gap-5">
         <h1 className="font-display text-xl font-bold text-ink-chalk">Найди пару</h1>
+        <MuseDateBanner />
         <p className="text-sm text-ink-mist">
           Поле 5×5. Переворачивай по две карточки и ищи одинаковых футболистов. Среди карт спрятана одна особая —
           она приносит бонус монет, если её найти.
@@ -171,6 +176,7 @@ export default function PairsGamePage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <MuseDateBanner />
       <div className="flex items-center justify-between rounded-2xl bg-bg-surface px-4 py-3">
         <div>
           <p className="font-mono text-micro uppercase tracking-wide text-ink-mist-dim">Пары</p>

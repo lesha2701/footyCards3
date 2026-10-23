@@ -15,6 +15,7 @@ from app.models.user import User
 from app.schemas.game import PairsCardOut, PairsClaimOut, PairsFlipOut, PairsStartOut
 from app.schemas.player import PlayerOut
 from app.services.game_config_service import get_config
+from app.services import muse_service
 from app.services.wallet_service import credit_coins, lock_user_for_update
 from app.services.club_pass_service import extra_rewarded_attempts
 
@@ -62,21 +63,24 @@ async def _ensure_hourly_reset(db: AsyncSession, user: User) -> None:
         db.add(user)
 
 
-async def start_session(db: AsyncSession, user: User) -> PairsStartOut:
+async def start_session(db: AsyncSession, user: User, muse_date: bool = False) -> PairsStartOut:
     config = await get_config(db)
     locked_user = await lock_user_for_update(db, user.id)
-    await _ensure_hourly_reset(db, locked_user)
-    if locked_user.pairs_hourly_attempts >= config.hourly_game_limit:
-        remaining = timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(locked_user.pairs_hour_started_at))
-        raise ConflictError(
-            "Hourly play limit reached for this game",
-            details={
-                "hourly_limit": config.hourly_game_limit,
-                "retry_after_seconds": max(0, int(remaining.total_seconds())),
-            },
-        )
-    locked_user.pairs_hourly_attempts += 1
-    db.add(locked_user)
+    # «Свидание с музой»: an extra attempt — the hourly counter is not touched.
+    muse_date_row = await muse_service.begin_date(db, locked_user.id, "pairs") if muse_date else None
+    if muse_date_row is None:
+        await _ensure_hourly_reset(db, locked_user)
+        if locked_user.pairs_hourly_attempts >= config.hourly_game_limit:
+            remaining = timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(locked_user.pairs_hour_started_at))
+            raise ConflictError(
+                "Hourly play limit reached for this game",
+                details={
+                    "hourly_limit": config.hourly_game_limit,
+                    "retry_after_seconds": max(0, int(remaining.total_seconds())),
+                },
+            )
+        locked_user.pairs_hourly_attempts += 1
+        db.add(locked_user)
 
     await _ensure_daily_reset(db, locked_user)
 
@@ -93,6 +97,9 @@ async def start_session(db: AsyncSession, user: User) -> PairsStartOut:
         },
     )
     db.add(session)
+    if muse_date_row is not None:
+        await db.flush()
+        muse_date_row.session_id = session.id
     await db.commit()
     await db.refresh(session)
 
@@ -228,6 +235,13 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> PairsCl
     await db.refresh(session, with_for_update=True)
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
+    muse_coins = await muse_service.finish_date(db, locked_user, session.id)
+    if muse_coins is not None:
+        session.is_rewarded = True
+        db.add(session)
+        await db.commit()
+        await db.refresh(locked_user)
+        return PairsClaimOut(reward_coins=muse_coins, new_balance=locked_user.balance)
     await _ensure_daily_reset(db, locked_user)
     daily_cap_reached = locked_user.pairs_rewarded_attempts_today >= config.pairs_daily_limit + await extra_rewarded_attempts(
         db, locked_user.id, config
