@@ -197,7 +197,7 @@ export default function PlayPage() {
       : []),
     ...(kontra?.enabled
       ? [{
-        path: "/play/kontra", Icon: IconCounter, tint: "bg-green-600", title: "Контратака", group: "tactics" as Group,
+        path: "/play/kontra", art: artOf("kontra"), Icon: IconCounter, tint: "bg-green-600", title: "Контратака", group: "tactics" as Group,
         time: "5 мин", bot: true,
         description: "Отряд из 5 карт: арена и босс недели",
         stat: `Арена ${kontra.rating}`, limitKey: "kontra" as LimitKey,
