@@ -15,7 +15,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
@@ -141,9 +141,33 @@ def _fighter_out(card, gear: list[KontraGear]) -> KontraFighterOut:
     )
 
 
-async def _usable_cards(db: AsyncSession, user_id: int) -> list:
+def _best_copy_ids(user_id: int):
+    """Ids of the strongest copy of each footballer the user owns, picked in
+    SQL — big collections (tens of thousands of cards) must not be loaded
+    whole. The score mirrors card_rating_bonus; _best_copies re-checks."""
+    who = func.lower(func.trim(Player.display_name))
+    artifact = case(
+        (UserCard.artifact_bonus_owner_id == UserCard.owner_id, func.coalesce(UserCard.artifact_rating_bonus, 0)), else_=0,
+    )
+    score = (Player.rating + func.coalesce(UserCard.diamond_rating_bonus, 0) + func.coalesce(UserCard.star_rating_bonus, 0)
+             + func.coalesce(UserCard.path_rating_bonus, 0) + func.coalesce(UserCard.equipment_rating_bonus, 0) + artifact)
+    ranked = (
+        select(UserCard.id.label("id"), func.row_number().over(partition_by=who, order_by=(score.desc(), UserCard.id)).label("n"))
+        .join(Player, Player.id == UserCard.player_id)
+        .where(UserCard.owner_id == user_id, UserCard.is_locked_by_admin.is_(False))
+        .subquery()
+    )
+    return select(ranked.c.id).where(ranked.c.n == 1)
+
+
+async def _usable_cards(db: AsyncSession, user_id: int, include: Optional[list[int]] = None) -> list:
+    """The best copy of each footballer (plus `include` — cards a saved or
+    submitted squad names), with their players loaded."""
+    wanted = UserCard.id.in_(_best_copy_ids(user_id))
+    if include:
+        wanted = wanted | UserCard.id.in_(include)
     rows = (await db.execute(
-        select(UserCard).where(UserCard.owner_id == user_id, UserCard.is_locked_by_admin.is_(False))
+        select(UserCard).where(UserCard.owner_id == user_id, UserCard.is_locked_by_admin.is_(False), wanted)
         .options(joinedload(UserCard.player))
     )).unique().scalars().all()
     cards = list(rows)
@@ -195,9 +219,9 @@ def _auto_pick(cards: list) -> list:
 async def _squad_cards(db: AsyncSession, user: User) -> tuple[list, Optional[int], list]:
     """(squad cards, leader id, all usable cards) — the saved squad cleaned
     of cards no longer owned, else an automatic pick."""
-    cards = await _usable_cards(db, user.id)
-    by_id = {c.id: c for c in cards}
     saved = user.kontra_squad or {}
+    cards = await _usable_cards(db, user.id, include=list(saved.get("cards") or []))
+    by_id = {c.id: c for c in cards}
     squad = _best_copies([by_id[i] for i in saved.get("cards") or [] if i in by_id])[:SQUAD_SIZE]
     if not squad:
         squad = _auto_pick(cards)
@@ -267,7 +291,7 @@ async def get_squad(db: AsyncSession, user: User) -> KontraSquadOut:
 async def set_squad(db: AsyncSession, user: User, card_ids: list[int], leader: int) -> KontraSquadOut:
     if not 1 <= len(card_ids) <= SQUAD_SIZE or len(set(card_ids)) != len(card_ids):
         raise ConflictError(f"В отряде от 1 до {SQUAD_SIZE} разных карточек")
-    owned = {c.id: c for c in await _usable_cards(db, user.id)}
+    owned = {c.id: c for c in await _usable_cards(db, user.id, include=list(card_ids))}
     if not set(card_ids) <= owned.keys():
         raise ForbiddenError("Можно брать только свои карточки")
     if len({_who(owned[i]) for i in card_ids}) != len(card_ids):
@@ -738,7 +762,7 @@ async def equip_gear(db: AsyncSession, user: User, gear_id: int, card_id: Option
     if gear is None or gear.user_id != user.id:
         raise NotFoundError("Вещь не найдена")
     if card_id is not None:
-        if card_id not in {c.id for c in await _usable_cards(db, user.id)}:
+        if card_id not in {c.id for c in await _usable_cards(db, user.id, include=[card_id])}:
             raise ForbiddenError("Надеть можно только на свою карточку")
         worn = (await db.execute(select(KontraGear).where(
             KontraGear.user_id == user.id, KontraGear.card_id == card_id, KontraGear.slot == gear.slot, KontraGear.id != gear.id,
