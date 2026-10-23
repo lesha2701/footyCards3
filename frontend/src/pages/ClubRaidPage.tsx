@@ -9,6 +9,7 @@ import { IconChevronLeft, IconClock, IconCoin } from "@/components/icons";
 import { RewardBundleChips } from "@/components/rewards/RewardBundleView";
 import { formatGameError } from "@/lib/errors";
 import { formatCountdown } from "@/lib/format";
+import { raidBossArt } from "@/lib/bossArt";
 import { hapticNotify } from "@/lib/telegram";
 
 function goalsWord(n: number): string {
@@ -37,6 +38,7 @@ export default function ClubRaidPage() {
   });
   if (isLoading || !data) return <ListSkeleton />;
   const secondsLeft = Math.max(0, Math.floor((new Date(data.ends_at).getTime() - Date.now()) / 1000));
+  const bossArt = raidBossArt(data.boss.code);
   const hpLeft = Math.max(0, data.hp - data.damage);
   const pct = Math.round((hpLeft / data.hp) * 100);
   const top = Math.max(1, ...data.members.map((m) => m.damage));
@@ -61,9 +63,13 @@ export default function ClubRaidPage() {
           initial={{ scale: 1 }}
           animate={last ? { scale: [1, 0.85, 1.05, 1], rotate: [0, -6, 6, 0] } : {}}
           transition={{ duration: 0.5 }}
-          className={`text-6xl ${data.defeated ? "grayscale" : ""}`}
+          className={`${bossArt ? "" : "text-6xl"} ${data.defeated ? "grayscale" : ""}`}
         >
-          {data.boss.emoji}
+          {bossArt ? (
+            <img src={bossArt} alt={data.boss.name} className="h-40 w-40 rounded-3xl object-cover shadow-[0_12px_32px_-10px_rgba(0,0,0,0.8)] ring-1 ring-white/10" />
+          ) : (
+            data.boss.emoji
+          )}
         </motion.span>
         <div>
           <p className="font-display text-lg font-bold text-ink-chalk">{data.boss.name}</p>
