@@ -1,6 +1,8 @@
+import { ListSkeleton } from "@/components/common/Skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { CLUB_ROLE_LABELS, isClubManager } from "@/lib/clubRoles";
 
 import { fetchClubActivity, fetchMyClub, remindMember } from "@/api/clubs";
 import EmptyState from "@/components/common/EmptyState";
@@ -9,7 +11,6 @@ import { ApiRequestError } from "@/lib/api";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 
-const ROLE_LABELS: Record<string, string> = { captain: "Капитан", assistant: "Ассистент", member: "Участник" };
 const ACTIVITY_WINDOW_DAYS = 7;
 
 export default function ClubActivityPage() {
@@ -35,7 +36,7 @@ export default function ClubActivityPage() {
     },
   });
 
-  const isManager = club?.my_role === "captain" || club?.my_role === "assistant";
+  const isManager = isClubManager(club?.my_role);
   const sorted = [...(activity ?? [])].sort(
     (a, b) => a.games_played + a.daily_rewards_claimed - (b.games_played + b.daily_rewards_claimed)
   );
@@ -56,7 +57,7 @@ export default function ClubActivityPage() {
 
       {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
 
-      {isLoading && <p className="text-sm text-ink-mist-dim">Загрузка...</p>}
+      {isLoading && <ListSkeleton count={3} />}
 
       {!isLoading && !sorted.length && (
         <EmptyState icon={IconUsers} title="Нет данных" description="В клубе пока никого нет" />
@@ -77,7 +78,7 @@ export default function ClubActivityPage() {
                 <p className="truncate text-sm font-semibold text-ink-chalk">
                   {m.username ?? m.first_name ?? `#${m.user_id}`}
                 </p>
-                <p className="text-[11px] text-ink-mist-dim">{ROLE_LABELS[m.role]}</p>
+                <p className="text-caption text-ink-mist-dim">{CLUB_ROLE_LABELS[m.role]}</p>
                 <div className="mt-1.5 flex items-center gap-3 text-xs text-ink-mist">
                   <span className="flex items-center gap-1">
                     <IconBrain size={13} className="text-accent-lime" />

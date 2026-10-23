@@ -16,6 +16,7 @@ from app.schemas.game import PairsCardOut, PairsClaimOut, PairsFlipOut, PairsSta
 from app.schemas.player import PlayerOut
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
+from app.services.club_pass_service import extra_rewarded_attempts
 
 BOARD_SIZE = 25
 TOTAL_PAIRS = 12
@@ -228,7 +229,9 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> PairsCl
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked_user)
-    daily_cap_reached = locked_user.pairs_rewarded_attempts_today >= config.pairs_daily_limit
+    daily_cap_reached = locked_user.pairs_rewarded_attempts_today >= config.pairs_daily_limit + await extra_rewarded_attempts(
+        db, locked_user.id, config
+    )
 
     reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else session.reward_coins
     session.is_rewarded = True

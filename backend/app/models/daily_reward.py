@@ -14,7 +14,12 @@ class DailyReward(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     reward_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # Monthly login calendar (daily_reward_service): the day of the month
+    # this row claims. Rows from before the calendar hold the old 1-7 streak.
     streak_day: Mapped[int] = mapped_column(Integer, nullable=False)
+    # "login" (claimed that very day) or "coins"/"stars" (a missed day caught
+    # up later).
+    claim_method: Mapped[str] = mapped_column(String(8), default="login", server_default="login", nullable=False)
     coins_awarded: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     free_pack_id: Mapped[Optional[int]] = mapped_column(ForeignKey("packs.id"), nullable=True)
     random_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_cards.id"), nullable=True)

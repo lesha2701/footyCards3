@@ -956,7 +956,7 @@ async def test_set_squad_enforces_rarity_rules(client, db_session, bot_token):
     squad = (await client.get(f"{API}/squad", headers=headers)).json()
     # Only five cards and two are legendary: the cap can't be met.
     assert squad["is_complete"] is False and any("легендарных" in v for v in squad["violations"])
-    assert squad["rarity_limits"] == {"max_legendary": 1, "max_diamond": 1, "min_rare": 1, "min_common": 1}
+    assert squad["rarity_limits"] == {"max_legendary": 1, "max_diamond": 1, "max_path": 1, "min_rare": 1, "min_common": 1}
     cards = {"star": ids[0], "tackler": ids[1], "speedster": ids[2], "provocateur": ids[3], "regular_1": ids[4]}
     resp = await client.put(f"{API}/squad", headers=headers, json={"cards": cards, "layout": squad["layout"]})
     assert resp.status_code == 409 and "легендарных" in resp.json()["error"]["message"]
@@ -1317,3 +1317,8 @@ async def test_admin_sets_role_caps(client, db_session, bot_token):
     assert resp.status_code == 200
     assert resp.json()["stratego_provocateur_max_rarity"] == "legendary"
     assert resp.json()["stratego_speedster_max_rarity"] == "rare"
+
+
+# Stake tests here are about stake mechanics; the anti-farming limits have
+# their own file (test_stake_guard.py).
+pytestmark = pytest.mark.usefixtures("stake_guards_off")

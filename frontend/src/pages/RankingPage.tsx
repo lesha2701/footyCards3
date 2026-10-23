@@ -1,10 +1,12 @@
+import { ListSkeleton } from "@/components/common/Skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { fetchRanking } from "@/api/leaderboard";
 import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
-import { IconBall, IconCollection, IconFlag, IconFlagCheckered, IconGoal, IconHandshake, IconTrophy, IconUsers, type IconProps } from "@/components/icons";
+import { IconBall, IconBoxingGlove, IconCollection, IconFlag, IconFlagCheckered, IconGoal, IconHandshake, IconStadium, IconStar, IconTrophy, IconUsers, type IconProps } from "@/components/icons";
 import { useAuthStore } from "@/store/authStore";
 import type { RankingEntry, RankingMetric } from "@/types";
 
@@ -14,14 +16,23 @@ const METRICS: { value: RankingMetric; label: string; Icon: (props: IconProps) =
   { value: "penalty_rating", label: "Рейтинг Пенальти", Icon: IconGoal },
   { value: "stratego_rating", label: "Рейтинг Стратего", Icon: IconFlag },
   { value: "stratego_puzzles", label: "Задачи Стратего", Icon: IconFlag },
+  { value: "mordoboi_rating", label: "Рейтинг Мордобоя", Icon: IconBoxingGlove },
   { value: "matches_won", label: "Победы", Icon: IconTrophy },
   { value: "cards_count", label: "Карт в коллекции", Icon: IconCollection },
   { value: "unique_players", label: "Уникальных игроков", Icon: IconUsers },
   { value: "referral_count", label: "Рефералов", Icon: IconHandshake },
+  { value: "base_level", label: "Уровень базы", Icon: IconStadium },
+  { value: "academy_level", label: "Уровень Академии", Icon: IconStar },
+  { value: "academy_prestige", label: "Престиж Академии", Icon: IconStar },
 ];
 
 export default function RankingPage() {
-  const [metric, setMetric] = useState<RankingMetric>("arena_rating");
+  // ?metric=… opens a specific board (e.g. «Уровень базы» from the base screen).
+  const [params] = useSearchParams();
+  const [metric, setMetric] = useState<RankingMetric>(() => {
+    const wanted = params.get("metric");
+    return METRICS.find((m) => m.value === wanted)?.value ?? "arena_rating";
+  });
   const user = useAuthStore((s) => s.user);
   const { data, isLoading } = useQuery({ queryKey: ["ranking", metric], queryFn: () => fetchRanking(metric) });
 
@@ -49,7 +60,7 @@ export default function RankingPage() {
         ))}
       </div>
 
-      {isLoading && <p className="text-sm text-ink-mist">Загрузка...</p>}
+      {isLoading && <ListSkeleton count={3} />}
 
       {!isLoading && !data?.top.length ? (
         <EmptyState icon={IconTrophy} title="Пока никто не набрал очков" description="Стань первым!" />

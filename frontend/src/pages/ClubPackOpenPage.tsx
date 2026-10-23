@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
   COACH_STAGES,
@@ -16,6 +16,7 @@ import { StadiumRevealStage } from "@/components/cards/StadiumRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import { IconCoin } from "@/components/icons";
+import PlayerCard from "@/components/cards/PlayerCard";
 import { openClubPack } from "@/api/clubPacks";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { haptic, hapticNotify } from "@/lib/telegram";
@@ -30,6 +31,7 @@ function stagesFor(item: OpenedClubPackItem) {
 export default function ClubPackOpenPage() {
   const { packId } = useParams<{ packId: string }>();
   const navigate = useNavigate();
+  const quantity = Math.max(1, Number((useLocation().state as { quantity?: number } | null)?.quantity ?? 1));
 
   const [phase, setPhase] = useState<"packshot" | "revealing" | "summary">("packshot");
   const [cardIndex, setCardIndex] = useState(0);
@@ -49,7 +51,7 @@ export default function ClubPackOpenPage() {
     if (hasStartedRef.current) return;
     hasStartedRef.current = true;
 
-    openClubPack(Number(packId), idempotencyKeyRef.current!)
+    openClubPack(Number(packId), idempotencyKeyRef.current!, quantity)
       .then((data) => setRequestState({ status: "success", data }))
       .catch((err: unknown) => {
         setRequestState({
@@ -190,41 +192,40 @@ export default function ClubPackOpenPage() {
                   key={`coach-${item.coach_card!.id}`}
                   className={`flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2 ${result.cards.length === 1 ? "w-2/5" : ""}`}
                 >
-                  <img
+                  <img decoding="async"
                     src={staticUrl(item.coach_card!.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                     alt={item.coach_card!.coach.display_name}
                     className="aspect-square w-full rounded-lg object-cover"
                   />
-                  <span className="truncate text-[10px] font-semibold text-ink-chalk">{item.coach_card!.coach.display_name}</span>
-                  <span className="text-[9px] font-bold text-accent-cyan">Тренер</span>
-                  {item.is_new && <span className="text-[9px] font-bold text-accent-green">Новый!</span>}
+                  <span className="truncate text-micro font-semibold text-ink-chalk">{item.coach_card!.coach.display_name}</span>
+                  <span className="text-micro font-bold text-accent-cyan">Тренер</span>
+                  {item.is_new && <span className="text-micro font-bold text-accent-green">Новый!</span>}
                 </div>
               ) : item.kind === "stadium" ? (
                 <div
                   key={`stadium-${item.stadium_card!.id}`}
                   className={`flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2 ${result.cards.length === 1 ? "w-2/5" : ""}`}
                 >
-                  <img
+                  <img decoding="async"
                     src={staticUrl(item.stadium_card!.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                     alt={item.stadium_card!.stadium.display_name}
                     className="aspect-square w-full rounded-lg object-cover"
                   />
-                  <span className="truncate text-[10px] font-semibold text-ink-chalk">{item.stadium_card!.stadium.display_name}</span>
-                  <span className="text-[9px] font-bold text-accent-cyan">Стадион · +{Math.round(item.stadium_card!.stadium.boost_pct * 100)}%</span>
-                  {item.is_new && <span className="text-[9px] font-bold text-accent-green">Новый!</span>}
+                  <span className="truncate text-micro font-semibold text-ink-chalk">{item.stadium_card!.stadium.display_name}</span>
+                  <span className="text-micro font-bold text-accent-cyan">Стадион · +{Math.round(item.stadium_card!.stadium.boost_pct * 100)}%</span>
+                  {item.is_new && <span className="text-micro font-bold text-accent-green">Новый!</span>}
                 </div>
               ) : (
-                <div
-                  key={`player-${item.card!.id}`}
-                  className={`flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-2 ${result.cards.length === 1 ? "w-2/5" : ""}`}
-                >
-                  <img
-                    src={staticUrl(item.card!.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                    alt={item.card!.player.display_name}
-                    className="aspect-square w-full rounded-lg object-cover"
+                <div key={`player-${item.card!.id}`} className={result.cards.length === 1 ? "w-2/5" : ""}>
+                  <PlayerCard
+                    player={item.card!.player}
+                    size="sm"
+                    footer={
+                      item.is_new ? (
+                        <p className="pb-1 text-center text-micro font-bold leading-none text-accent-green">Новая!</p>
+                      ) : undefined
+                    }
                   />
-                  <span className="truncate text-[10px] font-semibold text-ink-chalk">{item.card!.player.display_name}</span>
-                  {item.is_new && <span className="text-[9px] font-bold text-accent-green">Новая!</span>}
                 </div>
               )
             )}

@@ -9,7 +9,7 @@ export function PrizeGlyph({ prize }: { prize: WheelPrize }) {
   if (prize.prize_type === "coins") return <IconCoin size={26} />;
   if (prize.prize_type === "pack") return <IconPack size={26} />;
   if (prize.prize_type === "card_rarity") return <IconCard size={26} />;
-  if (prize.badge?.image_path) return <img src={staticUrl(prize.badge.image_path) ?? undefined} className="h-6 w-6 rounded-full object-cover" />;
+  if (prize.badge?.image_path) return <img decoding="async" src={staticUrl(prize.badge.image_path) ?? undefined} className="h-6 w-6 rounded-full object-cover" />;
   return <span className="text-lg leading-none">{prize.badge?.icon ?? "🏅"}</span>;
 }
 

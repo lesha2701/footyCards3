@@ -4,8 +4,9 @@ import { useNavigate } from "react-router-dom";
 
 import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
-import { IconCoin, IconPlus, IconSwap } from "@/components/icons";
+import { IconCoin, IconPlus, IconSearch, IconSwap } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
+import { fetchFeatureFlags } from "@/api/featureFlags";
 import { acceptTradeOffer, cancelTradeOffer, fetchTradeOffers, rejectTradeOffer } from "@/api/trades";
 import { staticUrl } from "@/lib/api";
 import { hapticNotify } from "@/lib/telegram";
@@ -34,6 +35,9 @@ export default function TradesPage() {
   const { data: offers, isLoading } = useQuery({ queryKey: ["trades", tab], queryFn: () => fetchTradeOffers(params) });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["trades"] });
+  // Admin switch: while trades are off, no new offers and no accepting.
+  const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags });
+  const tradesOff = flags?.trades_enabled === false;
 
   const acceptMutation = useMutation({
     mutationFn: acceptTradeOffer,
@@ -46,16 +50,32 @@ export default function TradesPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-xl font-bold text-ink-chalk">Обмены</h1>
-        <button
-          onClick={() => navigate("/trades/new")}
-          className="flex items-center gap-1 rounded-full bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95"
-        >
-          <IconPlus size={13} />
-          Новый
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => navigate("/trades/finder")}
+            className="flex items-center gap-1 rounded-full bg-white/5 px-4 py-2 text-xs font-bold text-ink-chalk active:scale-95"
+          >
+            <IconSearch size={13} />
+            Поиск
+          </button>
+          <button
+            onClick={() => navigate("/trades/new")}
+            disabled={tradesOff}
+            className="flex items-center gap-1 rounded-full bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-40"
+          >
+            <IconPlus size={13} />
+            Новый
+          </button>
+        </div>
       </div>
 
       <CardsSectionTabs />
+
+      {tradesOff && (
+        <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-3 py-2.5 text-xs text-amber-200" role="status">
+          ⏸ Обмены временно отключены. Свои предложения можно отменить, входящие — отклонить.
+        </p>
+      )}
 
       <div className="flex gap-2">
         <TabButton active={tab === "incoming"} label="Входящие" onClick={() => setTab("incoming")} />
@@ -74,6 +94,7 @@ export default function TradesPage() {
             myUserId={userId}
             onOpen={() => navigate(`/trades/${offer.id}`)}
             onAccept={() => acceptMutation.mutate(offer.id)}
+            acceptDisabled={tradesOff}
             onReject={() => rejectMutation.mutate(offer.id)}
             onCancel={() => cancelMutation.mutate(offer.id)}
           />
@@ -99,6 +120,7 @@ function TradeCard({
   myUserId,
   onOpen,
   onAccept,
+  acceptDisabled = false,
   onReject,
   onCancel,
 }: {
@@ -106,6 +128,7 @@ function TradeCard({
   myUserId?: number;
   onOpen: () => void;
   onAccept: () => void;
+  acceptDisabled?: boolean;
   onReject: () => void;
   onCancel: () => void;
 }) {
@@ -119,7 +142,7 @@ function TradeCard({
           {isSender ? `Кому: ${offer.receiver.username ?? offer.receiver.first_name}` : `От: ${offer.sender.username ?? offer.sender.first_name}`}
           <UserBadge badge={isSender ? offer.receiver.active_badge : offer.sender.active_badge} />
         </span>
-        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-ink-mist-dim">{STATUS_LABELS[offer.status]}</span>
+        <span className="rounded-full bg-white/5 px-2 py-0.5 text-caption text-ink-mist-dim">{STATUS_LABELS[offer.status]}</span>
       </div>
 
       <div className="mt-3 flex items-center gap-2">
@@ -134,7 +157,11 @@ function TradeCard({
         <div className="mt-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
           {isReceiver && (
             <>
-              <button onClick={onAccept} className="flex-1 rounded-xl bg-accent-green py-2 text-xs font-bold text-bg-base active:scale-95">
+              <button
+                onClick={onAccept}
+                disabled={acceptDisabled}
+                className="flex-1 rounded-xl bg-accent-green py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-40"
+              >
                 Принять
               </button>
               <button onClick={onReject} className="flex-1 rounded-xl bg-red-500/80 py-2 text-xs font-bold text-white active:scale-95">
@@ -156,10 +183,10 @@ function TradeCard({
 function MiniCardRow({ cards, label, coins }: { cards: TradeOffer["offered_cards"]; label: string; coins: number }) {
   return (
     <div className="flex-1">
-      <p className="mb-1 text-[10px] text-ink-mist-dim">{label}</p>
+      <p className="mb-1 text-micro text-ink-mist-dim">{label}</p>
       <div className="flex -space-x-2">
         {cards.slice(0, 3).map((c) => (
-          <img
+          <img decoding="async" loading="lazy"
             key={c.id}
             src={staticUrl(c.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
             alt={c.player.display_name}
@@ -169,7 +196,7 @@ function MiniCardRow({ cards, label, coins }: { cards: TradeOffer["offered_cards
         {cards.length === 0 && coins === 0 && <span className="text-xs text-ink-mist-dim">—</span>}
       </div>
       {coins > 0 && (
-        <p className="mt-1 flex items-center gap-0.5 font-mono text-[11px] font-semibold text-accent-lime">
+        <p className="mt-1 flex items-center gap-0.5 font-mono text-caption font-semibold text-accent-lime">
           +{coins}
           <IconCoin size={10} />
         </p>

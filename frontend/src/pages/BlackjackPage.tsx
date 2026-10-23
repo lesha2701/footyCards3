@@ -75,7 +75,7 @@ function FootyCard({ card, index }: { card: BlackjackCard; index: number }) {
     >
       {card.hidden ? (
         <div className="flex h-full w-full items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-white/10 to-bg-surface shadow-lg">
-          <img src="/brand/victor-fc-crest.jpg" alt="" className="h-10 w-10 rounded-full opacity-80 ring-1 ring-white/10" />
+          <img decoding="async" src="/brand/victor-fc-crest.jpg" alt="" className="h-10 w-10 rounded-full opacity-80 ring-1 ring-white/10" />
         </div>
       ) : (
         <div
@@ -89,10 +89,10 @@ function FootyCard({ card, index }: { card: BlackjackCard; index: number }) {
         >
           <div className="flex items-start justify-between">
             <span className="font-display text-lg font-bold leading-none text-ink-chalk">{face ? face.short : card.rank}</span>
-            <span className="text-[9px] font-semibold text-ink-mist">{suit?.label}</span>
+            <span className="text-micro font-semibold text-ink-mist">{suit?.label}</span>
           </div>
           <div className="text-center text-2xl leading-none">{face ? face.icon : suit?.icon}</div>
-          <p className="truncate text-center text-[9px] font-semibold text-ink-mist">
+          <p className="truncate text-center text-micro font-semibold text-ink-mist">
             {face ? face.title : "Игрок"}
           </p>
         </div>
@@ -247,15 +247,15 @@ export default function BlackjackPage() {
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="rounded-xl bg-bg-surface px-2 py-2">
           <p className="font-mono text-base font-bold text-ink-chalk">{status.free_remaining}/{status.free_per_day}</p>
-          <p className="text-[10px] text-ink-mist">бесплатно сегодня</p>
+          <p className="text-micro text-ink-mist">бесплатно сегодня</p>
         </div>
         <div className="rounded-xl bg-bg-surface px-2 py-2">
           <p className="font-mono text-base font-bold text-ink-chalk">{status.replay_entries}</p>
-          <p className="text-[10px] text-ink-mist">переигровки</p>
+          <p className="text-micro text-ink-mist">переигровки</p>
         </div>
         <div className="rounded-xl bg-bg-surface px-2 py-2">
           <p className="font-mono text-base font-bold text-ink-chalk">{status.paid_entries}</p>
-          <p className="text-[10px] text-ink-mist">куплено</p>
+          <p className="text-micro text-ink-mist">куплено</p>
         </div>
       </div>
 

@@ -1,12 +1,34 @@
 from app.models.admin_action import AdminAction
 from app.models.badge import Badge, UserBadge
 from app.models.blackjack import BlackjackMatch
-from app.models.card import UserCard
+from app.models.card import CardStarLedger, UserCard
+from app.models.card_path import AcademyLedger, UserAcademy, CardPath, PathAttemptPurchase, PathPrestigeLedger, PathStage, PathStageTask, PathTalent, PathXpEvent
 from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
-from app.models.career import CareerParticipant, CareerSeason, Friendship
+from app.models.career import CareerClub, CareerParticipant, CareerProfile, CareerSeason, Friendship
 from app.models.lifestyle import LifestyleItem, UserLifestyleItem
-from app.models.my_player import MyPlayer
-from app.models.player_career import PlayerCareerSeason
+from app.models.club_base import ClubBaseLedger, UserBaseCosmetic, UserClubBase
+from app.models.manager_club import (
+    ManagerClub,
+    ManagerContract,
+    ManagerCosmetic,
+    ManagerLeague,
+    ManagerMerch,
+    ManagerNpc,
+    ManagerSeason,
+    ManagerValueHistory,
+)
+from app.models.my_player import MyPlayer, MyPlayerDuel
+from app.models.player_career import (
+    PlayerCareerCup,
+    PlayerCareerGoldenBall,
+    PlayerCareerMonthStat,
+    PlayerCareerSeason,
+    PlayerCareerClubRecord,
+    PlayerCareerFriendLeague,
+    PlayerCareerFriendMember,
+    PlayerCareerWeekStat,
+    PlayerCareerWeeklyClaim,
+)
 from app.models.card_collection import CardCollection, UserCollectionReward
 from app.models.card_upgrade import CardUpgradeAttempt, CardUpgradeRule
 from app.models.club import Club, ClubJoinRequest, ClubMember
@@ -15,7 +37,20 @@ from app.models.club_card import ClubCard
 from app.models.club_card_availability import ClubCardAvailability
 from app.models.club_coach_card import ClubCoachCard
 from app.models.club_daily_claim import ClubDailyClaim
-from app.models.club_league import ClubLeagueResult, ClubLeagueWeek
+from app.models.club_emblem import ClubDonation, ClubEmblemItem, ClubEmblemUnlock, ClubStarTransaction
+from app.models.club_wall import ClubPost
+from app.models.club_reward import ClubRewardClaim, ClubRewardGrant, ClubShopItem, ClubShopPurchase
+from app.models.club_quest import ClubQuestCompletion, ClubQuestTemplate
+from app.models.weekly_event import (
+    ClubRaid,
+    ClubRaidAttack,
+    MatchDayFixture,
+    MatchDayPrediction,
+    WeeklyCupResult,
+    WeeklyCupWeek,
+)
+from app.models.club_war import ClubWar, ClubWarRound
+from app.models.club_league import ClubLeagueResult, ClubLeagueWeek, ClubSeasonResult
 from app.models.club_lineup import ClubLineup, ClubLineupCard
 from app.models.club_pack import ClubPack, ClubPackRarityProbability
 from app.models.club_pack_opening import ClubPackOpening, ClubPackOpeningCard
@@ -38,6 +73,7 @@ from app.models.player_tournament import (
 )
 from app.models.player import Player
 from app.models.stratego import StrategoMatch, StrategoQueueEntry
+from app.models.mordoboi import MordoboiMatch, MordoboiQueueEntry
 from app.models.magnate import MagnateMatch, MagnateSeat
 from app.models.task import TaskDefinition, UserTask
 from app.models.tournament_queue import TournamentQueue, TournamentQueueEntry, TournamentQueueState
@@ -46,24 +82,64 @@ from app.models.tournament_match import TournamentMatch
 from app.models.tournament_standing import TournamentClubStanding
 from app.models.tournament_result import TournamentClubResult
 from app.models.tournament_simulation_slot_log import TournamentSimulationSlotLog
-from app.models.trade import TradeOffer, TradeOfferCard
+from app.models.trade import TradeOffer, TradeOfferCard, TradeWish
 from app.models.transaction import CoinTransaction
 from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.wheel import WheelPrize, WheelSpin
 from app.models.user import User
+from app.models.user_activity import UserDailyActivity
+from app.models.stars_payment_receipt import StarsPaymentReceipt
+from app.models.equipment import EquipmentCollection, EquipmentItem, UserEquipment
+from app.models.monetization import (
+    Artifact,
+    ClubSubscription,
+    Cosmetic,
+    LoginCalendarBonusClaim,
+    LoginCalendarDay,
+    Season,
+    SeasonClaim,
+    SeasonLevel,
+    SeasonProgress,
+    StarterOfferPurchase,
+    UserArtifact,
+    UserCosmetic,
+)
 from app.models.user_coach_card import UserCoachCard
 from app.models.stadium import Stadium
 from app.models.user_stadium_card import UserStadiumCard
 from app.models.club_stadium_card import ClubStadiumCard
 
 __all__ = [
+    "ManagerClub",
+    "ManagerContract",
+    "ManagerLeague",
+    "ManagerNpc",
+    "ManagerSeason",
+    "ManagerCosmetic",
+    "ManagerMerch",
+    "ManagerValueHistory",
     "AdminAction",
     "BlackjackMatch",
     "StrategoMatch",
+    "MordoboiMatch",
+    "MordoboiQueueEntry",
     "StrategoQueueEntry",
     "Badge",
     "UserBadge",
     "UserCard",
+    "CardStarLedger",
+    "CardPath",
+    "PathAttemptPurchase",
+    "PathPrestigeLedger",
+    "UserAcademy",
+    "UserClubBase",
+    "ClubBaseLedger",
+    "UserBaseCosmetic",
+    "AcademyLedger",
+    "PathStage",
+    "PathStageTask",
+    "PathTalent",
+    "PathXpEvent",
     "CardCollection",
     "UserCollectionReward",
     "CardUpgradeAttempt",
@@ -76,6 +152,26 @@ __all__ = [
     "ClubCardAvailability",
     "ClubCoachCard",
     "ClubDailyClaim",
+    "ClubDonation",
+    "ClubEmblemItem",
+    "ClubEmblemUnlock",
+    "ClubStarTransaction",
+    "ClubPost",
+    "ClubWar",
+    "ClubWarRound",
+    "ClubSeasonResult",
+    "ClubQuestCompletion",
+    "ClubRaid",
+    "ClubRaidAttack",
+    "MatchDayFixture",
+    "MatchDayPrediction",
+    "WeeklyCupResult",
+    "WeeklyCupWeek",
+    "ClubQuestTemplate",
+    "ClubRewardClaim",
+    "ClubRewardGrant",
+    "ClubShopItem",
+    "ClubShopPurchase",
     "ClubLeagueResult",
     "ClubLeagueWeek",
     "ClubLineup",
@@ -121,6 +217,7 @@ __all__ = [
     "UserTask",
     "TradeOffer",
     "TradeOfferCard",
+    "TradeWish",
     "TournamentQueue",
     "TournamentQueueEntry",
     "TournamentQueueState",
@@ -136,6 +233,23 @@ __all__ = [
     "WheelPrize",
     "WheelSpin",
     "User",
+    "UserDailyActivity",
+    "StarsPaymentReceipt",
+    "ClubSubscription",
+    "Cosmetic",
+    "LoginCalendarBonusClaim",
+    "LoginCalendarDay",
+    "Season",
+    "SeasonClaim",
+    "SeasonLevel",
+    "SeasonProgress",
+    "StarterOfferPurchase",
+    "UserCosmetic",
+    "Artifact",
+    "UserArtifact",
+    "EquipmentCollection",
+    "EquipmentItem",
+    "UserEquipment",
     "UserCoachCard",
     "Stadium",
     "UserStadiumCard",
@@ -147,7 +261,16 @@ __all__ = [
     "CareerParticipant",
     "Friendship",
     "MyPlayer",
+    "MyPlayerDuel",
     "LifestyleItem",
     "UserLifestyleItem",
     "PlayerCareerSeason",
+    "PlayerCareerCup",
+    "PlayerCareerMonthStat",
+    "PlayerCareerGoldenBall",
+    "PlayerCareerClubRecord",
+    "PlayerCareerFriendLeague",
+    "PlayerCareerFriendMember",
+    "PlayerCareerWeekStat",
+    "PlayerCareerWeeklyClaim",
 ]

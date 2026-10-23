@@ -64,6 +64,10 @@ async def credit_coins(
     from app.services.my_player_service import grant_reward_xp
 
     await grant_reward_xp(db, user, tx_type, amount)
+    # «Сезонный пропуск»: the same rewarded games give season XP.
+    from app.services import season_pass_service
+
+    await season_pass_service.grant_reward_xp(db, user, tx_type, amount)
     return tx
 
 

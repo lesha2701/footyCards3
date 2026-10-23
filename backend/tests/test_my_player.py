@@ -396,3 +396,85 @@ async def test_admin_lifestyle_crud(client, db_session, bot_token):
     assert upd.status_code == 200 and upd.json()["coins_price"] == 9000 and not upd.json()["is_active"]
     assert len((await client.get("/api/v1/admin/lifestyle", headers=auth)).json()) == 1
     assert (await client.delete(f"/api/v1/admin/lifestyle/{item_id}", headers=auth)).status_code == 204
+
+
+async def test_premium_hairstyle_for_stars_sets_appearance_and_status(client, db_session, bot_token, monkeypatch):
+    from app.services import stars_payment_service
+    from tests.test_gifts import INTERNAL_HEADERS, _deliver, _fake_invoice_link
+
+    monkeypatch.setattr(stars_payment_service, "_request_telegram_invoice_link", _fake_invoice_link)
+    _, headers = await _login(client, db_session, bot_token, 870090)
+    await _create(client, headers)
+    view = (await client.get(f"{API}/my-player", headers=headers)).json()
+    neymar = next(c for c in view["cosmetics"]["catalog"] if c["code"] == "hair_neymar")
+    assert neymar["kind"] == "hair" and neymar["stars_price"] == 120 and neymar["price"] == 0
+    assert neymar["status"] == 30 and neymar["hair_index"] == 14
+    assert (await client.post(f"{API}/my-player/cosmetics/buy", headers=headers, json={"code": "hair_neymar"})).status_code == 409
+
+    resp = await client.post(f"{API}/my-player/stars-invoice", headers=headers, json={"purchase": "cosmetic", "code": "hair_neymar"})
+    token, stars = resp.json()["payload_token"], resp.json()["stars_amount"]
+    assert (await _deliver(client, token, 870090, "charge-hair", stars)).status_code == 200
+    view = (await client.get(f"{API}/my-player", headers=headers)).json()
+    assert view["player"]["appearance"]["hair"] == 14 and view["cosmetics"]["hair"] == "hair_neymar"
+    assert (await client.get(f"{API}/lifestyle", headers=headers)).json()["prestige"] == 30
+
+    # Editing the look keeps the premium style; picking a free hairstyle takes it off.
+    same = await client.patch(f"{API}/my-player", headers=headers, json={"appearance": {**LOOK, "hair": 14}})
+    assert same.status_code == 200 and same.json()["player"]["appearance"]["hair"] == 14
+    free = await client.patch(f"{API}/my-player", headers=headers, json={"appearance": {**LOOK, "hair": 3}})
+    assert free.json()["player"]["appearance"]["hair"] == 3 and free.json()["cosmetics"]["hair"] is None
+    # Put it back on, then off again → back to the free hairstyle.
+    on = await client.put(f"{API}/my-player/cosmetics/equip", headers=headers, json={"kind": "hair", "code": "hair_neymar"})
+    assert on.json()["player"]["appearance"]["hair"] == 14
+    off = await client.put(f"{API}/my-player/cosmetics/equip", headers=headers, json={"kind": "hair", "code": None})
+    assert off.json()["player"]["appearance"]["hair"] == 3
+    # Status stays while owned, worn or not.
+    assert (await client.get(f"{API}/lifestyle", headers=headers)).json()["prestige"] == 30
+    # A premium index can't be picked without owning it.
+    assert (await client.patch(f"{API}/my-player", headers=headers, json={"appearance": {**LOOK, "hair": 15}})).status_code == 409
+
+
+def test_rebased_xp_keeps_the_level_and_its_share():
+    from types import SimpleNamespace
+
+    old = SimpleNamespace(my_player_xp_level_base=100, my_player_xp_level_step=20)
+    new = SimpleNamespace(my_player_xp_level_base=200, my_player_xp_level_step=50)
+    xp = my_player_service.xp_to_reach(10, old) + 140  # level 10, 140 of 280
+    assert my_player_service.level_info(xp, old)[:2] == (10, 140)
+    moved = my_player_service.rebased_xp(xp, old, new)
+    level, into, need = my_player_service.level_info(moved, new)
+    assert (level, into, need) == (10, 325, 650)  # same level, the same half of it
+    assert my_player_service.rebased_xp(0, old, new) == 0
+
+
+async def test_admin_xp_curve_change_keeps_levels_and_points(client, db_session, bot_token):
+    user_id, headers = await _login(client, db_session, bot_token, 870090)
+    await _create(client, headers)
+    config = await get_config(db_session)
+    per_level = config.my_player_points_per_level
+    user = await db_session.get(User, user_id)
+    user.my_player_xp = my_player_service.xp_to_reach(6, config) + 10
+    await db_session.commit()
+    view = (await client.get(f"{API}/my-player", headers=headers)).json()
+    assert view["level"] == 6
+    spend = await client.post(f"{API}/my-player/train", headers=headers, json={"attr": "atk", "points": 5 * per_level})
+    assert spend.status_code == 200, spend.text
+
+    admin = await client.post(f"{API}/auth/session", headers=telegram_headers(999000001, bot_token))
+    admin_headers = {"Authorization": f"Bearer {admin.json()['admin_token']}"}
+    resp = await client.put(
+        f"{API}/admin/games/config", headers=admin_headers,
+        json={"my_player_xp_level_base": config.my_player_xp_level_base * 3, "my_player_xp_level_step": 60},
+    )
+    assert resp.status_code == 200, resp.text
+
+    view = (await client.get(f"{API}/my-player", headers=headers)).json()
+    assert view["level"] == 6 and view["points_available"] == 0
+    # The next level gives its points again.
+    await db_session.refresh(user)
+    config = await get_config(db_session)
+    await db_session.refresh(config)
+    user.my_player_xp = my_player_service.xp_to_reach(7, config)
+    await db_session.commit()
+    view = (await client.get(f"{API}/my-player", headers=headers)).json()
+    assert view["level"] == 7 and view["points_available"] == per_level

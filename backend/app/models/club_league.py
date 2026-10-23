@@ -32,5 +32,26 @@ class ClubLeagueResult(Base):
     rank: Mapped[int] = mapped_column(Integer, nullable=False)
     points: Mapped[int] = mapped_column(Integer, nullable=False)
     reward: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # The division the club played this week in; `rank` is within it.
+    division: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     __table_args__ = (UniqueConstraint("week_start", "club_id", name="uq_club_league_result_week_club"),)
+
+
+class ClubSeasonResult(Base):
+    """A club's final standing in a «Лига клубов» season (club_league_service
+    settles it together with the season's last week): its division, place by
+    season points and whether it went up (+1), stayed (0) or down (-1)."""
+
+    __tablename__ = "club_season_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # The last week of the season.
+    season_end_week: Mapped[date] = mapped_column(Date, nullable=False)
+    club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    division: Mapped[int] = mapped_column(Integer, nullable=False)
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    points: Mapped[int] = mapped_column(Integer, nullable=False)
+    moved: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    __table_args__ = (UniqueConstraint("season_end_week", "club_id", name="uq_club_season_result_once"),)

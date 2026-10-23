@@ -3,9 +3,13 @@
   "configurations": [
     {
       "name": "frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
+      "url": "http://localhost:5173",
       "port": 5173
+    },
+    {
+      "name": "arena-preview",
+      "url": "http://localhost:5174",
+      "port": 5174
     }
   ]
 }

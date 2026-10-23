@@ -23,6 +23,7 @@ import StrategoRulesModal from "@/components/stratego/StrategoRulesModal";
 import { formatGameError } from "@/lib/errors";
 import { openTelegramLink } from "@/lib/telegram";
 import type { StrategoMatch, UserPublic } from "@/types";
+import { clampStake, stakeLabel, useStakeMax } from "@/lib/stakes";
 
 type Tab = "pending" | "active" | "history";
 
@@ -144,12 +145,12 @@ export default function StrategoPage() {
           </span>
           <span className="font-mono text-sm font-bold text-ink-chalk">
             {stats.stratego_rating}
-            {stats.stratego_rank ? <span className="ml-1.5 text-[11px] font-normal text-ink-mist">#{stats.stratego_rank}</span> : null}
+            {stats.stratego_rank ? <span className="ml-1.5 text-caption font-normal text-ink-mist">#{stats.stratego_rank}</span> : null}
           </span>
         </button>
       )}
       {info && (
-        <p className="text-[11px] text-ink-mist-dim">
+        <p className="text-caption text-ink-mist-dim">
           Наградных матчей сегодня: {info.rewarded_today}/{info.daily_limit} · победа {info.reward_win} монет
         </p>
       )}
@@ -197,7 +198,7 @@ export default function StrategoPage() {
             <IconChat size={14} />
             Вызвать соперника через чат
           </button>
-          <p className="-mt-1 text-center text-[11px] text-ink-mist-dim">
+          <p className="-mt-1 text-center text-caption text-ink-mist-dim">
             Онлайн-матч даёт рейтинг ×2, матч с другом — без рейтинга. Матч стартует по твоей сохранённой расстановке — поменять её можно в «Подготовке»
           </p>
         </>
@@ -213,9 +214,9 @@ export default function StrategoPage() {
             <IconTrophy size={20} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-mono text-[10px] uppercase tracking-wider text-accent-lime">Задача дня</span>
+            <span className="block font-mono text-micro uppercase tracking-wider text-accent-lime">Задача дня</span>
             <span className="block font-display text-sm font-bold text-ink-chalk">{puzzle.title}</span>
-            <span className="block text-[11px] text-ink-mist">
+            <span className="block text-caption text-ink-mist">
               Захвати Кубок за {puzzle.moves} хода ·{" "}
               {puzzle.solved_today ? "решена сегодня ✓" : `+${puzzle.reward} монет`} · решено всего: {puzzle.solved_total}
             </span>
@@ -229,7 +230,7 @@ export default function StrategoPage() {
       >
         <span>
           <span className="block text-sm font-semibold text-ink-chalk">Обучение</span>
-          <span className="block text-[11px] text-ink-mist">Маленькое поле, подсказки, карточки не нужны</span>
+          <span className="block text-caption text-ink-mist">Маленькое поле, подсказки, карточки не нужны</span>
         </span>
         <IconPlay size={16} className="text-accent-lime" />
       </button>
@@ -259,7 +260,7 @@ export default function StrategoPage() {
           >
             <div className="min-w-0">
               <p className="truncate font-display text-sm font-bold text-ink-chalk">{m.opponent_name || "Открытый вызов"}</p>
-              <p className="mt-0.5 text-[11px] text-ink-mist">
+              <p className="mt-0.5 text-caption text-ink-mist">
                 {OPPONENT_LABELS[m.opponent_type]} · {STATUS_LABELS[m.status]}
                 {m.status === "in_progress" && (m.my_turn ? " · твой ход" : " · ход соперника")}
                 {m.stake_coins > 0 && ` · ставка ${m.stake_coins}`}
@@ -286,7 +287,7 @@ export default function StrategoPage() {
                 className="rounded-2xl bg-white/5 p-3 text-left active:scale-[0.98]"
               >
                 <span className="block text-sm font-bold text-ink-chalk">Лёгкий бот</span>
-                <span className="block text-[11px] text-ink-mist">
+                <span className="block text-caption text-ink-mist">
                   Иногда ошибается · {info ? `${Math.round((info.reward_win * (info.easy_reward_pct ?? 60)) / 100)} монет за победу · ` : ""}рейтинг максимум +1
                 </span>
               </button>
@@ -295,7 +296,7 @@ export default function StrategoPage() {
                 className="rounded-2xl border border-accent-lime/30 bg-accent-lime/10 p-3 text-left active:scale-[0.98]"
               >
                 <span className="block text-sm font-bold text-ink-chalk">Сильный бот</span>
-                <span className="block text-[11px] text-ink-mist">
+                <span className="block text-caption text-ink-mist">
                   Охотится Провокатором за Звездой, бережёт Кубок · {info ? `${info.reward_win} монет за победу` : "полная награда"}
                 </span>
               </button>
@@ -352,7 +353,8 @@ function ChallengeSheet({ onClose, onPick }: { onClose: () => void; onPick: (use
 
 function ChatInviteSheet({ busy, onClose, onCreate }: { busy: boolean; onClose: () => void; onCreate: (stakeCoins: number) => void }) {
   const [stake, setStake] = useState("0");
-  const stakeCoins = Math.max(0, Math.floor(Number(stake) || 0));
+  const maxStake = useStakeMax();
+  const stakeCoins = clampStake(stake, maxStake);
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={onClose}>
       <div className="safe-bottom w-full rounded-t-3xl bg-bg-base p-5" onClick={(e) => e.stopPropagation()}>
@@ -360,17 +362,19 @@ function ChatInviteSheet({ busy, onClose, onCreate }: { busy: boolean; onClose: 
         <p className="mb-3 text-xs text-ink-mist">
           Создадим вызов и откроем «Поделиться» — выбери чат. Первый, кто примет вызов, станет твоим соперником.
         </p>
-        <label className="mb-1 block text-xs text-ink-mist-dim">Ставка, монеты (0 — без ставки)</label>
+        <label className="mb-1 block text-xs text-ink-mist-dim">{stakeLabel(maxStake)}</label>
         <input
           type="number"
           min={0}
           inputMode="numeric"
           value={stake}
+        max={maxStake || undefined}
+        disabled={maxStake === 0}
           onChange={(e) => setStake(e.target.value)}
           className="mb-3 w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk outline-none"
         />
         {stakeCoins > 0 && (
-          <p className="mb-3 flex items-center gap-1 text-[11px] text-ink-mist-dim">
+          <p className="mb-3 flex items-center gap-1 text-caption text-ink-mist-dim">
             Победитель заберёт {stakeCoins * 2} <IconCoin size={11} /> — по {stakeCoins} с каждой стороны, ничья вернёт ставки.
           </p>
         )}

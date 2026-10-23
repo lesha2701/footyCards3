@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import MatchSkillNotes from "@/components/cards/MatchSkillNotes";
 import MatchSkillSummary from "@/components/cards/MatchSkillSummary";
+import MatchPitchView from "@/components/match/MatchPitchView";
+import MatchStatsTable from "@/components/match/MatchStatsTable";
+import { normalizeTwoSideEvents } from "@/lib/matchVisual";
 import type { MatchEvent } from "@/types";
 
 const EVENT_STEP_MS = 950;
@@ -12,12 +15,18 @@ export function TournamentMatchReplay({
   clubBName,
   scoreA,
   scoreB,
+  finishedLabel = "Матч завершён",
+  scoreLabel = "Итоговый счёт",
 }: {
   events: MatchEvent[];
   clubAName: string;
   clubBName: string;
   scoreA: number;
   scoreB: number;
+  /** Status once every event is shown (e.g. "Перерыв" for a first half). */
+  finishedLabel?: string;
+  /** Caption of the score once every event is shown. */
+  scoreLabel?: string;
 }) {
   const [revealedCount, setRevealedCount] = useState(0);
   const [autoSkip, setAutoSkip] = useState(false);
@@ -49,6 +58,12 @@ export function TournamentMatchReplay({
   };
 
   const revealed = events.slice(0, revealedCount);
+  // Arena-shaped copy for the shared pitch/stats: club A attacks right.
+  const normalizedRevealed = useMemo(
+    () => normalizeTwoSideEvents(events.slice(0, revealedCount)),
+    [events, revealedCount],
+  );
+  const normalizedAll = useMemo(() => normalizeTwoSideEvents(events), [events]);
   const currentMinute = revealed.length ? revealed[revealed.length - 1].minute : 0;
   const liveScoreA = revealed.filter((e) => e.event_type === "goal" && e.team === "a").length;
   const liveScoreB = revealed.filter((e) => e.event_type === "goal" && e.team === "b").length;
@@ -70,10 +85,10 @@ export function TournamentMatchReplay({
     <section className="rounded-2xl bg-bg-surface p-4">
       <div className="flex items-center justify-between">
         <span className="font-mono text-xs text-ink-mist-dim">
-          {caughtUp ? "Матч завершён" : autoSkip ? "Пропускаем матч..." : `${currentMinute}' · идёт матч...`}
+          {caughtUp ? finishedLabel : autoSkip ? "Пропускаем матч..." : `${currentMinute}' · идёт матч...`}
         </span>
         {!caughtUp && !autoSkip && (
-          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-ink-chalk">
+          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-caption font-semibold text-ink-chalk">
             Пропустить
           </button>
         )}
@@ -92,15 +107,24 @@ export function TournamentMatchReplay({
 
       {caughtUp && (
         <div
-          aria-label={`Итоговый счёт ${scoreA} : ${scoreB}`}
+          aria-label={`${scoreLabel} ${scoreA} : ${scoreB}`}
           className="mt-1 flex items-center justify-center gap-2 font-display text-sm font-bold text-ink-chalk"
         >
-          <span>Итоговый счёт:</span>
+          <span>{scoreLabel}:</span>
           <span className="w-6 text-right">{scoreA}</span>
           <span>:</span>
           <span className="w-6 text-left">{scoreB}</span>
         </div>
       )}
+      {/* Schematic pitch while it plays; once everything is shown the pitch
+          has nothing left to add, so the numbers take its place. */}
+      <div className="mt-3">
+        {caughtUp ? (
+          <MatchStatsTable events={normalizedAll} leftLabel={clubAName} opponentName={clubBName} />
+        ) : (
+          <MatchPitchView events={normalizedRevealed} leftLabel={clubAName} opponentName={clubBName} />
+        )}
+      </div>
       {caughtUp && <MatchSkillSummary events={events} />}
 
       <div ref={logRef} className="mt-3 max-h-64 space-y-1 overflow-y-auto text-xs">

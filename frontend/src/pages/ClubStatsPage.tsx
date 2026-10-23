@@ -1,3 +1,4 @@
+import { ListSkeleton } from "@/components/common/Skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
@@ -7,7 +8,7 @@ import { IconChevronLeft, IconTarget } from "@/components/icons";
 function StatTile({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-2xl bg-bg-surface p-3">
-      <p className="text-[11px] text-ink-mist-dim">{label}</p>
+      <p className="text-caption text-ink-mist-dim">{label}</p>
       <p className="font-mono text-lg font-bold text-ink-chalk">{value}</p>
     </div>
   );
@@ -29,7 +30,7 @@ export default function ClubStatsPage() {
         </h1>
       </div>
 
-      {isLoading && <p className="text-sm text-ink-mist-dim">Загрузка...</p>}
+      {isLoading && <ListSkeleton count={3} />}
 
       {stats && (
         <>

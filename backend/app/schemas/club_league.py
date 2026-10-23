@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from app.models.enums import ClubLogoShape
+from app.schemas.club_emblem import ClubEmblemOut
 
 
 class ClubLeagueRowOut(BaseModel):
@@ -12,6 +13,7 @@ class ClubLeagueRowOut(BaseModel):
     name: str
     logo_shape: ClubLogoShape
     logo_color: str
+    emblem: Optional[ClubEmblemOut] = None
     points: int
     # Budget reward for this place (projected for the current week, paid for a past one).
     reward: int
@@ -33,8 +35,34 @@ class ClubLeagueLastWeekOut(BaseModel):
     my_row: Optional[ClubLeagueRowOut] = None
 
 
+class ClubSeasonRowOut(BaseModel):
+    rank: int
+    club_id: int
+    name: str
+    logo_shape: ClubLogoShape
+    logo_color: str
+    emblem: Optional[ClubEmblemOut] = None
+    points: int
+    # "up" / "down" when the place is in the promotion / relegation zone now.
+    zone: Optional[str] = None
+
+
+class ClubSeasonOut(BaseModel):
+    weeks: int
+    week_of_season: int
+    ends_at: datetime
+    promote_count: int
+    relegate_count: int
+    standings: list[ClubSeasonRowOut]
+    my_row: Optional[ClubSeasonRowOut] = None
+
+
 class ClubLeagueOut(BaseModel):
     enabled: bool
+    # The division shown (the player's club's, Бронза outside a club).
+    division: int = 0
+    division_names: list[str] = []
+    division_reward_pct: int = 100
     week_start: date
     ends_at: datetime
     points_game: int
@@ -48,6 +76,7 @@ class ClubLeagueOut(BaseModel):
     my_row: Optional[ClubLeagueRowOut] = None
     members: list[ClubLeagueMemberOut]
     last_week: Optional[ClubLeagueLastWeekOut] = None
+    season: Optional[ClubSeasonOut] = None
 
 
 class ClubLeagueSettleResult(BaseModel):

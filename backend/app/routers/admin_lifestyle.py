@@ -10,7 +10,7 @@ from app.models.user import User
 from app.schemas.my_player import AdminLifestyleItemIn, AdminLifestyleItemOut, AdminLifestyleItemUpdate
 from app.services.admin_log_service import log_action
 from app.services.image_service import delete_lifestyle_image, save_lifestyle_image
-from app.services.lifestyle_service import CATEGORIES
+from app.services.lifestyle_service import CATEGORIES, EFFECTS
 
 router = APIRouter(prefix="/admin/lifestyle", tags=["admin"], dependencies=[Depends(get_current_admin)])
 
@@ -29,6 +29,10 @@ def _validate(item: LifestyleItem) -> None:
         raise ConflictError("Укажи цену в монетах и/или в звёздах")
     if item.max_supply is not None and item.max_supply < item.sold_count:
         raise ConflictError("Нельзя сделать тираж меньше уже проданного")
+    if (item.effect or "none") not in EFFECTS:
+        raise ConflictError("Неизвестный эффект")
+    if item.effect == "xp_bonus_pct" and item.effect_value > 100:
+        raise ConflictError("Бонус опыта — не больше 100%")
 
 
 def _ip(request: Request):

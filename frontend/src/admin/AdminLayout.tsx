@@ -1,9 +1,12 @@
+import { useQuery } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import AdminToastContainer from "@/admin/AdminToastContainer";
+import { fetchStarsReceiptProblemCount } from "@/admin/api";
 import {
   IconBall,
+  IconBan,
   IconBrain,
   IconCard,
   IconChart,
@@ -34,6 +37,8 @@ import {
 const SECTIONS: { to: string; label: string; Icon: (props: IconProps) => JSX.Element; end?: boolean }[] = [
   { to: "/admin", label: "Дашборд", Icon: IconChart, end: true },
   { to: "/admin/economy", label: "Экономика", Icon: IconCoin },
+  { to: "/admin/analytics", label: "Аналитика", Icon: IconTarget },
+  { to: "/admin/antifraud", label: "Антифрод", Icon: IconBan },
   { to: "/admin/users", label: "Пользователи", Icon: IconUsers },
   { to: "/admin/players", label: "Футболисты", Icon: IconBall },
   { to: "/admin/coaches", label: "Тренеры", Icon: IconShirt },
@@ -50,20 +55,40 @@ const SECTIONS: { to: string; label: string; Icon: (props: IconProps) => JSX.Ele
   { to: "/admin/gifts", label: "Подарки", Icon: IconGift },
   { to: "/admin/lifestyle", label: "Имущество", Icon: IconStar },
   { to: "/admin/wheel", label: "Колесо фортуны", Icon: IconGlobe },
-  { to: "/admin/daily-rewards", label: "Ежедневные награды", Icon: IconClock },
+  { to: "/admin/daily-rewards", label: "Календарь наград", Icon: IconClock },
   { to: "/admin/games", label: "Игры", Icon: IconPlay },
+  { to: "/admin/match-day", label: "Матч дня", Icon: IconPlay },
   { to: "/admin/upgrades", label: "Апгрейд", Icon: IconUpgrade },
   { to: "/admin/diamond-upgrades", label: "Диамант", Icon: IconCard },
   { to: "/admin/card-skills", label: "Навыки карточек", Icon: IconBrain },
+  { to: "/admin/path", label: "Академия", Icon: IconUpgrade },
+  { to: "/admin/club-base", label: "Клубная база", Icon: IconStadium },
   { to: "/admin/bingo", label: "Бинго недели", Icon: IconTag },
   { to: "/admin/shop", label: "Магазин", Icon: IconCoin },
+  { to: "/admin/monetization", label: "Абонемент, сезон, стиль", Icon: IconStar },
   { to: "/admin/broadcasts", label: "Рассылка", Icon: IconChat },
+  { to: "/admin/transactions", label: "Транзакции", Icon: IconCoin },
   { to: "/admin/log", label: "Журнал", Icon: IconScroll },
 ];
+
+function ProblemBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="ml-auto rounded-full bg-red-500 px-1.5 text-micro font-bold text-white" title="Неначисленные платежи Stars">
+      {count}
+    </span>
+  );
+}
 
 export default function AdminLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
+  // Paid-but-undelivered Stars payments — shown on «Магазин» so they get noticed.
+  const { data: paymentProblems = 0 } = useQuery({
+    queryKey: ["admin-stars-receipt-problems"],
+    queryFn: fetchStarsReceiptProblemCount,
+    refetchInterval: 60_000,
+  });
 
   return (
     <div className="flex min-h-screen w-full max-w-full overflow-x-hidden bg-bg-base text-slate-100">
@@ -80,6 +105,7 @@ export default function AdminLayout() {
               }
             >
               <s.Icon size={16} /> {s.label}
+              {s.to === "/admin/shop" && <ProblemBadge count={paymentProblems} />}
             </NavLink>
           ))}
         </nav>
@@ -106,6 +132,7 @@ export default function AdminLayout() {
                 }
               >
                 <s.Icon size={16} /> {s.label}
+              {s.to === "/admin/shop" && <ProblemBadge count={paymentProblems} />}
               </NavLink>
             ))}
             <button onClick={() => navigate("/")} className="rounded-xl bg-white/5 px-3 py-2 text-left text-sm text-slate-300">

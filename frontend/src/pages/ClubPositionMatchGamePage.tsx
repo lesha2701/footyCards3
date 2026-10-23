@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 
 import { claimClubPositionMatchReward, startClubPositionMatch, submitClubPositionMatchAttempt } from "@/api/clubs";
 import { IconChevronLeft, IconCoin, IconShirt, IconTrophy } from "@/components/icons";
+import PrimaryActionButton from "@/components/common/PrimaryActionButton";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
-import { POSITION_LABELS, RARITY_GRADIENTS, RARITY_GLOW } from "@/lib/rarity";
+import { POSITION_LABELS, RARITY_GRADIENTS, RARITY_GLOW_STATIC } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import type { ClubPositionMatchCard, ClubPositionMatchClaim } from "@/types";
 
@@ -138,13 +139,11 @@ export default function ClubPositionMatchGamePage() {
         </p>
 
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
-        <button
+        <PrimaryActionButton
+          text="Начать игру"
           onClick={start}
-          disabled={starting}
-          className="rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
-        >
-          {starting ? "Загрузка..." : "Начать игру"}
-        </button>
+          loading={starting}
+        />
       </div>
     );
   }
@@ -196,11 +195,11 @@ export default function ClubPositionMatchGamePage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between rounded-2xl bg-bg-surface px-4 py-3">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-wide text-ink-mist-dim">Угадано</p>
+          <p className="font-mono text-micro uppercase tracking-wide text-ink-mist-dim">Угадано</p>
           <p className="font-display text-lg font-bold text-ink-chalk">{matchedCardIds.size}/{cards.length}</p>
         </div>
         <div className="text-right">
-          <p className="font-mono text-[10px] uppercase tracking-wide text-ink-mist-dim">Ошибки</p>
+          <p className="font-mono text-micro uppercase tracking-wide text-ink-mist-dim">Ошибки</p>
           <p className="font-display text-lg font-bold text-ink-chalk">{mistakes}/{maxMistakes}</p>
         </div>
       </div>
@@ -268,10 +267,10 @@ function CardButton({
         isMatched ? "opacity-50" : isSelected ? "bg-accent-lime/10 ring-2 ring-accent-lime" : isWrong ? "bg-red-500/10 ring-2 ring-red-500" : "bg-bg-surface"
       }`}
     >
-      <div className={`h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-gradient-to-b ${RARITY_GRADIENTS[card.rarity]} ${RARITY_GLOW[card.rarity]} p-[1.5px]`}>
+      <div className={`h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-gradient-to-b ${RARITY_GRADIENTS[card.rarity]} ${RARITY_GLOW_STATIC[card.rarity]} p-[1.5px]`}>
         <div className="h-full w-full overflow-hidden rounded-[7px] bg-bg-surface">
           {card.image_path ? (
-            <img src={staticUrl(card.image_path) ?? undefined} alt={card.display_name} className="h-full w-full object-cover" />
+            <img decoding="async" loading="lazy" src={staticUrl(card.image_path) ?? undefined} alt={card.display_name} className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
               <IconShirt size={16} className="text-ink-mist-dim" />

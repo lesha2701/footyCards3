@@ -9,8 +9,8 @@ _FWD_WIDE = (Position.LW, Position.RW)
 _FWD_ANY = (Position.LW, Position.ST, Position.RW)
 _MID_CENTRAL = (Position.CDM, Position.CM, Position.CAM)
 _MID_ANY = (Position.CDM, Position.CM, Position.CAM, Position.LM, Position.RM)
-_DEF_WIDE = (Position.LB, Position.RB)
-_DEF_ANY = (Position.LB, Position.CB, Position.RB)
+_DEF_WIDE = (Position.LB, Position.RB, Position.LWB, Position.RWB)
+_DEF_ANY = (Position.LB, Position.CB, Position.RB, Position.LWB, Position.RWB)
 
 
 @dataclass(frozen=True)

@@ -18,7 +18,8 @@ from app.schemas.admin import (
     PackExpectedValueOut,
     RecentAdminActionOut,
 )
-from app.services import admin_economy_service
+from app.schemas.admin_analytics import AnalyticsReportOut
+from app.services import admin_analytics_service, admin_economy_service
 
 router = APIRouter(prefix="/admin/dashboard", tags=["admin"], dependencies=[Depends(get_current_admin)])
 
@@ -79,6 +80,13 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
 async def get_economy(days: int = Query(7, ge=1, le=90), db: AsyncSession = Depends(get_db)):
     """Coin inflow/outflow by source and by day, pack and skill-token flow."""
     return await admin_economy_service.economy_report(db, days)
+
+
+@router.get("/analytics", response_model=AnalyticsReportOut)
+async def get_analytics(days: int = Query(30, ge=1, le=90), db: AsyncSession = Depends(get_db)):
+    """Activity, retention cohorts, mode popularity, new-player funnel and
+    Stars monetization over the last `days` local days (aggregates only)."""
+    return await admin_analytics_service.analytics_report(db, days)
 
 
 @router.get("/packs/{pack_id}/expected-value", response_model=PackExpectedValueOut)

@@ -91,6 +91,8 @@ class _Config:
     match_keeper_save_chance_min = 0.35
     match_keeper_save_chance_max = 0.75
     match_penalty_gk_rating_penalty = 6
+    club_tactical_tackle_attempt_chance = 0.20
+    club_tactical_injury_chance = 0.35
 
 
 def squad(ratings: dict[Position, int], default: int = 75, formation: str = "4-3-3") -> list[tuple]:

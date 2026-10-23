@@ -10,6 +10,8 @@ import type {
   Coach,
   ClubPack,
   CoinPackage,
+  ClubEmblemItem,
+  Cosmetic,
   DiamondUpgradeTier,
   Gift,
   GiftSet,
@@ -29,6 +31,10 @@ import type {
   UserTrophy,
 } from "@/types";
 import type {
+  AdminPathOverview,
+  AdminClubBaseArt,
+  AdminClubBaseLedgerEntry,
+  AdminPathTask,
   AdminLifestyleItem,
   AdminActionLog,
   AdminClub,
@@ -44,18 +50,25 @@ import type {
   AdminWheelPrize,
   AdminWheelPrizePool,
   CardCollection,
-  DailyRewardOption,
+  AdminArtifact,
+  AdminArtifactCatalog,
+  AdminSeason,
+  CalendarTemplateDay,
   MagnateBoardConfig,
   Dashboard,
   GameConfig,
   AdminSkillLedgerEntry,
   PackPreview,
   StarsDonationSummary,
+  AntifraudScan,
   StarsPackPurchase,
+  StarsPaymentReceipt,
+  StarsReceiptFilter,
   TopSupporter,
   SuspiciousMatch,
   SuspiciousMemorySession,
   TaskDefinition,
+  RewardBundleInput,
 } from "@/admin/types";
 
 export async function fetchDashboard(): Promise<Dashboard> {
@@ -66,6 +79,11 @@ export async function fetchDashboard(): Promise<Dashboard> {
 // --- Economy analytics ---
 export interface EconomyReport {
   days: number;
+  coins_in_circulation: number;
+  inflow_outflow_ratio: number | null;
+  positive_days: number;
+  /** Set when coins are minted noticeably faster than they're spent. */
+  warning: string | null;
   total_inflow: number;
   total_outflow: number;
   net: number;
@@ -79,6 +97,64 @@ export interface EconomyReport {
 
 export async function fetchEconomyReport(days: number): Promise<EconomyReport> {
   const { data } = await api.get<EconomyReport>("/admin/dashboard/economy", { params: { days } });
+  return data;
+}
+
+// --- Product analytics (backend: admin_analytics_service.py) ---
+export type DayCount = { date: string; count: number };
+
+export interface AnalyticsReport {
+  days: number;
+  today: string;
+  activity: {
+    dau_today: number;
+    wau: number;
+    mau: number;
+    stickiness: number | null;
+    active_in_period: number;
+    total_users: number;
+    dau_by_day: DayCount[];
+    registrations_by_day: DayCount[];
+  };
+  retention: {
+    cohorts: { date: string; size: number; d1: number | null; d7: number | null; d30: number | null }[];
+    summary: {
+      d1: number | null; d7: number | null; d30: number | null;
+      d1_eligible: number; d7_eligible: number; d30_eligible: number;
+    };
+  };
+  modes: { key: string; label: string; games: number; players: number }[];
+  funnel: { cohort_size: number; steps: { key: string; label: string; users: number; share: number | null }[] };
+  monetization: {
+    stars_total: number;
+    purchases: number;
+    payers: number;
+    paying_share: number | null;
+    arppu: number | null;
+    stars_by_day: DayCount[];
+    by_product: { product: string; stars: number; purchases: number }[];
+  };
+  suspicious_trades: {
+    young_days: number;
+    min_donors: number;
+    rows: SuspiciousTradeRow[];
+  };
+}
+
+export interface SuspiciousTradeRow {
+  user_id: number;
+  telegram_id: number | null;
+  name: string;
+  username: string | null;
+  young_donors: number;
+  coins_received: number;
+  cards_received: number;
+  trades: number;
+  last_trade_at: string | null;
+}
+
+export async function fetchAnalyticsReport(days: number): Promise<AnalyticsReport> {
+  const { data } = await api.get<AnalyticsReport>("/admin/dashboard/analytics", { params: { days } });
   return data;
 }
 
@@ -502,21 +578,135 @@ export async function toggleWheelPrizeActive(id: number): Promise<AdminWheelPriz
   return data;
 }
 
-// --- Daily reward options ---
-export async function fetchDailyRewardOptions(): Promise<DailyRewardOption[]> {
-  const { data } = await api.get<DailyRewardOption[]>("/admin/daily-reward-options");
+// --- «Календарь наград» template ---
+export async function fetchCalendarTemplate(): Promise<CalendarTemplateDay[]> {
+  const { data } = await api.get<CalendarTemplateDay[]>("/admin/login-calendar");
   return data;
 }
-export async function updateDailyRewardOptions(
-  options: Omit<DailyRewardOption, "id">[],
-): Promise<DailyRewardOption[]> {
-  const { data } = await api.put<DailyRewardOption[]>("/admin/daily-reward-options", { options });
+export async function updateCalendarTemplate(days: CalendarTemplateDay[]): Promise<CalendarTemplateDay[]> {
+  const { data } = await api.put<CalendarTemplateDay[]>("/admin/login-calendar", { days });
+  return data;
+}
+
+// --- Club emblem constructor catalog ---
+export async function fetchAdminClubEmblemItems(): Promise<ClubEmblemItem[]> {
+  const { data } = await api.get<ClubEmblemItem[]>("/admin/club-emblem-items");
+  return data;
+}
+export async function saveAdminClubEmblemItem(item: ClubEmblemItem): Promise<ClubEmblemItem> {
+  const { id, name, coins_price, stars_price, is_active, sort_order } = item;
+  const { data } = await api.put<ClubEmblemItem>(`/admin/club-emblem-items/${id}`, {
+    name, coins_price, stars_price, is_active, sort_order,
+  });
+  return data;
+}
+
+// --- «Клубный магазин» ---
+export interface AdminClubShopItem {
+  id?: number;
+  name: string;
+  description: string;
+  price: number;
+  weekly_limit: number;
+  reward: RewardBundleInput;
+  is_active: boolean;
+  sort_order: number;
+}
+export async function fetchAdminClubShopItems(): Promise<AdminClubShopItem[]> {
+  const { data } = await api.get<AdminClubShopItem[]>("/admin/club-shop-items");
+  return data;
+}
+export async function saveAdminClubShopItem(item: AdminClubShopItem): Promise<AdminClubShopItem> {
+  const { id, ...body } = item;
+  const { data } = id
+    ? await api.put<AdminClubShopItem>(`/admin/club-shop-items/${id}`, body)
+    : await api.post<AdminClubShopItem>("/admin/club-shop-items", body);
+  return data;
+}
+
+// --- «Задания недели» клуба ---
+export interface AdminClubQuest {
+  id?: number;
+  title: string;
+  metric: "games" | "packs" | "tasks";
+  target_per_member: number;
+  reward_budget: number;
+  reward: RewardBundleInput;
+  is_active: boolean;
+  sort_order: number;
+}
+export async function fetchAdminClubQuests(): Promise<AdminClubQuest[]> {
+  const { data } = await api.get<AdminClubQuest[]>("/admin/club-quests");
+  return data;
+}
+export async function saveAdminClubQuest(item: AdminClubQuest): Promise<AdminClubQuest> {
+  const { id, ...body } = item;
+  const { data } = id
+    ? await api.put<AdminClubQuest>(`/admin/club-quests/${id}`, body)
+    : await api.post<AdminClubQuest>("/admin/club-quests", body);
+  return data;
+}
+
+// --- Cosmetics & seasons ---
+export async function fetchAdminCosmetics(): Promise<Cosmetic[]> {
+  const { data } = await api.get<Cosmetic[]>("/admin/cosmetics");
+  return data;
+}
+export async function saveAdminCosmetic(item: Omit<Cosmetic, "id"> & { id?: number }): Promise<Cosmetic> {
+  const { id, ...body } = item;
+  const { data } = id
+    ? await api.put<Cosmetic>(`/admin/cosmetics/${id}`, body)
+    : await api.post<Cosmetic>("/admin/cosmetics", body);
+  return data;
+}
+export async function uploadCosmeticImage(id: number, file: File): Promise<Cosmetic> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<Cosmetic>(`/admin/cosmetics/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+export async function deleteCosmeticImage(id: number): Promise<Cosmetic> {
+  const { data } = await api.delete<Cosmetic>(`/admin/cosmetics/${id}/image`);
+  return data;
+}
+export async function fetchAdminSeasons(): Promise<AdminSeason[]> {
+  const { data } = await api.get<AdminSeason[]>("/admin/seasons");
+  return data;
+}
+export async function saveAdminSeason(season: AdminSeason): Promise<AdminSeason> {
+  const { id, players: _players, premium_players: _premium, ...body } = season;
+  const { data } = id
+    ? await api.put<AdminSeason>(`/admin/seasons/${id}`, body)
+    : await api.post<AdminSeason>("/admin/seasons", body);
   return data;
 }
 
 // --- Trades ---
-export async function fetchAdminTrades(status?: TradeStatus, username?: string): Promise<TradeOffer[]> {
-  const { data } = await api.get<TradeOffer[]>("/admin/trades", { params: { status, username: username || undefined } });
+export interface AdminTradesQuery {
+  status?: TradeStatus;
+  username?: string;
+  /** Inclusive local days, YYYY-MM-DD. */
+  date_from?: string;
+  date_to?: string;
+  /** Coins in the offer, both sides summed. */
+  coins_min?: number;
+  coins_max?: number;
+  /** Only offers without cards (pure coin transfers). */
+  coins_only?: boolean;
+  page: number;
+  page_size?: number;
+}
+
+export async function fetchAdminTrades(q: AdminTradesQuery): Promise<Page<TradeOffer>> {
+  const { data } = await api.get<Page<TradeOffer>>("/admin/trades", {
+    params: {
+      status: q.status, username: q.username || undefined, date_from: q.date_from || undefined,
+      date_to: q.date_to || undefined, coins_min: q.coins_min, coins_max: q.coins_max,
+      coins_only: q.coins_only || undefined, page: q.page, page_size: q.page_size ?? 50,
+    },
+  });
   return data;
 }
 
@@ -526,6 +716,41 @@ export async function forceCancelTrade(id: number): Promise<TradeOffer> {
 }
 
 // --- Games ---
+export interface CareerClubAdmin {
+  id?: number;
+  name: string;
+  division: number;
+  source?: string;
+  pool_club?: string | null;
+  pool_players?: number;
+  rating_offset: number;
+  formation?: string | null;
+  preset?: string | null;
+  is_active: boolean;
+}
+
+export async function fetchCareerClubs(): Promise<{ clubs: CareerClubAdmin[] }> {
+  const { data } = await api.get<{ clubs: CareerClubAdmin[] }>("/admin/career/clubs");
+  return data;
+}
+
+export async function buildCareerClubs(replace: boolean): Promise<{ clubs: CareerClubAdmin[] }> {
+  const { data } = await api.post<{ clubs: CareerClubAdmin[] }>("/admin/career/clubs/build", { replace });
+  return data;
+}
+
+export async function createCareerClub(club: CareerClubAdmin): Promise<{ clubs: CareerClubAdmin[] }> {
+  const { data } = await api.post<{ clubs: CareerClubAdmin[] }>("/admin/career/clubs", club);
+  return data;
+}
+
+export async function updateCareerClub(club: CareerClubAdmin): Promise<{ clubs: CareerClubAdmin[] }> {
+  const { id, name, division, pool_club, rating_offset, formation, preset, is_active } = club;
+  const { data } = await api.put<{ clubs: CareerClubAdmin[] }>(`/admin/career/clubs/${id}`,
+    { name, division, pool_club, rating_offset, formation, preset, is_active });
+  return data;
+}
+
 export async function fetchGameConfig(): Promise<GameConfig> {
   const { data } = await api.get<GameConfig>("/admin/games/config");
   return data;
@@ -805,6 +1030,26 @@ export async function fetchTopSupporters(): Promise<TopSupporter[]> {
   return data;
 }
 
+export async function fetchStarsReceipts(status: StarsReceiptFilter, page: number): Promise<Page<StarsPaymentReceipt>> {
+  const { data } = await api.get<Page<StarsPaymentReceipt>>("/admin/stars-purchases/receipts", { params: { status, page } });
+  return data;
+}
+
+export async function fetchStarsReceiptProblemCount(): Promise<number> {
+  const { data } = await api.get<{ count: number }>("/admin/stars-purchases/receipts/problem-count");
+  return data.count;
+}
+
+export async function retryStarsReceipt(id: number): Promise<StarsPaymentReceipt> {
+  const { data } = await api.post<StarsPaymentReceipt>(`/admin/stars-purchases/receipts/${id}/retry`);
+  return data;
+}
+
+export async function refundStarsReceipt(id: number): Promise<StarsPaymentReceipt> {
+  const { data } = await api.post<StarsPaymentReceipt>(`/admin/stars-purchases/receipts/${id}/refund`);
+  return data;
+}
+
 // --- Leagues ---
 export async function fetchAdminLeagues(): Promise<LeagueTier[]> {
   const { data } = await api.get<LeagueTier[]>("/admin/leagues");
@@ -977,5 +1222,192 @@ export async function uploadLifestyleItemImage(id: number, file: File): Promise<
 
 export async function deleteLifestyleItemImage(id: number): Promise<AdminLifestyleItem> {
   const { data } = await api.delete<AdminLifestyleItem>(`/admin/lifestyle/${id}/image`);
+  return data;
+}
+
+
+// --- «Академия» ---------------------------------------------------------
+
+export async function fetchAdminPath(): Promise<AdminPathOverview> {
+  const { data } = await api.get<AdminPathOverview>("/admin/path");
+  return data;
+}
+
+export async function updateAdminPathTalent(
+  code: string, payload: { is_enabled?: boolean; sort_order?: number; level_values?: Record<string, Record<string, number>> },
+): Promise<AdminPathOverview> {
+  const { data } = await api.put<AdminPathOverview>(`/admin/path/talents/${code}`, payload);
+  return data;
+}
+
+export async function updateAdminPathStage(
+  index: number, payload: { name?: string; max_rating?: number; talent_level?: number },
+): Promise<AdminPathOverview> {
+  const { data } = await api.put<AdminPathOverview>(`/admin/path/stages/${index}`, payload);
+  return data;
+}
+
+export type AdminPathTaskIn = Omit<AdminPathTask, "id">;
+
+export async function createAdminPathTask(payload: AdminPathTaskIn): Promise<AdminPathOverview> {
+  const { data } = await api.post<AdminPathOverview>("/admin/path/tasks", payload);
+  return data;
+}
+
+export async function updateAdminPathTask(id: number, payload: AdminPathTaskIn): Promise<AdminPathOverview> {
+  const { data } = await api.put<AdminPathOverview>(`/admin/path/tasks/${id}`, payload);
+  return data;
+}
+
+export async function deleteAdminPathTask(id: number): Promise<AdminPathOverview> {
+  const { data } = await api.delete<AdminPathOverview>(`/admin/path/tasks/${id}`);
+  return data;
+}
+
+// --- All users' coin transactions --------------------------------------------
+
+export interface AdminTransactionFilters {
+  search?: string;
+  type?: string;
+  direction?: "income" | "spend";
+  date_from?: string;
+  date_to?: string;
+}
+
+export interface AdminTransaction extends CoinTransaction {
+  user_id: number;
+  user_name: string;
+  username: string | null;
+  telegram_id: number | null;
+}
+
+export interface AdminTransactionsPage {
+  items: AdminTransaction[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+  income: number;
+  spent: number;
+}
+
+export async function fetchAdminTransactions(
+  params: AdminTransactionFilters & { user_id?: number; page: number; page_size: number },
+): Promise<AdminTransactionsPage> {
+  const { data } = await api.get<AdminTransactionsPage>("/admin/transactions", { params });
+  return data;
+}
+
+// --- «Артефакты» ---
+export async function fetchAdminArtifacts(): Promise<AdminArtifactCatalog> {
+  const { data } = await api.get<AdminArtifactCatalog>("/admin/artifacts");
+  return data;
+}
+export async function saveAdminArtifact(item: AdminArtifact): Promise<AdminArtifact> {
+  const { id, sold_count: _sold, image_path: _image, ...body } = item;
+  const { data } = id
+    ? await api.put<AdminArtifact>(`/admin/artifacts/${id}`, body)
+    : await api.post<AdminArtifact>("/admin/artifacts", body);
+  return data;
+}
+export async function uploadArtifactImage(id: number, file: File): Promise<AdminArtifact> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<AdminArtifact>(`/admin/artifacts/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+export async function grantArtifact(id: number, userId: number): Promise<{ serial_number: number }> {
+  const { data } = await api.post<{ serial_number: number }>(`/admin/artifacts/${id}/grant`, { user_id: userId });
+  return data;
+}
+export async function giftArtifactToTopDonors(
+  id: number, top: number, message: string | null,
+): Promise<{ donors: number; granted: number; already_owned: number; sold_out: number }> {
+  const { data } = await api.post(`/admin/artifacts/${id}/gift-top-donors`, { top, message });
+  return data;
+}
+
+// --- Антифрод ---
+export async function fetchAntifraudScan(params: { min_senders: number; days: number }): Promise<AntifraudScan> {
+  const { data } = await api.get<AntifraudScan>("/admin/antifraud/scan", { params });
+  return data;
+}
+
+export async function banAntifraudUsers(userIds: number[]): Promise<{ banned: number; user_ids: number[] }> {
+  const { data } = await api.post<{ banned: number; user_ids: number[] }>("/admin/antifraud/ban", { user_ids: userIds });
+  return data;
+}
+
+// --- «Клубная база» ---
+
+export async function fetchClubBaseArt(): Promise<AdminClubBaseArt> {
+  const { data } = await api.get<AdminClubBaseArt>("/admin/club-base/art");
+  return data;
+}
+
+export async function uploadClubBaseArt(slot: string, file: File): Promise<AdminClubBaseArt> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<AdminClubBaseArt>(`/admin/club-base/art/${slot}`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function deleteClubBaseArt(slot: string): Promise<AdminClubBaseArt> {
+  const { data } = await api.delete<AdminClubBaseArt>(`/admin/club-base/art/${slot}`);
+  return data;
+}
+
+export async function fetchClubBaseLedger(userId?: number): Promise<AdminClubBaseLedgerEntry[]> {
+  const { data } = await api.get<AdminClubBaseLedgerEntry[]>("/admin/club-base/ledger", {
+    params: { limit: 200, ...(userId ? { user_id: userId } : {}) },
+  });
+  return data;
+}
+
+// --- «Экипировка» ---
+const ITEM_FIELDS = [
+  "name", "description", "icon", "slot", "rarity", "collection_id", "effect", "effect_value", "cond_club",
+  "cond_country", "coins_price", "stars_price", "is_active", "sort_order", "max_supply", "available_from", "available_until",
+] as const;
+const COLLECTION_FIELDS = [
+  "name", "description", "set_size", "set_bonus_rating", "set_team_country", "set_team_chemistry", "is_active", "sort_order",
+] as const;
+const pick = <T extends object>(obj: T, keys: readonly string[]) =>
+  Object.fromEntries(keys.map((k) => [k, (obj as Record<string, unknown>)[k]]));
+
+export async function fetchAdminEquipment(): Promise<import("@/admin/types").AdminEquipmentCatalog> {
+  const { data } = await api.get("/admin/equipment");
+  return data;
+}
+export async function saveAdminEquipmentItem(
+  item: import("@/admin/types").AdminEquipmentItem,
+): Promise<import("@/admin/types").AdminEquipmentItem> {
+  const body = pick(item, ITEM_FIELDS);
+  const { data } = item.id ? await api.put(`/admin/equipment/items/${item.id}`, body) : await api.post("/admin/equipment/items", body);
+  return data;
+}
+export async function saveAdminEquipmentCollection(
+  collection: import("@/admin/types").AdminEquipmentCollection,
+): Promise<import("@/admin/types").AdminEquipmentCollection> {
+  const body = pick(collection, COLLECTION_FIELDS);
+  const { data } = collection.id
+    ? await api.put(`/admin/equipment/collections/${collection.id}`, body)
+    : await api.post("/admin/equipment/collections", body);
+  return data;
+}
+export async function uploadAdminEquipmentImage(kind: "items" | "collections", id: number, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post(`/admin/equipment/${kind}/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+export async function grantAdminEquipment(itemId: number, userId: number): Promise<{ copy_id: number }> {
+  const { data } = await api.post(`/admin/equipment/items/${itemId}/grant`, { user_id: userId });
   return data;
 }

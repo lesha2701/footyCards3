@@ -16,7 +16,11 @@ class RankingMetric(str, enum.Enum):
     penalty_rating = "penalty_rating"
     stratego_rating = "stratego_rating"
     stratego_puzzles = "stratego_puzzles"
+    mordoboi_rating = "mordoboi_rating"
     league_rating = "league_rating"
+    academy_prestige = "academy_prestige"
+    academy_level = "academy_level"
+    base_level = "base_level"
 
 
 class RankingEntry(BaseModel):

@@ -1,10 +1,4 @@
-import os
 import uuid
-
-import pytest
-from sqlalchemy import select, text
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.models.club import Club
 from app.models.club_pack import ClubPack, ClubPackRarityProbability
@@ -14,11 +8,10 @@ from app.models.user import User
 from app.routers.admin_club_packs import delete_club_pack
 from tests.utils import telegram_headers
 
-# See test_club_packs.py's REAL_POSTGRES_URL comment for why this test opens its own
-# independent connection to the real dev Postgres instance rather than using the pytest
+# See test_club_packs.py's real-Postgres comment for why this test uses the `real_pg`
+# fixture (a dedicated `*_test` database, cleaned after every test) rather than the pytest
 # suite's `client`/`db_session` fixtures (hardcoded to in-memory SQLite, which doesn't
 # enforce foreign-key constraints by default and so can't catch a missing ON DELETE CASCADE).
-REAL_POSTGRES_URL = os.environ.get("REAL_POSTGRES_URL", "postgresql+asyncpg://postgres:1234@postgres:5432/footycards")
 
 
 class _NullRequest:
@@ -101,28 +94,17 @@ async def test_club_pack_stadium_drop_chance_round_trips_through_create_and_upda
     assert update_resp.json()["stadium_drop_chance"] == 0.5
 
 
-async def test_delete_club_pack_with_prior_opening_cascades():
+async def test_delete_club_pack_with_prior_opening_cascades(real_pg):
     """Regression test for finding 5: club_pack_openings.club_pack_id previously had no
     ondelete on its FK, so deleting a club pack that had ever been opened raised an unhandled
     Postgres FK-violation 500 instead of succeeding. The pytest suite's default `client`/
     `db_session` fixtures run against in-memory SQLite, which doesn't enforce FK constraints
-    by default and so can't catch this — this test opens its own connection to the real dev
-    Postgres instance instead (skips gracefully if unreachable), mints a real ClubPackOpening
+    by default and so can't catch this — this test uses the real-Postgres test database
+    (`real_pg`) instead (skips gracefully if unreachable), mints a real ClubPackOpening
     row referencing the pack, then calls the admin delete endpoint's handler function directly
     and asserts it succeeds and that the opening row is actually gone (cascade took effect).
     """
-    engine = create_async_engine(REAL_POSTGRES_URL, pool_pre_ping=True)
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-    except OSError as exc:
-        await engine.dispose()
-        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
-    except OperationalError as exc:
-        await engine.dispose()
-        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
-
-    RealSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+    RealSessionLocal = real_pg
     suffix = uuid.uuid4().hex[:10]
 
     setup = RealSessionLocal()
@@ -165,25 +147,4 @@ async def test_delete_club_pack_with_prior_opening_cascades():
             remaining_pack = await verify.get(ClubPack, pack_id)
             assert remaining_pack is None, "ClubPack row itself must be gone"
     finally:
-        # Self-cleaning: this test writes real rows into the shared dev Postgres instance.
-        # The pack (and its cascaded opening) is already deleted by the test itself when it
-        # succeeds; only the club and user (and its cascaded admin_actions row) remain. Uses
-        # the plain-int ids captured above rather than the (possibly expired/session-broken)
-        # ORM objects, for the same reason as the capture above.
-        async with RealSessionLocal() as cleanup:
-            if club_id is not None:
-                club_row = await cleanup.get(Club, club_id)
-                if club_row is not None:
-                    await cleanup.delete(club_row)
-            if pack_id is not None:
-                pack_row = await cleanup.get(ClubPack, pack_id)
-                if pack_row is not None:
-                    await cleanup.delete(pack_row)
-            await cleanup.commit()
-            if user_id is not None:
-                user_row = await cleanup.get(User, user_id)
-                if user_row is not None:
-                    await cleanup.delete(user_row)
-                    await cleanup.commit()
         await setup.close()
-        await engine.dispose()

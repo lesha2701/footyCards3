@@ -10,6 +10,10 @@ from tests.utils import telegram_headers
 
 settings = get_settings()
 
+# These tests are about trade mechanics; the anti-farming rules have their
+# own file (test_trade_anti_farming.py).
+pytestmark = pytest.mark.usefixtures("trade_guards_off")
+
 
 @pytest.fixture(autouse=True)
 def _reset_rate_limits():
@@ -325,15 +329,115 @@ async def test_admin_can_search_trades_by_either_side_username(client, db_sessio
     # Searching for the sender finds their trade.
     by_sender = await client.get("/api/v1/admin/trades", headers=auth, params={"username": "alice"})
     assert by_sender.status_code == 200
-    assert len(by_sender.json()) == 1
-    assert by_sender.json()[0]["sender"]["id"] == sender.id
+    assert by_sender.json()["total"] == 1
+    assert by_sender.json()["items"][0]["sender"]["id"] == sender.id
 
     # Searching for the receiver finds both trades they're party to.
     by_receiver = await client.get("/api/v1/admin/trades", headers=auth, params={"username": "bob_trader"})
     assert by_receiver.status_code == 200
-    assert len(by_receiver.json()) == 2
+    assert len(by_receiver.json()["items"]) == 2
 
     # No match returns an empty list, not an error.
     no_match = await client.get("/api/v1/admin/trades", headers=auth, params={"username": "nobody_at_all"})
     assert no_match.status_code == 200
-    assert no_match.json() == []
+    assert no_match.json()["items"] == [] and no_match.json()["total"] == 0
+
+
+async def test_admin_trades_filter_by_date_and_paginate(client, db_session, bot_token):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.trade import TradeOffer
+
+    auth = await _admin_auth(client, bot_token)
+    sender, sender_headers = await _register(client, db_session, 730020, bot_token, username="dated_sender")
+    receiver, _ = await _register(client, db_session, 730021, bot_token, username="dated_receiver")
+    ids = []
+    for _ in range(3):
+        player = await create_player(db_session, rarity=Rarity.common)
+        card = await create_user_card(db_session, sender.id, player.id, CardSource.seed)
+        await db_session.commit()
+        resp = await client.post(
+            "/api/v1/trades/offers", headers=sender_headers,
+            json={"receiver_id": receiver.id, "offered_card_ids": [card.id]},
+        )
+        ids.append(resp.json()["id"])
+    # Move the first offer 10 days back.
+    old = await db_session.get(TradeOffer, ids[0])
+    old.created_at = datetime.now(timezone.utc) - timedelta(days=10)
+    await db_session.commit()
+
+    today = datetime.now(timezone.utc).date()
+    recent = (await client.get("/api/v1/admin/trades", headers=auth,
+                               params={"date_from": str(today - timedelta(days=2))})).json()
+    assert recent["total"] == 2 and ids[0] not in [t["id"] for t in recent["items"]]
+    older = (await client.get("/api/v1/admin/trades", headers=auth,
+                              params={"date_to": str(today - timedelta(days=5))})).json()
+    assert [t["id"] for t in older["items"]] == [ids[0]]
+
+    page1 = (await client.get("/api/v1/admin/trades", headers=auth, params={"page_size": 2})).json()
+    page2 = (await client.get("/api/v1/admin/trades", headers=auth, params={"page_size": 2, "page": 2})).json()
+    assert page1["total"] == 3 and page1["pages"] == 2
+    assert len(page1["items"]) == 2 and len(page2["items"]) == 1
+    assert {t["id"] for t in page1["items"] + page2["items"]} == set(ids)
+
+
+async def test_admin_trades_filter_by_coins(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    rich, rich_headers = await _register(client, db_session, 730030, bot_token, username="rich_sender")
+    other, _ = await _register(client, db_session, 730031, bot_token, username="coins_receiver")
+    rich.balance = 2_000_000
+    await db_session.commit()
+
+    big = await client.post("/api/v1/trades/offers", headers=rich_headers,
+                            json={"receiver_id": other.id, "sender_coins": 1_000_000})
+    small = await client.post("/api/v1/trades/offers", headers=rich_headers,
+                              json={"receiver_id": other.id, "receiver_coins": 50})
+    player = await create_player(db_session, rarity=Rarity.common)
+    card = await create_user_card(db_session, rich.id, player.id, CardSource.seed)
+    await db_session.commit()
+    with_card = await client.post("/api/v1/trades/offers", headers=rich_headers,
+                                  json={"receiver_id": other.id, "offered_card_ids": [card.id], "sender_coins": 500_000})
+
+    def ids(resp):
+        return {t["id"] for t in resp.json()["items"]}
+
+    huge = await client.get("/api/v1/admin/trades", headers=auth, params={"coins_min": 100_000})
+    assert ids(huge) == {big.json()["id"], with_card.json()["id"]}
+    pure = await client.get("/api/v1/admin/trades", headers=auth, params={"coins_min": 100_000, "coins_only": True})
+    assert ids(pure) == {big.json()["id"]}
+    cheap = await client.get("/api/v1/admin/trades", headers=auth, params={"coins_max": 100})
+    assert ids(cheap) == {small.json()["id"]}
+
+
+async def test_admin_can_switch_trades_off(client, db_session, bot_token):
+    from app.services.game_config_service import get_config
+
+    auth = await _admin_auth(client, bot_token)
+    sender, sender_headers = await _register(client, db_session, 730040, bot_token, username="switch_sender")
+    receiver, receiver_headers = await _register(client, db_session, 730041, bot_token, username="switch_receiver")
+    receiver_id = receiver.id
+    pending = await client.post("/api/v1/trades/offers", headers=sender_headers,
+                                json={"receiver_id": receiver.id, "sender_coins": 10})
+    assert pending.status_code == 200
+
+    resp = await client.put("/api/v1/admin/games/config", headers=auth, json={"trades_enabled": False})
+    assert resp.status_code == 200 and resp.json()["trades_enabled"] is False
+    flags = await client.get("/api/v1/feature-flags", headers=sender_headers)
+    assert flags.json()["trades_enabled"] is False
+
+    blocked_new = await client.post("/api/v1/trades/offers", headers=sender_headers,
+                                    json={"receiver_id": receiver.id, "sender_coins": 10})
+    assert blocked_new.status_code == 409
+    assert blocked_new.json()["error"]["details"]["reason"] == "trades_disabled"
+    blocked_accept = await client.post(f"/api/v1/trades/offers/{pending.json()['id']}/accept", headers=receiver_headers)
+    assert blocked_accept.status_code == 409
+    # Pending offers can still be withdrawn while trading is off.
+    cancelled = await client.post(f"/api/v1/trades/offers/{pending.json()['id']}/cancel", headers=sender_headers)
+    assert cancelled.status_code == 200
+
+    await client.put("/api/v1/admin/games/config", headers=auth, json={"trades_enabled": True})
+    db_session.expire_all()
+    assert (await get_config(db_session)).trades_enabled is True
+    again = await client.post("/api/v1/trades/offers", headers=sender_headers,
+                              json={"receiver_id": receiver_id, "sender_coins": 10})
+    assert again.status_code == 200

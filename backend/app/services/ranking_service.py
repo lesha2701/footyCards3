@@ -17,6 +17,7 @@ _DIRECT_COLUMNS = {
     RankingMetric.penalty_rating: User.penalty_rating,
     RankingMetric.stratego_rating: User.stratego_rating,
     RankingMetric.stratego_puzzles: User.stratego_puzzles_solved,
+    RankingMetric.mordoboi_rating: User.mordoboi_rating,
     RankingMetric.league_rating: _LEAGUE_RATING_EXPR,
 }
 
@@ -44,6 +45,40 @@ async def get_ranking(db: AsyncSession, metric: RankingMetric, current_user: Use
             .options(selectinload(User.active_badge))
             .outerjoin(UserCard, UserCard.owner_id == User.id)
             .where(User.is_banned.is_(False), User.is_admin.is_(False))
+            .group_by(User.id)
+            .order_by(value_expr.desc())
+        )
+    elif metric == RankingMetric.academy_level:
+        # «Уровень Академии»: the sum of the building's wing levels.
+        from app.models.card_path import UserAcademy
+
+        stmt = (
+            select(User, UserAcademy.total_level)
+            .join(UserAcademy, UserAcademy.user_id == User.id)
+            .where(User.is_banned.is_(False), User.is_admin.is_(False), UserAcademy.total_level > 0)
+            .order_by(UserAcademy.total_level.desc())
+        )
+    elif metric == RankingMetric.base_level:
+        # «Уровень базы»: the «Клубная база» buildings plus the «Академия» wings.
+        from app.models.card_path import UserAcademy
+        from app.models.club_base import UserClubBase
+
+        value_expr = func.coalesce(UserClubBase.total_level, 0) + func.coalesce(UserAcademy.total_level, 0)
+        stmt = (
+            select(User, value_expr)
+            .outerjoin(UserClubBase, UserClubBase.user_id == User.id)
+            .outerjoin(UserAcademy, UserAcademy.user_id == User.id)
+            .where(User.is_banned.is_(False), User.is_admin.is_(False), value_expr > 0)
+            .order_by(value_expr.desc())
+        )
+    elif metric == RankingMetric.academy_prestige:
+        # «Престиж Академии»: total prestige tiers of the user's copies.
+        value_expr = func.coalesce(func.sum(UserCard.prestige), 0)
+        stmt = (
+            select(User, value_expr)
+            .options(selectinload(User.active_badge))
+            .join(UserCard, UserCard.owner_id == User.id)
+            .where(User.is_banned.is_(False), User.is_admin.is_(False), UserCard.prestige > 0)
             .group_by(User.id)
             .order_by(value_expr.desc())
         )

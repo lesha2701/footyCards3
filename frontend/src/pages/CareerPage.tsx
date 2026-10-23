@@ -13,9 +13,20 @@ import {
   type CareerSlot,
   type CareerSquadCard,
   type CareerRoundReport,
+  type CareerDivision,
   type CareerView,
+  type TacticsCatalog,
 } from "@/api/career";
 import { fetchFriends } from "@/api/friends";
+import CareerSquad from "@/components/career/CareerSquad";
+import { PlanEditor, ScoutingCard, TacticsBoard } from "@/components/career/CareerTactics";
+import { SetPiecesCard, SquadWarnings } from "@/components/career/SetPiecesCard";
+import { CoachProfileCard, ObjectiveCard, TrainingCard } from "@/components/career/CareerManagement";
+import CupCard from "@/components/career/CupCard";
+import { LiveMatchCenter } from "@/components/career/CareerLive";
+import { CoachExtras } from "@/components/career/CoachExtras";
+import { MarkingCard, PlanHints, RolesCard } from "@/components/career/RolesMarking";
+import { OffseasonPanel, SeasonSummaryView } from "@/components/career/Offseason";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconTrophy, IconUsers } from "@/components/icons";
@@ -24,7 +35,7 @@ import { formatGameError } from "@/lib/errors";
 import { CATEGORY_POSITIONS } from "@/lib/formation";
 import { haptic } from "@/lib/telegram";
 
-type Tab = "squad" | "table" | "calendar";
+type Tab = "prep" | "squad" | "table" | "calendar" | "cup";
 
 /** Round times in the viewer's own time zone (the server schedules them in
  * its own one, e.g. 12:00/19:00 Moscow). */
@@ -48,7 +59,11 @@ function formatWhen(iso: string | null): string {
  * daily) with the player's own cards, solo or together with a friend. */
 export default function CareerPage() {
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ["career"], queryFn: fetchCareer, refetchInterval: 60_000 });
+  const { data, isLoading } = useQuery({
+    queryKey: ["career"], queryFn: fetchCareer,
+    // Faster while a live match is at half-time: the second half follows the break.
+    refetchInterval: (query) => (query.state.data?.season?.live ? 15_000 : 60_000),
+  });
   const [error, setError] = useState<string | null>(null);
   const onView = (view: CareerView) => {
     setError(null);
@@ -67,11 +82,13 @@ export default function CareerPage() {
       </h1>
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
 
+      {data.profile && <CoachProfileCard profile={data.profile} />}
+      {data.profile && <CoachExtras achievements={data.profile.achievements} />}
       {data.invite && <InviteCard view={data} onView={onView} onError={onError} />}
 
       {!data.season || data.season.status === "finished" || data.season.my_status === "left" ? (
         <>
-          {data.season?.status === "finished" && <FinishedCard season={data.season} />}
+          {data.season?.status === "finished" && <FinishedCard season={data.season} catalog={data.tactics_catalog ?? null} />}
           {data.season?.my_status === "left" && data.season.status !== "finished" && (
             <p className="rounded-2xl bg-bg-surface p-4 text-sm text-ink-mist">Ты покинул сезон. Можно начать новый.</p>
           )}
@@ -80,7 +97,7 @@ export default function CareerPage() {
       ) : data.season.status === "pending" ? (
         <PendingCard season={data.season} onView={onView} onError={onError} />
       ) : (
-        <ActiveSeason season={data.season} onView={onView} onError={onError} />
+        <ActiveSeason season={data.season} catalog={data.tactics_catalog ?? null} onView={onView} onError={onError} />
       )}
     </div>
   );
@@ -91,12 +108,11 @@ type Handlers = { onView: (v: CareerView) => void; onError: (e: unknown) => void
 function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
   const [params] = useSearchParams();
   const presetFriend = Number(params.get("friend")) || null;
-  const [difficulty, setDifficulty] = useState("pro");
   const [withFriend, setWithFriend] = useState<boolean>(!!presetFriend);
   const [friendId, setFriendId] = useState<number | null>(presetFriend);
   const { data: friends } = useQuery({ queryKey: ["friends"], queryFn: fetchFriends, enabled: withFriend });
   const create = useMutation({
-    mutationFn: () => createCareerSeason(difficulty, withFriend ? friendId ?? undefined : undefined),
+    mutationFn: () => createCareerSeason(withFriend ? friendId ?? undefined : undefined),
     onSuccess: (v) => { haptic("medium"); onView(v); },
     onError,
   });
@@ -104,31 +120,21 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
   if (!view.enabled) {
     return <p className="rounded-2xl bg-bg-surface p-4 text-sm text-ink-mist">Карьера сейчас недоступна — загляни позже.</p>;
   }
-  const pct = view.difficulties.find((d) => d.code === difficulty)?.reward_pct ?? 100;
+  const division = view.division;
+  const pct = division?.reward_pct ?? 100;
   return (
     <section className="flex flex-col gap-4 rounded-3xl bg-bg-surface p-4">
       <div className="text-sm text-ink-mist">
         <p className="font-display text-base font-bold text-ink-chalk">Сезон на неделю</p>
         <p className="mt-1">
-          8 команд, 14 туров — по два в день, в {localSlots(view).join(" и ")}. Играешь своими карточками: заявка из 16
+          8 команд, 14 туров — по два в день, в {localSlots(view).join(" и ")}. Играешь своими карточками: заявка из 22
           игроков, следи за усталостью и травмами. Вход бесплатный.
         </p>
       </div>
 
       <div>
-        <p className="mb-1.5 text-xs font-semibold text-ink-mist">Сложность</p>
-        <div className="grid grid-cols-3 gap-1 rounded-xl bg-bg-raised p-1">
-          {view.difficulties.map((d) => (
-            <button
-              key={d.code}
-              onClick={() => setDifficulty(d.code)}
-              className={`rounded-lg py-2 text-xs font-semibold ${difficulty === d.code ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
-        <p className="mt-1.5 flex items-center gap-1 text-[11px] text-ink-mist">
+        {division && <DivisionCard division={division} divisions={view.divisions ?? []} />}
+        <p className="mt-1.5 flex items-center gap-1 text-caption text-ink-mist">
           Чемпиону: {Math.round(((view.place_rewards[0] ?? 0) * pct) / 100)} <IconCoin size={11} className="text-accent-lime" /> и трофей
         </p>
       </div>
@@ -152,7 +158,7 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
               </button>
             ))
           )}
-          <p className="text-[11px] text-ink-mist-dim">Друг будет в той же лиге: два личных матча, общая таблица. Если не ответит за сутки — его место займёт бот.</p>
+          <p className="text-caption text-ink-mist-dim">Друг будет в той же лиге: два личных матча, общая таблица. Если не ответит за сутки — его место займёт бот.</p>
         </div>
       )}
 
@@ -167,6 +173,32 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
   );
 }
 
+function DivisionCard({ division, divisions }: { division: CareerDivision; divisions: CareerDivision[] }) {
+  return (
+    <div className="rounded-2xl bg-bg-raised p-3">
+      <p className="text-micro uppercase tracking-wider text-ink-mist">Твой дивизион</p>
+      <p className="font-display text-base font-bold text-ink-chalk">{division.name}</p>
+      <p className="mt-1 text-caption text-ink-mist">
+        Соперники: {division.bot_level_label} · награды ×{division.reward_pct / 100}.
+        {division.promote > 0 && division.division > 1 && ` Места 1–${division.promote} — повышение.`}
+        {division.relegate > 0 && division.division < division.count && ` Последние ${division.relegate} — вылет.`}
+        {" "}Сложность растёт вместе с дивизионом.
+      </p>
+      {divisions.length > 1 && (
+        <div className="mt-2 flex gap-1" aria-label="Лестница дивизионов">
+          {[...divisions].reverse().map((d) => (
+            <span
+              key={d.division}
+              title={d.name}
+              className={`h-1.5 flex-1 rounded-full ${d.division === division.division ? "bg-accent-lime" : d.division > division.division ? "bg-white/25" : "bg-white/10"}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function InviteCard({ view, onView, onError }: { view: CareerView } & Handlers) {
   const invite = view.invite!;
   const respond = useMutation({ mutationFn: (accept: boolean) => respondCareerInvite(invite.season_id, accept), onSuccess: onView, onError });
@@ -174,7 +206,7 @@ function InviteCard({ view, onView, onError }: { view: CareerView } & Handlers) 
     <section className="rounded-3xl bg-accent-lime/10 p-4 ring-1 ring-accent-lime/30">
       <p className="font-display text-base font-bold text-ink-chalk">{invite.from_name} зовёт в общий сезон</p>
       <p className="mt-1 text-xs text-ink-mist">
-        Сложность: {invite.difficulty_label}. Ответить до {formatWhen(invite.expires_at)}.
+        {invite.difficulty_label}. Ответить до {formatWhen(invite.expires_at)}.
       </p>
       <div className="mt-3 flex gap-2">
         <button onClick={() => respond.mutate(true)} disabled={respond.isPending} className="flex-1 rounded-xl bg-floodlight py-2.5 text-sm font-bold text-bg-base disabled:opacity-50">
@@ -217,7 +249,7 @@ function PendingCard({ season, onView, onError }: { season: CareerSeason } & Han
   );
 }
 
-function FinishedCard({ season }: { season: CareerSeason }) {
+function FinishedCard({ season, catalog }: { season: CareerSeason; catalog: TacticsCatalog | null }) {
   return (
     <section className="flex flex-col gap-3 rounded-3xl bg-bg-surface p-4">
       <div className="flex items-center gap-3">
@@ -231,13 +263,26 @@ function FinishedCard({ season }: { season: CareerSeason }) {
           </p>
         </div>
       </div>
+      {season.next_division && season.division && <DivisionMove from={season.division} to={season.next_division} />}
+      {season.summary && <SeasonSummaryView summary={season.summary} catalog={catalog} />}
       <StandingsTable season={season} />
     </section>
   );
 }
 
-function ActiveSeason({ season, onView, onError }: { season: CareerSeason } & Handlers) {
-  const [tab, setTab] = useState<Tab>("squad");
+function DivisionMove({ from, to }: { from: CareerDivision; to: CareerDivision }) {
+  const up = to.division < from.division;
+  const down = to.division > from.division;
+  const tone = up ? "bg-accent-lime/15 text-accent-lime" : down ? "bg-red-500/10 text-red-400" : "bg-white/5 text-ink-mist";
+  const text = up ? `Повышение! Следующий сезон — ${to.name}`
+    : down ? `Вылет. Следующий сезон — ${to.name}`
+      : `Остаёшься в дивизионе «${from.name}»`;
+  return <p className={`rounded-xl px-3 py-2 text-sm font-semibold ${tone}`}>{text}</p>;
+}
+
+function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeason; catalog: TacticsCatalog | null } & Handlers) {
+  const hasTactics = (season.tactics_version ?? 0) > 0;
+  const [tab, setTab] = useState<Tab>(season.scouting ? "prep" : "squad");
   const [confirmLeave, setConfirmLeave] = useState(false);
   const queryClient = useQueryClient();
   const leave = useMutation({
@@ -252,15 +297,16 @@ function ActiveSeason({ season, onView, onError }: { season: CareerSeason } & Ha
 
   return (
     <>
+      {season.live && <LiveMatchCenter live={season.live} catalog={catalog} onView={onView} onError={onError} />}
       <section className="rounded-3xl bg-bg-surface p-4">
         <div className="flex items-center justify-between text-xs text-ink-mist">
-          <span>{season.difficulty_label} · тур {Math.min(season.rounds_played + 1, season.total_rounds)} из {season.total_rounds}</span>
+          <span>{season.division?.name ?? season.difficulty_label} · тур {Math.min(season.rounds_played + 1, season.total_rounds)} из {season.total_rounds}</span>
           <span>{myRow >= 0 ? `${myRow + 1} место` : ""}</span>
         </div>
         {opponent && myMatch && (
           <div className="mt-3 flex items-center gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] uppercase tracking-wider text-ink-mist">Следующий матч · {formatWhen(nextRound.at)}</p>
+              <p className="text-micro uppercase tracking-wider text-ink-mist">Следующий матч · {formatWhen(nextRound.at)}</p>
               <p className="truncate font-display text-base font-bold text-ink-chalk">
                 {myMatch.home === season.my_team_index ? "Дома" : "В гостях"}: {opponent.name}
               </p>
@@ -272,21 +318,61 @@ function ActiveSeason({ season, onView, onError }: { season: CareerSeason } & Ha
         )}
       </section>
 
-      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-bg-surface p-1">
-        {([["squad", "Состав"], ["table", "Таблица"], ["calendar", "Календарь"]] as [Tab, string][]).map(([id, label]) => (
+      <div className="flex gap-1 overflow-x-auto rounded-2xl bg-bg-surface p-1" style={{ scrollbarWidth: "none" }}>
+        {([
+          ...(season.scouting ? [["prep", "Подготовка"]] : []),
+          ["squad", "Состав"], ["table", "Таблица"], ["calendar", "Календарь"],
+          ...(season.cup ? [["cup", "Кубок"]] : []),
+        ] as [Tab, string][]).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`rounded-xl py-2 text-xs font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
+            className={`shrink-0 flex-1 rounded-xl px-3 py-2 text-xs font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
           >
             {label}
           </button>
         ))}
       </div>
 
-      {tab === "squad" && <LineupEditor season={season} onView={onView} onError={onError} />}
+      {tab === "prep" && season.scouting && season.live && (
+        <p className="rounded-2xl bg-bg-surface p-4 text-xs text-ink-mist">
+          Идёт тур {season.live.round + 1}: указания на второй тайм — в матч-центре выше. Подготовка к следующему туру
+          откроется после финального свистка.
+        </p>
+      )}
+      {tab === "prep" && season.scouting && !season.live && (
+        <>
+          <OffseasonPanel season={season} catalog={catalog} onView={onView} onError={onError} />
+          <SquadWarnings warnings={season.squad_warnings} />
+          {hasTactics && <ObjectiveCard season={season} onView={onView} onError={onError} />}
+          <ScoutingCard scouting={season.scouting} catalog={catalog} difficultyLabel={season.difficulty_label} />
+          {hasTactics && <MarkingCard season={season} onView={onView} onError={onError} />}
+          {hasTactics && catalog ? (
+            <>
+              <TrainingCard season={season} onView={onView} onError={onError} />
+              <TacticsBoard season={season} catalog={catalog} onView={onView} onError={onError} />
+              <RolesCard season={season} catalog={catalog} onView={onView} onError={onError} />
+              <PlanHints season={season} />
+              <PlanEditor season={season} catalog={catalog} onView={onView} onError={onError} />
+              <SetPiecesCard season={season} catalog={catalog} onView={onView} onError={onError} />
+            </>
+          ) : (
+            <p className="rounded-2xl bg-bg-surface p-4 text-xs text-ink-mist">
+              Сыгранность и план на матч появятся в следующем сезоне — этот доигрывается по прежним правилам.
+            </p>
+          )}
+        </>
+      )}
+      {tab === "squad" && hasTactics && (
+        <>
+          <SquadWarnings warnings={season.squad_warnings} />
+          <CareerSquad season={season} onView={onView} onError={onError} />
+        </>
+      )}
+      {tab === "squad" && !hasTactics && <LineupEditor season={season} onView={onView} onError={onError} />}
       {tab === "table" && <section className="rounded-3xl bg-bg-surface p-4"><StandingsTable season={season} /></section>}
       {tab === "calendar" && <Calendar season={season} />}
+      {tab === "cup" && <CupCard season={season} onView={onView} onError={onError} />}
 
       <button onClick={() => setConfirmLeave(true)} className="self-center text-xs text-ink-mist-dim underline underline-offset-2">
         Покинуть сезон
@@ -320,9 +406,12 @@ function StandingsTable({ season }: { season: CareerSeason }) {
         {season.table.map((row, i) => {
           const team = season.teams[row.team_index];
           const me = row.team_index === season.my_team_index;
+          const div = season.division;
+          const zone = !div ? "" : i < div.promote && div.division > 1 ? "border-l-2 border-accent-lime"
+            : i >= season.table.length - div.relegate && div.division < div.count ? "border-l-2 border-red-400" : "";
           return (
             <tr key={row.team_index} className={me ? "font-bold text-accent-lime" : !team.is_bot ? "text-accent-cyan" : "text-ink-chalk"}>
-              <td className="py-1">{i + 1}</td>
+              <td className={`py-1 pl-1 ${zone}`}>{i + 1}</td>
               <td className="max-w-[10rem] truncate py-1">{team.name}</td>
               <td className="py-1 text-right font-mono">{row.played}</td>
               <td className="py-1 text-right font-mono">{row.gf - row.ga > 0 ? "+" : ""}{row.gf - row.ga}</td>
@@ -356,10 +445,10 @@ function Calendar({ season }: { season: CareerSeason }) {
             onClick={() => navigate(`/play/career/seasons/${season.id}/rounds/${round.index}/matches/${index}`)}
             className="flex items-center gap-3 rounded-2xl bg-bg-surface px-3 py-2.5 text-left disabled:cursor-default"
           >
-            <span className="w-10 shrink-0 font-mono text-[11px] text-ink-mist">Тур {round.index + 1}</span>
+            <span className="w-10 shrink-0 font-mono text-caption text-ink-mist">Тур {round.index + 1}</span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm text-ink-chalk">{home ? "vs" : "@"} {opp.name}</span>
-              <span className="block text-[10px] text-ink-mist-dim">{formatWhen(round.at)}</span>
+              <span className="block text-micro text-ink-mist-dim">{formatWhen(round.at)}</span>
               {round.report && <RoundReport report={round.report} />}
             </span>
             <span className={`font-mono text-sm font-bold ${tone}`}>{played ? `${own}:${theirs}` : "—"}</span>
@@ -380,7 +469,7 @@ function RoundReport({ report }: { report: CareerRoundReport }) {
   if (report.form_up.length) parts.push({ text: `в форме: ${report.form_up.join(", ")}`, tone: "text-accent-lime" });
   if (!parts.length) return null;
   return (
-    <span className="mt-0.5 block text-[10px] leading-snug">
+    <span className="mt-0.5 block text-micro leading-snug">
       {parts.map((p, i) => (
         <span key={i} className={`${p.tone} block truncate`}>{p.text}</span>
       ))}
@@ -402,6 +491,9 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
   const [mentality, setMentality] = useState(season.mentality);
   const [playstyle, setPlaystyle] = useState(season.playstyle);
   const [picking, setPicking] = useState<CareerSlot | null>(null);
+  // Tactics seasons edit formation/mentality/tactic on the prep tab; here
+  // the saved tactic is just sent back unchanged with the players.
+  const tacticsSeason = (season.tactics_version ?? 0) > 0;
   // Reset the local edit only when the saved lineup itself changes — not on
   // every background refetch, which would wipe unsaved changes each minute.
   const savedKey = JSON.stringify(season.lineup);
@@ -411,6 +503,8 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
     mutationFn: (payload: { formation?: string; slots?: Record<string, number> }) =>
       setCareerLineup({
         slots: payload.slots ?? slots, formation: payload.formation ?? season.formation, mentality, playstyle,
+        round_index: season.rounds_played,
+        ...(tacticsSeason && season.tactic ? { tactic: season.tactic } : {}),
       }),
     onSuccess: (v) => { haptic("light"); onView(v); },
     onError,
@@ -421,12 +515,19 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
 
   return (
     <section className="flex flex-col gap-3 rounded-3xl bg-bg-surface p-4">
-      <div className="grid grid-cols-3 gap-2">
-        <Select value={season.formation} options={FORMATIONS} onChange={(f) => save.mutate({ formation: f, slots: {} })} />
-        <Select value={mentality} options={MENTALITIES} onChange={setMentality} />
-        <Select value={playstyle} options={PLAYSTYLES} onChange={setPlaystyle} />
-      </div>
-      <p className="text-[11px] text-ink-mist">
+      {tacticsSeason ? (
+        <div className="flex items-center justify-between gap-2 text-xs">
+          <span className="text-ink-mist">Схема {season.formation} · заявка {season.squad.length} игроков</span>
+          <span className="text-caption text-ink-mist-dim">тактика — во вкладке «Подготовка»</span>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          <Select value={season.formation} options={FORMATIONS} onChange={(f) => save.mutate({ formation: f, slots: {} })} />
+          <Select value={mentality} options={MENTALITIES} onChange={setMentality} />
+          <Select value={playstyle} options={PLAYSTYLES} onChange={setPlaystyle} />
+        </div>
+      )}
+      <p className="text-caption text-ink-mist">
         Пустые места, травмированных и дисквалифицированных автоматически заменит лучший свежий игрок заявки.
         Усталость снижает рейтинг, форма ▲ после победы добавляет. Три жёлтые или красная — пропуск тура.
       </p>
@@ -437,7 +538,7 @@ function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Ha
       </div>
       {bench.length > 0 && (
         <div>
-          <p className="mb-1 text-[11px] font-semibold text-ink-mist">Запас</p>
+          <p className="mb-1 text-caption font-semibold text-ink-mist">Запас</p>
           <div className="flex flex-col divide-y divide-white/5">
             {bench.map((entry) => <SquadRow key={entry.card_id} label="—" entry={entry} />)}
           </div>
@@ -489,21 +590,21 @@ function SquadRow({ label, entry, onClick }: { label: string; entry?: CareerSqua
   const mine = entry?.my_player;
   return (
     <button onClick={onClick} disabled={!onClick} className="flex w-full items-center gap-3 py-2 text-left">
-      <span className="w-10 shrink-0 font-mono text-[10px] text-ink-mist">{label}</span>
+      <span className="w-10 shrink-0 font-mono text-micro text-ink-mist">{label}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm text-ink-chalk">
           {mine ? (
             <>
-              {mine.name} <span className="rounded bg-accent-lime/15 px-1 text-[9px] font-bold text-accent-lime">МОЙ ИГРОК</span>
+              {mine.name} <span className="rounded bg-accent-lime/15 px-1 text-micro font-bold text-accent-lime">МОЙ ИГРОК</span>
             </>
           ) : card ? card.player.display_name : entry ? "Карточка продана" : "Авто"}
         </span>
-        {card && <span className="text-[10px] text-ink-mist">{card.player.position} · {card.player.rating}</span>}
-        {mine && <span className="text-[10px] text-ink-mist">{mine.position} · {mine.rating}</span>}
+        {card && <span className="text-micro text-ink-mist">{card.player.position} · {card.player.rating}</span>}
+        {mine && <span className="text-micro text-ink-mist">{mine.position} · {mine.rating}</span>}
       </span>
       {entry && entry.form !== 0 && entry.injured_rounds === 0 && entry.suspended_rounds === 0 && (
         <span
-          className={`font-mono text-[10px] font-bold ${entry.form > 0 ? "text-accent-lime" : "text-red-400"}`}
+          className={`font-mono text-micro font-bold ${entry.form > 0 ? "text-accent-lime" : "text-red-400"}`}
           title="Форма на следующий матч"
         >
           {entry.form > 0 ? `▲+${entry.form}` : `▼${entry.form}`}
@@ -517,11 +618,11 @@ function SquadRow({ label, entry, onClick }: { label: string; entry?: CareerSqua
         </span>
       )}
       {entry && entry.suspended_rounds > 0 ? (
-        <span className="flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
+        <span className="flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-micro font-semibold text-red-400">
           <span className="h-3 w-2 rounded-[2px] bg-red-500" /> дисквал. · {entry.suspended_rounds} т.
         </span>
       ) : entry && entry.injured_rounds > 0 ? (
-        <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
+        <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-micro font-semibold text-red-400">
           травма · {entry.injured_rounds} т.
         </span>
       ) : entry ? (

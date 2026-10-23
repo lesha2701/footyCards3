@@ -12,8 +12,9 @@ from app.models.enums import BingoGoalType, NotificationType, Rarity, TradeCardS
 from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.user import User
 from app.schemas.trade import TradeAcceptOut, TradeCreateRequest, TradeOfferOut
-from app.services import bingo_service, task_service
+from app.services import artifact_service, bingo_service, equipment_service, task_service, trade_finder_service, trade_guard_service
 from app.services.collection_service import grant_collection_rewards_for_new_cards
+from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
@@ -110,7 +111,18 @@ async def _find_receiver(db: AsyncSession, payload: TradeCreateRequest) -> User:
     return receiver
 
 
+TRADES_OFF_MESSAGE = "Обмены временно отключены"
+
+
+async def _assert_trades_enabled(db: AsyncSession) -> None:
+    """Admin switch (GameConfig.trades_enabled): blocks creating and
+    accepting offers; cancelling / rejecting stays possible."""
+    if not (await get_config(db)).trades_enabled:
+        raise ConflictError(TRADES_OFF_MESSAGE, details={"reason": "trades_disabled"})
+
+
 async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateRequest) -> TradeOfferOut:
+    await _assert_trades_enabled(db)
     receiver = await _find_receiver(db, payload)
     if receiver.id == sender.id:
         raise ConflictError("You cannot trade with yourself")
@@ -123,11 +135,25 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
     if not receiver.accept_trades:
         raise ConflictError("This user is not accepting trade offers")
 
+    offered_ids = payload.offered_card_ids or []
+    requested_ids = payload.requested_card_ids or []
+
+    # Anti-farming (see trade_guard_service); re-checked at accept time.
+    config = await get_config(db)
+    trade_guard_service.ensure_trade_shape(
+        config, payload.sender_coins, payload.receiver_coins,
+        len(set(offered_ids)), len(set(requested_ids)),
+    )
+    if payload.sender_coins > 0 or offered_ids:
+        await trade_guard_service.ensure_can_give(db, sender, config, own=True)
+    if payload.receiver_coins > 0 or requested_ids:
+        await trade_guard_service.ensure_can_give(db, receiver, config, own=False)
+    await trade_guard_service.ensure_receive_cap(db, receiver, payload.sender_coins, config, own=False)
+    await trade_guard_service.ensure_receive_cap(db, sender, payload.receiver_coins, config, own=True)
+
     if payload.sender_coins > sender.balance:
         raise InsufficientBalanceError("You do not have enough coins for this offer")
 
-    offered_ids = payload.offered_card_ids or []
-    requested_ids = payload.requested_card_ids or []
     all_card_ids = list(dict.fromkeys(offered_ids + requested_ids))
     cards_by_id: dict[int, UserCard] = {}
     if all_card_ids:
@@ -151,7 +177,9 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
         for card in offered_cards:
             if card.owner_id != sender.id:
                 raise ForbiddenError("You can only offer your own cards")
-            if card.player.rarity == Rarity.diamond:
+            # «Академия» cards are the one tradeable kind of diamond: their
+            # path progress lives on the card row and moves with it.
+            if card.player.rarity == Rarity.diamond and card.player.path_talent_code is None:
                 raise ConflictError("Diamond cards cannot be traded")
             if card.is_locked():
                 raise ConflictError(f"Card #{card.serial_number} is not available for trade")
@@ -165,7 +193,9 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
         for card in requested_cards:
             if card.owner_id != receiver.id:
                 raise ConflictError("Requested cards must belong to the trade partner")
-            if card.player.rarity == Rarity.diamond:
+            # «Академия» cards are the one tradeable kind of diamond: their
+            # path progress lives on the card row and moves with it.
+            if card.player.rarity == Rarity.diamond and card.player.path_talent_code is None:
                 raise ConflictError("Diamond cards cannot be traded")
             if card.is_locked() or card.hidden_from_trade:
                 raise ConflictError(f"Card #{card.serial_number} is not available for trade")
@@ -252,6 +282,7 @@ async def reject_offer(db: AsyncSession, user: User, offer_id: int) -> TradeOffe
 
 
 async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcceptOut:
+    await _assert_trades_enabled(db)
     offer = await _get_offer_or_404(db, offer_id)
     offer = await _expire_if_needed(db, offer)
     if offer.receiver_id != user.id:
@@ -265,6 +296,8 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
     trade_cards = trade_cards_result.scalars().all()
     card_ids = sorted({tc.user_card_id for tc in trade_cards})
 
+    # Before the locks: get_config commits when it has to create the row.
+    config = await get_config(db)
     first_id, second_id = sorted([offer.sender_id, offer.receiver_id])
     first_user = await lock_user_for_update(db, first_id)
     second_user = await lock_user_for_update(db, second_id)
@@ -303,6 +336,20 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
         if card.is_in_tactico_squad:
             raise ConflictError(f"Card #{card.serial_number} is currently used in a Tactico squad")
 
+    # Anti-farming, under both user locks: this is the check that counts
+    # (offers created before a rule was switched on can't slip through).
+    trade_guard_service.ensure_trade_shape(
+        config, offer.sender_coins, offer.receiver_coins,
+        sum(1 for tc in trade_cards if tc.side == TradeCardSide.offered),
+        sum(1 for tc in trade_cards if tc.side == TradeCardSide.requested),
+    )
+    if offer.sender_coins > 0 or any(tc.side == TradeCardSide.offered for tc in trade_cards):
+        await trade_guard_service.ensure_can_give(db, sender, config, own=False)
+    if offer.receiver_coins > 0 or any(tc.side == TradeCardSide.requested for tc in trade_cards):
+        await trade_guard_service.ensure_can_give(db, receiver, config, own=True)
+    await trade_guard_service.ensure_receive_cap(db, receiver, offer.sender_coins, config, own=True)
+    await trade_guard_service.ensure_receive_cap(db, sender, offer.receiver_coins, config, own=False)
+
     if offer.sender_coins > 0 and sender.balance < offer.sender_coins:
         raise InsufficientBalanceError("Sender no longer has enough coins for this trade")
     if offer.receiver_coins > 0 and receiver.balance < offer.receiver_coins:
@@ -310,28 +357,43 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
 
     receiver_new_player_ids: list[int] = []
     sender_new_player_ids: list[int] = []
+    # «Экипировка» stays with its owner: take it off before the cards move.
+    await equipment_service.detach_from_cards(db, [tc.user_card_id for tc in trade_cards])
     for tc in trade_cards:
         card = cards_by_id[tc.user_card_id]
         new_owner_id = offer.receiver_id if tc.side == TradeCardSide.offered else offer.sender_id
         card.owner_id = new_owner_id
         card.is_locked_in_trade = False
         db.add(card)
+        await trade_finder_service.notify_wanted_card(db, new_owner_id, card.player_id)
         if new_owner_id == offer.receiver_id:
             receiver_new_player_ids.append(card.player_id)
         else:
             sender_new_player_ids.append(card.player_id)
 
+    if trade_cards:
+        # «Артефакты» card bonuses belong to the owner: the moved cards drop
+        # the old owner's and pick up the new owner's.
+        await db.flush()
+        await artifact_service.refresh_card_bonuses(db, sender.id, config)
+        await artifact_service.refresh_card_bonuses(db, receiver.id, config)
     if receiver_new_player_ids:
         await grant_collection_rewards_for_new_cards(db, receiver, receiver_new_player_ids)
     if sender_new_player_ids:
         await grant_collection_rewards_for_new_cards(db, sender, sender_new_player_ids)
 
-    if offer.sender_coins > 0:
-        await debit_coins(db, sender, offer.sender_coins, TransactionType.trade_coins_sent, "Монеты отправлены при обмене", "trade_offer", offer.id)
-        await credit_coins(db, receiver, offer.sender_coins, TransactionType.trade_coins_received, "Монеты получены при обмене", "trade_offer", offer.id)
-    if offer.receiver_coins > 0:
-        await debit_coins(db, receiver, offer.receiver_coins, TransactionType.trade_coins_sent, "Монеты отправлены при обмене", "trade_offer", offer.id)
-        await credit_coins(db, sender, offer.receiver_coins, TransactionType.trade_coins_received, "Монеты получены при обмене", "trade_offer", offer.id)
+    for payer, payee, amount in ((sender, receiver, offer.sender_coins), (receiver, sender, offer.receiver_coins)):
+        if amount <= 0:
+            continue
+        await debit_coins(db, payer, amount, TransactionType.trade_coins_sent, "Монеты отправлены при обмене", "trade_offer", offer.id)
+        await credit_coins(db, payee, amount, TransactionType.trade_coins_received, "Монеты получены при обмене", "trade_offer", offer.id)
+        tax = trade_guard_service.coin_tax(amount, config)
+        if tax > 0:
+            # Coin sink: the payee was just credited `amount`, so this can't fail.
+            await debit_coins(
+                db, payee, tax, TransactionType.trade_coin_tax,
+                f"Налог на монеты в обмене ({config.trade_coin_tax_pct}%)", "trade_offer", offer.id,
+            )
 
     offer.status = TradeStatus.accepted
     offer.resolved_at = datetime.now(timezone.utc)

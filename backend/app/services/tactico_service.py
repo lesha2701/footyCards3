@@ -34,12 +34,13 @@ from app.schemas.tactico import (
     TacticoSquadOut,
     TacticoStatsOut,
 )
-from app.services import bingo_service, league_service, ranking_service
+from app.services import bingo_service, league_service, ranking_service, stake_guard_service
 from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS
 from app.services.match_service import BOT_NAMES
 from app.services.notification_service import notify
-from app.services.player_stats_service import effective_card_stats
+from app.services.path_service import is_path_card, is_plain_diamond
+from app.services.player_stats_service import card_rating_bonus, effective_card_stats
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 SQUAD_SIZE = 11
@@ -120,7 +121,7 @@ async def _serialize_squad(db: AsyncSession, squad: TacticoSquad) -> TacticoSqua
         template_index=squad.template_index, name=squad.name, is_active=squad.is_active,
         is_complete=len(cards) == SQUAD_SIZE, cards=cards,
         max_legendary=config.tactico_max_legendary_cards, max_epic=config.tactico_max_epic_cards,
-        max_diamond=config.tactico_max_diamond_cards,
+        max_diamond=config.tactico_max_diamond_cards, max_path=config.tactico_max_path_cards,
     )
 
 
@@ -168,7 +169,10 @@ async def set_squad(
 
     legendary_count = sum(1 for c in cards_by_id.values() if c.player.rarity == Rarity.legendary)
     epic_count = sum(1 for c in cards_by_id.values() if c.player.rarity == Rarity.epic)
-    diamond_count = sum(1 for c in cards_by_id.values() if c.player.rarity == Rarity.diamond)
+    diamond_count = sum(1 for c in cards_by_id.values() if is_plain_diamond(c))
+    path_count = sum(1 for c in cards_by_id.values() if is_path_card(c))
+    if path_count > config.tactico_max_path_cards:
+        raise ConflictError(f"Максимум {config.tactico_max_path_cards} карт «Академии» в составе Тактико")
     if legendary_count > config.tactico_max_legendary_cards:
         raise ConflictError(f"Максимум {config.tactico_max_legendary_cards} легендарных карт в составе Тактико")
     if epic_count > config.tactico_max_epic_cards:
@@ -350,7 +354,7 @@ def _record_pick(state: dict, side: str, card: UserCard) -> None:
         raise ConflictError("You already submitted a card for this round")
     pool.remove(card.id)
     state[f"{side}_pending_card_id"] = card.id
-    state[f"{side}_pending_snapshot"] = _card_snapshot(card.player, user_card_id=card.id, diamond_rating_bonus=card.diamond_rating_bonus)
+    state[f"{side}_pending_snapshot"] = _card_snapshot(card.player, user_card_id=card.id, diamond_rating_bonus=card_rating_bonus(card))
 
 
 def _bot_submit(state: dict, difficulty: MatchDifficulty, config: GameConfig, bonus_pct: float) -> None:
@@ -561,6 +565,7 @@ async def create_open_challenge(db: AsyncSession, sender: User, stake_coins: int
     squad = await get_squad(db, sender)
     if not squad.is_complete:
         raise ConflictError(f"Build a full {SQUAD_SIZE}-card Tactico squad before challenging a friend")
+    await stake_guard_service.ensure_can_create(db, sender, stake_coins, config)
     if stake_coins > 0 and sender.balance < stake_coins:
         raise ConflictError("Не хватает монет для такой ставки")
 
@@ -634,8 +639,12 @@ async def accept_open_challenge(db: AsyncSession, user: User, match_id: int) -> 
     if not receiver_squad.is_complete:
         raise ConflictError(f"Build a full {SQUAD_SIZE}-card Tactico squad before accepting")
 
-    creator = await lock_user_for_update(db, match.user_id)
-    acceptor = await lock_user_for_update(db, user.id)
+    first_id, second_id = sorted([match.user_id, user.id])
+    first = await lock_user_for_update(db, first_id)
+    second = await lock_user_for_update(db, second_id)
+    creator = first if first.id == match.user_id else second
+    acceptor = first if first.id == user.id else second
+    await stake_guard_service.ensure_can_accept(db, creator, acceptor, match.stake_coins, config)
     if match.stake_coins > 0:
         if creator.balance < match.stake_coins:
             raise ConflictError("У создателя вызова больше не хватает монет на ставку")
@@ -1130,7 +1139,7 @@ async def _hydrate_match(db: AsyncSession, match: TacticoMatch, viewer: User) ->
                     TacticoCardOut(
                         **_card_snapshot(
                             cards_by_id[cid].player, user_card_id=cid,
-                            diamond_rating_bonus=cards_by_id[cid].diamond_rating_bonus,
+                            diamond_rating_bonus=card_rating_bonus(cards_by_id[cid]),
                         )
                     )
                     for cid in pool_ids

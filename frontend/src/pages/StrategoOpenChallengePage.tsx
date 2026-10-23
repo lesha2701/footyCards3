@@ -93,7 +93,7 @@ export default function StrategoOpenChallengePage() {
         <p className="rounded-2xl bg-bg-surface px-6 py-4 text-sm text-ink-mist">Обычная игра, без ставки</p>
       )}
 
-      <p className="max-w-xs text-[11px] text-ink-mist-dim">
+      <p className="max-w-xs text-caption text-ink-mist-dim">
         Твои фишки встанут по сохранённой расстановке.{" "}
         <button onClick={() => navigate("/play/stratego/squad")} className="font-semibold text-accent-lime">
           Изменить подготовку

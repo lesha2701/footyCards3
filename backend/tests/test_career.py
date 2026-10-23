@@ -255,11 +255,13 @@ async def test_round_report_and_reminder_once_per_round(client, db_session, bot_
     season = (await client.post(f"{API}/career/seasons", headers=headers, json={})).json()["season"]
     first = datetime.fromisoformat(season["schedule"][0])
 
-    assert await career_service.send_reminders(db_session, now=first - timedelta(hours=3)) == 0  # too early
+    # Hours before: the pre-season reminder (squad, camp); the round one comes later.
+    assert await career_service.send_reminders(db_session, now=first - timedelta(hours=3)) == 1
+    assert await career_service.send_reminders(db_session, now=first - timedelta(hours=2)) == 0
     assert await career_service.send_reminders(db_session, now=first - timedelta(minutes=30)) == 1
     assert await career_service.send_reminders(db_session, now=first - timedelta(minutes=20)) == 0  # once per round
 
-    await career_service.resolve_due(db_session, season["id"], now=first)
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=11))
     view = (await client.get(f"{API}/career", headers=headers)).json()["season"]
     report = view["rounds"][0]["report"]
     assert report is not None and set(report) >= {"yellow", "red", "injured", "form_up", "form_down"}

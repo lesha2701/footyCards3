@@ -106,13 +106,13 @@ export default function AdminGiftsPage() {
           <div key={g.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-bg-surface px-3 py-2">
             <div className="flex items-center gap-2">
               {g.image_path ? (
-                <img src={staticUrl(g.image_path) ?? undefined} className="h-10 w-10 rounded-lg object-cover" />
+                <img decoding="async" loading="lazy" src={staticUrl(g.image_path) ?? undefined} className="h-10 w-10 rounded-lg object-cover" />
               ) : (
                 <span className="text-2xl">🎁</span>
               )}
               <div>
                 <p className="text-sm font-semibold">{g.name}</p>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-caption text-slate-500">
                   <span className="rounded bg-white/10 px-1.5 py-0.5 font-semibold">
                     {g.kind === "collectible" ? "Коллекционный" : "Набор"}
                   </span>{" "}
@@ -127,8 +127,8 @@ export default function AdminGiftsPage() {
               </div>
             </div>
             <div className="flex gap-1">
-              <button onClick={() => openEdit(g)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-              <button onClick={() => confirmDelete(g)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">Удалить</button>
+              <button onClick={() => openEdit(g)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+              <button onClick={() => confirmDelete(g)} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">Удалить</button>
             </div>
           </div>
         ))}
@@ -209,7 +209,7 @@ export default function AdminGiftsPage() {
                   <label className="flex flex-col gap-1">
                     <span className="text-xs text-slate-400">Цена в монетах (для покупки игроками)</span>
                     <NumberInput min={0} value={form.coins_price} onChange={(v) => setForm({ ...form, coins_price: v })} />
-                    <span className="text-[10px] text-slate-500">Нужна хотя бы одна цена — в ⭐ или в монетах.</span>
+                    <span className="text-micro text-slate-500">Нужна хотя бы одна цена — в ⭐ или в монетах.</span>
                   </label>
                   <label className="flex flex-col gap-1">
                     <span className="text-xs text-slate-400">Тираж (0 = без ограничения)</span>
@@ -244,7 +244,7 @@ export default function AdminGiftsPage() {
                   <span className="text-xs font-semibold text-slate-400">Картинка набора</span>
                   <div className="flex items-center gap-3">
                     {(editing as GiftSet).image_path ? (
-                      <img
+                      <img decoding="async" loading="lazy"
                         src={staticUrl((editing as GiftSet).image_path!) ?? undefined}
                         className="h-14 w-14 rounded-lg border border-white/10 object-cover"
                       />
@@ -255,12 +255,12 @@ export default function AdminGiftsPage() {
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploadImageMutation.isPending}
-                        className="rounded-lg bg-white/5 px-2 py-1 text-[11px]"
+                        className="rounded-lg bg-white/5 px-2 py-1 text-caption"
                       >
                         {uploadImageMutation.isPending ? "Загрузка..." : "Загрузить"}
                       </button>
                       {(editing as GiftSet).image_path && (
-                        <button onClick={() => removeImageMutation.mutate()} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">
+                        <button onClick={() => removeImageMutation.mutate()} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">
                           Удалить картинку
                         </button>
                       )}

@@ -183,7 +183,7 @@ export default function StrategoMatchPage() {
           <p className="truncate font-display text-base font-bold text-ink-chalk">
             {match.mode === "puzzle" ? match.puzzle?.title ?? "Задача дня" : match.mode === "tutorial" ? "Обучение" : `vs ${match.opponent_name || "…"}`}
           </p>
-          <p className="text-[11px] text-ink-mist">
+          <p className="text-caption text-ink-mist">
             {match.mode === "puzzle"
               ? `Ход ${Math.min(match.puzzle?.moves ?? 0, Math.floor(match.ply / 2) + 1)} из ${match.puzzle?.moves ?? "—"}`
               : `Ход ${match.ply}/${match.move_limit}`}
@@ -244,7 +244,7 @@ export default function StrategoMatchPage() {
       )}
 
       {selected?.role && (
-        <p className="text-center text-[11px] text-ink-mist">
+        <p className="text-center text-caption text-ink-mist">
           <RoleIcon role={selected.role} size={12} className="mr-1 inline align-[-2px] text-accent-lime" />
           {ROLE_META[selected.role].label}
           {selected.card && `: ${selected.card.display_name} (${selected.card.position}, ${selected.power})`}
@@ -253,7 +253,7 @@ export default function StrategoMatchPage() {
         </p>
       )}
       {inPlay && !selected && match.mode !== "puzzle" && (
-        <p className="text-center text-[10px] text-ink-mist-dim">Нажми на фишку соперника, чтобы пометить её: «Стенка?», «Кубок?»…</p>
+        <p className="text-center text-micro text-ink-mist-dim">Нажми на фишку соперника, чтобы пометить её: «Стенка?», «Кубок?»…</p>
       )}
 
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
@@ -280,7 +280,7 @@ export default function StrategoMatchPage() {
         <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={() => setNoteFor(null)}>
           <div className="safe-bottom w-full rounded-t-3xl bg-bg-base p-5" onClick={(e) => e.stopPropagation()}>
             <p className="font-display text-base font-bold text-ink-chalk">Пометить фишку соперника</p>
-            <p className="mb-3 text-[11px] text-ink-mist">
+            <p className="mb-3 text-caption text-ink-mist">
               Пометку видишь только ты.{noteFor.moved ? " Эта фишка уже ходила — значит, это не Кубок и не Стенка." : ""}
             </p>
             <div className="grid grid-cols-3 gap-2">
@@ -349,11 +349,11 @@ function TutorialTip({ match, selected, onHide }: { match: StrategoMatch; select
   const step = match.ply === 0 ? (selected ? 1 : 0) : !fought ? 2 : match.ply < 12 ? 3 : 4;
   return (
     <div className="flex items-start gap-3 rounded-2xl border border-accent-lime/30 bg-accent-lime/10 p-3">
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-floodlight font-mono text-[11px] font-bold text-bg-base">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-floodlight font-mono text-caption font-bold text-bg-base">
         {step + 1}
       </span>
       <p className="flex-1 text-xs leading-relaxed text-ink-chalk">{TUTORIAL_TIPS[step]}</p>
-      <button onClick={onHide} className="text-[11px] text-ink-mist">Скрыть</button>
+      <button onClick={onHide} className="text-caption text-ink-mist">Скрыть</button>
     </div>
   );
 }
@@ -377,8 +377,8 @@ function CombatBanner({ move, onReplay }: { move: StrategoMove; onReplay: () => 
 function Trophies({ title, pieces }: { title: string; pieces: StrategoCombatPiece[] }) {
   return (
     <div className="rounded-xl bg-bg-surface p-2">
-      <p className="mb-1.5 text-[11px] font-semibold text-ink-mist">{title} · {pieces.length}</p>
-      {pieces.length === 0 ? <p className="text-[11px] text-ink-mist-dim">—</p> : (
+      <p className="mb-1.5 text-caption font-semibold text-ink-mist">{title} · {pieces.length}</p>
+      {pieces.length === 0 ? <p className="text-caption text-ink-mist-dim">—</p> : (
         <div className="flex flex-wrap gap-1">
           {pieces.map((p) => (
             <span key={p.id} className="flex h-8 w-8 items-center justify-center" title={pieceName(p)}>
@@ -402,8 +402,8 @@ function PendingPanel({ match, busy, onAction }: { match: StrategoMatch; busy: b
             ? "Открытый вызов отправлен в чат — ждём первого, кто его примет"
             : "Ждём, пока соперник примет вызов"}
       </p>
-      {match.stake_coins > 0 && <p className="text-[11px] text-ink-mist">Ставка: {match.stake_coins} монет с каждой стороны</p>}
-      {incoming && <p className="text-[11px] text-ink-mist">Твои фишки встанут по сохранённой расстановке из «Подготовки».</p>}
+      {match.stake_coins > 0 && <p className="text-caption text-ink-mist">Ставка: {match.stake_coins} монет с каждой стороны</p>}
+      {incoming && <p className="text-caption text-ink-mist">Твои фишки встанут по сохранённой расстановке из «Подготовки».</p>}
       <div className="flex gap-2">
         {incoming ? (
           <>
@@ -444,9 +444,9 @@ function ResultPanel({ match, onOpen }: { match: StrategoMatch; onOpen: () => vo
           </span>
         )}
       </p>
-      {match.stake_coins > 0 && <p className="text-[11px] text-ink-mist-dim">Ставка: {match.stake_coins} с каждой стороны</p>}
-      {match.my_player_xp > 0 && <p className="text-[11px] text-accent-lime">Мой игрок: +{match.my_player_xp} опыта</p>}
-      <p className="text-[11px] text-ink-mist-dim">Все фишки соперника раскрыты · нажми, чтобы сыграть ещё</p>
+      {match.stake_coins > 0 && <p className="text-caption text-ink-mist-dim">Ставка: {match.stake_coins} с каждой стороны</p>}
+      {match.my_player_xp > 0 && <p className="text-caption text-accent-lime">Мой игрок: +{match.my_player_xp} опыта</p>}
+      <p className="text-caption text-ink-mist-dim">Все фишки соперника раскрыты · нажми, чтобы сыграть ещё</p>
     </button>
   );
 }

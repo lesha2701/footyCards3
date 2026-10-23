@@ -221,7 +221,8 @@ async def test_fut_draft_start_charges_entry_cost(client, db_session, bot_token)
 
 async def test_fut_draft_choose_formation_rejects_unoffered_formation(client, db_session, bot_token):
     headers, body = await _start(client, db_session, bot_token, 770002)
-    all_formations = {"4-3-3", "4-4-2", "3-5-2", "5-3-2"}
+    from app.services.club_formation_service import CLUB_FORMATIONS
+    all_formations = set(CLUB_FORMATIONS)
     not_offered = next(f for f in all_formations if f not in body["formation_options"])
 
     resp = await client.post(

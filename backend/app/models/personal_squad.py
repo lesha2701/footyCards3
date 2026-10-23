@@ -20,6 +20,9 @@ class PersonalSquad(TimestampMixin, Base):
     formation: Mapped[str] = mapped_column(String(16), nullable=False, default="4-3-3", server_default="4-3-3")
     mentality: Mapped[str] = mapped_column(String(16), nullable=False, default="BALANCED", server_default="BALANCED")
     playstyle: Mapped[str] = mapped_column(String(16), nullable=False, default="CENTRAL_PLAY", server_default="CENTRAL_PLAY")
+    # Card Arena style (manager_tactics / arena_tactics.STYLES): what the
+    # tournament plays with; mentality / playstyle are no longer played.
+    style: Mapped[str] = mapped_column(String(16), nullable=False, default="possession", server_default="possession")
     user_coach_card_id: Mapped[int | None] = mapped_column(
         ForeignKey("user_coach_cards.id", ondelete="SET NULL"), nullable=True
     )

@@ -90,7 +90,7 @@ export default function PlayerTournamentPage() {
           <IconFlagCheckered size={16} className="text-accent-lime" />
           Мой турнир
           {current.status === "active" && (
-            <span className="ml-auto flex items-center gap-1.5 rounded-full bg-accent-lime/10 px-2 py-1 text-[10px] font-bold text-accent-lime">
+            <span className="ml-auto flex items-center gap-1.5 rounded-full bg-accent-lime/10 px-2 py-1 text-micro font-bold text-accent-lime">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-lime" />
               Идёт
             </span>

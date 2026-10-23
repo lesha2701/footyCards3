@@ -54,7 +54,7 @@ export default function MagnateRoomPage() {
         <p className="mt-1 text-sm text-ink-mist">{room.creator_name} зовёт за стол</p>
       </div>
       <div className="w-full max-w-xs rounded-2xl bg-bg-surface px-4 py-3 text-left">
-        <p className="mb-1 text-[11px] text-ink-mist-dim">За столом {room.players.length}/{room.seats_total}</p>
+        <p className="mb-1 text-caption text-ink-mist-dim">За столом {room.players.length}/{room.seats_total}</p>
         {room.players.map((name, i) => (
           <p key={i} className="truncate text-sm text-ink-chalk">{name}</p>
         ))}

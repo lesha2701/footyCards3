@@ -1,6 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { formationLabel, inRow, pitchRows, PITCH_STYLE } from "@/lib/formationLayout";
+import PitchCardTile from "@/components/cards/PitchCardTile";
+import PitchBackground from "@/components/squad/PitchBackground";
 
 import {
   chooseFutDraftFormation,
@@ -36,7 +39,7 @@ import {
 } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
-import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_TEXT } from "@/lib/rarity";
+import { RARITY_GRADIENTS, RARITY_GLOW_STATIC, RARITY_TEXT } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
@@ -393,11 +396,11 @@ export default function FutDraftGamePage() {
           </div>
           {config && (
             <div className="mt-1 flex flex-col gap-1 border-t border-white/5 pt-2">
-              <p className="text-[11px] text-ink-mist-dim">Награда за серию побед</p>
+              <p className="text-caption text-ink-mist-dim">Награда за серию побед</p>
               <div className="flex justify-between gap-1">
                 {config.reward_by_wins.map((amount, wins) => (
                   <div key={wins} className="flex flex-1 flex-col items-center gap-0.5 rounded-lg bg-white/5 py-1.5">
-                    <span className="text-[9px] text-ink-mist-dim">{wins} поб.</span>
+                    <span className="text-micro text-ink-mist-dim">{wins} поб.</span>
                     <span className="font-mono text-xs font-bold text-accent-lime">{amount}</span>
                   </div>
                 ))}
@@ -625,7 +628,7 @@ function StrengthBar({
     <div className="flex flex-col gap-2 rounded-2xl bg-bg-surface px-4 py-3">
       <div className="flex items-center justify-between">
         <button onClick={onToggleHint} className="flex items-center gap-1.5 text-ink-mist-dim">
-          <span className="font-mono text-[10px] uppercase tracking-wide">Сила состава</span>
+          <span className="font-mono text-micro uppercase tracking-wide">Сила состава</span>
           <IconHelp size={12} />
         </button>
         <div className="flex items-center gap-2">
@@ -635,7 +638,7 @@ function StrengthBar({
           <span className="font-display text-lg font-bold text-accent-lime">{teamStrength}</span>
         </div>
       </div>
-      {showHint && <p className="text-[11px] leading-relaxed text-ink-mist">{STRENGTH_HINT}</p>}
+      {showHint && <p className="text-caption leading-relaxed text-ink-mist">{STRENGTH_HINT}</p>}
     </div>
   );
 }
@@ -654,41 +657,27 @@ function Pitch({
   disabled: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
-      <p className="text-center font-mono text-[10px] uppercase tracking-wide text-ink-mist-dim">{formation}</p>
-      {(["FWD", "MID", "DEF", "GK"] as const).map((category) => (
-        <div key={category} className="flex justify-center gap-2">
-          {slots
-            .filter((s) => s.category === category)
+    <div style={PITCH_STYLE} className="relative flex flex-col gap-2 overflow-hidden rounded-[22px] p-3 ring-1 ring-white/10">
+      <PitchBackground />
+      <p className="relative text-center font-mono text-micro uppercase tracking-wide text-ink-mist">{formationLabel(formation)}</p>
+      {pitchRows(formation, slots.map((s) => s.slot_code)).map((row) => (
+        <div key={row.key} className="relative flex justify-center gap-2">
+          {inRow(row, slots)
             .map((slot) => (
               <button
                 key={slot.slot_code}
                 onClick={() => onSlotTap(slot)}
                 disabled={slot.player ? false : disabled}
-                className={`flex h-[104px] w-[72px] shrink-0 flex-col items-center justify-center gap-1 rounded-xl p-1.5 backdrop-blur-sm active:scale-95 disabled:active:scale-100 ${
+                className={`flex h-[104px] w-[72px] shrink-0 flex-col items-center justify-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 disabled:active:scale-100 ${
                   slot.slot_code === selectedSlotCode ? "ring-2 ring-accent-lime" : ""
-                } ${
-                  slot.player ? `bg-gradient-to-b ${RARITY_GRADIENTS[slot.player.rarity]} ${RARITY_GLOW[slot.player.rarity]} p-[1.5px]` : "bg-black/30"
                 }`}
               >
                 {slot.player ? (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-1 rounded-[9px] bg-bg-surface p-1">
-                    <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                      {slot.player.image_path ? (
-                        <img src={staticUrl(slot.player.image_path) ?? undefined} alt="" className="h-full w-full object-cover" loading="lazy" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center">
-                          <IconShirt size={16} className="text-ink-mist-dim" />
-                        </div>
-                      )}
-                    </div>
-                    <span className="font-mono text-[9px] font-bold leading-none text-ink-chalk">{slot.player.rating}</span>
-                    <span className="rounded-full bg-black/40 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">{slot.player.position}</span>
-                  </div>
+                  <PitchCardTile player={slot.player} />
                 ) : (
                   <>
                     <IconPlus size={18} className="text-ink-mist-dim" />
-                    <span className="font-mono text-[10px] font-bold text-ink-mist-dim">{slot.ideal_position}</span>
+                    <span className="font-mono text-micro font-bold text-ink-mist-dim">{slot.ideal_position}</span>
                   </>
                 )}
               </button>
@@ -713,12 +702,12 @@ function DraftCandidateCard({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center gap-3 rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[card.rarity]} ${RARITY_GLOW[card.rarity]} p-[1.5px] text-left transition active:scale-[0.98] disabled:active:scale-100`}
+      className={`flex items-center gap-3 rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[card.rarity]} ${RARITY_GLOW_STATIC[card.rarity]} p-[1.5px] text-left transition active:scale-[0.98] disabled:active:scale-100`}
     >
       <div className="flex w-full items-center gap-3 rounded-[15px] bg-bg-surface p-3">
         <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-bg-raised">
           {card.image_path ? (
-            <img src={staticUrl(card.image_path) ?? undefined} alt={card.display_name} className="h-full w-full object-cover" />
+            <img decoding="async" loading="lazy" src={staticUrl(card.image_path) ?? undefined} alt={card.display_name} className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
               <IconShirt size={20} className="text-ink-mist-dim" />
@@ -732,8 +721,8 @@ function DraftCandidateCard({
         <div className="shrink-0 text-right">
           <p className="font-mono text-xl font-bold text-ink-chalk">{card.rating}</p>
           <div className="flex items-center gap-1">
-            <span className="rounded-full bg-white/5 px-1.5 py-0.5 font-mono text-[9px] font-bold text-accent-cyan">{card.position}</span>
-            <span className={`text-[10px] font-bold uppercase ${RARITY_TEXT[card.rarity]}`}>{card.rarity}</span>
+            <span className="rounded-full bg-white/5 px-1.5 py-0.5 font-mono text-micro font-bold text-accent-cyan">{card.position}</span>
+            <span className={`text-micro font-bold uppercase ${RARITY_TEXT[card.rarity]}`}>{card.rarity}</span>
           </div>
         </div>
       </div>
@@ -745,7 +734,7 @@ function PlayerDetailModal({ card, onClose }: { card: FutDraftCandidate; onClose
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={onClose}>
       <div
-        className={`w-full max-w-xs rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[card.rarity]} ${RARITY_GLOW[card.rarity]} p-[1.5px]`}
+        className={`w-full max-w-xs rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[card.rarity]} ${RARITY_GLOW_STATIC[card.rarity]} p-[1.5px]`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col items-center gap-3 rounded-[15px] bg-bg-base p-5">
@@ -754,7 +743,7 @@ function PlayerDetailModal({ card, onClose }: { card: FutDraftCandidate; onClose
           </button>
           <div className="h-28 w-28 overflow-hidden rounded-2xl bg-bg-surface">
             {card.image_path ? (
-              <img src={staticUrl(card.image_path) ?? undefined} alt={card.display_name} className="h-full w-full object-cover" />
+              <img decoding="async" loading="lazy" src={staticUrl(card.image_path) ?? undefined} alt={card.display_name} className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
                 <IconShirt size={32} className="text-ink-mist-dim" />
@@ -766,15 +755,15 @@ function PlayerDetailModal({ card, onClose }: { card: FutDraftCandidate; onClose
           <div className="grid w-full grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-bg-surface py-2">
               <p className="font-mono text-lg font-bold text-accent-lime">{card.rating}</p>
-              <p className="text-[9px] text-ink-mist-dim">Рейтинг</p>
+              <p className="text-micro text-ink-mist-dim">Рейтинг</p>
             </div>
             <div className="rounded-xl bg-bg-surface py-2">
               <p className="font-mono text-lg font-bold text-accent-cyan">{card.position}</p>
-              <p className="text-[9px] text-ink-mist-dim">Позиция</p>
+              <p className="text-micro text-ink-mist-dim">Позиция</p>
             </div>
             <div className="rounded-xl bg-bg-surface py-2">
-              <p className="truncate px-1 font-mono text-[11px] font-bold text-ink-chalk">{card.club}</p>
-              <p className="text-[9px] text-ink-mist-dim">Клуб</p>
+              <p className="truncate px-1 font-mono text-caption font-bold text-ink-chalk">{card.club}</p>
+              <p className="text-micro text-ink-mist-dim">Клуб</p>
             </div>
           </div>
           <p className="text-xs text-ink-mist">{card.country}</p>
@@ -890,7 +879,7 @@ function CardArenaRoundPlayer({
                 : `${currentMinute}' · идёт матч...`}
         </span>
         {!autoSkip && !(caughtUp && isFinished) && !awaitingCoinFlip && (
-          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-ink-chalk">
+          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-caption font-semibold text-ink-chalk">
             Пропустить
           </button>
         )}
@@ -977,7 +966,7 @@ function CardArenaActionPrompt({
             >
               <Icon size={16} />
               {label}
-              {subtitle && <span className="text-[10px] font-normal text-ink-mist-dim">{subtitle}</span>}
+              {subtitle && <span className="text-micro font-normal text-ink-mist-dim">{subtitle}</span>}
             </button>
           );
         })}
@@ -1116,7 +1105,7 @@ function PenaltyRoundPlayer({
         <div className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2">
           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-bg-raised">
             {round.picked_player.image_path ? (
-              <img
+              <img decoding="async" loading="lazy"
                 src={staticUrl(round.picked_player.image_path) ?? undefined}
                 alt=""
                 className="h-full w-full object-cover"
@@ -1144,7 +1133,7 @@ function PenaltyRoundPlayer({
             key={zone}
             onClick={() => onKick(zone)}
             disabled={busy}
-            className="rounded-xl bg-white/5 py-3 text-[11px] font-semibold text-ink-chalk active:scale-95 disabled:opacity-50"
+            className="rounded-xl bg-white/5 py-3 text-caption font-semibold text-ink-chalk active:scale-95 disabled:opacity-50"
           >
             {PENALTY_ZONE_LABELS[zone] ?? zone}
           </button>

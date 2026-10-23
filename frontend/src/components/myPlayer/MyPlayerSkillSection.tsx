@@ -14,7 +14,7 @@ interface Props {
 
 function Price({ tokens, coins, have }: { tokens: number; coins: number; have: number }) {
   return (
-    <span className="flex items-center gap-2 font-mono text-[11px]">
+    <span className="flex items-center gap-2 font-mono text-caption">
       {tokens > 0 && <span className={have >= tokens ? "text-ink-chalk" : "text-red-400"}>🎟 {have}/{tokens}</span>}
       {coins > 0 && (
         <span className="flex items-center gap-0.5 text-ink-chalk">
@@ -56,7 +56,7 @@ export default function MyPlayerSkillSection({ view, skill, onSaved }: Props) {
           </span>
         )}
       </div>
-      <p className="mt-1 text-[11px] text-ink-mist">
+      <p className="mt-1 text-caption text-ink-mist">
         Как у карточек: назначь навык, улучшай до III за жетоны этого навыка и монеты. Действует в матчах «Карьеры
         тренера». Жетоны выпадают из паков и наград турниров.
       </p>
@@ -92,7 +92,7 @@ export default function MyPlayerSkillSection({ view, skill, onSaved }: Props) {
                 <span className="text-2xl leading-none">{o.icon}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold text-ink-chalk">{o.name}</span>
-                  <span className="block text-[11px] text-ink-mist">{o.effect}</span>
+                  <span className="block text-caption text-ink-mist">{o.effect}</span>
                   {!active && (
                     <span className="mt-1.5 flex items-center justify-between gap-2">
                       <Price tokens={tokens} coins={coins} have={have} />
@@ -112,7 +112,7 @@ export default function MyPlayerSkillSection({ view, skill, onSaved }: Props) {
         </div>
       )}
       {skill.code && (
-        <p className="mt-2 text-[10px] text-ink-mist-dim">Замена начинает новый навык с уровня I.</p>
+        <p className="mt-2 text-micro text-ink-mist-dim">Замена начинает новый навык с уровня I.</p>
       )}
       {error && <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
     </section>

@@ -13,6 +13,7 @@ import {
   togglePlayerPackDroppable,
   updatePlayer,
   uploadPlayerImage,
+  fetchAdminPath,
 } from "@/admin/api";
 import NumberInput from "@/components/common/NumberInput";
 import { ApiRequestError, staticUrl } from "@/lib/api";
@@ -20,14 +21,16 @@ import { RARITY_LABELS } from "@/lib/rarity";
 import type { Player, Position, Rarity } from "@/types";
 
 const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
-const POSITIONS: Position[] = ["GK", "LB", "CB", "RB", "CDM", "CM", "CAM", "LM", "RM", "LW", "RW", "ST"];
+const POSITIONS: Position[] = ["GK", "LB", "CB", "RB", "LWB", "RWB", "CDM", "CM", "CAM", "LM", "RM", "LW", "RW", "ST"];
 
 const emptyForm = {
-  first_name: "", last_name: "", display_name: "", rating: 70, rarity: "common" as Rarity,
+  display_name: "", rating: 70, rarity: "common" as Rarity,
   country: "", club: "", position: "ST" as Position, quick_sell_price: 10, is_active: true,
   is_pack_droppable: true,
   collection_id: "" as number | "",
   attack_rating: "" as number | "", defense_rating: "" as number | "",
+  /** «Академия»: talent of a diamond path card ("" = regular card). */
+  path_talent_code: "",
 };
 
 export default function AdminPlayersPage() {
@@ -44,6 +47,7 @@ export default function AdminPlayersPage() {
 
   const { data, isLoading } = useQuery({ queryKey: ["admin-players", search, page], queryFn: () => fetchAdminPlayers(search, page) });
   const { data: collections } = useQuery({ queryKey: ["admin-card-collections"], queryFn: fetchAdminCardCollections });
+  const { data: pathOverview } = useQuery({ queryKey: ["admin-path"], queryFn: fetchAdminPath });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-players"] });
 
@@ -52,6 +56,7 @@ export default function AdminPlayersPage() {
     collection_id: form.collection_id === "" ? null : form.collection_id,
     attack_rating: form.attack_rating === "" ? null : form.attack_rating,
     defense_rating: form.defense_rating === "" ? null : form.defense_rating,
+    path_talent_code: form.rarity === "diamond" && form.path_talent_code ? form.path_talent_code : null,
   });
 
   const createMutation = useMutation({
@@ -84,12 +89,13 @@ export default function AdminPlayersPage() {
   const openEdit = (p: Player) => {
     setEditing(p);
     setForm({
-      first_name: p.first_name, last_name: p.last_name, display_name: p.display_name, rating: p.rating,
+      display_name: p.display_name, rating: p.rating,
       rarity: p.rarity, country: p.country, club: p.club, position: p.position,
       quick_sell_price: p.quick_sell_price, is_active: p.is_active,
       is_pack_droppable: p.is_pack_droppable,
       collection_id: p.collection_id ?? "",
       attack_rating: p.attack_rating, defense_rating: p.defense_rating,
+      path_talent_code: p.path_talent_code ?? "",
     });
   };
 
@@ -144,7 +150,7 @@ export default function AdminPlayersPage() {
             {data?.items.map((p) => (
               <tr key={p.id} className="border-t border-white/5">
                 <td className="px-3 py-2">
-                  <img src={staticUrl(p.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="h-10 w-10 rounded-lg object-cover" />
+                  <img decoding="async" loading="lazy" src={staticUrl(p.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="h-10 w-10 rounded-lg object-cover" />
                 </td>
                 <td className="px-3 py-2">{p.display_name}</td>
                 <td className="px-3 py-2">{p.rating}</td>
@@ -196,8 +202,6 @@ export default function AdminPlayersPage() {
             <p className="mb-4 font-display text-lg font-bold">{editing ? "Редактировать игрока" : "Новый игрок"}</p>
             {error && <p className="mb-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
             <div className="flex flex-col gap-2 text-sm">
-              <TextField label="Имя" value={form.first_name} onChange={(v) => setForm({ ...form, first_name: v })} />
-              <TextField label="Фамилия" value={form.last_name} onChange={(v) => setForm({ ...form, last_name: v })} />
               <TextField label="Отображаемое имя" value={form.display_name} onChange={(v) => setForm({ ...form, display_name: v })} />
               <TextField label="Страна" value={form.country} onChange={(v) => setForm({ ...form, country: v })} />
               <TextField label="Клуб" value={form.club} onChange={(v) => setForm({ ...form, club: v })} />
@@ -234,6 +238,27 @@ export default function AdminPlayersPage() {
                   ))}
                 </select>
               </label>
+              {form.rarity === "diamond" && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-400">Талант пути («Академия»)</span>
+                  <select
+                    value={form.path_talent_code}
+                    onChange={(e) => setForm({ ...form, path_talent_code: e.target.value })}
+                    className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                  >
+                    <option value="">— Нет (обычный бриллиант, не «Академия»)</option>
+                    {pathOverview?.talents
+                      .filter((t) => !t.positions || t.positions.includes(form.position))
+                      .map((t) => (
+                        <option key={t.code} value={t.code}>{t.emoji} {t.name}{t.is_enabled ? "" : " (выключен)"}</option>
+                      ))}
+                  </select>
+                  <span className="text-caption text-slate-500">
+                    Карта пути стартует с рейтинга игрока и растёт игрой; бриллиантовая прокачка к ней не применяется, у неё
+                    свой лимит в составах. Обычно стартовый рейтинг — 60.
+                  </span>
+                </label>
+              )}
               <label className="flex items-center gap-2 text-xs text-slate-300">
                 <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
                 Активен
@@ -246,14 +271,14 @@ export default function AdminPlayersPage() {
                 />
                 Может выпасть из пака
               </label>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-caption text-slate-500">
                 Если выключить, карта останется активной (видна в коллекции, участвует в мини-играх), но новые паки
                 и колесо фортуны больше не будут её выдавать.
               </p>
 
               {editing && (
                 <div className="mt-2 flex items-center gap-2">
-                  <img src={staticUrl(editing.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="h-14 w-14 rounded-lg object-cover" />
+                  <img decoding="async" loading="lazy" src={staticUrl(editing.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="h-14 w-14 rounded-lg object-cover" />
                   <button onClick={() => fileInputRef.current?.click()} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs">Загрузить фото</button>
                   <input
                     ref={fileInputRef}

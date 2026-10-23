@@ -38,6 +38,8 @@ class UpgradeCardRequest(BaseModel):
     idempotency_key: Optional[str] = None
     # Must be true to stake a copy that has a skill (destroyed, no token refund).
     confirm_skill_loss: bool = False
+    # Must be true to stake a copy that stands in a squad (it leaves it).
+    confirm_leave_squad: bool = False
 
 
 class CardUpgradeResultOut(BaseModel):

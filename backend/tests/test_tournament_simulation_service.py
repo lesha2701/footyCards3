@@ -1,5 +1,4 @@
 import asyncio
-import os
 import uuid
 
 import pytest
@@ -21,15 +20,13 @@ from app.services.tournament_simulation_service import resolve_match_lineup, sim
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
 
-# Same real-dev-Postgres pattern as test_club_packs.py / test_tournament_queue_service.py:
+# Same real-Postgres pattern as test_club_packs.py / test_tournament_queue_service.py:
 # the pytest suite's `client`/`db_session` fixtures (tests/conftest.py) are hardcoded to an
-# in-memory SQLite engine, an entirely separate database from real dev Postgres — there is no
-# `tests.conftest.RealSessionLocal` to import (that name does not exist anywhere in this
-# codebase). The two genuine-concurrency tests below build their own tournament directly
+# in-memory SQLite engine, an entirely separate database from the `real_pg` fixture's
+# dedicated `*_test` Postgres database. The two genuine-concurrency tests below build their own tournament directly
 # against real Postgres (raw model construction, mirroring
 # test_tournament_queue_service.py's test_eight_concurrent_applications_form_exactly_one_tournament)
 # rather than trying to reuse a SQLite-backed fixture's row id against a different database.
-REAL_POSTGRES_URL = os.environ.get("REAL_POSTGRES_URL", "postgresql+asyncpg://postgres:1234@postgres:5432/footycards")
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -474,7 +471,7 @@ async def test_equipped_coach_boosts_flow_into_simulated_match(db_session, eight
 # model construction, mirroring test_tournament_queue_service.py's own real-Postgres race
 # test) rather than reusing the SQLite `db_session`-backed `eight_club_tournament` fixture —
 # that fixture's rows live in a completely different (in-memory SQLite) database and would
-# not exist for a RealSessionLocal query to find. Skips gracefully if real dev Postgres is
+# not exist for a RealSessionLocal query to find. Skips gracefully if real Postgres is
 # unreachable, same as every other real-Postgres regression test in this suite.
 
 
@@ -484,7 +481,7 @@ async def _seed_real_eight_club_tournament(RealSessionLocal, suffix: str) -> dic
     apply_to_tournament sequentially (not concurrently — queue-formation racing is already
     covered by test_tournament_queue_service.py; here we just need a concrete, already-formed
     tournament to exist before racing simulate_next_round against it). Returns the created ids
-    (for cleanup) and the formed tournament's id."""
+    and the formed tournament's id (the `real_pg` fixture deletes all of it on teardown)."""
     from app.models.club import ClubMember
     from app.models.club_card import ClubCard
     from app.models.club_lineup import ClubLineup, ClubLineupCard
@@ -560,136 +557,78 @@ async def _seed_real_eight_club_tournament(RealSessionLocal, suffix: str) -> dic
     return {"tournament_id": tournament_id, "club_ids": club_ids, "user_ids": user_ids, "player_ids": player_ids}
 
 
-async def _cleanup_real_tournament(RealSessionLocal, tournament_id, club_ids, user_ids, player_ids):
-    from app.models.player import Player
-    from app.models.user import User
-
-    async with RealSessionLocal() as session:
-        tournament = await session.get(Tournament, tournament_id)
-        if tournament is not None:
-            await session.delete(tournament)
-        await session.commit()
-    async with RealSessionLocal() as session:
-        for club_id in club_ids:
-            club = await session.get(Club, club_id)
-            if club is not None:
-                await session.delete(club)
-        await session.commit()
-    async with RealSessionLocal() as session:
-        for user_id in user_ids:
-            user = await session.get(User, user_id)
-            if user is not None:
-                await session.delete(user)
-        await session.commit()
-    async with RealSessionLocal() as session:
-        for player_id in player_ids:
-            player = await session.get(Player, player_id)
-            if player is not None:
-                await session.delete(player)
-        await session.commit()
-
-
-async def _real_engine_or_skip():
-    from sqlalchemy import text
-    from sqlalchemy.exc import OperationalError
-    from sqlalchemy.ext.asyncio import create_async_engine
-
-    engine = create_async_engine(REAL_POSTGRES_URL, pool_pre_ping=True)
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-    except (OSError, OperationalError) as exc:
-        await engine.dispose()
-        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
-    return engine
-
-
-async def test_simulate_next_round_is_idempotent_under_concurrent_calls():
+async def test_simulate_next_round_is_idempotent_under_concurrent_calls(real_pg):
     """Genuine concurrency regression test against real Postgres: two concurrent
     simulate_next_round calls racing on the same freshly-formed tournament must not
     double-simulate round 1 (checked by asserting rounds_simulated == 1 and exactly 4 matches
     exist for round 1 afterward, not 8)."""
-    from sqlalchemy.ext.asyncio import async_sessionmaker
-
-    engine = await _real_engine_or_skip()
-    RealSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+    RealSessionLocal = real_pg
     suffix = uuid.uuid4().hex[:8]
     seed = await _seed_real_eight_club_tournament(RealSessionLocal, suffix)
     tournament_id = seed["tournament_id"]
 
-    try:
-        async def call():
-            async with RealSessionLocal() as session:
-                return await simulate_next_round(session)
-
-        results = await asyncio.gather(call(), call(), return_exceptions=True)
-        for result in results:
-            assert not isinstance(result, BaseException), f"simulate_next_round raised instead of handling the race: {result!r}"
-
+    async def call():
         async with RealSessionLocal() as session:
-            tournament = await session.get(Tournament, tournament_id)
-            assert tournament.rounds_simulated == 1
-            round_1_matches = (
-                await session.execute(
-                    select(TournamentMatch).where(TournamentMatch.tournament_id == tournament_id, TournamentMatch.round_number == 1)
-                )
-            ).scalars().all()
-            assert len(round_1_matches) == 4
-    finally:
-        await _cleanup_real_tournament(RealSessionLocal, tournament_id, seed["club_ids"], seed["user_ids"], seed["player_ids"])
-        await engine.dispose()
+            return await simulate_next_round(session)
+
+    results = await asyncio.gather(call(), call(), return_exceptions=True)
+    for result in results:
+        assert not isinstance(result, BaseException), f"simulate_next_round raised instead of handling the race: {result!r}"
+
+    async with RealSessionLocal() as session:
+        tournament = await session.get(Tournament, tournament_id)
+        assert tournament.rounds_simulated == 1
+        round_1_matches = (
+            await session.execute(
+                select(TournamentMatch).where(TournamentMatch.tournament_id == tournament_id, TournamentMatch.round_number == 1)
+            )
+        ).scalars().all()
+        assert len(round_1_matches) == 4
 
 
-async def test_round_14_reward_distribution_cannot_double_fire_under_concurrency():
+async def test_round_14_reward_distribution_cannot_double_fire_under_concurrency(real_pg):
     """Genuine concurrency regression test against real Postgres: advances a tournament to
     round 13 (sequentially — only the final round-14 call is raced), then fires two concurrent
     simulate_next_round calls that both try to simulate round 14 and conclude the tournament.
     Exactly one must win: TournamentClubResult must end up with exactly one row per club (8),
     not 16, and the tournament's budget/star rewards must only be credited once."""
-    from sqlalchemy.ext.asyncio import async_sessionmaker
-
-    engine = await _real_engine_or_skip()
-    RealSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+    RealSessionLocal = real_pg
     suffix = uuid.uuid4().hex[:8]
     seed = await _seed_real_eight_club_tournament(RealSessionLocal, suffix)
     tournament_id = seed["tournament_id"]
 
-    try:
-        for _ in range(13):
-            async with RealSessionLocal() as session:
-                await simulate_next_round(session)
-
+    for _ in range(13):
         async with RealSessionLocal() as session:
-            tournament = await session.get(Tournament, tournament_id)
-            assert tournament.rounds_simulated == 13
-            assert tournament.status == TournamentStatus.active
+            await simulate_next_round(session)
 
-        async def call():
-            async with RealSessionLocal() as session:
-                return await simulate_next_round(session)
+    async with RealSessionLocal() as session:
+        tournament = await session.get(Tournament, tournament_id)
+        assert tournament.rounds_simulated == 13
+        assert tournament.status == TournamentStatus.active
 
-        results = await asyncio.gather(call(), call(), return_exceptions=True)
-        for result in results:
-            assert not isinstance(result, BaseException), f"simulate_next_round raised instead of handling the race: {result!r}"
-
+    async def call():
         async with RealSessionLocal() as session:
-            tournament = await session.get(Tournament, tournament_id)
-            assert tournament.rounds_simulated == 14
-            assert tournament.status == TournamentStatus.completed
+            return await simulate_next_round(session)
 
-            result_count = (
-                await session.execute(select(func.count(TournamentClubResult.id)).where(TournamentClubResult.tournament_id == tournament_id))
-            ).scalar_one()
-            assert result_count == 8  # exactly one TournamentClubResult per club, not 16
+    results = await asyncio.gather(call(), call(), return_exceptions=True)
+    for result in results:
+        assert not isinstance(result, BaseException), f"simulate_next_round raised instead of handling the race: {result!r}"
 
-            round_14_matches = (
-                await session.execute(
-                    select(func.count(TournamentMatch.id)).where(
-                        TournamentMatch.tournament_id == tournament_id, TournamentMatch.round_number == 14
-                    )
+    async with RealSessionLocal() as session:
+        tournament = await session.get(Tournament, tournament_id)
+        assert tournament.rounds_simulated == 14
+        assert tournament.status == TournamentStatus.completed
+
+        result_count = (
+            await session.execute(select(func.count(TournamentClubResult.id)).where(TournamentClubResult.tournament_id == tournament_id))
+        ).scalar_one()
+        assert result_count == 8  # exactly one TournamentClubResult per club, not 16
+
+        round_14_matches = (
+            await session.execute(
+                select(func.count(TournamentMatch.id)).where(
+                    TournamentMatch.tournament_id == tournament_id, TournamentMatch.round_number == 14
                 )
-            ).scalar_one()
-            assert round_14_matches == 4  # not 8 — round 14 itself wasn't double-simulated either
-    finally:
-        await _cleanup_real_tournament(RealSessionLocal, tournament_id, seed["club_ids"], seed["user_ids"], seed["player_ids"])
-        await engine.dispose()
+            )
+        ).scalar_one()
+        assert round_14_matches == 4  # not 8 — round 14 itself wasn't double-simulated either

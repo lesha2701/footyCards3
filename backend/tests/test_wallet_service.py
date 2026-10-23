@@ -1,10 +1,6 @@
-import os
 import uuid
 
-import pytest
 from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.models.enums import TransactionType
 from app.models.user import User
@@ -14,30 +10,19 @@ from app.services import wallet_service
 # Postgres constraint applied only via Alembic — it is NOT part of the SQLAlchemy model
 # metadata, so tests/conftest.py's SQLite `Base.metadata.create_all` never creates it and
 # the in-memory suite can't catch a regression here. Same "verify manually against real
-# Postgres" approach as test_club_packs.py's REAL_POSTGRES_URL tests — written as a
-# permanent, self-cleaning regression test rather than a one-off manual check.
-REAL_POSTGRES_URL = os.environ.get("REAL_POSTGRES_URL", "postgresql+asyncpg://postgres:1234@postgres:5432/footycards")
+# Postgres" approach as test_club_packs.py's `real_pg` tests — written as a permanent
+# regression test (dedicated `*_test` database, rows removed on teardown) rather than a
+# one-off manual check.
 
 
-async def test_credit_coins_succeeds_while_balance_negative_from_clawback():
+async def test_credit_coins_succeeds_while_balance_negative_from_clawback(real_pg):
     """Reproduces the production bug: a player clawed back into negative balance by the
     premium-task subscription sweep (bot/db.py's adjust_coins_allow_negative, which uses the
     exempted `premium_subscription_adjustment` type) could not earn ANY coins afterwards —
     every game/task/daily reward 500'd with a CheckViolationError, since balance_after stayed
     negative until the balance crossed back to zero on its own. Fixed by 0076, which also
     allows any transaction with amount >= 0 (a credit can never make the balance worse)."""
-    engine = create_async_engine(REAL_POSTGRES_URL, pool_pre_ping=True)
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-    except OSError as exc:
-        await engine.dispose()
-        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
-    except OperationalError as exc:
-        await engine.dispose()
-        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
-
-    RealSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+    RealSessionLocal = real_pg
     suffix = uuid.uuid4().hex[:10]
 
     setup = RealSessionLocal()
@@ -70,11 +55,4 @@ async def test_credit_coins_succeeds_while_balance_negative_from_clawback():
         finally:
             await session.close()
     finally:
-        if user_id is not None:
-            cleanup = RealSessionLocal()
-            await cleanup.execute(text("DELETE FROM coin_transactions WHERE user_id = :uid"), {"uid": user_id})
-            await cleanup.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": user_id})
-            await cleanup.commit()
-            await cleanup.close()
         await setup.close()
-        await engine.dispose()

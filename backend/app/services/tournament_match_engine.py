@@ -59,6 +59,41 @@ _PLAYSTYLE_GOAL_FLAVOR: dict[str, list[str]] = {
 }
 
 
+OPENER_PHRASE = "открывает счёт"
+
+
+def score_phrase(own: int, opp: int) -> str:
+    """What a goal did to the score, from the scorer's side, `own`/`opp`
+    counted after it: the opener, an equaliser, going ahead, extending a
+    lead or pulling one back."""
+    if own + opp == 1:
+        return OPENER_PHRASE
+    if own == opp:
+        return "сравнивает счёт"
+    if own == opp + 1:
+        return "выходит вперёд"
+    if own > opp:
+        return "увеличивает преимущество"
+    return "сокращает отставание"
+
+
+def fix_goal_descriptions(events: list[dict]) -> None:
+    """Goal texts are drawn before the score is known: "открывает счёт" may
+    land on any goal. Rewrites it to fit the running score — a separate pass
+    over the finished log, so it draws no random numbers and never changes
+    a result."""
+    goals = {"a": 0, "b": 0}
+    for event in events:
+        team = event.get("team")
+        if event.get("event_type") != "goal" or team not in goals:
+            continue
+        goals[team] += 1
+        text = event.get("description") or ""
+        if OPENER_PHRASE in text:
+            other = "b" if team == "a" else "a"
+            event["description"] = text.replace(OPENER_PHRASE, score_phrase(goals[team], goals[other]))
+
+
 def _describe_event(
     event_type: str, team: str, club_a_name: str, club_b_name: str,
     playstyle: str | None = None, quality: str | None = None,
@@ -73,6 +108,7 @@ def _describe_event(
 
 from app.services import club_tactical_matchup_service
 from app.services.card_skill_effects import aerial_alpha, aerial_shot_roll, effect_of, skill_roll
+from app.services.path_talent_effects import dynamic_bonus, dynamic_note, with_bonus
 
 # Maps a Chance's quality tier (club_tactical_matchup_service.Chance.quality)
 # onto the same units situation.bias used to nudge effective rating in the
@@ -104,6 +140,21 @@ def _clamp_rating(rating: float) -> int:
     return max(58, min(99, round(rating)))
 
 
+def _boost(actor: dict | None, key: str) -> int:
+    """An actor's «Экипировка» / artifact boost in percentage points (0 = none)."""
+    return int(((actor or {}).get("boosts") or {}).get(key) or 0)
+
+
+def _less(chance: float, pp: int) -> float:
+    """A failure chance lowered by a boost: −pp, never below 2% (untouched without one)."""
+    return max(0.02, chance - pp / 100) if pp > 0 and chance > 0.02 else chance
+
+
+def _more(chance: float, pp: int) -> float:
+    """A success chance raised by a boost: +pp, capped at 98% (untouched without one)."""
+    return min(0.98, chance + pp / 100) if pp > 0 and chance < 0.98 else chance
+
+
 def _resolve_shot_continuation(
     missed: bool, shot_type: str, config, blocker_rating, keeper_rating,
     keeper: dict | None = None, notes: list | None = None, one_on_one: bool = False,
@@ -114,7 +165,11 @@ def _resolve_shot_continuation(
         blocked = random.random() < _lerp_chance(blocker_rating, float(config.match_defender_block_chance_min), float(config.match_defender_block_chance_max))
     if not missed and not blocked:
         saved, save_notes = skill_roll(
-            _lerp_chance_positive(keeper_rating, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
+            # The keeper's «Экипировка» save bonus (save_pp).
+            _more(
+                _lerp_chance_positive(keeper_rating, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
+                _boost(keeper, "save_pp"),
+            ),
             # A keeper has one skill, so at most one of these is ever active.
             [_skill(keeper, "reflexes", 1)] + ([_skill(keeper, "one_on_one", 1)] if one_on_one else []),
         )
@@ -163,7 +218,11 @@ def _shot_miss_roll(
     """The scorer's miss roll (sniper), or — on a cross whose header duel
     involves an aerial_master — the same probability split into header duel
     + header (card_skill_effects.aerial_shot_roll). Without an aerial effect
-    this is exactly the old single roll."""
+    this is exactly the old single roll. A «Мой игрок» shot_pp artifact
+    (scorer["boosts"]) lowers the miss chance by that many points."""
+    shot_pp = (scorer.get("boosts") or {}).get("shot_pp") or 0
+    if shot_pp:
+        miss = max(0.02, miss - shot_pp / 100)
     if aerial and moment.get("is_cross"):
         target = scorer if scorer.get("position") in ("ST", "CB") else (aerial.get("attack_target") or scorer)
         defender = aerial.get("defender")
@@ -189,9 +248,29 @@ def _with_skill_notes(payload: dict, notes: list) -> dict:
     return payload
 
 
+def _with_talent_notes(payload: dict, notes: list) -> dict:
+    if notes:
+        payload["talents"] = payload.get("talents", []) + notes
+    return payload
+
+
+def _talented(actor: dict | None, minute: int, own: int, opp: int, role: str, *, one_on_one: bool = False):
+    """(actor for this roll, note) — the actor's rating with its «Начало
+    пути» dynamic talent when the condition holds now (player tournaments
+    only: club/career actors never carry a talent). Its static talents are
+    already inside the rating."""
+    snap = actor.get("talent") if actor else None
+    if not snap:
+        return actor, None
+    bonus = dynamic_bonus(snap, minute=minute, own=own, opp=opp, role=role, one_on_one=one_on_one)
+    if not bonus:
+        return actor, None
+    return {**actor, "rating": with_bonus(actor["rating"], bonus)}, dynamic_note(snap, bonus)
+
+
 def _resolve_shot_action(
     attacking_side: str, moment: dict, config, quality_bias: float = 0,
-    keeper: dict | None = None, notes: list | None = None, aerial: dict | None = None,
+    keeper: dict | None = None, notes: list | None = None, aerial: dict | None = None, keeper_bonus: int = 0,
 ) -> tuple[dict, str]:
     """Shoots when quality_bias is non-negative (a clear chance), passes
     otherwise — same shoot/pass split the old situation.bias-driven policy
@@ -217,7 +296,10 @@ def _resolve_shot_action(
         # One roll, two opposing skills: the passer's "playmaker" lowers the
         # fail chance, the duel defender's "interceptor" raises it.
         pass_failed, roll_notes = skill_roll(
-            _lerp_chance(eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max)),
+            _less(
+                _lerp_chance(eff_passer_rating, float(config.match_pass_fail_chance_min), float(config.match_pass_fail_chance_max)),
+                _boost(shooter, "pass_pp"),
+            ),
             [_skill(shooter, "playmaker", -1), _skill(defender, "interceptor", 1)],
         )
         notes.extend(roll_notes)
@@ -235,7 +317,7 @@ def _resolve_shot_action(
         scorer = pass_target
 
     outcome, extra = _resolve_shot_continuation(
-        missed, shot_type, config, blocker_rating=defender["rating"], keeper_rating=defender["rating"],
+        missed, shot_type, config, blocker_rating=defender["rating"], keeper_rating=with_bonus(defender["rating"], keeper_bonus),
         keeper=keeper, notes=notes, one_on_one=bool(moment.get("is_one_on_one")),
     )
     # shooter_id / assist (+_id): who scored / set it up — read by «Карьера
@@ -256,6 +338,7 @@ def _resolve_shot_action(
 
 def _resolve_defense_tackle(
     defending_side: str, moment: dict, config, keeper: dict | None = None,
+    foul_mult: float = 1.0, penalty_hook=None, talent_ctx: dict | None = None,
 ) -> tuple[dict, str, tuple[int, str] | None]:
     """Default policy: defending side always attempts a tackle (same
     rating-driven foul/card rolls as a human picking 'tackle' today).
@@ -264,7 +347,13 @@ def _resolve_defense_tackle(
     is_box = moment["is_box"]
     shot_type = moment["shot_type"]
 
-    foul = random.random() < _lerp_chance(defender["rating"], float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max))
+    foul_chance = _less(
+        _lerp_chance(defender["rating"], float(config.match_tackle_foul_chance_min), float(config.match_tackle_foul_chance_max)),
+        _boost(defender, "tackle_pp"),
+    )
+    if foul_mult != 1.0:  # career tackling style (career_tactics_service)
+        foul_chance = min(0.95, foul_chance * foul_mult)
+    foul = random.random() < foul_chance
     if not foul:
         event = {
             "minute": moment["minute"], "event_type": "tackle_won", "team": defending_side,
@@ -275,20 +364,39 @@ def _resolve_defense_tackle(
     is_red = random.random() < _lerp_chance(defender["rating"], float(config.match_tackle_red_chance_min), float(config.match_tackle_red_chance_max))
     card_kind = "red" if is_red else "yellow"
 
+    if is_box and penalty_hook is not None:
+        # Career: the penalty is taken by the attacking side's taker vs its keeper.
+        attacking_side = "a" if defending_side == "b" else "b"
+        event, scored = penalty_hook(attacking_side, moment["minute"], card_kind)
+        return event, (attacking_side if scored else "none"), (defender["club_card_id"], card_kind)
+
     if is_box:
-        eff_gk = _clamp_rating(defender["rating"] - config.match_penalty_gk_rating_penalty)
+        # «Академия»: the keeper's talent on a penalty (Хладнокровие etc.).
+        penalty_talents: list = []
+        keeper_bonus = 0
+        if talent_ctx is not None and keeper and keeper.get("talent"):
+            keeper_bonus = dynamic_bonus(
+                keeper["talent"], minute=moment["minute"], own=talent_ctx["own"], opp=talent_ctx["opp"],
+                role="keeper", penalty=True,
+            )
+            if keeper_bonus:
+                penalty_talents.append(dynamic_note(keeper["talent"], keeper_bonus))
+        eff_gk = _clamp_rating(defender["rating"] + keeper_bonus - config.match_penalty_gk_rating_penalty)
         saved, save_notes = skill_roll(
-            _lerp_chance_positive(eff_gk, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
+            _more(
+                _lerp_chance_positive(eff_gk, float(config.match_keeper_save_chance_min), float(config.match_keeper_save_chance_max)),
+                _boost(keeper, "save_pp"),
+            ),
             [_skill(keeper, "reflexes", 1)],
         )
         outcome = "save" if saved else "goal"
         attacking_side = "a" if defending_side == "b" else "b"
         event = {
             "minute": moment["minute"], "event_type": outcome, "team": attacking_side,
-            "payload": _with_skill_notes(
+            "payload": _with_talent_notes(_with_skill_notes(
                 {"shot_type": shot_type, "action": "tackle", "defender": defender["name"], "card": card_kind, "is_penalty": True},
                 save_notes,
-            ),
+            ), penalty_talents),
         }
         return event, (attacking_side if outcome == "goal" else "none"), (defender["club_card_id"], card_kind)
 
@@ -334,44 +442,33 @@ def simulate_match(
 
     result = MatchResult(score_a=0, score_b=0)
     for chance in chances:
-        attacking_side = chance.attacking_side
-        defending_side = "b" if attacking_side == "a" else "a"
-        attacking_playstyle = side_a.playstyle if attacking_side == "a" else side_b.playstyle
+        _resolve_chance(result, chance, side_a, side_b, lineup_a, lineup_b, config, club_a_name, club_b_name)
+    fix_goal_descriptions(result.event_log)
+    return result
 
-        if chance.shot_type == "empty_net":
-            lineup = lineup_a if attacking_side == "a" else lineup_b
-            moment = {"minute": chance.minute}
-            event, scorer = _resolve_breakaway(attacking_side, moment, lineup, config, notes=chance.skill_notes)
-            result.event_log.append(event)
-            event["description"] = _describe_event(
-                event["event_type"], event["team"], club_a_name, club_b_name,
-                playstyle=attacking_playstyle, quality=chance.quality,
-            )
-            if scorer != "none":
-                setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
-            continue
 
-        moment = {
-            "minute": chance.minute, "shot_type": chance.shot_type, "is_box": chance.is_box,
-            "actors": {"shooter": chance.shooter, "pass_target": chance.pass_target, "defender": chance.defender},
-            # A flank attack finished inside the box = a cross (aerial duel).
-            "is_cross": getattr(chance, "zone", None) == "wing_attack" and chance.shot_type == "in_box",
-            # The top chance tier is the engine's "clean through on goal"
-            # (keeper's one_on_one skill applies to that save).
-            "is_one_on_one": chance.quality == "VERY_HIGH",
-        }
-        quality_bias = QUALITY_BIAS[chance.quality]
-        defending_keeper = _keeper_of(lineup_b if attacking_side == "a" else lineup_a)
-        aerial = None
-        if moment["is_cross"]:
-            aerial = {
-                "attack_target": _aerial_pick(lineup_a if attacking_side == "a" else lineup_b, "ST"),
-                "defender": _aerial_pick(lineup_b if attacking_side == "a" else lineup_a, "CB"),
-            }
-        event, scorer = _resolve_shot_action(
-            attacking_side, moment, config, quality_bias, keeper=defending_keeper, notes=chance.skill_notes,
-            **({"aerial": aerial} if aerial else {}),
-        )
+def _resolve_chance(
+    result: MatchResult, chance, side_a, side_b, lineup_a: list[dict], lineup_b: list[dict], config,
+    club_a_name: str, club_b_name: str, tag_origin: bool = False, controller=None,
+) -> None:
+    """Resolves one tactical Chance into event(s) and score on `result`.
+    `tag_origin` (career matches) also records the chance's origin/zone in
+    the event payload — read by the career tactical match analysis."""
+    attacking_side = chance.attacking_side
+    defending_side = "b" if attacking_side == "a" else "a"
+    attacking_playstyle = side_a.playstyle if attacking_side == "a" else side_b.playstyle
+
+    def tag(event: dict) -> None:
+        if tag_origin:
+            event.setdefault("payload", {})["origin"] = getattr(chance, "origin", "build_up")
+            if getattr(chance, "zone", None):
+                event["payload"]["zone"] = chance.zone
+
+    if chance.shot_type == "empty_net":
+        lineup = lineup_a if attacking_side == "a" else lineup_b
+        moment = {"minute": chance.minute}
+        event, scorer = _resolve_breakaway(attacking_side, moment, lineup, config, notes=chance.skill_notes)
+        tag(event)
         result.event_log.append(event)
         event["description"] = _describe_event(
             event["event_type"], event["team"], club_a_name, club_b_name,
@@ -379,25 +476,150 @@ def simulate_match(
         )
         if scorer != "none":
             setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
+        return
 
-        # Defense is attempted only when a blocked/saved shot has a further
-        # (config.club_tactical_tackle_attempt_chance) chance the defender
-        # committed a foul in the process — mirrors match_service's "tackle
-        # can stop an attack before it becomes a shot" flow for the box/foul
-        # path; everywhere else, shoot/pass resolves directly against the
-        # defender's rating via _resolve_shot_continuation's blocker/keeper
-        # roll, same as the personal engine.
-        if event["event_type"] in ("blocked", "save") and random.random() < float(config.club_tactical_tackle_attempt_chance):
-            defense_event, defense_scorer, card = _resolve_defense_tackle(defending_side, moment, config, keeper=defending_keeper)
-            result.event_log.append(defense_event)
+    moment = {
+        "minute": chance.minute, "shot_type": chance.shot_type, "is_box": chance.is_box,
+        "actors": {"shooter": chance.shooter, "pass_target": chance.pass_target, "defender": chance.defender},
+        # A flank attack finished inside the box = a cross (aerial duel).
+        "is_cross": getattr(chance, "zone", None) == "wing_attack" and chance.shot_type == "in_box",
+        # The top chance tier is the engine's "clean through on goal"
+        # (keeper's one_on_one skill applies to that save).
+        "is_one_on_one": chance.quality == "VERY_HIGH",
+    }
+    quality_bias = QUALITY_BIAS[chance.quality]
+    defending_keeper = _keeper_of(lineup_b if attacking_side == "a" else lineup_a)
+    # «Академия» dynamic talents (no RNG draws: a match without talents
+    # resolves exactly as before).
+    own_att, own_def = getattr(result, f"score_{attacking_side}"), getattr(result, f"score_{defending_side}")
+    keeper_bonus = 0
+    talent_notes: dict[str, dict] = {}
+    if any(a and a.get("talent") for a in (chance.shooter, chance.pass_target, chance.defender, defending_keeper)):
+        one_on_one = moment["is_one_on_one"]
+        role = "shooter" if quality_bias >= 0 else "passer"
+        shooter, n1 = _talented(chance.shooter, chance.minute, own_att, own_def, role, one_on_one=one_on_one and role == "shooter")
+        target, n2 = _talented(chance.pass_target, chance.minute, own_att, own_def, "shooter", one_on_one=one_on_one)
+        defender, n3 = _talented(chance.defender, chance.minute, own_def, own_att, "defender")
+        moment["actors"] = {"shooter": shooter, "pass_target": target, "defender": defender}
+        talent_notes = {k: n for k, n in (("shooter", n1), ("pass_target", n2), ("defender", n3)) if n}
+        keeper_snap = defending_keeper.get("talent") if defending_keeper else None
+        keeper_bonus = dynamic_bonus(
+            keeper_snap, minute=chance.minute, own=own_def, opp=own_att, role="keeper", one_on_one=one_on_one,
+        )
+        if keeper_bonus:
+            talent_notes["keeper"] = dynamic_note(keeper_snap, keeper_bonus)
+    aerial = None
+    if moment["is_cross"]:
+        aerial = {
+            "attack_target": _aerial_pick(lineup_a if attacking_side == "a" else lineup_b, "ST"),
+            "defender": _aerial_pick(lineup_b if attacking_side == "a" else lineup_a, "CB"),
+        }
+    event, scorer = _resolve_shot_action(
+        attacking_side, moment, config, quality_bias, keeper=defending_keeper, notes=chance.skill_notes,
+        **({"aerial": aerial} if aerial else {}), **({"keeper_bonus": keeper_bonus} if keeper_bonus else {}),
+    )
+    if talent_notes:
+        # A note only for an actor whose roll actually happened: the passer's
+        # receiver after a completed pass, the defender once the shot was on
+        # target (block / keeper base), the keeper when there was a save roll.
+        reached = event["event_type"] in ("blocked", "save", "goal")
+        used = ["shooter"]
+        if event["payload"].get("action") == "pass" and event["event_type"] != "pass_failed":
+            used.append("pass_target")
+        if reached:
+            used.append("defender")
+        if event["event_type"] in ("save", "goal"):
+            used.append("keeper")
+        _with_talent_notes(event["payload"], [talent_notes[k] for k in used if k in talent_notes])
+    tag(event)
+    result.event_log.append(event)
+    event["description"] = _describe_event(
+        event["event_type"], event["team"], club_a_name, club_b_name,
+        playstyle=attacking_playstyle, quality=chance.quality,
+    )
+    if scorer != "none":
+        setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
+
+    # Defense is attempted only when a blocked/saved shot has a further
+    # (config.club_tactical_tackle_attempt_chance) chance the defender
+    # committed a foul in the process — mirrors match_service's "tackle
+    # can stop an attack before it becomes a shot" flow for the box/foul
+    # path; everywhere else, shoot/pass resolves directly against the
+    # defender's rating via _resolve_shot_continuation's blocker/keeper
+    # roll, same as the personal engine.
+    tackle_chance = float(config.club_tactical_tackle_attempt_chance)
+    if controller is not None:
+        tackle_chance = min(0.95, tackle_chance * controller.tackle_attempt_mult(defending_side))
+    if event["event_type"] in ("blocked", "save") and random.random() < tackle_chance:
+        if controller is not None:
+            defense_event, defense_scorer, card = _resolve_defense_tackle(
+                defending_side, moment, config, keeper=defending_keeper,
+                foul_mult=controller.foul_mult(defending_side), penalty_hook=controller.penalty,
+            )
+        else:
+            defense_event, defense_scorer, card = _resolve_defense_tackle(
+                defending_side, moment, config, keeper=defending_keeper,
+                talent_ctx={"own": own_def, "opp": own_att} if defending_keeper and defending_keeper.get("talent") else None,
+            )
+        result.event_log.append(defense_event)
+        if "description" not in defense_event:
             defense_event["description"] = _describe_event(defense_event["event_type"], defense_event["team"], club_a_name, club_b_name)
-            if defense_scorer != "none":
-                setattr(result, f"score_{defense_scorer}", getattr(result, f"score_{defense_scorer}") + 1)
-            if card is not None:
-                club_card_id, card_kind = card
-                if card_kind == "red":
-                    result.red_cards.append((club_card_id, 1))
-                    if random.random() < float(config.club_tactical_injury_chance):
-                        result.injuries.append((club_card_id, random.randint(1, 3)))
+        if defense_scorer != "none":
+            setattr(result, f"score_{defense_scorer}", getattr(result, f"score_{defense_scorer}") + 1)
+        if card is not None:
+            club_card_id, card_kind = card
+            if card_kind == "red":
+                result.red_cards.append((club_card_id, 1))
+                if random.random() < float(config.club_tactical_injury_chance):
+                    result.injuries.append((club_card_id, random.randint(1, 3)))
 
+
+class MatchController:
+    """Hook for simulate_match_controlled: called before every phase with
+    the minute and the live score; returns the sides/lineups to play that
+    phase with plus any events to log first (tactic changes, substitutions).
+    See career_tactics_service.CareerMatchController."""
+
+    def before_phase(self, minute: int, score_a: int, score_b: int) -> tuple:  # pragma: no cover - interface
+        raise NotImplementedError
+
+
+def simulate_match_controlled(
+    controller: MatchController, config, club_a_name: str = "Клуб A", club_b_name: str = "Клуб B",
+    tracker: dict | None = None,
+) -> MatchResult:
+    """Phase-by-phase variant of simulate_match for «Карьера тренера»: each
+    chance is resolved as soon as it happens, so the controller sees the real
+    score and minute before the next phase (conditional instructions,
+    substitutions, in-match fatigue). Same phase count, minute draw and chance
+    ceiling as simulate_match_phases; `tracker` collects the per-side phase
+    statistics the post-match analysis reports."""
+    num_phases = random.randint(config.club_tactical_phases_per_match_min, config.club_tactical_phases_per_match_max)
+    minutes = sorted(random.sample(range(1, 90), min(num_phases, 89)))
+    max_chances = config.club_tactical_promoted_chance_target_max
+
+    result = MatchResult(score_a=0, score_b=0)
+    chances = 0
+    for minute in minutes:
+        side_a, side_b, lineup_a, lineup_b, events = controller.before_phase(minute, result.score_a, result.score_b)
+        result.event_log.extend(events)
+        if chances >= max_chances:
+            continue
+        chance = club_tactical_matchup_service.simulate_phase(minute, side_a, side_b, config, tracker)
+        if chance is None:
+            continue
+        chances += 1
+        before = len(result.event_log)
+        _resolve_chance(
+            result, chance, side_a, side_b, lineup_a, lineup_b, config, club_a_name, club_b_name, tag_origin=True,
+            controller=controller if hasattr(controller, "penalty") else None,
+        )
+        if hasattr(controller, "set_pieces"):
+            for event, scorer in controller.set_pieces(result.event_log[before:], minute):
+                result.event_log.append(event)
+                if scorer:
+                    setattr(result, f"score_{scorer}", getattr(result, f"score_{scorer}") + 1)
+    if hasattr(controller, "finish"):
+        controller.finish()
+    fix_goal_descriptions(result.event_log)
     return result

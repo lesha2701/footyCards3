@@ -5,6 +5,7 @@ from app.core.dependencies import verify_internal_secret
 from app.database import get_db
 from app.schemas.chat_pack import ChatPackOpenIn
 from app.schemas.club_league import ClubLeagueSettleResult
+from app.schemas.club_war import ClubWarSweepResult
 from app.schemas.magnate import MagnateSweepResult
 from app.schemas.pack import PackOpenResult
 from app.schemas.stars import (
@@ -16,6 +17,7 @@ from app.schemas.stars import (
 from app.schemas.player_tournament import PlayerTournamentReminderResult
 from app.schemas.tournament import LineupReminderResult, SimulateRoundResult
 from app.services import (
+    match_day_auto,
     career_service,
     chat_pack_service,
     club_league_service,
@@ -23,6 +25,7 @@ from app.services import (
     player_tournament_notification_service,
     player_tournament_simulation_service,
     stars_payment_service,
+    stars_receipt_service,
     tournament_notification_service,
     tournament_simulation_service,
 )
@@ -40,9 +43,10 @@ async def pre_checkout(payload: StarsPreCheckoutValidateIn, db: AsyncSession = D
 
 @router.post("/stars-payments/deliver", response_model=StarsInvoiceStatusOut)
 async def deliver(payload: StarsPaymentDeliverIn, db: AsyncSession = Depends(get_db)):
-    return await stars_payment_service.deliver_payment(
-        db, payload.payload_token, payload.telegram_user_id, payload.telegram_payment_charge_id, payload.total_amount
-    )
+    """Called by the bot on successful_payment and by its retry loop for
+    receipts whose delivery failed. Every attempt is recorded on the
+    payment's receipt (stars_receipt_service)."""
+    return await stars_receipt_service.deliver_with_receipt(db, payload)
 
 
 @router.post("/chat-pack/open", response_model=PackOpenResult)
@@ -93,8 +97,15 @@ async def resolve_career_rounds(slot_key: str | None = None, db: AsyncSession = 
     # «Карьера игрока» shares the career slots (player_career_service).
     from app.services import player_career_service
 
-    total = await career_service.resolve_all_due(db) + await player_career_service.resolve_all_due(db)
+    total = await career_service.resolve_all_due(db) + await player_career_service.resolve_everything_due(db)
     return SimulateRoundResult(matches_simulated=total)
+
+
+@router.post("/career/digest", response_model=PlayerTournamentReminderResult)
+async def career_digest(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Called by the bot at the career slots: the weekly «итоги недели»,
+    at most once per ISO week per coach (later fires are no-ops)."""
+    return PlayerTournamentReminderResult(users_notified=await career_service.send_weekly_digests(db))
 
 
 @router.post("/clubs/league/settle", response_model=ClubLeagueSettleResult)
@@ -102,6 +113,16 @@ async def settle_club_league(slot_key: str | None = None, db: AsyncSession = Dep
     """Called by the bot at its career slots: pays out last week's «Лига
     клубов» once. Repeated calls are no-ops (club_league_weeks primary key)."""
     return ClubLeagueSettleResult(clubs_rewarded=await club_league_service.settle_due(db))
+
+
+@router.post("/clubs/wars/sweep", response_model=ClubWarSweepResult)
+async def sweep_club_wars(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Called by the bot every few minutes: pairs this week's «Клубные войны»
+    once their start time comes and settles finished ones (both idempotent)."""
+    from app.services import club_war_service
+
+    started, settled = await club_war_service.sweep(db)
+    return ClubWarSweepResult(started=started, settled=settled)
 
 
 @router.post("/career/reminders", response_model=PlayerTournamentReminderResult)
@@ -124,3 +145,34 @@ async def magnate_sweep(slot_key: str | None = None, db: AsyncSession = Depends(
     lazy sweep on reads — each match is taken with SKIP LOCKED and its
     deadline re-checked under the lock."""
     return MagnateSweepResult(advanced=await magnate_service.sweep_due(db))
+
+
+@router.post("/manager/sweep", response_model=SimulateRoundResult)
+async def manager_sweep(db: AsyncSession = Depends(get_db)):
+    """Called by the bot every couple of minutes: starts the «Менеджер»
+    season when the preseason closes and plays every due round (the manager
+    slots differ from the career ones). Idempotent — the season start is
+    guarded by its primary key, each league row is locked and a round is
+    played once (rounds_played advances)."""
+    from app.services import manager_service
+
+    return SimulateRoundResult(matches_simulated=await manager_service.resolve_all_due(db))
+
+
+@router.post("/club-base/sweep")
+async def club_base_sweep(db: AsyncSession = Depends(get_db)):
+    """Called by the bot every minute: completes «Клубная база»
+    constructions whose timer ran out and notifies the player. Safe
+    alongside the lazy completion on reads — each base is taken with SKIP
+    LOCKED and re-checked under the lock."""
+    from app.services import club_base_service
+
+    return {"completed": await club_base_service.sweep_due(db)}
+
+
+@router.post("/match-day/sync")
+async def match_day_sync(db: AsyncSession = Depends(get_db)):
+    """Called by the bot every half hour: the automatic «Матч дня» —
+    results of the bot's matches and a new one when none is open
+    (match_day_auto; nothing happens while it is switched off)."""
+    return await match_day_auto.sync(db)

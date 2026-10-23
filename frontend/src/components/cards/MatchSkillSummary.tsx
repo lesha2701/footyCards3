@@ -17,7 +17,7 @@ export default function MatchSkillSummary({ events }: { events: MatchEvent[] }) 
     byName.set(key, entry);
   }
   return (
-    <div className="mt-2 rounded-xl bg-accent-lime/10 px-3 py-2 text-[11px] text-accent-lime">
+    <div className="mt-2 rounded-xl bg-accent-lime/10 px-3 py-2 text-caption text-accent-lime">
       <p className="font-semibold">
         Навыки в матче: учтены {notes.length} раз{decisive.length ? `, решили исход ${decisive.length}` : ""}
       </p>

@@ -11,8 +11,12 @@ from app.schemas.my_player import (
     MyPlayerCosmeticBuyIn,
     MyPlayerCosmeticEquipIn,
     MyPlayerCreateIn,
+    MyPlayerDuelIn,
+    MyPlayerDuelPlayOut,
+    MyPlayerDuelsOut,
     MyPlayerLeaderboardOut,
     MyPlayerPublicOut,
+    MyPlayerRoleIn,
     MyPlayerSkillIn,
     MyPlayerStarsInvoiceIn,
     MyPlayerStarsInvoiceOut,
@@ -36,13 +40,18 @@ async def get_my_player(db: AsyncSession = Depends(get_db), user: User = Depends
 @router.post("", response_model=MyPlayerViewOut)
 async def create_my_player(payload: MyPlayerCreateIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"my_player_create:{user.id}", max_calls=10, window_seconds=60)
-    return await my_player_service.create(db, user, payload.name, payload.number, payload.position, payload.appearance)
+    return await my_player_service.create(
+        db, user, payload.name, payload.number, payload.position, payload.appearance, payload.country,
+    )
 
 
 @router.patch("", response_model=MyPlayerViewOut)
 async def update_my_player(payload: MyPlayerUpdateIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"my_player_update:{user.id}", max_calls=20, window_seconds=60)
-    return await my_player_service.update(db, user, payload.name, payload.number, payload.position, payload.appearance)
+    return await my_player_service.update(
+        db, user, payload.name, payload.number, payload.position, payload.appearance,
+        payload.country, country_set="country" in payload.model_fields_set,
+    )
 
 
 @router.post("/train", response_model=MyPlayerViewOut)
@@ -113,9 +122,36 @@ async def create_stars_invoice(
     payload: MyPlayerStarsInvoiceIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     await check_rate_limit(f"my_player_stars:{user.id}", max_calls=10, window_seconds=60)
-    return await my_player_service.create_stars_invoice(db, user, payload.purchase, payload.item_id)
+    return await my_player_service.create_stars_invoice(
+        db, user, payload.purchase, payload.item_id, code=payload.code, position=payload.position,
+    )
 
 
 @router.get("/stars-invoices/{payload_token}", response_model=StarsInvoiceStatusOut)
 async def get_stars_invoice_status(payload_token: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await stars_payment_service.get_invoice_status(db, user, payload_token)
+
+
+@router.post("/level-seen", response_model=MyPlayerViewOut)
+async def ack_level_up(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The level-up screen was shown for the current level."""
+    await check_rate_limit(f"my_player_level_seen:{user.id}", max_calls=20, window_seconds=60)
+    return await my_player_service.ack_level_up(db, user)
+
+
+@router.post("/role", response_model=MyPlayerViewOut)
+async def change_role(payload: MyPlayerRoleIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Смена амплуа» for coins (Stars: /stars-invoice with purchase=role)."""
+    await check_rate_limit(f"my_player_role:{user.id}", max_calls=5, window_seconds=60)
+    return await my_player_service.change_role(db, user, payload.position)
+
+
+@router.get("/duels", response_model=MyPlayerDuelsOut)
+async def get_duels(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await my_player_service.duels_view(db, user)
+
+
+@router.post("/duels", response_model=MyPlayerDuelPlayOut)
+async def play_duel(payload: MyPlayerDuelIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"my_player_duel:{user.id}", max_calls=10, window_seconds=60)
+    return await my_player_service.play_duel(db, user, payload.opponent_user_id)

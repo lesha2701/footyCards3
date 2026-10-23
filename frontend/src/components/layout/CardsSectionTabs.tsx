@@ -1,4 +1,6 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+
+import { usePageSwipe } from "@/lib/useSwipe";
 
 const SECTIONS = [
   { to: "/collection", label: "Альбом", match: (p: string, tab: string | null) => p === "/collection" && tab !== "mine" },
@@ -8,10 +10,18 @@ const SECTIONS = [
 ];
 
 /** One "Карточки" section in the bottom nav, four screens inside it:
- * album, my cards, trades and the upgrade forge. */
+ * album, my cards, trades and the upgrade forge. A sideways swipe anywhere
+ * on these screens moves to the neighbouring one. */
 export default function CardsSectionTabs() {
   const { pathname, search } = useLocation();
+  const navigate = useNavigate();
   const tab = new URLSearchParams(search).get("tab");
+  const activeIndex = SECTIONS.findIndex((s) => s.match(pathname, tab));
+  const go = (i: number) => () => navigate(SECTIONS[i].to, { replace: true });
+  usePageSwipe(
+    activeIndex >= 0 && activeIndex < SECTIONS.length - 1 ? go(activeIndex + 1) : null,
+    activeIndex > 0 ? go(activeIndex - 1) : null,
+  );
   return (
     <nav className="grid grid-cols-4 gap-1 rounded-2xl bg-bg-surface p-1" aria-label="Разделы карточек">
       {SECTIONS.map((s) => {

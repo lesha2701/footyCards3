@@ -9,9 +9,17 @@ import MaintenanceBanner from "@/components/layout/MaintenanceBanner";
 import TopBar from "@/components/layout/TopBar";
 import UpdateBanner from "@/components/layout/UpdateBanner";
 import { apiUrl, buildAuthHeaders } from "@/lib/api";
+import { setClosingConfirmation } from "@/lib/telegram";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
 
 export default function AppLayout() {
+  // While a live match is guarded, also ask Telegram to confirm closing the
+  // Mini App (swipe-down / ✕) — the in-app guard can't see those.
+  const guardActive = useMatchGuardStore((s) => s.active);
+  useEffect(() => {
+    setClosingConfirmation(guardActive);
+  }, [guardActive]);
+
   useEffect(() => {
     const beforeUnloadHandler = (e: BeforeUnloadEvent) => {
       if (useMatchGuardStore.getState().active) {

@@ -1,26 +1,28 @@
+import SoundSetting from "@/components/profile/SoundSetting";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { claimDailyReward, fetchDailyRewardCalendar } from "@/api/dailyRewards";
 import { fetchFeatureFlags } from "@/api/featureFlags";
 import { fetchLeagueStatus } from "@/api/leagues";
 import { fetchMyGifts } from "@/api/gifts";
 import {
   fetchMyAttention, fetchMyBadges, fetchMyProfile, fetchMyTransactions, fetchMyTrophies, updateMySettings,
 } from "@/api/profile";
+import ShareButton from "@/components/common/ShareButton";
 import { UserBadge } from "@/components/common/UserBadge";
 import { MyPlayerEntry } from "@/components/myPlayer/MyPlayerEntry";
+import AcademyShowcase from "@/components/path/AcademyShowcase";
+import LoginCalendar from "@/components/profile/LoginCalendar";
 import ThemeSetting from "@/components/profile/ThemeSetting";
+import MonetizationEntries from "@/components/shop/MonetizationEntries";
 import { BuyCoinsModal } from "@/components/shop/CoinPackages";
 import {
   IconChevronRight,
   IconCoin,
-  IconCollection,
   IconFire,
   IconGift,
-  IconPack,
   IconScroll,
   IconSwap,
   IconTag,
@@ -29,13 +31,13 @@ import {
   IconUsers,
   type IconProps,
 } from "@/components/icons";
-import { ApiRequestError, staticUrl } from "@/lib/api";
+import { staticUrl } from "@/lib/api";
+import { backgroundClass, frameClass } from "@/lib/cosmetics";
 import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from "@/lib/legalLinks";
-import { RARITY_GLOW, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import { TX_TYPE_LABELS } from "@/lib/transactionLabels";
 import { hapticNotify, openLink } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { DailyRewardClaimResult, UserTrophy } from "@/types";
+import type { UserTrophy } from "@/types";
 
 function dayStreakLabel(days: number): string {
   const mod10 = days % 10;
@@ -52,8 +54,6 @@ export default function ProfilePage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showTx, setShowTx] = useState(false);
-  const [claimError, setClaimError] = useState<string | null>(null);
-  const [claimResult, setClaimResult] = useState<DailyRewardClaimResult | null>(null);
   const [showBuyCoins, setShowBuyCoins] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
 
@@ -66,24 +66,10 @@ export default function ProfilePage() {
   const { data: myGifts } = useQuery({ queryKey: ["gifts", "mine"], queryFn: fetchMyGifts });
   const pinnedGifts = myGifts?.filter((g) => g.is_pinned) ?? [];
   const [selectedTrophy, setSelectedTrophy] = useState<UserTrophy | null>(null);
-  const { data: calendar } = useQuery({ queryKey: ["daily-reward-calendar"], queryFn: fetchDailyRewardCalendar });
   const { data: transactions } = useQuery({
     queryKey: ["transactions"],
     queryFn: () => fetchMyTransactions(1),
     enabled: showTx,
-  });
-
-  const claimMutation = useMutation({
-    mutationFn: claimDailyReward,
-    onSuccess: (data) => {
-      updateBalance(data.new_balance);
-      hapticNotify("success");
-      setClaimError(null);
-      setClaimResult(data);
-      queryClient.invalidateQueries({ queryKey: ["daily-reward-calendar"] });
-      queryClient.invalidateQueries({ queryKey: ["collection"] });
-    },
-    onError: (err) => setClaimError(err instanceof ApiRequestError ? err.message : "Не удалось получить награду"),
   });
 
   const settingsMutation = useMutation({
@@ -97,20 +83,31 @@ export default function ProfilePage() {
   });
 
   if (!user || !profile) return null;
+  const frame = frameClass(profile.cosmetics?.frame);
+  const background = backgroundClass(profile.cosmetics?.background);
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="flex flex-col items-center gap-2 rounded-3xl bg-bg-surface p-5 text-center">
-        <img
-          src={user.avatar_url ?? staticUrl("players/placeholder/player_placeholder.webp")}
-          alt="avatar"
-          className="h-20 w-20 rounded-full ring-2 ring-accent-lime object-cover"
-        />
+      <section
+        className={`flex flex-col items-center gap-2 rounded-3xl p-5 text-center ${background ?? "bg-bg-surface"}`}
+      >
+        <span className={`rounded-full ${frame ? `p-[3px] ${frame}` : ""}`}>
+          <img decoding="async" loading="lazy"
+            src={user.avatar_url ?? staticUrl("players/placeholder/player_placeholder.webp")}
+            alt="avatar"
+            className={`h-20 w-20 rounded-full object-cover ${frame ? "ring-2 ring-bg-base" : "ring-2 ring-accent-lime"}`}
+          />
+        </span>
         <p className="flex items-center gap-1.5 font-display text-xl font-bold text-ink-chalk">
           {user.first_name} {user.last_name}
           <UserBadge badge={user.active_badge} />
         </p>
         {user.username && <p className="text-sm text-ink-mist">@{user.username}</p>}
+        {profile.club_pass_active && (
+          <span className="rounded-full bg-emerald-400/15 px-2.5 py-0.5 text-caption font-semibold text-emerald-300">
+            Клубный абонемент
+          </span>
+        )}
         <p className="text-xs text-ink-mist-dim">С нами с {new Date(user.created_at).toLocaleDateString("ru-RU")}</p>
         {profile.daily_login_streak > 0 && (
           <div className="mt-1 flex items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1">
@@ -135,7 +132,7 @@ export default function ProfilePage() {
             {(() => {
               const tier = leagueStatus.current_league ?? leagueStatus.next_league!;
               return tier.image_path ? (
-                <img src={staticUrl(tier.image_path) ?? undefined} className="h-full w-full object-cover" />
+                <img decoding="async" loading="lazy" src={staticUrl(tier.image_path) ?? undefined} className="h-full w-full object-cover" />
               ) : (
                 <IconTrophy size={22} style={{ color: tier.color }} />
               );
@@ -146,7 +143,7 @@ export default function ProfilePage() {
               {leagueStatus.current_league ? leagueStatus.current_league.name : "Пока вне лиги"}
             </p>
             {leagueStatus.current_league_percent !== null && (
-              <p className="mt-0.5 text-[11px] text-ink-mist-dim">
+              <p className="mt-0.5 text-caption text-ink-mist-dim">
                 {leagueStatus.current_league_percent}% игроков в этой лиге
               </p>
             )}
@@ -176,7 +173,7 @@ export default function ProfilePage() {
               </button>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-ink-mist-dim">
+          <p className="mt-2 text-caption text-ink-mist-dim">
             Нажми на значок, чтобы показать его рядом со своим именем. Нажми ещё раз, чтобы снять.
           </p>
         </section>
@@ -197,19 +194,22 @@ export default function ProfilePage() {
               >
                 <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-b from-amber-400/20 to-amber-600/5">
                   {t.trophy.image_path ? (
-                    <img src={staticUrl(t.trophy.image_path) ?? undefined} className="h-full w-full object-cover" />
+                    <img decoding="async" loading="lazy" src={staticUrl(t.trophy.image_path) ?? undefined} className="h-full w-full object-cover" />
                   ) : (
                     <span className="text-2xl">{t.trophy.icon}</span>
                   )}
                 </div>
-                <span className="w-full truncate text-center text-[10px] text-ink-mist">{t.trophy.name}</span>
+                <span className="w-full truncate text-center text-micro text-ink-mist">{t.trophy.name}</span>
               </button>
             ))}
           </div>
         </section>
       )}
 
+      <MonetizationEntries />
+
       <MyPlayerEntry />
+      {user && <AcademyShowcase userId={user.id} />}
 
       <button
         onClick={() => navigate("/friends")}
@@ -221,7 +221,7 @@ export default function ProfilePage() {
         </span>
         <span className="flex items-center gap-2">
           {!!attention?.friend_requests && (
-            <span className="rounded-full bg-accent-lime px-2 py-0.5 font-mono text-[10px] font-bold text-bg-base">
+            <span className="rounded-full bg-accent-lime px-2 py-0.5 font-mono text-micro font-bold text-bg-base">
               {attention.friend_requests} новых
             </span>
           )}
@@ -246,7 +246,7 @@ export default function ProfilePage() {
                   className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border-2 border-bg-surface bg-rarity-epic/10"
                 >
                   {g.gift_set.image_path ? (
-                    <img src={staticUrl(g.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
+                    <img decoding="async" loading="lazy" src={staticUrl(g.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
                   ) : (
                     <IconGift size={14} className="text-rarity-epic" />
                   )}
@@ -275,56 +275,19 @@ export default function ProfilePage() {
 
       {profile.rarest_card && (
         <section className="flex items-center gap-3 rounded-2xl bg-rarity-legendary/10 p-4">
-          <img
+          <img decoding="async" loading="lazy"
             src={staticUrl(profile.rarest_card.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
             alt={profile.rarest_card.display_name}
             className="h-16 w-16 rounded-xl object-cover"
           />
           <div>
-            <p className="text-[11px] text-rarity-legendary">Самая редкая карточка</p>
+            <p className="text-caption text-rarity-legendary">Самая редкая карточка</p>
             <p className="font-display text-sm font-bold text-ink-chalk">{profile.rarest_card.display_name}</p>
           </div>
         </section>
       )}
 
-      <section className="rounded-2xl bg-bg-surface p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="flex items-center gap-1.5 font-display text-base font-bold text-ink-chalk">
-            <IconGift size={16} className="text-accent-lime" />
-            Ежедневная награда
-          </p>
-          <span className="font-mono text-xs text-ink-mist">Серия: день {calendar?.current_streak ?? 1}</span>
-        </div>
-        <div className="grid grid-cols-7 gap-1.5">
-          {calendar?.days.map((d) => {
-            const DayIcon = d.grants_random_card ? IconCollection : d.free_pack_name ? IconPack : IconCoin;
-            return (
-              <div
-                key={d.day}
-                className={`flex flex-col items-center gap-0.5 rounded-lg py-2 text-[10px] ${
-                  d.is_claimed
-                    ? "bg-accent-green/15 text-accent-green"
-                    : d.is_today
-                      ? "bg-accent-lime/15 text-accent-lime"
-                      : "bg-white/5 text-ink-mist-dim"
-                }`}
-              >
-                <span className="font-mono">Д{d.day}</span>
-                <DayIcon size={13} />
-                <span className="font-mono">{d.coins}</span>
-              </div>
-            );
-          })}
-        </div>
-        {claimError && <p className="mt-2 text-xs text-red-400">{claimError}</p>}
-        <button
-          onClick={() => claimMutation.mutate()}
-          disabled={calendar?.already_claimed_today || claimMutation.isPending}
-          className="mt-3 w-full rounded-2xl bg-floodlight py-3 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-40"
-        >
-          {calendar?.already_claimed_today ? "Уже получено сегодня" : "Забрать награду"}
-        </button>
-      </section>
+      <LoginCalendar />
 
       <section className="rounded-2xl bg-bg-surface p-4">
         <p className="flex items-center gap-1.5 font-display text-base font-bold text-ink-chalk">
@@ -349,7 +312,7 @@ export default function ProfilePage() {
               navigator.clipboard.writeText(`https://t.me/${profile.telegram_bot_username}?start=ref_${user.telegram_id}`);
               hapticNotify("success");
             }}
-            className="shrink-0 rounded-lg bg-floodlight px-2 py-1 text-[11px] font-bold text-bg-base"
+            className="shrink-0 rounded-lg bg-floodlight px-2 py-1 text-caption font-bold text-bg-base"
           >
             Копировать
           </button>
@@ -381,12 +344,13 @@ export default function ProfilePage() {
             className="h-5 w-5 shrink-0 accent-accent-lime"
           />
         </label>
-        <p className="mt-1 text-[11px] text-ink-mist-dim">
+        <p className="mt-1 text-caption text-ink-mist-dim">
           Если отключено, тебя не будет видно в поиске игроков и тебе не смогут предложить обмен. Сам ты по-прежнему сможешь предлагать обмены.
         </p>
       </section>
 
       <ThemeSetting />
+      <SoundSetting />
 
       <section>
         <button onClick={() => setShowTx((v) => !v)} className="w-full rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-mist">
@@ -398,7 +362,7 @@ export default function ProfilePage() {
               <div key={tx.id} className="flex items-center justify-between rounded-xl bg-bg-surface px-3 py-2 text-sm">
                 <div>
                   <p className="text-ink-mist">{TX_TYPE_LABELS[tx.type] ?? tx.type}</p>
-                  <p className="font-mono text-[10px] text-ink-mist-dim">{new Date(tx.created_at).toLocaleString("ru-RU")}</p>
+                  <p className="font-mono text-micro text-ink-mist-dim">{new Date(tx.created_at).toLocaleString("ru-RU")}</p>
                 </div>
                 <span className={`font-mono font-bold ${tx.amount >= 0 ? "text-accent-green" : "text-red-400"}`}>
                   {tx.amount >= 0 ? "+" : ""}{tx.amount}
@@ -427,7 +391,6 @@ export default function ProfilePage() {
         Документы
       </button>
 
-      {claimResult && <DailyRewardResultModal result={claimResult} onClose={() => setClaimResult(null)} />}
       {selectedTrophy && <TrophyDetailModal trophy={selectedTrophy} onClose={() => setSelectedTrophy(null)} />}
       {showBuyCoins && (
         <BuyCoinsModal
@@ -491,7 +454,7 @@ function TrophyDetailModal({ trophy, onClose }: { trophy: UserTrophy; onClose: (
       >
         <div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b from-amber-400/25 to-amber-600/5">
           {trophy.trophy.image_path ? (
-            <img src={staticUrl(trophy.trophy.image_path) ?? undefined} className="h-full w-full object-cover" />
+            <img decoding="async" loading="lazy" src={staticUrl(trophy.trophy.image_path) ?? undefined} className="h-full w-full object-cover" />
           ) : (
             <span className="text-4xl">{trophy.trophy.icon}</span>
           )}
@@ -501,72 +464,12 @@ function TrophyDetailModal({ trophy, onClose }: { trophy: UserTrophy; onClose: (
         {trophy.message && (
           <p className="mt-3 rounded-xl bg-amber-400/10 px-3 py-2 text-xs italic text-amber-300">«{trophy.message}»</p>
         )}
-        <p className="mt-2 text-[11px] text-ink-mist-dim">
+        <p className="mt-2 text-caption text-ink-mist-dim">
           Вручено {new Date(trophy.granted_at).toLocaleDateString("ru-RU")}
         </p>
+        <ShareButton kind="trophy" id={trophy.id} className="mt-4" />
         <button onClick={onClose} className="mt-4 w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95">
           Закрыть
-        </button>
-      </motion.div>
-    </div>
-  );
-}
-
-function DailyRewardResultModal({ result, onClose }: { result: DailyRewardClaimResult; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm" onClick={onClose}>
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", damping: 20, stiffness: 300 }}
-        className="w-full max-w-xs rounded-3xl bg-bg-surface p-5 text-center"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <motion.div
-          initial={{ scale: 0.6, rotate: -10 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: "spring", damping: 12, stiffness: 260, delay: 0.1 }}
-          className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-accent-lime/15 text-accent-lime"
-        >
-          <IconGift size={30} />
-        </motion.div>
-        <p className="mt-3 font-display text-lg font-bold text-ink-chalk">Награда получена!</p>
-        <p className="text-xs text-ink-mist">День {result.streak_day} серии</p>
-
-        {result.coins_awarded > 0 && (
-          <p className="mt-3 flex items-center justify-center gap-1.5 font-mono text-2xl font-bold text-accent-lime">
-            +{result.coins_awarded}
-            <IconCoin size={20} />
-          </p>
-        )}
-
-        {result.granted_pack_name && (
-          <p className="mt-2 flex items-center justify-center gap-1.5 text-sm text-ink-chalk">
-            <IconPack size={16} className="text-accent-cyan" />
-            Пак «{result.granted_pack_name}»
-          </p>
-        )}
-
-        {result.granted_card && (
-          <div
-            className={`mx-auto mt-3 flex h-36 w-28 flex-col items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[result.granted_card.player.rarity]} p-[2px] ${RARITY_GLOW[result.granted_card.player.rarity]}`}
-          >
-            <div className="flex h-full w-full flex-col rounded-[14px] bg-bg-surface">
-              <img
-                src={staticUrl(result.granted_card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                alt={result.granted_card.player.display_name}
-                className="aspect-square w-full object-cover"
-              />
-              <div className="p-1.5 text-center">
-                <p className="truncate text-[10px] font-bold text-ink-chalk">{result.granted_card.player.display_name}</p>
-                <p className="text-[9px] text-ink-mist">{RARITY_LABELS[result.granted_card.player.rarity]}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <button onClick={onClose} className="mt-4 w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95">
-          Отлично!
         </button>
       </motion.div>
     </div>
@@ -592,7 +495,7 @@ function Stat({
         {Icon && <Icon size={16} className={iconClass} />}
         {value}
       </p>
-      <p className="mt-0.5 text-[11px] text-ink-mist">{label}</p>
+      <p className="mt-0.5 text-caption text-ink-mist">{label}</p>
     </div>
   );
 }

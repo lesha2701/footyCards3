@@ -1,3 +1,4 @@
+import { ListSkeleton } from "@/components/common/Skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -47,7 +48,7 @@ export default function ClubLeaderboardPage() {
         ))}
       </div>
 
-      {isLoading && <p className="text-sm text-ink-mist">Загрузка...</p>}
+      {isLoading && <ListSkeleton count={3} />}
 
       {!isLoading && !data?.top.length ? (
         <EmptyState icon={IconTrophy} title="Пока никто не набрал очков" description="Стань первым клубом в рейтинге!" />
@@ -78,7 +79,7 @@ function ClubRankingRow({ entry, highlight = false }: { entry: ClubRankingEntry;
     >
       <div className="flex items-center gap-2">
         <span className="w-6 text-center font-mono text-sm font-bold text-ink-mist-dim">{entry.rank}</span>
-        <ClubLogo shape={entry.logo_shape} color={entry.logo_color} size={24} />
+        <ClubLogo shape={entry.logo_shape} color={entry.logo_color} emblem={entry.emblem} size={24} />
         <span className={highlight ? "font-semibold text-accent-lime" : "text-ink-chalk"}>{entry.name}</span>
       </div>
       <span className="font-mono font-bold text-accent-cyan">{entry.value}</span>

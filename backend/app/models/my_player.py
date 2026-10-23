@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import JSON, Date, DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -46,11 +46,70 @@ class MyPlayer(Base):
     extra_training_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     extra_trainings_bought: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     extra_training_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # Consecutive days with the free training done (ends on training_day);
+    # every config.my_player_streak_days in a row pays skill tokens.
+    training_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Highest level the player has already seen the level-up screen for
+    # (0 = not tracked yet: set silently to the current level on first view).
+    level_seen: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Freshness 0-100 as of freshness_at; it regenerates over time (see
+    # my_player_service.freshness_now), «Карьера игрока» matches drain it,
+    # trainings restore it. Low freshness lowers the rating in matches.
+    freshness: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    freshness_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Friend duels played on duels_day (daily limit).
+    duels_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    duels_today: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # «Карьера игрока»: current club (player_career_service club key),
-    # reputation (opens bigger clubs) and lifetime stats
+    # reputation — shown as «Престиж» (opens bigger clubs, raises the salary) — and lifetime stats
     # {"seasons", "matches", "goals", "assists", "titles", "top_scorer", "mvp"}.
     club_key: Mapped[Optional[str]] = mapped_column(String(96), nullable=True)
     reputation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     career_stats: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Contract with club_key: salary agreed at signing (0 = market rate) and
+    # seasons left; 0 seasons = expired, only lower-league clubs or the
+    # transfer-window offers remain.
+    contract_salary: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    contract_seasons_left: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # National team (Player.country values); NULL = not chosen.
+    country: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # Coach's trust at the current club, 0-100 (sets the role: bench /
+    # starter / captain; reset to 50 at a new club).
+    trust: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    # League rounds still to miss through injury.
+    injury_rounds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # «Карьера Pro» pass active until; the day its bonus training was last granted.
+    pro_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    pro_bonus_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # Bought, not yet used: an agent for a transfer window, a fast season.
+    agent_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    fast_season_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Local day the daily career chest was opened.
+    chest_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # «Менеджер»: listed on the free-agent market (any manager may offer a contract).
+    market_open: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class MyPlayerDuel(Base):
+    """A friend duel: the challenger's «Мой игрок» against a friend's, played
+    instantly on the server (my_player_service.play_duel). Only the
+    challenger is rewarded; the friend just gets a notification."""
+
+    __tablename__ = "my_player_duels"
+    __table_args__ = (Index("ix_my_player_duels_user_created", "user_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    opponent_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    my_goals: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    opp_goals: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # win | draw | loss — from the challenger's side.
+    result: Mapped[str] = mapped_column(String(8), nullable=False)
+    reward_coins: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # [{"n": 1, "side": "me" | "opp", "outcome": "goal" | "save" | "miss"}]
+    events: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # Both players as they were in the duel ({"me": player_out, "opp": player_out}).
+    snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)

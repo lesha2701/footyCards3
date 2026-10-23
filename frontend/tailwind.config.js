@@ -31,11 +31,23 @@ export default {
           lime: "#c6e63a",
           soft: "#8fe3b8",
         },
+        // Card status semantics (theme-aware, see src/index.css).
+        path: "rgb(var(--c-path) / <alpha-value>)",
+        legend: "rgb(var(--c-legend) / <alpha-value>)",
+        prestige: "rgb(var(--c-prestige) / <alpha-value>)",
         ink: {
           chalk: "rgb(var(--c-ink-chalk) / <alpha-value>)",
           mist: "rgb(var(--c-ink-mist) / <alpha-value>)",
           "mist-dim": "rgb(var(--c-ink-mist-dim) / <alpha-value>)",
         },
+      },
+      // Small-text scale. Below `micro` (10px) nothing is readable on a
+      // phone — use these instead of text-[Npx] so sizes can be tuned in one
+      // place (e.g. bump `caption` to 12px later). Larger text uses the
+      // Tailwind defaults (xs 12 / sm 14 / base 16 …).
+      fontSize: {
+        micro: ["10px", { lineHeight: "12px" }],
+        caption: ["11px", { lineHeight: "14px" }],
       },
       fontFamily: {
         display: ["'Benzin'", "system-ui", "sans-serif"],
@@ -61,8 +73,20 @@ export default {
         "goal-flash": "goalFlash 1.1s ease-out forwards",
         "legendary-pulse": "legendaryPulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "diamond-shimmer": "diamondShimmer 2.2s ease-in-out infinite",
+        // A ready reward button gently glows so it gets noticed.
+        "claim-glow": "claimGlow 2.4s ease-in-out infinite",
+        // Grid tiles fade/slide in (delay set per tile).
+        "card-in": "cardIn 0.32s ease-out both",
       },
       keyframes: {
+        claimGlow: {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(200, 242, 76, 0)" },
+          "50%": { boxShadow: "0 0 14px 2px rgba(200, 242, 76, 0.55)" },
+        },
+        cardIn: {
+          "0%": { opacity: "0", transform: "translateY(8px) scale(0.98)" },
+          "100%": { opacity: "1", transform: "none" },
+        },
         shimmer: {
           "0%": { backgroundPosition: "-500px 0" },
           "100%": { backgroundPosition: "500px 0" },

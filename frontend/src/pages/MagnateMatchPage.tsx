@@ -150,7 +150,7 @@ export default function MagnateMatchPage() {
         </button>
         <div className="min-w-0 flex-1">
           <p className="truncate font-display text-base font-bold text-ink-chalk">Футбольный магнат</p>
-          <p className="text-[11px] text-ink-mist">
+          <p className="text-caption text-ink-mist">
             {MODE_LABELS[match.mode]}
             {inPlay && ` · круг ${match.round}/${match.max_rounds}`}
             {inPlay && match.ends_at && ` · до ${new Date(match.ends_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`}
@@ -192,7 +192,7 @@ export default function MagnateMatchPage() {
           >
             <MagnateDice dice={match.last_roll?.dice ?? null} rollN={match.last_roll?.n ?? null} />
             {inPlay && current && (
-              <p className="flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1 text-center text-[11px] font-bold text-white backdrop-blur-sm">
+              <p className="flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1 text-center text-caption font-bold text-white backdrop-blur-sm">
                 <span className="h-2 w-2 rounded-full" style={{ background: SEAT_COLORS[current.seat] }} />
                 {match.my_turn ? "Твой ход" : `Ходит ${current.name}`}
                 {turnLeft !== null && !current.is_bot && (
@@ -202,7 +202,7 @@ export default function MagnateMatchPage() {
             )}
             <div className="flex w-full flex-col gap-0.5 rounded-lg bg-black/35 px-2 py-1 backdrop-blur-sm">
               {match.log.slice(-3).map((e, i, arr) => (
-                <p key={e.n} className={`truncate text-center text-[9px] leading-tight ${i === arr.length - 1 ? "font-semibold text-white" : "text-white/65"}`}>
+                <p key={e.n} className={`truncate text-center text-micro leading-tight ${i === arr.length - 1 ? "font-semibold text-white" : "text-white/65"}`}>
                   {e.text}
                 </p>
               ))}
@@ -267,11 +267,11 @@ function PlayersStrip({ players, turn }: { players: MagnatePlayer[]; turn: numbe
         >
           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: SEAT_COLORS[p.seat] }} />
           <span className="min-w-0 flex-1">
-            <span className={`block truncate text-[11px] font-semibold text-ink-chalk ${p.bankrupt ? "line-through" : ""}`}>
+            <span className={`block truncate text-caption font-semibold text-ink-chalk ${p.bankrupt ? "line-through" : ""}`}>
               {p.name}
               {p.is_me && <span className="text-accent-lime"> · ты</span>}
             </span>
-            <span className="block font-mono text-[10px] text-ink-mist">
+            <span className="block font-mono text-micro text-ink-mist">
               {p.bankrupt ? "банкрот" : formatMoney(p.cash)}
               {p.in_jail && " · ⛔"}
               {p.left && " · бот"}
@@ -298,7 +298,7 @@ function ActionPanel({
   const builds = match.build_options.map((i) => match.cells[i]);
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-bg-surface p-3">
-      <div className="flex items-center justify-between text-[11px] text-ink-mist">
+      <div className="flex items-center justify-between text-caption text-ink-mist">
         <span>У тебя {formatMoney(me.cash)}</span>
         {turnLeft !== null && (
           <span className={`flex items-center gap-1 font-mono ${turnLeft <= 5 ? "text-red-400" : ""}`}>
@@ -334,7 +334,7 @@ function ActionPanel({
 
       {builds.length > 0 && (match.phase === "roll" || match.phase === "end") && (
         <div className="flex flex-col gap-1.5">
-          <p className="text-[11px] text-ink-mist">Можно строить — у тебя вся группа:</p>
+          <p className="text-caption text-ink-mist">Можно строить — у тебя вся группа:</p>
           {builds.map((c) => (
             <button
               key={c.index}
@@ -372,7 +372,7 @@ function CellInfo({ cell, match, onClose }: { cell: MagnateCell; match: MagnateM
       <button
         onClick={onClose}
         aria-label="Закрыть"
-        className="absolute right-2 top-2 z-10 rounded-full bg-black/40 px-2 py-0.5 text-[11px] text-white"
+        className="absolute right-2 top-2 z-10 rounded-full bg-black/40 px-2 py-0.5 text-caption text-white"
       >
         ✕
       </button>
@@ -387,11 +387,11 @@ function EventFeed({ match }: { match: MagnateMatch }) {
     <div className="rounded-2xl bg-bg-surface p-3">
       <button onClick={() => setOpen((o) => !o)} className="mb-1.5 flex w-full items-center justify-between text-left">
         <span className="font-display text-sm font-bold text-ink-chalk">Лента событий</span>
-        <span className="text-[11px] text-ink-mist">{open ? "Свернуть" : "Ещё"}</span>
+        <span className="text-caption text-ink-mist">{open ? "Свернуть" : "Ещё"}</span>
       </button>
       <div className="flex flex-col gap-1">
         {entries.map((e) => (
-          <p key={e.n} className="flex gap-2 text-[11px] leading-snug text-ink-mist">
+          <p key={e.n} className="flex gap-2 text-caption leading-snug text-ink-mist">
             <span
               className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full"
               style={{ background: e.seat !== null ? SEAT_COLORS[e.seat] : "rgba(255,255,255,0.3)" }}
@@ -423,7 +423,7 @@ function ResultPanel({ match, busy, onAgain }: { match: MagnateMatch; busy: bool
         <p className="mt-1 font-display text-lg font-bold text-ink-chalk">
           {me?.left ? "Ты покинул партию" : match.my_place === 1 ? "Ты — магнат!" : `${match.my_place ?? "—"}-е место`}
         </p>
-        <p className="text-[11px] text-ink-mist">{FINISH_REASON_LABELS[match.finish_reason ?? ""] ?? "Партия завершена"}</p>
+        <p className="text-caption text-ink-mist">{FINISH_REASON_LABELS[match.finish_reason ?? ""] ?? "Партия завершена"}</p>
         {match.my_reward > 0 && (
           <p className="mt-1 flex items-center justify-center gap-1 font-mono text-sm font-bold text-accent-lime">
             +{match.my_reward} <IconCoin size={13} />
@@ -440,7 +440,7 @@ function ResultPanel({ match, busy, onAgain }: { match: MagnateMatch; busy: bool
               {p.bankrupt && <span className="text-ink-mist"> · банкрот</span>}
               {p.left && <span className="text-ink-mist"> · ушёл</span>}
             </span>
-            <span className="font-mono text-[11px] text-ink-mist">{formatMoney(p.capital)}</span>
+            <span className="font-mono text-caption text-ink-mist">{formatMoney(p.capital)}</span>
           </div>
         ))}
       </div>
@@ -548,7 +548,7 @@ function BuyDialog({
           group={cell.group !== null ? match.groups[cell.group] : null}
           stadiumRents={match.stadium_rents}
         >
-          <div className="mb-2 flex items-center justify-between text-[11px] text-ink-mist">
+          <div className="mb-2 flex items-center justify-between text-caption text-ink-mist">
             <span>У тебя {formatMoney(cash)} → останется {formatMoney(cash - price)}</span>
             {turnLeft !== null && (
               <span className={`flex items-center gap-1 font-mono ${turnLeft <= 5 ? "text-red-400" : ""}`}>

@@ -73,12 +73,32 @@ async def create_player(payload: PlayerCreate, request: Request, db: AsyncSessio
         if data["defense_rating"] is None:
             data["defense_rating"] = default_defense
     player = Player(**data)
+    validate_path_player(player)
     db.add(player)
     await db.flush()
     await log_action(db, admin.id, "create_player", "player", player.id, new_value=payload.model_dump(mode="json"), ip_address=request.client.host if request.client else None)
     await db.commit()
     await db.refresh(player)
     return PlayerOut.model_validate(player)
+
+
+def validate_path_player(player: Player) -> None:
+    """«Академия»: a talent may only be set on a diamond player, must be
+    from the server catalog and fit the player's position."""
+    from app.core.exceptions import ConflictError
+    from app.models.enums import Rarity
+    from app.services.path_talent_catalog import TALENTS
+
+    code = player.path_talent_code
+    if code is None:
+        return
+    if code not in TALENTS:
+        raise ConflictError("Неизвестный талант")
+    if player.rarity != Rarity.diamond:
+        raise ConflictError("Карточкой «Академии» может быть только бриллиантовый игрок")
+    allowed = TALENTS[code].positions
+    if allowed is not None and player.position not in allowed:
+        raise ConflictError(f"Талант «{TALENTS[code].name}» не подходит для позиции {player.position.value}")
 
 
 async def _get_player_or_404(db: AsyncSession, player_id: int) -> Player:
@@ -95,6 +115,7 @@ async def update_player(player_id: int, payload: PlayerUpdate, request: Request,
     updates = payload.model_dump(exclude_unset=True)
     for key, value in updates.items():
         setattr(player, key, value)
+    validate_path_player(player)
     db.add(player)
     await log_action(db, admin.id, "update_player", "player", player_id, old_value=old_value, new_value=updates, ip_address=request.client.host if request.client else None)
     await db.commit()

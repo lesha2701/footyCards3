@@ -30,7 +30,10 @@ describe("TournamentMatchReplay", () => {
 
   it("reaches a stable end state matching the final score after all events reveal", async () => {
     render(<TournamentMatchReplay events={events} clubAName="Реал" clubBName="Барселона" scoreA={2} scoreB={2} />);
-    await vi.advanceTimersByTimeAsync(950 * events.length);
+    // One reveal tick at a time, as the browser runs them: the schematic
+    // pitch's framer-motion frames share the faked clock, so a single big
+    // jump can end before React has scheduled the next reveal timer.
+    for (let i = 0; i < events.length; i++) await vi.advanceTimersByTimeAsync(950);
     expect(screen.getByText("Матч завершён")).toBeInTheDocument();
     // The fixture only has one goal per team, so the live event-derived score
     // tops out at 1:1 — distinct from the final scoreA/scoreB props (2:2)

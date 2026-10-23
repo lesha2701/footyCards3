@@ -26,7 +26,7 @@ export default function BenchUpgradeHints({
       <ul className="mt-2 flex flex-col gap-1.5">
         {shown.map((h) => (
           <li key={h.slot_code} className="flex items-center gap-2 text-xs">
-            <span className="w-9 shrink-0 font-mono text-[10px] text-ink-mist">{h.slot_code}</span>
+            <span className="w-9 shrink-0 font-mono text-micro text-ink-mist">{h.slot_code}</span>
             <span className="min-w-0 flex-1 truncate text-ink-chalk">
               {h.suggested_name} <span className="font-mono text-ink-mist">{h.suggested_rating}</span>
               {h.current_name ? (
@@ -35,11 +35,11 @@ export default function BenchUpgradeHints({
                 <span className="text-ink-mist"> в пустой слот</span>
               )}
             </span>
-            <span className="shrink-0 font-mono text-[11px] font-bold text-accent-lime">+{h.gain} рейт.</span>
+            <span className="shrink-0 font-mono text-caption font-bold text-accent-lime">+{h.gain} рейт.</span>
             <button
               onClick={() => onApply(h)}
               disabled={busy}
-              className="shrink-0 rounded-full bg-accent-lime/15 px-2 py-0.5 text-[11px] font-semibold text-accent-lime disabled:opacity-50"
+              className="shrink-0 rounded-full bg-accent-lime/15 px-2 py-0.5 text-caption font-semibold text-accent-lime disabled:opacity-50"
             >
               Поставить
             </button>
@@ -47,7 +47,7 @@ export default function BenchUpgradeHints({
         ))}
       </ul>
       {hints.length > 2 && (
-        <button onClick={() => setExpanded((v) => !v)} className="mt-1.5 text-[11px] text-ink-mist">
+        <button onClick={() => setExpanded((v) => !v)} className="mt-1.5 text-caption text-ink-mist">
           {expanded ? "Свернуть" : `Ещё ${hints.length - 2}`}
         </button>
       )}

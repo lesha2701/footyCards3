@@ -4,6 +4,7 @@ import AlbumTab from "@/components/collection/AlbumTab";
 import MyCardsTab from "@/components/collection/MyCardsTab";
 import SkillTokensStrip from "@/components/collection/SkillTokensStrip";
 import CardsSectionTabs from "@/components/layout/CardsSectionTabs";
+import { MyCardSkinProvider } from "@/components/cards/CardSkinContext";
 
 export default function CollectionPage() {
   // The tab lives in the URL (?tab=mine) so back/forward and the section
@@ -19,7 +20,7 @@ export default function CollectionPage() {
 
       <SkillTokensStrip />
 
-      {tab === "album" ? <AlbumTab /> : <MyCardsTab />}
+      {tab === "album" ? <AlbumTab /> : <MyCardSkinProvider><MyCardsTab /></MyCardSkinProvider>}
     </div>
   );
 }

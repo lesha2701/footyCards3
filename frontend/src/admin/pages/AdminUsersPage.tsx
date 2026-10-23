@@ -6,7 +6,6 @@ import {
   banUser,
   deleteUserCard,
   fetchAdminUserCollection,
-  fetchAdminUserTransactions,
   fetchAdminUsers,
   grantCard,
   resetUserLimits,
@@ -14,6 +13,7 @@ import {
   toggleTradeBan,
   unbanUser,
 } from "@/admin/api";
+import TransactionsTable from "@/admin/components/TransactionsTable";
 import type { AdminUser } from "@/admin/types";
 import { staticUrl } from "@/lib/api";
 
@@ -94,11 +94,7 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
     queryFn: () => fetchAdminUserCollection(user.id),
     enabled: tab === "collection",
   });
-  const { data: transactions } = useQuery({
-    queryKey: ["admin-user-transactions", user.id],
-    queryFn: () => fetchAdminUserTransactions(user.id),
-    enabled: tab === "transactions",
-  });
+
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-users"] });
 
@@ -201,9 +197,9 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {collection?.items?.map((c) => (
               <div key={c.id} className="rounded-xl bg-bg-surface p-2 text-center">
-                <img src={staticUrl(c.player.image_path) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="aspect-square w-full rounded-lg object-cover" />
-                <p className="mt-1 truncate text-[11px]">{c.player.display_name}</p>
-                <button onClick={() => deleteCardMutation.mutate(c.id)} className="mt-1 w-full rounded-lg bg-red-500/80 py-1 text-[10px] font-bold text-white">
+                <img decoding="async" loading="lazy" src={staticUrl(c.player.image_path) ?? staticUrl("players/placeholder/player_placeholder.webp")} className="aspect-square w-full rounded-lg object-cover" />
+                <p className="mt-1 truncate text-caption">{c.player.display_name}</p>
+                <button onClick={() => deleteCardMutation.mutate(c.id)} className="mt-1 w-full rounded-lg bg-red-500/80 py-1 text-micro font-bold text-white">
                   Удалить
                 </button>
               </div>
@@ -212,17 +208,7 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
           </div>
         )}
 
-        {tab === "transactions" && (
-          <div className="flex flex-col gap-2">
-            {transactions?.items?.map((t) => (
-              <div key={t.id} className="flex items-center justify-between rounded-lg bg-bg-surface px-3 py-2 text-xs">
-                <span>{t.description || t.type}</span>
-                <span className={t.amount >= 0 ? "text-emerald-400" : "text-red-400"}>{t.amount}</span>
-              </div>
-            ))}
-            {!transactions?.items?.length && <p className="text-sm text-slate-500">Нет транзакций</p>}
-          </div>
-        )}
+        {tab === "transactions" && <TransactionsTable userId={user.id} pageSize={25} />}
       </div>
     </div>
   );
@@ -231,7 +217,7 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
 function Info({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl bg-bg-surface px-3 py-2">
-      <p className="text-[11px] text-slate-400">{label}</p>
+      <p className="text-caption text-slate-400">{label}</p>
       <p className="font-semibold text-slate-100">{value}</p>
     </div>
   );

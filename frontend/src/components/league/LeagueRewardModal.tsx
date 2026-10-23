@@ -52,7 +52,7 @@ export default function LeagueRewardModal({ open, rewards, collecting, onCollect
                 transition={{ type: "spring", damping: 8, stiffness: 200, delay: 0.15 }}
               >
                 {hero.image_path ? (
-                  <img src={staticUrl(hero.image_path) ?? undefined} className="h-full w-full object-cover" />
+                  <img decoding="async" src={staticUrl(hero.image_path) ?? undefined} className="h-full w-full object-cover" />
                 ) : (
                   <IconTrophy size={68} style={{ color: hero.color }} />
                 )}
@@ -84,14 +84,14 @@ export default function LeagueRewardModal({ open, rewards, collecting, onCollect
 
             {rest.length > 0 && (
               <div className="mt-6 flex flex-col gap-2">
-                <p className="text-center text-[11px] uppercase tracking-wider text-ink-mist-dim">
+                <p className="text-center text-caption uppercase tracking-wider text-ink-mist-dim">
                   Также пройдено по пути
                 </p>
                 {rest.map((r) => (
                   <div key={r.id} className="flex items-center gap-3 rounded-xl bg-bg-raised px-3 py-2.5">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-bg-surface">
                       {r.image_path ? (
-                        <img src={staticUrl(r.image_path) ?? undefined} className="h-full w-full object-cover" />
+                        <img decoding="async" src={staticUrl(r.image_path) ?? undefined} className="h-full w-full object-cover" />
                       ) : (
                         <IconTrophy size={18} style={{ color: r.color }} />
                       )}

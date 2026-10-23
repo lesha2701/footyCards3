@@ -72,7 +72,7 @@ export default function MagnateRulesModal({ open, onClose, info }: Props) {
             <div className="flex flex-col gap-4">
               {sections.map((s, i) => (
                 <div key={s.title} className="flex gap-3">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-floodlight font-mono text-[10px] font-bold text-bg-base">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-floodlight font-mono text-micro font-bold text-bg-base">
                     {i + 1}
                   </span>
                   <div className="min-w-0">

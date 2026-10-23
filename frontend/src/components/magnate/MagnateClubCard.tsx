@@ -37,13 +37,13 @@ export default function MagnateClubCard({
         </span>
         <span className="relative min-w-0 flex-1">
           <span className="block truncate font-display text-base font-bold text-white drop-shadow">{cell.name}</span>
-          <span className="block text-[11px] text-white/80 drop-shadow">
+          <span className="block text-caption text-white/80 drop-shadow">
             {isClub && group ? group.name : CELL_TYPE_LABELS[cell.type]}
             {cell.price !== null && ` · ${formatMoney(cell.price)}`}
           </span>
         </span>
         {owner && (
-          <span className="relative rounded-full bg-black/35 px-2 py-0.5 text-[10px] font-semibold" style={{ color: SEAT_COLORS[owner.seat] }}>
+          <span className="relative rounded-full bg-black/35 px-2 py-0.5 text-micro font-semibold" style={{ color: SEAT_COLORS[owner.seat] }}>
             {owner.is_me ? "твой" : owner.name}
           </span>
         )}
@@ -51,15 +51,15 @@ export default function MagnateClubCard({
       {!compact && (
         <div className="px-3 py-2">
           {cell.price !== null && (
-            <p className="mb-1.5 text-[11px] text-ink-mist">
+            <p className="mb-1.5 text-caption text-ink-mist">
               {owner
                 ? `${cell.level > 0 ? `${levelLabel(cell.level)} · ` : ""}аренда сейчас ${formatMoney(cell.current_rent)}`
                 : "Свободен — можно купить"}
             </p>
           )}
-          {cell.type === "fine" && cell.amount !== null && <p className="text-[11px] text-ink-mist">Платёж: {formatMoney(cell.amount)}</p>}
+          {cell.type === "fine" && cell.amount !== null && <p className="text-caption text-ink-mist">Платёж: {formatMoney(cell.amount)}</p>}
           {rentRows.length > 0 && (
-            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-caption">
               {rentRows.map(([label, value]) => (
                 <div key={label} className="contents">
                   <span className="text-ink-mist">{label}</span>

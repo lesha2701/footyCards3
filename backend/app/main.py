@@ -11,6 +11,8 @@ from app.routers import (
     admin_bingo,
     admin_card_collections,
     admin_card_skills,
+    admin_path,
+    admin_transactions,
     admin_card_upgrades,
     admin_club_packs,
     admin_clubs,
@@ -19,15 +21,20 @@ from app.routers import (
     admin_daily_rewards,
     admin_dashboard,
     admin_diamond_upgrades,
+    admin_career,
     admin_games,
     admin_gifts,
     admin_leagues,
     admin_lifestyle,
+    admin_club_base,
     admin_log,
+    admin_equipment,
+    admin_monetization,
     admin_packs,
     admin_players,
     admin_stadiums,
     admin_stars_purchases,
+    admin_antifraud,
     admin_tasks,
     admin_tournaments,
     admin_trades,
@@ -41,7 +48,11 @@ from app.routers import (
     broadcasts,
     card_collections,
     card_skills,
+    path,
+    academy,
+    club_base,
     career,
+    club_features,
     clubs,
     player_tournaments,
     collection,
@@ -53,12 +64,16 @@ from app.routers import (
     gifts,
     internal,
     leaderboard,
+    equipment,
+    events,
+    monetization,
     leagues,
     lineups,
     maintenance,
     lifestyle,
     magnate,
     matches,
+    manager,
     my_player,
     player_career,
     notifications,
@@ -66,7 +81,9 @@ from app.routers import (
     penalty_matches,
     players,
     profile,
+    share,
     stratego,
+    mordoboi,
     tactico,
     tasks,
     trades,
@@ -120,6 +137,9 @@ app.include_router(players.router, prefix=API_PREFIX)
 app.include_router(card_collections.router, prefix=API_PREFIX)
 app.include_router(collection.router, prefix=API_PREFIX)
 app.include_router(card_skills.router, prefix=API_PREFIX)
+app.include_router(path.router, prefix=API_PREFIX)
+app.include_router(academy.router, prefix=API_PREFIX)
+app.include_router(club_base.router, prefix=API_PREFIX)
 app.include_router(bingo.router, prefix=API_PREFIX)
 app.include_router(packs.router, prefix=API_PREFIX)
 app.include_router(free_pack.router, prefix=API_PREFIX)
@@ -129,6 +149,7 @@ app.include_router(gifts.router, prefix=API_PREFIX)
 app.include_router(lineups.router, prefix=API_PREFIX)
 app.include_router(career.router, prefix=API_PREFIX)
 app.include_router(friends.router, prefix=API_PREFIX)
+app.include_router(manager.router, prefix=API_PREFIX)
 app.include_router(my_player.router, prefix=API_PREFIX)
 app.include_router(lifestyle.router, prefix=API_PREFIX)
 app.include_router(player_career.router, prefix=API_PREFIX)
@@ -139,15 +160,18 @@ app.include_router(matches.router, prefix=API_PREFIX)
 app.include_router(penalty_matches.router, prefix=API_PREFIX)
 app.include_router(tactico.router, prefix=API_PREFIX)
 app.include_router(stratego.router, prefix=API_PREFIX)
+app.include_router(mordoboi.router, prefix=API_PREFIX)
 app.include_router(magnate.router, prefix=API_PREFIX)
 app.include_router(trades.router, prefix=API_PREFIX)
 app.include_router(daily_rewards.router, prefix=API_PREFIX)
 app.include_router(wheel.router, prefix=API_PREFIX)
 app.include_router(blackjack.router, prefix=API_PREFIX)
 app.include_router(profile.router, prefix=API_PREFIX)
+app.include_router(share.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(leaderboard.router, prefix=API_PREFIX)
 app.include_router(leagues.router, prefix=API_PREFIX)
+app.include_router(club_features.router, prefix=API_PREFIX)
 app.include_router(clubs.router, prefix=API_PREFIX)
 app.include_router(player_tournaments.router, prefix=API_PREFIX)
 app.include_router(notifications.router, prefix=API_PREFIX)
@@ -163,6 +187,8 @@ app.include_router(admin_coin_packages.router, prefix=API_PREFIX)
 app.include_router(admin_card_collections.router, prefix=API_PREFIX)
 app.include_router(admin_card_upgrades.router, prefix=API_PREFIX)
 app.include_router(admin_card_skills.router, prefix=API_PREFIX)
+app.include_router(admin_path.router, prefix=API_PREFIX)
+app.include_router(admin_transactions.router, prefix=API_PREFIX)
 app.include_router(admin_diamond_upgrades.router, prefix=API_PREFIX)
 app.include_router(admin_bingo.router, prefix=API_PREFIX)
 app.include_router(admin_club_packs.router, prefix=API_PREFIX)
@@ -174,12 +200,21 @@ app.include_router(admin_trophies.router, prefix=API_PREFIX)
 app.include_router(admin_gifts.router, prefix=API_PREFIX)
 app.include_router(admin_leagues.router, prefix=API_PREFIX)
 app.include_router(admin_lifestyle.router, prefix=API_PREFIX)
+app.include_router(admin_club_base.router, prefix=API_PREFIX)
 app.include_router(admin_wheel.router, prefix=API_PREFIX)
 app.include_router(admin_games.router, prefix=API_PREFIX)
+app.include_router(admin_career.router, prefix=API_PREFIX)
 app.include_router(admin_log.router, prefix=API_PREFIX)
 app.include_router(admin_stars_purchases.router, prefix=API_PREFIX)
+app.include_router(admin_antifraud.router, prefix=API_PREFIX)
 app.include_router(internal.router, prefix=API_PREFIX)
 app.include_router(wallet.router, prefix=API_PREFIX)
+app.include_router(monetization.router, prefix=API_PREFIX)
+app.include_router(equipment.router, prefix=API_PREFIX)
+app.include_router(events.router, prefix=API_PREFIX)
+app.include_router(events.admin_router, prefix=API_PREFIX)
+app.include_router(admin_equipment.router, prefix=API_PREFIX)
+app.include_router(admin_monetization.router, prefix=API_PREFIX)
 
 
 @app.get("/api/health")

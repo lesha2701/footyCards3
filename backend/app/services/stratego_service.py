@@ -58,13 +58,13 @@ from app.schemas.stratego import (
     StrategoSquadSlotOut,
     StrategoStatsOut,
 )
-from app.services import my_player_service, ranking_service
+from app.services import my_player_service, ranking_service, stake_guard_service
 from app.services import stratego_engine as engine
 from app.services import stratego_puzzles
 from app.services.game_config_service import get_config
 from app.services.match_service import BOT_NAMES
 from app.services.notification_service import notify
-from app.services.player_stats_service import effective_card_stats
+from app.services.player_stats_service import card_rating_bonus, effective_card_stats
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 MATCHMAKING_TIMEOUT_SECONDS = 60
@@ -73,7 +73,7 @@ ACTIVE_STATUSES = (StrategoMatchStatus.in_progress,)
 
 # Which real positions fit each card role; roles absent here take any card.
 ROLE_POSITIONS: dict[str, frozenset[Position]] = {
-    "tackler": frozenset({Position.LB, Position.CB, Position.RB, Position.CDM}),
+    "tackler": frozenset({Position.LB, Position.CB, Position.RB, Position.LWB, Position.RWB, Position.CDM}),
     "speedster": frozenset({Position.LW, Position.RW, Position.LM, Position.RM}),
     "provocateur": frozenset({Position.CM, Position.CAM, Position.CDM, Position.LM, Position.RM}),
 }
@@ -96,6 +96,8 @@ def _player_info(player: Player, user_card_id: Optional[int] = None, diamond_bon
             "user_card_id": user_card_id, "player_id": player.id, "display_name": player.display_name,
             "position": player.position.value, "image_path": player.image_path,
             "rarity": player.rarity.value, "rating": rating,
+            # «Академия»: counted against their own squad limit, not the diamond one.
+            "is_path": getattr(player, "path_talent_code", None) is not None,
         },
     }
 
@@ -122,7 +124,7 @@ def _with_skill(info: dict, code: Optional[str], level: Optional[int], per_level
 
 
 def _card_info(card: UserCard, per_level: int = 0) -> dict:
-    info = _player_info(card.player, card.id, card.diamond_rating_bonus)
+    info = _player_info(card.player, card.id, card_rating_bonus(card))
     return _with_skill(info, getattr(card, "skill_code", None), getattr(card, "skill_level", None), per_level)
 
 
@@ -151,7 +153,10 @@ def _fits(role: str, info: dict) -> bool:
     return allowed is None or Position(info["card"]["position"]) in allowed
 
 
-RARITY_LABELS = {"common": "обычных", "rare": "редких", "epic": "эпических", "legendary": "легендарных", "diamond": "диамантовых"}
+RARITY_LABELS = {
+    "common": "обычных", "rare": "редких", "epic": "эпических", "legendary": "легендарных", "diamond": "диамантовых",
+    "path": "карт «Академии»",
+}
 
 
 RARITY_ADJ = {"common": "обычной", "rare": "редкой", "epic": "эпической", "legendary": "легендарной", "diamond": "диамантовой"}
@@ -160,7 +165,10 @@ _RANK = {r.value: RARITY_ORDER[r] for r in Rarity}
 
 def _rarity_rules(config: GameConfig) -> dict:
     return {
-        "max": {"legendary": config.stratego_max_legendary_cards, "diamond": config.stratego_max_diamond_cards},
+        "max": {
+            "legendary": config.stratego_max_legendary_cards, "diamond": config.stratego_max_diamond_cards,
+            "path": config.stratego_max_path_cards,
+        },
         "min": {"rare": config.stratego_min_rare_cards, "common": config.stratego_min_common_cards},
         # Hard per-role ceiling on card rarity (role -> highest allowed rarity).
         "role_max": _role_caps(config),
@@ -200,9 +208,15 @@ def _rarity(info: dict) -> str:
     return info["card"]["rarity"]
 
 
+def _limit_group(info: dict) -> str:
+    """Squad-limit bucket: the rarity, except that a «Академия» card has
+    its own limit (it never takes a diamond place)."""
+    return "path" if info["card"].get("is_path") else _rarity(info)
+
+
 def rarity_violations(picked: list[dict], rules: dict) -> list[str]:
     """Human-readable squad composition problems (empty list = valid)."""
-    counts = Counter(_rarity(i) for i in picked)
+    counts = Counter(_limit_group(i) for i in picked)
     problems = [
         f"Максимум {cap} {RARITY_LABELS[r]} карт (сейчас {counts[r]})"
         for r, cap in rules["max"].items() if counts[r] > cap
@@ -223,15 +237,15 @@ def _assign_once(infos: list[dict], slots: list[str], fixed: dict[str, dict], ru
     pool = sorted(infos, key=_sort_key)
 
     def feasible(cand: dict, slots_left_after: int) -> bool:
-        counts = Counter(_rarity(i) for i in chosen.values())
-        counts[_rarity(cand)] += 1
+        counts = Counter(_limit_group(i) for i in chosen.values())
+        counts[_limit_group(cand)] += 1
         if any(counts[r] > cap for r, cap in rules["max"].items()):
             return False
         need = {r: max(0, n - counts[r]) for r, n in rules["min"].items()}
         if sum(need.values()) > slots_left_after:
             return False
         taken = used | {id(cand)}
-        return all(sum(1 for i in pool if id(i) not in taken and _rarity(i) == r) >= n for r, n in need.items())
+        return all(sum(1 for i in pool if id(i) not in taken and _limit_group(i) == r) >= n for r, n in need.items())
 
     def best(role: str, slots_left_after: int) -> Optional[dict]:
         free = [i for i in pool if id(i) not in used and _role_allows(role, i, rules)]
@@ -381,6 +395,7 @@ async def get_squad(db: AsyncSession, user: User) -> StrategoSquadOut:
         cards_needed=len(cslots),
         rarity_limits={
             "max_legendary": config.stratego_max_legendary_cards, "max_diamond": config.stratego_max_diamond_cards,
+            "max_path": config.stratego_max_path_cards,
             "min_rare": config.stratego_min_rare_cards, "min_common": config.stratego_min_common_cards,
         },
         tackler_max_rarity=config.stratego_tackler_max_rarity,
@@ -458,6 +473,7 @@ async def get_info(db: AsyncSession, user: User) -> StrategoInfoOut:
         reward_loss=config.stratego_reward_loss, daily_limit=config.stratego_daily_limit,
         rewarded_today=user.stratego_rewarded_attempts_today if reset_day == local_today() else 0,
         max_legendary=config.stratego_max_legendary_cards, max_diamond=config.stratego_max_diamond_cards,
+        max_path=config.stratego_max_path_cards,
         min_rare=config.stratego_min_rare_cards, min_common=config.stratego_min_common_cards,
         my_player_xp=config.stratego_my_player_xp,
         tackler_max_rarity=config.stratego_tackler_max_rarity,
@@ -707,6 +723,7 @@ async def create_open_challenge(db: AsyncSession, sender: User, stake_coins: int
     config = await get_config(db)
     if await _has_active_match(db, sender.id):
         raise ConflictError(_ACTIVE_MATCH_MSG)
+    await stake_guard_service.ensure_can_create(db, sender, stake_coins, config)
     if stake_coins > 0 and sender.balance < stake_coins:
         raise ConflictError("Не хватает монет для такой ставки")
     state = _new_state(config)
@@ -768,6 +785,7 @@ async def accept_open_challenge(db: AsyncSession, user: User, match_id: int) -> 
     second = await lock_user_for_update(db, second_id)
     creator = first if first.id == match.user_id else second
     acceptor = await _consume_hourly_slot(db, user.id, config)
+    await stake_guard_service.ensure_can_accept(db, creator, acceptor, match.stake_coins, config)
     if match.stake_coins > 0:
         if creator.balance < match.stake_coins:
             raise ConflictError("У автора вызова больше не хватает монет на ставку")
@@ -984,7 +1002,10 @@ async def _grant_reward(
     db: AsyncSession, user: User, result: MatchResult, config: GameConfig, match_id: int, pct: int = 100,
 ) -> int:
     _ensure_daily_reset(user)
-    if user.game_rewards_blocked or user.stratego_rewarded_attempts_today >= config.stratego_daily_limit:
+    from app.services.club_pass_service import extra_rewarded_attempts
+
+    limit = config.stratego_daily_limit + await extra_rewarded_attempts(db, user.id, config)
+    if user.game_rewards_blocked or user.stratego_rewarded_attempts_today >= limit:
         db.add(user)
         return 0
     reward = round(_reward_for(result, config) * pct / 100)
@@ -1053,7 +1074,9 @@ async def _finish_match(
             p["side"] == side and p.get("card") and p["card"].get("user_card_id") == mine_id for p in state["pieces"]
         )
         if fielded:
-            my_player_xp[side] = my_player_service.add_xp(locked[uid], config.stratego_my_player_xp, config)
+            my_player_xp[side] = my_player_service.add_xp(
+                locked[uid], config.stratego_my_player_xp, config, bonus_pct=await my_player_service.xp_bonus_pct(db, uid),
+            )
             db.add(locked[uid])
     state["my_player_xp"] = my_player_xp
 

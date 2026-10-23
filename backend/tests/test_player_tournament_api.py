@@ -80,3 +80,60 @@ async def test_leaderboard_sorted_by_metric(client, db_session, bot_token):
     body = resp.json()
     assert [e["value"] for e in body["top"]][:2] == [8, 3]
     assert body["me"]["user_id"] == a.id
+
+
+async def test_card_arena_tactics_style_and_next_opponent(client, db_session, bot_token):
+    """Tactics like Card Arena: a style of four in a circle on the squad,
+    the rules, and the next opponent's style with what it means for my lines."""
+    users = [await make_ready_user(client, db_session, bot_token, 880500 + i) for i in range(16)]
+    h = telegram_headers(880500, bot_token)
+    view = (await client.get(f"{BASE}/tactics", headers=h)).json()
+    assert [s["value"] for s in view["rules"]["styles"]] == ["attacking", "possession", "defensive", "counter"]
+    assert view["next"] is None  # not in a tournament yet
+
+    resp = await client.put(f"{BASE}/squads/1/tactics", headers=h, json={"formation": "4-3-3", "style": "attacking"})
+    assert resp.status_code == 200 and resp.json()["style"] == "attacking"
+    bad = await client.put(f"{BASE}/squads/1/tactics", headers=h, json={"formation": "4-3-3", "style": "chaos"})
+    assert bad.status_code == 409
+    # An old client without a style keeps the chosen one.
+    resp = await client.put(f"{BASE}/squads/1/tactics", headers=h, json={"formation": "4-3-3", "mentality": "BALANCED", "playstyle": "WING_PLAY"})
+    assert resp.json()["style"] == "attacking"
+
+    for u in users:
+        await apply_to_tournament(db_session, u)
+    view = (await client.get(f"{BASE}/tactics", headers=h)).json()
+    nxt = view["next"]
+    assert nxt["round"] == 1 and nxt["opponent"]
+    from sqlalchemy import select
+
+    from app.models.player_tournament import PlayerTournamentParticipant
+    from app.services.player_tournament_fixture_service import generate_fixtures
+
+    order = list((await db_session.execute(
+        select(PlayerTournamentParticipant.user_id).order_by(PlayerTournamentParticipant.id)
+    )).scalars().all())
+    me = users[0].id
+    opponent_id = next(b if a == me else a for r, a, b in generate_fixtures(order) if r == 1 and me in (a, b))
+    opponent = next(u for u in users if u.id == opponent_id)
+    await client.put(f"{BASE}/squads/1/tactics", headers=telegram_headers(opponent.telegram_id, bot_token),
+                     json={"formation": "4-3-3", "style": "defensive"})
+    nxt = (await client.get(f"{BASE}/tactics", headers=h)).json()["next"]
+    edge = view["rules"]["edge_pct"]
+    assert nxt["style"] == "defensive" and nxt["edge"] == "win"
+    assert nxt["mods"] == {"GK": -4 + edge, "DEF": -4 + edge, "MID": 2 + edge, "FWD": 6 + edge}
+
+    await simulate_next_round(db_session)
+    assert (await client.get(f"{BASE}/tactics", headers=h)).json()["next"]["round"] == 2
+
+
+def test_tactics_change_the_match_ratings():
+    from types import SimpleNamespace
+
+    from app.services import manager_tactics
+
+    config = SimpleNamespace(ptour_style_edge_pct=10, ptour_formation_effect_pct=0)
+    mods = manager_tactics.modifiers("counter", "3-4-3", "attacking", config, "ptour")
+    assert mods == {"GK": 10, "DEF": 13, "MID": 8, "FWD": 13}  # counter beats attacking, no formation tilt
+    assert manager_tactics.apply(70, "FWD", mods) == 79
+    even = manager_tactics.modifiers("possession", "4-3-3", "attacking", config, "ptour")
+    assert even == {"GK": 0, "DEF": 0, "MID": 6, "FWD": 0}

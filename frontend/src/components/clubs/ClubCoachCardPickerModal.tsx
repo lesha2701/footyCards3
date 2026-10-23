@@ -71,15 +71,15 @@ export default function ClubCoachCardPickerModal({ open, cards, onSelect, onClos
                     className="flex items-center gap-3 rounded-xl bg-white/5 p-2.5 text-left active:scale-[0.99]"
                   >
                     <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-black/40">
-                      <img
+                      <img decoding="async" loading="lazy"
                         src={staticUrl(c.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                         alt="" className="h-full w-full object-cover"
                       />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-ink-chalk">{c.coach.display_name}</p>
-                      <p className="text-[10px] text-ink-mist-dim">{RARITY_LABELS[c.coach.rarity]}</p>
-                      <p className="mt-0.5 truncate text-[10px] text-ink-mist">
+                      <p className="text-micro text-ink-mist-dim">{RARITY_LABELS[c.coach.rarity]}</p>
+                      <p className="mt-0.5 truncate text-micro text-ink-mist">
                         {c.coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
                       </p>
                     </div>

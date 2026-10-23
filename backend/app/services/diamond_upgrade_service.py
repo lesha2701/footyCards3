@@ -102,15 +102,23 @@ async def feed_cards(
         raise NotFoundError("Card not found")
     if diamond_card.player.rarity != Rarity.diamond:
         raise ConflictError("Only a diamond card can be leveled up this way")
-    if diamond_card.is_locked():
+    if diamond_card.player.path_talent_code is not None:
+        raise ConflictError("Карточки «Академии» растут только по своему пути")
+    # The fed card itself stays (same row), so it may stand in a squad — only
+    # an admin freeze or a pending trade stops it.
+    if diamond_card.is_locked_by_admin or diamond_card.is_locked_in_trade:
         raise ConflictError("This card is locked and cannot be upgraded")
 
     material_cards = [cards[cid] for cid in material_card_ids]
     for card in material_cards:
         if card.owner_id != locked_user.id:
             raise NotFoundError("Card not found")
+        if card.is_user_locked:
+            raise ConflictError(f"«{card.player.display_name}» под твоим замком — сними замок, чтобы сжечь её")
         if card.is_locked():
             raise ConflictError("This card is locked and cannot be used as material")
+        if card.player.path_talent_code is not None:
+            raise ConflictError("Карточку «Академии» нельзя использовать как материал")
     # Materials are destroyed; only the fed diamond card (same row, same
     # identity) keeps its skill.
     require_skill_loss_confirmation(material_cards, confirm_skill_loss, "прокачка бриллиантовой карточки")
@@ -185,6 +193,8 @@ async def get_material_cards(db: AsyncSession, user_id: int, diamond_card_id: in
         raise NotFoundError("Card not found")
     if diamond_card.player.rarity != Rarity.diamond:
         raise ConflictError("Only a diamond card can be leveled up this way")
+    if diamond_card.player.path_talent_code is not None:
+        raise ConflictError("Карточки «Академии» растут только по своему пути")
 
     current_rating, _, _ = effective_card_stats(diamond_card.player, diamond_card.diamond_rating_bonus)
     rating_cap = await get_effective_rating_cap(db)
@@ -208,10 +218,12 @@ async def get_material_cards(db: AsyncSession, user_id: int, diamond_card_id: in
             UserCard.owner_id == user_id,
             UserCard.id != diamond_card_id,
             Player.rarity == Rarity.diamond,
+            Player.path_talent_code.is_(None),
             UserCard.is_locked_by_admin.is_(False),
             UserCard.is_locked_in_trade.is_(False),
             UserCard.is_in_lineup.is_(False),
             UserCard.is_in_tactico_squad.is_(False),
+            UserCard.is_user_locked.is_(False),
         )
     )
     if band.kind == "same_player_diamond":

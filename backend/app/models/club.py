@@ -21,6 +21,15 @@ class Club(Base):
     )
     # Hex color string, e.g. "#3B82F6" — validated by ClubCreate/ClubUpdate schemas, not here.
     logo_color: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Emblem constructor (club_emblem_service): each one needs its catalog item
+    # unlocked; null = not used. logo_outline_thin is a free variant of an outline.
+    logo_color2: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    logo_pattern: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    logo_symbol: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    logo_letters: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
+    logo_outline: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    logo_outline_thin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    logo_effect: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     captain_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     # Permanent, unique deep-link token — see club_service.join_by_invite.
     invite_code: Mapped[str] = mapped_column(String(16), unique=True, nullable=False, index=True)
@@ -35,8 +44,22 @@ class Club(Base):
     # tournament's history for every other club that ever played against it). A club with no
     # tournament history is still hard-deleted exactly as before — see club_service.leave_club.
     is_disbanded: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Captain's switch: only captain / vice-captain / treasurer may spend the
+    # budget (otherwise assistants may too) — club_service.can_spend_budget.
+    budget_treasurer_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # «Лига клубов» division: 0 Бронза, 1 Серебро, 2 Золото (club_league_service).
+    league_division: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Клубные войны» Elo rating — wars pair clubs closest by it (club_war_service).
+    war_rating: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    # «Звёзды клуба»: Telegram Stars patrons put into the club (club_treasury_service);
+    # budget spenders buy the club's Stars goods (emblem layers) from it.
+    # Not to be confused with stars_count (tournament stars).
+    star_balance: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    __table_args__ = (CheckConstraint("budget >= 0", name="ck_clubs_budget_non_negative"),)
+    __table_args__ = (
+        CheckConstraint("budget >= 0", name="ck_clubs_budget_non_negative"),
+        CheckConstraint("star_balance >= 0", name="ck_clubs_star_balance_non_negative"),
+    )
 
 
 class ClubMember(Base):
@@ -53,6 +76,8 @@ class ClubMember(Base):
     # this off for a specific member (e.g. an inactive player who shouldn't get a free reward).
     # Applies to any member row, including assistants and the captain's own row.
     personal_reward_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # «Стена клуба»: posts after this are unread for the member (club_wall_service).
+    wall_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ClubJoinRequest(Base):

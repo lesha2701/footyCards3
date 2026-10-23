@@ -11,10 +11,61 @@ interface Props {
   className?: string;
   /** Stadium-glow backdrop (off where the avatar sits on its own surface). */
   background?: boolean;
-  /** Equipped cosmetics (shop codes): headband | earring | chain | goggles. */
+  /** Equipped cosmetics (shop codes): headband | earring | chain | goggles |
+   * captain | headphones | crown. */
   accessory?: string | null;
-  /** bg_sunset | bg_neon | bg_gold; anything else = the default stadium. */
+  /** bg_sunset | bg_neon | bg_gold | bg_night | bg_galaxy | bg_champions |
+   * bg_goal | bg_national | bg_pro; anything else = the default stadium. */
   backdrop?: string | null;
+  /** National team, for the «Флаг сборной» background. */
+  country?: string | null;
+}
+
+// Flag stripes for «Флаг сборной» (top to bottom); unknown countries get a
+// stable colour pair from the name.
+const FLAGS: Record<string, string[]> = {
+  "Россия": ["#ffffff", "#1c3f94", "#d52b1e"], "Германия": ["#000000", "#dd0000", "#ffce00"],
+  "Франция": ["#0055a4", "#ffffff", "#ef4135"], "Италия": ["#009246", "#ffffff", "#ce2b37"],
+  "Испания": ["#aa151b", "#f1bf00", "#aa151b"], "Бразилия": ["#009c3b", "#ffdf00", "#002776"],
+  "Аргентина": ["#74acdf", "#ffffff", "#74acdf"], "Нидерланды": ["#ae1c28", "#ffffff", "#21468b"],
+  "Португалия": ["#006600", "#ff0000", "#ff0000"], "Англия": ["#ffffff", "#ce1124", "#ffffff"],
+  "Бельгия": ["#000000", "#fdda24", "#ef3340"], "Хорватия": ["#ff0000", "#ffffff", "#171796"],
+  "Уругвай": ["#ffffff", "#0038a8", "#ffffff"], "Украина": ["#0057b7", "#ffd700"], "Беларусь": ["#c8313e", "#4aa657"],
+  "Казахстан": ["#00afca", "#fec50c", "#00afca"], "Польша": ["#ffffff", "#dc143c"], "Япония": ["#ffffff", "#bc002d", "#ffffff"],
+  "Марокко": ["#c1272d", "#006233", "#c1272d"], "Сенегал": ["#00853f", "#fdef42", "#e31b23"], "США": ["#b22234", "#ffffff", "#3c3b6e"],
+}
+
+function flagOf(country?: string | null): string[] {
+  if (country && FLAGS[country]) return FLAGS[country];
+  const n = [...(country ?? "Victor")].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const hues = [n % 360, (n * 7) % 360];
+  return [`hsl(${hues[0]} 70% 45%)`, "#ffffff", `hsl(${hues[1]} 70% 40%)`];
+}
+
+// Radial backdrop colours (centre, middle, edge) per background code.
+const BACKDROPS: Record<string, [string, string, string]> = {
+  default: ["#2b3a4d", "#16202c", "#0c1219"],
+  bg_gold: ["#ffe8a3", "#c48a1c", "#4a3006"],
+  bg_neon: ["#2a0f4d", "#120a2e", "#05030f"],
+  bg_night: ["#27496d", "#0b1a2e", "#03070d"],
+  bg_galaxy: ["#5b21b6", "#1e1b4b", "#05030f"],
+  bg_champions: ["#1d4ed8", "#0c1a4a", "#020617"],
+};
+
+// Fixed star field for «Галактика» (x, y, r).
+const GALAXY_STARS = [
+  [14, 20, 1.2], [38, 52, 0.8], [62, 14, 1], [88, 34, 0.7], [120, 12, 1.3], [150, 40, 0.8], [178, 22, 1.1],
+  [190, 70, 0.7], [24, 92, 0.9], [170, 104, 1], [8, 140, 0.8], [192, 150, 1.2], [44, 128, 0.6], [150, 132, 0.7],
+  [100, 6, 0.9], [76, 70, 0.6], [132, 84, 0.8], [30, 172, 0.7], [182, 186, 0.9], [12, 60, 0.7],
+];
+
+function starPath(cx: number, cy: number, r: number): string {
+  const points = Array.from({ length: 10 }, (_, i) => {
+    const angle = (Math.PI / 5) * i - Math.PI / 2;
+    const radius = i % 2 === 0 ? r : r * 0.45;
+    return `${(cx + radius * Math.cos(angle)).toFixed(1)} ${(cy + radius * Math.sin(angle)).toFixed(1)}`;
+  });
+  return `M${points.join(" L")}Z`;
 }
 
 function shade(hex: string, amount: number): string {
@@ -33,7 +84,7 @@ const MOUSTACHE = "M84 126 Q100 118 116 126 Q100 124 84 126Z";
 /** The constructor's footballer: a shaded head-and-shoulders SVG drawn from
  * option indexes (no uploaded photos — nothing to moderate). Option counts
  * must match backend my_player_service.APPEARANCE_OPTIONS. */
-export default function PlayerAvatar({ appearance: a, number, className, background = true, accessory, backdrop }: Props) {
+export default function PlayerAvatar({ appearance: a, number, className, background = true, accessory, backdrop, country }: Props) {
   const id = useId().replace(/:/g, "");
   const skin = SKIN_TONES[a.skin] ?? SKIN_TONES[0];
   const hair = HAIR_COLORS[a.hair_color] ?? HAIR_COLORS[0];
@@ -71,6 +122,38 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
     ),
     10: <circle cx="100" cy="34" r="14" fill={hairFill} />,
   };
+
+  // Premium «Раздевалка» hairstyles (indexes 14+, backend PREMIUM_HAIR) —
+  // fixed colours, whatever hair_color is picked.
+  const premiumHair: Record<number, JSX.Element> = {
+    // 14 — Неймар: shaved sides, platinum mohawk.
+    14: (
+      <>
+        {stubble("M58 100 Q56 60 100 56 Q144 60 142 100 Q132 80 100 78 Q68 80 58 100Z", "ney-sides")}
+        <path d="M80 76 Q76 34 94 22 Q102 14 108 22 Q126 34 120 76 Q100 66 80 76Z" fill={`url(#ney${id})`} />
+        <path d="M90 64 Q92 36 102 24 M100 66 Q104 40 112 30" stroke="#fffbea" strokeWidth="1.6" fill="none" opacity="0.8" strokeLinecap="round" />
+      </>
+    ),
+    // 15 — Роналду: short slick with a side part and gel shine.
+    15: (
+      <>
+        <path d="M57 100 Q52 46 100 40 Q148 46 143 100 Q138 70 124 62 Q114 52 84 56 Q66 64 57 100Z" fill="#241811" />
+        <path d="M84 56 Q96 46 118 50" stroke="#5c4636" strokeWidth="2" fill="none" />
+        <path d="M74 64 Q92 50 112 48 M118 52 Q132 56 138 70" stroke="#ffffff" strokeOpacity="0.35" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+        <path d="M80 60 L88 52" stroke="#000" strokeOpacity="0.5" strokeWidth="1.4" />
+      </>
+    ),
+    // 16 — Погба: skin fade with a shaved line, dyed flat top.
+    16: (
+      <>
+        {stubble("M58 100 Q56 62 100 58 Q144 62 142 100 Q132 82 100 80 Q68 82 58 100Z", "pog-sides")}
+        <path d="M66 80 L68 46 Q100 32 132 46 L134 80 Q100 70 66 80Z" fill={`url(#pog${id})`} />
+        <path d="M62 88 L74 82 M126 82 L138 88" stroke={sk3} strokeWidth="1.6" />
+        <path d="M74 48 Q100 38 126 48" stroke="#fff" strokeOpacity="0.35" strokeWidth="2" fill="none" />
+      </>
+    ),
+  };
+  const premium = premiumHair[a.hair];
 
   const hairFront: Record<number, JSX.Element | null> = {
     0: (
@@ -210,10 +293,15 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
     <svg viewBox="0 0 200 240" className={className} role="img" aria-label="Аватар игрока" preserveAspectRatio="xMidYMax slice">
       <defs>
         <radialGradient id={`bg${id}`} cx="50%" cy="30%" r="80%">
-          <stop offset="0" stopColor={backdrop === "bg_gold" ? "#ffe8a3" : backdrop === "bg_neon" ? "#2a0f4d" : "#2b3a4d"} />
-          <stop offset="0.6" stopColor={backdrop === "bg_gold" ? "#c48a1c" : backdrop === "bg_neon" ? "#120a2e" : "#16202c"} />
-          <stop offset="1" stopColor={backdrop === "bg_gold" ? "#4a3006" : backdrop === "bg_neon" ? "#05030f" : "#0c1219"} />
+          {(BACKDROPS[backdrop ?? ""] ?? BACKDROPS.default).map((color, i) => (
+            <stop key={i} offset={[0, 0.6, 1][i]} stopColor={color} />
+          ))}
         </radialGradient>
+        <linearGradient id={`crown${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff3b0" />
+          <stop offset="0.5" stopColor="#f5c542" />
+          <stop offset="1" stopColor="#a8740f" />
+        </linearGradient>
         <linearGradient id={`sunset${id}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#ff9a3d" />
           <stop offset="0.45" stopColor="#d64a6b" />
@@ -233,6 +321,16 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
           <stop offset="0" stopColor={h1} />
           <stop offset="0.5" stopColor={hair} />
           <stop offset="1" stopColor={h2} />
+        </linearGradient>
+        <linearGradient id={`ney${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff7d1" />
+          <stop offset="0.6" stopColor="#f2d675" />
+          <stop offset="1" stopColor="#b8913a" />
+        </linearGradient>
+        <linearGradient id={`pog${id}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#a5f3fc" />
+          <stop offset="0.5" stopColor="#22d3ee" />
+          <stop offset="1" stopColor="#7c3aed" />
         </linearGradient>
         <linearGradient id={`kit${id}`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor={shade(kit, 0.22)} />
@@ -268,13 +366,62 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
               </g>
             </>
           )}
+          {backdrop === "bg_night" && (
+            <>
+              <path d="M0 0 L40 0 L120 240 L70 240Z" fill="#e0f2fe" opacity="0.1" />
+              <path d="M200 0 L160 0 L80 240 L130 240Z" fill="#e0f2fe" opacity="0.1" />
+              {[10, 24, 176, 190].map((x) => <circle key={x} cx={x} cy="10" r="3.5" fill="#f8fafc" opacity="0.85" />)}
+              <path d="M0 190 Q100 170 200 190 L200 240 L0 240Z" fill="#14532d" opacity="0.55" />
+            </>
+          )}
+          {backdrop === "bg_galaxy" && (
+            <>
+              <ellipse cx="50" cy="60" rx="70" ry="34" fill="#ec4899" opacity="0.16" transform="rotate(-20 50 60)" />
+              <ellipse cx="160" cy="110" rx="60" ry="26" fill="#22d3ee" opacity="0.14" transform="rotate(25 160 110)" />
+              {GALAXY_STARS.map(([x, y, r]) => <circle key={`${x}-${y}`} cx={x} cy={y} r={r} fill="#fff" opacity="0.85" />)}
+            </>
+          )}
+          {backdrop === "bg_goal" && (
+            <g>
+              <rect width="200" height="240" fill="#14532d" />
+              <g stroke="#e2e8f0" strokeOpacity="0.35" strokeWidth="1">
+                {Array.from({ length: 21 }, (_, i) => <path key={`v${i}`} d={`M${i * 10} 0 V240`} />)}
+                {Array.from({ length: 25 }, (_, i) => <path key={`h${i}`} d={`M0 ${i * 10} H200`} />)}
+              </g>
+              <path d="M6 0 V240 M194 0 V240 M0 6 H200" stroke="#f8fafc" strokeWidth="8" opacity="0.9" />
+            </g>
+          )}
+          {backdrop === "bg_national" && (
+            <g>
+              {flagOf(country).map((color, i, all) => (
+                <rect key={i} y={(240 / all.length) * i} width="200" height={240 / all.length + 1} fill={color} />
+              ))}
+              <rect width="200" height="240" fill="#000" opacity="0.28" />
+            </g>
+          )}
+          {backdrop === "bg_pro" && (
+            <g>
+              <rect width="200" height="240" fill="#1e0b3a" />
+              <circle cx="100" cy="80" r="110" fill="#7c3aed" opacity="0.35" />
+              <circle cx="100" cy="80" r="60" fill="#c084fc" opacity="0.25" />
+              <text x="100" y="40" textAnchor="middle" fontSize="34" fontWeight="900" fontFamily="system-ui, sans-serif" fill="#e9d5ff" opacity="0.25">PRO</text>
+            </g>
+          )}
+          {backdrop === "bg_champions" && (
+            <g fill="#f8fafc" opacity="0.28">
+              {Array.from({ length: 8 }, (_, i) => {
+                const angle = (Math.PI * 2 * i) / 8 - Math.PI / 2;
+                return <path key={i} d={starPath(100 + 64 * Math.cos(angle), 84 + 52 * Math.sin(angle), 10)} />;
+              })}
+            </g>
+          )}
           <g opacity={backdrop === "bg_gold" ? 0.22 : 0.08} fill="#fff">
             <path d="M30 0 L60 0 L100 240 L90 240Z" />
             <path d="M150 0 L175 0 L115 240 L106 240Z" />
           </g>
         </>
       )}
-      {hairBack[a.hair]}
+      {!premium && hairBack[a.hair]}
 
       {/* torso + kit */}
       <g clipPath={`url(#torso${id})`}>
@@ -286,6 +433,14 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
         <path d="M154 182 Q148 214 152 240" stroke="#000" strokeOpacity="0.25" strokeWidth="2" fill="none" />
         <rect x="0" y="150" width="200" height="90" fill={`url(#fold${id})`} />
       </g>
+      {accessory === "captain" && (
+        <g clipPath={`url(#torso${id})`}>
+          <g transform="rotate(-10 30 210)">
+            <rect x="10" y="202" width="40" height="15" rx="2" fill="#facc15" />
+            <text x="30" y="214" textAnchor="middle" fontSize="12" fontWeight="900" fontFamily="system-ui, sans-serif" fill="#18181b">C</text>
+          </g>
+        </g>
+      )}
       <path d="M80 162 Q100 190 120 162" fill="none" stroke={trim} strokeWidth="5" strokeLinecap="round" />
       <path d="M80 162 Q100 186 120 162" fill="none" stroke="#000" strokeOpacity="0.25" strokeWidth="1.5" />
       <g transform="translate(58 192)">
@@ -303,6 +458,15 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
 
       {/* neck, ears, head */}
       <path d="M80 126 L80 166 Q100 182 120 166 L120 126Z" fill={`url(#neck${id})`} />
+      {accessory === "diamond_chain" && (
+        <>
+          <path d="M78 148 Q100 180 122 148" fill="none" stroke="#e5e7eb" strokeWidth="3.4" strokeDasharray="2.5 1.2" />
+          <path d="M94 166 L100 158 L106 166 L100 176Z" fill="#a5f3fc" stroke="#e0f2fe" strokeWidth="1" />
+          {[[86, 162], [114, 162], [100, 152]].map(([x, y]) => (
+            <path key={`${x}-${y}`} d={`M${x} ${y - 3} L${x + 1} ${y} L${x} ${y + 3} L${x - 1} ${y}Z`} fill="#fff" />
+          ))}
+        </>
+      )}
       {accessory === "chain" && (
         <>
           <path d="M80 150 Q100 176 120 150" fill="none" stroke="#f5c542" strokeWidth="2.6" strokeDasharray="3 1.5" />
@@ -340,7 +504,7 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
         <path d="M88 134 Q100 141 112 134 Q100 137 88 134Z" fill="#9b4a3a" stroke="#7a3428" strokeWidth="1.5" strokeLinejoin="round" />
       )}
 
-      {hairFront[a.hair] ?? null}
+      {premium ?? hairFront[a.hair] ?? null}
 
       {accessory === "earring" && (
         <>
@@ -358,6 +522,46 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
             </g>
           ))}
           <path d="M93 97 Q100 93 107 97" stroke="#18181b" strokeWidth="3" fill="none" />
+        </>
+      )}
+      {accessory === "aviators" && (
+        <>
+          <path d="M58 94 L70 94 M130 94 L142 94" stroke="#d4a017" strokeWidth="2.5" />
+          {[81, 119].map((x) => (
+            <g key={x}>
+              <path d={`M${x - 12} 91 Q${x} 88 ${x + 12} 91 Q${x + 12} 106 ${x} 107 Q${x - 12} 106 ${x - 12} 91Z`}
+                fill={`url(#avi${id})`} stroke="#d4a017" strokeWidth="2" />
+              <path d={`M${x - 7} 93 Q${x - 3} 91 ${x + 2} 92`} stroke="#fff" strokeWidth="1.4" opacity="0.6" fill="none" />
+            </g>
+          ))}
+          <path d="M93 92 Q100 89 107 92" stroke="#d4a017" strokeWidth="2.2" fill="none" />
+          <defs>
+            <linearGradient id={`avi${id}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#1f2937" />
+              <stop offset="1" stopColor="#7c2d12" />
+            </linearGradient>
+          </defs>
+        </>
+      )}
+      {accessory === "headphones" && (
+        <>
+          <path d="M74 160 Q100 192 126 160" fill="none" stroke="#18181b" strokeWidth="6" strokeLinecap="round" />
+          {[72, 128].map((x) => (
+            <g key={x}>
+              <ellipse cx={x} cy="158" rx="10" ry="13" fill="#18181b" />
+              <ellipse cx={x} cy="158" rx="5.5" ry="8" fill="#ef4444" />
+            </g>
+          ))}
+        </>
+      )}
+      {accessory === "crown" && (
+        <>
+          <path d="M68 52 L74 20 L88 38 L100 12 L112 38 L126 20 L132 52Z" fill={`url(#crown${id})`} stroke="#8a5d08" strokeWidth="1.5" strokeLinejoin="round" />
+          <rect x="67" y="48" width="66" height="9" rx="2" fill={`url(#crown${id})`} stroke="#8a5d08" strokeWidth="1.5" />
+          {([[84, "#ef4444"], [100, "#22d3ee"], [116, "#22c55e"]] as const).map(([x, color]) => (
+            <circle key={x} cx={x} cy="52" r="3" fill={color} />
+          ))}
+          <circle cx="100" cy="14" r="3" fill="#fff" opacity="0.9" />
         </>
       )}
       {accessory === "headband" && (

@@ -1,3 +1,4 @@
+import { ListSkeleton } from "@/components/common/Skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -165,7 +166,7 @@ export default function TacticoMatchPage() {
   }, [match?.status, match?.reward_coins]);
 
   if (isLoading || !match) {
-    return <p className="text-sm text-ink-mist">Загрузка...</p>;
+    return <ListSkeleton count={3} />;
   }
 
   return (
@@ -219,7 +220,7 @@ export default function TacticoMatchPage() {
                 Ждём ход соперника...
               </p>
               {match.round_deadline && (
-                <p className="mt-1 text-[11px] text-ink-mist-dim">
+                <p className="mt-1 text-caption text-ink-mist-dim">
                   Если соперник не успеет за <RoundCountdown deadline={match.round_deadline} />, за него сыграет случайная карта
                 </p>
               )}
@@ -235,7 +236,7 @@ export default function TacticoMatchPage() {
           <button
             onClick={() => forfeitMutation.mutate()}
             disabled={forfeitMutation.isPending}
-            className="mt-3 text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2 active:scale-95"
+            className="mt-3 text-caption font-semibold text-ink-mist-dim underline underline-offset-2 active:scale-95"
           >
             Сдаться (засчитается поражение)
           </button>
@@ -337,13 +338,13 @@ function TacticoCardTile({ card, phase, onClick }: { card: TacticoCard; phase: s
     >
       <div className="flex h-full w-full flex-col overflow-hidden rounded-[14px] bg-bg-surface/90">
         <div className="relative flex-1 overflow-hidden">
-          <img src={imageUrl} alt={card.display_name} className="h-full w-full object-cover" loading="lazy" />
+          <img decoding="async" src={imageUrl} alt={card.display_name} className="h-full w-full object-cover" loading="lazy" />
           <div className="absolute left-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-display text-xs font-bold leading-none text-white">★{card.rating}</div>
           <div className="absolute right-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-display text-xs font-semibold leading-none text-white">{card.position}</div>
         </div>
         <div className="border-t border-white/10 bg-black/30 px-2 py-1.5 text-center">
           <p className="truncate font-display text-xs font-semibold text-ink-chalk">{card.display_name}</p>
-          <p className="mt-0.5 flex items-center justify-center gap-2 font-mono text-[9px]">
+          <p className="mt-0.5 flex items-center justify-center gap-2 font-mono text-micro">
             <span className={attackActive ? "font-bold text-accent-lime" : "text-ink-mist"}>
               АТК <b>{card.attack_rating}</b>
             </span>

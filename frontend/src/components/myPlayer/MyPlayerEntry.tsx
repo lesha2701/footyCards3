@@ -8,6 +8,7 @@ import { TIER_TEXT } from "@/lib/myPlayer";
 
 import MyPlayerCard from "./MyPlayerCard";
 import PlayerAvatar from "./PlayerAvatar";
+import TrophyShowcase from "./TrophyShowcase";
 
 /** Profile row leading to /my-player: the avatar + level, or a "create" call. */
 export function MyPlayerEntry() {
@@ -42,7 +43,7 @@ export function MyPlayerEntry() {
       </span>
       <span className="flex items-center gap-2">
         {player && data.points_available > 0 && (
-          <span className="rounded-full bg-accent-lime px-2 py-0.5 font-mono text-[10px] font-bold text-bg-base">
+          <span className="rounded-full bg-accent-lime px-2 py-0.5 font-mono text-micro font-bold text-bg-base">
             +{data.points_available}
           </span>
         )}
@@ -65,10 +66,15 @@ export function PublicMyPlayer({ userId }: { userId: number }) {
       <div className="w-44">
         <MyPlayerCard player={data.player} level={data.level} />
       </div>
+      {data.trophies.length > 0 && (
+        <div className="w-full">
+          <TrophyShowcase trophies={data.trophies} />
+        </div>
+      )}
       {!!property?.items.length && (
         <div className="w-full rounded-xl bg-bg-raised p-3">
           <p className="text-xs text-ink-mist">
-            Имущество · <b className="text-amber-300">{property.prestige} престижа</b>
+            Имущество · <b className="text-amber-300">{property.prestige} статуса</b>
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {property.items.map((i) => (

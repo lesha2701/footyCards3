@@ -33,7 +33,7 @@ export default function CardSkillBadge({
           ? `${skill.name} ${SKILL_LEVEL_LABELS[level]}${inactiveReason ? ` — ${inactiveReason}` : upgradable ? " — можно улучшить" : ""}`
           : undefined
       }
-      className={`inline-flex items-center gap-0.5 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold leading-none ${
+      className={`inline-flex items-center gap-0.5 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-micro font-bold leading-none ${
         inactiveReason ? "text-ink-mist-dim line-through" : "text-accent-lime"
       } ${className}`}
     >

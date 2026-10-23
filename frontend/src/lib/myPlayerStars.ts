@@ -1,12 +1,12 @@
-import { createMyPlayerStarsInvoice, fetchMyPlayerStarsInvoiceStatus } from "@/api/myPlayer";
+import { createMyPlayerStarsInvoice, fetchMyPlayerStarsInvoiceStatus, type MyPlayerStarsPurchase } from "@/api/myPlayer";
 import { openTelegramInvoice } from "@/lib/telegram";
 
-/** Pays a «Мой игрок» purchase (extra training / «Имущество» item) with
- * Telegram Stars: invoice → native payment sheet → poll until the bot has
- * relayed the payment and the server delivered it. Resolves to "paid",
- * "cancelled" or throws with a user-facing message. */
-export async function payMyPlayerWithStars(purchase: "training" | "item", itemId?: number): Promise<"paid" | "cancelled"> {
-  const invoice = await createMyPlayerStarsInvoice(purchase, itemId);
+/** Pays a «Мой игрок» purchase (extra training, «Имущество» item, cosmetic,
+ * line change) with Telegram Stars: invoice → native payment sheet → poll
+ * until the bot has relayed the payment and the server delivered it.
+ * Resolves to "paid", "cancelled" or throws with a user-facing message. */
+export async function payMyPlayerWithStars(order: MyPlayerStarsPurchase): Promise<"paid" | "cancelled"> {
+  const invoice = await createMyPlayerStarsInvoice(order);
   const status = await openTelegramInvoice(invoice.invoice_link);
   if (status === "cancelled") return "cancelled";
   if (status === "failed") throw new Error("Платёж не прошёл");

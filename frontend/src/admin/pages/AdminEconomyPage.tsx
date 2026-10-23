@@ -34,7 +34,19 @@ export default function AdminEconomyPage() {
         <p className="text-slate-400">Загрузка...</p>
       ) : (
         <>
+          {data.warning && (
+            <p className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
+              ⚠️ {data.warning} Стоит добавить способы тратить монеты или снизить награды.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Stat label="Монет у игроков сейчас" value={data.coins_in_circulation} />
+            <Stat
+              label="Выдано / списано"
+              value={data.inflow_outflow_ratio == null ? "—" : `${data.inflow_outflow_ratio}×`}
+              tone={data.warning ? "text-amber-300" : undefined}
+              hint={`дней с перевесом начислений: ${data.positive_days} из ${data.daily.length}`}
+            />
             <Stat label="Выдано монет" value={data.total_inflow} tone="text-emerald-400" />
             <Stat label="Списано монет" value={data.total_outflow} tone="text-rose-400" />
             <Stat
@@ -66,7 +78,7 @@ export default function AdminEconomyPage() {
                       <div className="flex-1 rounded-t bg-emerald-400/70" style={{ height: `${(d.inflow / maxDay) * 100}%` }} />
                       <div className="flex-1 rounded-t bg-rose-400/70" style={{ height: `${(d.outflow / maxDay) * 100}%` }} />
                     </div>
-                    <span className="text-[9px] text-slate-500">{d.date.slice(5)}</span>
+                    <span className="text-micro text-slate-500">{d.date.slice(5)}</span>
                   </div>
                 ))}
               </div>
@@ -105,7 +117,7 @@ function Stat({ label, value, tone, hint }: { label: string; value: string | num
     <div className="rounded-2xl border border-white/5 bg-bg-surface p-4">
       <p className={`font-display text-2xl font-bold ${tone ?? ""}`}>{value}</p>
       <p className="mt-1 text-xs text-slate-400">{label}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-slate-500">{hint}</p>}
+      {hint && <p className="mt-0.5 text-caption text-slate-500">{hint}</p>}
     </div>
   );
 }

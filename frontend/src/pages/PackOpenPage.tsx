@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -19,7 +19,11 @@ import { SkillTokenRevealStage } from "@/components/cards/SkillTokenRevealStage"
 import SkillTokenTile from "@/components/cards/SkillTokenTile";
 import { StadiumRevealStage } from "@/components/cards/StadiumRevealStage";
 import ErrorScreen from "@/components/common/ErrorScreen";
+import PlayerCard from "@/components/cards/PlayerCard";
+import ShareButton from "@/components/common/ShareButton";
 import LoadingScreen from "@/components/common/LoadingScreen";
+import { BuyCoinsModal } from "@/components/shop/CoinPackages";
+import TopUpButton from "@/components/shop/TopUpButton";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconCoin, IconHandshake, IconTag } from "@/components/icons";
 import { openPack, openPackBulk } from "@/api/packs";
@@ -27,6 +31,7 @@ import { useStarsPackPurchase } from "@/hooks/useStarsPackPurchase";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
+import { useTopUpStars } from "@/lib/useTopUp";
 import { useAuthStore } from "@/store/authStore";
 import type { OpenedCard, OpenedCoachCard, OpenedStadiumCard, PackBulkOpenResult, PackOpenResult } from "@/types";
 
@@ -261,6 +266,28 @@ function SinglePackOpenView() {
     else reopenCoinPack();
   };
 
+  // Right after a pull is the best moment to sell the next one: ×5 when
+  // the balance allows it, otherwise a top-up that keeps the player here.
+  const [topUp, setTopUp] = useState(false);
+  const topUpStars = useTopUpStars();
+  const coinPrice = result && !isStarsPack ? result.pack.price : 0;
+  const upsell =
+    !result || isStarsPack || queue.length > 0 ? undefined : balance >= coinPrice * 5 ? (
+      <button
+        onClick={() => navigate(`/packs/${result.pack.id}/open`, { replace: true, state: { quantity: 5 } })}
+        className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-sm font-bold text-ink-chalk ring-1 ring-white/10 active:scale-95"
+      >
+        Открыть сразу ×5 · <IconCoin size={13} className="text-accent-lime" /> {(coinPrice * 5).toLocaleString("ru-RU")}
+      </button>
+    ) : !canAffordAgain ? (
+      <TopUpButton
+        need={coinPrice - balance}
+        stars={topUpStars(coinPrice - balance)}
+        onClick={() => setTopUp(true)}
+        className="rounded-2xl py-3 text-sm"
+      />
+    ) : undefined;
+
   useEffect(() => {
     if (phase !== "tokens" || tokenRevealed) return;
     const timer = setTimeout(() => setTokenRevealed(true), TOKEN_STAGE_DURATION_MS);
@@ -375,6 +402,7 @@ function SinglePackOpenView() {
                   onDone={finish}
                   onOpenAnother={handleOpenAnother}
                   canOpenAnother={canAffordAgain}
+                  more={upsell}
                   busy={isStarsPack && buyingStarsPackAgain}
                   error={isStarsPack ? buyStarsPackAgainError : null}
                 />
@@ -397,10 +425,13 @@ function SinglePackOpenView() {
           onDone={finish}
           onOpenAnother={handleOpenAnother}
           canOpenAnother={canAffordAgain}
+          more={upsell}
           busy={isStarsPack && buyingStarsPackAgain}
           error={isStarsPack ? buyStarsPackAgainError : null}
         />
       )}
+
+      {topUp && <BuyCoinsModal onClose={() => setTopUp(false)} onPurchased={updateBalance} />}
     </div>
   );
 }
@@ -668,30 +699,7 @@ function BulkSummary({
       ))}
       <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
         {result.cards.map((opened) => (
-          <div
-            key={opened.card.id}
-            className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.player.rarity]} p-[2px] ${RARITY_GLOW[opened.card.player.rarity]}`}
-          >
-            <div className="flex flex-col rounded-[14px] bg-bg-surface">
-              <img
-                src={staticUrl(opened.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                alt={opened.card.player.display_name}
-                className="aspect-square w-full object-cover"
-              />
-              <div className="p-1.5 text-center">
-                <p className="truncate text-[11px] font-bold text-ink-chalk">{opened.card.player.display_name}</p>
-                <p className="text-[9px] text-ink-mist">{RARITY_LABELS[opened.card.player.rarity]}</p>
-              </div>
-            </div>
-            {opened.is_new && (
-              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
-            )}
-            {opened.duplicate_count > 1 && (
-              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
-                ×{opened.duplicate_count}
-              </span>
-            )}
-          </div>
+          <OpenedCardTile key={opened.card.id} opened={opened} />
         ))}
         {result.coach_cards.map((opened) => (
           <div
@@ -699,21 +707,21 @@ function BulkSummary({
             className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.coach.rarity]} p-[2px] ${RARITY_GLOW[opened.card.coach.rarity]}`}
           >
             <div className="flex flex-col rounded-[14px] bg-bg-surface">
-              <img
+              <img decoding="async"
                 src={staticUrl(opened.card.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                 alt={opened.card.coach.display_name}
                 className="aspect-square w-full object-cover"
               />
               <div className="p-1.5 text-center">
-                <p className="truncate text-[11px] font-bold text-ink-chalk">{opened.card.coach.display_name}</p>
-                <p className="text-[9px] text-ink-mist">Тренер · {RARITY_LABELS[opened.card.coach.rarity]}</p>
+                <p className="truncate text-caption font-bold text-ink-chalk">{opened.card.coach.display_name}</p>
+                <p className="text-micro text-ink-mist">Тренер · {RARITY_LABELS[opened.card.coach.rarity]}</p>
               </div>
             </div>
             {opened.is_new && (
-              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
+              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-micro font-bold text-bg-base">NEW</span>
             )}
             {opened.duplicate_count > 1 && (
-              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
+              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-micro font-bold text-ink-chalk">
                 ×{opened.duplicate_count}
               </span>
             )}
@@ -728,21 +736,21 @@ function BulkSummary({
             className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.stadium.rarity]} p-[2px] ${RARITY_GLOW[opened.card.stadium.rarity]}`}
           >
             <div className="flex flex-col rounded-[14px] bg-bg-surface">
-              <img
+              <img decoding="async"
                 src={staticUrl(opened.card.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                 alt={opened.card.stadium.display_name}
                 className="aspect-square w-full object-cover"
               />
               <div className="p-1.5 text-center">
-                <p className="truncate text-[11px] font-bold text-ink-chalk">{opened.card.stadium.display_name}</p>
-                <p className="text-[9px] text-ink-mist">Стадион · +{Math.round(opened.card.stadium.boost_pct * 100)}%</p>
+                <p className="truncate text-caption font-bold text-ink-chalk">{opened.card.stadium.display_name}</p>
+                <p className="text-micro text-ink-mist">Стадион · +{Math.round(opened.card.stadium.boost_pct * 100)}%</p>
               </div>
             </div>
             {opened.is_new && (
-              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
+              <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-micro font-bold text-bg-base">NEW</span>
             )}
             {opened.duplicate_count > 1 && (
-              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
+              <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-micro font-bold text-ink-chalk">
                 ×{opened.duplicate_count}
               </span>
             )}
@@ -762,12 +770,15 @@ function ReopenActions({
   canOpenAnother,
   busy,
   error,
+  more,
 }: {
   onDone: () => void;
   onOpenAnother: () => void;
   canOpenAnother: boolean;
   busy: boolean;
   error: string | null;
+  /** Upsell under the buttons: «Ещё ×5» or «Докупить» when short. */
+  more?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -787,6 +798,7 @@ function ReopenActions({
           {busy ? "Открываем..." : "Открыть ещё"}
         </button>
       </div>
+      {more}
     </div>
   );
 }
@@ -814,6 +826,7 @@ function Summary({
   canOpenAnother,
   busy,
   error,
+  more,
 }: {
   result: PackOpenResult;
   onDone: () => void;
@@ -821,6 +834,7 @@ function Summary({
   canOpenAnother: boolean;
   busy: boolean;
   error: string | null;
+  more?: ReactNode;
 }) {
   // A single-card pack's one card was already fully shown during the reveal
   // stage — re-displaying it here (and the generic "Pack opened" heading)
@@ -878,35 +892,8 @@ function Summary({
       {showRecap && (
         <div className={totalOpened === 1 ? "flex justify-center" : "grid grid-cols-2 gap-3 sm:grid-cols-3"}>
           {result.cards.map((opened) => (
-            <div
-              key={opened.card.id}
-              className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.player.rarity]} p-[2px] ${RARITY_GLOW[opened.card.player.rarity]} ${singleCardWidthClass}`}
-            >
-              <div className="flex flex-col rounded-[14px] bg-bg-surface">
-                <img
-                  src={staticUrl(opened.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                  alt={opened.card.player.display_name}
-                  className="aspect-square w-full object-cover"
-                />
-                <div className="p-2 text-center">
-                  <p className="truncate text-xs font-bold text-ink-chalk">{opened.card.player.display_name}</p>
-                  <p className="text-[10px] text-ink-mist">{RARITY_LABELS[opened.card.player.rarity]}</p>
-                  {opened.card.player.collection_name && (
-                    <p className="flex items-center justify-center gap-1 truncate text-[9px] font-semibold text-accent-lime">
-                      <IconTag size={9} />
-                      {opened.card.player.collection_name}
-                    </p>
-                  )}
-                </div>
-              </div>
-              {opened.is_new && (
-                <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
-              )}
-              {opened.duplicate_count > 1 && (
-                <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
-                  ×{opened.duplicate_count}
-                </span>
-              )}
+            <div key={opened.card.id} className={singleCardWidthClass}>
+              <OpenedCardTile opened={opened} withDetails />
             </div>
           ))}
           {result.coach_cards.map((opened) => (
@@ -915,21 +902,21 @@ function Summary({
               className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.coach.rarity]} p-[2px] ${RARITY_GLOW[opened.card.coach.rarity]} ${singleCardWidthClass}`}
             >
               <div className="flex flex-col rounded-[14px] bg-bg-surface">
-                <img
+                <img decoding="async"
                   src={staticUrl(opened.card.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                   alt={opened.card.coach.display_name}
                   className="aspect-square w-full object-cover"
                 />
                 <div className="p-2 text-center">
                   <p className="truncate text-xs font-bold text-ink-chalk">{opened.card.coach.display_name}</p>
-                  <p className="text-[10px] text-ink-mist">Тренер · {RARITY_LABELS[opened.card.coach.rarity]}</p>
+                  <p className="text-micro text-ink-mist">Тренер · {RARITY_LABELS[opened.card.coach.rarity]}</p>
                 </div>
               </div>
               {opened.is_new && (
-                <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
+                <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-micro font-bold text-bg-base">NEW</span>
               )}
               {opened.duplicate_count > 1 && (
-                <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
+                <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-micro font-bold text-ink-chalk">
                   ×{opened.duplicate_count}
                 </span>
               )}
@@ -946,21 +933,21 @@ function Summary({
               className={`relative overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[opened.card.stadium.rarity]} p-[2px] ${RARITY_GLOW[opened.card.stadium.rarity]} ${singleCardWidthClass}`}
             >
               <div className="flex flex-col rounded-[14px] bg-bg-surface">
-                <img
+                <img decoding="async"
                   src={staticUrl(opened.card.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                   alt={opened.card.stadium.display_name}
                   className="aspect-square w-full object-cover"
                 />
                 <div className="p-2 text-center">
                   <p className="truncate text-xs font-bold text-ink-chalk">{opened.card.stadium.display_name}</p>
-                  <p className="text-[10px] text-ink-mist">Стадион · +{Math.round(opened.card.stadium.boost_pct * 100)}%</p>
+                  <p className="text-micro text-ink-mist">Стадион · +{Math.round(opened.card.stadium.boost_pct * 100)}%</p>
                 </div>
               </div>
               {opened.is_new && (
-                <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-[9px] font-bold text-bg-base">NEW</span>
+                <span className="absolute left-1 top-1 rounded-full bg-accent-green px-1.5 py-0.5 text-micro font-bold text-bg-base">NEW</span>
               )}
               {opened.duplicate_count > 1 && (
-                <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">
+                <span className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-micro font-bold text-ink-chalk">
                   ×{opened.duplicate_count}
                 </span>
               )}
@@ -975,8 +962,52 @@ function Summary({
           canOpenAnother={canOpenAnother}
           busy={busy}
           error={error}
+          more={more}
         />
       </div>
     </div>
   );
 }
+
+/** A card from the pack in the recap grids: the shared PlayerCard face
+ * (rating, position, rarity frame, «Академия» — same as everywhere else),
+ * with what's specific to *this opening* — new / ×N copies, the collection
+ * and, for a legendary or diamond, «Поделиться» — under the name instead of
+ * on top of the card's corners. */
+function OpenedCardTile({ opened, withDetails = false }: { opened: OpenedCard; withDetails?: boolean }) {
+  const player = opened.card.player;
+  const shareable = player.rarity === "legendary" || player.rarity === "diamond";
+  return (
+    <PlayerCard
+      player={player}
+      size="sm"
+      stars={opened.card.stars}
+      pathStage={opened.card.path_stage}
+      prestige={opened.card.prestige}
+      footer={
+        <div className="flex flex-col items-center gap-1 px-1.5 pb-1.5 pt-1">
+          {(opened.is_new || opened.duplicate_count > 1) && (
+            <div className="flex items-center gap-1">
+              {opened.is_new && (
+                <span className="rounded-full bg-accent-green px-1.5 py-0.5 text-micro font-bold leading-none text-bg-base">NEW</span>
+              )}
+              {opened.duplicate_count > 1 && (
+                <span className="rounded-full bg-black/40 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-ink-chalk">
+                  ×{opened.duplicate_count}
+                </span>
+              )}
+            </div>
+          )}
+          {withDetails && player.collection_name && (
+            <p className="flex max-w-full items-center justify-center gap-1 truncate text-micro font-semibold text-accent-lime">
+              <IconTag size={10} />
+              {player.collection_name}
+            </p>
+          )}
+          {withDetails && shareable && <ShareButton kind="card" id={opened.card.id} compact />}
+        </div>
+      }
+    />
+  );
+}
+

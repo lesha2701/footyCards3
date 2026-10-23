@@ -80,7 +80,7 @@ export default function VictoryOverlay({ match, onClose, onRematch, onShare, rem
                 </span>
               )}
             </div>
-            {match.my_player_xp > 0 && <p className="text-[11px] text-accent-lime">Мой игрок: +{match.my_player_xp} опыта</p>}
+            {match.my_player_xp > 0 && <p className="text-caption text-accent-lime">Мой игрок: +{match.my_player_xp} опыта</p>}
             <div className="mt-3 flex w-full flex-col gap-2">
               {onRematch && (
                 <button onClick={onRematch} className="rounded-2xl bg-floodlight py-3 text-sm font-bold text-bg-base active:scale-95">

@@ -46,6 +46,17 @@ class User(TimestampMixin, Base):
     goals_for: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     goals_against: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     arena_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Card Arena divisions (arena_ladder_service) — separate from
+    # arena_rating, which keeps feeding the overall «Лига».
+    arena_points: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
+    arena_shield_matches: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    arena_best_division: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Team strength at this user's last Arena kickoff — matchmaking only
+    # picks opponents who actually play the Arena.
+    arena_last_strength: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The opponent found for the next match (shown before kickoff, kept until
+    # that match is played so a player can't re-roll for an easier one).
+    arena_pending_opponent: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Lifetime counters feeding `metric_counter` tasks (see task_service.py).
     arena_clean_sheet_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     memory_levels_completed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -118,6 +129,31 @@ class User(TimestampMixin, Base):
     # Stale/missing entries are auto-filled lazily; None = fully auto.
     stratego_squad: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
+    # «Мордобой»: rating, the usual hourly/daily counter pairs and the saved
+    # boxer (a user_card id; checked for ownership whenever it is used,
+    # stale ids fall back to the strongest card).
+    mordoboi_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    mordoboi_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    mordoboi_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    mordoboi_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    mordoboi_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    mordoboi_card_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # «Легенда ринга»: local day of the last rewarded legend win, lifetime wins.
+    mordoboi_legend_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    mordoboi_legend_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Выход на ринг»: a preset nickname (mordoboi_look.NICKNAMES) and the
+    # equipped ring cosmetics (kinds ring_gloves / ring_shorts / ring_entrance).
+    mordoboi_nickname: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    equipped_ring_gloves_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
+    equipped_ring_shorts_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
+    equipped_ring_entrance_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Футбольный магнат
     magnate_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     magnate_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -173,6 +209,9 @@ class User(TimestampMixin, Base):
     # DailyReward.streak_day (which cycles 1-7 to pick a reward tier), this
     # keeps counting up so the profile can show an uncapped "days in a row".
     daily_login_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Paid coin packs (with a legendary chance) opened since the last
+    # legendary — GameConfig.pity_packs guarantees one (migration 0183).
+    pity_counter: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     wheel_free_spins_used_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     wheel_spins_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -196,6 +235,9 @@ class User(TimestampMixin, Base):
 
     # Trade privacy
     accept_trades: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Saved default card filter (rarity/country/club/position/sort) for the
+    # collection, album and Forge — see PUT /collection/filter-default.
+    card_filter_default: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Currently-equipped Badge (if any), shown next to this user's name
     # everywhere a public identity is rendered. `lazy="joined"` so every
@@ -205,6 +247,20 @@ class User(TimestampMixin, Base):
         ForeignKey("badges.id", ondelete="SET NULL"), nullable=True
     )
     active_badge: Mapped[Optional["Badge"]] = relationship(lazy="joined")
+
+    # Equipped cosmetics (models/monetization.py) — visual only. Stored as
+    # ids; cosmetic_service resolves them to style keys for display.
+    equipped_frame_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
+    equipped_background_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
+    equipped_card_skin_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
+    # When the one-time starter offer was first shown full-screen.
+    starter_offer_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     cards: Mapped[list["UserCard"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
 

@@ -4,9 +4,10 @@ import { useNavigate } from "react-router-dom";
 
 import { claimTask, fetchTasks } from "@/api/tasks";
 import EmptyState from "@/components/common/EmptyState";
-import { IconChat, IconCheck, IconCoin, IconPack, IconParty, IconTarget, IconTrophy, IconWarning } from "@/components/icons";
+import { IconChat, IconCheck, IconCoin, IconPack, IconTarget, IconTrophy, IconWarning } from "@/components/icons";
 import { ApiRequestError } from "@/lib/api";
 import { SkillTokenIcon } from "@/components/icons/skills";
+import RewardModal, { RewardCoins } from "@/components/common/RewardModal";
 import { skillByCode, useSkillCatalog } from "@/lib/cardSkills";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -128,24 +129,12 @@ export default function TasksPage() {
 
 function RewardClaimedModal({ coins, onClose }: { coins: number; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6">
-      <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-bg-surface p-6 text-center">
-        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-accent-lime/15 text-accent-lime">
-          <IconParty size={32} />
-        </span>
-        <p className="mt-3 font-display text-lg font-bold text-ink-chalk">Награда получена!</p>
-        <p className="mt-1 text-sm text-ink-mist">Задание выполнено, монеты начислены на баланс.</p>
-        <p className="mt-3 flex items-center justify-center gap-1.5 font-display text-2xl font-bold text-amber-300">
-          <IconCoin size={20} />+{coins}
-        </p>
-        <button
-          onClick={onClose}
-          className="mt-5 w-full rounded-xl bg-accent py-2.5 text-sm font-bold text-bg-base active:scale-95"
-        >
-          Ок
-        </button>
-      </div>
-    </div>
+    <RewardModal
+      title="Награда получена!"
+      subtitle="Задание выполнено, монеты начислены на баланс."
+      items={[<RewardCoins key="coins" amount={coins} />]}
+      onClose={onClose}
+    />
   );
 }
 
@@ -169,7 +158,7 @@ function TabButton({
     >
       {label}
       {!!badge && (
-        <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+        <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-micro font-bold text-white">
           {badge}
         </span>
       )}
@@ -267,7 +256,7 @@ function TaskSkillReward({ code, quantity }: { code: string; quantity: number })
   const { data: catalog } = useSkillCatalog();
   const skill = skillByCode(catalog?.skills, code);
   return (
-    <p className="mt-0.5 text-[11px] font-semibold text-accent-lime">
+    <p className="mt-0.5 text-caption font-semibold text-accent-lime">
       + <SkillTokenIcon code={code} size={13} className="inline-block align-[-2px]" aria-hidden /> жетон «{skill?.name ?? code}» × {quantity}
     </p>
   );

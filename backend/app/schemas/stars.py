@@ -28,6 +28,10 @@ class StarsInvoiceStatusOut(BaseModel):
     my_player_result: Optional[dict] = None
     # «21» entry purchase: {"kind": "entry", "paid_entries": n}.
     blackjack_result: Optional[dict] = None
+    # «Академия» attempt purchase: {"kind": "path_attempt", "user_card_id": n}.
+    path_result: Optional[dict] = None
+    # Monetization products (shop_product_service): {"kind": ..., ...}.
+    shop_result: Optional[dict] = None
 
 
 class StarsCoinInvoiceCreate(BaseModel):
@@ -42,6 +46,9 @@ class CoinPackageOut(BaseModel):
     coins_amount: int
     is_active: bool
     sort_order: int
+    # Extra coins this player gets on it as their first coin purchase
+    # (GameConfig.first_coin_purchase_bonus_pct; 0 once they have bought).
+    first_purchase_bonus_coins: int = 0
 
 
 class StarsPreCheckoutValidateIn(BaseModel):
@@ -59,3 +66,8 @@ class StarsPaymentDeliverIn(BaseModel):
     telegram_user_id: int
     telegram_payment_charge_id: str
     total_amount: int
+    # Telegram Stars subscriptions (club pass): when the paid period ends,
+    # and whether this payment is a renewal. Absent on retries.
+    subscription_expiration_date: Optional[int] = None
+    is_recurring: bool = False
+    is_first_recurring: bool = False

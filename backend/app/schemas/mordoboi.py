@@ -1,0 +1,256 @@
+from datetime import datetime
+from typing import Literal, Optional
+
+from pydantic import BaseModel
+
+from app.models.enums import MatchResult, MordoboiMatchStatus, MordoboiOpponentType
+
+MordoboiAction = Literal["jab", "hook", "uppercut", "block", "dodge"]
+
+
+class MordoboiCardOut(BaseModel):
+    """Snapshot of the card behind a boxer — taken at match start."""
+
+    user_card_id: Optional[int] = None
+    player_id: int
+    display_name: str
+    position: str
+    image_path: Optional[str] = None
+    rarity: str
+    rating: int
+
+
+class MordoboiLookOut(BaseModel):
+    """«Выход на ринг»: style keys of the equipped ring cosmetics."""
+
+    nickname: Optional[str] = None
+    gloves: Optional[str] = None
+    shorts: Optional[str] = None
+    entrance: Optional[str] = None
+
+
+class MordoboiBoxerStatsOut(BaseModel):
+    power: int
+    speed: int
+    guard: int
+    max_hp: int
+    max_stamina: int
+
+
+class MordoboiBoxerOptionOut(BaseModel):
+    card: MordoboiCardOut
+    stats: MordoboiBoxerStatsOut
+
+
+class MordoboiBoxerOut(BaseModel):
+    """The saved boxer plus every card that could box, strongest first."""
+
+    selected: Optional[MordoboiBoxerOptionOut] = None
+    options: list[MordoboiBoxerOptionOut]
+    look: MordoboiLookOut = MordoboiLookOut()
+    nickname_options: list[str] = []
+
+
+class MordoboiNicknameRequest(BaseModel):
+    # None clears it; anything else must be one of nickname_options.
+    nickname: Optional[str] = None
+
+
+class MordoboiLegendOut(BaseModel):
+    code: str
+    name: str
+    nickname: str
+    tagline: str
+    position: str
+    rating: int
+    reward: int
+    beaten_today: bool
+    wins_total: int
+    active_match_id: Optional[int] = None
+    look: MordoboiLookOut
+
+
+class MordoboiClubRingOpponentOut(BaseModel):
+    user_id: int
+    name: str
+
+
+class MordoboiClubRingOut(BaseModel):
+    """«Клубный ринг»: while the player's club is at war, wins over the other
+    club's members score war points."""
+
+    active: bool
+    my_club: Optional[str] = None
+    opponent_club: Optional[str] = None
+    ends_at: Optional[datetime] = None
+    win_points: int = 0
+    member_cap: int = 0
+    my_points: int = 0
+    my_club_points: int = 0
+    opponent_club_points: int = 0
+    opponents: list[MordoboiClubRingOpponentOut] = []
+
+
+class MordoboiBoxerSetRequest(BaseModel):
+    user_card_id: int
+
+
+class MordoboiFighterOut(BaseModel):
+    name: str
+    card: Optional[MordoboiCardOut] = None
+    look: MordoboiLookOut = MordoboiLookOut()
+    power: int
+    speed: int
+    guard: int
+    hp: int
+    max_hp: int
+    stamina: int
+    max_stamina: int
+    landed: int
+    damage_dealt: int
+
+
+class MordoboiExchangeOut(BaseModel):
+    """One resolved exchange from the viewer's side: `mine_*` is the viewer."""
+
+    n: int
+    round: int
+    exchange: int
+    my_action: str
+    opponent_action: str
+    my_outcome: str
+    opponent_outcome: str
+    my_damage: int  # dealt by the viewer
+    opponent_damage: int
+    my_hp: int
+    opponent_hp: int
+    my_auto: bool = False
+    opponent_auto: bool = False
+    round_end: bool = False
+    end: Optional[str] = None
+
+
+class MordoboiScorecardOut(BaseModel):
+    mine: int
+    opponent: int
+
+
+class MordoboiBrutalityOut(BaseModel):
+    """A joke finisher the winner did after the bout."""
+
+    by_me: bool
+    style_key: str
+    name: str
+    emoji: str
+    image_path: Optional[str] = None
+    # Coins it added to the winner's reward.
+    bonus_coins: int = 0
+    # The beaten side's «Каска» bounced it back onto the winner.
+    reflected: bool = False
+    # From the viewer's side: «надел ему труханы на голову» / «…тебе…».
+    text: str
+
+
+class MordoboiBrutalityRequest(BaseModel):
+    cosmetic_id: int
+
+
+class MordoboiMatchOut(BaseModel):
+    id: int
+    version: int
+    mode: str = "normal"
+    # «Легенда ринга»: the boss's habit, told up front.
+    legend_tagline: Optional[str] = None
+    opponent_type: MordoboiOpponentType
+    opponent_name: str
+    opponent_user_id: Optional[int] = None
+    status: MordoboiMatchStatus
+    viewer_side: Literal["user", "opponent"]
+    difficulty: Optional[str] = None
+    live: bool = False
+    rounds: int
+    exchanges_per_round: int
+    round: int
+    exchange: int
+    me: Optional[MordoboiFighterOut] = None
+    opponent: Optional[MordoboiFighterOut] = None
+    # The viewer's own pick for the current exchange (never the opponent's).
+    my_pick: Optional[str] = None
+    opponent_ready: bool = False
+    can_pick: bool = False
+    available_actions: list[str] = []
+    deadline: Optional[datetime] = None
+    my_auto_moves: int = 0
+    max_auto_moves: int = 0
+    log: list[MordoboiExchangeOut] = []
+    scorecards: list[MordoboiScorecardOut] = []
+    result: Optional[MatchResult] = None
+    win_reason: Optional[str] = None
+    reward_coins: int = 0
+    rating_delta: int = 0
+    stake_coins: int = 0
+    brutality: Optional[MordoboiBrutalityOut] = None
+    # The viewer won and hasn't finished the opponent off yet.
+    can_brutality: bool = False
+    created_at: datetime
+    expires_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
+
+
+class MordoboiInfoOut(BaseModel):
+    enabled: bool
+    rounds: int
+    exchanges_per_round: int
+    base_hp: int
+    reward_win: int
+    reward_draw: int
+    reward_loss: int
+    reward_ko_bonus: int
+    daily_limit: int
+    rewarded_today: int
+    easy_reward_pct: int
+    move_timeout_hours: int
+    live_move_seconds: int
+    challenge_expiry_hours: int
+    max_auto_moves: int
+    # Rules numbers for the help screen (engine constants).
+    stamina_cost: dict[str, int]
+    damage: dict[str, int]
+    legend_reward: int = 0
+
+
+class MordoboiStatsOut(BaseModel):
+    mordoboi_rating: int
+    mordoboi_rank: Optional[int] = None
+
+
+class MordoboiBotMatchRequest(BaseModel):
+    difficulty: Literal["easy", "hard"] = "hard"
+
+
+class MordoboiChallengeRequest(BaseModel):
+    receiver_id: int
+
+
+class MordoboiOpenChallengeRequest(BaseModel):
+    stake_coins: int = 0
+
+
+class MordoboiOpenChallengePreviewOut(BaseModel):
+    id: int
+    creator_name: str
+    stake_coins: int
+    status: MordoboiMatchStatus
+    is_own_challenge: bool
+
+
+class MordoboiPickRequest(BaseModel):
+    action: MordoboiAction
+    # The match version the client saw — a stale one gets 409 (unless it is
+    # a replay of a pick already recorded, which returns the match as is).
+    version: int
+
+
+class MordoboiSearchStatusOut(BaseModel):
+    status: Literal["not_searching", "searching", "matched", "timeout"]
+    match_id: Optional[int] = None

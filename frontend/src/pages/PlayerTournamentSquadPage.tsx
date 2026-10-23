@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useRef, useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
-import CardSkillBadge from "@/components/cards/CardSkillBadge";
+import PitchCardTile from "@/components/cards/PitchCardTile";
 import { skillByCode, skillInactiveReason, useSkillCatalog } from "@/lib/cardSkills";
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
 import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPickerModal";
@@ -16,12 +16,16 @@ import { ChemistryDiamonds, ChemistryFrozenNote, ChemistryHints, ChemistryLinksO
 import { chemistryGain, chemistrySwapHints, type ChemistrySwapHint } from "@/lib/chemistry";
 import {
   activatePersonalSquad, autoFillPersonalSquad, fetchPersonalSquadBenchUpgrades, fetchPersonalSquadCoachCards, fetchPersonalSquads, fetchPersonalSquadStadiumCards,
+  fetchPersonalTournamentTactics,
   renamePersonalSquad, setPersonalSquadCards, setPersonalSquadCoach, setPersonalSquadStadium, setPersonalSquadTactics,
 } from "@/api/personalTournament";
 import { staticUrl } from "@/lib/api";
 import { BOOST_TYPE_LABELS } from "@/lib/coaches";
-import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
+import type { ManagerStyle } from "@/api/manager";
+import TacticsPanel from "@/components/manager/TacticsPanel";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
+import { inRow, pitchRows, PITCH_STYLE } from "@/lib/formationLayout";
+import PitchBackground from "@/components/squad/PitchBackground";
 import { formatGameError } from "@/lib/errors";
 import { haptic } from "@/lib/telegram";
 import type { PersonalSquadSlot, UserCard } from "@/types";
@@ -46,6 +50,7 @@ export default function PlayerTournamentSquadPage() {
     queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc", search: pickerSearch || undefined }),
   });
   const { data: coachCards } = useQuery({ queryKey: ["player-tournament", "coach-cards"], queryFn: fetchPersonalSquadCoachCards });
+  const { data: tactics } = useQuery({ queryKey: ["player-tournament", "tactics"], queryFn: fetchPersonalTournamentTactics });
   const { data: stadiumCards } = useQuery({ queryKey: ["player-tournament", "stadium-cards"], queryFn: fetchPersonalSquadStadiumCards });
 
   const [pickerSlot, setPickerSlot] = useState<PersonalSquadSlot | null>(null);
@@ -72,8 +77,12 @@ export default function PlayerTournamentSquadPage() {
   });
 
   const setTacticsMutation = useMutation({
-    mutationFn: (payload: { formation: string; mentality: string; playstyle: string }) => setPersonalSquadTactics(viewedIndex, payload),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] }); queryClient.invalidateQueries({ queryKey: ["player-tournament", "current"] }); },
+    mutationFn: (payload: { formation: string; style: ManagerStyle }) => setPersonalSquadTactics(viewedIndex, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] });
+      queryClient.invalidateQueries({ queryKey: ["player-tournament", "current"] });
+      queryClient.invalidateQueries({ queryKey: ["player-tournament", "tactics"] });
+    },
     onError: (err) => setError(formatGameError(err, "Не удалось обновить тактику")),
   });
 
@@ -102,9 +111,9 @@ export default function PlayerTournamentSquadPage() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["player-tournament", "squads"] }); setRenamingTemplate(false); },
   });
 
-  const updateTactics = (patch: Partial<{ formation: string; mentality: string; playstyle: string }>) => {
+  const updateTactics = (patch: { formation?: string; style?: ManagerStyle }) => {
     if (!squad) return;
-    setTacticsMutation.mutate({ formation: squad.formation, mentality: squad.mentality, playstyle: squad.playstyle, ...patch });
+    setTacticsMutation.mutate({ formation: squad.formation, style: squad.style, ...patch });
   };
 
   const { data: benchUpgrades } = useQuery({
@@ -156,7 +165,7 @@ export default function PlayerTournamentSquadPage() {
     const gain = chemistryGain(chemistry, chemSlots, pickerSlot.slot_code, card.player);
     if (gain == null) return null;
     return (
-      <span className={`font-mono text-[10px] font-bold ${gain > 0 ? "text-accent-green" : gain < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
+      <span className={`font-mono text-micro font-bold ${gain > 0 ? "text-accent-green" : gain < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
         {gain > 0 ? "+" : ""}{gain} хим.
       </span>
     );
@@ -196,9 +205,9 @@ export default function PlayerTournamentSquadPage() {
               t.template_index === viewedIndex ? "bg-accent-lime text-bg-base" : "bg-white/5 text-ink-mist"
             }`}
           >
-            <span className="whitespace-nowrap text-[11px] font-bold">{t.name}</span>
+            <span className="whitespace-nowrap text-caption font-bold">{t.name}</span>
             {t.is_active && (
-              <span className={`text-[8px] ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
+              <span className={`text-micro ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
                 Активный
               </span>
             )}
@@ -226,7 +235,7 @@ export default function PlayerTournamentSquadPage() {
       ) : (
         <button
           onClick={() => { setRenameValue(squad?.name ?? ""); setRenamingTemplate(true); }}
-          className="self-start text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2"
+          className="self-start text-caption font-semibold text-ink-mist-dim underline underline-offset-2"
         >
           Переименовать «{squad?.name}»
         </button>
@@ -249,7 +258,7 @@ export default function PlayerTournamentSquadPage() {
           <div>
             <p className="font-display text-base font-bold text-ink-chalk">Состав {squad?.formation}</p>
             {squadSkills.length > 0 && (
-              <p className="text-[11px] text-ink-mist">
+              <p className="text-caption text-ink-mist">
                 Навыки: действуют {activeSquadSkills.length} из {squadSkills.length}
               </p>
             )}
@@ -257,14 +266,14 @@ export default function PlayerTournamentSquadPage() {
               <button
                 onClick={() => autoFillMutation.mutate(false)}
                 disabled={autoFillMutation.isPending}
-                className="rounded-full bg-accent-lime/15 px-2.5 py-1 text-[11px] font-semibold text-accent-lime disabled:opacity-50"
+                className="rounded-full bg-accent-lime/15 px-2.5 py-1 text-caption font-semibold text-accent-lime disabled:opacity-50"
               >
                 Собрать лучший
               </button>
               <button
                 onClick={() => autoFillMutation.mutate(true)}
                 disabled={autoFillMutation.isPending}
-                className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-ink-mist disabled:opacity-50"
+                className="rounded-full bg-white/5 px-2.5 py-1 text-caption font-semibold text-ink-mist disabled:opacity-50"
               >
                 Из Card Arena
               </button>
@@ -285,34 +294,28 @@ export default function PlayerTournamentSquadPage() {
         <ChemistrySummary chemistry={chemistry} />
         <ChemistryHints hints={chemistryHints} onApply={applyChemistryHint} busy={setCardsMutation.isPending} />
 
-        <div className="mb-3 flex flex-col gap-1.5">
-          <TacticSelect
-            label="Схема"
-            options={FORMATIONS}
-            value={squad?.formation ?? "4-3-3"}
-            disabled={!squad || setTacticsMutation.isPending}
-            onChange={(value) => updateTactics({ formation: value })}
-          />
-          <TacticSelect
-            label="Настрой"
-            options={MENTALITIES}
-            value={squad?.mentality ?? "BALANCED"}
-            disabled={!squad || setTacticsMutation.isPending}
-            onChange={(value) => updateTactics({ mentality: value })}
-          />
-          <TacticSelect
-            label="Стиль игры"
-            options={PLAYSTYLES}
-            value={squad?.playstyle ?? "CENTRAL_PLAY"}
-            disabled={!squad || setTacticsMutation.isPending}
-            onChange={(value) => updateTactics({ playstyle: value })}
-          />
-        </div>
+        {tactics && (
+          <div className="mb-3">
+            <TacticsPanel
+              style={squad?.style ?? "possession"} formation={squad?.formation ?? "4-3-3"} rules={tactics.rules}
+              next={tactics.next && squad?.is_active ? { ...tactics.next, detail: `тур ${tactics.next.round}` } : null}
+              busy={!squad || setTacticsMutation.isPending} onChange={updateTactics}
+              note="Тактика действует со следующего тура. Смена схемы убирает с поля тех, кому нет места."
+              help={<>
+                <p>1. <b className="text-ink-chalk">Состав.</b> Твои 11 карточек по схеме; химия, тренер, стадион (дома), навыки и таланты работают как раньше.</p>
+                <p>2. <b className="text-ink-chalk">Тактика — как в Card Arena.</b> Стиль даёт % к рейтингу своих линий, схема — небольшой крен в атаку или защиту. Если твой стиль бьёт стиль соперника, все твои игроки получают +{tactics.rules.edge_pct}%.</p>
+                <p>3. <b className="text-ink-chalk">Игра.</b> Движок разыгрывает владение и моменты по рейтингам с учётом тактики: полузащита борется за мяч, нападающие — с защитниками, удары — против вратаря.</p>
+                <p>4. <b className="text-ink-chalk">Случай.</b> Слабый иногда побеждает, но на дистанции 30 туров решают сила и тактика.</p>
+              </>}
+            />
+          </div>
+        )}
 
-        <div ref={pitchRef} className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
+        <div ref={pitchRef} style={PITCH_STYLE} className="relative flex flex-col gap-3 overflow-hidden rounded-[22px] p-3 ring-1 ring-white/10">
+          <PitchBackground />
           <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
-          {(["FWD", "MID", "DEF", "GK"] as const).map((category) => (
-            <div key={category} className="relative flex justify-evenly gap-2">
+          {pitchRows(squad?.formation, (squad?.slots ?? []).map((s) => s.slot_code)).map((row) => { const category = row.category; return (
+            <div key={row.key} className="relative flex justify-evenly gap-2">
               {category === "GK" && (
                 <button
                   onClick={() => setCoachPickerOpen(true)}
@@ -324,17 +327,17 @@ export default function PlayerTournamentSquadPage() {
                   {squad?.coach ? (
                     <>
                       <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                        <img
+                        <img decoding="async"
                           src={staticUrl(squad.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
                       </div>
-                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">Тренер</span>
+                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">Тренер</span>
                     </>
                   ) : (
                     <>
                       <IconPlus size={16} className="text-ink-mist-dim" />
-                      <span className="text-[8px] text-ink-mist-dim">Тренер</span>
+                      <span className="text-micro text-ink-mist-dim">Тренер</span>
                     </>
                   )}
                 </button>
@@ -350,25 +353,24 @@ export default function PlayerTournamentSquadPage() {
                   {squad?.stadium ? (
                     <>
                       <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                        <img
+                        <img decoding="async"
                           src={staticUrl(squad.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
                       </div>
-                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">
+                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">
                         +{Math.round(squad.stadium.boost_pct * 100)}%
                       </span>
                     </>
                   ) : (
                     <>
                       <IconPlus size={16} className="text-ink-mist-dim" />
-                      <span className="text-[8px] text-ink-mist-dim">Стадион</span>
+                      <span className="text-micro text-ink-mist-dim">Стадион</span>
                     </>
                   )}
                 </button>
               )}
-              {squad?.slots
-                .filter((slot) => slot.category === category)
+              {inRow(row, squad?.slots ?? [])
                 .map((slot) => (
                   <button
                     key={slot.slot_code}
@@ -378,17 +380,12 @@ export default function PlayerTournamentSquadPage() {
                     className="flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 disabled:opacity-60"
                   >
                     {slot.player ? (
-                      <>
-                        <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                          <img
-                            src={staticUrl(slot.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                            alt="" className="h-full w-full object-cover" loading="lazy"
-                          />
-                        </div>
-                        <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[9px] font-bold leading-none text-accent-cyan">
-                          {slot.player.position}
-                        </span>
-                        <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.player.rating}</span>
+                      <PitchCardTile
+                        player={slot.player}
+                        skillCode={slot.skill_code}
+                        skillLevel={slot.skill_level}
+                        skillInactiveReason={skillInactive(slot.skill_code, slot.player.position)}
+                      >
                         {chemistryOn && chemBySlot.has(slot.slot_code) && (
                           <ChemistryDiamonds
                             points={chemBySlot.get(slot.slot_code)!.points}
@@ -396,28 +393,23 @@ export default function PlayerTournamentSquadPage() {
                             onPosition={chemBySlot.get(slot.slot_code)!.on_position}
                           />
                         )}
-                        <CardSkillBadge
-                          code={slot.skill_code}
-                          level={slot.skill_level}
-                          inactiveReason={skillInactive(slot.skill_code, slot.player.position)}
-                        />
-                      </>
+                      </PitchCardTile>
                     ) : (
                       <>
                         <IconPlus size={18} className="text-ink-mist-dim" />
-                        <span className="text-[9px] text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
+                        <span className="text-micro text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
                       </>
                     )}
                   </button>
                 ))}
             </div>
-          ))}
+          ); })}
         </div>
 
         {squad?.coach && (
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{squad.coach.display_name}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">
+            <p className="mt-0.5 text-caption text-ink-mist">
               {squad.coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
             </p>
           </div>
@@ -425,7 +417,7 @@ export default function PlayerTournamentSquadPage() {
         {squad?.stadium && (
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{squad.stadium.display_name}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">+{Math.round(squad.stadium.boost_pct * 100)}% к силе</p>
+            <p className="mt-0.5 text-caption text-ink-mist">+{Math.round(squad.stadium.boost_pct * 100)}% к силе</p>
           </div>
         )}
       </section>
@@ -458,37 +450,6 @@ export default function PlayerTournamentSquadPage() {
         onSelect={(card) => setStadiumMutation.mutate(card ? card.id : null)}
         onClose={() => setStadiumPickerOpen(false)}
       />
-    </div>
-  );
-}
-
-function TacticSelect({
-  label, options, value, disabled, onChange,
-}: {
-  label: string;
-  options: { value: string; label: string }[];
-  value: string;
-  disabled: boolean;
-  onChange: (value: string) => void;
-}) {
-  const selected = options.find((o) => o.value === value);
-  return (
-    <div className={`relative flex items-center justify-between gap-3 rounded-xl bg-white/5 px-3 py-2.5 ${disabled ? "opacity-60" : ""}`}>
-      <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-mist-dim">{label}</span>
-      <span className="flex min-w-0 items-center gap-1.5">
-        <span className="truncate text-sm font-semibold text-ink-chalk">{selected?.label ?? value}</span>
-      </span>
-      <select
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={label}
-        className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 disabled:cursor-default"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
     </div>
   );
 }

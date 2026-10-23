@@ -65,6 +65,9 @@ export default function MagnateBoard({ cells, groups, players, selected, highlig
               ) : (
                 <CellIcon type={cell.type} size={corner ? 17 : 13} />
               )}
+              {/* Board-cell legends are the one exception to the 10px minimum
+                  (text-micro): 32 cells share a phone-width board, and the
+                  full name/price is shown in the cell panel below on tap. */}
               {cell.type !== "club" && cell.type !== "stadium" && (
                 <span className="w-full truncate px-[1px] text-center text-[6.5px] font-bold uppercase leading-none tracking-tight text-white/75">
                   {SHORT_LABELS[cell.type] ?? cell.name}

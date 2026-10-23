@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useRef, useState } from "react";
+import { isClubManager } from "@/lib/clubRoles";
 
 import ClubCardPickerModal from "@/components/clubs/ClubCardPickerModal";
 import ClubCoachCardPickerModal from "@/components/clubs/ClubCoachCardPickerModal";
@@ -9,6 +10,7 @@ import {
   IconBoot, IconChevronLeft, IconChevronUp, IconFlag, IconPlus, IconStadium, IconStar, IconTarget, IconUsers,
 } from "@/components/icons";
 import { ListSkeleton } from "@/components/common/Skeleton";
+import PitchCardTile from "@/components/cards/PitchCardTile";
 import { ChemistryDiamonds, ChemistryFrozenNote, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
 import { fetchMyClub } from "@/api/clubs";
 import {
@@ -19,6 +21,8 @@ import {
 import { staticUrl } from "@/lib/api";
 import { BOOST_TYPE_LABELS } from "@/lib/coaches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
+import { inRow, pitchRows, PITCH_STYLE } from "@/lib/formationLayout";
+import PitchBackground from "@/components/squad/PitchBackground";
 import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
 import { formatGameError } from "@/lib/errors";
 import type { ClubCard, ClubLineupSlot } from "@/types";
@@ -27,7 +31,7 @@ export default function ClubSquadPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: club } = useQuery({ queryKey: ["clubs", "me"], queryFn: fetchMyClub, retry: false });
-  const canEdit = club?.my_role === "captain" || club?.my_role === "assistant";
+  const canEdit = isClubManager(club?.my_role);
   const { data: templates, isLoading: lineupLoading } = useQuery({ queryKey: ["clubs", "lineup-templates"], queryFn: fetchClubLineupTemplates });
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const activeIndex = templates?.find((t) => t.is_active)?.template_index ?? 1;
@@ -143,9 +147,9 @@ export default function ClubSquadPage() {
                   t.template_index === viewedIndex ? "bg-accent-lime text-bg-base" : "bg-white/5 text-ink-mist"
                 }`}
               >
-                <span className="whitespace-nowrap text-[11px] font-bold">{t.name}</span>
+                <span className="whitespace-nowrap text-caption font-bold">{t.name}</span>
                 {t.is_active && (
-                  <span className={`text-[8px] ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
+                  <span className={`text-micro ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
                     Активный
                   </span>
                 )}
@@ -173,7 +177,7 @@ export default function ClubSquadPage() {
           ) : (
             <button
               onClick={() => { setRenameValue(lineup?.name ?? ""); setRenamingTemplate(true); }}
-              className="self-start text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2"
+              className="self-start text-caption font-semibold text-ink-mist-dim underline underline-offset-2"
             >
               Переименовать «{lineup?.name}»
             </button>
@@ -203,19 +207,19 @@ export default function ClubSquadPage() {
           <div className="mb-3 grid grid-cols-4 gap-2 rounded-xl bg-white/5 px-3 py-2.5 text-center">
             <div>
               <p className="font-mono text-sm font-bold text-accent-cyan">{lineup.attack}</p>
-              <p className="text-[9px] text-ink-mist-dim">Атака</p>
+              <p className="text-micro text-ink-mist-dim">Атака</p>
             </div>
             <div>
               <p className="font-mono text-sm font-bold text-accent-cyan">{lineup.midfield}</p>
-              <p className="text-[9px] text-ink-mist-dim">Полузащита</p>
+              <p className="text-micro text-ink-mist-dim">Полузащита</p>
             </div>
             <div>
               <p className="font-mono text-sm font-bold text-accent-cyan">{lineup.defence}</p>
-              <p className="text-[9px] text-ink-mist-dim">Защита</p>
+              <p className="text-micro text-ink-mist-dim">Защита</p>
             </div>
             <div>
               <p className="font-mono text-sm font-bold text-accent-cyan">{lineup.goalkeeping}</p>
-              <p className="text-[9px] text-ink-mist-dim">Вратарь</p>
+              <p className="text-micro text-ink-mist-dim">Вратарь</p>
             </div>
           </div>
         )}
@@ -264,10 +268,11 @@ export default function ClubSquadPage() {
         <ChemistryFrozenNote chemistry={chemistry} />
         <ChemistrySummary chemistry={chemistry} />
 
-        <div ref={pitchRef} className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
+        <div ref={pitchRef} style={PITCH_STYLE} className="relative flex flex-col gap-3 overflow-hidden rounded-[22px] p-3 ring-1 ring-white/10">
+          <PitchBackground />
           <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
-          {(["FWD", "MID", "DEF", "GK"] as const).map((category) => (
-            <div key={category} className="relative flex justify-evenly gap-2">
+          {pitchRows(lineup?.formation, (lineup?.slots ?? []).map((s) => s.slot_code)).map((row) => { const category = row.category; return (
+            <div key={row.key} className="relative flex justify-evenly gap-2">
               {category === "GK" && (
                 <button
                   onClick={canEdit ? () => setCoachPickerOpen(true) : undefined}
@@ -279,12 +284,12 @@ export default function ClubSquadPage() {
                   {lineup?.coach ? (
                     <>
                       <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                        <img
+                        <img decoding="async"
                           src={staticUrl(lineup.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
                       </div>
-                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">Тренер</span>
+                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">Тренер</span>
                     </>
                   ) : (
                     <>
@@ -293,7 +298,7 @@ export default function ClubSquadPage() {
                       ) : (
                         <span className="flex h-[16px] items-center text-ink-mist-dim">—</span>
                       )}
-                      <span className="text-[8px] text-ink-mist-dim">Тренер</span>
+                      <span className="text-micro text-ink-mist-dim">Тренер</span>
                     </>
                   )}
                 </button>
@@ -309,12 +314,12 @@ export default function ClubSquadPage() {
                   {lineup?.stadium ? (
                     <>
                       <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                        <img
+                        <img decoding="async"
                           src={staticUrl(lineup.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
                       </div>
-                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">
+                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">
                         +{Math.round(lineup.stadium.boost_pct * 100)}%
                       </span>
                     </>
@@ -325,13 +330,12 @@ export default function ClubSquadPage() {
                       ) : (
                         <span className="flex h-[16px] items-center text-ink-mist-dim">—</span>
                       )}
-                      <span className="text-[8px] text-ink-mist-dim">Стадион</span>
+                      <span className="text-micro text-ink-mist-dim">Стадион</span>
                     </>
                   )}
                 </button>
               )}
-              {lineup?.slots
-                .filter((slot) => slot.category === category)
+              {inRow(row, lineup?.slots ?? [])
                 .map((slot) => (
                   <button
                     key={slot.slot_code}
@@ -344,21 +348,10 @@ export default function ClubSquadPage() {
                   >
                     {slot.card ? (
                       <>
-                        <div className={`relative aspect-square w-full overflow-hidden rounded-lg bg-black/40 ${
-                          slot.card.availability ? "ring-2 ring-red-500" : ""
-                        }`}>
-                          <img
-                            src={staticUrl(slot.card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                            alt="" className="h-full w-full object-cover" loading="lazy"
-                          />
-                          {slot.card.availability && (
-                            <span className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-sm bg-red-600 text-[10px] font-black leading-none text-white">
-                              {slot.card.availability.reason === "red_card" ? "▮" : "+"}
-                            </span>
-                          )}
-                        </div>
-                        <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[9px] font-bold leading-none text-accent-cyan">{slot.card.player.position}</span>
-                        <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.card.player.rating}</span>
+                        <PitchCardTile
+                          player={slot.card.player}
+                          unavailable={slot.card.availability ? (slot.card.availability.reason === "red_card" ? "red_card" : "injury") : null}
+                        />
                         {chemistryOn && chemBySlot.has(slot.slot_code) && (
                           <ChemistryDiamonds
                             points={chemBySlot.get(slot.slot_code)!.points}
@@ -367,7 +360,7 @@ export default function ClubSquadPage() {
                           />
                         )}
                         {slot.card.availability && (
-                          <span className="text-center font-mono text-[8px] font-bold leading-tight text-red-400">
+                          <span className="text-center font-mono text-micro font-bold leading-tight text-red-400">
                             {slot.card.availability.reason === "red_card" ? "Кр." : "Травма"} · {slot.card.availability.rounds_remaining}т
                           </span>
                         )}
@@ -379,19 +372,19 @@ export default function ClubSquadPage() {
                         ) : (
                           <span className="flex h-[18px] items-center text-ink-mist-dim">—</span>
                         )}
-                        <span className="text-[9px] text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
+                        <span className="text-micro text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
                       </>
                     )}
                   </button>
                 ))}
             </div>
-          ))}
+          ); })}
         </div>
 
         {lineup?.coach && (
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{lineup.coach.display_name}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">
+            <p className="mt-0.5 text-caption text-ink-mist">
               {lineup.coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
             </p>
           </div>
@@ -399,7 +392,7 @@ export default function ClubSquadPage() {
         {lineup?.stadium && (
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{lineup.stadium.display_name}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">+{Math.round(lineup.stadium.boost_pct * 100)}% к силе</p>
+            <p className="mt-0.5 text-caption text-ink-mist">+{Math.round(lineup.stadium.boost_pct * 100)}% к силе</p>
           </div>
         )}
       </section>
@@ -501,11 +494,11 @@ export default function ClubSquadPage() {
         <div className="grid grid-cols-4 gap-2">
           {(cards ?? []).filter((c) => !c.is_in_lineup).map((c) => (
             <div key={c.id} className="flex flex-col items-center gap-1 rounded-xl bg-bg-surface p-1.5">
-              <img
+              <img decoding="async" loading="lazy"
                 src={staticUrl(c.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                 alt="" className="aspect-square w-full rounded-lg object-cover"
               />
-              <span className="font-mono text-[9px] text-ink-mist-dim">{c.player.position} · {c.player.rating}</span>
+              <span className="font-mono text-micro text-ink-mist-dim">{c.player.position} · {c.player.rating}</span>
             </div>
           ))}
         </div>
@@ -551,7 +544,7 @@ function TacticSelect({
   const selected = options.find((o) => o.value === value);
   return (
     <div className={`relative flex items-center justify-between gap-3 rounded-xl bg-white/5 px-3 py-2.5 ${disabled ? "opacity-60" : ""}`}>
-      <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-mist-dim">{label}</span>
+      <span className="shrink-0 text-micro uppercase tracking-wide text-ink-mist-dim">{label}</span>
       <span className="flex min-w-0 items-center gap-1.5">
         <span className="truncate text-sm font-semibold text-ink-chalk">{selected?.label ?? value}</span>
         <IconChevronUp size={14} className="shrink-0 rotate-180 text-ink-mist-dim" />

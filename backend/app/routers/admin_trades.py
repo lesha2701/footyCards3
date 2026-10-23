@@ -1,15 +1,17 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_admin
 from app.core.exceptions import ConflictError, NotFoundError
+from app.core.pagination import Page, PageParams
+from app.core.timeutil import app_timezone
 from app.database import get_db
 from app.models.enums import TradeStatus
-from app.models.trade import TradeOffer
+from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.user import User
 from app.schemas.trade import TradeOfferOut
 from app.services.admin_log_service import log_action
@@ -18,24 +20,57 @@ from app.services.trade_service import hydrate_offer, unlock_trade_cards
 router = APIRouter(prefix="/admin/trades", tags=["admin"], dependencies=[Depends(get_current_admin)])
 
 
-@router.get("", response_model=list[TradeOfferOut])
+def _local_day_start(day: date) -> datetime:
+    """Start of a local calendar day (settings.timezone) as an aware UTC datetime."""
+    return datetime.combine(day, time.min, tzinfo=app_timezone()).astimezone(timezone.utc)
+
+
+@router.get("", response_model=Page[TradeOfferOut])
 async def list_all_trades(
-    status: Optional[TradeStatus] = None, username: Optional[str] = None, db: AsyncSession = Depends(get_db)
+    status: Optional[TradeStatus] = None,
+    username: Optional[str] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    coins_min: Optional[int] = None,
+    coins_max: Optional[int] = None,
+    coins_only: bool = False,
+    params: PageParams = Depends(),
+    db: AsyncSession = Depends(get_db),
 ):
-    query = select(TradeOffer).order_by(TradeOffer.created_at.desc()).limit(200)
+    """All trade offers, newest first, paginated. date_from / date_to are
+    inclusive local calendar days (settings.timezone) on created_at.
+    coins_min / coins_max bound the coins in the offer (both sides summed);
+    coins_only keeps offers without a single card (pure coin transfers)."""
+    query = select(TradeOffer)
+    coins_total = TradeOffer.sender_coins + TradeOffer.receiver_coins
+    if coins_min is not None:
+        query = query.where(coins_total >= coins_min)
+    if coins_max is not None:
+        query = query.where(coins_total <= coins_max)
+    if coins_only:
+        query = query.where(~select(TradeOfferCard.id).where(TradeOfferCard.trade_offer_id == TradeOffer.id).exists())
     if status:
         query = query.where(TradeOffer.status == status)
+    if date_from:
+        query = query.where(TradeOffer.created_at >= _local_day_start(date_from))
+    if date_to:
+        query = query.where(TradeOffer.created_at < _local_day_start(date_to + timedelta(days=1)))
     if username:
         matching_user_ids = (
             await db.execute(select(User.id).where(User.username.ilike(f"%{username}%")))
         ).scalars().all()
         if not matching_user_ids:
-            return []
+            return Page.build([], 0, params)
         query = query.where(
             or_(TradeOffer.sender_id.in_(matching_user_ids), TradeOffer.receiver_id.in_(matching_user_ids))
         )
-    offers = (await db.execute(query)).scalars().all()
-    return [await hydrate_offer(db, o) for o in offers]
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
+    offers = (
+        await db.execute(
+            query.order_by(TradeOffer.created_at.desc(), TradeOffer.id.desc()).offset(params.offset).limit(params.page_size)
+        )
+    ).scalars().all()
+    return Page.build([await hydrate_offer(db, o) for o in offers], total, params)
 
 
 @router.get("/{offer_id}", response_model=TradeOfferOut)

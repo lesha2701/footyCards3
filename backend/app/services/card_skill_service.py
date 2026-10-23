@@ -58,7 +58,7 @@ from app.services.card_skill_effects import is_position_compatible, level_bonus_
 from app.services.game_config_service import get_config
 from app.services.wallet_service import debit_coins, lock_user_for_update
 
-GRANT_KINDS = {"grant_task", "grant_tournament", "grant_pack", "grant_admin", "revoke_admin"}
+GRANT_KINDS = {"grant_task", "grant_tournament", "grant_pack", "grant_admin", "revoke_admin", "grant_prestige"}
 
 
 # --- Catalog -----------------------------------------------------------------
@@ -566,18 +566,40 @@ async def perform_operation(
 
 
 def require_skill_loss_confirmation(cards: list[UserCard], confirmed: bool, action: str) -> None:
-    """Selling, staking in a rarity upgrade or feeding into a diamond card
-    destroys the copy — and its skill, with no token refund. Refuse unless
-    the player explicitly confirmed losing exactly these skilled copies."""
+    """Selling, staking in a rarity upgrade, feeding into a diamond card or
+    into another copy's stars destroys the copy — and its skill (no token
+    refund) and its own stars/«копилка» (card_star_service; nothing
+    refunded). Refuse unless the player explicitly confirmed losing exactly
+    these copies. One flag/detail key for both, so every existing confirm
+    dialog keeps working; requires_star_loss_confirmation tells the UI to
+    mention stars too."""
     skilled = [c for c in cards if c.skill_code]
-    if skilled and not confirmed:
+    starred = [c for c in cards if getattr(c, "stars", 0) or getattr(c, "star_progress", 0)]
+    # «Академия»: the levels / stage reached on the path go with the copy.
+    pathed = [
+        c for c in cards if getattr(c, "path_level", 0) or getattr(c, "path_stage", 0) or getattr(c, "prestige", 0)
+    ]
+    if (skilled or starred or pathed) and not confirmed:
+        lost = " и ".join(
+            part for part, present in (
+                ("навык", skilled), ("звёзды и копилку", starred), ("прогресс пути", pathed),
+            ) if present
+        )
         raise ConflictError(
-            f"У карточки есть навык — при действии «{action}» он будет потерян без возврата жетонов",
+            f"При действии «{action}» карточка потеряет {lost} без возврата",
             details={
                 "requires_skill_loss_confirmation": True,
+                "requires_star_loss_confirmation": bool(starred),
+                "requires_path_loss_confirmation": bool(pathed),
                 "cards": [
-                    {"id": c.id, "serial_number": c.serial_number, "skill_code": c.skill_code, "skill_level": c.skill_level}
-                    for c in skilled
+                    {
+                        "id": c.id, "serial_number": c.serial_number, "skill_code": c.skill_code,
+                        "skill_level": c.skill_level, "stars": getattr(c, "stars", 0) or 0,
+                        "star_progress": getattr(c, "star_progress", 0) or 0,
+                        "path_level": getattr(c, "path_level", 0) or 0,
+                        "path_stage": getattr(c, "path_stage", 0) or 0,
+                    }
+                    for c in cards if c in skilled or c in starred or c in pathed
                 ],
             },
         )

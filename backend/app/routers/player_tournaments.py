@@ -67,6 +67,12 @@ async def auto_fill_squad(
     return await auto_squad_service.auto_personal_squad(db, user, template_index, copy_from_arena=copy_from_arena)
 
 
+@router.get("/tactics")
+async def read_tactics(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Tactics rules (Card Arena styles) and the next opponent's style."""
+    return await personal_squad_service.tactics_view(db, user)
+
+
 @router.put("/squads/{template_index}/tactics", response_model=PersonalSquadOut)
 async def update_squad_tactics(
     template_index: int, payload: PersonalSquadTacticsRequest,

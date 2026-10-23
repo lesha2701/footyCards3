@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.models.enums import ClubJoinRequestStatus, ClubLogoShape, ClubRole, ClubType
+from app.schemas.club_emblem import ClubEmblemOut, SponsorTier
 
 
 class ClubCreationCostOut(BaseModel):
@@ -36,6 +37,8 @@ class ClubMemberOut(BaseModel):
     role: ClubRole
     joined_at: datetime
     personal_reward_enabled: bool
+    # «Казна за Stars»: bronze/silver/gold patron of this club, null = never donated.
+    sponsor_tier: Optional[SponsorTier] = None
 
 
 class ClubSummaryOut(BaseModel):
@@ -44,6 +47,7 @@ class ClubSummaryOut(BaseModel):
     club_type: ClubType
     logo_shape: ClubLogoShape
     logo_color: str
+    emblem: Optional[ClubEmblemOut] = None
     member_count: int
     cups_count: int
     stars_count: int
@@ -56,6 +60,7 @@ class ClubDetailOut(BaseModel):
     club_type: ClubType
     logo_shape: ClubLogoShape
     logo_color: str
+    emblem: Optional[ClubEmblemOut] = None
     captain_id: int
     founded_at: datetime
     member_count: int
@@ -75,6 +80,16 @@ class ClubDetailOut(BaseModel):
     # (TransactionType.club_tournament_match_reward) — null for a non-member, 0 if they're a
     # member with no such credits yet. See club_service._personal_match_earnings.
     personal_match_earnings: Optional[int] = None
+    # Captain's switch: only captain / vice-captain / treasurer spend the budget.
+    budget_treasurer_only: bool = False
+    # «Звёзды клуба» balance (patrons' Stars, spent on the club's Stars goods).
+    star_balance: int = 0
+    # Whether the requester may spend the budget (packs, emblem, spare cards).
+    can_spend_budget: bool = False
+    # «Стена клуба»: posts the requester hasn't seen yet (null for a non-member).
+    wall_unread: Optional[int] = None
+    # Club rewards (shop, quests, wars) the requester can still claim.
+    rewards_unclaimed: Optional[int] = None
 
 
 class ClubJoinRequestOut(BaseModel):
@@ -97,3 +112,11 @@ class TransferCaptainIn(BaseModel):
 
 class PersonalRewardToggleIn(BaseModel):
     enabled: bool
+
+
+class MemberRoleIn(BaseModel):
+    role: ClubRole
+
+
+class BudgetPolicyIn(BaseModel):
+    treasurer_only: bool

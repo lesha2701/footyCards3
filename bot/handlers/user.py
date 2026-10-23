@@ -18,7 +18,9 @@ HELP_TEXT = (
     "<b>Команды:</b>\n"
     "/start — открыть игру\n"
     "/profile — показать свой профиль\n"
-    "/help — это сообщение\n\n"
+    "/help — это сообщение\n"
+    "/paysupport — помощь с оплатой звёздами\n"
+    "/terms — правила и документы\n\n"
     "Нажми кнопку ниже, чтобы открыть приложение."
 )
 
@@ -72,6 +74,26 @@ async def cmd_start(message: Message) -> None:
         keyboard = (
             open_app_keyboard(path=f"/play/stratego/open/{match_id}") if match_id.isdigit() else open_app_keyboard()
         )
+    elif payload and payload.startswith("mordoboi_vs_"):
+        user_id = payload[len("mordoboi_vs_"):]
+        text = (
+            f"Привет, {message.from_user.first_name}! 👋\n\n"
+            "🥊 Тебя зовут на ринг в «Мордобое»!\n\n"
+            "Нажми кнопку ниже — вызов уйдёт тому, кто тебя позвал 👇"
+        )
+        keyboard = (
+            open_app_keyboard(path="/play/mordoboi", query=f"?vs={user_id}") if user_id.isdigit() else open_app_keyboard()
+        )
+    elif payload and payload.startswith("mordoboi_open_"):
+        match_id = payload[len("mordoboi_open_"):]
+        text = (
+            f"Привет, {message.from_user.first_name}! 👋\n\n"
+            "🥊 Тебя вызвали на ринг в «Мордобое»!\n\n"
+            "Нажми кнопку ниже, чтобы посмотреть детали вызова и принять его 👇"
+        )
+        keyboard = (
+            open_app_keyboard(path=f"/play/mordoboi/open/{match_id}") if match_id.isdigit() else open_app_keyboard()
+        )
     elif payload and payload.startswith("penalty_open_"):
         match_id = payload[len("penalty_open_"):]
         text = (
@@ -91,6 +113,18 @@ async def cmd_start(message: Message) -> None:
         )
         keyboard = (
             open_app_keyboard(path=f"/play/magnate/room/{code}") if code.isalnum() else open_app_keyboard()
+        )
+    elif payload and payload.startswith("trade_"):
+        # «Поделиться в чат» from «Поиск обменов»: open a trade with the sharer.
+        partner_id = payload[len("trade_"):]
+        text = (
+            f"Привет, {message.from_user.first_name}! 👋\n\n"
+            "🔄 Тебе предлагают обмен карточками в <b>VICTOR FC</b>!\n\n"
+            "Нажми кнопку ниже, чтобы выбрать карточки для обмена 👇"
+        )
+        keyboard = (
+            open_app_keyboard(path="/trades/new", query=f"?to={partner_id}", text="🔄 Предложить обмен")
+            if partner_id.isdigit() else open_app_keyboard()
         )
     elif payload == "chatpack":
         # Deep link from the "вкарта" group-chat button — the card is

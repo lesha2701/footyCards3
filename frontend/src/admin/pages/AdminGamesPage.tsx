@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import AdminCareerClubs from "@/admin/pages/AdminCareerClubs";
 
 import { fetchGameConfig, fetchSuspiciousMatches, fetchSuspiciousMemorySessions, updateGameConfig } from "@/admin/api";
 import AdminMagnateBoardEditor from "@/admin/pages/AdminMagnateBoardEditor";
@@ -11,9 +12,24 @@ const MY_PLAYER_COSMETICS: [string, string][] = [
   ["earring", "Серьга"],
   ["chain", "Цепочка"],
   ["goggles", "Спортивные очки"],
+  ["captain", "Капитанская повязка"],
+  ["headphones", "Наушники"],
+  ["crown", "Корона"],
   ["bg_sunset", "Фон «Закат»"],
   ["bg_neon", "Фон «Неон»"],
   ["bg_gold", "Фон «Золотой стадион»"],
+  ["bg_night", "Фон «Ночной матч»"],
+  ["bg_galaxy", "Фон «Галактика»"],
+  ["bg_champions", "Фон «Лига чемпионов»"],
+  ["fx_sparkle", "Эффект «Искры»"],
+  ["fx_fire", "Эффект «Пламя»"],
+  ["fx_lightning", "Эффект «Молния»"],
+  ["bg_goal", "Фон «Ворота»"],
+  ["bg_national", "Фон «Флаг сборной»"],
+  ["cel_siu", "Празднование «Сиу!»"],
+  ["cel_plane", "Празднование «Самолётик»"],
+  ["cel_heart", "Празднование «Сердечко»"],
+  ["cel_dance", "Празднование «Танец у флажка»"],
 ];
 
 export default function AdminGamesPage() {
@@ -49,11 +65,41 @@ export default function AdminGamesPage() {
       | "career_place_rewards"
       | "career_difficulty_reward_pct"
       | "career_difficulty_rating_offset"
+      | "career_bot_counter_chance_pct"
+      | "career_division_rating_offset"
+      | "career_division_reward_pct"
+      | "career_ambition_bonus_pct"
+      | "career_ambition_rep_success"
+      | "career_ambition_rep_fail"
+      | "career_rep_levels"
+      | "career_cup_rewards"
       | "my_player_tier_thresholds"
       | "player_career_place_rewards"
+      | "player_career_level_ratings"
+      | "player_career_level_salary"
+      | "player_career_level_prestige"
+      | "player_career_star_prestige"
+      | "player_career_cl_rewards"
+      | "player_career_national_rewards"
+      | "player_career_weekly_coins"
+      | "player_career_friends_rewards"
+      | "manager_value_ratings"
+      | "manager_value_eur"
+      | "manager_division_budget"
+      | "manager_division_income_pct"
+      | "manager_division_wage_pct"
+      | "manager_division_rating"
+      | "manager_place_rewards"
+      | "manager_place_budget"
       | "club_league_rewards"
+      | "club_league_division_reward_pct"
       | "magnate_place_rewards"
-      | "magnate_stadium_rents",
+      | "magnate_stadium_rents"
+      | "arena_division_min_points"
+      | "arena_division_reward_coins"
+      | "arena_division_coin_pct"
+      | "weekly_cup_prizes"
+      | "match_day_leagues",
     label: string,
   ) => (
     <label className="col-span-2 flex flex-col gap-1">
@@ -71,11 +117,48 @@ export default function AdminGamesPage() {
     </label>
   );
 
+  const textListField = (key: "career_division_bot_level" | "weekly_cup_games", label: string) => (
+    <label className="col-span-2 flex flex-col gap-1">
+      <span className="text-xs text-slate-400">{label}</span>
+      <input
+        defaultValue={(form[key] ?? []).join(", ")}
+        onBlur={(e) =>
+          setForm({ ...form, [key]: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })
+        }
+        className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+      />
+    </label>
+  );
+
+  const jsonField = (key: "manager_slots" | "manager_cosmetics" | "manager_merch", label: string) => (
+    <label className="col-span-2 flex flex-col gap-1">
+      <span className="text-xs text-slate-400">{label}</span>
+      <textarea
+        rows={key === "manager_slots" ? 1 : 6}
+        defaultValue={JSON.stringify(form[key] ?? [], null, key === "manager_slots" ? 0 : 1)}
+        onBlur={(e) => {
+          try {
+            setForm({ ...form, [key]: JSON.parse(e.target.value || "[]") });
+            e.target.classList.remove("ring-1", "ring-red-500");
+          } catch {
+            e.target.classList.add("ring-1", "ring-red-500");
+          }
+        }}
+        className="rounded-lg bg-bg-surface px-3 py-2 font-mono text-xs outline-none"
+      />
+    </label>
+  );
+
   const toggle = (
     key:
       | "matchmaking_enabled"
       | "wheel_enabled"
+      | "trades_enabled"
+      | "trade_coins_enabled"
+      | "trade_cards_both_sides"
+      | "club_war_enabled"
       | "blackjack_enabled"
+      | "mordoboi_enabled"
       | "leagues_enabled"
       | "diamond_rating_cap_enabled"
       | "bot_daily_digest_enabled"
@@ -83,9 +166,20 @@ export default function AdminGamesPage() {
       | "club_league_enabled"
       | "career_enabled"
       | "career_reminders_enabled"
+      | "career_cup_enabled"
+      | "career_offseason_auto"
+      | "career_live_enabled"
+      | "career_digest_enabled"
       | "my_player_enabled"
       | "player_career_enabled"
-      | "chemistry_enabled",
+      | "player_career_fast_season_enabled"
+      | "manager_enabled"
+      | "chemistry_enabled"
+      | "card_stars_enabled"
+      | "weekly_cup_enabled"
+      | "match_day_enabled"
+      | "match_day_auto_enabled"
+      | "club_raid_enabled",
     label: string,
   ) => (
     <label className="flex items-center gap-2 text-sm">
@@ -111,6 +205,7 @@ export default function AdminGamesPage() {
         <div className="flex flex-col gap-2">
           {toggle("matchmaking_enabled", "Показывать кнопку «Играть» (подбор соперника) в Тактико и Пенальти")}
           {toggle("wheel_enabled", "Показывать раздел «Колесо фортуны» на главном экране")}
+          {toggle("trades_enabled", "Обмены между игроками (выкл — нельзя создавать и принимать предложения)")}
           {toggle("blackjack_enabled", "Игра «21: Добавленное время» (новые партии и покупка попыток)")}
           {toggle("leagues_enabled", "Показывать баннер лиг на главном экране и в профиле")}
         </div>
@@ -254,9 +349,42 @@ export default function AdminGamesPage() {
           {field("chemistry_coach_country_points", "+ химии игроку из страны тренера")}
           {field("chemistry_stadium_club_points", "+ химии игроку клуба стадиона (дома)")}
         </div>
-        <p className="mt-2 text-[11px] text-slate-500">
+        <p className="mt-2 text-caption text-slate-500">
           Подбор значений: <code>python -m scripts.compare_chemistry --synthetic 2000</code> в backend сравнивает силу
           существующих составов по старой и новой формуле.
+        </p>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Звёзды карточек</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Дубли того же игрока копятся в конкретной карточке; при достижении порога за монеты выдаётся звезда (+рейтинг).
+          Бриллианты не участвуют. Выключено — нельзя вкладывать и забирать новые звёзды, полученные продолжают действовать.
+          Бонус звезды фиксируется на карточке в момент получения.
+        </p>
+        <div className="mb-3">{toggle("card_stars_enabled", "Включить звёзды карточек")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("card_stars_max", "Максимум звёзд (0–5)")}
+          {field("card_star_rating_per_star", "+ рейтинга за звезду")}
+          {field("card_star_bonus_cap", "Потолок прибавки от звёзд")}
+        </div>
+        <p className="mb-2 mt-3 text-xs font-semibold text-slate-400">По редкостям: дубли / монеты за ★1, ★2, ★3 (через запятую)</p>
+        <div className="grid grid-cols-[auto_1fr_1fr] items-center gap-2 text-xs">
+          {(["common", "rare", "epic", "legendary"] as const).map((rarity) => (
+            <StarLadderRow
+              key={rarity}
+              rarity={rarity}
+              dupes={form.card_star_dupes_per_level?.[rarity] ?? []}
+              coins={form.card_star_coin_cost?.[rarity] ?? []}
+              onChange={(kind, values) =>
+                setForm({ ...form, [kind]: { ...(form[kind] ?? {}), [rarity]: values } })
+              }
+            />
+          ))}
+        </div>
+        <p className="mt-2 text-caption text-slate-500">
+          Оценка до включения: <code>python -m scripts.estimate_card_stars</code> в backend — сколько звёзд игроки получили бы
+          сразу и сколько дублей ушло бы из быстрой продажи.
         </p>
       </section>
 
@@ -325,6 +453,82 @@ export default function AdminGamesPage() {
           {field("club_league_points_pack", "Очки за покупку пака")}
           {field("club_league_points_task", "Очки за задание")}
           {listField("club_league_rewards", "Награды за места, монеты в бюджет клуба")}
+          {listField("club_league_division_reward_pct", "Множитель наград по лигам Бронза, Серебро, Золото, %")}
+          {field("club_league_season_weeks", "Сезон, недель")}
+          {field("club_league_promote_count", "Повышаются в конце сезона (топ-N)")}
+          {field("club_league_relegate_count", "Вылетают в конце сезона (последние N)")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Клубные войны</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Раз в неделю клубы (от N участников) получают соперника с ближайшим рейтингом (Эло). В окне войны очки
+          считаются как в лиге клубов (игры, паки, задания) с личным потолком. День недели: 0 — пн … 6 — вс, час — по
+          времени сервера (часовой пояс приложения).
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("club_war_enabled", "Войны включены")}
+          {field("club_war_start_weekday", "День старта (0 пн … 6 вс)")}
+          {field("club_war_start_hour", "Час старта")}
+          {field("club_war_duration_hours", "Длительность, ч")}
+          {field("club_war_min_members", "Минимум участников в клубе")}
+          {field("club_war_member_cap", "Максимум очков с игрока за войну")}
+          {field("club_war_win_budget", "Победа: в бюджет клуба")}
+          {field("club_war_draw_budget", "Ничья: в бюджет клуба")}
+          {field("club_war_loss_budget", "Поражение: в бюджет клуба")}
+          {field("club_war_win_member_coins", "Победа: монет каждому участнику")}
+          {field("club_ring_win_points", "«Клубный ринг»: очков за победу в «Мордобое»")}
+          {field("club_ring_member_cap", "«Клубный ринг»: максимум очков с игрока")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Неделя мини-игры</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Каждую неделю — одна мини-игра по кругу из списка (penalty, free_kick, memory, saboteur, pairs). Очки игрока — сумма
+          N лучших игр недели. Призы — монеты за 1, 2, 3… места; итоги подводятся в ночь на понедельник, приз игрок забирает сам.
+          Игра недели фиксируется при первом заходе на неделе.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("weekly_cup_enabled", "Турнир включён")}
+          {field("weekly_cup_best_of", "Лучших игр в зачёт")}
+          {textListField("weekly_cup_games", "Игры по неделям, через запятую")}
+          {listField("weekly_cup_prizes", "Призы за места, монет через запятую")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Матч дня</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Матчи добавляются в разделе «Матч дня» вручную или автоматически: бот раз в полчаса берёт лучший матч сегодня/завтра по приоритету лиг и сам записывает счёт (основное время). Нужен ключ API_FOOTBALL_KEY на сервере. Награда — одна, самая высокая из угаданных.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("match_day_enabled", "Матч дня включён")}
+          {field("match_day_exact_coins", "Точный счёт, монет")}
+          {field("match_day_diff_coins", "Разница голов, монет")}
+          {field("match_day_outcome_coins", "Исход, монет")}
+          {toggle("match_day_auto_enabled", "Автоматически: матчи и счёт из API-Football")}
+          {listField("match_day_leagues", "Лиги по приоритету (ID API-Football): 2 ЛЧ, 39 АПЛ, 140 Ла Лига, 235 РПЛ, 135 Серия А, 78 Бундеслига, 61 Лига 1, 3 ЛЕ, 848 ЛК, 1 ЧМ, 4 Евро")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Клубный рейд</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Босс недели для каждого клуба. HP = «HP на участника» × участников (минимум 3), фиксируется при открытии рейда.
+          Атака — серия ударов, шанс гола от силы 11 лучших карт игрока; урон = голы × «урон за гол» + сила состава. Лимит атак
+          в день общий для всех клубов игрока. Победа: в казну клуба и награда каждому участнику (забирают в клубном магазине).
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("club_raid_enabled", "Рейды включены")}
+          {field("club_raid_hp_per_member", "HP на участника")}
+          {field("club_raid_attacks_per_day", "Атак в день")}
+          {field("club_raid_shots", "Ударов в атаке")}
+          {field("club_raid_damage_per_goal", "Урон за гол")}
+          {field("club_raid_reward_budget", "Победа: в казну клуба")}
+          {field("club_raid_reward_coins", "Победа: монет каждому")}
+          {field("club_raid_reward_pack_id", "Победа: пак каждому (ID, 0 — нет)")}
         </div>
       </section>
 
@@ -337,8 +541,8 @@ export default function AdminGamesPage() {
         <div className="grid grid-cols-2 items-end gap-3">
           {toggle("career_enabled", "Режим включён")}
           {listField("career_place_rewards", "Награда за места 1–8, монеты")}
-          {listField("career_difficulty_reward_pct", "Множитель награды по сложности, %")}
-          {listField("career_difficulty_rating_offset", "Сила ботов относительно заявки, ±рейтинг")}
+          {listField("career_difficulty_reward_pct", "Множитель награды по сложности, % (сезоны до дивизионов)")}
+          {listField("career_difficulty_rating_offset", "Сила ботов по сложности, ±рейтинг (сезоны до дивизионов)")}
           {field("career_match_reward_win", "За победу в туре")}
           {field("career_match_reward_draw", "За ничью в туре")}
           {field("career_bot_growth_tenths", "Рост ботов за тур, десятые рейтинга")}
@@ -351,8 +555,79 @@ export default function AdminGamesPage() {
           {field("career_yellows_for_ban", "Жёлтых до дисквалификации")}
           {field("career_form_max", "Форма после победы, до +N рейтинга")}
           {toggle("career_reminders_enabled", "Напоминание ботом за 30 мин до тура")}
+          <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">
+            Дивизионы (новые сезоны; списки — от высшего дивизиона к низшему)
+          </p>
+          {field("career_division_count", "Число дивизионов")}
+          {field("career_division_promote", "Мест на повышение")}
+          {field("career_division_relegate", "Мест на вылет")}
+          {listField("career_division_rating_offset", "Сила ботов по дивизионам, ±рейтинг")}
+          {listField("career_division_reward_pct", "Множитель награды по дивизионам, %")}
+          {textListField("career_division_bot_level", "Уровень ботов по дивизионам (amateur / pro / legend)")}
+          <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">
+            Тактика (новые сезоны): оси «направление / построение / после потери / после отбора / линия».
+          </p>
+          {field("career_squad_size", "Размер заявки на сезон")}
+          <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">
+            Задачи руководства и репутация (списки: Выживание, Середина, Выход)
+          </p>
+          {listField("career_ambition_bonus_pct", "Бонус к награде за выполненную задачу, %")}
+          {listField("career_ambition_rep_success", "Репутация за выполненную задачу")}
+          {listField("career_ambition_rep_fail", "Репутация за проваленную задачу")}
+          {field("career_rep_title", "Репутация за чемпионство")}
+          {field("career_rep_promotion", "Репутация за повышение")}
+          {field("career_rep_relegation", "Репутация за вылет (отрицательная)")}
+          {listField("career_rep_levels", "Пороги уровней репутации")}
+          <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">Кубок</p>
+          {toggle("career_cup_enabled", "Кубок в новых сезонах")}
+          {listField("career_cup_rewards", "Призы кубка: победа, финал, полуфинал")}
+          {field("career_rep_cup", "Репутация за кубок")}
+          <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">Предсезонка и живая лига</p>
+          {toggle("career_offseason_auto", "Новый сезон автоматически на следующий день")}
+          {field("career_inactive_days", "Неактивен дней — без продления и вниз")}
+          {field("career_core_min", "Ядро: минимум игроков")}
+          {field("career_core_keep_pct", "Ядро: переносится сыгранности, %")}
+          {field("career_camp_physical_pct", "Сборы «Физика»: меньше усталости, %")}
+          {field("career_camp_physical_rounds", "Сборы «Физика»: туров")}
+          {field("career_camp_tactical_tenths", "Сборы «Тактика»: сыгранность, десятые %")}
+          {field("career_tenure_minutes_per_point", "Клубный стаж: минут за +1")}
+          {field("career_tenure_max", "Клубный стаж: максимум")}
+          {field("career_division_club_count", "Клубов в каталоге на дивизион")}
+          <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">Live-матч, достижения, дайджест</p>
+          {toggle("career_live_enabled", "Live-матч: перерыв для указаний")}
+          {field("career_halftime_minutes", "Перерыв: минут до второго тайма")}
+          {field("career_achievement_reward", "Награда за достижение, монет")}
+          {toggle("career_digest_enabled", "Недельный дайджест в Telegram")}
+          {field("career_familiarity_step_tenths", "Сыгранность за матч, десятые %")}
+          {field("career_familiarity_max_tenths", "Потолок сыгранности, десятые %")}
+          {field("career_familiarity_keep_pct", "Сохраняется при смене схемы, %")}
+          {field("career_familiarity_axis_keep_pct", "Сохраняется за каждую изменённую ось, %")}
+          <label className="col-span-2 flex flex-col gap-1">
+            <span className="text-xs text-slate-400">
+              Рычаги тактики, JSON поверх значений по умолчанию (пусто = по умолчанию). Например
+              {" "}{'{"shift": {"press_vs_short": 0.2}}'}. После изменения силы взаимодействий перегенерируй таблицу
+              скриптом simulate_career_tactics.py --write.
+            </span>
+            <textarea
+              rows={3}
+              defaultValue={JSON.stringify(form.career_tactics_tuning ?? {})}
+              onBlur={(e) => {
+                try {
+                  setForm({ ...form, career_tactics_tuning: JSON.parse(e.target.value || "{}") });
+                } catch {
+                  e.target.classList.add("ring-1", "ring-red-500");
+                }
+              }}
+              className="rounded-lg bg-bg-surface px-3 py-2 font-mono text-xs outline-none"
+            />
+          </label>
+          {field("career_max_plan_rules", "Указаний на матч")}
+          {field("career_max_substitutions", "Замен на матч")}
+          {listField("career_bot_counter_chance_pct", "Шанс контр-стиля у ботов (Любитель, Профи, Легенда), %")}
         </div>
       </section>
+
+      <AdminCareerClubs divisions={form.career_division_count ?? 5} />
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-1 font-display text-base font-bold">Мой игрок</p>
@@ -375,25 +650,36 @@ export default function AdminGamesPage() {
           {field("my_player_extra_trainings_max", "Доп. тренировок в день (макс.)")}
           {field("my_player_extra_training_coins", "Доп. тренировка, монеты (0 — нет)")}
           {field("my_player_extra_training_stars", "Доп. тренировка, звёзды ⭐ (0 — нет)")}
+          {field("my_player_streak_days", "Серия тренировок: дней для награды")}
+          {field("my_player_streak_tokens", "Серия: жетонов навыка (0 — нет)")}
+          {field("my_player_freshness_per_match", "Свежесть: −за матч Карьеры игрока")}
+          {field("my_player_freshness_regen_per_hour", "Свежесть: +в час")}
+          {field("my_player_freshness_training", "Свежесть: +за тренировку")}
+          {field("my_player_fatigue_max_penalty", "Усталость: −рейтинга при 0% свежести")}
+          {field("my_player_duels_per_day", "Дуэлей в день (0 — выкл.)")}
+          {field("my_player_duel_reward_win", "Дуэль: монеты за победу")}
+          {field("my_player_duel_reward_draw", "Дуэль: монеты за ничью")}
+          {field("my_player_duel_xp", "Дуэль: опыт")}
+          {field("my_player_role_change_coins", "Смена амплуа, монеты (0 — нет)")}
+          {field("my_player_role_change_stars", "Смена амплуа, звёзды ⭐ (0 — нет)")}
         </div>
-        <p className="mb-2 mt-4 text-xs text-slate-400">Цены косметики, монеты (0 — не продаётся)</p>
-        <div className="grid grid-cols-2 items-end gap-3">
+        <p className="mb-2 mt-4 text-xs text-slate-400">Цены косметики: монеты / звёзды ⭐ (0 — не продаётся за эту валюту)</p>
+        <div className="grid grid-cols-1 gap-2">
           {MY_PLAYER_COSMETICS.map(([code, label]) => (
-            <label key={code} className="flex flex-col gap-1">
-              <span className="text-xs text-slate-400">{label}</span>
-              <input
-                type="number"
-                min={0}
-                value={form.my_player_cosmetic_prices?.[code] ?? 0}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    my_player_cosmetic_prices: { ...form.my_player_cosmetic_prices, [code]: Number(e.target.value) },
-                  })
-                }
-                className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
-              />
-            </label>
+            <div key={code} className="grid grid-cols-[1fr_6rem_6rem] items-center gap-2">
+              <span className="text-xs text-slate-300">{label}</span>
+              {(["my_player_cosmetic_prices", "my_player_cosmetic_stars_prices"] as const).map((key) => (
+                <input
+                  key={key}
+                  type="number"
+                  min={0}
+                  aria-label={`${label}: ${key === "my_player_cosmetic_prices" ? "монеты" : "звёзды"}`}
+                  value={form[key]?.[code] ?? 0}
+                  onChange={(e) => setForm({ ...form, [key]: { ...form[key], [code]: Number(e.target.value) } })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                />
+              ))}
+            </div>
           ))}
         </div>
       </section>
@@ -401,23 +687,149 @@ export default function AdminGamesPage() {
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-1 font-display text-base font-bold">Карьера игрока</p>
         <p className="mb-3 text-xs text-slate-400">
-          Клубы собираются из карточек (поле «клуб»). Клуб открыт, если его рейтинг ≤ рейтинг игрока + запас и репутация ≥
-          (рейтинг клуба − 60) × «репутации за пункт». Сезон — 8 клубов, 14 туров в слоты «Карьеры тренера».
+          Клубы и дивизионы — общие с «Карьерой тренера» (список клубов выше). Клуб открыт, если его рейтинг ≤ рейтинг игрока +
+          запас и престиж игрока ≥ «престиж за звёзды клуба» + «престиж за дивизион». Зарплата = база дивизиона × (1 + % за
+          каждую звезду сверх первой) × (1 + 1% за 10 престижа, до потолка). Списки — по дивизионам/звёздам от 1 до 5. Сезон — 8
+          клубов дивизиона, 14 туров в слоты «Карьеры тренера».
         </p>
         <div className="grid grid-cols-2 items-end gap-3">
           {toggle("player_career_enabled", "Режим включён")}
-          {field("player_career_min_club_cards", "Мин. карточек у клуба")}
           {field("player_career_rating_margin", "Запас рейтинга для клуба")}
-          {field("player_career_rep_per_club_rating", "Репутации за пункт рейтинга клуба")}
-          {field("player_career_rep_per_goal", "Репутация за гол")}
-          {field("player_career_rep_per_assist", "Репутация за передачу")}
-          {field("player_career_rep_per_win", "Репутация за победу")}
-          {field("player_career_rep_title", "Репутация за титул")}
+          {field("player_career_rep_per_goal", "Престиж за гол")}
+          {field("player_career_rep_per_assist", "Престиж за передачу")}
+          {field("player_career_rep_per_win", "Престиж за победу")}
+          {field("player_career_rep_title", "Престиж за титул")}
           {field("player_career_match_reward_win", "Монеты за победу")}
           {field("player_career_match_reward_draw", "Монеты за ничью")}
           {field("player_career_goal_reward", "Монеты за гол игрока")}
           {field("player_career_match_xp", "Опыт за матч")}
+          {field("player_career_objective_coins", "Цель клуба: монеты")}
+          {field("player_career_objective_rep", "Цель клуба: престиж")}
+          {listField("player_career_level_ratings", "Рейтинг клубов без карточек по дивизионам 1–5")}
+          {listField("player_career_level_salary", "Базовая зарплата по дивизионам 1–5")}
+          {listField("player_career_level_prestige", "Престиж за дивизион 1–5")}
+          {listField("player_career_star_prestige", "Престиж за звёзды клуба 1–5")}
+          {field("player_career_star_salary_pct", "Зарплата: +% за звезду клуба")}
+          {field("player_career_prestige_salary_cap", "Зарплата: потолок % от престижа")}
+          {field("player_career_contract_seasons", "Длина контракта, сезонов")}
+          {field("player_career_free_agent_level", "Без контракта: дивизионы от N и ниже")}
+          {field("player_career_offers_max", "Предложений в трансферное окно")}
+          {field("player_career_haggle_base", "Торг: базовый шанс согласия, %")}
+          {field("player_career_haggle_raise_penalty", "Торг: −% шанса за 1% прибавки")}
+          {field("player_career_haggle_repeat_penalty", "Торг: −% шанса за повторный торг")}
+          {field("player_career_cl_places", "ЛЧ: мест из высшего дивизиона")}
+          {listField("player_career_cl_rewards", "ЛЧ: монеты за 1/4, 1/2, финал")}
+          {field("player_career_cl_prestige", "ЛЧ: престиж за победу")}
+          {field("player_career_national_prestige", "Сборная: престиж для вызова")}
+          {listField("player_career_national_rewards", "Сборная: монеты за 1/4, 1/2, финал")}
+          {field("player_career_national_win_prestige", "Сборная: престиж за победу")}
+          {field("player_career_golden_ball_min_matches", "Золотой мяч: минимум матчей")}
+          {field("player_career_golden_ball_coins", "Золотой мяч: монеты")}
+          {field("player_career_golden_ball_prestige", "Золотой мяч: престиж")}
+          {field("player_career_moments", "Ключевых моментов в матче")}
+          {field("player_career_moment_hit_pct", "Момент: +% шанса за тайминг")}
+          {field("player_career_moment_window_hours", "Момент: ждать решения, часов")}
+          {field("player_career_bench_gap", "Скамейка: рейтинг ниже клуба больше чем на")}
+          {field("player_career_bench_play_pct", "Запасной выходит в % матчей")}
+          {field("player_career_trust_starter", "Доверие для основы")}
+          {field("player_career_trust_captain", "Доверие для капитанства")}
+          {field("player_career_captain_salary_pct", "Капитан: +% к зарплате")}
+          {field("player_career_injury_freshness", "Травмы: ниже этой свежести")}
+          {field("player_career_injury_max_pct", "Травмы: шанс при 0% свежести, %")}
+          {field("player_career_heal_coins", "Лечение, монеты (0 — нет)")}
+          {field("player_career_heal_stars", "Лечение, звёзды ⭐ (0 — нет)")}
+          {field("player_career_refresh_coins", "Полная свежесть, монеты (0 — нет)")}
+          {field("player_career_refresh_stars", "Полная свежесть, звёзды ⭐ (0 — нет)")}
+          {field("player_career_event_every", "События: не чаще раза в N туров")}
+          {field("player_career_event_coins", "События: базовые монеты")}
+          {field("player_career_event_prestige", "События: базовый престиж")}
+          {field("player_career_derby_multiplier", "Лига друзей: множитель дерби")}
+          {field("player_career_pro_stars", "Карьера Pro, звёзды ⭐ (0 — нет)")}
+          {field("player_career_pro_days", "Карьера Pro, дней")}
+          {field("player_career_pro_xp_pct", "Карьера Pro: +% опыта")}
+          {field("player_career_agent_stars", "Агент, звёзды ⭐ (0 — нет)")}
+          {field("player_career_agent_haggle_bonus", "Агент: +% к шансу торга")}
+          {field("player_career_save_offer_stars", "Вернуть клуб, звёзды ⭐ (0 — нет)")}
+          {toggle("player_career_fast_season_enabled", "Ускоренный сезон в продаже")}
+          {field("player_career_fast_season_stars", "Ускоренный сезон, звёзды ⭐ (0 — нет)")}
+          {field("player_career_fast_round_minutes", "Ускоренный сезон: минут между турами")}
+          {field("player_career_chest_coins_min", "Сундук дня: монет от")}
+          {field("player_career_chest_coins_max", "Сундук дня: монет до")}
+          {field("player_career_chest_token_pct", "Сундук дня: шанс жетона, %")}
+          {field("player_career_weekly_goals", "Задание недели: голов")}
+          {field("player_career_weekly_matches", "Задание недели: матчей")}
+          {field("player_career_weekly_rating_x10", "Задание недели: оценка ×10 (70 = 7.0)")}
+          {listField("player_career_weekly_coins", "Задания недели: монеты (голы, матчи, оценка)")}
+          {listField("player_career_friends_rewards", "Лига друзей: монеты за 1–3 места")}
           {listField("player_career_place_rewards", "Награда за места 1–8, монеты")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">«Личный турнир»: тактика</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Как в Card Arena: схема + один из 4 стилей по кругу (Атака › Оборона › Владение › Контратака › Атака).
+          Стиль даёт % к рейтингам своих линий, схема — крен в атаку или защиту.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {field("ptour_style_edge_pct", "Бонус ко всем игрокам стилю, который бьёт стиль соперника, %")}
+          {field("ptour_formation_effect_pct", "Сила крена схем в атаку/защиту, %")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">«Менеджер»</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Свой клуб у каждого: «Мой игрок» и игрок академии всегда в составе, до N «Моих игроков» других
+          пользователей и футболисты каталога. Деньги клуба — евро, только внутри режима (в монеты не
+          превращаются). Пирамида ×2 до 10 дивизионов, неделя = предсезонка + 15 туров. Бюджет: грант дивизиона
+          + бонус «Клубной базы» (стадион, маркетинг, магазин, бухгалтерия) с потолком.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("manager_enabled", "Режим включён")}
+          {field("manager_found_cost", "Основание клуба, монет")}
+          {field("manager_min_level", "Мин. уровень «Моего игрока» (менеджер и игроки)")}
+          {field("manager_max_live", "«Моих игроков» других пользователей в клубе, максимум")}
+          {field("manager_squad_max", "Заявка: живые + футболисты, максимум")}
+          {field("manager_league_size", "Клубов в лиге (чётное; туров = клубов − 1)")}
+          {field("manager_divisions", "Дивизионов, максимум (пирамида ×2)")}
+          {field("manager_promote", "Повышаются из лиги при заполненной пирамиде (вылетают вдвое больше)")}
+          {field("manager_preseason_hours", "Предсезонка (трансферное окно): часов от понедельника 00:00 (72 = старт в четверг)")}
+          {field("manager_style_edge_pct", "Тактика: бонус к рейтингам стилю, который бьёт стиль соперника, %")}
+          {field("manager_formation_effect_pct", "Тактика: сила крена схем в атаку/защиту, %")}
+          {field("manager_wage_pct", "Зарплата футболиста за сезон, % стоимости (база)")}
+          {field("manager_loan_fee_pct", "Аренда футболиста на сезон, % стоимости")}
+          {field("manager_sell_back_pct", "Продажа купленного футболиста системе, % стоимости")}
+          {field("manager_live_wage_max", "Антифрод: зарплата живому игроку за сезон, максимум монет")}
+          {field("manager_wage_eur_per_coin", "Сколько € бюджета стоит 1 монета зарплаты живому игроку")}
+          {field("manager_form_bonus_pct", "Стоимость живого игрока: +% за гол или передачу в клубе")}
+          {field("manager_form_bonus_cap", "…максимум, %")}
+          {field("manager_income_win", "€ за победу (× % дивизиона)")}
+          {field("manager_income_draw", "€ за ничью")}
+          {field("manager_income_loss", "€ за поражение")}
+          {field("manager_ticket_eur_per_level", "Билеты: € за домашний матч за уровень стадиона базы")}
+          {field("manager_sponsor_eur_per_level", "Спонсоры: € за сезон за уровень отдела маркетинга")}
+          {field("manager_merch_eur_per_level", "Мерч: € за сезон за уровень клубного магазина")}
+          {field("manager_budget_per_base_level", "€ за сезон за каждый уровень «Клубной базы» (здания + академия)")}
+          {field("manager_base_bonus_cap_pct", "Бонус базы за сезон не больше, % гранта дивизиона")}
+          {field("manager_promotion_bonus_pct", "Бонус за повышение, % гранта нового дивизиона")}
+          {field("manager_parachute_pct", "Компенсация за вылет, % разницы грантов")}
+          {field("manager_match_xp", "Опыт «Моему игроку» за матч")}
+          {field("manager_freshness_cost", "Свежесть «Моего игрока» за матч (0 = не устаёт)")}
+          {field("manager_merch_cap_eur", "Мерч: € одному клубу за сезон, максимум")}
+          {field("manager_pro_stars", "«Менеджер Pro»: цена, звёзды (0 = не продаётся)")}
+          {field("manager_pro_days", "«Менеджер Pro»: дней")}
+          {listField("manager_value_ratings", "Шкала стоимости: рейтинги")}
+          {listField("manager_value_eur", "…стоимость при этих рейтингах, €")}
+          {listField("manager_division_budget", "Грант на сезон по дивизионам, € (1, 2, 3…)")}
+          {listField("manager_division_income_pct", "Доход матчей и призы по дивизионам, %")}
+          {listField("manager_division_wage_pct", "Зарплаты футболистов по дивизионам, %")}
+          {listField("manager_division_rating", "Ориентир рейтинга по дивизионам (автодокупка, боты без живых)")}
+          {listField("manager_place_rewards", "Монеты менеджеру за 1–3 места (× % дивизиона)")}
+          {listField("manager_place_budget", "€ в бюджет за 1–3 места (× % дивизиона)")}
+          {jsonField("manager_slots", "Время туров (местное), по порядку")}
+          {jsonField("manager_cosmetics", "Магазин стиля клуба: kind = shape | symbol | kit | frame | theme | stadium_name; coins / stars 0 = не продаётся за них, оба 0 = бесплатно")}
+          {jsonField("manager_merch", "Мерч для болельщиков: coins сгорают, eur идут в бюджет клуба")}
         </div>
       </section>
 
@@ -490,6 +902,61 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Обмены: защита от фарма</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Отдавать монеты или карточки в обмене (с любой стороны) можно только с аккаунта не младше указанного
+          возраста и с нужным числом дней активности; получать можно всем. Лимит — монеты, полученные через обмены за
+          текущие сутки (МСК). Налог списывается с получателя монет и сжигается. 0 — правило выключено. Последние два
+          поля — пороги блока «Подозрительные обмены» на странице «Аналитика».
+        </p>
+        <div className="mb-3 flex flex-col gap-2">
+          {toggle("trade_coins_enabled", "Монеты в обменах (выкл — только «карточка на карточку»)")}
+          {toggle("trade_cards_both_sides", "Карточки обязательны с обеих сторон (без подарков в одну сторону)")}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("trade_send_min_account_age_days", "Мин. возраст аккаунта, дней")}
+          {field("trade_send_min_active_days", "Мин. дней активности")}
+          {field("trade_daily_coins_receive_cap", "Лимит получения монет в день")}
+          {field("trade_coin_tax_pct", "Налог на монеты, %")}
+          {field("trade_suspicious_young_days", "«Молодой» аккаунт — младше, дней")}
+          {field("trade_suspicious_min_donors", "Мин. молодых доноров для флага")}
+          {field("trade_finder_max_wants", "Поиск обменов: карточек в «Ищу»")}
+          {field("trade_finder_max_gives", "Поиск обменов: карточек в «Отдаю»")}
+          {field("trade_finder_active_days", "Поиск: партнёр заходил за N дней")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Ставки в вызовах через чат</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Тактико, Стратего и Пенальти. Ставка — это перевод монет между игроками, поэтому для неё действуют те же
+          возраст аккаунта и дни активности, что и для обменов. Лимит пары — сколько матчей на ставку двое игроков
+          могут начать за сутки (во всех трёх играх вместе). Лимит выигрыша — сколько игрок может чисто выиграть на
+          ставках за сутки. 0 в «Макс. ставке» отключает ставки, в остальных полях — снимает ограничение.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("stake_max_coins", "Макс. ставка с каждой стороны")}
+          {field("stake_pair_daily_limit", "Матчей на ставку с одним игроком в день")}
+          {field("stake_daily_profit_cap", "Лимит выигрыша на ставках в день")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Магазин: ускорители продаж</p>
+        <p className="mb-3 text-xs text-slate-500">
+          0 — выключено. Гарант: платный пак за монеты с шансом на легендарку, который идёт после N−1 таких паков без
+          легендарки, даёт легендарку; игрок видит «гарантирована через N паков». Скидка ×10 — на открытие 10+ одинаковых
+          паков разом. Бонус первой покупки — процент сверху на первую покупку монет за Stars (раз на игрока).
+          Рекомендуем начать с гаранта 40, скидки 10% и бонуса 100%.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("pity_packs", "Гарант легендарки: паков")}
+          {field("bulk10_discount_pct", "Скидка на ×10, %")}
+          {field("first_coin_purchase_bonus_pct", "Бонус первой покупки монет, %")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Рефералы</p>
         <div className="grid grid-cols-2 gap-3">
           {field("referral_referred_reward", "Награда приглашённому")}
@@ -509,8 +976,8 @@ export default function AdminGamesPage() {
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Card Arena</p>
         <p className="mb-3 text-xs text-slate-500">
-          Итоговая награда = (награда ниже × множитель сложности) + 5 монет за каждый забитый гол — этот бонус за голы
-          не настраивается отдельно. Игрок всегда играет на среднем множителе (выбора сложности в интерфейсе нет).
+          Итоговая награда = (награда ниже × множитель сложности × множитель дивизиона) + 5 монет за каждый забитый
+          гол — этот бонус за голы не настраивается отдельно. Игрок всегда играет на среднем множителе (выбора сложности в интерфейсе нет).
           Множители сложности общие с ботом Тактико (раздел ниже) — «сложный» там сейчас недостижим, так как в Тактико
           оставлены только лёгкий и продвинутый уровни.
         </p>
@@ -558,6 +1025,42 @@ export default function AdminGamesPage() {
           {field("match_keeper_save_chance_max", "Сейв вратаря, макс (0-1)")}
           {field("match_red_card_strength_penalty_pct", "Штраф к обороне за красную (0-1)")}
           {field("match_penalty_gk_rating_penalty", "Штраф к рейтингу вратаря на пенальти")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Card Arena — дивизионы</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Очки арены считаются как Эло: за победу над соперником с теми же очками +K/2, за поражение −K/2; против
+          соперника выше по очкам победа дороже, против более слабого — поражение дороже. Дивизион N — N-е значение
+          списков ниже (первый порог всегда 0). Награда за дивизион выдаётся один раз — при первом достижении.
+          Рейтинг арены для общей «Лиги» (+3/+1/−1) не меняется.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {listField("arena_division_min_points", "Пороги очков по дивизионам (1, 2, 3, …)")}
+          {listField("arena_division_reward_coins", "Награда за первое достижение дивизиона, монеты")}
+          {listField("arena_division_coin_pct", "Множитель монет за матч по дивизионам, %")}
+          {field("arena_points_k", "K — максимум очков за матч")}
+          {field("arena_points_scale", "Шкала Эло (разница очков для 10:1)")}
+          {field("arena_shield_matches", "Матчей защиты от вылета после повышения")}
+          {field("arena_matchmaking_window", "Окно подбора соперника, ± очков")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Card Arena — баланс и стили</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Насколько разница в силе решает исход. По умолчанию: перевес 30% ≈ 87% побед и ≈3% поражений, равные
+          ≈ 46/27/27. Показатель «шанс на победу» перед матчем берётся из таблицы симуляции
+          (backend/scripts/simulate_arena_balance.py --write) — после сильных изменений здесь её стоит пересчитать.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("arena_style_matchup_bonus_pct", "Бонус выигранного матчапа стилей, % к силе")}
+          {field("arena_share_exponent", "Степень доли моментов (атака vs защита)")}
+          {field("arena_shot_exponent", "Степень частоты опасных моментов")}
+          {field("arena_edge_rating_per_10pct", "Очков рейтинга в каждом розыгрыше за +10% силы")}
+          {field("arena_edge_rating_max", "Максимум этих очков")}
+          {field("arena_formation_effect_pct", "Влияние схемы на атаку/защиту, % (100 — 3-4-3 даёт +4%/−4%, 0 — выкл.)")}
         </div>
       </section>
 
@@ -680,6 +1183,33 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Мордобой</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Боксёрский поединок на одной карточке: раунды из обменов, в каждом оба тайно выбирают действие. Число раундов,
+          обменов и HP применяются к новым боям. Награда — в пределах дневного лимита игрока; за нокаут победитель
+          получает бонус; сдавшийся или пропустивший удары получает 0. Бой с другом рейтинг не двигает, онлайн — ×2.
+        </p>
+        <div className="mb-3">{toggle("mordoboi_enabled", "Режим включён (выкл — нельзя начинать новые бои, плитка скрыта)")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("mordoboi_rounds", "Раундов")}
+          {field("mordoboi_exchanges_per_round", "Обменов в раунде")}
+          {field("mordoboi_base_hp", "HP боксёра")}
+          {field("mordoboi_reward_win", "Награда за победу")}
+          {field("mordoboi_reward_draw", "Награда за ничью")}
+          {field("mordoboi_reward_loss", "Награда за поражение")}
+          {field("mordoboi_reward_ko_bonus", "Бонус за нокаут")}
+          {field("mordoboi_daily_limit", "Лимит наградных боёв/день")}
+          {field("mordoboi_bot_easy_reward_pct", "Лёгкий бот: % от награды")}
+          {field("mordoboi_challenge_expiry_hours", "Срок жизни вызова, часы")}
+          {field("mordoboi_move_timeout_hours", "С другом: часов на удар")}
+          {field("mordoboi_live_move_seconds", "Онлайн: секунд на удар")}
+          {field("mordoboi_max_auto_moves", "Автоударов подряд до поражения")}
+          {field("mordoboi_legend_rating", "«Легенда ринга»: рейтинг босса")}
+          {field("mordoboi_legend_reward", "«Легенда ринга»: награда (раз в день)")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-1 font-display text-base font-bold">Футбольный магнат</p>
         <p className="mb-3 text-xs text-slate-500">
           Деньги партии («М») — отдельная валюта, не монеты. Правила, поле и карточки фиксируются в партии при её старте —
@@ -769,5 +1299,37 @@ export default function AdminGamesPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+const STAR_RARITY_LABELS: Record<string, string> = { common: "Обычная", rare: "Редкая", epic: "Эпическая", legendary: "Легендарная" };
+
+function StarLadderRow({
+  rarity, dupes, coins, onChange,
+}: {
+  rarity: string;
+  dupes: number[];
+  coins: number[];
+  onChange: (kind: "card_star_dupes_per_level" | "card_star_coin_cost", values: number[]) => void;
+}) {
+  const parse = (value: string) => value.split(",").map((v) => Number(v.trim())).filter((v) => Number.isFinite(v) && v >= 0);
+  return (
+    <>
+      <span className="text-slate-400">{STAR_RARITY_LABELS[rarity]}</span>
+      <input
+        key={`d-${dupes.join(",")}`}
+        defaultValue={dupes.join(", ")}
+        onBlur={(e) => onChange("card_star_dupes_per_level", parse(e.target.value))}
+        aria-label={`Дубли за звёзды: ${STAR_RARITY_LABELS[rarity]}`}
+        className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+      />
+      <input
+        key={`c-${coins.join(",")}`}
+        defaultValue={coins.join(", ")}
+        onBlur={(e) => onChange("card_star_coin_cost", parse(e.target.value))}
+        aria-label={`Монеты за звёзды: ${STAR_RARITY_LABELS[rarity]}`}
+        className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+      />
+    </>
   );
 }

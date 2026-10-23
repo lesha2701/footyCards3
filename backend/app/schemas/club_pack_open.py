@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.club_pack import ClubPackOut
 from app.schemas.club_squad import ClubCardOut, ClubCoachCardOut, ClubStadiumCardOut
@@ -22,4 +22,6 @@ class ClubPackOpenResult(BaseModel):
 
 
 class OpenClubPackRequest(BaseModel):
-    idempotency_key: str | None = None
+    idempotency_key: str | None = Field(default=None, max_length=100)
+    # Several copies at once: one budget debit, one transaction.
+    quantity: int = Field(default=1, ge=1, le=20)

@@ -130,18 +130,18 @@ export default function AdminLeaguesPage() {
           <div key={t.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-bg-surface px-3 py-2">
             <div className="flex items-center gap-2">
               {t.image_path ? (
-                <img src={staticUrl(t.image_path) ?? undefined} className="h-10 w-10 rounded-lg object-cover" />
+                <img decoding="async" loading="lazy" src={staticUrl(t.image_path) ?? undefined} className="h-10 w-10 rounded-lg object-cover" />
               ) : (
                 <IconTrophy size={20} style={{ color: t.color }} />
               )}
               <div>
                 <p className="text-sm font-semibold">{t.name}</p>
-                <p className="text-[11px] text-slate-500">от {t.min_rating} рейтинга · +{t.reward_coins} монет</p>
+                <p className="text-caption text-slate-500">от {t.min_rating} рейтинга · +{t.reward_coins} монет</p>
               </div>
             </div>
             <div className="flex gap-1">
-              <button onClick={() => openEdit(t)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-              <button onClick={() => confirmDelete(t)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">Удалить</button>
+              <button onClick={() => openEdit(t)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+              <button onClick={() => confirmDelete(t)} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">Удалить</button>
             </div>
           </div>
         ))}
@@ -203,7 +203,7 @@ export default function AdminLeaguesPage() {
                   <span className="text-xs font-semibold text-slate-400">Картинка лиги — используется вместо кубка, пока не загружена</span>
                   <div className="flex items-center gap-3">
                     {(editing as LeagueTier).image_path ? (
-                      <img
+                      <img decoding="async" loading="lazy"
                         src={staticUrl((editing as LeagueTier).image_path!) ?? undefined}
                         className="h-14 w-14 rounded-lg border border-white/10 object-cover"
                       />
@@ -216,12 +216,12 @@ export default function AdminLeaguesPage() {
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploadImageMutation.isPending}
-                        className="rounded-lg bg-white/5 px-2 py-1 text-[11px]"
+                        className="rounded-lg bg-white/5 px-2 py-1 text-caption"
                       >
                         {uploadImageMutation.isPending ? "Загрузка..." : "Загрузить"}
                       </button>
                       {(editing as LeagueTier).image_path && (
-                        <button onClick={() => removeImageMutation.mutate()} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">
+                        <button onClick={() => removeImageMutation.mutate()} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">
                           Удалить картинку
                         </button>
                       )}

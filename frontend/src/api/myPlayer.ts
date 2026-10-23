@@ -31,6 +31,36 @@ export interface MyPlayer {
   /** Equipped cosmetics (codes from the shop catalog). */
   accessory?: string | null;
   background?: string | null;
+  /** Card effect (fx_sparkle | fx_fire | fx_lightning). */
+  effect?: string | null;
+  /** National team. */
+  country?: string | null;
+  /** Goal celebration (cosmetic). */
+  celebration?: string | null;
+  /** «Карьера Pro» is active. */
+  pro?: boolean;
+}
+
+export type MyPlayerCosmeticKind = "accessory" | "background" | "effect" | "hair" | "celebration";
+export type MyPlayerDrill = "shot" | "pass" | "tackle" | "save";
+
+export interface MyPlayerTrophy {
+  id: number;
+  code: string;
+  name: string;
+  icon: string;
+  image_path: string | null;
+  message: string | null;
+  granted_at: string;
+}
+
+export interface MyPlayerAttention {
+  create: boolean;
+  level_up: boolean;
+  points: boolean;
+  training: boolean;
+  income: boolean;
+  career_offers: boolean;
 }
 
 export interface MyPlayerSkillOption {
@@ -64,10 +94,16 @@ export interface MyPlayerSkill {
 
 export interface MyPlayerCosmeticItem {
   code: string;
-  kind: "accessory" | "background";
+  kind: MyPlayerCosmeticKind;
   name: string;
+  /** Coins / Telegram Stars; 0 = not sold for that currency. */
   price: number;
+  stars_price: number;
   owned: boolean;
+  /** «Статус» the item adds (premium style items). */
+  status?: number;
+  /** Premium hairstyle: the appearance hair index it sets. */
+  hair_index?: number | null;
 }
 
 export interface MyPlayerLeaderboardEntry {
@@ -93,8 +129,14 @@ export interface MyPlayerView {
   xp_per_reward: number;
   xp_career_match: number;
   xp_stratego_match: number;
+  xp_player_career_match: number;
+  /** XP bonus from «Имущество», percent. */
+  xp_bonus_pct: number;
   points_available: number;
   points_per_level: number;
+  level_seen: number;
+  /** Set until the level-up screen is acknowledged. */
+  level_up: { from_level: number; to_level: number; points: number } | null;
   rating_cap: number;
   at_rating_cap: boolean;
   tier_thresholds: number[];
@@ -116,10 +158,43 @@ export interface MyPlayerView {
     xp_base: number;
     xp_per_hit: number;
     max_hits: number;
+    /** Today's drill — follows the weekday and the player's line. */
+    drill: { code: MyPlayerDrill; name: string; hint: string };
+    /** Free trainings in a row; every streak_days pays streak_tokens skill tokens. */
+    streak: number;
+    streak_days: number;
+    streak_tokens: number;
+    streak_left: number;
+    freshness_bonus: number;
   };
-  cosmetics: { owned: string[]; accessory: string | null; background: string | null; catalog: MyPlayerCosmeticItem[] };
+  cosmetics: {
+    owned: string[];
+    accessory: string | null;
+    background: string | null;
+    effect: string | null;
+    hair: string | null;
+    celebration: string | null;
+    catalog: MyPlayerCosmeticItem[];
+  };
+  freshness: {
+    value: number;
+    /** Rating points lost in matches right now. */
+    penalty: number;
+    max_penalty: number;
+    regen_per_hour: number;
+    regen_bonus: number;
+    per_match: number;
+    training: number;
+  } | null;
+  role_change: { coins_price: number; stars_price: number } | null;
+  trophies: MyPlayerTrophy[];
+  /** What the top-bar dot is for. */
+  attention: MyPlayerAttention;
+  /** Countries the player can represent. */
+  countries: string[];
   /** Only on the training-finish response. */
   training_xp?: number | null;
+  streak_reward?: { tokens: number; skill_code: string; skill_name: string; skill_icon: string; streak: number } | null;
 }
 
 export interface MyPlayerDraft {
@@ -127,6 +202,7 @@ export interface MyPlayerDraft {
   number: number;
   position: string;
   appearance: MyPlayerAppearance;
+  country?: string | null;
 }
 
 export async function fetchMyPlayer(): Promise<MyPlayerView> {
@@ -149,8 +225,14 @@ export async function trainMyPlayer(attr: MyPlayerAttr, points: number): Promise
   return data;
 }
 
-export async function fetchPublicMyPlayer(userId: number): Promise<{ player: MyPlayer | null; level: number | null }> {
-  const { data } = await api.get<{ player: MyPlayer | null; level: number | null }>(`/my-player/users/${userId}`);
+export interface MyPlayerPublic {
+  player: MyPlayer | null;
+  level: number | null;
+  trophies: MyPlayerTrophy[];
+}
+
+export async function fetchPublicMyPlayer(userId: number): Promise<MyPlayerPublic> {
+  const { data } = await api.get<MyPlayerPublic>(`/my-player/users/${userId}`);
   return data;
 }
 
@@ -159,8 +241,8 @@ export async function setMyPlayerSkill(code: string): Promise<MyPlayerView> {
   return data;
 }
 
-export async function startMyPlayerTraining(): Promise<{ max_hits: number; min_seconds: number }> {
-  const { data } = await api.post<{ max_hits: number; min_seconds: number }>("/my-player/training/start");
+export async function startMyPlayerTraining(): Promise<{ max_hits: number; min_seconds: number; drill: MyPlayerDrill }> {
+  const { data } = await api.post<{ max_hits: number; min_seconds: number; drill: MyPlayerDrill }>("/my-player/training/start");
   return data;
 }
 
@@ -174,7 +256,7 @@ export async function buyMyPlayerCosmetic(code: string): Promise<MyPlayerView> {
   return data;
 }
 
-export async function equipMyPlayerCosmetic(kind: "accessory" | "background", code: string | null): Promise<MyPlayerView> {
+export async function equipMyPlayerCosmetic(kind: MyPlayerCosmeticKind, code: string | null): Promise<MyPlayerView> {
   const { data } = await api.put<MyPlayerView>("/my-player/cosmetics/equip", { kind, code });
   return data;
 }
@@ -202,8 +284,21 @@ export interface MyPlayerStarsInvoice {
   stars_amount: number;
 }
 
-export async function createMyPlayerStarsInvoice(purchase: "training" | "item", itemId?: number): Promise<MyPlayerStarsInvoice> {
-  const { data } = await api.post<MyPlayerStarsInvoice>("/my-player/stars-invoice", { purchase, item_id: itemId ?? null });
+export type MyPlayerStarsPurchase =
+  | { purchase: "training" }
+  | { purchase: "item"; itemId: number }
+  | { purchase: "cosmetic"; code: string }
+  | { purchase: "role"; position: string }
+  | { purchase: "career"; code: "pro" | "agent" | "refresh" | "heal" | "save_offer" | "fast"; arg?: string }
+  | { purchase: "manager"; code: string };
+
+export async function createMyPlayerStarsInvoice(order: MyPlayerStarsPurchase): Promise<MyPlayerStarsInvoice> {
+  const { data } = await api.post<MyPlayerStarsInvoice>("/my-player/stars-invoice", {
+    purchase: order.purchase,
+    item_id: order.purchase === "item" ? order.itemId : null,
+    code: order.purchase === "cosmetic" || order.purchase === "career" || order.purchase === "manager" ? order.code : null,
+    position: order.purchase === "role" ? order.position : order.purchase === "career" ? order.arg ?? null : null,
+  });
   return data;
 }
 
@@ -211,5 +306,59 @@ export async function fetchMyPlayerStarsInvoiceStatus(
   payloadToken: string,
 ): Promise<{ status: "pending" | "completed"; my_player_result?: { kind: string; name?: string } | null }> {
   const { data } = await api.get(`/my-player/stars-invoices/${payloadToken}`);
+  return data;
+}
+
+export async function ackMyPlayerLevelUp(): Promise<MyPlayerView> {
+  const { data } = await api.post<MyPlayerView>("/my-player/level-seen");
+  return data;
+}
+
+export async function changeMyPlayerRole(position: string): Promise<MyPlayerView> {
+  const { data } = await api.post<MyPlayerView>("/my-player/role", { position });
+  return data;
+}
+
+export interface MyPlayerDuelSide extends MyPlayer {
+  /** Rating as fielded in the duel (fatigue included). */
+  match_rating: number | null;
+}
+
+export interface MyPlayerDuel {
+  id: number;
+  created_at: string;
+  as_challenger: boolean;
+  opponent_user_id: number;
+  opponent_name: string;
+  my_goals: number;
+  opp_goals: number;
+  result: "win" | "draw" | "loss";
+  reward_coins: number;
+  events: { n: number; side: "me" | "opp"; outcome: "goal" | "save" | "miss" }[];
+  me: MyPlayerDuelSide | null;
+  opp: MyPlayerDuelSide | null;
+}
+
+export interface MyPlayerDuels {
+  enabled: boolean;
+  left_today: number;
+  per_day: number;
+  reward_win: number;
+  reward_draw: number;
+  xp: number;
+  attacks: number;
+  friends: { user_id: number; user_name: string; level: number; player: MyPlayer }[];
+  recent: MyPlayerDuel[];
+}
+
+export async function fetchMyPlayerDuels(): Promise<MyPlayerDuels> {
+  const { data } = await api.get<MyPlayerDuels>("/my-player/duels");
+  return data;
+}
+
+export async function playMyPlayerDuel(opponentUserId: number): Promise<{ duel: MyPlayerDuel; duels: MyPlayerDuels; balance: number }> {
+  const { data } = await api.post<{ duel: MyPlayerDuel; duels: MyPlayerDuels; balance: number }>("/my-player/duels", {
+    opponent_user_id: opponentUserId,
+  });
   return data;
 }

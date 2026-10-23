@@ -139,7 +139,7 @@ async def test_catalog_lists_all_available_skills(client, db_session, bot_token)
     ]
     by_code = {s["code"]: s for s in body["skills"]}
     assert all(s["is_available"] and s["engine_supported"] for s in body["skills"])
-    assert by_code["crosser"]["positions"] == ["LW", "RW", "LM", "RM", "LB", "RB"]
+    assert by_code["crosser"]["positions"] == ["LW", "RW", "LM", "RM", "LB", "RB", "LWB", "RWB"]
     assert by_code["last_line"]["positions"] == ["CB"]
     assert by_code["one_on_one"]["positions"] == ["GK"]
     assert by_code["aerial_master"]["positions"] == ["CB", "ST"]
@@ -334,7 +334,7 @@ async def test_two_copies_of_same_player_are_independent(client, db_session, bot
 # --- lifecycle ------------------------------------------------------------------------
 
 
-async def test_trade_moves_skill_with_the_copy_and_locks_changes_while_pending(client, db_session, bot_token):
+async def test_trade_moves_skill_with_the_copy_and_locks_changes_while_pending(client, db_session, bot_token, trade_guards_off):
     sender, _ = await _register(client, db_session, 820030, bot_token)
     receiver, _ = await _register(client, db_session, 820031, bot_token)
     card = await _card(db_session, sender.id, Position.ST, skill_code="sniper", skill_level=2)

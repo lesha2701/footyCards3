@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # never sent from the frontend. Must match INTERNAL_API_SECRET in the
     # bot's own settings.
     internal_api_secret: str = "dev_only_internal_secret"
+    # API-Football (api-sports.io) key for the automatic «Матч дня»; empty = matches by hand only.
+    api_football_key: str = ""
+    api_football_url: str = "https://v3.football.api-sports.io"
     dev_mode: bool = False
     # Optional: share rate-limit windows across backend replicas (see
     # app/core/rate_limit.py). Empty = per-process in-memory limiter.

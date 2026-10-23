@@ -20,6 +20,14 @@ const CATEGORIES = [
   { code: "other", label: "✨ Другое" },
 ];
 
+// Codes from backend lifestyle_service.EFFECTS.
+const EFFECTS = [
+  { code: "none", label: "Без эффекта", unit: "" },
+  { code: "freshness_regen", label: "Свежесть: +в час", unit: "в час" },
+  { code: "xp_bonus_pct", label: "Бонус опыта, %", unit: "%" },
+  { code: "weekly_income", label: "Доход в неделю, монеты", unit: "монет/нед." },
+];
+
 type Form = Omit<AdminLifestyleItem, "id" | "image_path" | "sold_count">;
 
 function toForm(item?: AdminLifestyleItem): Form {
@@ -34,6 +42,8 @@ function toForm(item?: AdminLifestyleItem): Form {
     max_supply: item?.max_supply ?? null,
     is_active: item?.is_active ?? true,
     sort_order: item?.sort_order ?? 0,
+    effect: item?.effect ?? "none",
+    effect_value: item?.effect_value ?? 0,
   };
 }
 
@@ -87,7 +97,8 @@ export default function AdminLifestylePage() {
           <h1 className="font-display text-2xl font-bold">Имущество</h1>
           <p className="text-xs text-slate-500">
             Статусные предметы «Моего игрока»: машины, недвижимость, акции и т. п. Цена в монетах и/или звёздах (0 — не
-            продаётся за эту валюту), престиж — очки статуса. Тираж пустой — без ограничений.
+            продаётся за эту валюту), статус — очки статуса (не влияет на престиж «Карьеры игрока»). Тираж пустой — без ограничений. Эффект — польза для игрока:
+            быстрее восстанавливает свежесть, даёт бонус опыта или доход раз в неделю (суммируется по всем предметам).
           </p>
         </div>
         <button
@@ -106,23 +117,24 @@ export default function AdminLifestylePage() {
           <div key={item.id} className="flex items-center justify-between gap-2 rounded-xl border border-white/5 bg-bg-surface px-3 py-2">
             <div className="flex min-w-0 items-center gap-2">
               {item.image_path ? (
-                <img src={staticUrl(item.image_path) ?? undefined} className="h-10 w-10 rounded-lg object-cover" />
+                <img decoding="async" loading="lazy" src={staticUrl(item.image_path) ?? undefined} className="h-10 w-10 rounded-lg object-cover" />
               ) : (
                 <span className="text-2xl">{item.emoji}</span>
               )}
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{item.name}</p>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-caption text-slate-500">
                   {CATEGORIES.find((c) => c.code === item.category)?.label} · {item.coins_price > 0 && `🪙 ${item.coins_price} `}
-                  {item.stars_price > 0 && `⭐ ${item.stars_price} `}· престиж {item.prestige} · продано {item.sold_count}
+                  {item.stars_price > 0 && `⭐ ${item.stars_price} `}· статус {item.prestige} · продано {item.sold_count}
                   {item.max_supply != null && ` из ${item.max_supply}`}
+                  {item.effect !== "none" && ` · ${EFFECTS.find((e) => e.code === item.effect)?.label}: ${item.effect_value}`}
                   {!item.is_active && " · выключен"}
                 </p>
               </div>
             </div>
             <div className="flex shrink-0 gap-1">
-              <button onClick={() => openEdit(item)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-              <button onClick={() => confirmDelete(item)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">Удалить</button>
+              <button onClick={() => openEdit(item)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+              <button onClick={() => confirmDelete(item)} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">Удалить</button>
             </div>
           </div>
         ))}
@@ -155,7 +167,7 @@ export default function AdminLifestylePage() {
               </label>
               {num("coins_price", "Цена, монеты")}
               {num("stars_price", "Цена, звёзды ⭐")}
-              {num("prestige", "Престиж")}
+              {num("prestige", "Статус (очки)")}
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Тираж (пусто — без лимита)</span>
                 <input
@@ -165,13 +177,29 @@ export default function AdminLifestylePage() {
                 />
               </label>
               {num("sort_order", "Порядок")}
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Эффект</span>
+                <select value={form.effect} onChange={(e) => setForm({ ...form, effect: e.target.value })} className="rounded-lg bg-bg-surface px-3 py-2 outline-none">
+                  {EFFECTS.map((e) => <option key={e.code} value={e.code}>{e.label}</option>)}
+                </select>
+              </label>
+              {form.effect !== "none" && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-400">Размер ({EFFECTS.find((e) => e.code === form.effect)?.unit})</span>
+                  <input
+                    type="number" min={0} value={form.effect_value}
+                    onChange={(e) => setForm({ ...form, effect_value: Number(e.target.value) })}
+                    className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                  />
+                </label>
+              )}
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
                 В продаже
               </label>
               {editing !== "new" && (
                 <div className="col-span-2 flex items-center gap-2">
-                  {editing.image_path && <img src={staticUrl(editing.image_path) ?? undefined} className="h-12 w-12 rounded-lg object-cover" />}
+                  {editing.image_path && <img decoding="async" loading="lazy" src={staticUrl(editing.image_path) ?? undefined} className="h-12 w-12 rounded-lg object-cover" />}
                   <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && upload.mutate(e.target.files[0])} />
                   <button onClick={() => fileRef.current?.click()} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs">
                     {editing.image_path ? "Заменить картинку" : "Загрузить картинку"}

@@ -28,6 +28,8 @@ interface PackForm {
   coach_drop_chance: number;
   stadium_drop_chance: number;
   skill_token_drop_chance: number;
+  /** "path" = the «Академия» pack: diamond slots drop only path cards. */
+  player_pool: "default" | "path";
   guaranteed_min_rarity: Rarity | "";
   is_active: boolean;
   image_path: string | null;
@@ -49,6 +51,7 @@ function packToForm(p?: Pack): PackForm {
     coach_drop_chance: (p?.coach_drop_chance ?? 0) * 100,
     stadium_drop_chance: (p?.stadium_drop_chance ?? 0) * 100,
     skill_token_drop_chance: (p?.skill_token_drop_chance ?? 0) * 100,
+    player_pool: (p?.player_pool as PackForm["player_pool"]) ?? "default",
     guaranteed_min_rarity: p?.guaranteed_min_rarity ?? "",
     is_active: p?.is_active ?? true,
     image_path: p?.image_path ?? null,
@@ -95,6 +98,7 @@ export default function AdminPacksPage() {
     coach_drop_chance: form.coach_drop_chance / 100,
     stadium_drop_chance: form.stadium_drop_chance / 100,
     skill_token_drop_chance: form.skill_token_drop_chance / 100,
+    player_pool: form.player_pool,
     guaranteed_min_rarity: form.guaranteed_min_rarity || null,
     is_active: form.is_active,
     image_path: form.image_path,
@@ -136,7 +140,7 @@ export default function AdminPacksPage() {
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {packs?.map((p) => (
           <div key={p.id} className="flex gap-3 rounded-2xl border border-white/5 bg-bg-surface p-3">
-            <img src={staticUrl(p.image_path ?? undefined)} className="h-24 w-20 rounded-xl object-cover" />
+            <img decoding="async" loading="lazy" src={staticUrl(p.image_path ?? undefined)} className="h-24 w-20 rounded-xl object-cover" />
             <div className="flex-1">
               <p className="font-display text-sm font-bold">{p.name}</p>
               <p className="text-xs text-slate-400">
@@ -151,19 +155,19 @@ export default function AdminPacksPage() {
               )}
               <p className="text-xs text-slate-500">{p.is_active ? "Активен" : "Отключён"}</p>
               <div className="mt-2 flex flex-wrap gap-1">
-                <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-                <button onClick={() => toggleMutation.mutate(p.id)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">
+                <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+                <button onClick={() => toggleMutation.mutate(p.id)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">
                   {p.is_active ? "Отключить" : "Включить"}
                 </button>
                 <button
                   onClick={async () => setPreview({ pack: p, result: await previewPack(p.id) })}
-                  className="rounded-lg bg-white/5 px-2 py-1 text-[11px]"
+                  className="rounded-lg bg-white/5 px-2 py-1 text-caption"
                 >
                   Предпросмотр
                 </button>
                 <button
                   onClick={() => confirmDelete(p)}
-                  className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400"
+                  className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400"
                 >
                   Удалить
                 </button>
@@ -189,6 +193,17 @@ export default function AdminPacksPage() {
               <NumField label="Шанс тренера вместо игрока (%) — 0 = только игроки" value={form.coach_drop_chance} min={0} max={100} onChange={(v) => setForm({ ...form, coach_drop_chance: v })} />
               <NumField label="Шанс стадиона вместо игрока (%) — 0 = только игроки" value={form.stadium_drop_chance} min={0} max={100} onChange={(v) => setForm({ ...form, stadium_drop_chance: v })} />
               <NumField label="Шанс жетона навыка вместо игрока (%) — 100 = пак навыков; что выпадает — в «Навыки карточек»" value={form.skill_token_drop_chance} min={0} max={100} onChange={(v) => setForm({ ...form, skill_token_drop_chance: v })} />
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Пул игроков</span>
+                <select
+                  value={form.player_pool}
+                  onChange={(e) => setForm({ ...form, player_pool: e.target.value as PackForm["player_pool"] })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                >
+                  <option value="default">Обычный — карты «Академии» не выпадают</option>
+                  <option value="path">«Академия» — бриллиантовый слот = карта пути</option>
+                </select>
+              </label>
               {form.coach_drop_chance + form.stadium_drop_chance + form.skill_token_drop_chance > 100 && (
                 <p className="text-xs text-amber-300">Сумма шансов тренера, стадиона и жетона больше 100% — один бросок на слот, жетоны получат только остаток.</p>
               )}
@@ -254,7 +269,7 @@ export default function AdminPacksPage() {
                   <span className="text-xs text-slate-500">%</span>
                 </div>
               ))}
-              <p className="text-[11px] text-slate-500">Можно указывать доли процента, например 0.05%</p>
+              <p className="text-caption text-slate-500">Можно указывать доли процента, например 0.05%</p>
               {editing && <PackValueHint packId={editing.id} />}
               {Math.abs(probabilitySum - 1) > 0.02 && (
                 <p className="text-xs text-amber-400">Сумма шансов должна быть ≈ 100%, иначе сохранить нельзя</p>
@@ -267,7 +282,7 @@ export default function AdminPacksPage() {
               <div className="mt-2 flex flex-col gap-2">
                 <span className="text-xs font-semibold text-slate-400">Обложка пака</span>
                 <div className="flex items-center gap-3">
-                  <img
+                  <img decoding="async" loading="lazy"
                     src={staticUrl(form.image_path ?? undefined)}
                     className="h-20 w-16 rounded-lg border border-white/10 object-cover"
                   />
@@ -286,7 +301,7 @@ export default function AdminPacksPage() {
                     </div>
                   )}
                 </div>
-                <span className="text-[11px] text-slate-500">Или выбери готовый шаблон:</span>
+                <span className="text-caption text-slate-500">Или выбери готовый шаблон:</span>
                 <div className="flex gap-2">
                   {COVER_TEMPLATES.map((t) => (
                     <button
@@ -296,7 +311,7 @@ export default function AdminPacksPage() {
                       className={`overflow-hidden rounded-lg border-2 ${form.image_path === t.path ? "border-accent" : "border-transparent"}`}
                       title={RARITY_LABELS[t.rarity]}
                     >
-                      <img src={staticUrl(t.path)} className="h-16 w-12 object-cover" />
+                      <img decoding="async" loading="lazy" src={staticUrl(t.path)} className="h-16 w-12 object-cover" />
                     </button>
                   ))}
                 </div>
@@ -368,7 +383,7 @@ function PackValueHint({ packId }: { packId: number }) {
         Средняя ценность пака (быстрая продажа): <b>{data.expected_quick_sell_value}</b> монет при цене {data.price}
         {data.value_to_price != null && <> — <b>{Math.round(data.value_to_price * 100)}%</b> цены</>}
       </p>
-      <p className="mt-0.5 text-[11px] text-slate-500">
+      <p className="mt-0.5 text-caption text-slate-500">
         По сохранённым шансам; бонусы (тренер, стадион, жетон) и гарантия редкости не учтены.
       </p>
     </div>

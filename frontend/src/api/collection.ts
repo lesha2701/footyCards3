@@ -1,5 +1,7 @@
 import { api } from "@/lib/api";
 import type {
+  CardStarOperation,
+  CardStarState,
   CardUpgradeResult,
   CardUpgradeRule,
   CollectionStats,
@@ -82,14 +84,54 @@ export async function upgradeCards(
   userCardIds: number[],
   toRarity: Rarity,
   idempotencyKey?: string,
-  confirmSkillLoss = false
+  confirmSkillLoss = false,
+  confirmLeaveSquad = false,
 ): Promise<CardUpgradeResult> {
   const { data } = await api.post<CardUpgradeResult>("/collection/upgrade", {
     user_card_ids: userCardIds,
     to_rarity: toRarity,
     idempotency_key: idempotencyKey,
     confirm_skill_loss: confirmSkillLoss,
+    confirm_leave_squad: confirmLeaveSquad,
   });
+  return data;
+}
+
+/** The owner's «замок» on one or several copies (no selling, no burning). */
+export async function setCardsLocked(cardIds: number[], locked: boolean): Promise<{ card_ids: number[]; locked: boolean }> {
+  const { data } = await api.patch<{ card_ids: number[]; locked: boolean }>("/collection/cards/lock", {
+    card_ids: cardIds, locked,
+  });
+  return data;
+}
+
+export interface CardFilterOptions {
+  countries: string[];
+  clubs: string[];
+}
+
+export async function fetchCardFilterOptions(): Promise<CardFilterOptions> {
+  const { data } = await api.get<CardFilterOptions>("/collection/filter-options");
+  return data;
+}
+
+/** Saved default card filter (every field optional). */
+export interface CardFilterDefault {
+  rarity?: Rarity | null;
+  country?: string | null;
+  club?: string | null;
+  position?: string | null;
+  sort_by?: "rating" | "rarity" | "acquired_at" | null;
+  has_skill?: boolean | null;
+}
+
+export async function fetchCardFilterDefault(): Promise<CardFilterDefault | null> {
+  const { data } = await api.get<CardFilterDefault | null>("/collection/filter-default");
+  return data;
+}
+
+export async function saveCardFilterDefault(filter: CardFilterDefault | null): Promise<CardFilterDefault | null> {
+  const { data } = await api.put<CardFilterDefault | null>("/collection/filter-default", filter ?? {});
   return data;
 }
 
@@ -136,5 +178,23 @@ export interface SellDuplicatesResult {
  * counts them for the confirmation dialog. */
 export async function sellDuplicates(preview: boolean): Promise<SellDuplicatesResult> {
   const { data } = await api.post<SellDuplicatesResult>("/collection/cards/sell-duplicates", { preview });
+  return data;
+}
+
+export async function fetchCardStars(cardId: number): Promise<CardStarState> {
+  const { data } = await api.get<CardStarState>(`/collection/cards/${cardId}/stars`);
+  return data;
+}
+
+export async function feedCardStars(
+  cardId: number,
+  payload: { all_free?: boolean; material_card_ids?: number[]; confirm_skill_loss?: boolean; idempotency_key: string },
+): Promise<CardStarOperation> {
+  const { data } = await api.post<CardStarOperation>(`/collection/cards/${cardId}/stars/feed`, payload);
+  return data;
+}
+
+export async function claimCardStar(cardId: number, idempotencyKey: string): Promise<CardStarOperation> {
+  const { data } = await api.post<CardStarOperation>(`/collection/cards/${cardId}/stars/claim`, { idempotency_key: idempotencyKey });
   return data;
 }

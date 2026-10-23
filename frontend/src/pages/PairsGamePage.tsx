@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { claimPairsReward, flipPairsCard, startPairs } from "@/api/games";
 import { IconCard, IconCoin, IconTrophy } from "@/components/icons";
+import PrimaryActionButton from "@/components/common/PrimaryActionButton";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
 import { RARITY_GRADIENTS, RARITY_GLOW } from "@/lib/rarity";
@@ -121,13 +122,11 @@ export default function PairsGamePage() {
         </p>
 
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
-        <button
+        <PrimaryActionButton
+          text="Начать игру"
           onClick={() => startMutation.mutate()}
-          disabled={startMutation.isPending}
-          className="rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
-        >
-          {startMutation.isPending ? "Загрузка..." : "Начать игру"}
-        </button>
+          loading={startMutation.isPending}
+        />
       </div>
     );
   }
@@ -174,11 +173,11 @@ export default function PairsGamePage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between rounded-2xl bg-bg-surface px-4 py-3">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-wide text-ink-mist-dim">Пары</p>
+          <p className="font-mono text-micro uppercase tracking-wide text-ink-mist-dim">Пары</p>
           <p className="font-display text-lg font-bold text-ink-chalk">{matchedPairs}/{totalPairs}</p>
         </div>
         <div className="text-right">
-          <p className="font-mono text-[10px] uppercase tracking-wide text-ink-mist-dim">Ошибки</p>
+          <p className="font-mono text-micro uppercase tracking-wide text-ink-mist-dim">Ошибки</p>
           <p className="font-display text-lg font-bold text-ink-chalk">{wrongAttempts}</p>
         </div>
       </div>
@@ -238,7 +237,7 @@ function Tile({
       }`}
     >
       <div className="flex h-full w-full flex-col overflow-hidden rounded-[10px] bg-bg-surface">
-        <img
+        <img decoding="async" loading="lazy"
           src={staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
           alt={player.display_name}
           className="h-full w-full object-cover"

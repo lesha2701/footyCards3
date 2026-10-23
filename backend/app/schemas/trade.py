@@ -1,10 +1,11 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import TradeStatus
 from app.schemas.card import UserCardOut
+from app.schemas.player import PlayerOut
 from app.schemas.user import UserPublicOut
 
 
@@ -57,3 +58,43 @@ class TradeCreateRequest(BaseModel):
         if not self.offered_card_ids and not self.requested_card_ids and not self.sender_coins and not self.receiver_coins:
             raise ValueError("Trade must include at least one card or coin amount")
         return self
+
+
+class TradeRulesOut(BaseModel):
+    """Anti-farming rules as they apply to the current player right now."""
+
+    can_give: bool
+    give_block_reason: Optional[str] = None
+    min_account_age_days: int
+    min_active_days: int
+    daily_coins_receive_cap: int
+    coins_received_today: int
+    coin_tax_pct: int
+    coins_enabled: bool
+    cards_both_sides: bool
+
+
+class TradeWishRequest(BaseModel):
+    kind: Literal["want", "give"]
+    player_id: int
+
+
+class TradeWishesOut(BaseModel):
+    wants: list[PlayerOut]
+    gives: list[PlayerOut]
+    max_wants: int
+    max_gives: int
+
+
+class TradeMatchCardOut(BaseModel):
+    card_id: int
+    player: PlayerOut
+    # The owner put this player in their «Отдаю» list.
+    marked_to_give: bool = False
+
+
+class TradeMatchOut(BaseModel):
+    user: UserPublicOut
+    mutual: bool
+    they_have: list[TradeMatchCardOut]
+    they_want: list[TradeMatchCardOut]

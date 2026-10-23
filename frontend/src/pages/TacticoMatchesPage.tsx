@@ -13,6 +13,7 @@ import TacticoRulesModal from "@/components/tactico/TacticoRulesModal";
 import { formatGameError } from "@/lib/errors";
 import { openTelegramLink } from "@/lib/telegram";
 import type { MatchDifficulty, TacticoMatch, UserPublic } from "@/types";
+import { clampStake, stakeLabel, useStakeMax } from "@/lib/stakes";
 
 type Tab = "pending" | "active" | "history";
 
@@ -141,7 +142,7 @@ export default function TacticoMatchesPage() {
                 <IconPlay size={20} />
                 Играть
               </button>
-              <p className="-mt-2 text-center text-[11px] text-ink-mist-dim">
+              <p className="-mt-2 text-center text-caption text-ink-mist-dim">
                 За онлайн-матч рейтинг в <span className="font-semibold text-accent-lime">2 раза больше</span>, чем с ботом или другом
               </p>
             </>
@@ -241,7 +242,7 @@ function MatchRow({ match, onClick }: { match: TacticoMatch; onClick: () => void
     <button onClick={onClick} className="flex items-center justify-between rounded-2xl bg-bg-surface p-4 text-left active:scale-[0.98]">
       <div>
         <p className="font-display text-sm font-bold text-ink-chalk">{match.opponent_name || "Открытый вызов"}</p>
-        <p className="mt-0.5 text-[11px] text-ink-mist">
+        <p className="mt-0.5 text-caption text-ink-mist">
           {OPPONENT_TYPE_LABELS[match.opponent_type]} · {STATUS_LABELS[match.status]}
           {match.stake_coins > 0 && ` · Ставка ${match.stake_coins}`}
         </p>
@@ -301,24 +302,27 @@ function ChallengeSheet({ onClose, onPick }: { onClose: () => void; onPick: (use
 
 function ChatInviteSheet({ busy, onClose, onCreate }: { busy: boolean; onClose: () => void; onCreate: (stakeCoins: number) => void }) {
   const [stake, setStake] = useState("0");
-  const stakeCoins = Math.max(0, Math.floor(Number(stake) || 0));
+  const maxStake = useStakeMax();
+  const stakeCoins = clampStake(stake, maxStake);
 
   return (
     <Sheet title="Вызвать соперника через чат" onClose={onClose}>
       <p className="mb-3 text-xs text-ink-mist">
         Создадим вызов и откроем окно «Поделиться» — выбери чат, куда его отправить. Первый, кто примет вызов, станет твоим соперником.
       </p>
-      <label className="mb-1 block text-xs text-ink-mist-dim">Ставка, монеты (0 — без ставки)</label>
+      <label className="mb-1 block text-xs text-ink-mist-dim">{stakeLabel(maxStake)}</label>
       <input
         type="number"
         min={0}
         inputMode="numeric"
         value={stake}
+        max={maxStake || undefined}
+        disabled={maxStake === 0}
         onChange={(e) => setStake(e.target.value)}
         className="mb-3 w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk outline-none"
       />
       {stakeCoins > 0 && (
-        <p className="mb-3 text-[11px] text-ink-mist-dim">
+        <p className="mb-3 text-caption text-ink-mist-dim">
           Победитель заберёт {stakeCoins * 2} монет — по {stakeCoins} с каждой стороны.
         </p>
       )}

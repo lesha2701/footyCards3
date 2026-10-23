@@ -37,6 +37,9 @@ function apply(theme: Theme) {
   const webApp = getTelegramWebApp();
   webApp?.setHeaderColor?.(CHROME[theme].header);
   webApp?.setBackgroundColor?.(CHROME[theme].background);
+  // The bottom nav sits on the surface colour — match Telegram's bottom bar
+  // to it so there's no seam under the tab bar.
+  webApp?.setBottomBarColor?.(CHROME[theme].header);
 }
 
 interface UiState {

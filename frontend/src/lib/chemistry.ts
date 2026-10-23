@@ -1,4 +1,5 @@
 import type { ChemistryLink, ChemistryLinkLevel, ChemistryOut, ChemistryRules, PlayerChemistry } from "@/types";
+import { onIdealPosition } from "@/lib/formation";
 
 /**
  * Client-side mirror of backend services/chemistry_service.compute_chemistry,
@@ -16,6 +17,12 @@ export interface ChemistryPlayerInput {
   country: string;
   position: string;
   idealPosition: string;
+  /** «Экипировка» of this card: its own +chemistry, and a national-team set
+   * («Комплект сборной») giving +teamChemistry to every on-position player
+   * of teamCountry in the squad (backend equipment_service). */
+  equipmentChemistry?: number;
+  teamCountry?: string | null;
+  teamChemistry?: number;
 }
 
 export interface ChemistryResult {
@@ -70,6 +77,11 @@ export function computeChemistry(
   extras: ChemistryExtras = {},
 ): ChemistryResult {
   const coachCountry = groupKey(extras.coachCountry), stadiumClub = groupKey(extras.stadiumClub);
+  const teamPoints = new Map<string, number>();
+  for (const p of players) {
+    const country = groupKey(p.teamCountry);
+    if (country && p.teamChemistry) teamPoints.set(country, Math.max(teamPoints.get(country) ?? 0, p.teamChemistry));
+  }
   const bySlot = new Map(players.map((p) => [p.slot, p]));
   const linkSums = new Map(players.map((p) => [p.slot, 0]));
   const links: ChemistryLink[] = [];
@@ -84,13 +96,15 @@ export function computeChemistry(
   }
   const result: Record<string, PlayerChemistry> = {};
   for (const p of players) {
-    const onPosition = p.position === p.idealPosition;
+    const onPosition = onIdealPosition(p.position, p.idealPosition);
     const linkSum = linkSums.get(p.slot) ?? 0;
     const base = playerPoints(linkSum, onPosition, rules);
     // Extras after the thresholds, on-position only, capped at player_max (chemistry_service.compute_chemistry).
     const coachBonus = onPosition && coachCountry !== null && groupKey(p.country) === coachCountry ? Math.max(0, rules.coach_country_points ?? 0) : 0;
     const stadiumBonus = onPosition && stadiumClub !== null && groupKey(p.club) === stadiumClub ? Math.max(0, rules.stadium_club_points ?? 0) : 0;
-    const points = coachBonus || stadiumBonus ? Math.min(Math.max(0, rules.player_max), base + coachBonus + stadiumBonus) : base;
+    const equipmentBonus = onPosition ? (p.equipmentChemistry ?? 0) + (teamPoints.get(groupKey(p.country) ?? "") ?? 0) : 0;
+    const extra = coachBonus + stadiumBonus + equipmentBonus;
+    const points = extra ? Math.min(Math.max(0, rules.player_max), base + extra) : base;
     result[p.slot] = {
       slot_code: p.slot, points, link_sum: linkSum, on_position: onPosition,
       rating_bonus: points * rules.rating_per_point - (onPosition ? 0 : rules.off_position_penalty),
@@ -105,6 +119,27 @@ interface SlotLike {
   slot_code: string;
   ideal_position: string;
   player: { id: number; display_name: string; club: string; country: string; position: string } | null;
+  /** The slot's card «Экипировка» (Card Arena slots carry the whole card). */
+  equipment?: CardEquipmentChemistry | null;
+}
+
+/** What a card's worn things mean for chemistry, from UserCard fields. */
+export interface CardEquipmentChemistry {
+  equipmentChemistry?: number;
+  teamCountry?: string | null;
+  teamChemistry?: number;
+}
+
+export function equipmentChemistryOf(card: {
+  equipment_chemistry?: number;
+  equipment_boosts?: Record<string, unknown> | null;
+} | null | undefined): CardEquipmentChemistry {
+  const boosts = card?.equipment_boosts ?? {};
+  return {
+    equipmentChemistry: card?.equipment_chemistry ?? 0,
+    teamCountry: typeof boosts.team_country === "string" ? boosts.team_country : null,
+    teamChemistry: typeof boosts.team_chemistry === "number" ? boosts.team_chemistry : 0,
+  };
 }
 
 export interface ChemistryCandidate {
@@ -127,13 +162,17 @@ export interface ChemistrySwapHint {
 function inputsOf(slots: SlotLike[]): ChemistryPlayerInput[] {
   return slots
     .filter((s) => s.player)
-    .map((s) => ({ slot: s.slot_code, club: s.player!.club, country: s.player!.country, position: s.player!.position, idealPosition: s.ideal_position }));
+    .map((s) => ({
+      slot: s.slot_code, club: s.player!.club, country: s.player!.country, position: s.player!.position,
+      idealPosition: s.ideal_position, ...(s.equipment ?? {}),
+    }));
 }
 
 /** Team-chemistry change if `candidate` is put into `slotCode` (replacing
  * whoever is there). null when the server has chemistry switched off. */
 export function chemistryGain(
-  chemistry: ChemistryOut | undefined, slots: SlotLike[], slotCode: string, candidate: Omit<ChemistryCandidate, "cardId" | "playerId" | "name">,
+  chemistry: ChemistryOut | undefined, slots: SlotLike[], slotCode: string,
+  candidate: Omit<ChemistryCandidate, "cardId" | "playerId" | "name"> & CardEquipmentChemistry,
 ): number | null {
   if (!chemistry?.enabled || !chemistry.rules) return null;
   const target = slots.find((s) => s.slot_code === slotCode);
@@ -143,7 +182,11 @@ export function chemistryGain(
   const after = computeChemistry(
     [
       ...inputsOf(slots.filter((s) => s.slot_code !== slotCode)),
-      { slot: slotCode, club: candidate.club, country: candidate.country, position: candidate.position, idealPosition: target.ideal_position },
+      {
+        slot: slotCode, club: candidate.club, country: candidate.country, position: candidate.position,
+        idealPosition: target.ideal_position, equipmentChemistry: candidate.equipmentChemistry,
+        teamCountry: candidate.teamCountry, teamChemistry: candidate.teamChemistry,
+      },
     ],
     chemistry.adjacency, chemistry.rules, slots.length, extras,
   ).team;

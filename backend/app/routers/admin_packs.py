@@ -106,6 +106,17 @@ async def upload_pack_image(pack_id: int, request: Request, file: UploadFile = F
 @router.post("/{pack_id}/toggle-active", response_model=PackOut)
 async def toggle_pack_active(pack_id: int, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
     pack = await _get_pack_or_404(db, pack_id)
+    if not pack.is_active:
+        # «Академия» pack: switching it on with no «Академия» players would
+        # only produce failed openings — say so here instead.
+        from sqlalchemy.orm import selectinload
+
+        from app.services.pack_service import assert_pool_ready
+
+        full = (await db.execute(
+            select(Pack).where(Pack.id == pack.id).options(selectinload(Pack.rarity_probabilities))
+        )).scalar_one()
+        await assert_pool_ready(db, full)
     pack.is_active = not pack.is_active
     db.add(pack)
     await log_action(db, admin.id, "toggle_pack_active", "pack", pack_id, new_value={"is_active": pack.is_active}, ip_address=request.client.host if request.client else None)

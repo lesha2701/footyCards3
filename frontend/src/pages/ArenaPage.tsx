@@ -2,17 +2,23 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
-import CardSkillBadge from "@/components/cards/CardSkillBadge";
+import PitchCardTile from "@/components/cards/PitchCardTile";
 import MatchSkillNotes from "@/components/cards/MatchSkillNotes";
+import MatchPathSummary from "@/components/path/MatchPathSummary";
 import MatchSkillSummary from "@/components/cards/MatchSkillSummary";
 import { skillByCode, skillInactiveReason, useSkillCatalog } from "@/lib/cardSkills";
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
 import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPickerModal";
 import EmptyState from "@/components/common/EmptyState";
+import ShareButton from "@/components/common/ShareButton";
+import MatchPitchView from "@/components/match/MatchPitchView";
+import MatchSheet from "@/components/match/MatchSheet";
+import MatchStatsTable from "@/components/match/MatchStatsTable";
+import { ArenaDivisionCard, ArenaMatchReport, ArenaMatchupLine, ArenaOpponentCard } from "@/components/arena/ArenaPanels";
 import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
 import BenchUpgradeHints from "@/components/squad/BenchUpgradeHints";
 import { ChemistryDiamonds, ChemistryHints, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
-import { chemistryGain, chemistrySwapHints, type ChemistrySwapHint } from "@/lib/chemistry";
+import { chemistryGain, chemistrySwapHints, equipmentChemistryOf, type ChemistrySwapHint } from "@/lib/chemistry";
 import {
   IconBall,
   IconBoot,
@@ -31,14 +37,16 @@ import {
   activateLineupTemplate,
   autoFillLineupTemplate,
   fetchLineupBenchUpgrades, fetchLineupTemplates, fetchUserCoachCards, fetchUserStadiumCards,
-  renameLineupTemplate, setLineupTemplate, setLineupTemplateCoach, setLineupTemplateStadium, setLineupTemplateTactic,
+  renameLineupTemplate, setLineupTemplate, setLineupTemplateCoach, setLineupTemplateFormation, setLineupTemplateStadium,
+  setLineupTemplateTactic,
   type BenchUpgrade,
 } from "@/api/lineups";
-import { actMatch, fetchArenaStats, fetchMatchHistory, forfeitMatch, playMatch } from "@/api/matches";
+import { actMatch, fetchArenaOpponent, fetchArenaStats, fetchMatchHistory, forfeitMatch, playMatch } from "@/api/matches";
 import { staticUrl } from "@/lib/api";
 import { BOOST_TYPE_LABELS } from "@/lib/coaches";
-import { CATEGORY_LABELS, CATEGORY_POSITIONS, TACTICS, type FormationSlot } from "@/lib/formation";
+import { CATEGORY_LABELS, CATEGORY_POSITIONS, TACTIC_LABELS, TACTICS, type FormationSlot } from "@/lib/formation";
 import { formatGameError } from "@/lib/errors";
+import { FORMATION_LABELS, formationLabel, inRow, pitchRows } from "@/lib/formationLayout";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
@@ -82,6 +90,11 @@ export default function ArenaPage() {
   const [matchError, setMatchError] = useState<string | null>(null);
   const [lineupError, setLineupError] = useState<string | null>(null);
   const [simulating, setSimulating] = useState(false);
+  // The match plays in a sheet over the lineup. `matchReopened` = the sheet
+  // was reopened for a match that already finished, so it shows the final
+  // state instead of replaying (and never re-credits the reward).
+  const [matchSheetOpen, setMatchSheetOpen] = useState(false);
+  const [matchReopened, setMatchReopened] = useState(false);
   const [strengthHintOpen, setStrengthHintOpen] = useState(false);
   const pitchRef = useRef<HTMLDivElement>(null);
   const [coachPickerOpen, setCoachPickerOpen] = useState(false);
@@ -98,6 +111,28 @@ export default function ArenaPage() {
   const setTacticMutation = useMutation({
     mutationFn: (tactic: LineupTactic) => setLineupTemplateTactic(viewedIndex, tactic),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["lineup-templates"] }),
+  });
+
+  const setFormationMutation = useMutation({
+    mutationFn: (formation: string) => setLineupTemplateFormation(viewedIndex, formation),
+    onSuccess: () => { haptic("light"); setLineupError(null); queryClient.invalidateQueries({ queryKey: ["lineup-templates"] }); },
+    onError: (err) => setLineupError(formatGameError(err, "Не удалось сменить схему")),
+  });
+
+  // The next opponent is found once on the server and kept until that match
+  // is played; the key follows the active squad's style/strength so the
+  // matchup and chances refresh as soon as the player changes them.
+  const activeLineup = templates?.find((t) => t.is_active);
+  const { data: preview, isFetching: previewFetching } = useQuery({
+    queryKey: ["arena-opponent", activeLineup?.tactic, activeLineup?.team_strength],
+    queryFn: fetchArenaOpponent,
+    enabled: !!activeLineup?.is_complete && !simulating,
+    placeholderData: (prev) => prev,
+    staleTime: 60_000,
+  });
+  const activeStyleMutation = useMutation({
+    mutationFn: (tactic: LineupTactic) => setLineupTemplateTactic(activeIndex, tactic),
+    onSuccess: () => { haptic("light"); queryClient.invalidateQueries({ queryKey: ["lineup-templates"] }); },
   });
 
   const setCoachMutation = useMutation({
@@ -137,6 +172,9 @@ export default function ArenaPage() {
       setMatch(data);
       setMatchError(null);
       setSimulating(true);
+      queryClient.removeQueries({ queryKey: ["arena-opponent"] });
+      setMatchReopened(false);
+      setMatchSheetOpen(true);
       // Balance, stats and history only update once the simulation finishes
       // playing out (MatchSimulation's onFinished) so the result isn't spoiled.
     },
@@ -194,7 +232,7 @@ export default function ArenaPage() {
   const nativePlayButton = useTelegramMainButton({
     text: "Играть матч",
     onClick: () => playMutation.mutate(),
-    visible: !simulating && match?.status !== "in_progress",
+    visible: !simulating && match?.status !== "in_progress" && !matchSheetOpen,
     enabled: !!lineup?.is_complete,
     loading: playMutation.isPending,
   });
@@ -209,10 +247,17 @@ export default function ArenaPage() {
   )?.map((s) => s.card!.player.id) ?? [];
 
   const maxDiamond = lineup?.max_diamond ?? 1;
-  const diamondCount = (pickerSlot
+  // «Академия» cards are diamonds with a squad limit of their own.
+  const maxPath = lineup?.max_path ?? 1;
+  const isPlainDiamond = (p: { rarity: string; path_talent_code?: string | null }) => p.rarity === "diamond" && !p.path_talent_code;
+  const otherSlots = (pickerSlot
     ? lineup?.slots.filter((s) => s.card && s.slot_code !== pickerSlot.code)
     : lineup?.slots.filter((s) => s.card)
-  )?.filter((s) => s.card!.player.rarity === "diamond").length ?? 0;
+  ) ?? [];
+  const diamondCount = otherSlots.filter((s) => isPlainDiamond(s.card!.player)).length;
+  const pathCount = otherSlots.filter((s) => !!s.card!.player.path_talent_code).length;
+  const limitBlocked = (c: UserCard) =>
+    (isPlainDiamond(c.player) && diamondCount >= maxDiamond) || (!!c.player.path_talent_code && pathCount >= maxPath);
 
   const cardsForSlot = (slot: FormationSlot): UserCard[] => {
     const positions = CATEGORY_POSITIONS[slot.category];
@@ -240,15 +285,21 @@ export default function ArenaPage() {
   const chemistry = lineup?.chemistry;
   const chemistryOn = !!chemistry?.enabled;
   const chemBySlot = new Map((chemistry?.players ?? []).map((p) => [p.slot_code, p]));
-  const chemSlots = (lineup?.slots ?? []).map((s) => ({ slot_code: s.slot_code, ideal_position: s.ideal_position, player: s.card?.player ?? null }));
+  const chemSlots = (lineup?.slots ?? []).map((s) => ({
+    slot_code: s.slot_code, ideal_position: s.ideal_position, player: s.card?.player ?? null,
+    equipment: s.card ? equipmentChemistryOf(s.card) : null,
+  }));
   const diamondsOutside = (slotCode: string) =>
-    (lineup?.slots ?? []).filter((s) => s.card && s.slot_code !== slotCode && s.card.player.rarity === "diamond").length;
+    (lineup?.slots ?? []).filter((s) => s.card && s.slot_code !== slotCode && isPlainDiamond(s.card.player)).length;
+  const pathOutside = (slotCode: string) =>
+    (lineup?.slots ?? []).filter((s) => s.card && s.slot_code !== slotCode && !!s.card.player.path_talent_code).length;
   const chemistryHints = chemistryOn
     ? chemistrySwapHints(chemistry, chemSlots, (slot) => {
         const positions = CATEGORY_POSITIONS[(lineup?.slots.find((s) => s.slot_code === slot.slot_code)?.category ?? "GK") as FormationSlot["category"]];
         return (collectionPage?.items ?? [])
           .filter((c) => positions.includes(c.player.position))
-          .filter((c) => c.player.rarity !== "diamond" || diamondsOutside(slot.slot_code) < maxDiamond)
+          .filter((c) => !isPlainDiamond(c.player) || diamondsOutside(slot.slot_code) < maxDiamond)
+          .filter((c) => !c.player.path_talent_code || pathOutside(slot.slot_code) < maxPath)
           .map((c) => ({ cardId: c.id, playerId: c.player.id, name: c.player.display_name, club: c.player.club, country: c.player.country, position: c.player.position }));
       })
     : [];
@@ -261,10 +312,10 @@ export default function ArenaPage() {
   };
   const pickerChemistryNote = (card: UserCard) => {
     if (!chemistryOn || !pickerSlot) return null;
-    const gain = chemistryGain(chemistry, chemSlots, pickerSlot.code, card.player);
+    const gain = chemistryGain(chemistry, chemSlots, pickerSlot.code, { ...card.player, ...equipmentChemistryOf(card) });
     if (gain == null) return null;
     return (
-      <span className={`font-mono text-[10px] font-bold ${gain > 0 ? "text-accent-green" : gain < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
+      <span className={`font-mono text-micro font-bold ${gain > 0 ? "text-accent-green" : gain < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
         {gain > 0 ? "+" : ""}{gain} хим.
       </span>
     );
@@ -276,10 +327,12 @@ export default function ArenaPage() {
     <div className="flex flex-col gap-5">
       <h1 className="font-display text-xl font-bold text-ink-chalk">Card Arena</h1>
 
+      {stats?.division && <ArenaDivisionCard division={stats.division} rank={stats.arena_rank} />}
+
       {stats && (
         <div className="grid grid-cols-3 gap-2 text-center">
-          <MiniStat label="Рейтинг" value={stats.arena_rating} />
-          <MiniStat label="Место в рейтинге" value={stats.arena_rank != null ? `#${stats.arena_rank}` : "—"} />
+          <MiniStat label="Рейтинг лиги" value={stats.arena_rating} />
+          <MiniStat label="В · Н · П" value={`${stats.matches_won}·${stats.matches_drawn}·${stats.matches_lost}`} />
           <div className="rounded-xl bg-bg-surface py-2">
             <div className="flex items-center justify-center gap-1">
               {lastFive.length ? (
@@ -288,7 +341,7 @@ export default function ArenaPage() {
                 <span className="font-mono text-xs text-ink-mist-dim">—</span>
               )}
             </div>
-            <p className="mt-1 text-[10px] text-ink-mist-dim">Форма</p>
+            <p className="mt-1 text-micro text-ink-mist-dim">Форма</p>
           </div>
         </div>
       )}
@@ -304,9 +357,9 @@ export default function ArenaPage() {
               t.template_index === viewedIndex ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
             }`}
           >
-            <span className="whitespace-nowrap text-[11px] font-bold">{t.name}</span>
+            <span className="whitespace-nowrap text-caption font-bold">{t.name}</span>
             {t.is_active && (
-              <span className={`text-[8px] ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
+              <span className={`text-micro ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
                 Активный
               </span>
             )}
@@ -334,7 +387,7 @@ export default function ArenaPage() {
       ) : (
         <button
           onClick={() => { setRenameValue(lineup?.name ?? ""); setRenamingTemplate(true); }}
-          className="self-start text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2"
+          className="self-start text-caption font-semibold text-ink-mist-dim underline underline-offset-2"
         >
           Переименовать «{lineup?.name}»
         </button>
@@ -353,9 +406,9 @@ export default function ArenaPage() {
       <section className="rounded-2xl bg-bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <p className="font-display text-base font-bold text-ink-chalk">Состав 4-3-3</p>
+            <p className="font-display text-base font-bold text-ink-chalk">Состав {formationLabel(lineup?.formation ?? "4-3-3")}</p>
             {lineupSkills.length > 0 && (
-              <p className="text-[11px] text-ink-mist">
+              <p className="text-caption text-ink-mist">
                 Навыки: действуют {activeLineupSkills.length} из {lineupSkills.length}
                 {activeLineupSkills.length < lineupSkills.length && " (зачёркнутые здесь не работают)"}
               </p>
@@ -363,7 +416,7 @@ export default function ArenaPage() {
             <button
               onClick={() => autoFillMutation.mutate()}
               disabled={autoFillMutation.isPending}
-              className="mt-1 rounded-full bg-accent-lime/15 px-2.5 py-1 text-[11px] font-semibold text-accent-lime disabled:opacity-50"
+              className="mt-1 rounded-full bg-accent-lime/15 px-2.5 py-1 text-caption font-semibold text-accent-lime disabled:opacity-50"
             >
               {autoFillMutation.isPending ? "Собираем..." : "Собрать лучший состав"}
             </button>
@@ -374,14 +427,15 @@ export default function ArenaPage() {
               className="flex items-center gap-1 font-mono text-sm font-bold text-accent-cyan"
             >
               Сила: {lineup.team_strength}
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold text-ink-mist-dim">?</span>
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/10 text-micro font-bold text-ink-mist-dim">?</span>
             </button>
           )}
         </div>
         {strengthHintOpen && (
-          <div className="mb-3 rounded-xl bg-white/5 px-3 py-2 text-[11px] leading-relaxed text-ink-mist">
+          <div className="mb-3 rounded-xl bg-white/5 px-3 py-2 text-caption leading-relaxed text-ink-mist">
             <p className="mb-1 font-semibold text-ink-chalk">Что влияет на силу состава:</p>
             <p>· Позиция игрока: 100% рейтинга на своей позиции, 90% на смежной, 75% не по профилю</p>
+            <p>· Схема: определяет позиции и соседей для химии; атакующие схемы (3-4-3, 4-4-2) чуть усиливают атаку и ослабляют защиту, оборонительные (5-3-2, 4-3-3 с опорником) — наоборот</p>
             {chemistryOn ? (
               <p>· Химия: связи с соседями по схеме — каждое очко химии игрока добавляет рейтинг в матче</p>
             ) : (
@@ -389,7 +443,7 @@ export default function ArenaPage() {
             )}
             <p>· Редкость карточки: чем выше редкость, тем больше вклад рейтинга в силу</p>
             <p>· Тренер: даёт бонус к силе по своей редкости</p>
-            <p>· Тактика: атакующая усиливает нападающих, оборонительная — защитников, сбалансированная даёт небольшой бонус всем — выгоднее та тактика, что совпадает с сильной стороной состава</p>
+            <p>· Стиль игры: каждый усиливает свою линию (Атака — нападение, Владение — полузащиту, Оборона — защиту и вратаря, Контратака — понемногу оба края), а против стиля соперника может дать ещё бонус</p>
             <p className="mt-1 text-ink-mist-dim">Поэтому простая замена на игрока с более высоким рейтингом не всегда увеличивает силу — важна ещё позиция, химия и тактика.</p>
           </div>
         )}
@@ -398,19 +452,40 @@ export default function ArenaPage() {
         </div>
         <ChemistrySummary chemistry={chemistry} />
         <ChemistryHints hints={chemistryHints} onApply={applyChemistryHint} busy={setLineupMutation.isPending} />
-        <p className="mb-3 text-[11px] font-semibold">
+        <p className="mb-3 text-caption font-semibold">
           <span className={`rounded-full px-2.5 py-1 ${diamondCount >= maxDiamond ? "bg-rarity-diamond/20 text-rarity-diamond" : "bg-white/5 text-ink-mist"}`}>
             Диамантовых: {diamondCount}/{maxDiamond}
           </span>
+          {pathCount > 0 && (
+            <span className={`ml-1.5 rounded-full px-2.5 py-1 ${pathCount >= maxPath ? "bg-emerald-400/20 text-path" : "bg-white/5 text-ink-mist"}`}>
+              🌱 Академия: {pathCount}/{maxPath}
+            </span>
+          )}
         </p>
+        <div className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
+          {Object.keys(FORMATION_LABELS).map((code) => {
+            const active = (lineup?.formation ?? "4-3-3") === code;
+            return (
+              <button
+                key={code}
+                onClick={() => !active && setFormationMutation.mutate(code)}
+                disabled={setFormationMutation.isPending}
+                className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-[11px] font-bold disabled:opacity-60 ${
+                  active ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
+                }`}
+              >
+                {FORMATION_LABELS[code]}
+              </button>
+            );
+          })}
+        </div>
         <div ref={pitchRef} className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
           <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
           <div className="pointer-events-none absolute inset-x-3 top-1/2 h-px -translate-y-1/2 bg-white/10" />
           <div className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
-          {(["FWD", "MID", "DEF", "GK"] as const).map((category) => (
-            <div key={category} className="relative flex justify-evenly gap-2">
-              {lineup?.slots
-                .filter((slot) => slot.category === category)
+          {pitchRows(lineup?.formation, (lineup?.slots ?? []).map((s) => s.slot_code)).map((row) => (
+            <div key={row.key} className="relative flex justify-evenly gap-2">
+              {inRow(row, lineup?.slots ?? [])
                 .map((slot) => {
                   const formationSlot = { code: slot.slot_code, category: slot.category as FormationSlot["category"], idealPosition: slot.ideal_position };
                   return (
@@ -422,22 +497,16 @@ export default function ArenaPage() {
                       className="flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 disabled:opacity-60"
                     >
                       {slot.card ? (
-                        <>
-                          <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                            <img
-                              src={
-                                staticUrl(slot.card.player.image_path ?? undefined) ??
-                                staticUrl("players/placeholder/player_placeholder.webp")
-                              }
-                              alt=""
-                              className="h-full w-full object-cover"
-                              loading="lazy"
-                            />
-                          </div>
-                          <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[9px] font-bold leading-none text-accent-cyan">
-                            {slot.card.player.position}
-                          </span>
-                          <span className="font-mono text-[9px] font-bold leading-none text-accent-lime">{slot.card.player.rating}</span>
+                        <PitchCardTile
+                          player={slot.card.player}
+                          stars={slot.card.stars}
+                          pathStage={slot.card.path_stage}
+                          prestige={slot.card.prestige}
+                          talentOverride={slot.card.talent_override}
+                          skillCode={slot.card.skill_code}
+                          skillLevel={slot.card.skill_level}
+                          skillInactiveReason={skillInactive(slot.card.skill_code, slot.card.player.position)}
+                        >
                           {chemistryOn && chemBySlot.has(slot.slot_code) && (
                             <ChemistryDiamonds
                               points={chemBySlot.get(slot.slot_code)!.points}
@@ -445,22 +514,17 @@ export default function ArenaPage() {
                               onPosition={chemBySlot.get(slot.slot_code)!.on_position}
                             />
                           )}
-                          <CardSkillBadge
-                            code={slot.card.skill_code}
-                            level={slot.card.skill_level}
-                            inactiveReason={skillInactive(slot.card.skill_code, slot.card.player.position)}
-                          />
-                        </>
+                        </PitchCardTile>
                       ) : (
                         <>
                           <IconPlus size={18} className="text-ink-mist-dim" />
-                          <span className="text-[9px] text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
+                          <span className="text-micro text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
                         </>
                       )}
                     </button>
                   );
                 })}
-              {category === "GK" && (
+              {row.category === "GK" && (
                 <button
                   onClick={() => setCoachPickerOpen(true)}
                   disabled={setCoachMutation.isPending}
@@ -469,22 +533,22 @@ export default function ArenaPage() {
                   {lineup?.coach ? (
                     <>
                       <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                        <img
+                        <img decoding="async"
                           src={staticUrl(lineup.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
                       </div>
-                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">Тренер</span>
+                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">Тренер</span>
                     </>
                   ) : (
                     <>
                       <IconPlus size={16} className="text-ink-mist-dim" />
-                      <span className="text-[8px] text-ink-mist-dim">Тренер</span>
+                      <span className="text-micro text-ink-mist-dim">Тренер</span>
                     </>
                   )}
                 </button>
               )}
-              {category === "GK" && (
+              {row.category === "GK" && (
                 <button
                   onClick={() => setStadiumPickerOpen(true)}
                   disabled={setStadiumMutation.isPending}
@@ -493,19 +557,19 @@ export default function ArenaPage() {
                   {lineup?.stadium ? (
                     <>
                       <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                        <img
+                        <img decoding="async"
                           src={staticUrl(lineup.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
                       </div>
-                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-[8px] font-bold leading-none text-accent-cyan">
+                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">
                         +{Math.round(lineup.stadium.boost_pct * 100)}%
                       </span>
                     </>
                   ) : (
                     <>
                       <IconPlus size={16} className="text-ink-mist-dim" />
-                      <span className="text-[8px] text-ink-mist-dim">Стадион</span>
+                      <span className="text-micro text-ink-mist-dim">Стадион</span>
                     </>
                   )}
                 </button>
@@ -516,7 +580,7 @@ export default function ArenaPage() {
         {lineup?.coach && (
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{lineup.coach.display_name}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">
+            <p className="mt-0.5 text-caption text-ink-mist">
               {lineup.coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
             </p>
           </div>
@@ -524,14 +588,17 @@ export default function ArenaPage() {
         {lineup?.stadium && (
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{lineup.stadium.display_name}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">+{Math.round(lineup.stadium.boost_pct * 100)}% к силе</p>
+            <p className="mt-0.5 text-caption text-ink-mist">+{Math.round(lineup.stadium.boost_pct * 100)}% к силе</p>
           </div>
         )}
       </section>
 
       <section className="rounded-2xl bg-bg-surface p-4">
-        <p className="mb-3 font-display text-sm font-bold text-ink-chalk">Тактическая схема</p>
-        <div className="grid grid-cols-3 gap-2">
+        <p className="font-display text-sm font-bold text-ink-chalk">Стиль игры</p>
+        <p className="mb-3 mt-0.5 text-caption leading-snug text-ink-mist">
+          Атака бьёт Оборону, Оборона — Владение, Владение — Контратаку, Контратака — Атаку. Стиль соперника виден перед матчем.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
           {TACTICS.map((t) => (
             <button
               key={t.value}
@@ -541,14 +608,27 @@ export default function ArenaPage() {
                 lineup?.tactic === t.value ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
               }`}
             >
-              <p className="whitespace-nowrap text-[9px] font-bold leading-tight">{t.label}</p>
-              <p className={`mt-0.5 whitespace-nowrap text-[8px] leading-tight ${lineup?.tactic === t.value ? "text-bg-base/70" : "text-ink-mist-dim"}`}>
-                {t.description}
+              <p className="whitespace-nowrap text-xs font-bold leading-tight">{t.label}</p>
+              <p className={`mt-0.5 text-micro leading-tight ${lineup?.tactic === t.value ? "text-bg-base/70" : "text-ink-mist-dim"}`}>
+                {t.description} · бьёт «{TACTIC_LABELS[t.beats]}»
               </p>
             </button>
           ))}
         </div>
       </section>
+
+      {preview && activeLineup?.is_complete && !simulating && (
+        <div className={previewFetching ? "opacity-70 transition-opacity" : "transition-opacity"}>
+          {viewedIndex !== activeIndex && (
+            <p className="mb-1.5 text-caption text-ink-mist-dim">Играет активный состав «{activeLineup.name}»</p>
+          )}
+          <ArenaOpponentCard
+            preview={preview}
+            onStyle={(style) => activeStyleMutation.mutate(style)}
+            stylePending={activeStyleMutation.isPending}
+          />
+        </div>
+      )}
 
       {matchError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{matchError}</p>}
 
@@ -562,33 +642,76 @@ export default function ArenaPage() {
         </button>
       </section>
 
-      {match && (
-        <MatchSimulation
-          key={match.id}
-          match={match}
-          actPending={actMutation.isPending}
-          onAct={(action) => actMutation.mutate(action)}
-          onFinished={() => {
-            setSimulating(false);
-            if (match.reward_coins > 0) {
-              updateBalance((useAuthStore.getState().user?.balance ?? 0) + match.reward_coins);
-            }
-            queryClient.invalidateQueries({ queryKey: ["arena-stats"] });
-            queryClient.invalidateQueries({ queryKey: ["match-history"] });
-            hapticNotify(match.result === "win" ? "success" : match.result === "loss" ? "error" : "warning");
-          }}
-        />
-      )}
-
-      {simulating && match?.status === "in_progress" && (
+      {/* After the sheet is closed, the last result stays one tap away. */}
+      {match && !matchSheetOpen && match.status === "finished" && (
         <button
-          onClick={() => forfeitMutation.mutate()}
-          disabled={forfeitMutation.isPending}
-          className="self-center text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2 active:scale-95"
+          onClick={() => { setMatchReopened(true); setMatchSheetOpen(true); }}
+          className="flex items-center justify-between rounded-xl bg-bg-surface px-3 py-2.5 text-sm active:scale-[0.98]"
         >
-          Сдаться (засчитается поражение)
+          <span className="text-ink-mist">Последний матч · vs {match.opponent_name}</span>
+          <span className="font-semibold text-accent-green">Открыть</span>
         </button>
       )}
+
+      <MatchSheet
+        open={!!match && matchSheetOpen}
+        title="Матч Card Arena"
+        footer={
+          match && simulating && match.status === "in_progress" ? (
+            <button
+              onClick={() => forfeitMutation.mutate()}
+              disabled={forfeitMutation.isPending}
+              className="w-full text-center text-caption font-semibold text-ink-mist-dim underline underline-offset-2 active:scale-95"
+            >
+              Сдаться (засчитается поражение)
+            </button>
+          ) : match && !simulating ? (
+            <div className="flex flex-col gap-2">
+              {match.result === "win" && <ShareButton kind="match" id={match.id} label="Поделиться победой" />}
+              {matchError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{matchError}</p>}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setMatchSheetOpen(false)}
+                  className="rounded-2xl bg-white/10 py-3 font-display text-sm font-bold text-ink-chalk active:scale-95"
+                >
+                  К составу
+                </button>
+                <button
+                  onClick={() => playMutation.mutate()}
+                  disabled={!lineup?.is_complete || playMutation.isPending}
+                  className="rounded-2xl bg-floodlight py-3 font-display text-sm font-bold text-bg-base active:scale-95 disabled:opacity-40"
+                >
+                  {playMutation.isPending ? "Начинаем..." : "Ещё матч"}
+                </button>
+              </div>
+            </div>
+          ) : null
+        }
+      >
+        {match && (
+          <MatchSimulation
+            key={match.id}
+            match={match}
+            startRevealed={matchReopened}
+            actPending={actMutation.isPending}
+            onAct={(action) => actMutation.mutate(action)}
+            onFinished={() => {
+              setSimulating(false);
+              if (match.reward_coins > 0) {
+                updateBalance((useAuthStore.getState().user?.balance ?? 0) + match.reward_coins);
+              }
+              queryClient.invalidateQueries({ queryKey: ["arena-stats"] });
+              queryClient.invalidateQueries({ queryKey: ["match-history"] });
+              queryClient.invalidateQueries({ queryKey: ["arena-opponent"] });
+              if (match.ladder?.rewards.length) {
+                const coins = match.ladder.rewards.reduce((sum, r) => sum + r.coins, 0);
+                updateBalance((useAuthStore.getState().user?.balance ?? 0) + coins);
+              }
+              hapticNotify(match.result === "win" ? "success" : match.result === "loss" ? "error" : "warning");
+            }}
+          />
+        )}
+      </MatchSheet>
 
       <section>
         <p className="mb-2 font-display text-base font-bold text-ink-chalk">История матчей</p>
@@ -598,9 +721,16 @@ export default function ArenaPage() {
           <div className="flex flex-col gap-2">
             {history.slice(0, 5).map((m) => (
               <div key={m.id} className="flex items-center justify-between rounded-xl bg-bg-surface px-3 py-2 text-sm">
-                <span className="text-ink-mist">vs {m.opponent_name}</span>
-                <span className={`font-mono font-bold ${m.result === "win" ? "text-accent-green" : m.result === "loss" ? "text-red-400" : "text-ink-mist"}`}>
-                  {m.user_score}:{m.opponent_score}
+                <span className="min-w-0 truncate text-ink-mist">vs {m.opponent_name}</span>
+                <span className="flex shrink-0 items-center gap-2">
+                  {m.ladder && (
+                    <span className={`font-mono text-caption ${m.ladder.delta > 0 ? "text-accent-green" : m.ladder.delta < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
+                      {m.ladder.delta > 0 ? "+" : ""}{m.ladder.delta}
+                    </span>
+                  )}
+                  <span className={`font-mono font-bold ${m.result === "win" ? "text-accent-green" : m.result === "loss" ? "text-red-400" : "text-ink-mist"}`}>
+                    {m.user_score}:{m.opponent_score}
+                  </span>
                 </span>
               </div>
             ))}
@@ -615,7 +745,7 @@ export default function ArenaPage() {
           title={`Выбери на позицию ${CATEGORY_LABELS[pickerSlot.category]}`}
           cards={cardsForSlot(pickerSlot)}
           disabledCardIds={cardsForSlot(pickerSlot)
-            .filter((c) => usedPlayerIds.includes(c.player.id) || (c.player.rarity === "diamond" && diamondCount >= maxDiamond))
+            .filter((c) => usedPlayerIds.includes(c.player.id) || limitBlocked(c))
             .map((c) => c.id)}
           onSelect={(card) => assignSlot(pickerSlot, card)}
           onClose={() => { setPickerSlot(null); setPickerSearch(""); }}
@@ -646,7 +776,7 @@ function MiniStat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl bg-bg-surface py-2">
       <p className="font-mono text-sm font-bold text-ink-chalk">{value}</p>
-      <p className="text-[10px] text-ink-mist-dim">{label}</p>
+      <p className="text-micro text-ink-mist-dim">{label}</p>
     </div>
   );
 }
@@ -660,7 +790,7 @@ function FormBadge({ result }: { result: MatchResult | null }) {
         ? "bg-red-500/20 text-red-400"
         : "bg-white/10 text-ink-mist";
   return (
-    <span className={`flex h-5 w-5 items-center justify-center rounded-full font-mono text-[10px] font-bold ${className}`}>
+    <span className={`flex h-5 w-5 items-center justify-center rounded-full font-mono text-micro font-bold ${className}`}>
       {letter}
     </span>
   );
@@ -671,19 +801,24 @@ function MatchSimulation({
   actPending,
   onAct,
   onFinished,
+  startRevealed = false,
 }: {
   match: Match;
   actPending: boolean;
   onAct: (action: MatchActionKind) => void;
   onFinished: () => void;
+  /** Reopening an already-finished match: show it as played, don't replay it. */
+  startRevealed?: boolean;
 }) {
-  const [revealedCount, setRevealedCount] = useState(0);
+  const [revealedCount, setRevealedCount] = useState(startRevealed ? match.events.length : 0);
   const [autoSkip, setAutoSkip] = useState(false);
   const [flashKey, setFlashKey] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
-  const finishedFiredRef = useRef(false);
-  const prevRevealedRef = useRef(0);
+  // A reopened, already-played match must not re-credit the reward or
+  // re-flash its goals.
+  const finishedFiredRef = useRef(startRevealed);
+  const prevRevealedRef = useRef(startRevealed ? match.events.length : 0);
   const ackedBreakawayRef = useRef(-1);
 
   const total = match.events.length;
@@ -725,7 +860,7 @@ function MatchSimulation({
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
-  }, [revealedCount]);
+  }, [revealedCount, caughtUp, isFinished]);
 
   // Auto-play any pending action while skipping, so the match resolves
   // itself all the way to the final result without further input.
@@ -759,6 +894,17 @@ function MatchSimulation({
   const revealed = match.events.slice(0, revealedCount);
   const currentMinute = revealed.length ? revealed[revealed.length - 1].minute : 0;
   const pendingMoment = caughtUp && !isFinished && !autoSkip ? match.pending_moment : null;
+  const showFinal = caughtUp && isFinished;
+
+  // Keep the pitch on the chance the player just answered until its outcome
+  // is revealed, instead of snapping back while the action request is in
+  // flight and the next event waits for its reveal tick.
+  const [heldMoment, setHeldMoment] = useState<{ team: string; shot_type: string; at: number } | null>(null);
+  useEffect(() => {
+    if (pendingMoment) setHeldMoment({ team: pendingMoment.team, shot_type: pendingMoment.shot_type, at: revealedCount });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingMoment?.seq]);
+  const pitchMoment = pendingMoment ?? (heldMoment && heldMoment.at === revealedCount ? heldMoment : null);
 
   // The live score only counts goals among the *revealed* events, so it
   // climbs to the final score in step with the commentary instead of
@@ -767,7 +913,7 @@ function MatchSimulation({
   const liveOpponentScore = revealed.filter((e) => e.event_type === "goal" && e.team === "opponent").length;
 
   return (
-    <section className="relative overflow-hidden rounded-2xl bg-bg-surface p-4">
+    <section className="relative flex min-h-0 flex-1 flex-col">
       {flashKey > 0 && (
         <div
           key={flashKey}
@@ -775,32 +921,34 @@ function MatchSimulation({
         />
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex shrink-0 items-center justify-between">
         <span className="font-mono text-xs text-ink-mist-dim">
-          {caughtUp && isFinished ? "Матч завершён" : autoSkip ? "Пропускаем матч..." : `${currentMinute}' · идёт матч...`}
+          {showFinal ? "Матч завершён" : autoSkip ? "Пропускаем матч..." : `${currentMinute}' · идёт матч...`}
         </span>
         {/* Visible any time there's still something to skip through — including
             while waiting on the player's own action choice (caughtUp && !isFinished),
             not just during the event-by-event reveal — only hidden once the match
             has actually finished or a skip is already in progress. */}
-        {!autoSkip && !(caughtUp && isFinished) && (
-          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-ink-chalk">
+        {!autoSkip && !showFinal && (
+          <button onClick={skip} className="rounded-full bg-white/10 px-3 py-1 text-caption font-semibold text-ink-chalk">
             Пропустить
           </button>
         )}
       </div>
 
-      <p className="mt-1 text-center font-mono text-lg font-bold text-ink-chalk">
+      {/* You first, as before — and the pitch/stats below keep you on the
+          left too, so the numbers always line up with the sides. */}
+      <p className="mt-1 shrink-0 text-center font-mono text-3xl font-bold tabular-nums text-ink-chalk">
         {liveUserScore} : {liveOpponentScore}
       </p>
-      <p className="text-center text-sm text-ink-mist">vs {match.opponent_name}</p>
+      <ArenaMatchupLine match={match} />
 
       {/* The win/draw/loss verdict and reward stay hidden until the
           simulation actually finishes playing out, even though the live
           score above already tracks along with it. */}
-      {caughtUp && isFinished && (
+      {showFinal && (
         <p
-          className={`mt-1 flex items-center justify-center gap-1 text-center font-display text-sm font-bold ${
+          className={`mt-1 flex shrink-0 items-center justify-center gap-1 text-center font-display text-sm font-bold ${
             match.result === "win" ? "text-accent-green" : match.result === "loss" ? "text-red-400" : "text-ink-mist"
           }`}
         >
@@ -808,19 +956,46 @@ function MatchSimulation({
           <IconCoin size={13} />
         </p>
       )}
-      {caughtUp && isFinished && <MatchSkillSummary events={match.events} />}
 
-      <div ref={logRef} className="mt-3 max-h-48 space-y-1 overflow-y-auto text-xs">
+      {/* Live: the schematic pitch. After the whistle the pitch has nothing
+          left to say, so the summary takes its place, in view without scrolling. */}
+      {/* After the whistle the report + stats + log are taller than the
+          sheet: they scroll together, so the footer buttons stay reachable.
+          Live, only the commentary log scrolls under the pitch. */}
+      <div className={showFinal ? "mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2" : "contents"}>
+      <div className={showFinal ? "shrink-0" : "mt-3 shrink-0"}>
+        {showFinal ? (
+          <div className="flex flex-col gap-2">
+            <ArenaMatchReport match={match} />
+            <MatchStatsTable events={match.events} opponentName={match.opponent_name} />
+            <MatchSkillSummary events={match.events} />
+            <MatchPathSummary match={match} />
+          </div>
+        ) : (
+          <MatchPitchView events={revealed} opponentName={match.opponent_name} pending={pitchMoment} />
+        )}
+      </div>
+
+      <div
+        ref={logRef}
+        className={showFinal ? "mt-3 space-y-1 text-xs" : "mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto pb-2 text-xs"}
+      >
         {revealed.map((e, i) => (
-          <p key={i} className={e.team === "user" ? "text-accent-green" : "text-ink-mist"}>
+          <p
+            key={i}
+            className={`${e.team === "user" ? "text-accent-green" : "text-ink-mist"} ${
+              Array.isArray(e.payload?.talents) && e.payload.talents.length ? "-mx-1 rounded-md bg-path/10 px-1" : ""
+            }`}
+          >
             <span className="font-mono text-ink-mist-dim">{e.minute}&apos;</span> {e.description}
             <MatchSkillNotes event={e} />
           </p>
         ))}
       </div>
+      </div>
 
       {isBreakawayNext && !autoSkip && (
-        <div className="mt-4 flex flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
+        <div className="mt-3 flex shrink-0 flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
           <p className="text-sm font-semibold text-ink-chalk">
             <span className="inline-flex items-center gap-1.5"><IconWarning size={15} className="shrink-0 text-amber-300" />Соперник выходит один на один с твоим вратарём!</span>
           </p>
@@ -858,7 +1033,7 @@ function ActionPrompt({
   };
 
   return (
-    <div className="mt-4 flex flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
+    <div className="mt-3 flex shrink-0 flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
       <p className="text-sm font-semibold text-ink-chalk">{pending.description}</p>
       <div className={`grid gap-2 ${pending.actions.length === 1 ? "grid-cols-1" : pending.actions.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
         {pending.actions.map((action) => {
@@ -873,7 +1048,7 @@ function ActionPrompt({
             >
               <Icon size={16} />
               {label}
-              {subtitle && <span className="text-[10px] font-normal text-ink-mist-dim">{subtitle}</span>}
+              {subtitle && <span className="text-micro font-normal text-ink-mist-dim">{subtitle}</span>}
             </button>
           );
         })}

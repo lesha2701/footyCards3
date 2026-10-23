@@ -1,3 +1,4 @@
+import { ListSkeleton } from "@/components/common/Skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -56,6 +57,13 @@ export function CoinPackagesPanel({
     }
   };
 
+  // Value badges: coins per ⭐ against the smallest package — the bigger
+  // ones show their bonus, the best rate and the middle one are flagged.
+  const list = [...(packages ?? [])].filter((p) => p.stars_price > 0).sort((a, b) => a.stars_price - b.stars_price);
+  const baseRate = list.length ? list[0].coins_amount / list[0].stars_price : 1;
+  const bestId = list.length > 1 ? [...list].sort((a, b) => b.coins_amount / b.stars_price - a.coins_amount / a.stars_price)[0].id : null;
+  const popularId = list.length > 2 ? list[Math.floor(list.length / 2)].id : null;
+
   if (success) {
     return (
       <div className="flex flex-col gap-3">
@@ -76,24 +84,46 @@ export function CoinPackagesPanel({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3 pt-2">
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
-      {isLoading && <p className="text-xs text-ink-mist">Загрузка...</p>}
-      {!isLoading && !packages?.length && <p className="text-xs text-ink-mist">Пакетов монет пока нет</p>}
-      {(packages ?? []).map((pkg) => (
-        <button
-          key={pkg.id}
-          onClick={() => handleBuy(pkg)}
-          disabled={busyId !== null}
-          className="flex items-center justify-between rounded-2xl bg-black/20 px-4 py-3 text-left disabled:opacity-40"
-        >
-          <span className="font-mono text-sm font-semibold text-ink-chalk">{pkg.stars_price} ⭐</span>
-          <span className="flex items-center gap-1 font-mono text-sm font-bold text-accent-lime">
-            {busyId === pkg.id ? "..." : `+${pkg.coins_amount}`}
-            <IconCoin size={13} />
-          </span>
-        </button>
-      ))}
+      {isLoading && <ListSkeleton count={3} />}
+      {!isLoading && !list.length && <p className="text-xs text-ink-mist">Пакетов монет пока нет</p>}
+      {list.map((pkg) => {
+        const bonus = Math.round((pkg.coins_amount / pkg.stars_price / baseRate - 1) * 100);
+        const best = pkg.id === bestId;
+        const popular = pkg.id === popularId;
+        return (
+          <button
+            key={pkg.id}
+            onClick={() => handleBuy(pkg)}
+            disabled={busyId !== null}
+            className={`relative flex items-center justify-between gap-2 rounded-2xl px-4 py-3 text-left active:scale-[0.98] disabled:opacity-40 ${
+              best ? "bg-amber-400/10 ring-1 ring-amber-400/50" : popular ? "bg-accent-lime/5 ring-1 ring-accent-lime/30" : "bg-black/20"
+            }`}
+          >
+            {!!pkg.first_purchase_bonus_coins && (
+              <span className="absolute -top-2 right-3 rounded-full bg-red-500 px-2 py-0.5 text-micro font-bold text-white">
+                +{pkg.first_purchase_bonus_coins.toLocaleString("ru-RU")} на первую покупку
+              </span>
+            )}
+            {(best || popular) && (
+              <span
+                className={`absolute -top-2 left-3 rounded-full px-2 py-0.5 text-micro font-bold ${
+                  best ? "bg-amber-400 text-bg-base" : "bg-accent-lime text-bg-base"
+                }`}
+              >
+                {best ? "Выгоднее всего" : "Популярный"}
+              </span>
+            )}
+            <span className="flex items-center gap-1 font-mono text-base font-bold text-accent-lime">
+              {busyId === pkg.id ? "..." : `+${pkg.coins_amount.toLocaleString("ru-RU")}`}
+              <IconCoin size={14} />
+              {bonus >= 5 && <span className="ml-1 rounded-full bg-accent-lime/15 px-1.5 font-sans text-micro font-bold">+{bonus}%</span>}
+            </span>
+            <span className="rounded-full bg-amber-400 px-3 py-1.5 font-mono text-sm font-bold text-bg-base">{pkg.stars_price} ⭐</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

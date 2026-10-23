@@ -7,6 +7,7 @@ import { PublicMyPlayer } from "@/components/myPlayer/MyPlayerEntry";
 import FriendButton from "@/components/profile/FriendButton";
 import { IconChevronLeft, IconSwap } from "@/components/icons";
 import { fetchPublicProfile } from "@/api/profile";
+import AcademyShowcase from "@/components/path/AcademyShowcase";
 import { staticUrl } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import type { UserPublic } from "@/types";
@@ -31,7 +32,7 @@ export default function PublicProfilePage() {
       </button>
 
       <section className="flex flex-col items-center gap-2 rounded-3xl bg-bg-surface p-5 text-center">
-        <img
+        <img decoding="async" loading="lazy"
           src={profile.avatar_url ?? staticUrl("players/placeholder/player_placeholder.webp")}
           alt="avatar"
           className="h-20 w-20 rounded-full ring-2 ring-accent-lime object-cover"
@@ -73,15 +74,17 @@ export default function PublicProfilePage() {
 
       <PublicMyPlayer userId={profile.id} />
 
+      <AcademyShowcase userId={profile.id} />
+
       {profile.rarest_card && (
         <section className="flex items-center gap-3 rounded-2xl bg-rarity-legendary/10 p-4">
-          <img
+          <img decoding="async" loading="lazy"
             src={staticUrl(profile.rarest_card.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
             alt={profile.rarest_card.display_name}
             className="h-16 w-16 rounded-xl object-cover"
           />
           <div>
-            <p className="text-[11px] text-rarity-legendary">Самая редкая карточка</p>
+            <p className="text-caption text-rarity-legendary">Самая редкая карточка</p>
             <p className="font-display text-sm font-bold text-ink-chalk">{profile.rarest_card.display_name}</p>
           </div>
         </section>
@@ -94,7 +97,7 @@ function Stat({ label, value, accentClass }: { label: string; value: string | nu
   return (
     <div>
       <p className={`font-mono text-2xl font-bold ${accentClass ?? "text-ink-chalk"}`}>{value}</p>
-      <p className="mt-0.5 text-[11px] text-ink-mist">{label}</p>
+      <p className="mt-0.5 text-caption text-ink-mist">{label}</p>
     </div>
   );
 }

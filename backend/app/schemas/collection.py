@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.models.enums import CardSource, Position, Rarity
 from app.schemas.player import PlayerOut
-from app.services.player_stats_service import effective_card_stats
+from app.services.player_stats_service import card_rating_bonus, effective_card_stats
 
 
 class UserCardListItem(BaseModel):
@@ -22,11 +22,35 @@ class UserCardListItem(BaseModel):
     is_in_lineup: bool
     is_in_tactico_squad: bool
     hidden_from_trade: bool
+    # The owner's own «замок»: no selling, no burning as material.
+    is_user_locked: bool = False
+    # Standing in a player-tournament squad (those don't set a flag on the
+    # card); filled by the endpoints that list cards for picking.
+    in_personal_squad: bool = False
     duplicate_count: int = 1
     diamond_rating_bonus: int = 0
+    # «Звёзды карточки» (services/card_star_service.py): earned stars, duplicates
+    # banked toward the next one, and the rating the stars add (already baked
+    # into player.rating below, like the diamond bonus).
+    stars: int = 0
+    star_progress: int = 0
+    star_rating_bonus: int = 0
     # This copy's own skill (null = none).
     skill_code: Optional[str] = None
     skill_level: Optional[int] = None
+    # «Академия» (services/path_service.py): levels gained, stage reached
+    # (0 = Новичок …) and the rating they add (already in player.rating).
+    path_level: int = 0
+    path_stage: int = 0
+    path_rating_bonus: int = 0
+    # «Экипировка» it wears (services/equipment_service.py; rating already in player.rating).
+    equipment_rating_bonus: int = 0
+    equipment_chemistry: int = 0
+    equipment_boosts: Optional[dict] = None
+    # «Академия» prestige tier, its «Икона» number and the reforged talent.
+    prestige: int = 0
+    prestige_icon_number: Optional[int] = None
+    talent_override: Optional[str] = None
     # Every skilled copy of this player the owner has — the list collapses
     # duplicates into one representative, so the album badge needs these.
     skilled_copies: List["SkilledCopyOut"] = []
@@ -37,7 +61,7 @@ class UserCardListItem(BaseModel):
         """Same per-copy rating bake-in as UserCardOut — see its docstring."""
         if isinstance(data, dict):
             return data
-        bonus = getattr(data, "diamond_rating_bonus", 0) or 0
+        bonus = card_rating_bonus(data)
         player_out = PlayerOut.model_validate(data.player)
         if bonus > 0:
             rating, attack, defense = effective_card_stats(data.player, bonus)
@@ -53,9 +77,22 @@ class UserCardListItem(BaseModel):
             "is_in_lineup": data.is_in_lineup,
             "is_in_tactico_squad": data.is_in_tactico_squad,
             "hidden_from_trade": data.hidden_from_trade,
-            "diamond_rating_bonus": bonus,
+            "is_user_locked": bool(getattr(data, "is_user_locked", False)),
+            "diamond_rating_bonus": getattr(data, "diamond_rating_bonus", 0) or 0,
+            "stars": getattr(data, "stars", 0) or 0,
+            "star_progress": getattr(data, "star_progress", 0) or 0,
+            "star_rating_bonus": getattr(data, "star_rating_bonus", 0) or 0,
             "skill_code": getattr(data, "skill_code", None),
             "skill_level": getattr(data, "skill_level", None),
+            "path_level": getattr(data, "path_level", 0) or 0,
+            "path_stage": getattr(data, "path_stage", 0) or 0,
+            "path_rating_bonus": getattr(data, "path_rating_bonus", 0) or 0,
+            "equipment_rating_bonus": getattr(data, "equipment_rating_bonus", 0) or 0,
+            "equipment_chemistry": getattr(data, "equipment_chemistry", 0) or 0,
+            "equipment_boosts": getattr(data, "equipment_boosts", None) or None,
+            "prestige": getattr(data, "prestige", 0) or 0,
+            "prestige_icon_number": getattr(data, "prestige_icon_number", None),
+            "talent_override": getattr(data, "talent_override", None),
         }
 
 
@@ -106,6 +143,32 @@ class SetCardHiddenRequest(BaseModel):
     hidden: bool
 
 
+class SetCardsLockedRequest(BaseModel):
+    """The owner's «замок» on one or several copies."""
+    card_ids: List[int]
+    locked: bool
+
+
+class SetCardsLockedOut(BaseModel):
+    card_ids: List[int]
+    locked: bool
+
+
+class CardFilterOptionsOut(BaseModel):
+    countries: List[str]
+    clubs: List[str]
+
+
+class CardFilterDefault(BaseModel):
+    """Saved default card filter; every field optional (unset = any)."""
+    rarity: Optional[str] = None
+    country: Optional[str] = None
+    club: Optional[str] = None
+    position: Optional[str] = None
+    sort_by: Optional[str] = None
+    has_skill: Optional[bool] = None
+
+
 class SellCardRequest(BaseModel):
     user_card_id: int
     confirm_last_copy: bool = False
@@ -130,6 +193,9 @@ class SellDuplicatesRequest(BaseModel):
     # true = only count what would be sold (for the confirmation dialog).
     preview: bool = True
     include_diamond: bool = False
+    # Also sell the spares of players whose copy already has stars or a
+    # started «копилка» (off by default: they are star material).
+    include_star_material: bool = False
 
 
 class SellDuplicatesOut(SellResultOut):

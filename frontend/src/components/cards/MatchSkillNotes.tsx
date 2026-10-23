@@ -1,5 +1,14 @@
 import { SkillIcon } from "@/components/icons/skills";
-import type { MatchEvent, MatchSkillNote } from "@/types";
+import type { MatchEvent, MatchSkillNote, MatchTalentNote } from "@/types";
+
+// «Экипировка» note per effect: icon and what it improved.
+const EQUIPMENT_NOTE: Record<string, [string, string]> = {
+  shot_pp: ["👟", "к точности удара"],
+  dribble_pp: ["⚡", "к обыгрышу"],
+  pass_pp: ["🎯", "к точности паса"],
+  tackle_pp: ["🛡️", "к чистому отбору"],
+  save_pp: ["🧤", "к сейву"],
+};
 
 /** Skill lines under one match-log event. The server only attaches a note
  * when a skill actually took part in that event's roll; "decisive" is set
@@ -8,11 +17,29 @@ import type { MatchEvent, MatchSkillNote } from "@/types";
  * claiming it caused the outcome. */
 export default function MatchSkillNotes({ event }: { event: MatchEvent }) {
   const notes = (event.payload?.skills as MatchSkillNote[] | undefined) ?? [];
-  if (!notes.length) return null;
+  // «Академия»: a talent line appears only when the talent really changed
+  // this event's roll (the server attaches nothing otherwise).
+  const talents = (event.payload?.talents as MatchTalentNote[] | undefined) ?? [];
+  // «Экипировка» (Card Arena): a line per worn-thing bonus this roll counted.
+  const equipment = (event.payload?.equipment as { player?: string; effect: string; bonus_pp: number }[] | undefined) ?? [];
+  if (!notes.length && !talents.length && !equipment.length) return null;
   return (
     <>
+      {talents.map((t, i) => (
+        <span key={`t${i}`} className="mt-0.5 block pl-6 text-micro"><span className="text-path/90">
+          <span className="mr-1" aria-hidden>{t.emoji}</span>
+          Талант «{t.name}» {t.level_label}
+          {t.player ? ` (${t.player})` : ""}: +{t.bonus} к рейтингу
+        </span></span>
+      ))}
+      {equipment.map((e, i) => (
+        <span key={`e${i}`} className="mt-0.5 block pl-6 text-micro text-accent-cyan/80">
+          <span className="mr-1" aria-hidden>{EQUIPMENT_NOTE[e.effect]?.[0] ?? "⚡"}</span>
+          Экипировка{e.player ? ` (${e.player})` : ""}: +{e.bonus_pp}% {EQUIPMENT_NOTE[e.effect]?.[1] ?? "к действию"}
+        </span>
+      ))}
       {notes.map((note, i) => (
-        <span key={i} className="mt-0.5 block pl-6 text-[10px] text-accent-lime/80">
+        <span key={i} className="mt-0.5 block pl-6 text-micro text-accent-lime/80">
           <SkillIcon code={note.code} size={11} className="mr-1 inline-block align-[-1px]" aria-hidden />
           {note.name} {note.level_label}
           {note.player ? ` (${note.player})` : ""}

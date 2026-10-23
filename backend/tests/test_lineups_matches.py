@@ -141,7 +141,7 @@ async def test_set_lineup_tactic(client, db_session, bot_token):
     await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
 
     resp = await client.get("/api/v1/lineups/active", headers=headers)
-    assert resp.json()["tactic"] == "balanced"
+    assert resp.json()["tactic"] == "possession"
 
     resp = await client.post("/api/v1/lineups/tactic", headers=headers, json={"tactic": "attacking"})
     assert resp.status_code == 200

@@ -123,7 +123,7 @@ export default function AdminMagnateBoardEditor({ board, cards, onChange }: Prop
               setCardsError("Некорректный JSON — карточки не изменены");
             }
           }}
-          className="rounded-lg bg-bg-base px-3 py-2 font-mono text-[11px] outline-none"
+          className="rounded-lg bg-bg-base px-3 py-2 font-mono text-caption outline-none"
         />
         {cardsError && <span className="text-xs text-red-400">{cardsError}</span>}
         {cards && (

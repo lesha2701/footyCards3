@@ -1,3 +1,4 @@
+import AnimatedNumber from "@/components/common/AnimatedNumber";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -17,6 +18,8 @@ export default function TopBar() {
   const requestNavigate = useMatchGuardStore((s) => s.requestNavigate);
   const { data: myPlayer } = useQuery({ queryKey: ["my-player"], queryFn: fetchMyPlayer, enabled: !!user, staleTime: 60_000 });
   const mine = myPlayer?.player;
+  // Something waits in «Мой игрок»: points, a free training, a level-up, income, club offers…
+  const attention = !!myPlayer?.attention && Object.values(myPlayer.attention).some(Boolean);
 
   return (
     <header className="safe-top sticky top-0 z-30 border-b border-white/5 bg-bg-base/85 backdrop-blur">
@@ -25,7 +28,7 @@ export default function TopBar() {
           onClick={() => (guardActive ? requestNavigate("/") : navigate("/"))}
           className="flex items-center gap-2"
         >
-          <img src="/brand/victor-fc-crest.jpg" alt="" className="h-7 w-7 rounded-full ring-1 ring-white/10" />
+          <img decoding="async" src="/brand/victor-fc-crest.jpg" alt="" className="h-7 w-7 rounded-full ring-1 ring-white/10" />
           <span className="font-display text-sm font-bold tracking-wide text-ink-chalk">
             VICTOR <span className="text-accent-lime">FC</span>
           </span>
@@ -42,8 +45,11 @@ export default function TopBar() {
               ) : (
                 <IconProfile size={17} />
               )}
-              {(!mine || myPlayer.points_available > 0) && (
-                <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-accent-lime ring-2 ring-bg-base" />
+              {attention && (
+                <span
+                  data-testid="my-player-dot"
+                  className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-bg-base"
+                />
               )}
             </button>
           )}
@@ -62,7 +68,7 @@ export default function TopBar() {
             className="flex items-center gap-1.5 rounded-full border border-white/5 bg-bg-raised px-3 py-1.5 active:scale-95"
           >
             <IconCoin size={15} className="text-accent-lime" />
-            <span className="font-mono text-[13px] font-semibold text-ink-chalk">{user?.balance ?? 0}</span>
+            <AnimatedNumber value={user?.balance ?? 0} className="font-mono text-[13px] font-semibold text-ink-chalk" />
           </button>
         </div>
       </div>

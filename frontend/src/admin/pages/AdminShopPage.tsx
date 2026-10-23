@@ -16,6 +16,7 @@ import {
   updateCoinPackage,
   uploadBadgeImage,
 } from "@/admin/api";
+import StarsPaymentsSection from "@/admin/components/StarsPaymentsSection";
 import NumberInput from "@/components/common/NumberInput";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import type { Badge, CoinPackage } from "@/types";
@@ -24,6 +25,7 @@ export default function AdminShopPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-display text-2xl font-bold">Магазин</h1>
+      <StarsPaymentsSection />
       <CoinPackagesSection />
       <BadgesSection />
       <TopSupportersSection />
@@ -59,7 +61,7 @@ function TopSupportersSection() {
                   {s.user_display_name}
                   {s.user_username && <span className="text-slate-500"> @{s.user_username}</span>}
                 </p>
-                <p className="text-[11px] text-slate-500">{s.purchase_count} покупок · id {s.user_telegram_id}</p>
+                <p className="text-caption text-slate-500">{s.purchase_count} покупок · id {s.user_telegram_id}</p>
               </div>
             </div>
             <span className="font-mono text-sm font-bold text-amber-300">{s.total_stars} ⭐</span>
@@ -92,7 +94,7 @@ function StarsPackPurchasesSection() {
         {summary && (
           <div className="shrink-0 rounded-xl bg-amber-400/10 px-3 py-2 text-right">
             <p className="font-display text-lg font-bold text-amber-300">{summary.total_stars} ⭐</p>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-caption text-slate-500">
               задонатили всего ({summary.total_purchases} покупок: паки + монеты)
             </p>
           </div>
@@ -120,7 +122,7 @@ function StarsPackPurchasesSection() {
                 <td className="px-3 py-2 text-xs">
                   {purchase.user_display_name}
                   {purchase.user_username && <span className="text-slate-500"> @{purchase.user_username}</span>}
-                  <div className="text-[11px] text-slate-500">id {purchase.user_telegram_id}</div>
+                  <div className="text-caption text-slate-500">id {purchase.user_telegram_id}</div>
                 </td>
                 <td className="px-3 py-2 text-xs">{purchase.pack_name}</td>
                 <td className="px-3 py-2 text-xs">{purchase.stars_amount}</td>
@@ -198,11 +200,11 @@ function CoinPackagesSection() {
           <div key={p.id} className="flex items-center justify-between rounded-xl bg-bg-base px-3 py-2">
             <div>
               <p className="text-sm font-semibold">{p.stars_price} ⭐ → {p.coins_amount} монет</p>
-              <p className="text-[11px] text-slate-500">{p.is_active ? "Активен" : "Отключён"} · порядок {p.sort_order}</p>
+              <p className="text-caption text-slate-500">{p.is_active ? "Активен" : "Отключён"} · порядок {p.sort_order}</p>
             </div>
             <div className="flex gap-1">
-              <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-              <button onClick={() => deleteMutation.mutate(p.id)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">Удалить</button>
+              <button onClick={() => openEdit(p)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+              <button onClick={() => deleteMutation.mutate(p.id)} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">Удалить</button>
             </div>
           </div>
         ))}
@@ -307,18 +309,18 @@ function BadgesSection() {
           <div key={b.id} className="flex items-center justify-between rounded-xl bg-bg-base px-3 py-2">
             <div className="flex items-center gap-2">
               {b.image_path ? (
-                <img src={staticUrl(b.image_path) ?? undefined} className="h-7 w-7 rounded-full object-cover" />
+                <img decoding="async" loading="lazy" src={staticUrl(b.image_path) ?? undefined} className="h-7 w-7 rounded-full object-cover" />
               ) : (
                 <span className="text-lg">{b.icon}</span>
               )}
               <div>
                 <p className="text-sm font-semibold">{b.name}</p>
-                <p className="text-[11px] text-slate-500">{b.is_active ? "Активен" : "Отключён"} · порядок {b.sort_order}</p>
+                <p className="text-caption text-slate-500">{b.is_active ? "Активен" : "Отключён"} · порядок {b.sort_order}</p>
               </div>
             </div>
             <div className="flex gap-1">
-              <button onClick={() => openEdit(b)} className="rounded-lg bg-white/5 px-2 py-1 text-[11px]">Изменить</button>
-              <button onClick={() => deleteMutation.mutate(b.id)} className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400">Удалить</button>
+              <button onClick={() => openEdit(b)} className="rounded-lg bg-white/5 px-2 py-1 text-caption">Изменить</button>
+              <button onClick={() => deleteMutation.mutate(b.id)} className="rounded-lg bg-red-500/10 px-2 py-1 text-caption text-red-400">Удалить</button>
             </div>
           </div>
         ))}
@@ -361,7 +363,7 @@ function BadgesSection() {
                   <span className="text-xs font-semibold text-slate-400">Картинка значка</span>
                   <div className="flex items-center gap-3">
                     {(editing as Badge).image_path ? (
-                      <img src={staticUrl((editing as Badge).image_path!) ?? undefined} className="h-12 w-12 rounded-full border border-white/10 object-cover" />
+                      <img decoding="async" loading="lazy" src={staticUrl((editing as Badge).image_path!) ?? undefined} className="h-12 w-12 rounded-full border border-white/10 object-cover" />
                     ) : (
                       <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 text-xl">{(editing as Badge).icon}</span>
                     )}
@@ -385,7 +387,7 @@ function BadgesSection() {
                   </div>
                 </div>
               )}
-              {editing === "new" && <span className="text-[11px] text-slate-500">Картинку можно загрузить после создания значка.</span>}
+              {editing === "new" && <span className="text-caption text-slate-500">Картинку можно загрузить после создания значка.</span>}
             </div>
             <div className="mt-4 flex gap-2">
               <button onClick={() => setEditing(null)} className="flex-1 rounded-xl bg-white/5 py-2.5 text-sm">Отмена</button>

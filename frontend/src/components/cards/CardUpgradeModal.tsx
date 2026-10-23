@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { fetchUpgradeRules, upgradeCards } from "@/api/collection";
 import { IconBomb, IconChevronRight, IconCoin, IconTrophy, IconUpgrade } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
+import { squadLabel } from "@/lib/cardLocks";
 import { effectiveUpgradeChance } from "@/lib/cardUpgrade";
 import { formatGameError } from "@/lib/errors";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
@@ -31,6 +32,8 @@ export default function CardUpgradeModal({ cards, onClose }: { cards: UserCard[]
   const fromRarity = cards[0].player.rarity;
   const cardCount = cards.length;
   const skilledCards = cards.filter((c) => !!c.skill_code);
+  // Copies that play in a squad: staking them empties their slot.
+  const squadCards = cards.filter((c) => squadLabel(c) !== null);
 
   const { data: rules } = useQuery({ queryKey: ["upgrade-rules"], queryFn: fetchUpgradeRules });
   const options = rules?.filter((r) => r.from_rarity === fromRarity && r.is_active) ?? [];
@@ -43,12 +46,19 @@ export default function CardUpgradeModal({ cards, onClose }: { cards: UserCard[]
     // The staked copies are destroyed either way; when one of them has a
     // skill, the confirm step below spells that out before this runs, so the
     // explicit confirmation is sent along with it.
-    mutationFn: () => upgradeCards(cards.map((c) => c.id), target!, undefined, skilledCards.length > 0),
+    mutationFn: () => upgradeCards(
+      cards.map((c) => c.id), target!, undefined, skilledCards.length > 0, squadCards.length > 0,
+    ),
     onSuccess: (data) => {
       updateBalance(data.new_balance);
       setResult(data);
       queryClient.invalidateQueries({ queryKey: ["collection"] });
       queryClient.invalidateQueries({ queryKey: ["collection-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["upgrade-cards"] });
+      if (squadCards.length) {
+        queryClient.invalidateQueries({ queryKey: ["lineup"] });
+        queryClient.invalidateQueries({ queryKey: ["lineup-templates"] });
+      }
     },
     onError: (err) => {
       // Without this, a rejected request (e.g. insufficient balance) left
@@ -101,7 +111,7 @@ export default function CardUpgradeModal({ cards, onClose }: { cards: UserCard[]
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {cards.map((c) => (
-                <img
+                <img decoding="async"
                   key={c.id}
                   src={staticUrl(c.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                   alt={c.player.display_name}
@@ -126,7 +136,7 @@ export default function CardUpgradeModal({ cards, onClose }: { cards: UserCard[]
                     >
                       <div>
                         <p className="font-display text-sm font-bold text-ink-chalk">{RARITY_LABELS[rule.to_rarity]}</p>
-                        <p className="mt-0.5 font-mono text-[11px] text-ink-mist">
+                        <p className="mt-0.5 font-mono text-caption text-ink-mist">
                           Шанс {Math.round(chance * 100)}%
                         </p>
                       </div>
@@ -171,6 +181,12 @@ export default function CardUpgradeModal({ cards, onClose }: { cards: UserCard[]
               <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-300">
                 Среди ставок {skilledCards.length === 1 ? "есть карточка" : `есть ${skilledCards.length} карточки`} с навыком
                 (№ {skilledCards.map((c) => c.serial_number).join(", ")}) — навык будет потерян, жетоны не вернутся.
+              </p>
+            )}
+            {squadCards.length > 0 && (
+              <p className="mt-3 rounded-xl bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+                {squadCards.map((c) => `«${c.player.display_name}» ${squadLabel(c)}`).join(", ")} — после Кузницы
+                {squadCards.length === 1 ? " она уйдёт" : " они уйдут"} из состава, не забудь поставить замену.
               </p>
             )}
             {!canAfford && (
@@ -238,7 +254,7 @@ export default function CardUpgradeModal({ cards, onClose }: { cards: UserCard[]
                   className={`relative flex h-40 w-32 flex-col items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b ${RARITY_GRADIENTS[result.new_card.player.rarity]} p-[3px] ${RARITY_GLOW[result.new_card.player.rarity]}`}
                 >
                   <div className="flex h-full w-full flex-col items-center justify-center rounded-[14px] bg-bg-surface">
-                    <img
+                    <img decoding="async"
                       src={staticUrl(result.new_card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                       alt={result.new_card.player.display_name}
                       className="h-full w-full object-cover"

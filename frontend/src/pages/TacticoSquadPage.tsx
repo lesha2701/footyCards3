@@ -78,11 +78,15 @@ export default function TacticoSquadPage() {
   const maxLegendary = squad?.max_legendary ?? 3;
   const maxEpic = squad?.max_epic ?? 3;
   const maxDiamond = squad?.max_diamond ?? 1;
+  // «Академия» cards are diamonds with a limit of their own.
+  const maxPath = squad?.max_path ?? 1;
 
   const cardsById = new Map<number, UserCard>(cards.map((c) => [c.id, c]));
   const legendaryCount = selectedIds.filter((id) => cardsById.get(id)?.player.rarity === "legendary").length;
   const epicCount = selectedIds.filter((id) => cardsById.get(id)?.player.rarity === "epic").length;
-  const diamondCount = selectedIds.filter((id) => cardsById.get(id)?.player.rarity === "diamond").length;
+  const isPlainDiamond = (c?: UserCard) => c?.player.rarity === "diamond" && !c.player.path_talent_code;
+  const diamondCount = selectedIds.filter((id) => isPlainDiamond(cardsById.get(id))).length;
+  const pathCount = selectedIds.filter((id) => !!cardsById.get(id)?.player.path_talent_code).length;
 
   const toggle = (card: UserCard) => {
     const id = card.id;
@@ -105,9 +109,14 @@ export default function TacticoSquadPage() {
       setError(`Максимум ${maxEpic} эпических карт в составе`);
       return;
     }
-    if (card.player.rarity === "diamond" && diamondCount >= maxDiamond) {
+    if (isPlainDiamond(card) && diamondCount >= maxDiamond) {
       haptic("medium");
       setError(`Максимум ${maxDiamond} диамантовых карт в составе`);
+      return;
+    }
+    if (card.player.path_talent_code && pathCount >= maxPath) {
+      haptic("medium");
+      setError(`Максимум ${maxPath} карт «Академии» в составе`);
       return;
     }
     setError(null);
@@ -133,9 +142,9 @@ export default function TacticoSquadPage() {
               t.template_index === viewedIndex ? "bg-accent-lime text-bg-base" : "bg-white/5 text-ink-mist"
             }`}
           >
-            <span className="whitespace-nowrap text-[11px] font-bold">{t.name}</span>
+            <span className="whitespace-nowrap text-caption font-bold">{t.name}</span>
             {t.is_active && (
-              <span className={`text-[8px] ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
+              <span className={`text-micro ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
                 Активный
               </span>
             )}
@@ -163,7 +172,7 @@ export default function TacticoSquadPage() {
       ) : (
         <button
           onClick={() => { setRenameValue(squad?.name ?? ""); setRenamingTemplate(true); }}
-          className="self-start text-[11px] font-semibold text-ink-mist-dim underline underline-offset-2"
+          className="self-start text-caption font-semibold text-ink-mist-dim underline underline-offset-2"
         >
           Переименовать «{squad?.name}»
         </button>
@@ -179,7 +188,7 @@ export default function TacticoSquadPage() {
         </button>
       )}
 
-      <div className="flex gap-2 text-[11px] font-semibold">
+      <div className="flex gap-2 text-caption font-semibold">
         <span className={`rounded-full px-2.5 py-1 ${legendaryCount >= maxLegendary ? "bg-rarity-legendary/20 text-rarity-legendary" : "bg-white/5 text-ink-mist"}`}>
           Легендарных: {legendaryCount}/{maxLegendary}
         </span>
@@ -189,6 +198,11 @@ export default function TacticoSquadPage() {
         <span className={`rounded-full px-2.5 py-1 ${diamondCount >= maxDiamond ? "bg-rarity-diamond/20 text-rarity-diamond" : "bg-white/5 text-ink-mist"}`}>
           Диамантовых: {diamondCount}/{maxDiamond}
         </span>
+        {(pathCount > 0 || cards.some((c) => c.player.path_talent_code)) && (
+          <span className={`rounded-full px-2.5 py-1 ${pathCount >= maxPath ? "bg-emerald-400/20 text-path" : "bg-white/5 text-ink-mist"}`}>
+            🌱 Академия: {pathCount}/{maxPath}
+          </span>
+        )}
       </div>
 
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
@@ -213,11 +227,13 @@ export default function TacticoSquadPage() {
             !selected &&
             ((card.player.rarity === "legendary" && legendaryCount >= maxLegendary) ||
               (card.player.rarity === "epic" && epicCount >= maxEpic) ||
-              (card.player.rarity === "diamond" && diamondCount >= maxDiamond));
+              (isPlainDiamond(card) && diamondCount >= maxDiamond) ||
+              (!!card.player.path_talent_code && pathCount >= maxPath));
           return (
             <PlayerCard
               key={card.id}
               player={card.player}
+              pathStage={card.path_stage} prestige={card.prestige} talentOverride={card.talent_override}
               size="sm"
               selected={selected}
               dimmed={!selected && (selectedIds.length >= SQUAD_SIZE || rarityBlocked)}

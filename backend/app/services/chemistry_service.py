@@ -76,6 +76,22 @@ FORMATION_LINKS: dict[str, tuple[tuple[str, str], ...]] = {
         ("MID1", "FWD1"), ("MID2", "FWD1"), ("MID4", "FWD2"), ("MID5", "FWD2"),
         ("FWD1", "FWD2"),
     ),
+    "4-3-3H": (
+        ("GK", "DEF2"), ("GK", "DEF3"),
+        ("DEF1", "DEF2"), ("DEF2", "DEF3"), ("DEF3", "DEF4"),
+        ("DEF1", "MID1"), ("DEF2", "MID2"), ("DEF3", "MID2"), ("DEF4", "MID3"),
+        ("MID1", "MID2"), ("MID2", "MID3"),
+        ("MID1", "FWD1"), ("MID1", "FWD2"), ("MID3", "FWD2"), ("MID3", "FWD3"),
+        ("FWD1", "FWD2"), ("FWD2", "FWD3"),
+    ),
+    "4-2-3-1": (
+        ("GK", "DEF2"), ("GK", "DEF3"),
+        ("DEF1", "DEF2"), ("DEF2", "DEF3"), ("DEF3", "DEF4"),
+        ("DEF1", "MID3"), ("DEF2", "MID1"), ("DEF3", "MID2"), ("DEF4", "MID5"),
+        ("MID1", "MID2"), ("MID1", "MID4"), ("MID2", "MID4"),
+        ("MID3", "MID4"), ("MID4", "MID5"),
+        ("MID3", "FWD1"), ("MID4", "FWD1"), ("MID5", "FWD1"),
+    ),
     "5-3-2": (
         ("GK", "DEF2"), ("GK", "DEF3"), ("GK", "DEF4"),
         ("DEF1", "DEF2"), ("DEF2", "DEF3"), ("DEF3", "DEF4"), ("DEF4", "DEF5"),
@@ -83,6 +99,14 @@ FORMATION_LINKS: dict[str, tuple[tuple[str, str], ...]] = {
         ("MID1", "MID2"), ("MID2", "MID3"),
         ("MID1", "FWD1"), ("MID2", "FWD1"), ("MID2", "FWD2"), ("MID3", "FWD2"),
         ("FWD1", "FWD2"),
+    ),
+    "3-4-3": (
+        ("GK", "DEF1"), ("GK", "DEF2"), ("GK", "DEF3"),
+        ("DEF1", "DEF2"), ("DEF2", "DEF3"), ("DEF1", "DEF4"), ("DEF3", "DEF5"),
+        ("DEF2", "MID1"), ("DEF2", "MID2"),
+        ("DEF4", "MID1"), ("MID1", "MID2"), ("MID2", "DEF5"),
+        ("DEF4", "FWD1"), ("MID1", "FWD2"), ("MID2", "FWD2"), ("DEF5", "FWD3"),
+        ("FWD1", "FWD2"), ("FWD2", "FWD3"),
     ),
 }
 
@@ -168,6 +192,9 @@ def link_level(player_a, player_b) -> str:
     return LINK_NONE
 
 
+_LEVEL_ORDER = {LINK_NONE: 0, LINK_MEDIUM: 1, LINK_STRONG: 2}
+
+
 def link_points(level: str, rules: ChemistryRules) -> int:
     if level == LINK_STRONG:
         return rules.link_strong
@@ -229,6 +256,8 @@ def stadium_club_of(stadium) -> str | None:
 def compute_chemistry(
     cards_with_slots: Iterable[tuple[Any, Any]], formation: str, rules: ChemistryRules, slot_count: int | None = None,
     coach_country: str | None = None, stadium_club: str | None = None,
+    link_floor: dict[str, int] | None = None, on_position_slots: set | None = None,
+    extra_points: dict[str, int] | None = None,
 ) -> ChemistryResult:
     """cards_with_slots: (card-like with .player.{club,country,position},
     FormationSlot) pairs — UserCard, the tournament _EngineCard adapter and
@@ -236,21 +265,43 @@ def compute_chemistry(
     slot_count: the formation's total slot count for team_max (defaults to
     the number of filled slots). coach_country / stadium_club: the equipped
     coach's country and stadium's club (coach_country_of / stadium_club_of;
-    None = no such extra)."""
+    None = no such extra).
+
+    Match-time «Академия» talent hooks (path_talent_effects; all None in
+    editors and for every card without such a talent): link_floor — slot ->
+    minimum link level with that slot (1 medium, 2 strong; «Свой парень»),
+    on_position_slots — slots counted as on-position («Универсал» II),
+    extra_points — slot -> extra chemistry points when on position."""
     pairs = list(cards_with_slots)
     by_code = {slot.code: card for card, slot in pairs}
+    # «Комплект сборной» (equipment_service): a card wearing a national-team
+    # set gives +N to every on-position player of that country in this squad.
+    team_country_points: dict[str, int] = {}
+    for card, _slot in pairs:
+        boosts = getattr(card, "equipment_boosts", None) or {}
+        country = _group_key(boosts.get("team_country"))
+        if country and boosts.get("team_chemistry"):
+            team_country_points[country] = max(team_country_points.get(country, 0), int(boosts["team_chemistry"]))
     coach_country, stadium_club = _group_key(coach_country), _group_key(stadium_club)
     result = ChemistryResult(formation=formation, coach_country=coach_country, stadium_club=stadium_club)
     link_sums = {code: 0 for code in by_code}
     for a, b in FORMATION_LINKS.get(formation, ()):
         if a in by_code and b in by_code:
             level = link_level(by_code[a].player, by_code[b].player)
+            if link_floor:
+                floor = max(link_floor.get(a, 0), link_floor.get(b, 0))
+                if floor and _LEVEL_ORDER[level] < floor:
+                    level = (LINK_NONE, LINK_MEDIUM, LINK_STRONG)[min(floor, 2)]
             pts = link_points(level, rules)
             result.links.append(ChemistryLink(a=a, b=b, level=level, points=pts))
             link_sums[a] += pts
             link_sums[b] += pts
     for card, slot in pairs:
-        on_position = card.player.position == slot.ideal_position
+        from app.services.lineup_service import on_ideal_position  # lineup_service imports this module
+
+        on_position = on_ideal_position(card.player.position, slot.ideal_position) or (
+            bool(on_position_slots) and slot.code in on_position_slots
+        )
         base = player_points(link_sums[slot.code], on_position, rules)
         coach_extra = stadium_extra = 0
         if on_position:
@@ -258,7 +309,16 @@ def compute_chemistry(
                 coach_extra = max(0, rules.coach_country_points)
             if stadium_club is not None and _group_key(card.player.club) == stadium_club:
                 stadium_extra = max(0, rules.stadium_club_points)
-        pts = min(max(0, rules.player_max), base + coach_extra + stadium_extra) if (coach_extra or stadium_extra) else base
+        talent_extra = (extra_points or {}).get(slot.code, 0) if on_position else 0
+        # «Экипировка» (equipment_service): points the card's worn things add.
+        equipment_extra = (
+            (getattr(card, "equipment_chemistry", 0) or 0) + team_country_points.get(_group_key(card.player.country), 0)
+            if on_position else 0
+        )
+        pts = (
+            min(max(0, rules.player_max), base + coach_extra + stadium_extra + talent_extra + equipment_extra)
+            if (coach_extra or stadium_extra or talent_extra or equipment_extra) else base
+        )
         bonus = pts * rules.rating_per_point - (0 if on_position else rules.off_position_penalty)
         result.players[slot.code] = PlayerChemistry(
             slot_code=slot.code, points=pts, link_sum=link_sums[slot.code], on_position=on_position, rating_bonus=bonus,

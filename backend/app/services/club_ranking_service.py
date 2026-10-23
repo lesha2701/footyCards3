@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.club import Club, ClubMember
 from app.schemas.club_ranking import ClubRankingEntry, ClubRankingMetric, ClubRankingOut
+from app.services.club_emblem_service import emblem_out
 
 # Mirrors ranking_service.get_ranking's exact shape (one unfiltered query, Python top-N slice,
 # linear scan of the full row set for "my position") — confirmed by direct read of that file
@@ -24,7 +25,7 @@ async def get_club_ranking(
     def to_entry(rank: int, club: Club, value) -> ClubRankingEntry:
         return ClubRankingEntry(
             rank=rank, club_id=club.id, name=club.name,
-            logo_shape=club.logo_shape, logo_color=club.logo_color, value=int(value or 0),
+            logo_shape=club.logo_shape, logo_color=club.logo_color, emblem=emblem_out(club), value=int(value or 0),
         )
 
     top = [to_entry(i + 1, club, value) for i, (club, value) in enumerate(rows[:limit])]

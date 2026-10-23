@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from typing import Iterable, List, Optional
 
 from sqlalchemy import func, select
@@ -25,6 +26,7 @@ from app.schemas.pack import CollectionRewardGrantOut
 from app.schemas.player import PlayerOut
 from app.services import notification_service
 from app.services.card_skill_service import require_skill_loss_confirmation
+from app.services.player_stats_service import card_rating_bonus
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
 OTHER_COLLECTION_ID = -1
@@ -56,6 +58,40 @@ async def _skilled_copies(db: AsyncSession, user_id: int, player_ids: Iterable[i
     return by_player
 
 
+async def personal_squad_card_ids(db: AsyncSession, card_ids: Iterable[int]) -> set[int]:
+    """Copies standing in a player-tournament squad — those squads don't set
+    a flag on the card (unlike Card Arena / Tactico)."""
+    from app.models.personal_squad import PersonalSquadCard
+
+    ids = list(card_ids)
+    if not ids:
+        return set()
+    rows = await db.execute(select(PersonalSquadCard.user_card_id).where(PersonalSquadCard.user_card_id.in_(ids)))
+    return set(rows.scalars().all())
+
+
+async def _owner_personal_squad_ids(db: AsyncSession, user_id: int) -> set[int]:
+    from app.models.personal_squad import PersonalSquadCard
+
+    rows = await db.execute(
+        select(PersonalSquadCard.user_card_id)
+        .join(UserCard, UserCard.id == PersonalSquadCard.user_card_id)
+        .where(UserCard.owner_id == user_id)
+    )
+    return set(rows.scalars().all())
+
+
+def _stands_alone(card, personal_squad_ids: set[int]) -> bool:
+    """A copy listed as its own tile instead of collapsing behind its
+    duplicates: it has a skill, stars/Academy progress, stands in a squad or
+    is under the owner's «замок» — pickers and quick actions must be able to
+    reach exactly that copy, and a squad copy is shown with its lock."""
+    return bool(
+        card.skill_code or _invested(card) or card.is_in_lineup or card.is_in_tactico_squad
+        or card.is_user_locked or card.id in personal_squad_ids
+    )
+
+
 def _pick_representative(current: Optional[UserCard], card: UserCard) -> UserCard:
     """First card in sort order, except that a copy WITHOUT a skill wins over
     a skilled one: the list's quick actions (sell, select-to-sell) act on the
@@ -63,7 +99,7 @@ def _pick_representative(current: Optional[UserCard], card: UserCard) -> UserCar
     while a plain duplicate exists. Skilled copies are listed separately."""
     if current is None:
         return card
-    if current.skill_code and not card.skill_code:
+    if (current.skill_code or _invested(current)) and not (card.skill_code or _invested(card)):
         return card
     return current
 
@@ -111,36 +147,61 @@ async def list_user_cards(
     query = query.order_by(order_col.desc() if filters.sort_dir == "desc" else order_col.asc())
 
     # Pagination and totals are computed after collapsing duplicate copies of
-    # the same player (below), not at the SQL level, so LIMIT/OFFSET can't be
-    # pushed into this query — the whole filtered set has to be fetched first.
-    all_cards: List[UserCard] = (await db.execute(query)).unique().scalars().all()
+    # the same player (below), so the whole filtered set is scanned — but only
+    # as LIGHT rows (the few columns the grouping needs, no Player objects);
+    # full cards are loaded for the requested page alone (two-phase load).
+    light = (await db.execute(query.with_only_columns(
+        UserCard.id, UserCard.player_id, UserCard.skill_code, UserCard.stars, UserCard.star_progress,
+        UserCard.path_level, UserCard.path_stage, UserCard.prestige, Player.rarity,
+        UserCard.is_in_lineup, UserCard.is_in_tactico_squad, UserCard.is_user_locked,
+    ))).all()
+    all_cards = [
+        SimpleNamespace(
+            id=r.id, player_id=r.player_id, skill_code=r.skill_code, rarity=r.rarity,
+            is_in_lineup=r.is_in_lineup, is_in_tactico_squad=r.is_in_tactico_squad, is_user_locked=r.is_user_locked,
+            has_star_investment=(lambda r=r: bool(r.stars or r.star_progress)),
+            has_path_progress=(lambda r=r: bool(r.path_level or r.path_stage or r.prestige)),
+        )
+        for r in light
+    ]
+    squad_ids = await _owner_personal_squad_ids(db, user_id)
 
     if filters.sort_by == "rarity":
-        all_cards.sort(key=lambda c: RARITY_ORDER[c.player.rarity], reverse=(filters.sort_dir == "desc"))
+        all_cards.sort(key=lambda c: RARITY_ORDER[c.rarity], reverse=(filters.sort_dir == "desc"))
 
     # A user can own several copies of the same player (duplicates); the
     # collection list should show each player once, with duplicate_count
     # conveying how many copies are owned — not one row per physical card.
-    # Exception: a copy WITH a skill is a distinct item of its own (keyed by
-    # its card id), because every picker built on this list (lineups,
-    # tournament squads, trades, sell) must be able to choose exactly that
-    # copy — plain duplicates stay collapsed behind one representative.
+    # Exception: a copy with a skill, stars / a started «копилка», standing in
+    # a squad or under the owner's «замок» is a distinct item of its own
+    # (keyed by its card id, see _stands_alone), because every picker built on
+    # this list (lineups, tournament squads, trades, sell) must be able to
+    # choose exactly that copy — plain duplicates stay collapsed behind one
+    # representative.
     representative_by_key: dict[object, UserCard] = {}
     for card in all_cards:
-        key = ("skilled", card.id) if card.skill_code else card.player_id
+        key = ("own", card.id) if _stands_alone(card, squad_ids) else card.player_id
         representative_by_key[key] = _pick_representative(representative_by_key.get(key), card)
     unique_cards = list(representative_by_key.values())
 
     total = len(unique_cards)
-    page_cards = unique_cards[params.offset : params.offset + params.page_size]
+    page_ids = [c.id for c in unique_cards[params.offset : params.offset + params.page_size]]
+    loaded = {
+        c.id: c for c in (await db.execute(
+            select(UserCard).where(UserCard.id.in_(page_ids)).options(joinedload(UserCard.player))
+        )).unique().scalars().all()
+    } if page_ids else {}
+    page_cards = [loaded[i] for i in page_ids if i in loaded]
 
     dup_counts = await _duplicate_counts(db, user_id)
     skilled = await _skilled_copies(db, user_id, (c.player_id for c in page_cards))
+    in_squad = squad_ids
     items = []
     for card in page_cards:
         item = UserCardListItem.model_validate(card)
         item.duplicate_count = dup_counts.get(card.player_id, 1)
         item.skilled_copies = skilled.get(card.player_id, [])
+        item.in_personal_squad = card.id in in_squad
         items.append(item)
 
     return Page.build(items, total, params)
@@ -193,6 +254,10 @@ async def _assert_sellable(db: AsyncSession, user_id: int, card: UserCard, confi
         raise ConflictError("Card is used in an active lineup")
     if card.is_in_tactico_squad:
         raise ConflictError("Card is used in your Tactico squad")
+    if card.is_user_locked:
+        raise ConflictError(
+            f"«{card.player.display_name}» под замком — сними замок, чтобы продать", details={"reason": "user_locked"},
+        )
 
     remaining = (
         await db.execute(
@@ -208,6 +273,14 @@ async def _assert_sellable(db: AsyncSession, user_id: int, card: UserCard, confi
         )
 
 
+async def _with_shop_bonus(db: AsyncSession, user_id: int, coins: int, config=None) -> int:
+    """«Клубная база» club shop: +sell_pct % to a quick sale."""
+    from app.services import club_base_service
+
+    pct = (await club_base_service.user_effects(db, user_id, config)).get("sell_pct", 0)
+    return coins + coins * pct // 100
+
+
 async def sell_cards(
     db: AsyncSession, user: User, user_card_ids: List[int], confirm_last_copy: bool, confirm_skill_loss: bool = False,
 ) -> dict:
@@ -220,11 +293,17 @@ async def sell_cards(
     if len(cards) != len(set(user_card_ids)):
         raise NotFoundError("One or more cards not found")
 
+    from app.services.game_config_service import get_config
+    from app.services.path_prestige_service import sell_price
+
+    config = await get_config(db)
     total_value = 0
     for card in cards:
         await _assert_sellable(db, user.id, card, confirm_last_copy)
-        total_value += card.player.quick_sell_price
+        # «Академия» prestige raises a copy's quick-sell price.
+        total_value += sell_price(card, config)
     require_skill_loss_confirmation(list(cards), confirm_skill_loss, "продажа")
+    total_value = await _with_shop_bonus(db, user.id, total_value, config)
 
     for card in cards:
         await db.delete(card)
@@ -241,16 +320,28 @@ async def sell_cards(
     return {"sold_count": len(cards), "coins_earned": total_value, "new_balance": locked_user.balance}
 
 
+def _invested(card: UserCard) -> bool:
+    """Stars / «копилка» or «Академия» progress — a copy that is not
+    interchangeable with its duplicates (listed on its own, never sold as a
+    spare)."""
+    return card.has_star_investment() or card.has_path_progress()
+
+
 def _locked(card: UserCard) -> bool:
-    return card.is_locked_by_admin or card.is_locked_in_trade or card.is_in_lineup or card.is_in_tactico_squad
+    """Locked, in a squad or under the owner's own «замок» — never sold as a spare."""
+    return not card.can_burn()
 
 
-async def duplicate_sale_plan(db: AsyncSession, user_id: int, include_diamond: bool = False) -> list[UserCard]:
+async def duplicate_sale_plan(
+    db: AsyncSession, user_id: int, include_diamond: bool = False, include_star_material: bool = False,
+) -> list[UserCard]:
     """Copies "Продать дубликаты" would sell: for every player owned more than
-    once, one copy is always kept (a locked / in-squad / skilled copy if there
-    is one, otherwise the best diamond-bonus, lowest-numbered copy), and only
-    plain, unlocked, skill-less spare copies are sold. Diamond cards are
-    left alone unless asked (they are diamond-upgrade material)."""
+    once, one copy is always kept (a locked / in-squad / skilled / starred
+    copy if there is one, otherwise the best-bonus, lowest-numbered copy),
+    and only plain, unlocked, skill-less, star-less spare copies are sold.
+    Diamond cards are left alone unless asked (they are diamond-upgrade
+    material), and so are the spares of a player whose copy already has
+    stars or a started «копилка» (they are star material) unless asked."""
     result = await db.execute(
         select(UserCard).where(UserCard.owner_id == user_id).options(joinedload(UserCard.player))
     )
@@ -261,12 +352,14 @@ async def duplicate_sale_plan(db: AsyncSession, user_id: int, include_diamond: b
     for copies in by_player.values():
         if len(copies) < 2:
             continue
-        protected = [c for c in copies if _locked(c) or c.skill_code]
+        protected = [c for c in copies if _locked(c) or c.skill_code or _invested(c)]
         if not protected:
-            keeper = sorted(copies, key=lambda c: (-(c.diamond_rating_bonus or 0), c.serial_number or 0))[0]
+            keeper = sorted(copies, key=lambda c: (-card_rating_bonus(c), c.serial_number or 0))[0]
             protected = [keeper]
+        if not include_star_material and any(c.has_star_investment() for c in copies):
+            continue
         for card in copies:
-            if card in protected or _locked(card) or card.skill_code:
+            if card in protected or _locked(card) or card.skill_code or _invested(card):
                 continue
             if card.player.rarity == Rarity.diamond and not include_diamond:
                 continue
@@ -274,9 +367,11 @@ async def duplicate_sale_plan(db: AsyncSession, user_id: int, include_diamond: b
     return to_sell
 
 
-async def sell_duplicates(db: AsyncSession, user: User, preview: bool, include_diamond: bool = False) -> dict:
-    plan = await duplicate_sale_plan(db, user.id, include_diamond)
-    coins = sum(c.player.quick_sell_price for c in plan)
+async def sell_duplicates(
+    db: AsyncSession, user: User, preview: bool, include_diamond: bool = False, include_star_material: bool = False,
+) -> dict:
+    plan = await duplicate_sale_plan(db, user.id, include_diamond, include_star_material)
+    coins = await _with_shop_bonus(db, user.id, sum(c.player.quick_sell_price for c in plan))
     by_rarity: dict[str, int] = {}
     for card in plan:
         by_rarity[card.player.rarity.value] = by_rarity.get(card.player.rarity.value, 0) + 1
@@ -523,9 +618,19 @@ async def get_album_collection_detail(
             .where(UserCard.owner_id == user_id, UserCard.player_id.in_(player_ids))
             .options(joinedload(UserCard.player))
         )
-        for card in cards_result.unique().scalars().all():
+        all_owned = cards_result.unique().scalars().all()
+        in_squad = await personal_squad_card_ids(db, [c.id for c in all_owned])
+        squad_copy: dict[int, UserCard] = {}
+        for card in all_owned:
             dup_counts[card.player_id] = dup_counts.get(card.player_id, 0) + 1
             owned_cards[card.player_id] = _pick_representative(owned_cards.get(card.player_id), card)
+            if card.is_in_lineup or card.is_in_tactico_squad or card.id in in_squad:
+                squad_copy.setdefault(card.player_id, card)
+        # The album shows the copy that plays (with its squad lock) when
+        # there is one, so it can be opened and upgraded from here.
+        owned_cards.update(squad_copy)
+    else:
+        in_squad = set()
     skilled = await _skilled_copies(db, user_id, owned_cards.keys())
 
     slots: List[AlbumPlayerOut] = []
@@ -536,6 +641,7 @@ async def get_album_collection_detail(
             card_item = UserCardListItem.model_validate(card)
             card_item.duplicate_count = dup_counts.get(player.id, 1)
             card_item.skilled_copies = skilled.get(player.id, [])
+            card_item.in_personal_squad = card.id in in_squad
         slots.append(
             AlbumPlayerOut(
                 player=PlayerOut.model_validate(player), owned=card is not None,
@@ -550,3 +656,73 @@ async def get_album_collection_detail(
         reward_claimed=False if collection_id == OTHER_COLLECTION_ID else await _reward_claimed(db, user_id, collection_id),
         players=slots,
     )
+
+
+# ---- The owner's «замок» and card filters ----
+
+MAX_LOCK_BATCH = 200
+
+
+async def set_cards_user_locked(db: AsyncSession, user: User, card_ids: List[int], locked: bool) -> list[int]:
+    """Puts (or takes off) the owner's «замок» on several copies at once.
+    Under the user row lock, so it serializes with selling."""
+    ids = list(dict.fromkeys(card_ids))
+    if not ids:
+        raise ConflictError("Выбери карточки", details={"reason": "no_cards"})
+    if len(ids) > MAX_LOCK_BATCH:
+        raise ConflictError(f"За раз можно не больше {MAX_LOCK_BATCH} карточек", details={"reason": "too_many"})
+    await lock_user_for_update(db, user.id)
+    cards = (
+        await db.execute(select(UserCard).where(UserCard.id.in_(ids)).order_by(UserCard.id).with_for_update())
+    ).scalars().all()
+    if len(cards) != len(ids) or any(c.owner_id != user.id for c in cards):
+        raise NotFoundError("Card not found")
+    for card in cards:
+        card.is_user_locked = locked
+    await db.commit()
+    return [c.id for c in cards]
+
+
+async def card_filter_options(db: AsyncSession, user_id: int) -> dict:
+    """Countries and clubs present among the owner's cards (for the filter
+    pickers), most common first."""
+    async def _distinct(column) -> list[str]:
+        rows = await db.execute(
+            select(column, func.count(UserCard.id))
+            .join(UserCard, UserCard.player_id == Player.id)
+            .where(UserCard.owner_id == user_id)
+            .group_by(column)
+            .order_by(func.count(UserCard.id).desc(), column)
+        )
+        return [value for value, _ in rows.all() if value]
+
+    return {"countries": await _distinct(Player.country), "clubs": await _distinct(Player.club)}
+
+
+FILTER_KEYS = {"rarity", "country", "club", "position", "sort_by", "has_skill"}
+
+
+def clean_filter_default(raw: Optional[dict]) -> Optional[dict]:
+    """Keeps only the known keys with simple values; empty → None."""
+    if not raw:
+        return None
+    cleaned = {
+        k: v for k, v in raw.items()
+        if k in FILTER_KEYS and v not in (None, "", []) and isinstance(v, (str, bool))
+    }
+    if "rarity" in cleaned and cleaned["rarity"] not in {r.value for r in Rarity}:
+        cleaned.pop("rarity")
+    if "position" in cleaned:
+        from app.models.enums import Position
+        if cleaned["position"] not in {p.value for p in Position}:
+            cleaned.pop("position")
+    if "sort_by" in cleaned and cleaned["sort_by"] not in {"acquired_at", "rating", "rarity"}:
+        cleaned.pop("sort_by")
+    return cleaned or None
+
+
+async def save_filter_default(db: AsyncSession, user: User, raw: Optional[dict]) -> Optional[dict]:
+    user.card_filter_default = clean_filter_default(raw)
+    db.add(user)
+    await db.commit()
+    return user.card_filter_default

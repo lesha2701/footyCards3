@@ -246,7 +246,7 @@ function NoteBadge({ tag }: { tag: StrategoNoteTag }) {
   const role = tag === "strong" || tag === "weak" ? null : tag;
   return (
     <span
-      className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-300 px-0.5 text-[9px] font-bold leading-none text-bg-base ring-1 ring-bg-base"
+      className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-300 px-0.5 text-micro font-bold leading-none text-bg-base ring-1 ring-bg-base"
       title={`Твоя пометка: ${NOTE_LABELS[tag]}`}
     >
       {role ? <RoleIcon role={role} size={9} strokeWidth={2.6} /> : tag === "strong" ? "+" : "−"}
@@ -294,7 +294,7 @@ export function PieceChip({
     >
       <RoleIcon role={piece.role} size={15} strokeWidth={2} />
       {piece.power ? (
-        <span className={`font-mono text-[9px] font-bold ${piece.mine ? "text-ink-chalk" : "text-red-50"}`}>{piece.power}</span>
+        <span className={`font-mono text-micro font-bold ${piece.mine ? "text-ink-chalk" : "text-red-50"}`}>{piece.power}</span>
       ) : null}
       {piece.mine && piece.revealed && (
         <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-red-400 ring-1 ring-bg-base" title="Соперник знает эту фишку" />

@@ -9,6 +9,14 @@ Telegram Mini App for collecting football cards.
 Main features:
 - packs with staged opening animation, including themed card collections with completion rewards;
 - card collection (album + "my cards"), filtering and selling;
+- «Академия» path cards: diamond youngsters that level up from rewarded
+  matches along staged gates and carry a situational talent
+  (`path_service.py` / `path_talent_effects.py` / `path_match_service.py`,
+  see docs/path-cards.md);
+- «Клубная база»: the player's own campus (stadium, HQ, medical, finance
+  department, …) around the «Академия», one construction queue with it,
+  career effects frozen per season (`club_base_service.py`, see
+  docs/club-base.md);
 - game currency, daily rewards and a free periodic pack;
 - mini-games: Memory Sequence, Card Arena, Саботёр (Saboteur), Пенальти,
   Штрафной удар (Free Kick), Футбольные буквы (a football-themed word-guessing
@@ -20,6 +28,41 @@ Main features:
   4-seat economic board game — `magnate_engine.py` is the pure, seeded
   rules engine + bot, `magnate_service.py` the lobbies/rooms, turn timers,
   limits and rewards; see "Turn-based game state" below);
+- clubs: squad/tournaments/league plus emblem constructor (`club_emblem_service`,
+  paid layers for budget coins or Stars), «Казна за Stars» (`club_treasury_service`),
+  spare-card sale/exchange (`club_market_service`), roles (vice-captain, treasurer),
+  wall, shop / weekly quests / wars whose member rewards go through one claim
+  mechanism (`club_reward_service`), league divisions with seasons and a trophy
+  room. Quests, wars and league settlement have no scheduler of their own: they
+  run lazily on reads and from bot sweeps (`/internal/clubs/...`), idempotent via
+  unique rows;
+- «Менеджер» (`manager_service.py`, `manager_shop.py`): every user's own club.
+  Squad: his «Мой игрок» and one «Академия» card (both always start), up to
+  `manager_max_live` other users' «Мои игроки» on contracts for seasons (sign
+  a free agent, or buy / loan from another club — the player and the selling
+  club both consent) and catalog footballers bought or loaned (`manager_npc`,
+  one club at a time, partial unique index). Club money is euros (BigInteger,
+  never converted to coins): a season grant by division plus a capped
+  «Клубная база» bonus (stadium tickets, marketing, shop, accounting), match
+  income, prizes, fans' merchandise; values follow the Transfermarkt-like
+  curve `manager_value_ratings` / `manager_value_eur`. A ×2 pyramid of
+  `manager_divisions` (leagues of `manager_league_size`, new clubs at the
+  bottom, one division a season); a weekly season keyed by ISO week:
+  preseason transfer window, then `ensure_season` (once, `manager_seasons`
+  PK) pays wages, auto-loans footballers into empty slots, freezes the XIs
+  and draws leagues by strength; rounds at `manager_slots`, one evening
+  digest a day, `_settle` moves clubs when every league is over. Runs lazily
+  and from the bot's manager sweep (`/internal/manager/sweep`). A club whose
+  league runs can't trade. Users' wages are coins, capped per season.
+  Tactics (`manager_tactics.py`): a club formation plus one of four styles
+  in a circle (Card Arena's); the engine runs with neutral settings and the
+  tactics are a transparent % on each line's ratings for the match.
+  «Личный турнир» plays the same layer (`personal_squads.style`, GameConfig
+  `ptour_style_edge_pct` / `ptour_formation_effect_pct`, `GET
+  /player-tournaments/tactics` shows the next opponent's style); its old
+  mentality / playstyle columns are kept but no longer played.
+  The style shop / merchandise / «Менеджер Pro» are cosmetics and
+  convenience only (Stars via my_player_service, key "manager:<code>");
 - player-to-player card exchanges;
 - tasks/achievements, referrals, leaderboards and profile;
 - Telegram bot (notifications/reminders) and a React-based administrative panel.
@@ -122,6 +165,44 @@ Main features:
   When changing a table the bot touches (users, notifications, daily
   rewards, free pack), update both the SQLAlchemy model/migration and the
   bot's raw SQL.
+- **Telegram Stars payments**: the Mini App creates a `StarsInvoice`
+  (price frozen on it); the bot answers `pre_checkout_query` and, on
+  `successful_payment`, first inserts a `stars_payment_receipts` row
+  straight into Postgres (the player is already charged — the receipt must
+  survive a backend outage), then calls `POST /internal/stars-payments/deliver`
+  (`stars_receipt_service.deliver_with_receipt` → idempotent
+  `stars_payment_service.deliver_payment`). Every attempt updates the
+  receipt (status/attempts/last_error/backoff); the bot's
+  `run_stars_payment_retry_loop` retries failed ones, and admins re-deliver
+  or refund (`refundStarPayment`) from Магазин → Платежи Stars. A refunded
+  receipt is never delivered and a delivered one never refunded (decided
+  under the receipt's row lock). Availability is enforced at pre-checkout,
+  not at delivery. The bot also serves `/paysupport` and `/terms`.
+- **Card locks and squads**: `UserCard.is_user_locked` is the owner's own
+  «замок» (`PATCH /collection/cards/lock`, bulk) — a locked copy is never
+  sold or burned as material; it still plays and trades. `UserCard.can_burn()`
+  is the material check (no squad flag, no trade/admin lock, no «замок»);
+  player-tournament squads have no flag on the card, so material/Forge paths
+  also check `collection_service.personal_squad_card_ids`. Improving a card
+  (stars, diamond feeding, path, skill) is allowed while it plays; the Forge
+  destroys the stake, so a squad copy needs `confirm_leave_squad`. Lists
+  (`/collection/cards`, album, `/upgrade-cards`) return squad and locked
+  copies as their own tiles (`in_personal_squad` flag); the UI shades them
+  (`PlayerCard inSquad / userLocked`, `lib/cardLocks.ts`).
+- **Card filter**: `users.card_filter_default` (`GET/PUT
+  /collection/filter-default`) is the saved default for «Мои карты», the
+  album and the Forge (`lib/cardFilter.ts` `useCardFilter`,
+  `CardFilterBar`); `/collection/filter-options` lists the owner's countries
+  and clubs.
+- **Trade anti-farming / «Антифрод»**: `trade_guard_service` gates trades
+  (GameConfig `trade_send_min_*`, `trade_daily_coins_receive_cap` — the cap is
+  what stops a hub collecting millions in one evening — and `trade_coin_tax_pct`);
+  `GameConfig.trades_enabled` switches trading off. Admin «Антифрод»
+  (`admin_antifraud_service`, `/admin/antifraud/scan|ban`) finds hubs (coins
+  from >= N distinct senders), the farm accounts that fed them and
+  registration bursts, and bans in bulk (payers of Stars are flagged, never
+  pre-selected; admins are never banned). Admin adjustments may take a balance
+  below zero (migration 0164) — used to claw back already-spent farm coins.
 - **Frontend routing**: one React app serves both the Mini App (`/`, `/packs`,
   `/play/*`, `/collection`, …) and the admin panel (`/admin/*`, gated by
   `AdminGuard` client-side and `get_current_admin` server-side). State:
@@ -129,6 +210,15 @@ Main features:
   which blocks in-app navigation during a live match and also fires a
   `pagehide` keepalive `fetch` so a real tab close/reload still records a
   forfeit), TanStack Query for server state.
+- **Admin analytics**: `user_daily_activity` holds one row per user per
+  local day (settings.timezone), written by `activity_service.record_daily_activity`
+  from the same once-a-day spot in `core/dependencies.py` that advances the
+  login streak (`users.last_seen_at` alone can't answer "came back on day 7").
+  `admin_analytics_service.py` (`GET /admin/dashboard/analytics`) derives DAU/
+  WAU/MAU, retention cohorts, the new-player funnel, mode popularity and Stars
+  monetization from it plus the per-mode tables listed in `MODE_SOURCES` —
+  add a new game mode there. History before migration 0150 is backfilled from
+  timestamped activity, so it's a lower bound.
 - **Alembic revisions** are named sequentially (`0001_...` → current head),
   not autogenerate-hash IDs — follow that convention (`NNNN_short_description.py`)
   and bump `down_revision` to the current head.
@@ -189,8 +279,28 @@ python -c "from app.main import app"    # import/startup sanity check
 ```
 
 Row-level locking (`SELECT ... FOR UPDATE`) is not exercised by the SQLite
-test DB — verify locking-dependent changes manually against real Postgres
-(e.g. via the running `docker compose` backend/postgres containers).
+test DB. Concurrency/locking tests that need real Postgres use the `real_pg`
+fixture (`tests/conftest.py`, logic in `tests/real_postgres.py`) — use it for
+any new one, never a hand-rolled `create_async_engine`:
+
+- They write to a **separate database whose name must end in `_test`**, never
+  the app's own: `REAL_POSTGRES_URL` if set, otherwise the process's
+  `DATABASE_URL` with `_test` appended (inside the backend container:
+  `footycards_test` on the compose `postgres`). Any other database name fails
+  the test. A missing test DB is created and `alembic upgrade head`-ed once
+  per pytest session; it is disposable — drop it any time.
+- Each test snapshots the max primary key of every table and on teardown
+  (pass or fail) deletes every row created after it, children first —
+  including rows the code under test created (tournaments, transactions,
+  user_cards, …). Tests don't write their own cleanup.
+- Unreachable server → the tests skip, so plain SQLite runs stay green.
+
+```bash
+# inside the dev stack (writes to footycards_test on the compose postgres):
+docker compose exec backend pytest tests/ -v
+# from the host against the compose postgres (port 5434):
+REAL_POSTGRES_URL=postgresql+asyncpg://postgres:<password>@localhost:5434/footycards_test pytest tests/ -v
+```
 
 ### Database migrations
 

@@ -4,7 +4,9 @@ import aiohttp
 from aiogram import F, Router
 from aiogram.types import Message, PreCheckoutQuery
 
+import db
 from config import get_bot_settings
+from services import stars_delivery
 
 router = Router(name="payments")
 settings = get_bot_settings()
@@ -42,52 +44,45 @@ async def handle_pre_checkout_query(pre_checkout_query: PreCheckoutQuery) -> Non
 
 @router.message(F.successful_payment)
 async def handle_successful_payment(message: Message) -> None:
+    """Telegram has already charged the player at this point. The payment
+    is written to stars_payment_receipts first (straight into Postgres, so
+    it survives even a backend outage), then delivered; a failed delivery
+    is retried by services/stars_delivery.run_stars_payment_retry_loop and
+    shows up in the admin panel — never just a log line."""
     payment = message.successful_payment
-    ok = False
-    body: dict = {}
+    telegram_user_id = message.from_user.id
     try:
-        async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
-            async with session.post(
-                f"{settings.internal_backend_url}/internal/stars-payments/deliver",
-                json={
-                    "payload_token": payment.invoice_payload,
-                    "telegram_user_id": message.from_user.id,
-                    "telegram_payment_charge_id": payment.telegram_payment_charge_id,
-                    "total_amount": payment.total_amount,
-                },
-                headers=_HEADERS,
-            ) as resp:
-                ok = resp.status == 200
-                if ok:
-                    body = await resp.json()
-                else:
-                    logger.error("stars payment delivery failed: status=%s body=%s", resp.status, await resp.text())
+        await db.record_stars_payment(
+            payment.telegram_payment_charge_id, payment.invoice_payload, telegram_user_id, payment.total_amount,
+            stars_delivery.FIRST_RETRY_DELAY_SECONDS,
+        )
     except Exception:
-        logger.exception("stars payment delivery call failed")
-        ok = False
+        # Delivery below still records it backend-side; this only matters
+        # if the backend is down as well.
+        logger.exception("could not record stars payment receipt")
 
-    if ok:
-        # Which of these is set tells us what was actually purchased — see
-        # StarsInvoiceStatusOut (result=pack, gift_result=gift, coin_result=coins).
-        if body.get("gift_result"):
-            await message.answer("🎁 Подарок отправлен! Получатель сможет открыть его в приложении.")
-        elif body.get("blackjack_result"):
-            await message.answer("🃏 Попытка в «21» куплена! Открой приложение, чтобы сыграть с Тренером соперника.")
-        elif body.get("wheel_result"):
-            await message.answer("🎡 Колесо фортуны крутится — открой приложение, чтобы увидеть свой приз!")
-        elif body.get("coin_result"):
-            await message.answer("⭐ Монеты зачислены! Открой приложение, чтобы увидеть баланс.")
-        else:
-            await message.answer("🎉 Пак куплен и уже в твоей коллекции! Открой приложение, чтобы посмотреть карточку.")
-    else:
-        # The payment went through on Telegram's side regardless of whether
-        # our delivery call succeeded — never leave the player without their
-        # purchase. Loud enough to notice and retry by hand if this ever fires.
-        await message.answer(
-            "⭐ Оплата прошла, но при начислении покупки произошла ошибка. Мы разберёмся и начислим её вручную — "
-            "напиши в поддержку, если покупка не появится в течение нескольких минут."
-        )
-        logger.critical(
-            "UNDELIVERED stars payment: charge_id=%s user=%s payload=%s",
-            payment.telegram_payment_charge_id, message.from_user.id, payment.invoice_payload,
-        )
+    # «Клубный абонемент» is a Telegram Stars subscription: its renewals
+    # arrive here too (same payload, new charge id) with these fields set.
+    subscription = None
+    if getattr(payment, "subscription_expiration_date", None):
+        subscription = {
+            "subscription_expiration_date": payment.subscription_expiration_date,
+            "is_recurring": bool(getattr(payment, "is_recurring", False)),
+            "is_first_recurring": bool(getattr(payment, "is_first_recurring", False)),
+        }
+    outcome = await stars_delivery.deliver(
+        payment.invoice_payload, telegram_user_id, payment.telegram_payment_charge_id, payment.total_amount,
+        subscription=subscription,
+    )
+    if outcome.ok:
+        await message.answer(stars_delivery.success_text(outcome.body))
+        return
+
+    logger.critical(
+        "UNDELIVERED stars payment (will retry): charge_id=%s user=%s payload=%s",
+        payment.telegram_payment_charge_id, telegram_user_id, payment.invoice_payload,
+    )
+    await message.answer(stars_delivery.DELAYED_TEXT)
+    await stars_delivery.alert_admins(message.bot, stars_delivery.admin_alert_text(
+        telegram_user_id, payment.total_amount, payment.telegram_payment_charge_id, outcome.error, 1,
+    ))

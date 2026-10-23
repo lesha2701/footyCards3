@@ -1,12 +1,9 @@
 import asyncio
-import os
 import uuid
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select, text
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy import select
 
 from app.core.exceptions import ConflictError
 from app.models.club import Club
@@ -20,11 +17,10 @@ from app.services.club_squad_service import set_club_lineup
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
 
-# See test_club_packs.py's REAL_POSTGRES_URL comment for why this test opens its own
-# independent connection to the real dev Postgres instance rather than using the pytest
+# See test_club_packs.py's real-Postgres comment for why this test uses the `real_pg`
+# fixture (a dedicated `*_test` database, cleaned after every test) rather than the pytest
 # suite's `client`/`db_session` fixtures (hardcoded to in-memory SQLite, single shared
 # connection, can't reproduce genuine multi-connection unique-constraint race timing).
-REAL_POSTGRES_URL = os.environ.get("REAL_POSTGRES_URL", "postgresql+asyncpg://postgres:1234@postgres:5432/footycards")
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -36,14 +32,18 @@ async def _seed_position_pool(db_session):
     autouse fixtures are file-scoped in this codebase's test setup, so it
     must be repeated here (fresh SQLite schema per test, see conftest.py's
     `_fresh_schema`)."""
+    await _seed_positions(db_session)
+
+
+async def _seed_positions(session):
     for position in (Position.GK, Position.GK, Position.GK):
-        await create_player(db_session, position=position)
+        await create_player(session, position=position)
     for position in (Position.LB, Position.LB, Position.CB, Position.CB, Position.RB, Position.RB):
-        await create_player(db_session, position=position)
+        await create_player(session, position=position)
     for position in (Position.CDM, Position.CM, Position.CAM, Position.LM, Position.RM):
-        await create_player(db_session, position=position)
+        await create_player(session, position=position)
     for position in (Position.LW, Position.LW, Position.ST, Position.ST, Position.RW):
-        await create_player(db_session, position=position)
+        await create_player(session, position=position)
 
 
 async def _register_only(client, bot_token, telegram_id):
@@ -153,7 +153,7 @@ async def test_non_manager_cannot_set_lineup(client, db_session, bot_token):
     assert resp.status_code == 403
 
 
-async def test_set_lineup_concurrent_saves_no_unhandled_integrity_error():
+async def test_set_lineup_concurrent_saves_no_unhandled_integrity_error(real_pg):
     """Genuine concurrency regression test for an unhandled IntegrityError observed in
     production as a 500 on PUT /clubs/me/lineup: set_club_lineup's with_for_update(of=ClubLineup)
     lock serializes overlapping saves once each one's SELECT resolves, but two truly concurrent
@@ -164,23 +164,15 @@ async def test_set_lineup_concurrent_saves_no_unhandled_integrity_error():
     uq_club_lineup_card_once. Before the fix this raised a raw IntegrityError (500); after, the
     loser(s) get a clean ConflictError (409) instead. Skips if real Postgres is unreachable.
     """
-    engine = create_async_engine(REAL_POSTGRES_URL, pool_pre_ping=True)
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-    except OSError as exc:
-        await engine.dispose()
-        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
-    except OperationalError as exc:
-        await engine.dispose()
-        pytest.skip(f"real dev Postgres not reachable at {REAL_POSTGRES_URL!r}: {exc!r}")
-
-    RealSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+    RealSessionLocal = real_pg
     suffix = uuid.uuid4().hex[:10]
 
     setup = RealSessionLocal()
     captain = club_id = None
     try:
+        # The real-Postgres test database starts empty — seed the squad pool
+        # create_club draws from, same as the SQLite tests' autouse fixture.
+        await _seed_positions(setup)
         captain = User(telegram_id=991_300_000_000 + uuid.uuid4().int % 1_000_000_000, username=f"lineup_race_{suffix}", balance=10000)
         setup.add(captain)
         await setup.flush()
@@ -233,20 +225,8 @@ async def test_set_lineup_concurrent_saves_no_unhandled_integrity_error():
             ).scalars().all()
             assert len(final_cards) == 11, "lineup must end with exactly 11 cards, not duplicated or partially deleted"
     finally:
-        async with RealSessionLocal() as cleanup:
-            if club_id is not None:
-                club_row = await cleanup.get(Club, club_id)
-                if club_row is not None:
-                    await cleanup.delete(club_row)
-            await cleanup.commit()
-            if captain is not None:
-                user_row = await cleanup.get(User, captain.id)
-                if user_row is not None:
-                    await cleanup.delete(user_row)
-            await cleanup.commit()
         if setup is not None:
             await setup.close()
-        await engine.dispose()
 
 
 async def test_new_club_lineup_defaults_to_4_3_3_balanced_central(client, db_session, bot_token):

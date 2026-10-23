@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
@@ -9,8 +9,8 @@ import NumberInput from "@/components/common/NumberInput";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import PlayerCard from "@/components/cards/PlayerCard";
 import { fetchCollection, fetchUserCollection } from "@/api/collection";
-import { createTradeOffer } from "@/api/trades";
-import { searchUsers } from "@/api/profile";
+import { createTradeOffer, fetchTradeRules } from "@/api/trades";
+import { fetchPublicProfile, searchUsers } from "@/api/profile";
 import { ApiRequestError } from "@/lib/api";
 import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
 import type { UserPublic } from "@/types";
@@ -21,12 +21,25 @@ export default function NewTradePage() {
   const navigate = useNavigate();
   // "Предложить обмен" on a public profile opens this page with the
   // receiver already picked.
-  const prefilled = (useLocation().state as { target?: UserPublic } | null)?.target ?? null;
+  // «Поиск обменов» also passes the cards it matched.
+  const state = useLocation().state as { target?: UserPublic; offeredIds?: number[]; requestedIds?: number[] } | null;
+  const prefilled = state?.target ?? null;
 
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState<UserPublic | null>(prefilled);
-  const [offeredIds, setOfferedIds] = useState<number[]>([]);
-  const [requestedIds, setRequestedIds] = useState<number[]>([]);
+  // «Поделиться в чат» link from «Поиск обменов»: /trades/new?to=<user id>.
+  const [searchParams] = useSearchParams();
+  const toId = Number(searchParams.get("to")) || null;
+  const { data: linkedTarget } = useQuery({
+    queryKey: ["trade-link-target", toId],
+    queryFn: () => fetchPublicProfile(toId!),
+    enabled: !!toId && !prefilled,
+  });
+  useEffect(() => {
+    if (linkedTarget && !target) setTarget(linkedTarget);
+  }, [linkedTarget, target]);
+  const [offeredIds, setOfferedIds] = useState<number[]>(state?.offeredIds ?? []);
+  const [requestedIds, setRequestedIds] = useState<number[]>(state?.requestedIds ?? []);
   const [senderCoins, setSenderCoins] = useState(0);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +57,8 @@ export default function NewTradePage() {
     queryFn: () => fetchCollection({ page_size: 100, search: myCardSearch || undefined }),
   });
 
+  const { data: rules } = useQuery({ queryKey: ["trade-rules"], queryFn: fetchTradeRules });
+
   const { data: theirCollection } = useQuery({
     queryKey: ["their-collection", target?.id, theirCardSearch],
     queryFn: () => fetchUserCollection(target!.id, { page_size: 100, search: theirCardSearch || undefined }),
@@ -53,13 +68,15 @@ export default function NewTradePage() {
   // Neither side's collection ever offers/requests a card locked elsewhere
   // (admin lock, in a trade, in a Card Arena lineup, or in a Tactico
   // squad) — the backend rejects all four (plus diamond rarity, which never
-  // trades at all) at accept time anyway, so showing them as pickable here
-  // just sets the offer up to fail later.
+  // trades — except «Академия» cards, whose path progress moves with the
+  // card) at accept time anyway, so showing them as pickable here just sets
+  // the offer up to fail later.
   const isTradeable = (c: {
     is_locked_by_admin: boolean; is_locked_in_trade: boolean; is_in_lineup: boolean; is_in_tactico_squad: boolean;
-    player: { rarity: string };
+    player: { rarity: string; path_talent_code?: string | null };
   }) =>
-    !c.is_locked_by_admin && !c.is_locked_in_trade && !c.is_in_lineup && !c.is_in_tactico_squad && c.player.rarity !== "diamond";
+    !c.is_locked_by_admin && !c.is_locked_in_trade && !c.is_in_lineup && !c.is_in_tactico_squad &&
+    (c.player.rarity !== "diamond" || !!c.player.path_talent_code);
 
   const createMutation = useMutation({
     mutationFn: createTradeOffer,
@@ -81,13 +98,19 @@ export default function NewTradePage() {
     setError(null);
   };
 
+  const coinsEnabled = rules?.coins_enabled ?? true;
+  const coins = coinsEnabled ? senderCoins : 0;
+  const canSubmit = rules?.cards_both_sides
+    ? offeredIds.length > 0 && requestedIds.length > 0
+    : offeredIds.length > 0 || requestedIds.length > 0 || coins > 0;
+
   const submit = () => {
     if (!target) return;
     createMutation.mutate({
       receiver_id: target.id,
       offered_card_ids: offeredIds,
       requested_card_ids: requestedIds,
-      sender_coins: senderCoins,
+      sender_coins: coins,
       message: message || undefined,
     });
   };
@@ -96,7 +119,7 @@ export default function NewTradePage() {
     text: "Отправить предложение",
     onClick: submit,
     visible: !!target,
-    enabled: offeredIds.length > 0 || requestedIds.length > 0 || senderCoins > 0,
+    enabled: canSubmit,
     loading: createMutation.isPending,
   });
 
@@ -142,6 +165,11 @@ export default function NewTradePage() {
           </div>
 
           {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
+          {rules && !rules.can_give && rules.give_block_reason && (
+            <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+              {rules.give_block_reason} Пока можно только получать карточки и монеты от других игроков.
+            </p>
+          )}
 
           <section>
             <p className="mb-2 text-sm font-semibold text-ink-mist">Твои карточки ({offeredIds.length}/{MAX_TRADE_CARDS_PER_SIDE})</p>
@@ -154,7 +182,7 @@ export default function NewTradePage() {
             <div className="max-h-64 overflow-y-auto">
               <div className="grid grid-cols-3 gap-2">
                 {myCollection?.items.filter(isTradeable).map((c) => (
-                  <PlayerCard key={c.id} player={c.player} size="sm" badge={<CardSkillBadge code={c.skill_code} level={c.skill_level} />} selected={offeredIds.includes(c.id)} onClick={() => toggle(offeredIds, setOfferedIds, c.id)} />
+                  <PlayerCard key={c.id} player={c.player} pathStage={c.path_stage} prestige={c.prestige} talentOverride={c.talent_override} size="sm" badge={<CardSkillBadge code={c.skill_code} level={c.skill_level} />} selected={offeredIds.includes(c.id)} onClick={() => toggle(offeredIds, setOfferedIds, c.id)} />
                 ))}
                 {myCollection && !myCollection.items.filter(isTradeable).length && (
                   <p className="col-span-3 text-xs text-ink-mist-dim">
@@ -164,7 +192,7 @@ export default function NewTradePage() {
               </div>
             </div>
             {myCollection && myCollection.total > myCollection.items.length && !myCardSearch && (
-              <p className="mt-1 text-[11px] text-ink-mist-dim">
+              <p className="mt-1 text-caption text-ink-mist-dim">
                 Показано {myCollection.items.length} из {myCollection.total} — используй поиск, чтобы найти конкретную карточку
               </p>
             )}
@@ -181,7 +209,7 @@ export default function NewTradePage() {
             <div className="max-h-64 overflow-y-auto">
               <div className="grid grid-cols-3 gap-2">
                 {theirCollection?.items.filter(isTradeable).map((c) => (
-                  <PlayerCard key={c.id} player={c.player} size="sm" badge={<CardSkillBadge code={c.skill_code} level={c.skill_level} />} selected={requestedIds.includes(c.id)} onClick={() => toggle(requestedIds, setRequestedIds, c.id)} />
+                  <PlayerCard key={c.id} player={c.player} pathStage={c.path_stage} prestige={c.prestige} talentOverride={c.talent_override} size="sm" badge={<CardSkillBadge code={c.skill_code} level={c.skill_level} />} selected={requestedIds.includes(c.id)} onClick={() => toggle(requestedIds, setRequestedIds, c.id)} />
                 ))}
                 {theirCollection && theirCollection.items.filter(isTradeable).length === 0 && (
                   <p className="col-span-3 text-xs text-ink-mist-dim">
@@ -191,13 +219,21 @@ export default function NewTradePage() {
               </div>
             </div>
             {theirCollection && theirCollection.total > theirCollection.items.length && !theirCardSearch && (
-              <p className="mt-1 text-[11px] text-ink-mist-dim">
+              <p className="mt-1 text-caption text-ink-mist-dim">
                 Показано {theirCollection.items.length} из {theirCollection.total} — используй поиск, чтобы найти конкретную карточку
               </p>
             )}
           </section>
 
-          <div>
+          {rules && (!rules.coins_enabled || rules.cards_both_sides) && (
+            <p className="text-caption text-ink-mist-dim">
+              {rules.cards_both_sides
+                ? "Обмен — «карточка на карточку»: выбери хотя бы одну свою карточку и одну карточку игрока."
+                : "Монеты в обменах сейчас отключены."}
+            </p>
+          )}
+
+          {coinsEnabled && <div>
             <label className="mb-1 block text-sm font-semibold text-ink-mist">Добавить монет со своей стороны</label>
             <NumberInput
               min={0}
@@ -205,7 +241,13 @@ export default function NewTradePage() {
               onChange={setSenderCoins}
               className="w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk outline-none"
             />
-          </div>
+            {rules && rules.coin_tax_pct > 0 && senderCoins > 0 && (
+              <p className="mt-1 text-caption text-ink-mist-dim">
+                Налог {rules.coin_tax_pct}%: игрок получит{" "}
+                {senderCoins - Math.min(senderCoins, Math.ceil((senderCoins * rules.coin_tax_pct) / 100))} монет
+              </p>
+            )}
+          </div>}
 
           <div>
             <label className="mb-1 block text-sm font-semibold text-ink-mist">Сообщение (необязательно)</label>
@@ -220,7 +262,7 @@ export default function NewTradePage() {
           <button
             onClick={submit}
             hidden={nativeSubmit}
-            disabled={createMutation.isPending || (offeredIds.length === 0 && requestedIds.length === 0 && senderCoins === 0)}
+            disabled={createMutation.isPending || !canSubmit}
             className="rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-40"
           >
             {createMutation.isPending ? "Отправка..." : "Отправить предложение"}

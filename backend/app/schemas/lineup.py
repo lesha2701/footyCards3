@@ -54,6 +54,8 @@ class LineupOut(BaseModel):
     is_complete: bool
     team_strength: Optional[int] = None
     max_diamond: int
+    # «Академия» cards: own limit, they never take a diamond place.
+    max_path: int = 1
     coach: Optional[EquippedCoachOut] = None
     stadium: Optional[EquippedStadiumOut] = None
     slots: list[LineupSlotOut]
@@ -71,6 +73,10 @@ class LineupSetRequest(BaseModel):
 
 class LineupTacticRequest(BaseModel):
     tactic: str
+
+
+class LineupFormationRequest(BaseModel):
+    formation: str
 
 
 class LineupCoachSetRequest(BaseModel):

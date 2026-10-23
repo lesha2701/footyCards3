@@ -11,9 +11,11 @@ from app.models.mixins import TimestampMixin, utcnow
 class LifestyleItem(TimestampMixin, Base):
     """«Имущество» of «Мой игрок»: admin-curated status items (cars, real
     estate, stocks, anything else) bought for coins and/or Telegram Stars.
-    Purely prestige — every item adds `prestige` points to the owner's
-    status; no gameplay effect. One copy per player; `max_supply` makes a
-    limited edition (sold_count is bumped under a row lock)."""
+    Every item adds `prestige` points to the owner's status and may carry
+    one admin-set effect (lifestyle_service.EFFECTS): faster freshness
+    recovery, an XP bonus or a weekly coin income. One copy per player;
+    `max_supply` makes a limited edition (sold_count is bumped under a row
+    lock)."""
 
     __tablename__ = "lifestyle_items"
 
@@ -33,6 +35,9 @@ class LifestyleItem(TimestampMixin, Base):
     sold_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # none | freshness_regen | xp_bonus_pct | weekly_income, and its size.
+    effect: Mapped[str] = mapped_column(String(24), nullable=False, default="none")
+    effect_value: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class UserLifestyleItem(Base):
@@ -45,6 +50,8 @@ class UserLifestyleItem(Base):
     source: Mapped[str] = mapped_column(String(16), nullable=False, default="coins")
     serial_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     acquired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    # weekly_income: paid up to this moment (NULL = since acquired_at).
+    income_claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     item: Mapped["LifestyleItem"] = relationship(lazy="joined")
 

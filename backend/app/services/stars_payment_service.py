@@ -16,6 +16,7 @@ from app.models.coin_package import CoinPackage
 from app.models.enums import CardSource, GiftKind, TransactionType, WheelSpinSource
 from app.models.gift import Gift, GiftSet
 from app.models.pack import Pack, PackOpening, StarsInvoice
+from app.models.transaction import CoinTransaction
 from app.models.user import User
 from app.models.wheel import WheelPrize, WheelSpin
 from app.schemas.badge import BadgeOut
@@ -36,11 +37,33 @@ settings = get_settings()
 logger = logging.getLogger(__name__)
 
 
-async def list_active_coin_packages(db: AsyncSession) -> list[CoinPackageOut]:
+async def _first_coin_purchase_bonus(db: AsyncSession, user_id: int, coins: int) -> int:
+    """GameConfig.first_coin_purchase_bonus_pct of `coins` for a player who
+    has never bought coins for Stars yet (0 otherwise or when it's off)."""
+    from app.services.game_config_service import get_config
+
+    pct = (await get_config(db)).first_coin_purchase_bonus_pct
+    if pct <= 0:
+        return 0
+    bought_before = (
+        await db.execute(
+            select(CoinTransaction.id)
+            .where(CoinTransaction.user_id == user_id, CoinTransaction.type == TransactionType.stars_coin_purchase)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return 0 if bought_before is not None else coins * pct // 100
+
+
+async def list_active_coin_packages(db: AsyncSession, user: User | None = None) -> list[CoinPackageOut]:
     result = await db.execute(
         select(CoinPackage).where(CoinPackage.is_active.is_(True)).order_by(CoinPackage.sort_order)
     )
-    return [CoinPackageOut.model_validate(p) for p in result.scalars().all()]
+    out = [CoinPackageOut.model_validate(p) for p in result.scalars().all()]
+    if user is not None:
+        for item in out:
+            item.first_purchase_bonus_coins = await _first_coin_purchase_bonus(db, user.id, item.coins_amount)
+    return out
 
 
 async def _get_invoice_or_404(db: AsyncSession, payload_token: str) -> StarsInvoice:
@@ -117,6 +140,17 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
     if invoice.is_blackjack_entry:
         return StarsInvoiceStatusOut(status="completed", blackjack_result={"kind": "entry"})
 
+    if invoice.path_user_card_id is not None:
+        return StarsInvoiceStatusOut(
+            status="completed", path_result={"kind": "path_attempt", "user_card_id": invoice.path_user_card_id},
+        )
+    if invoice.academy_speedup:
+        kind = ("base_speedup" if invoice.academy_speedup.startswith("base:")
+                else "base_cosmetic" if invoice.academy_speedup.startswith("basecos:") else "academy_speedup")
+        return StarsInvoiceStatusOut(status="completed", path_result={"kind": kind})
+    if invoice.shop_product:
+        return StarsInvoiceStatusOut(status="completed", shop_result={"kind": invoice.shop_product.split(":")[0]})
+
     user = await db.get(User, invoice.user_id)
     return StarsInvoiceStatusOut(
         status="completed",
@@ -124,7 +158,9 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
     )
 
 
-async def _request_telegram_invoice_link(payload_token: str, title: str, description: str, stars_amount: int) -> str:
+async def _request_telegram_invoice_link(
+    payload_token: str, title: str, description: str, stars_amount: int, subscription_period: int | None = None,
+) -> str:
     """Calls the Bot API to mint an invoice link. Split out from the create_*
     functions so tests can monkeypatch this one Telegram-calling function
     instead of mocking httpx (mirrors telegram_service's
@@ -137,6 +173,10 @@ async def _request_telegram_invoice_link(payload_token: str, title: str, descrip
         "currency": "XTR",
         "prices": [{"label": title[:32], "amount": stars_amount}],
     }
+    if subscription_period:
+        # Telegram Stars subscription: Telegram charges the same price again
+        # every period until the player (or we) cancel it.
+        body["subscription_period"] = subscription_period
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/createInvoiceLink"
     try:
         async with httpx.AsyncClient(timeout=10, proxy=settings.telegram_proxy_url or None) as client:
@@ -161,6 +201,14 @@ async def create_invoice(db: AsyncSession, user: User, pack_id: int) -> StarsInv
         raise ConflictError("This pack is not purchasable with Telegram Stars")
     if not pack.is_active:
         raise ConflictError("This pack is not currently available")
+    from sqlalchemy.orm import selectinload
+
+    from app.services.pack_service import assert_pool_ready
+
+    pack = (await db.execute(
+        select(Pack).where(Pack.id == pack.id).options(selectinload(Pack.rarity_probabilities))
+    )).scalar_one()
+    await assert_pool_ready(db, pack)  # «Академия» pack with no players: refuse before charging
 
     payload_token = secrets.token_urlsafe(16)
     invoice = StarsInvoice(
@@ -280,6 +328,26 @@ async def validate_pre_checkout(db: AsyncSession, payload_token: str, total_amou
         from app.services import blackjack_service
 
         return await blackjack_service.validate_stars_entry(db, invoice)
+    elif invoice.path_user_card_id is not None:
+        from app.services.game_config_service import get_config
+
+        if not (await get_config(db)).path_enabled:
+            return False, "«Академия» сейчас недоступна"
+    elif invoice.academy_speedup:
+        from app.services.club_base_service import COSMETIC_PREFIX, SPEEDUP_PREFIX, validate_cosmetic_invoice
+        from app.services.game_config_service import get_config
+
+        if invoice.academy_speedup.startswith(COSMETIC_PREFIX):
+            return await validate_cosmetic_invoice(db, invoice)
+        if invoice.academy_speedup.startswith(SPEEDUP_PREFIX):
+            if not (await get_config(db)).club_base_enabled:
+                return False, "Клубная база сейчас закрыта"
+        elif not (await get_config(db)).academy_enabled:
+            return False, "Академия сейчас закрыта"
+    elif invoice.shop_product:
+        from app.services import shop_product_service
+
+        return await shop_product_service.validate(db, invoice)
     return True, ""
 
 
@@ -296,8 +364,39 @@ async def _grant_pack_badge(db: AsyncSession, user: User, badge_id: int) -> None
     db.add(user)
 
 
+async def _deliver_subscription_renewal(
+    db: AsyncSession, user: User, charge_id: str, total_amount: int, subscription_expiration: int | None,
+) -> StarsInvoiceStatusOut:
+    """A Telegram Stars subscription renews by sending another
+    successful_payment with the ORIGINAL invoice payload and a new charge id.
+    Each renewal gets its own completed StarsInvoice row ("club_pass_renewal")
+    — that row's unique charge id is what makes a redelivered renewal a
+    no-op, and it is what revenue analytics count."""
+    from app.services import shop_product_service
+
+    existing = (await db.execute(
+        select(StarsInvoice).where(StarsInvoice.telegram_payment_charge_id == charge_id)
+    )).scalar_one_or_none()
+    if existing is not None:
+        return StarsInvoiceStatusOut(status="completed", shop_result={"kind": "club_pass_renewal"})
+
+    renewal = StarsInvoice(
+        user_id=user.id, payload_token=secrets.token_urlsafe(16), stars_amount=total_amount,
+        shop_product="club_pass_renewal", telegram_payment_charge_id=charge_id,
+        completed_at=datetime.now(timezone.utc),
+    )
+    db.add(renewal)
+    shop_result = await shop_product_service.deliver(db, user, renewal, charge_id, subscription_expiration)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()  # a concurrent delivery of the same renewal won
+    return StarsInvoiceStatusOut(status="completed", shop_result=shop_result)
+
+
 async def deliver_payment(
-    db: AsyncSession, payload_token: str, telegram_user_id: int, telegram_payment_charge_id: str, total_amount: int
+    db: AsyncSession, payload_token: str, telegram_user_id: int, telegram_payment_charge_id: str, total_amount: int,
+    subscription_expiration: int | None = None,
 ) -> StarsInvoiceStatusOut:
     """Grants the pack or credits the coins for a completed Telegram Stars
     payment. Called by the bot after it receives `successful_payment`.
@@ -316,7 +415,11 @@ async def deliver_payment(
     if invoice is None:
         raise NotFoundError("Invoice not found")
 
-    if invoice.completed_at is not None:
+    is_renewal = (
+        invoice.completed_at is not None and invoice.shop_product == "club_pass"
+        and invoice.telegram_payment_charge_id != telegram_payment_charge_id
+    )
+    if invoice.completed_at is not None and not is_renewal:
         return await _delivered_result(db, invoice)
 
     result = await db.execute(select(User).where(User.telegram_id == telegram_user_id))
@@ -325,11 +428,22 @@ async def deliver_payment(
         raise NotFoundError("User not found")
     if user.id != invoice.user_id:
         raise ConflictError("This payment does not belong to the invoice's original user")
+    if is_renewal:
+        return await _deliver_subscription_renewal(
+            db, user, telegram_payment_charge_id, total_amount, subscription_expiration,
+        )
 
+    # By the time successful_payment arrives the player has already been
+    # charged, so delivery checks only what the payment itself must match —
+    # the price frozen on the invoice. A product an admin switched off or
+    # re-priced after pre-checkout is still delivered: it was bought at the
+    # invoice's price (pre-checkout is where availability is enforced).
     if invoice.pack_id is not None:
         pack = await db.get(Pack, invoice.pack_id)
-        if pack is None or pack.stars_price != total_amount:
-            raise ConflictError("Stars amount does not match the pack price")
+        if pack is None:
+            raise NotFoundError("Pack not found")
+        if invoice.stars_amount != total_amount:
+            raise ConflictError("Stars amount does not match the invoice")
 
         # payload_token (our own short, bounded id), not the Telegram charge
         # id — real charge ids can run well past 128 characters, which
@@ -360,8 +474,10 @@ async def deliver_payment(
             await _grant_pack_badge(db, user, pack.badge_id)
     elif invoice.gift_set_id is not None:
         gift_set = await db.get(GiftSet, invoice.gift_set_id)
-        if gift_set is None or not gift_set.is_active or gift_set.stars_price != total_amount:
-            raise ConflictError("This gift set is no longer available")
+        if gift_set is None:
+            raise NotFoundError("Gift set not found")
+        if invoice.stars_amount != total_amount:
+            raise ConflictError("Stars amount does not match the invoice")
 
         serial_number = await gift_service.reserve_gift_serial_numbers(db, gift_set)
 
@@ -386,6 +502,26 @@ async def deliver_payment(
         if invoice.stars_amount != total_amount:
             raise ConflictError("Stars amount does not match the invoice")
         blackjack_result = await blackjack_service.deliver_stars_entry(db, user)
+    elif invoice.path_user_card_id is not None:
+        from app.services import path_service
+
+        if invoice.stars_amount != total_amount:
+            raise ConflictError("Stars amount does not match the invoice")
+        path_result = await path_service.deliver_stars_attempt(db, user, invoice)
+    elif invoice.academy_speedup:
+        from app.services import academy_service
+
+        if invoice.stars_amount != total_amount:
+            raise ConflictError("Stars amount does not match the invoice")
+        path_result = await academy_service.deliver_speedup(db, user, invoice)
+    elif invoice.shop_product:
+        from app.services import shop_product_service
+
+        if invoice.stars_amount != total_amount:
+            raise ConflictError("Stars amount does not match the invoice")
+        shop_result = await shop_product_service.deliver(
+            db, user, invoice, telegram_payment_charge_id, subscription_expiration,
+        )
     elif invoice.is_wheel_spin:
         # Imported here rather than at module level: wheel_service itself
         # imports _request_telegram_invoice_link from this module at import
@@ -418,11 +554,17 @@ async def deliver_payment(
         if invoice.stars_amount != total_amount:
             raise ConflictError("Stars amount does not match the invoice")
         user = await lock_user_for_update(db, user.id)
+        # First coin purchase bonus: decided at delivery under the user lock
+        # (not when the invoice was made), so several unpaid invoices can't
+        # all carry it. The invoice records what was actually credited.
+        bonus = await _first_coin_purchase_bonus(db, user.id, invoice.coins_amount)
         await credit_coins(
-            db, user, invoice.coins_amount, TransactionType.stars_coin_purchase,
-            f"Покупка {invoice.coins_amount} монет за {invoice.stars_amount} ⭐",
+            db, user, invoice.coins_amount + bonus, TransactionType.stars_coin_purchase,
+            f"Покупка {invoice.coins_amount} монет за {invoice.stars_amount} ⭐"
+            + (f" + {bonus} бонус за первую покупку" if bonus else ""),
             related_object_type="stars_invoice", related_object_id=invoice.id,
         )
+        invoice.coins_amount += bonus
 
     invoice.telegram_payment_charge_id = telegram_payment_charge_id
     invoice.completed_at = datetime.now(timezone.utc)
@@ -452,6 +594,10 @@ async def deliver_payment(
         return StarsInvoiceStatusOut(status="completed", my_player_result=my_player_result)
     if invoice.is_blackjack_entry:
         return StarsInvoiceStatusOut(status="completed", blackjack_result=blackjack_result)
+    if invoice.path_user_card_id is not None or invoice.academy_speedup:
+        return StarsInvoiceStatusOut(status="completed", path_result=path_result)
+    if invoice.shop_product:
+        return StarsInvoiceStatusOut(status="completed", shop_result=shop_result)
     return StarsInvoiceStatusOut(
         status="completed",
         coin_result=StarsCoinResultOut(coins_credited=invoice.coins_amount, new_balance=user.balance),

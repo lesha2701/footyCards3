@@ -130,6 +130,32 @@ class StarsPackPurchaseOut(BaseModel):
     completed_at: datetime
 
 
+class StarsPaymentReceiptOut(BaseModel):
+    """One received Stars payment and how its delivery went (admin view)."""
+
+    id: int
+    telegram_payment_charge_id: str
+    telegram_user_id: int
+    user_id: Optional[int] = None
+    user_username: Optional[str] = None
+    user_display_name: Optional[str] = None
+    product: str
+    stars_amount: int
+    status: Literal["pending", "delivered", "failed", "refunded"]
+    attempts: int
+    last_error: Optional[str] = None
+    next_attempt_at: Optional[datetime] = None
+    # Still being retried by the bot on its own (false = waits for an admin).
+    auto_retry: bool
+    created_at: datetime
+    delivered_at: Optional[datetime] = None
+    refunded_at: Optional[datetime] = None
+
+
+class StarsPaymentProblemCountOut(BaseModel):
+    count: int
+
+
 class GameConfigOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -215,6 +241,19 @@ class GameConfigOut(BaseModel):
     match_keeper_save_chance_max: float
     match_red_card_strength_penalty_pct: float
     match_penalty_gk_rating_penalty: int
+    arena_style_matchup_bonus_pct: int = 6
+    arena_share_exponent: float = 1.2
+    arena_shot_exponent: float = 0.8
+    arena_edge_rating_per_10pct: float = 2.0
+    arena_edge_rating_max: int = 12
+    arena_formation_effect_pct: int = 100
+    arena_points_k: int = 40
+    arena_points_scale: int = 400
+    arena_shield_matches: int = 3
+    arena_matchmaking_window: int = 150
+    arena_division_min_points: list[int] = []
+    arena_division_reward_coins: list[int] = []
+    arena_division_coin_pct: list[int] = []
     saboteur_line_base_reward: int
     saboteur_line_growth: float
     saboteur_daily_limit: int
@@ -231,6 +270,7 @@ class GameConfigOut(BaseModel):
     hourly_game_limit: int
     matchmaking_enabled: bool
     wheel_enabled: bool
+    trades_enabled: bool = True
     leagues_enabled: bool
     free_pack_interval_hours: int
     bot_daily_digest_enabled: bool = False
@@ -260,6 +300,45 @@ class GameConfigOut(BaseModel):
     career_yellows_for_ban: int = 3
     career_form_max: int = 2
     career_reminders_enabled: bool = True
+    career_tactics_tuning: dict = {}
+    career_familiarity_axis_keep_pct: int = 80
+    career_squad_size: int = 22
+    career_ambition_bonus_pct: list[int] = []
+    career_ambition_rep_success: list[int] = []
+    career_ambition_rep_fail: list[int] = []
+    career_rep_title: int = 25
+    career_rep_promotion: int = 10
+    career_rep_relegation: int = -10
+    career_rep_levels: list[int] = []
+    career_cup_enabled: bool = True
+    career_cup_rewards: list[int] = []
+    career_rep_cup: int = 15
+    career_offseason_auto: bool = True
+    career_inactive_days: int = 3
+    career_core_min: int = 15
+    career_core_keep_pct: int = 50
+    career_camp_physical_pct: int = 30
+    career_camp_physical_rounds: int = 3
+    career_camp_tactical_tenths: int = 40
+    career_tenure_minutes_per_point: int = 900
+    career_tenure_max: int = 2
+    career_division_club_count: int = 10
+    career_live_enabled: bool = True
+    career_halftime_minutes: int = 10
+    career_achievement_reward: int = 150
+    career_digest_enabled: bool = True
+    career_familiarity_step_tenths: int = 20
+    career_familiarity_max_tenths: int = 90
+    career_familiarity_keep_pct: int = 50
+    career_max_plan_rules: int = 3
+    career_max_substitutions: int = 3
+    career_bot_counter_chance_pct: list[int] = []
+    career_division_count: int = 5
+    career_division_promote: int = 2
+    career_division_relegate: int = 2
+    career_division_rating_offset: list[int] = []
+    career_division_reward_pct: list[int] = []
+    career_division_bot_level: list[str] = []
     my_player_enabled: bool = True
     my_player_xp_per_reward: int = 10
     my_player_xp_daily_cap: int = 200
@@ -275,10 +354,125 @@ class GameConfigOut(BaseModel):
     my_player_extra_trainings_max: int = 3
     my_player_extra_training_coins: int = 300
     my_player_extra_training_stars: int = 15
+    my_player_streak_days: int = 7
+    my_player_streak_tokens: int = 1
+    my_player_freshness_per_match: int = 15
+    my_player_freshness_regen_per_hour: int = 1
+    my_player_freshness_training: int = 20
+    my_player_fatigue_max_penalty: int = 5
+    my_player_duels_per_day: int = 5
+    my_player_duel_reward_win: int = 30
+    my_player_duel_reward_draw: int = 10
+    my_player_duel_xp: int = 10
+    my_player_role_change_coins: int = 25000
+    my_player_role_change_stars: int = 300
+    my_player_cosmetic_stars_prices: dict[str, int] = {}
+    player_career_level_ratings: list[int] = []
+    player_career_level_salary: list[int] = []
+    player_career_level_prestige: list[int] = []
+    player_career_star_prestige: list[int] = []
+    player_career_star_salary_pct: int = 20
+    player_career_prestige_salary_cap: int = 50
+    player_career_contract_seasons: int = 2
+    player_career_free_agent_level: int = 4
+    player_career_offers_max: int = 3
+    player_career_haggle_base: int = 90
+    player_career_haggle_raise_penalty: int = 2
+    player_career_haggle_repeat_penalty: int = 15
+    player_career_cl_places: int = 2
+    player_career_cl_rewards: list[int] = []
+    player_career_cl_prestige: int = 40
+    player_career_national_prestige: int = 150
+    player_career_national_rewards: list[int] = []
+    player_career_national_win_prestige: int = 30
+    player_career_golden_ball_min_matches: int = 8
+    player_career_golden_ball_coins: int = 3000
+    player_career_golden_ball_prestige: int = 50
+    player_career_moments: int = 2
+    player_career_moment_hit_pct: int = 18
+    player_career_moment_window_hours: int = 6
+    player_career_bench_gap: int = 3
+    player_career_bench_play_pct: int = 40
+    player_career_trust_starter: int = 70
+    player_career_trust_captain: int = 85
+    player_career_captain_salary_pct: int = 10
+    player_career_injury_freshness: int = 40
+    player_career_injury_max_pct: int = 20
+    player_career_heal_coins: int = 500
+    player_career_heal_stars: int = 20
+    player_career_refresh_coins: int = 300
+    player_career_refresh_stars: int = 15
+    player_career_event_every: int = 3
+    player_career_event_coins: int = 100
+    player_career_event_prestige: int = 5
+    player_career_derby_multiplier: int = 2
+    player_career_pro_stars: int = 299
+    player_career_pro_days: int = 30
+    player_career_pro_xp_pct: int = 50
+    player_career_agent_stars: int = 50
+    player_career_agent_haggle_bonus: int = 15
+    player_career_save_offer_stars: int = 30
+    player_career_fast_season_enabled: bool = False
+    player_career_fast_season_stars: int = 100
+    player_career_fast_round_minutes: int = 120
+    player_career_chest_coins_min: int = 50
+    player_career_chest_coins_max: int = 200
+    player_career_chest_token_pct: int = 10
+    player_career_weekly_goals: int = 5
+    player_career_weekly_matches: int = 10
+    player_career_weekly_rating_x10: int = 70
+    player_career_weekly_coins: list[int] = []
+    player_career_friends_rewards: list[int] = []
+    manager_enabled: bool = True
+    manager_found_cost: int = 3000
+    manager_min_level: int = 3
+    manager_max_live: int = 5
+    manager_squad_max: int = 22
+    manager_league_size: int = 16
+    manager_divisions: int = 10
+    manager_promote: int = 2
+    manager_preseason_hours: int = 72
+    manager_style_edge_pct: int = 4
+    ptour_style_edge_pct: int = 4
+    ptour_formation_effect_pct: int = 100
+    manager_formation_effect_pct: int = 100
+    manager_wage_pct: int = 10
+    manager_loan_fee_pct: int = 20
+    manager_sell_back_pct: int = 50
+    manager_live_wage_max: int = 3000
+    manager_wage_eur_per_coin: int = 1000
+    manager_form_bonus_pct: int = 5
+    manager_form_bonus_cap: int = 50
+    manager_income_win: int = 300000
+    manager_income_draw: int = 150000
+    manager_income_loss: int = 60000
+    manager_ticket_eur_per_level: int = 20000
+    manager_sponsor_eur_per_level: int = 100000
+    manager_merch_eur_per_level: int = 60000
+    manager_budget_per_base_level: int = 20000
+    manager_base_bonus_cap_pct: int = 60
+    manager_promotion_bonus_pct: int = 50
+    manager_parachute_pct: int = 33
+    manager_match_xp: int = 30
+    manager_freshness_cost: int = 0
+    manager_merch_cap_eur: int = 15000000
+    manager_pro_stars: int = 299
+    manager_pro_days: int = 30
+    manager_value_ratings: list[int] = []
+    manager_value_eur: list[int] = []
+    manager_division_budget: list[int] = []
+    manager_division_income_pct: list[int] = []
+    manager_division_wage_pct: list[int] = []
+    manager_division_rating: list[int] = []
+    manager_place_rewards: list[int] = []
+    manager_place_budget: list[int] = []
+    manager_slots: list[str] = []
+    manager_cosmetics: list[dict] = []
+    manager_merch: list[dict] = []
+    player_career_objective_coins: int = 150
+    player_career_objective_rep: int = 5
     player_career_enabled: bool = True
-    player_career_min_club_cards: int = 5
     player_career_rating_margin: int = 5
-    player_career_rep_per_club_rating: int = 4
     player_career_rep_per_goal: int = 3
     player_career_rep_per_assist: int = 2
     player_career_rep_per_win: int = 2
@@ -371,6 +565,24 @@ class GameConfigOut(BaseModel):
     blackjack_stars_cost: int = 10
     blackjack_paid_daily_limit: int = 10
     blackjack_consolation_coins: int = 25
+    mordoboi_enabled: bool = True
+    mordoboi_rounds: int = 3
+    mordoboi_exchanges_per_round: int = 4
+    mordoboi_base_hp: int = 100
+    mordoboi_reward_win: int = 80
+    mordoboi_reward_draw: int = 40
+    mordoboi_reward_loss: int = 25
+    mordoboi_reward_ko_bonus: int = 20
+    mordoboi_daily_limit: int = 10
+    mordoboi_bot_easy_reward_pct: int = 60
+    mordoboi_challenge_expiry_hours: int = 24
+    mordoboi_move_timeout_hours: int = 12
+    mordoboi_live_move_seconds: int = 30
+    mordoboi_max_auto_moves: int = 3
+    mordoboi_legend_rating: int = 90
+    mordoboi_legend_reward: int = 150
+    club_ring_win_points: int = 30
+    club_ring_member_cap: int = 300
     bingo_reward_coins: int
     bingo_reward_pack_id: Optional[int] = None
     card_skills_enabled: bool = True
@@ -401,6 +613,152 @@ class GameConfigOut(BaseModel):
     chemistry_off_position_penalty: int = 0
     chemistry_coach_country_points: int = 1
     chemistry_stadium_club_points: int = 1
+    card_stars_enabled: bool = False
+    card_stars_max: int = 3
+    card_star_dupes_per_level: dict[str, list[int]] = {}
+    card_star_coin_cost: dict[str, list[int]] = {}
+    card_star_rating_per_star: int = 1
+    card_star_bonus_cap: int = 6
+    path_enabled: bool = True
+    path_title: str = "Академия"
+    path_xp_base: int = 75
+    path_xp_step: int = 10
+    path_start_rating: int = 60
+    path_rating_per_level: int = 1
+    path_xp_match: int = 10
+    path_xp_win: int = 10
+    path_xp_draw: int = 3
+    path_xp_goal: int = 5
+    path_xp_assist: int = 3
+    path_daily_free_arena: int = 10
+    path_daily_career: int = 2
+    path_daily_ptour: int = 3
+    path_coin_attempt_prices: list[int] = []
+    path_stars_attempt_prices: list[int] = []
+    path_talent_cap: int = 8
+    match_max_path_cards: int = 1
+    tactico_max_path_cards: int = 1
+    stratego_max_path_cards: int = 1
+    path_prestige_dupes: list[int] = []
+    path_prestige_coins: list[int] = []
+    path_prestige_names: list[str] = []
+    path_prestige_rewards: list[dict] = []
+    path_prestige_xp_pct: int = 5
+    path_prestige_xp_cap_pct: int = 15
+    path_prestige_free_attempts: int = 1
+    path_prestige_sell_pct: int = 50
+    path_prestige_other_ratio: int = 5
+    academy_enabled: bool = True
+    academy_buildings: dict = {}
+    academy_stars_per_hour: int = 2
+    academy_scout_report: dict = {}
+    club_base_enabled: bool = True
+    club_base_buildings: dict = {}
+    club_base_caps: dict = {}
+    club_base_stars_per_hour: int = 2
+    club_base_income_max_days: int = 3
+    club_base_art: dict = {}
+    club_base_cosmetics: list[dict] = []
+    calendar_catchup_coins: int = 150
+    calendar_catchup_stars: int = 10
+    calendar_catchup_max_per_month: int = 5
+    club_pass_enabled: bool = False
+    club_pass_stars: int = 199
+    club_pass_daily_coins: int = 300
+    club_pass_daily_pack_id: Optional[int] = None
+    club_pass_extra_rewarded_attempts: int = 2
+    club_pass_bonus_coins: int = 2000
+    club_pass_bonus_pack_id: Optional[int] = None
+    club_pass_bonus_card_rarity: Optional[str] = None
+    club_pass_season_xp_bonus_pct: int = 50
+    club_pass_free_catchups: int = 3
+    club_pass_status: int = 50
+    season_premium_status: int = 30
+    club_pass_frame_cosmetic_id: Optional[int] = None
+    club_pass_badge_id: Optional[int] = None
+    club_pass_ad_free: bool = True
+    season_pass_enabled: bool = False
+    season_xp_per_game: int = 10
+    season_xp_per_daily_claim: int = 25
+    starter_offer_enabled: bool = False
+    starter_offer_hours: int = 48
+    starter_offer_stars: int = 50
+    starter_offer_coins: int = 1000
+    starter_offer_pack_id: Optional[int] = None
+    starter_offer_cosmetic_id: Optional[int] = None
+    starter_offer_for_all: bool = False
+    starter_offer_all_since: Optional[datetime] = None
+    artifacts_enabled: bool = False
+    artifact_slots: int = 3
+    artifact_max_opp_pct: int = 5
+    artifact_max_stat: int = 6
+    club_emblems_enabled: bool = True
+    club_donation_enabled: bool = False
+    club_donation_coins_per_star: int = 15
+    club_donation_star_options: list[int] = []
+    club_sponsor_silver_stars: int = 250
+    club_sponsor_gold_stars: int = 1000
+    club_card_market_enabled: bool = True
+    club_card_sell_pct: int = 100
+    club_card_exchange_count: int = 5
+    club_card_exchange_pack_id: Optional[int] = None
+    club_announcement_cooldown_minutes: int = 60
+    club_quests_enabled: bool = True
+    club_league_season_weeks: int = 4
+    club_league_promote_count: int = 3
+    club_league_relegate_count: int = 3
+    club_league_division_reward_pct: list[int] = []
+    club_war_enabled: bool = True
+    club_war_start_weekday: int = 4
+    club_war_start_hour: int = 18
+    club_war_duration_hours: int = 48
+    club_war_min_members: int = 3
+    club_war_member_cap: int = 100
+    club_war_win_budget: int = 3000
+    club_war_draw_budget: int = 1500
+    club_war_loss_budget: int = 500
+    club_war_win_member_coins: int = 200
+    weekly_cup_enabled: bool = True
+    weekly_cup_games: list[str] = []
+    weekly_cup_best_of: int = 5
+    weekly_cup_prizes: list[int] = []
+    match_day_enabled: bool = False
+    match_day_exact_coins: int = 1000
+    match_day_diff_coins: int = 400
+    match_day_outcome_coins: int = 200
+    match_day_auto_enabled: bool = False
+    match_day_leagues: list[int] = []
+    club_raid_enabled: bool = True
+    club_raid_hp_per_member: int = 3000
+    club_raid_attacks_per_day: int = 3
+    club_raid_shots: int = 6
+    club_raid_damage_per_goal: int = 100
+    club_raid_reward_coins: int = 1000
+    club_raid_reward_pack_id: Optional[int] = None
+    club_raid_reward_budget: int = 2000
+    trade_send_min_account_age_days: int = 3
+    trade_send_min_active_days: int = 2
+    trade_daily_coins_receive_cap: int = 3000
+    trade_coin_tax_pct: int = 0
+    trade_coins_enabled: bool = False
+    trade_cards_both_sides: bool = True
+    trade_finder_max_wants: int = 10
+    trade_finder_max_gives: int = 20
+    trade_finder_active_days: int = 7
+    trade_finder_notify_hours: int = 24
+    trade_suspicious_young_days: int = 14
+    trade_suspicious_min_donors: int = 3
+    stake_max_coins: int = 500
+    stake_pair_daily_limit: int = 2
+    stake_daily_profit_cap: int = 2000
+    equipment_enabled: bool = False
+    equipment_max_rating: int = 3
+    equipment_max_pp: int = 8
+    equipment_max_chemistry: int = 1
+    equipment_max_talisman_pct: int = 15
+    pity_packs: int = 0
+    bulk10_discount_pct: int = 0
+    first_coin_purchase_bonus_pct: int = 0
 
 
 class GameConfigUpdate(BaseModel):
@@ -486,6 +844,40 @@ class GameConfigUpdate(BaseModel):
     match_keeper_save_chance_max: Optional[float] = Field(default=None, ge=0, le=1)
     match_red_card_strength_penalty_pct: Optional[float] = Field(default=None, ge=0, le=1)
     match_penalty_gk_rating_penalty: Optional[int] = Field(default=None, ge=0)
+    arena_style_matchup_bonus_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    arena_share_exponent: Optional[float] = Field(default=None, ge=0, le=5)
+    arena_shot_exponent: Optional[float] = Field(default=None, ge=0, le=5)
+    arena_edge_rating_per_10pct: Optional[float] = Field(default=None, ge=0, le=10)
+    arena_edge_rating_max: Optional[int] = Field(default=None, ge=0, le=40)
+    arena_formation_effect_pct: Optional[int] = Field(default=None, ge=0, le=300)
+    arena_points_k: Optional[int] = Field(default=None, ge=1, le=200)
+    arena_points_scale: Optional[int] = Field(default=None, ge=50, le=2000)
+    arena_shield_matches: Optional[int] = Field(default=None, ge=0, le=20)
+    arena_matchmaking_window: Optional[int] = Field(default=None, ge=0, le=5000)
+    arena_division_min_points: Optional[list[int]] = Field(default=None, min_length=1, max_length=30)
+    arena_division_reward_coins: Optional[list[int]] = Field(default=None, min_length=1, max_length=30)
+    arena_division_coin_pct: Optional[list[int]] = Field(default=None, min_length=1, max_length=30)
+    equipment_enabled: Optional[bool] = None
+    equipment_max_rating: Optional[int] = Field(default=None, ge=0, le=10)
+    equipment_max_pp: Optional[int] = Field(default=None, ge=0, le=30)
+    equipment_max_chemistry: Optional[int] = Field(default=None, ge=0, le=3)
+    equipment_max_talisman_pct: Optional[int] = Field(default=None, ge=0, le=100)
+
+    @field_validator("arena_division_min_points")
+    @classmethod
+    def _arena_thresholds(cls, value):
+        if value is None:
+            return value
+        if value[0] != 0 or any(b <= a for a, b in zip(value, value[1:])):
+            raise ValueError("Пороги дивизионов: первый 0, дальше строго по возрастанию")
+        return value
+
+    @field_validator("arena_division_reward_coins", "arena_division_coin_pct")
+    @classmethod
+    def _arena_division_values(cls, value):
+        if value is not None and any(int(v) < 0 for v in value):
+            raise ValueError("Значения по дивизионам не могут быть отрицательными")
+        return value
     saboteur_line_base_reward: Optional[int] = Field(default=None, ge=0)
     saboteur_line_growth: Optional[float] = Field(default=None, ge=1)
     saboteur_daily_limit: Optional[int] = Field(default=None, ge=0)
@@ -502,6 +894,7 @@ class GameConfigUpdate(BaseModel):
     hourly_game_limit: Optional[int] = Field(default=None, ge=1)
     matchmaking_enabled: Optional[bool] = None
     wheel_enabled: Optional[bool] = None
+    trades_enabled: Optional[bool] = None
     leagues_enabled: Optional[bool] = None
     free_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     bot_daily_digest_enabled: Optional[bool] = None
@@ -534,6 +927,45 @@ class GameConfigUpdate(BaseModel):
     career_yellows_for_ban: Optional[int] = Field(default=None, ge=1, le=10)
     career_form_max: Optional[int] = Field(default=None, ge=0, le=5)
     career_reminders_enabled: Optional[bool] = None
+    career_tactics_tuning: Optional[dict] = None
+    career_familiarity_axis_keep_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    career_squad_size: Optional[int] = Field(default=None, ge=16, le=30)
+    career_ambition_bonus_pct: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    career_ambition_rep_success: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    career_ambition_rep_fail: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    career_rep_title: Optional[int] = Field(default=None, ge=0, le=500)
+    career_rep_promotion: Optional[int] = Field(default=None, ge=0, le=500)
+    career_rep_relegation: Optional[int] = Field(default=None, ge=-500, le=0)
+    career_rep_levels: Optional[list[int]] = Field(default=None, min_length=2, max_length=10)
+    career_cup_enabled: Optional[bool] = None
+    career_cup_rewards: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    career_rep_cup: Optional[int] = Field(default=None, ge=0, le=500)
+    career_offseason_auto: Optional[bool] = None
+    career_inactive_days: Optional[int] = Field(default=None, ge=1, le=60)
+    career_core_min: Optional[int] = Field(default=None, ge=0, le=30)
+    career_core_keep_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    career_camp_physical_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    career_camp_physical_rounds: Optional[int] = Field(default=None, ge=0, le=14)
+    career_camp_tactical_tenths: Optional[int] = Field(default=None, ge=0, le=150)
+    career_tenure_minutes_per_point: Optional[int] = Field(default=None, ge=90, le=100000)
+    career_tenure_max: Optional[int] = Field(default=None, ge=0, le=10)
+    career_division_club_count: Optional[int] = Field(default=None, ge=7, le=40)
+    career_live_enabled: Optional[bool] = None
+    career_halftime_minutes: Optional[int] = Field(default=None, ge=3, le=120)
+    career_achievement_reward: Optional[int] = Field(default=None, ge=0, le=100000)
+    career_digest_enabled: Optional[bool] = None
+    career_familiarity_step_tenths: Optional[int] = Field(default=None, ge=0, le=50)
+    career_familiarity_max_tenths: Optional[int] = Field(default=None, ge=0, le=150)
+    career_familiarity_keep_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    career_max_plan_rules: Optional[int] = Field(default=None, ge=0, le=5)
+    career_max_substitutions: Optional[int] = Field(default=None, ge=0, le=5)
+    career_bot_counter_chance_pct: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    career_division_count: Optional[int] = Field(default=None, ge=1, le=10)
+    career_division_promote: Optional[int] = Field(default=None, ge=0, le=4)
+    career_division_relegate: Optional[int] = Field(default=None, ge=0, le=4)
+    career_division_rating_offset: Optional[list[int]] = Field(default=None, min_length=1, max_length=10)
+    career_division_reward_pct: Optional[list[int]] = Field(default=None, min_length=1, max_length=10)
+    career_division_bot_level: Optional[list[str]] = Field(default=None, min_length=1, max_length=10)
     my_player_enabled: Optional[bool] = None
     my_player_xp_per_reward: Optional[int] = Field(default=None, ge=0, le=1000)
     my_player_xp_daily_cap: Optional[int] = Field(default=None, ge=0, le=100000)
@@ -550,10 +982,125 @@ class GameConfigUpdate(BaseModel):
     my_player_extra_trainings_max: Optional[int] = Field(default=None, ge=0, le=20)
     my_player_extra_training_coins: Optional[int] = Field(default=None, ge=0)
     my_player_extra_training_stars: Optional[int] = Field(default=None, ge=0, le=10000)
+    my_player_streak_days: Optional[int] = Field(default=None, ge=1, le=60)
+    my_player_streak_tokens: Optional[int] = Field(default=None, ge=0, le=100)
+    my_player_freshness_per_match: Optional[int] = Field(default=None, ge=0, le=100)
+    my_player_freshness_regen_per_hour: Optional[int] = Field(default=None, ge=0, le=100)
+    my_player_freshness_training: Optional[int] = Field(default=None, ge=0, le=100)
+    my_player_fatigue_max_penalty: Optional[int] = Field(default=None, ge=0, le=30)
+    my_player_duels_per_day: Optional[int] = Field(default=None, ge=0, le=100)
+    my_player_duel_reward_win: Optional[int] = Field(default=None, ge=0)
+    my_player_duel_reward_draw: Optional[int] = Field(default=None, ge=0)
+    my_player_duel_xp: Optional[int] = Field(default=None, ge=0, le=1000)
+    my_player_role_change_coins: Optional[int] = Field(default=None, ge=0)
+    my_player_role_change_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    my_player_cosmetic_stars_prices: Optional[dict[str, int]] = None
+    player_career_level_ratings: Optional[list[int]] = Field(default=None, min_length=5, max_length=5)
+    player_career_level_salary: Optional[list[int]] = Field(default=None, min_length=5, max_length=5)
+    player_career_level_prestige: Optional[list[int]] = Field(default=None, min_length=5, max_length=5)
+    player_career_star_prestige: Optional[list[int]] = Field(default=None, min_length=5, max_length=5)
+    player_career_star_salary_pct: Optional[int] = Field(default=None, ge=0, le=500)
+    player_career_prestige_salary_cap: Optional[int] = Field(default=None, ge=0, le=500)
+    player_career_contract_seasons: Optional[int] = Field(default=None, ge=1, le=10)
+    player_career_free_agent_level: Optional[int] = Field(default=None, ge=1, le=5)
+    player_career_offers_max: Optional[int] = Field(default=None, ge=0, le=10)
+    player_career_haggle_base: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_haggle_raise_penalty: Optional[int] = Field(default=None, ge=0, le=10)
+    player_career_haggle_repeat_penalty: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_cl_places: Optional[int] = Field(default=None, ge=0, le=8)
+    player_career_cl_rewards: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    player_career_cl_prestige: Optional[int] = Field(default=None, ge=0, le=10000)
+    player_career_national_prestige: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_national_rewards: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    player_career_national_win_prestige: Optional[int] = Field(default=None, ge=0, le=10000)
+    player_career_golden_ball_min_matches: Optional[int] = Field(default=None, ge=1, le=200)
+    player_career_golden_ball_coins: Optional[int] = Field(default=None, ge=0)
+    player_career_golden_ball_prestige: Optional[int] = Field(default=None, ge=0, le=10000)
+    player_career_moments: Optional[int] = Field(default=None, ge=0, le=5)
+    player_career_moment_hit_pct: Optional[int] = Field(default=None, ge=0, le=60)
+    player_career_moment_window_hours: Optional[int] = Field(default=None, ge=1, le=48)
+    player_career_bench_gap: Optional[int] = Field(default=None, ge=0, le=30)
+    player_career_bench_play_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_trust_starter: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_trust_captain: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_captain_salary_pct: Optional[int] = Field(default=None, ge=0, le=200)
+    player_career_injury_freshness: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_injury_max_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_heal_coins: Optional[int] = Field(default=None, ge=0, le=1000000)
+    player_career_heal_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_refresh_coins: Optional[int] = Field(default=None, ge=0, le=1000000)
+    player_career_refresh_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_event_every: Optional[int] = Field(default=None, ge=1, le=14)
+    player_career_event_coins: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_event_prestige: Optional[int] = Field(default=None, ge=0, le=1000)
+    player_career_derby_multiplier: Optional[int] = Field(default=None, ge=1, le=10)
+    player_career_pro_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_pro_days: Optional[int] = Field(default=None, ge=1, le=365)
+    player_career_pro_xp_pct: Optional[int] = Field(default=None, ge=0, le=500)
+    player_career_agent_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_agent_haggle_bonus: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_save_offer_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_fast_season_enabled: Optional[bool] = None
+    player_career_fast_season_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_fast_round_minutes: Optional[int] = Field(default=None, ge=15, le=1440)
+    player_career_chest_coins_min: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_chest_coins_max: Optional[int] = Field(default=None, ge=0, le=100000)
+    player_career_chest_token_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    player_career_weekly_goals: Optional[int] = Field(default=None, ge=1, le=200)
+    player_career_weekly_matches: Optional[int] = Field(default=None, ge=1, le=200)
+    player_career_weekly_rating_x10: Optional[int] = Field(default=None, ge=10, le=100)
+    player_career_weekly_coins: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    player_career_friends_rewards: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    manager_enabled: Optional[bool] = None
+    manager_found_cost: Optional[int] = Field(default=None, ge=0, le=1000000)
+    manager_min_level: Optional[int] = Field(default=None, ge=1, le=500)
+    manager_max_live: Optional[int] = Field(default=None, ge=0, le=11)
+    manager_squad_max: Optional[int] = Field(default=None, ge=11, le=40)
+    manager_league_size: Optional[int] = Field(default=None, ge=4, le=20)
+    manager_divisions: Optional[int] = Field(default=None, ge=1, le=12)
+    manager_promote: Optional[int] = Field(default=None, ge=1, le=4)
+    manager_preseason_hours: Optional[int] = Field(default=None, ge=1, le=150)
+    manager_style_edge_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    ptour_style_edge_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    ptour_formation_effect_pct: Optional[int] = Field(default=None, ge=0, le=300)
+    manager_formation_effect_pct: Optional[int] = Field(default=None, ge=0, le=300)
+    manager_wage_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    manager_loan_fee_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    manager_sell_back_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    manager_live_wage_max: Optional[int] = Field(default=None, ge=0, le=1000000)
+    manager_wage_eur_per_coin: Optional[int] = Field(default=None, ge=0, le=1000000)
+    manager_form_bonus_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    manager_form_bonus_cap: Optional[int] = Field(default=None, ge=0, le=500)
+    manager_income_win: Optional[int] = Field(default=None, ge=0, le=100000000)
+    manager_income_draw: Optional[int] = Field(default=None, ge=0, le=100000000)
+    manager_income_loss: Optional[int] = Field(default=None, ge=0, le=100000000)
+    manager_ticket_eur_per_level: Optional[int] = Field(default=None, ge=0, le=10000000)
+    manager_sponsor_eur_per_level: Optional[int] = Field(default=None, ge=0, le=100000000)
+    manager_merch_eur_per_level: Optional[int] = Field(default=None, ge=0, le=100000000)
+    manager_budget_per_base_level: Optional[int] = Field(default=None, ge=0, le=100000000)
+    manager_base_bonus_cap_pct: Optional[int] = Field(default=None, ge=0, le=1000)
+    manager_promotion_bonus_pct: Optional[int] = Field(default=None, ge=0, le=500)
+    manager_parachute_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    manager_match_xp: Optional[int] = Field(default=None, ge=0, le=10000)
+    manager_freshness_cost: Optional[int] = Field(default=None, ge=0, le=100)
+    manager_merch_cap_eur: Optional[int] = Field(default=None, ge=0, le=2000000000)
+    manager_pro_stars: Optional[int] = Field(default=None, ge=0, le=100000)
+    manager_pro_days: Optional[int] = Field(default=None, ge=1, le=365)
+    manager_value_ratings: Optional[list[int]] = Field(default=None, min_length=2, max_length=30)
+    manager_value_eur: Optional[list[int]] = Field(default=None, min_length=2, max_length=30)
+    manager_division_budget: Optional[list[int]] = Field(default=None, min_length=1, max_length=12)
+    manager_division_income_pct: Optional[list[int]] = Field(default=None, min_length=1, max_length=12)
+    manager_division_wage_pct: Optional[list[int]] = Field(default=None, min_length=1, max_length=12)
+    manager_division_rating: Optional[list[int]] = Field(default=None, min_length=1, max_length=12)
+    manager_place_rewards: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    manager_place_budget: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
+    manager_slots: Optional[list[str]] = Field(default=None, min_length=1, max_length=8)
+    manager_cosmetics: Optional[list[dict]] = Field(default=None, max_length=200)
+    manager_merch: Optional[list[dict]] = Field(default=None, max_length=20)
+    player_career_objective_coins: Optional[int] = Field(default=None, ge=0)
+    player_career_objective_rep: Optional[int] = Field(default=None, ge=0, le=1000)
     player_career_enabled: Optional[bool] = None
-    player_career_min_club_cards: Optional[int] = Field(default=None, ge=1, le=11)
     player_career_rating_margin: Optional[int] = Field(default=None, ge=0, le=30)
-    player_career_rep_per_club_rating: Optional[int] = Field(default=None, ge=0, le=100)
     player_career_rep_per_goal: Optional[int] = Field(default=None, ge=0, le=100)
     player_career_rep_per_assist: Optional[int] = Field(default=None, ge=0, le=100)
     player_career_rep_per_win: Optional[int] = Field(default=None, ge=0, le=100)
@@ -647,6 +1194,24 @@ class GameConfigUpdate(BaseModel):
     blackjack_stars_cost: Optional[int] = Field(default=None, ge=1, le=10000)
     blackjack_paid_daily_limit: Optional[int] = Field(default=None, ge=0, le=100)
     blackjack_consolation_coins: Optional[int] = Field(default=None, ge=0)
+    mordoboi_enabled: Optional[bool] = None
+    mordoboi_rounds: Optional[int] = Field(default=None, ge=1, le=12)
+    mordoboi_exchanges_per_round: Optional[int] = Field(default=None, ge=1, le=10)
+    mordoboi_base_hp: Optional[int] = Field(default=None, ge=20, le=1000)
+    mordoboi_reward_win: Optional[int] = Field(default=None, ge=0)
+    mordoboi_reward_draw: Optional[int] = Field(default=None, ge=0)
+    mordoboi_reward_loss: Optional[int] = Field(default=None, ge=0)
+    mordoboi_reward_ko_bonus: Optional[int] = Field(default=None, ge=0)
+    mordoboi_daily_limit: Optional[int] = Field(default=None, ge=0)
+    mordoboi_bot_easy_reward_pct: Optional[int] = Field(default=None, ge=0, le=200)
+    mordoboi_challenge_expiry_hours: Optional[int] = Field(default=None, ge=1)
+    mordoboi_move_timeout_hours: Optional[int] = Field(default=None, ge=1)
+    mordoboi_live_move_seconds: Optional[int] = Field(default=None, ge=10, le=3600)
+    mordoboi_max_auto_moves: Optional[int] = Field(default=None, ge=0, le=50)
+    mordoboi_legend_rating: Optional[int] = Field(default=None, ge=40, le=99)
+    mordoboi_legend_reward: Optional[int] = Field(default=None, ge=0)
+    club_ring_win_points: Optional[int] = Field(default=None, ge=0)
+    club_ring_member_cap: Optional[int] = Field(default=None, ge=0)
     bingo_reward_coins: Optional[int] = Field(default=None, ge=0)
     bingo_reward_pack_id: Optional[int] = Field(default=None)
     card_skills_enabled: Optional[bool] = None
@@ -677,6 +1242,181 @@ class GameConfigUpdate(BaseModel):
     chemistry_off_position_penalty: Optional[int] = Field(default=None, ge=0, le=20)
     chemistry_coach_country_points: Optional[int] = Field(default=None, ge=0, le=3)
     chemistry_stadium_club_points: Optional[int] = Field(default=None, ge=0, le=3)
+    card_stars_enabled: Optional[bool] = None
+    card_stars_max: Optional[int] = Field(default=None, ge=0, le=5)
+    card_star_dupes_per_level: Optional[dict[str, list[int]]] = None
+    card_star_coin_cost: Optional[dict[str, list[int]]] = None
+    card_star_rating_per_star: Optional[int] = Field(default=None, ge=0, le=10)
+    card_star_bonus_cap: Optional[int] = Field(default=None, ge=0, le=30)
+    path_enabled: Optional[bool] = None
+    path_title: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    path_xp_base: Optional[int] = Field(default=None, ge=1, le=10000)
+    path_xp_step: Optional[int] = Field(default=None, ge=0, le=10000)
+    path_start_rating: Optional[int] = Field(default=None, ge=1, le=99)
+    path_rating_per_level: Optional[int] = Field(default=None, ge=1, le=5)
+    path_xp_match: Optional[int] = Field(default=None, ge=0, le=1000)
+    path_xp_win: Optional[int] = Field(default=None, ge=0, le=1000)
+    path_xp_draw: Optional[int] = Field(default=None, ge=0, le=1000)
+    path_xp_goal: Optional[int] = Field(default=None, ge=0, le=1000)
+    path_xp_assist: Optional[int] = Field(default=None, ge=0, le=1000)
+    path_daily_free_arena: Optional[int] = Field(default=None, ge=0, le=100)
+    path_daily_career: Optional[int] = Field(default=None, ge=0, le=100)
+    path_daily_ptour: Optional[int] = Field(default=None, ge=0, le=100)
+    path_coin_attempt_prices: Optional[list[int]] = Field(default=None, max_length=20)
+    path_stars_attempt_prices: Optional[list[int]] = Field(default=None, max_length=20)
+    path_talent_cap: Optional[int] = Field(default=None, ge=0, le=20)
+    match_max_path_cards: Optional[int] = Field(default=None, ge=0, le=11)
+    tactico_max_path_cards: Optional[int] = Field(default=None, ge=0, le=11)
+    stratego_max_path_cards: Optional[int] = Field(default=None, ge=0, le=20)
+    path_prestige_dupes: Optional[list[int]] = Field(default=None, max_length=10)
+    path_prestige_coins: Optional[list[int]] = Field(default=None, max_length=10)
+    path_prestige_names: Optional[list[str]] = Field(default=None, max_length=10)
+    path_prestige_rewards: Optional[list[dict[str, int]]] = Field(default=None, max_length=10)
+    path_prestige_xp_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    path_prestige_xp_cap_pct: Optional[int] = Field(default=None, ge=0, le=200)
+    path_prestige_free_attempts: Optional[int] = Field(default=None, ge=0, le=20)
+    path_prestige_sell_pct: Optional[int] = Field(default=None, ge=0, le=1000)
+    path_prestige_other_ratio: Optional[int] = Field(default=None, ge=1, le=50)
+    academy_enabled: Optional[bool] = None
+    academy_buildings: Optional[dict[str, dict[str, list[int]]]] = None
+    academy_stars_per_hour: Optional[int] = Field(default=None, ge=1, le=100)
+    academy_scout_report: Optional[dict[str, list[int]]] = None
+    club_base_enabled: Optional[bool] = None
+    club_base_buildings: Optional[dict[str, dict[str, list[int]]]] = None
+    club_base_caps: Optional[dict[str, int]] = None
+    club_base_stars_per_hour: Optional[int] = Field(default=None, ge=1, le=100)
+    club_base_income_max_days: Optional[int] = Field(default=None, ge=1, le=30)
+    club_base_cosmetics: Optional[list[dict]] = Field(default=None, max_length=100)
+    trade_send_min_account_age_days: Optional[int] = Field(default=None, ge=0, le=365)
+    trade_send_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
+    trade_daily_coins_receive_cap: Optional[int] = Field(default=None, ge=0)
+    trade_coin_tax_pct: Optional[int] = Field(default=None, ge=0, le=90)
+    trade_coins_enabled: Optional[bool] = None
+    trade_cards_both_sides: Optional[bool] = None
+    trade_finder_max_wants: Optional[int] = Field(default=None, ge=0, le=100)
+    trade_finder_max_gives: Optional[int] = Field(default=None, ge=0, le=100)
+    trade_finder_active_days: Optional[int] = Field(default=None, ge=1, le=90)
+    trade_finder_notify_hours: Optional[int] = Field(default=None, ge=0, le=720)
+    trade_suspicious_young_days: Optional[int] = Field(default=None, ge=1, le=365)
+    trade_suspicious_min_donors: Optional[int] = Field(default=None, ge=2, le=100)
+    stake_max_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    stake_pair_daily_limit: Optional[int] = Field(default=None, ge=0, le=100)
+    stake_daily_profit_cap: Optional[int] = Field(default=None, ge=0)
+    pity_packs: Optional[int] = Field(default=None, ge=0, le=1000)
+    bulk10_discount_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    first_coin_purchase_bonus_pct: Optional[int] = Field(default=None, ge=0, le=300)
+
+    @field_validator("path_prestige_dupes", "path_prestige_coins")
+    @classmethod
+    def _non_negative_tiers(cls, value):
+        if value is not None and any(int(v) < 0 for v in value):
+            raise ValueError("Значения по ступеням не могут быть отрицательными")
+        return value
+
+    @field_validator("path_coin_attempt_prices", "path_stars_attempt_prices")
+    @classmethod
+    def _positive_prices(cls, value):
+        if value is not None and any(int(v) < 1 for v in value):
+            raise ValueError("Цены попыток должны быть не меньше 1")
+        return value
+
+    @field_validator("card_star_dupes_per_level", "card_star_coin_cost")
+    @classmethod
+    def _star_levels_per_rarity(cls, value, info):
+        # Diamond is deliberately not allowed: diamond cards have their own upgrade.
+        if value is None:
+            return value
+        allowed = {"common", "rare", "epic", "legendary"}
+        minimum = 1 if info.field_name == "card_star_dupes_per_level" else 0
+        for rarity, levels in value.items():
+            if rarity not in allowed:
+                raise ValueError(f"unknown rarity '{rarity}' (allowed: {', '.join(sorted(allowed))})")
+            if len(levels) > 5 or any(not minimum <= v <= 1_000_000 for v in levels):
+                raise ValueError(f"{rarity}: up to 5 values, each {minimum}..1000000")
+        return value
+
+    calendar_catchup_coins: Optional[int] = Field(default=None, ge=0)
+    calendar_catchup_stars: Optional[int] = Field(default=None, ge=0, le=10000)
+    calendar_catchup_max_per_month: Optional[int] = Field(default=None, ge=0, le=31)
+    club_pass_enabled: Optional[bool] = None
+    club_pass_stars: Optional[int] = Field(default=None, ge=1, le=10000)
+    club_pass_daily_coins: Optional[int] = Field(default=None, ge=0)
+    club_pass_daily_pack_id: Optional[int] = Field(default=None, ge=0)
+    club_pass_extra_rewarded_attempts: Optional[int] = Field(default=None, ge=0, le=20)
+    club_pass_bonus_coins: Optional[int] = Field(default=None, ge=0)
+    club_pass_bonus_pack_id: Optional[int] = Field(default=None, ge=0)
+    club_pass_bonus_card_rarity: Optional[Literal["", "common", "rare", "epic", "legendary", "diamond"]] = None
+    club_pass_season_xp_bonus_pct: Optional[int] = Field(default=None, ge=0, le=500)
+    club_pass_free_catchups: Optional[int] = Field(default=None, ge=0, le=31)
+    club_pass_status: Optional[int] = Field(default=None, ge=0, le=10000)
+    season_premium_status: Optional[int] = Field(default=None, ge=0, le=10000)
+    club_pass_frame_cosmetic_id: Optional[int] = Field(default=None, ge=0)
+    club_pass_badge_id: Optional[int] = Field(default=None, ge=0)
+    club_pass_ad_free: Optional[bool] = None
+    season_pass_enabled: Optional[bool] = None
+    season_xp_per_game: Optional[int] = Field(default=None, ge=0, le=10000)
+    season_xp_per_daily_claim: Optional[int] = Field(default=None, ge=0, le=10000)
+    starter_offer_enabled: Optional[bool] = None
+    starter_offer_hours: Optional[int] = Field(default=None, ge=1, le=720)
+    starter_offer_stars: Optional[int] = Field(default=None, ge=1, le=10000)
+    starter_offer_coins: Optional[int] = Field(default=None, ge=0)
+    starter_offer_pack_id: Optional[int] = Field(default=None, ge=0)
+    starter_offer_cosmetic_id: Optional[int] = Field(default=None, ge=0)
+    starter_offer_for_all: Optional[bool] = None
+    artifacts_enabled: Optional[bool] = None
+    artifact_slots: Optional[int] = Field(default=None, ge=0, le=10)
+    artifact_max_opp_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    artifact_max_stat: Optional[int] = Field(default=None, ge=0, le=50)
+    club_emblems_enabled: Optional[bool] = None
+    club_donation_enabled: Optional[bool] = None
+    club_donation_coins_per_star: Optional[int] = Field(default=None, ge=1, le=10000)
+    club_donation_star_options: Optional[list[Annotated[int, Field(ge=1, le=10000)]]] = Field(
+        default=None, min_length=1, max_length=8,
+    )
+    club_sponsor_silver_stars: Optional[int] = Field(default=None, ge=1, le=1000000)
+    club_sponsor_gold_stars: Optional[int] = Field(default=None, ge=1, le=1000000)
+    club_card_market_enabled: Optional[bool] = None
+    club_card_sell_pct: Optional[int] = Field(default=None, ge=0, le=1000)
+    club_card_exchange_count: Optional[int] = Field(default=None, ge=2, le=20)
+    club_card_exchange_pack_id: Optional[int] = Field(default=None, ge=0)
+    club_announcement_cooldown_minutes: Optional[int] = Field(default=None, ge=0, le=10080)
+    club_quests_enabled: Optional[bool] = None
+    club_league_season_weeks: Optional[int] = Field(default=None, ge=1, le=52)
+    club_league_promote_count: Optional[int] = Field(default=None, ge=0, le=50)
+    club_league_relegate_count: Optional[int] = Field(default=None, ge=0, le=50)
+    club_league_division_reward_pct: Optional[list[Annotated[int, Field(ge=0, le=1000)]]] = Field(
+        default=None, min_length=3, max_length=3,
+    )
+    club_war_enabled: Optional[bool] = None
+    club_war_start_weekday: Optional[int] = Field(default=None, ge=0, le=6)
+    club_war_start_hour: Optional[int] = Field(default=None, ge=0, le=23)
+    club_war_duration_hours: Optional[int] = Field(default=None, ge=1, le=168)
+    club_war_min_members: Optional[int] = Field(default=None, ge=1, le=11)
+    club_war_member_cap: Optional[int] = Field(default=None, ge=1, le=100000)
+    club_war_win_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
+    club_war_draw_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
+    club_war_loss_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
+    club_war_win_member_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
+    weekly_cup_enabled: Optional[bool] = None
+    weekly_cup_games: Optional[list[Literal["penalty", "free_kick", "memory", "saboteur", "pairs"]]] = Field(
+        default=None, min_length=1, max_length=10,
+    )
+    weekly_cup_best_of: Optional[int] = Field(default=None, ge=1, le=50)
+    weekly_cup_prizes: Optional[list[Annotated[int, Field(ge=0, le=10000000)]]] = Field(default=None, max_length=100)
+    match_day_enabled: Optional[bool] = None
+    match_day_exact_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
+    match_day_diff_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
+    match_day_outcome_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
+    match_day_auto_enabled: Optional[bool] = None
+    match_day_leagues: Optional[list[Annotated[int, Field(ge=1, le=100000)]]] = Field(default=None, min_length=1, max_length=30)
+    club_raid_enabled: Optional[bool] = None
+    club_raid_hp_per_member: Optional[int] = Field(default=None, ge=1, le=10000000)
+    club_raid_attacks_per_day: Optional[int] = Field(default=None, ge=1, le=50)
+    club_raid_shots: Optional[int] = Field(default=None, ge=1, le=20)
+    club_raid_damage_per_goal: Optional[int] = Field(default=None, ge=0, le=1000000)
+    club_raid_reward_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
+    club_raid_reward_pack_id: Optional[int] = Field(default=None, ge=0)
+    club_raid_reward_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod
@@ -733,6 +1473,10 @@ class EconomyDayRow(BaseModel):
 
 class EconomyReportOut(BaseModel):
     days: int
+    coins_in_circulation: int = 0
+    inflow_outflow_ratio: Optional[float] = None
+    positive_days: int = 0
+    warning: Optional[str] = None
     total_inflow: int
     total_outflow: int
     net: int

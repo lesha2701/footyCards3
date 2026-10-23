@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -40,11 +40,20 @@ class PackOut(BaseModel):
     coach_drop_chance: float
     stadium_drop_chance: float
     skill_token_drop_chance: float = 0.0
+    # "default" | "path" — see Pack.player_pool.
+    player_pool: str = "default"
     user_purchase_count: int = 0
     is_available_now: bool = True
+    # Why it cannot be bought now (e.g. «Академия» pack with no players yet).
+    unavailable_reason: Optional[str] = None
     # Average quick-sell value of the cards inside (pack_value_service);
     # filled for the shop listing only.
     expected_value: Optional[float] = None
+    # Shop listing, per player: paid packs left until the guaranteed
+    # legendary (None = pity off or this pack has no legendary chance), and
+    # the discount on opening 10+ at once (GameConfig, 0 = none).
+    pity_left: Optional[int] = None
+    bulk10_discount_pct: int = 0
 
 
 class PackRarityProbabilityIn(BaseModel):
@@ -71,6 +80,7 @@ class PackCreate(BaseModel):
     coach_drop_chance: float = Field(default=0.0, ge=0, le=1)
     stadium_drop_chance: float = Field(default=0.0, ge=0, le=1)
     skill_token_drop_chance: float = Field(default=0.0, ge=0, le=1)
+    player_pool: Literal["default", "path"] = "default"
 
 
 class PackUpdate(BaseModel):
@@ -91,6 +101,7 @@ class PackUpdate(BaseModel):
     coach_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
     stadium_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
     skill_token_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
+    player_pool: Optional[Literal["default", "path"]] = None
 
 
 class UserCoachCardOut(BaseModel):

@@ -31,6 +31,10 @@ class Position(str, enum.Enum):
     LB = "LB"
     CB = "CB"
     RB = "RB"
+    # Wing-backs: defenders (DEF line), interchangeable with LB/RB for
+    # "on position" (lineup_service.on_ideal_position).
+    LWB = "LWB"
+    RWB = "RWB"
     CDM = "CDM"
     CM = "CM"
     CAM = "CAM"
@@ -58,6 +62,7 @@ class CardSource(str, enum.Enum):
     gift = "gift"
     wheel = "wheel"
     league_reward = "league_reward"
+    club_reward = "club_reward"
 
 
 class TransactionType(str, enum.Enum):
@@ -70,6 +75,7 @@ class TransactionType(str, enum.Enum):
     achievement_reward = "achievement_reward"
     trade_coins_sent = "trade_coins_sent"
     trade_coins_received = "trade_coins_received"
+    trade_coin_tax = "trade_coin_tax"
     admin_adjustment = "admin_adjustment"
     task_reward = "task_reward"
     card_upgrade = "card_upgrade"
@@ -105,8 +111,43 @@ class TransactionType(str, enum.Enum):
     stratego_stake_lock = "stratego_stake_lock"
     stratego_stake_win = "stratego_stake_win"
     stratego_stake_refund = "stratego_stake_refund"
+    mordoboi_reward = "mordoboi_reward"
+    mordoboi_stake_lock = "mordoboi_stake_lock"
+    mordoboi_stake_win = "mordoboi_stake_win"
+    mordoboi_stake_refund = "mordoboi_stake_refund"
+    mordoboi_brutality_bonus = "mordoboi_brutality_bonus"
+    mordoboi_legend_reward = "mordoboi_legend_reward"
     blackjack_consolation = "blackjack_consolation"
     magnate_reward = "magnate_reward"
+    card_star_upgrade = "card_star_upgrade"
+    path_attempt_purchase = "path_attempt_purchase"
+    path_prestige = "path_prestige"
+    path_prestige_reward = "path_prestige_reward"
+    academy_upgrade = "academy_upgrade"
+    academy_scout_reward = "academy_scout_reward"
+    club_base_upgrade = "club_base_upgrade"
+    club_base_income = "club_base_income"
+    club_base_matchday = "club_base_matchday"
+    club_base_cosmetic = "club_base_cosmetic"
+    arena_division_reward = "arena_division_reward"
+    my_player_duel_reward = "my_player_duel_reward"
+    my_player_role_change = "my_player_role_change"
+    manager_club_found = "manager_club_found"
+    manager_salary = "manager_salary"
+    manager_reward = "manager_reward"
+    manager_cosmetic = "manager_cosmetic"
+    manager_merch = "manager_merch"
+    lifestyle_income = "lifestyle_income"
+    calendar_catchup = "calendar_catchup"
+    cosmetic_purchase = "cosmetic_purchase"
+    club_pass_reward = "club_pass_reward"
+    season_pass_reward = "season_pass_reward"
+    starter_offer_reward = "starter_offer_reward"
+    artifact_purchase = "artifact_purchase"
+    equipment_purchase = "equipment_purchase"
+    club_reward = "club_reward"
+    weekly_cup_prize = "weekly_cup_prize"
+    match_day_reward = "match_day_reward"
 
 
 class GiftKind(str, enum.Enum):
@@ -118,6 +159,12 @@ class ClubRole(str, enum.Enum):
     captain = "captain"
     assistant = "assistant"
     member = "member"
+    # One per club: a manager who also edits the emblem and takes over
+    # first when the captain leaves.
+    vice_captain = "vice_captain"
+    # One per club: may spend the club budget (packs, emblem, spare cards)
+    # without squad/membership powers.
+    treasurer = "treasurer"
 
 
 class ClubType(str, enum.Enum):
@@ -148,6 +195,13 @@ class ClubBudgetTransactionType(str, enum.Enum):
     admin_adjustment = "admin_adjustment"
     club_position_match_reward = "club_position_match_reward"
     league_reward = "league_reward"
+    stars_donation = "stars_donation"
+    emblem_purchase = "emblem_purchase"
+    card_sale = "card_sale"
+    shop_purchase = "shop_purchase"
+    quest_reward = "quest_reward"
+    war_reward = "war_reward"
+    raid_reward = "raid_reward"
 
 
 class TournamentQueueStatus(str, enum.Enum):
@@ -168,6 +222,7 @@ class ClubCardAvailabilityReason(str, enum.Enum):
 class ClubCardSource(str, enum.Enum):
     starter_seed = "starter_seed"
     club_pack = "club_pack"
+    exchange = "exchange"
 
 
 class ClubCoachCardSource(str, enum.Enum):
@@ -292,6 +347,23 @@ class StrategoMatchStatus(str, enum.Enum):
     expired = "expired"
 
 
+class MordoboiOpponentType(str, enum.Enum):
+    bot = "bot"
+    friend = "friend"
+    online = "online"
+    # Open challenge shared into a Telegram chat: whoever accepts first plays.
+    chat = "chat"
+
+
+class MordoboiMatchStatus(str, enum.Enum):
+    pending_accept = "pending_accept"
+    in_progress = "in_progress"
+    finished = "finished"
+    declined = "declined"
+    cancelled = "cancelled"
+    expired = "expired"
+
+
 class PenaltyMatchStatus(str, enum.Enum):
     pending_accept = "pending_accept"
     in_progress = "in_progress"
@@ -307,6 +379,16 @@ class NotificationType(str, enum.Enum):
     trade_offer_rejected = "trade_offer_rejected"
     trade_offer_cancelled = "trade_offer_cancelled"
     trade_offer_expired = "trade_offer_expired"
+    trade_wish_available = "trade_wish_available"
+    club_donation = "club_donation"
+    club_member_joined = "club_member_joined"
+    club_announcement = "club_announcement"
+    club_reward_available = "club_reward_available"
+    club_league_promoted = "club_league_promoted"
+    club_league_relegated = "club_league_relegated"
+    club_war_started = "club_war_started"
+    club_war_finished = "club_war_finished"
+    club_base_built = "club_base_built"
     daily_reward_available = "daily_reward_available"
     special_pack = "special_pack"
     admin_message = "admin_message"
@@ -349,6 +431,7 @@ class NotificationType(str, enum.Enum):
     career_round_result = "career_round_result"
     career_season_finished = "career_season_finished"
     career_reminder = "career_reminder"
+    career_digest = "career_digest"
     player_career_round_result = "player_career_round_result"
     player_career_season_finished = "player_career_season_finished"
     club_league_reward = "club_league_reward"
@@ -356,6 +439,17 @@ class NotificationType(str, enum.Enum):
     stratego_challenge_accepted = "stratego_challenge_accepted"
     stratego_your_turn = "stratego_your_turn"
     stratego_match_finished = "stratego_match_finished"
+    mordoboi_challenge_received = "mordoboi_challenge_received"
+    mordoboi_challenge_accepted = "mordoboi_challenge_accepted"
+    mordoboi_your_turn = "mordoboi_your_turn"
+    mordoboi_match_finished = "mordoboi_match_finished"
+    mordoboi_brutality = "mordoboi_brutality"
+    mordoboi_helmet = "mordoboi_helmet"
+    my_player_duel = "my_player_duel"
+    player_career_event = "player_career_event"
+    manager_event = "manager_event"
+    weekly_cup_result = "weekly_cup_result"
+    match_day_result = "match_day_result"
 
 
 class TradeCardSide(str, enum.Enum):

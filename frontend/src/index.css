@@ -30,7 +30,20 @@
   --c-bg-raised: 22 28 21;
   --c-ink-chalk: 243 246 242;
   --c-ink-mist: 138 150 142;
-  --c-ink-mist-dim: 91 101 94;
+  --c-ink-mist-dim: 118 130 122; /* 5.0:1 on bg-base (was 3.3, below WCAG AA) */
+  /* Status semantics (cards): «Академия» growth, the Legend stage, prestige. */
+  --c-path: 110 231 183;
+  --c-legend: 252 211 77;
+  --c-prestige: 240 171 252;
+  /* «Клубная база» drawn map: an evening campus on the dark theme. */
+  --map-land: 24 46 30;
+  --map-land-2: 31 58 37;
+  --map-contour: 120 170 120;
+  --map-water: 34 82 110;
+  --map-road: 70 82 72;
+  --map-tree: 38 92 52;
+  --map-wall: 58 66 60;
+  --map-roof: 92 104 94;
 }
 
 /* Light theme (Telegram light mode, or chosen in Профиль → Тема). The app's
@@ -43,7 +56,18 @@
   --c-bg-raised: 228 234 225;
   --c-ink-chalk: 16 23 18;
   --c-ink-mist: 86 99 91;
-  --c-ink-mist-dim: 134 146 138;
+  --c-ink-mist-dim: 100 111 104; /* 4.6:1 on bg-base (was 2.9) */
+  --c-path: 4 120 87;
+  --c-legend: 180 83 9;
+  --c-prestige: 162 28 175;
+  --map-land: 196 222 178;
+  --map-land-2: 178 210 160;
+  --map-contour: 92 130 80;
+  --map-water: 120 184 214;
+  --map-road: 226 220 200;
+  --map-tree: 86 150 92;
+  --map-wall: 236 232 220;
+  --map-roof: 150 120 100;
 }
 /* "text-bg-base" is always dark text on a bright fill (lime/floodlight). */
 :root[data-theme="light"] .text-bg-base { color: rgb(7 9 10); }
@@ -51,6 +75,7 @@
 :root[data-theme="light"] .text-accent-lime { color: rgb(95 122 0); }
 :root[data-theme="light"] .text-accent-cyan { color: rgb(13 148 136); }
 :root[data-theme="light"] .text-accent-green { color: rgb(21 128 61); }
+/* «Академия» screens: pale emerald/amber text read on dark only. */
 /* Translucent white overlays/borders become translucent black. */
 :root[data-theme="light"] .bg-white\/5 { background-color: rgb(0 0 0 / 0.04); }
 :root[data-theme="light"] .bg-white\/10 { background-color: rgb(0 0 0 / 0.07); }
@@ -74,6 +99,8 @@ body,
 }
 
 body {
+  /* Digits of equal width: balances, ratings and timers don't jump. */
+  font-variant-numeric: tabular-nums;
   @apply bg-bg-base text-slate-100 font-body antialiased;
   margin: 0;
   -webkit-tap-highlight-color: transparent;
@@ -104,6 +131,21 @@ body {
   border-radius: 999px;
 }
 
+/* OS "reduce motion": stop the endless decorative loops (rarity shimmer,
+   legendary/diamond pulse, skeleton sheen, spinners' siblings) and make
+   one-shot transitions near-instant. Functional state changes still happen,
+   they just don't animate. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 .skeleton {
   @apply relative overflow-hidden bg-bg-raised;
 }
@@ -122,4 +164,53 @@ body {
   100% {
     background-position: -200% 0;
   }
+}
+
+/* Card shine: a light band sweeping across a card on the GPU (transform of a
+   pseudo-element — no repaint of the card itself). Only where a card is the
+   focus (detail sheet, selection, pack reveal, «Икона»), never a whole grid,
+   and never with reduced motion. */
+.card-shine { isolation: isolate; }
+.card-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgb(255 255 255 / 0.28) 48%, transparent 60%);
+  transform: translateX(-130%);
+  will-change: transform;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card-shine::after { animation: card-shine 3.6s ease-in-out infinite; }
+}
+@keyframes card-shine {
+  0%, 55% { transform: translateX(-130%); }
+  100% { transform: translateX(130%); }
+}
+
+/* Club emblem effects (components/clubs/ClubLogo.tsx) — bought with Stars.
+   SVG-only, transform/opacity animations; static under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .emblem-shine-band { animation: emblem-shine 3.2s ease-in-out infinite; }
+  .emblem-flame { transform-box: fill-box; transform-origin: 50% 100%; animation: emblem-flame 0.9s ease-in-out infinite alternate; }
+  .emblem-flame-2 { transform-box: fill-box; transform-origin: 50% 100%; animation: emblem-flame 0.7s ease-in-out infinite alternate-reverse; }
+  .emblem-sparkle { transform-box: fill-box; transform-origin: center; animation: emblem-sparkle 1.8s ease-in-out infinite; }
+  .emblem-neon { animation: emblem-neon 2.4s ease-in-out infinite; }
+}
+@keyframes emblem-shine {
+  0%, 50% { transform: translateX(-120px); }
+  100% { transform: translateX(120px); }
+}
+@keyframes emblem-flame {
+  0% { transform: scaleY(0.82) scaleX(1.04); opacity: 0.75; }
+  100% { transform: scaleY(1.12) scaleX(0.96); opacity: 1; }
+}
+@keyframes emblem-sparkle {
+  0%, 100% { transform: scale(0.2); opacity: 0; }
+  50% { transform: scale(1); opacity: 1; }
+}
+@keyframes emblem-neon {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
 }

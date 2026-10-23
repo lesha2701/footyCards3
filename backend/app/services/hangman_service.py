@@ -14,6 +14,7 @@ from app.models.user import User
 from app.schemas.game import HangmanClaimOut, HangmanGuessOut, HangmanStartOut
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
+from app.services.club_pass_service import extra_rewarded_attempts
 
 CYRILLIC_LETTERS = set("АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ")
 
@@ -182,7 +183,9 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> Hangman
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked_user)
-    daily_cap_reached = locked_user.hangman_rewarded_attempts_today >= config.hangman_daily_limit
+    daily_cap_reached = locked_user.hangman_rewarded_attempts_today >= config.hangman_daily_limit + await extra_rewarded_attempts(
+        db, locked_user.id, config
+    )
 
     reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else session.reward_coins
     session.is_rewarded = True

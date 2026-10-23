@@ -22,6 +22,13 @@ async def buy_item(item_id: int, db: AsyncSession = Depends(get_db), user: User 
     return await lifestyle_service.buy_with_coins(db, user, item_id)
 
 
+@router.post("/income/claim", response_model=LifestyleCatalogOut)
+async def claim_income(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Collects the weekly income of the player's items."""
+    await check_rate_limit(f"lifestyle_income:{user.id}", max_calls=10, window_seconds=60)
+    return await lifestyle_service.claim_income(db, user)
+
+
 @router.get("/users/{user_id}", response_model=LifestylePublicOut)
 async def get_public(user_id: int, db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
     return await lifestyle_service.public_view(db, user_id)

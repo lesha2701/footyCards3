@@ -8,10 +8,13 @@ from sqlalchemy.orm import joinedload
 from app.models.card_collection import CardCollection
 from app.models.enums import Position, Rarity
 from app.models.player import Player
+from app.schemas.player import split_display_name
 from app.services.player_stats_service import compute_default_attack_defense
 
+# first_name / last_name are no longer exported; an import may still carry
+# them (older files) — blank or missing ones follow display_name.
 CSV_COLUMNS = [
-    "first_name", "last_name", "display_name", "rating", "attack_rating", "defense_rating", "rarity",
+    "display_name", "rating", "attack_rating", "defense_rating", "rarity",
     "country", "club", "position", "collection", "quick_sell_price", "is_active", "is_pack_droppable",
 ]
 
@@ -26,8 +29,6 @@ async def export_players_csv(db: AsyncSession) -> str:
     for p in players:
         writer.writerow(
             {
-                "first_name": p.first_name,
-                "last_name": p.last_name,
                 "display_name": p.display_name,
                 "rating": p.rating,
                 "attack_rating": p.attack_rating if p.attack_rating is not None else "",
@@ -74,9 +75,13 @@ async def import_players_csv(db: AsyncSession, content: str) -> dict:
             parsed_attack = _parse_optional_stat(row, "attack_rating")
             parsed_defense = _parse_optional_stat(row, "defense_rating")
 
+            first_name = (row.get("first_name") or "").strip()
+            last_name = (row.get("last_name") or "").strip()
+            if not first_name or not last_name:
+                first_name, last_name = split_display_name(display_name)
             values = dict(
-                first_name=row["first_name"].strip(),
-                last_name=row["last_name"].strip(),
+                first_name=first_name,
+                last_name=last_name,
                 display_name=display_name,
                 rating=int(row["rating"]),
                 rarity=Rarity(row["rarity"].strip().lower()),

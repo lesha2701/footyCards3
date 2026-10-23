@@ -11,6 +11,10 @@ interface TelegramWebApp {
   disableVerticalSwipes?: () => void;
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
+  /** Bot API 7.10+: colour of the bottom bar under the Mini App. */
+  setBottomBarColor?: (color: string) => void;
+  enableClosingConfirmation?: () => void;
+  disableClosingConfirmation?: () => void;
   onEvent: (event: string, handler: () => void) => void;
   offEvent: (event: string, handler: () => void) => void;
   HapticFeedback?: {
@@ -36,7 +40,19 @@ interface TelegramWebApp {
     offClick: (cb: () => void) => void;
   };
   openInvoice?: (url: string, callback?: (status: "paid" | "cancelled" | "failed" | "pending") => void) => void;
+  /** Bot API 8.0+: device orientation (radians); events "deviceOrientationChanged". */
+  DeviceOrientation?: {
+    isStarted: boolean;
+    alpha: number | null;
+    beta: number | null;
+    gamma: number | null;
+    start: (params: { refresh_rate?: number; need_absolute?: boolean }, callback?: (started: boolean) => void) => void;
+    stop: (callback?: (stopped: boolean) => void) => void;
+  };
+  isVersionAtLeast?: (version: string) => boolean;
   openTelegramLink?: (url: string) => void;
+  /** Bot API 8.0+: lets the user pick a chat for a message the bot prepared. */
+  shareMessage?: (msgId: string, callback?: (sent: boolean) => void) => void;
   openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
   showConfirm?: (message: string, callback: (confirmed: boolean) => void) => void;
 }
@@ -109,6 +125,41 @@ export function openTelegramLink(url: string): void {
   } else {
     window.open(url, "_blank", "noopener,noreferrer");
   }
+}
+
+/** Telegram asks "close the app?" before a swipe-down/close while this is on
+ * — used during live matches, where leaving costs the match. No-op outside
+ * Telegram or on clients without the method. */
+export function setClosingConfirmation(enabled: boolean): void {
+  const webApp = getTelegramWebApp();
+  if (!isInsideTelegram()) return;
+  if (enabled) webApp?.enableClosingConfirmation?.();
+  else webApp?.disableClosingConfirmation?.();
+}
+
+/** Light tick for switching tabs / segments (Telegram selection haptic). */
+export function hapticSelection(): void {
+  getTelegramWebApp()?.HapticFeedback?.selectionChanged();
+}
+
+/** Shares a server-prepared message (image + «Играть» button) to a chat the
+ * user picks, when the Telegram client supports it; otherwise opens the
+ * plain t.me/share/url fallback. Resolves true when Telegram reports the
+ * message as sent (the fallback can't tell, so it resolves false). */
+export function shareToTelegram(preparedMessageId: string | null, fallbackUrl: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const webApp = getTelegramWebApp();
+    if (preparedMessageId && isInsideTelegram() && webApp?.shareMessage) {
+      try {
+        webApp.shareMessage(preparedMessageId, (sent) => resolve(Boolean(sent)));
+        return;
+      } catch {
+        // Older clients expose the method but reject the call — fall through.
+      }
+    }
+    openTelegramLink(fallbackUrl);
+    resolve(false);
+  });
 }
 
 /** Shows a confirmation prompt. Telegram's in-app WebView does not reliably

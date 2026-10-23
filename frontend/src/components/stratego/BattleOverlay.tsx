@@ -34,7 +34,7 @@ export default function BattleOverlay({ move, onClose }: { move: StrategoMove | 
           exit={{ opacity: 0 }}
           onClick={onClose}
         >
-          <p className="font-mono text-[11px] uppercase tracking-wider text-ink-mist">
+          <p className="font-mono text-caption uppercase tracking-wider text-ink-mist">
             {move.mine ? "Твоя атака" : "Атака соперника"}{move.auto ? " · автоход" : ""}
           </p>
           <div className="flex items-center gap-4">
@@ -90,15 +90,15 @@ function DuelCard({ piece, attacking, lost, from }: {
         <RoleIcon role={piece.role} size={30} />
       </span>
       <p className="font-display text-sm font-bold text-ink-chalk">{ROLE_META[piece.role].label}</p>
-      {piece.card && <p className="line-clamp-2 text-[11px] leading-tight text-ink-mist">{piece.card.display_name}</p>}
+      {piece.card && <p className="line-clamp-2 text-caption leading-tight text-ink-mist">{piece.card.display_name}</p>}
       {piece.power > 0 && (
         <p className="font-mono text-lg font-bold text-ink-chalk">
           {piece.power}
           {skillBonus > 0 && <span className="ml-1 text-xs text-accent-lime">+{skillBonus}</span>}
         </p>
       )}
-      {skillBonus > 0 && <p className="text-[10px] text-accent-lime">{piece.card?.skill_name}</p>}
-      <span className="text-[10px] text-ink-mist-dim">{piece.mine ? "твоя" : "соперника"}</span>
+      {skillBonus > 0 && <p className="text-micro text-accent-lime">{piece.card?.skill_name}</p>}
+      <span className="text-micro text-ink-mist-dim">{piece.mine ? "твоя" : "соперника"}</span>
       {!lost && (
         <motion.span
           className="pointer-events-none absolute inset-0 rounded-2xl shadow-glow"

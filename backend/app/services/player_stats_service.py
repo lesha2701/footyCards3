@@ -1,4 +1,4 @@
-from app.models.enums import Position, Rarity
+from app.models.enums import Position
 
 # How far a position's Attack/Defense split leans from the base `rating`,
 # in points. Central midfield (CM) is the balanced pivot — both stats equal
@@ -8,6 +8,8 @@ _SKEW: dict[Position, int] = {
     Position.GK: 18,
     Position.CB: 14,
     Position.LB: 8,
+    Position.LWB: 4,
+    Position.RWB: 4,
     Position.RB: 8,
     Position.CDM: 6,
     Position.CM: 0,
@@ -19,7 +21,7 @@ _SKEW: dict[Position, int] = {
     Position.ST: 16,
 }
 
-_DEFENSIVE_POSITIONS = {Position.GK, Position.CB, Position.LB, Position.RB, Position.CDM}
+_DEFENSIVE_POSITIONS = {Position.GK, Position.CB, Position.LB, Position.RB, Position.LWB, Position.RWB, Position.CDM}
 
 
 def compute_default_attack_defense(rating: int, position: Position) -> tuple[int, int]:
@@ -38,24 +40,43 @@ def compute_default_attack_defense(rating: int, position: Position) -> tuple[int
     return clamp(attack), clamp(defense)
 
 
+def card_rating_bonus(card) -> int:
+    """Everything a specific owned copy adds to its player's rating: the
+    diamond upgrade (diamond cards only), earned stars (non-diamond only,
+    services/card_star_service.py), «Академия» levels (path cards
+    only, services/path_service.py), the owner's active «Артефакты»
+    (artifact_service.refresh_card_bonuses — only while computed for the
+    current owner) and the «Экипировка» it wears (equipment_service). All
+    are fixed on the card row. getattr: also called with ClubCard rows and lightweight
+    stand-ins that carry none of these columns."""
+    artifact = getattr(card, "artifact_rating_bonus", 0) or 0
+    if artifact and getattr(card, "artifact_bonus_owner_id", None) != getattr(card, "owner_id", None):
+        artifact = 0  # computed for a previous owner (traded away)
+    return (
+        (getattr(card, "diamond_rating_bonus", 0) or 0) + (getattr(card, "star_rating_bonus", 0) or 0)
+        + (getattr(card, "path_rating_bonus", 0) or 0) + artifact + (getattr(card, "equipment_rating_bonus", 0) or 0)
+    )
+
+
 def effective_card_stats(player, diamond_rating_bonus: int) -> tuple[int, int, int]:
     """A card's real (rating, attack, defense) for display and gameplay.
 
-    For every non-diamond card, or a diamond card with no bonus yet, this is
+    `diamond_rating_bonus` is the copy's whole rating bonus — pass
+    card_rating_bonus(card) (diamond upgrade + stars). With no bonus this is
     just the template's own values (falling back attack/defense to rating,
-    same as PlayerOut does for rows predating those columns). A leveled-up
-    diamond card's rating grows by its accumulated bonus (capped at 99, the
-    same ceiling every other card is clamped to), and attack/defense scale
-    by the same ratio the rating grew by — preserving that specific card's
-    own designed attack/defense split rather than sliding it onto the
-    generic position curve above."""
+    same as PlayerOut does for rows predating those columns). A boosted
+    card's rating grows by its bonus (capped at 99, the same ceiling every
+    other card is clamped to), and attack/defense scale by the same ratio
+    the rating grew by — preserving that specific card's own designed
+    attack/defense split rather than sliding it onto the generic position
+    curve above."""
     # getattr, not direct access: this is also called via calculate_base_strength
     # with club_tactical_profile_service.py's lighter-weight player stand-ins,
     # which carry rating/position/rarity/club/country but not attack/defense.
     base_attack = getattr(player, "attack_rating", None) or player.rating
     base_defense = getattr(player, "defense_rating", None) or player.rating
 
-    if player.rarity != Rarity.diamond or diamond_rating_bonus <= 0:
+    if diamond_rating_bonus <= 0:
         return player.rating, base_attack, base_defense
 
     new_rating = min(99, player.rating + diamond_rating_bonus)

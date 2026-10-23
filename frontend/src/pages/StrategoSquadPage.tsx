@@ -55,11 +55,16 @@ export default function StrategoSquadPage() {
   // Live rarity counters over the current (possibly unsaved) picks; the
   // server re-checks the same rules on save and at match start.
   const picked = Object.values(cards).map((id) => cardById.get(id)).filter(Boolean) as StrategoCard[];
-  const count = (r: string) => picked.filter((c) => c.rarity === r).length;
+  // «Академия» cards count against their own limit, not the diamond one.
+  const count = (r: string) =>
+    picked.filter((c) => (r === "path" ? !!c.is_path : c.rarity === r && !(r === "diamond" && c.is_path))).length;
   const lim = squad.rarity_limits;
   const rules = [
     { label: "Легендарных", value: count("legendary"), ok: count("legendary") <= lim.max_legendary, hint: `≤${lim.max_legendary}` },
     { label: "Диамантов", value: count("diamond"), ok: count("diamond") <= lim.max_diamond, hint: `≤${lim.max_diamond}` },
+    ...(count("path") > 0
+      ? [{ label: "Академия", value: count("path"), ok: count("path") <= (lim.max_path ?? 1), hint: `≤${lim.max_path ?? 1}` }]
+      : []),
     { label: "Редких", value: count("rare"), ok: count("rare") >= lim.min_rare, hint: `≥${lim.min_rare}` },
     { label: "Обычных", value: count("common"), ok: count("common") >= lim.min_common, hint: `≥${lim.min_common}` },
   ];
@@ -128,14 +133,14 @@ export default function StrategoSquadPage() {
         {rules.map((r) => (
           <div key={r.label} className={`rounded-xl px-2 py-1.5 text-center ${r.ok ? "bg-bg-surface" : "bg-red-500/15"}`}>
             <p className={`font-mono text-sm font-bold ${r.ok ? "text-ink-chalk" : "text-red-400"}`}>
-              {r.value}<span className="text-[10px] font-normal text-ink-mist"> {r.hint}</span>
+              {r.value}<span className="text-micro font-normal text-ink-mist"> {r.hint}</span>
             </p>
-            <p className="text-[9px] text-ink-mist">{r.label}</p>
+            <p className="text-micro text-ink-mist">{r.label}</p>
           </div>
         ))}
       </div>
       {Object.keys(caps).length > 0 && (
-        <p className="-mt-2 text-[11px] text-ink-mist-dim">
+        <p className="-mt-2 text-caption text-ink-mist-dim">
           {(Object.entries(caps) as [keyof typeof ROLE_META, keyof typeof RARITY_LABELS][])
             .map(([role, cap]) => `${ROLE_META[role].label} — не выше: ${RARITY_LABELS[cap].toLowerCase()}`)
             .join(" · ")}
@@ -153,7 +158,7 @@ export default function StrategoSquadPage() {
       )}
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-mono text-[11px] uppercase tracking-wider text-ink-mist">Роли</h2>
+        <h2 className="font-mono text-caption uppercase tracking-wider text-ink-mist">Роли</h2>
         {squad.card_slots.map((s) => {
           const card = cards[s.slot] !== undefined ? cardById.get(cards[s.slot]) : undefined;
           const meta = ROLE_META[s.role];
@@ -168,7 +173,7 @@ export default function StrategoSquadPage() {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-bold text-ink-chalk" title={meta.hint}>{slotLabel(s.slot)}</span>
-                <span className="block truncate text-[11px] text-ink-mist">
+                <span className="block truncate text-caption text-ink-mist">
                   {card ? `${card.is_my_player ? "Мой игрок: " : ""}${card.display_name} · ${card.position}` : "Не выбрана"}
                 </span>
               </span>
@@ -180,12 +185,12 @@ export default function StrategoSquadPage() {
 
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <h2 className="font-mono text-[11px] uppercase tracking-wider text-ink-mist">Расстановка</h2>
+          <h2 className="font-mono text-caption uppercase tracking-wider text-ink-mist">Расстановка</h2>
           <button onClick={onAuto} className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-accent-lime active:scale-95">
             Авто
           </button>
         </div>
-        <p className="text-[11px] text-ink-mist-dim">
+        <p className="text-caption text-ink-mist-dim">
           Верхний ряд — ближний к сопернику. Нажми фишку, потом клетку — фишки поменяются местами.
         </p>
         <div
@@ -269,7 +274,7 @@ function CardPicker({
     <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={onClose}>
       <div className="safe-bottom max-h-[75vh] w-full overflow-y-auto rounded-t-3xl bg-bg-base p-5" onClick={(e) => e.stopPropagation()}>
         <p className="font-display text-base font-bold text-ink-chalk">{slotLabel(slot)}</p>
-        <p className="mb-3 text-[11px] text-ink-mist">
+        <p className="mb-3 text-caption text-ink-mist">
           {ROLE_META[def.role].hint}
           {eligible && ` · Позиции: ${eligible.join(", ")}`}
           {def.role === "star" && " · Должна быть самой сильной картой состава"}
@@ -286,7 +291,7 @@ function CardPicker({
               } ${fits(c) ? "text-ink-chalk" : "text-ink-mist-dim"}`}
             >
               <span className="truncate">
-                {c.is_my_player && <span className="mr-1 rounded bg-accent-lime px-1 text-[10px] font-bold text-bg-base">Мой игрок</span>}
+                {c.is_my_player && <span className="mr-1 rounded bg-accent-lime px-1 text-micro font-bold text-bg-base">Мой игрок</span>}
                 {c.display_name} · {c.position}
               </span>
               <span className="font-mono font-bold">{c.rating}</span>

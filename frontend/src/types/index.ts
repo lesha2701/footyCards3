@@ -1,11 +1,12 @@
+import type { ManagerStyle } from "@/api/manager";
 export type Rarity = "common" | "rare" | "epic" | "legendary" | "diamond";
-export type Position = "GK" | "LB" | "CB" | "RB" | "CDM" | "CM" | "CAM" | "LM" | "RM" | "LW" | "RW" | "ST";
+export type Position = "GK" | "LB" | "CB" | "RB" | "LWB" | "RWB" | "CDM" | "CM" | "CAM" | "LM" | "RM" | "LW" | "RW" | "ST";
 export type TradeStatus = "pending" | "accepted" | "rejected" | "cancelled" | "expired";
 export type MatchDifficulty = "easy" | "medium" | "hard";
 export type MatchResult = "win" | "draw" | "loss";
 export type MatchStatus = "in_progress" | "finished";
 export type ShotType = "in_box" | "long_range" | "empty_net";
-export type LineupTactic = "attacking" | "balanced" | "defensive";
+export type LineupTactic = "attacking" | "possession" | "defensive" | "counter";
 export type MatchActionKind = "shoot" | "pass" | "tackle" | "block" | "keeper" | "strike";
 
 export interface Page<T> {
@@ -61,6 +62,8 @@ export interface Player {
   is_pack_droppable: boolean;
   collection_id: number | null;
   collection_name: string | null;
+  /** «Академия»: set = a path card with this talent. */
+  path_talent_code?: string | null;
 }
 
 export type CoachBoostType =
@@ -112,6 +115,10 @@ export interface UserCard {
   is_in_lineup: boolean;
   is_in_tactico_squad: boolean;
   hidden_from_trade: boolean;
+  /** The owner's own «замок»: can't be sold or burned as material. */
+  is_user_locked?: boolean;
+  /** Stands in a player-tournament squad (no flag of its own on the card). */
+  in_personal_squad?: boolean;
   duplicate_count?: number;
   diamond_rating_bonus: number;
   /** This copy's own skill (null = none). See CardSkillBadge / CardSkillPanel. */
@@ -120,6 +127,57 @@ export interface UserCard {
   /** Collection list only: every skilled copy of this player (the list
    * collapses duplicates into one representative). */
   skilled_copies?: SkilledCopy[];
+  /** «Звёзды карточки»: earned stars, duplicates banked toward the next one
+   * and the rating the stars add (already included in player.rating). */
+  stars?: number;
+  star_progress?: number;
+  star_rating_bonus?: number;
+  /** «Академия»: levels gained, stage reached (0 = Новичок …) and the
+   * rating the levels add (already included in player.rating). */
+  path_level?: number;
+  path_stage?: number;
+  path_rating_bonus?: number;
+  /** «Экипировка» it wears (already included in player.rating). */
+  equipment_rating_bonus?: number;
+  /** Its worn things: +chemistry and the boosts (shot/save/…, a national-team set). */
+  equipment_chemistry?: number;
+  equipment_boosts?: Record<string, unknown> | null;
+  /** «Академия» prestige tier, its «Икона» number and the reforged talent. */
+  prestige?: number;
+  prestige_icon_number?: number | null;
+  talent_override?: string | null;
+}
+
+export interface CardStarState {
+  card_id: number;
+  player_id: number;
+  rarity: Rarity;
+  enabled: boolean;
+  block_reason: string | null;
+  stars: number;
+  max_stars: number;
+  progress: number;
+  thresholds: number[];
+  coin_costs: number[];
+  next_threshold: number | null;
+  next_coin_cost: number | null;
+  claimable: boolean;
+  dupes_to_max: number;
+  rating_base: number;
+  rating_now: number;
+  rating_bonus: number;
+  rating_after_next_star: number | null;
+  free_duplicates: { id: number; serial_number: number; skill_code: string | null; skill_level: number | null }[];
+}
+
+export interface CardStarOperation {
+  kind: "feed" | "claim";
+  cards_consumed: number;
+  stars_gained: number;
+  coins_spent: number;
+  new_balance: number;
+  replayed: boolean;
+  state: CardStarState;
 }
 
 export interface SkilledCopy {
@@ -221,10 +279,18 @@ export interface Pack {
   coach_drop_chance: number;
   stadium_drop_chance: number;
   skill_token_drop_chance?: number;
+  /** "path" = the «Академия» pack (diamond slots drop only path cards). */
+  player_pool?: string;
+  /** Why the pack cannot be bought right now (e.g. no «Академия» players yet). */
+  unavailable_reason?: string | null;
   user_purchase_count: number;
   is_available_now: boolean;
   /** Average quick-sell value of the cards inside (shop listing only). */
   expected_value?: number | null;
+  /** Paid packs left until the guaranteed legendary (null = off / no legendary here). */
+  pity_left?: number | null;
+  /** Discount on opening 10+ at once, % (0 = none). */
+  bulk10_discount_pct?: number;
 }
 
 export interface OpenedCard {
@@ -404,6 +470,8 @@ export interface CoinPackage {
   coins_amount: number;
   is_active: boolean;
   sort_order: number;
+  /** Extra coins on this player's first coin purchase (0 once they have bought). */
+  first_purchase_bonus_coins?: number;
 }
 
 export interface MemoryStart {
@@ -539,6 +607,8 @@ export interface Lineup {
   is_complete: boolean;
   team_strength: number | null;
   max_diamond: number;
+  /** «Академия» cards: own limit next to the diamond one. */
+  max_path?: number;
   coach: EquippedCoach | null;
   stadium: EquippedStadium | null;
   slots: LineupSlot[];
@@ -638,6 +708,101 @@ export interface Match {
   created_at: string;
   events: MatchEvent[];
   pending_moment: MatchPendingMoment | null;
+  /** «Академия»: static talents applied at kickoff / experience earned. */
+  talent_notes?: MatchTalentNote[] | null;
+  path_progress?: PathMatchProgress[] | null;
+  /** Card Arena divisions: styles/chances at kickoff, points, the report. */
+  arena?: MatchArenaInfo | null;
+  ladder?: ArenaLadderResult | null;
+  report?: ArenaMatchReport | null;
+}
+
+export type ArenaMatchup = "win" | "loss" | "neutral";
+
+export interface ArenaChances {
+  win: number;
+  draw: number;
+  loss: number;
+}
+
+export interface MatchArenaInfo {
+  user_style: LineupTactic;
+  opponent_style: LineupTactic;
+  user_formation?: string;
+  opponent_formation?: string;
+  matchup: ArenaMatchup;
+  matchup_bonus_pct: number;
+  chances: ArenaChances | null;
+  opponent_points: number | null;
+}
+
+export interface ArenaLadderResult {
+  points_before: number;
+  points_after: number;
+  delta: number;
+  division_before: number;
+  division_after: number;
+  promoted: boolean;
+  relegated: boolean;
+  shield_used: boolean;
+  shield_left: number;
+  rewards: { division: number; coins: number }[];
+}
+
+export interface ArenaLineCompare {
+  key: "GK" | "DEF" | "MID" | "FWD";
+  label: string;
+  user: number;
+  opponent: number;
+}
+
+export interface ArenaMatchReport {
+  verdict: string;
+  reasons: string[];
+  chances: ArenaChances;
+  user_strength: number;
+  opponent_strength: number;
+  user_style: LineupTactic;
+  opponent_style: LineupTactic;
+  matchup: ArenaMatchup;
+  matchup_bonus_pct: number;
+  lines: ArenaLineCompare[];
+  user_chances: number;
+  opponent_chances: number;
+  user_keeper_saves: number;
+  opponent_keeper_saves: number;
+}
+
+export interface ArenaDivision {
+  division: number;
+  total_divisions: number;
+  points: number;
+  min_points: number;
+  next_min_points: number | null;
+  shield_matches: number;
+  coin_pct: number;
+  next_reward_coins: number | null;
+}
+
+export interface ArenaPreview {
+  opponent_name: string;
+  opponent_avatar_url: string | null;
+  opponent_is_bot: boolean;
+  opponent_points: number;
+  opponent_division: number;
+  opponent_strength: number;
+  opponent_style: LineupTactic;
+  opponent_formation: string;
+  user_strength: number;
+  user_style: LineupTactic;
+  user_formation: string;
+  matchup: ArenaMatchup;
+  matchup_bonus_pct: number;
+  matchup_text: string;
+  lines: ArenaLineCompare[];
+  chances: ArenaChances;
+  points_at_stake: Record<MatchResult, number>;
+  division: ArenaDivision;
 }
 
 export interface ArenaStats {
@@ -645,7 +810,9 @@ export interface ArenaStats {
   matches_drawn: number;
   matches_lost: number;
   arena_rating: number;
+  /** Place by arena points (null before the first division match). */
   arena_rank: number | null;
+  division?: ArenaDivision | null;
 }
 
 export interface MaintenanceStatus {
@@ -665,7 +832,11 @@ export interface Announcement {
 export interface FeatureFlags {
   matchmaking_enabled: boolean;
   wheel_enabled: boolean;
+  /** Admin switch: off = no new trade offers and no accepting. */
+  trades_enabled?: boolean;
   leagues_enabled: boolean;
+  /** Largest stake per side in open chat challenges; 0 = stakes off. */
+  stake_max_coins?: number;
 }
 
 export interface GameLimits {
@@ -680,6 +851,7 @@ export interface GameLimits {
   pairs: number;
   stratego: number;
   magnate: number;
+  mordoboi: number;
   /** Exhausted games only: when the hourly cap frees up again. */
   resets_at?: Partial<Record<string, string>>;
 }
@@ -689,6 +861,8 @@ export interface ArenaLeaderboardEntry {
   display_name: string;
   avatar_url: string | null;
   arena_rating: number;
+  arena_points?: number;
+  division?: number;
   matches_won: number;
   matches_drawn: number;
   matches_lost: number;
@@ -697,6 +871,9 @@ export interface ArenaLeaderboardEntry {
 }
 
 export type RankingMetric =
+  | "academy_level"
+  | "base_level"
+  | "academy_prestige"
   | "arena_rating"
   | "matches_won"
   | "cards_count"
@@ -706,6 +883,7 @@ export type RankingMetric =
   | "penalty_rating"
   | "stratego_rating"
   | "stratego_puzzles"
+  | "mordoboi_rating"
   | "league_rating";
 
 export interface RankingEntry {
@@ -759,6 +937,7 @@ export interface TacticoSquad {
   max_legendary: number;
   max_epic: number;
   max_diamond: number;
+  max_path?: number;
 }
 
 export interface TacticoStats {
@@ -833,31 +1012,236 @@ export interface TacticoOpenChallengePreview {
   is_own_challenge: boolean;
 }
 
-export interface DailyRewardDay {
-  day: number;
+// --- Monetization: reward slots, login calendar, club pass, season pass,
+// starter offer, cosmetics (backend schemas/monetization.py) ---
+
+export type CosmeticKind =
+  | "profile_frame"
+  | "profile_background"
+  | "card_skin"
+  | "brutality"
+  | "ring_gloves"
+  | "ring_shorts"
+  | "ring_entrance"
+  | "helmet";
+
+export interface Cosmetic {
+  id: number;
+  kind: CosmeticKind;
+  name: string;
+  description: string | null;
+  style_key: string;
+  coins_price: number;
+  stars_price: number;
+  is_exclusive: boolean;
+  is_active: boolean;
+  sort_order: number;
+  /** «Статус» of «Мой игрок» while owned. */
+  status: number;
+  /** Uploaded picture (shown instead of the style's built-in look). */
+  image_path?: string | null;
+  /** «Бруталити»: coins added to the win when applied. */
+  win_bonus_coins?: number;
+}
+
+export interface CosmeticCatalogItem extends Cosmetic {
+  owned: boolean;
+  equipped: boolean;
+}
+
+export interface EquippedCosmetics {
+  frame: string | null;
+  background: string | null;
+  card_skin: string | null;
+}
+
+export interface CosmeticCatalog {
+  items: CosmeticCatalogItem[];
+  equipped: EquippedCosmetics;
+  balance: number;
+}
+
+/** What one reward slot contains — shown before claiming or paying. */
+export interface RewardBundle {
   coins: number;
-  free_pack_name: string | null;
-  grants_random_card: boolean;
-  is_claimed: boolean;
-  is_today: boolean;
+  pack_id: number | null;
+  pack_name: string | null;
+  card_rarity: Rarity | null;
+  badge: Badge | null;
+  cosmetic: Cosmetic | null;
 }
 
-export interface DailyRewardCalendar {
-  current_streak: number;
-  already_claimed_today: boolean;
-  days: DailyRewardDay[];
-}
-
-export interface DailyRewardClaimResult {
-  streak_day: number;
-  coins_awarded: number;
+export interface GrantedRewards {
+  coins: number;
+  pack_name: string | null;
+  cards: UserCard[];
+  badge: Badge | null;
+  cosmetic: Cosmetic | null;
   new_balance: number;
-  granted_card: UserCard | null;
-  granted_pack_name: string | null;
+}
+
+export type CalendarDayStatus = "claimed" | "today" | "missed" | "future";
+
+export interface CalendarDay {
+  day: number;
+  date: string;
+  reward: RewardBundle;
+  status: CalendarDayStatus;
+  claim_method: string | null;
+  is_big: boolean;
+}
+
+export interface LoginCalendar {
+  month: string;
+  today: string;
+  days: CalendarDay[];
+  claimed_count: number;
+  days_in_month: number;
+  already_claimed_today: boolean;
+  month_bonus: RewardBundle;
+  month_bonus_claimed: boolean;
+  catchup_coins: number;
+  catchup_stars: number;
+  catchups_left: number;
+  /** «Клубный абонемент»: free catch-ups left this month. */
+  free_catchups_left: number;
+}
+
+export interface CalendarClaimResult {
+  day: number;
+  granted: GrantedRewards;
+  month_bonus: GrantedRewards | null;
+  new_balance: number;
+}
+
+export interface ClubPassPerks {
+  /** «Статус» of «Мой игрок» while the pass is active. */
+  status: number;
+  daily_coins: number;
+  daily_pack: RewardBundle | null;
+  /** Granted with every paid month. */
+  monthly_bonus: RewardBundle | null;
+  extra_rewarded_attempts: number;
+  season_xp_bonus_pct: number;
+  free_catchups: number;
+  frame: Cosmetic | null;
+  badge: Badge | null;
+  ad_free: boolean;
+}
+
+export interface ClubPass {
+  enabled: boolean;
+  stars_price: number;
+  perks: ClubPassPerks;
+  is_active: boolean;
+  expires_at: string | null;
+  auto_renew: boolean;
+  daily_claimed_today: boolean;
+}
+
+export interface SeasonLevel {
+  level: number;
+  xp_required: number;
+  free: RewardBundle;
+  premium: RewardBundle;
+  reached: boolean;
+  free_claimed: boolean;
+  premium_claimed: boolean;
+}
+
+export interface SeasonPass {
+  enabled: boolean;
+  season_id: number | null;
+  name: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  premium_stars: number;
+  xp: number;
+  level: number;
+  next_level_xp: number | null;
+  is_premium: boolean;
+  levels: SeasonLevel[];
+  claimable: number;
+  locked_premium: number;
+  xp_per_game: number;
+  xp_per_daily_claim: number;
+  premium_status: number;
+}
+
+export type ArtifactTarget = "club" | "my_player";
+
+export interface ArtifactInfo {
+  id: number;
+  name: string;
+  description: string | null;
+  image_path: string | null;
+  icon: string;
+  rarity: Rarity;
+  target: ArtifactTarget;
+  target_label: string;
+  effect: string;
+  effect_value: number;
+  effect_label: string;
+  /** Stronger with a card of this stadium / coach / player. */
+  link_type: "stadium" | "coach" | "player" | null;
+  link_kind: string;
+  link_name: string | null;
+  link_label: string;
+  link_owned: boolean;
+  /** «+3 к рейтингу карточек «Марадона»» — "" when none. */
+  card_player_name: string | null;
+  card_label: string;
+  /** The value that applies to this player (link bonus included). */
+  active_label: string;
+  coins_price: number;
+  stars_price: number;
+  /** «Статус» of «Мой игрок» while owned (once per artifact). */
+  status: number;
+  max_supply: number | null;
+  left: number | null;
+}
+
+export interface ArtifactShopItem extends ArtifactInfo {
+  owned_count: number;
+}
+
+export interface ArtifactCopy {
+  copy_id: number;
+  serial_number: number;
+  equipped: boolean;
+  source: string;
+  artifact: ArtifactInfo;
+}
+
+export interface ArtifactEffect {
+  effect: string;
+  value: number;
+  label: string;
+}
+
+export interface ArtifactCatalog {
+  enabled: boolean;
+  slots: number;
+  active_count: number;
+  shop: ArtifactShopItem[];
+  shelf: ArtifactCopy[];
+  effects: Record<ArtifactTarget, ArtifactEffect[]>;
+  balance: number;
+}
+
+export interface StarterOffer {
+  available: boolean;
+  stars_price: number;
+  contents: RewardBundle;
+  expires_at: string | null;
+  seen: boolean;
+  purchased: boolean;
 }
 
 export interface ProfilePublic {
   id: number;
+  cosmetics?: EquippedCosmetics;
+  club_pass_active?: boolean;
   username: string | null;
   first_name: string | null;
   last_name: string | null;
@@ -1410,8 +1794,72 @@ export interface ApiError {
 }
 
 export type ClubType = "open" | "closed";
-export type ClubRole = "captain" | "assistant" | "member";
+export type ClubRole = "captain" | "vice_captain" | "assistant" | "treasurer" | "member";
 export type ClubLogoShape = "shield" | "circle" | "hexagon" | "star" | "diamond" | "banner" | "crest" | "chevron";
+
+/** Paid layers on top of logo_shape/logo_color (club_emblem_service). */
+export interface ClubEmblem {
+  color2: string | null;
+  pattern: string | null;
+  symbol: string | null;
+  letters: string | null;
+  outline: string | null;
+  outline_thin: boolean;
+  effect: string | null;
+}
+
+export type ClubEmblemKind = "color2" | "pattern" | "letters" | "symbol" | "outline" | "effect";
+export type ClubSponsorTier = "bronze" | "silver" | "gold";
+
+export interface ClubEmblemItem {
+  id: number;
+  kind: ClubEmblemKind;
+  style_key: string;
+  name: string;
+  coins_price: number;
+  stars_price: number;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface ClubEmblemState {
+  enabled: boolean;
+  club_id: number;
+  logo_shape: ClubLogoShape;
+  logo_color: string;
+  emblem: ClubEmblem;
+  items: (ClubEmblemItem & { unlocked: boolean })[];
+  budget: number;
+  star_balance: number;
+  can_edit: boolean;
+  can_spend_budget: boolean;
+}
+
+export interface ClubPatron {
+  user_id: number;
+  username: string | null;
+  first_name: string | null;
+  avatar_url: string | null;
+  stars: number;
+  coins: number;
+  tier: ClubSponsorTier;
+  is_member: boolean;
+}
+
+export interface ClubTreasury {
+  enabled: boolean;
+  club_id: number;
+  budget: number;
+  star_balance: number;
+  coins_per_star: number;
+  star_options: number[];
+  silver_stars: number;
+  gold_stars: number;
+  my_stars: number;
+  my_tier: ClubSponsorTier | null;
+  patrons: ClubPatron[];
+  recent: { user_id: number; username: string | null; first_name: string | null; stars: number; coins: number; created_at: string }[];
+}
 
 export interface ClubMember {
   user_id: number;
@@ -1421,6 +1869,7 @@ export interface ClubMember {
   role: ClubRole;
   joined_at: string;
   personal_reward_enabled: boolean;
+  sponsor_tier?: ClubSponsorTier | null;
 }
 
 export interface ClubLeagueRow {
@@ -1429,6 +1878,7 @@ export interface ClubLeagueRow {
   name: string;
   logo_shape: ClubLogoShape;
   logo_color: string;
+  emblem?: ClubEmblem | null;
   points: number;
   reward: number;
 }
@@ -1442,8 +1892,31 @@ export interface ClubLeagueMember {
   points: number;
 }
 
+export interface ClubSeasonRow {
+  rank: number;
+  club_id: number;
+  name: string;
+  logo_shape: ClubLogoShape;
+  logo_color: string;
+  emblem?: ClubEmblem | null;
+  points: number;
+  zone: "up" | "down" | null;
+}
+
 export interface ClubLeague {
   enabled: boolean;
+  division?: number;
+  division_names?: string[];
+  division_reward_pct?: number;
+  season?: {
+    weeks: number;
+    week_of_season: number;
+    ends_at: string;
+    promote_count: number;
+    relegate_count: number;
+    standings: ClubSeasonRow[];
+    my_row: ClubSeasonRow | null;
+  } | null;
   week_start: string;
   ends_at: string;
   points_game: number;
@@ -1487,6 +1960,7 @@ export interface ClubSummary {
   club_type: ClubType;
   logo_shape: ClubLogoShape;
   logo_color: string;
+  emblem?: ClubEmblem | null;
   member_count: number;
   cups_count: number;
   stars_count: number;
@@ -1499,6 +1973,7 @@ export interface Club {
   club_type: ClubType;
   logo_shape: ClubLogoShape;
   logo_color: string;
+  emblem?: ClubEmblem | null;
   captain_id: number;
   founded_at: string;
   member_count: number;
@@ -1506,6 +1981,11 @@ export interface Club {
   invite_code: string | null;
   my_role: ClubRole | null;
   budget: number;
+  budget_treasurer_only?: boolean;
+  star_balance?: number;
+  can_spend_budget?: boolean;
+  wall_unread?: number | null;
+  rewards_unclaimed?: number | null;
   cups_count: number;
   stars_count: number;
   daily_reward_seconds_remaining: number | null;
@@ -1534,6 +2014,118 @@ export interface ClubCard {
   acquired_at: string;
   is_in_lineup: boolean;
   availability: ClubCardAvailability | null;
+}
+
+export interface ClubPost {
+  id: number;
+  user_id: number;
+  username: string | null;
+  first_name: string | null;
+  avatar_url: string | null;
+  role: ClubRole | null;
+  text: string;
+  is_announcement: boolean;
+  is_pinned: boolean;
+  created_at: string;
+  can_delete: boolean;
+}
+
+export interface ClubWall {
+  posts: ClubPost[];
+  can_announce: boolean;
+  can_pin: boolean;
+  announce_cooldown_seconds: number;
+}
+
+export interface ClubReward {
+  id: number;
+  source: string;
+  title: string;
+  reward: RewardBundle;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface ClubQuests {
+  enabled: boolean;
+  week_start: string;
+  ends_at: string;
+  quests: { id: number; title: string; metric: "games" | "packs" | "tasks"; target: number; progress: number; completed: boolean; reward_budget: number; reward: RewardBundle }[];
+  members: { user_id: number; name: string; games: number; packs: number; tasks: number }[];
+}
+
+export interface ClubTrophies {
+  club_id: number;
+  name: string;
+  logo_shape: ClubLogoShape;
+  logo_color: string;
+  emblem?: ClubEmblem | null;
+  division: number;
+  division_name: string;
+  cups_count: number;
+  stars_count: number;
+  founded_at: string;
+  seasons: { season_end_week: string; division: number; division_name: string; rank: number; points: number; moved: number }[];
+  league_gold: number;
+  league_silver: number;
+  league_bronze: number;
+  recent_podiums: { week_start: string; division: number; division_name: string; rank: number; points: number }[];
+  tournaments_played: number;
+  tournaments_won: number;
+  best_tournament_rank: number | null;
+  recent_tournaments: { tournament_id: number; final_rank: number; cup: boolean; played_at: string }[];
+  quests_completed: number;
+  wars_played: number;
+  wars_won: number;
+}
+
+export interface ClubWarSide {
+  club_id: number;
+  name: string;
+  logo_shape: ClubLogoShape;
+  logo_color: string;
+  emblem?: ClubEmblem | null;
+  war_rating: number;
+  score: number;
+  members: { user_id: number; name: string; games: number; packs: number; tasks: number; points: number; ring_points?: number }[];
+}
+
+export interface ClubWar {
+  enabled: boolean;
+  state: "none" | "upcoming" | "active" | "finished";
+  starts_at: string;
+  ends_at: string;
+  duration_hours: number;
+  min_members: number;
+  member_count: number;
+  war_rating: number;
+  win_budget: number;
+  draw_budget: number;
+  loss_budget: number;
+  win_member_coins: number;
+  war_id: number | null;
+  me: ClubWarSide | null;
+  opponent: ClubWarSide | null;
+  result: "win" | "loss" | "draw" | null;
+  history: { war_id: number; opponent_name: string; my_score: number; opponent_score: number; result: "win" | "loss" | "draw"; ended_at: string }[];
+}
+
+export interface ClubShop {
+  budget: number;
+  can_buy: boolean;
+  member_count: number;
+  items: { id: number; name: string; description: string; price: number; weekly_limit: number; bought_this_week: number; reward: RewardBundle }[];
+  rewards: ClubReward[];
+}
+
+export interface ClubSurplus {
+  enabled: boolean;
+  can_manage: boolean;
+  budget: number;
+  sell_pct: number;
+  exchange_count: number;
+  cards: { card: ClubCard; protected: boolean; sell_value: number }[];
+  exchange_pack: ClubPack | null;
 }
 
 export interface ClubLineupSlot {
@@ -1611,6 +2203,7 @@ export interface ClubRankingEntry {
   name: string;
   logo_shape: ClubLogoShape;
   logo_color: string;
+  emblem?: ClubEmblem | null;
   value: number;
 }
 
@@ -1705,6 +2298,8 @@ export interface PersonalSquad {
   formation: string;
   mentality: string;
   playstyle: string;
+  /** Card Arena style the tournament plays with. */
+  style: ManagerStyle;
   slots: PersonalSquadSlot[];
   coach: EquippedCoach | null;
   stadium: EquippedStadium | null;
@@ -2028,6 +2623,8 @@ export interface StrategoCard {
   rarity: Rarity;
   rating: number;
   is_my_player?: boolean;
+  /** «Академия»: own squad limit. */
+  is_path?: boolean;
   skill_name?: string | null;
   skill_level?: number | null;
   skill_kind?: "atk" | "def" | null;
@@ -2066,7 +2663,7 @@ export interface StrategoSquad {
   layout: Record<string, [number, number]>;
   is_complete: boolean;
   cards_needed: number;
-  rarity_limits: { max_legendary: number; max_diamond: number; min_rare: number; min_common: number };
+  rarity_limits: { max_legendary: number; max_diamond: number; max_path?: number; min_rare: number; min_common: number };
   /** Highest rarity allowed on a Подкатчик slot. */
   tackler_max_rarity: Rarity;
   /** Highest rarity per capped role (tackler / provocateur / speedster). */
@@ -2093,6 +2690,7 @@ export interface StrategoInfo {
   rewarded_today: number;
   max_legendary: number;
   max_diamond: number;
+  max_path?: number;
   min_rare: number;
   min_common: number;
   my_player_xp: number;
@@ -2332,4 +2930,458 @@ export interface MagnateRoomPreview {
   players: string[];
   seats_total: number;
   is_member: boolean;
+}
+
+// --- «Академия» ---------------------------------------------------------
+
+export interface PathTask {
+  id: number;
+  metric: string;
+  label: string;
+  target: number;
+  progress: number;
+  applies: boolean;
+  done: boolean;
+}
+
+export interface PathStage {
+  index: number;
+  name: string;
+  min_rating: number;
+  max_rating: number;
+  talent_level: number;
+  reached: boolean;
+  current: boolean;
+  tasks: PathTask[];
+}
+
+export interface PathTalentLevel {
+  level: number;
+  label: string;
+  text: string;
+  unlocked: boolean;
+  unlock_stage: string | null;
+}
+
+export interface PathTalent {
+  code: string;
+  name: string;
+  emoji: string;
+  summary: string;
+  kind: "static" | "dynamic";
+  level: number;
+  level_label: string | null;
+  enabled: boolean;
+  levels: PathTalentLevel[];
+  modes: { mode: string; label: string; text: string | null }[];
+}
+
+export interface PathDaily {
+  arena_free_total: number;
+  arena_free_left: number;
+  bought_attempts: number;
+  career_total: number;
+  career_left: number;
+  ptour_total: number;
+  ptour_left: number;
+  coin_buys_left: number;
+  next_coin_price: number | null;
+  stars_buys_left: number;
+  next_stars_price: number | null;
+}
+
+export interface PathHistoryItem {
+  source_type: "arena" | "ptour" | "career";
+  xp: number;
+  result: "win" | "draw" | "loss" | null;
+  goals: number;
+  assists: number;
+  levels: number[];
+  stages: number[];
+  created_at: string | null;
+}
+
+export interface PathState {
+  card_id: number;
+  title: string;
+  enabled: boolean;
+  player_name: string;
+  position: string;
+  base_rating: number;
+  rating: number;
+  ceiling: number;
+  level: number;
+  max_level: number;
+  xp: number;
+  xp_into_level: number;
+  xp_for_next: number | null;
+  blocked_by_tasks: boolean;
+  stage: number;
+  stage_name: string;
+  is_legend: boolean;
+  stages: PathStage[];
+  talent: PathTalent | null;
+  daily: PathDaily;
+  xp_rules: { match: number; win: number; draw: number; goal: number; assist: number };
+  totals: Record<string, number>;
+  hunger_streak: number;
+  recent: PathHistoryItem[];
+  prestige?: PathPrestige;
+  /** «Академия» building bonuses applied to this card. */
+  academy?: { xp_pct: number; attempts: number; task_cut_pct: number };
+}
+
+export interface PathPrestigeReward {
+  coins: number;
+  attempts: number;
+  skill_tokens: number;
+}
+
+export interface PathPrestige {
+  tier: number;
+  max_tier: number;
+  tier_name: string | null;
+  names: string[];
+  next_dupes: number | null;
+  ratio: number;
+  free_units: number;
+  next_coins: number | null;
+  next_reward: PathPrestigeReward | null;
+  free_duplicates: { id: number; serial_number: number; skill_code: string | null; player_name: string; same_player: boolean; units: number }[];
+  xp_bonus_pct: number;
+  next_xp_bonus_pct: number | null;
+  extra_free_attempts: number;
+  sell_price: number;
+  icon_number: number | null;
+  reforged: boolean;
+  can_reforge: boolean;
+  reforge_options: { code: string; name: string; emoji: string; summary: string }[];
+}
+
+export interface PathCatalog {
+  title: string;
+  enabled: boolean;
+  talent_cap: number;
+  stages: { index: number; name: string; max_rating: number; talent_level: number }[];
+  talents: PathTalent[];
+}
+
+export interface MatchTalentNote {
+  code: string;
+  name: string;
+  emoji: string;
+  level: number;
+  level_label: string;
+  player: string | null;
+  bonus: number;
+  aura?: boolean;
+}
+
+export interface PathMatchProgress {
+  user_card_id: number;
+  status: "awarded" | "duplicate" | "no_attempts" | "limit" | "not_path";
+  xp: number;
+  levels: number[];
+  stages: number[];
+}
+
+// --- «Академия» building ---------------------------------------------------
+
+export interface AcademyWing {
+  code: "scout" | "training" | "dorm" | "staff" | "hall";
+  name: string;
+  emoji: string;
+  about: string;
+  level: number;
+  max_level: number;
+  effect: string | null;
+  next_effect: string | null;
+  next_cost: number | null;
+  next_hours: number | null;
+  building: boolean;
+}
+
+export interface AcademyState {
+  enabled: boolean;
+  level: number;
+  max_level: number;
+  wings: AcademyWing[];
+  construction: { building_code: string; to_level: number; ends_at: string; remaining_seconds: number; speedup_stars: number } | null;
+  scout_report: { chance_pct: number; consolation_coins: number; cooldown_days: number; available: boolean; next_at: string | null } | null;
+  effects: Record<string, number>;
+  showcase_slots: number;
+  academy_cards: number;
+  cards: UserCard[];
+  new_balance?: number;
+  report?: { coins?: number; card_id?: number; player_name?: string } | null;
+}
+
+// «Клубная база» (GET /club-base) — see backend club_base_service.state_out.
+export type ClubBaseCode =
+  | "hq" | "stadium" | "hotel" | "training" | "medical" | "analytics" | "media" | "marketing" | "shop" | "accounting";
+
+export interface ClubBaseBuilding {
+  code: ClubBaseCode;
+  name: string;
+  emoji: string;
+  about: string;
+  group: "core" | "finance";
+  level: number;
+  max_level: number;
+  cap_level: number;
+  effects: string[];
+  next_effects: string[];
+  next_cost: number | null;
+  next_cost_full: number | null;
+  next_hours: number | null;
+  locked: boolean;
+  building: boolean;
+}
+
+export interface ClubBaseLook {
+  seats: string;
+  roof: "none" | "canopy" | "full";
+  lights: "on" | "off";
+  screen: "on" | "off";
+  pitch: "stripes" | "checks" | "diagonal";
+  facade: "concrete" | "brick" | "glass" | "gold";
+}
+
+/** A stadium cosmetics shop item (GameConfig.club_base_cosmetics). */
+export interface ClubBaseCosmetic {
+  code: string;
+  kind: keyof ClubBaseLook;
+  value: string;
+  name: string;
+  coins: number;
+  stars: number;
+  min_level: number;
+  owned: boolean;
+  free: boolean;
+  usable: boolean;
+}
+
+export interface ClubBaseState {
+  enabled: boolean;
+  level: number;
+  max_level: number;
+  academy_level: number;
+  academy_max_level: number;
+  total_level: number;
+  buildings: ClubBaseBuilding[];
+  construction: {
+    owner: "base" | "academy";
+    building_code: string;
+    name: string;
+    emoji: string;
+    to_level: number;
+    ends_at: string;
+    remaining_seconds: number;
+    speedup_stars: number;
+  } | null;
+  income: { daily: number; pending: number; cap: number; max_days: number };
+  stadium: {
+    level: number;
+    capacity: number;
+    matchday_income: number;
+    look: ClubBaseLook;
+    defaults: ClubBaseLook;
+    cosmetics: ClubBaseCosmetic[];
+  };
+  effects: Record<string, number>;
+  art: { background: string | null; buildings: Partial<Record<ClubBaseCode, string>> };
+  new_balance?: number;
+  claimed?: number;
+}
+
+// --- «Мордобой» ---
+
+export type MordoboiAction = "jab" | "hook" | "uppercut" | "block" | "dodge";
+/** Per side, what happened to its own action in the exchange. */
+export type MordoboiOutcome = "landed" | "beaten" | "blocked" | "slipped" | "caught" | "counter" | "none";
+export type MordoboiMatchStatus = "pending_accept" | "in_progress" | "finished" | "declined" | "cancelled" | "expired";
+export type MordoboiOpponentType = "bot" | "friend" | "online" | "chat";
+
+export interface MordoboiCard {
+  user_card_id: number | null;
+  player_id: number;
+  display_name: string;
+  position: string;
+  image_path: string | null;
+  rarity: string;
+  rating: number;
+}
+
+export interface MordoboiBoxerStats {
+  power: number;
+  speed: number;
+  guard: number;
+  max_hp: number;
+  max_stamina: number;
+}
+
+export interface MordoboiBoxerOption {
+  card: MordoboiCard;
+  stats: MordoboiBoxerStats;
+}
+
+export interface MordoboiBoxer {
+  selected: MordoboiBoxerOption | null;
+  options: MordoboiBoxerOption[];
+  look: MordoboiLook;
+  nickname_options: string[];
+}
+
+export interface MordoboiLegend {
+  code: string;
+  name: string;
+  nickname: string;
+  tagline: string;
+  position: string;
+  rating: number;
+  reward: number;
+  beaten_today: boolean;
+  wins_total: number;
+  active_match_id: number | null;
+  look: MordoboiLook;
+}
+
+export interface MordoboiClubRing {
+  active: boolean;
+  my_club: string | null;
+  opponent_club: string | null;
+  ends_at: string | null;
+  win_points: number;
+  member_cap: number;
+  my_points: number;
+  my_club_points: number;
+  opponent_club_points: number;
+  opponents: { user_id: number; name: string }[];
+}
+
+/** «Выход на ринг»: style keys of the equipped ring cosmetics. */
+export interface MordoboiLook {
+  nickname: string | null;
+  gloves: string | null;
+  shorts: string | null;
+  entrance: string | null;
+}
+
+export interface MordoboiFighter extends MordoboiBoxerStats {
+  name: string;
+  card: MordoboiCard | null;
+  look: MordoboiLook;
+  hp: number;
+  stamina: number;
+  landed: number;
+  damage_dealt: number;
+}
+
+export interface MordoboiExchange {
+  n: number;
+  round: number;
+  exchange: number;
+  my_action: MordoboiAction;
+  opponent_action: MordoboiAction;
+  my_outcome: MordoboiOutcome;
+  opponent_outcome: MordoboiOutcome;
+  my_damage: number;
+  opponent_damage: number;
+  my_hp: number;
+  opponent_hp: number;
+  my_auto: boolean;
+  opponent_auto: boolean;
+  round_end: boolean;
+  end: string | null;
+}
+
+export interface MordoboiMatch {
+  id: number;
+  version: number;
+  mode: "normal" | "legend";
+  legend_tagline: string | null;
+  opponent_type: MordoboiOpponentType;
+  opponent_name: string;
+  opponent_user_id: number | null;
+  status: MordoboiMatchStatus;
+  viewer_side: "user" | "opponent";
+  difficulty: string | null;
+  live: boolean;
+  rounds: number;
+  exchanges_per_round: number;
+  round: number;
+  exchange: number;
+  me: MordoboiFighter | null;
+  opponent: MordoboiFighter | null;
+  my_pick: MordoboiAction | null;
+  opponent_ready: boolean;
+  can_pick: boolean;
+  available_actions: MordoboiAction[];
+  deadline: string | null;
+  my_auto_moves: number;
+  max_auto_moves: number;
+  log: MordoboiExchange[];
+  scorecards: { mine: number; opponent: number }[];
+  result: "win" | "draw" | "loss" | null;
+  win_reason: string | null;
+  reward_coins: number;
+  rating_delta: number;
+  stake_coins: number;
+  brutality: MordoboiBrutality | null;
+  can_brutality: boolean;
+  created_at: string;
+  expires_at: string | null;
+  resolved_at: string | null;
+}
+
+export interface MordoboiBrutality {
+  by_me: boolean;
+  style_key: string;
+  name: string;
+  emoji: string;
+  image_path: string | null;
+  bonus_coins: number;
+  /** The beaten side's «Каска» bounced it back onto the winner. */
+  reflected: boolean;
+  /** From the viewer's side: «надел ему труханы на голову» / «…тебе…». */
+  text: string;
+}
+
+export interface MordoboiOpenChallengePreview {
+  id: number;
+  creator_name: string;
+  stake_coins: number;
+  status: MordoboiMatchStatus;
+  is_own_challenge: boolean;
+}
+
+export interface MordoboiInfo {
+  enabled: boolean;
+  rounds: number;
+  exchanges_per_round: number;
+  base_hp: number;
+  reward_win: number;
+  reward_draw: number;
+  reward_loss: number;
+  reward_ko_bonus: number;
+  daily_limit: number;
+  rewarded_today: number;
+  easy_reward_pct: number;
+  move_timeout_hours: number;
+  live_move_seconds: number;
+  challenge_expiry_hours: number;
+  max_auto_moves: number;
+  stamina_cost: Record<MordoboiAction, number>;
+  damage: Partial<Record<MordoboiAction, number>>;
+  legend_reward: number;
+}
+
+export interface MordoboiStats {
+  mordoboi_rating: number;
+  mordoboi_rank: number | null;
+}
+
+export interface MordoboiSearchStatus {
+  status: "not_searching" | "searching" | "matched" | "timeout";
+  match_id: number | null;
 }

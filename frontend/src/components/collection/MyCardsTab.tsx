@@ -1,38 +1,38 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
+import CardFilterBar from "@/components/collection/CardFilterBar";
+import CardQuickActions from "@/components/collection/CardQuickActions";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
-import { IconCoin, IconCollection } from "@/components/icons";
+import { IconCoin, IconCollection, IconLock, IconLockOpen } from "@/components/icons";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import CardUpgradeModal from "@/components/cards/CardUpgradeModal";
+import { losesProgress } from "@/lib/cardStars";
 import PlayerCard from "@/components/cards/PlayerCard";
 import CardDetailModal from "@/components/collection/CardDetailModal";
 import { useCardActions } from "@/components/collection/useCardActions";
 import {
-  fetchCollection, fetchCollectionStats, sellDuplicates, type CollectionFilters, type SellDuplicatesResult,
+  fetchCollection, fetchCollectionStats, sellDuplicates, setCardsLocked, type CollectionFilters, type SellDuplicatesResult,
 } from "@/api/collection";
 import { fetchCollections } from "@/api/collections";
-import { RARITY_LABELS, RARITY_ORDER } from "@/lib/rarity";
+import { cardLockProps, inSquad } from "@/lib/cardLocks";
+import { useCardFilter } from "@/lib/cardFilter";
+import { RARITY_ORDER } from "@/lib/rarity";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import { useSkillUpgradeCheck } from "@/lib/cardSkills";
 import { formatGameError } from "@/lib/errors";
-import { usePersistentState } from "@/lib/usePersistentState";
 import { haptic } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { Rarity, UserCard } from "@/types";
-
-const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary", "diamond"];
+import type { UserCard } from "@/types";
 
 const PAGE_SIZE = 60;
 
 export default function MyCardsTab() {
-  // Filters and sort survive leaving the tab (and an app restart).
-  const [rarity, setRarity] = usePersistentState<Rarity | null>("collection.rarity", null);
+  // Starts from the player's saved default filter (CardFilterBar saves it).
+  const { filter, setFilter, defaultFilter } = useCardFilter();
   const [collectionId, setCollectionId] = useState<number | undefined>(undefined);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = usePersistentState<CollectionFilters["sort_by"]>("collection.sort", "acquired_at");
-  const [onlySkilled, setOnlySkilled] = usePersistentState("collection.skilled", false);
   const [dupPreview, setDupPreview] = useState<SellDuplicatesResult | null>(null);
   const [dupMessage, setDupMessage] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -40,6 +40,9 @@ export default function MyCardsTab() {
   const [pageNum, setPageNum] = useState(1);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Long-pressed card: quick actions without opening the full sheet.
+  const [quickCard, setQuickCard] = useState<UserCard | null>(null);
 
   const {
     detailCard, setDetailCard, confirmSell, setConfirmSell,
@@ -51,15 +54,18 @@ export default function MyCardsTab() {
   // "Карточек не найдено" result after narrowing the filters.
   useEffect(() => {
     setPageNum(1);
-  }, [rarity, collectionId, search, sortBy, onlySkilled]);
+  }, [filter, collectionId, search]);
 
   const filters: CollectionFilters = {
-    rarity: rarity ?? undefined,
+    rarity: filter.rarity ?? undefined,
+    country: filter.country ?? undefined,
+    club: filter.club ?? undefined,
+    position: filter.position ?? undefined,
     collection_id: collectionId,
     search: search || undefined,
-    sort_by: sortBy,
+    sort_by: filter.sort_by,
     sort_dir: "desc",
-    has_skill: onlySkilled || undefined,
+    has_skill: filter.has_skill || undefined,
     page: pageNum,
     page_size: PAGE_SIZE,
   };
@@ -98,95 +104,126 @@ export default function MyCardsTab() {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
-  const totalSellValue = (page?.items ?? [])
-    .filter((c) => selected.includes(c.id))
-    .reduce((sum, c) => sum + c.player.quick_sell_price, 0);
+  const selectedCards = (page?.items ?? []).filter((c) => selected.includes(c.id));
+  // Squad copies and the owner's locked ones are never sold.
+  const sellable = selectedCards.filter(
+    (c) => !inSquad(c) && !c.is_user_locked && !c.is_locked_by_admin && !c.is_locked_in_trade,
+  );
+  const totalSellValue = sellable.reduce((sum, c) => sum + c.player.quick_sell_price, 0);
+  const allLocked = selectedCards.length > 0 && selectedCards.every((c) => c.is_user_locked);
+
+  const lockMutation = useMutation({
+    mutationFn: ({ ids, locked }: { ids: number[]; locked: boolean }) => setCardsLocked(ids, locked),
+    onSuccess: (data) => {
+      haptic("light");
+      setDupMessage(
+        data.locked
+          ? `🔒 Замок на ${data.card_ids.length} шт. — их не продать и не сжечь`
+          : `Замок снят с ${data.card_ids.length} шт.`,
+      );
+      setSelected([]);
+      setSelectMode(false);
+      for (const key of [["collection"], ["album-detail"], ["upgrade-cards"]]) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
+    },
+    onError: (err) => setDupMessage(formatGameError(err, "Не удалось поставить замок")),
+  });
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-end gap-2">
-        <button
-          onClick={() => duplicatesMutation.mutate(true)}
-          disabled={duplicatesMutation.isPending}
-          className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-ink-mist disabled:opacity-50"
-        >
-          Продать дубликаты
-        </button>
+    <div className="flex flex-col gap-3">
+      {/* One toolbar: search, select mode and the rarely used actions in «⋯». */}
+      <div className="flex items-center gap-2">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Поиск по имени…"
+          aria-label="Поиск по имени"
+          className="min-w-0 flex-1 rounded-xl bg-bg-surface px-3.5 py-2.5 text-sm text-ink-chalk placeholder:text-ink-mist-dim outline-none"
+        />
         <button
           onClick={() => { setSelectMode((v) => !v); setSelected([]); }}
-          className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-ink-mist"
+          className={`shrink-0 rounded-xl px-3 py-2.5 text-xs font-semibold ${
+            selectMode ? "bg-accent-lime text-bg-base" : "bg-bg-surface text-ink-mist"
+          }`}
         >
-          {selectMode ? "Отмена" : "Выбрать"}
+          {selectMode ? "Готово" : "Выбрать"}
         </button>
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="Ещё действия"
+            aria-expanded={menuOpen}
+            className="rounded-xl bg-bg-surface px-3 py-2.5 text-sm font-bold leading-none text-ink-mist"
+          >
+            ⋯
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-full z-20 mt-1 w-52 overflow-hidden rounded-xl border border-white/10 bg-bg-raised shadow-xl">
+              <button
+                onClick={() => { setMenuOpen(false); duplicatesMutation.mutate(true); }}
+                disabled={duplicatesMutation.isPending}
+                className="block w-full px-3 py-2.5 text-left text-sm text-ink-chalk hover:bg-white/5 disabled:opacity-50"
+              >
+                Продать дубликаты
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
+      <CardFilterBar
+        filter={filter}
+        onChange={setFilter}
+        defaultFilter={defaultFilter}
+        extraActive={collectionId !== undefined ? 1 : 0}
+        extraPanel={!!collections?.length && (
+          <label className="col-span-2 flex flex-col gap-1">
+            <span className="text-micro text-ink-mist-dim">Коллекция</span>
+            <select
+              value={collectionId ?? ""}
+              onChange={(e) => setCollectionId(e.target.value ? Number(e.target.value) : undefined)}
+              className="rounded-xl bg-bg-raised px-2.5 py-2 text-xs text-ink-chalk outline-none"
+            >
+              <option value="">Все коллекции</option>
+              {collections.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
+      />
 
       {dupMessage && (
         <p className="rounded-xl bg-bg-surface px-3 py-2 text-xs text-ink-mist" role="status">{dupMessage}</p>
       )}
 
       {stats && (
-        <div className="grid grid-cols-2 gap-x-3 rounded-2xl bg-bg-surface p-4">
-          <div>
-            <p className="font-display text-2xl font-bold text-ink-chalk">{stats.unique_players}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">Уникальных</p>
-          </div>
-          <div>
-            <p className="font-display text-2xl font-bold text-ink-chalk">{stats.total_cards}</p>
-            <p className="mt-0.5 text-[11px] text-ink-mist">Всего карточек</p>
-          </div>
-        </div>
-      )}
-
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Поиск по имени..."
-        className="rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk placeholder:text-ink-mist-dim outline-none"
-      />
-
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        <FilterChip active={rarity === null} label="Все" onClick={() => setRarity(null)} />
-        {RARITIES.map((r) => (
-          <FilterChip key={r} active={rarity === r} label={RARITY_LABELS[r]} onClick={() => setRarity(r)} />
-        ))}
-        <FilterChip active={onlySkilled} label="С навыком" onClick={() => setOnlySkilled((v) => !v)} />
-      </div>
-
-      <select
-        value={sortBy}
-        onChange={(e) => setSortBy(e.target.value as CollectionFilters["sort_by"])}
-        className="rounded-xl bg-bg-surface px-3 py-2 text-sm text-ink-chalk outline-none"
-      >
-        <option value="acquired_at">По дате получения</option>
-        <option value="rating">По рейтингу</option>
-        <option value="rarity">По редкости</option>
-      </select>
-
-      {!!collections?.length && (
-        <select
-          value={collectionId ?? ""}
-          onChange={(e) => setCollectionId(e.target.value ? Number(e.target.value) : undefined)}
-          className="rounded-xl bg-bg-surface px-3 py-2 text-sm text-ink-chalk outline-none"
-        >
-          <option value="">Все коллекции</option>
-          {collections.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
+        <p className="flex justify-between text-caption text-ink-mist-dim">
+          <span>
+            <b className="text-ink-mist">{stats.unique_players}</b> уникальных · <b className="text-ink-mist">{stats.total_cards}</b> всего
+          </span>
+          {!selectMode && <span>Удерживай карту — быстрые действия</span>}
+        </p>
       )}
 
       {isLoading && <CardGridSkeleton count={9} />}
       {!isLoading && !page?.items.length && <EmptyState icon={IconCollection} title="Карточек не найдено" description="Открой паки, чтобы собрать коллекцию" />}
 
       <div className="grid grid-cols-3 gap-2">
-        {page?.items.map((card) => (
+        {page?.items.map((card, i) => (
+          <div key={card.id} className="animate-card-in" style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }}>
           <PlayerCard
-            key={card.id}
             player={card.player}
+            stars={card.stars}
+            pathStage={card.path_stage} prestige={card.prestige} talentOverride={card.talent_override}
             badge={<CardTileBadges card={card} />}
+            {...cardLockProps(card)}
             selected={selectMode && selected.includes(card.id)}
             onClick={() => (selectMode ? toggleSelect(card.id) : setDetailCard(card))}
+            onLongPress={selectMode ? undefined : () => { haptic("medium"); setQuickCard(card); }}
           />
+          </div>
         ))}
       </div>
 
@@ -212,23 +249,47 @@ export default function MyCardsTab() {
         </div>
       )}
 
+      {selectMode && selected.length === 0 && (
+        <p className="text-center text-xs text-ink-mist">Отметь карточки, чтобы продать их или поставить замок 🔒</p>
+      )}
+
       {selectMode && selected.length > 0 && (
-        <div className="safe-bottom fixed inset-x-0 bottom-16 z-30 mx-auto flex max-w-lg items-center justify-between rounded-2xl border border-white/10 bg-bg-surface px-4 py-3 shadow-xl">
+        <div className="safe-bottom fixed inset-x-0 bottom-16 z-30 mx-auto flex max-w-lg flex-col gap-2 rounded-2xl border border-white/10 bg-bg-surface px-4 py-3 shadow-xl">
           <span className="flex items-center gap-1.5 text-sm text-ink-mist">
-            Выбрано: {selected.length} ·
-            <IconCoin size={13} className="text-accent-lime" />
-            <span className="font-mono text-accent-lime">{totalSellValue}</span>
+            Выбрано: {selected.length}
+            {sellable.length > 0 && (
+              <>
+                {" "}· <IconCoin size={13} className="text-accent-lime" />
+                <span className="font-mono text-accent-lime">{totalSellValue}</span>
+              </>
+            )}
           </span>
-          <button
-            onClick={() => setConfirmSell({
-              ids: selected,
-              lastCopy: false,
-              skillLoss: (page?.items ?? []).some((c) => selected.includes(c.id) && !!c.skill_code),
-            })}
-            className="rounded-full bg-red-500 px-4 py-2 text-xs font-bold text-white active:scale-95"
-          >
-            Продать
-          </button>
+          {sellable.length < selectedCards.length && (
+            <span className="text-micro text-ink-mist-dim">
+              {selectedCards.length - sellable.length} шт. в составе или под замком — не продаются
+            </span>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={() => lockMutation.mutate({ ids: selected, locked: !allLocked })}
+              disabled={lockMutation.isPending}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-amber-400 px-3 py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-50"
+            >
+              {allLocked ? <IconLockOpen size={14} /> : <IconLock size={14} />}
+              {allLocked ? "Снять замок" : "Поставить замок"}
+            </button>
+            <button
+              onClick={() => setConfirmSell({
+                ids: sellable.map((c) => c.id),
+                lastCopy: false,
+                skillLoss: sellable.some((c) => losesProgress(c)),
+              })}
+              disabled={sellable.length === 0}
+              className="flex-1 rounded-full bg-red-500 px-3 py-2 text-xs font-bold text-white active:scale-95 disabled:opacity-40"
+            >
+              Продать{sellable.length > 0 && sellable.length < selectedCards.length ? ` ${sellable.length}` : ""}
+            </button>
+          </div>
         </div>
       )}
 
@@ -236,7 +297,7 @@ export default function MyCardsTab() {
         <CardDetailModal
           card={detailCard}
           onClose={() => setDetailCard(null)}
-          onSell={() => setConfirmSell({ ids: [detailCard.id], lastCopy: false, skillLoss: !!detailCard.skill_code })}
+          onSell={() => setConfirmSell({ ids: [detailCard.id], lastCopy: false, skillLoss: losesProgress(detailCard) })}
           onToggleHidden={(hidden) => hideMutation.mutate({ id: detailCard.id, hidden })}
           hiddenPending={hideMutation.isPending}
           onUpgrade={
@@ -247,6 +308,15 @@ export default function MyCardsTab() {
         />
       )}
 
+      {quickCard && (
+        <CardQuickActions
+          card={quickCard}
+          onClose={() => setQuickCard(null)}
+          onOpen={() => setDetailCard(quickCard)}
+          onSell={() => setConfirmSell({ ids: [quickCard.id], lastCopy: false, skillLoss: losesProgress(quickCard) })}
+        />
+      )}
+
       {upgradeCard && <CardUpgradeModal cards={[upgradeCard]} onClose={() => setUpgradeCard(null)} />}
 
       <ConfirmDialog
@@ -254,7 +324,7 @@ export default function MyCardsTab() {
         title={`Продать ${dupPreview?.sold_count ?? 0} дубликатов?`}
         description={
           `Получишь ${dupPreview?.coins_earned ?? 0} монет. По одной карточке каждого игрока остаётся; `
-          + "карточки с навыком, в составах, в обменах и бриллиантовые не продаются."
+          + "карточки с навыком, в составах, в обменах, под замком и бриллиантовые не продаются."
         }
         confirmLabel="Продать"
         onConfirm={() => duplicatesMutation.mutate(false)}
@@ -268,7 +338,7 @@ export default function MyCardsTab() {
           (confirmSell?.lastCopy
             ? "Ты продашь единственный экземпляр этого футболиста. Это действие нельзя отменить."
             : "Монеты будут зачислены на баланс. Действие нельзя отменить.")
-          + (confirmSell?.skillLoss ? " У карточки есть навык — он будет потерян, жетоны не вернутся." : "")
+          + (confirmSell?.skillLoss ? " У карточки есть навык или звёзды — они будут потеряны без возврата." : "")
         }
         danger
         confirmLabel="Продать"
@@ -290,20 +360,9 @@ function CardTileBadges({ card }: { card: UserCard }) {
   return (
     <span className="flex items-center gap-1">
       {hasDuplicates && (
-        <span className="rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-[9px] font-bold text-ink-chalk">×{card.duplicate_count}</span>
+        <span className="rounded-full bg-black/70 px-1.5 py-0.5 font-mono text-micro font-bold text-ink-chalk">×{card.duplicate_count}</span>
       )}
       <CardSkillBadge code={card.skill_code} level={card.skill_level} upgradable={canUpgrade(card.skill_code, card.skill_level)} />
     </span>
-  );
-}
-
-function FilterChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${active ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"}`}
-    >
-      {label}
-    </button>
   );
 }

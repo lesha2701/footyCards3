@@ -1,3 +1,4 @@
+import type { ManagerLine, ManagerStyle, ManagerTacticsRules } from "@/api/manager";
 import type { BenchUpgrade } from "@/api/lineups";
 import { api } from "@/lib/api";
 import type {
@@ -36,7 +37,7 @@ export async function setPersonalSquadCards(
 }
 
 export async function setPersonalSquadTactics(
-  templateIndex: number, payload: { formation: string; mentality: string; playstyle: string },
+  templateIndex: number, payload: { formation: string; style: ManagerStyle },
 ): Promise<PersonalSquad> {
   const { data } = await api.put<PersonalSquad>(`/player-tournaments/squads/${templateIndex}/tactics`, payload);
   return data;
@@ -107,5 +108,23 @@ export async function autoFillPersonalSquad(templateIndex: number, copyFromArena
 
 export async function fetchPersonalSquadBenchUpgrades(templateIndex: number): Promise<BenchUpgrade[]> {
   const { data } = await api.get<BenchUpgrade[]>(`/player-tournaments/squads/${templateIndex}/bench-upgrades`);
+  return data;
+}
+
+export interface PersonalTournamentTactics {
+  rules: ManagerTacticsRules;
+  /** The next round's opponent in my running tournament, null when none. */
+  next: {
+    round: number;
+    opponent: string;
+    style: ManagerStyle;
+    formation: string;
+    edge: "win" | "lose" | "even";
+    mods: Record<ManagerLine, number>;
+  } | null;
+}
+
+export async function fetchPersonalTournamentTactics(): Promise<PersonalTournamentTactics> {
+  const { data } = await api.get<PersonalTournamentTactics>("/player-tournaments/tactics");
   return data;
 }

@@ -6,9 +6,11 @@ export async function fetchClubPacks(): Promise<ClubPack[]> {
   return data;
 }
 
-export async function openClubPack(packId: number, idempotencyKey?: string): Promise<ClubPackOpenResult> {
+/** Opens `quantity` copies (1–20) in one request: one budget debit for all. */
+export async function openClubPack(packId: number, idempotencyKey?: string, quantity = 1): Promise<ClubPackOpenResult> {
   const { data } = await api.post<ClubPackOpenResult>(`/clubs/me/packs/${packId}/open`, {
     idempotency_key: idempotencyKey ?? crypto.randomUUID(),
+    quantity,
   });
   return data;
 }

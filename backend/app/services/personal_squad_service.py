@@ -15,7 +15,7 @@ from app.schemas.personal_squad import (
     PersonalSquadCoachRequest, PersonalSquadOut, PersonalSquadSetRequest, PersonalSquadSlotOut,
     PersonalSquadStadiumRequest, PersonalSquadTacticsRequest,
 )
-from app.services import chemistry_service
+from app.services import chemistry_service, manager_tactics
 from app.services.chemistry_service import ChemistryRules
 from app.services.club_formation_service import CLUB_FORMATIONS, get_formation_slots
 from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES
@@ -139,7 +139,7 @@ def _serialize(
     return PersonalSquadOut(
         template_index=squad.template_index, name=squad.name, is_active=squad.is_active,
         is_complete=all(s.user_card_id is not None for s in slots),
-        formation=squad.formation, mentality=squad.mentality, playstyle=squad.playstyle,
+        formation=squad.formation, mentality=squad.mentality, playstyle=squad.playstyle, style=squad.style,
         slots=slots, coach=coach, stadium=stadium,
         # No single team-strength number in this mode (the tournament engine
         # works on per-card ratings and zones), so no strength_bonus either.
@@ -253,6 +253,8 @@ async def set_tactics(
         raise ConflictError(f"Неизвестный настрой: {payload.mentality}")
     if payload.playstyle not in PLAYSTYLES:
         raise ConflictError(f"Неизвестный стиль игры: {payload.playstyle}")
+    if payload.style is not None and payload.style not in manager_tactics.STYLES:
+        raise ConflictError(f"Неизвестный стиль: {payload.style}")
 
     squad = await _lock_row(db, user.id, template_index)
     idx = squad.template_index
@@ -266,6 +268,8 @@ async def set_tactics(
     squad.formation = payload.formation
     squad.mentality = payload.mentality
     squad.playstyle = payload.playstyle
+    if payload.style is not None:
+        squad.style = payload.style
     db.add(squad)
     await db.commit()
     return await _out(db, user.id, idx)
@@ -358,3 +362,59 @@ async def resolve_active_squad(
 async def is_squad_complete(db: AsyncSession, user_id: int) -> bool:
     squad, pairs = await resolve_active_squad(db, user_id)
     return len(pairs) == len(get_formation_slots(squad.formation))
+
+
+async def active_tactics(db: AsyncSession, user_id: int) -> tuple[str, str]:
+    """(style, formation) of the user's active squad — what the tournament
+    plays with; the defaults when the user has no squad yet."""
+    row = (await db.execute(
+        select(PersonalSquad.style, PersonalSquad.formation)
+        .where(PersonalSquad.user_id == user_id, PersonalSquad.is_active.is_(True))
+    )).first()
+    if row is None:
+        return manager_tactics.DEFAULT_STYLE, manager_tactics.DEFAULT_FORMATION
+    return manager_tactics.clean_style(row[0]), row[1]
+
+
+async def tactics_view(db: AsyncSession, user: User) -> dict:
+    """The tactics rules and the next tournament opponent's style, so the
+    player can pick the style that beats it (Card Arena style)."""
+    from app.models.enums import TournamentStatus
+    from app.models.player_tournament import PlayerTournament, PlayerTournamentParticipant
+    from app.services.player_tournament_fixture_service import TOTAL_ROUNDS, generate_fixtures
+
+    config = await get_config(db)
+    view = {"rules": manager_tactics.rules_out(config, "ptour"), "next": None}
+    tournament = (await db.execute(
+        select(PlayerTournament)
+        .join(PlayerTournamentParticipant, PlayerTournamentParticipant.tournament_id == PlayerTournament.id)
+        .where(PlayerTournamentParticipant.user_id == user.id, PlayerTournament.status == TournamentStatus.active,
+               PlayerTournament.rounds_simulated < TOTAL_ROUNDS)
+        .order_by(PlayerTournament.id.desc()).limit(1)
+    )).scalar_one_or_none()
+    if tournament is None:
+        return view
+    user_ids = list((await db.execute(
+        select(PlayerTournamentParticipant.user_id).where(PlayerTournamentParticipant.tournament_id == tournament.id)
+        .order_by(PlayerTournamentParticipant.id)
+    )).scalars().all())
+    try:
+        fixtures = generate_fixtures(user_ids)
+    except ValueError:
+        return view
+    round_number = tournament.rounds_simulated + 1
+    opponent_id = next(
+        (b if a == user.id else a for r, a, b in fixtures if r == round_number and user.id in (a, b)), None,
+    )
+    if opponent_id is None:
+        return view
+    opponent = await db.get(User, opponent_id)
+    style, formation = await active_tactics(db, user.id)
+    their_style, their_formation = await active_tactics(db, opponent_id)
+    view["next"] = {
+        "round": round_number, "opponent": opponent.full_display_name() if opponent else "Соперник",
+        "style": their_style, "formation": their_formation,
+        "edge": manager_tactics.edge(style, their_style),
+        "mods": manager_tactics.modifiers(style, formation, their_style, config, "ptour"),
+    }
+    return view

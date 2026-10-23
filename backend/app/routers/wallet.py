@@ -17,8 +17,8 @@ router = APIRouter(prefix="/wallet", tags=["wallet"])
 
 
 @router.get("/coin-packages", response_model=list[CoinPackageOut])
-async def get_coin_packages(db: AsyncSession = Depends(get_db)):
-    return await stars_payment_service.list_active_coin_packages(db)
+async def get_coin_packages(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await stars_payment_service.list_active_coin_packages(db, user)
 
 
 @router.post("/stars-invoice", response_model=StarsInvoiceCreateOut)
