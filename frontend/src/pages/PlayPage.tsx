@@ -35,14 +35,11 @@ import {
 } from "@/components/icons";
 import { Skeleton } from "@/components/common/Skeleton";
 import { hapticSelection } from "@/lib/telegram";
+import { artOf } from "@/lib/gameArt";
 import { formatClock } from "@/lib/today";
 import { usePersistentState } from "@/lib/usePersistentState";
 import { useAuthStore } from "@/store/authStore";
 import type { GameLimits } from "@/types";
-
-/** Illustrated game art (192 px webp); games without one keep their tinted icon. */
-const GAME_ART = import.meta.glob<string>("@/assets/games/*.webp", { eager: true, import: "default" });
-const artOf = (key: string): string | undefined => GAME_ART[`/src/assets/games/${key}.webp`];
 
 function playerTournamentStatusLabel(status?: string, queuePosition?: number | null): string {
   switch (status) {

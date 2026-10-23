@@ -22,6 +22,7 @@ import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconBoxingGlove, IconChat, IconCoin, IconHelp, IconPlay, IconTrophy, IconUsers } from "@/components/icons";
 import { ACTION_META, ACTION_ORDER } from "@/components/mordoboi/mordoboiMeta";
+import GameHero from "@/components/common/GameHero";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
 import { RARITY_GRADIENTS } from "@/lib/rarity";
@@ -115,19 +116,15 @@ export default function MordoboiPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="flex items-center gap-2 font-display text-xl font-bold text-ink-chalk">
-          <IconBoxingGlove size={20} className="text-yellow-400" />
-          Мордобой
-        </h1>
+      <GameHero game="mordoboi" title="Мордобой">
         <button
           onClick={() => setSheet("rules")}
           aria-label="Правила"
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-ink-mist active:scale-95"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-black/35 text-ink-chalk active:scale-95"
         >
           <IconHelp size={15} />
         </button>
-      </div>
+      </GameHero>
 
       {disabled && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">Режим сейчас выключен — новые бои недоступны.</p>}
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}

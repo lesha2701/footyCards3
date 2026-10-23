@@ -6,6 +6,7 @@ import PitchCardTile from "@/components/cards/PitchCardTile";
 import MatchSkillNotes from "@/components/cards/MatchSkillNotes";
 import MatchPathSummary from "@/components/path/MatchPathSummary";
 import MatchSkillSummary from "@/components/cards/MatchSkillSummary";
+import GameHero from "@/components/common/GameHero";
 import { skillByCode, skillInactiveReason, useSkillCatalog } from "@/lib/cardSkills";
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
 import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPickerModal";
@@ -325,7 +326,7 @@ export default function ArenaPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="font-display text-xl font-bold text-ink-chalk">Card Arena</h1>
+      <GameHero game="arena" title="Card Arena" />
 
       {stats?.division && <ArenaDivisionCard division={stats.division} rank={stats.arena_rank} />}
 

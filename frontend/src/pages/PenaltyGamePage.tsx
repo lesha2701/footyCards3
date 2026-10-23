@@ -8,6 +8,7 @@ import { claimPenaltyReward, forfeitPenalty, kickPenalty, startPenalty } from "@
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import { IconCoin, IconFlagCheckered, IconPlay, IconTrophy, IconUsers } from "@/components/icons";
 import PenaltyGoalScene, { type PenaltyGoalKick } from "@/components/penalty/PenaltyGoalScene";
+import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -164,7 +165,7 @@ export default function PenaltyGamePage() {
   if (phase === "pick_card" && !choosingBot) {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="font-display text-xl font-bold text-ink-chalk">Пенальти</h1>
+        <GameHero game="penalty" title="Пенальти" />
         <p className="text-sm text-ink-mist">Выбери, с кем играть.</p>
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
         {flags?.matchmaking_enabled !== false && (
@@ -210,7 +211,7 @@ export default function PenaltyGamePage() {
   if (phase === "pick_card") {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="font-display text-xl font-bold text-ink-chalk">Пенальти</h1>
+        <GameHero game="penalty" title="Пенальти" />
         <p className="text-sm text-ink-mist">
           Выбери игрока для серии пенальти. Чем выше его рейтинг, тем меньше шанс промазать по воротам.
         </p>

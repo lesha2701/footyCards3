@@ -35,6 +35,7 @@ import Emblem, { KitShirt } from "@/components/manager/Emblem";
 import ManagerPitch from "@/components/manager/ManagerPitch";
 import StyleTab from "@/components/manager/StyleTab";
 import TacticsPanel from "@/components/manager/TacticsPanel";
+import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 import { themeClass } from "@/lib/managerLook";
 import { eur, trend } from "@/lib/managerMoney";
@@ -98,7 +99,7 @@ export default function ManagerPage() {
   const props = { view: data, onView, onError };
   return (
     <div className="flex flex-col gap-4" data-testid="manager-page">
-      <h1 className="font-display text-xl font-bold text-ink-chalk">Менеджер</h1>
+      <GameHero game="manager" title="Менеджер" />
       <SeasonBanner view={data} />
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
       <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1">

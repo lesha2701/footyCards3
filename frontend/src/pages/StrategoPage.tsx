@@ -20,6 +20,7 @@ import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChat, IconCoin, IconFlag, IconHelp, IconPlay, IconShirt, IconTrophy, IconUsers } from "@/components/icons";
 import StrategoRulesModal from "@/components/stratego/StrategoRulesModal";
+import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 import { openTelegramLink } from "@/lib/telegram";
 import type { StrategoMatch, UserPublic } from "@/types";
@@ -108,25 +109,24 @@ export default function StrategoPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-xl font-bold text-ink-chalk">Стратего</h1>
-        <div className="flex items-center gap-2">
+      <GameHero game="stratego" title="Стратего">
+        <div className="flex flex-col items-end gap-1.5">
           <button
             onClick={() => setRulesOpen(true)}
             aria-label="Правила"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-ink-mist active:scale-95"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-black/35 text-ink-chalk active:scale-95"
           >
             <IconHelp size={15} />
           </button>
           <button
             onClick={() => navigate("/play/stratego/squad")}
-            className="flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-accent-lime active:scale-95"
+            className="flex items-center gap-1.5 rounded-full bg-black/35 px-3 py-1.5 text-xs font-semibold text-accent-lime active:scale-95"
           >
             <IconShirt size={14} />
             Подготовка
           </button>
         </div>
-      </div>
+      </GameHero>
 
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
       {squad && !squad.is_complete && (

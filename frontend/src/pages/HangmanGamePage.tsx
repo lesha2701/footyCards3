@@ -6,6 +6,7 @@ import { claimHangmanReward, guessHangmanLetter, startHangman } from "@/api/game
 import { IconCoin, IconFlag, IconTrophy } from "@/components/icons";
 import PrimaryActionButton from "@/components/common/PrimaryActionButton";
 import MuseDateBanner from "@/components/muses/MuseDateBanner";
+import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 import { useMuseDate } from "@/lib/museDate";
 import { haptic, hapticNotify } from "@/lib/telegram";
@@ -97,7 +98,7 @@ export default function HangmanGamePage() {
   if (phase === "idle") {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="font-display text-xl font-bold text-ink-chalk">Футбольные буквы</h1>
+        <GameHero game="hangman" title="Футбольные буквы" />
         <MuseDateBanner />
         <p className="text-sm text-ink-mist">
           Угадай загаданного футболиста или футбольное понятие по буквам. Ошибёшься 6 раз — судья покажет красную,

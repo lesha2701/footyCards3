@@ -5,6 +5,7 @@ import { useState } from "react";
 import { applyToPlayerTournament, fetchPlayerTournamentCurrent } from "@/api/personalTournament";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronRight, IconClock, IconFlagCheckered, IconStar, IconTrophy, IconUsers } from "@/components/icons";
+import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 
 export default function PlayerTournamentPage() {
@@ -30,10 +31,7 @@ export default function PlayerTournamentPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="flex items-center gap-2 font-display text-xl font-bold text-ink-chalk">
-        <IconFlagCheckered size={20} className="text-accent-lime" />
-        Личный турнир
-      </h1>
+      <GameHero game="player-tournament" title="Личный турнир" />
       <p className="text-xs text-ink-mist">
         16 игроков, 30 туров (2 круга) — свой состав, своя тактика. Тур симулируется 3 раза в день.
       </p>

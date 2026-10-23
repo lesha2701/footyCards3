@@ -17,6 +17,7 @@ import {
   type IconProps,
 } from "@/components/icons";
 import MuseDateBanner from "@/components/muses/MuseDateBanner";
+import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 import { useMuseDate } from "@/lib/museDate";
 import { haptic, hapticNotify } from "@/lib/telegram";
@@ -158,7 +159,7 @@ export default function MemoryGamePage() {
   if (phase === "idle") {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="font-display text-xl font-bold text-ink-chalk">Memory Sequence</h1>
+        <GameHero game="memory" title="Memory Sequence" />
         <MuseDateBanner />
         <p className="text-sm text-ink-mist">
           Запомни последовательность символов и повтори её. С каждым уровнем последовательность становится длиннее.

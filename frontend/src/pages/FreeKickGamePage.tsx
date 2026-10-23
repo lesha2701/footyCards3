@@ -7,6 +7,7 @@ import { fetchCollection } from "@/api/collection";
 import { claimFreeKickReward, kickFreeKick, startFreeKick } from "@/api/games";
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import { IconCheck, IconClose, IconCoin, IconFlagCheckered, IconTarget, type IconProps } from "@/components/icons";
+import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -106,7 +107,7 @@ export default function FreeKickGamePage() {
   if (phase === "pick_card") {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="font-display text-xl font-bold text-ink-chalk">Штрафной удар</h1>
+        <GameHero game="free-kick" title="Штрафной удар" />
         <p className="text-sm text-ink-mist">
           Останови шкалу в нужный момент. Чем выше рейтинг выбранного игрока, тем шире зона точного удара.
         </p>

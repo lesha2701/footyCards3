@@ -4,9 +4,9 @@ import { useNavigate } from "react-router-dom";
 
 import { autoKontraSquad, fetchKontraHub, fetchKontraSquad, saveKontraSquad } from "@/api/kontra";
 import { Skeleton } from "@/components/common/Skeleton";
-import { IconCounter } from "@/components/icons";
 import FighterCard from "@/components/kontra/FighterCard";
 import { ROLE_FILTERS, TIER_LABELS } from "@/components/kontra/kontraMeta";
+import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 import { hapticSelection } from "@/lib/telegram";
 import type { KontraFighter, KontraSquad } from "@/types";
@@ -67,13 +67,9 @@ export default function KontraPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h1 className="flex items-center gap-2 font-display text-xl font-bold text-ink-chalk">
-          <IconCounter size={20} className="text-green-400" />
-          Контратака
-        </h1>
-        <span className="font-mono text-sm font-bold text-ink-chalk">⚡ {squad.power.toLocaleString("ru-RU")}</span>
-      </div>
+      <GameHero game="kontra" title="Контратака">
+        <span className="rounded-full bg-black/35 px-2.5 py-1 font-mono text-sm font-bold text-ink-chalk">⚡ {squad.power.toLocaleString("ru-RU")}</span>
+      </GameHero>
       {hub && !hub.enabled && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">Режим сейчас выключен.</p>}
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
 
