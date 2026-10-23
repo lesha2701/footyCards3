@@ -40,6 +40,7 @@ class PackOut(BaseModel):
     coach_drop_chance: float
     stadium_drop_chance: float
     skill_token_drop_chance: float = 0.0
+    muse_drop_chance: float = 0.0
     # "default" | "path" — see Pack.player_pool.
     player_pool: str = "default"
     user_purchase_count: int = 0
@@ -80,6 +81,7 @@ class PackCreate(BaseModel):
     coach_drop_chance: float = Field(default=0.0, ge=0, le=1)
     stadium_drop_chance: float = Field(default=0.0, ge=0, le=1)
     skill_token_drop_chance: float = Field(default=0.0, ge=0, le=1)
+    muse_drop_chance: float = Field(default=0.0, ge=0, le=1)
     player_pool: Literal["default", "path"] = "default"
 
 
@@ -101,6 +103,7 @@ class PackUpdate(BaseModel):
     coach_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
     stadium_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
     skill_token_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
+    muse_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
     player_pool: Optional[Literal["default", "path"]] = None
 
 
@@ -153,6 +156,14 @@ class OpenedSkillTokenOut(BaseModel):
     quantity: int
 
 
+class OpenedMuseOut(BaseModel):
+    """One pack slot that dropped a «Муза» (muse_service.muse_out)."""
+
+    muse: dict
+    is_new: bool
+    copies: int
+
+
 class CollectionRewardGrantOut(BaseModel):
     collection_id: int
     collection_name: str
@@ -167,6 +178,7 @@ class PackOpenResult(BaseModel):
     coach_cards: list[OpenedCoachCardOut] = []
     stadium_cards: list[OpenedStadiumCardOut] = []
     skill_tokens: list[OpenedSkillTokenOut] = []
+    muses: list[OpenedMuseOut] = []
     new_balance: int
     referral_bonus_coins: Optional[int] = None
     collection_rewards: list[CollectionRewardGrantOut] = []
@@ -205,6 +217,7 @@ class PackBulkOpenResult(BaseModel):
     coach_cards: list[OpenedCoachCardOut] = []
     stadium_cards: list[OpenedStadiumCardOut] = []
     skill_tokens: list[OpenedSkillTokenOut] = []
+    muses: list[OpenedMuseOut] = []
     new_balance: int
     total_price_paid: int
     referral_bonus_coins: Optional[int] = None

@@ -59,4 +59,8 @@ export const TX_TYPE_LABELS: Record<string, string> = {
   manager_club_found: "Менеджер: основание клуба",
   manager_salary: "Менеджер: зарплата",
   manager_reward: "Менеджер: призовые",
+  muse_daily_coins: "Муза: монеты дня",
+  muse_accessory_purchase: "Подарок музе",
+  muse_spare_sale: "Муза: лишняя копия",
+  muse_date_reward: "Свидание с музой",
 };

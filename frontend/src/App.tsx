@@ -36,6 +36,7 @@ const AdminTrophiesPage = lazy(() => import("@/admin/pages/AdminTrophiesPage"));
 const AdminLeaguesPage = lazy(() => import("@/admin/pages/AdminLeaguesPage"));
 const AdminGiftsPage = lazy(() => import("@/admin/pages/AdminGiftsPage"));
 const AdminLifestylePage = lazy(() => import("@/admin/pages/AdminLifestylePage"));
+const AdminMusesPage = lazy(() => import("@/admin/pages/AdminMusesPage"));
 const AdminDailyRewardsPage = lazy(() => import("@/admin/pages/AdminDailyRewardsPage"));
 const AdminWheelPage = lazy(() => import("@/admin/pages/AdminWheelPage"));
 const AdminGamesPage = lazy(() => import("@/admin/pages/AdminGamesPage"));
@@ -58,6 +59,7 @@ const SeasonPassPage = lazy(() => import("@/pages/SeasonPassPage"));
 const StylePage = lazy(() => import("@/pages/StylePage"));
 const ArtifactsPage = lazy(() => import("@/pages/ArtifactsPage"));
 const EquipmentPage = lazy(() => import("@/pages/EquipmentPage"));
+const MusesPage = lazy(() => import("@/pages/MusesPage"));
 const AdminMonetizationPage = lazy(() => import("@/admin/pages/AdminMonetizationPage"));
 const AdminMatchDayPage = lazy(() => import("@/admin/pages/AdminMatchDayPage"));
 const BlackjackPage = lazy(() => import("@/pages/BlackjackPage"));
@@ -245,6 +247,7 @@ export default function App() {
         <Route path="leagues" element={<AdminLeaguesPage />} />
         <Route path="gifts" element={<AdminGiftsPage />} />
         <Route path="lifestyle" element={<AdminLifestylePage />} />
+        <Route path="muses" element={<AdminMusesPage />} />
         <Route path="wheel" element={<AdminWheelPage />} />
         <Route path="daily-rewards" element={<AdminDailyRewardsPage />} />
         <Route path="games" element={<AdminGamesPage />} />
@@ -353,6 +356,7 @@ export default function App() {
         <Route path="/style" element={<StylePage />} />
         <Route path="/artifacts" element={<ArtifactsPage />} />
         <Route path="/equipment" element={<EquipmentPage />} />
+        <Route path="/muses" element={<MusesPage />} />
         <Route path="/upgrade" element={<UpgradePage />} />
         <Route path="/bingo" element={<BingoPage />} />
         <Route path="/ranking" element={<RankingPage />} />

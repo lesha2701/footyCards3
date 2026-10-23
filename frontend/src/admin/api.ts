@@ -1411,3 +1411,38 @@ export async function grantAdminEquipment(itemId: number, userId: number): Promi
   const { data } = await api.post(`/admin/equipment/items/${itemId}/grant`, { user_id: userId });
   return data;
 }
+
+// --- «Музы» (backend routers/admin_muses.py) ---
+export type AdminMuseKind = "collections" | "muses" | "accessories";
+const MUSE_FIELDS: Record<AdminMuseKind, readonly string[]> = {
+  collections: ["name", "description", "is_active", "sort_order"],
+  muses: [
+    "name", "title", "description", "icon", "rarity", "collection_id", "effect", "effect_value", "drop_weight",
+    "is_active", "sort_order",
+  ],
+  accessories: [
+    "name", "description", "icon", "kind", "rarity", "boost_pct", "coins_price", "stars_price", "is_active", "sort_order",
+  ],
+};
+
+export async function fetchAdminMuses(): Promise<import("@/admin/types").AdminMuseCatalog> {
+  const { data } = await api.get("/admin/muses");
+  return data;
+}
+export async function saveAdminMuseRow<T extends { id?: number }>(kind: AdminMuseKind, row: T): Promise<T> {
+  const body = pick(row, MUSE_FIELDS[kind]);
+  const { data } = row.id ? await api.put(`/admin/muses/${kind}/${row.id}`, body) : await api.post(`/admin/muses/${kind}`, body);
+  return data;
+}
+export async function uploadAdminMuseImage(kind: AdminMuseKind, id: number, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post(`/admin/muses/${kind}/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+export async function grantAdminMuse(museId: number, userId: number): Promise<{ user_muse_id: number; copies: number }> {
+  const { data } = await api.post(`/admin/muses/muses/${museId}/grant`, { user_id: userId });
+  return data;
+}

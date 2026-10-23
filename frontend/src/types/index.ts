@@ -1,4 +1,5 @@
 import type { ManagerStyle } from "@/api/manager";
+import type { Muse } from "@/api/muses";
 export type Rarity = "common" | "rare" | "epic" | "legendary" | "diamond";
 export type Position = "GK" | "LB" | "CB" | "RB" | "LWB" | "RWB" | "CDM" | "CM" | "CAM" | "LM" | "RM" | "LW" | "RW" | "ST";
 export type TradeStatus = "pending" | "accepted" | "rejected" | "cancelled" | "expired";
@@ -279,6 +280,8 @@ export interface Pack {
   coach_drop_chance: number;
   stadium_drop_chance: number;
   skill_token_drop_chance?: number;
+  /** Per-slot chance of a «Муза» instead of a footballer (the «Музы» pack: 0.1). */
+  muse_drop_chance?: number;
   /** "path" = the «Академия» pack (diamond slots drop only path cards). */
   player_pool?: string;
   /** Why the pack cannot be bought right now (e.g. no «Академия» players yet). */
@@ -340,9 +343,18 @@ export interface PackOpenResult {
   stadium_cards: OpenedStadiumCard[];
   /** Pack slots that rolled card-skill tokens instead of a card. */
   skill_tokens?: { skill_code: string; quantity: number }[];
+  /** Pack slots that dropped a «Муза» instead of a card. */
+  muses?: OpenedMuse[];
   new_balance: number;
   referral_bonus_coins: number | null;
   collection_rewards: CollectionRewardGrant[];
+}
+
+/** A pack slot that dropped a «Муза» (see api/muses.ts Muse). */
+export interface OpenedMuse {
+  muse: Muse;
+  is_new: boolean;
+  copies: number;
 }
 
 export interface PackBulkOpenResult {
@@ -354,6 +366,8 @@ export interface PackBulkOpenResult {
   stadium_cards: OpenedStadiumCard[];
   /** Pack slots that rolled card-skill tokens instead of a card. */
   skill_tokens?: { skill_code: string; quantity: number }[];
+  /** Pack slots that dropped a «Муза» instead of a card. */
+  muses?: OpenedMuse[];
   new_balance: number;
   total_price_paid: number;
   referral_bonus_coins: number | null;

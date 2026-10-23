@@ -5,7 +5,9 @@ import { useNavigate } from "react-router-dom";
 import { claimHangmanReward, guessHangmanLetter, startHangman } from "@/api/games";
 import { IconCoin, IconFlag, IconTrophy } from "@/components/icons";
 import PrimaryActionButton from "@/components/common/PrimaryActionButton";
+import MuseDateBanner from "@/components/muses/MuseDateBanner";
 import { formatGameError } from "@/lib/errors";
+import { useMuseDate } from "@/lib/museDate";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { HangmanGuessResult } from "@/types";
@@ -38,8 +40,9 @@ export default function HangmanGamePage() {
   const [claimResult, setClaimResult] = useState<{ reward_coins: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const museDate = useMuseDate();
   const startMutation = useMutation({
-    mutationFn: startHangman,
+    mutationFn: () => startHangman(museDate.active),
     onSuccess: (data) => {
       setSessionId(data.session_id);
       setCategory(data.category);
@@ -61,6 +64,7 @@ export default function HangmanGamePage() {
       updateBalance(data.new_balance);
       hapticNotify("success");
       setClaimResult(data);
+      if (museDate.active) museDate.done();
     },
   });
 
@@ -94,6 +98,7 @@ export default function HangmanGamePage() {
     return (
       <div className="flex flex-col gap-5">
         <h1 className="font-display text-xl font-bold text-ink-chalk">Футбольные буквы</h1>
+        <MuseDateBanner />
         <p className="text-sm text-ink-mist">
           Угадай загаданного футболиста или футбольное понятие по буквам. Ошибёшься 6 раз — судья покажет красную,
           и раунд проигран.
@@ -152,6 +157,7 @@ export default function HangmanGamePage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <MuseDateBanner />
       <p className="text-center text-xs font-semibold text-ink-mist">{CATEGORY_LABEL[category] ?? "Загадано слово"}</p>
 
       <RefereeCards wrongCount={wrongLetters.length} maxWrong={maxWrong} />

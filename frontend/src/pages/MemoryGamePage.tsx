@@ -16,7 +16,9 @@ import {
   IconTrophy,
   type IconProps,
 } from "@/components/icons";
+import MuseDateBanner from "@/components/muses/MuseDateBanner";
 import { formatGameError } from "@/lib/errors";
+import { useMuseDate } from "@/lib/museDate";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { MemoryStart } from "@/types";
@@ -65,8 +67,9 @@ export default function MemoryGamePage() {
 
   const { data: leaderboard } = useQuery({ queryKey: ["memory-leaderboard"], queryFn: fetchMemoryLeaderboard });
 
+  const museDate = useMuseDate();
   const startMutation = useMutation({
-    mutationFn: startMemoryGame,
+    mutationFn: () => startMemoryGame(museDate.active),
     onSuccess: (data) => {
       setSession(data);
       setScore(0);
@@ -84,6 +87,7 @@ export default function MemoryGamePage() {
       updateBalance(data.new_balance);
       setClaimResult(data);
       queryClient.invalidateQueries({ queryKey: ["memory-leaderboard"] });
+      if (museDate.active) museDate.done();
     },
   });
 
@@ -155,6 +159,7 @@ export default function MemoryGamePage() {
     return (
       <div className="flex flex-col gap-5">
         <h1 className="font-display text-xl font-bold text-ink-chalk">Memory Sequence</h1>
+        <MuseDateBanner />
         <p className="text-sm text-ink-mist">
           Запомни последовательность символов и повтори её. С каждым уровнем последовательность становится длиннее.
         </p>
@@ -222,6 +227,7 @@ export default function MemoryGamePage() {
 
   return (
     <div className="flex flex-col items-center gap-6 py-6">
+      <MuseDateBanner />
       <p className="font-mono text-sm text-ink-mist">Раунд {session?.round_number} · Очки: {score}</p>
 
       <div className="flex min-h-[64px] flex-wrap items-center justify-center gap-2">

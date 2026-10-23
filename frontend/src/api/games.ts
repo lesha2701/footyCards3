@@ -38,8 +38,9 @@ export async function fetchGameLimits(): Promise<GameLimits> {
   return data;
 }
 
-export async function startMemoryGame(): Promise<MemoryStart> {
-  const { data } = await api.post<MemoryStart>("/games/memory/start");
+/** `museDate` = today's «Свидание с музой» (an extra attempt, see api/muses). */
+export async function startMemoryGame(museDate = false): Promise<MemoryStart> {
+  const { data } = await api.post<MemoryStart>("/games/memory/start", undefined, { params: museDate ? { muse_date: true } : undefined });
   return data;
 }
 
@@ -131,8 +132,8 @@ export async function claimFreeKickReward(sessionId: number): Promise<FreeKickCl
 
 // --- Football Hangman ---
 
-export async function startHangman(): Promise<HangmanStartResult> {
-  const { data } = await api.post<HangmanStartResult>("/games/hangman/start");
+export async function startHangman(museDate = false): Promise<HangmanStartResult> {
+  const { data } = await api.post<HangmanStartResult>("/games/hangman/start", undefined, { params: museDate ? { muse_date: true } : undefined });
   return data;
 }
 
@@ -148,8 +149,8 @@ export async function claimHangmanReward(sessionId: number): Promise<HangmanClai
 
 // --- Найди пару ---
 
-export async function startPairs(): Promise<PairsStartResult> {
-  const { data } = await api.post<PairsStartResult>("/games/pairs/start");
+export async function startPairs(museDate = false): Promise<PairsStartResult> {
+  const { data } = await api.post<PairsStartResult>("/games/pairs/start", undefined, { params: museDate ? { muse_date: true } : undefined });
   return data;
 }
 

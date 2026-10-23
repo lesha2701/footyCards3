@@ -7,10 +7,14 @@ import { createStarterOfferInvoice, fetchStarterOffer, markStarterOfferSeen } fr
 import { IconClose, IconGift } from "@/components/icons";
 import { RewardBundleChips } from "@/components/rewards/RewardBundleView";
 import { formatGameError } from "@/lib/errors";
+import { useHiddenOffer } from "@/lib/hiddenOffers";
 import { formatCountdown } from "@/lib/rewards";
 import { payShopWithStars } from "@/lib/shopStars";
 import { hapticNotify } from "@/lib/telegram";
 import type { StarterOffer } from "@/types";
+
+// lib/hiddenOffers id: hiding it on the home screen is remembered under it.
+const STARTER_OFFER_ID = "starter_offer";
 
 function useCountdown(iso: string | null): number {
   const [now, setNow] = useState(() => Date.now());
@@ -67,16 +71,17 @@ export function StarterOfferModal() {
   const queryClient = useQueryClient();
   const { data: offer } = useQuery({ queryKey: ["starter-offer"], queryFn: fetchStarterOffer });
   const [open, setOpen] = useState(false);
+  const [hidden] = useHiddenOffer(STARTER_OFFER_ID);
   const { buy, error } = useStarterOfferPurchase(() => setOpen(false));
 
   useEffect(() => {
-    if (offer?.available && !offer.seen) {
+    if (offer?.available && !offer.seen && !hidden) {
       setOpen(true);
       markStarterOfferSeen()
         .then((data) => queryClient.setQueryData(["starter-offer"], data))
         .catch(() => undefined);
     }
-  }, [offer, queryClient]);
+  }, [offer, queryClient, hidden]);
 
   if (!open || !offer?.available) return null;
   return createPortal(
@@ -101,13 +106,26 @@ export function StarterOfferModal() {
   );
 }
 
-/** The banner (home + shop) with a countdown, while the offer lasts. */
-export function StarterOfferBanner() {
+/** The banner (home + shop) with a countdown, while the offer lasts.
+ * `hideable` (home): a cross hides it there for good (lib/hiddenOffers). */
+export function StarterOfferBanner({ hideable = false }: { hideable?: boolean }) {
   const { data: offer } = useQuery({ queryKey: ["starter-offer"], queryFn: fetchStarterOffer });
+  const [hidden, hide] = useHiddenOffer(STARTER_OFFER_ID);
   const { buy, error } = useStarterOfferPurchase();
-  if (!offer?.available) return null;
+  if (!offer?.available || (hideable && hidden)) return null;
   return (
-    <section className="rounded-2xl border border-sky-400/40 bg-gradient-to-br from-sky-500/20 to-bg-surface p-4">
+    <section className="relative rounded-2xl border border-sky-400/40 bg-gradient-to-br from-sky-500/20 to-bg-surface p-4">
+      {hideable && (
+        <button
+          type="button"
+          onClick={hide}
+          aria-label="Скрыть предложение"
+          title="Скрыть — оно останется в магазине"
+          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full text-ink-mist-dim active:scale-90"
+        >
+          <IconClose size={14} />
+        </button>
+      )}
       <p className="flex items-center gap-1.5 font-display text-base font-bold text-ink-chalk">
         <IconGift size={16} className="text-sky-300" /> Стартовый набор
       </p>

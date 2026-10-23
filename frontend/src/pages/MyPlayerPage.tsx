@@ -23,6 +23,7 @@ import { IconChevronRight, IconCoin, IconEdit, IconFlag, IconFlagCheckered, Icon
 import LevelUpModal from "@/components/myPlayer/LevelUpModal";
 import LifestyleTab from "@/components/myPlayer/LifestyleTab";
 import MyPlayerArtifacts from "@/components/artifacts/MyPlayerArtifacts";
+import MyPlayerMuse from "@/components/muses/MyPlayerMuse";
 import MyPlayerCard from "@/components/myPlayer/MyPlayerCard";
 import MyPlayerDuels from "@/components/myPlayer/MyPlayerDuels";
 import MyPlayerLeaderboard from "@/components/myPlayer/MyPlayerLeaderboard";
@@ -192,6 +193,7 @@ function Overview({
         ))}
       </div>
 
+      {tab === "property" && <MyPlayerMuse />}
       {tab === "property" && <MyPlayerArtifacts />}
       {tab === "property" && <LifestyleTab />}
       {tab === "style" && (

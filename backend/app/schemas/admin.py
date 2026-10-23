@@ -771,6 +771,17 @@ class GameConfigOut(BaseModel):
     equipment_max_pp: int = 8
     equipment_max_chemistry: int = 1
     equipment_max_talisman_pct: int = 15
+    muses_enabled: bool = False
+    muse_max_stat: int = 6
+    muse_max_pp: int = 12
+    muse_max_xp_pct: int = 30
+    muse_max_daily_coins: int = 1000
+    muse_max_accessory_pct: int = 100
+    muse_spare_coins: dict[str, int] = {}
+    muse_date_games: list[str] = []
+    muse_date_coins: int = 150
+    muse_date_required: bool = True
+    muse_inspiration_hours: int = 36
     pity_packs: int = 0
     bulk10_discount_pct: int = 0
     first_coin_purchase_bonus_pct: int = 0
@@ -877,6 +888,17 @@ class GameConfigUpdate(BaseModel):
     equipment_max_pp: Optional[int] = Field(default=None, ge=0, le=30)
     equipment_max_chemistry: Optional[int] = Field(default=None, ge=0, le=3)
     equipment_max_talisman_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    muses_enabled: Optional[bool] = None
+    muse_max_stat: Optional[int] = Field(default=None, ge=0, le=20)
+    muse_max_pp: Optional[int] = Field(default=None, ge=0, le=40)
+    muse_max_xp_pct: Optional[int] = Field(default=None, ge=0, le=200)
+    muse_max_daily_coins: Optional[int] = Field(default=None, ge=0, le=100_000)
+    muse_max_accessory_pct: Optional[int] = Field(default=None, ge=0, le=500)
+    muse_spare_coins: Optional[dict[str, int]] = None
+    muse_date_games: Optional[list[Literal["memory", "pairs", "hangman"]]] = Field(default=None, min_length=1, max_length=3)
+    muse_date_coins: Optional[int] = Field(default=None, ge=0, le=100_000)
+    muse_date_required: Optional[bool] = None
+    muse_inspiration_hours: Optional[int] = Field(default=None, ge=1, le=240)
 
     @field_validator("arena_division_min_points")
     @classmethod

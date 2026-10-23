@@ -290,13 +290,23 @@ def add_xp(
     return granted
 
 
+async def boost_effects(db: AsyncSession, user_id: int, config=None) -> dict[str, int]:
+    """Worn «Артефакты» for «Мой игрок» plus the active «Муза», summed
+    (each capped on its own side)."""
+    from app.services import artifact_service, muse_service
+
+    out = dict(await artifact_service.effects_of(db, user_id, "my_player", config))
+    for effect, value in (await muse_service.effects_of(db, user_id, config)).items():
+        out[effect] = out.get(effect, 0) + value
+    return out
+
+
 async def xp_bonus_pct(db: AsyncSession, user_id: int) -> int:
-    """XP bonus from the player's «Имущество» and worn «Артефакты»."""
-    from app.services import artifact_service
+    """XP bonus from the player's «Имущество», worn «Артефакты» and the active «Муза»."""
     from app.services.lifestyle_service import effects_of
 
     return (await effects_of(db, user_id)).get("xp_bonus_pct", 0) + (
-        await artifact_service.effects_of(db, user_id)
+        await boost_effects(db, user_id)
     ).get("xp_bonus_pct", 0)
 
 
@@ -341,11 +351,10 @@ def fatigue_penalty(freshness: int, config) -> int:
 
 
 async def regen_bonus(db: AsyncSession, user_id: int) -> int:
-    from app.services import artifact_service
     from app.services.lifestyle_service import effects_of
 
     return (await effects_of(db, user_id)).get("freshness_regen", 0) + (
-        await artifact_service.effects_of(db, user_id)
+        await boost_effects(db, user_id)
     ).get("freshness_regen", 0)
 
 
@@ -471,12 +480,10 @@ def player_out(mp: MyPlayer, config) -> dict:
 
 async def match_stats(db: AsyncSession, mp: MyPlayer, config, now: Optional[datetime] = None) -> dict:
     """Rating / attack / defense as fielded in matches: minus the fatigue
-    penalty, plus the attack/defense of worn «Артефакты»."""
-    from app.services import artifact_service
-
+    penalty, plus the attack/defense of worn «Артефакты» and the active «Муза»."""
     out = player_out(mp, config)
     penalty = fatigue_penalty(freshness_now(mp, config, now, await regen_bonus(db, mp.user_id)), config)
-    artifacts = await artifact_service.effects_of(db, mp.user_id, "my_player", config)
+    artifacts = await boost_effects(db, mp.user_id, config)
     atk_bonus, def_bonus = artifacts.get("attack", 0), artifacts.get("defense", 0)
     rating_bonus = round((atk_bonus + def_bonus) / 2) + artifacts.get("match_rating", 0)
     return {
@@ -498,10 +505,8 @@ async def engine_card(db: AsyncSession, user_id: int, config=None) -> Optional[S
     mp = await get_my_player(db, user_id)
     if mp is None:
         return None
-    from app.services import artifact_service
-
     stats = await match_stats(db, mp, config)
-    artifacts = await artifact_service.effects_of(db, user_id, "my_player", config)
+    artifacts = await boost_effects(db, user_id, config)
     card_id = card_id_for(user_id)
     # A «skill_level» artifact plays the skill higher (3 = the top level).
     skill_level = min(3, (mp.skill_level or 1) + artifacts.get("skill_level", 0)) if mp.skill_code else 1
