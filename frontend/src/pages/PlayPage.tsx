@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchBlackjackStatus } from "@/api/blackjack";
@@ -124,6 +125,15 @@ export default function PlayPage() {
   const { data: weeklyCup } = useQuery({ queryKey: ["weekly-cup"], queryFn: fetchWeeklyCup, staleTime: 60_000 });
   const { data: matchDay } = useQuery({ queryKey: ["match-day"], queryFn: fetchMatchDay, staleTime: 60_000 });
 
+  // Flag-gated tiles remember whether they were on last time, so the grid
+  // doesn't jump when their (slower) status queries land.
+  const [flags, setFlags] = usePersistentState<Record<string, boolean>>("play.flags", {});
+  const live = { blackjack: blackjack?.enabled, mordoboi: mordoboi?.enabled, kontra: kontra?.enabled };
+  const on = (k: keyof typeof live) => live[k] ?? !!flags[k];
+  useEffect(() => {
+    const known = Object.fromEntries(Object.entries(live).filter(([, v]) => v !== undefined)) as Record<string, boolean>;
+    if (Object.entries(known).some(([k, v]) => flags[k] !== v)) setFlags({ ...flags, ...known });
+  }, [live.blackjack, live.mordoboi, live.kontra]); // eslint-disable-line react-hooks/exhaustive-deps
   const blackjackEntries = blackjack ? blackjack.free_remaining + blackjack.replay_entries + blackjack.paid_entries : 0;
   const games: GameDef[] = [
     // ⚡ quick
@@ -161,13 +171,13 @@ export default function PlayPage() {
       path: "/play/saboteur", Icon: IconParty, tint: "bg-pink-500", title: "Футбольный фанат", group: "quick", time: "2 мин",
       description: "Проберись сквозь стюардов к любимому игроку", limitKey: "saboteur",
     },
-    ...(blackjack?.enabled
+    ...(on("blackjack")
       ? [{
         path: "/play/blackjack", Icon: IconCard, tint: "bg-rose-500", title: "21: Добавленное время", group: "quick" as Group,
         time: "3 мин", bot: true,
         description: "Блэкджек против Тренера — победа крутит Золотое колесо",
-        stat: blackjack.active_match ? "Партия идёт" : `Попыток: ${blackjackEntries}`,
-        rightLabel: blackjack.free_remaining > 0 ? "бесплатно сегодня" : `⭐ ${blackjack.stars_cost}`,
+        stat: blackjack?.active_match ? "Партия идёт" : `Попыток: ${blackjackEntries}`,
+        rightLabel: !blackjack || blackjack.free_remaining > 0 ? "бесплатно сегодня" : `⭐ ${blackjack.stars_cost}`,
       }]
       : []),
     // 🧠 tactics
@@ -181,7 +191,7 @@ export default function PlayPage() {
       description: "Скрытая расстановка: найди и захвати Кубок соперника",
       stat: `Рейтинг ${strategoStats?.stratego_rating ?? 0}`, limitKey: "stratego",
     },
-    ...(mordoboi?.enabled
+    ...(on("mordoboi")
       ? [{
         path: "/play/mordoboi", Icon: IconBoxingGlove, tint: "bg-yellow-500", title: "Мордобой", group: "tactics" as Group,
         time: "5 мин", bot: true, friend: true,
@@ -189,12 +199,12 @@ export default function PlayPage() {
         stat: `Рейтинг ${mordoboiStats?.mordoboi_rating ?? 0}`, limitKey: "mordoboi" as LimitKey,
       }]
       : []),
-    ...(kontra?.enabled
+    ...(on("kontra")
       ? [{
         path: "/play/kontra", Icon: IconCounter, tint: "bg-green-600", title: "Контратака", group: "tactics" as Group,
         time: "5 мин", bot: true,
         description: "Отряд из 5 карт: арена и босс недели",
-        stat: `Арена ${kontra.rating}`, limitKey: "kontra" as LimitKey,
+        stat: `Арена ${kontra?.rating ?? "—"}`, limitKey: "kontra" as LimitKey,
       }]
       : []),
     {

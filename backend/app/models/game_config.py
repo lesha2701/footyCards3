@@ -808,7 +808,7 @@ class GameConfig(TimestampMixin, Base):
     mordoboi_live_move_seconds: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     mordoboi_max_auto_moves: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     # «Контратака» (kontra_service.py): arena + weekly boss. Off by default.
-    kontra_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    kontra_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     kontra_arena_reward_win: Mapped[int] = mapped_column(Integer, default=80, nullable=False)
     kontra_arena_reward_loss: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
     kontra_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)

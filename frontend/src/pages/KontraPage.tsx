@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { autoKontraSquad, fetchKontraHub, fetchKontraSquad, saveKontraSquad } from "@/api/kontra";
+import { Skeleton } from "@/components/common/Skeleton";
 import { IconCounter } from "@/components/icons";
 import FighterCard from "@/components/kontra/FighterCard";
 import { ROLE_FILTERS, TIER_LABELS } from "@/components/kontra/kontraMeta";
@@ -32,7 +33,16 @@ export default function KontraPage() {
   });
   const auto = useMutation({ mutationFn: autoKontraSquad, onSuccess: apply });
 
-  if (!squad) return null;
+  if (!squad) {
+    return (
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-7 w-40" />
+        <Skeleton className="h-40 w-full rounded-3xl" />
+        <div className="grid grid-cols-2 gap-2"><Skeleton className="h-16 rounded-2xl" /><Skeleton className="h-16 rounded-2xl" /></div>
+        <div className="grid grid-cols-4 gap-1">{Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="aspect-[3/4] rounded-2xl" />)}</div>
+      </div>
+    );
+  }
   const ids = squad.fighters.map((f) => f.card.card_id);
   const leader = squad.leader_id ?? ids[0];
   // Leader in the middle, the others stepping down on both sides.
@@ -47,6 +57,7 @@ export default function KontraPage() {
     hapticSelection();
     if (selected === null) {
       if (ids.length < squad.size) save.mutate({ cards: [...ids, cardId], leader });
+      else setError("Сначала нажми карту в отряде, которую хочешь заменить");
       return;
     }
     const next = ids.map((id) => (id === selected ? cardId : id));
@@ -74,7 +85,7 @@ export default function KontraPage() {
                 card={f.card}
                 leader={f.card.card_id === leader}
                 active={selected === f.card.card_id}
-                onTap={() => { hapticSelection(); setSelected(selected === f.card.card_id ? null : f.card.card_id); }}
+                onTap={() => { hapticSelection(); setError(null); setSelected(selected === f.card.card_id ? null : f.card.card_id); }}
               />
             </div>
           ))}
@@ -176,6 +187,7 @@ export default function KontraPage() {
             edge={i % 4 === 0 ? "left" : i % 4 === 3 ? "right" : undefined} />
         ))}
         {!pool.length && <p className="col-span-4 py-4 text-center text-xs text-ink-mist">Других карт этой роли нет</p>}
+        <p className="col-span-4 pt-1 text-center text-micro text-ink-mist-dim">Один футболист — одно место в отряде: копии и другие версии уже стоящего игрока скрыты</p>
       </div>
     </div>
   );

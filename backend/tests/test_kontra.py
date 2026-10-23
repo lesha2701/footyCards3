@@ -75,6 +75,24 @@ async def test_squad_auto_picks_five_with_a_keeper_and_can_be_set(client, db_ses
     assert (await client.put(f"{API}/squad", headers=headers, json={"cards": foreign[:1], "leader": foreign[0]})).status_code == 403
 
 
+async def test_one_footballer_takes_one_squad_place(client, db_session, bot_token):
+    headers, user_id, ids = await _player(client, db_session, bot_token, 960010)
+    first = (await client.get(f"{API}/squad", headers=headers)).json()["fighters"][0]["card"]
+    # A second copy of the top card and another version of the same footballer.
+    copy = await create_user_card(db_session, user_id, (await kontra_service._usable_cards(db_session, user_id))[0].player_id, CardSource.seed)
+    other = await create_player(db_session, rating=99, position=Position.ST, display_name=first["display_name"])
+    version = await create_user_card(db_session, user_id, other.id, CardSource.seed)
+    await db_session.commit()
+
+    squad = (await client.post(f"{API}/squad/auto", headers=headers)).json()
+    names = [f["card"]["display_name"] for f in squad["fighters"]]
+    assert len(names) == len(set(names)) == 5
+    assert first["display_name"] not in [o["card"]["display_name"] for o in squad["options"]]
+    for dup in (copy.id, version.id):
+        r = await client.put(f"{API}/squad", headers=headers, json={"cards": [ids[0], dup], "leader": ids[0]})
+        assert r.status_code == 409
+
+
 async def test_disabled_flag_blocks_battles(client, db_session, bot_token):
     headers, _, _ = await _player(client, db_session, bot_token, 960003)
     assert (await client.get(f"{API}/hub", headers=headers)).json()["enabled"] is False

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useRef, useState } from "react";
+import { type PointerEvent, useRef, useState } from "react";
 
 import { staticUrl } from "@/lib/api";
 import type { KontraCard } from "@/types";
@@ -9,7 +9,7 @@ import { TIER_LABELS, TIER_RING } from "./kontraMeta";
 const EFFECT_ICON: Record<string, string> = {
   stun: "💫", yellow: "🟨", slow: "🐢", shield: "🛡️", taunt: "📣", blind: "🚩", injury: "🩹", haste: "⚡",
 };
-const LONG_PRESS_MS = 380;
+const LONG_PRESS_MS = 450;
 
 export interface FighterCardProps {
   card: KontraCard | null;
@@ -44,8 +44,9 @@ export default function FighterCard({
   const pct = hp !== undefined && maxHp ? Math.max(0, Math.round((hp * 100) / maxHp)) : null;
   const low = pct !== null && pct < 30;
 
-  const start = () => {
+  const start = (e: PointerEvent) => {
     longPressed.current = false;
+    if (e.pointerType === "mouse") return;
     timer.current = setTimeout(() => { longPressed.current = true; setInfo(true); }, LONG_PRESS_MS);
   };
   const stop = () => {
@@ -60,7 +61,9 @@ export default function FighterCard({
         onPointerDown={start}
         onPointerUp={stop}
         onPointerLeave={() => { stop(); setInfo(false); }}
-        onMouseEnter={() => setInfo(true)}
+        // Hover info only for a real mouse: on iOS a hover-triggered change
+        // eats the tap, so the card could never be picked.
+        onPointerEnter={(e) => { if (e.pointerType === "mouse") setInfo(true); }}
         onContextMenu={(e) => e.preventDefault()}
         onClick={() => {
           if (longPressed.current) { longPressed.current = false; setInfo(false); return; }

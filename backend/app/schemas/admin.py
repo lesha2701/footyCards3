@@ -583,7 +583,7 @@ class GameConfigOut(BaseModel):
     mordoboi_legend_reward: int = 150
     club_ring_win_points: int = 30
     club_ring_member_cap: int = 300
-    kontra_enabled: bool = False
+    kontra_enabled: bool = True
     kontra_arena_reward_win: int = 80
     kontra_arena_reward_loss: int = 20
     kontra_daily_limit: int = 10

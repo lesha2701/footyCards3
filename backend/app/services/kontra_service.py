@@ -54,6 +54,7 @@ from app.services.player_stats_service import card_rating_bonus, effective_card_
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 SQUAD_SIZE = 5
+OPTIONS_PER_ROLE = 40
 RELATED = "kontra_battle"
 EVENTS_ON_READ = 40
 CHEMISTRY_PCT = {3: 4, 4: 7, 5: 10}
@@ -163,8 +164,26 @@ async def _gear_by_card(db: AsyncSession, user_id: int) -> dict[int, list[Kontra
     return out
 
 
+def _who(card) -> str:
+    """The footballer behind a card — copies and other versions (gold,
+    legendary…) of one player share it."""
+    return "me" if getattr(card, "is_my_player", False) else card.player.display_name.strip().casefold()
+
+
+def _best_copies(cards: list) -> list:
+    """One card per footballer — the strongest copy (cards come sorted)."""
+    seen: set = set()
+    out = []
+    for c in cards:
+        if _who(c) not in seen:
+            seen.add(_who(c))
+            out.append(c)
+    return out
+
+
 def _auto_pick(cards: list) -> list:
-    """Strongest five, with a goalkeeper when there is one."""
+    """Strongest five different footballers, with a goalkeeper when there is one."""
+    cards = _best_copies(cards)
     picked = cards[:SQUAD_SIZE]
     if not any(_position(c) == "GK" for c in picked):
         keeper = next((c for c in cards if _position(c) == "GK"), None)
@@ -179,7 +198,7 @@ async def _squad_cards(db: AsyncSession, user: User) -> tuple[list, Optional[int
     cards = await _usable_cards(db, user.id)
     by_id = {c.id: c for c in cards}
     saved = user.kontra_squad or {}
-    squad = [by_id[i] for i in saved.get("cards") or [] if i in by_id][:SQUAD_SIZE]
+    squad = _best_copies([by_id[i] for i in saved.get("cards") or [] if i in by_id])[:SQUAD_SIZE]
     if not squad:
         squad = _auto_pick(cards)
     leader = saved.get("leader")
@@ -215,6 +234,21 @@ def _power(units: list[dict]) -> int:
     return sum(u["atk"] + u["def"] + u["max_hp"] // 10 + u["spd"] for u in units)
 
 
+def _options(cards: list, squad: list) -> list:
+    """Bench to pick from: one copy per footballer not already in the squad,
+    the strongest OPTIONS_PER_ROLE of each role (the screen shows no more)."""
+    taken = {_who(c) for c in squad}
+    per_role: Counter = Counter()
+    out = []
+    for c in _best_copies(cards):
+        role = engine.ROLE_BY_POSITION.get(_position(c), "midfielder")
+        if _who(c) in taken or per_role[role] >= OPTIONS_PER_ROLE:
+            continue
+        per_role[role] += 1
+        out.append(c)
+    return out
+
+
 async def get_squad(db: AsyncSession, user: User) -> KontraSquadOut:
     squad, leader, cards = await _squad_cards(db, user)
     gear = await _gear_by_card(db, user.id)
@@ -225,7 +259,7 @@ async def get_squad(db: AsyncSession, user: User) -> KontraSquadOut:
     return KontraSquadOut(
         fighters=[_fighter_out(c, gear.get(c.id, [])) for c in squad], leader_id=leader, power=_power(units),
         chemistry_pct=chem, chemistry_label=chem_label, leader_aura=LEADER_AURA.get(leader_role) if leader_role else None,
-        options=[_fighter_out(c, gear.get(c.id, [])) for c in cards if c.id not in {s.id for s in squad}],
+        options=[_fighter_out(c, gear.get(c.id, [])) for c in _options(cards, squad)],
         size=SQUAD_SIZE,
     )
 
@@ -233,9 +267,11 @@ async def get_squad(db: AsyncSession, user: User) -> KontraSquadOut:
 async def set_squad(db: AsyncSession, user: User, card_ids: list[int], leader: int) -> KontraSquadOut:
     if not 1 <= len(card_ids) <= SQUAD_SIZE or len(set(card_ids)) != len(card_ids):
         raise ConflictError(f"В отряде от 1 до {SQUAD_SIZE} разных карточек")
-    owned = {c.id for c in await _usable_cards(db, user.id)}
-    if not set(card_ids) <= owned:
+    owned = {c.id: c for c in await _usable_cards(db, user.id)}
+    if not set(card_ids) <= owned.keys():
         raise ForbiddenError("Можно брать только свои карточки")
+    if len({_who(owned[i]) for i in card_ids}) != len(card_ids):
+        raise ConflictError("Один и тот же игрок не может стоять в отряде дважды")
     if leader not in card_ids:
         raise ConflictError("Лидер должен быть в отряде")
     user.kontra_squad = {"cards": list(card_ids), "leader": leader}
@@ -295,10 +331,13 @@ async def _guard_active(db: AsyncSession, user_id: int) -> None:
 
 async def get_hub(db: AsyncSession, user: User) -> KontraHubOut:
     config = await get_config(db)
-    squad, _, _ = await _squad_cards(db, user)
+    # The hub is polled by the Play screen — no full card load here.
+    squad_ready = bool((user.kontra_squad or {}).get("cards")) or (await db.execute(
+        select(UserCard.id).where(UserCard.owner_id == user.id).limit(1)
+    )).first() is not None
     gear_count = (await db.execute(select(func.count(KontraGear.id)).where(KontraGear.user_id == user.id))).scalar_one()
     return KontraHubOut(
-        enabled=config.kontra_enabled, squad_ready=bool(squad), rating=user.kontra_rating,
+        enabled=config.kontra_enabled, squad_ready=squad_ready, rating=user.kontra_rating,
         active_battle_id=await _active_battle(db, user.id), boss_name=catalog.boss_for(local_today())["name"],
         boss_attempts_left=_boss_attempts_left(user, config), gear_count=gear_count,
     )
@@ -343,7 +382,8 @@ async def _offer_cards(db: AsyncSession, offer: dict) -> tuple[list, Optional[in
     by_id = {p.id: p for p in rows}
     from types import SimpleNamespace
 
-    cards = [SimpleNamespace(id=-(pid), player=by_id[pid], is_my_player=False) for pid in offer["player_ids"] if pid in by_id]
+    cards = [SimpleNamespace(id=-(pid), player_id=pid, player=by_id[pid], is_my_player=False) for pid in offer["player_ids"] if pid in by_id]
+    cards = _best_copies(cards)
     return cards, (cards[0].id if cards else None), {}
 
 
