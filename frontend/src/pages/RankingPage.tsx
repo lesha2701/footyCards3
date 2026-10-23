@@ -6,7 +6,7 @@ import { useSearchParams } from "react-router-dom";
 import { fetchRanking } from "@/api/leaderboard";
 import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
-import { IconBall, IconBoxingGlove, IconCollection, IconFlag, IconFlagCheckered, IconGoal, IconHandshake, IconStadium, IconStar, IconTrophy, IconUsers, type IconProps } from "@/components/icons";
+import { IconBall, IconBoxingGlove, IconCollection, IconCounter, IconFlag, IconFlagCheckered, IconGoal, IconHandshake, IconStadium, IconStar, IconTrophy, IconUsers, type IconProps } from "@/components/icons";
 import { useAuthStore } from "@/store/authStore";
 import type { RankingEntry, RankingMetric } from "@/types";
 
@@ -17,6 +17,7 @@ const METRICS: { value: RankingMetric; label: string; Icon: (props: IconProps) =
   { value: "stratego_rating", label: "Рейтинг Стратего", Icon: IconFlag },
   { value: "stratego_puzzles", label: "Задачи Стратего", Icon: IconFlag },
   { value: "mordoboi_rating", label: "Рейтинг Мордобоя", Icon: IconBoxingGlove },
+  { value: "kontra_rating", label: "Арена Контратаки", Icon: IconCounter },
   { value: "matches_won", label: "Победы", Icon: IconTrophy },
   { value: "cards_count", label: "Карт в коллекции", Icon: IconCollection },
   { value: "unique_players", label: "Уникальных игроков", Icon: IconUsers },

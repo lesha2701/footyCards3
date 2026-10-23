@@ -603,3 +603,18 @@ export function IconBoxingGlove(props: IconProps) {
     </IconBase>
   );
 }
+
+/** Crossed blades with a return arrow: the counter-attack (Контратака). */
+export function IconCounter(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M5 19L16 8" />
+      <path d="M16 8l1.5-4.5L22 2l-1.5 4.5Z" strokeLinejoin="round" />
+      <path d="M4 15.5l4.5 4.5" />
+      <path d="M19 19L8 8" />
+      <path d="M20 15.5L15.5 20" />
+      <path d="M3 7a5 5 0 0 1 8-3" />
+      <path d="M9.5 2.5L11 4l-1.8 1.2" strokeLinejoin="round" />
+    </IconBase>
+  );
+}

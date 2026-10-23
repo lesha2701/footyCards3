@@ -852,6 +852,7 @@ export interface GameLimits {
   stratego: number;
   magnate: number;
   mordoboi: number;
+  kontra?: number;
   /** Exhausted games only: when the hourly cap frees up again. */
   resets_at?: Partial<Record<string, string>>;
 }
@@ -884,6 +885,7 @@ export type RankingMetric =
   | "stratego_rating"
   | "stratego_puzzles"
   | "mordoboi_rating"
+  | "kontra_rating"
   | "league_rating";
 
 export interface RankingEntry {
@@ -3384,4 +3386,184 @@ export interface MordoboiStats {
 export interface MordoboiSearchStatus {
   status: "not_searching" | "searching" | "matched" | "timeout";
   match_id: number | null;
+}
+
+// --- «Контратака» ---
+
+export type KontraTier = "common" | "rare" | "epic" | "legendary" | "diamond" | "path" | "my_player";
+
+export interface KontraCard {
+  card_id: number;
+  display_name: string;
+  position: string;
+  rarity: string;
+  rating: number;
+  image_path: string | null;
+  tier: KontraTier;
+}
+
+export interface KontraAbility {
+  code: string;
+  name: string;
+  description: string;
+  cooldown: number;
+  cd: number;
+  ready: boolean;
+}
+
+export interface KontraPassive {
+  code: string;
+  name: string;
+  description: string;
+}
+
+export interface KontraFighter {
+  card: KontraCard;
+  role: string;
+  role_label: string;
+  hp: number;
+  atk: number;
+  defence: number;
+  spd: number;
+  abilities: KontraAbility[];
+  passive: KontraPassive | null;
+  gear_count: number;
+}
+
+export interface KontraSquad {
+  fighters: KontraFighter[];
+  leader_id: number | null;
+  power: number;
+  chemistry_pct: number;
+  chemistry_label: string | null;
+  leader_aura: string | null;
+  options: KontraFighter[];
+  size: number;
+}
+
+export interface KontraUnit {
+  id: string;
+  side: "me" | "foe";
+  name: string;
+  card: KontraCard | null;
+  role: string;
+  tier: string;
+  hp: number;
+  max_hp: number;
+  meter_pct: number;
+  alive: boolean;
+  leader: boolean;
+  effects: { code: string; label: string; turns: number }[];
+  abilities: KontraAbility[];
+  passive: KontraPassive | null;
+}
+
+export interface KontraEvent {
+  kind: "ability" | "hit" | "miss" | "heal" | "down" | "effect" | "meter" | "tick" | "stunned" | "turn" | "passive" | "end";
+  n: number;
+  actor?: string;
+  target?: string;
+  ability?: string;
+  name?: string;
+  damage?: number;
+  absorbed?: number;
+  crit?: boolean;
+  hp?: number;
+  amount?: number;
+  effect?: string;
+  winner?: string;
+}
+
+export interface KontraGear {
+  id: number;
+  slot: string;
+  slot_label: string;
+  set_code: string;
+  set_name: string;
+  rarity: string;
+  rarity_label: string;
+  stat: string;
+  pct: number;
+  card_id: number | null;
+}
+
+export interface KontraBattle {
+  id: number;
+  version: number;
+  mode: "arena" | "boss";
+  status: "in_progress" | "finished";
+  result: "win" | "loss" | null;
+  opponent_name: string;
+  manual: boolean;
+  auto: boolean;
+  turn_of: string | null;
+  can_act: boolean;
+  round: number;
+  max_rounds: number;
+  units: KontraUnit[];
+  events: KontraEvent[];
+  damage: number;
+  reward_coins: number;
+  rating_delta: number;
+  gear_drop: KontraGear | null;
+  boss_name: string | null;
+  boss_tagline: string | null;
+  created_at: string;
+}
+
+export interface KontraOffer {
+  index: number;
+  name: string;
+  rating: number;
+  power: number;
+  is_bot: boolean;
+  cards: KontraCard[];
+}
+
+export interface KontraArena {
+  rating: number;
+  rank: number | null;
+  offers: KontraOffer[];
+  rewarded_today: number;
+  daily_limit: number;
+  reward_win: number;
+  reward_loss: number;
+  rating_win: number;
+  rating_loss: number;
+}
+
+export interface KontraBoss {
+  code: string;
+  name: string;
+  tagline: string;
+  week_start: string;
+  week_hp: number;
+  week_damage: number;
+  phase: number;
+  my_damage: number;
+  my_best: number;
+  club_name: string | null;
+  club_damage: number;
+  attempts_left: number;
+  attempts_per_day: number;
+  reward_tiers: [number, number][];
+  top: { user_id: number; name: string; damage: number }[];
+}
+
+export interface KontraHub {
+  enabled: boolean;
+  squad_ready: boolean;
+  rating: number;
+  active_battle_id: number | null;
+  boss_name: string;
+  boss_attempts_left: number;
+  gear_count: number;
+}
+
+export interface KontraGearList {
+  items: KontraGear[];
+  sets: { code: string; name: string; description: string }[];
+  chest_coins: number;
+  chest_stars: number;
+  balance: number;
 }

@@ -26,6 +26,9 @@ vi.mock("@/api/mordoboi", () => ({
     { id: 3, status: "in_progress", can_pick: true, opponent_type: "friend", opponent_name: "Петя", viewer_side: "opponent" },
   ]),
 }));
+vi.mock("@/api/kontra", () => ({
+  fetchKontraHub: vi.fn(async () => ({ enabled: true, rating: 1040, active_battle_id: null })),
+}));
 vi.mock("@/api/blackjack", () => ({ fetchBlackjackStatus: vi.fn(async () => ({ enabled: false })) }));
 vi.mock("@/api/personalTournament", () => ({ fetchPlayerTournamentCurrent: vi.fn(async () => ({ status: "not_queued" })) }));
 vi.mock("@/api/career", () => ({ fetchCareer: vi.fn(async () => ({ enabled: true, season: null, invite: null })) }));
@@ -61,6 +64,8 @@ describe("вкладка «Играть»", () => {
     fireEvent.click(screen.getByRole("tab", { name: "🧠 Тактика" }));
     expect(screen.getByText("Мордобой")).toBeInTheDocument();
     expect(await screen.findByText("Рейтинг 12")).toBeInTheDocument();
+    expect(screen.getByText("Контратака")).toBeInTheDocument();
+    expect(screen.getByText("Арена 1040")).toBeInTheDocument();
   });
 
   it("shows the week's cup and the match of the day", async () => {

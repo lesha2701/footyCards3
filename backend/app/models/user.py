@@ -154,6 +154,19 @@ class User(TimestampMixin, Base):
         ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
     )
 
+    # «Контратака»: saved squad {"cards": [card ids], "leader": card id}
+    # (it is also the arena defence), arena rating, the usual hourly/daily
+    # pairs (arena attacks), boss attempts per day, the current arena offers.
+    kontra_squad: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    kontra_rating: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    kontra_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    kontra_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    kontra_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    kontra_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    kontra_boss_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    kontra_boss_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    kontra_arena_offers: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+
     # Футбольный магнат
     magnate_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     magnate_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -583,6 +583,21 @@ class GameConfigOut(BaseModel):
     mordoboi_legend_reward: int = 150
     club_ring_win_points: int = 30
     club_ring_member_cap: int = 300
+    kontra_enabled: bool = False
+    kontra_arena_reward_win: int = 80
+    kontra_arena_reward_loss: int = 20
+    kontra_daily_limit: int = 10
+    kontra_rating_win: int = 20
+    kontra_rating_loss: int = 10
+    kontra_arena_max_rounds: int = 60
+    kontra_boss_daily_attempts: int = 3
+    kontra_boss_max_rounds: int = 25
+    kontra_boss_week_hp: int = 50_000_000
+    kontra_boss_reward_tiers: list = [[0, 20], [20000, 50], [60000, 100], [150000, 200], [400000, 400]]
+    kontra_gear_drop_boss_pct: int = 35
+    kontra_gear_drop_arena_pct: int = 15
+    kontra_chest_coins: int = 1500
+    kontra_chest_stars: int = 25
     bingo_reward_coins: int
     bingo_reward_pack_id: Optional[int] = None
     card_skills_enabled: bool = True
@@ -1212,6 +1227,21 @@ class GameConfigUpdate(BaseModel):
     mordoboi_legend_reward: Optional[int] = Field(default=None, ge=0)
     club_ring_win_points: Optional[int] = Field(default=None, ge=0)
     club_ring_member_cap: Optional[int] = Field(default=None, ge=0)
+    kontra_enabled: Optional[bool] = None
+    kontra_arena_reward_win: Optional[int] = Field(default=None, ge=0)
+    kontra_arena_reward_loss: Optional[int] = Field(default=None, ge=0)
+    kontra_daily_limit: Optional[int] = Field(default=None, ge=0)
+    kontra_rating_win: Optional[int] = Field(default=None, ge=0, le=1000)
+    kontra_rating_loss: Optional[int] = Field(default=None, ge=0, le=1000)
+    kontra_arena_max_rounds: Optional[int] = Field(default=None, ge=5, le=500)
+    kontra_boss_daily_attempts: Optional[int] = Field(default=None, ge=0, le=50)
+    kontra_boss_max_rounds: Optional[int] = Field(default=None, ge=3, le=200)
+    kontra_boss_week_hp: Optional[int] = Field(default=None, ge=1000)
+    kontra_boss_reward_tiers: Optional[list[list[int]]] = None
+    kontra_gear_drop_boss_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    kontra_gear_drop_arena_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    kontra_chest_coins: Optional[int] = Field(default=None, ge=0)
+    kontra_chest_stars: Optional[int] = Field(default=None, ge=0, le=10000)
     bingo_reward_coins: Optional[int] = Field(default=None, ge=0)
     bingo_reward_pack_id: Optional[int] = Field(default=None)
     card_skills_enabled: Optional[bool] = None

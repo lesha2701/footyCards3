@@ -37,6 +37,7 @@ LABELS = {
     "club_emblem": "Эмблема клуба",
     "club_donation": "Казна клуба",
     "club_stars": "Звёзды клуба",
+    "kontra_chest": "Контратака: сундук комплекта",
 }
 
 
@@ -120,6 +121,10 @@ async def validate(db: AsyncSession, invoice: StarsInvoice) -> tuple[bool, str]:
         from app.services import club_treasury_service
 
         return await club_treasury_service.validate_club_stars(db, invoice.user_id, arg)
+    if kind == "kontra_chest":
+        from app.services import kontra_service
+
+        return await kontra_service.validate_stars(db, invoice.user_id, invoice.stars_amount)
     return False, "Unknown order"
 
 
@@ -171,4 +176,8 @@ async def deliver(
         from app.services import club_treasury_service
 
         return await club_treasury_service.deliver_club_stars(db, user, invoice)
+    if kind == "kontra_chest":
+        from app.services import kontra_service
+
+        return await kontra_service.deliver_stars(db, user, invoice)
     raise NotFoundError("Unknown product")

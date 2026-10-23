@@ -117,6 +117,8 @@ class TransactionType(str, enum.Enum):
     mordoboi_stake_refund = "mordoboi_stake_refund"
     mordoboi_brutality_bonus = "mordoboi_brutality_bonus"
     mordoboi_legend_reward = "mordoboi_legend_reward"
+    kontra_reward = "kontra_reward"
+    kontra_chest_purchase = "kontra_chest_purchase"
     blackjack_consolation = "blackjack_consolation"
     magnate_reward = "magnate_reward"
     card_star_upgrade = "card_star_upgrade"

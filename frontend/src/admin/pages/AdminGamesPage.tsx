@@ -159,6 +159,7 @@ export default function AdminGamesPage() {
       | "club_war_enabled"
       | "blackjack_enabled"
       | "mordoboi_enabled"
+      | "kontra_enabled"
       | "leagues_enabled"
       | "diamond_rating_cap_enabled"
       | "bot_daily_digest_enabled"
@@ -1180,6 +1181,43 @@ export default function AdminGamesPage() {
           {field("stratego_reward_loss", "Награда за поражение")}
           {field("stratego_daily_limit", "Лимит наградных матчей/день")}
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Контратака</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Отряд из 5 карт: арена против защиты других игроков (или ботов) и босс недели. Награды арены — в пределах
+          дневного лимита; у босса — по порогам урона за попытку. Шанс выпадения комплекта — в процентах.
+        </p>
+        <div className="mb-3">{toggle("kontra_enabled", "Режим включён (выкл — нельзя начинать бои, плитка скрыта)")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("kontra_arena_reward_win", "Арена: монет за победу")}
+          {field("kontra_arena_reward_loss", "Арена: монет за поражение")}
+          {field("kontra_daily_limit", "Арена: наградных боёв в день")}
+          {field("kontra_rating_win", "Арена: рейтинг за победу")}
+          {field("kontra_rating_loss", "Арена: рейтинг за поражение")}
+          {field("kontra_arena_max_rounds", "Арена: максимум ходов соперника")}
+          {field("kontra_boss_daily_attempts", "Босс: попыток в день")}
+          {field("kontra_boss_max_rounds", "Босс: ходов босса за попытку")}
+          {field("kontra_boss_week_hp", "Босс: HP за неделю (фазы)")}
+          {field("kontra_gear_drop_boss_pct", "Комплект с босса, %")}
+          {field("kontra_gear_drop_arena_pct", "Комплект за победу на арене, %")}
+          {field("kontra_chest_coins", "Сундук комплекта, монет (0 — нет)")}
+          {field("kontra_chest_stars", "Сундук комплекта, ⭐ (0 — нет)")}
+        </div>
+        <label className="mt-3 flex flex-col gap-1">
+          <span className="text-xs text-slate-400">Босс: награда за урон попытки — строки «урон монеты»</span>
+          <textarea
+            rows={5}
+            value={(form.kontra_boss_reward_tiers ?? []).map(([d, c]) => `${d} ${c}`).join("\n")}
+            onChange={(e) => setForm({
+              ...form,
+              kontra_boss_reward_tiers: e.target.value.split("\n").map((l) => l.trim().split(/\s+/).map(Number))
+                .filter((p) => p.length === 2 && p.every(Number.isFinite)) as [number, number][],
+            })}
+            className="rounded-lg bg-bg-surface px-3 py-2 font-mono text-xs outline-none"
+          />
+        </label>
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">

@@ -75,6 +75,11 @@ const TacticoSearchPage = lazy(() => import("@/pages/TacticoSearchPage"));
 const TacticoSquadPage = lazy(() => import("@/pages/TacticoSquadPage"));
 const StrategoPage = lazy(() => import("@/pages/StrategoPage"));
 const MordoboiPage = lazy(() => import("@/pages/MordoboiPage"));
+const KontraPage = lazy(() => import("@/pages/KontraPage"));
+const KontraArenaPage = lazy(() => import("@/pages/KontraArenaPage"));
+const KontraBossPage = lazy(() => import("@/pages/KontraBossPage"));
+const KontraBattlePage = lazy(() => import("@/pages/KontraBattlePage"));
+const KontraGearPage = lazy(() => import("@/pages/KontraGearPage"));
 const MordoboiSearchPage = lazy(() => import("@/pages/MordoboiSearchPage"));
 const MordoboiMatchPage = lazy(() => import("@/pages/MordoboiMatchPage"));
 const MordoboiOpenChallengePage = lazy(() => import("@/pages/MordoboiOpenChallengePage"));
@@ -285,6 +290,11 @@ export default function App() {
         <Route path="/play/tactico/open/:matchId" element={<TacticoOpenChallengePage />} />
         <Route path="/play/stratego" element={<StrategoPage />} />
         <Route path="/play/mordoboi" element={<MordoboiPage />} />
+        <Route path="/play/kontra" element={<KontraPage />} />
+        <Route path="/play/kontra/arena" element={<KontraArenaPage />} />
+        <Route path="/play/kontra/boss" element={<KontraBossPage />} />
+        <Route path="/play/kontra/battles/:battleId" element={<KontraBattlePage />} />
+        <Route path="/play/kontra/gear" element={<KontraGearPage />} />
         <Route path="/play/mordoboi/search" element={<MordoboiSearchPage />} />
         <Route path="/play/mordoboi/matches/:matchId" element={<MordoboiMatchPage />} />
         <Route path="/play/mordoboi/open/:matchId" element={<MordoboiOpenChallengePage />} />

@@ -17,6 +17,7 @@ class RankingMetric(str, enum.Enum):
     stratego_rating = "stratego_rating"
     stratego_puzzles = "stratego_puzzles"
     mordoboi_rating = "mordoboi_rating"
+    kontra_rating = "kontra_rating"
     league_rating = "league_rating"
     academy_prestige = "academy_prestige"
     academy_level = "academy_level"

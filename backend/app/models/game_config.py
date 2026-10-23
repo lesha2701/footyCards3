@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, Numeric, String
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -807,6 +807,26 @@ class GameConfig(TimestampMixin, Base):
     mordoboi_move_timeout_hours: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
     mordoboi_live_move_seconds: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     mordoboi_max_auto_moves: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # «Контратака» (kontra_service.py): arena + weekly boss. Off by default.
+    kontra_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    kontra_arena_reward_win: Mapped[int] = mapped_column(Integer, default=80, nullable=False)
+    kontra_arena_reward_loss: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    kontra_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    kontra_rating_win: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    kontra_rating_loss: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    kontra_arena_max_rounds: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    kontra_boss_daily_attempts: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    kontra_boss_max_rounds: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    kontra_boss_week_hp: Mapped[int] = mapped_column(BigInteger, default=50_000_000, nullable=False)
+    # Damage of one boss attempt -> coins: [[min damage, coins], …] ascending.
+    kontra_boss_reward_tiers: Mapped[list] = mapped_column(
+        JSON, default=lambda: [[0, 20], [20000, 50], [60000, 100], [150000, 200], [400000, 400]], nullable=False,
+    )
+    kontra_gear_drop_boss_pct: Mapped[int] = mapped_column(Integer, default=35, nullable=False)
+    kontra_gear_drop_arena_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    kontra_chest_coins: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
+    kontra_chest_stars: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+
     # «Легенда ринга»: the daily boss's rating and its once-a-day win reward.
     mordoboi_legend_rating: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
     mordoboi_legend_reward: Mapped[int] = mapped_column(Integer, default=150, nullable=False)

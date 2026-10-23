@@ -37,6 +37,7 @@ SEASON_XP_TX_TYPES = frozenset({
     TransactionType.career_reward, TransactionType.bingo_reward, TransactionType.player_tournament_match_reward,
     TransactionType.club_tournament_match_reward, TransactionType.stratego_reward, TransactionType.magnate_reward,
     TransactionType.mordoboi_reward, TransactionType.mordoboi_legend_reward,
+    TransactionType.kontra_reward,
     TransactionType.my_player_duel_reward,
 })
 

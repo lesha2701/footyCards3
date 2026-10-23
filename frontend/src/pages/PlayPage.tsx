@@ -6,6 +6,7 @@ import { fetchCareer } from "@/api/career";
 import { fetchMatchDay, fetchWeeklyCup } from "@/api/events";
 import { fetchGameLimits, fetchPenaltyStats } from "@/api/games";
 import { fetchArenaStats } from "@/api/matches";
+import { fetchKontraHub } from "@/api/kontra";
 import { fetchMordoboiInfo, fetchMordoboiMatches, fetchMordoboiStats } from "@/api/mordoboi";
 import { fetchPlayerTournamentCurrent } from "@/api/personalTournament";
 import { fetchStrategoStats } from "@/api/stratego";
@@ -17,6 +18,7 @@ import {
   IconCard,
   IconChart,
   IconCollection,
+  IconCounter,
   IconDice,
   IconFlag,
   IconGoal,
@@ -105,6 +107,7 @@ export default function PlayPage() {
   const { data: limits } = useQuery({ queryKey: ["game-limits"], queryFn: fetchGameLimits });
   const { data: blackjack } = useQuery({ queryKey: ["blackjack-status"], queryFn: fetchBlackjackStatus });
   const { data: mordoboi } = useQuery({ queryKey: ["mordoboi-info"], queryFn: fetchMordoboiInfo });
+  const { data: kontra } = useQuery({ queryKey: ["kontra-hub"], queryFn: fetchKontraHub });
   const { data: mordoboiStats } = useQuery({
     queryKey: ["mordoboi-stats"], queryFn: fetchMordoboiStats, enabled: !!mordoboi?.enabled,
   });
@@ -186,6 +189,14 @@ export default function PlayPage() {
         stat: `Рейтинг ${mordoboiStats?.mordoboi_rating ?? 0}`, limitKey: "mordoboi" as LimitKey,
       }]
       : []),
+    ...(kontra?.enabled
+      ? [{
+        path: "/play/kontra", Icon: IconCounter, tint: "bg-green-600", title: "Контратака", group: "tactics" as Group,
+        time: "5 мин", bot: true,
+        description: "Отряд из 5 карт: арена и босс недели",
+        stat: `Арена ${kontra.rating}`, limitKey: "kontra" as LimitKey,
+      }]
+      : []),
     {
       path: "/play/magnate", Icon: IconDice, tint: "bg-violet-500", title: "Футбольный магнат", group: "tactics", time: "15 мин", bot: true, friend: true,
       description: "Клубы, стадионы и аренда — 4 игрока, онлайн или с ботами", limitKey: "magnate",
@@ -248,6 +259,9 @@ export default function PlayPage() {
     } else if (m.status === "pending_accept" && m.viewer_side === "opponent") {
       now.push({ key: `mc${m.id}`, kicker: "Вызов на ринг", title: `Мордобой · ${m.opponent_name}`, tone: "bg-amber-400/15 text-amber-200 ring-amber-400/30", to: `/play/mordoboi/matches/${m.id}` });
     }
+  }
+  if (kontra?.active_battle_id) {
+    now.push({ key: "k", kicker: "Бой идёт", title: "Контратака", tone: "bg-green-500/15 text-green-200 ring-green-400/30", to: `/play/kontra/battles/${kontra.active_battle_id}` });
   }
   if (career?.invite) {
     now.push({ key: "ci", kicker: "Приглашение", title: `Карьера · ${career.invite.from_name}`, tone: "bg-cyan-500/15 text-cyan-200 ring-cyan-400/30", to: "/play/career" });
