@@ -178,7 +178,7 @@ export default function PlayPage() {
       : []),
     // 🧠 tactics
     {
-      path: "/play/tactico", Icon: IconTactics, tint: "bg-sky-500", title: "Тактико", group: "tactics", time: "10 мин", bot: true, friend: true,
+      path: "/play/tactico", art: artOf("tactico"), Icon: IconTactics, tint: "bg-sky-500", title: "Тактико", group: "tactics", time: "10 мин", bot: true, friend: true,
       description: "Состав из 11 карт, раунд за раундом",
       stat: `Рейтинг ${tacticoStats?.tactics_rating ?? user?.tactics_rating ?? 0}`, limitKey: "tactico",
     },
@@ -189,7 +189,7 @@ export default function PlayPage() {
     },
     ...(mordoboi?.enabled
       ? [{
-        path: "/play/mordoboi", Icon: IconBoxingGlove, tint: "bg-yellow-500", title: "Мордобой", group: "tactics" as Group,
+        path: "/play/mordoboi", art: artOf("mordoboi"), Icon: IconBoxingGlove, tint: "bg-yellow-500", title: "Мордобой", group: "tactics" as Group,
         time: "5 мин", bot: true, friend: true,
         description: "Боксёрский поединок карточек: угадай удар соперника",
         stat: `Рейтинг ${mordoboiStats?.mordoboi_rating ?? 0}`, limitKey: "mordoboi" as LimitKey,
@@ -225,7 +225,7 @@ export default function PlayPage() {
       description: "Свой клуб, трансферы и 10 дивизионов", rightLabel: "Новое",
     },
     {
-      path: "/player-tournament", Icon: IconTrophy, tint: "bg-amber-400", title: "Личный турнир", group: "long", time: "30 туров",
+      path: "/player-tournament", art: artOf("player-tournament"), Icon: IconTrophy, tint: "bg-amber-400", title: "Личный турнир", group: "long", time: "30 туров",
       description: "16 игроков — свой состав и тактика",
       stat: playerTournamentStatusLabel(playerTournamentCurrent?.status, playerTournamentCurrent?.queue_position),
       rightLabel: "16 игроков",
