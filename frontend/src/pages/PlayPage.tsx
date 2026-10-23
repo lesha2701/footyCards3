@@ -39,6 +39,10 @@ import { usePersistentState } from "@/lib/usePersistentState";
 import { useAuthStore } from "@/store/authStore";
 import type { GameLimits } from "@/types";
 
+/** Illustrated game art (192 px webp); games without one keep their tinted icon. */
+const GAME_ART = import.meta.glob<string>("@/assets/games/*.webp", { eager: true, import: "default" });
+const artOf = (key: string): string | undefined => GAME_ART[`/src/assets/games/${key}.webp`];
+
 function playerTournamentStatusLabel(status?: string, queuePosition?: number | null): string {
   switch (status) {
     case "queued":
@@ -70,6 +74,8 @@ interface GameDef {
   Icon: (props: IconProps) => JSX.Element;
   /** Each game has its own colour — no two tiles alike. Literal classes. */
   tint: string;
+  /** Picture for the tile instead of the icon (src/assets/games/<key>.webp). */
+  art?: string;
   title: string;
   description: string;
   group: Group;
@@ -128,7 +134,7 @@ export default function PlayPage() {
   const games: GameDef[] = [
     // ⚡ quick
     {
-      path: "/play/arena", Icon: IconBall, tint: "bg-emerald-500", title: "Card Arena", group: "quick", time: "3 мин", bot: true,
+      path: "/play/arena", art: artOf("arena"), Icon: IconBall, tint: "bg-emerald-500", title: "Card Arena", group: "quick", time: "3 мин", bot: true,
       description: "Собери состав и сыграй матч",
       stat: arenaStats?.division
         ? `Дивизион ${arenaStats.division.division} · ${arenaStats.division.points} очк.`
@@ -136,34 +142,34 @@ export default function PlayPage() {
       limitKey: "arena",
     },
     {
-      path: "/play/penalty", Icon: IconGoal, tint: "bg-orange-500", title: "Пенальти", group: "quick", time: "2 мин", bot: true, friend: true,
+      path: "/play/penalty", art: artOf("penalty"), Icon: IconGoal, tint: "bg-orange-500", title: "Пенальти", group: "quick", time: "2 мин", bot: true, friend: true,
       description: "Серия пенальти против бота или друга",
       stat: `Рейтинг ${penaltyStats?.penalty_rating ?? user?.penalty_rating ?? 0}`, limitKey: "penalty",
     },
     {
-      path: "/play/free-kick", Icon: IconTarget, tint: "bg-blue-500", title: "Штрафной удар", group: "quick", time: "1 мин",
+      path: "/play/free-kick", art: artOf("free-kick"), Icon: IconTarget, tint: "bg-blue-500", title: "Штрафной удар", group: "quick", time: "1 мин",
       description: "Останови шкалу силы в нужный момент", limitKey: "free_kick",
     },
     {
-      path: "/play/memory", Icon: IconBrain, tint: "bg-teal-500", title: "Memory", group: "quick", time: "1 мин",
+      path: "/play/memory", art: artOf("memory"), Icon: IconBrain, tint: "bg-teal-500", title: "Memory", group: "quick", time: "1 мин",
       description: "Запомни и повтори последовательность",
       stat: `Рекорд ${user?.memory_best_score ?? 0}`, limitKey: "memory",
     },
     {
-      path: "/play/hangman", Icon: IconLetters, tint: "bg-purple-500", title: "Футбольные буквы", group: "quick", time: "2 мин",
+      path: "/play/hangman", art: artOf("hangman"), Icon: IconLetters, tint: "bg-purple-500", title: "Футбольные буквы", group: "quick", time: "2 мин",
       description: "Угадай футболиста или термин по буквам", limitKey: "hangman",
     },
     {
-      path: "/play/pairs", Icon: IconPairs, tint: "bg-slate-400", title: "Найди пару", group: "quick", time: "2 мин",
+      path: "/play/pairs", art: artOf("pairs"), Icon: IconPairs, tint: "bg-slate-400", title: "Найди пару", group: "quick", time: "2 мин",
       description: "Находи одинаковых футболистов", limitKey: "pairs",
     },
     {
-      path: "/play/saboteur", Icon: IconParty, tint: "bg-pink-500", title: "Футбольный фанат", group: "quick", time: "2 мин",
+      path: "/play/saboteur", art: artOf("saboteur"), Icon: IconParty, tint: "bg-pink-500", title: "Футбольный фанат", group: "quick", time: "2 мин",
       description: "Проберись сквозь стюардов к любимому игроку", limitKey: "saboteur",
     },
     ...(blackjack?.enabled
       ? [{
-        path: "/play/blackjack", Icon: IconCard, tint: "bg-rose-500", title: "21: Добавленное время", group: "quick" as Group,
+        path: "/play/blackjack", art: artOf("blackjack"), Icon: IconCard, tint: "bg-rose-500", title: "21: Добавленное время", group: "quick" as Group,
         time: "3 мин", bot: true,
         description: "Блэкджек против Тренера — победа крутит Золотое колесо",
         stat: blackjack.active_match ? "Партия идёт" : `Попыток: ${blackjackEntries}`,
@@ -177,7 +183,7 @@ export default function PlayPage() {
       stat: `Рейтинг ${tacticoStats?.tactics_rating ?? user?.tactics_rating ?? 0}`, limitKey: "tactico",
     },
     {
-      path: "/play/stratego", Icon: IconFlag, tint: "bg-red-500", title: "Футбольное Стратего", group: "tactics", time: "15 мин", bot: true, friend: true,
+      path: "/play/stratego", art: artOf("stratego"), Icon: IconFlag, tint: "bg-red-500", title: "Футбольное Стратего", group: "tactics", time: "15 мин", bot: true, friend: true,
       description: "Скрытая расстановка: найди и захвати Кубок соперника",
       stat: `Рейтинг ${strategoStats?.stratego_rating ?? 0}`, limitKey: "stratego",
     },
@@ -198,16 +204,16 @@ export default function PlayPage() {
       }]
       : []),
     {
-      path: "/play/magnate", Icon: IconDice, tint: "bg-violet-500", title: "Футбольный магнат", group: "tactics", time: "15 мин", bot: true, friend: true,
+      path: "/play/magnate", art: artOf("magnate"), Icon: IconDice, tint: "bg-violet-500", title: "Футбольный магнат", group: "tactics", time: "15 мин", bot: true, friend: true,
       description: "Клубы, стадионы и аренда — 4 игрока, онлайн или с ботами", limitKey: "magnate",
     },
     {
-      path: "/play/fut-draft", Icon: IconCollection, tint: "bg-fuchsia-500", title: "FUT Draft", group: "tactics", time: "10 мин", bot: true,
+      path: "/play/fut-draft", art: artOf("fut-draft"), Icon: IconCollection, tint: "bg-fuchsia-500", title: "FUT Draft", group: "tactics", time: "10 мин", bot: true,
       description: "Состав из случайных карт и серия матчей", noLimit: true,
     },
     // 🏆 long
     {
-      path: "/play/career", Icon: IconWhistle, tint: "bg-cyan-500", title: "Карьера тренера", group: "long", time: "неделя", friend: true,
+      path: "/play/career", art: artOf("career"), Icon: IconWhistle, tint: "bg-cyan-500", title: "Карьера тренера", group: "long", time: "неделя", friend: true,
       description: "8 команд, 14 туров, свои карточки — один или с другом", rightLabel: "2 тура в день",
     },
     {
@@ -215,7 +221,7 @@ export default function PlayPage() {
       description: "Твой игрок в клубе: голы, оценки, трансферы", rightLabel: "Мой игрок",
     },
     {
-      path: "/play/manager", Icon: IconChart, tint: "bg-indigo-500", title: "Менеджер", group: "long", time: "неделя",
+      path: "/play/manager", art: artOf("manager"), Icon: IconChart, tint: "bg-indigo-500", title: "Менеджер", group: "long", time: "неделя",
       description: "Свой клуб, трансферы и 10 дивизионов", rightLabel: "Новое",
     },
     {
@@ -413,8 +419,14 @@ function GameRow({
         <span
           className={`relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl shadow-[0_6px_16px_-6px_rgba(0,0,0,0.6)] ${game.tint}`}
         >
-          <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/35 to-transparent" aria-hidden />
-          <Icon size={22} className="relative text-white drop-shadow-sm" />
+          {game.art ? (
+            <img src={game.art} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+          ) : (
+            <>
+              <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/35 to-transparent" aria-hidden />
+              <Icon size={22} className="relative text-white drop-shadow-sm" />
+            </>
+          )}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate font-display text-sm font-bold text-ink-chalk">{game.title}</span>
