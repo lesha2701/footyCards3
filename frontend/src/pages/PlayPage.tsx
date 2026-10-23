@@ -217,7 +217,7 @@ export default function PlayPage() {
       description: "8 команд, 14 туров, свои карточки — один или с другом", rightLabel: "2 тура в день",
     },
     {
-      path: "/play/player-career", Icon: IconProfile, tint: "bg-lime-500", title: "Карьера игрока", group: "long", time: "сезон",
+      path: "/play/player-career", art: artOf("player-career"), Icon: IconProfile, tint: "bg-lime-500", title: "Карьера игрока", group: "long", time: "сезон",
       description: "Твой игрок в клубе: голы, оценки, трансферы", rightLabel: "Мой игрок",
     },
     {
