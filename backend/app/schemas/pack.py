@@ -217,6 +217,7 @@ class PackBulkOpenResult(BaseModel):
     coach_cards: list[OpenedCoachCardOut] = []
     stadium_cards: list[OpenedStadiumCardOut] = []
     skill_tokens: list[OpenedSkillTokenOut] = []
+    muses: list[OpenedMuseOut] = []
     new_balance: int
     total_price_paid: int
     referral_bonus_coins: Optional[int] = None

@@ -119,6 +119,22 @@ async def test_muse_pack_drops_muses_first_becomes_active_repeat_adds_copies(cli
     assert row.copies == 3
 
 
+async def test_bulk_open_returns_muses_and_replays_them(client, db_session, bot_token):
+    await _config(db_session)
+    await _muse(db_session, rarity="epic")
+    await create_player(db_session, rarity=Rarity.epic)
+    pack = await create_pack(db_session, "muses-bulk", price=10, card_count=2, probabilities={Rarity.epic: 1.0},
+                             muse_drop_chance=1.0)
+    headers, _ = await _register(client, db_session, 830013, bot_token)
+
+    body = {"quantity": 3, "idempotency_key": "bulk-m-1"}
+    first = await client.post(f"/api/v1/packs/{pack.id}/open-bulk", headers=headers, json=body)
+    assert first.status_code == 200, first.text
+    assert first.json()["cards"] == [] and len(first.json()["muses"]) == 6
+    replay = await client.post(f"/api/v1/packs/{pack.id}/open-bulk", headers=headers, json=body)
+    assert len(replay.json()["muses"]) == 6
+
+
 async def test_switched_off_or_empty_pool_drops_footballers(client, db_session, bot_token):
     await _config(db_session, muses_enabled=False)
     await _muse(db_session)
