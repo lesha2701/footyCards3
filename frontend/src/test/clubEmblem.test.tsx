@@ -36,8 +36,11 @@ vi.mock("@/api/clubFeatures", () => ({
 describe("ClubLogo", () => {
   it("draws a plain one-colour logo without an emblem", () => {
     const { container } = render(<ClubLogo shape="circle" color="#FF0000" />);
-    expect(container.querySelectorAll("path")).toHaveLength(1);
-    expect(container.querySelector("clipPath")).toBeNull();
+    // A badge in the club colour (gradient, gloss, rim) — but none of the paid layers.
+    expect(container.querySelector("linearGradient stop[stop-color='#FF0000']")).not.toBeNull();
+    expect(container.querySelector("text")).toBeNull();
+    expect(container.querySelector("[id^='outline-']")).toBeNull();
+    expect(container.querySelector(".emblem-sparkle")).toBeNull();
   });
 
   it("draws the paid layers on top", () => {
