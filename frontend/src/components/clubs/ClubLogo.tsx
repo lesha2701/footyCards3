@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 
 import type { ClubEmblem, ClubLogoShape } from "@/types";
 
@@ -120,6 +120,54 @@ const SPARKLES: [number, number, number, string][] = [
   [18, 16, 5, "0s"], [84, 22, 4, "0.6s"], [80, 82, 5, "1.1s"], [14, 74, 4, "0.3s"], [50, 2, 3.5, "0.9s"],
 ];
 
+/** `hex` lighter (amount > 0) or darker (< 0), amount in -1…1; non-hex colours pass through. */
+function shade(hex: string, amount: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const mix = (c: number) => Math.round(amount >= 0 ? c + (255 - c) * amount : c * (1 + amount));
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(mix);
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+}
+
+/** The badge itself — every logo gets depth (gradient, gloss, a dark rim with a light inner
+ * edge, a drop shadow); `children` are the emblem layers drawn inside the shape. */
+function Badge({ uid, path, color, children }: { uid: string; path: string; color: string; children?: ReactNode }) {
+  return (
+    <>
+      <defs>
+        <linearGradient id={`base-${uid}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={shade(color, 0.22)} />
+          <stop offset="55%" stopColor={color} />
+          <stop offset="100%" stopColor={shade(color, -0.28)} />
+        </linearGradient>
+        <linearGradient id={`gloss-${uid}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#fff" stopOpacity="0.38" />
+          <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id={`shadow-${uid}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#000" stopOpacity="0" />
+          <stop offset="100%" stopColor="#000" stopOpacity="0.22" />
+        </linearGradient>
+        <filter id={`drop-${uid}`} x="-20%" y="-20%" width="140%" height="150%">
+          <feDropShadow dx="0" dy="2.5" stdDeviation="2.2" floodColor="#000" floodOpacity="0.45" />
+        </filter>
+      </defs>
+      <path d={path} fill={shade(color, -0.5)} filter={`url(#drop-${uid})`} />
+      <g clipPath={`url(#clip-${uid})`}>
+        <rect x={0} y={0} width={100} height={100} fill={`url(#base-${uid})`} />
+        {children}
+        {/* Gloss on the upper half and a darker bottom edge. */}
+        <ellipse cx={50} cy={8} rx={62} ry={40} fill={`url(#gloss-${uid})`} />
+        <rect x={0} y={55} width={100} height={45} fill={`url(#shadow-${uid})`} />
+        {/* Inner light edge: a stroke clipped to the shape shows only its inner half. */}
+        <path d={path} fill="none" stroke="#fff" strokeOpacity={0.3} strokeWidth={5} strokeLinejoin="round" />
+      </g>
+      <path d={path} fill="none" stroke={shade(color, -0.55)} strokeWidth={2.2} strokeLinejoin="round" />
+    </>
+  );
+}
+
 export function ClubLogo({
   shape, color, size = 40, emblem,
 }: { shape: ClubLogoShape; color: string; size?: number; emblem?: ClubEmblem | null }) {
@@ -127,8 +175,13 @@ export function ClubLogo({
   const path = SHAPE_PATHS[shape];
   if (!emblem || !Object.entries(emblem).some(([k, v]) => k !== "outline_thin" && v)) {
     return (
-      <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        <path d={path} fill={color} />
+      <svg width={size} height={size} viewBox="-6 -6 112 112" xmlns="http://www.w3.org/2000/svg" style={{ overflow: "visible" }}>
+        <defs>
+          <clipPath id={`clip-${uid}`}>
+            <path d={path} />
+          </clipPath>
+        </defs>
+        <Badge uid={uid} path={path} color={color} />
       </svg>
     );
   }
@@ -182,34 +235,41 @@ export function ClubLogo({
         </g>
       )}
 
-      <g clipPath={`url(#clip-${uid})`}>
-        <rect x={0} y={0} width={100} height={100} fill={color} />
-        {emblem.pattern && <Pattern kind={emblem.pattern} fill={overlay} />}
+      <defs>
+        <filter id={`mark-${uid}`} x="-20%" y="-20%" width="140%" height="150%">
+          <feDropShadow dx="0" dy="1.4" stdDeviation="1" floodColor="#000" floodOpacity="0.5" />
+        </filter>
+      </defs>
+
+      <Badge uid={uid} path={path} color={color}>
+        {emblem.pattern && <g opacity={0.92}><Pattern kind={emblem.pattern} fill={overlay} /></g>}
         {emblem.effect === "shine" && (
           <rect className="emblem-shine-band" x={-10} y={-10} width={40} height={120} fill={`url(#shine-${uid})`} transform="skewX(-15)" />
         )}
-      </g>
+      </Badge>
 
-      {emblem.symbol && (
-        <SymbolMark kind={emblem.symbol} fill={markFill} base={color} y={showLetters ? -7 : 0} scale={showLetters ? 0.85 : 1} />
-      )}
-      {showLetters && (
-        <text
-          x={50}
-          y={emblem.symbol ? 84 : 50}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontSize={emblem.symbol ? 14 : letters.length > 2 ? 26 : 32}
-          fontWeight={900}
-          fontFamily="inherit"
-          fill={markFill}
-          stroke="rgba(0,0,0,0.35)"
-          strokeWidth={emblem.symbol ? 0.8 : 1.2}
-          paintOrder="stroke"
-        >
-          {letters}
-        </text>
-      )}
+      <g filter={`url(#mark-${uid})`}>
+        {emblem.symbol && (
+          <SymbolMark kind={emblem.symbol} fill={markFill} base={color} y={showLetters ? -7 : 0} scale={showLetters ? 0.85 : 1} />
+        )}
+        {showLetters && (
+          <text
+            x={50}
+            y={emblem.symbol ? 84 : 50}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={emblem.symbol ? 14 : letters.length > 2 ? 26 : 32}
+            fontWeight={900}
+            fontFamily="inherit"
+            fill={markFill}
+            stroke="rgba(0,0,0,0.25)"
+            strokeWidth={emblem.symbol ? 0.6 : 0.9}
+            paintOrder="stroke"
+          >
+            {letters}
+          </text>
+        )}
+      </g>
 
       {stops && (
         <path
