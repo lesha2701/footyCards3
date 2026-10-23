@@ -23,7 +23,6 @@ from typing import Optional
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
@@ -65,6 +64,7 @@ from app.services import mordoboi_legends as legends
 from app.services import mordoboi_look as look_service
 from app.services import mordoboi_engine as engine
 from app.services import ranking_service, stake_guard_service
+from app.services.card_pool_service import load_top_copies
 from app.services.game_config_service import get_config
 from app.services.match_service import BOT_NAMES
 from app.services.notification_service import notify
@@ -124,20 +124,17 @@ def _card_fighter(card: UserCard, config: GameConfig) -> dict:
     return _player_fighter(card.player, config, card.id, card_rating_bonus(card))
 
 
-async def _usable_cards(db: AsyncSession, user_id: int) -> list[UserCard]:
-    result = await db.execute(
-        select(UserCard)
-        .where(UserCard.owner_id == user_id, UserCard.is_locked_by_admin.is_(False))
-        .options(joinedload(UserCard.player))
-    )
-    cards = list(result.unique().scalars().all())
+async def _usable_cards(db: AsyncSession, user: User) -> list[UserCard]:
+    """The best copy of each player plus the saved boxer — not the whole
+    collection (card_pool_service)."""
+    cards = await load_top_copies(db, user.id, per_player=1, include=[user.mordoboi_card_id], unlocked_only=True)
     cards.sort(key=lambda c: (-effective_card_stats(c.player, card_rating_bonus(c))[0], c.id))
     return cards
 
 
 async def _boxer_card(db: AsyncSession, user: User) -> UserCard:
     """The saved boxer if the user still owns it, otherwise the strongest card."""
-    cards = await _usable_cards(db, user.id)
+    cards = await _usable_cards(db, user)
     if not cards:
         raise ConflictError("Для «Мордобоя» нужна хотя бы одна карточка в коллекции")
     return next((c for c in cards if c.id == user.mordoboi_card_id), cards[0])
@@ -152,7 +149,7 @@ def _option(fighter: dict) -> MordoboiBoxerOptionOut:
 
 async def get_boxer(db: AsyncSession, user: User) -> MordoboiBoxerOut:
     config = await get_config(db)
-    cards = await _usable_cards(db, user.id)
+    cards = await _usable_cards(db, user)
     options = [_option(_card_fighter(c, config)) for c in cards]
     look = MordoboiLookOut(**await look_service.look_for(db, user))
     nicknames = list(look_service.NICKNAMES)

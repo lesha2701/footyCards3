@@ -12,9 +12,7 @@ greedy result is saved as-is, exactly as before.
 from dataclasses import dataclass
 from typing import Iterable, Optional
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from app.core.exceptions import ConflictError
 from app.models.card import UserCard
@@ -205,11 +203,13 @@ def improve_for_chemistry(
     return current
 
 
-async def owned_cards(db: AsyncSession, user_id: int) -> list[UserCard]:
-    result = await db.execute(
-        select(UserCard).where(UserCard.owner_id == user_id).options(joinedload(UserCard.player))
-    )
-    return list(result.unique().scalars().all())
+async def owned_cards(db: AsyncSession, user_id: int, include=None) -> list[UserCard]:
+    """The cards squads are picked from: the strongest copies of each player
+    plus `include` (cards already in the squad) — never the whole collection
+    (card_pool_service)."""
+    from app.services.card_pool_service import load_top_copies
+
+    return await load_top_copies(db, user_id, include=include)
 
 
 def require_any(chosen: dict) -> None:
@@ -256,7 +256,7 @@ async def auto_personal_squad(db: AsyncSession, user: User, template_index: int,
         preferred = frozenset(s.card.id for s in arena.slots if s.card is not None)
         if not preferred:
             raise ConflictError("Состав Card Arena пуст — копировать нечего")
-    cards = await owned_cards(db, user.id)
+    cards = await owned_cards(db, user.id, include=preferred)
     chosen = pick_cards(slots, cards, "tournament", preferred_ids=preferred)
     require_any(chosen)
     # The rules the next tournament match will really use (a running
@@ -340,7 +340,7 @@ async def arena_bench_upgrades(db: AsyncSession, user: User, template_index: int
     slots = [SlotSpec(s.code, s.category, s.ideal_position) for s in lineup_service.arena_slots(lineup.formation)]
     current = {s.slot_code: (s.card.id if s.card else None) for s in lineup.slots}
     return bench_upgrades(
-        slots, current, await owned_cards(db, user.id), max_diamonds=config.match_max_diamond_cards,
+        slots, current, await owned_cards(db, user.id, include=current.values()), max_diamonds=config.match_max_diamond_cards,
         max_path=config.match_max_path_cards,
     )
 
@@ -352,4 +352,4 @@ async def personal_bench_upgrades(db: AsyncSession, user: User, template_index: 
     squad = await personal_squad_service.get_squad(db, user, template_index)
     slots = [SlotSpec(s.code, s.category, s.ideal_position) for s in get_formation_slots(squad.formation)]
     current = {s.slot_code: s.user_card_id for s in squad.slots}
-    return bench_upgrades(slots, current, await owned_cards(db, user.id))
+    return bench_upgrades(slots, current, await owned_cards(db, user.id, include=current.values()))

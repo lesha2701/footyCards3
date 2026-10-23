@@ -22,7 +22,6 @@ from typing import Optional
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
@@ -61,6 +60,7 @@ from app.schemas.stratego import (
 from app.services import my_player_service, ranking_service, stake_guard_service
 from app.services import stratego_engine as engine
 from app.services import stratego_puzzles
+from app.services.card_pool_service import load_top_copies
 from app.services.game_config_service import get_config
 from app.services.match_service import BOT_NAMES
 from app.services.notification_service import notify
@@ -315,19 +315,16 @@ def _slot_counts(config: GameConfig) -> tuple[int, dict]:
     }
 
 
-async def _usable_cards(db: AsyncSession, user_id: int) -> list[UserCard]:
-    result = await db.execute(
-        select(UserCard)
-        .where(UserCard.owner_id == user_id, UserCard.is_locked_by_admin.is_(False))
-        .options(joinedload(UserCard.player))
-    )
-    return list(result.unique().scalars().all())
+async def _usable_cards(db: AsyncSession, user_id: int, include=None) -> list[UserCard]:
+    """The strongest copies of each player plus `include` (saved or submitted
+    picks) — not the whole collection (card_pool_service)."""
+    return await load_top_copies(db, user_id, include=include, unlocked_only=True)
 
 
-async def _usable_infos(db: AsyncSession, user_id: int) -> list[dict]:
+async def _usable_infos(db: AsyncSession, user_id: int, include=None) -> list[dict]:
     """The user's cards plus «Мой игрок» (when created and the feature is on)."""
     per_level = (await get_config(db)).stratego_skill_bonus_per_level
-    infos = [_card_info(c, per_level) for c in await _usable_cards(db, user_id)]
+    infos = [_card_info(c, per_level) for c in await _usable_cards(db, user_id, include)]
     mine = await my_player_service.engine_card(db, user_id)
     if mine is not None:
         infos.append(_with_skill(_my_player_info(mine), mine.skill_code, mine.skill_level, per_level))
@@ -345,10 +342,10 @@ async def _resolve_squad(
 ) -> tuple[dict[str, dict], dict[str, list[int]], list[dict]]:
     slots = engine.all_slots(counts)
     cslots = engine.card_slots(counts)
-    infos = await _usable_infos(db, user.id)
+    saved = user.stratego_squad or {}
+    infos = await _usable_infos(db, user.id, include=(saved.get("cards") or {}).values())
     by_card_id = {i["card"]["user_card_id"]: i for i in infos}
 
-    saved = user.stratego_squad or {}
     fixed: dict[str, dict] = {}
     for slot, card_id in (saved.get("cards") or {}).items():
         info = by_card_id.get(card_id)
@@ -415,7 +412,7 @@ async def set_squad(db: AsyncSession, user: User, cards: dict[str, int], layout:
         raise ConflictError("Выбери карточку для каждой роли")
     if len(set(cards.values())) != len(cslots):
         raise ConflictError("Одна карточка не может играть две роли")
-    infos = await _usable_infos(db, user.id)
+    infos = await _usable_infos(db, user.id, include=cards.values())
     by_card_id = {i["card"]["user_card_id"]: i for i in infos}
     chosen: dict[str, dict] = {}
     for slot, card_id in cards.items():

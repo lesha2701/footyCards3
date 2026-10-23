@@ -279,7 +279,11 @@ def _usable(card: UserCard) -> bool:
 
 async def _career_cards(db: AsyncSession, user_id: int, config=None) -> list:
     """Own cards plus «Мой игрок» (a duck-typed stand-in card, if created)."""
-    cards: list = await owned_cards(db, user_id)
+    # Every squad the user has in a career keeps its exact copies.
+    squads = (await db.execute(
+        select(CareerParticipant.squad_card_ids).where(CareerParticipant.user_id == user_id)
+    )).scalars().all()
+    cards: list = await owned_cards(db, user_id, include={i for ids in squads for i in (ids or [])})
     mine = await my_player_service.engine_card(db, user_id, config)
     if mine is not None:
         cards.append(mine)
