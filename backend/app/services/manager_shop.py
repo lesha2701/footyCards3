@@ -34,14 +34,14 @@ from app.services import wallet_service
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 
-KINDS = ("shape", "symbol", "kit", "frame", "theme", "stadium_name")
+KINDS = ("shape", "symbol", "rim", "fx", "kit", "frame", "theme", "stadium_name")
 PALETTE = (
     "#1f8a4c", "#0f5132", "#c62828", "#8e0000", "#1565c0", "#0d2b6b", "#6a1b9a", "#f9a825",
     "#ef6c00", "#212121", "#f5f5f5", "#00838f", "#ad1457", "#4e342e", "#9e9e9e", "#c6e63a",
 )
 DEFAULT_LOOK = {
     "shape": "shield", "symbol": "⚽", "color": "#1f8a4c", "color2": "#f5f5f5",
-    "kit": "plain", "kit_color": "#1f8a4c", "kit_color2": "#f5f5f5", "frame": "classic", "theme": "night",
+    "kit": "plain", "kit_color": "#1f8a4c", "kit_color2": "#f5f5f5", "frame": "classic", "theme": "night", "rim": "none", "fx": "none",
 }
 PRO_FRAME = "frame_gold"
 STADIUM_NAME_MAX = 32
@@ -171,7 +171,7 @@ async def set_look(db: AsyncSession, user: User, look: dict) -> dict:
     pro = is_pro(club)
     current = resolve_look(club)
     by_kind_value = {(i["kind"], i["value"]): i for i in catalog(config)}
-    for field, kind in (("shape", "shape"), ("symbol", "symbol"), ("kit", "kit"), ("frame", "frame"), ("theme", "theme")):
+    for field, kind in (("shape", "shape"), ("symbol", "symbol"), ("rim", "rim"), ("fx", "fx"), ("kit", "kit"), ("frame", "frame"), ("theme", "theme")):
         if field not in look:
             continue
         item = by_kind_value.get((kind, str(look[field])))

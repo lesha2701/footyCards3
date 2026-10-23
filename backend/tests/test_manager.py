@@ -464,3 +464,18 @@ async def test_catalog_filters_by_budget_price_and_free(client, db_session, bot_
     free = await client.get(f"{API}/manager/npc", headers=a_headers, params={"q": "Фильтр", "sort": "cheap", "free_only": True})
     assert names(free) == ["Фильтр 60", "Фильтр 70", "Фильтр 80"]
     assert (await client.get(f"{API}/manager/npc", headers=a_headers, params={"afford": "cheap"})).status_code == 422
+
+
+async def test_emblem_rim_and_effect_are_bought_then_worn(client, db_session, bot_token):
+    """«Обводка эмблемы» / «Эффект эмблемы»: "none" is free, the rest must be bought."""
+    config = await get_config(db_session)
+    codes = {i["code"]: i for i in manager_shop.catalog(config)}
+    assert codes["rim_none"]["stars"] == 0 and codes["fx_lightning"]["stars"] > 0
+    _a_id, a_headers = await _player(client, db_session, bot_token, 894301)
+    view = await _club(client, a_headers)
+    assert view["club"]["look"]["rim"] == "none" and view["club"]["look"]["fx"] == "none"
+    assert (await client.patch(f"{API}/manager/look", headers=a_headers, json={"rim": "gold"})).status_code == 409
+    assert (await client.patch(f"{API}/manager/look", headers=a_headers, json={"fx": "orbit"})).status_code == 409
+    assert (await client.post(f"{API}/manager/shop/rim_bronze", headers=a_headers)).status_code == 200
+    look = (await client.patch(f"{API}/manager/look", headers=a_headers, json={"rim": "bronze", "fx": "none"})).json()["club"]["look"]
+    assert look["rim"] == "bronze" and look["fx"] == "none"

@@ -83,6 +83,9 @@ export interface ManagerLook {
   kit_color2: string;
   frame: string;
   theme: string;
+  /** Emblem outline and effect from «Стиль» ("none" = without). */
+  rim?: string;
+  fx?: string;
 }
 
 export interface ManagerBase {
@@ -204,7 +207,7 @@ export interface ManagerRules {
 
 export interface ManagerCosmetic {
   code: string;
-  kind: "shape" | "symbol" | "kit" | "frame" | "theme" | "stadium_name";
+  kind: "shape" | "symbol" | "rim" | "fx" | "kit" | "frame" | "theme" | "stadium_name";
   name: string;
   value: string;
   coins: number;

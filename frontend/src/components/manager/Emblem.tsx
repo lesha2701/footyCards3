@@ -1,4 +1,5 @@
 import type { ManagerLook } from "@/api/manager";
+import { EmblemArt } from "@/components/clubs/ClubLogo";
 import { kitBackground } from "@/lib/managerLook";
 
 const SHAPES: Record<string, string> = {
@@ -12,14 +13,30 @@ const SHAPES: Record<string, string> = {
   castle: "M10 92 V30 H22 V16 H34 V30 H44 V10 H56 V30 H66 V16 H78 V30 H90 V92 Z",
 };
 
-/** The club emblem drawn from its look (shape, two colours, a symbol). */
-export default function Emblem({ look, size = 48, className = "" }: { look: Pick<ManagerLook, "shape" | "symbol" | "color" | "color2">; size?: number; className?: string }) {
+/** The club emblem drawn from its look: shape and colours (the second colour is the inner
+ * band), the symbol, and the «Обводка» / «Эффект» bought in «Стиль» (shared drawing with
+ * the clubs' ClubLogo). */
+export default function Emblem({ look, size = 48, className = "" }: {
+  look: Pick<ManagerLook, "shape" | "symbol" | "color" | "color2"> & Partial<Pick<ManagerLook, "rim" | "fx">>;
+  size?: number;
+  className?: string;
+}) {
   const path = SHAPES[look.shape] ?? SHAPES.shield;
+  const rim = look.rim && look.rim !== "none" ? look.rim : null;
+  const fx = look.fx && look.fx !== "none" ? look.fx : null;
   return (
-    <svg viewBox="0 0 100 100" width={size} height={size} className={className} aria-hidden="true">
-      <path d={path} fill={look.color} stroke={look.color2} strokeWidth={6} strokeLinejoin="round" />
-      <text x="50" y="58" textAnchor="middle" dominantBaseline="middle" fontSize="40">{look.symbol}</text>
-    </svg>
+    <span className={`inline-flex shrink-0 ${className}`} aria-hidden="true">
+      <EmblemArt
+        path={path}
+        color={look.color}
+        size={size}
+        outline={rim}
+        effect={fx}
+        glow={look.color2}
+        inside={<path d={path} fill="none" stroke={look.color2} strokeWidth={12} strokeLinejoin="round" />}
+        mark={<text x="50" y="56" textAnchor="middle" dominantBaseline="middle" fontSize="40">{look.symbol}</text>}
+      />
+    </span>
   );
 }
 
