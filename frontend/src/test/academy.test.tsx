@@ -55,6 +55,6 @@ describe("Академия", () => {
   it("the base tile on the home grid invites to claim the Academy's scouting report", async () => {
     wrap(<ModesGrid />);
     expect(await screen.findByText(/Скаутский отчёт готов/)).toBeInTheDocument();
-    expect(screen.getByText(/Клубная база/)).toBeInTheDocument();
+    expect(screen.getByText("База")).toBeInTheDocument();
   });
 });

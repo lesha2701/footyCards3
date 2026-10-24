@@ -108,7 +108,7 @@ describe("Клубная база", () => {
   it("the home modes grid has the base in place of the Academy and invites to collect the income", async () => {
     wrap(<ModesGrid />);
     expect(await screen.findByText(/Доход готов: \+120/)).toBeInTheDocument();
-    expect(screen.getByText(/Клубная база/)).toBeInTheDocument();
+    expect(screen.getByText("База")).toBeInTheDocument();
     expect(screen.queryByText(/^Академия/)).toBeNull();
   });
 
