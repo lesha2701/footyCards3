@@ -219,10 +219,11 @@ function ModeTile({
   return (
     <button
       onClick={onClick}
-      className={`relative flex min-h-[96px] flex-col justify-between gap-2 overflow-hidden rounded-2xl p-3 text-left ring-1 active:scale-[0.97] ${t.box}`}
+      className={`relative flex min-h-[96px] flex-col justify-between gap-2 overflow-hidden rounded-2xl p-3 text-left ring-1 active:scale-[0.97] ${picture ? "bg-bg-surface ring-white/10" : t.box}`}
     >
       {picture && (
-        <img src={picture} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-25 blur-xl" />
+        // The same calm surface for every tile; only a soft glow of the picture behind it.
+        <img src={picture} alt="" aria-hidden className="pointer-events-none absolute -left-4 -top-4 h-24 w-24 rounded-full object-cover opacity-40 blur-2xl" />
       )}
       {picture ? (
         <span className="relative h-12 w-12 shrink-0">
