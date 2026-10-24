@@ -14,7 +14,7 @@ import {
   setStadiumLook,
   upgradeClubBaseBuilding,
 } from "@/api/clubBase";
-import BaseMap from "@/components/base/BaseMap";
+import IllustratedBaseMap from "@/components/base/IllustratedBaseMap";
 import FirstVisitHint from "@/components/common/FirstVisitHint";
 import { IconClose, IconCoin } from "@/components/icons";
 import { SEAT_COLORS, formatBuildTime, hoursLabel, upgradeBlocker } from "@/lib/clubBase";
@@ -339,7 +339,7 @@ export default function ClubBasePage() {
       />
 
       <section className="rounded-3xl border border-path/25 bg-bg-surface p-2">
-        <BaseMap state={state} onPick={setPicked} onAcademy={() => navigate("/academy")} />
+        <IllustratedBaseMap state={state} onPick={setPicked} onAcademy={() => navigate("/academy")} />
         {state.construction ? (
           <div className="mt-2 flex items-center gap-2 rounded-2xl bg-legend/10 p-2.5">
             <span className="text-xl" aria-hidden>🏗️</span>
