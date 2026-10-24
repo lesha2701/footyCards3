@@ -18,6 +18,7 @@ import IllustratedBaseMap from "@/components/base/IllustratedBaseMap";
 import GameHero from "@/components/common/GameHero";
 import FirstVisitHint from "@/components/common/FirstVisitHint";
 import { IconClose, IconCoin } from "@/components/icons";
+import { thumbOf } from "@/lib/baseArt";
 import { SEAT_COLORS, formatBuildTime, hoursLabel, upgradeBlocker } from "@/lib/clubBase";
 import { formatGameError } from "@/lib/errors";
 import { useMarkSeen } from "@/lib/seenSections";
@@ -303,7 +304,12 @@ export default function ClubBasePage() {
       key={b.code} type="button" onClick={() => setPicked(b.code)}
       className={`flex min-h-[56px] items-center gap-3 rounded-2xl bg-bg-surface p-2.5 text-left active:scale-[0.99] ${b.building ? "ring-1 ring-legend/60" : ""}`}
     >
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-path/10 text-xl" aria-hidden>{b.emoji}</span>
+      {thumbOf(b.code) ? (
+        <img src={thumbOf(b.code)} alt="" aria-hidden
+             className={`h-11 w-11 shrink-0 rounded-xl object-cover ring-1 ring-white/10 ${b.level === 0 ? "opacity-60 grayscale" : ""}`} />
+      ) : (
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-path/10 text-xl" aria-hidden>{b.emoji}</span>
+      )}
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
           <span className="truncate font-display text-sm font-bold text-ink-chalk">{b.name}</span>
@@ -396,7 +402,8 @@ export default function ClubBasePage() {
         <h2 className="mt-2 text-xs font-semibold uppercase tracking-wider text-ink-mist-dim">🌱 Академия</h2>
         <button type="button" onClick={() => navigate("/academy")}
                 className="flex min-h-[56px] items-center gap-3 rounded-2xl border border-path/25 bg-path/5 p-2.5 text-left">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-path/15 text-xl" aria-hidden>🌱</span>
+          <img src={thumbOf("academy")} alt="" aria-hidden
+               className={`h-11 w-11 shrink-0 rounded-xl object-cover ring-1 ring-white/10 ${state.academy_level === 0 ? "opacity-60 grayscale" : ""}`} />
           <span className="min-w-0 flex-1">
             <span className="flex items-baseline justify-between gap-2">
               <span className="font-display text-sm font-bold text-ink-chalk">Академия</span>

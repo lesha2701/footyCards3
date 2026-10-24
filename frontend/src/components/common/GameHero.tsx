@@ -18,9 +18,9 @@ export default function GameHero({ game, title, subtitle, children }: {
     );
   }
   return (
-    <header className="relative overflow-hidden rounded-3xl ring-1 ring-white/10">
-      <img src={art} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-150 object-cover opacity-70 blur-2xl" />
-      <span className="absolute inset-0 bg-gradient-to-r from-black/10 via-black/35 to-black/70" aria-hidden />
+    <header className="relative overflow-hidden rounded-3xl bg-bg-surface ring-1 ring-white/10">
+      {/* A soft glow of the picture's own colours behind it — the card itself stays the app's surface. */}
+      <img src={art} alt="" aria-hidden className="absolute -left-6 top-1/2 h-32 w-32 -translate-y-1/2 rounded-full object-cover opacity-45 blur-2xl" />
       <div className="relative flex items-center gap-3 p-3">
         <img
           src={art}
@@ -28,8 +28,8 @@ export default function GameHero({ game, title, subtitle, children }: {
           className="h-16 w-16 shrink-0 rounded-2xl object-cover shadow-[0_10px_24px_-8px_rgba(0,0,0,0.8)] ring-1 ring-white/20"
         />
         <div className="min-w-0 flex-1">
-          <h1 className="font-display text-xl font-bold leading-tight text-ink-chalk drop-shadow">{title}</h1>
-          {subtitle && <p className="mt-0.5 text-caption text-ink-chalk/80">{subtitle}</p>}
+          <h1 className="font-display text-xl font-bold leading-tight text-ink-chalk">{title}</h1>
+          {subtitle && <p className="mt-0.5 text-caption text-ink-mist">{subtitle}</p>}
         </div>
         {children}
       </div>
