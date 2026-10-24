@@ -15,6 +15,7 @@ import {
   upgradeClubBaseBuilding,
 } from "@/api/clubBase";
 import IllustratedBaseMap from "@/components/base/IllustratedBaseMap";
+import GameHero from "@/components/common/GameHero";
 import FirstVisitHint from "@/components/common/FirstVisitHint";
 import { IconClose, IconCoin } from "@/components/icons";
 import { SEAT_COLORS, formatBuildTime, hoursLabel, upgradeBlocker } from "@/lib/clubBase";
@@ -317,16 +318,12 @@ export default function ClubBasePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex items-end justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-ink-chalk">🏟️ Клубная база</h1>
-          <p className="text-xs text-ink-mist">Твой тренировочный городок: стадион, корпуса и Академия</p>
+      <GameHero game="home-base" title="Клубная база" subtitle="Стадион, корпуса и Академия">
+        <div className="shrink-0 rounded-2xl bg-black/35 px-2.5 py-1 text-right">
+          <p className="font-display text-xl font-bold leading-tight text-path">{state.total_level}</p>
+          <p className="text-micro uppercase tracking-wider text-ink-chalk/70">из {state.max_level + state.academy_max_level}</p>
         </div>
-        <div className="text-right">
-          <p className="font-display text-2xl font-bold text-path">{state.total_level}</p>
-          <p className="text-micro uppercase tracking-wider text-ink-mist">уровень из {state.max_level + state.academy_max_level}</p>
-        </div>
-      </header>
+      </GameHero>
 
       <FirstVisitHint
         id="club-base"
