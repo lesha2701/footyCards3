@@ -135,6 +135,16 @@ def on_ideal_position(position, ideal) -> bool:
     return position == ideal or POSITION_EQUIVALENTS.get(position) == ideal
 
 
+def slot_fit(position, slot) -> float:
+    """How much of a card's rating counts in this slot: its own position
+    1.0, another position of the slot's line 0.9, anything else 0.75."""
+    if on_ideal_position(position, slot.ideal_position):
+        return 1.0
+    if position in CATEGORY_POSITIONS[slot.category]:
+        return 0.9
+    return 0.75
+
+
 
 TEMPLATE_COUNT = 5
 DEFAULT_TEMPLATE_NAMES = {i: f"Шаблон {i}" for i in range(1, TEMPLATE_COUNT + 1)}
@@ -251,12 +261,7 @@ def calculate_base_strength(
     total = 0.0
     for card, slot in cards_with_slots:
         player = card.player
-        if on_ideal_position(player.position, slot.ideal_position):
-            fit = 1.0
-        elif player.position in CATEGORY_POSITIONS[slot.category]:
-            fit = 0.9
-        else:
-            fit = 0.75
+        fit = slot_fit(player.position, slot)
         # club_tactical_profile_service.py reuses this function with ClubCard
         # rows (a separate club-owned card pool with no diamond-leveling
         # concept of its own) alongside personal UserCard rows — getattr

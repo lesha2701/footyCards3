@@ -163,3 +163,24 @@ async def test_serialized_squad_hides_cards_no_longer_owned(client, db_session, 
     assert slot.user_card_id is None and slot.player is None
     assert all(s.user_card_id != moved_id for s in squad.slots)
     assert await svc.is_squad_complete(db_session, seller_id) is False
+
+
+async def test_slots_show_the_copy_rating_and_the_off_position_cost(client, db_session, bot_token):
+    from app.models.card import UserCard
+    from app.models.enums import CardSource
+
+    user = await make_ready_user(client, db_session, bot_token, 841020)
+    squad = await svc.get_squad(db_session, user)
+    cdm = next(s for s in squad.slots if s.ideal_position == "CDM")
+    assert cdm.rating == 70 and cdm.fit_pct == 100 and cdm.match_rating == 70
+
+    # A boosted CM (stars add +4) dropped into the CDM slot: 74 rating, 90 % fit.
+    cm = await create_player(db_session, position=Position.CM, rating=70)
+    card = UserCard(owner_id=user.id, player_id=cm.id, source=CardSource.seed, star_rating_bonus=4, stars=2)
+    db_session.add(card)
+    await db_session.commit()
+    await db_session.refresh(card)
+    await svc.set_squad_cards(db_session, user, PersonalSquadSetRequest(
+        slots=[PersonalSquadSlotIn(slot_code=cdm.slot_code, user_card_id=card.id)]))
+    slot = next(s for s in (await svc.get_squad(db_session, user)).slots if s.slot_code == cdm.slot_code)
+    assert (slot.rating, slot.fit_pct, slot.match_rating, slot.stars) == (74, 90, 67, 2)

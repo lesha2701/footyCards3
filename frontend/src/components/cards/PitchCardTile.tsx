@@ -21,6 +21,7 @@ export default function PitchCardTile({
   skillLevel,
   skillInactiveReason = null,
   unavailable = null,
+  ratingDown = false,
   children,
 }: {
   /** Anything card-like: owned cards, club cards, FUT Draft candidates. */
@@ -41,6 +42,8 @@ export default function PitchCardTile({
   /** Club squads: suspended / injured — red frame + mark (bottom-right,
    * which club cards never use for «Академия»). */
   unavailable?: "red_card" | "injury" | null;
+  /** The rating shown is cut (e.g. off position) — drawn red. */
+  ratingDown?: boolean;
   children?: React.ReactNode;
 }) {
   const isPath = !!player.path_talent_code;
@@ -56,7 +59,9 @@ export default function PitchCardTile({
       <div className={`relative aspect-square w-full rounded-lg bg-gradient-to-b ${frame} p-[2px]`}>
         <div className="relative h-full w-full overflow-hidden rounded-[6px] bg-black/40">
           <img src={imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" draggable={false} />
-          <span className="absolute left-0.5 top-0.5 rounded bg-black/75 px-1 py-px text-center font-display text-micro font-bold leading-none text-white">
+          <span className={`absolute left-0.5 top-0.5 rounded px-1 py-px text-center font-display text-micro font-bold leading-none ${
+            ratingDown ? "bg-red-600/90 text-white" : "bg-black/75 text-white"
+          }`}>
             {player.rating}
             {stars > 0 && (
               <span className="block text-micro leading-none text-amber-300" aria-label={`Звёзд: ${stars}`}>

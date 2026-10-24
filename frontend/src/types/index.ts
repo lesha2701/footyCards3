@@ -2307,6 +2307,15 @@ export interface PersonalSquadSlot {
   player: Player | null;
   skill_code?: string | null;
   skill_level?: number | null;
+  /** The copy's rating with its own bonuses; the slot fit (100 / 90 / 75 %);
+   * the chemistry bonus; what it plays at: (rating + chemistry) × fit. */
+  rating?: number | null;
+  fit_pct?: number;
+  chemistry_bonus?: number;
+  match_rating?: number | null;
+  stars?: number;
+  path_stage?: number;
+  prestige?: number;
 }
 
 export interface PersonalSquad {

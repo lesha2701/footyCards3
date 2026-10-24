@@ -161,12 +161,18 @@ export default function PlayerTournamentSquadPage() {
     setCardsMutation.mutate(slots);
   };
   const pickerChemistryNote = (card: UserCard) => {
-    if (!chemistryOn || !pickerSlot) return null;
-    const gain = chemistryGain(chemistry, chemSlots, pickerSlot.slot_code, card.player);
-    if (gain == null) return null;
+    if (!pickerSlot) return null;
+    const fit = slotFitPct(card.player.position, pickerSlot);
+    const gain = chemistryOn ? chemistryGain(chemistry, chemSlots, pickerSlot.slot_code, card.player) : null;
+    if (fit === 100 && gain == null) return null;
     return (
-      <span className={`font-mono text-micro font-bold ${gain > 0 ? "text-accent-green" : gain < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
-        {gain > 0 ? "+" : ""}{gain} хим.
+      <span className="flex items-center gap-1.5">
+        {fit < 100 && <span className="font-mono text-micro font-bold text-red-400">−{100 - fit}% не своя позиция</span>}
+        {gain != null && (
+          <span className={`font-mono text-micro font-bold ${gain > 0 ? "text-accent-green" : gain < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
+            {gain > 0 ? "+" : ""}{gain} хим.
+          </span>
+        )}
       </span>
     );
   };
@@ -381,11 +387,16 @@ export default function PlayerTournamentSquadPage() {
                   >
                     {slot.player ? (
                       <PitchCardTile
-                        player={slot.player}
+                        player={{ ...slot.player, rating: slot.match_rating ?? slot.player.rating }}
+                        stars={slot.stars ?? 0}
+                        pathStage={slot.path_stage}
+                        prestige={slot.prestige ?? 0}
+                        ratingDown={(slot.fit_pct ?? 100) < 100}
                         skillCode={slot.skill_code}
                         skillLevel={slot.skill_level}
                         skillInactiveReason={skillInactive(slot.skill_code, slot.player.position)}
                       >
+                        <SlotPosition slot={slot} />
                         {chemistryOn && chemBySlot.has(slot.slot_code) && (
                           <ChemistryDiamonds
                             points={chemBySlot.get(slot.slot_code)!.points}
@@ -397,7 +408,7 @@ export default function PlayerTournamentSquadPage() {
                     ) : (
                       <>
                         <IconPlus size={18} className="text-ink-mist-dim" />
-                        <span className="text-micro text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
+                        <span className="font-mono text-micro font-bold text-accent-cyan">{slot.ideal_position}</span>
                       </>
                     )}
                   </button>
@@ -405,6 +416,10 @@ export default function PlayerTournamentSquadPage() {
             </div>
           ); })}
         </div>
+
+        <p className="mt-2 text-center text-micro text-ink-mist-dim">
+          Под картой — позиция места. На чужой позиции игрок слабее: в своей линии 90%, в чужой 75% — рейтинг станет красным.
+        </p>
 
         {squad?.coach && (
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
@@ -426,7 +441,7 @@ export default function PlayerTournamentSquadPage() {
         <CardPickerModal
           showSkills
           open
-          title={`Выбери на позицию ${CATEGORY_LABELS[pickerSlot.category as FormationSlot["category"]]}`}
+          title={`Место ${pickerSlot.ideal_position} · ${CATEGORY_LABELS[pickerSlot.category as FormationSlot["category"]]}`}
           cards={cardsForSlot(pickerSlot)}
           disabledCardIds={cardsForSlot(pickerSlot).filter((c) => usedPlayerIds.includes(c.player.id)).map((c) => c.id)}
           onSelect={(card) => assignSlot(pickerSlot, card)}
@@ -451,5 +466,25 @@ export default function PlayerTournamentSquadPage() {
         onClose={() => setStadiumPickerOpen(false)}
       />
     </div>
+  );
+}
+
+// Mirrors lineup_service.slot_fit: own position (LB/LWB, RB/RWB count as
+// one) 100 %, another position of the slot's line 90 %, anything else 75 %.
+const EQUIVALENT: Record<string, string> = { LB: "LWB", LWB: "LB", RB: "RWB", RWB: "RB" };
+function slotFitPct(position: string, slot: PersonalSquadSlot): number {
+  if (position === slot.ideal_position || EQUIVALENT[position] === slot.ideal_position) return 100;
+  return CATEGORY_POSITIONS[slot.category as FormationSlot["category"]]?.includes(position as never) ? 90 : 75;
+}
+
+/** Under a filled slot: the slot's own position, and what playing off it costs. */
+function SlotPosition({ slot }: { slot: PersonalSquadSlot }) {
+  const fit = slot.fit_pct ?? 100;
+  const cut = slot.rating != null && slot.match_rating != null ? slot.rating + (slot.chemistry_bonus ?? 0) - slot.match_rating : 0;
+  return (
+    <span className={`mt-0.5 block text-center font-mono text-micro font-bold leading-tight ${fit < 100 ? "text-red-400" : "text-ink-mist"}`}>
+      {slot.ideal_position}
+      {fit < 100 && <span className="block font-normal">−{cut} ({fit}%)</span>}
+    </span>
   );
 }

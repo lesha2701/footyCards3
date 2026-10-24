@@ -20,7 +20,8 @@ from app.services.chemistry_service import ChemistryRules
 from app.services.club_formation_service import CLUB_FORMATIONS, get_formation_slots
 from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES
 from app.services.game_config_service import get_config
-from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot
+from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot, slot_fit
+from app.services.player_stats_service import card_rating_bonus
 
 TEMPLATE_COUNT = 5
 DEFAULT_TEMPLATE_NAMES = {i: f"Шаблон {i}" for i in range(1, TEMPLATE_COUNT + 1)}
@@ -111,8 +112,22 @@ def _serialize(
     by_slot = {c.slot_code: c.user_card for c in squad.cards if c.user_card.owner_id == squad.user_id}
     slots = []
     formation_slots = get_formation_slots(squad.formation)
+    chemistry = chemistry_service.compute_chemistry(
+        [(by_slot[s.code], s) for s in formation_slots if s.code in by_slot], squad.formation, rules,
+        slot_count=len(formation_slots),
+        # Shown as a home match: the stadium extra only applies at home.
+        coach_country=chemistry_service.coach_country_of(squad.user_coach_card.coach if squad.user_coach_card else None),
+        stadium_club=chemistry_service.stadium_club_of(squad.user_stadium_card.stadium if squad.user_stadium_card else None),
+    ) if rules is not None else None
     for slot in formation_slots:
         card = by_slot.get(slot.code)
+        rating = fit = chem = None
+        if card is not None:
+            # Same order as the tournament engine (player_tournament_simulation_service._engine_card
+            # and lineup_service.calculate_base_strength).
+            rating = min(99, card.player.rating + card_rating_bonus(card))
+            chem = chemistry.rating_bonus(slot.code) if chemistry is not None else 0
+            fit = slot_fit(card.player.position, slot)
         slots.append(PersonalSquadSlotOut(
             slot_code=slot.code, category=slot.category, ideal_position=slot.ideal_position.value,
             user_card_id=card.id if card else None,
@@ -120,6 +135,10 @@ def _serialize(
             player=card.player if card else None,
             skill_code=card.skill_code if card else None,
             skill_level=card.skill_level if card else None,
+            rating=rating, fit_pct=round((fit or 1) * 100), chemistry_bonus=chem or 0,
+            match_rating=round(chemistry_service.boosted_rating(rating, chem) * fit) if card else None,
+            stars=(card.stars or 0) if card else 0, path_stage=(card.path_stage or 0) if card else 0,
+            prestige=(card.prestige or 0) if card else 0,
         ))
     coach = None
     if squad.user_coach_card is not None:
@@ -143,16 +162,7 @@ def _serialize(
         slots=slots, coach=coach, stadium=stadium,
         # No single team-strength number in this mode (the tournament engine
         # works on per-card ratings and zones), so no strength_bonus either.
-        chemistry=chemistry_service.to_out(
-            chemistry_service.compute_chemistry(
-                [(by_slot[s.code], s) for s in formation_slots if s.code in by_slot], squad.formation, rules,
-                slot_count=len(formation_slots),
-                # Shown as a home match: the stadium extra only applies at home.
-                coach_country=chemistry_service.coach_country_of(squad.user_coach_card.coach if squad.user_coach_card else None),
-                stadium_club=chemistry_service.stadium_club_of(squad.user_stadium_card.stadium if squad.user_stadium_card else None),
-            ) if rules is not None else None,
-            rules, frozen=frozen, live_enabled=live_enabled,
-        ),
+        chemistry=chemistry_service.to_out(chemistry, rules, frozen=frozen, live_enabled=live_enabled),
     )
 
 

@@ -44,6 +44,17 @@ class PersonalSquadSlotOut(BaseModel):
     player: PlayerOut | None = None
     skill_code: str | None = None
     skill_level: int | None = None
+    # The copy's own rating (stars, diamond, «Академия», artifacts, equipment
+    # included), its line-fit in this slot (100 / 90 / 75 % —
+    # lineup_service.slot_fit), the chemistry bonus (0 while chemistry is
+    # off) and what that makes for the match: (rating + chemistry) × fit.
+    rating: int | None = None
+    fit_pct: int = 100
+    chemistry_bonus: int = 0
+    match_rating: int | None = None
+    stars: int = 0
+    path_stage: int = 0
+    prestige: int = 0
 
 
 class PersonalSquadOut(BaseModel):
