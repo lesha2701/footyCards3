@@ -82,7 +82,7 @@ export default function ModesGrid() {
   return (
     <section>
       <h2 className="mb-2 font-display text-base font-bold text-ink-chalk">Режимы</h2>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {career?.enabled !== false && (
           <ModeTile
             tint="cyan"
@@ -131,7 +131,7 @@ export default function ModesGrid() {
             tint="path"
             icon={<IconCampus size={18} />}
             art="home-base"
-            title="Клубная база"
+            title="База"
             corner={<NewBadge section="club-base" />}
             status={
               !base
@@ -219,28 +219,28 @@ function ModeTile({
   return (
     <button
       onClick={onClick}
-      className={`relative flex min-h-[96px] flex-col justify-between gap-2 overflow-hidden rounded-2xl p-3 text-left ring-1 active:scale-[0.97] ${picture ? "bg-bg-surface ring-white/10" : t.box}`}
+      className={`relative flex flex-col items-center gap-1.5 overflow-hidden rounded-2xl px-1.5 pb-2 pt-2.5 text-center ring-1 active:scale-[0.97] ${picture ? "bg-bg-surface ring-white/10" : t.box}`}
     >
       {picture && (
         // The same calm surface for every tile; only a soft glow of the picture behind it.
-        <img src={picture} alt="" aria-hidden className="pointer-events-none absolute -left-4 -top-4 h-24 w-24 rounded-full object-cover opacity-40 blur-2xl" />
+        <img src={picture} alt="" aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-20 w-20 -translate-x-1/2 rounded-full object-cover opacity-40 blur-2xl" />
       )}
-      {picture ? (
-        <span className="relative h-12 w-12 shrink-0">
-          <img src={picture} alt="" className="h-12 w-12 rounded-xl object-cover shadow-[0_8px_18px_-8px_rgba(0,0,0,0.8)] ring-1 ring-white/15" />
-          {badge && <span className="absolute -bottom-1.5 -right-1.5">{badge}</span>}
-        </span>
-      ) : (
-        <span className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl ${t.icon}`}>{icon}</span>
-      )}
+      <span className="relative">
+        {picture ? (
+          <img src={picture} alt="" className="h-14 w-14 rounded-2xl object-cover shadow-[0_8px_18px_-8px_rgba(0,0,0,0.8)] ring-1 ring-white/15" />
+        ) : (
+          <span className={`flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl ${t.icon}`}>{icon}</span>
+        )}
+        {badge && <span className="absolute -bottom-1.5 -right-1.5">{badge}</span>}
+      </span>
       {alert ? (
-        <span className="absolute right-3 top-3 h-2.5 w-2.5 animate-pulse rounded-full bg-accent-lime" aria-label="Есть действие" />
+        <span className="absolute right-2 top-2 h-2 w-2 animate-pulse rounded-full bg-accent-lime" aria-label="Есть действие" />
       ) : (
-        corner && <span className="absolute right-2.5 top-2.5">{corner}</span>
+        corner && <span className="absolute right-1 top-1 origin-top-right scale-75">{corner}</span>
       )}
-      <span className="relative min-w-0">
-        <span className="block truncate font-display text-sm font-bold text-ink-chalk">{title}</span>
-        <span className={`block truncate text-xs ${alert ? `font-semibold ${t.text}` : "text-ink-mist"}`}>{status}</span>
+      <span className="relative w-full min-w-0">
+        <span className="block truncate font-display text-[13px] font-bold leading-tight text-ink-chalk">{title}</span>
+        <span className={`mt-0.5 block truncate text-[11px] leading-tight ${alert ? `font-semibold ${t.text}` : "text-ink-mist"}`}>{status}</span>
       </span>
     </button>
   );
