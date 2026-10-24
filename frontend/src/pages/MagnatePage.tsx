@@ -8,6 +8,7 @@ import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronLeft, IconCoin, IconHelp, IconPlay, IconStadium, IconTrophy, IconUsers } from "@/components/icons";
 import MagnateRulesModal from "@/components/magnate/MagnateRulesModal";
 import { MODE_LABELS } from "@/components/magnate/magnateMeta";
+import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 import type { MagnateMatch } from "@/types";
 
@@ -46,14 +47,17 @@ export default function MagnatePage() {
         <button onClick={() => navigate("/play")} className="rounded-full bg-white/5 p-2 text-ink-mist active:scale-95" aria-label="Назад">
           <IconChevronLeft size={16} />
         </button>
-        <h1 className="flex-1 font-display text-xl font-bold text-ink-chalk">Футбольный магнат</h1>
-        <button
-          onClick={() => setRulesOpen(true)}
-          aria-label="Правила"
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-ink-mist active:scale-95"
-        >
-          <IconHelp size={15} />
-        </button>
+        <div className="min-w-0 flex-1">
+          <GameHero game="magnate" title="Футбольный магнат">
+            <button
+              onClick={() => setRulesOpen(true)}
+              aria-label="Правила"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-black/35 text-ink-chalk active:scale-95"
+            >
+              <IconHelp size={15} />
+            </button>
+          </GameHero>
+        </div>
       </div>
 
       <p className="text-xs leading-relaxed text-ink-mist">

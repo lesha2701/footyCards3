@@ -29,7 +29,8 @@ import { MarkingCard, PlanHints, RolesCard } from "@/components/career/RolesMark
 import { OffseasonPanel, SeasonSummaryView } from "@/components/career/Offseason";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconTrophy, IconUsers } from "@/components/icons";
+import { IconChevronRight, IconClock, IconCoin, IconTrophy, IconUsers } from "@/components/icons";
+import GameHero from "@/components/common/GameHero";
 import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
 import { formatGameError } from "@/lib/errors";
 import { CATEGORY_POSITIONS } from "@/lib/formation";
@@ -76,10 +77,7 @@ export default function CareerPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="flex items-center gap-2 font-display text-xl font-bold text-ink-chalk">
-        <IconFlagCheckered size={20} className="text-accent-lime" />
-        Карьера тренера
-      </h1>
+      <GameHero game="career" title="Карьера тренера" />
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
 
       {data.profile && <CoachProfileCard profile={data.profile} />}

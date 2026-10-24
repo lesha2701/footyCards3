@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { claimPairsReward, flipPairsCard, startPairs } from "@/api/games";
 import { IconCard, IconCoin, IconTrophy } from "@/components/icons";
 import PrimaryActionButton from "@/components/common/PrimaryActionButton";
+import GameHero from "@/components/common/GameHero";
 import { staticUrl } from "@/lib/api";
 import MuseDateBanner from "@/components/muses/MuseDateBanner";
 import { formatGameError } from "@/lib/errors";
@@ -119,7 +120,7 @@ export default function PairsGamePage() {
   if (phase === "idle") {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="font-display text-xl font-bold text-ink-chalk">Найди пару</h1>
+        <GameHero game="pairs" title="Найди пару" />
         <MuseDateBanner />
         <p className="text-sm text-ink-mist">
           Поле 5×5. Переворачивай по две карточки и ищи одинаковых футболистов. Среди карт спрятана одна особая —

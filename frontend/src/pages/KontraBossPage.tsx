@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchKontraBoss, startKontraBoss } from "@/api/kontra";
 import { IconChevronLeft, IconCoin } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
+import { kontraBossArt } from "@/lib/bossArt";
 
 const fmt = (n: number) => n.toLocaleString("ru-RU");
 
@@ -25,6 +26,7 @@ export default function KontraBossPage() {
     onError: (err) => setError(formatGameError(err, "Не удалось начать бой")),
   });
   if (!boss) return null;
+  const art = kontraBossArt(boss.code, boss.name);
   const left = Math.max(0, boss.week_hp - boss.week_damage);
   const pct = boss.week_hp ? Math.max(0, Math.round((left * 100) / boss.week_hp)) : 0;
 
@@ -34,6 +36,9 @@ export default function KontraBossPage() {
         <IconChevronLeft size={16} /> Контратака
       </button>
       <section className="rounded-3xl bg-red-950/50 p-4 ring-1 ring-red-500/40">
+        {art && (
+          <img src={art} alt={boss.name} className="mx-auto mb-3 h-48 w-48 rounded-3xl object-cover shadow-[0_14px_36px_-10px_rgba(0,0,0,0.85)] ring-1 ring-red-400/30" />
+        )}
         <p className="font-mono text-micro uppercase tracking-wider text-red-300">Босс недели · фаза {boss.phase}</p>
         <h1 className="font-display text-2xl font-black text-ink-chalk">{boss.name}</h1>
         <p className="text-xs text-ink-mist">{boss.tagline}</p>

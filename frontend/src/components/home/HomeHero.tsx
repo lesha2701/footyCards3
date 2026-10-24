@@ -110,26 +110,26 @@ export default function HomeHero({
             </span>
           )}
         </button>
-        <div className="min-w-0 flex-1">
-          <p className="font-mono text-micro uppercase tracking-wider text-ink-mist">С возвращением</p>
-          <p className="flex items-center gap-1.5 truncate font-display text-lg font-bold text-ink-chalk">
+        {/* Greeting, name and the rating stacked — the Muse needs the right side of the row. */}
+        <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
+          <p className="max-w-full truncate font-mono text-micro uppercase tracking-wider text-ink-mist">С возвращением</p>
+          <p className="flex max-w-full items-center gap-1.5 font-display text-lg font-bold leading-tight text-ink-chalk">
             <span className="truncate">{name}</span>
             <UserBadge badge={profile.active_badge} />
           </p>
+          {profile.arena_rank > 0 && (
+            <button
+              type="button"
+              onClick={() => navigate("/ranking")}
+              className="flex max-w-full items-center gap-1 rounded-full bg-accent-lime/10 px-2 py-0.5 ring-1 ring-accent-lime/25 active:scale-95"
+              aria-label={`Место в рейтинге: ${profile.arena_rank}`}
+            >
+              <IconTrophy size={12} className="shrink-0 text-accent-lime" />
+              <span className="font-mono text-xs font-bold text-accent-lime tabular-nums">#{profile.arena_rank}</span>
+              <span className="truncate text-micro text-ink-mist">в рейтинге</span>
+            </button>
+          )}
         </div>
-        {profile.arena_rank > 0 && (
-          <button
-            type="button"
-            onClick={() => navigate("/ranking")}
-            className="flex shrink-0 flex-col items-end rounded-2xl bg-accent-lime/10 px-2.5 py-1 active:scale-95"
-            aria-label={`Место в рейтинге: ${profile.arena_rank}`}
-          >
-            <span className="flex items-center gap-1 font-mono text-sm font-bold text-accent-lime tabular-nums">
-              <IconTrophy size={13} />#{profile.arena_rank}
-            </span>
-            <span className="text-micro uppercase tracking-wider text-ink-mist">рейтинг</span>
-          </button>
-        )}
         <HeroMusePortrait />
       </div>
     </section>

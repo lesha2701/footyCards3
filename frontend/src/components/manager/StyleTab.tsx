@@ -20,6 +20,8 @@ import Emblem, { KitShirt } from "./Emblem";
 const SECTIONS: { kind: ManagerCosmetic["kind"]; field: keyof ManagerLook; title: string }[] = [
   { kind: "shape", field: "shape", title: "Форма эмблемы" },
   { kind: "symbol", field: "symbol", title: "Символ" },
+  { kind: "rim", field: "rim", title: "Обводка эмблемы" },
+  { kind: "fx", field: "fx", title: "Эффект эмблемы" },
   { kind: "kit", field: "kit", title: "Рисунок формы" },
   { kind: "frame", field: "frame", title: "Рамка карточек «Поделиться»" },
   { kind: "theme", field: "theme", title: "Цветовая тема клуба" },
@@ -81,6 +83,8 @@ export default function StyleTab({ view, club, onView, onError }: {
                     className="flex h-12 w-full items-center justify-center disabled:opacity-50" aria-label={c.name}>
                     {kind === "shape" && <Emblem look={{ ...club.look, shape: c.value }} size={40} />}
                     {kind === "symbol" && <span className="text-3xl">{c.value}</span>}
+                    {kind === "rim" && <Emblem look={{ ...club.look, rim: c.value }} size={40} />}
+                    {kind === "fx" && <Emblem look={{ ...club.look, fx: c.value }} size={40} />}
                     {kind === "kit" && <KitShirt look={{ ...club.look, kit: c.value }} size={40} />}
                     {kind === "frame" && <span className="h-10 w-8 rounded-md border-4 bg-bg-base" style={{ borderColor: FRAME_COLORS[c.value] ?? "#fff" }} />}
                     {kind === "theme" && <span className={`h-10 w-full rounded-lg bg-gradient-to-br ${themeClass(c.value)} ring-1 ring-white/10`} />}

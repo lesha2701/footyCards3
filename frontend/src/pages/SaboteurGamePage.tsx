@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { claimSaboteurReward, endSaboteur, revealSaboteurCell, startSaboteur } from "@/api/games";
 import { IconCoin, IconFlagCheckered, IconHelp, IconProfile } from "@/components/icons";
 import PrimaryActionButton from "@/components/common/PrimaryActionButton";
+import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -92,7 +93,7 @@ export default function SaboteurGamePage() {
   if (phase === "idle") {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="font-display text-xl font-bold text-ink-chalk">Футбольный фанат</h1>
+        <GameHero game="saboteur" title="Футбольный фанат" />
         <p className="text-sm text-ink-mist">
           Ты — фанат, который пробирается сквозь стюардов к любимому игроку. На каждой линии выбирай одну из{" "}
           {LINE_SIZE} ячеек. Прошёл мимо стюарда — линия открывается дальше и награда растёт. Заберёшь накопленное

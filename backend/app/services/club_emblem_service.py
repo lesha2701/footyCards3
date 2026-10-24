@@ -57,6 +57,26 @@ DEFAULT_CATALOG: list[tuple[str, str, str, int, int]] = [
     ("effect", "shine", "Блеск", 0, 150),
     ("effect", "flame", "Пламя", 0, 150),
     ("effect", "sparkle", "Звёздное мерцание", 0, 150),
+    # Second wave: more patterns for coins, symbols / outlines / animated effects for Stars.
+    ("pattern", "hoops", "Обручи", 2500, 0),
+    ("pattern", "quarters", "Четверти", 3000, 0),
+    ("pattern", "waves", "Волны", 3500, 0),
+    ("pattern", "sunburst", "Солнце", 3500, 0),
+    ("symbol", "star", "Звезда", 0, 75),
+    ("symbol", "trophy", "Кубок", 0, 100),
+    ("symbol", "wings", "Крылья", 0, 100),
+    ("symbol", "anchor", "Якорь", 0, 75),
+    ("symbol", "wolf", "Волк", 0, 100),
+    ("symbol", "swords", "Скрещённые мечи", 0, 100),
+    ("outline", "ruby", "Рубиновая обводка", 0, 125),
+    ("outline", "emerald", "Изумрудная обводка", 0, 125),
+    ("outline", "diamond", "Бриллиантовая обводка", 0, 200),
+    ("outline", "rainbow", "Радужная обводка", 0, 250),
+    ("effect", "aura", "Аура", 0, 200),
+    ("effect", "laurel", "Лавровый венок", 0, 200),
+    ("effect", "rays", "Сияние", 0, 250),
+    ("effect", "orbit", "Мяч на орбите", 0, 250),
+    ("effect", "lightning", "Молнии", 0, 300),
 ]
 
 # Club column per kind (color2 / letters hold a free value; the unlock is the item itself).

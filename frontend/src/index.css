@@ -197,6 +197,13 @@ body {
   .emblem-flame-2 { transform-box: fill-box; transform-origin: 50% 100%; animation: emblem-flame 0.7s ease-in-out infinite alternate-reverse; }
   .emblem-sparkle { transform-box: fill-box; transform-origin: center; animation: emblem-sparkle 1.8s ease-in-out infinite; }
   .emblem-neon { animation: emblem-neon 2.4s ease-in-out infinite; }
+  .emblem-diamond { animation: emblem-neon 1.6s ease-in-out infinite; }
+  .emblem-rainbow { animation: emblem-hue 4s linear infinite; }
+  .emblem-aura { transform-box: fill-box; transform-origin: center; animation: emblem-aura 2.6s ease-in-out infinite; }
+  .emblem-rays { transform-box: fill-box; transform-origin: center; animation: emblem-spin 14s linear infinite; }
+  .emblem-orbit { transform-box: fill-box; transform-origin: center; animation: emblem-spin 5s linear infinite; }
+  .emblem-electric { animation: emblem-electric 0.8s linear infinite; }
+  .emblem-bolt { animation: emblem-bolt 1.4s steps(1, end) infinite; }
 }
 @keyframes emblem-shine {
   0%, 50% { transform: translateX(-120px); }
@@ -213,4 +220,22 @@ body {
 @keyframes emblem-neon {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.65; }
+}
+@keyframes emblem-hue {
+  to { filter: hue-rotate(360deg); }
+}
+@keyframes emblem-aura {
+  0%, 100% { transform: scale(0.92); opacity: 0.75; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+@keyframes emblem-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes emblem-electric {
+  to { stroke-dashoffset: -32; }
+}
+@keyframes emblem-bolt {
+  0%, 60%, 100% { opacity: 0; }
+  10%, 25% { opacity: 1; }
+  15% { opacity: 0.3; }
 }

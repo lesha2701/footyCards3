@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { formationLabel, inRow, pitchRows, PITCH_STYLE } from "@/lib/formationLayout";
 import PitchCardTile from "@/components/cards/PitchCardTile";
 import PitchBackground from "@/components/squad/PitchBackground";
+import GameHero from "@/components/common/GameHero";
 
 import {
   chooseFutDraftFormation,
@@ -379,7 +380,7 @@ export default function FutDraftGamePage() {
   if (phase === "idle") {
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="font-display text-xl font-bold text-ink-chalk">FUT Draft</h1>
+        <GameHero game="fut-draft" title="FUT Draft" />
         <p className="text-sm text-ink-mist">
           Собери временный состав из случайных карт всей игры — даже тех, которых нет в твоей коллекции. Выбери
           схему, задрафти 11 игроков (сам решай, с какой позиции начать) и сыграй до 4 матчей на вылет. Чем дальше

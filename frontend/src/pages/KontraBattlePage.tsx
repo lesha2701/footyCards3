@@ -11,6 +11,7 @@ import LoadingScreen from "@/components/common/LoadingScreen";
 import { IconChevronLeft, IconCoin } from "@/components/icons";
 import FighterCard from "@/components/kontra/FighterCard";
 import { describeEvent, turnOrder } from "@/components/kontra/kontraMeta";
+import { kontraBossArt } from "@/lib/bossArt";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -146,6 +147,16 @@ export default function KontraBattlePage() {
         <div className="relative flex flex-col gap-1">
           {isBoss ? (
             <section className="rounded-2xl bg-red-950/50 p-3 text-center ring-1 ring-red-500/40">
+              {kontraBossArt(null, battle.boss_name) && (
+                <motion.img
+                  key={`boss-${dmg}`}
+                  src={kontraBossArt(null, battle.boss_name)}
+                  alt=""
+                  animate={dmg ? { x: [0, -5, 5, -3, 0], filter: ["brightness(1)", "brightness(1.6)", "brightness(1)"] } : {}}
+                  transition={{ duration: 0.4 }}
+                  className="mx-auto mb-2 h-24 w-24 rounded-2xl object-cover ring-1 ring-red-400/30"
+                />
+              )}
               <p className="font-display text-base font-black text-ink-chalk">{battle.boss_name}</p>
               <p className="text-micro text-ink-mist">{battle.boss_tagline}</p>
               <motion.p key={dmg} initial={{ scale: 1.25 }} animate={{ scale: 1 }} className="mt-1 font-mono text-2xl font-black text-amber-300">

@@ -10,6 +10,7 @@ import {
 import { IconCoin } from "@/components/icons";
 import { WheelPrizeResult } from "@/components/wheel/WheelPrizeResult";
 import { PrizeOddsList, WheelReel } from "@/components/wheel/WheelReel";
+import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 import { haptic, openTelegramInvoice } from "@/lib/telegram";
 import { WHEEL_SPIN_MS, prizeLabel, shuffle, type WheelTheme } from "@/lib/wheel";
@@ -238,7 +239,7 @@ export default function BlackjackPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="font-display text-xl font-bold text-ink-chalk">21: Добавленное время</h1>
+        <GameHero game="blackjack" title="21: Добавленное время" />
         <p className="mt-1 text-sm text-ink-mist">
           Набери больше Тренера соперника, но не больше 21. Звёзды — 10, Легенда — 1 или 11. Тренер добирает до 17.
         </p>

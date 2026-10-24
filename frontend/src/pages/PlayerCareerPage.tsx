@@ -25,6 +25,7 @@ import PlayerAvatar from "@/components/myPlayer/PlayerAvatar";
 import { BonusTab, CareerStatus, HallOfFame, NewsFeed, RankingsTab, StoryEvent } from "@/components/playerCareer/CareerLife";
 import FriendsLeagueTab from "@/components/playerCareer/FriendsLeagueTab";
 import KeyMoments from "@/components/playerCareer/KeyMoments";
+import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useCareerStars } from "@/lib/useCareerStars";
@@ -101,7 +102,7 @@ export default function PlayerCareerPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="font-display text-xl font-bold text-ink-chalk">Карьера игрока</h1>
+      <GameHero game="player-career" title="Карьера игрока" />
 
       <section className="flex items-center gap-3 rounded-2xl bg-bg-surface p-4">
         {data.player && (

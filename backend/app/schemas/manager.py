@@ -47,6 +47,8 @@ class ManagerLookIn(BaseModel):
     kit_color2: Optional[str] = Field(default=None, max_length=16)
     frame: Optional[str] = Field(default=None, max_length=32)
     theme: Optional[str] = Field(default=None, max_length=32)
+    rim: Optional[str] = Field(default=None, max_length=32)
+    fx: Optional[str] = Field(default=None, max_length=32)
 
 
 class ManagerStadiumNameIn(BaseModel):
