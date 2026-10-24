@@ -79,7 +79,7 @@ export default function IllustratedBaseMap({
         onMouseLeave={() => setHint(null)}
         onFocus={() => setHint(label)}
         onBlur={() => setHint(null)}
-        aria-label={level > 0 ? `${name}, уровень ${level}` : `${name}, не построено`}
+        aria-label={isAcademy ? "Академия" : `${name}, уровень ${level}`}
         className="group absolute outline-none"
         style={level > 0 && picture
           ? { left: pct(p.left, W), top: pct(p.top, H), width: pct(p.width, W), height: pct(p.height, H) }
