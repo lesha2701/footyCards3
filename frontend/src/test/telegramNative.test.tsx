@@ -27,15 +27,14 @@ describe("PrimaryActionButton", () => {
     expect(onClick).toHaveBeenCalled();
   });
 
-  it("uses Telegram's MainButton inside Telegram and hides it on unmount", () => {
+  it("stays an in-page button inside Telegram too (never the native MainButton)", () => {
     const button = mainButton();
     window.Telegram = { WebApp: { initData: "x", MainButton: button } as never };
-    const { unmount, container } = render(<PrimaryActionButton text="Начать игру" onClick={() => {}} loading />);
-    expect(container.querySelector("button")).toBeNull();
-    expect(button.setText).toHaveBeenCalledWith("Начать игру");
-    expect(button.showProgress).toHaveBeenCalled();
-    unmount();
-    expect(button.hide).toHaveBeenCalled();
+    const onClick = vi.fn();
+    render(<PrimaryActionButton text="Начать игру" onClick={onClick} />);
+    fireEvent.click(screen.getByText("Начать игру"));
+    expect(onClick).toHaveBeenCalled();
+    expect(button.show).not.toHaveBeenCalled();
   });
 });
 

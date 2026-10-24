@@ -1,10 +1,7 @@
-import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
-
-/** A screen's single primary action (e.g. «Начать игру»). Inside Telegram it
- * becomes the native bottom MainButton — shown while this component is
- * mounted, hidden again when it unmounts (the hook's cleanup), so rendering
- * it only on the start screen is all a page has to do. Outside Telegram it
- * renders the regular in-page button. */
+/** A screen's single primary action (e.g. «Начать игру»). Always an
+ * in-page button: Telegram's native MainButton (lib/useTelegramMainButton)
+ * did not show up for some players, leaving mini-game start screens with no
+ * way to start — a start button must never depend on it. */
 export default function PrimaryActionButton({
   text,
   loadingText = "Загрузка...",
@@ -18,8 +15,6 @@ export default function PrimaryActionButton({
   disabled?: boolean;
   loading?: boolean;
 }) {
-  const native = useTelegramMainButton({ text, onClick, enabled: !disabled, loading });
-  if (native) return null;
   return (
     <button
       onClick={onClick}

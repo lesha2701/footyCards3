@@ -16,7 +16,6 @@ import MatchPitchView from "@/components/match/MatchPitchView";
 import MatchSheet from "@/components/match/MatchSheet";
 import MatchStatsTable from "@/components/match/MatchStatsTable";
 import { ArenaDivisionCard, ArenaMatchReport, ArenaMatchupLine, ArenaOpponentCard } from "@/components/arena/ArenaPanels";
-import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
 import BenchUpgradeHints from "@/components/squad/BenchUpgradeHints";
 import { ChemistryDiamonds, ChemistryHints, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
 import { chemistryGain, chemistrySwapHints, equipmentChemistryOf, type ChemistrySwapHint } from "@/lib/chemistry";
@@ -229,14 +228,6 @@ export default function ArenaPage() {
     slots.push({ slot_code: hint.slot_code, user_card_id: hint.suggested_card_id });
     setLineupMutation.mutate(slots);
   };
-
-  const nativePlayButton = useTelegramMainButton({
-    text: "Играть матч",
-    onClick: () => playMutation.mutate(),
-    visible: !simulating && match?.status !== "in_progress" && !matchSheetOpen,
-    enabled: !!lineup?.is_complete,
-    loading: playMutation.isPending,
-  });
 
   if (lineupLoading) return <ListSkeleton />;
 
@@ -633,7 +624,7 @@ export default function ArenaPage() {
 
       {matchError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{matchError}</p>}
 
-      <section className={`flex flex-col gap-3 ${nativePlayButton ? "hidden" : ""}`}>
+      <section className="flex flex-col gap-3">
         <button
           onClick={() => playMutation.mutate()}
           disabled={!lineup?.is_complete || playMutation.isPending || simulating}

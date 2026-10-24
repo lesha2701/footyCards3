@@ -12,7 +12,6 @@ import { fetchCollection, fetchUserCollection } from "@/api/collection";
 import { createTradeOffer, fetchTradeRules } from "@/api/trades";
 import { fetchPublicProfile, searchUsers } from "@/api/profile";
 import { ApiRequestError } from "@/lib/api";
-import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
 import type { UserPublic } from "@/types";
 
 const MAX_TRADE_CARDS_PER_SIDE = 3;
@@ -114,14 +113,6 @@ export default function NewTradePage() {
       message: message || undefined,
     });
   };
-
-  const nativeSubmit = useTelegramMainButton({
-    text: "Отправить предложение",
-    onClick: submit,
-    visible: !!target,
-    enabled: canSubmit,
-    loading: createMutation.isPending,
-  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -261,7 +252,6 @@ export default function NewTradePage() {
 
           <button
             onClick={submit}
-            hidden={nativeSubmit}
             disabled={createMutation.isPending || !canSubmit}
             className="rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-40"
           >
