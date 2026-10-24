@@ -11,6 +11,7 @@ import UpdateBanner from "@/components/layout/UpdateBanner";
 import { apiUrl, buildAuthHeaders } from "@/lib/api";
 import { setClosingConfirmation } from "@/lib/telegram";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
+import WeeklyTopAwardModal from "@/components/weeklyTop/WeeklyTopAwardModal";
 
 export default function AppLayout() {
   // While a live match is guarded, also ask Telegram to confirm closing the
@@ -69,6 +70,7 @@ export default function AppLayout() {
       </main>
       <BottomNav />
       <LeaveConfirmDialog />
+      <WeeklyTopAwardModal />
     </div>
   );
 }

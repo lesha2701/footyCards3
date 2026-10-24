@@ -159,6 +159,15 @@ async def manager_sweep(db: AsyncSession = Depends(get_db)):
     return SimulateRoundResult(matches_simulated=await manager_service.resolve_all_due(db))
 
 
+@router.post("/weekly-top/settle")
+async def weekly_top_settle(db: AsyncSession = Depends(get_db)):
+    """Called by the bot every few minutes: pays the closed week's «Топ
+    недели» once (WeeklyTopRun primary key) — a no-op the rest of the week."""
+    from app.services import weekly_top_service
+
+    return {"paid": await weekly_top_service.settle_due(db)}
+
+
 @router.post("/club-base/sweep")
 async def club_base_sweep(db: AsyncSession = Depends(get_db)):
     """Called by the bot every minute: completes «Клубная база»

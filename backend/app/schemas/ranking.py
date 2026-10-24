@@ -22,6 +22,11 @@ class RankingMetric(str, enum.Enum):
     academy_prestige = "academy_prestige"
     academy_level = "academy_level"
     base_level = "base_level"
+    # This week only (Monday to Sunday, local time) — the «Топ недели»
+    # nominations for activity rather than standing.
+    games_week = "games_week"
+    stars_week = "stars_week"
+    referrals_week = "referrals_week"
 
 
 class RankingEntry(BaseModel):

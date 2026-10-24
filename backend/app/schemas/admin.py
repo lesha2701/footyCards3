@@ -598,6 +598,10 @@ class GameConfigOut(BaseModel):
     kontra_gear_drop_arena_pct: int = 15
     kontra_chest_coins: int = 1500
     kontra_chest_stars: int = 25
+    weekly_top_enabled: bool = True
+    weekly_top_size: int = 10
+    weekly_top_rewards: list = []
+    weekly_top_metrics: list = []
     bingo_reward_coins: int
     bingo_reward_pack_id: Optional[int] = None
     card_skills_enabled: bool = True
@@ -785,6 +789,16 @@ class GameConfigOut(BaseModel):
     pity_packs: int = 0
     bulk10_discount_pct: int = 0
     first_coin_purchase_bonus_pct: int = 0
+
+
+class WeeklyTopRewardIn(BaseModel):
+    """One place of the «Топ недели» ladder (a reward_bundle_service bundle)."""
+
+    coins: int = Field(default=0, ge=0, le=1_000_000)
+    pack_id: Optional[int] = None
+    card_rarity: Optional[Rarity] = None
+    badge_id: Optional[int] = None
+    cosmetic_id: Optional[int] = None
 
 
 class GameConfigUpdate(BaseModel):
@@ -1264,6 +1278,10 @@ class GameConfigUpdate(BaseModel):
     kontra_gear_drop_arena_pct: Optional[int] = Field(default=None, ge=0, le=100)
     kontra_chest_coins: Optional[int] = Field(default=None, ge=0)
     kontra_chest_stars: Optional[int] = Field(default=None, ge=0, le=10000)
+    weekly_top_enabled: Optional[bool] = None
+    weekly_top_size: Optional[int] = Field(default=None, ge=1, le=100)
+    weekly_top_rewards: Optional[list[WeeklyTopRewardIn]] = Field(default=None, max_length=100)
+    weekly_top_metrics: Optional[list[str]] = None
     bingo_reward_coins: Optional[int] = Field(default=None, ge=0)
     bingo_reward_pack_id: Optional[int] = Field(default=None)
     card_skills_enabled: Optional[bool] = None

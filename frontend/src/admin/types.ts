@@ -630,6 +630,10 @@ export interface GameConfig {
   kontra_gear_drop_arena_pct: number;
   kontra_chest_coins: number;
   kontra_chest_stars: number;
+  weekly_top_enabled: boolean;
+  weekly_top_size: number;
+  weekly_top_rewards: RewardBundleInput[];
+  weekly_top_metrics: string[];
   bingo_reward_coins: number;
   bingo_reward_pack_id: number | null;
   card_skills_enabled: boolean;

@@ -87,6 +87,7 @@ from app.routers import (
     stratego,
     mordoboi,
     kontra,
+    weekly_top,
     tactico,
     tasks,
     trades,
@@ -165,6 +166,7 @@ app.include_router(tactico.router, prefix=API_PREFIX)
 app.include_router(stratego.router, prefix=API_PREFIX)
 app.include_router(mordoboi.router, prefix=API_PREFIX)
 app.include_router(kontra.router, prefix=API_PREFIX)
+app.include_router(weekly_top.router, prefix=API_PREFIX)
 app.include_router(magnate.router, prefix=API_PREFIX)
 app.include_router(trades.router, prefix=API_PREFIX)
 app.include_router(daily_rewards.router, prefix=API_PREFIX)

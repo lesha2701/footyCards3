@@ -1,6 +1,9 @@
-from sqlalchemy import func, select
+from datetime import date
+from typing import Optional
+
+from sqlalchemy import and_, func, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from app.models.card import UserCard
 from app.models.user import User
@@ -23,7 +26,97 @@ _DIRECT_COLUMNS = {
 }
 
 
-async def get_ranking(db: AsyncSession, metric: RankingMetric, current_user: User, limit: int = 10) -> RankingOut:
+WEEKLY_METRICS = frozenset({RankingMetric.games_week, RankingMetric.stars_week, RankingMetric.referrals_week})
+
+
+def _week_counts(metric: RankingMetric, week_start: date):
+    """Subquery (uid, n): the user's games / Stars spent / referrals that
+    count in the week starting `week_start`."""
+    from app.models.game import GameSession
+    from app.models.pack import StarsInvoice
+    from app.models.transaction import CoinTransaction
+    from app.models.enums import TransactionType
+    from app.services.admin_analytics_service import MODE_SOURCES
+    from app.services.club_league_service import week_bounds
+
+    start, end = week_bounds(week_start)
+    if metric == RankingMetric.stars_week:
+        return (
+            select(StarsInvoice.user_id.label("uid"), func.sum(StarsInvoice.stars_amount).label("n"))
+            .where(StarsInvoice.completed_at >= start, StarsInvoice.completed_at < end)
+            .group_by(StarsInvoice.user_id)
+            .subquery()
+        )
+    if metric == RankingMetric.referrals_week:
+        # A referral counts when it is rewarded (the friend's first genuine
+        # paid pack — pack_service._credit_referral_bonus), never at sign-up,
+        # so throwaway accounts don't climb this board.
+        friend = aliased(User)
+        return (
+            select(CoinTransaction.user_id.label("uid"), func.count(CoinTransaction.id).label("n"))
+            .join(friend, and_(friend.id == CoinTransaction.related_object_id, friend.referred_by_id == CoinTransaction.user_id))
+            .where(
+                CoinTransaction.type == TransactionType.referral_reward, CoinTransaction.related_object_type == "user",
+                CoinTransaction.created_at >= start, CoinTransaction.created_at < end,
+            )
+            .group_by(CoinTransaction.user_id)
+            .subquery()
+        )
+    # Games: every played mini-game session plus every match / battle of the
+    # game modes (season and club rows of the career modes and wheel spins
+    # are not games).
+    parts = [select(GameSession.user_id.label("uid")).where(GameSession.created_at >= start, GameSession.created_at < end)]
+    for source in MODE_SOURCES:
+        if source.key in {"career", "player_career", "manager", "wheel"}:
+            continue
+        for col in source.user_cols:
+            q = select(col.label("uid")).select_from(source.model)
+            if source.join is not None:
+                q = q.join(*source.join)
+            parts.append(q.where(source.ts >= start, source.ts < end, col.is_not(None)))
+    games = union_all(*parts).subquery()
+    return select(games.c.uid, func.count().label("n")).group_by(games.c.uid).subquery()
+
+
+def ranking_statement(metric: RankingMetric, week_start: Optional[date] = None):
+    """(User, value) rows of a ranking, best first (ties: the earlier
+    account first). Weekly metrics count the week starting `week_start`
+    (default: the current one)."""
+    if metric in WEEKLY_METRICS:
+        from app.services.club_league_service import week_start_for
+
+        counts = _week_counts(metric, week_start or week_start_for())
+        return (
+            select(User, counts.c.n)
+            .join(counts, counts.c.uid == User.id)
+            .where(User.is_banned.is_(False), User.is_admin.is_(False), counts.c.n > 0)
+            .order_by(counts.c.n.desc(), User.id)
+        )
+    return _standing_statement(metric).order_by(User.id)
+
+
+def _start_value(column) -> int:
+    default = column.property.columns[0].default
+    return int(default.arg) if default is not None and isinstance(default.arg, int) else 0
+
+
+def starting_value(metric: RankingMetric) -> int:
+    """What a player who never played has (ratings start at 1000 etc.)."""
+    if metric == RankingMetric.league_rating:
+        return sum(_start_value(c) for c in (User.arena_rating, User.tactics_rating, User.penalty_rating))
+    column = _DIRECT_COLUMNS.get(metric)
+    return _start_value(column) if column is not None and hasattr(column, "property") else 0
+
+
+async def top_rows(db: AsyncSession, metric: RankingMetric, limit: int, week_start: Optional[date] = None) -> list:
+    """The first `limit` (User, value) rows above the starting value — a
+    rating nobody has played yet ranks nobody."""
+    floor = starting_value(metric)
+    rows = (await db.execute(ranking_statement(metric, week_start).limit(limit))).all()
+    return [(user, int(value or 0)) for user, value in rows if (value or 0) > floor]
+
+
+def _standing_statement(metric: RankingMetric):
     if metric == RankingMetric.cards_count:
         value_expr = func.count(UserCard.id)
         stmt = (
@@ -90,8 +183,11 @@ async def get_ranking(db: AsyncSession, metric: RankingMetric, current_user: Use
             .where(User.is_banned.is_(False), User.is_admin.is_(False))
             .order_by(column.desc())
         )
+    return stmt
 
-    rows = (await db.execute(stmt)).all()
+
+async def get_ranking(db: AsyncSession, metric: RankingMetric, current_user: User, limit: int = 10) -> RankingOut:
+    rows = (await db.execute(ranking_statement(metric))).all()
 
     def to_entry(rank: int, user: User, value) -> RankingEntry:
         return RankingEntry(

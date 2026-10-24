@@ -827,6 +827,16 @@ class GameConfig(TimestampMixin, Base):
     kontra_chest_coins: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
     kontra_chest_stars: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
 
+    # «Топ недели» (weekly_top_service.py): every Monday the top places of
+    # each ranking get the reward of their place. weekly_top_rewards is one
+    # reward bundle per place ({coins, pack_id, card_rarity, badge_id,
+    # cosmetic_id}, place 1 first); weekly_top_metrics lists the rankings
+    # that pay (empty = all of them).
+    weekly_top_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    weekly_top_size: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    weekly_top_rewards: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    weekly_top_metrics: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+
     # «Легенда ринга»: the daily boss's rating and its once-a-day win reward.
     mordoboi_legend_rating: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
     mordoboi_legend_reward: Mapped[int] = mapped_column(Integer, default=150, nullable=False)

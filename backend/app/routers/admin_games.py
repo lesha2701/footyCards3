@@ -80,6 +80,23 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
                 "starter_offer_pack_id", "starter_offer_cosmetic_id", "club_raid_reward_pack_id"):
         if getattr(config, key) == 0:
             setattr(config, key, None)  # 0 from the admin form = none
+    if "weekly_top_rewards" in updates:
+        from app.services import reward_bundle_service
+        from app.services.reward_bundle_service import Bundle
+
+        ladder = []
+        for row in updates["weekly_top_rewards"] or []:
+            bundle = Bundle(**{k: (row.get(k) or None) for k in ("pack_id", "card_rarity", "badge_id", "cosmetic_id")},
+                            coins=row.get("coins") or 0)
+            await reward_bundle_service.validate(db, bundle)
+            ladder.append({"coins": bundle.coins, "pack_id": bundle.pack_id,
+                           "card_rarity": getattr(bundle.card_rarity, "value", bundle.card_rarity),
+                           "badge_id": bundle.badge_id, "cosmetic_id": bundle.cosmetic_id})
+        config.weekly_top_rewards = ladder
+    if "weekly_top_metrics" in updates:
+        from app.schemas.ranking import RankingMetric
+
+        config.weekly_top_metrics = [m for m in updates["weekly_top_metrics"] or [] if m in RankingMetric.__members__]
     if config.card_skill_probability_floor_pct >= config.card_skill_probability_ceiling_pct:
         await db.rollback()
         raise ConflictError("Нижняя граница вероятности навыков должна быть меньше верхней")

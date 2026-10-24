@@ -900,6 +900,9 @@ export type RankingMetric =
   | "stratego_puzzles"
   | "mordoboi_rating"
   | "kontra_rating"
+  | "games_week"
+  | "stars_week"
+  | "referrals_week"
   | "league_rating";
 
 export interface RankingEntry {
@@ -3580,4 +3583,37 @@ export interface KontraGearList {
   chest_coins: number;
   chest_stars: number;
   balance: number;
+}
+
+/** «Топ недели»: one place taken in one ranking (a popup each). */
+export interface WeeklyTopAward {
+  id: number;
+  week_start: string;
+  metric: RankingMetric;
+  metric_label: string;
+  rank: number;
+  value: number;
+  coins: number;
+  pack_name: string | null;
+  cards: number;
+  cosmetic_name: string | null;
+  cosmetic_style: string | null;
+  balance: number;
+}
+
+export interface WeeklyTopPlace {
+  rank: number;
+  coins: number;
+  pack_name: string | null;
+  cosmetic_name: string | null;
+  cosmetic_style: string | null;
+}
+
+export interface WeeklyTopInfo {
+  enabled: boolean;
+  size: number;
+  ends_at: string;
+  places: WeeklyTopPlace[];
+  metrics: RankingMetric[];
+  starting_values: Partial<Record<RankingMetric, number>>;
 }

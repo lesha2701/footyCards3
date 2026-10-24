@@ -4,7 +4,8 @@ import AdminCareerClubs from "@/admin/pages/AdminCareerClubs";
 
 import { fetchGameConfig, fetchSuspiciousMatches, fetchSuspiciousMemorySessions, updateGameConfig } from "@/admin/api";
 import AdminMagnateBoardEditor from "@/admin/pages/AdminMagnateBoardEditor";
-import type { GameConfig } from "@/admin/types";
+import RewardBundleEditor from "@/admin/components/RewardBundleEditor";
+import { EMPTY_BUNDLE, type GameConfig } from "@/admin/types";
 
 // Codes from backend my_player_service.COSMETICS.
 const MY_PLAYER_COSMETICS: [string, string][] = [
@@ -30,6 +31,15 @@ const MY_PLAYER_COSMETICS: [string, string][] = [
   ["cel_plane", "Празднование «Самолётик»"],
   ["cel_heart", "Празднование «Сердечко»"],
   ["cel_dance", "Празднование «Танец у флажка»"],
+];
+
+const WEEKLY_TOP_METRICS: [string, string][] = [
+  ["arena_rating", "Рейтинг Arena"], ["tactics_rating", "Рейтинг Тактико"], ["penalty_rating", "Рейтинг Пенальти"],
+  ["stratego_rating", "Рейтинг Стратего"], ["stratego_puzzles", "Задачи Стратего"], ["mordoboi_rating", "Рейтинг Мордобоя"],
+  ["kontra_rating", "Арена Контратаки"], ["league_rating", "Рейтинг лиги"], ["matches_won", "Победы"],
+  ["cards_count", "Карт в коллекции"], ["unique_players", "Уникальных игроков"], ["referral_count", "Рефералов"],
+  ["base_level", "Уровень базы"], ["academy_level", "Уровень Академии"], ["academy_prestige", "Престиж Академии"],
+  ["games_week", "Игр за неделю"], ["stars_week", "Звёзд за неделю"], ["referrals_week", "Рефералов за неделю"],
 ];
 
 export default function AdminGamesPage() {
@@ -160,6 +170,7 @@ export default function AdminGamesPage() {
       | "blackjack_enabled"
       | "mordoboi_enabled"
       | "kontra_enabled"
+      | "weekly_top_enabled"
       | "leagues_enabled"
       | "diamond_rating_cap_enabled"
       | "bot_daily_digest_enabled"
@@ -1180,6 +1191,51 @@ export default function AdminGamesPage() {
           {field("stratego_reward_draw", "Награда за ничью")}
           {field("stratego_reward_loss", "Награда за поражение")}
           {field("stratego_daily_limit", "Лимит наградных матчей/день")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Топ недели</p>
+        <p className="mb-3 text-xs text-slate-500">
+          В понедельник ночью лучшие места каждого отмеченного рейтинга получают награду своего места (монеты, пак,
+          карточка, значок, рамка) и видят попап. Рейтинги-«очки» награждают только тех, кто поднялся выше стартового
+          значения. «Игр / звёзд / рефералов за неделю» считаются за прошедшую неделю.
+        </p>
+        <div className="mb-3">{toggle("weekly_top_enabled", "Награды топа недели включены")}</div>
+        <div className="mb-3 grid grid-cols-2 gap-3">{field("weekly_top_size", "Сколько мест награждать")}</div>
+        <p className="mb-1 text-xs text-slate-400">Рейтинги с наградами (ничего не отмечено — все)</p>
+        <div className="mb-3 grid grid-cols-2 gap-1 sm:grid-cols-3">
+          {WEEKLY_TOP_METRICS.map(([code, label]) => (
+            <label key={code} className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={(form.weekly_top_metrics ?? []).includes(code)}
+                onChange={(e) => setForm({
+                  ...form,
+                  weekly_top_metrics: e.target.checked
+                    ? [...(form.weekly_top_metrics ?? []), code]
+                    : (form.weekly_top_metrics ?? []).filter((m) => m !== code),
+                })}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: form.weekly_top_size || 0 }, (_, i) => (
+            <div key={i}>
+              <p className="mb-1 text-xs font-semibold text-slate-300">{i + 1}-е место</p>
+              <RewardBundleEditor
+                value={(form.weekly_top_rewards ?? [])[i] ?? EMPTY_BUNDLE}
+                onChange={(next) => {
+                  const ladder = [...(form.weekly_top_rewards ?? [])];
+                  while (ladder.length < i) ladder.push(EMPTY_BUNDLE);
+                  ladder[i] = next;
+                  setForm({ ...form, weekly_top_rewards: ladder });
+                }}
+              />
+            </div>
+          ))}
         </div>
       </section>
 

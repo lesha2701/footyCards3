@@ -13,6 +13,9 @@ export const FRAME_STYLES: Record<string, string> = {
   starter: "bg-gradient-to-br from-sky-300 via-blue-400 to-indigo-500 shadow-[0_0_14px_rgba(96,165,250,0.5)]",
   season: "bg-gradient-to-br from-rose-300 via-purple-400 to-indigo-500 shadow-[0_0_14px_rgba(168,85,247,0.5)]",
   diamond: "bg-gradient-to-br from-fuchsia-300 via-cyan-200 to-violet-500 shadow-[0_0_18px_rgba(103,232,249,0.6)]",
+  // «Топ недели» (granted to the weekly top places, never sold).
+  weekly_champion: "bg-[conic-gradient(from_0deg,#fde68a,#f59e0b,#fff7ed,#d97706,#fde68a)] shadow-[0_0_20px_rgba(245,158,11,0.75)]",
+  weekly_top: "bg-gradient-to-br from-slate-100 via-amber-200 to-slate-400 shadow-[0_0_14px_rgba(226,232,240,0.55)]",
 };
 
 /** Profile header backgrounds. */
