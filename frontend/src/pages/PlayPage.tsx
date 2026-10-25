@@ -34,6 +34,7 @@ import {
   type IconProps,
 } from "@/components/icons";
 import { Skeleton } from "@/components/common/Skeleton";
+import { preloadShotArt } from "@/components/penalty/preloadShotArt";
 import { hapticSelection } from "@/lib/telegram";
 import { artOf } from "@/lib/gameArt";
 import { formatClock } from "@/lib/today";
@@ -137,6 +138,7 @@ export default function PlayPage() {
     const known = Object.fromEntries(Object.entries(live).filter(([, v]) => v !== undefined)) as Record<string, boolean>;
     if (Object.entries(known).some(([k, v]) => flags[k] !== v)) setFlags({ ...flags, ...known });
   }, [live.blackjack, live.mordoboi, live.kontra]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(preloadShotArt, []);
   const blackjackEntries = blackjack ? blackjack.free_remaining + blackjack.replay_entries + blackjack.paid_entries : 0;
   const games: GameDef[] = [
     // ⚡ quick

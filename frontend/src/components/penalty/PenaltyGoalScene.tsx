@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect } from "react";
 
 import keeperDiveLowBlue from "@/assets/shots/keeper-dive-low-blue.webp";
 import keeperDiveLow from "@/assets/shots/keeper-dive-low.webp";
@@ -7,6 +8,7 @@ import keeperDiveSide from "@/assets/shots/keeper-dive-side.webp";
 import keeperReadyBlue from "@/assets/shots/keeper-ready-blue.webp";
 import keeperReady from "@/assets/shots/keeper-ready.webp";
 import penaltyBg from "@/assets/shots/penalty-bg.webp";
+import { haptic } from "@/lib/telegram";
 import type { PenaltyDirection } from "@/types";
 
 import { SceneBall } from "./SceneBall";
@@ -96,6 +98,13 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
   const frameState = outcomeLabel ? (outcomeGood ? "good" : "bad") : "idle";
   const kickKey = kick ? `${kick.shotZone}-${kick.diveZone}-${kick.outcome}` : "idle";
 
+  // A thud as the ball arrives: hard into the net or the gloves, soft past the post.
+  useEffect(() => {
+    if (!kick) return;
+    const t = setTimeout(() => haptic(kick.outcome === "miss" ? "light" : "heavy"), 480);
+    return () => clearTimeout(t);
+  }, [kickKey]); // eslint-disable-line react-hooks/exhaustive-deps -- a new kick, not a new object
+
   return (
     <div
       className={`relative w-full max-w-[420px] overflow-hidden rounded-[20px] border transition-[border-color,box-shadow] duration-300 ${
@@ -150,8 +159,9 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
           className="pointer-events-none absolute"
           style={{ x: "-50%", y: "-50%" }}
           initial={false}
-          animate={{ left: `${ball.x}%`, top: `${ball.y}%`, width: kick ? "3.4%" : "7%" }}
-          transition={{ duration: kick ? 0.55 : 0.3, ease: [0.16, 0.85, 0.35, 1] }}
+          animate={{ left: `${ball.x}%`, top: `${ball.y}%`, width: kick ? "3.4%" : "7%", rotate: kick ? (ball.x < 50 ? -600 : 600) : 0 }}
+          // The spin snaps back unseen when the ball is put on the spot again.
+          transition={{ duration: kick ? 0.55 : 0.3, ease: [0.16, 0.85, 0.35, 1], rotate: kick ? { duration: 0.55, ease: "easeOut" } : { duration: 0 } }}
         >
           <SceneBall />
         </motion.div>

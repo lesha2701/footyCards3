@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
@@ -35,7 +35,7 @@ from app.schemas.diamond_upgrade import (
     FeedCardsResult,
 )
 from app.services import card_star_service
-from app.services.card_upgrade_service import list_rules, list_upgradeable_cards, upgrade_card
+from app.services.card_upgrade_service import UPGRADE_CARDS_MAX_PAGE, list_rules, list_upgradeable_cards, upgrade_card
 from app.services.collection_service import (
     collection_stats,
     get_album_collection_detail,
@@ -167,9 +167,18 @@ async def get_upgrade_rules(db: AsyncSession = Depends(get_db), _user: User = De
 
 @router.get("/upgrade-cards", response_model=list[UserCardOut])
 async def get_upgradeable_cards(
-    rarity: Rarity, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+    rarity: Rarity,
+    position: str | None = None,
+    country: str | None = None,
+    club: str | None = None,
+    limit: int = Query(UPGRADE_CARDS_MAX_PAGE, ge=1, le=UPGRADE_CARDS_MAX_PAGE),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    return await list_upgradeable_cards(db, user.id, rarity)
+    return await list_upgradeable_cards(
+        db, user.id, rarity, position=position, country=country, club=club, limit=limit, offset=offset,
+    )
 
 
 @router.post("/upgrade", response_model=CardUpgradeResultOut)

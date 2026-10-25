@@ -10,11 +10,9 @@ COMPOSE="docker compose -f docker-compose.prod.yml"
 BACKUP_DIR="${BACKUP_DIR:-$HOME/backups}"
 KEEP_DAYS="${KEEP_DAYS:-14}"
 
-# Имя базы и пользователь — из .env (только читаем).
-DB_NAME=$(grep -E '^DB_NAME=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
-DB_USER=$(grep -E '^DB_USER=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
-DB_NAME="${DB_NAME:-footycards}"
-DB_USER="${DB_USER:-postgres}"
+# Имя базы и пользователь берём из окружения контейнера postgres.
+DB_NAME=$($COMPOSE exec -T postgres printenv POSTGRES_DB | tr -d '\r')
+DB_USER=$($COMPOSE exec -T postgres printenv POSTGRES_USER | tr -d '\r')
 
 mkdir -p "$BACKUP_DIR"
 STAMP=$(date +%Y%m%d_%H%M)

@@ -2,7 +2,7 @@ import FirstVisitHint from "@/components/common/FirstVisitHint";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { fetchUpgradeableCards, fetchUpgradeRules, setCardsLocked } from "@/api/collection";
+import { fetchUpgradeRules, setCardsLocked } from "@/api/collection";
 import CardUpgradeModal from "@/components/cards/CardUpgradeModal";
 import DiamondFeedModal from "@/components/cards/DiamondFeedModal";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
@@ -12,11 +12,12 @@ import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import { IconChevronRight, IconCoin, IconStar, IconUpgrade } from "@/components/icons";
-import { matchesPlayer, useCardFilter } from "@/lib/cardFilter";
+import { useCardFilter } from "@/lib/cardFilter";
 import { cardLockProps } from "@/lib/cardLocks";
 import { effectiveUpgradeChance } from "@/lib/cardUpgrade";
 import { formatGameError } from "@/lib/errors";
 import { RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
+import { useUpgradeCards } from "@/lib/useUpgradeCards";
 import type { Rarity, UserCard } from "@/types";
 import CardsSectionTabs from "@/components/layout/CardsSectionTabs";
 
@@ -50,11 +51,9 @@ export default function UpgradePage() {
   // above (their own upgrade mechanic isn't final yet), so this is a separate
   // tab reusing the same "your unlocked cards of this rarity" endpoint, just
   // as a showcase list for now rather than wiring it into the staking flow.
-  const { data: diamondCards, isLoading: diamondLoading } = useQuery({
-    queryKey: ["upgrade-cards", "diamond"],
-    queryFn: () => fetchUpgradeableCards("diamond"),
-    enabled: tab === "diamond",
-  });
+  const diamond = useUpgradeCards("diamond", filter, tab === "diamond");
+  const shownDiamonds = diamond.cards;
+  const diamondLoading = diamond.isLoading;
 
   const selectRarity = (r: Rarity) => {
     setRarity(r);
@@ -94,13 +93,10 @@ export default function UpgradePage() {
   // of the same player each show as their own selectable tile, and locked
   // cards (in a lineup, a Tactico squad, a pending trade, or frozen by an
   // admin) never appear as an option in the first place.
-  const { data: allCards, isLoading } = useQuery({
-    queryKey: ["upgrade-cards", effectiveRarity],
-    queryFn: () => fetchUpgradeableCards(effectiveRarity!),
-    enabled: !!effectiveRarity,
-  });
-  const cards = allCards?.filter((c) => matchesPlayer({ ...filter, rarity: null }, c.player));
-  const shownDiamonds = diamondCards?.filter((c) => matchesPlayer({ ...filter, rarity: null }, c.player));
+  const forge = useUpgradeCards(effectiveRarity, filter, tab === "upgrade");
+  const cards = forge.cards;
+  const isLoading = forge.isLoading;
+  const filtered = !!(filter.position || filter.country || filter.club);
 
   const previewChance = currentRule && selected.length > 0 ? effectiveUpgradeChance(currentRule, selected.length) : null;
   const previewCost = currentRule ? currentRule.coin_cost * Math.max(1, selected.length) : null;
@@ -223,13 +219,13 @@ export default function UpgradePage() {
                 <EmptyState
                   icon={IconUpgrade}
                   title="Нечего улучшать"
-                  description={allCards?.length
+                  description={filtered
                     ? "Под фильтр ничего не подходит — смени или очисти его"
                     : `Нет карточек редкости «${RARITY_LABELS[effectiveRarity!]}» — открой паки`}
                 />
               )}
 
-              <div className="grid grid-cols-3 gap-2 pb-20">
+              <div className="grid grid-cols-3 gap-2">
                 {cards?.map((card) => (
                   <PlayerCard
                     key={card.id}
@@ -241,6 +237,7 @@ export default function UpgradePage() {
                   />
                 ))}
               </div>
+              <LoadMore query={forge} />
             </>
           )}
         </>
@@ -258,7 +255,7 @@ export default function UpgradePage() {
           />
 
           {diamondLoading && <CardGridSkeleton count={9} />}
-          {!diamondLoading && !diamondCards?.length && (
+          {!diamondLoading && !shownDiamonds?.length && !filtered && (
             <EmptyState
               icon={IconStar}
               title="Пока нет диамантовых карточек"
@@ -266,7 +263,7 @@ export default function UpgradePage() {
             />
           )}
 
-          <div className="grid grid-cols-3 gap-2 pb-20">
+          <div className="grid grid-cols-3 gap-2">
             {shownDiamonds?.map((card) => (
               <PlayerCard
                 key={card.id}
@@ -278,6 +275,7 @@ export default function UpgradePage() {
               />
             ))}
           </div>
+          <LoadMore query={diamond} />
         </>
       )}
 
@@ -328,6 +326,23 @@ export default function UpgradePage() {
             setSelected([]);
           }}
         />
+      )}
+    </div>
+  );
+}
+
+/** «Показать ещё» under a paged Forge grid (leaves room for the bottom bar). */
+function LoadMore({ query }: { query: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown } }) {
+  return (
+    <div className="pb-20">
+      {query.hasNextPage && (
+        <button
+          onClick={() => query.fetchNextPage()}
+          disabled={query.isFetchingNextPage}
+          className="w-full rounded-xl bg-white/5 py-2.5 text-xs font-semibold text-ink-mist active:scale-95 disabled:opacity-60"
+        >
+          {query.isFetchingNextPage ? "Загружаю..." : "Показать ещё"}
+        </button>
       )}
     </div>
   );

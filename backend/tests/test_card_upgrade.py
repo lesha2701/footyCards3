@@ -2,7 +2,7 @@ from sqlalchemy import select
 
 from app.models.card import UserCard
 from app.models.card_upgrade import CardUpgradeRule
-from app.models.enums import CardSource, Rarity
+from app.models.enums import CardSource, Position, Rarity
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
 
@@ -315,3 +315,26 @@ async def test_upgradeable_cards_lists_each_duplicate_separately(client, db_sess
     resp = await client.get("/api/v1/collection/upgrade-cards", headers=headers, params={"rarity": "common"})
     assert resp.status_code == 200
     assert sorted(c["id"] for c in resp.json()) == sorted(card_ids)
+
+
+async def test_upgradeable_cards_are_paged_and_filtered_in_sql(client, db_session, bot_token):
+    """Huge collections: the Forge asks for a page at a time (strongest first)
+    and narrows by position on the server."""
+    user = await _register(client, db_session, 900015, bot_token)
+    players = [
+        await create_player(db_session, rarity=Rarity.common, rating=50 + i, position=Position.CB if i == 0 else Position.ST)
+        for i in range(5)
+    ]
+    for i, p in enumerate(players):
+        await _give_card(db_session, user.id, p.id, serial_number=i + 1)
+    headers = telegram_headers(900015, bot_token)
+    url = "/api/v1/collection/upgrade-cards"
+
+    first = (await client.get(url, headers=headers, params={"rarity": "common", "limit": 2})).json()
+    rest = (await client.get(url, headers=headers, params={"rarity": "common", "limit": 2, "offset": 2})).json()
+    last = (await client.get(url, headers=headers, params={"rarity": "common", "limit": 2, "offset": 4})).json()
+    ratings = [c["player"]["rating"] for c in first + rest + last]
+    assert ratings == [54, 53, 52, 51, 50]
+
+    only = (await client.get(url, headers=headers, params={"rarity": "common", "position": "CB"})).json()
+    assert [c["player"]["rating"] for c in only] == [50]

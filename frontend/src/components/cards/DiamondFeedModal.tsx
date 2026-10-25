@@ -6,7 +6,6 @@ import {
   fetchDiamondMaterialCards,
   fetchDiamondUpgradeCap,
   fetchDiamondUpgradeTiers,
-  fetchUpgradeableCards,
 } from "@/api/collection";
 import { IconChevronRight, IconStar, IconUpgrade } from "@/components/icons";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
@@ -15,8 +14,10 @@ import { inSquad } from "@/lib/cardLocks";
 import { formatGameError } from "@/lib/errors";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { haptic, hapticNotify } from "@/lib/telegram";
+import { useUpgradeCards } from "@/lib/useUpgradeCards";
 import type { DiamondMaterialBandKind, FeedCardsResult, Rarity, UserCard } from "@/types";
 
+const NO_FILTER = { position: null, country: null, club: null };
 const MATERIAL_RARITIES: Rarity[] = ["common", "rare", "epic", "legendary"];
 const COST_FIELD: Record<Rarity, "common_cost" | "rare_cost" | "epic_cost" | "legendary_cost" | null> = {
   common: "common_cost",
@@ -64,11 +65,9 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
     }
   }, [isExtensionBand, phase]);
 
-  const { data: adminTierCards, isLoading: adminTierLoading } = useQuery({
-    queryKey: ["upgrade-cards", rarity],
-    queryFn: () => fetchUpgradeableCards(rarity!),
-    enabled: !!rarity && phase === "pick" && !isExtensionBand,
-  });
+  const adminTier = useUpgradeCards(rarity, NO_FILTER, phase === "pick" && !isExtensionBand);
+  const adminTierCards = adminTier.cards;
+  const adminTierLoading = adminTier.isLoading;
 
   // The Forge list also shows squad copies and locked ones — never material.
   const burnable = adminTierCards?.filter((c) => !inSquad(c) && !c.is_user_locked);
@@ -189,6 +188,15 @@ export default function DiamondFeedModal({ card, onClose }: { card: UserCard; on
                   </button>
                 );
               })}
+              {!isExtensionBand && adminTier.hasNextPage && (
+                <button
+                  onClick={() => adminTier.fetchNextPage()}
+                  disabled={adminTier.isFetchingNextPage}
+                  className="col-span-4 rounded-lg bg-white/5 py-2 text-xs font-semibold text-ink-mist disabled:opacity-60"
+                >
+                  {adminTier.isFetchingNextPage ? "Загружаю..." : "Показать ещё"}
+                </button>
+              )}
             </div>
             <div className="mt-3 rounded-xl bg-black/20 px-3 py-2 text-xs text-ink-mist">
               Выбрано: <b className="text-ink-chalk">{selected.length}</b> · прирост:{" "}

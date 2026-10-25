@@ -26,17 +26,28 @@ async def list_rules(db: AsyncSession) -> list[CardUpgradeRule]:
     return list(result.scalars().all())
 
 
-async def list_upgradeable_cards(db: AsyncSession, user_id: int, rarity: Rarity) -> list[UserCardOut]:
+# One page of the Forge list at most (old clients ask without a limit).
+UPGRADE_CARDS_MAX_PAGE = 500
+
+
+async def list_upgradeable_cards(
+    db: AsyncSession, user_id: int, rarity: Rarity, *,
+    position: str | None = None, country: str | None = None, club: str | None = None,
+    limit: int = UPGRADE_CARDS_MAX_PAGE, offset: int = 0,
+) -> list[UserCardOut]:
     """Every individual card of `rarity` the user owns — NOT deduplicated by
     player: each owned copy is its own stakeable unit (staking several
     duplicates of the same player is the most natural upgrade-fodder case).
     Copies in a squad or under the owner's «замок» are listed too (flagged,
     the UI shades them): a squad copy can be staked after confirming it
     leaves the squad, a locked one after taking the lock off. Copies frozen
-    by an admin or in a pending trade are left out — they can't be staked."""
+    by an admin or in a pending trade are left out — they can't be staked.
+
+    Paged (strongest first) and filtered in SQL: a big collection holds tens
+    of thousands of commons, far too many to send and draw at once."""
     from app.services.collection_service import personal_squad_card_ids
 
-    result = await db.execute(
+    query = (
         select(UserCard)
         .join(Player)
         .where(
@@ -45,8 +56,17 @@ async def list_upgradeable_cards(db: AsyncSession, user_id: int, rarity: Rarity)
             UserCard.is_locked_by_admin.is_(False),
             UserCard.is_locked_in_trade.is_(False),
         )
-        .options(joinedload(UserCard.player))
-        .order_by(Player.rating.desc())
+    )
+    if position:
+        query = query.where(Player.position == position)
+    if country:
+        query = query.where(Player.country == country)
+    if club:
+        query = query.where(Player.club == club)
+    result = await db.execute(
+        query.options(joinedload(UserCard.player))
+        .order_by(Player.rating.desc(), UserCard.id.desc())
+        .limit(max(1, min(limit, UPGRADE_CARDS_MAX_PAGE))).offset(max(0, offset))
     )
     cards = list(result.unique().scalars().all())
     in_squad = await personal_squad_card_ids(db, [c.id for c in cards])

@@ -75,8 +75,18 @@ export async function fetchUpgradeRules(): Promise<CardUpgradeRule[]> {
 
 // Every individual unlocked card of `rarity` — NOT deduplicated by player,
 // unlike fetchCollection, since each owned copy is its own stakeable unit.
-export async function fetchUpgradeableCards(rarity: Rarity): Promise<UserCard[]> {
-  const { data } = await api.get<UserCard[]>("/collection/upgrade-cards", { params: { rarity } });
+export interface UpgradeCardsQuery {
+  position?: string | null;
+  country?: string | null;
+  club?: string | null;
+  limit?: number;
+  offset?: number;
+}
+
+/** One page of the Forge list (strongest first), filtered on the server. */
+export async function fetchUpgradeableCards(rarity: Rarity, query: UpgradeCardsQuery = {}): Promise<UserCard[]> {
+  const params = Object.fromEntries(Object.entries({ rarity, ...query }).filter(([, v]) => v != null && v !== ""));
+  const { data } = await api.get<UserCard[]>("/collection/upgrade-cards", { params });
   return data;
 }
 
