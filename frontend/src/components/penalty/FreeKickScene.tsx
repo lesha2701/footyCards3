@@ -51,7 +51,8 @@ export default function FreeKickScene({ aim, shot }: { aim: number; shot: FreeKi
   const scored = !!shot && shot.tier !== "miss";
 
   return (
-    <div className="relative w-full max-w-sm select-none overflow-hidden rounded-[20px] border border-white/5" style={{ aspectRatio: `${SCENE_ASPECT}` }}>
+    // Height from padding, not aspect-ratio (older Telegram WebViews lack it).
+    <div className="relative w-full max-w-sm select-none overflow-hidden rounded-[20px] border border-white/5" style={{ paddingTop: `${100 / SCENE_ASPECT}%` }}>
       <img src={freekickBg} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
 
       {/* Aim: sweeps across the goal while the player waits for the moment. */}

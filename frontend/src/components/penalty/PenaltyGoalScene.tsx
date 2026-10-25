@@ -93,7 +93,7 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
 
   return (
     <div
-      className={`relative overflow-hidden rounded-[20px] border transition-[border-color,box-shadow] duration-300 ${
+      className={`relative w-full max-w-[420px] overflow-hidden rounded-[20px] border transition-[border-color,box-shadow] duration-300 ${
         frameState === "good"
           ? "border-[#3ecf6e]/70 shadow-[0_0_28px_-6px_rgba(62,207,110,0.55)]"
           : frameState === "bad"
@@ -101,7 +101,9 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
             : "border-white/5"
       } bg-[#0b1530]`}
     >
-      <div className="relative w-full select-none" style={{ aspectRatio: `${SCENE_ASPECT}` }}>
+      {/* Height from padding, not aspect-ratio: older Telegram WebViews
+          don't support the latter and would draw the scene 0 px tall. */}
+      <div className="relative w-full select-none" style={{ paddingTop: `${100 / SCENE_ASPECT}%` }}>
         <img src={penaltyBg} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
 
         {/* Goal: the net lights up when the ball goes in. */}
