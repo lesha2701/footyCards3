@@ -1,7 +1,10 @@
 import { AnimatePresence, motion } from "framer-motion";
 
+import keeperDiveLowBlue from "@/assets/shots/keeper-dive-low-blue.webp";
 import keeperDiveLow from "@/assets/shots/keeper-dive-low.webp";
+import keeperDiveSideBlue from "@/assets/shots/keeper-dive-side-blue.webp";
 import keeperDiveSide from "@/assets/shots/keeper-dive-side.webp";
+import keeperReadyBlue from "@/assets/shots/keeper-ready-blue.webp";
 import keeperReady from "@/assets/shots/keeper-ready.webp";
 import penaltyBg from "@/assets/shots/penalty-bg.webp";
 import type { PenaltyDirection } from "@/types";
@@ -15,8 +18,8 @@ export interface PenaltyGoalKick {
 }
 
 export interface PenaltyGoalSceneProps {
-  /** "own" = your goal is under attack, your (red) keeper dives.
-   *  "opponent" = you're attacking, their (blue) keeper dives. */
+  /** "own" = your goal is under attack, your (blue) keeper dives.
+   *  "opponent" = you're attacking, their (red) keeper dives. */
   keeperSide: "own" | "opponent";
   /** The kick currently animating in, or null to show the idle/reset scene. */
   kick: PenaltyGoalKick | null;
@@ -65,11 +68,13 @@ function missTarget(zone: PenaltyDirection): { x: number; y: number } {
 // the feet when standing, the gloves when diving. Dives are drawn to the
 // keeper's left as seen from the spot; right-hand dives mirror them.
 const KEEPER_W = 21.5;
+// Red kit = the opponent's keeper (the art as drawn); blue = your own (the
+// same art with only the kit recoloured, skin and gloves untouched).
 const POSES = {
-  ready: { src: keeperReady, w: KEEPER_W, anchor: { x: 0.5, y: 1 } },
-  jump: { src: keeperReady, w: KEEPER_W, anchor: { x: 0.5, y: 0.4 } },
-  side: { src: keeperDiveSide, w: KEEPER_W * (594 / 575), anchor: { x: 0.1, y: 0.22 } },
-  low: { src: keeperDiveLow, w: KEEPER_W * (577 / 575), anchor: { x: 0.1, y: 0.8 } },
+  ready: { src: { opponent: keeperReady, own: keeperReadyBlue }, w: KEEPER_W, anchor: { x: 0.5, y: 1 } },
+  jump: { src: { opponent: keeperReady, own: keeperReadyBlue }, w: KEEPER_W, anchor: { x: 0.5, y: 0.4 } },
+  side: { src: { opponent: keeperDiveSide, own: keeperDiveSideBlue }, w: KEEPER_W * (594 / 575), anchor: { x: 0.1, y: 0.22 } },
+  low: { src: { opponent: keeperDiveLow, own: keeperDiveLowBlue }, w: KEEPER_W * (577 / 575), anchor: { x: 0.1, y: 0.8 } },
 } as const;
 
 function keeperPlacement(kick: PenaltyGoalKick | null) {
@@ -132,15 +137,11 @@ export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outco
           transition={{ type: "spring", stiffness: 260, damping: 22 }}
         >
           <img
-            src={keeper.pose.src}
+            src={keeper.pose.src[keeperSide]}
             alt=""
             draggable={false}
             className="block w-full drop-shadow-[0_6px_6px_rgba(0,0,0,0.45)]"
-            style={{
-              transform: keeper.flip ? "scaleX(-1)" : undefined,
-              // The art is the red keeper; the opponent's is recoloured blue.
-              filter: keeperSide === "opponent" ? "hue-rotate(220deg) saturate(1.1)" : undefined,
-            }}
+            style={{ transform: keeper.flip ? "scaleX(-1)" : undefined }}
           />
         </motion.div>
 
