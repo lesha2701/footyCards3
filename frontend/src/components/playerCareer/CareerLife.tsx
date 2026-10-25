@@ -175,6 +175,7 @@ export function RankingsTab() {
     <div className="flex flex-col gap-4" data-testid="rankings">
       <p className="text-caption text-ink-mist">Неделя {data.week.split("-W")[1]} — все матчи «Карьеры игрока»: лига, кубки, лига друзей.</p>
       <RankList title="⚽ Бомбардиры недели" rows={data.scorers} unit="гол." />
+      <RankList title="🅰️ Ассистенты недели" rows={data.assists ?? []} unit="пас." />
       <RankList title="⭐ Лучшая оценка недели (от 4 матчей)" rows={data.ratings} unit="" />
       <RankList title="👑 Престиж" rows={data.prestige} unit="" />
     </div>

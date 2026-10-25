@@ -175,7 +175,7 @@ describe("PlayerCareerPage", () => {
         weights: { FWD: { goals: 3, assists: 2, clean_sheets: 0 }, GK: { goals: 6, assists: 3, clean_sheets: 7 } },
         table: [{ place: 1, user_id: 7, user_name: "Петя", is_me: false, matches: 10, goals: 0, assists: 0, clean_sheets: 6, line: "GK", avg_rating: 7.4, score: 116 }],
         me: { place: 0, user_id: 1, user_name: "Я", is_me: true, matches: 5, goals: 2, assists: 1, clean_sheets: 0, line: "FWD", avg_rating: 7, score: 78 },
-        winners: [{ month: "2026-09", month_label: "Сентябрь 2026", user_name: "Вася", is_me: false, score: 120, goals: 11, avg_rating: 7.9 }],
+        winners: [{ month: "2026-09", month_label: "Сентябрь 2026", user_name: "Вася", is_me: false, score: 120, goals: 11, assists: 4, avg_rating: 7.9 }],
       },
     });
     renderPage();

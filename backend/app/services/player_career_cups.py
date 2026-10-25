@@ -207,7 +207,8 @@ async def golden_ball_view(db: AsyncSession, user: User, config, now: Optional[d
         "me": entry(mine, user, my_place or 0) if mine is not None else None,
         "winners": [
             {"month": g.month, "month_label": month_label(g.month), "user_name": (u.first_name or u.username or "Игрок") if u else "—",
-             "is_me": bool(u and u.id == user.id), "score": g.score, "goals": g.goals, "avg_rating": g.avg_rating}
+             "is_me": bool(u and u.id == user.id), "score": g.score, "goals": g.goals, "assists": g.assists,
+             "avg_rating": g.avg_rating}
             for g, u in winners
         ],
     }

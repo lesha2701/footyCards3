@@ -255,6 +255,7 @@ async def rankings(db: AsyncSession, user: User, now: Optional[datetime] = None)
                 "value": value, "matches": stat.matches}
 
     scorers = sorted(rows, key=lambda r: (-r[0].goals, -r[0].assists, r[0].user_id))
+    assisters = sorted(rows, key=lambda r: (-r[0].assists, -r[0].goals, r[0].user_id))
     rated = sorted(
         (r for r in rows if r[0].matches >= 4), key=lambda r: (-(r[0].rating_sum / r[0].matches), r[0].user_id),
     )
@@ -264,6 +265,7 @@ async def rankings(db: AsyncSession, user: User, now: Optional[datetime] = None)
     return {
         "week": key,
         "scorers": [entry(s, u, i + 1, s.goals) for i, (s, u) in enumerate(scorers[:10]) if s.goals > 0],
+        "assists": [entry(s, u, i + 1, s.assists) for i, (s, u) in enumerate(assisters[:10]) if s.assists > 0],
         "ratings": [entry(s, u, i + 1, round(s.rating_sum / s.matches, 2)) for i, (s, u) in enumerate(rated[:10])],
         "prestige": [
             {"place": i + 1, "user_id": u.id, "user_name": _name(u), "is_me": u.id == user.id, "value": mp.reputation or 0,

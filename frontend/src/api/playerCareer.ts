@@ -173,7 +173,7 @@ export interface PlayerCareerGoldenBall {
   weights: Record<string, { goals: number; assists: number; clean_sheets: number }>;
   table: PlayerCareerGoldenBallEntry[];
   me: PlayerCareerGoldenBallEntry | null;
-  winners: { month: string; month_label: string; user_name: string; is_me: boolean; score: number; goals: number; avg_rating: number }[];
+  winners: { month: string; month_label: string; user_name: string; is_me: boolean; score: number; goals: number; assists: number; avg_rating: number }[];
 }
 
 export interface PlayerCareerObjective {
@@ -294,6 +294,7 @@ export interface PlayerCareerRankingEntry {
 export interface PlayerCareerRankings {
   week: string;
   scorers: PlayerCareerRankingEntry[];
+  assists: PlayerCareerRankingEntry[];
   ratings: PlayerCareerRankingEntry[];
   prestige: PlayerCareerRankingEntry[];
 }

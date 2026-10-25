@@ -711,7 +711,7 @@ function GoldenBallTab({ ball }: { ball: PlayerCareerGoldenBall }) {
                   {e.user_name} <span className="font-mono text-micro text-ink-mist">{LINE_SHORT[e.line] ?? ""}</span>
                 </span>
                 <span className="text-caption text-ink-mist">
-                  ⚽ {e.goals}{e.clean_sheets > 0 && ` · 🧱 ${e.clean_sheets}`} · {e.avg_rating}
+                  ⚽ {e.goals} · 🅰️ {e.assists}{e.clean_sheets > 0 && ` · 🧱 ${e.clean_sheets}`} · {e.avg_rating}
                 </span>
                 <span className="w-12 text-right font-mono font-bold">{e.score}</span>
               </div>
@@ -725,7 +725,7 @@ function GoldenBallTab({ ball }: { ball: PlayerCareerGoldenBall }) {
           <div className="mt-2 flex flex-col gap-1.5">
             {ball.winners.map((w) => (
               <p key={w.month} className={`text-sm ${w.is_me ? "font-bold text-amber-300" : "text-ink-chalk"}`}>
-                🏆 {w.month_label}: {w.user_name} <span className="text-ink-mist">· {w.goals} голов, оценка {w.avg_rating}</span>
+                🏆 {w.month_label}: {w.user_name} <span className="text-ink-mist">· {w.goals} голов, {w.assists ?? 0} передач, оценка {w.avg_rating}</span>
               </p>
             ))}
           </div>

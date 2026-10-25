@@ -283,6 +283,7 @@ class PlayerCareerGoldenBallWinnerOut(BaseModel):
     is_me: bool
     score: float
     goals: int
+    assists: int = 0
     avg_rating: float
 
 

@@ -226,7 +226,7 @@ async def test_weekly_tasks_rankings_and_daily_chest(client, db_session, bot_tok
     config = await get_config(db_session)
     now = datetime.now(timezone.utc)
     for _ in range(config.player_career_weekly_matches):
-        await life.record_week(db_session, user_id, now, 1, 0, 7.5, False)
+        await life.record_week(db_session, user_id, now, 1, 1, 7.5, False)
     await db_session.commit()
     view = (await client.get(f"{API}/player-career", headers=headers)).json()
     tasks = {t["code"]: t for t in view["weekly"]["tasks"]}
@@ -238,6 +238,7 @@ async def test_weekly_tasks_rankings_and_daily_chest(client, db_session, bot_tok
 
     ranks = (await client.get(f"{API}/player-career/rankings", headers=headers)).json()
     assert ranks["scorers"][0]["is_me"] and ranks["scorers"][0]["value"] == config.player_career_weekly_matches
+    assert ranks["assists"][0]["is_me"] and ranks["assists"][0]["value"] == config.player_career_weekly_matches
 
     assert view["chest"]["available"]
     chest = await client.post(f"{API}/player-career/chest", headers=headers)
