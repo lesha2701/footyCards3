@@ -92,6 +92,9 @@ services:
     restart: unless-stopped
     ports:
       - "${NGINX_PORT:-80}:80"
+    # Card art served by nginx itself (see nginx.conf «location ^~ /static/»).
+    volumes:
+      - ./backend/static:/srv/static:ro
     depends_on:
       backend:
         condition: service_healthy
