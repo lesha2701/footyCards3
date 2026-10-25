@@ -23,7 +23,7 @@ export default function PrimaryActionButton({
       <button
         onClick={onClick}
         disabled={disabled || loading}
-        className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base shadow-lg shadow-black/40 active:scale-95 disabled:opacity-50"
+        className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:bg-none disabled:bg-bg-raised disabled:text-ink-mist"
       >
         {loading ? loadingText : text}
       </button>

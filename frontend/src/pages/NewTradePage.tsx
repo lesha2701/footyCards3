@@ -255,7 +255,7 @@ export default function NewTradePage() {
             <button
               onClick={submit}
               disabled={createMutation.isPending || !canSubmit}
-              className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base shadow-lg shadow-black/40 active:scale-95 disabled:opacity-40"
+              className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:bg-none disabled:bg-bg-raised disabled:text-ink-mist"
             >
               {createMutation.isPending ? "Отправка..." : "Отправить предложение"}
             </button>
