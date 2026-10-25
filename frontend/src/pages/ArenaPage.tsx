@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
+import StickyActionBar from "@/components/common/StickyActionBar";
 import PitchCardTile from "@/components/cards/PitchCardTile";
 import MatchSkillNotes from "@/components/cards/MatchSkillNotes";
 import MatchPathSummary from "@/components/path/MatchPathSummary";
@@ -624,15 +625,15 @@ export default function ArenaPage() {
 
       {matchError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{matchError}</p>}
 
-      <section className="flex flex-col gap-3">
+      <StickyActionBar>
         <button
           onClick={() => playMutation.mutate()}
           disabled={!lineup?.is_complete || playMutation.isPending || simulating}
-          className="rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-40"
+          className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base shadow-lg shadow-black/40 active:scale-95 disabled:opacity-40"
         >
           {playMutation.isPending || simulating ? "Идёт матч..." : "Играть матч"}
         </button>
-      </section>
+      </StickyActionBar>
 
       {/* After the sheet is closed, the last result stays one tap away. */}
       {match && !matchSheetOpen && match.status === "finished" && (

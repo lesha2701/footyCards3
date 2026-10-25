@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import EmptyState from "@/components/common/EmptyState";
+import StickyActionBar from "@/components/common/StickyActionBar";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconSearch } from "@/components/icons";
 import NumberInput from "@/components/common/NumberInput";
@@ -250,13 +251,15 @@ export default function NewTradePage() {
             />
           </div>
 
-          <button
-            onClick={submit}
-            disabled={createMutation.isPending || !canSubmit}
-            className="rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-40"
-          >
-            {createMutation.isPending ? "Отправка..." : "Отправить предложение"}
-          </button>
+          <StickyActionBar>
+            <button
+              onClick={submit}
+              disabled={createMutation.isPending || !canSubmit}
+              className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base shadow-lg shadow-black/40 active:scale-95 disabled:opacity-40"
+            >
+              {createMutation.isPending ? "Отправка..." : "Отправить предложение"}
+            </button>
+          </StickyActionBar>
         </>
       )}
     </div>

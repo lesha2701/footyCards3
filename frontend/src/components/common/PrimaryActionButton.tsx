@@ -1,7 +1,10 @@
-/** A screen's single primary action (e.g. «Начать игру»). Always an
- * in-page button: Telegram's native MainButton (lib/useTelegramMainButton)
- * did not show up for some players, leaving mini-game start screens with no
- * way to start — a start button must never depend on it. */
+import StickyActionBar from "@/components/common/StickyActionBar";
+
+/** A screen's single primary action (e.g. «Начать игру»): our own button,
+ * pinned above the bottom navigation (StickyActionBar) so it is always in
+ * reach. Not Telegram's native MainButton (lib/useTelegramMainButton) — it
+ * did not show up for some players, leaving start screens with no way to
+ * start. */
 export default function PrimaryActionButton({
   text,
   loadingText = "Загрузка...",
@@ -16,12 +19,14 @@ export default function PrimaryActionButton({
   loading?: boolean;
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled || loading}
-      className="rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-50"
-    >
-      {loading ? loadingText : text}
-    </button>
+    <StickyActionBar>
+      <button
+        onClick={onClick}
+        disabled={disabled || loading}
+        className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base shadow-lg shadow-black/40 active:scale-95 disabled:opacity-50"
+      >
+        {loading ? loadingText : text}
+      </button>
+    </StickyActionBar>
   );
 }
