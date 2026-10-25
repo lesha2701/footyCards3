@@ -27,6 +27,26 @@ async def test_admin_dashboard_accessible_with_valid_admin_token(client, db_sess
     resp = await client.get("/api/v1/admin/dashboard", headers={"Authorization": f"Bearer {admin_token}"})
     assert resp.status_code == 200
     assert "total_users" in resp.json()
+    assert resp.json()["new_users_24h"] >= 1 and resp.json()["server_errors_24h"] == 0
+
+
+async def test_admin_sees_server_errors_grouped(client, db_session, bot_token):
+    from app.models.server_error import ServerError
+
+    db_session.add_all([
+        ServerError(method="GET", path="/api/v1/kontra/{id}", error="KeyError: 'a'", traceback="tb1"),
+        ServerError(method="GET", path="/api/v1/kontra/{id}", error="KeyError: 'b'", traceback="tb2"),
+        ServerError(method="POST", path="/api/v1/packs/{id}/open", error="ValueError: x", traceback="tb3"),
+    ])
+    await db_session.commit()
+    session_resp = await client.post("/api/v1/auth/session", headers=telegram_headers(999000001, bot_token))
+    auth = {"Authorization": f"Bearer {session_resp.json()['admin_token']}"}
+
+    body = (await client.get("/api/v1/admin/dashboard/errors", headers=auth)).json()
+    assert [(g["path"], g["count"]) for g in body["groups"]] == [("/api/v1/kontra/{id}", 2), ("/api/v1/packs/{id}/open", 1)]
+    assert body["groups"][0]["last_error"] == "KeyError: 'b'"
+    assert len(body["recent"]) == 3 and body["recent"][0]["traceback"] == "tb3"
+    assert (await client.get("/api/v1/admin/dashboard", headers=auth)).json()["server_errors_24h"] == 3
 
 
 async def test_admin_can_adjust_user_balance(client, db_session, bot_token):

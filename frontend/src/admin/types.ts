@@ -24,6 +24,11 @@ export interface Dashboard {
   registrations_by_day: DashboardChartPoint[];
   pack_openings_by_day: DashboardChartPoint[];
   recent_actions: RecentAdminAction[];
+  new_users_24h: number;
+  active_users_24h: number;
+  stars_24h: number;
+  stars_purchases_24h: number;
+  server_errors_24h: number;
 }
 
 export interface AdminUser {
@@ -1252,4 +1257,26 @@ export interface AdminMuseCatalog {
   collections: AdminMuseCollection[];
   muses: AdminMuse[];
   accessories: AdminMuseAccessory[];
+}
+
+export interface ServerErrorGroup {
+  method: string;
+  path: string;
+  count: number;
+  last_at: string;
+  last_error: string;
+}
+
+export interface ServerErrorEntry {
+  id: number;
+  created_at: string;
+  method: string;
+  path: string;
+  error: string;
+  traceback: string;
+}
+
+export interface ServerErrors {
+  groups: ServerErrorGroup[];
+  recent: ServerErrorEntry[];
 }

@@ -56,6 +56,7 @@ import type {
   CalendarTemplateDay,
   MagnateBoardConfig,
   Dashboard,
+  ServerErrors,
   GameConfig,
   AdminSkillLedgerEntry,
   PackPreview,
@@ -70,6 +71,12 @@ import type {
   TaskDefinition,
   RewardBundleInput,
 } from "@/admin/types";
+
+/** «Ошибки сервера»: the last week's 500s, grouped, plus the latest with tracebacks. */
+export async function fetchServerErrors(): Promise<ServerErrors> {
+  const { data } = await api.get<ServerErrors>("/admin/dashboard/errors");
+  return data;
+}
 
 export async function fetchDashboard(): Promise<Dashboard> {
   const { data } = await api.get<Dashboard>("/admin/dashboard");

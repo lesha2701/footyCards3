@@ -37,6 +37,38 @@ class DashboardOut(BaseModel):
     registrations_by_day: list[DashboardChartPoint]
     pack_openings_by_day: list[DashboardChartPoint]
     recent_actions: list[RecentAdminActionOut]
+    # «За сутки» (rolling 24 hours).
+    new_users_24h: int = 0
+    active_users_24h: int = 0
+    stars_24h: int = 0
+    stars_purchases_24h: int = 0
+    server_errors_24h: int = 0
+
+
+class ServerErrorGroupOut(BaseModel):
+    method: str
+    path: str
+    count: int
+    last_at: datetime
+    last_error: str
+
+
+class ServerErrorOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime
+    method: str
+    path: str
+    error: str
+    traceback: str
+
+
+class ServerErrorsOut(BaseModel):
+    """«Ошибки сервера» (the 500s error_log_service records), last 7 days."""
+
+    groups: list[ServerErrorGroupOut]
+    recent: list[ServerErrorOut]
 
 
 class AdminUserOut(BaseModel):

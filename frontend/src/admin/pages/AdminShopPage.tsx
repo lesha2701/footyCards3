@@ -86,8 +86,8 @@ function StarsPackPurchasesSection() {
 
   return (
     <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <p className="font-display text-base font-bold">Открытия паков за Stars</p>
           <p className="text-xs text-slate-500">Кто, какой пак и когда купил за Telegram Stars.</p>
         </div>

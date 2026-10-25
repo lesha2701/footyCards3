@@ -239,3 +239,70 @@ body {
   10%, 25% { opacity: 1; }
   15% { opacity: 0.3; }
 }
+
+/* Admin panel: nothing wider than its column on a phone. Inputs keep the
+   browser's ~20ch default width otherwise and poke out of narrow grid cells;
+   long ids, keys and JSON break instead of pushing the page sideways. */
+.admin-root input:not([type="checkbox"]):not([type="radio"]),
+.admin-root select,
+.admin-root textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+.admin-root main {
+  overflow-wrap: anywhere;
+}
+
+/* Admin tables on a phone: one card per row, «Колонка: значение» lines
+   (labels set by admin/useStackedTables.ts) instead of a table that has to be
+   scrolled sideways. Desktop keeps the table. */
+@media (max-width: 767px) {
+  .admin-root table.admin-stack {
+    min-width: 0 !important;
+    width: 100%;
+  }
+  .admin-root table.admin-stack thead {
+    display: none;
+  }
+  .admin-root table.admin-stack,
+  .admin-root table.admin-stack tbody,
+  .admin-root table.admin-stack tr,
+  .admin-root table.admin-stack td {
+    display: block;
+  }
+  .admin-root table.admin-stack tr {
+    margin: 6px;
+    padding: 6px 10px;
+    border: 1px solid rgb(255 255 255 / 0.06);
+    border-radius: 12px;
+    background: rgb(var(--c-bg-surface));
+  }
+  .admin-root table.admin-stack td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 28px;
+    padding: 3px 0 !important;
+    border: 0 !important;
+    text-align: right;
+  }
+  .admin-root table.admin-stack td > * {
+    min-width: 0;
+  }
+  .admin-root table.admin-stack td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    max-width: 45%;
+    color: rgb(100 116 139);
+    font-size: 11px;
+    text-align: left;
+  }
+  .admin-root table.admin-stack td[data-label=""] {
+    justify-content: flex-start;
+    text-align: left;
+  }
+  .admin-root table.admin-stack td[data-label=""]::before {
+    display: none;
+  }
+}

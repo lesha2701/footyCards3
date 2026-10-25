@@ -8,7 +8,8 @@ from app.core.dependencies import get_current_admin
 from app.database import get_db
 from app.models.admin_action import AdminAction
 from app.models.card import UserCard
-from app.models.pack import PackOpening
+from app.models.pack import PackOpening, StarsInvoice
+from app.models.server_error import ServerError
 from app.models.trade import TradeOffer
 from app.models.user import User
 from app.schemas.admin import (
@@ -17,6 +18,9 @@ from app.schemas.admin import (
     EconomyReportOut,
     PackExpectedValueOut,
     RecentAdminActionOut,
+    ServerErrorGroupOut,
+    ServerErrorOut,
+    ServerErrorsOut,
 )
 from app.schemas.admin_analytics import AnalyticsReportOut
 from app.services import admin_analytics_service, admin_economy_service
@@ -63,6 +67,17 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         await db.execute(select(AdminAction).order_by(AdminAction.created_at.desc()).limit(20))
     ).scalars().all()
 
+    day_ago = now - timedelta(days=1)
+    new_users_24h = (await db.execute(select(func.count(User.id)).where(User.created_at >= day_ago))).scalar_one()
+    active_users_24h = (await db.execute(select(func.count(User.id)).where(User.last_seen_at >= day_ago))).scalar_one()
+    stars_24h, stars_purchases_24h = (await db.execute(
+        select(func.coalesce(func.sum(StarsInvoice.stars_amount), 0), func.count(StarsInvoice.id))
+        .where(StarsInvoice.completed_at >= day_ago)
+    )).one()
+    server_errors_24h = (
+        await db.execute(select(func.count(ServerError.id)).where(ServerError.created_at >= day_ago))
+    ).scalar_one()
+
     return DashboardOut(
         total_users=total_users,
         active_users_7d=active_users_7d,
@@ -73,6 +88,38 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         registrations_by_day=registrations_by_day,
         pack_openings_by_day=pack_openings_by_day,
         recent_actions=[RecentAdminActionOut.model_validate(a) for a in recent_actions_rows],
+        new_users_24h=new_users_24h,
+        active_users_24h=active_users_24h,
+        stars_24h=int(stars_24h or 0),
+        stars_purchases_24h=stars_purchases_24h,
+        server_errors_24h=server_errors_24h,
+    )
+
+
+@router.get("/errors", response_model=ServerErrorsOut)
+async def get_server_errors(db: AsyncSession = Depends(get_db)):
+    """«Ошибки сервера»: the last week's 500s, grouped by endpoint, plus the
+    latest ones with their traceback."""
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    groups = (await db.execute(
+        select(
+            ServerError.method, ServerError.path, func.count(ServerError.id), func.max(ServerError.created_at),
+        )
+        .where(ServerError.created_at >= week_ago)
+        .group_by(ServerError.method, ServerError.path)
+        .order_by(func.count(ServerError.id).desc())
+        .limit(30)
+    )).all()
+    recent = (await db.execute(
+        select(ServerError).where(ServerError.created_at >= week_ago).order_by(ServerError.id.desc()).limit(40)
+    )).scalars().all()
+    last_error = {(e.method, e.path): e.error for e in reversed(recent)}
+    return ServerErrorsOut(
+        groups=[
+            ServerErrorGroupOut(method=m, path=p, count=c, last_at=at, last_error=last_error.get((m, p), ""))
+            for m, p, c, at in groups
+        ],
+        recent=[ServerErrorOut.model_validate(e) for e in recent],
     )
 
 

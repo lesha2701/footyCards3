@@ -47,12 +47,13 @@ export default function AdminMonetizationPage() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="font-display text-2xl font-bold">Абонемент, сезон, стиль</h1>
-      <div className="flex gap-1 rounded-xl bg-bg-surface p-1">
+      {/* Every tab visible at once: a grid that wraps, never a clipped row. */}
+      <div className="grid grid-cols-4 gap-1 rounded-xl bg-bg-surface p-1">
         {([["settings", "Настройки"], ["cosmetics", "Косметика"], ["seasons", "Сезоны"], ["artifacts", "Артефакты"], ["equipment", "Экипировка"], ["emblems", "Эмблемы"], ["club_shop", "Клуб. магазин"], ["club_quests", "Клуб. задания"]] as [Tab, string][]).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`flex-1 rounded-lg py-2 text-xs font-semibold ${tab === id ? "bg-accent text-bg-base" : "text-slate-400"}`}
+            className={`min-w-0 truncate rounded-lg px-1 py-2 text-xs font-semibold ${tab === id ? "bg-accent text-bg-base" : "text-slate-400"}`}
           >
             {label}
           </button>
