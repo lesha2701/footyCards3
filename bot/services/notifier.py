@@ -75,6 +75,13 @@ _TYPE_PATHS = {
     "friend_request": "/friends",
     "friend_accepted": "/friends",
     "trade_wish_available": "/trades/finder",
+    "weekly_top": "/ranking",
+}
+
+
+# related_object_type -> fixed Mini App path (the object has no page of its own).
+_RELATED_PATHS = {
+    "card_offer": "/packs?tab=cards",
 }
 
 
@@ -84,6 +91,8 @@ def _keyboard_for(
     fixed_path = _TYPE_PATHS.get(notification_type) if notification_type else None
     if fixed_path:
         return open_app_keyboard(fixed_path, text="🎮 Перейти в игру")
+    if related_object_type in _RELATED_PATHS:
+        return open_app_keyboard(_RELATED_PATHS[related_object_type], text="⭐ Открыть магазин")
     prefix = _MATCH_PATH_PREFIXES.get(related_object_type) if related_object_type else None
     if not prefix or related_object_id is None:
         return None

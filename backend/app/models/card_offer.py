@@ -29,6 +29,8 @@ class CardOffer(TimestampMixin, Base):
     sold_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # When «Разослать игрокам» went out (once per offer).
+    announced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     player = relationship("Player", lazy="joined")
 

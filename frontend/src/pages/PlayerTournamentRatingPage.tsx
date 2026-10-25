@@ -35,12 +35,12 @@ export default function PlayerTournamentRatingPage() {
         </h1>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="flex flex-wrap gap-1.5">
         {METRICS.map((m) => (
           <button
             key={m.value}
             onClick={() => setMetric(m.value)}
-            className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
               metric === m.value ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
             }`}
           >

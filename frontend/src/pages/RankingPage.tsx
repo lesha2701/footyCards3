@@ -47,6 +47,10 @@ export default function RankingPage() {
   const pays = !!weekly?.enabled && weekly.metrics.includes(metric);
 
   const meInTop = !!data?.me && data.top.some((e) => e.user_id === data.me!.user_id);
+  // How far the player is from the last paid place of this week's top.
+  const lastPaid = pays && weekly ? data?.top[weekly.size - 1] : undefined;
+  const me = data?.me;
+  const toPrize = lastPaid && me && me.rank > weekly!.size ? lastPaid.value - me.value + 1 : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -91,6 +95,11 @@ export default function RankingPage() {
           <p className="mt-1 text-center text-xs text-ink-mist-dim">⋯</p>
           <RankingRow entry={data.me} highlight />
         </>
+      )}
+      {toPrize != null && toPrize > 0 && (
+        <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-center text-xs text-amber-200">
+          До топ-{weekly!.size} и награды недели не хватает <b className="font-mono">{toPrize.toLocaleString("ru-RU")}</b>
+        </p>
       )}
     </div>
   );

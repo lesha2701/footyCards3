@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { fetchAdminPlayers } from "@/admin/api";
-import { deleteAdminCardOffer, fetchAdminCardOffers, saveAdminCardOffer } from "@/api/cardOffers";
+import { announceAdminCardOffer, deleteAdminCardOffer, fetchAdminCardOffers, saveAdminCardOffer } from "@/api/cardOffers";
 import { formatGameError } from "@/lib/errors";
 import type { CardOfferAdmin, CardOfferAdminInput, Player } from "@/types";
 
@@ -46,6 +46,15 @@ export default function AdminCardOffers() {
     onError: (e) => setError(formatGameError(e, "Не удалилось")),
   });
 
+  const [notice, setNotice] = useState<string | null>(null);
+  const announce = useMutation({
+    mutationFn: announceAdminCardOffer,
+    onSuccess: (r) => { setNotice(`Разослано: ${r.sent} игрокам — бот отправит в течение нескольких минут`); setError(null); refresh(); },
+    onError: (e) => setError(formatGameError(e, "Не разослалось")),
+  });
+  const askAnnounce = (o: CardOfferAdmin) =>
+    confirm(`Отправить всем игрокам сообщение от бота про «${o.player.display_name}»? Это можно сделать один раз.`) && announce.mutate(o.id);
+
   const edit = (o: CardOfferAdmin) => setDraft({ ...o, player_id: o.player.id });
 
   return (
@@ -61,6 +70,7 @@ export default function AdminCardOffers() {
         «выпадает из паков», и купить её можно будет только здесь. Время, тираж и лимит на игрока — по желанию.
       </p>
       {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
+      {notice && <p className="rounded-lg bg-accent-lime/10 px-3 py-2 text-xs text-accent-lime">{notice}</p>}
 
       {draft && <OfferForm draft={draft} onChange={setDraft} onSave={() => save.mutate(draft)} onCancel={() => setDraft(null)} busy={save.isPending} />}
 
@@ -74,8 +84,12 @@ export default function AdminCardOffers() {
                 {o.stars_price} ⭐ · продано {o.sold_count}{o.stock ? `/${o.stock}` : ""}
                 {o.ends_at ? ` · до ${new Date(o.ends_at).toLocaleString("ru-RU")}` : ""}
                 {o.is_active ? "" : " · выключено"}
+                {o.announced_at ? " · разослано" : ""}
               </span>
             </span>
+            {o.live && !o.announced_at && (
+              <button onClick={() => askAnnounce(o)} disabled={announce.isPending} className="text-xs text-amber-300">Разослать</button>
+            )}
             <button onClick={() => edit(o)} className="text-xs text-accent-cyan">Изменить</button>
             {o.sold_count === 0 && (
               <button onClick={() => confirm("Удалить предложение?") && remove.mutate(o.id)} className="text-xs text-red-400">Удалить</button>

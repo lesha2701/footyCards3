@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_admin, get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.card_offer import CardOfferAdminIn, CardOfferAdminOut, CardOfferOut
+from app.schemas.card_offer import CardOfferAdminIn, CardOfferAdminOut, CardOfferAnnounceOut, CardOfferOut
 from app.schemas.stars import StarsInvoiceCreateOut
 from app.services import card_offer_service, shop_product_service
 
@@ -35,6 +35,11 @@ async def admin_create(body: CardOfferAdminIn, db: AsyncSession = Depends(get_db
 @admin_router.put("/{offer_id}", response_model=CardOfferAdminOut)
 async def admin_update(offer_id: int, body: CardOfferAdminIn, db: AsyncSession = Depends(get_db)):
     return await card_offer_service.admin_update(db, offer_id, body)
+
+
+@admin_router.post("/{offer_id}/announce", response_model=CardOfferAnnounceOut)
+async def admin_announce(offer_id: int, db: AsyncSession = Depends(get_db)):
+    return CardOfferAnnounceOut(sent=await card_offer_service.admin_announce(db, offer_id))
 
 
 @admin_router.delete("/{offer_id}")

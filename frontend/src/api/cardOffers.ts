@@ -23,6 +23,12 @@ export async function saveAdminCardOffer(body: CardOfferAdminInput, id?: number)
   return data;
 }
 
+/** «Разослать игрокам»: a bot message to every player, once per offer. */
+export async function announceAdminCardOffer(id: number): Promise<{ sent: number }> {
+  const { data } = await api.post<{ sent: number }>(`/admin/card-offers/${id}/announce`);
+  return data;
+}
+
 export async function deleteAdminCardOffer(id: number): Promise<void> {
   await api.delete(`/admin/card-offers/${id}`);
 }

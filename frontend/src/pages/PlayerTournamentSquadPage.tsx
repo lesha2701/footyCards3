@@ -202,16 +202,17 @@ export default function PlayerTournamentSquadPage() {
         <h1 className="font-display text-xl font-bold text-ink-chalk">Состав для турнира</h1>
       </div>
 
-      <section className="flex gap-1.5 overflow-x-auto pb-1">
+      {/* Every template visible at once: a grid, never a clipped sideways row. */}
+      <section className="grid grid-cols-3 gap-1.5">
         {(templates ?? []).map((t) => (
           <button
             key={t.template_index}
             onClick={() => { setSelectedIndex(t.template_index); setRenamingTemplate(false); }}
-            className={`flex shrink-0 flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 ${
+            className={`flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 ${
               t.template_index === viewedIndex ? "bg-accent-lime text-bg-base" : "bg-white/5 text-ink-mist"
             }`}
           >
-            <span className="whitespace-nowrap text-caption font-bold">{t.name}</span>
+            <span className="w-full truncate text-center text-caption font-bold">{t.name}</span>
             {t.is_active && (
               <span className={`text-micro ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
                 Активный

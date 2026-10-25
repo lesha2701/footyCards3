@@ -3659,4 +3659,5 @@ export interface CardOfferAdmin extends Omit<CardOfferAdminInput, "player_id"> {
   player: Player;
   sold_count: number;
   live: boolean;
+  announced_at: string | null;
 }

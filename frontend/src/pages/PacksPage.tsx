@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import EmptyState from "@/components/common/EmptyState";
@@ -78,6 +78,7 @@ export default function PacksPage() {
   const { data: artifacts } = useQuery({ queryKey: ["artifacts"], queryFn: fetchArtifacts });
   const { data: equipment } = useQuery({ queryKey: ["equipment-shop"], queryFn: fetchEquipmentShop });
   const { data: cardOffers } = useQuery({ queryKey: ["card-offers"], queryFn: fetchCardOffers });
+  const freshOffers = useFreshOffers(cardOffers?.map((o) => o.id), tab === "cards");
   const shopTabs = SHOP_TABS.filter(
     (t) => (t.id !== "artifacts" || artifacts?.enabled !== false) && (t.id !== "equipment" || equipment?.enabled !== false)
       && (t.id !== "cards" || cardOffers?.length !== 0),
@@ -132,6 +133,9 @@ export default function PacksPage() {
             }`}
           >
             {t.label}
+            {t.id === "cards" && freshOffers && tab !== "cards" && (
+              <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-amber-400 align-middle" aria-label="новое" />
+            )}
           </button>
         ))}
       </div>
@@ -257,4 +261,29 @@ export default function PacksPage() {
       )}
     </div>
   );
+}
+
+/** A dot on «Карты ⭐» while an offer the player hasn't seen is on sale
+ * (per device); opening the tab marks them all seen. */
+function useFreshOffers(ids: number[] | undefined, open: boolean): boolean {
+  const KEY = "shop.seen.card-offers";
+  const [seen, setSeen] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(KEY) ?? "[]") as string[];
+    } catch {
+      return [];
+    }
+  });
+  const fresh = !!ids?.some((id) => !seen.includes(String(id)));
+  useEffect(() => {
+    if (!open || !fresh || !ids) return;
+    const next = ids.map(String);
+    try {
+      localStorage.setItem(KEY, JSON.stringify(next));
+    } catch {
+      /* storage off — the dot just comes back next time */
+    }
+    setSeen(next);
+  }, [open, fresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  return fresh;
 }

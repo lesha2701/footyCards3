@@ -47,3 +47,8 @@ class CardOfferAdminOut(BaseModel):
     is_active: bool
     sort_order: int
     live: bool  # on sale right now
+    announced_at: Optional[datetime] = None
+
+
+class CardOfferAnnounceOut(BaseModel):
+    sent: int

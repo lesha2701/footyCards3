@@ -103,3 +103,34 @@ async def test_window_hides_offers_outside_it(client, db_session, bot_token):
     assert (await client.delete(f"{ADMIN}/{later.json()['id']}", headers=admin)).status_code == 200
     assert len((await client.get(ADMIN, headers=admin)).json()) == 1
     assert await card_offer_service.list_live(db_session, user) == []
+
+
+async def test_announce_messages_every_player_once(client, db_session, bot_token):
+    from app.models.notification import Notification
+
+    admin = await _admin(client, bot_token)
+    _, player_user = await _user(client, db_session, bot_token, 990021)
+    legend = await create_player(db_session, rating=91, display_name="Back Again", is_pack_droppable=False)
+    await db_session.commit()
+    offer = (await client.post(ADMIN, headers=admin, json={"player_id": legend.id, "stars_price": 99, "stock": 5})).json()
+
+    sent = await client.post(f"{ADMIN}/{offer['id']}/announce", headers=admin)
+    assert sent.status_code == 200, sent.text
+    assert sent.json()["sent"] >= 2  # the admin and the player
+    note = (await db_session.execute(
+        select(Notification).where(Notification.user_id == player_user.id, Notification.related_object_type == "card_offer")
+    )).scalar_one()
+    assert "Лимитка" in note.title and "Back Again" in note.body and "99" in note.body
+
+    again = await client.post(f"{ADMIN}/{offer['id']}/announce", headers=admin)
+    assert again.status_code == 409
+    listed = (await client.get(ADMIN, headers=admin)).json()
+    assert listed[0]["announced_at"] is not None
+
+
+async def test_announce_refuses_an_offer_not_on_sale(client, db_session, bot_token):
+    admin = await _admin(client, bot_token)
+    player = await create_player(db_session, rating=80)
+    await db_session.commit()
+    offer = (await client.post(ADMIN, headers=admin, json={"player_id": player.id, "stars_price": 50, "is_active": False})).json()
+    assert (await client.post(f"{ADMIN}/{offer['id']}/announce", headers=admin)).status_code == 409

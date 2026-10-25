@@ -12,14 +12,15 @@ delivered, so a sold-out offer may end one or two copies over its stock.
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, insert, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.timeutil import ensure_aware
 from app.models.card_offer import CardOffer, CardOfferPurchase
-from app.models.enums import CardSource
+from app.models.enums import CardSource, NotificationType
+from app.models.notification import Notification
 from app.models.player import Player
 from app.models.user import User
 from app.schemas.card_offer import CardOfferAdminIn, CardOfferAdminOut, CardOfferOut
@@ -153,6 +154,7 @@ def _admin_out(offer: CardOffer) -> CardOfferAdminOut:
         id=offer.id, player=PlayerOut.model_validate(offer.player), stars_price=offer.stars_price, title=offer.title,
         starts_at=offer.starts_at, ends_at=offer.ends_at, stock=offer.stock, per_user_limit=offer.per_user_limit,
         sold_count=offer.sold_count, is_active=offer.is_active, sort_order=offer.sort_order, live=_live(offer),
+        announced_at=offer.announced_at,
     )
 
 
@@ -206,3 +208,46 @@ async def admin_delete(db: AsyncSession, offer_id: int) -> None:
         raise ConflictError("Эту карточку уже покупали — выключи предложение вместо удаления")
     await db.delete(offer)
     await db.commit()
+
+
+def _announce_text(offer: CardOffer) -> tuple[str, str]:
+    player = offer.player
+    retired = player.is_pack_droppable is False
+    title = "🔥 Лимитка вернулась в магазин!" if retired else "⭐ Новая карточка в магазине"
+    lines = [f"{player.display_name} · {player.rating} — за {offer.stars_price} ⭐."]
+    if retired:
+        lines.append("Из паков она больше не выпадает — купить можно только сейчас.")
+    if offer.ends_at:
+        lines.append(f"Продажа до {ensure_aware(offer.ends_at).strftime('%d.%m %H:%M')} UTC.")
+    if offer.stock:
+        lines.append(f"Всего {offer.stock} шт.")
+    return title, " ".join(lines)
+
+
+async def admin_announce(db: AsyncSession, offer_id: int) -> int:
+    """«Разослать игрокам»: one bot message per player about a live offer,
+    once per offer (announced_at, decided under the offer's row lock)."""
+    offer = (await db.execute(select(CardOffer).where(CardOffer.id == offer_id).with_for_update())).unique().scalar_one_or_none()
+    if offer is None:
+        raise NotFoundError("Предложение не найдено")
+    if offer.announced_at is not None:
+        raise ConflictError("Об этой карточке уже разослали")
+    if not _live(offer):
+        raise ConflictError("Предложение сейчас не в продаже — сначала включи его")
+    title, body = _announce_text(offer)
+    user_ids = (
+        await db.execute(select(User.id).where(User.is_banned.is_(False), User.bot_blocked.is_(False)))
+    ).scalars().all()
+    now = _now()
+    if user_ids:
+        await db.execute(insert(Notification), [
+            {
+                "user_id": uid, "type": NotificationType.admin_message, "title": title, "body": body,
+                "related_object_type": "card_offer", "related_object_id": offer.id,
+                "is_read": False, "telegram_sent": False, "created_at": now,
+            }
+            for uid in user_ids
+        ])
+    offer.announced_at = now
+    await db.commit()
+    return len(user_ids)
