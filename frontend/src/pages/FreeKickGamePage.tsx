@@ -8,6 +8,7 @@ import { claimFreeKickReward, kickFreeKick, startFreeKick } from "@/api/games";
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import { IconCheck, IconClose, IconCoin, IconFlagCheckered, IconTarget, type IconProps } from "@/components/icons";
 import GameHero from "@/components/common/GameHero";
+import FreeKickScene, { type FreeKickShot } from "@/components/penalty/FreeKickScene";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -34,6 +35,8 @@ export default function FreeKickGamePage() {
   const [totalCoins, setTotalCoins] = useState(0);
   const [claimResult, setClaimResult] = useState<{ reward_coins: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [shot, setShot] = useState<FreeKickShot | null>(null);
+  const aimAtKick = useRef(50);
 
   const localStartRef = useRef(0);
   const rafRef = useRef<number | null>(null);
@@ -51,6 +54,7 @@ export default function FreeKickGamePage() {
       setKick(data.kick);
       setTotalCoins(0);
       setLastResult(null);
+      setShot(null);
       setClaimResult(null);
       setErrorMsg(null);
       setPhase("playing");
@@ -72,6 +76,7 @@ export default function FreeKickGamePage() {
     onSuccess: (result) => {
       haptic(result.tier === "miss" ? "light" : "medium");
       setLastResult({ tier: result.tier, coins: result.coins_this_kick });
+      setShot((prev) => ({ id: (prev?.id ?? 0) + 1, aim: aimAtKick.current, tier: result.tier }));
       setTotalCoins(result.total_coins);
       if (result.is_finished) {
         hapticNotify("success");
@@ -101,6 +106,7 @@ export default function FreeKickGamePage() {
   const takeShot = () => {
     if (!kick || kickMutation.isPending) return;
     const elapsedMs = Math.round(performance.now() - localStartRef.current);
+    aimAtKick.current = position;
     kickMutation.mutate(elapsedMs);
   };
 
@@ -164,7 +170,8 @@ export default function FreeKickGamePage() {
   const halfWidth = kick?.half_width ?? 8;
 
   return (
-    <div className="flex flex-col items-center gap-6 py-6">
+    <div className="flex flex-col items-center gap-4 py-4">
+      <FreeKickScene aim={position} shot={shot} />
       <p className="text-sm text-ink-mist">
         Удар {(kick?.kick_index ?? 0) + 1} / 3 · Всего: <span className="inline-flex items-center gap-1 font-mono font-bold text-accent-lime">{totalCoins}<IconCoin size={13} /></span>
       </p>
