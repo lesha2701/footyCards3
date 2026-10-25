@@ -20,7 +20,8 @@ step "2/5 Бэкап"
 if [ "${1:-}" = "--no-backup" ]; then
   echo "Пропущен (--no-backup)"
 else
-  ./ops/backup.sh || fail "бэкап"
+  # Локальный бэкап перед миграциями; копию в Telegram шлёт ночной бэкап.
+  BACKUP_TG=0 ./ops/backup.sh || fail "бэкап"
 fi
 
 step "3/5 Сборка и перезапуск (несколько минут)"

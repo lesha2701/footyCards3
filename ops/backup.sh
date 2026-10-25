@@ -36,3 +36,38 @@ mv "$TMP" "$OUT"
 
 find "$BACKUP_DIR" -name "${DB_NAME}_*.dump" -mtime +"$KEEP_DAYS" -delete
 echo "[$(date '+%F %T')] ГОТОВО: $(du -h "$OUT" | cut -f1). Всего дампов: $(ls "$BACKUP_DIR"/${DB_NAME}_*.dump | wc -l), место: $(df -h "$BACKUP_DIR" | awk 'NR==2{print $4}') свободно"
+
+# Копия вне сервера: бот присылает дамп в личку владельцу (@victor2289) —
+# только ему, НЕ всем из ADMIN_TELEGRAM_IDS. BACKUP_TG=0 — выключить.
+# Боты отправляют файлы до 50 МБ, поэтому дамп режется на части по 45 МБ.
+# Собрать обратно:  cat footycards_ДАТА.dump.* > footycards_ДАТА.dump
+BACKUP_TG_CHAT="488556166"
+if [ "${BACKUP_TG:-1}" != "0" ]; then
+  TOKEN=$($COMPOSE exec -T bot printenv TELEGRAM_BOT_TOKEN | tr -d '\r')
+  if [ -z "$TOKEN" ]; then
+    echo "Копия в Telegram пропущена: у бота нет токена"
+  elif ! command -v curl > /dev/null; then
+    echo "Копия в Telegram пропущена: на сервере нет curl (apt install curl)"
+  else
+    PARTS_DIR=$(mktemp -d)
+    split -b 45M -d -a 2 "$OUT" "$PARTS_DIR/$(basename "$OUT")."
+    TOTAL=$(ls "$PARTS_DIR" | wc -l)
+    N=0
+    FAILED=0
+    for PART in "$PARTS_DIR"/*; do
+      N=$((N + 1))
+      if ! curl -sf -o /dev/null --max-time 600 \
+          -F chat_id="$BACKUP_TG_CHAT" -F disable_notification=true \
+          -F caption="💾 Бэкап $STAMP, часть $N/$TOTAL" \
+          -F document=@"$PART" "https://api.telegram.org/bot$TOKEN/sendDocument"; then
+        FAILED=1
+      fi
+    done
+    rm -rf "$PARTS_DIR"
+    if [ "$FAILED" = 0 ]; then
+      echo "Копия отправлена в Telegram (@victor2289): $TOTAL ч."
+    else
+      echo "ВНИМАНИЕ: не все части ушли в Telegram (локальный дамп цел)"
+    fi
+  fi
+fi
