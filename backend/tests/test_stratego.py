@@ -26,6 +26,20 @@ def _reset_rate_limits():
     yield
 
 
+@pytest.fixture
+def user_moves_first(monkeypatch):
+    """Bot matches pick who starts at random, and a bot that starts can take
+    a piece on its very first move (a speedster runs the whole column) —
+    tests that count or look for the player's pieces start with the user."""
+    start = stratego_service._start_play
+
+    def _user_first(state, *args, **kwargs):
+        start(state, *args, **kwargs)
+        state["turn"] = "user"
+
+    monkeypatch.setattr(stratego_service, "_start_play", _user_first)
+
+
 SMALL_COUNTS = {"wall": 2, "tackler": 1, "speedster": 1, "regular": 1}
 
 
@@ -876,7 +890,7 @@ EIGHT_SPEC = [
 ]
 
 
-async def test_default_8x8_bot_match_has_16_pieces_and_lakes(client, db_session, bot_token):
+async def test_default_8x8_bot_match_has_16_pieces_and_lakes(client, db_session, bot_token, user_moves_first):
     headers = await _register(client, bot_token, 970070)
     user = await get_user_by_telegram_id(db_session, 970070)
     await _give_cards(db_session, user.id, spec=EIGHT_SPEC)
@@ -1008,7 +1022,7 @@ async def _with_my_player(client, db_session, bot_token, telegram_id):
     return headers, user, ids
 
 
-async def test_my_player_can_take_a_role_and_earns_xp(client, db_session, bot_token):
+async def test_my_player_can_take_a_role_and_earns_xp(client, db_session, bot_token, user_moves_first):
     from app.services.my_player_service import card_id_for
 
     await _set_config(db_session, stratego_my_player_xp=15)
@@ -1036,7 +1050,7 @@ async def test_my_player_can_take_a_role_and_earns_xp(client, db_session, bot_to
     assert view["xp_stratego_match"] == 15
 
 
-async def test_my_player_gets_no_xp_when_owner_forfeits_or_not_fielded(client, db_session, bot_token):
+async def test_my_player_gets_no_xp_when_owner_forfeits_or_not_fielded(client, db_session, bot_token, user_moves_first):
     headers, user, ids = await _with_my_player(client, db_session, bot_token, 970091)
     user_id = user.id
     # Auto squad: five stronger cards fill the five slots, the 52-rated

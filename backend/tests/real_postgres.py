@@ -168,14 +168,25 @@ async def delete_created_rows(conn: AsyncConnection, snapshot: Snapshot) -> None
         await conn.execute(delete(table).where(_new_rows(table, snapshot)))
 
 
+# Two pytest runs at once (two worktrees, two sessions) share the `_test`
+# database: one run's cleanup would delete the other's rows and the code
+# under test (e.g. simulate_next_round) acts on every tournament it finds.
+# A session-level advisory lock makes real-Postgres tests take turns.
+_RUN_LOCK_KEY = 0x6674_7270  # "ftrp"
+
+
 class RealPostgres:
     """Per-test handle: snapshot on enter, delete everything created on exit."""
 
     def __init__(self, url: str):
         self._maintenance = create_async_engine(url, poolclass=NullPool)
         self._snapshot: Snapshot | None = None
+        self._lock_conn: AsyncConnection | None = None
 
     async def start(self) -> None:
+        self._lock_conn = await self._maintenance.connect()
+        await self._lock_conn.execute(text("SELECT pg_advisory_lock(:key)"), {"key": _RUN_LOCK_KEY})
+        await self._lock_conn.commit()
         async with self._maintenance.connect() as conn:
             self._snapshot = await take_snapshot(conn)
 
@@ -185,4 +196,6 @@ class RealPostgres:
                 async with self._maintenance.begin() as conn:
                     await delete_created_rows(conn, self._snapshot)
         finally:
+            if self._lock_conn is not None:
+                await self._lock_conn.close()  # the session ends, the lock goes with it
             await self._maintenance.dispose()
