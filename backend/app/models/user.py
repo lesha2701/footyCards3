@@ -244,6 +244,9 @@ class User(TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     referral_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # When the bot last sent «Возвращайся» (once per absence: only if the
+    # player has been back since — last_seen_at after it).
+    comeback_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     referral_reward_granted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Trade privacy

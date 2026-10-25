@@ -287,6 +287,11 @@ class GameConfig(TimestampMixin, Base):
     # tasks, sent after this hour in the bot's timezone. Off by default.
     bot_daily_digest_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     bot_daily_digest_hour: Mapped[int] = mapped_column(Integer, default=18, nullable=False)
+    # «Возвращайся» (bot/services/comeback.py): one message to a player who
+    # hasn't opened the game for N days (once per absence), after this hour.
+    bot_comeback_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    bot_comeback_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    bot_comeback_hour: Mapped[int] = mapped_column(Integer, default=19, nullable=False)
     # Shop "предложение дня" (services/shop_offer_service.py): one coin pack a
     # day at a discount, once per player per day. pack_id = None rotates
     # through the active coin packs by date. Off by default.

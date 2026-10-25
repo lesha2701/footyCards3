@@ -264,6 +264,38 @@ async def fetch_daily_digest_recipients(today: date) -> list[asyncpg.Record]:
     )
 
 
+async def fetch_comeback_settings() -> Optional[asyncpg.Record]:
+    pool = await get_pool()
+    return await pool.fetchrow(
+        "SELECT bot_comeback_enabled, bot_comeback_days, bot_comeback_hour FROM game_config WHERE id = 1"
+    )
+
+
+async def fetch_comeback_recipients(days: int, limit: int = 2000) -> list[asyncpg.Record]:
+    """«Возвращайся»: players away for `days`+ days (but under 30), not yet
+    pinged during this absence — comeback_sent_at before their last visit
+    or never. Banned / bot-blocked players skipped."""
+    pool = await get_pool()
+    return await pool.fetch(
+        """SELECT id, telegram_id, first_name,
+                  (free_pack_available_at IS NOT NULL AND free_pack_available_at <= now()) AS free_pack_ready
+           FROM users
+           WHERE is_banned = false AND bot_blocked = false
+             AND last_seen_at IS NOT NULL
+             AND last_seen_at < now() - make_interval(days => $1)
+             AND last_seen_at > now() - interval '30 days'
+             AND (comeback_sent_at IS NULL OR comeback_sent_at < last_seen_at)
+           ORDER BY last_seen_at DESC
+           LIMIT $2""",
+        days, limit,
+    )
+
+
+async def mark_comeback_sent(user_id: int) -> None:
+    pool = await get_pool()
+    await pool.execute("UPDATE users SET comeback_sent_at = now() WHERE id = $1", user_id)
+
+
 async def create_notification(user_id: int, type_: str, title: str, body: str) -> None:
     pool = await get_pool()
     await pool.execute(

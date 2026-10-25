@@ -174,6 +174,7 @@ export default function AdminGamesPage() {
       | "leagues_enabled"
       | "diamond_rating_cap_enabled"
       | "bot_daily_digest_enabled"
+      | "bot_comeback_enabled"
       | "shop_daily_offer_enabled"
       | "club_league_enabled"
       | "career_enabled"
@@ -876,6 +877,16 @@ export default function AdminGamesPage() {
         <div className="grid grid-cols-2 items-end gap-3">
           {toggle("bot_daily_digest_enabled", "Включено")}
           {field("bot_daily_digest_hour", "Час отправки (0–23, часовой пояс бота)")}
+        </div>
+        <p className="mb-3 mt-5 font-display text-sm font-bold">«Возвращайся»</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Один раз тому, кто не заходил N дней (и пропал не больше 30 дней назад): «давно не виделись, тебя ждут бесплатный
+          пак и награда дня». Повторно — только если игрок вернулся и снова пропал.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("bot_comeback_enabled", "Включено")}
+          {field("bot_comeback_days", "Через сколько дней без захода")}
+          {field("bot_comeback_hour", "Час отправки (0–23)")}
         </div>
       </section>
 

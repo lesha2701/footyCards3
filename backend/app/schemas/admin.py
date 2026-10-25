@@ -341,6 +341,9 @@ class GameConfigOut(BaseModel):
     free_pack_interval_hours: int
     bot_daily_digest_enabled: bool = False
     bot_daily_digest_hour: int = 18
+    bot_comeback_enabled: bool = True
+    bot_comeback_days: int = 3
+    bot_comeback_hour: int = 19
     shop_daily_offer_enabled: bool = False
     shop_daily_offer_discount_pct: int = 25
     shop_daily_offer_pack_id: Optional[int] = None
@@ -1017,6 +1020,9 @@ class GameConfigUpdate(BaseModel):
     free_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     bot_daily_digest_enabled: Optional[bool] = None
     bot_daily_digest_hour: Optional[int] = Field(default=None, ge=0, le=23)
+    bot_comeback_enabled: Optional[bool] = None
+    bot_comeback_days: Optional[int] = Field(default=None, ge=1, le=30)
+    bot_comeback_hour: Optional[int] = Field(default=None, ge=0, le=23)
     shop_daily_offer_enabled: Optional[bool] = None
     shop_daily_offer_discount_pct: Optional[int] = Field(default=None, ge=1, le=90)
     # 0 = rotate through active coin packs by date (stored as NULL).
