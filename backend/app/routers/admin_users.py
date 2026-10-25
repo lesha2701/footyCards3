@@ -15,7 +15,16 @@ from app.models.player import Player
 from app.models.transaction import CoinTransaction
 from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.user import User
-from app.schemas.admin import AdminUserOut, BalanceAdjustRequest, GrantCardRequest, GrantTrophyRequest, ResetLimitsResponse
+from app.schemas.admin import (
+    AdminUserActionOut,
+    AdminUserOut,
+    AdminUserStarsPurchaseOut,
+    AdminUserSummaryOut,
+    BalanceAdjustRequest,
+    GrantCardRequest,
+    GrantTrophyRequest,
+    ResetLimitsResponse,
+)
 from app.schemas.card import UserCardOut
 from app.schemas.transaction import CoinTransactionOut
 from app.schemas.trophy import UserTrophyOut
@@ -58,6 +67,55 @@ async def _get_user_or_404(db: AsyncSession, user_id: int) -> User:
 @router.get("/{user_id}", response_model=AdminUserOut)
 async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
     return await _get_user_or_404(db, user_id)
+
+
+@router.get("/{user_id}/summary", response_model=AdminUserSummaryOut)
+async def get_user_summary(user_id: int, db: AsyncSession = Depends(get_db)):
+    """One-screen player card: activity, collection, club, «Мой игрок»,
+    referrals, Stars spent and what admins did to the account."""
+    from app.models.admin_action import AdminAction
+    from app.models.club import Club, ClubMember
+    from app.models.my_player import MyPlayer
+    from app.models.pack import PackOpening, StarsInvoice
+    from app.models.trade import TradeOffer
+    from app.services.admin_analytics_service import _product
+
+    user = await _get_user_or_404(db, user_id)
+    cards = (await db.execute(select(func.count(UserCard.id)).where(UserCard.owner_id == user_id))).scalar_one()
+    packs = (await db.execute(select(func.count(PackOpening.id)).where(PackOpening.user_id == user_id))).scalar_one()
+    trades = (await db.execute(select(func.count(TradeOffer.id)).where(
+        (TradeOffer.sender_id == user_id) | (TradeOffer.receiver_id == user_id)
+    ))).scalar_one()
+    club_name = (await db.execute(
+        select(Club.name).join(ClubMember, ClubMember.club_id == Club.id).where(ClubMember.user_id == user_id)
+    )).scalar_one_or_none()
+    my_player = (await db.execute(select(MyPlayer).where(MyPlayer.user_id == user_id))).scalar_one_or_none()
+    referrer = await db.get(User, user.referred_by_id) if user.referred_by_id else None
+    stars_total, stars_purchases = (await db.execute(
+        select(func.coalesce(func.sum(StarsInvoice.stars_amount), 0), func.count(StarsInvoice.id))
+        .where(StarsInvoice.user_id == user_id, StarsInvoice.completed_at.is_not(None))
+    )).one()
+    invoices = (await db.execute(
+        select(StarsInvoice).where(StarsInvoice.user_id == user_id, StarsInvoice.completed_at.is_not(None))
+        .order_by(StarsInvoice.completed_at.desc()).limit(10)
+    )).scalars().all()
+    actions = (await db.execute(
+        select(AdminAction).where(AdminAction.entity_type == "user", AdminAction.entity_id == user_id)
+        .order_by(AdminAction.created_at.desc()).limit(10)
+    )).scalars().all()
+    return AdminUserSummaryOut(
+        created_at=user.created_at, last_seen_at=user.last_seen_at, login_streak=user.daily_login_streak or 0,
+        cards=cards, packs_opened=packs, trades=trades, club_name=club_name,
+        my_player_name=my_player.name if my_player else None,
+        my_player_prestige=my_player.reputation if my_player else None,
+        referral_count=user.referral_count or 0, referred_by_id=user.referred_by_id,
+        referred_by_name=(referrer.username or referrer.first_name) if referrer else None,
+        stars_total=int(stars_total or 0), stars_purchases=stars_purchases,
+        recent_stars=[
+            AdminUserStarsPurchaseOut(completed_at=i.completed_at, stars=i.stars_amount, product=_product(i)) for i in invoices
+        ],
+        admin_actions=[AdminUserActionOut(created_at=a.created_at, action=a.action, admin_id=a.admin_id) for a in actions],
+    )
 
 
 @router.get("/{user_id}/collection", response_model=Page[UserCardOut])

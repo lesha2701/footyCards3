@@ -45,6 +45,39 @@ class DashboardOut(BaseModel):
     server_errors_24h: int = 0
 
 
+class AdminUserStarsPurchaseOut(BaseModel):
+    completed_at: datetime
+    stars: int
+    product: str
+
+
+class AdminUserActionOut(BaseModel):
+    created_at: datetime
+    action: str
+    admin_id: Optional[int] = None
+
+
+class AdminUserSummaryOut(BaseModel):
+    """Everything about one player on one screen (Пользователи → Открыть)."""
+
+    created_at: Optional[datetime] = None
+    last_seen_at: Optional[datetime] = None
+    login_streak: int = 0
+    cards: int = 0
+    packs_opened: int = 0
+    trades: int = 0
+    club_name: Optional[str] = None
+    my_player_name: Optional[str] = None
+    my_player_prestige: Optional[int] = None
+    referral_count: int = 0
+    referred_by_id: Optional[int] = None
+    referred_by_name: Optional[str] = None
+    stars_total: int = 0
+    stars_purchases: int = 0
+    recent_stars: list[AdminUserStarsPurchaseOut] = []
+    admin_actions: list[AdminUserActionOut] = []
+
+
 class ServerErrorGroupOut(BaseModel):
     method: str
     path: str

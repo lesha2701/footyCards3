@@ -1280,3 +1280,22 @@ export interface ServerErrors {
   groups: ServerErrorGroup[];
   recent: ServerErrorEntry[];
 }
+
+export interface AdminUserSummary {
+  created_at: string | null;
+  last_seen_at: string | null;
+  login_streak: number;
+  cards: number;
+  packs_opened: number;
+  trades: number;
+  club_name: string | null;
+  my_player_name: string | null;
+  my_player_prestige: number | null;
+  referral_count: number;
+  referred_by_id: number | null;
+  referred_by_name: string | null;
+  stars_total: number;
+  stars_purchases: number;
+  recent_stars: { completed_at: string; stars: number; product: string }[];
+  admin_actions: { created_at: string; action: string; admin_id: number | null }[];
+}

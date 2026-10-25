@@ -30,6 +30,30 @@ async def test_admin_dashboard_accessible_with_valid_admin_token(client, db_sess
     assert resp.json()["new_users_24h"] >= 1 and resp.json()["server_errors_24h"] == 0
 
 
+async def test_admin_user_summary_on_one_screen(client, db_session, bot_token):
+    from datetime import datetime, timezone
+
+    from app.models.pack import StarsInvoice
+
+    session_resp = await client.post("/api/v1/auth/session", headers=telegram_headers(999000001, bot_token))
+    auth = {"Authorization": f"Bearer {session_resp.json()['admin_token']}"}
+    await client.post("/api/v1/auth/session", headers=telegram_headers(760050, bot_token))
+    player = await get_user_by_telegram_id(db_session, 760050)
+    db_session.add_all([
+        StarsInvoice(user_id=player.id, payload_token="sum-1", stars_amount=150, completed_at=datetime.now(timezone.utc)),
+        StarsInvoice(user_id=player.id, payload_token="sum-2", stars_amount=999, completed_at=None),  # never paid
+    ])
+    await db_session.commit()
+    await client.post(f"/api/v1/admin/users/{player.id}/ban", headers=auth)
+
+    body = (await client.get(f"/api/v1/admin/users/{player.id}/summary", headers=auth)).json()
+    assert body["stars_total"] == 150 and body["stars_purchases"] == 1
+    assert [p["stars"] for p in body["recent_stars"]] == [150]
+    assert body["admin_actions"][0]["action"] == "ban_user"
+    assert body["created_at"] is not None and body["cards"] >= 0
+    assert (await client.get("/api/v1/admin/users/99999999/summary", headers=auth)).status_code == 404
+
+
 async def test_admin_sees_server_errors_grouped(client, db_session, bot_token):
     from app.models.server_error import ServerError
 

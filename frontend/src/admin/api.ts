@@ -57,6 +57,7 @@ import type {
   MagnateBoardConfig,
   Dashboard,
   ServerErrors,
+  AdminUserSummary,
   GameConfig,
   AdminSkillLedgerEntry,
   PackPreview,
@@ -209,6 +210,12 @@ export async function fetchAdminUsers(search: string, page: number): Promise<Pag
 
 export async function fetchAdminUser(id: number): Promise<AdminUser> {
   const { data } = await api.get<AdminUser>(`/admin/users/${id}`);
+  return data;
+}
+
+/** One-screen player card (activity, club, «Мой игрок», referrals, Stars, admin actions). */
+export async function fetchAdminUserSummary(id: number): Promise<AdminUserSummary> {
+  const { data } = await api.get<AdminUserSummary>(`/admin/users/${id}/summary`);
   return data;
 }
 

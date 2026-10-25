@@ -6,6 +6,7 @@ import {
   banUser,
   deleteUserCard,
   fetchAdminUserCollection,
+  fetchAdminUserSummary,
   fetchAdminUsers,
   grantCard,
   resetUserLimits,
@@ -14,7 +15,7 @@ import {
   unbanUser,
 } from "@/admin/api";
 import TransactionsTable from "@/admin/components/TransactionsTable";
-import type { AdminUser } from "@/admin/types";
+import type { AdminUser, AdminUserSummary } from "@/admin/types";
 import { staticUrl } from "@/lib/api";
 
 export default function AdminUsersPage() {
@@ -89,6 +90,9 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
   const [balanceReason, setBalanceReason] = useState("");
   const [playerId, setPlayerId] = useState("");
 
+  const { data: summary } = useQuery({
+    queryKey: ["admin-user-summary", user.id], queryFn: () => fetchAdminUserSummary(user.id), enabled: tab === "overview",
+  });
   const { data: collection } = useQuery({
     queryKey: ["admin-user-collection", user.id],
     queryFn: () => fetchAdminUserCollection(user.id),
@@ -117,14 +121,14 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-bg-base p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          <p className="font-display text-lg font-bold">{user.username ?? user.first_name} (#{user.id})</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-bg-base p-4 md:p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="min-w-0 break-words font-display text-lg font-bold">{user.username ?? user.first_name} (#{user.id})</p>
           <button onClick={onClose} className="rounded-full bg-white/5 px-3 py-1.5 text-sm">Закрыть</button>
         </div>
 
-        <div className="mb-4 flex gap-2">
+        <div className="mb-4 grid grid-cols-3 gap-1.5">
           {(["overview", "collection", "transactions"] as const).map((t) => (
             <button
               key={t}
@@ -146,11 +150,13 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
               <Info label="Обмены" value={user.is_trade_banned ? "Запрещены" : "Разрешены"} />
             </div>
 
+            {summary && <UserSummary summary={summary} />}
+
             <div className="rounded-xl bg-bg-surface p-3">
               <p className="mb-2 text-xs font-semibold text-slate-400">Изменить баланс</p>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <input type="number" min={0} value={balanceAmount} onChange={(e) => setBalanceAmount(Number(e.target.value))} className="w-24 rounded-lg bg-black/30 px-2 py-1.5 text-sm outline-none" />
-                <input value={balanceReason} onChange={(e) => setBalanceReason(e.target.value)} placeholder="Причина" className="flex-1 rounded-lg bg-black/30 px-2 py-1.5 text-sm outline-none" />
+                <input value={balanceReason} onChange={(e) => setBalanceReason(e.target.value)} placeholder="Причина" className="min-w-[8rem] flex-1 rounded-lg bg-black/30 px-2 py-1.5 text-sm outline-none" />
                 <button
                   onClick={() => balanceMutation.mutate(1)}
                   disabled={!balanceAmount}
@@ -214,11 +220,58 @@ function UserDetailModal({ user, onClose }: { user: AdminUser; onClose: () => vo
   );
 }
 
+const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" }) : "—");
+
+/** The «everything about this player» block of the user card. */
+function UserSummary({ summary: s }: { summary: AdminUserSummary }) {
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <Info label="Регистрация" value={fmt(s.created_at)} />
+        <Info label="Был в игре" value={fmt(s.last_seen_at)} />
+        <Info label="Дней подряд" value={s.login_streak} />
+        <Info label="Карточек" value={s.cards.toLocaleString("ru-RU")} />
+        <Info label="Паков открыто" value={s.packs_opened} />
+        <Info label="Обменов" value={s.trades} />
+        <Info label="Клуб" value={s.club_name ?? "—"} />
+        <Info label="Мой игрок" value={s.my_player_name ? `${s.my_player_name} · престиж ${s.my_player_prestige ?? 0}` : "—"} />
+        <Info label="Привёл друзей" value={s.referral_count} />
+        <Info label="Пришёл от" value={s.referred_by_id ? `${s.referred_by_name ?? "игрок"} (#${s.referred_by_id})` : "—"} />
+      </div>
+      <div className="rounded-xl bg-bg-surface p-3">
+        <p className="text-xs font-semibold text-slate-400">
+          Звёзды: <span className="text-amber-300">{s.stars_total.toLocaleString("ru-RU")} ⭐</span> за {s.stars_purchases} покупок
+        </p>
+        {s.recent_stars.length > 0 && (
+          <div className="mt-2 flex flex-col gap-1 text-xs">
+            {s.recent_stars.map((p, i) => (
+              <div key={i} className="flex flex-wrap justify-between gap-x-3 text-slate-300">
+                <span className="min-w-0 break-words">{p.product}</span>
+                <span className="shrink-0 text-slate-500">{p.stars} ⭐ · {fmt(p.completed_at)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {s.admin_actions.length > 0 && (
+        <div className="rounded-xl bg-bg-surface p-3">
+          <p className="mb-1 text-xs font-semibold text-slate-400">Что делали админы</p>
+          {s.admin_actions.map((a, i) => (
+            <p key={i} className="break-words text-xs text-slate-300">
+              {fmt(a.created_at)} · {a.action}{a.admin_id ? ` · #${a.admin_id}` : ""}
+            </p>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 function Info({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl bg-bg-surface px-3 py-2">
+    <div className="min-w-0 rounded-xl bg-bg-surface px-3 py-2">
       <p className="text-caption text-slate-400">{label}</p>
-      <p className="font-semibold text-slate-100">{value}</p>
+      <p className="break-words font-semibold text-slate-100">{value}</p>
     </div>
   );
 }
