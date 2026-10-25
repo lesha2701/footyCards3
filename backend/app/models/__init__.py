@@ -76,6 +76,7 @@ from app.models.stratego import StrategoMatch, StrategoQueueEntry
 from app.models.mordoboi import MordoboiMatch, MordoboiQueueEntry
 from app.models.kontra import KontraBattle, KontraGear
 from app.models.weekly_top import WeeklyTopAward, WeeklyTopRun
+from app.models.card_offer import CardOffer, CardOfferPurchase
 from app.models.magnate import MagnateMatch, MagnateSeat
 from app.models.task import TaskDefinition, UserTask
 from app.models.tournament_queue import TournamentQueue, TournamentQueueEntry, TournamentQueueState
@@ -129,6 +130,8 @@ __all__ = [
     "KontraGear",
     "WeeklyTopAward",
     "WeeklyTopRun",
+    "CardOffer",
+    "CardOfferPurchase",
     "MordoboiQueueEntry",
     "StrategoQueueEntry",
     "Badge",

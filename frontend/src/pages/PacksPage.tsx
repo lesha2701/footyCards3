@@ -6,6 +6,8 @@ import EmptyState from "@/components/common/EmptyState";
 import { IconChevronUp, IconPack } from "@/components/icons";
 import { CardGridSkeleton, ListSkeleton } from "@/components/common/Skeleton";
 import { BuyCoinsModal, CoinPackagesPanel } from "@/components/shop/CoinPackages";
+import CardOfferShop from "@/components/shop/CardOfferShop";
+import { fetchCardOffers } from "@/api/cardOffers";
 import DailyOfferCard from "@/components/shop/DailyOfferCard";
 import EquipmentShop from "@/components/shop/EquipmentShop";
 import PackMachine from "@/components/shop/PackMachine";
@@ -39,9 +41,10 @@ const BULK_QUANTITY_PRESETS = [10];
 // "Подарки" tab is opened.
 const GiftShop = lazy(() => import("@/pages/GiftsPage").then((m) => ({ default: m.GiftShop })));
 
-type ShopTab = "coins" | "buy-coins" | "equipment" | "style" | "gifts" | "artifacts";
+type ShopTab = "coins" | "cards" | "buy-coins" | "equipment" | "style" | "gifts" | "artifacts";
 const SHOP_TABS: { id: ShopTab; label: string }[] = [
   { id: "coins", label: "Паки" },
+  { id: "cards", label: "Карты ⭐" },
   { id: "buy-coins", label: "Монеты" },
   { id: "equipment", label: "Экипировка" },
   { id: "artifacts", label: "Артефакты" },
@@ -74,8 +77,10 @@ export default function PacksPage() {
   // «Артефакты» / «Экипировка» tabs hide once the server says they are off (shown while loading, so the grid does not jump).
   const { data: artifacts } = useQuery({ queryKey: ["artifacts"], queryFn: fetchArtifacts });
   const { data: equipment } = useQuery({ queryKey: ["equipment-shop"], queryFn: fetchEquipmentShop });
+  const { data: cardOffers } = useQuery({ queryKey: ["card-offers"], queryFn: fetchCardOffers });
   const shopTabs = SHOP_TABS.filter(
-    (t) => (t.id !== "artifacts" || artifacts?.enabled !== false) && (t.id !== "equipment" || equipment?.enabled !== false),
+    (t) => (t.id !== "artifacts" || artifacts?.enabled !== false) && (t.id !== "equipment" || equipment?.enabled !== false)
+      && (t.id !== "cards" || cardOffers?.length !== 0),
   );
 
   // Coin packs then Stars packs, each by price; the grid follows the sort toggle.
@@ -145,6 +150,8 @@ export default function PacksPage() {
           {/* Club and season passes sit with the coins (same Stars buyers). */}
           <MonetizationEntries showStyle={false} showArtifacts={false} showEquipment={false} />
         </>
+      ) : tab === "cards" ? (
+        <CardOfferShop />
       ) : tab === "equipment" ? (
         <EquipmentShop />
       ) : tab === "artifacts" ? (

@@ -30,6 +30,7 @@ import { EMPTY_BUNDLE, type AdminSeason, type GameConfig } from "@/admin/types";
 import CosmeticPreview from "@/components/shop/CosmeticPreview";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { KIND_LABELS, STYLE_OPTIONS } from "@/lib/cosmetics";
+import AdminCardOffers from "@/admin/components/AdminCardOffers";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import type { ClubEmblemItem, ClubEmblemKind, Cosmetic, CosmeticKind } from "@/types";
@@ -122,6 +123,7 @@ function SettingsTab() {
 
   return (
     <div className="flex flex-col gap-3">
+      <AdminCardOffers />
       <section className={block}>
         <p className="font-display text-sm font-bold">Клубный абонемент (подписка Stars, 30 дней)</p>
         {flag("club_pass_enabled", "Продаётся (запуск)")}

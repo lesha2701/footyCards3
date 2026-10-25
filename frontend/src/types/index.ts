@@ -3626,3 +3626,37 @@ export interface WeeklyTopInfo {
   metrics: RankingMetric[];
   starting_values: Partial<Record<RankingMetric, number>>;
 }
+
+/** «Карты за звёзды»: a footballer card on sale for Telegram Stars. */
+export interface CardOffer {
+  id: number;
+  player: Player;
+  stars_price: number;
+  title: string | null;
+  ends_at: string | null;
+  stock: number | null;
+  left: number | null;
+  per_user_limit: number;
+  bought: number;
+  can_buy: boolean;
+  retired: boolean;
+}
+
+export interface CardOfferAdminInput {
+  player_id: number;
+  stars_price: number;
+  title: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  stock: number | null;
+  per_user_limit: number;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface CardOfferAdmin extends Omit<CardOfferAdminInput, "player_id"> {
+  id: number;
+  player: Player;
+  sold_count: number;
+  live: boolean;
+}
