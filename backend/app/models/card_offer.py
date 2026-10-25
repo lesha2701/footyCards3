@@ -31,8 +31,24 @@ class CardOffer(TimestampMixin, Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # When «Разослать игрокам» went out (once per offer).
     announced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # When the «осталось 3 часа» reminder went out (once per offer).
+    reminded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     player = relationship("Player", lazy="joined")
+
+
+class CardOfferView(Base):
+    """A player opened «Карты ⭐» while this offer was on sale — who gets
+    the reminder before it ends (unless they bought it)."""
+
+    __tablename__ = "card_offer_views"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    offer_id: Mapped[int] = mapped_column(ForeignKey("card_offers.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("offer_id", "user_id", name="uq_card_offer_views_offer_user"),)
 
 
 class CardOfferPurchase(Base):

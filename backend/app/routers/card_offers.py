@@ -4,7 +4,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_admin, get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.card_offer import CardOfferAdminIn, CardOfferAdminOut, CardOfferAnnounceOut, CardOfferOut
+from app.schemas.card_offer import (
+    CardOfferAdminIn,
+    CardOfferAdminOut,
+    CardOfferAnnounceOut,
+    CardOfferOut,
+    CardOffersSeenIn,
+)
 from app.schemas.stars import StarsInvoiceCreateOut
 from app.services import card_offer_service, shop_product_service
 
@@ -15,6 +21,13 @@ admin_router = APIRouter(prefix="/admin/card-offers", tags=["admin"], dependenci
 @router.get("", response_model=list[CardOfferOut])
 async def list_offers(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await card_offer_service.list_live(db, user)
+
+
+@router.post("/seen")
+async def offers_seen(body: CardOffersSeenIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Карты ⭐» was opened — these players get the «осталось 3 часа» reminder."""
+    await card_offer_service.mark_viewed(db, user, body.ids)
+    return {"ok": True}
 
 
 @router.post("/{offer_id}/stars-invoice", response_model=StarsInvoiceCreateOut)

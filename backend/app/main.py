@@ -1,10 +1,14 @@
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.config import get_settings
+from app.database import get_db
 from app.core.exceptions import register_exception_handlers
 from app.routers import (
     admin_badges,
@@ -231,3 +235,10 @@ app.include_router(admin_monetization.router, prefix=API_PREFIX)
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok", "environment": settings.environment}
+
+
+@app.get("/api/health/deep")
+async def deep_health_check(db: AsyncSession = Depends(get_db)):
+    """For the bot's watchdog: the app answers *and* reaches the database."""
+    await db.execute(text("SELECT 1"))
+    return {"status": "ok"}

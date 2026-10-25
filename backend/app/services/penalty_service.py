@@ -29,6 +29,13 @@ def player_miss_chance(rating: int) -> float:
     return 0.30 - (r - 58) / (99 - 58) * (0.30 - 0.05)
 
 
+def placement_chance(rating: int, max_pct: int) -> float:
+    """vs the bot: how often a shot into the corner the keeper picked still
+    goes in — 0 at rating 58, `max_pct`% at 99 (GameConfig)."""
+    r = max(58, min(99, rating))
+    return (r - 58) / (99 - 58) * max(0, max_pct) / 100
+
+
 def _resolve_shot(miss_chance: float, shot_zone: str, dive_zone: str) -> str:
     """A single blind shot vs. a single blind dive: 'goal', 'saved', or
     'miss'. The shooter's own miss chance is rolled first (independent of
@@ -147,6 +154,12 @@ async def resolve_kick(db: AsyncSession, user: User, session_id: int, direction:
     if kicker == "player":
         bot_dir = random.choice(PENALTY_ZONES)
         outcome = _resolve_shot(player_miss_chance(state["player_rating"]), direction, bot_dir)
+        # A strong card can place it past a keeper who guessed right.
+        beat_keeper = outcome == "saved" and random.random() < placement_chance(
+            state["player_rating"], config.penalty_placement_max_pct,
+        )
+        if beat_keeper:
+            outcome = "goal"
         if outcome == "goal":
             state["player_score"] += 1
         round_entry = {

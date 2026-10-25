@@ -294,6 +294,7 @@ export interface GameConfig {
   penalty_reward_draw: number;
   penalty_reward_loss: number;
   penalty_bot_miss_chance: number;
+  penalty_placement_max_pct: number;
   penalty_daily_limit: number;
   free_kick_period_min_ms: number;
   free_kick_period_max_ms: number;

@@ -4,7 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.weekly_top import WeeklyTopAwardOut, WeeklyTopInfoOut, WeeklyTopSeenIn
+from app.schemas.ranking import RankingMetric
+from app.schemas.weekly_top import WeeklyTopAwardOut, WeeklyTopHallOut, WeeklyTopInfoOut, WeeklyTopSeenIn
 from app.services import weekly_top_service
 
 router = APIRouter(prefix="/weekly-top", tags=["weekly-top"])
@@ -20,6 +21,13 @@ async def get_awards(db: AsyncSession = Depends(get_db), user: User = Depends(ge
 @router.post("/awards/seen")
 async def mark_seen(body: WeeklyTopSeenIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return {"seen": await weekly_top_service.mark_seen(db, user, body.ids)}
+
+
+@router.get("/hall", response_model=WeeklyTopHallOut)
+async def get_hall(
+    metric: RankingMetric, db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user),
+):
+    return await weekly_top_service.hall(db, metric.value)
 
 
 @router.get("/info", response_model=WeeklyTopInfoOut)

@@ -95,6 +95,13 @@ async def test_settle_pays_each_ranking_once_and_shows_popups(client, db_session
     # Someone else's award can't be marked.
     assert (await client.post(f"{API}/awards/seen", headers=h1, json={"ids": [popups[2]["id"]]})).json()["seen"] == 0
 
+    # «Зал славы»: last week's podium of a ranking; empty for one never paid.
+    hall = (await client.get(f"{API}/hall", headers=h1, params={"metric": "kontra_rating"})).json()
+    assert hall["week_start"] == week.isoformat()
+    assert [(w["rank"], w["user_id"], w["value"]) for w in hall["winners"]] == [(1, u1_id, 1500), (2, u2_id, 1200)]
+    empty = (await client.get(f"{API}/hall", headers=h1, params={"metric": "cards_count"})).json()
+    assert empty == {"week_start": None, "winners": []}
+
 
 async def test_disabled_pays_nothing(client, db_session, bot_token):
     await _user(client, db_session, bot_token, 980010, kontra=1500)

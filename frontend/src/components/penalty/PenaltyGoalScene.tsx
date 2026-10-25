@@ -83,12 +83,16 @@ function keeperPlacement(kick: PenaltyGoalKick | null) {
   if (!kick) return { pose: POSES.ready, at: { x: 50, y: GOAL.bottom + 0.5 }, flip: false };
   const { row, col } = zoneParts(kick.diveZone);
   const at = zoneTarget(kick.diveZone);
+  // Right corner, but the ball still went in (a strong shot placed past
+  // him): his gloves land a little short of it, toward the middle.
+  const beaten = kick.outcome === "goal" && kick.shotZone === kick.diveZone;
   if (col === "center") {
     return row === "top"
-      ? { pose: POSES.jump, at, flip: false }
+      ? { pose: POSES.jump, at: beaten ? { x: at.x, y: at.y + 6 } : at, flip: false }
       : { pose: POSES.ready, at: { x: 50, y: GOAL.bottom + 0.5 }, flip: false };
   }
-  return { pose: row === "top" ? POSES.side : POSES.low, at, flip: col === "right" };
+  const reach = beaten ? { x: at.x + (col === "left" ? 1 : -1) * GOAL_W * 0.09, y: at.y + (row === "top" ? 4 : -2) } : at;
+  return { pose: row === "top" ? POSES.side : POSES.low, at: reach, flip: col === "right" };
 }
 
 export default function PenaltyGoalScene({ keeperSide, kick, outcomeLabel, outcomeGood }: PenaltyGoalSceneProps) {

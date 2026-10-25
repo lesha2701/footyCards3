@@ -27,6 +27,8 @@ from services.magnate_scheduler import run_magnate_sweep_loop
 from services.match_day_scheduler import run_match_day_sync_loop
 from services.manager_scheduler import run_manager_sweep_loop
 from services.weekly_top_scheduler import run_weekly_top_loop
+from services.watchdog import run_watchdog_loop
+from services.card_offer_scheduler import run_card_offer_reminder_loop
 from services.club_base_scheduler import run_club_base_sweep_loop
 from services.notifier import run_notification_dispatcher
 from services.premium_subscription_check import run_premium_subscription_check
@@ -85,6 +87,8 @@ async def run_polling() -> None:
         asyncio.create_task(run_club_base_sweep_loop()),
         asyncio.create_task(run_weekly_top_loop()),
         asyncio.create_task(run_stars_payment_retry_loop(bot)),
+        asyncio.create_task(run_watchdog_loop(bot)),
+        asyncio.create_task(run_card_offer_reminder_loop()),
     ]
 
     try:
@@ -127,6 +131,8 @@ async def run_webhook() -> None:
     asyncio.create_task(run_club_base_sweep_loop())
     asyncio.create_task(run_weekly_top_loop())
     asyncio.create_task(run_stars_payment_retry_loop(bot))
+    asyncio.create_task(run_watchdog_loop(bot))
+    asyncio.create_task(run_card_offer_reminder_loop())
 
     await bot.set_webhook(settings.bot_webhook_url, secret_token=settings.bot_webhook_secret, drop_pending_updates=True)
 

@@ -1,5 +1,11 @@
 import { api } from "@/lib/api";
-import type { WeeklyTopAward, WeeklyTopInfo } from "@/types";
+import type { RankingMetric, WeeklyTopAward, WeeklyTopHall, WeeklyTopInfo } from "@/types";
+
+/** «Зал славы»: last paid week's podium of one ranking. */
+export async function fetchWeeklyTopHall(metric: RankingMetric): Promise<WeeklyTopHall> {
+  const { data } = await api.get<WeeklyTopHall>("/weekly-top/hall", { params: { metric } });
+  return data;
+}
 
 export async function fetchWeeklyTopAwards(): Promise<WeeklyTopAward[]> {
   const { data } = await api.get<WeeklyTopAward[]>("/weekly-top/awards");

@@ -1101,6 +1101,7 @@ export default function AdminGamesPage() {
           {field("penalty_reward_draw", "Награда за ничью (сейчас недостижима)")}
           {field("penalty_reward_loss", "Награда за поражение")}
           {field("penalty_bot_miss_chance", "Шанс промаха бота (0-1)")}
+          {field("penalty_placement_max_pct", "Гол, даже если вратарь угадал: % у карты 99 (у 58 — 0)")}
           {field("penalty_daily_limit", "Лимит наградных попыток/день")}
         </div>
       </section>

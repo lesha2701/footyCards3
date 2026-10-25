@@ -86,6 +86,10 @@ export default function AdminCardOffers() {
                 {o.is_active ? "" : " · выключено"}
                 {o.announced_at ? " · разослано" : ""}
               </span>
+              <span className="block text-xs text-slate-400">
+                Выручка {o.stars_total.toLocaleString("ru-RU")} ⭐ · смотрели {o.viewers} · купили {o.buyers}
+                {o.viewers > 0 ? ` (${Math.round((o.buyers / o.viewers) * 100)}%)` : ""}
+              </span>
             </span>
             {o.live && !o.announced_at && (
               <button onClick={() => askAnnounce(o)} disabled={announce.isPending} className="text-xs text-amber-300">Разослать</button>

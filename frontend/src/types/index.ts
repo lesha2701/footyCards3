@@ -3618,6 +3618,11 @@ export interface WeeklyTopPlace {
   cosmetic_style: string | null;
 }
 
+export interface WeeklyTopHall {
+  week_start: string | null;
+  winners: { rank: number; user_id: number; display_name: string; value: number; cosmetic_style: string | null }[];
+}
+
 export interface WeeklyTopInfo {
   enabled: boolean;
   size: number;
@@ -3660,4 +3665,7 @@ export interface CardOfferAdmin extends Omit<CardOfferAdminInput, "player_id"> {
   sold_count: number;
   live: boolean;
   announced_at: string | null;
+  stars_total: number;
+  buyers: number;
+  viewers: number;
 }

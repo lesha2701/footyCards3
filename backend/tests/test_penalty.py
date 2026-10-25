@@ -356,3 +356,32 @@ async def test_penalty_forfeit_rejects_already_finished_session(client, db_sessi
 
     second = await client.post(f"/api/v1/games/penalty/{session_id}/forfeit", headers=headers)
     assert second.status_code == 409
+
+
+def test_placement_chance_grows_with_rating_up_to_the_admin_cap():
+    from app.services.penalty_service import placement_chance
+
+    assert placement_chance(50, 15) == 0 and placement_chance(58, 15) == 0
+    assert placement_chance(99, 15) == pytest.approx(0.15)
+    assert 0 < placement_chance(80, 15) < placement_chance(90, 15) < 0.15
+    assert placement_chance(99, 0) == 0
+
+
+async def test_strong_shot_beats_a_keeper_who_guessed(client, db_session, bot_token, monkeypatch):
+    """Same corner as the dive: saved — unless the placement roll goes in."""
+    user = await _register(client, db_session, 830020, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(830020, bot_token)
+    monkeypatch.setattr(penalty_service, "player_miss_chance", lambda rating: 0.0)
+    monkeypatch.setattr(penalty_service.random, "choice", lambda seq: "top_right")
+    start = await client.post("/api/v1/games/penalty/start", headers=headers, json={"user_card_id": card.id})
+    session_id = start.json()["session_id"]
+
+    monkeypatch.setattr(penalty_service, "placement_chance", lambda rating, max_pct: 1.0)
+    kick = (await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "top_right"})).json()
+    assert kick["outcome"] == "goal"
+    await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "top_left"})  # bot's turn
+
+    monkeypatch.setattr(penalty_service, "placement_chance", lambda rating, max_pct: 0.0)
+    kick = (await client.post(f"/api/v1/games/penalty/{session_id}/kick", headers=headers, json={"direction": "top_right"})).json()
+    assert kick["outcome"] == "saved"

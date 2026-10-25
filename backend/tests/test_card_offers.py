@@ -134,3 +134,47 @@ async def test_announce_refuses_an_offer_not_on_sale(client, db_session, bot_tok
     await db_session.commit()
     offer = (await client.post(ADMIN, headers=admin, json={"player_id": player.id, "stars_price": 50, "is_active": False})).json()
     assert (await client.post(f"{ADMIN}/{offer['id']}/announce", headers=admin)).status_code == 409
+
+
+async def test_reminder_goes_to_viewers_who_did_not_buy_once(client, db_session, bot_token):
+    from app.models.notification import Notification
+
+    admin = await _admin(client, bot_token)
+    legend = await create_player(db_session, rating=90, display_name="Last Call", is_pack_droppable=False)
+    await db_session.commit()
+    ends = datetime.now(timezone.utc) + timedelta(hours=2)
+    offer = (await client.post(ADMIN, headers=admin, json={
+        "player_id": legend.id, "stars_price": 120, "stock": 10, "ends_at": ends.isoformat(),
+    })).json()
+
+    viewer_h, viewer = await _user(client, db_session, bot_token, 990031)
+    buyer_h, buyer = await _user(client, db_session, bot_token, 990032)
+    _, stranger = await _user(client, db_session, bot_token, 990033)
+    for headers in (viewer_h, buyer_h, viewer_h):  # a repeat view is fine
+        assert (await client.post("/api/v1/card-offers/seen", headers=headers, json={"ids": [offer["id"], 999999]})).status_code == 200
+    invoice, ok, _ = await _pay(db_session, buyer, offer["id"], 120, "rem-1")
+    assert ok
+    await shop_product_service.deliver(db_session, buyer, invoice, "charge-rem-1")
+    await db_session.commit()
+
+    listed = next(o for o in (await client.get(ADMIN, headers=admin)).json() if o["id"] == offer["id"])
+    assert (listed["stars_total"], listed["buyers"], listed["viewers"]) == (120, 1, 2)
+
+    assert await card_offer_service.remind_due(db_session) == 1
+    assert await card_offer_service.remind_due(db_session) == 0  # once per offer
+    reminded = (await db_session.execute(
+        select(Notification.user_id).where(Notification.related_object_type == "card_offer")
+    )).scalars().all()
+    assert reminded == [viewer.id] and stranger.id not in reminded
+
+
+async def test_no_reminder_while_the_end_is_far(client, db_session, bot_token):
+    admin = await _admin(client, bot_token)
+    card = await create_player(db_session, rating=85)
+    await db_session.commit()
+    offer = (await client.post(ADMIN, headers=admin, json={
+        "player_id": card.id, "stars_price": 80, "ends_at": (datetime.now(timezone.utc) + timedelta(days=2)).isoformat(),
+    })).json()
+    headers, _ = await _user(client, db_session, bot_token, 990041)
+    await client.post("/api/v1/card-offers/seen", headers=headers, json={"ids": [offer["id"]]})
+    assert await card_offer_service.remind_due(db_session) == 0

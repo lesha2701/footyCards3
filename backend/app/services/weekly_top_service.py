@@ -24,7 +24,13 @@ from app.models.monetization import Cosmetic
 from app.models.user import User
 from app.models.weekly_top import WeeklyTopAward, WeeklyTopRun
 from app.schemas.ranking import RankingMetric
-from app.schemas.weekly_top import WeeklyTopAwardOut, WeeklyTopInfoOut, WeeklyTopPlaceOut
+from app.schemas.weekly_top import (
+    WeeklyTopAwardOut,
+    WeeklyTopHallEntryOut,
+    WeeklyTopHallOut,
+    WeeklyTopInfoOut,
+    WeeklyTopPlaceOut,
+)
 from app.services import ranking_service, reward_bundle_service
 from app.services.club_league_service import week_bounds, week_start_for
 from app.services.game_config_service import get_config
@@ -185,6 +191,29 @@ async def mark_seen(db: AsyncSession, user: User, ids: list[int]) -> int:
         db.add(a)
     await db.commit()
     return len(rows)
+
+
+async def hall(db: AsyncSession, metric: str, places: int = 3) -> WeeklyTopHallOut:
+    """«Зал славы»: the podium of `metric` in the latest week it paid —
+    proof on the ranking page that the prizes are real."""
+    week = (await db.execute(
+        select(WeeklyTopAward.week_start).where(WeeklyTopAward.metric == metric)
+        .order_by(WeeklyTopAward.week_start.desc()).limit(1)
+    )).scalar_one_or_none()
+    if week is None:
+        return WeeklyTopHallOut()
+    rows = (await db.execute(
+        select(WeeklyTopAward, User).join(User, User.id == WeeklyTopAward.user_id)
+        .where(WeeklyTopAward.week_start == week, WeeklyTopAward.metric == metric, WeeklyTopAward.rank <= places)
+        .order_by(WeeklyTopAward.rank)
+    )).all()
+    return WeeklyTopHallOut(week_start=week, winners=[
+        WeeklyTopHallEntryOut(
+            rank=award.rank, user_id=user.id, display_name=user.full_display_name(), value=award.value,
+            cosmetic_style=(award.rewards or {}).get("cosmetic_style"),
+        )
+        for award, user in rows
+    ])
 
 
 async def info(db: AsyncSession) -> WeeklyTopInfoOut:

@@ -9,16 +9,18 @@ idempotent by invoice (CardOfferPurchase.invoice_id unique). Two buyers
 racing for the very last copy can both get through pre-checkout; both are
 delivered, so a sold-out offer may end one or two copies over its stock.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, insert, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.timeutil import ensure_aware
-from app.models.card_offer import CardOffer, CardOfferPurchase
+from app.models.card_offer import CardOffer, CardOfferPurchase, CardOfferView
 from app.models.enums import CardSource, NotificationType
 from app.models.notification import Notification
 from app.models.player import Player
@@ -149,20 +151,40 @@ async def deliver_stars(db: AsyncSession, user: User, invoice) -> dict:
 
 # --- admin -----------------------------------------------------------------
 
-def _admin_out(offer: CardOffer) -> CardOfferAdminOut:
+def _admin_out(offer: CardOffer, stats: Optional[dict] = None) -> CardOfferAdminOut:
+    stats = stats or {}
     return CardOfferAdminOut(
         id=offer.id, player=PlayerOut.model_validate(offer.player), stars_price=offer.stars_price, title=offer.title,
         starts_at=offer.starts_at, ends_at=offer.ends_at, stock=offer.stock, per_user_limit=offer.per_user_limit,
         sold_count=offer.sold_count, is_active=offer.is_active, sort_order=offer.sort_order, live=_live(offer),
-        announced_at=offer.announced_at,
+        announced_at=offer.announced_at, stars_total=stats.get("stars", 0), buyers=stats.get("buyers", 0),
+        viewers=stats.get("viewers", 0),
     )
+
+
+async def _admin_stats(db: AsyncSession, offer_ids: list[int]) -> dict[int, dict]:
+    """Per offer: Stars earned, distinct buyers and players who looked."""
+    stats: dict[int, dict] = {oid: {} for oid in offer_ids}
+    for oid, stars, buyers in (await db.execute(
+        select(CardOfferPurchase.offer_id, func.sum(CardOfferPurchase.stars_amount),
+               func.count(func.distinct(CardOfferPurchase.user_id)))
+        .where(CardOfferPurchase.offer_id.in_(offer_ids or [0])).group_by(CardOfferPurchase.offer_id)
+    )).all():
+        stats[oid].update(stars=int(stars or 0), buyers=buyers)
+    for oid, viewers in (await db.execute(
+        select(CardOfferView.offer_id, func.count(CardOfferView.id))
+        .where(CardOfferView.offer_id.in_(offer_ids or [0])).group_by(CardOfferView.offer_id)
+    )).all():
+        stats[oid]["viewers"] = viewers
+    return stats
 
 
 async def admin_list(db: AsyncSession) -> list[CardOfferAdminOut]:
     offers = (await db.execute(
         select(CardOffer).order_by(CardOffer.is_active.desc(), CardOffer.sort_order, CardOffer.id.desc())
     )).unique().scalars().all()
-    return [_admin_out(o) for o in offers]
+    stats = await _admin_stats(db, [o.id for o in offers])
+    return [_admin_out(o, stats.get(o.id)) for o in offers]
 
 
 async def _apply(db: AsyncSession, offer: CardOffer, data: CardOfferAdminIn) -> None:
@@ -218,7 +240,7 @@ def _announce_text(offer: CardOffer) -> tuple[str, str]:
     if retired:
         lines.append("Из паков она больше не выпадает — купить можно только сейчас.")
     if offer.ends_at:
-        lines.append(f"Продажа до {ensure_aware(offer.ends_at).strftime('%d.%m %H:%M')} UTC.")
+        lines.append(f"Продажа до {_local(offer.ends_at)}.")
     if offer.stock:
         lines.append(f"Всего {offer.stock} шт.")
     return title, " ".join(lines)
@@ -239,6 +261,17 @@ async def admin_announce(db: AsyncSession, offer_id: int) -> int:
         await db.execute(select(User.id).where(User.is_banned.is_(False), User.bot_blocked.is_(False)))
     ).scalars().all()
     now = _now()
+    await _notify_all(db, offer, user_ids, title, body, now)
+    offer.announced_at = now
+    await db.commit()
+    return len(user_ids)
+
+
+def _local(moment: datetime) -> str:
+    return ensure_aware(moment).astimezone(ZoneInfo(get_settings().timezone)).strftime("%d.%m %H:%M")
+
+
+async def _notify_all(db: AsyncSession, offer: CardOffer, user_ids, title: str, body: str, now: datetime) -> None:
     if user_ids:
         await db.execute(insert(Notification), [
             {
@@ -248,6 +281,67 @@ async def admin_announce(db: AsyncSession, offer_id: int) -> int:
             }
             for uid in user_ids
         ])
-    offer.announced_at = now
-    await db.commit()
-    return len(user_ids)
+
+
+# ---------------------------------------------------------------------------
+# «Осталось 3 часа»: a reminder to those who looked and didn't buy
+# ---------------------------------------------------------------------------
+
+REMIND_BEFORE = timedelta(hours=3)
+
+
+async def mark_viewed(db: AsyncSession, user: User, offer_ids: list[int]) -> None:
+    """The player opened «Карты ⭐» with these offers on sale (once each)."""
+    wanted = set(offer_ids[:50])
+    if not wanted:
+        return
+    known = set((await db.execute(
+        select(CardOfferView.offer_id).where(CardOfferView.user_id == user.id, CardOfferView.offer_id.in_(wanted))
+    )).scalars().all())
+    existing = set((await db.execute(select(CardOffer.id).where(CardOffer.id.in_(wanted)))).scalars().all())
+    for offer_id in (wanted & existing) - known:
+        db.add(CardOfferView(offer_id=offer_id, user_id=user.id))
+    try:
+        await db.commit()
+    except IntegrityError:  # two tabs at once — the other request recorded it
+        await db.rollback()
+
+
+async def remind_due(db: AsyncSession) -> int:
+    """Offers ending within REMIND_BEFORE: one message to every player who
+    viewed it and can still buy it. Once per offer (reminded_at, under the
+    offer's row lock) — the bot calls this every few minutes."""
+    now = _now()
+    due_ids = (await db.execute(
+        select(CardOffer.id).where(
+            CardOffer.is_active.is_(True), CardOffer.reminded_at.is_(None),
+            CardOffer.ends_at.is_not(None), CardOffer.ends_at > now, CardOffer.ends_at <= now + REMIND_BEFORE,
+        )
+    )).scalars().all()
+    sent = 0
+    for offer_id in due_ids:
+        offer = (await db.execute(
+            select(CardOffer).where(CardOffer.id == offer_id).with_for_update()
+        )).unique().scalar_one_or_none()
+        if offer is None or offer.reminded_at is not None:
+            continue
+        offer.reminded_at = now
+        left = _left(offer)
+        if _live(offer, now) and (left is None or left > 0):
+            bought = select(CardOfferPurchase.user_id).where(CardOfferPurchase.offer_id == offer.id)
+            query = (
+                select(CardOfferView.user_id).join(User, User.id == CardOfferView.user_id)
+                .where(CardOfferView.offer_id == offer.id, User.is_banned.is_(False), User.bot_blocked.is_(False))
+            )
+            # A per-player limit of 0 is «unlimited» — buyers may want another.
+            if offer.per_user_limit > 0:
+                query = query.where(CardOfferView.user_id.not_in(bought))
+            user_ids = (await db.execute(query)).scalars().all()
+            player = offer.player
+            body = f"{player.display_name} · {player.rating} за {offer.stars_price} ⭐ — продажа закончится в {_local(offer.ends_at)}."
+            if left is not None:
+                body += f" Осталось {left} шт."
+            await _notify_all(db, offer, user_ids, "⏳ Осталось меньше 3 часов!", body, now)
+            sent += len(user_ids)
+        await db.commit()
+    return sent

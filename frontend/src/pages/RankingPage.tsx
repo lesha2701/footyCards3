@@ -4,13 +4,13 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { fetchRanking } from "@/api/leaderboard";
-import { fetchWeeklyTopInfo } from "@/api/weeklyTop";
+import { fetchWeeklyTopHall, fetchWeeklyTopInfo } from "@/api/weeklyTop";
 import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconBall, IconBoxingGlove, IconCollection, IconCounter, IconFlag, IconFlagCheckered, IconGoal, IconHandshake, IconStadium, IconStar, IconTrophy, IconUsers, type IconProps } from "@/components/icons";
 import { useAuthStore } from "@/store/authStore";
 import { frameClass } from "@/lib/cosmetics";
-import type { RankingEntry, RankingMetric, WeeklyTopInfo } from "@/types";
+import type { RankingEntry, RankingMetric, WeeklyTopHall, WeeklyTopInfo } from "@/types";
 
 const METRICS: { value: RankingMetric; label: string; Icon: (props: IconProps) => JSX.Element }[] = [
   { value: "arena_rating", label: "Рейтинг Arena", Icon: IconBall },
@@ -45,6 +45,9 @@ export default function RankingPage() {
   const { data, isLoading } = useQuery({ queryKey: ["ranking", metric], queryFn: () => fetchRanking(metric) });
   const { data: weekly } = useQuery({ queryKey: ["weekly-top-info"], queryFn: fetchWeeklyTopInfo, staleTime: 60_000 });
   const pays = !!weekly?.enabled && weekly.metrics.includes(metric);
+  const { data: hall } = useQuery({
+    queryKey: ["weekly-top-hall", metric], queryFn: () => fetchWeeklyTopHall(metric), enabled: pays, staleTime: 5 * 60_000,
+  });
 
   const meInTop = !!data?.me && data.top.some((e) => e.user_id === data.me!.user_id);
   // How far the player is from the last paid place of this week's top.
@@ -76,6 +79,8 @@ export default function RankingPage() {
           </button>
         ))}
       </div>
+
+      {pays && !!hall?.winners.length && <HallOfFame hall={hall} />}
 
       {isLoading && <ListSkeleton count={3} />}
 
@@ -151,6 +156,30 @@ function WeeklyTopBanner({ info, pays }: { info: WeeklyTopInfo; pays: boolean })
           {open ? "Свернуть" : `Все ${info.places.length} мест`}
         </button>
       )}
+    </section>
+  );
+}
+
+/** «Зал славы»: who took this board's prizes last week — the frame they won
+ * around their name. */
+function HallOfFame({ hall }: { hall: WeeklyTopHall }) {
+  const week = hall.week_start ? new Date(`${hall.week_start}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) : "";
+  return (
+    <section className="rounded-2xl bg-bg-surface p-3">
+      <p className="text-micro font-semibold uppercase tracking-wider text-ink-mist">Зал славы · неделя с {week}</p>
+      <div className="mt-2 grid grid-cols-3 gap-1.5">
+        {hall.winners.map((w) => (
+          <div key={w.rank} className="flex min-w-0 flex-col items-center gap-1 rounded-xl bg-black/20 px-1.5 py-2 text-center">
+            <span className="text-lg leading-none">{MEDALS[w.rank - 1] ?? `#${w.rank}`}</span>
+            <span className={`max-w-full rounded-full p-[2px] ${frameClass(w.cosmetic_style) ?? ""}`}>
+              <span className="block truncate rounded-full bg-bg-surface px-2 py-0.5 text-xs font-semibold text-ink-chalk">
+                {w.display_name}
+              </span>
+            </span>
+            <span className="font-mono text-micro text-accent-cyan">{w.value.toLocaleString("ru-RU")}</span>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

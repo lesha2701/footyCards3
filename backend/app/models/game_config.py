@@ -238,6 +238,9 @@ class GameConfig(TimestampMixin, Base):
     penalty_reward_draw: Mapped[int] = mapped_column(Integer, default=18, nullable=False)
     penalty_reward_loss: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     penalty_bot_miss_chance: Mapped[float] = mapped_column(Numeric(4, 2), default=0.12, nullable=False)
+    # vs the bot: a strong shooter sometimes beats a keeper who guessed the
+    # corner — this % at rating 99, falling to 0 at 58 (penalty_service).
+    penalty_placement_max_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     penalty_daily_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     penalty_challenge_expiry_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
 

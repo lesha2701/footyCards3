@@ -262,6 +262,7 @@ class GameConfigOut(BaseModel):
     penalty_reward_draw: int
     penalty_reward_loss: int
     penalty_bot_miss_chance: float
+    penalty_placement_max_pct: int = 15
     penalty_daily_limit: int
     free_kick_period_min_ms: int
     free_kick_period_max_ms: int
@@ -937,6 +938,7 @@ class GameConfigUpdate(BaseModel):
     penalty_reward_draw: Optional[int] = Field(default=None, ge=0)
     penalty_reward_loss: Optional[int] = Field(default=None, ge=0)
     penalty_bot_miss_chance: Optional[float] = Field(default=None, ge=0, le=1)
+    penalty_placement_max_pct: Optional[int] = Field(default=None, ge=0, le=60)
     penalty_daily_limit: Optional[int] = Field(default=None, ge=0)
     free_kick_period_min_ms: Optional[int] = Field(default=None, ge=100)
     free_kick_period_max_ms: Optional[int] = Field(default=None, ge=100)

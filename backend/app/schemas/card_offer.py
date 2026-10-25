@@ -48,7 +48,14 @@ class CardOfferAdminOut(BaseModel):
     sort_order: int
     live: bool  # on sale right now
     announced_at: Optional[datetime] = None
+    stars_total: int = 0  # Stars earned on it
+    buyers: int = 0  # distinct players who bought
+    viewers: int = 0  # players who opened «Карты ⭐» while it was on sale
 
 
 class CardOfferAnnounceOut(BaseModel):
     sent: int
+
+
+class CardOffersSeenIn(BaseModel):
+    ids: list[int] = Field(default_factory=list, max_length=50)

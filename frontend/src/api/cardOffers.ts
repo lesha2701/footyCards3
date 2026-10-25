@@ -6,6 +6,11 @@ export async function fetchCardOffers(): Promise<CardOffer[]> {
   return data;
 }
 
+/** «Карты ⭐» was opened: these players get the «осталось 3 часа» reminder. */
+export async function markCardOffersSeen(ids: number[]): Promise<void> {
+  await api.post("/card-offers/seen", { ids });
+}
+
 export async function createCardOfferInvoice(offerId: number): Promise<StarsInvoiceCreate> {
   const { data } = await api.post<StarsInvoiceCreate>(`/card-offers/${offerId}/stars-invoice`);
   return data;

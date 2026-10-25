@@ -73,6 +73,9 @@ def register_exception_handlers(app):
 
     @app.exception_handler(Exception)
     async def unhandled_error_handler(request: Request, exc: Exception):
+        from app.services import error_log_service  # imports the DB layer; keep this module light
+
+        await error_log_service.record(request, exc)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=_error_body("internal_error", "Internal server error"),

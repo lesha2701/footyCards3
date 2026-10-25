@@ -33,6 +33,22 @@ class WeeklyTopPlaceOut(BaseModel):
     cosmetic_style: Optional[str] = None
 
 
+class WeeklyTopHallEntryOut(BaseModel):
+    rank: int
+    user_id: int
+    display_name: str
+    value: int
+    # The frame the place paid (shown around the name), if any.
+    cosmetic_style: Optional[str] = None
+
+
+class WeeklyTopHallOut(BaseModel):
+    """«Зал славы»: last settled week's podium of one ranking."""
+
+    week_start: Optional[date] = None
+    winners: list[WeeklyTopHallEntryOut] = []
+
+
 class WeeklyTopInfoOut(BaseModel):
     enabled: bool
     size: int

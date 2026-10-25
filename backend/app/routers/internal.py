@@ -168,6 +168,15 @@ async def weekly_top_settle(db: AsyncSession = Depends(get_db)):
     return {"paid": await weekly_top_service.settle_due(db)}
 
 
+@router.post("/card-offers/remind")
+async def card_offers_remind(db: AsyncSession = Depends(get_db)):
+    """Called by the bot every few minutes: «осталось 3 часа» for offers
+    about to end, once per offer — a no-op otherwise."""
+    from app.services import card_offer_service
+
+    return {"sent": await card_offer_service.remind_due(db)}
+
+
 @router.post("/club-base/sweep")
 async def club_base_sweep(db: AsyncSession = Depends(get_db)):
     """Called by the bot every minute: completes «Клубная база»

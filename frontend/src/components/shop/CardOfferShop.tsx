@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { createCardOfferInvoice, fetchCardOffers } from "@/api/cardOffers";
+import { createCardOfferInvoice, fetchCardOffers, markCardOffersSeen } from "@/api/cardOffers";
 import PlayerCard from "@/components/cards/PlayerCard";
 import { formatGameError } from "@/lib/errors";
 import { formatCountdown } from "@/lib/rewards";
@@ -23,6 +23,11 @@ function useNow(): number {
 export default function CardOfferShop() {
   const { data: offers } = useQuery({ queryKey: ["card-offers"], queryFn: fetchCardOffers });
   const now = useNow();
+  // Seen here = reminded before the offer ends (unless bought). Best-effort.
+  const seenKey = offers?.map((o) => o.id).join(",") ?? "";
+  useEffect(() => {
+    if (seenKey) markCardOffersSeen(seenKey.split(",").map(Number)).catch(() => undefined);
+  }, [seenKey]);
   if (!offers) return null;
   if (!offers.length) {
     return <p className="py-8 text-center text-sm text-ink-mist">Сейчас карточек за звёзды нет — загляни позже</p>;
