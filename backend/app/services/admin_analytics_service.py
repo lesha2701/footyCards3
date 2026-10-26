@@ -412,28 +412,30 @@ async def _suspicious_trades(db: AsyncSession, since: datetime) -> dict:
     young = timedelta(days=config.trade_suspicious_young_days)
     min_donors = config.trade_suspicious_min_donors
 
-    offers = (await db.execute(
-        select(TradeOffer).where(
-            TradeOffer.status == TradeStatus.accepted,
-            TradeOffer.resolved_at.is_not(None),
-            TradeOffer.resolved_at >= since,
-        )
-    )).scalars().all()
+    in_window = (
+        TradeOffer.status == TradeStatus.accepted,
+        TradeOffer.resolved_at.is_not(None),
+        TradeOffer.resolved_at >= since,
+    )
+    offers = (await db.execute(select(TradeOffer).where(*in_window))).scalars().all()
     result = {"young_days": config.trade_suspicious_young_days, "min_donors": min_donors, "rows": []}
     if not offers:
         return result
 
+    # Joined / sub-selected rather than `IN (<every id>)`: a busy month has
+    # tens of thousands of trades, past Postgres' 32 767 bound-parameter limit.
     cards: dict[tuple[int, TradeCardSide], int] = defaultdict(int)
     card_rows = (await db.execute(
         select(TradeOfferCard.trade_offer_id, TradeOfferCard.side, func.count())
-        .where(TradeOfferCard.trade_offer_id.in_([o.id for o in offers]))
+        .join(TradeOffer, TradeOffer.id == TradeOfferCard.trade_offer_id)
+        .where(*in_window)
         .group_by(TradeOfferCard.trade_offer_id, TradeOfferCard.side)
     )).all()
     for offer_id, side, n in card_rows:
         cards[(offer_id, side)] = int(n)
 
-    user_ids = {o.sender_id for o in offers} | {o.receiver_id for o in offers}
-    users = {u.id: u for u in (await db.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()}
+    traders = select(TradeOffer.sender_id).where(*in_window).union(select(TradeOffer.receiver_id).where(*in_window))
+    users = {u.id: u for u in (await db.execute(select(User).where(User.id.in_(traders)))).scalars().all()}
 
     # (giver, taker) -> [coins, cards, young_at_any_give, trades, last_at]
     pairs: dict[tuple[int, int], list] = {}
