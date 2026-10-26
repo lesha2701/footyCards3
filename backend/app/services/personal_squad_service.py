@@ -22,6 +22,7 @@ from app.services.club_tactical_matchup_service import MENTALITIES, PLAYSTYLES
 from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot, slot_fit
 from app.services.player_stats_service import card_rating_bonus
+from app.services.player_identity import card_person
 
 TEMPLATE_COUNT = 5
 DEFAULT_TEMPLATE_NAMES = {i: f"Шаблон {i}" for i in range(1, TEMPLATE_COUNT + 1)}
@@ -227,7 +228,7 @@ async def set_squad_cards(
     if len(cards_by_id) != len(seen_cards):
         raise NotFoundError("Одна или несколько карт не найдены")
 
-    seen_players: set[int] = set()
+    seen_players: set[str] = set()
     for slot_in in payload.slots:
         card = cards_by_id[slot_in.user_card_id]
         slot = slots_by_code[slot_in.slot_code]
@@ -239,9 +240,9 @@ async def set_squad_cards(
             raise ConflictError(
                 f"{card.player.display_name} ({card.player.position.value}) не подходит на позицию {slot.category}"
             )
-        if card.player_id in seen_players:
-            raise ConflictError(f"{card.player.display_name} уже стоит на другой позиции")
-        seen_players.add(card.player_id)
+        if card_person(card) in seen_players:
+            raise ConflictError(f"{card.player.display_name} уже в составе — разные карточки одного игрока в один состав нельзя")
+        seen_players.add(card_person(card))
 
     idx = squad.template_index
     squad_id = squad.id

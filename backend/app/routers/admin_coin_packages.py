@@ -17,6 +17,7 @@ router = APIRouter(prefix="/admin/coin-packages", tags=["admin"], dependencies=[
 class CoinPackageCreate(BaseModel):
     stars_price: int = Field(ge=1)
     coins_amount: int = Field(ge=1)
+    bonus_pct: int = Field(default=0, ge=0, le=500)
     is_active: bool = True
     sort_order: int = 0
 
@@ -24,6 +25,7 @@ class CoinPackageCreate(BaseModel):
 class CoinPackageUpdate(BaseModel):
     stars_price: int | None = Field(default=None, ge=1)
     coins_amount: int | None = Field(default=None, ge=1)
+    bonus_pct: int | None = Field(default=None, ge=0, le=500)
     is_active: bool | None = None
     sort_order: int | None = None
 

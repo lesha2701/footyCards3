@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import JSON, BigInteger, Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint
@@ -22,6 +22,8 @@ class UserCard(Base):
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="RESTRICT"), nullable=False, index=True)
 
     acquired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    # Newcomer's gift: no trade / sale / burning until then (is_bound).
+    bound_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     source: Mapped[CardSource] = mapped_column(Enum(CardSource, name="card_source_enum"), nullable=False)
     source_ref_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
@@ -97,8 +99,20 @@ class UserCard(Base):
     def has_path_progress(self) -> bool:
         return bool(self.path_level or self.path_stage or self.prestige)
 
+    def is_bound(self) -> bool:
+        """A newcomer's gift (newbie_service): plays as usual, but can't be
+        traded, sold or burned until `bound_until` — so a farm account's
+        welcome cards can't be funnelled to a main account."""
+        if self.bound_until is None:
+            return False
+        bound = self.bound_until if self.bound_until.tzinfo else self.bound_until.replace(tzinfo=timezone.utc)
+        return bound > datetime.now(timezone.utc)
+
     def is_locked(self) -> bool:
-        return self.is_locked_by_admin or self.is_locked_in_trade or self.is_in_lineup or self.is_in_tactico_squad
+        return (
+            self.is_locked_by_admin or self.is_locked_in_trade or self.is_in_lineup or self.is_in_tactico_squad
+            or self.is_bound()
+        )
 
     def can_burn(self) -> bool:
         """May this copy be destroyed as material (stars, diamond feeding,

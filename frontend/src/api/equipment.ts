@@ -51,15 +51,25 @@ export interface EquipmentShop {
 
 export interface EquipmentInventory {
   enabled: boolean;
-  items: { copy_id: number; item: EquipmentItem; serial_number?: number | null; user_card_id: number | null; card_name: string | null }[];
+  items: {
+    copy_id: number; item: EquipmentItem; serial_number?: number | null; user_card_id: number | null; card_name: string | null;
+    /** Bought with coins: binds to the first card it's put on. */
+    binds?: boolean;
+    /** That card (only it may wear the thing again). */
+    bound_card_id?: number | null;
+    bound_card_name?: string | null;
+  }[];
 }
 
 export interface CardEquipmentSlot {
   code: string;
   label: string;
   available: boolean;
-  worn: { copy_id: number; item: EquipmentItem; applies: boolean } | null;
-  options: { copy_id: number; item: EquipmentItem; applies: boolean }[];
+  /** `bound`: a thing bought with coins — belongs to this card for good. */
+  worn: { copy_id: number; item: EquipmentItem; applies: boolean; bound?: boolean } | null;
+  /** `binds`: bought with coins, not bound yet — putting it on binds it to this card;
+   * `bound`: already this card's own. */
+  options: { copy_id: number; item: EquipmentItem; applies: boolean; binds?: boolean; bound?: boolean }[];
 }
 
 export interface CardEquipment {

@@ -16,6 +16,8 @@ export const FRAME_STYLES: Record<string, string> = {
   // «Топ недели» (granted to the weekly top places, never sold).
   weekly_champion: "bg-[conic-gradient(from_0deg,#fde68a,#f59e0b,#fff7ed,#d97706,#fde68a)] shadow-[0_0_20px_rgba(245,158,11,0.75)]",
   weekly_top: "bg-gradient-to-br from-slate-100 via-amber-200 to-slate-400 shadow-[0_0_14px_rgba(226,232,240,0.55)]",
+  // «Ультрас»: the stands' flare red and smoke.
+  ultras: "bg-[conic-gradient(from_90deg,#ef4444,#111827,#f97316,#111827,#ef4444)] shadow-[0_0_18px_rgba(239,68,68,0.65)]",
 };
 
 /** Profile header backgrounds. */
@@ -25,6 +27,7 @@ export const BACKGROUND_STYLES: Record<string, string> = {
   sunset: "bg-gradient-to-b from-orange-500/50 via-rose-700/40 to-bg-surface",
   aurora: "bg-gradient-to-br from-teal-600/50 via-indigo-800/50 to-fuchsia-800/40",
   gold_rush: "bg-gradient-to-b from-amber-500/40 via-yellow-900/40 to-bg-surface",
+  derby: "bg-gradient-to-r from-red-700/50 via-bg-surface to-sky-700/50",
 };
 
 /** Card frame skins: an extra outline around the player's own cards. */

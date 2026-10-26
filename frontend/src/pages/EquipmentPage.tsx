@@ -67,7 +67,7 @@ function Inventory({ onShop }: { onShop: () => void }) {
   return (
     <div className="flex flex-col gap-2">
       {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
-      {data.items.map(({ copy_id, item, card_name, serial_number }) => (
+      {data.items.map(({ copy_id, item, card_name, serial_number, bound_card_name, binds }) => (
         <div key={copy_id} className="flex items-center gap-3 rounded-2xl bg-bg-surface p-3">
           <EquipmentTile item={item} size="sm" />
           <div className="min-w-0 flex-1">
@@ -77,6 +77,8 @@ function Inventory({ onShop }: { onShop: () => void }) {
               {item.slot_label}
               {serial_number && item.max_supply ? ` · №${serial_number} из ${item.max_supply}` : ""}
               {" · "}{card_name ? `надета: ${card_name}` : "свободна"}
+              {bound_card_name && <span className="block text-amber-300">🔒 только для: {bound_card_name}</span>}
+              {binds && !bound_card_name && <span className="block text-ink-mist-dim">За монеты: привяжется к первой карточке</span>}
             </p>
           </div>
           {card_name && (

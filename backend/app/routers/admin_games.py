@@ -77,7 +77,8 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
     if config.club_pass_bonus_card_rarity == "":
         config.club_pass_bonus_card_rarity = None
     for key in ("club_card_exchange_pack_id", "club_pass_daily_pack_id", "club_pass_bonus_pack_id", "club_pass_frame_cosmetic_id", "club_pass_badge_id",
-                "starter_offer_pack_id", "starter_offer_cosmetic_id", "club_raid_reward_pack_id"):
+                "starter_offer_pack_id", "starter_offer_cosmetic_id", "club_raid_reward_pack_id",
+                "newbie_finale_pack_id", "newbie_finale_badge_id"):
         if getattr(config, key) == 0:
             setattr(config, key, None)  # 0 from the admin form = none
     if "weekly_top_rewards" in updates:
@@ -93,6 +94,51 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
                            "card_rarity": getattr(bundle.card_rarity, "value", bundle.card_rarity),
                            "badge_id": bundle.badge_id, "cosmetic_id": bundle.cosmetic_id})
         config.weekly_top_rewards = ladder
+    if updates.get("streak_rewards") is not None:
+        from app.services import reward_bundle_service
+        from app.services.reward_bundle_service import Bundle
+
+        rows = []
+        for row in sorted(updates["streak_rewards"], key=lambda r: r["days"]):
+            bundle = Bundle(**{k: (row.get(k) or None) for k in ("pack_id", "card_rarity", "badge_id", "cosmetic_id")},
+                            coins=row.get("coins") or 0)
+            await reward_bundle_service.validate(db, bundle)
+            rows.append({"days": row["days"], "coins": bundle.coins, "pack_id": bundle.pack_id,
+                         "card_rarity": getattr(bundle.card_rarity, "value", bundle.card_rarity),
+                         "badge_id": bundle.badge_id, "cosmetic_id": bundle.cosmetic_id})
+        if len({r["days"] for r in rows}) != len(rows):
+            raise ConflictError("Награды за дни подряд: два порога с одинаковым числом дней")
+        config.streak_rewards = rows
+    if updates.get("referral_milestones") is not None:
+        from app.services import reward_bundle_service
+        from app.services.reward_bundle_service import Bundle
+
+        rows = []
+        for row in sorted(updates["referral_milestones"], key=lambda r: r["count"]):
+            bundle = Bundle(**{k: (row.get(k) or None) for k in ("pack_id", "card_rarity", "badge_id", "cosmetic_id")},
+                            coins=row.get("coins") or 0)
+            await reward_bundle_service.validate(db, bundle)
+            rows.append({"count": row["count"], "coins": bundle.coins, "pack_id": bundle.pack_id,
+                         "card_rarity": getattr(bundle.card_rarity, "value", bundle.card_rarity),
+                         "badge_id": bundle.badge_id, "cosmetic_id": bundle.cosmetic_id})
+        if len({r["count"] for r in rows}) != len(rows):
+            raise ConflictError("Рефералы: у двух наград одинаковое число друзей")
+        config.referral_milestones = rows
+    for key in ("newbie_squad_rarity", "newbie_arena_rarity", "newbie_day3_rarity"):
+        if key in updates and updates[key] is not None:
+            setattr(config, key, getattr(updates[key], "value", updates[key]))
+    if updates.get("newbie_first_pack_rarities") is not None:
+        config.newbie_first_pack_rarities = [getattr(r, "value", r) for r in updates["newbie_first_pack_rarities"]]
+    if updates.get("newbie_tasks") is not None:
+        from app.services import newbie_service
+
+        codes = [t["code"] for t in updates["newbie_tasks"]]
+        if len(set(codes)) != len(codes):
+            raise ConflictError("Путь дебютанта: коды заданий должны быть разными")
+        unknown = [t["mode"] for t in updates["newbie_tasks"] if t["mode"] not in newbie_service.known_modes()]
+        if unknown:
+            raise ConflictError(f"Путь дебютанта: неизвестный режим {unknown[0]}")
+        config.newbie_tasks = updates["newbie_tasks"]
     if "weekly_top_metrics" in updates:
         from app.schemas.ranking import RankingMetric
 

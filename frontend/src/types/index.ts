@@ -65,6 +65,8 @@ export interface Player {
   collection_name: string | null;
   /** «Академия»: set = a path card with this talent. */
   path_talent_code?: string | null;
+  /** «Один футболист» key; null = by the display name. */
+  person_key?: string | null;
 }
 
 export type CoachBoostType =
@@ -118,6 +120,8 @@ export interface UserCard {
   hidden_from_trade: boolean;
   /** The owner's own «замок»: can't be sold or burned as material. */
   is_user_locked?: boolean;
+  /** «Путь дебютанта» gift: no trade, sale or burning until this moment. */
+  bound_until?: string | null;
   /** Stands in a player-tournament squad (no flag of its own on the card). */
   in_personal_squad?: boolean;
   duplicate_count?: number;
@@ -274,6 +278,8 @@ export interface Pack {
   guaranteed_min_rarity: Rarity | null;
   is_active: boolean;
   purchase_limit_per_user: number | null;
+  /** At most this many a day per player (e.g. «Легенда дня»). */
+  daily_limit_per_user?: number | null;
   available_from: string | null;
   available_until: string | null;
   rarity_probabilities: PackRarityProbability[];
@@ -287,6 +293,8 @@ export interface Pack {
   /** Why the pack cannot be bought right now (e.g. no «Академия» players yet). */
   unavailable_reason?: string | null;
   user_purchase_count: number;
+  /** Bought today (counted for a pack with daily_limit_per_user). */
+  user_today_count?: number;
   is_available_now: boolean;
   /** Average quick-sell value of the cards inside (shop listing only). */
   expected_value?: number | null;
@@ -482,6 +490,8 @@ export interface CoinPackage {
   id: number;
   stars_price: number;
   coins_amount: number;
+  /** «+N%» set by the admin (already inside coins_amount); 0 = computed from the price. */
+  bonus_pct?: number;
   is_active: boolean;
   sort_order: number;
   /** Extra coins on this player's first coin purchase (0 once they have bought). */
@@ -1300,6 +1310,9 @@ export interface ProfilePrivate extends ProfilePublic {
   referral_reward_pending: boolean;
   referral_referrer_reward: number;
   referral_referred_reward: number;
+  /** A friend counts after this many days of play. */
+  referral_active_days?: number;
+  referral_milestones?: { count: number; reward: RewardBundle; reached: boolean }[];
   daily_login_streak: number;
 }
 
@@ -1383,6 +1396,7 @@ export interface GiftSet {
   image_path: string | null;
   kind: "bundle" | "collectible";
   pack_id: number | null;
+  pack_count?: number;
   coins_amount: number;
   stars_price: number;
   coins_price: number;
@@ -3668,4 +3682,56 @@ export interface CardOfferAdmin extends Omit<CardOfferAdminInput, "player_id"> {
   stars_total: number;
   buyers: number;
   viewers: number;
+}
+
+// «Путь дебютанта» (GET /newbie)
+export interface NewbieTask {
+  code: string;
+  label: string;
+  path: string;
+  coins: number;
+  pack_name: string | null;
+  played: boolean;
+  claimed: boolean;
+}
+
+export interface NewbieGift {
+  day: number;
+  coins: number;
+  card_rarity: Rarity | null;
+  opens_on: string;
+  ready: boolean;
+  claimed: boolean;
+}
+
+export interface NewbieState {
+  active: boolean;
+  day: number;
+  first_pack_done: boolean;
+  first_pack_top: Rarity | null;
+  squad_pack_done: boolean;
+  squad_size: number;
+  arena_played: boolean;
+  arena_claimed: boolean;
+  arena_rarity: Rarity | null;
+  tasks: NewbieTask[];
+  gifts: NewbieGift[];
+  bound_days: number;
+  steps_done: number;
+  steps_total: number;
+  /** Every step done: «Путь пройден» with its reward. */
+  finale_ready?: boolean;
+  finale?: RewardBundle | null;
+}
+
+export interface NewbieClaimResult {
+  rewards: GrantedRewards;
+  state: NewbieState;
+}
+
+export interface NewbieFunnel {
+  days: number;
+  started: number;
+  completed: number;
+  steps: { code: string; label: string; players: number }[];
 }

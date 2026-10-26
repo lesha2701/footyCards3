@@ -89,7 +89,7 @@ export function CoinPackagesPanel({
       {isLoading && <ListSkeleton count={3} />}
       {!isLoading && !list.length && <p className="text-xs text-ink-mist">Пакетов монет пока нет</p>}
       {list.map((pkg) => {
-        const bonus = Math.round((pkg.coins_amount / pkg.stars_price / baseRate - 1) * 100);
+        const bonus = pkg.bonus_pct || Math.round((pkg.coins_amount / pkg.stars_price / baseRate - 1) * 100);
         const best = pkg.id === bestId;
         const popular = pkg.id === popularId;
         return (

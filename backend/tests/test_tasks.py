@@ -499,15 +499,19 @@ async def test_referral_completion_progresses_referral_task(client, db_session, 
     new_user_headers["X-Referral-Code"] = str(referrer.telegram_id)
     await client.post("/api/v1/auth/session", headers=new_user_headers)
 
-    # Referral progress is only credited once the referred user completes a
-    # real paid purchase (not on bare registration) — see pack_service.open_pack.
-    from app.models.enums import Rarity
-    from tests.factories import create_pack, create_player
+    # Referral progress is only credited once the friend has really played
+    # (referral_service.check_friend), not on bare registration.
+    from datetime import timedelta
 
-    await create_player(db_session, rarity=Rarity.common)
-    pack = await create_pack(db_session, "basic", price=100, card_count=1, probabilities={Rarity.common: 1.0})
-    resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=new_user_headers, json={})
-    assert resp.status_code == 200
+    from app.core.timeutil import local_today
+    from app.models.user_activity import UserDailyActivity
+    from app.services import referral_service
+
+    friend = await get_user_by_telegram_id(db_session, 810012)
+    for n in (1, 2):
+        db_session.add(UserDailyActivity(user_id=friend.id, day=local_today() - timedelta(days=n)))
+    await db_session.commit()
+    await referral_service.check_friend(db_session, friend)
 
     tasks_after = (await client.get("/api/v1/tasks", headers=referrer_headers)).json()["regular"]
     invite_task_after = next(t for t in tasks_after if t["code"] == "invite_test")

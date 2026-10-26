@@ -91,6 +91,14 @@ class UserEquipment(Base):
     # The item's slot, copied at equip time (the unique key below needs it).
     slot: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     source: Mapped[str] = mapped_column(String(16), nullable=False)  # coins | stars | admin
+    # Coin purchases (from migration 0208): the first card it is put on owns
+    # it for good (`bound_card_id`) — it can come off and be swapped, but
+    # only ever goes back on that card; follows it in a trade and is
+    # deleted with it. Stars copies stay free.
+    binds_on_equip: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    bound_card_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("user_cards.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     # «№7 из 50»: the item's sale order (copies sold before serials existed: NULL).
     serial_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Coin purchases: a retried request with the same key is a no-op.

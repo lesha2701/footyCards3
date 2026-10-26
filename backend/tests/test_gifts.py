@@ -552,3 +552,18 @@ async def test_admin_can_create_collectible_with_prize_below_price(client, bot_t
     )
     assert create_resp.status_code == 200
     assert create_resp.json()["coins_amount"] == 5
+
+
+async def test_gift_with_two_packs_shows_every_card(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    headers = telegram_headers(860020, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 860020)
+    await create_player(db_session, rarity=Rarity.common)
+    pack = await create_pack(db_session, "chest", price=0, card_count=2, probabilities={Rarity.common: 1.0})
+    gift_set = await create_gift_set(db_session, coins_amount=100, stars_price=0, pack_id=pack.id, pack_count=2)
+    gift_id = (await client.post(
+        "/api/v1/admin/gifts/send", headers=auth, json={"gift_set_id": gift_set.id, "user_id": user.id},
+    )).json()["id"]
+    body = (await client.post(f"/api/v1/gifts/{gift_id}/claim", headers=headers)).json()
+    assert len(body["pack_result"]["cards"]) == 4 and body["coins_credited"] == 100

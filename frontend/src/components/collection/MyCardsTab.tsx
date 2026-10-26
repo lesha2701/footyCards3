@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import CardFilterBar from "@/components/collection/CardFilterBar";
 import CardQuickActions from "@/components/collection/CardQuickActions";
+import DuplicateSaleSheet from "@/components/collection/DuplicateSaleSheet";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { IconCoin, IconCollection, IconLock, IconLockOpen } from "@/components/icons";
@@ -24,7 +25,7 @@ import { useSkillUpgradeCheck } from "@/lib/cardSkills";
 import { formatGameError } from "@/lib/errors";
 import { haptic } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { UserCard } from "@/types";
+import type { UserCard, Rarity } from "@/types";
 
 const PAGE_SIZE = 60;
 
@@ -82,10 +83,11 @@ export default function MyCardsTab() {
   }, [sellMutation.isSuccess]);
 
   const duplicatesMutation = useMutation({
-    mutationFn: sellDuplicates,
+    mutationFn: ({ preview, rarities }: { preview: boolean; rarities?: Rarity[] }) => sellDuplicates(preview, rarities),
     onSuccess: (data) => {
       if (data.preview) {
-        if (data.sold_count === 0) setDupMessage("Лишних дубликатов нет — продавать нечего");
+        const any = Object.values(data.available_by_rarity ?? {}).some((n) => n > 0) || data.sold_count > 0;
+        if (!any) setDupMessage("Лишних дубликатов нет — продавать нечего");
         else { setDupMessage(null); setDupPreview(data); }
         return;
       }
@@ -161,7 +163,7 @@ export default function MyCardsTab() {
           {menuOpen && (
             <div className="absolute right-0 top-full z-20 mt-1 w-52 overflow-hidden rounded-xl border border-white/10 bg-bg-raised shadow-xl">
               <button
-                onClick={() => { setMenuOpen(false); duplicatesMutation.mutate(true); }}
+                onClick={() => { setMenuOpen(false); duplicatesMutation.mutate({ preview: true }); }}
                 disabled={duplicatesMutation.isPending}
                 className="block w-full px-3 py-2.5 text-left text-sm text-ink-chalk hover:bg-white/5 disabled:opacity-50"
               >
@@ -319,16 +321,11 @@ export default function MyCardsTab() {
 
       {upgradeCard && <CardUpgradeModal cards={[upgradeCard]} onClose={() => setUpgradeCard(null)} />}
 
-      <ConfirmDialog
-        open={!!dupPreview}
-        title={`Продать ${dupPreview?.sold_count ?? 0} дубликатов?`}
-        description={
-          `Получишь ${dupPreview?.coins_earned ?? 0} монет. По одной карточке каждого игрока остаётся; `
-          + "карточки с навыком, в составах, в обменах, под замком и бриллиантовые не продаются."
-        }
-        confirmLabel="Продать"
-        onConfirm={() => duplicatesMutation.mutate(false)}
-        onCancel={() => setDupPreview(null)}
+      <DuplicateSaleSheet
+        preview={dupPreview}
+        busy={duplicatesMutation.isPending}
+        onSell={(rarities) => duplicatesMutation.mutate({ preview: false, rarities })}
+        onClose={() => setDupPreview(null)}
       />
 
       <ConfirmDialog

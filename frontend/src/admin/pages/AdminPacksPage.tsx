@@ -25,6 +25,8 @@ interface PackForm {
   bonus_coins: number | "";
   badge_id: number | "";
   card_count: number;
+  /** Per player per day; "" = no limit. */
+  daily_limit_per_user: number | "";
   coach_drop_chance: number;
   stadium_drop_chance: number;
   skill_token_drop_chance: number;
@@ -49,6 +51,7 @@ function packToForm(p?: Pack): PackForm {
     bonus_coins: p?.bonus_coins ?? "",
     badge_id: p?.badge_id ?? "",
     card_count: p?.card_count ?? 3,
+    daily_limit_per_user: p?.daily_limit_per_user ?? "",
     coach_drop_chance: (p?.coach_drop_chance ?? 0) * 100,
     stadium_drop_chance: (p?.stadium_drop_chance ?? 0) * 100,
     skill_token_drop_chance: (p?.skill_token_drop_chance ?? 0) * 100,
@@ -97,6 +100,7 @@ export default function AdminPacksPage() {
     bonus_coins: form.bonus_coins === "" ? null : form.bonus_coins,
     badge_id: form.badge_id === "" ? null : form.badge_id,
     card_count: form.card_count,
+    daily_limit_per_user: form.daily_limit_per_user === "" ? null : form.daily_limit_per_user,
     coach_drop_chance: form.coach_drop_chance / 100,
     stadium_drop_chance: form.stadium_drop_chance / 100,
     skill_token_drop_chance: form.skill_token_drop_chance / 100,
@@ -192,6 +196,13 @@ export default function AdminPacksPage() {
               <div className="grid grid-cols-2 gap-2">
                 <NumField label="Цена, монеты" value={form.price} min={0} onChange={(v) => setForm({ ...form, price: v })} />
                 <NumField label="Карт в паке" value={form.card_count} min={1} max={12} onChange={(v) => setForm({ ...form, card_count: v })} />
+                <NumField
+                  label="Лимит в день на игрока (0 — нет)"
+                  value={form.daily_limit_per_user === "" ? 0 : form.daily_limit_per_user}
+                  min={0}
+                  max={100}
+                  onChange={(v) => setForm({ ...form, daily_limit_per_user: v > 0 ? v : "" })}
+                />
               </div>
               <NumField label="Шанс тренера вместо игрока (%) — 0 = только игроки" value={form.coach_drop_chance} min={0} max={100} onChange={(v) => setForm({ ...form, coach_drop_chance: v })} />
               <NumField label="Шанс стадиона вместо игрока (%) — 0 = только игроки" value={form.stadium_drop_chance} min={0} max={100} onChange={(v) => setForm({ ...form, stadium_drop_chance: v })} />

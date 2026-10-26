@@ -108,135 +108,95 @@ async def test_referral_code_links_new_user_without_crediting_referrer_yet(clien
     await db_session.refresh(referrer)
     assert new_user.referred_by_id == referrer.id
     # Not credited yet: a bare registration must not be enough to farm
-    # referral rewards with disposable accounts (see pack_service.open_pack
-    # for where this is actually credited).
+    # referral rewards with disposable accounts (referral_service.check_friend).
     assert referrer.referral_count == 0
 
 
-async def test_referral_reward_credited_on_referred_users_first_pack(client, db_session, bot_token):
+async def _referral_pair(client, db_session, bot_token, referrer_tg, friend_tg):
+    from tests.factories import get_user_by_telegram_id
+
+    await client.post("/api/v1/auth/session", headers=telegram_headers(referrer_tg, bot_token, username=f"r{referrer_tg}"))
+    referrer = await get_user_by_telegram_id(db_session, referrer_tg)
+    friend_headers = telegram_headers(friend_tg, bot_token, username=f"f{friend_tg}")
+    friend_headers["X-Referral-Code"] = str(referrer.telegram_id)
+    await client.post("/api/v1/auth/session", headers=friend_headers)
+    friend = await get_user_by_telegram_id(db_session, friend_tg)
+    return referrer, friend, friend_headers
+
+
+async def _active_on_past_days(db_session, user, days):
+    from datetime import timedelta
+
+    from app.core.timeutil import local_today
+    from app.models.user_activity import UserDailyActivity
+
+    for n in range(1, days + 1):
+        db_session.add(UserDailyActivity(user_id=user.id, day=local_today() - timedelta(days=n)))
+    await db_session.commit()
+
+
+async def test_referral_counts_only_after_friend_played_three_days(client, db_session, bot_token):
     from sqlalchemy import select
 
     from app.models.enums import NotificationType, Rarity
     from app.models.notification import Notification
-    from tests.factories import create_pack, create_player, get_user_by_telegram_id
+    from app.services import referral_service
+    from tests.factories import create_pack, create_player
 
     await create_player(db_session, rarity=Rarity.common)
     pack = await create_pack(db_session, "basic", price=100, card_count=1, probabilities={Rarity.common: 1.0})
+    referrer, friend, friend_headers = await _referral_pair(client, db_session, bot_token, 555020, 555021)
+    referrer_before, friend_before = referrer.balance, friend.balance
 
-    referrer_headers = telegram_headers(555020, bot_token, username="referrer2")
-    await client.post("/api/v1/auth/session", headers=referrer_headers)
-    referrer = await get_user_by_telegram_id(db_session, 555020)
-    referrer_balance_before = referrer.balance
+    # A pack is no signal any more: free packs cost nothing.
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=friend_headers, json={})
+    assert resp.status_code == 200 and resp.json()["referral_bonus_coins"] is None
+    assert await referral_service.check_friend(db_session, friend) is None  # one day so far
 
-    new_user_headers = telegram_headers(555021, bot_token, username="newbie2")
-    new_user_headers["X-Referral-Code"] = str(referrer.telegram_id)
-    await client.post("/api/v1/auth/session", headers=new_user_headers)
-    new_user = await get_user_by_telegram_id(db_session, 555021)
-    new_user_balance_before = new_user.balance
-
+    await _active_on_past_days(db_session, friend, 2)
+    assert await referral_service.check_friend(db_session, friend) == 2000
     await db_session.refresh(referrer)
-    assert referrer.referral_count == 0
-
-    resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=new_user_headers, json={})
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["referral_bonus_coins"] == 200
-
-    await db_session.refresh(referrer)
-    await db_session.refresh(new_user)
-    assert referrer.referral_count == 1
-    # Referred user: -100 (pack price) + 200 (referral bonus) = +100 net.
-    assert new_user.balance == new_user_balance_before - pack.price + 200
-    assert referrer.balance == referrer_balance_before + 400
-
-    # The referrer must be told explicitly, not just have a silent counter bump.
-    notifications = (
-        await db_session.execute(
-            select(Notification).where(
-                Notification.user_id == referrer.id, Notification.type == NotificationType.referral_joined
-            )
-        )
-    ).scalars().all()
-    assert len(notifications) == 1
-
-    # A second pack by the same referred user must not credit again.
-    pack2 = await create_pack(db_session, "basic2", price=100, card_count=1, probabilities={Rarity.common: 1.0})
-    resp = await client.post(f"/api/v1/packs/{pack2.id}/open", headers=new_user_headers, json={})
-    assert resp.status_code == 200
-    assert resp.json()["referral_bonus_coins"] is None
-
+    await db_session.refresh(friend)
+    assert referrer.referral_count == 1 and friend.referral_reward_granted is True
+    assert referrer.balance == referrer_before + 3000
+    assert friend.balance == friend_before - pack.price + 2000
+    # «Друг присоединился» at sign-up + «Друг засчитан».
+    notes = (await db_session.execute(select(Notification).where(
+        Notification.user_id == referrer.id, Notification.type == NotificationType.referral_joined,
+    ))).scalars().all()
+    assert len(notes) == 2
+    # Never twice.
+    assert await referral_service.check_friend(db_session, friend) is None
     await db_session.refresh(referrer)
     assert referrer.referral_count == 1
-    assert referrer.balance == referrer_balance_before + 400
 
 
-async def test_referral_reward_triggers_on_free_pack(client, db_session, bot_token):
-    from app.models.enums import Rarity
-    from tests.factories import create_pack, create_player, get_user_by_telegram_id
+async def test_referral_checked_on_friends_new_day(client, db_session, bot_token):
+    from datetime import datetime, timedelta, timezone
 
-    await create_player(db_session, rarity=Rarity.common)
-    free_pack = await create_pack(db_session, "free-basic", price=0, card_count=1, probabilities={Rarity.common: 1.0})
-
-    referrer_headers = telegram_headers(555022, bot_token, username="referrer3")
-    await client.post("/api/v1/auth/session", headers=referrer_headers)
-    referrer = await get_user_by_telegram_id(db_session, 555022)
-
-    new_user_headers = telegram_headers(555023, bot_token, username="newbie3")
-    new_user_headers["X-Referral-Code"] = str(referrer.telegram_id)
-    await client.post("/api/v1/auth/session", headers=new_user_headers)
-    new_user = await get_user_by_telegram_id(db_session, 555023)
-    balance_before = new_user.balance
-
-    resp = await client.post(f"/api/v1/packs/{free_pack.id}/open", headers=new_user_headers, json={})
-    assert resp.status_code == 200
-    assert resp.json()["referral_bonus_coins"] == 200
-
-    await db_session.refresh(referrer)
-    await db_session.refresh(new_user)
-    assert referrer.referral_count == 1
-    assert new_user.balance == balance_before + 200
-    assert new_user.referral_reward_granted is True
-
-
-async def test_referral_reward_triggers_on_bonus_pack_grant(client, db_session, bot_token):
-    """Regression test: pack_service.grant_bonus_pack_opening (shared by
-    task rewards, collection-completion rewards, league-tier rewards, and
-    wheel-of-fortune bonus packs) used to bypass the referral-credit check
-    entirely (only open_pack had it) — a referred user whose first-ever
-    pack was one of these server-initiated grants left their referrer
-    stuck at referral_count=0 forever."""
-    from app.models.enums import Rarity
-    from app.services import pack_service
-    from app.services.wallet_service import lock_user_for_update
-    from tests.factories import create_pack, create_player, get_user_by_telegram_id
-
-    await create_player(db_session, rarity=Rarity.common)
-    pack = await create_pack(db_session, "bonus-pack", price=0, card_count=1, probabilities={Rarity.common: 1.0})
-
-    referrer_headers = telegram_headers(555024, bot_token, username="referrer4")
-    await client.post("/api/v1/auth/session", headers=referrer_headers)
-    referrer = await get_user_by_telegram_id(db_session, 555024)
-
-    new_user_headers = telegram_headers(555025, bot_token, username="newbie4")
-    new_user_headers["X-Referral-Code"] = str(referrer.telegram_id)
-    await client.post("/api/v1/auth/session", headers=new_user_headers)
-    new_user = await get_user_by_telegram_id(db_session, 555025)
-    balance_before = new_user.balance
-
-    locked_user = await lock_user_for_update(db_session, new_user.id)
-    result = await pack_service.grant_bonus_pack_opening(
-        db_session, locked_user, pack.id, idempotency_prefix="test-bonus-grant",
-    )
+    referrer, friend, friend_headers = await _referral_pair(client, db_session, bot_token, 555022, 555023)
+    await _active_on_past_days(db_session, friend, 2)
+    friend.last_seen_at = datetime.now(timezone.utc) - timedelta(days=1)
     await db_session.commit()
-
-    assert result is not None
-    assert result.referral_bonus_coins == 200
-
+    assert (await client.get("/api/v1/auth/me", headers=friend_headers)).status_code == 200
     await db_session.refresh(referrer)
-    await db_session.refresh(new_user)
     assert referrer.referral_count == 1
-    assert new_user.balance == balance_before + 200
-    assert new_user.referral_reward_granted is True
+
+
+async def test_referral_milestones_pay_once(client, db_session, bot_token):
+    from app.services import referral_service
+    from app.services.game_config_service import get_config
+
+    config = await get_config(db_session)
+    config.referral_milestones = [{"count": 1, "coins": 777}, {"count": 2, "coins": 5000}]
+    await db_session.commit()
+    referrer, friend, _ = await _referral_pair(client, db_session, bot_token, 555024, 555025)
+    before = referrer.balance
+    await _active_on_past_days(db_session, friend, 2)
+    await referral_service.check_friend(db_session, friend)
+    await db_session.refresh(referrer)
+    assert referrer.balance == before + 3000 + 777
+    assert referrer.referral_milestone_paid == 1
 
 
 async def test_self_referral_is_a_no_op(client, db_session, bot_token):

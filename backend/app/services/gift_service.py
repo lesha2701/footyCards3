@@ -77,16 +77,22 @@ async def claim_gift(db: AsyncSession, user: User, gift_id: int) -> GiftClaimRes
     gift_set = gift.gift_set
 
     pack_result = None
-    if gift_set.pack_id is not None:
+    # Several packs (pack_count) show up as one result with every card.
+    for n in range(max(1, gift_set.pack_count or 1) if gift_set.pack_id is not None else 0):
         granted = await grant_bonus_pack_opening(
-            db, user, gift_set.pack_id, idempotency_prefix=f"gift-{gift.id}", source=CardSource.gift,
+            db, user, gift_set.pack_id, idempotency_prefix=f"gift-{gift.id}-{n}", source=CardSource.gift,
         )
-        if granted is not None:
-            granted.collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(
-                db, user, [item.card.player.id for item in granted.cards]
-            )
+        if granted is None:
+            break
+        granted.collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(
+            db, user, [item.card.player.id for item in granted.cards]
+        )
+        if pack_result is None:
             gift.pack_opening_id = granted.opening_id
             pack_result = granted
+        else:
+            for field in ("cards", "coach_cards", "stadium_cards", "skill_tokens", "muses", "collection_rewards"):
+                getattr(pack_result, field).extend(getattr(granted, field))
 
     if gift_set.coins_amount:
         user = await lock_user_for_update(db, user.id)

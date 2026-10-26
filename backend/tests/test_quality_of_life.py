@@ -188,3 +188,26 @@ async def test_attention_counts_incoming_trades(client, db_session, bot_token):
     body = (await client.get(f"{API}/profile/me/attention", headers=telegram_headers(830008, bot_token))).json()
     assert body["incoming_trades"] == 1
     assert body["match_challenges"] == 0 and body["active_friend_matches"] == 0
+
+
+async def test_sell_duplicates_of_one_rarity_only(client, db_session, bot_token):
+    user = await _register(client, db_session, 830015, bot_token)
+    headers = telegram_headers(830015, bot_token)
+    common = await create_player(db_session, position=Position.ST, rarity=Rarity.common, quick_sell_price=10)
+    rare = await create_player(db_session, position=Position.CB, rarity=Rarity.rare, quick_sell_price=40)
+    diamond = await create_player(db_session, position=Position.GK, rarity=Rarity.diamond, quick_sell_price=500)
+    for player in (common, common, rare, rare, rare, diamond, diamond):
+        await _card(db_session, user.id, player)
+
+    preview = (await client.post(f"{API}/collection/cards/sell-duplicates", headers=headers,
+                                 json={"preview": True, "rarities": ["rare"]})).json()
+    assert preview["sold_count"] == 2 and preview["by_rarity"] == {"rare": 2}
+    assert preview["available_by_rarity"] == {"common": 1, "rare": 2, "diamond": 1}
+    assert preview["available_coins_by_rarity"]["rare"] == 80
+
+    done = (await client.post(f"{API}/collection/cards/sell-duplicates", headers=headers,
+                              json={"preview": False, "rarities": ["rare"]})).json()
+    assert done["sold_count"] == 2
+    left = (await client.post(f"{API}/collection/cards/sell-duplicates", headers=headers,
+                              json={"preview": True, "rarities": ["common", "rare", "diamond"]})).json()
+    assert left["by_rarity"] == {"common": 1, "diamond": 1}

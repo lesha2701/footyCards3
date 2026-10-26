@@ -209,6 +209,9 @@ async def create_invoice(db: AsyncSession, user: User, pack_id: int) -> StarsInv
         select(Pack).where(Pack.id == pack.id).options(selectinload(Pack.rarity_probabilities))
     )).scalar_one()
     await assert_pool_ready(db, pack)  # «Академия» pack with no players: refuse before charging
+    from app.services.pack_service import assert_daily_limit
+
+    await assert_daily_limit(db, pack, user.id)  # «Легенда дня»: one a day
 
     payload_token = secrets.token_urlsafe(16)
     invoice = StarsInvoice(
@@ -316,6 +319,11 @@ async def validate_pre_checkout(db: AsyncSession, payload_token: str, total_amou
         pack = await db.get(Pack, invoice.pack_id)
         if pack is None or not pack.is_active or pack.stars_price != total_amount:
             return False, "This pack is no longer available"
+        if pack.daily_limit_per_user:
+            from app.services.pack_service import today_count
+
+            if await today_count(db, pack.id, invoice.user_id) >= pack.daily_limit_per_user:
+                return False, "Сегодня этот пак уже открыт — приходи завтра"
     elif invoice.gift_set_id is not None:
         gift_set = await db.get(GiftSet, invoice.gift_set_id)
         if gift_set is None or not gift_set.is_active or gift_set.stars_price != total_amount:

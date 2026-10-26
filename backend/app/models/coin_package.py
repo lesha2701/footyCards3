@@ -16,5 +16,7 @@ class CoinPackage(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     stars_price: Mapped[int] = mapped_column(Integer, nullable=False)
     coins_amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Shown as «+N%» — already included in coins_amount.
+    bonus_pct: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

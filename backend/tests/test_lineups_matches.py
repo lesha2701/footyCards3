@@ -740,3 +740,28 @@ async def test_forfeit_rejects_already_finished_match(client, db_session, bot_to
 
     resp = await client.post(f"/api/v1/matches/{match['id']}/forfeit", headers=headers)
     assert resp.status_code == 409
+
+
+async def test_two_versions_of_one_footballer_cant_share_a_lineup(client, db_session, bot_token):
+    from app.services.player_identity import person_key
+
+    headers = telegram_headers(750018, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 750018)
+    slot_a, slot_b = FORMATION_SLOTS[1], FORMATION_SLOTS[2]
+    base = await create_player(db_session, position=slot_a.ideal_position, display_name="Лионель Месси ")
+    toty = await create_player(db_session, position=slot_a.ideal_position, display_name="Месси", person_key="Лионель  Месси")
+    namesake = await create_player(db_session, position=slot_a.ideal_position, display_name="Луис Диас")
+    other = await create_player(db_session, position=slot_a.ideal_position, display_name="Браим Диас")
+    assert person_key(base) == person_key(toty) and person_key(namesake) != person_key(other)
+    cards = [await create_user_card(db_session, user.id, p.id, CardSource.seed) for p in (base, toty, namesake, other)]
+    await db_session.commit()
+
+    def put(a, b):
+        return client.put("/api/v1/lineups/active", headers=headers, json={"slots": [
+            {"slot_code": slot_a.code, "user_card_id": a.id}, {"slot_code": slot_b.code, "user_card_id": b.id},
+        ]})
+
+    resp = await put(cards[0], cards[1])
+    assert resp.status_code == 409 and "уже в составе" in resp.json()["error"]["message"]
+    assert (await put(cards[2], cards[3])).status_code == 200

@@ -112,7 +112,9 @@ export default function HomeHero({
         </button>
         {/* Greeting, name and the rating stacked — the Muse needs the right side of the row. */}
         <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
-          <p className="max-w-full truncate font-mono text-micro uppercase tracking-wider text-ink-mist">С возвращением</p>
+          <p className="max-w-full truncate font-mono text-micro uppercase tracking-wider text-ink-mist">
+            {new Date(profile.created_at).toDateString() === new Date().toDateString() ? "Добро пожаловать" : "С возвращением"}
+          </p>
           <p className="flex max-w-full items-center gap-1.5 font-display text-lg font-bold leading-tight text-ink-chalk">
             <span className="truncate">{name}</span>
             <UserBadge badge={profile.active_badge} />

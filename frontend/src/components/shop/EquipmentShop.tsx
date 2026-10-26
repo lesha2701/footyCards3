@@ -128,6 +128,11 @@ export default function EquipmentShop({ showInventoryLink = true }: { showInvent
           <span className="text-caption text-ink-mist">
             {item.slot_label} · {RARITY_LABELS[item.rarity]}
           </span>
+          {item.coins_price > 0 && (
+            <span className="text-caption text-amber-300/90">
+              За монеты — привязывается к карточке, которую оденешь{item.stars_price > 0 ? "; за ⭐ — можно снимать" : ""}
+            </span>
+          )}
           <span className="text-sm font-semibold text-accent-lime">{item.effect_label}</span>
           {item.cond_club && <span className="text-xs text-amber-300">Действует только для игроков «{item.cond_club}»</span>}
           {item.cond_country && <span className="text-xs text-amber-300">Действует только для игроков страны {item.cond_country}</span>}

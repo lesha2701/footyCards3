@@ -43,6 +43,8 @@ class Pack(TimestampMixin, Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     purchase_limit_per_user: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # At most this many per player per local day (e.g. «Легенда дня»); null = no limit.
+    daily_limit_per_user: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     available_from: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     available_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

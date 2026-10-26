@@ -24,6 +24,7 @@ from app.services.chemistry_service import ChemistryResult
 from app.services.coach_boost_service import arena_rarity_team_strength_bonus
 from app.services.game_config_service import get_config
 from app.services.player_stats_service import card_rating_bonus, effective_card_stats
+from app.services.player_identity import card_person
 
 
 def clean_group_key(value):
@@ -544,7 +545,7 @@ async def set_lineup(
     if len(cards_by_id) != len(card_ids_seen):
         raise NotFoundError("One or more cards not found")
 
-    player_ids_seen: set[int] = set()
+    player_ids_seen: set[str] = set()
     for slot_in in payload.slots:
         card = cards_by_id[slot_in.user_card_id]
         slot = slots_by_code[slot_in.slot_code]
@@ -556,11 +557,12 @@ async def set_lineup(
             raise ConflictError(
                 f"Player {card.player.display_name} ({card.player.position.value}) cannot fill a {slot.category} slot"
             )
-        if card.player_id in player_ids_seen:
+        # One footballer once: copies and other versions (TOTY…) of him too.
+        if card_person(card) in player_ids_seen:
             raise ConflictError(
-                f"Player {card.player.display_name} is already assigned to another slot; even duplicate copies can't fill two slots"
+                f"{card.player.display_name} уже в составе — разные карточки одного игрока в один состав нельзя"
             )
-        player_ids_seen.add(card.player_id)
+        player_ids_seen.add(card_person(card))
 
     config = await get_config(db)
     # «Академия» cards are diamonds with a squad limit of their own.

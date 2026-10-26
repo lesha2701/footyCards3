@@ -43,6 +43,7 @@ from app.services.lineup_service import CATEGORY_POSITIONS, on_ideal_position
 from app.services.notification_service import notify
 from app.services.player_stats_service import card_rating_bonus
 from app.services.player_tournament_simulation_service import _EngineCard, _engine_card
+from app.services.player_identity import card_person
 
 TEAMS = 8
 ROUNDS = 14
@@ -308,9 +309,9 @@ def pick_squad(cards: list[UserCard], formation: str = "4-3-3", size: int = SQUA
     if len(xi) < len(slots):
         raise ConflictError("Для карьеры нужно минимум 11 карточек, закрывающих все позиции схемы 4-3-3")
     chosen = [c.id for c in xi.values()]
-    used_players = {c.player_id for c in xi.values()}
+    used_players = {card_person(c) for c in xi.values()}
     pool = sorted(
-        (c for c in cards if _usable(c) and c.id not in chosen and c.player_id not in used_players),
+        (c for c in cards if _usable(c) and c.id not in chosen and card_person(c) not in used_players),
         key=lambda c: (-_effective(c), c.id),
     )
     # Bench: a backup per line first (keeper, then outfield lines twice),
@@ -320,11 +321,11 @@ def pick_squad(cards: list[UserCard], formation: str = "4-3-3", size: int = SQUA
         if len(chosen) >= size:
             break
         for card in pool:
-            if card.player_id in used_players:
+            if card_person(card) in used_players:
                 continue
             if need is None or card.player.position in CATEGORY_POSITIONS[need]:
                 chosen.append(card.id)
-                used_players.add(card.player_id)
+                used_players.add(card_person(card))
                 break
     return chosen[:size]
 
@@ -356,25 +357,25 @@ def resolve_lineup(
     available = [c for c in squad if _usable(c) and not _is_out(part, c.id, round_index)]
     by_id = {c.id: c for c in available}
     chosen: dict[str, UserCard] = {}
-    used_players: set[int] = set()
+    used_players: set[str] = set()
     for slot in ([] if rotate else slots):  # rotation: ignore the saved XI
         card = by_id.get((part.lineup or {}).get(slot.code) or -1)
-        if card and card.player.position in CATEGORY_POSITIONS[slot.category] and card.player_id not in used_players:
+        if card and card.player.position in CATEGORY_POSITIONS[slot.category] and card_person(card) not in used_players:
             chosen[slot.code] = card
-            used_players.add(card.player_id)
+            used_players.add(card_person(card))
     missing = [SlotSpec(s.code, s.category, s.ideal_position) for s in slots if s.code not in chosen]
     if missing:
         fresh = frozenset(c.id for c in available if _condition(part, c.id).get("fatigue", 0) < (35 if rotate else 60))
-        pool = [c for c in available if c.player_id not in used_players]
+        pool = [c for c in available if card_person(c) not in used_players]
         for code, card in pick_cards(missing, pool, "tournament", preferred_ids=fresh).items():
             chosen[code] = card
-            used_players.add(card.player_id)
+            used_players.add(card_person(card))
     missing = [SlotSpec(s.code, s.category, s.ideal_position) for s in slots if s.code not in chosen]
     if missing:
-        pool = [c for c in extra_cards if c.player_id not in used_players and c.id not in squad_ids]
+        pool = [c for c in extra_cards if card_person(c) not in used_players and c.id not in squad_ids]
         for code, card in pick_cards(missing, pool, "tournament").items():
             chosen[code] = card
-            used_players.add(card.player_id)
+            used_players.add(card_person(card))
     if fill_any_position:
         # Still a hole (nobody of that line is fit or owned): rather than a
         # technical defeat, the best remaining fit player plays out of
@@ -384,13 +385,13 @@ def resolve_lineup(
             if slot.code in chosen:
                 continue
             spare = [c for c in available + [c for c in extra_cards if c.id not in squad_ids]
-                     if c.player_id not in used_players]
+                     if card_person(c) not in used_players]
             if not spare:
                 break
             prefer_gk = slot.category == "GK"
             card = max(spare, key=lambda c: ((c.player.position.value == "GK") == prefer_gk, _effective(c), -c.id))
             chosen[slot.code] = card
-            used_players.add(card.player_id)
+            used_players.add(card_person(card))
     return [(chosen[s.code], s) for s in slots if s.code in chosen]
 
 
@@ -754,14 +755,14 @@ def _next_squad(prev: list[int], cards: list, formation: str, size: int) -> list
     remaining cards: the core stays unless the coach changes it."""
     by_id = {c.id: c for c in cards}
     kept = [cid for cid in prev if cid in by_id and _usable(by_id[cid])][:size]
-    used_players = {by_id[cid].player_id for cid in kept}
+    used_players = {card_person(by_id[cid]) for cid in kept}
     best = pick_squad(cards, formation if formation in CLUB_FORMATIONS else "4-3-3", size=size)
     for cid in best:
         if len(kept) >= size:
             break
-        if cid not in kept and by_id[cid].player_id not in used_players:
+        if cid not in kept and card_person(by_id[cid]) not in used_players:
             kept.append(cid)
-            used_players.add(by_id[cid].player_id)
+            used_players.add(card_person(by_id[cid]))
     return kept
 
 
@@ -858,14 +859,14 @@ async def set_squad(db: AsyncSession, user: User, card_ids: list[int]) -> None:
     cards = {c.id: c for c in await _career_cards(db, user.id, config)}
     if len(card_ids) > int(config.career_squad_size):
         raise ConflictError(f"В заявке не больше {config.career_squad_size} игроков")
-    players: set[int] = set()
+    players: set[str] = set()
     for cid in card_ids:
         card = cards.get(cid)
         if card is None or not _usable(card):
             raise ConflictError("В заявку — только свои доступные карточки")
-        if card.player_id in players:
+        if card_person(card) in players:
             raise ConflictError("Один игрок не может быть в заявке дважды")
-        players.add(card.player_id)
+        players.add(card_person(card))
     probe = CareerParticipant(squad_card_ids=list(card_ids), formation=part.formation, condition={}, lineup=None, user_id=user.id)
     xi = resolve_lineup(probe, cards, 0, [])
     if len(xi) < len(get_formation_slots(part.formation)):
@@ -1099,15 +1100,15 @@ async def set_lineup(
     slot_defs = {s.code: s for s in get_formation_slots(formation)}
     cards = {c.id: c for c in await _career_cards(db, user.id)}
     squad_ids = _squad_ids(part, cards)
-    used_players: set[int] = set()
+    used_players: set[str] = set()
     clean: dict[str, int] = {}
     for code, card_id in slots.items():
         slot, card = slot_defs.get(code), cards.get(card_id)
         if slot is None or card is None or card_id not in squad_ids:
             raise ConflictError("В составе можно использовать только карточки заявки")
-        if card.player.position not in CATEGORY_POSITIONS[slot.category] or card.player_id in used_players:
+        if card.player.position not in CATEGORY_POSITIONS[slot.category] or card_person(card) in used_players:
             raise ConflictError(f"{card.player.display_name} не подходит на позицию {code}")
-        used_players.add(card.player_id)
+        used_players.add(card_person(card))
         clean[code] = card_id
     part.formation, part.mentality, part.playstyle, part.tactic = formation, mentality, playstyle, tactic
     part.lineup = clean or None
@@ -1503,10 +1504,10 @@ def _human_runner(
     if len(pairs) != len(get_formation_slots(part.formation)):
         return None, [], 0
     xi_ids = {c.id for c, _ in pairs}
-    xi_players = {c.player_id for c, _ in pairs}
+    xi_players = {card_person(c) for c, _ in pairs}
     bench = [by_id[cid] for cid in _squad_ids(part, by_id) if cid in by_id]
     bench = [c for c in bench if _usable(c) and not _is_out(part, c.id, avail_round)
-             and c.id not in xi_ids and c.player_id not in xi_players]
+             and c.id not in xi_ids and card_person(c) not in xi_players]
     tr = tactics.tuning_of(config)["training"]
 
     def live(card, slot=None):

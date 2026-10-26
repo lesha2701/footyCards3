@@ -137,6 +137,16 @@ async def artifact_invoice(artifact_id: int, db: AsyncSession = Depends(get_db),
     return await shop_product_service.create_invoice(db, user, *await artifact_service.stars_order(db, user, artifact_id))
 
 
+@router.post("/artifacts/{artifact_id}/gift-invoice", response_model=StarsInvoiceCreateOut)
+async def artifact_gift_invoice(
+    artifact_id: int, payload: ArtifactGiftIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """A copy bought with Stars straight for a friend."""
+    return await shop_product_service.create_invoice(
+        db, user, *await artifact_service.stars_gift_order(db, user, artifact_id, payload.recipient_id),
+    )
+
+
 @router.post("/artifacts/copies/{copy_id}/active")
 async def activate_artifact(
     copy_id: int, payload: ArtifactEquipIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),

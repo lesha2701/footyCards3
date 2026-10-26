@@ -153,7 +153,9 @@ async def _worn_rows(db: AsyncSession, card: UserCard) -> list[UserEquipment]:
 async def recompute(db: AsyncSession, card: UserCard, config: Optional[GameConfig] = None) -> None:
     """Writes what the card wears onto its row (caller commits)."""
     config = config or await get_config(db)
-    if card.player is None:
+    from sqlalchemy import inspect as sa_inspect
+
+    if "player" in sa_inspect(card).unloaded or card.player is None:
         await db.refresh(card, attribute_names=["player"])
     items = [row.item for row in await _worn_rows(db, card)]
     card.equipment_rating_bonus, card.equipment_chemistry, card.equipment_boosts = compute_effects(card.player, items, config)
@@ -192,6 +194,8 @@ async def detach_from_cards(db: AsyncSession, card_ids: list[int]) -> None:
         select(UserEquipment).where(UserEquipment.user_card_id.in_(card_ids)).execution_options(populate_existing=True)
     )).unique().scalars().all()
     for row in rows:
+        if row.bound_card_id is not None:
+            continue  # its own card: stays on it (move_bound_with_card)
         row.user_card_id, row.slot = None, None
         db.add(row)
     # populate_existing: a card already in the session may hold a stale bonus.
@@ -202,6 +206,20 @@ async def detach_from_cards(db: AsyncSession, card_ids: list[int]) -> None:
         card.equipment_rating_bonus, card.equipment_chemistry, card.equipment_boosts = 0, 0, None
         db.add(card)
     await db.flush()
+
+
+async def move_bound_with_card(db: AsyncSession, card: UserCard, new_owner_id: int) -> None:
+    """A trade moved `card`: the things bound to it change hands too, and
+    its bonus is recomputed for them. Caller commits."""
+    rows = (await db.execute(
+        select(UserEquipment).where(UserEquipment.bound_card_id == card.id).execution_options(populate_existing=True)
+    )).unique().scalars().all()
+    for row in rows:
+        row.user_id = new_owner_id
+        db.add(row)
+    if rows:
+        await db.flush()
+        await recompute(db, card)
 
 
 # --- read --------------------------------------------------------------------------------
@@ -246,7 +264,9 @@ def collection_out(collection: EquipmentCollection) -> dict:
 async def _owned(db: AsyncSession, user_id: int) -> list[UserEquipment]:
     result = await db.execute(select(UserEquipment).where(UserEquipment.user_id == user_id).order_by(UserEquipment.id))
     rows = list(result.unique().scalars().all())
-    worn_ids = {r.user_card_id for r in rows if r.user_card_id is not None}
+    worn_ids = {r.user_card_id for r in rows if r.user_card_id is not None} | {
+        r.bound_card_id for r in rows if r.bound_card_id is not None
+    }
     if worn_ids:
         mine = set((await db.execute(
             select(UserCard.id).where(UserCard.id.in_(worn_ids), UserCard.owner_id == user_id)
@@ -255,6 +275,9 @@ async def _owned(db: AsyncSession, user_id: int) -> list[UserEquipment]:
             # The card is gone or no longer ours: the copy is simply free.
             if row.user_card_id is not None and row.user_card_id not in mine:
                 row.user_card_id, row.slot = None, None
+        # A bound thing whose card was sold or burned went with it (the FK
+        # cascades on Postgres; this also hides it where it doesn't).
+        rows = [r for r in rows if r.bound_card_id is None or r.bound_card_id in mine]
     return rows
 
 
@@ -293,7 +316,9 @@ async def shop(db: AsyncSession, user: User) -> dict:
 
 async def inventory(db: AsyncSession, user: User) -> dict:
     rows = await _owned(db, user.id)
-    card_ids = {r.user_card_id for r in rows if r.user_card_id is not None}
+    card_ids = {r.user_card_id for r in rows if r.user_card_id is not None} | {
+        r.bound_card_id for r in rows if r.bound_card_id is not None
+    }
     names: dict[int, str] = {}
     if card_ids:
         cards = (await db.execute(
@@ -306,6 +331,8 @@ async def inventory(db: AsyncSession, user: User) -> dict:
             {
                 "copy_id": r.id, "item": item_out(r.item), "serial_number": r.serial_number,
                 "user_card_id": r.user_card_id, "card_name": names.get(r.user_card_id),
+                "binds": r.binds_on_equip, "bound_card_id": r.bound_card_id,
+                "bound_card_name": names.get(r.bound_card_id),
             }
             for r in rows
         ],
@@ -330,13 +357,19 @@ async def card_equipment(db: AsyncSession, user: User, card_id: int) -> dict:
                 "available": not (code in GK_ONLY_SLOTS and card.player.position != Position.GK),
                 "worn": (
                     {"copy_id": worn[code].id, "item": item_out(worn[code].item),
-                     "applies": item_applies(worn[code].item, card.player)}
+                     "applies": item_applies(worn[code].item, card.player),
+                     "bound": worn[code].bound_card_id is not None}
                     if code in worn else None
                 ),
-                # Free copies of things for this slot (one per kind is enough to pick).
+                # Free copies of things for this slot that may go on this card
+                # (free ones, or bound to it) — one per kind is enough to pick.
                 "options": [
-                    {"copy_id": r.id, "item": item_out(r.item), "applies": item_applies(r.item, card.player)}
-                    for r in {r.item_id: r for r in free if r.item.slot == code}.values()
+                    {"copy_id": r.id, "item": item_out(r.item), "applies": item_applies(r.item, card.player),
+                     "binds": r.binds_on_equip and r.bound_card_id is None, "bound": r.bound_card_id == card.id}
+                    for r in {
+                        (r.item_id, r.binds_on_equip, r.bound_card_id): r for r in free
+                        if r.item.slot == code and r.bound_card_id in (None, card.id)
+                    }.values()
                 ],
             }
             for code, label in SLOTS.items()
@@ -369,6 +402,10 @@ async def _own_copy(db: AsyncSession, user_id: int, copy_id: int) -> UserEquipme
     )).unique().scalar_one_or_none()
     if row is None or row.user_id != user_id:
         raise NotFoundError("Вещь не найдена")
+    if row.bound_card_id is not None:
+        owner = (await db.execute(select(UserCard.owner_id).where(UserCard.id == row.bound_card_id))).scalar_one_or_none()
+        if owner != user_id:
+            raise NotFoundError("Вещь не найдена")
     return row
 
 
@@ -401,6 +438,7 @@ async def _grant(
         item.max_supply = item.sold_count  # a paid Stars order that raced the last copy
     row = UserEquipment(
         user_id=user_id, item_id=item.id, source=source, purchase_key=purchase_key, serial_number=item.sold_count,
+        binds_on_equip=source == "coins",
     )
     db.add_all([item, row])
     await db.flush()
@@ -452,6 +490,8 @@ async def equip(db: AsyncSession, user: User, copy_id: int, card_id: int) -> dic
         raise ConflictError("Неизвестный слот вещи")
     if slot in GK_ONLY_SLOTS and card.player.position != Position.GK:
         raise ConflictError("Перчатки можно надеть только вратарю")
+    if row.bound_card_id is not None and row.bound_card_id != card.id:
+        raise ConflictError("Вещь за монеты привязана к другой карточке — надеть её можно только туда")
 
     touched: dict[int, UserCard] = {card.id: card}
     if row.user_card_id is not None and row.user_card_id != card.id:
@@ -470,6 +510,8 @@ async def equip(db: AsyncSession, user: User, copy_id: int, card_id: int) -> dic
     row.user_card_id, row.slot = None, None
     await db.flush()
     row.user_card_id, row.slot = card.id, slot
+    if row.binds_on_equip and row.bound_card_id is None:
+        row.bound_card_id = card.id
     db.add(row)
     await db.flush()
     for touched_card in touched.values():

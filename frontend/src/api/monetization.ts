@@ -110,7 +110,8 @@ export async function setArtifactActive(copyId: number, active: boolean): Promis
   return data;
 }
 
-export async function giftArtifact(copyId: number, recipientId: number): Promise<ArtifactCatalog> {
-  const { data } = await api.post<ArtifactCatalog>(`/artifacts/copies/${copyId}/gift`, { recipient_id: recipientId });
+/** A copy bought with Stars straight for a friend (the only way to gift one). */
+export async function createArtifactGiftInvoice(id: number, recipientId: number): Promise<StarsInvoiceCreate> {
+  const { data } = await api.post<StarsInvoiceCreate>(`/artifacts/${id}/gift-invoice`, { recipient_id: recipientId });
   return data;
 }

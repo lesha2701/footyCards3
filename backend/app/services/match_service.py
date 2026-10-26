@@ -1175,7 +1175,12 @@ async def _resolve_opponent(db: AsyncSession, pending: dict, user_strength: int,
 
 async def _pending_opponent(db: AsyncSession, locked_user: User, config: GameConfig) -> dict:
     if not locked_user.arena_pending_opponent:
-        locked_user.arena_pending_opponent = await arena_ladder_service.find_opponent(db, locked_user, config)
+        from app.services import newbie_service
+
+        locked_user.arena_pending_opponent = (
+            await newbie_service.first_arena_opponent(db, locked_user, config)
+            or await arena_ladder_service.find_opponent(db, locked_user, config)
+        )
         db.add(locked_user)
     return dict(locked_user.arena_pending_opponent)
 

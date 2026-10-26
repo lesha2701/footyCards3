@@ -4,8 +4,9 @@ import { useNavigate } from "react-router-dom";
 
 import { equipItem, fetchCardEquipment, unequipItem, type CardEquipmentSlot } from "@/api/equipment";
 import EquipmentTile from "@/components/equipment/EquipmentTile";
+import { IconLock } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
-import { haptic } from "@/lib/telegram";
+import { haptic, showConfirm } from "@/lib/telegram";
 
 /** «Экипировка» tab of the card sheet: the card's slots (things + one
  * artifact), what they add, and picking a thing from the inventory. */
@@ -84,7 +85,10 @@ export default function CardEquipmentPanel({ cardId }: { cardId: number }) {
               <div className="mt-2 flex items-center gap-2">
                 <EquipmentTile item={slot.worn.item} size="sm" dimmed={!slot.worn.applies} />
                 <span className="min-w-0 flex-1 text-xs">
-                  <b className="block truncate text-ink-chalk">{slot.worn.item.name}</b>
+                  <b className="flex items-center gap-1 truncate text-ink-chalk">
+                    {slot.worn.item.name}
+                    {slot.worn.bound && <IconLock size={11} className="shrink-0 text-amber-300" aria-label="Привязана к этой карточке" />}
+                  </b>
                   <span className={slot.worn.applies ? "text-accent-lime" : "text-ink-mist-dim"}>
                     {slot.worn.applies ? slot.worn.item.effect_label : "Не действует на этого игрока"}
                   </span>
@@ -105,12 +109,19 @@ export default function CardEquipmentPanel({ cardId }: { cardId: number }) {
                     <EquipmentTile item={o.item} size="sm" dimmed={!o.applies} />
                     <span className="min-w-0 flex-1 text-xs">
                       <b className="block truncate text-ink-chalk">{o.item.name}</b>
+                      {o.bound && <span className="block text-micro text-amber-300">🔒 вещь этой карточки</span>}
                       <span className={o.applies ? "text-ink-mist" : "text-ink-mist-dim"}>
                         {o.applies ? o.item.effect_label : `Не подойдёт: ${o.item.cond_club ?? o.item.cond_country ?? "условие"}`}
                       </span>
                     </span>
                     <button
-                      onClick={() => equip.mutate(o.copy_id)}
+                      onClick={async () => {
+                        if (
+                          o.binds
+                          && !(await showConfirm(`«${o.item.name}» куплена за монеты: надев, ты привяжешь её к этой карточке навсегда. Снимать и менять можно, но надеть на другую карточку — нет; в обмене она уйдёт вместе с карточкой, при продаже пропадёт. Надеть?`))
+                        ) return;
+                        equip.mutate(o.copy_id);
+                      }}
                       disabled={busy}
                       className="min-h-[36px] rounded-xl bg-accent-lime/15 px-3 text-xs font-semibold text-accent-lime disabled:opacity-40"
                     >

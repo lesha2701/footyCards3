@@ -4,8 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { useState } from "react";
 
-import { fetchFriends } from "@/api/friends";
-import { fetchArtifacts, giftArtifact, setArtifactActive } from "@/api/monetization";
+import { fetchArtifacts, setArtifactActive } from "@/api/monetization";
 import ArtifactShop from "@/components/artifacts/ArtifactShop";
 import ArtifactTile from "@/components/artifacts/ArtifactTile";
 import EmptyState from "@/components/common/EmptyState";
@@ -39,14 +38,6 @@ export default function ArtifactsPage() {
       apply(data);
     },
     onError: (err) => setError(formatGameError(err, "Не получилось")),
-  });
-  const gift = useMutation({
-    mutationFn: ({ copyId, friendId }: { copyId: number; friendId: number }) => giftArtifact(copyId, friendId),
-    onSuccess: (data) => {
-      hapticNotify("success");
-      apply(data);
-    },
-    onError: (err) => setError(formatGameError(err, "Не получилось подарить")),
   });
 
   if (!catalog) return null;
@@ -145,9 +136,8 @@ export default function ArtifactsPage() {
       {selected && (
         <CopySheet
           copy={selected}
-          busy={toggle.isPending || gift.isPending}
+          busy={toggle.isPending}
           onToggle={() => toggle.mutate({ copyId: selected.copy_id, active: !selected.equipped })}
-          onGift={(friendId) => gift.mutate({ copyId: selected.copy_id, friendId })}
           onClose={() => setSelected(null)}
         />
       )}
@@ -156,16 +146,13 @@ export default function ArtifactsPage() {
 }
 
 function CopySheet({
-  copy, busy, onToggle, onGift, onClose,
+  copy, busy, onToggle, onClose,
 }: {
   copy: ArtifactCopy;
   busy: boolean;
   onToggle: () => void;
-  onGift: (friendId: number) => void;
   onClose: () => void;
 }) {
-  const [picking, setPicking] = useState(false);
-  const { data: friends } = useQuery({ queryKey: ["friends"], queryFn: fetchFriends, enabled: picking });
   const a = copy.artifact;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
@@ -185,42 +172,20 @@ function CopySheet({
             {a.description && <p className="mt-1 text-caption text-ink-mist-dim">{a.description}</p>}
           </div>
         </div>
-        {!picking ? (
-          <div className="mt-4 flex flex-col gap-2">
-            <button
-              onClick={onToggle}
-              disabled={busy}
-              className={`rounded-2xl py-3 text-sm font-bold disabled:opacity-40 ${
-                copy.equipped ? "bg-white/10 text-ink-chalk" : "bg-floodlight text-bg-base"
-              }`}
-            >
-              {copy.equipped ? "Убрать на полку" : "Сделать активным"}
-            </button>
-            <button
-              onClick={() => setPicking(true)}
-              disabled={busy}
-              className="flex items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-mist disabled:opacity-40"
-            >
-              <IconGift size={15} /> Подарить другу
-            </button>
-          </div>
-        ) : (
-          <div className="mt-4 flex flex-col gap-1.5">
-            <p className="text-xs text-ink-mist">Кому подарить №{copy.serial_number}?</p>
-            {friends?.friends.length === 0 && <p className="text-xs text-ink-mist-dim">Пока нет друзей — добавь их в профиле.</p>}
-            {friends?.friends.map((f) => (
-              <button
-                key={f.user.id}
-                onClick={() => onGift(f.user.id)}
-                disabled={busy}
-                className="rounded-xl bg-white/5 px-3 py-2.5 text-left text-sm text-ink-chalk disabled:opacity-40"
-              >
-                {f.user.first_name ?? f.user.username ?? `Игрок #${f.user.id}`}
-              </button>
-            ))}
-            <button onClick={() => setPicking(false)} className="mt-1 text-xs text-ink-mist">Назад</button>
-          </div>
-        )}
+        <div className="mt-4 flex flex-col gap-2">
+          <button
+            onClick={onToggle}
+            disabled={busy}
+            className={`rounded-2xl py-3 text-sm font-bold disabled:opacity-40 ${
+              copy.equipped ? "bg-white/10 text-ink-chalk" : "bg-floodlight text-bg-base"
+            }`}
+          >
+            {copy.equipped ? "Убрать на полку" : "Сделать активным"}
+          </button>
+          <p className="flex items-center justify-center gap-1 text-caption text-ink-mist-dim">
+            <IconGift size={12} /> Подарить другу можно в магазине — за ⭐
+          </p>
+        </div>
       </motion.div>
     </div>
   );

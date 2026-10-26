@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import AdminCareerClubs from "@/admin/pages/AdminCareerClubs";
 
-import { fetchGameConfig, fetchSuspiciousMatches, fetchSuspiciousMemorySessions, updateGameConfig } from "@/admin/api";
+import { fetchGameConfig, fetchNewbieFunnel, fetchSuspiciousMatches, fetchSuspiciousMemorySessions, updateGameConfig } from "@/admin/api";
 import AdminMagnateBoardEditor from "@/admin/pages/AdminMagnateBoardEditor";
 import RewardBundleEditor from "@/admin/components/RewardBundleEditor";
 import { EMPTY_BUNDLE, type GameConfig } from "@/admin/types";
@@ -63,7 +63,7 @@ export default function AdminGamesPage() {
       <span className="text-xs text-slate-400">{label}</span>
       <input
         type="number"
-        value={form[key] as number}
+        value={(form[key] as number | null) ?? 0}
         onChange={(e) => setForm({ ...form, [key]: Number(e.target.value) })}
         className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
       />
@@ -127,7 +127,7 @@ export default function AdminGamesPage() {
     </label>
   );
 
-  const textListField = (key: "career_division_bot_level" | "weekly_cup_games", label: string) => (
+  const textListField = (key: "career_division_bot_level" | "weekly_cup_games" | "newbie_first_pack_rarities", label: string) => (
     <label className="col-span-2 flex flex-col gap-1">
       <span className="text-xs text-slate-400">{label}</span>
       <input
@@ -140,7 +140,7 @@ export default function AdminGamesPage() {
     </label>
   );
 
-  const jsonField = (key: "manager_slots" | "manager_cosmetics" | "manager_merch", label: string) => (
+  const jsonField = (key: "manager_slots" | "manager_cosmetics" | "manager_merch" | "newbie_tasks", label: string) => (
     <label className="col-span-2 flex flex-col gap-1">
       <span className="text-xs text-slate-400">{label}</span>
       <textarea
@@ -171,6 +171,7 @@ export default function AdminGamesPage() {
       | "mordoboi_enabled"
       | "kontra_enabled"
       | "weekly_top_enabled"
+      | "newbie_enabled"
       | "leagues_enabled"
       | "diamond_rating_cap_enabled"
       | "bot_daily_digest_enabled"
@@ -980,10 +981,108 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-3 font-display text-base font-bold">Рефералы</p>
+        <p className="mb-1 font-display text-base font-bold">Рефералы</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Друг засчитывается, когда поиграл указанное число разных дней (не за пак — паки бывают бесплатные).
+          Тогда оба получают монеты, а пригласивший — награды лестницы, когда число друзей дойдёт до порога.
+        </p>
         <div className="grid grid-cols-2 gap-3">
           {field("referral_referred_reward", "Награда приглашённому")}
           {field("referral_referrer_reward", "Награда пригласившему")}
+          {field("referral_active_days", "Дней игры, чтобы друг засчитался")}
+        </div>
+        <p className="mb-1 mt-4 text-xs text-slate-400">Лестница: награда за N засчитанных друзей</p>
+        <div className="flex flex-col gap-3">
+          {(form.referral_milestones ?? []).map((m, i) => (
+            <div key={i} className="rounded-xl bg-bg-base/60 p-2">
+              <div className="mb-1 flex items-center gap-2">
+                <label className="flex items-center gap-1 text-xs text-slate-300">
+                  Друзей
+                  <input
+                    type="number"
+                    value={m.count}
+                    onChange={(e) => {
+                      const rows = [...form.referral_milestones];
+                      rows[i] = { ...m, count: Number(e.target.value) };
+                      setForm({ ...form, referral_milestones: rows });
+                    }}
+                    className="w-20 rounded-lg bg-bg-surface px-2 py-1 outline-none"
+                  />
+                </label>
+                <button
+                  onClick={() => setForm({ ...form, referral_milestones: form.referral_milestones.filter((_, j) => j !== i) })}
+                  className="ml-auto text-xs text-red-400"
+                >
+                  Убрать
+                </button>
+              </div>
+              <RewardBundleEditor
+                value={m}
+                onChange={(next) => {
+                  const rows = [...form.referral_milestones];
+                  rows[i] = { ...next, count: m.count };
+                  setForm({ ...form, referral_milestones: rows });
+                }}
+              />
+            </div>
+          ))}
+          <button
+            onClick={() => setForm({
+              ...form,
+              referral_milestones: [...(form.referral_milestones ?? []), { ...EMPTY_BUNDLE, count: 1 }],
+            })}
+            className="self-start rounded-lg bg-white/10 px-3 py-1.5 text-xs"
+          >
+            + Ступень
+          </button>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Награды за дни подряд</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Памятный подарок за N дней подряд в игре: выдаётся автоматически один раз и показывается попапом с анимацией.
+        </p>
+        <div className="flex flex-col gap-3">
+          {(form.streak_rewards ?? []).map((m, i) => (
+            <div key={i} className="rounded-xl bg-bg-base/60 p-2">
+              <div className="mb-1 flex items-center gap-2">
+                <label className="flex items-center gap-1 text-xs text-slate-300">
+                  Дней подряд
+                  <input
+                    type="number"
+                    value={m.days}
+                    onChange={(e) => {
+                      const rows = [...form.streak_rewards];
+                      rows[i] = { ...m, days: Number(e.target.value) };
+                      setForm({ ...form, streak_rewards: rows });
+                    }}
+                    className="w-20 rounded-lg bg-bg-surface px-2 py-1 outline-none"
+                  />
+                </label>
+                <button
+                  onClick={() => setForm({ ...form, streak_rewards: form.streak_rewards.filter((_, j) => j !== i) })}
+                  className="ml-auto text-xs text-red-400"
+                >
+                  Убрать
+                </button>
+              </div>
+              <RewardBundleEditor
+                value={m}
+                onChange={(next) => {
+                  const rows = [...form.streak_rewards];
+                  rows[i] = { ...next, days: m.days };
+                  setForm({ ...form, streak_rewards: rows });
+                }}
+              />
+            </div>
+          ))}
+          <button
+            onClick={() => setForm({ ...form, streak_rewards: [...(form.streak_rewards ?? []), { ...EMPTY_BUNDLE, days: 30 }] })}
+            className="self-start rounded-lg bg-white/10 px-3 py-1.5 text-xs"
+          >
+            + Порог
+          </button>
         </div>
       </section>
 
@@ -1204,6 +1303,45 @@ export default function AdminGamesPage() {
           {field("stratego_reward_loss", "Награда за поражение")}
           {field("stratego_daily_limit", "Лимит наградных матчей/день")}
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Путь дебютанта</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Для игроков, зарегистрированных после включения: первым экраном — пак с гарантированной картой, затем пак
+          «Твоя команда» (11 игроков под 4-3-3, состав собирается сам), карта за первый матч Арены, задания «попробуй
+          режим», подарок 2-го и 3-го дня. Стартовое предложение для них открывается со 2-го дня. Все подарочные карты
+          закреплены: играть можно, продать/обменять/сжечь — только через указанное число дней.
+        </p>
+        <div className="mb-3">{toggle("newbie_enabled", "Путь дебютанта включён")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {textListField("newbie_first_pack_rarities", "Первый пак: редкости карт (через запятую)")}
+          {(["newbie_squad_rarity", "newbie_arena_rarity", "newbie_day3_rarity"] as const).map((key) => (
+            <label key={key} className="flex flex-col gap-1">
+              <span className="text-xs text-slate-400">
+                {key === "newbie_squad_rarity" ? "Редкость команды" : key === "newbie_arena_rarity" ? "Карта за 1-й матч Арены" : "Карта 3-го дня"}
+              </span>
+              <select
+                value={form[key]}
+                onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+              >
+                <option value="common">Обычная</option>
+                <option value="rare">Редкая</option>
+                <option value="epic">Эпическая</option>
+                <option value="legendary">Легендарная</option>
+              </select>
+            </label>
+          ))}
+          {field("newbie_day2_coins", "Монет на 2-й день")}
+          {field("newbie_bound_days", "Дней без продажи/обмена подарков")}
+          {field("newbie_reminder_hour", "Бот: час напоминания о подарке дня")}
+          {field("newbie_finale_coins", "Финал «Путь пройден»: монет")}
+          {field("newbie_finale_pack_id", "Финал: id пака (0 — нет)")}
+          {field("newbie_finale_badge_id", "Финал: id значка (0 — нет)")}
+          {jsonField("newbie_tasks", "Задания «попробуй режим» (code, label, mode, path, coins, pack_id)")}
+        </div>
+        <NewbieFunnelView />
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
@@ -1437,5 +1575,45 @@ function StarLadderRow({
         className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
       />
     </>
+  );
+}
+
+function NewbieFunnelView() {
+  const [days, setDays] = useState(7);
+  const { data } = useQuery({ queryKey: ["admin", "newbie-funnel", days], queryFn: () => fetchNewbieFunnel(days) });
+  return (
+    <div className="mt-4 rounded-xl bg-bg-base/60 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold">Воронка дебютантов</p>
+        <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="rounded-lg bg-bg-surface px-2 py-1 text-xs">
+          <option value={1}>1 день</option>
+          <option value={7}>7 дней</option>
+          <option value={30}>30 дней</option>
+        </select>
+      </div>
+      {!data ? (
+        <p className="text-xs text-slate-500">Загрузка…</p>
+      ) : (
+        <div className="flex flex-col gap-1 text-xs">
+          <p className="text-slate-400">
+            Начали: <b className="text-slate-200">{data.started}</b> · прошли полностью: <b className="text-slate-200">{data.completed}</b>
+          </p>
+          {data.steps.map((s) => {
+            const pct = data.started ? Math.round((s.players / data.started) * 100) : 0;
+            return (
+              <div key={s.code} className="flex items-center gap-2">
+                <span className="w-1/2 min-w-0 truncate text-slate-300">{s.label}</span>
+                <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                  <span className="block h-full rounded-full bg-accent-lime" style={{ width: `${pct}%` }} />
+                </span>
+                <span className="w-16 shrink-0 text-right font-mono tabular-nums text-slate-300">
+                  {s.players} · {pct}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

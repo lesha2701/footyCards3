@@ -52,6 +52,7 @@ from app.services.game_config_service import get_config
 from app.services.match_service import BOT_NAMES
 from app.services.player_stats_service import card_rating_bonus, effective_card_stats
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
+from app.services.player_identity import card_person
 
 SQUAD_SIZE = 5
 OPTIONS_PER_ROLE = 40
@@ -191,7 +192,7 @@ async def _gear_by_card(db: AsyncSession, user_id: int) -> dict[int, list[Kontra
 def _who(card) -> str:
     """The footballer behind a card — copies and other versions (gold,
     legendary…) of one player share it."""
-    return "me" if getattr(card, "is_my_player", False) else card.player.display_name.strip().casefold()
+    return "me" if getattr(card, "is_my_player", False) else card_person(card)
 
 
 def _best_copies(cards: list) -> list:

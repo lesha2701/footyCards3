@@ -1,3 +1,4 @@
+import { RewardBundleChips } from "@/components/rewards/RewardBundleView";
 import SoundSetting from "@/components/profile/SoundSetting";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -301,8 +302,25 @@ export default function ProfilePage() {
           <div className="mt-2 flex items-center gap-1.5 rounded-xl bg-accent-lime/10 px-3 py-2 text-xs text-accent-lime">
             <IconCoin size={13} />
             <span>
-              Тебе +{profile.referral_referrer_reward}, другу +{profile.referral_referred_reward} за каждого приглашённого
+              Тебе +{profile.referral_referrer_reward.toLocaleString("ru-RU")}, другу +
+              {profile.referral_referred_reward.toLocaleString("ru-RU")} — когда друг поиграет{" "}
+              {profile.referral_active_days ?? 3} дня
             </span>
+          </div>
+        )}
+        {!!profile.referral_milestones?.length && (
+          <div className="mt-2 flex flex-col gap-1">
+            {profile.referral_milestones.map((m) => (
+              <div
+                key={m.count}
+                className={`flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs ${
+                  m.reached ? "bg-accent-lime/10 text-accent-lime" : "bg-white/5 text-ink-mist"
+                }`}
+              >
+                <span className="w-16 shrink-0 font-bold">{m.reached ? "✓ " : ""}{m.count} друзей</span>
+                <RewardBundleChips bundle={m.reward} compact />
+              </div>
+            ))}
           </div>
         )}
         <div className="mt-3 flex items-center gap-2 rounded-xl bg-black/20 px-3 py-2">

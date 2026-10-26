@@ -51,6 +51,7 @@ import { FORMATION_LABELS, formationLabel, inRow, pitchRows } from "@/lib/format
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
+import ArenaNewbieGuide from "@/components/newbie/ArenaNewbieGuide";
 import type { LineupTactic, Match, MatchActionKind, MatchPendingMoment, MatchResult, UserCard } from "@/types";
 
 const EVENT_STEP_MS = 950;
@@ -98,6 +99,9 @@ export default function ArenaPage() {
   const [matchReopened, setMatchReopened] = useState(false);
   const [strengthHintOpen, setStrengthHintOpen] = useState(false);
   const pitchRef = useRef<HTMLDivElement>(null);
+  const tacticsRef = useRef<HTMLElement>(null);
+  const playRef = useRef<HTMLButtonElement>(null);
+  const [finishedMatch, setFinishedMatch] = useState<Match | null>(null);
   const [coachPickerOpen, setCoachPickerOpen] = useState(false);
   const { data: coachCards } = useQuery({ queryKey: ["lineup", "coach-cards"], queryFn: fetchUserCoachCards });
   const [stadiumPickerOpen, setStadiumPickerOpen] = useState(false);
@@ -586,7 +590,7 @@ export default function ArenaPage() {
         )}
       </section>
 
-      <section className="rounded-2xl bg-bg-surface p-4">
+      <section ref={tacticsRef} className="rounded-2xl bg-bg-surface p-4">
         <p className="font-display text-sm font-bold text-ink-chalk">Стиль игры</p>
         <p className="mb-3 mt-0.5 text-caption leading-snug text-ink-mist">
           Атака бьёт Оборону, Оборона — Владение, Владение — Контратаку, Контратака — Атаку. Стиль соперника виден перед матчем.
@@ -627,6 +631,7 @@ export default function ArenaPage() {
 
       <StickyActionBar>
         <button
+          ref={playRef}
           onClick={() => playMutation.mutate()}
           disabled={!lineup?.is_complete || playMutation.isPending || simulating}
           className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:bg-none disabled:bg-bg-raised disabled:text-ink-mist"
@@ -701,10 +706,18 @@ export default function ArenaPage() {
                 updateBalance((useAuthStore.getState().user?.balance ?? 0) + coins);
               }
               hapticNotify(match.result === "win" ? "success" : match.result === "loss" ? "error" : "warning");
+              if (!matchReopened) setFinishedMatch(match);
             }}
           />
         )}
       </MatchSheet>
+
+      <ArenaNewbieGuide
+        targets={{ pitch: pitchRef, tactics: tacticsRef, play: playRef }}
+        activeIndex={activeIndex}
+        simulating={simulating || playMutation.isPending}
+        finished={finishedMatch}
+      />
 
       <section>
         <p className="mb-2 font-display text-base font-bold text-ink-chalk">История матчей</p>

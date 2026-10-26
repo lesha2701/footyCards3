@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 import { fetchCollection } from "@/api/collection";
 import { fetchFeatureFlags } from "@/api/featureFlags";
@@ -51,7 +51,10 @@ export default function PenaltyGamePage() {
 
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("pick_card");
-  const [choosingBot, setChoosingBot] = useState(false);
+  // From a «Путь дебютанта» task: straight into the bot game — no waiting
+  // for a live opponent who may never come (and only the bot game counts).
+  const fromNewbie = !!(useLocation().state as { fromNewbie?: boolean } | null)?.fromNewbie;
+  const [choosingBot, setChoosingBot] = useState(fromNewbie);
   const [pickingForSearch, setPickingForSearch] = useState(false);
   const [lastKick, setLastKick] = useState<PenaltyKickResult | null>(null);
   const [claimResult, setClaimResult] = useState<{ reward_coins: number } | null>(null);

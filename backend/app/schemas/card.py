@@ -23,6 +23,8 @@ class UserCardOut(BaseModel):
     hidden_from_trade: bool
     # The owner's own «замок»: no selling, no burning as material.
     is_user_locked: bool = False
+    # «Путь дебютанта» gift: no trade, sale or burning until then.
+    bound_until: Optional[datetime] = None
     # Standing in a player-tournament squad (those don't set a flag on the
     # card); filled by the endpoints that list cards for picking.
     in_personal_squad: bool = False
@@ -83,6 +85,7 @@ class UserCardOut(BaseModel):
             "is_in_tactico_squad": data.is_in_tactico_squad,
             "hidden_from_trade": data.hidden_from_trade,
             "is_user_locked": bool(getattr(data, "is_user_locked", False)),
+            "bound_until": getattr(data, "bound_until", None),
             "diamond_rating_bonus": getattr(data, "diamond_rating_bonus", 0) or 0,
             "stars": getattr(data, "stars", 0) or 0,
             "star_progress": getattr(data, "star_progress", 0) or 0,

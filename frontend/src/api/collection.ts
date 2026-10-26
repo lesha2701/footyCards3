@@ -181,13 +181,16 @@ export interface SellDuplicatesResult {
   new_balance: number;
   by_rarity: Record<string, number>;
   preview: boolean;
+  /** Every spare by rarity (diamond included) and what each group pays. */
+  available_by_rarity?: Record<string, number>;
+  available_coins_by_rarity?: Record<string, number>;
 }
 
 /** Sells every spare copy (one of each player is always kept; skilled,
  * in-squad, traded and diamond copies are never touched). preview=true only
  * counts them for the confirmation dialog. */
-export async function sellDuplicates(preview: boolean): Promise<SellDuplicatesResult> {
-  const { data } = await api.post<SellDuplicatesResult>("/collection/cards/sell-duplicates", { preview });
+export async function sellDuplicates(preview: boolean, rarities?: Rarity[]): Promise<SellDuplicatesResult> {
+  const { data } = await api.post<SellDuplicatesResult>("/collection/cards/sell-duplicates", { preview, rarities });
   return data;
 }
 

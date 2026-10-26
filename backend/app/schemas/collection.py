@@ -196,11 +196,17 @@ class SellDuplicatesRequest(BaseModel):
     # Also sell the spares of players whose copy already has stars or a
     # started «копилка» (off by default: they are star material).
     include_star_material: bool = False
+    # Only these rarities (a picked "diamond" counts as include_diamond);
+    # null = every rarity but diamond, as before.
+    rarities: Optional[list[Rarity]] = None
 
 
 class SellDuplicatesOut(SellResultOut):
     by_rarity: dict[str, int] = {}
     preview: bool
+    # Every spare by rarity (diamond included) — the picker in the dialog.
+    available_by_rarity: dict[str, int] = {}
+    available_coins_by_rarity: dict[str, int] = {}
 
 
 class AlbumCollectionSummaryOut(BaseModel):

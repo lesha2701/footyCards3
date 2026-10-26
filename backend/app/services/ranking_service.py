@@ -48,8 +48,8 @@ def _week_counts(metric: RankingMetric, week_start: date):
             .subquery()
         )
     if metric == RankingMetric.referrals_week:
-        # A referral counts when it is rewarded (the friend's first genuine
-        # paid pack — pack_service._credit_referral_bonus), never at sign-up,
+        # A referral counts when it is rewarded (the friend played on
+        # referral_active_days days — referral_service.check_friend), never at sign-up,
         # so throwaway accounts don't climb this board.
         friend = aliased(User)
         return (

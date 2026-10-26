@@ -248,6 +248,8 @@ class User(TimestampMixin, Base):
     # player has been back since — last_seen_at after it).
     comeback_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     referral_reward_granted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Highest referral milestone (friends count) already paid (referral_service).
+    referral_milestone_paid: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Trade privacy
     accept_trades: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

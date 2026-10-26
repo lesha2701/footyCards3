@@ -369,17 +369,34 @@ async def duplicate_sale_plan(
 
 async def sell_duplicates(
     db: AsyncSession, user: User, preview: bool, include_diamond: bool = False, include_star_material: bool = False,
+    rarities: Optional[list[Rarity]] = None,
 ) -> dict:
-    plan = await duplicate_sale_plan(db, user.id, include_diamond, include_star_material)
+    every = await duplicate_sale_plan(db, user.id, True, include_star_material)
+    available: dict[str, int] = {}
+    available_coins: dict[str, int] = {}
+    for card in every:
+        key = card.player.rarity.value
+        available[key] = available.get(key, 0) + 1
+        available_coins[key] = available_coins.get(key, 0) + card.player.quick_sell_price
+    for key in available_coins:
+        available_coins[key] = await _with_shop_bonus(db, user.id, available_coins[key])
+    if rarities is not None:
+        plan = [c for c in every if c.player.rarity in set(rarities)]
+    else:
+        plan = [c for c in every if include_diamond or c.player.rarity != Rarity.diamond]
     coins = await _with_shop_bonus(db, user.id, sum(c.player.quick_sell_price for c in plan))
     by_rarity: dict[str, int] = {}
     for card in plan:
         by_rarity[card.player.rarity.value] = by_rarity.get(card.player.rarity.value, 0) + 1
+    extra = {"available_by_rarity": available, "available_coins_by_rarity": available_coins}
     if preview or not plan:
-        return {"sold_count": len(plan), "coins_earned": coins, "by_rarity": by_rarity, "new_balance": user.balance, "preview": True}
+        return {
+            "sold_count": len(plan), "coins_earned": coins, "by_rarity": by_rarity, "new_balance": user.balance,
+            "preview": True, **extra,
+        }
     # sell_cards re-checks ownership/locks under the user lock and is atomic.
     result = await sell_cards(db, user, [c.id for c in plan], confirm_last_copy=False)
-    return {**result, "by_rarity": by_rarity, "preview": False}
+    return {**result, "by_rarity": by_rarity, "preview": False, **extra}
 
 
 async def _collection_progress(db: AsyncSession, user_id: int, collection_id: Optional[int]) -> tuple[int, int]:
@@ -677,6 +694,11 @@ async def set_cards_user_locked(db: AsyncSession, user: User, card_ids: List[int
     ).scalars().all()
     if len(cards) != len(ids) or any(c.owner_id != user.id for c in cards):
         raise NotFoundError("Card not found")
+    if not locked and any(c.is_bound() for c in cards):
+        raise ConflictError(
+            "Подарочную карточку дебютанта пока нельзя снять с замка — она твоя, но без продажи и обмена",
+            details={"reason": "bound"},
+        )
     for card in cards:
         card.is_user_locked = locked
     await db.commit()

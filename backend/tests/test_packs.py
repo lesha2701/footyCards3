@@ -431,3 +431,20 @@ async def test_open_pack_bulk_cards_sorted_by_rarity_ascending(client, db_sessio
     assert resp.status_code == 200
     orders = [RARITY_ORDER[c["card"]["player"]["rarity"]] for c in resp.json()["cards"]]
     assert orders == sorted(orders)
+
+
+async def test_daily_limited_pack_opens_once_a_day(client, db_session, bot_token):
+    from app.models.enums import Rarity
+    from tests.factories import create_pack, create_player
+    from tests.utils import telegram_headers
+
+    await create_player(db_session, rarity=Rarity.legendary)
+    pack = await create_pack(db_session, "daily", price=10, card_count=1, probabilities={Rarity.legendary: 1.0},
+                             daily_limit_per_user=1)
+    headers = telegram_headers(870901, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    assert (await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={})).status_code == 200
+    resp = await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={})
+    assert resp.status_code == 409 and resp.json()["error"]["details"]["reason"] == "daily_limit"
+    listed = next(p for p in (await client.get("/api/v1/packs", headers=headers)).json() if p["id"] == pack.id)
+    assert listed["user_today_count"] == 1 and listed["daily_limit_per_user"] == 1

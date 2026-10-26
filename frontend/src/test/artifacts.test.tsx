@@ -31,13 +31,19 @@ const catalog: ArtifactCatalog = {
   effects: { club: [{ effect: "opp_home_pct", value: 2, label: "−2% к силе соперника в домашних матчах" }], my_player: [] },
 };
 
-const api = vi.hoisted(() => ({ setArtifactActive: vi.fn(), giftArtifact: vi.fn() }));
+const api = vi.hoisted(() => ({ setArtifactActive: vi.fn(), createArtifactGiftInvoice: vi.fn() }));
 vi.mock("@/api/monetization", () => ({
   fetchArtifacts: async () => catalog,
   setArtifactActive: api.setArtifactActive,
-  giftArtifact: api.giftArtifact,
+  createArtifactGiftInvoice: api.createArtifactGiftInvoice,
   buyArtifactWithCoins: vi.fn(),
   createArtifactStarsInvoice: vi.fn(),
+}));
+vi.mock("@/lib/shopStars", () => ({
+  payShopWithStars: async (create: () => Promise<unknown>) => {
+    await create();
+    return "paid";
+  },
 }));
 vi.mock("@/api/friends", () => ({
   fetchFriends: async () => ({ friends: [{ user: { id: 42, first_name: "Друг" }, since: "" }], incoming: [], outgoing: [] }),
@@ -60,19 +66,22 @@ describe("artifacts page", () => {
     expect(screen.getByText("Футболка Марадоны")).toBeInTheDocument();
   });
 
-  it("activates a shelf copy and gifts one to a friend", async () => {
+  it("activates a shelf copy; gifts are bought for a friend with Stars", async () => {
     api.setArtifactActive.mockResolvedValue(catalog);
-    api.giftArtifact.mockResolvedValue(catalog);
+    api.createArtifactGiftInvoice.mockResolvedValue({});
     wrap(<ArtifactsPage />);
     fireEvent.click(await screen.findByText("Футболка Марадоны"));
     expect(screen.getByText("Для Моего игрока · подарок")).toBeInTheDocument();
+    expect(screen.getByText(/Подарить другу можно в магазине/)).toBeInTheDocument();
     fireEvent.click(screen.getByText("Сделать активным"));
     await waitFor(() => expect(api.setArtifactActive).toHaveBeenCalledWith(11, true));
 
-    fireEvent.click(screen.getByText("Футболка Марадоны"));
-    fireEvent.click(screen.getByText("Подарить другу"));
+    fireEvent.click(screen.getByText("Магазин"));
+    fireEvent.click((await screen.findAllByLabelText(/: подробнее$/))[0]);
+    const giftButtons = await screen.findAllByLabelText("Подарить другу");
+    fireEvent.click(giftButtons[0]);
     fireEvent.click(await screen.findByText("Друг"));
-    await waitFor(() => expect(api.giftArtifact).toHaveBeenCalledWith(11, 42));
+    await waitFor(() => expect(api.createArtifactGiftInvoice).toHaveBeenCalledWith(expect.any(Number), 42));
   });
 
   it("explains the rules and the stadium bonus in the shop", async () => {

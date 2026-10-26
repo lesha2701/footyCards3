@@ -151,6 +151,7 @@ function StarsPackPurchasesSection() {
 interface CoinPackageForm {
   stars_price: number;
   coins_amount: number;
+  bonus_pct: number;
   is_active: boolean;
   sort_order: number;
 }
@@ -159,6 +160,7 @@ function packageToForm(p?: CoinPackage): CoinPackageForm {
   return {
     stars_price: p?.stars_price ?? 10,
     coins_amount: p?.coins_amount ?? 20,
+    bonus_pct: p?.bonus_pct ?? 0,
     is_active: p?.is_active ?? true,
     sort_order: p?.sort_order ?? 0,
   };
@@ -224,6 +226,10 @@ function CoinPackagesSection() {
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Монет</span>
                 <NumberInput value={form.coins_amount} onChange={(v) => setForm({ ...form, coins_amount: v })} />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Бонус «+N%» (уже внутри монет; 0 — посчитать по цене)</span>
+                <NumberInput value={form.bonus_pct} onChange={(v) => setForm({ ...form, bonus_pct: v })} />
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Порядок сортировки</span>

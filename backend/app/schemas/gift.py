@@ -17,6 +17,7 @@ class GiftSetOut(BaseModel):
     image_path: Optional[str] = None
     kind: GiftKind
     pack_id: Optional[int] = None
+    pack_count: int = 1
     coins_amount: int
     stars_price: int
     coins_price: int
@@ -32,6 +33,7 @@ class GiftSetCreate(BaseModel):
     description: str = ""
     kind: GiftKind = GiftKind.bundle
     pack_id: Optional[int] = None
+    pack_count: int = Field(default=1, ge=1, le=10)
     coins_amount: int = Field(default=0, ge=0)
     stars_price: int = Field(default=0, ge=0)
     coins_price: int = Field(default=0, ge=0)
@@ -45,6 +47,7 @@ class GiftSetUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=128)
     description: Optional[str] = None
     pack_id: Optional[int] = None
+    pack_count: Optional[int] = Field(default=None, ge=1, le=10)
     coins_amount: Optional[int] = Field(default=None, ge=0)
     stars_price: Optional[int] = Field(default=None, ge=0)
     coins_price: Optional[int] = Field(default=None, ge=0)

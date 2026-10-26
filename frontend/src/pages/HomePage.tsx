@@ -11,6 +11,7 @@ import ModesGrid from "@/components/home/ModesGrid";
 import ShowcaseCard from "@/components/home/ShowcaseCard";
 import TodayCard from "@/components/home/TodayCard";
 import WeeklyEventStrip from "@/components/home/WeeklyEventStrip";
+import NewbieCard from "@/components/newbie/NewbieCard";
 import { StarterOfferBanner, StarterOfferModal } from "@/components/shop/StarterOffer";
 import {
   IconChat,
@@ -35,13 +36,15 @@ export default function HomePage() {
     <div className="flex flex-col gap-5">
       <HomeHero profile={profile} league={leagueStatus} leaguesEnabled={flags?.leagues_enabled !== false} />
 
+      <NewbieCard />
+
       <StarterOfferModal />
       <StarterOfferBanner hideable />
       {profile?.referral_reward_pending && (
         <NoticeCard
           Icon={IconHandshake}
           title="Тебя пригласил друг!"
-          subtitle={`Открой любой пак (можно бесплатный) и получи ${profile.referral_referred_reward} монет`}
+          subtitle={`Поиграй ${profile.referral_active_days ?? 3} дня — и получишь ${profile.referral_referred_reward.toLocaleString("ru-RU")} монет`}
           onClick={() => navigate("/packs")}
         />
       )}

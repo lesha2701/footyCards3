@@ -25,6 +25,8 @@ class GiftSet(TimestampMixin, Base):
     image_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     pack_id: Mapped[Optional[int]] = mapped_column(ForeignKey("packs.id", ondelete="SET NULL"), nullable=True)
     coins_amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # How many of `pack_id` the gift opens (the «Сундук чемпиона» holds two).
+    pack_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     stars_price: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     kind: Mapped[GiftKind] = mapped_column(Enum(GiftKind, name="gift_kind_enum"), nullable=False, default=GiftKind.bundle)
     coins_price: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

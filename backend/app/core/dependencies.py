@@ -78,13 +78,15 @@ async def _get_or_create_user(
                     referrer_result = await db.execute(select(User).where(User.telegram_id == ref_telegram_id))
                     referrer = referrer_result.scalar_one_or_none()
                     if referrer is not None:
-                        # Only record the relationship here — referral_count is
-                        # credited later, on the referred user's first genuine
-                        # paid purchase (see pack_service.open_pack). Crediting
-                        # it immediately on registration would let anyone farm
-                        # referral rewards with disposable, never-used accounts
-                        # via this client-supplied header alone.
+                        # Only record the relationship here — the friend counts
+                        # once he has really played (referral_service.check_friend);
+                        # crediting at registration would let anyone farm rewards
+                        # with disposable accounts via this client-supplied header.
                         user.referred_by_id = referrer.id
+                        await db.flush()
+                        from app.services.referral_service import notify_joined
+
+                        await notify_joined(db, referrer, user)
 
             await record_daily_activity(db, user.id, local_today())
             await db.commit()
@@ -122,6 +124,18 @@ async def _get_or_create_user(
     user.last_seen_at = datetime.now(timezone.utc)
     if changed:
         await db.commit()
+        await db.refresh(user)
+    if previous_day != today:
+        # The streak just moved: a «N дней подряд» keepsake may be due.
+        from app.services.streak_reward_service import check as check_streak
+
+        await check_streak(db, user)
+        await db.refresh(user)
+    if previous_day != today and user.referred_by_id is not None and not user.referral_reward_granted:
+        # A new active day may make him a counted friend (referral_service).
+        from app.services.referral_service import check_friend
+
+        await check_friend(db, user)
         await db.refresh(user)
     else:
         db.add(user)

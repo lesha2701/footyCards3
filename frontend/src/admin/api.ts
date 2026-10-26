@@ -29,6 +29,7 @@ import type {
   TrophyDefinition,
   UserCard,
   UserTrophy,
+  NewbieFunnel,
 } from "@/types";
 import type {
   AdminPathOverview,
@@ -159,6 +160,11 @@ export interface SuspiciousTradeRow {
   cards_received: number;
   trades: number;
   last_trade_at: string | null;
+}
+
+export async function fetchNewbieFunnel(days: number): Promise<NewbieFunnel> {
+  const { data } = await api.get<NewbieFunnel>("/admin/dashboard/newbie-funnel", { params: { days } });
+  return data;
 }
 
 export async function fetchAnalyticsReport(days: number): Promise<AnalyticsReport> {

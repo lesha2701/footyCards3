@@ -40,6 +40,8 @@ export default function PackTile({
       badge={
         endsIn ? (
           <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-micro font-bold text-white">⏳ {endsIn}</span>
+        ) : pack.daily_limit_per_user ? (
+          <span className="rounded-full bg-amber-400 px-1.5 py-0.5 text-micro font-bold text-bg-base">1 в день</span>
         ) : undefined
       }
       accent={isStars ? "stars" : undefined}

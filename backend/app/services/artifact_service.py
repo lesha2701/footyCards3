@@ -399,37 +399,10 @@ async def set_active(db: AsyncSession, user: User, copy_id: int, active: bool) -
 
 
 async def gift(db: AsyncSession, user: User, copy_id: int, recipient_id: int) -> dict:
-    """Gives one owned copy to a friend; it lands on their shelf (or in a
-    free slot) and they get a notification."""
-    from app.services import friend_service
-    from app.services.notification_service import notify
-
-    _check_enabled(await get_config(db))
-    if recipient_id == user.id:
-        raise ConflictError("Нельзя подарить самому себе")
-    if recipient_id not in await friend_service.friend_ids(db, user.id):
-        raise ForbiddenError("Дарить артефакты можно только друзьям")
-    first, second = sorted((user.id, recipient_id))
-    await lock_user_for_update(db, first)
-    await lock_user_for_update(db, second)
-    row = await _own_copy(db, user.id, copy_id)
-    config = await get_config(db)
-    row.equipped = False
-    row.user_id = recipient_id
-    row.gifted_by_id = user.id
-    row.source = "gift"
-    theirs = [c for c in await _copies(db, recipient_id) if c.id != row.id]
-    row.equipped = _can_activate(theirs, row.artifact_id, config.artifact_slots)
-    await notify(
-        db, recipient_id, NotificationType.admin_message, "Тебе подарили артефакт",
-        f"{user.full_display_name()} подарил(а) тебе артефакт «{row.artifact.name}» №{row.serial_number}.",
-        related_object_type="user_artifact", related_object_id=row.id,
-    )
-    await db.flush()
-    await refresh_card_bonuses(db, user.id, config)
-    await refresh_card_bonuses(db, recipient_id, config)
-    await db.commit()
-    return await catalog(db, user)
+    """Retired: an owned copy (often bought with coins) passed to a friend
+    was a way around the trade anti-farming rules. Gifts are bought for the
+    friend with Stars instead (stars_gift_order / deliver_stars_gift)."""
+    raise ForbiddenError("Артефакт можно подарить только при покупке за ⭐ — кнопка «Подарить» в магазине")
 
 
 # --- Stars ("artifact:<id>", see shop_product_service) ---------------------------------
@@ -467,6 +440,69 @@ async def deliver_stars(db: AsyncSession, user: User, artifact_id: int) -> dict:
     row = await grant(db, user.id, artifact_id, "stars", force_supply=True)
     artifact = await db.get(Artifact, artifact_id)
     return {"kind": "artifact", "name": artifact.name if artifact else "Артефакт", "serial_number": row.serial_number}
+
+
+# --- a gift for a friend, Stars only ("artifact_gift:<id>:<friend id>") ---------------
+
+
+async def _check_friend(db: AsyncSession, user_id: int, recipient_id: int) -> User:
+    from app.services import friend_service
+
+    if recipient_id == user_id:
+        raise ConflictError("Нельзя подарить самому себе")
+    if recipient_id not in await friend_service.friend_ids(db, user_id):
+        raise ForbiddenError("Дарить артефакты можно только друзьям")
+    recipient = await db.get(User, recipient_id)
+    if recipient is None or recipient.is_banned:
+        raise NotFoundError("Друг не найден")
+    return recipient
+
+
+async def stars_gift_order(db: AsyncSession, user: User, artifact_id: int, recipient_id: int) -> tuple[str, int, str, str]:
+    _check_enabled(await get_config(db))
+    artifact = _check_buyable(await db.get(Artifact, artifact_id))
+    if artifact.stars_price <= 0:
+        raise ConflictError("Этот артефакт нельзя купить за звёзды")
+    recipient = await _check_friend(db, user.id, recipient_id)
+    return (
+        f"artifact_gift:{artifact.id}:{recipient.id}", artifact.stars_price, f"{artifact.name} — в подарок",
+        f"Артефакт «{artifact.name}» в подарок для {recipient.full_display_name()}. " + (artifact.description or ""),
+    )
+
+
+def _gift_args(arg: str) -> tuple[int, int]:
+    artifact_id, _, recipient_id = arg.partition(":")
+    return int(artifact_id), int(recipient_id)
+
+
+async def validate_stars_gift(db: AsyncSession, user_id: int, arg: str, stars_amount: int) -> tuple[bool, str]:
+    artifact_id, recipient_id = _gift_args(arg)
+    ok, reason = await validate_stars(db, user_id, artifact_id, stars_amount)
+    if not ok:
+        return ok, reason
+    try:
+        await _check_friend(db, user_id, recipient_id)
+    except (ConflictError, ForbiddenError, NotFoundError) as exc:
+        return False, exc.message
+    return True, ""
+
+
+async def deliver_stars_gift(db: AsyncSession, user: User, arg: str) -> dict:
+    """Already paid: the copy goes to the friend (serial from the edition,
+    `gifted_by_id` = the payer) with a notification. The caller commits."""
+    from app.services.notification_service import notify
+
+    artifact_id, recipient_id = _gift_args(arg)
+    row = await grant(db, recipient_id, artifact_id, "gift", force_supply=True)
+    row.gifted_by_id = user.id
+    artifact = await db.get(Artifact, artifact_id)
+    name = artifact.name if artifact else "Артефакт"
+    await notify(
+        db, recipient_id, NotificationType.admin_message, "🎁 Тебе подарили артефакт",
+        f"{user.full_display_name()} подарил(а) тебе артефакт «{name}» №{row.serial_number}.",
+        related_object_type="user_artifact", related_object_id=row.id,
+    )
+    return {"kind": "artifact_gift", "name": name, "serial_number": row.serial_number}
 
 
 # --- admin ----------------------------------------------------------------------------

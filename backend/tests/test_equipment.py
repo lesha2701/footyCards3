@@ -63,6 +63,13 @@ async def _buy(client, headers, item_id, key=None):
     return await client.post(f"{API}/items/{item_id}/buy", headers=headers, json={"idempotency_key": key})
 
 
+async def _movable(db_session, *copy_ids):
+    """Like Stars copies: never bound to a card (coin copies bind on equip)."""
+    for copy_id in copy_ids:
+        (await db_session.get(UserEquipment, copy_id)).binds_on_equip = False
+    await db_session.commit()
+
+
 async def _card(db_session, card_id) -> UserCard:
     return (await db_session.execute(
         select(UserCard).where(UserCard.id == card_id).execution_options(populate_existing=True)
@@ -154,6 +161,7 @@ async def test_equip_applies_bonus_swaps_slot_and_moves_between_cards(client, db
     copy_kit = (await _buy(client, headers, kit.id)).json()["copy_id"]
     copy_better = (await _buy(client, headers, better_kit.id)).json()["copy_id"]
     copy_boots = (await _buy(client, headers, boots.id)).json()["copy_id"]
+    await _movable(db_session, copy_kit, copy_better, copy_boots)
 
     state = (await client.post(f"{API}/equip", headers=headers, json={"copy_id": copy_kit, "user_card_id": card.id})).json()
     assert state["rating_bonus"] == 1
@@ -211,6 +219,7 @@ async def test_trade_takes_things_off_and_sold_card_frees_them(client, db_sessio
     kit = await _item(db_session, slot="kit")
     headers, user, card = await _user(client, db_session, bot_token, 910008)
     copy_id = (await _buy(client, headers, kit.id)).json()["copy_id"]
+    await _movable(db_session, copy_id)
     await client.post(f"{API}/equip", headers=headers, json={"copy_id": copy_id, "user_card_id": card.id})
 
     await equipment_service.detach_from_cards(db_session, [card.id])
@@ -225,6 +234,52 @@ async def test_trade_takes_things_off_and_sold_card_frees_them(client, db_sessio
     await db_session.commit()
     inv = (await client.get(f"{API}/inventory", headers=headers)).json()
     assert inv["items"][0]["user_card_id"] is None
+
+
+async def test_coin_things_bind_to_the_card(client, db_session, bot_token):
+    await _config(db_session)
+    kit = await _item(db_session, slot="kit")
+    other_kit = await _item(db_session, slot="kit")
+    headers, user, card = await _user(client, db_session, bot_token, 910009)
+    second = await create_user_card(db_session, user.id, (await create_player(db_session, position=Position.ST)).id, CardSource.seed)
+    await db_session.commit()
+    copy_id = (await _buy(client, headers, kit.id)).json()["copy_id"]
+    inv = (await client.get(f"{API}/inventory", headers=headers)).json()
+    assert inv["items"][0]["binds"] is True and inv["items"][0]["bound_card_id"] is None
+
+    await client.post(f"{API}/equip", headers=headers, json={"copy_id": copy_id, "user_card_id": card.id})
+    assert (await db_session.get(UserEquipment, copy_id)).bound_card_id == card.id
+    # It comes off and can be swapped for another thing…
+    assert (await client.post(f"{API}/unequip", headers=headers, json={"copy_id": copy_id})).status_code == 200
+    other = (await _buy(client, headers, other_kit.id)).json()["copy_id"]
+    await _movable(db_session, other)
+    assert (await client.post(f"{API}/equip", headers=headers, json={"copy_id": other, "user_card_id": card.id})).status_code == 200
+    # …but stays this card's: never on another card, offered only to its own.
+    resp = await client.post(f"{API}/equip", headers=headers, json={"copy_id": copy_id, "user_card_id": second.id})
+    assert resp.status_code == 409
+    second_kit = next(s for s in (await client.get(f"{API}/cards/{second.id}", headers=headers)).json()["slots"] if s["code"] == "kit")
+    assert all(o["copy_id"] != copy_id for o in second_kit["options"])
+    own_kit = next(s for s in (await client.get(f"{API}/cards/{card.id}", headers=headers)).json()["slots"] if s["code"] == "kit")
+    assert any(o["copy_id"] == copy_id and o["bound"] for o in own_kit["options"])
+    assert (await client.post(f"{API}/equip", headers=headers, json={"copy_id": copy_id, "user_card_id": card.id})).status_code == 200
+
+    # A trade: it goes with the card to the new owner.
+    _h2, friend, _c2 = await _user(client, db_session, bot_token, 910010)
+    await equipment_service.detach_from_cards(db_session, [card.id])
+    c = await _card(db_session, card.id)
+    c.owner_id = friend.id
+    await equipment_service.move_bound_with_card(db_session, c, friend.id)
+    await db_session.commit()
+    row = await db_session.get(UserEquipment, copy_id)
+    await db_session.refresh(row)
+    assert row.user_id == friend.id and row.user_card_id == card.id
+    assert (await _card(db_session, card.id)).equipment_rating_bonus == 1
+
+    # Sold or burned: it's gone with the card.
+    await db_session.delete(await _card(db_session, card.id))
+    await db_session.commit()
+    inv = (await client.get(f"{API}/inventory", headers=_h2)).json()
+    assert all(i["copy_id"] != copy_id for i in inv["items"])
 
 
 # --- game modes -------------------------------------------------------------------------------

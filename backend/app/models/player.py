@@ -15,6 +15,9 @@ class Player(TimestampMixin, Base):
     first_name: Mapped[str] = mapped_column(String(64), nullable=False)
     last_name: Mapped[str] = mapped_column(String(64), nullable=False)
     display_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    # «Один футболист»: versions of one player share it (player_identity);
+    # empty = the normalized display name.
+    person_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
 
     rating: Mapped[int] = mapped_column(Integer, nullable=False)
     # Nullable: NULL means "not yet computed" for rows created before this

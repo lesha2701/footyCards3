@@ -335,6 +335,8 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
             raise ConflictError(f"Card #{card.serial_number} is currently used in a lineup")
         if card.is_in_tactico_squad:
             raise ConflictError(f"Card #{card.serial_number} is currently used in a Tactico squad")
+        if card.is_bound():
+            raise ConflictError(f"Card #{card.serial_number} is a gift card and can't be traded yet")
 
     # Anti-farming, under both user locks: this is the check that counts
     # (offers created before a rule was switched on can't slip through).
@@ -365,6 +367,7 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
         card.owner_id = new_owner_id
         card.is_locked_in_trade = False
         db.add(card)
+        await equipment_service.move_bound_with_card(db, card, new_owner_id)
         await trade_finder_service.notify_wanted_card(db, new_owner_id, card.player_id)
         if new_owner_id == offer.receiver_id:
             receiver_new_player_ids.append(card.player_id)

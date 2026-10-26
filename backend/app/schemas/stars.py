@@ -44,6 +44,8 @@ class CoinPackageOut(BaseModel):
     id: int
     stars_price: int
     coins_amount: int
+    # «+N%» label; already included in coins_amount.
+    bonus_pct: int = 0
     is_active: bool
     sort_order: int
     # Extra coins this player gets on it as their first coin purchase

@@ -139,7 +139,9 @@ async def _packs_opened(db: AsyncSession, user_id: int) -> int:
 
 async def _build_public(db: AsyncSession, user: User) -> ProfilePublicOut:
     total, unique, rarest = await _collection_summary(db, user.id)
-    rank = await _arena_rank(db, user)
+    # No Card Arena match yet: no place to show (a fresh player was «#1»).
+    played = user.matches_won + user.matches_drawn + user.matches_lost
+    rank = await _arena_rank(db, user) if played else 0
     league_rank = await _league_rank(db, user)
     packs_opened = await _packs_opened(db, user.id)
     tactics_won, tactics_drawn, tactics_lost = await _tactico_record(db, user.id)
@@ -193,6 +195,20 @@ async def get_private_profile(db: AsyncSession, user: User) -> ProfilePrivateOut
     await club_pass_service.expire_if_needed(db, user)
     public = await _build_public(db, user)
     config = await get_config(db)
+    from app.schemas.profile import ReferralMilestoneOut
+    from app.services import referral_service, reward_bundle_service
+    from app.services.reward_bundle_service import Bundle
+
+    milestones = [
+        ReferralMilestoneOut(
+            count=m["count"], reached=user.referral_count >= m["count"],
+            reward=await reward_bundle_service.describe(db, Bundle(
+                coins=m.get("coins") or 0, pack_id=m.get("pack_id"), card_rarity=m.get("card_rarity"),
+                badge_id=m.get("badge_id"), cosmetic_id=m.get("cosmetic_id"),
+            )),
+        )
+        for m in referral_service.milestones(config)
+    ]
     return ProfilePrivateOut(
         **public.model_dump(),
         telegram_id=user.telegram_id,
@@ -204,6 +220,8 @@ async def get_private_profile(db: AsyncSession, user: User) -> ProfilePrivateOut
         referral_reward_pending=user.referred_by_id is not None and not user.referral_reward_granted,
         referral_referrer_reward=config.referral_referrer_reward,
         referral_referred_reward=config.referral_referred_reward,
+        referral_active_days=config.referral_active_days,
+        referral_milestones=milestones,
         daily_login_streak=user.daily_login_streak,
     )
 

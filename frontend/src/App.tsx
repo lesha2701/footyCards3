@@ -5,7 +5,9 @@ import AppLayout from "@/components/layout/AppLayout";
 import HomePage from "@/pages/HomePage";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import ErrorScreen from "@/components/common/ErrorScreen";
-import OnboardingScreen from "@/components/common/OnboardingScreen";
+import NewbieTaskWatcher from "@/components/newbie/NewbieTaskWatcher";
+import StreakRewardPopup from "@/components/common/StreakRewardPopup";
+import NewbieWelcome from "@/components/newbie/NewbieWelcome";
 import { createSession } from "@/api/auth";
 import { joinByInvite } from "@/api/clubs";
 import { useAuthStore } from "@/store/authStore";
@@ -217,7 +219,7 @@ export default function App() {
 
   if (user && !onboardingSeen) {
     return (
-      <OnboardingScreen
+      <NewbieWelcome
         onFinish={() => {
           markOnboardingSeen(user.id);
           setOnboardingSeen(true);
@@ -229,6 +231,8 @@ export default function App() {
   return (
     <Suspense fallback={<LoadingScreen />}>
     <TelegramBackButton />
+    <NewbieTaskWatcher />
+    {!window.location.pathname.startsWith("/admin") && <StreakRewardPopup />}
     <Routes>
       <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
         <Route index element={<AdminDashboardPage />} />

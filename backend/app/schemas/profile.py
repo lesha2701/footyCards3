@@ -4,7 +4,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from app.schemas.badge import BadgeOut
-from app.schemas.monetization import EquippedCosmeticsOut
+from app.schemas.monetization import EquippedCosmeticsOut, RewardBundleOut
 from app.schemas.player import PlayerOut
 
 
@@ -42,6 +42,12 @@ class ProfilePublicOut(BaseModel):
     penalty_matches_lost: int
 
 
+class ReferralMilestoneOut(BaseModel):
+    count: int
+    reward: RewardBundleOut
+    reached: bool
+
+
 class ProfilePrivateOut(ProfilePublicOut):
     telegram_id: int
     balance: int
@@ -52,6 +58,9 @@ class ProfilePrivateOut(ProfilePublicOut):
     referral_reward_pending: bool
     referral_referrer_reward: int
     referral_referred_reward: int
+    # A friend counts after this many days of play (referral_service).
+    referral_active_days: int = 3
+    referral_milestones: list[ReferralMilestoneOut] = []
     daily_login_streak: int
 
 

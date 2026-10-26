@@ -23,6 +23,7 @@ from app.services.card_skill_catalog import SKILL_DEFINITIONS
 from app.services.chemistry_service import ChemistryRules
 from app.services.lineup_service import CATEGORY_POSITIONS, calculate_base_strength, on_ideal_position
 from app.services.player_stats_service import card_rating_bonus
+from app.services.player_identity import card_person
 
 
 @dataclass(frozen=True)
@@ -60,13 +61,13 @@ def pick_cards(
     then an active skill. Never uses two copies of one player."""
     pool = [c for c in cards if not c.is_locked_by_admin and not c.is_locked_in_trade]
     chosen: dict[str, UserCard] = {}
-    used_players: set[int] = set()
+    used_players: set[str] = set()
     diamonds = paths = 0
     ordered = sorted(slots, key=lambda s: 0 if s.category == "GK" else 1)
     for slot in ordered:
         best, best_key = None, None
         for card in pool:
-            if card.player_id in used_players or card.player.position not in CATEGORY_POSITIONS[slot.category]:
+            if card_person(card) in used_players or card.player.position not in CATEGORY_POSITIONS[slot.category]:
                 continue
             if _is_diamond(card) and max_diamonds is not None and diamonds >= max_diamonds:
                 continue
@@ -83,7 +84,7 @@ def pick_cards(
                 best, best_key = card, key
         if best is not None:
             chosen[slot.code] = best
-            used_players.add(best.player_id)
+            used_players.add(card_person(best))
             diamonds += _is_diamond(best)
             paths += _is_path(best)
     return chosen
@@ -157,9 +158,9 @@ def improve_for_chemistry(
 
     def candidates(slot: SlotSpec, current: dict[str, UserCard]) -> list[UserCard]:
         others = {code: c for code, c in current.items() if code != slot.code}
-        taken_players = {c.player_id for c in others.values()}
+        taken_players = {card_person(c) for c in others.values()}
         taken_ids = {c.id for c in current.values()}
-        eligible = [c for c in pool if c.id not in taken_ids and c.player_id not in taken_players and fits(c, slot)]
+        eligible = [c for c in pool if c.id not in taken_ids and card_person(c) not in taken_players and fits(c, slot)]
         by_rating = sorted(
             eligible, key=lambda c: (on_ideal_position(c.player.position, slot.ideal_position), _effective(c), -c.id), reverse=True,
         )
@@ -289,7 +290,7 @@ def bench_upgrades(
     by_id = {c.id: c for c in cards}
     pool = [c for c in by_id.values() if not c.is_locked_by_admin and not c.is_locked_in_trade]
     in_squad = {cid for cid in current.values() if cid}
-    used_players = {by_id[cid].player_id for cid in in_squad if cid in by_id}
+    used_players = {card_person(by_id[cid]) for cid in in_squad if cid in by_id}
     diamonds = sum(1 for cid in in_squad if cid in by_id and _is_diamond(by_id[cid]))
     paths = sum(1 for cid in in_squad if cid in by_id and _is_path(by_id[cid]))
     hints: list[dict] = []
@@ -298,7 +299,10 @@ def bench_upgrades(
         now_rating = _effective(now) if now else 0
         best = None
         for card in pool:
-            if card.id in in_squad or card.player_id in used_players:
+            # Another version of the slot's own footballer is a fair upgrade.
+            if card.id in in_squad or (
+                card_person(card) in used_players and not (now is not None and card_person(now) == card_person(card))
+            ):
                 continue
             if card.player.position not in CATEGORY_POSITIONS[slot.category]:
                 continue
@@ -314,7 +318,7 @@ def bench_upgrades(
                 best = card
         if best is None:
             continue
-        used_players.add(best.player_id)
+        used_players.add(card_person(best))
         in_squad.add(best.id)
         diamonds += _is_diamond(best)
         paths += _is_path(best)

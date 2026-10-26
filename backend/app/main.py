@@ -64,6 +64,8 @@ from app.routers import (
     daily_rewards,
     feature_flags,
     free_pack,
+    newbie,
+    streak_rewards,
     friends,
     games,
     gifts,
@@ -152,6 +154,8 @@ app.include_router(club_base.router, prefix=API_PREFIX)
 app.include_router(bingo.router, prefix=API_PREFIX)
 app.include_router(packs.router, prefix=API_PREFIX)
 app.include_router(free_pack.router, prefix=API_PREFIX)
+app.include_router(newbie.router, prefix=API_PREFIX)
+app.include_router(streak_rewards.router, prefix=API_PREFIX)
 app.include_router(games.router, prefix=API_PREFIX)
 app.include_router(feature_flags.router, prefix=API_PREFIX)
 app.include_router(gifts.router, prefix=API_PREFIX)

@@ -31,6 +31,8 @@ const emptyForm = {
   attack_rating: "" as number | "", defense_rating: "" as number | "",
   /** «Академия»: talent of a diamond path card ("" = regular card). */
   path_talent_code: "",
+  /** «Один футболист»: versions of one player share it ("" = by the name). */
+  person_key: "",
 };
 
 export default function AdminPlayersPage() {
@@ -57,6 +59,7 @@ export default function AdminPlayersPage() {
     attack_rating: form.attack_rating === "" ? null : form.attack_rating,
     defense_rating: form.defense_rating === "" ? null : form.defense_rating,
     path_talent_code: form.rarity === "diamond" && form.path_talent_code ? form.path_talent_code : null,
+    person_key: form.person_key.trim() || null,
   });
 
   const createMutation = useMutation({
@@ -96,6 +99,7 @@ export default function AdminPlayersPage() {
       collection_id: p.collection_id ?? "",
       attack_rating: p.attack_rating, defense_rating: p.defense_rating,
       path_talent_code: p.path_talent_code ?? "",
+      person_key: p.person_key ?? "",
     });
   };
 
@@ -203,6 +207,11 @@ export default function AdminPlayersPage() {
             {error && <p className="mb-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
             <div className="flex flex-col gap-2 text-sm">
               <TextField label="Отображаемое имя" value={form.display_name} onChange={(v) => setForm({ ...form, display_name: v })} />
+              <TextField
+                label="Один футболист (если версии карт написаны по-разному — одинаковое значение, напр. «лионель месси»; пусто — по имени)"
+                value={form.person_key}
+                onChange={(v) => setForm({ ...form, person_key: v })}
+              />
               <TextField label="Страна" value={form.country} onChange={(v) => setForm({ ...form, country: v })} />
               <TextField label="Клуб" value={form.club} onChange={(v) => setForm({ ...form, club: v })} />
               <div className="grid grid-cols-2 gap-2">

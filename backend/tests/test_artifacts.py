@@ -130,3 +130,43 @@ async def test_switching_artifacts_off_in_admin_removes_card_bonuses(client, db_
     assert resp.status_code == 200
     refreshed = await db_session.get(UserCard, card.id, populate_existing=True)
     assert refreshed.artifact_rating_bonus == 0
+
+
+async def test_gifts_only_bought_with_stars_for_a_friend(client, db_session, bot_token):
+    from sqlalchemy import select
+
+    from app.core.exceptions import ConflictError, ForbiddenError
+    from app.models.career import Friendship
+    from app.models.monetization import UserArtifact
+
+    user, headers = await _setup(client, db_session, bot_token, 880051)
+    friend, _ = await _setup(client, db_session, bot_token, 880052)
+    stranger, _ = await _setup(client, db_session, bot_token, 880053)
+    artifact = await _artifact(db_session, "Gift", stars_price=49, coins_price=5000, is_active=True)
+
+    # An owned copy can't be passed on any more (coins → friend bypassed the trade rules).
+    copy_id = await _grant(db_session, user.id, artifact.id)
+    resp = await client.post(f"/api/v1/artifacts/copies/{copy_id}/gift", headers=headers, json={"recipient_id": friend.id})
+    assert resp.status_code == 403
+
+    try:
+        await artifact_service.stars_gift_order(db_session, user, artifact.id, friend.id)
+        raise AssertionError("not friends yet")
+    except ForbiddenError:
+        pass
+    low, high = sorted((user.id, friend.id))
+    db_session.add(Friendship(requester_id=user.id, addressee_id=friend.id, user_low=low, user_high=high, status="accepted"))
+    await db_session.commit()
+    product, stars, _, _ = await artifact_service.stars_gift_order(db_session, user, artifact.id, friend.id)
+    assert product == f"artifact_gift:{artifact.id}:{friend.id}" and stars == 49
+    assert (await artifact_service.validate_stars_gift(db_session, user.id, f"{artifact.id}:{stranger.id}", 49))[0] is False
+    try:
+        await artifact_service.stars_gift_order(db_session, user, artifact.id, user.id)
+        raise AssertionError("self gift")
+    except ConflictError:
+        pass
+
+    await artifact_service.deliver_stars_gift(db_session, user, f"{artifact.id}:{friend.id}")
+    await db_session.commit()
+    rows = (await db_session.execute(select(UserArtifact).where(UserArtifact.user_id == friend.id))).scalars().all()
+    assert len(rows) == 1 and rows[0].gifted_by_id == user.id and rows[0].source == "gift"

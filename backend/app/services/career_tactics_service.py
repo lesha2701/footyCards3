@@ -35,6 +35,7 @@ from app.services import chemistry_service
 from app.services import club_tactical_matchup_service as matchup
 from app.services import club_tactical_profile_service as profile_service
 from app.services.lineup_service import CATEGORY_POSITIONS
+from app.services.player_identity import card_person
 
 TACTICS_VERSION = 1
 
@@ -897,8 +898,8 @@ class CareerSideRunner:
                  "payload": payload}]
 
     def _pick_bench(self, slot, wanted: Optional[int], minute: int) -> Optional[LivePlayer]:
-        on_players = {p.card.player_id for p in self.on_pitch}
-        fits = [p for p in self.bench if p.off_minute is None and p.card.player_id not in on_players
+        on_players = {card_person(p.card) for p in self.on_pitch}
+        fits = [p for p in self.bench if p.off_minute is None and card_person(p.card) not in on_players
                 and p.card.player.position in CATEGORY_POSITIONS[slot.category]]
         if wanted is not None:
             chosen = next((p for p in fits if p.card.id == wanted), None)

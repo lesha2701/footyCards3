@@ -555,6 +555,9 @@ class GameConfigOut(BaseModel):
     chat_pack_interval_hours: int
     referral_referred_reward: int
     referral_referrer_reward: int
+    referral_active_days: int = 3
+    referral_milestones: list = []
+    streak_rewards: list = []
     hangman_daily_limit: int
     hangman_reward_correct: int
     hangman_max_wrong: int
@@ -769,6 +772,19 @@ class GameConfigOut(BaseModel):
     season_xp_per_game: int = 10
     season_xp_per_daily_claim: int = 25
     starter_offer_enabled: bool = False
+    newbie_enabled: bool = True
+    newbie_since: Optional[datetime] = None
+    newbie_first_pack_rarities: list = []
+    newbie_squad_rarity: str = "rare"
+    newbie_arena_rarity: str = "legendary"
+    newbie_tasks: list = []
+    newbie_day2_coins: int = 10000
+    newbie_day3_rarity: str = "legendary"
+    newbie_bound_days: int = 14
+    newbie_reminder_hour: int = 12
+    newbie_finale_coins: int = 5000
+    newbie_finale_pack_id: Optional[int] = None
+    newbie_finale_badge_id: Optional[int] = None
     starter_offer_hours: int = 48
     starter_offer_stars: int = 50
     starter_offer_coins: int = 1000
@@ -868,6 +884,41 @@ class WeeklyTopRewardIn(BaseModel):
     card_rarity: Optional[Rarity] = None
     badge_id: Optional[int] = None
     cosmetic_id: Optional[int] = None
+
+
+class ReferralMilestoneIn(BaseModel):
+    """A reward for the referrer's N-th counted friend (referral_service)."""
+
+    count: int = Field(ge=1, le=10000)
+    coins: int = Field(default=0, ge=0, le=1_000_000)
+    pack_id: Optional[int] = None
+    card_rarity: Optional[Rarity] = None
+    badge_id: Optional[int] = None
+    cosmetic_id: Optional[int] = None
+
+
+class StreakRewardIn(BaseModel):
+    """A keepsake for `days` in a row in the game (streak_reward_service)."""
+
+    days: int = Field(ge=2, le=3650)
+    coins: int = Field(default=0, ge=0, le=1_000_000)
+    pack_id: Optional[int] = None
+    card_rarity: Optional[Rarity] = None
+    badge_id: Optional[int] = None
+    cosmetic_id: Optional[int] = None
+
+
+class NewbieTaskIn(BaseModel):
+    """One «попробуй режим» task of the «Путь дебютанта»: the first game of
+    `mode` (an analytics mode key: "game:<type>", "arena", "wheel", …)
+    after the path started pays the reward."""
+
+    code: str = Field(min_length=1, max_length=32, pattern=r"^[a-z0-9_]+$")
+    label: str = Field(min_length=1, max_length=80)
+    mode: str = Field(min_length=1, max_length=40)
+    path: str = Field(default="/play", max_length=80)
+    coins: int = Field(default=0, ge=0, le=1_000_000)
+    pack_id: Optional[int] = None
 
 
 class GameConfigUpdate(BaseModel):
@@ -1239,6 +1290,9 @@ class GameConfigUpdate(BaseModel):
     chat_pack_interval_hours: Optional[int] = Field(default=None, ge=1)
     referral_referred_reward: Optional[int] = Field(default=None, ge=0)
     referral_referrer_reward: Optional[int] = Field(default=None, ge=0)
+    referral_active_days: Optional[int] = Field(default=None, ge=1, le=30)
+    referral_milestones: Optional[list[ReferralMilestoneIn]] = Field(default=None, max_length=20)
+    streak_rewards: Optional[list[StreakRewardIn]] = Field(default=None, max_length=20)
     hangman_daily_limit: Optional[int] = Field(default=None, ge=0)
     hangman_reward_correct: Optional[int] = Field(default=None, ge=0)
     hangman_max_wrong: Optional[int] = Field(default=None, ge=1)
@@ -1500,6 +1554,18 @@ class GameConfigUpdate(BaseModel):
     season_xp_per_game: Optional[int] = Field(default=None, ge=0, le=10000)
     season_xp_per_daily_claim: Optional[int] = Field(default=None, ge=0, le=10000)
     starter_offer_enabled: Optional[bool] = None
+    newbie_enabled: Optional[bool] = None
+    newbie_first_pack_rarities: Optional[list[Rarity]] = Field(default=None, min_length=1, max_length=10)
+    newbie_squad_rarity: Optional[Rarity] = None
+    newbie_arena_rarity: Optional[Rarity] = None
+    newbie_tasks: Optional[list[NewbieTaskIn]] = Field(default=None, max_length=20)
+    newbie_day2_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    newbie_day3_rarity: Optional[Rarity] = None
+    newbie_bound_days: Optional[int] = Field(default=None, ge=0, le=365)
+    newbie_reminder_hour: Optional[int] = Field(default=None, ge=0, le=23)
+    newbie_finale_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    newbie_finale_pack_id: Optional[int] = Field(default=None, ge=0)
+    newbie_finale_badge_id: Optional[int] = Field(default=None, ge=0)
     starter_offer_hours: Optional[int] = Field(default=None, ge=1, le=720)
     starter_offer_stars: Optional[int] = Field(default=None, ge=1, le=10000)
     starter_offer_coins: Optional[int] = Field(default=None, ge=0)

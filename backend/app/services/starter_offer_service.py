@@ -6,7 +6,9 @@ the later of registration and `starter_offer_all_since` (the moment the
 switch went on), and a player who saw it before that sees it full-screen
 once more. It is shown full-screen once
 (`users.starter_offer_seen_at`), then stays as a banner with a countdown
-until it is bought or runs out. One purchase per player
+until it is bought or runs out. A player on the «Путь дебютанта»
+(newbie_service.is_newbie) gets it from local midnight of his second day
+instead — the first day is for the path. One purchase per player
 (starter_offer_purchases.user_id is unique; pre-checkout refuses a second)."""
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -16,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError
-from app.core.timeutil import ensure_aware
+from app.core.timeutil import app_timezone, ensure_aware
 from app.models.enums import CardSource, TransactionType
 from app.models.game_config import GameConfig
 from app.models.monetization import StarterOfferPurchase
@@ -42,12 +44,22 @@ def _all_since(config: GameConfig) -> Optional[datetime]:
     return None
 
 
-def expires_at(user: User, config: GameConfig) -> datetime:
+def starts_at(user: User, config: GameConfig) -> datetime:
+    from app.services.newbie_service import is_newbie
+
     start = ensure_aware(user.created_at)
+    if is_newbie(user, config):
+        tz = app_timezone()
+        day2 = start.astimezone(tz).date() + timedelta(days=1)
+        return datetime(day2.year, day2.month, day2.day, tzinfo=tz).astimezone(timezone.utc)
     since = _all_since(config)
     if since is not None and since > start:
         start = since
-    return start + timedelta(hours=config.starter_offer_hours)
+    return start
+
+
+def expires_at(user: User, config: GameConfig) -> datetime:
+    return starts_at(user, config) + timedelta(hours=config.starter_offer_hours)
 
 
 def _seen(user: User, config: GameConfig) -> bool:
@@ -65,7 +77,10 @@ async def _purchased(db: AsyncSession, user_id: int) -> bool:
 
 async def _available(db: AsyncSession, user: User, config: GameConfig, now: Optional[datetime] = None) -> bool:
     now = now or datetime.now(timezone.utc)
-    return config.starter_offer_enabled and now < expires_at(user, config) and not await _purchased(db, user.id)
+    return (
+        config.starter_offer_enabled and starts_at(user, config) <= now < expires_at(user, config)
+        and not await _purchased(db, user.id)
+    )
 
 
 async def get_status(db: AsyncSession, user: User) -> StarterOfferOut:

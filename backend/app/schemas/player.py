@@ -7,7 +7,7 @@ from app.models.enums import Position, Rarity
 _PLAYER_COLUMN_FIELDS = (
     "id", "first_name", "last_name", "display_name", "rating", "rarity",
     "country", "club", "position", "image_path", "quick_sell_price", "is_active",
-    "is_pack_droppable", "collection_id", "path_talent_code",
+    "is_pack_droppable", "collection_id", "path_talent_code", "person_key",
 )
 
 
@@ -33,6 +33,8 @@ class PlayerOut(BaseModel):
     collection_name: Optional[str] = None
     # «Академия»: set = a path card with this talent (services/path_talent_catalog.py).
     path_talent_code: Optional[str] = None
+    # «Один футболист» (services/player_identity.py); null = by display name.
+    person_key: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -101,6 +103,7 @@ class PlayerCreate(BaseModel):
     is_pack_droppable: bool = True
     collection_id: Optional[int] = None
     path_talent_code: Optional[str] = None
+    person_key: Optional[str] = Field(default=None, max_length=128)
 
 
 class PlayerUpdate(BaseModel):
@@ -123,5 +126,6 @@ class PlayerUpdate(BaseModel):
     quick_sell_price: Optional[int] = Field(default=None, ge=0)
     is_active: Optional[bool] = None
     is_pack_droppable: Optional[bool] = None
+    person_key: Optional[str] = Field(default=None, max_length=128)
     collection_id: Optional[int] = None
     path_talent_code: Optional[str] = None

@@ -150,7 +150,9 @@ async def sell_one_card(
 async def sell_duplicate_cards(
     payload: SellDuplicatesRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
-    return await sell_duplicates(db, user, payload.preview, payload.include_diamond, payload.include_star_material)
+    return await sell_duplicates(
+        db, user, payload.preview, payload.include_diamond, payload.include_star_material, payload.rarities,
+    )
 
 
 @router.post("/cards/bulk-sell", response_model=SellResultOut)

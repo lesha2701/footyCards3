@@ -2,10 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { buyArtifactWithCoins, createArtifactStarsInvoice, fetchArtifacts } from "@/api/monetization";
+import { buyArtifactWithCoins, createArtifactGiftInvoice, createArtifactStarsInvoice, fetchArtifacts } from "@/api/monetization";
+import GiftFriendSheet from "@/components/artifacts/GiftFriendSheet";
 import EmptyState from "@/components/common/EmptyState";
 import InfoTile from "@/components/shop/InfoTile";
-import { IconCoin } from "@/components/icons";
+import { IconCoin, IconGift } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
 import { RARITY_GRADIENTS } from "@/lib/rarity";
@@ -51,11 +52,26 @@ export default function ArtifactShop() {
     onError: (err) => setError(formatGameError(err, "Оплата не прошла")),
   });
 
+  const [giftFor, setGiftFor] = useState<{ id: number; name: string; stars: number } | null>(null);
+  const buyGift = useMutation({
+    mutationFn: ({ id, friendId }: { id: number; name: string; friendId: number; friendName: string }) =>
+      payShopWithStars(() => createArtifactGiftInvoice(id, friendId)),
+    onSuccess: (status, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["artifacts"] });
+      setGiftFor(null);
+      if (status === "paid") {
+        hapticNotify("success");
+        setNotice(`«${vars.name}» подарен — ${vars.friendName} получит уведомление`);
+      }
+    },
+    onError: (err) => setError(formatGameError(err, "Оплата не прошла")),
+  });
+
   if (!catalog) return null;
   if (!catalog.enabled || !catalog.shop.length) {
     return <EmptyState title="Артефактов пока нет" description="Загляни позже" />;
   }
-  const busy = buyCoins.isPending || buyStars.isPending;
+  const busy = buyCoins.isPending || buyStars.isPending || buyGift.isPending;
   // What pays off for this player first (their stadium / coach / player
   // makes it stronger), sold-out and already-owned ones last.
   const rank = (a: (typeof catalog.shop)[number]) =>
@@ -169,11 +185,30 @@ export default function ArtifactShop() {
                     {a.stars_price} ⭐
                   </button>
                 )}
+                {a.stars_price > 0 && (
+                  <button
+                    onClick={() => setGiftFor({ id: a.id, name: a.name, stars: a.stars_price })}
+                    disabled={busy || a.left === 0}
+                    aria-label="Подарить другу"
+                    className="flex items-center justify-center rounded-full bg-white/10 px-3 py-1.5 text-amber-300 active:scale-95 disabled:opacity-40"
+                  >
+                    <IconGift size={14} />
+                  </button>
+                )}
               </div>
             }
           />
         ))}
       </div>
+      {giftFor && (
+        <GiftFriendSheet
+          title={`«${giftFor.name}» в подарок`}
+          note={`Оплата ${giftFor.stars} ⭐ — артефакт сразу окажется у друга.`}
+          busy={buyGift.isPending}
+          onPick={(friendId, friendName) => buyGift.mutate({ id: giftFor.id, name: giftFor.name, friendId, friendName })}
+          onClose={() => setGiftFor(null)}
+        />
+      )}
     </div>
   );
 }

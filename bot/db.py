@@ -384,3 +384,34 @@ async def recent_stars_receipts(telegram_user_id: int, limit: int = 5) -> list[a
         "SELECT * FROM stars_payment_receipts WHERE telegram_user_id = $1 ORDER BY created_at DESC LIMIT $2",
         telegram_user_id, limit,
     )
+
+
+async def fetch_newbie_reminder_settings() -> Optional[asyncpg.Record]:
+    pool = await get_pool()
+    return await pool.fetchrow(
+        "SELECT newbie_enabled, newbie_reminder_hour, newbie_day2_coins, newbie_day3_rarity FROM game_config WHERE id = 1"
+    )
+
+
+async def fetch_newbie_gift_recipients(today, midnight, limit: int = 2000) -> list[asyncpg.Record]:
+    """«Путь дебютанта»: players whose day-2 / day-3 gift is open today, not
+    claimed, not reminded about it yet, and who haven't opened the game
+    today (they'd see it on the home screen)."""
+    pool = await get_pool()
+    return await pool.fetch(
+        """SELECT u.id, u.telegram_id, u.first_name, ($1::date - np.start_day + 1) AS day
+           FROM newbie_progress np JOIN users u ON u.id = np.user_id
+           WHERE u.is_banned = false AND u.bot_blocked = false
+             AND np.completed_at IS NULL
+             AND ($1::date - np.start_day + 1) IN (2, 3)
+             AND np.reminded_day < ($1::date - np.start_day + 1)
+             AND NOT (np.claimed::jsonb ? ('day' || ($1::date - np.start_day + 1)::text))
+             AND (u.last_seen_at IS NULL OR u.last_seen_at < $2)
+           LIMIT $3""",
+        today, midnight, limit,
+    )
+
+
+async def mark_newbie_reminded(user_id: int, day: int) -> None:
+    pool = await get_pool()
+    await pool.execute("UPDATE newbie_progress SET reminded_day = $2 WHERE user_id = $1", user_id, day)

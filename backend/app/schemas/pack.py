@@ -34,6 +34,7 @@ class PackOut(BaseModel):
     guaranteed_min_rarity: Optional[Rarity]
     is_active: bool
     purchase_limit_per_user: Optional[int]
+    daily_limit_per_user: Optional[int] = None
     available_from: Optional[datetime]
     available_until: Optional[datetime]
     rarity_probabilities: list[PackRarityProbabilityOut]
@@ -44,6 +45,8 @@ class PackOut(BaseModel):
     # "default" | "path" — see Pack.player_pool.
     player_pool: str = "default"
     user_purchase_count: int = 0
+    # Bought today (only counted for a pack with daily_limit_per_user).
+    user_today_count: int = 0
     is_available_now: bool = True
     # Why it cannot be bought now (e.g. «Академия» pack with no players yet).
     unavailable_reason: Optional[str] = None
@@ -75,6 +78,7 @@ class PackCreate(BaseModel):
     is_active: bool = True
     image_path: Optional[str] = None
     purchase_limit_per_user: Optional[int] = Field(default=None, ge=1)
+    daily_limit_per_user: Optional[int] = Field(default=None, ge=1)
     available_from: Optional[datetime] = None
     available_until: Optional[datetime] = None
     rarity_probabilities: list[PackRarityProbabilityIn]
@@ -97,6 +101,7 @@ class PackUpdate(BaseModel):
     is_active: Optional[bool] = None
     image_path: Optional[str] = None
     purchase_limit_per_user: Optional[int] = Field(default=None, ge=1)
+    daily_limit_per_user: Optional[int] = Field(default=None, ge=1)
     available_from: Optional[datetime] = None
     available_until: Optional[datetime] = None
     rarity_probabilities: Optional[list[PackRarityProbabilityIn]] = None

@@ -86,11 +86,14 @@ function SinglePackOpenView() {
   const queue = (location.state as { queue?: PackOpenResult[] } | null)?.queue ?? [];
   // Bought from the shop's "Предложение дня" — the server applies the discount.
   const dailyOffer = !!(location.state as { dailyOffer?: boolean } | null)?.dailyOffer;
+  // A gift pack that belongs to a flow (the «Путь дебютанта»): no «Открыть ещё»
+  // or upsell, «Дальше» goes back to where it came from.
+  const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? null;
   const finish = () => {
     if (queue.length) {
-      navigate(`/packs/${queue[0].pack.id}/open`, { replace: true, state: { result: queue[0], queue: queue.slice(1) } });
+      navigate(`/packs/${queue[0].pack.id}/open`, { replace: true, state: { result: queue[0], queue: queue.slice(1), returnTo } });
     } else {
-      navigate("/packs");
+      navigate(returnTo ?? "/packs", { replace: !!returnTo });
     }
   };
 
@@ -193,7 +196,9 @@ function SinglePackOpenView() {
       !result.pack.bonus_coins &&
       !result.pack.badge
     ) {
-      setSingleCardDone(true);
+      // A gift card of a flow: nothing to buy again — straight on.
+      if (returnTo) finish();
+      else setSingleCardDone(true);
       return;
     }
     goToTokensOrSummary();
@@ -304,7 +309,7 @@ function SinglePackOpenView() {
   const topUpStars = useTopUpStars();
   const coinPrice = result && !isStarsPack ? result.pack.price : 0;
   const upsell =
-    !result || isStarsPack || queue.length > 0 ? undefined : balance >= coinPrice * 5 ? (
+    !result || isStarsPack || queue.length > 0 || returnTo ? undefined : balance >= coinPrice * 5 ? (
       <button
         onClick={() => navigate(`/packs/${result.pack.id}/open`, { replace: true, state: { quantity: 5 } })}
         className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-sm font-bold text-ink-chalk ring-1 ring-white/10 active:scale-95"
@@ -379,7 +384,9 @@ function SinglePackOpenView() {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg-base">
-      {phase !== "summary" && !singleCardDone && (
+      {phase !== "summary" && !singleCardDone && !(
+        phase === "revealing" && cardIndex === result.cards.length - 1 && stageIndex === STAGES.length - 1
+      ) && (
         <button
           onClick={skipAll}
           className="safe-top absolute right-4 top-4 z-10 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-ink-chalk"
@@ -467,7 +474,7 @@ function SinglePackOpenView() {
               {singleCardDone ? (
                 <ReopenActions
                   onDone={finish}
-                  onOpenAnother={handleOpenAnother}
+                  onOpenAnother={returnTo ? undefined : handleOpenAnother}
                   canOpenAnother={canAffordAgain}
                   more={upsell}
                   busy={isStarsPack && buyingStarsPackAgain}
@@ -490,7 +497,7 @@ function SinglePackOpenView() {
         <Summary
           result={result}
           onDone={finish}
-          onOpenAnother={handleOpenAnother}
+          onOpenAnother={returnTo ? undefined : handleOpenAnother}
           canOpenAnother={canAffordAgain}
           more={upsell}
           busy={isStarsPack && buyingStarsPackAgain}
@@ -854,7 +861,8 @@ function ReopenActions({
   more,
 }: {
   onDone: () => void;
-  onOpenAnother: () => void;
+  /** Absent: a gift pack of a flow — one «Дальше» button. */
+  onOpenAnother?: () => void;
   canOpenAnother: boolean;
   busy: boolean;
   error: string | null;
@@ -865,19 +873,30 @@ function ReopenActions({
     <div className="flex flex-col gap-2">
       {error && <p className="text-center text-xs text-red-400">{error}</p>}
       <div className="flex gap-2">
-        <button
-          onClick={onDone}
-          className="flex-1 rounded-2xl bg-white/10 py-3.5 font-display text-base font-bold text-ink-chalk active:scale-95"
-        >
-          Готово
-        </button>
-        <button
-          onClick={onOpenAnother}
-          disabled={!canOpenAnother || busy}
-          className="flex-1 rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-40"
-        >
-          {busy ? "Открываем..." : "Открыть ещё"}
-        </button>
+        {onOpenAnother ? (
+          <>
+            <button
+              onClick={onDone}
+              className="flex-1 rounded-2xl bg-white/10 py-3.5 font-display text-base font-bold text-ink-chalk active:scale-95"
+            >
+              Готово
+            </button>
+            <button
+              onClick={onOpenAnother}
+              disabled={!canOpenAnother || busy}
+              className="flex-1 rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:opacity-40"
+            >
+              {busy ? "Открываем..." : "Открыть ещё"}
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={onDone}
+            className="flex-1 rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95"
+          >
+            Дальше
+          </button>
+        )}
       </div>
       {more}
     </div>
@@ -911,7 +930,7 @@ function Summary({
 }: {
   result: PackOpenResult;
   onDone: () => void;
-  onOpenAnother: () => void;
+  onOpenAnother?: () => void;
   canOpenAnother: boolean;
   busy: boolean;
   error: string | null;

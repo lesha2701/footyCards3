@@ -643,31 +643,6 @@ def test_home_edge_weakens_the_away_side():
     assert all(p["rating"] == 80 for p in plain) and all(p["rating"] == 76 for p in weak)
 
 
-async def test_gift_an_artifact_copy_to_a_friend(client, db_session, bot_token):
-    from app.models.career import Friendship
-    from app.services import friend_service
-
-    a = await _artifact(client, bot_token)
-    headers, user = await _register(client, db_session, 720071, bot_token)
-    friend_headers, friend = await _register(client, db_session, 720072, bot_token)
-    stranger_headers, stranger = await _register(client, db_session, 720073, bot_token)
-    body = (await client.post(f"/api/v1/artifacts/{a['id']}/buy", headers=headers)).json()
-    copy_id = body["shelf"][0]["copy_id"]
-
-    refused = await client.post(f"/api/v1/artifacts/copies/{copy_id}/gift", headers=headers, json={"recipient_id": stranger.id})
-    assert refused.status_code == 403
-
-    db_session.add(Friendship(requester_id=user.id, addressee_id=friend.id, user_low=min(user.id, friend.id),
-                              user_high=max(user.id, friend.id), status="accepted"))
-    await db_session.commit()
-    assert friend.id in await friend_service.friend_ids(db_session, user.id)
-
-    resp = await client.post(f"/api/v1/artifacts/copies/{copy_id}/gift", headers=headers, json={"recipient_id": friend.id})
-    assert resp.status_code == 200 and resp.json()["shelf"] == []
-    theirs = (await client.get("/api/v1/artifacts", headers=friend_headers)).json()["shelf"]
-    assert len(theirs) == 1 and theirs[0]["source"] == "gift" and theirs[0]["equipped"]
-
-
 async def test_artifact_for_stars_and_limited_supply(client, db_session, bot_token):
     a = await _artifact(client, bot_token, coins_price=0, stars_price=20, max_supply=1)
     headers, user = await _register(client, db_session, 720063, bot_token)

@@ -7,6 +7,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 from app.models.mixins import TimestampMixin
 
+NEWBIE_DEFAULT_TASKS = [
+    {"code": "penalty", "label": "Сыграй в Пенальти", "mode": "game:penalty", "path": "/play/penalty", "coins": 1000},
+    {"code": "free_kick", "label": "Пробей Штрафной", "mode": "game:free_kick", "path": "/play/free-kick", "coins": 1000},
+    {"code": "memory", "label": "Пройди Memory", "mode": "game:memory_sequence", "path": "/play/memory", "coins": 1000},
+    {"code": "hangman", "label": "Угадай слово в «Футбольных буквах»", "mode": "game:football_hangman", "path": "/play/hangman", "coins": 1000},
+    {"code": "blackjack", "label": "Сыграй в «21»", "mode": "blackjack", "path": "/play/blackjack", "coins": 1000},
+    {"code": "wheel", "label": "Крутани Колесо фортуны", "mode": "wheel", "path": "/wheel", "coins": 1000},
+]
+
 # «Клубная база» defaults (GameConfig.club_base_buildings / club_base_caps;
 # the 0180 migration writes the same values). Lists are per level.
 # 25 levels like the whole «Академия»: costs and build hours grow smoothly,
@@ -661,8 +670,14 @@ class GameConfig(TimestampMixin, Base):
     # on its own cooldown.
     chat_pack_interval_hours: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
 
-    referral_referred_reward: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
-    referral_referrer_reward: Mapped[int] = mapped_column(Integer, default=400, nullable=False)
+    # Referrals (services/referral_service.py): a friend counts once he has
+    # been active on referral_active_days days; milestones by friends count.
+    referral_referred_reward: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
+    referral_referrer_reward: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
+    referral_active_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    referral_milestones: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # Keepsakes for N days in a row in the game (streak_reward_service).
+    streak_rewards: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
 
     tactico_challenge_expiry_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
     tactico_round_timeout_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
@@ -1048,7 +1063,7 @@ class GameConfig(TimestampMixin, Base):
     # Giving anything in a trade (coins or cards, on either side) needs an
     # account at least this many days old that was active on at least this
     # many distinct days (user_daily_activity). 0 = no requirement.
-    trade_send_min_account_age_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    trade_send_min_account_age_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
     trade_send_min_active_days: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     # Max coins one player may receive through trades per local day (0 = no cap).
     trade_daily_coins_receive_cap: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
@@ -1148,6 +1163,26 @@ class GameConfig(TimestampMixin, Base):
     season_xp_per_daily_claim: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
     # One-time starter offer for new players.
     starter_offer_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # «Путь дебютанта» (services/newbie_service.py), for players registered
+    # after newbie_since: a first pack with an epic, a team pack that fills a
+    # 4-3-3, a legendary for the first Arena match, «попробуй режим» tasks,
+    # day-2 coins and a day-3 card. Gift cards are bound (no trade / sale /
+    # burning) for newbie_bound_days. The starter offer then opens on day 2.
+    newbie_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    newbie_since: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    newbie_first_pack_rarities: Mapped[list] = mapped_column(JSON, nullable=False, default=lambda: ["epic", "rare", "rare"])
+    newbie_squad_rarity: Mapped[str] = mapped_column(String(16), default="rare", nullable=False)
+    newbie_arena_rarity: Mapped[str] = mapped_column(String(16), default="legendary", nullable=False)
+    newbie_tasks: Mapped[list] = mapped_column(JSON, nullable=False, default=lambda: NEWBIE_DEFAULT_TASKS)
+    newbie_day2_coins: Mapped[int] = mapped_column(Integer, default=10000, nullable=False)
+    newbie_day3_rarity: Mapped[str] = mapped_column(String(16), default="legendary", nullable=False)
+    newbie_bound_days: Mapped[int] = mapped_column(Integer, default=14, nullable=False)
+    # The bot's day-2 / day-3 gift reminder, local hour (bot/services/newbie_reminder.py).
+    newbie_reminder_hour: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
+    # «Путь пройден»: the reward for finishing every step.
+    newbie_finale_coins: Mapped[int] = mapped_column(Integer, default=5000, nullable=False)
+    newbie_finale_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    newbie_finale_badge_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     starter_offer_hours: Mapped[int] = mapped_column(Integer, default=48, nullable=False)
     starter_offer_stars: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
     starter_offer_coins: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)

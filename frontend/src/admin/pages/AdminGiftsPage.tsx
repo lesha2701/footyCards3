@@ -22,6 +22,7 @@ interface GiftSetForm {
   description: string;
   kind: "bundle" | "collectible";
   pack_id: number | null;
+  pack_count: number;
   coins_amount: number;
   stars_price: number;
   coins_price: number;
@@ -37,6 +38,7 @@ function giftSetToForm(g?: GiftSet): GiftSetForm {
     description: g?.description ?? "",
     kind: g?.kind ?? "bundle",
     pack_id: g?.pack_id ?? null,
+    pack_count: g?.pack_count ?? 1,
     coins_amount: g?.coins_amount ?? 0,
     stars_price: g?.stars_price ?? 0,
     coins_price: g?.coins_price ?? 0,
@@ -193,6 +195,10 @@ export default function AdminGiftsPage() {
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Сколько паков открывает</span>
+                <NumberInput min={1} value={form.pack_count} onChange={(v) => setForm({ ...form, pack_count: Math.max(1, v) })} />
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">
