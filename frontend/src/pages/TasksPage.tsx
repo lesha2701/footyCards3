@@ -600,7 +600,10 @@ function SubscriptionsTab({
               className="h-28 w-28 shrink-0 object-contain drop-shadow-[0_0_18px_rgba(217,70,239,0.65)]"
             />
             <div className="min-w-0 flex-1 pr-6">
-              <p className="font-display text-lg font-bold leading-tight text-ink-chalk">{badge?.name ?? "Свой в клубе"}</p>
+              <p className="flex items-center gap-1.5 font-display text-lg font-bold leading-tight text-ink-chalk">
+                {badge?.image_path && <UserBadge badge={badge} className="!h-7 !w-7" />}
+                {badge?.name ?? "Свой в клубе"}
+              </p>
               <p className="text-xs font-semibold text-fuchsia-200">
                 {required.map((t) => t.reward_coins.toLocaleString("ru-RU")).join(" + ")} монет за подписки
                 {badge ? " и значок у имени" : ""}
