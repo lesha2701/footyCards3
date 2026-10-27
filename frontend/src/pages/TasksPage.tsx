@@ -18,7 +18,6 @@ import { ApiRequestError } from "@/lib/api";
 import { skillByCode, useSkillCatalog } from "@/lib/cardSkills";
 import { chestArt, type ChestArtKind } from "@/lib/chestArt";
 import { artOf } from "@/lib/gameArt";
-import { CHAT_INVITE_LINK } from "@/lib/links";
 import { RARITY_LABELS, RARITY_TEXT } from "@/lib/rarity";
 import { haptic, hapticNotify, openTelegramLink } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -562,8 +561,6 @@ function channelUrl(task: Task): string | null {
 function SubscriptionsTab({ tasks, pendingId, onClaim }: { tasks: Task[]; pendingId?: number; onClaim: (id: number) => void }) {
   const required = tasks.filter((t) => t.is_required);
   const others = tasks.filter((t) => !t.is_required).sort((a, b) => Number(a.is_claimed) - Number(b.is_claimed));
-  // The game chat used to sit on the home page; if no task covers it, keep a plain link here.
-  const chatCovered = tasks.some((t) => t.invite_link === CHAT_INVITE_LINK);
 
   return (
     <div className="flex flex-col gap-4">
@@ -586,25 +583,12 @@ function SubscriptionsTab({ tasks, pendingId, onClaim }: { tasks: Task[]; pendin
         </section>
       )}
 
-      {(others.length > 0 || !chatCovered) && (
+      {others.length > 0 && (
         <section className="flex flex-col gap-2">
           <div className="flex items-center justify-between px-1">
             <p className="font-display text-sm font-bold text-ink-chalk">Подписки с наградой</p>
             {required.length === 0 && <UnsubscribeInfo />}
           </div>
-          {!chatCovered && (
-            <button
-              onClick={() => { haptic("light"); openTelegramLink(CHAT_INVITE_LINK); }}
-              className="flex items-center gap-3 rounded-2xl bg-sky-500/10 p-3 text-left active:scale-[0.98]"
-            >
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-500/20 text-sky-200"><IconChat size={22} /></span>
-              <span className="min-w-0 flex-1">
-                <span className="block font-display text-sm font-bold text-ink-chalk">Чат VICTOR FC</span>
-                <span className="block truncate text-caption text-ink-mist">Обмены, дропы и паки по слову «вкарта»</span>
-              </span>
-              <IconChevronRight size={16} className="shrink-0 text-ink-mist" />
-            </button>
-          )}
           {others.map((task) => (
             <ChannelCard key={task.user_task_id} task={task} isPending={pendingId === task.user_task_id} onClaim={() => onClaim(task.user_task_id)} />
           ))}

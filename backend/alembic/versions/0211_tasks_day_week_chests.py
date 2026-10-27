@@ -27,6 +27,7 @@ DAILY_CHESTS = [{"points": 20, "coins": 100}, {"points": 50, "coins": 200}, {"po
                 {"points": 100, "coins": 500, "card_rarity": "rare"}]
 WEEKLY_CHESTS = [{"points": 30, "coins": 500}, {"points": 60, "coins": 1000},
                  {"points": 90, "coins": 1500, "card_rarity": "epic"}]
+CHAT_INVITE_LINK = "https://t.me/+42EZisiOi8w1ZmMy"
 # code, name, description, metric, target, coins, route
 WEEKLY_TASKS = [
     ("weekly_packs_10", "Коллекционер недели", "Открой 10 паков за неделю", "packs_opened", 10, 600, "/packs"),
@@ -72,13 +73,25 @@ def upgrade() -> None:
         "AND (channel_username IS NOT NULL OR channel_chat_id IS NOT NULL)"
     )
 
-    # The game chat (its invite link used to sit on the home page) is a must-do subscription.
-    op.execute(
-        "UPDATE task_definitions SET is_required = true WHERE category = 'premium' "
-        "AND invite_link LIKE '%42EZisiOi8w1ZmMy%'"
-    )
-
     bind = op.get_bind()
+    # The game chat (its invite link used to sit on the home page) is a must-do
+    # subscription. The task that already carries the link, else the one
+    # premium task named «…чат…» that the bot can check (chat id / @username)
+    # gets the link; its chat id / username stay untouched, so the
+    # unsubscribe clawback keeps working.
+    chat_ids = list(bind.execute(sa.text(
+        "SELECT id FROM task_definitions WHERE category = 'premium' AND invite_link = :link"
+    ), {"link": CHAT_INVITE_LINK}).scalars())
+    if not chat_ids:
+        named = list(bind.execute(sa.text(
+            "SELECT id FROM task_definitions WHERE category = 'premium' AND lower(name) LIKE '%чат%' "
+            "AND (channel_chat_id IS NOT NULL OR channel_username IS NOT NULL)"
+        )).scalars())
+        chat_ids = named if len(named) == 1 else []
+    for task_id in chat_ids:
+        bind.execute(sa.text(
+            "UPDATE task_definitions SET invite_link = :link, is_required = true WHERE id = :id"
+        ), {"link": CHAT_INVITE_LINK, "id": task_id})
     existing = set(bind.execute(sa.text("SELECT code FROM task_definitions")).scalars())
     for i, (code, name, description, metric, target, coins, route) in enumerate(WEEKLY_TASKS):
         if code in existing:
