@@ -9,13 +9,14 @@ import EmptyState from "@/components/common/EmptyState";
 import RewardModal, { RewardCoins } from "@/components/common/RewardModal";
 import WeeklyEventStrip from "@/components/home/WeeklyEventStrip";
 import {
-  IconChat, IconCheck, IconChevronRight, IconClock, IconCoin, IconFire, IconGift, IconHelp, IconLock, IconPack,
+  IconChat, IconCheck, IconChevronRight, IconClock, IconCoin, IconFire, IconHelp, IconLock, IconPack,
   IconSwap, IconTarget, IconTrophy, IconUsers, type IconProps,
 } from "@/components/icons";
 import { SkillTokenIcon } from "@/components/icons/skills";
 import { GrantedRewardModal } from "@/components/rewards/RewardBundleView";
 import { ApiRequestError } from "@/lib/api";
 import { skillByCode, useSkillCatalog } from "@/lib/cardSkills";
+import { chestArt, type ChestArtKind } from "@/lib/chestArt";
 import { artOf } from "@/lib/gameArt";
 import { CHAT_INVITE_LINK } from "@/lib/links";
 import { RARITY_LABELS, RARITY_TEXT } from "@/lib/rarity";
@@ -32,11 +33,13 @@ export default function TasksPage() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [claimedCoins, setClaimedCoins] = useState<number | null>(null);
-  const [chestReward, setChestReward] = useState<GrantedRewards | null>(null);
+  const [chestReward, setChestReward] = useState<{ rewards: GrantedRewards; kind: ChestKind } | null>(null);
   const [tab, setTab] = useState<Tab>("daily");
   const [claimingAll, setClaimingAll] = useState(false);
 
   const { data: taskList, isLoading } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
+  const chestCount = (track: Period) =>
+    (track === "weekly" ? taskList?.weekly_track : taskList?.daily_track)?.chests.length ?? 0;
   const { data: bingo } = useQuery({ queryKey: ["bingo-current"], queryFn: fetchCurrentBingo });
   const fail = (err: unknown, fallback: string) => setError(err instanceof ApiRequestError ? err.message : fallback);
 
@@ -62,11 +65,11 @@ export default function TasksPage() {
 
   const chestMutation = useMutation({
     mutationFn: ({ track, index }: { track: Period; index: number }) => claimTaskChest(track, index),
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       updateBalance(data.new_balance);
       hapticNotify("success");
       setError(null);
-      setChestReward(data.rewards);
+      setChestReward({ rewards: data.rewards, kind: chestKind(variables.track, variables.index, chestCount(variables.track)) });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["collection"] });
     },
@@ -177,7 +180,7 @@ export default function TasksPage() {
           {track && track.chests.length > 0 && (
             <>
               <ChestHero track={track} period={period} pending={chestMutation.isPending} onOpen={openChest} />
-              <ChestRoad track={track} pendingIndex={chestMutation.isPending ? chestMutation.variables?.index : undefined} onOpen={openChest} />
+              <ChestRoad track={track} period={period} pendingIndex={chestMutation.isPending ? chestMutation.variables?.index : undefined} onOpen={openChest} />
             </>
           )}
 
@@ -238,7 +241,14 @@ export default function TasksPage() {
           onClose={() => setClaimedCoins(null)}
         />
       )}
-      {chestReward && <GrantedRewardModal title="Сундук открыт!" granted={chestReward} onClose={() => setChestReward(null)} />}
+      {chestReward && (
+        <GrantedRewardModal
+          title="Сундук открыт!"
+          granted={chestReward.rewards}
+          hero={<img src={chestArt(chestReward.kind, true)} alt="" className="h-32 w-32 object-contain" />}
+          onClose={() => setChestReward(null)}
+        />
+      )}
     </div>
   );
 }
@@ -288,6 +298,29 @@ function chestRewardText(chest: TaskChest): string {
   return chest.card_rarity ? `${coins} + ${RARITY_LABELS[chest.card_rarity].toLowerCase()} карта` : coins;
 }
 
+type ChestKind = ChestArtKind;
+
+/** Ordinary chests are emerald; the day's last one gold, the week's last one legendary. */
+function chestKind(period: Period, index: number, total: number): ChestKind {
+  if (index < total - 1) return "emerald";
+  return period === "weekly" ? "legend" : "gold";
+}
+
+const CHEST_LOOK: Record<ChestKind, { frame: string; text: string; bar: string; glow: string }> = {
+  emerald: {
+    frame: "border-emerald-400/60 bg-gradient-to-br from-emerald-500/25 via-emerald-900/20 to-bg-surface",
+    text: "text-emerald-200", bar: "from-emerald-500 to-emerald-300", glow: "drop-shadow-[0_0_14px_rgba(52,211,153,0.55)]",
+  },
+  gold: {
+    frame: "border-amber-400/70 bg-gradient-to-br from-amber-500/30 via-amber-900/20 to-bg-surface",
+    text: "text-amber-200", bar: "from-amber-500 to-amber-300", glow: "drop-shadow-[0_0_16px_rgba(251,191,36,0.6)]",
+  },
+  legend: {
+    frame: "border-fuchsia-400/70 bg-gradient-to-br from-fuchsia-600/30 via-purple-900/30 to-bg-surface",
+    text: "text-fuchsia-200", bar: "from-fuchsia-500 to-fuchsia-300", glow: "drop-shadow-[0_0_18px_rgba(217,70,239,0.65)]",
+  },
+};
+
 /** The big banner: the next chest the player is heading for. */
 function ChestHero({
   track, period, pending, onOpen,
@@ -298,37 +331,31 @@ function ChestHero({
   onOpen: (index: number) => void;
 }) {
   const countdown = useCountdown(track.resets_at);
+  const total = track.chests.length;
   const next = track.chests.find((c) => !c.is_claimed);
-  const isLast = !!next && next.index === track.chests.length - 1;
+  const kind = chestKind(period, next?.index ?? total - 1, total);
+  const look = CHEST_LOOK[kind];
   const max = Math.max(1, track.max_points);
-  const title = period === "daily" ? "Сундук дня" : "Сундук недели";
+  const title = kind === "legend" ? "Легендарный сундук" : kind === "gold" ? "Золотой сундук" : period === "daily" ? "Сундук дня" : "Сундук недели";
 
   return (
-    <section
-      className={`relative overflow-hidden rounded-3xl border-2 p-4 ${
-        isLast
-          ? "border-fuchsia-400/70 bg-gradient-to-br from-fuchsia-600/30 via-purple-900/30 to-bg-surface"
-          : "border-amber-400/70 bg-gradient-to-br from-amber-500/30 via-amber-900/20 to-bg-surface"
-      }`}
-    >
-      <div className="flex items-center gap-4">
-        <motion.div
-          animate={next?.is_available ? { y: [0, -6, 0], rotate: [0, -4, 4, 0] } : { y: [0, -2, 0] }}
-          transition={{ duration: next?.is_available ? 0.9 : 2.4, repeat: Infinity, ease: "easeInOut" }}
-          className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl ${
-            isLast ? "bg-fuchsia-500/30 text-fuchsia-200 shadow-glow-diamond" : "bg-amber-400/30 text-amber-200 shadow-glow-legendary"
-          }`}
-        >
-          {next ? (isLast ? <IconTrophy size={44} /> : <IconGift size={44} />) : <IconCheck size={44} />}
-        </motion.div>
+    <section className={`relative overflow-hidden rounded-3xl border-2 p-4 ${look.frame}`}>
+      <div className="flex items-center gap-3">
+        <motion.img
+          src={chestArt(kind, !next)}
+          alt=""
+          animate={next?.is_available ? { y: [0, -6, 0], rotate: [0, -5, 5, 0] } : { y: [0, -3, 0] }}
+          transition={{ duration: next?.is_available ? 0.9 : 2.6, repeat: Infinity, ease: "easeInOut" }}
+          className={`h-28 w-28 shrink-0 object-contain ${look.glow}`}
+        />
         <div className="min-w-0 flex-1">
           <p className="font-display text-lg font-bold leading-tight text-ink-chalk">{next ? title : "Все сундуки открыты"}</p>
-          <p className={`text-xs font-semibold ${isLast ? "text-fuchsia-200" : "text-amber-200"}`}>
+          <p className={`text-xs font-semibold ${look.text}`}>
             {next ? chestRewardText(next) : "Возвращайся за новыми заданиями"}
           </p>
           <div className="mt-2 h-3 overflow-hidden rounded-full border border-white/10 bg-black/40">
             <div
-              className={`h-full rounded-full ${isLast ? "bg-gradient-to-r from-fuchsia-500 to-fuchsia-300" : "bg-gradient-to-r from-amber-500 to-amber-300"}`}
+              className={`h-full rounded-full bg-gradient-to-r ${look.bar}`}
               style={{ width: `${Math.min(100, (track.points / max) * 100)}%` }}
             />
           </div>
@@ -356,37 +383,55 @@ function ChestHero({
   );
 }
 
-/** Every chest of the period as a road: opened, ready (bouncing), locked, the last one special. */
-function ChestRoad({ track, pendingIndex, onOpen }: { track: TaskTrack; pendingIndex?: number; onOpen: (index: number) => void }) {
+/** Every chest of the period as a road: opened, ready (bouncing), locked (dimmed). */
+function ChestRoad({
+  track, period, pendingIndex, onOpen,
+}: {
+  track: TaskTrack;
+  period: Period;
+  pendingIndex?: number;
+  onOpen: (index: number) => void;
+}) {
+  const total = track.chests.length;
   return (
-    <div className="relative flex items-start justify-between px-2">
-      <div className="absolute left-8 right-8 top-6 h-1 rounded-full bg-white/10" />
+    <div className="relative flex items-start justify-between px-1">
+      <div className="absolute left-8 right-8 top-7 h-1 rounded-full bg-white/10" />
       {track.chests.map((chest) => {
-        const last = chest.index === track.chests.length - 1;
-        const look = chest.is_claimed
-          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-          : chest.is_available
-            ? "bg-amber-400/30 text-amber-200 border-amber-300 shadow-glow-legendary"
-            : last ? "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-400/40" : "bg-bg-surface text-ink-mist border-white/10";
-        const Icon = chest.is_claimed ? IconCheck : chest.is_available ? IconGift : last ? IconTrophy : IconLock;
+        const kind = chestKind(period, chest.index, total);
+        const locked = !chest.is_claimed && !chest.is_available;
         return (
           <button
             key={chest.index}
             onClick={() => chest.is_available && onOpen(chest.index)}
             disabled={!chest.is_available || pendingIndex === chest.index}
             aria-label={`Сундук за ${chest.points} очков`}
-            className="relative z-10 flex w-14 flex-col items-center gap-1"
+            className="relative z-10 flex w-16 flex-col items-center"
           >
             <motion.span
-              animate={chest.is_available ? { y: [0, -5, 0] } : undefined}
+              animate={chest.is_available ? { y: [0, -6, 0], scale: [1, 1.06, 1] } : undefined}
               transition={{ duration: 0.8, repeat: Infinity }}
-              className={`flex h-12 w-12 items-center justify-center rounded-2xl border-2 ${look}`}
+              className="relative"
             >
-              <Icon size={22} />
+              <img
+                src={chestArt(kind, chest.is_claimed)}
+                alt=""
+                className={`h-14 w-14 object-contain ${
+                  locked ? "opacity-45 grayscale-[60%]" : chest.is_claimed ? "opacity-60" : CHEST_LOOK[kind].glow
+                }`}
+              />
+              {(locked || chest.is_claimed) && (
+                <span
+                  className={`absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full ring-2 ring-bg-base ${
+                    chest.is_claimed ? "bg-emerald-500 text-bg-base" : "bg-bg-raised text-ink-mist"
+                  }`}
+                >
+                  {chest.is_claimed ? <IconCheck size={12} /> : <IconLock size={11} />}
+                </span>
+              )}
             </motion.span>
             <span className={`font-mono text-micro font-bold ${chest.is_available ? "text-amber-300" : "text-ink-mist"}`}>{chest.points}</span>
             {chest.card_rarity && !chest.is_claimed && (
-              <span className={`-mt-1 text-micro font-semibold ${RARITY_TEXT[chest.card_rarity]}`}>+карта</span>
+              <span className={`-mt-0.5 text-micro font-semibold ${RARITY_TEXT[chest.card_rarity]}`}>+карта</span>
             )}
           </button>
         );
