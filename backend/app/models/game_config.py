@@ -1329,6 +1329,9 @@ class GameConfig(TimestampMixin, Base):
         default=lambda: [{"points": 20, "coins": 100}, {"points": 50, "coins": 200}, {"points": 80, "coins": 300},
                          {"points": 100, "coins": 500, "card_rarity": "rare"}],
     )
+    # Badge «Свой в клубе»: granted once every required premium task is
+    # claimed, taken back by the bot's unsubscribe sweep with the coins.
+    task_required_badge_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     task_weekly_chests: Mapped[list] = mapped_column(
         JSON, nullable=False,
         default=lambda: [{"points": 30, "coins": 500}, {"points": 60, "coins": 1000},

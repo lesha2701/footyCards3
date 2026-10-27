@@ -507,6 +507,7 @@ class GameConfigOut(BaseModel):
     task_daily_slots: int = 5
     task_weekly_slots: int = 3
     task_free_rerolls: int = 1
+    task_required_badge_id: Optional[int] = None
     task_daily_chests: list[dict] = []
     task_weekly_chests: list[dict] = []
     manager_formation_effect_pct: int = 100
@@ -1255,6 +1256,7 @@ class GameConfigUpdate(BaseModel):
     task_daily_slots: Optional[int] = Field(default=None, ge=0, le=10)
     task_weekly_slots: Optional[int] = Field(default=None, ge=0, le=10)
     task_free_rerolls: Optional[int] = Field(default=None, ge=0, le=10)
+    task_required_badge_id: Optional[int] = None
     task_daily_chests: Optional[list[TaskChestConfigIn]] = Field(default=None, max_length=8)
     task_weekly_chests: Optional[list[TaskChestConfigIn]] = Field(default=None, max_length=8)
     manager_formation_effect_pct: Optional[int] = Field(default=None, ge=0, le=300)

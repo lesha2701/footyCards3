@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import TaskCategory, TaskConditionType
+from app.schemas.badge import BadgeOut
 from app.schemas.monetization import GrantedRewardsOut
 from app.schemas.pack import PackOpenResult
 
@@ -141,6 +142,8 @@ class TaskListOut(BaseModel):
     daily_track: Optional[TaskTrackOut] = None
     weekly_track: Optional[TaskTrackOut] = None
     rerolls_left: int = 0
+    # The badge every required subscription earns (shown on the «Обязательно» banner).
+    required_badge: Optional[BadgeOut] = None
 
 
 class PremiumCoinsBackfillOut(BaseModel):
@@ -160,6 +163,8 @@ class TaskClaimOut(BaseModel):
     granted_pack: Optional[PackOpenResult] = None
     refilled_task: Optional[TaskOut] = None
     points_added: int = 0
+    # «Свой в клубе», when this claim completed the last required subscription.
+    granted_badge: Optional[BadgeOut] = None
 
 
 class TaskChestClaimOut(BaseModel):

@@ -62,6 +62,7 @@ def upgrade() -> None:
     op.add_column("game_config", sa.Column("task_daily_slots", sa.Integer(), nullable=False, server_default="5"))
     op.add_column("game_config", sa.Column("task_weekly_slots", sa.Integer(), nullable=False, server_default="3"))
     op.add_column("game_config", sa.Column("task_free_rerolls", sa.Integer(), nullable=False, server_default="1"))
+    op.add_column("game_config", sa.Column("task_required_badge_id", sa.Integer(), nullable=True))
     for name, value in (("task_daily_chests", DAILY_CHESTS), ("task_weekly_chests", WEEKLY_CHESTS)):
         op.add_column("game_config", sa.Column(
             name, sa.JSON(), nullable=False, server_default=sa.text("'" + json.dumps(value) + "'::json"),
@@ -74,6 +75,12 @@ def upgrade() -> None:
     )
 
     bind = op.get_bind()
+    # «Свой в клубе»: the badge for every required subscription (see task_required_badge_id).
+    badge_id = bind.execute(sa.text(
+        "INSERT INTO badges (name, icon, is_active, sort_order, created_at, updated_at) "
+        "VALUES ('Свой в клубе', '🤝', true, 0, now(), now()) RETURNING id"
+    )).scalar_one()
+    bind.execute(sa.text("UPDATE game_config SET task_required_badge_id = :id"), {"id": badge_id})
     # The game chat (its invite link used to sit on the home page) is a must-do
     # subscription. The task that already carries the link, else the one
     # premium task named «…чат…» that the bot can check (chat id / @username)
@@ -107,7 +114,11 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DELETE FROM task_definitions WHERE code IN (" + ", ".join(f"'{t[0]}'" for t in WEEKLY_TASKS) + ")")
-    for name in ("task_weekly_chests", "task_daily_chests", "task_free_rerolls", "task_weekly_slots", "task_daily_slots"):
+    op.execute(
+        "DELETE FROM badges WHERE id IN (SELECT task_required_badge_id FROM game_config WHERE task_required_badge_id IS NOT NULL)"
+    )
+    for name in ("task_weekly_chests", "task_daily_chests", "task_required_badge_id", "task_free_rerolls",
+                 "task_weekly_slots", "task_daily_slots"):
         op.drop_column("game_config", name)
     op.drop_table("task_chest_claims")
     op.drop_table("task_activity")

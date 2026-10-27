@@ -478,6 +478,7 @@ export interface GameConfig {
   task_daily_slots: number;
   task_weekly_slots: number;
   task_free_rerolls: number;
+  task_required_badge_id: number | null;
   task_daily_chests: TaskChestConfig[];
   task_weekly_chests: TaskChestConfig[];
   manager_formation_effect_pct: number;

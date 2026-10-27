@@ -1505,6 +1505,8 @@ export interface TaskList {
   daily_track?: TaskTrack | null;
   weekly_track?: TaskTrack | null;
   rerolls_left?: number;
+  /** «Свой в клубе»: earned by every required subscription. */
+  required_badge?: Badge | null;
 }
 
 export interface TaskChestClaimResult {
@@ -1524,6 +1526,7 @@ export interface TaskClaimResult {
   granted_skill_tokens?: { skill_code: string; quantity: number } | null;
   refilled_task: Task | null;
   points_added?: number;
+  granted_badge?: Badge | null;
 }
 
 export interface SaboteurStartResult {

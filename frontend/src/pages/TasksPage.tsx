@@ -7,10 +7,11 @@ import { fetchCurrentBingo } from "@/api/bingo";
 import { claimTask, claimTaskChest, fetchTasks, rerollTask } from "@/api/tasks";
 import EmptyState from "@/components/common/EmptyState";
 import RewardModal, { RewardCoins } from "@/components/common/RewardModal";
+import { UserBadge } from "@/components/common/UserBadge";
 import WeeklyEventStrip from "@/components/home/WeeklyEventStrip";
 import {
   IconChat, IconCheck, IconChevronRight, IconClock, IconCoin, IconFire, IconHelp, IconLock, IconPack,
-  IconSwap, IconTarget, IconTrophy, IconUsers, type IconProps,
+  IconSwap, IconTarget, IconUsers, type IconProps,
 } from "@/components/icons";
 import { SkillTokenIcon } from "@/components/icons/skills";
 import { GrantedRewardModal } from "@/components/rewards/RewardBundleView";
@@ -21,7 +22,7 @@ import { artOf } from "@/lib/gameArt";
 import { RARITY_LABELS, RARITY_TEXT } from "@/lib/rarity";
 import { haptic, hapticNotify, openTelegramLink } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
-import type { GrantedRewards, Task, TaskChest, TaskTrack } from "@/types";
+import type { Badge, GrantedRewards, Task, TaskChest, TaskTrack } from "@/types";
 
 type Tab = "daily" | "weekly" | "subs";
 type Period = Exclude<Tab, "subs">;
@@ -31,7 +32,8 @@ export default function TasksPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
-  const [claimedCoins, setClaimedCoins] = useState<number | null>(null);
+  // A claim's reward popup; a subscription opens as a golden chest, maybe with «Свой в клубе».
+  const [claimed, setClaimed] = useState<{ coins: number; chest: boolean; badge: Badge | null } | null>(null);
   const [chestReward, setChestReward] = useState<{ rewards: GrantedRewards; kind: ChestKind } | null>(null);
   const [tab, setTab] = useState<Tab>("daily");
   const [claimingAll, setClaimingAll] = useState(false);
@@ -44,19 +46,21 @@ export default function TasksPage() {
 
   const claimMutation = useMutation({
     mutationFn: claimTask,
-    onSuccess: (data) => {
+    onSuccess: (data, userTaskId) => {
       updateBalance(data.new_balance);
       hapticNotify("success");
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["collection"] });
+      if (data.granted_badge) queryClient.invalidateQueries({ queryKey: ["profile", "me"] });
       if (data.granted_skill_tokens) queryClient.invalidateQueries({ queryKey: ["card-skills"] });
       if (data.granted_pack) {
         // Reuses the same full packshot + per-card reveal animation as a
         // real pack purchase, instead of a bespoke "reward received" popup.
         navigate(`/packs/${data.granted_pack.pack.id}/open`, { state: { result: data.granted_pack } });
       } else {
-        setClaimedCoins(data.reward_coins);
+        const chest = (taskList?.premium ?? []).some((t) => t.user_task_id === userTaskId);
+        setClaimed({ coins: data.reward_coins, chest, badge: data.granted_badge ?? null });
       }
     },
     onError: (err) => fail(err, "Не удалось забрать награду"),
@@ -115,7 +119,7 @@ export default function TasksPage() {
       }
       hapticNotify("success");
       setError(null);
-      setClaimedCoins(coins);
+      setClaimed({ coins, chest: false, badge: null });
     } catch (err) {
       fail(err, "Не удалось забрать награду");
     } finally {
@@ -171,6 +175,7 @@ export default function TasksPage() {
       {tab === "subs" ? (
         <SubscriptionsTab
           tasks={premium}
+          badge={taskList?.required_badge ?? null}
           pendingId={claimMutation.isPending ? claimMutation.variables : undefined}
           onClaim={(id) => claimMutation.mutate(id)}
         />
@@ -232,12 +237,22 @@ export default function TasksPage() {
         </>
       )}
 
-      {claimedCoins !== null && (
+      {claimed && (
         <RewardModal
-          title="Награда получена!"
-          subtitle="Задание выполнено, монеты начислены на баланс."
-          items={[<RewardCoins key="coins" amount={claimedCoins} />]}
-          onClose={() => setClaimedCoins(null)}
+          title={claimed.chest ? "Сундук подписчика открыт!" : "Награда получена!"}
+          subtitle={claimed.chest ? "Спасибо, что с нами! Монеты уже на балансе." : "Задание выполнено, монеты начислены на баланс."}
+          hero={claimed.chest ? <img src={chestArt("gold", true)} alt="" className="h-32 w-32 object-contain" /> : undefined}
+          items={[
+            <RewardCoins key="coins" amount={claimed.coins} />,
+            ...(claimed.badge
+              ? [
+                  <p key="badge" className="flex items-center gap-1.5 text-sm font-semibold text-fuchsia-200">
+                    <UserBadge badge={claimed.badge} /> Значок «{claimed.badge.name}» — теперь он у твоего имени
+                  </p>,
+                ]
+              : []),
+          ]}
+          onClose={() => setClaimed(null)}
         />
       )}
       {chestReward && (
@@ -553,31 +568,63 @@ function TaskCard({
   );
 }
 
-function channelUrl(task: Task): string | null {
-  if (task.invite_link) return task.invite_link;
-  return task.channel_username ? `https://t.me/${task.channel_username.replace("@", "")}` : null;
-}
-
-function SubscriptionsTab({ tasks, pendingId, onClaim }: { tasks: Task[]; pendingId?: number; onClaim: (id: number) => void }) {
+function SubscriptionsTab({
+  tasks, badge, pendingId, onClaim,
+}: {
+  tasks: Task[];
+  badge: Badge | null;
+  pendingId?: number;
+  onClaim: (id: number) => void;
+}) {
   const required = tasks.filter((t) => t.is_required);
   const others = tasks.filter((t) => !t.is_required).sort((a, b) => Number(a.is_claimed) - Number(b.is_claimed));
+  const done = required.filter((t) => t.is_claimed).length;
+  const total = required.reduce((sum, t) => sum + t.reward_coins, 0);
+  const allDone = required.length > 0 && done === required.length;
+  const [visited, markVisited] = useVisited();
 
   return (
     <div className="flex flex-col gap-4">
       {required.length > 0 && (
-        <section className="rounded-3xl border-2 border-amber-400/70 bg-gradient-to-br from-amber-500/25 via-amber-900/15 to-bg-surface p-4">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="flex items-center gap-1.5 font-display text-lg font-bold text-ink-chalk">
-                <IconTrophy size={18} className="text-amber-300" /> Обязательно
+        <section className="relative overflow-hidden rounded-3xl border-2 border-fuchsia-400/70 bg-gradient-to-br from-fuchsia-600/30 via-purple-900/30 to-bg-surface p-4">
+          <div className="absolute right-3 top-3"><UnsubscribeInfo /></div>
+          <div className="flex items-center gap-3">
+            <motion.img
+              src={chestArt("legend", allDone)}
+              alt=""
+              animate={allDone ? undefined : { y: [0, -4, 0], rotate: [0, -3, 3, 0] }}
+              transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+              className="h-28 w-28 shrink-0 object-contain drop-shadow-[0_0_18px_rgba(217,70,239,0.65)]"
+            />
+            <div className="min-w-0 flex-1 pr-6">
+              <p className="font-display text-lg font-bold leading-tight text-ink-chalk">{badge?.name ?? "Свой в клубе"}</p>
+              <p className="text-xs font-semibold text-fuchsia-200">
+                {total.toLocaleString("ru-RU")} монет{badge ? " + значок у имени" : ""}
               </p>
-              <p className="text-caption text-amber-100/80">Канал и чат игры: новости, дропы, обмены</p>
+              <div className="mt-2 flex gap-1">
+                {required.map((t) => (
+                  <span key={t.user_task_id} className={`h-2.5 flex-1 rounded-full ${t.is_claimed ? "bg-fuchsia-300" : "bg-black/40"}`} />
+                ))}
+              </div>
+              <p className="mt-1 flex items-center gap-1 text-micro text-ink-mist">
+                {allDone ? (
+                  <>Ты свой! {badge && <UserBadge badge={badge} />}</>
+                ) : (
+                  <>Подписки: {done} из {required.length} — подпишись на канал и чат игры</>
+                )}
+              </p>
             </div>
-            <UnsubscribeInfo />
           </div>
           <div className="mt-3 flex flex-col gap-2">
             {required.map((task) => (
-              <ChannelCard key={task.user_task_id} task={task} isPending={pendingId === task.user_task_id} onClaim={() => onClaim(task.user_task_id)} />
+              <SubscriptionRow
+                key={task.user_task_id}
+                task={task}
+                visited={visited.has(task.user_task_id)}
+                isPending={pendingId === task.user_task_id}
+                onVisit={() => markVisited(task.user_task_id)}
+                onClaim={() => onClaim(task.user_task_id)}
+              />
             ))}
           </div>
         </section>
@@ -586,14 +633,149 @@ function SubscriptionsTab({ tasks, pendingId, onClaim }: { tasks: Task[]; pendin
       {others.length > 0 && (
         <section className="flex flex-col gap-2">
           <div className="flex items-center justify-between px-1">
-            <p className="font-display text-sm font-bold text-ink-chalk">Подписки с наградой</p>
+            <p className="font-display text-sm font-bold text-ink-chalk">Сундуки подписчика</p>
             {required.length === 0 && <UnsubscribeInfo />}
           </div>
           {others.map((task) => (
-            <ChannelCard key={task.user_task_id} task={task} isPending={pendingId === task.user_task_id} onClaim={() => onClaim(task.user_task_id)} />
+            <SubscriptionChest
+              key={task.user_task_id}
+              task={task}
+              visited={visited.has(task.user_task_id)}
+              isPending={pendingId === task.user_task_id}
+              onVisit={() => markVisited(task.user_task_id)}
+              onClaim={() => onClaim(task.user_task_id)}
+            />
           ))}
         </section>
       )}
+    </div>
+  );
+}
+
+/** Subscriptions the player already opened in Telegram (this device): their
+ * button turns into «Открыть сундук». Remembered per viewer only. */
+function useVisited(): [Set<number>, (id: number) => void] {
+  const KEY = "tasks.subs.visited";
+  const [visited, setVisited] = useState<Set<number>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(KEY) ?? "[]") as number[]);
+    } catch {
+      return new Set();
+    }
+  });
+  const mark = (id: number) =>
+    setVisited((prev) => {
+      const next = new Set(prev).add(id);
+      try {
+        localStorage.setItem(KEY, JSON.stringify([...next]));
+      } catch {
+        // storage unavailable: the button still works for this visit
+      }
+      return next;
+    });
+  return [visited, mark];
+}
+
+function channelUrl(task: Task): string | null {
+  if (task.invite_link) return task.invite_link;
+  return task.channel_username ? `https://t.me/${task.channel_username.replace("@", "")}` : null;
+}
+
+/** «Подписаться» first; once the channel was opened it becomes «Открыть сундук» (the claim re-checks membership). */
+function SubscribeButton({
+  task, visited, isPending, onVisit, onClaim, className,
+}: {
+  task: Task;
+  visited: boolean;
+  isPending: boolean;
+  onVisit: () => void;
+  onClaim: () => void;
+  className: string;
+}) {
+  const url = channelUrl(task);
+  if (url && !visited) {
+    return (
+      <button onClick={() => { haptic("light"); openTelegramLink(url); onVisit(); }} className={`${className} border-2 border-amber-300 bg-amber-400/10 text-amber-200`}>
+        Подписаться
+      </button>
+    );
+  }
+  return (
+    <button onClick={onClaim} disabled={isPending} className={`${className} bg-amber-400 text-bg-base shadow-glow-legendary disabled:opacity-50`}>
+      {isPending ? "Проверяем..." : "Открыть сундук"}
+    </button>
+  );
+}
+
+function SubscriptionRow({
+  task, visited, isPending, onVisit, onClaim,
+}: {
+  task: Task;
+  visited: boolean;
+  isPending: boolean;
+  onVisit: () => void;
+  onClaim: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-black/30 p-2.5">
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${task.is_claimed ? "bg-emerald-500/20 text-emerald-300" : "bg-fuchsia-400/20 text-fuchsia-200"}`}>
+        {task.is_claimed ? <IconCheck size={20} /> : <IconChat size={20} />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-display text-sm font-bold text-ink-chalk">{task.name}</p>
+        <p className="flex items-center gap-0.5 text-caption font-bold text-amber-300">
+          <IconCoin size={12} />+{task.reward_coins.toLocaleString("ru-RU")}
+        </p>
+      </div>
+      {task.is_claimed ? (
+        <span className="text-caption font-bold text-emerald-400">Получено</span>
+      ) : (
+        <SubscribeButton
+          task={task} visited={visited} isPending={isPending} onVisit={onVisit} onClaim={onClaim}
+          className="shrink-0 rounded-xl px-3 py-2 text-xs font-bold active:scale-95"
+        />
+      )}
+    </div>
+  );
+}
+
+/** An ordinary rewarded subscription, shown as a golden chest. */
+function SubscriptionChest({
+  task, visited, isPending, onVisit, onClaim,
+}: {
+  task: Task;
+  visited: boolean;
+  isPending: boolean;
+  onVisit: () => void;
+  onClaim: () => void;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-3 rounded-3xl border p-3 ${
+        task.is_claimed ? "border-white/5 bg-bg-surface opacity-60" : "border-amber-400/50 bg-gradient-to-r from-amber-500/20 via-amber-900/10 to-bg-surface"
+      }`}
+    >
+      <motion.img
+        src={chestArt("gold", task.is_claimed)}
+        alt=""
+        animate={task.is_claimed ? undefined : { y: [0, -3, 0] }}
+        transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+        className="h-20 w-20 shrink-0 object-contain drop-shadow-[0_0_14px_rgba(251,191,36,0.5)]"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-display text-sm font-bold text-ink-chalk">{task.name}</p>
+        <p className="flex items-center gap-1 font-display text-xl font-bold text-amber-300">
+          <IconCoin size={18} />+{task.reward_coins.toLocaleString("ru-RU")}
+        </p>
+        {task.is_claimed ? (
+          <p className="flex items-center gap-1 text-caption font-bold text-emerald-400"><IconCheck size={13} /> Сундук открыт</p>
+        ) : (
+          <SubscribeButton
+            task={task} visited={visited} isPending={isPending} onVisit={onVisit} onClaim={onClaim}
+            className="mt-1.5 w-full rounded-xl py-2 text-xs font-bold active:scale-95"
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -614,49 +796,6 @@ function UnsubscribeInfo() {
           Если после получения награды отписаться — награда спишется с баланса. Подпишись снова, и задание опять
           станет активным: награду можно будет забрать ещё раз.
         </p>
-      )}
-    </div>
-  );
-}
-
-function ChannelCard({ task, isPending, onClaim }: { task: Task; isPending: boolean; onClaim: () => void }) {
-  const url = channelUrl(task);
-  return (
-    <div className={`rounded-2xl bg-black/30 p-3 ${task.is_claimed ? "opacity-60" : ""}`}>
-      <div className="flex items-center gap-3">
-        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${task.is_claimed ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-400/20 text-amber-200"}`}>
-          {task.is_claimed ? <IconCheck size={22} /> : <IconChat size={22} />}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-display text-sm font-bold text-ink-chalk">{task.name}</p>
-          {task.description && <p className="truncate text-caption text-ink-mist">{task.description}</p>}
-        </div>
-        <span className="flex shrink-0 items-center gap-1 font-display text-base font-bold text-amber-300">
-          <IconCoin size={15} />+{task.reward_coins.toLocaleString("ru-RU")}
-        </span>
-      </div>
-      {task.is_claimed ? (
-        <p className="mt-2 flex items-center justify-center gap-1 text-caption font-bold text-emerald-400">
-          <IconCheck size={13} /> Награда получена
-        </p>
-      ) : (
-        <div className={`mt-3 grid gap-2 ${url ? "grid-cols-2" : "grid-cols-1"}`}>
-          {url && (
-            <button
-              onClick={() => openTelegramLink(url)}
-              className="rounded-xl border-2 border-amber-300/70 bg-amber-400/10 py-2.5 text-xs font-bold text-amber-200 active:scale-95"
-            >
-              Подписаться
-            </button>
-          )}
-          <button
-            onClick={onClaim}
-            disabled={isPending}
-            className="rounded-xl bg-amber-400 py-2.5 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-50"
-          >
-            {isPending ? "Проверяем..." : "Забрать награду"}
-          </button>
-        </div>
       )}
     </div>
   );

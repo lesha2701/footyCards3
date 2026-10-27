@@ -54,9 +54,13 @@ async def run_premium_subscription_check(bot: Bot) -> None:
                     "Отписка от канала — награда за премиум-задание списана",
                 )
                 await db.reset_task_for_reclaim(row["user_task_id"])
+                # A required subscription also carries «Свой в клубе»; it comes
+                # back with the next claim once every required one is claimed.
+                badge_lost = bool(row["is_required"]) and await db.revoke_task_required_badge(row["user_id"])
                 await db.create_notification(
                     row["user_id"], "premium_task_coins_withdrawn", "Награда списана",
-                    f"Ты отписался от канала — {row['reward_coins_granted']} 🪙 за премиум-задание списаны с баланса. "
+                    f"Ты отписался от канала — {row['reward_coins_granted']} 🪙 за премиум-задание списаны с баланса"
+                    + (" и значок «Свой в клубе» снят" if badge_lost else "") + ". "
                     "Подпишись снова и нажми «Получить награду» в задании ещё раз, чтобы вернуть их.",
                 )
 

@@ -785,3 +785,43 @@ async def test_required_premium_tasks_come_first(client, db_session, bot_token):
     assert [t["code"] for t in premium] == ["prem_game_chat", "prem_other"]
     assert premium[0]["is_required"] is True and premium[1]["is_required"] is False
     assert premium[0]["route"] is None
+
+
+async def test_badge_comes_with_the_last_required_subscription(client, db_session, bot_token, monkeypatch):
+    from app.models.badge import Badge, UserBadge
+    from app.services.game_config_service import get_config
+
+    async def fake_subscribed(_telegram_id, _chat):
+        return True
+
+    monkeypatch.setattr("app.services.task_service.check_channel_membership", fake_subscribed)
+    badge = Badge(name="Свой в клубе", icon="🤝")
+    db_session.add(badge)
+    db_session.add_all([
+        TaskDefinition(code="req_channel", name="Канал", description="", category=TaskCategory.premium,
+                       condition_type=TaskConditionType.metric_counter, target_value=0, reward_coins=3000,
+                       channel_username="@game", is_required=True),
+        TaskDefinition(code="req_chat", name="Чат", description="", category=TaskCategory.premium,
+                       condition_type=TaskConditionType.metric_counter, target_value=0, reward_coins=3000,
+                       channel_username="@game_chat", is_required=True),
+    ])
+    await db_session.commit()
+    config = await get_config(db_session)
+    config.task_required_badge_id = badge.id
+    await db_session.commit()
+
+    user = await _register(client, db_session, 810026, bot_token)
+    headers = telegram_headers(810026, bot_token)
+    body = (await client.get("/api/v1/tasks", headers=headers)).json()
+    assert body["required_badge"]["name"] == "Свой в клубе"
+    first, second = body["premium"]
+
+    one = (await client.post(f"/api/v1/tasks/{first['user_task_id']}/claim", headers=headers)).json()
+    assert one["granted_badge"] is None
+    two = (await client.post(f"/api/v1/tasks/{second['user_task_id']}/claim", headers=headers)).json()
+    assert two["granted_badge"]["name"] == "Свой в клубе"
+
+    owned = (await db_session.execute(select(UserBadge).where(UserBadge.user_id == user.id))).scalars().all()
+    assert [b.badge_id for b in owned] == [badge.id]
+    await db_session.refresh(user)
+    assert user.active_badge_id == badge.id

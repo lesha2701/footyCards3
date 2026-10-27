@@ -13,6 +13,8 @@ from app.models.pack import Pack, PackOpening
 from app.models.task import TaskActivity, TaskChestClaim, TaskDefinition, UserTask
 from app.models.trade import TradeOffer
 from app.models.user import User
+from app.models.badge import Badge
+from app.schemas.badge import BadgeOut
 from app.schemas.pack import PackOpenResult
 from app.schemas.task import (
     GrantedSkillTokensOut, TaskChestClaimOut, TaskChestOut, TaskClaimOut, TaskListOut, TaskOut, TaskRerollOut,
@@ -343,7 +345,44 @@ async def list_my_tasks(db: AsyncSession, user: User) -> TaskListOut:
         daily_track=await _track(db, user, "daily", config),
         weekly_track=await _track(db, user, "weekly", config),
         rerolls_left=max(0, config.task_free_rerolls - (activity.rerolls if activity else 0)),
+        required_badge=await _required_badge(db, config),
     )
+
+
+async def _required_badge(db: AsyncSession, config) -> Optional[BadgeOut]:
+    if not config.task_required_badge_id:
+        return None
+    badge = await db.get(Badge, config.task_required_badge_id)
+    return BadgeOut.model_validate(badge) if badge and badge.is_active else None
+
+
+async def _grant_required_badge_if_done(db: AsyncSession, user: User) -> Optional[BadgeOut]:
+    """«Свой в клубе» once every active required subscription is claimed.
+    The bot's sweep takes it back with the coins when one is left."""
+    from app.services.game_config_service import get_config
+    from app.services.reward_bundle_service import grant_badge
+
+    config = await get_config(db)
+    badge = await _required_badge(db, config)
+    if badge is None:
+        return None
+    required = (await db.execute(
+        select(TaskDefinition.id).where(
+            TaskDefinition.category == TaskCategory.premium, TaskDefinition.is_active.is_(True),
+            TaskDefinition.is_required.is_(True),
+        )
+    )).scalars().all()
+    if not required:
+        return None
+    claimed = (await db.execute(
+        select(func.count(UserTask.id)).where(
+            UserTask.user_id == user.id, UserTask.task_definition_id.in_(required), UserTask.reward_claimed.is_(True),
+        )
+    )).scalar_one()
+    if claimed < len(required):
+        return None
+    await grant_badge(db, user, badge.id)
+    return badge
 
 
 async def claim_chest(db: AsyncSession, user: User, period: str, index: int) -> TaskChestClaimOut:
@@ -650,6 +689,12 @@ async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> 
         db.add(activity)
         points_added = definition.points
 
+    granted_badge: Optional[BadgeOut] = None
+    if definition.category == TaskCategory.premium and definition.is_required and not locked_user.game_rewards_blocked:
+        db.add(user_task)
+        await db.flush()
+        granted_badge = await _grant_required_badge_if_done(db, locked_user)
+
     db.add(user_task)
     await db.commit()
     await db.refresh(locked_user)
@@ -663,4 +708,5 @@ async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> 
         granted_pack=granted_pack,
         granted_skill_tokens=granted_tokens,
         points_added=points_added,
+        granted_badge=granted_badge,
     )
