@@ -81,7 +81,7 @@ from app.models.weekly_top import WeeklyTopAward, WeeklyTopRun
 from app.models.card_offer import CardOffer, CardOfferPurchase, CardOfferView
 from app.models.server_error import ServerError
 from app.models.magnate import MagnateMatch, MagnateSeat
-from app.models.task import TaskDefinition, UserTask
+from app.models.task import TaskActivity, TaskChestClaim, TaskDefinition, UserTask
 from app.models.tournament_queue import TournamentQueue, TournamentQueueEntry, TournamentQueueState
 from app.models.tournament import Tournament, TournamentClub
 from app.models.tournament_match import TournamentMatch
@@ -229,6 +229,8 @@ __all__ = [
     "PlayerTournamentStanding",
     "Player",
     "TaskDefinition",
+    "TaskActivity",
+    "TaskChestClaim",
     "UserTask",
     "TradeOffer",
     "TradeOfferCard",

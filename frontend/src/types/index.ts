@@ -1470,11 +1470,51 @@ export interface Task {
   target_value: number;
   is_completed: boolean;
   is_claimed: boolean;
+  period?: "daily" | "weekly";
+  /** Activity points the claim adds to its day / week track. */
+  points?: number;
+  /** Where «Играть →» leads; null = nowhere. */
+  route?: string | null;
+  /** A pinned must-do premium subscription (the game's channel / chat). */
+  is_required?: boolean;
+}
+
+export interface TaskChest {
+  index: number;
+  points: number;
+  coins: number;
+  card_rarity: Rarity | null;
+  pack_id: number | null;
+  is_claimed: boolean;
+  is_available: boolean;
+}
+
+export interface TaskTrack {
+  period_key: string;
+  points: number;
+  max_points: number;
+  chests: TaskChest[];
+  resets_at: string;
 }
 
 export interface TaskList {
+  /** Today's set. */
   regular: Task[];
+  weekly?: Task[];
   premium: Task[];
+  daily_track?: TaskTrack | null;
+  weekly_track?: TaskTrack | null;
+  rerolls_left?: number;
+}
+
+export interface TaskChestClaimResult {
+  rewards: GrantedRewards;
+  new_balance: number;
+}
+
+export interface TaskRerollResult {
+  task: Task;
+  rerolls_left: number;
 }
 
 export interface TaskClaimResult {
@@ -1483,6 +1523,7 @@ export interface TaskClaimResult {
   granted_pack: PackOpenResult | null;
   granted_skill_tokens?: { skill_code: string; quantity: number } | null;
   refilled_task: Task | null;
+  points_added?: number;
 }
 
 export interface SaboteurStartResult {

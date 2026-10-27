@@ -58,35 +58,142 @@ async def test_list_tasks_returns_fewer_than_five_when_pool_is_small(client, db_
     assert len(resp.json()["regular"]) == 3
 
 
-async def test_claim_regular_task_credits_coins_and_refills_slot(client, db_session, bot_token):
+async def _complete(db_session, user_task_id):
+    user_task = await db_session.get(UserTask, user_task_id)
+    user_task.progress = 1
+    user_task.completed_at = datetime.now(timezone.utc)
+    db_session.add(user_task)
+    await db_session.commit()
+
+
+async def test_claim_regular_task_credits_coins_and_keeps_it_as_done(client, db_session, bot_token):
     await _create_regular_tasks(db_session, 6)
     user = await _register(client, db_session, 810003, bot_token)
     headers = telegram_headers(810003, bot_token)
 
     tasks_before = (await client.get("/api/v1/tasks", headers=headers)).json()["regular"]
     target = tasks_before[0]
-    codes_before = {t["code"] for t in tasks_before}
-
-    # Simulate the task's condition being met.
-    user_task = await db_session.get(UserTask, target["user_task_id"])
-    user_task.progress = 1
-    user_task.completed_at = datetime.now(timezone.utc)
-    db_session.add(user_task)
-    await db_session.commit()
+    await _complete(db_session, target["user_task_id"])
 
     claim_resp = await client.post(f"/api/v1/tasks/{target['user_task_id']}/claim", headers=headers)
     assert claim_resp.status_code == 200
     body = claim_resp.json()
     assert body["reward_coins"] == target["reward_coins"]
-    assert body["refilled_task"] is not None
-    assert body["refilled_task"]["code"] not in codes_before
+    assert body["refilled_task"] is None
+    assert body["points_added"] == 20
 
     await db_session.refresh(user)
     assert user.balance == 500 + target["reward_coins"]
 
-    tasks_after = (await client.get("/api/v1/tasks", headers=headers)).json()["regular"]
-    assert len(tasks_after) == 5
-    assert target["code"] not in {t["code"] for t in tasks_after}
+    after = (await client.get("/api/v1/tasks", headers=headers)).json()
+    # The day's set is not refilled: the claimed task stays, shown as done.
+    assert [t["code"] for t in after["regular"]] == [t["code"] for t in tasks_before]
+    assert next(t for t in after["regular"] if t["code"] == target["code"])["is_claimed"] is True
+    assert after["daily_track"]["points"] == 20
+    assert after["daily_track"]["chests"][0]["is_available"] is True
+
+
+async def test_tasks_renew_on_a_new_day(client, db_session, bot_token):
+    await _create_regular_tasks(db_session, 6)
+    await _register(client, db_session, 810020, bot_token)
+    headers = telegram_headers(810020, bot_token)
+
+    first = (await client.get("/api/v1/tasks", headers=headers)).json()["regular"]
+    target = first[0]
+    await _complete(db_session, target["user_task_id"])
+    assert (await client.post(f"/api/v1/tasks/{target['user_task_id']}/claim", headers=headers)).status_code == 200
+
+    # Pretend the set was handed out yesterday.
+    rows = (await db_session.execute(select(UserTask).where(UserTask.slot_index.isnot(None)))).scalars().all()
+    for row in rows:
+        row.period_key = "2000-01-01"
+        db_session.add(row)
+    await db_session.commit()
+
+    renewed = (await client.get("/api/v1/tasks", headers=headers)).json()
+    assert len(renewed["regular"]) == 5
+    assert all(not t["is_claimed"] and not t["is_completed"] for t in renewed["regular"])
+
+
+async def test_weekly_tasks_get_their_own_slots(client, db_session, bot_token):
+    await _create_regular_tasks(db_session, 6)
+    for i in range(4):
+        db_session.add(TaskDefinition(
+            code=f"weekly_{i}", name=f"Week {i}", description="", category=TaskCategory.regular,
+            condition_type=TaskConditionType.metric_counter, metric="packs_opened", target_value=5,
+            reward_coins=100, period="weekly", points=30,
+        ))
+    await db_session.commit()
+    await _register(client, db_session, 810021, bot_token)
+
+    body = (await client.get("/api/v1/tasks", headers=telegram_headers(810021, bot_token))).json()
+    assert len(body["regular"]) == 5 and all(t["period"] == "daily" for t in body["regular"])
+    assert len(body["weekly"]) == 3 and all(t["period"] == "weekly" for t in body["weekly"])
+    assert body["weekly"][0]["route"] == "/packs"
+    assert len(body["weekly_track"]["chests"]) == 3
+
+
+async def test_chest_opens_once_after_its_threshold(client, db_session, bot_token):
+    await _create_regular_tasks(db_session, 6)
+    user = await _register(client, db_session, 810022, bot_token)
+    headers = telegram_headers(810022, bot_token)
+
+    closed = await client.post("/api/v1/tasks/chests/daily/0/claim", headers=headers)
+    assert closed.status_code == 409
+
+    tasks = (await client.get("/api/v1/tasks", headers=headers)).json()["regular"]
+    await _complete(db_session, tasks[0]["user_task_id"])
+    await client.post(f"/api/v1/tasks/{tasks[0]['user_task_id']}/claim", headers=headers)
+    await db_session.refresh(user)
+    balance = user.balance
+
+    opened = await client.post("/api/v1/tasks/chests/daily/0/claim", headers=headers)
+    assert opened.status_code == 200
+    assert opened.json()["rewards"]["coins"] == 100
+    await db_session.refresh(user)
+    assert user.balance == balance + 100
+
+    again = await client.post("/api/v1/tasks/chests/daily/0/claim", headers=headers)
+    assert again.status_code == 409
+    still_closed = await client.post("/api/v1/tasks/chests/daily/1/claim", headers=headers)
+    assert still_closed.status_code == 409
+
+    track = (await client.get("/api/v1/tasks", headers=headers)).json()["daily_track"]
+    assert track["chests"][0]["is_claimed"] is True
+
+
+async def test_reroll_swaps_a_daily_task_once_a_day(client, db_session, bot_token):
+    await _create_regular_tasks(db_session, 8)
+    await _register(client, db_session, 810023, bot_token)
+    headers = telegram_headers(810023, bot_token)
+
+    body = (await client.get("/api/v1/tasks", headers=headers)).json()
+    assert body["rerolls_left"] == 1
+    codes = {t["code"] for t in body["regular"]}
+    target = body["regular"][2]
+
+    resp = await client.post(f"/api/v1/tasks/{target['user_task_id']}/reroll", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["rerolls_left"] == 0
+    assert resp.json()["task"]["code"] not in codes
+
+    after = (await client.get("/api/v1/tasks", headers=headers)).json()
+    assert after["rerolls_left"] == 0
+    assert after["regular"][2]["code"] == resp.json()["task"]["code"]
+
+    second = await client.post(f"/api/v1/tasks/{after['regular'][0]['user_task_id']}/reroll", headers=headers)
+    assert second.status_code == 409
+
+
+async def test_completed_task_cannot_be_rerolled(client, db_session, bot_token):
+    await _create_regular_tasks(db_session, 8)
+    await _register(client, db_session, 810024, bot_token)
+    headers = telegram_headers(810024, bot_token)
+
+    target = (await client.get("/api/v1/tasks", headers=headers)).json()["regular"][0]
+    await _complete(db_session, target["user_task_id"])
+    resp = await client.post(f"/api/v1/tasks/{target['user_task_id']}/reroll", headers=headers)
+    assert resp.status_code == 409
 
 
 async def test_claim_regular_task_twice_is_rejected(client, db_session, bot_token):
@@ -660,3 +767,21 @@ async def test_admin_backfill_premium_coins_skips_definitions_with_existing_rewa
 
     await db_session.refresh(definition)
     assert definition.reward_coins == 250
+
+
+async def test_required_premium_tasks_come_first(client, db_session, bot_token):
+    db_session.add_all([
+        TaskDefinition(code="prem_other", name="Other", description="", category=TaskCategory.premium,
+                       condition_type=TaskConditionType.metric_counter, target_value=0, reward_coins=3000,
+                       channel_username="@other", sort_order=0),
+        TaskDefinition(code="prem_game_chat", name="Chat", description="", category=TaskCategory.premium,
+                       condition_type=TaskConditionType.metric_counter, target_value=0, reward_coins=3000,
+                       channel_username="@game_chat", sort_order=5, is_required=True),
+    ])
+    await db_session.commit()
+    await _register(client, db_session, 810025, bot_token)
+
+    premium = (await client.get("/api/v1/tasks", headers=telegram_headers(810025, bot_token))).json()["premium"]
+    assert [t["code"] for t in premium] == ["prem_game_chat", "prem_other"]
+    assert premium[0]["is_required"] is True and premium[1]["is_required"] is False
+    assert premium[0]["route"] is None

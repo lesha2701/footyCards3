@@ -140,7 +140,10 @@ export default function AdminGamesPage() {
     </label>
   );
 
-  const jsonField = (key: "manager_slots" | "manager_cosmetics" | "manager_merch" | "newbie_tasks", label: string) => (
+  const jsonField = (
+    key: "manager_slots" | "manager_cosmetics" | "manager_merch" | "newbie_tasks" | "task_daily_chests" | "task_weekly_chests",
+    label: string,
+  ) => (
     <label className="col-span-2 flex flex-col gap-1">
       <span className="text-xs text-slate-400">{label}</span>
       <textarea
@@ -788,6 +791,24 @@ export default function AdminGamesPage() {
         <div className="grid grid-cols-2 items-end gap-3">
           {field("ptour_style_edge_pct", "Бонус ко всем игрокам стилю, который бьёт стиль соперника, %")}
           {field("ptour_formation_effect_pct", "Сила крена схем в атаку/защиту, %")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">«Задания»: день, неделя, сундуки</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Набор заданий дня обновляется в полночь, недели — в понедельник. Очки заданий наполняют шкалу
+          активности; сундук открывается на своём пороге очков. Сундук: {"{"}"points", "coins", "card_rarity"
+          (common/rare/epic/legendary), "pack_id"{"}"}.
+        </p>
+        <div className="grid grid-cols-3 items-end gap-3">
+          {field("task_daily_slots", "Заданий в дне")}
+          {field("task_weekly_slots", "Заданий в неделе")}
+          {field("task_free_rerolls", "Бесплатных замен в день")}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          {jsonField("task_daily_chests", "Сундуки дня")}
+          {jsonField("task_weekly_chests", "Сундуки недели")}
         </div>
       </section>
 

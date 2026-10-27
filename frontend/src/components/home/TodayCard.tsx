@@ -18,7 +18,7 @@ export default function TodayCard({ wheel }: { wheel?: WheelStatus | null }) {
     return <Skeleton className="h-[116px] rounded-3xl" />;
   }
 
-  const tasksInProgress = [...(taskList?.regular ?? []), ...(taskList?.premium ?? [])].filter((t) => !t.is_completed).length;
+  const tasksInProgress = [...(taskList?.regular ?? []), ...(taskList?.weekly ?? []), ...(taskList?.premium ?? [])].filter((t) => !t.is_completed).length;
   const wheelReady = !!wheel && wheel.free_spins_remaining > 0;
   const instant = (dailyReady ? 1 : 0) + claimableTasks.length;
   const readyCount = instant + (freePackReady ? 1 : 0) + (wheelReady ? 1 : 0);

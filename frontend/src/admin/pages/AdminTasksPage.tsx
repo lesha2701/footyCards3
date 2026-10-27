@@ -37,6 +37,10 @@ interface TaskForm {
   channel_chat_id: string;
   invite_link: string;
   is_active: boolean;
+  period: "daily" | "weekly";
+  points: number;
+  route: string;
+  is_required: boolean;
 }
 
 function taskToForm(t?: TaskDefinition): TaskForm {
@@ -58,6 +62,10 @@ function taskToForm(t?: TaskDefinition): TaskForm {
     channel_chat_id: t?.channel_chat_id ? String(t.channel_chat_id) : "",
     invite_link: t?.invite_link ?? "",
     is_active: t?.is_active ?? true,
+    period: t?.period ?? "daily",
+    points: t?.points ?? 20,
+    route: t?.route ?? "",
+    is_required: t?.is_required ?? false,
   };
 }
 
@@ -148,6 +156,10 @@ export default function AdminTasksPage() {
     channel_chat_id: form.category === "premium" && form.channel_chat_id ? Number(form.channel_chat_id) : null,
     invite_link: form.category === "premium" ? form.invite_link || null : null,
     is_active: form.is_active,
+    period: form.period,
+    points: form.category === "premium" ? 0 : form.points,
+    route: form.category === "premium" ? null : form.route || null,
+    is_required: form.category === "premium" && form.is_required,
   });
 
   const createMutation = useMutation({ mutationFn: () => createTask(buildPayload()), onSuccess: () => { invalidate(); setCreating(false); } });
@@ -348,6 +360,24 @@ export default function AdminTasksPage() {
               </div>
 
               {form.category !== "premium" && (
+                <div className="grid grid-cols-3 gap-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-slate-400">Период</span>
+                    <select
+                      value={form.period}
+                      onChange={(e) => setForm({ ...form, period: e.target.value as TaskForm["period"] })}
+                      className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                    >
+                      <option value="daily">День</option>
+                      <option value="weekly">Неделя</option>
+                    </select>
+                  </label>
+                  <NumField label="Очки активности" value={form.points} onChange={(v) => setForm({ ...form, points: v })} />
+                  <Field label="«Играть →» (путь, пусто = авто)" value={form.route} onChange={(v) => setForm({ ...form, route: v })} />
+                </div>
+              )}
+
+              {form.category !== "premium" && (
                 <div className="grid grid-cols-2 gap-2">
                   <label className="flex flex-col gap-1">
                     <span className="text-xs text-slate-400">Награда: жетоны навыка</span>
@@ -372,6 +402,10 @@ export default function AdminTasksPage() {
 
               {form.category === "premium" && (
                 <>
+                  <label className="flex items-center gap-2 text-xs">
+                    <input type="checkbox" checked={form.is_required} onChange={(e) => setForm({ ...form, is_required: e.target.checked })} />
+                    Обязательное (канал / чат игры — закреплено сверху в «Заданиях»)
+                  </label>
                   <Field
                     label="Канал (@username, если есть)"
                     value={form.channel_username}

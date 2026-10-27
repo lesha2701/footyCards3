@@ -1317,3 +1317,20 @@ class GameConfig(TimestampMixin, Base):
     )
     match_day_auto_status: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     match_day_auto_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # --- «Задания»: day / week sets and activity chests (services/task_service.py) ---
+    task_daily_slots: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    task_weekly_slots: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Free replacements of a daily task per day.
+    task_free_rerolls: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Chests on the activity track: [{"points": 20, "coins": 100, "pack_id": null, "card_rarity": null}, …]
+    task_daily_chests: Mapped[list] = mapped_column(
+        JSON, nullable=False,
+        default=lambda: [{"points": 20, "coins": 100}, {"points": 50, "coins": 200}, {"points": 80, "coins": 300},
+                         {"points": 100, "coins": 500, "card_rarity": "rare"}],
+    )
+    task_weekly_chests: Mapped[list] = mapped_column(
+        JSON, nullable=False,
+        default=lambda: [{"points": 30, "coins": 500}, {"points": 60, "coins": 1000},
+                         {"points": 90, "coins": 1500, "card_rarity": "epic"}],
+    )

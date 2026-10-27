@@ -40,6 +40,40 @@ class TaskDefinition(TimestampMixin, Base):
     invite_link: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Regular tasks only: "daily" (a set renewed every local day) or "weekly"
+    # (renewed on Monday). `points` fill that period's activity track (chests).
+    period: Mapped[str] = mapped_column(String(8), default="daily", nullable=False)
+    points: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    # Where «Играть →» leads (a Mini App path); empty = derived from the metric.
+    route: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # Premium only: a must-do subscription (the game's own channel / chat),
+    # pinned above the other tasks.
+    is_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class TaskActivity(Base):
+    """Activity points a player earned in one period (a day "2026-10-27" or a
+    week "2026-W44"): the sum of claimed tasks' points, plus that day's free
+    task replacements used."""
+    __tablename__ = "task_activity"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    period_key: Mapped[str] = mapped_column(String(10), primary_key=True)
+    points: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rerolls: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class TaskChestClaim(Base):
+    """One activity chest opened — unique per player, period and chest, so it
+    pays once however the request is retried."""
+    __tablename__ = "task_chest_claims"
+    __table_args__ = (UniqueConstraint("user_id", "period_key", "chest_index", name="uq_task_chest_claim"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    period_key: Mapped[str] = mapped_column(String(10), nullable=False)
+    chest_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
 class UserTask(Base):
@@ -51,6 +85,9 @@ class UserTask(Base):
         ForeignKey("task_definitions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     slot_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The day / week this instance belongs to (TaskActivity.period_key); a slot
+    # whose key is not the current one is renewed on the next read.
+    period_key: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Snapshot of the metric's value at the moment this task instance was
     # (re-)assigned, for metric_counter tasks — progress is tracked relative

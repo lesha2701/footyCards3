@@ -322,10 +322,20 @@ async def test_saboteur_levels_cleared_progresses_task(client, db_session, bot_t
 
 
 # ---------------------------------------------------------------------------
-# Repeatable task pool: a claimed task goes back into rotation and its
+# Repeatable task pool: a claimed task goes back into rotation (next day) and its
 # progress is tracked relative to when it was (re-)assigned, not the
 # player's lifetime total.
 # ---------------------------------------------------------------------------
+
+async def _next_day(db_session):
+    """Makes every handed-out task look like yesterday's, so the next read deals a new day's set."""
+    from sqlalchemy import update
+
+    from app.models.task import UserTask
+
+    await db_session.execute(update(UserTask).where(UserTask.slot_index.isnot(None)).values(period_key="2000-01-01"))
+    await db_session.commit()
+
 
 async def test_metric_counter_task_resets_progress_when_reassigned(client, db_session, bot_token):
     from app.models.enums import Rarity
@@ -355,9 +365,9 @@ async def test_metric_counter_task_resets_progress_when_reassigned(client, db_se
     claim = await client.post(f"/api/v1/tasks/{task_done['user_task_id']}/claim", headers=headers)
     assert claim.status_code == 200
 
-    # It's the only definition in the pool, so a plain refetch (no longer
-    # excluded, since that exclusion only applied to the claim's own refill)
+    # It's the only definition in the pool, so the next day's set
     # deterministically brings it right back — reset, not still "done".
+    await _next_day(db_session)
     task_reassigned = await _fetch_task(client, headers, "pack_opener_repeat")
     assert task_reassigned["is_completed"] is False
     assert task_reassigned["progress"] == 0
@@ -402,6 +412,7 @@ async def test_match_min_rating_task_is_repeatable_after_claim(client, db_sessio
     claim = await client.post(f"/api/v1/tasks/{task_done['user_task_id']}/claim", headers=headers)
     assert claim.status_code == 200
 
+    await _next_day(db_session)
     task_reassigned = await _fetch_task(client, headers, "repeat_squad_check")
     assert task_reassigned["is_completed"] is False
 

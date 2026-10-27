@@ -15,7 +15,7 @@ export function useTodayState() {
     queryFn: fetchFreePackStatus,
     refetchInterval: 30000,
   });
-  const claimableTasks: Task[] = [...(taskList?.regular ?? []), ...(taskList?.premium ?? [])].filter(
+  const claimableTasks: Task[] = [...(taskList?.regular ?? []), ...(taskList?.weekly ?? []), ...(taskList?.premium ?? [])].filter(
     (t) => t.is_completed && !t.is_claimed,
   );
   const dailyReady = !!calendar && !calendar.already_claimed_today;
