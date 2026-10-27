@@ -25,8 +25,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 DAILY_CHESTS = [{"points": 20, "coins": 100}, {"points": 50, "coins": 200}, {"points": 80, "coins": 300},
                 {"points": 100, "coins": 500, "card_rarity": "rare"}]
-WEEKLY_CHESTS = [{"points": 30, "coins": 500}, {"points": 60, "coins": 1000},
-                 {"points": 90, "coins": 1500, "card_rarity": "epic"}]
+WEEKLY_CHESTS = [{"points": 30, "coins": 1000}, {"points": 60, "coins": 2000},
+                 {"points": 90, "coins": 3000, "card_rarity": "epic"}]
 CHAT_INVITE_LINK = "https://t.me/+42EZisiOi8w1ZmMy"
 # code, name, description, metric, target, coins, route
 WEEKLY_TASKS = [

@@ -1334,6 +1334,6 @@ class GameConfig(TimestampMixin, Base):
     task_required_badge_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     task_weekly_chests: Mapped[list] = mapped_column(
         JSON, nullable=False,
-        default=lambda: [{"points": 30, "coins": 500}, {"points": 60, "coins": 1000},
-                         {"points": 90, "coins": 1500, "card_rarity": "epic"}],
+        default=lambda: [{"points": 30, "coins": 1000}, {"points": 60, "coins": 2000},
+                         {"points": 90, "coins": 3000, "card_rarity": "epic"}],
     )

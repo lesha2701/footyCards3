@@ -346,7 +346,11 @@ function ChestHero({
 }) {
   const countdown = useCountdown(track.resets_at);
   const total = track.chests.length;
-  const next = track.chests.find((c) => !c.is_claimed);
+  // The day heads for its next chest; the week shows its big final one as
+  // the goal, unless a smaller one is already ready to open.
+  const next =
+    track.chests.find((c) => c.is_available) ??
+    (period === "weekly" ? [...track.chests].reverse().find((c) => !c.is_claimed) : track.chests.find((c) => !c.is_claimed));
   const kind = chestKind(period, next?.index ?? total - 1, total);
   const look = CHEST_LOOK[kind];
   const max = Math.max(1, track.max_points);
@@ -579,7 +583,6 @@ function SubscriptionsTab({
   const required = tasks.filter((t) => t.is_required);
   const others = tasks.filter((t) => !t.is_required).sort((a, b) => Number(a.is_claimed) - Number(b.is_claimed));
   const done = required.filter((t) => t.is_claimed).length;
-  const total = required.reduce((sum, t) => sum + t.reward_coins, 0);
   const allDone = required.length > 0 && done === required.length;
   const [visited, markVisited] = useVisited();
 
@@ -599,7 +602,8 @@ function SubscriptionsTab({
             <div className="min-w-0 flex-1 pr-6">
               <p className="font-display text-lg font-bold leading-tight text-ink-chalk">{badge?.name ?? "Свой в клубе"}</p>
               <p className="text-xs font-semibold text-fuchsia-200">
-                {total.toLocaleString("ru-RU")} монет{badge ? " + значок у имени" : ""}
+                {required.map((t) => t.reward_coins.toLocaleString("ru-RU")).join(" + ")} монет за подписки
+                {badge ? " и значок у имени" : ""}
               </p>
               <div className="mt-2 flex gap-1">
                 {required.map((t) => (
