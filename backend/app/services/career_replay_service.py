@@ -39,7 +39,9 @@ HALF_TIME = 45
 EPISODE_MS = 500                # playback at x1: an episode runs in real time
 BRIDGE_MS = 300                 # bridges are accelerated
 HALF_BUDGET_S = (90, 150)       # real seconds per half at x1 (3-5 minutes a match)
-VERSION = 1
+VERSION = 2
+DRIBBLE = 0.6                   # a held ball: metres in front of the holder, the way he runs
+PASS_SPEED = 16.0               # m/s a pass travels at (more when the receiver is far)
 
 CHANCE_TYPES = ("goal", "shot", "save", "blocked", "pass_failed")
 DEFENCE_TYPES = ("tackle_won", "foul_stopped")
@@ -312,15 +314,38 @@ class Director:
             self.pos[i][1] = _clamp(self.pos[i][1] + dy, 0.0, LENGTH)
 
     def tick(self, ball_at=None) -> None:
+        """One frame. `ball_at` (a point, or a function called after the
+        players have moved — so a ball aimed at a player reaches where he is
+        now, not where he was a frame ago) places a loose ball."""
         self.t += self.dt
+        before = tuple(self.pos[self.holder]) if self.holder is not None else None
         self._move()
         if self.holder is not None:
-            side = self.slots[self.holder].side
-            fwd = 0.9 if side == "a" else -0.9
-            self.ball = [self.pos[self.holder][0], _clamp(self.pos[self.holder][1] + fwd, 0, LENGTH)]
+            hx, hy = self.pos[self.holder]
+            dx, dy = hx - before[0], hy - before[1]
+            dist = math.hypot(dx, dy)
+            if dist > 0.15:
+                ux, uy = dx / dist, dy / dist
+            else:  # standing: the ball on the side of the goal he attacks
+                ux, uy = 0.0, (1.0 if self.slots[self.holder].side == "a" else -1.0)
+            self.ball = [_clamp(hx + ux * DRIBBLE, 0, WIDTH), _clamp(hy + uy * DRIBBLE, 0, LENGTH)]
         elif ball_at is not None:
+            if callable(ball_at):
+                ball_at = ball_at()
             self.ball = [_clamp(ball_at[0], 0, WIDTH), _clamp(ball_at[1], 0, LENGTH)]
         self._emit()
+
+    def predict(self, slot: int, n: int) -> tuple[float, float]:
+        """Where a player will be in `n` frames, running straight to his
+        override target (or staying put): the meeting point of a pass."""
+        x, y = self.pos[slot]
+        tx, ty, speed = self.ov.get(slot, (x, y, 6.0))
+        dx, dy = tx - x, ty - y
+        dist = math.hypot(dx, dy)
+        reach = speed * self.dt * n
+        if dist > reach:
+            dx, dy = dx / dist * reach, dy / dist * reach
+        return x + dx, y + dy
 
     # --- actions --------------------------------------------------------------------------
 
@@ -339,29 +364,49 @@ class Director:
         if run_to is not None:
             self.ov[to] = (*run_to, speed)
         if frames is None:
-            dist = math.hypot(self.pos[to][0] - start[0], self.pos[to][1] - start[1])
-            frames = int(_clamp(math.ceil(dist / 9.0), 1, 4))
+            # Played to where the receiver will be: the fewest frames at
+            # which the ball, at pass speed, meets his run.
+            frames = 4
+            for k in range(1, 5):
+                mx, my = self.predict(to, k)
+                if math.hypot(mx - start[0], my - start[1]) <= PASS_SPEED * self.dt * k:
+                    frames = k
+                    break
         self.passes.append([self.frame, self.frame + frames, frm, to])
         self.holder = None
         for k in range(frames):
-            end = self.pos[to]
             f = (k + 1) / frames
-            self.tick((start[0] + (end[0] - start[0]) * f, start[1] + (end[1] - start[1]) * f))
+            # Aimed at the receiver after he has moved this frame: the last
+            # frame of the pass has the ball exactly at him.
+            self.tick(lambda f=f: (start[0] + (self.pos[to][0] - start[0]) * f,
+                                   start[1] + (self.pos[to][1] - start[1]) * f))
         self.holder = to
         self.phase = self.slots[to].side
 
-    def kick(self, target: tuple, frames: int, keep_phase: bool = True) -> None:
+    def kick(self, target, frames: int, keep_phase: bool = True) -> None:
+        """The ball to a point; `target` may be a player's live position
+        (self.pos[i]) — then it is read after he moves and the ball reaches him."""
         start = list(self.ball)
         self.holder = None
         if not keep_phase:
             self.phase = None
         for k in range(frames):
             f = (k + 1) / frames
-            self.tick((start[0] + (target[0] - start[0]) * f, start[1] + (target[1] - start[1]) * f))
+            self.tick(lambda f=f: (start[0] + (target[0] - start[0]) * f, start[1] + (target[1] - start[1]) * f))
 
     def dead(self, n: int) -> None:
         self.holder = None
         for _ in range(n):
+            self.tick(self.ball)
+
+    def gather(self, slots: list, least: int, most: int = 16) -> None:
+        """A dead ball until the given players reach their override targets
+        (a set piece waits for its taker), at least `least` frames."""
+        self.holder = None
+        for k in range(most):
+            if k >= least and all(math.hypot(self.pos[i][0] - self.ov[i][0], self.pos[i][1] - self.ov[i][1]) < 1.0
+                                  for i in slots if i in self.ov):
+                break
             self.tick(self.ball)
 
     def mark(self, event_index: int) -> None:
@@ -515,7 +560,7 @@ def _finish_shot(d: Director, side: str, shooter: int, e: dict, idx: int) -> Non
         blocker = d.nearest(defending, mx, my, ("DEF", "MID"))
         d.ov[blocker] = (d.ball[0] + (mx - d.ball[0]) * 0.35, d.ball[1] + (my - d.ball[1]) * 0.35, 8.0)
         d.dead(1)
-        d.kick(tuple(d.pos[blocker]), 1)
+        d.kick(d.pos[blocker], 1)
         d.mark(idx)
         d.ov.pop(blocker, None)
         bu, bv = to_own(side, *d.ball)
@@ -550,12 +595,17 @@ def _defence(d: Director, e: dict, idx: int) -> None:
     defender = d.find(defending, p.get("defender"), None, ("DEF", "MID"))
     if d.holder is None or d.slots[d.holder].side != side:
         carrier = d.nearest(side, *d.ball, ("MID", "FWD"))
-        d.kick(tuple(d.pos[carrier]), 2)
+        d.kick(d.pos[carrier], 2)
         d.holder = carrier
         d.phase = side
     carrier = d.holder
-    d.ov[defender] = (d.pos[carrier][0], d.pos[carrier][1], 8.5)
-    d.hold(carrier, 2)
+    # The defender closes the carrier down before he wins the ball (2-10
+    # frames): the ball never jumps to a man metres away.
+    for k in range(10):
+        if k >= 2 and math.hypot(d.pos[defender][0] - d.pos[carrier][0], d.pos[defender][1] - d.pos[carrier][1]) < 1.5:
+            break
+        d.ov[defender] = (d.pos[carrier][0], d.pos[carrier][1], 8.5)
+        d.hold(carrier, 1)
     d.ov.pop(defender, None)
     if e["event_type"] == "tackle_won":
         d.holder, d.phase = defender, defending
@@ -585,12 +635,11 @@ def _corner(d: Director, e: dict, idx: int) -> None:
             d.ov[i] = (*d.at(side, d.rng.uniform(26, 42), d.rng.uniform(93, 99)), 8.0)
     for i in d.side_slots(defending, ("DEF", "MID", "FWD"))[:8]:
         d.ov[i] = (*d.at(side, d.rng.uniform(25, 43), d.rng.uniform(95, 101)), 8.0)
-    d.dead(5)
+    d.gather([taker, shooter], 5)
     head = d.at(side, d.rng.uniform(29, 39), d.rng.uniform(96, 99))
-    d.ov[shooter] = (*head, 7.0)
     d.holder = taker
-    d.passes.append([d.frame, d.frame + 3, taker, shooter])
-    d.kick(head, 3)
+    # The cross meets the header where his run takes him.
+    d.pass_to(taker, shooter, run_to=head, frames=3, speed=7.0)
     d.ov.clear()
     _finish_set_piece_shot(d, side, shooter, e, idx)
 
@@ -611,7 +660,7 @@ def _free_kick(d: Director, e: dict, idx: int) -> None:
     wu, wv = bu + gu / norm * 9.15, bv + gv / norm * 9.15
     for k, i in enumerate(d.side_slots(defending, ("DEF", "MID"))[:3]):
         d.ov[i] = (*d.at(side, wu + (k - 1) * 0.9, wv), 9.0)
-    d.dead(5)
+    d.gather([taker], 5)
     d.ov.clear()
     d.holder = taker
     _finish_set_piece_shot(d, side, taker, e, idx)
@@ -636,7 +685,7 @@ def _penalty(d: Director, e: dict, idx: int) -> None:
         return d.at(side, u, min(v, LENGTH - 19.5))
 
     d.limit = outside_box
-    d.dead(6)
+    d.gather([shooter, keeper], 6)
     d.holder = shooter
     _finish_set_piece_shot(d, side, shooter, e, idx)
     d.limit = None
@@ -743,7 +792,7 @@ def _bridge(d: Director, t0: float, t1: float, frames: int, side: Optional[str])
         before = d.count
         if d.holder is None or d.slots[d.holder].side != owner:
             d.phase = owner
-            d.kick(tuple(d.pos[nxt]), 1)
+            d.kick(d.pos[nxt], 1)
             d.holder = nxt
         else:
             d.pass_to(d.holder, nxt, run_to=d.at(owner, d.to_u(nxt), d.rng.uniform(30, 58)), frames=1)

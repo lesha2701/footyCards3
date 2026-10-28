@@ -9,20 +9,28 @@ import {
   HEAD_H,
   MAX_LEAD_FRAMES,
   SLOW_RATE,
-  FOOT,
   advance,
   ballState,
   cameraPose,
   episodeDuration,
   episodeRate,
   finishKind,
-  footBall,
   goalEpisodes,
-  groundBall,
   toWorld,
   type GoalEpisode,
 } from "@/lib/goalReplay3d";
-import { PITCH_L, PITCH_W, buildTimeline, holderAt, interpolatePlayer, rosterAt, type MatchEventLite } from "@/lib/matchReplay";
+import {
+  FOOT,
+  PITCH_L,
+  PITCH_W,
+  buildTimeline,
+  footBall,
+  groundBall,
+  holderAt,
+  interpolatePlayer,
+  rosterAt,
+  type MatchEventLite,
+} from "@/lib/matchReplay";
 
 import fixture from "./__fixtures__/career_goal_replay.json";
 

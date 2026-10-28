@@ -15,8 +15,8 @@ import {
   buildTimeline,
   clockAt,
   frameAt,
+  groundBall,
   holderAt,
-  interpolateBall,
   interpolatePlayer,
   minuteLabel,
   moments,
@@ -87,7 +87,7 @@ export function ReplayPlayer({ data, onTactics, onSubs, footer }: {
       const p = toSvg(interpolatePlayer(tl, f, frac, i));
       el.setAttribute("transform", `translate(${p.x.toFixed(2)} ${p.y.toFixed(2)})`);
     }
-    const b = toSvg(interpolateBall(tl, f, frac));
+    const b = toSvg(groundBall(tl, f + frac));
     ballRef.current?.setAttribute("transform", `translate(${b.x.toFixed(2)} ${b.y.toFixed(2)})`);
     const line = passRef.current;
     if (line) {

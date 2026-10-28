@@ -187,3 +187,53 @@ def test_defending_block_keeps_its_shape():
                 total += 1
                 deep += depths[4] < 10.0
     assert deep / total < 0.03, deep / total
+
+
+def test_passes_reach_the_receiver_and_a_held_ball_stays_at_the_feet():
+    """A pass ends at the receiver (aimed at where he runs to, not where he
+    was a frame ago) and the holder's ball is a step in front of him."""
+    quant = replay.LENGTH / 255 + 0.05      # one quantisation step
+    checked = held = 0
+    for seed in range(6):
+        match, lineups = _played(300 + seed)
+        rep = replay.build_replay(seed, match.event_log, lineups)
+        frames = replay.decode_frames(rep)
+        for f0, f1, _passer, receiver in rep["passes"]:
+            last = f1 - 1
+            if last < f0 or last >= len(frames):
+                continue
+            bx, by = frames[last]["ball"]
+            px, py = frames[last]["players"][receiver]
+            assert ((bx - px) ** 2 + (by - py) ** 2) ** 0.5 <= quant, (seed, f0, f1)
+            checked += 1
+        for fr in frames:
+            if fr["holder"] is None:
+                continue
+            bx, by = fr["ball"]
+            px, py = fr["players"][fr["holder"]]
+            assert ((bx - px) ** 2 + (by - py) ** 2) ** 0.5 <= replay.DRIBBLE + quant
+            held += 1
+    assert checked > 50 and held > 500
+
+
+def test_the_ball_reaches_a_new_holder_instead_of_jumping_to_him():
+    """In episodes, a player who gets the ball (a pass, a tackle, a set
+    piece taker) has it come to him: one frame of pass speed at most."""
+    received = 0
+    for seed in range(6):
+        match, lineups = _played(500 + seed)
+        rep = replay.build_replay(seed, match.event_log, lineups)
+        frames = replay.decode_frames(rep)
+        episode = set()
+        for kind, f0, n, *_ in rep["segments"]:
+            if kind in ("goal", "moment"):
+                episode.update(range(f0, f0 + n))
+        for f in range(1, len(frames)):
+            holder = frames[f]["holder"]
+            if f not in episode or holder is None or frames[f - 1]["holder"] == holder:
+                continue
+            bx, by = frames[f - 1]["ball"]
+            px, py = frames[f]["players"][holder]
+            assert ((bx - px) ** 2 + (by - py) ** 2) ** 0.5 <= 9.0, (seed, f)
+            received += 1
+    assert received > 100

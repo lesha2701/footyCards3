@@ -12,8 +12,8 @@ import {
   PITCH_L,
   PITCH_W,
   ballAt,
+  groundBall,
   holderAt,
-  interpolatePlayer,
   lerp,
   type MatchEventLite,
   type Point,
@@ -102,49 +102,6 @@ export function shotProfile(finish: FinishKind, event: number): { h0: number; h1
 
 const ground = (p: Point, h = BALL_R): BallPos => ({ x: p.x, y: p.y, h });
 const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
-
-/** How far in front of a player the ball he has sits (metres). */
-export const FOOT = 0.45;
-
-function playerPos(tl: Timeline, slot: number, t: number): Point {
-  const f = Math.floor(t);
-  return interpolatePlayer(tl, f, t - f, slot);
-}
-
-/** The ball at a player's feet: a step ahead of him the way he runs (towards
- * the goal his side attacks when he stands). Follows the player's own
- * smooth path, so a dribbled ball never lags behind the foot. */
-export function footBall(tl: Timeline, slot: number, t: number): Point {
-  const p = playerPos(tl, slot, t);
-  const q = playerPos(tl, slot, Math.min(tl.count - 1, t + 0.4));
-  let dx = q.x - p.x;
-  let dy = q.y - p.y;
-  let d = Math.hypot(dx, dy);
-  if (d < 0.2) {
-    dx = 0;
-    dy = slot < 11 ? 1 : -1;
-    d = 1;
-  }
-  return { x: clamp(p.x + (dx / d) * FOOT, 0, PITCH_W), y: clamp(p.y + (dy / d) * FOOT, 0, PITCH_L) };
-}
-
-/** The ball on the grass at time `t`. The key frames put a held ball 0.9 m
- * up the pitch from the holder and move it in straight lines between frames
- * while players curve, so the ball drifted off the foot; here a held ball is
- * at the holder's feet, and a pass goes from the passer's foot to where the
- * receiver's foot is at that moment — it arrives exactly at the foot. Loose
- * balls (shots, clearances, the ball in the net) are the key frames' own. */
-export function groundBall(tl: Timeline, t: number): Point {
-  const f = Math.max(0, Math.min(tl.count - 1, Math.floor(t)));
-  const frac = Math.max(0, Math.min(1, t - f));
-  const h0 = holderAt(tl, f);
-  const h1 = f + 1 < tl.count ? holderAt(tl, f + 1) : null;
-  if (h0 !== null && (frac === 0 || h1 === h0)) return footBall(tl, h0, f + frac);
-  const a = h0 !== null ? footBall(tl, h0, f) : ballAt(tl, f);
-  if (frac === 0 || f + 1 >= tl.count) return a;
-  const b = h1 !== null ? footBall(tl, h1, f + frac) : ballAt(tl, f + 1);
-  return { x: lerp(a.x, b.x, frac), y: lerp(a.y, b.y, frac) };
-}
 
 function buildFlights(tl: Timeline, replay: CareerReplay, ep: Omit<GoalEpisode, "flights">): Flight[] {
   const flights: Flight[] = [];
