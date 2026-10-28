@@ -6,6 +6,9 @@ from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.user import User
 from app.schemas.game import (
+    FreeKick3DShotOut,
+    FreeKick3DShotRequest,
+    FreeKick3DStartOut,
     FreeKickClaimOut,
     FreeKickKickOut,
     FreeKickKickRequest,
@@ -175,6 +178,21 @@ async def free_kick_kick(session_id: int, payload: FreeKickKickRequest, db: Asyn
 @router.post("/free-kick/{session_id}/claim", response_model=FreeKickClaimOut)
 async def free_kick_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await free_kick_service.claim_reward(db, user, session_id)
+
+
+# The 3D free kick (the mode in the menu); its series is claimed with the
+# same /free-kick/{session_id}/claim as the classic one.
+
+@router.post("/free-kick-3d/start", response_model=FreeKick3DStartOut)
+async def free_kick_3d_start(payload: FreeKickStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"free_kick_start:{user.id}", max_calls=20, window_seconds=60)
+    return await free_kick_service.start_3d(db, user, payload.user_card_id)
+
+
+@router.post("/free-kick-3d/{session_id}/shot", response_model=FreeKick3DShotOut)
+async def free_kick_3d_shot(session_id: int, payload: FreeKick3DShotRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"free_kick_3d_shot:{user.id}", max_calls=30, window_seconds=60)
+    return await free_kick_service.shoot_3d(db, user, session_id, payload)
 
 
 # --- Football Hangman ---

@@ -257,6 +257,16 @@ class GameConfig(TimestampMixin, Base):
     free_kick_period_max_ms: Mapped[int] = mapped_column(Integer, default=1700, nullable=False)
     free_kick_base_stake: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     free_kick_daily_limit: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    # «Штрафной 3D» (free_kick_service.start_3d): its own hourly cap of series
+    # (the shared hourly_game_limit is too generous for 5-kick series), the
+    # series length and the coins per kick — a goal, plus bonuses for a goal
+    # in the corner/top bins or with real curl, a little for a save or the post.
+    free_kick_hourly_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    free_kick_3d_kicks: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    free_kick_3d_goal_coins: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    free_kick_3d_corner_bonus: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    free_kick_3d_curl_bonus: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    free_kick_3d_near_coins: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
 
     hourly_game_limit: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
 

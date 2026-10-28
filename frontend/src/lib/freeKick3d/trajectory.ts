@@ -35,6 +35,9 @@ export type WallPlayer = { x: number; z: number };
 
 export type ShotSetup = {
   seed: number;
+  /** The kicker card's edge in [−1, 1] (rating 55 → −1, 75 → 0, 95 → 1):
+   * a little more power and curl, a slightly slower keeper. */
+  edge: number;
   ball: Vec3;
   wall: WallPlayer[];
   /** Time after the kick when the wall jumps (s). */
@@ -108,6 +111,16 @@ const CURL_GAIN = 260;
 /** Lofted shots get topspin so they dip back under the bar. */
 const DIP_GAIN = 180;
 const MAX_DIP = 40;
+/** What a full edge (rating 95) adds: max speed (m/s), curl share, and
+ * the keeper's slowdown share. Small on purpose — skill decides. */
+const EDGE_SPEED = 2;
+const EDGE_CURL = 0.1;
+const EDGE_KEEPER = 0.08;
+
+/** Card rating → edge in [−1, 1]. */
+export function ratingEdge(rating: number): number {
+  return clamp((rating - 75) / 20, -1, 1);
+}
 
 // ---------------------------------------------------------------------------
 // Seeded randomness (setup only — the flight itself has no randomness).
@@ -133,8 +146,9 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 /** Ball spot, wall and keeper for a seed. The wall stands 9.15 m from the
  * ball on the line to the goal centre and covers the near-post side; the
  * keeper leans to the far post. */
-export function createSetup(seed: number): ShotSetup {
+export function createSetup(seed: number, rating = 75): ShotSetup {
   const rnd = mulberry32(seed);
+  const edge = ratingEdge(rating);
   const distance = lerp(18, 26, rnd());
   const side = rnd() < 0.5 ? -1 : 1;
   const offset = side * lerp(0, 8, rnd());
@@ -160,13 +174,14 @@ export function createSetup(seed: number): ShotSetup {
 
   return {
     seed,
+    edge,
     ball,
     wall,
     wallJumpAt: lerp(0.12, 0.3, rnd()),
     keeper: {
       x: -nearSide * lerp(0.3, 0.9, rnd()),
       reaction: lerp(0.2, 0.32, rnd()),
-      speed: lerp(4.6, 5.6, rnd()),
+      speed: lerp(4.6, 5.6, rnd()) * (1 - EDGE_KEEPER * edge),
     },
   };
 }
@@ -200,7 +215,7 @@ export function swipeToKick(setup: ShotSetup, q: QuantizedSwipe): KickParams {
   // short swipe and must not come out weak): sqrt(length · 0.4) equals the
   // length for a full 0.4 swipe and is larger below it.
   const swipeSpeed = Math.sqrt(length * 0.4) / (q.durationMs / 1000);
-  const speed = clamp(MIN_SPEED + swipeSpeed * 7, MIN_SPEED, MAX_SPEED);
+  const speed = clamp(MIN_SPEED + swipeSpeed * 7, MIN_SPEED, MAX_SPEED + EDGE_SPEED * setup.edge);
 
   // Aim relative to the line ball → goal centre.
   const len = Math.sqrt(setup.ball.x * setup.ball.x + setup.ball.z * setup.ball.z);
@@ -215,7 +230,7 @@ export function swipeToKick(setup: ShotSetup, q: QuantizedSwipe): KickParams {
   const lift = clamp(up < 0.2 ? 0.2 - (0.2 - up) * 1.6 : 0.2 + (up - 0.2) * 0.8, 0.02, 0.7);
   // Spin about the vertical axis: ω_y > 0 bends a ball flying to −z to −x
   // (left), so a bow to the right (curve > 0) gets ω_y > 0.
-  const side = clamp(curve * CURL_GAIN, -MAX_SPIN, MAX_SPIN);
+  const side = clamp(curve * CURL_GAIN * (1 + EDGE_CURL * setup.edge), -MAX_SPIN, MAX_SPIN);
   // Launch off the aim towards the bow by the angle a constant sideways
   // Magnus pull (K·ω·v) takes back over the distance: θ = K·ω·D / (2·v).
   const yaw = aim + (MAGNUS_K * side * len) / (2 * speed);
@@ -498,8 +513,8 @@ export function simulateShot(setup: ShotSetup, kick: KickParams, sampleEvery = 2
 }
 
 /** The whole thing in one call — what a server replay would run. */
-export function playShot(seed: number, swipe: SwipeInput | QuantizedSwipe, quantized = false): ShotTrajectory {
-  const setup = createSetup(seed);
+export function playShot(seed: number, swipe: SwipeInput | QuantizedSwipe, quantized = false, rating = 75): ShotTrajectory {
+  const setup = createSetup(seed, rating);
   const q = quantized ? (swipe as QuantizedSwipe) : quantizeSwipe(swipe);
   return simulateShot(setup, swipeToKick(setup, q));
 }

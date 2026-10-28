@@ -320,7 +320,9 @@ export default function App() {
         <Route path="/play/penalty/matches/search" element={<PenaltySearchRoute />} />
         <Route path="/play/penalty/matches/:matchId" element={<PenaltyMatchPage />} />
         <Route path="/play/penalty/open/:matchId" element={<PenaltyOpenChallengePage />} />
-        <Route path="/play/free-kick" element={<FreeKickGamePage />} />
+        {/* «Штрафной удар» is the 3D game now; the classic one is kept, unlinked. */}
+        <Route path="/play/free-kick" element={<FreeKick3DPage />} />
+        <Route path="/play/free-kick-classic" element={<FreeKickGamePage />} />
         <Route path="/play/hangman" element={<HangmanGamePage />} />
         <Route path="/play/blackjack" element={<BlackjackPage />} />
         <Route path="/play/pairs" element={<PairsGamePage />} />
@@ -378,7 +380,7 @@ export default function App() {
         <Route path="/gifts" element={<GiftsPage />} />
         <Route path="/users/:userId" element={<PublicProfilePage />} />
       </Route>
-      <Route path="/play/free-kick-3d" element={<FreeKick3DPage />} />
+      <Route path="/play/free-kick-3d" element={<Navigate to="/play/free-kick" replace />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -1217,12 +1217,25 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-3 font-display text-base font-bold">Штрафной удар</p>
+        <p className="mb-1 font-display text-base font-bold">Штрафной удар (3D)</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Серия ударов с разных позиций; каждый удар сервер пересчитывает сам. «В угол» — гол у штанги или под
+          перекладиной, «с закруткой» — гол заметно закрученным ударом.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("free_kick_hourly_limit", "Серий в час")}
+          {field("free_kick_3d_kicks", "Ударов в серии")}
+          {field("free_kick_daily_limit", "Наградных серий в день")}
+          {field("free_kick_3d_goal_coins", "Монет за гол")}
+          {field("free_kick_3d_corner_bonus", "Бонус «в угол»")}
+          {field("free_kick_3d_curl_bonus", "Бонус «с закруткой»")}
+          {field("free_kick_3d_near_coins", "За сейв или штангу")}
+        </div>
+        <p className="mb-2 mt-4 text-xs text-slate-500">Классическая версия (шкала) — сохранена, в меню не показывается</p>
         <div className="grid grid-cols-2 gap-3">
           {field("free_kick_period_min_ms", "Мин. период шкалы, мс")}
           {field("free_kick_period_max_ms", "Макс. период шкалы, мс")}
           {field("free_kick_base_stake", "Базовая ставка")}
-          {field("free_kick_daily_limit", "Лимит наградных попыток/день")}
         </div>
       </section>
 

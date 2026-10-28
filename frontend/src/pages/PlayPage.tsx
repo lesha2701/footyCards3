@@ -55,7 +55,7 @@ function playerTournamentStatusLabel(status?: string, queuePosition?: number | n
   }
 }
 
-type LimitKey = Exclude<keyof GameLimits, "hourly_limit" | "resets_at">;
+type LimitKey = Exclude<keyof GameLimits, "hourly_limit" | "free_kick_hourly_limit" | "resets_at">;
 type Group = "quick" | "tactics" | "long";
 type Filter = "all" | Group | "friend" | "favs";
 
@@ -156,8 +156,8 @@ export default function PlayPage() {
       stat: `Рейтинг ${penaltyStats?.penalty_rating ?? user?.penalty_rating ?? 0}`, limitKey: "penalty",
     },
     {
-      path: "/play/free-kick", art: artOf("free-kick"), Icon: IconTarget, tint: "bg-blue-500", title: "Штрафной удар", group: "quick", time: "1 мин",
-      description: "Останови шкалу силы в нужный момент", limitKey: "free_kick",
+      path: "/play/free-kick", art: artOf("free-kick"), Icon: IconTarget, tint: "bg-blue-500", title: "Штрафной удар", group: "quick", time: "3 мин",
+      description: "Серия штрафных в 3D: свайпом через стенку и в угол", limitKey: "free_kick",
     },
     {
       path: "/play/memory", art: artOf("memory"), Icon: IconBrain, tint: "bg-teal-500", title: "Memory", group: "quick", time: "1 мин",
@@ -395,7 +395,7 @@ export default function PlayPage() {
             onToggleFav={() => toggleFav(g)}
             onClick={() => open(g.path)}
             remaining={g.limitKey ? limits?.[g.limitKey] : undefined}
-            limit={limits?.hourly_limit}
+            limit={g.limitKey === "free_kick" ? (limits?.free_kick_hourly_limit ?? limits?.hourly_limit) : limits?.hourly_limit}
             resetsAt={g.limitKey ? limits?.resets_at?.[g.limitKey] : undefined}
           />
         ))}

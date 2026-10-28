@@ -305,6 +305,12 @@ export interface GameConfig {
   free_kick_period_max_ms: number;
   free_kick_base_stake: number;
   free_kick_daily_limit: number;
+  free_kick_hourly_limit: number;
+  free_kick_3d_kicks: number;
+  free_kick_3d_goal_coins: number;
+  free_kick_3d_corner_bonus: number;
+  free_kick_3d_curl_bonus: number;
+  free_kick_3d_near_coins: number;
   hourly_game_limit: number;
   matchmaking_enabled: boolean;
   wheel_enabled: boolean;

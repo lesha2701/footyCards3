@@ -1,5 +1,8 @@
 import { api } from "@/lib/api";
+import type { QuantizedSwipe } from "@/lib/freeKick3d/trajectory";
 import type {
+  FreeKick3DShotResult,
+  FreeKick3DStartResult,
   FreeKickClaimResult,
   FreeKickKickResult,
   FreeKickStartResult,
@@ -122,6 +125,22 @@ export async function startFreeKick(userCardId: number): Promise<FreeKickStartRe
 
 export async function kickFreeKick(sessionId: number, elapsedMs: number): Promise<FreeKickKickResult> {
   const { data } = await api.post<FreeKickKickResult>(`/games/free-kick/${sessionId}/kick`, { elapsed_ms: elapsedMs });
+  return data;
+}
+
+export async function startFreeKick3D(userCardId: number): Promise<FreeKick3DStartResult> {
+  const { data } = await api.post<FreeKick3DStartResult>("/games/free-kick-3d/start", { user_card_id: userCardId });
+  return data;
+}
+
+/** The swipe exactly as quantized for the engine — the server replays it. */
+export async function shootFreeKick3D(sessionId: number, swipe: QuantizedSwipe): Promise<FreeKick3DShotResult> {
+  const { data } = await api.post<FreeKick3DShotResult>(`/games/free-kick-3d/${sessionId}/shot`, {
+    dx: swipe.dx,
+    dy: swipe.dy,
+    curve: swipe.curve,
+    duration_ms: swipe.durationMs,
+  });
   return data;
 }
 

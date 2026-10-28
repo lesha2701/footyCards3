@@ -1,8 +1,15 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
+import { fetchCollection } from "@/api/collection";
+import { claimFreeKickReward, shootFreeKick3D, startFreeKick3D } from "@/api/games";
+import CardPickerModal from "@/components/cards/CardPickerModal";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
+import GameHero from "@/components/common/GameHero";
+import { IconCoin } from "@/components/icons";
 import FreeKickScene3D, { type LiveShot } from "@/components/freeKick3d/FreeKickScene3D";
+import { formatGameError } from "@/lib/errors";
 import { playFreeKickSfx } from "@/lib/freeKick3d/sfx";
 import { swipeFromPoints, type SwipePoint } from "@/lib/freeKick3d/swipe";
 import {
@@ -10,9 +17,12 @@ import {
   quantizeSwipe,
   simulateShot,
   swipeToKick,
+  type QuantizedSwipe,
   type ShotOutcome,
 } from "@/lib/freeKick3d/trajectory";
-import { haptic, hapticNotify } from "@/lib/telegram";
+import { haptic, hapticNotify, showConfirm } from "@/lib/telegram";
+import { useAuthStore } from "@/store/authStore";
+import type { FreeKick3DKick, FreeKick3DShotResult, FreeKick3DStartResult, UserCard } from "@/types";
 
 const OUTCOME: Record<ShotOutcome, { label: string; className: string }> = {
   goal: { label: "ГОЛ!", className: "text-accent-lime" },
@@ -21,46 +31,189 @@ const OUTCOME: Record<ShotOutcome, { label: string; className: string }> = {
   wall: { label: "В стенку", className: "text-ink-mist" },
 };
 
-const newSeed = () => Math.floor(Math.random() * 0x7fffffff);
+const BONUS: Record<FreeKick3DShotResult["bonuses"][number], string> = {
+  corner: "в угол",
+  curl: "с закруткой",
+};
 
-/** «Живой штрафной» — a client-only 3D prototype (no rewards, no backend).
- * The shot itself is `simulateShot(createSetup(seed), swipeToKick(...))`,
- * a pure function the server can replay later; the scene only shows it. */
+type Series = FreeKick3DStartResult & { card: UserCard };
+
+/** «Штрафной удар» in 3D: pick a card, then a series of free kicks from
+ * server-chosen positions. Each swipe is simulated here for the show and
+ * replayed on the server (same engine, same integers), which alone decides
+ * the outcome and the coins. */
 export default function FreeKick3DPage() {
   const navigate = useNavigate();
-  // ?seed=N replays a position (handy for reproducing a shot).
-  const [params] = useSearchParams();
-  const [seed, setSeed] = useState(() => Number(params.get("seed")) || newSeed());
-  const setup = useMemo(() => createSetup(seed), [seed]);
+  const queryClient = useQueryClient();
+  const updateBalance = useAuthStore((s) => s.updateBalance);
+  const [series, setSeries] = useState<Series | null>(null);
+  const [kick, setKick] = useState<FreeKick3DKick | null>(null);
+  const [results, setResults] = useState<FreeKick3DShotResult[]>([]);
+  const [finished, setFinished] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [cardSearch, setCardSearch] = useState("");
+
+  const { data: collection } = useQuery({
+    queryKey: ["collection", "free-kick", cardSearch],
+    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc", search: cardSearch || undefined }),
+    enabled: series === null,
+  });
+
+  const start = useMutation({
+    mutationFn: (card: UserCard) => startFreeKick3D(card.id).then((data) => ({ ...data, card })),
+    onSuccess: (data) => {
+      setSeries(data);
+      setKick(data.kick);
+      setResults([]);
+      setFinished(false);
+      setErrorMsg(null);
+      void queryClient.invalidateQueries({ queryKey: ["game-limits"] });
+    },
+    onError: (err) => setErrorMsg(formatGameError(err, "Не удалось начать серию")),
+  });
+
+  const claim = useMutation({
+    mutationFn: () => claimFreeKickReward(series!.session_id),
+    onSuccess: (data) => {
+      updateBalance(data.new_balance);
+      hapticNotify("success");
+    },
+  });
+
+  if (!series || !kick) {
+    return (
+      <div className="flex flex-col gap-5">
+        <GameHero game="free-kick" title="Штрафной удар" />
+        <p className="text-sm text-ink-mist">
+          Серия штрафных с разных позиций. Свайпни от мяча к воротам: быстрее — сильнее, длиннее — выше, дугой —
+          закрутка. Чем выше рейтинг игрока, тем чуть сильнее удар и закрутка.
+        </p>
+        {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
+        <CardPickerModal
+          open={!start.isPending}
+          title="Кто бьёт?"
+          cards={collection?.items ?? []}
+          onSelect={(card) => start.mutate(card)}
+          onClose={() => navigate("/play")}
+          searchValue={cardSearch}
+          onSearchChange={setCardSearch}
+        />
+      </div>
+    );
+  }
+
+  const total = results.length ? results[results.length - 1].total_coins : 0;
+
+  if (finished) {
+    return (
+      <div className="flex flex-col items-center gap-5 py-10 text-center">
+        <p className="font-display text-2xl font-bold text-ink-chalk">Серия завершена</p>
+        <div className="flex flex-wrap justify-center gap-2">
+          {results.map((r, i) => (
+            <span key={i} className={`rounded-lg bg-bg-surface px-2 py-1 text-xs font-semibold ${OUTCOME[r.outcome].className}`}>
+              {OUTCOME[r.outcome].label}
+            </span>
+          ))}
+        </div>
+        <p className="text-sm text-ink-mist">
+          Голов: {results.filter((r) => r.outcome === "goal").length} из {results.length} · Итог:{" "}
+          <span className="inline-flex items-center gap-1 font-mono font-bold text-accent-lime">
+            {total}
+            <IconCoin size={14} />
+          </span>
+        </p>
+        {claim.isPending ? (
+          <p className="text-sm text-ink-mist">Начисление награды...</p>
+        ) : claim.data ? (
+          <div className="rounded-2xl bg-accent-green/10 px-5 py-3">
+            <p className="flex items-center justify-center gap-1.5 font-mono text-lg font-bold text-accent-green">
+              Ты получил +{claim.data.reward_coins}
+              <IconCoin size={16} />
+            </p>
+            {claim.data.reward_coins === 0 && total > 0 && (
+              <p className="mt-1 text-xs text-ink-mist">Лимит наградных серий на сегодня исчерпан</p>
+            )}
+          </div>
+        ) : claim.isError ? (
+          <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            {formatGameError(claim.error, "Не удалось начислить награду")}
+          </p>
+        ) : null}
+        <button onClick={() => navigate("/play")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
+          К играм
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <SeriesKick
+      series={series}
+      kick={kick}
+      total={total}
+      onBack={async () => {
+        if (await showConfirm("Серия не закончена — оставшиеся удары сгорят. Выйти?")) navigate("/play");
+      }}
+      onResult={(r) => setResults((prev) => [...prev, r])}
+      onNext={(r) => {
+        if (r.next_kick) setKick(r.next_kick);
+        else {
+          setFinished(true);
+          claim.mutate();
+        }
+      }}
+    />
+  );
+}
+
+/** One kick of the series: the 3D scene, the swipe, the server's verdict. */
+function SeriesKick({
+  series,
+  kick,
+  total,
+  onBack,
+  onResult,
+  onNext,
+}: {
+  series: Series;
+  kick: FreeKick3DKick;
+  total: number;
+  onBack: () => void;
+  onResult: (r: FreeKick3DShotResult) => void;
+  onNext: (r: FreeKick3DShotResult) => void;
+}) {
+  const setup = useMemo(() => createSetup(kick.seed, series.rating), [kick.seed, series.rating]);
   const [shot, setShot] = useState<LiveShot | null>(null);
-  const [result, setResult] = useState<ShotOutcome | null>(null);
+  const [shown, setShown] = useState(false);
   const [trail, setTrail] = useState<SwipePoint[]>([]);
   const [ready, setReady] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const onReady = useCallback(() => setReady(true), []);
   const points = useRef<SwipePoint[]>([]);
-  const shotCounter = useRef(0);
   const fpsRef = useRef<HTMLSpanElement | null>(null);
   const crashLog = useCrashLog();
 
-  const reset = useCallback((nextSeed?: number) => {
-    setShot(null);
-    setResult(null);
-    setTrail([]);
-    if (nextSeed !== undefined) setSeed(nextSeed);
-  }, []);
-
-  const onDecided = useCallback(
-    (shotId: number) => {
-      if (shotId !== shotCounter.current || !shot) return;
-      const outcome = shot.trajectory.outcome;
-      setResult(outcome);
-      setTrail([]);
-      hapticNotify(outcome === "goal" ? "success" : outcome === "save" ? "warning" : "error");
-      playFreeKickSfx(outcome === "goal" ? "roar" : "groan");
+  const shoot = useMutation({
+    mutationFn: (q: QuantizedSwipe) => shootFreeKick3D(series.session_id, q),
+    onSuccess: onResult,
+    onError: (err) => {
+      // The kick wasn't taken: let the player swipe it again.
+      setErrorMsg(formatGameError(err, "Удар не засчитан — попробуй ещё раз"));
+      setShot(null);
+      setShown(false);
     },
-    [shot],
-  );
+  });
+  const verdict = shoot.data;
+  // The replay and the server agree (same engine); the server's word is final.
+  const outcome: ShotOutcome | null = shown && verdict ? verdict.outcome : null;
 
+  useEffect(() => {
+    if (!outcome) return;
+    hapticNotify(outcome === "goal" ? "success" : outcome === "save" ? "warning" : "error");
+    playFreeKickSfx(outcome === "goal" ? "roar" : "groan");
+  }, [outcome]);
+
+  const onDecided = useCallback(() => setShown(true), []);
   const aiming = ready && shot === null;
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
@@ -83,22 +236,23 @@ export default function FreeKick3DPage() {
     const pts = [...points.current, { x: e.clientX, y: e.clientY, t: e.timeStamp }];
     points.current = [];
     const swipe = swipeFromPoints(pts, window.innerHeight);
-    if (!swipe) {
-      setTrail([]);
-      return;
-    }
-    const kick = swipeToKick(setup, quantizeSwipe(swipe));
-    shotCounter.current += 1;
+    const q = swipe ? quantizeSwipe(swipe) : null;
+    setTrail([]);
+    if (!q || q.dy >= 0) return;
+    const k = swipeToKick(setup, q);
     haptic("medium");
-    setShot({ id: shotCounter.current, kick, trajectory: simulateShot(setup, kick) });
+    setErrorMsg(null);
+    setShot({ id: kick.kick_index + 1, kick: k, trajectory: simulateShot(setup, k) });
+    shoot.mutate(q);
   };
 
   const speedKmh = shot ? Math.round(Math.hypot(shot.kick.velocity.x, shot.kick.velocity.y, shot.kick.velocity.z) * 3.6) : 0;
   const distance = Math.round(Math.hypot(setup.ball.x, setup.ball.z));
+  const isLast = kick.kick_index + 1 >= series.total_kicks;
 
   return (
-    <div className="fixed inset-0 select-none overflow-hidden bg-bg-base text-ink-chalk">
-      {/* A 3D failure (WebGL, physics) restarts the scene, not the app. */}
+    <div className="fixed inset-0 z-50 select-none overflow-hidden bg-bg-base text-ink-chalk">
+      {/* A 3D failure (WebGL) restarts the scene, not the app. */}
       <ErrorBoundary fallback={(error, retry) => <SceneCrash error={error} retry={retry} log={crashLog.current} />}>
         <FreeKickScene3D setup={setup} shot={shot} onDecided={onDecided} onReady={onReady} fpsRef={fpsRef} />
       </ErrorBoundary>
@@ -132,39 +286,61 @@ export default function FreeKick3DPage() {
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4">
         <button
           type="button"
-          onClick={() => navigate("/play")}
+          onClick={onBack}
           className="pointer-events-auto rounded-full bg-bg-surface/80 px-3 py-1.5 text-sm font-semibold"
         >
-          ← Назад
+          ← Выйти
         </button>
         <div className="text-right">
-          <div className="font-display text-sm">Штрафной 3D</div>
-          <div className="text-caption text-ink-mist">
-            прототип · {distance} м · #{seed} · <span ref={fpsRef}>— fps</span>
+          <div className="font-display text-sm">
+            Удар {kick.kick_index + 1} / {series.total_kicks}
           </div>
+          <div className="flex items-center justify-end gap-1 text-caption text-ink-mist">
+            {series.card.player.display_name} · {series.rating} · {distance} м ·
+            <span className="inline-flex items-center gap-0.5 font-mono text-accent-lime">
+              {total}
+              <IconCoin size={11} />
+            </span>
+          </div>
+          <span ref={fpsRef} className="hidden" />
         </div>
       </div>
 
       {(aiming || !ready) && (
-        <div className="pointer-events-none absolute inset-x-0 top-16 px-6 text-center text-sm text-ink-chalk/90 drop-shadow">
-          {ready
-            ? "Свайпните от мяча к воротам. Быстрее — сильнее, длиннее — выше, дугой — закрутка."
-            : "Загружаем…"}
+        <div className="pointer-events-none absolute inset-x-0 top-20 px-6 text-center text-sm text-ink-chalk/90 drop-shadow">
+          {ready ? "Свайпни от мяча к воротам. Быстрее — сильнее, длиннее — выше, дугой — закрутка." : "Загружаем…"}
+          {errorMsg && <div className="mt-2 text-red-300">{errorMsg}</div>}
         </div>
       )}
 
-      {result && (
-        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 bg-gradient-to-t from-bg-base/90 to-transparent p-6 pb-10 pt-16">
-          <div className={`font-display text-4xl drop-shadow ${OUTCOME[result].className}`}>{OUTCOME[result].label}</div>
-          <div className="text-caption text-ink-chalk/80">{speedKmh} км/ч</div>
-          <div className="flex gap-3">
-            <button type="button" onClick={() => reset()} className="rounded-xl bg-accent px-5 py-3 font-semibold text-black">
-              Ещё раз
-            </button>
-            <button type="button" onClick={() => reset(newSeed())} className="rounded-xl bg-bg-raised px-5 py-3 font-semibold">
-              Другая позиция
-            </button>
+      {shown && !verdict && shoot.isPending && (
+        <div className="absolute inset-x-0 bottom-10 text-center text-sm text-ink-mist">Судья смотрит повтор…</div>
+      )}
+
+      {outcome && verdict && (
+        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-gradient-to-t from-bg-base/90 to-transparent p-6 pb-10 pt-16">
+          <div className={`font-display text-4xl drop-shadow ${OUTCOME[outcome].className}`}>{OUTCOME[outcome].label}</div>
+          <div className="text-caption text-ink-chalk/80">
+            {speedKmh} км/ч{verdict.bonuses.length > 0 && ` · ${verdict.bonuses.map((b) => BONUS[b]).join(", ")}`}
           </div>
+          {verdict.coins_this_kick > 0 && (
+            <div className="flex items-center gap-1 font-mono text-lg font-bold text-accent-lime">
+              +{verdict.coins_this_kick}
+              <IconCoin size={16} />
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              // Same scene, next position: no WebGL context churn between kicks.
+              setShot(null);
+              setShown(false);
+              shoot.reset();
+              onNext(verdict);
+            }}
+            className="mt-1 rounded-xl bg-accent px-6 py-3 font-semibold text-black">
+            {isLast ? "Итоги серии" : "Следующий удар"}
+          </button>
         </div>
       )}
     </div>
@@ -176,9 +352,9 @@ function describe(err: Error) {
   return [err.message, ...(err.stack ?? "").split("\n").slice(1, 4)].join("\n");
 }
 
-/** Prototype diagnostics: every error while the page is open, in order —
- * when the scene crashes, the first one is the cause (later ones are often
- * fallout from tearing the 3D scene down). */
+/** Diagnostics: every error while the scene is open, in order — when it
+ * crashes, the first one is the cause (later ones are often fallout from
+ * tearing the 3D scene down). */
 function useCrashLog() {
   const log = useRef<string[]>([]);
   useEffect(() => {
@@ -205,8 +381,7 @@ function useCrashLog() {
   return log;
 }
 
-/** The scene failed: what threw (all logged errors, first first — a phone
- * screenshot is enough to find it) and a restart. */
+/** The scene failed: what threw (all logged errors, first first) and a restart. */
 function SceneCrash({ error, retry, log }: { error: Error; retry: () => void; log: string[] }) {
   const entries = log.length ? log : [describe(error)];
   return (

@@ -155,6 +155,40 @@ class FreeKickClaimOut(BaseModel):
     new_balance: int
 
 
+# --- Free Kick 3D (the free kick mode; the classic one above is kept, unlinked) ---
+
+class FreeKick3DKickOut(BaseModel):
+    """One position of the series: the client builds the scene from
+    `seed` + the series' card rating, exactly as the server will replay it."""
+    kick_index: int
+    seed: int
+
+
+class FreeKick3DStartOut(BaseModel):
+    session_id: int
+    rating: int
+    total_kicks: int
+    kick: FreeKick3DKickOut
+
+
+class FreeKick3DShotRequest(BaseModel):
+    """The swipe as the client quantized it (integer thousandths of the
+    viewport height, dy < 0 is upwards; whole milliseconds)."""
+    dx: int = Field(ge=-1500, le=1500)
+    dy: int = Field(ge=-1500, le=-1)
+    curve: int = Field(ge=-500, le=500)
+    duration_ms: int = Field(ge=40, le=2000)
+
+
+class FreeKick3DShotOut(BaseModel):
+    outcome: str  # goal | save | miss | wall
+    bonuses: list[str]  # corner | curl
+    coins_this_kick: int
+    total_coins: int
+    is_finished: bool
+    next_kick: Optional[FreeKick3DKickOut] = None
+
+
 # --- Football Hangman ---
 
 class HangmanStartOut(BaseModel):
@@ -186,6 +220,8 @@ class HangmanClaimOut(BaseModel):
 
 class GameLimitsOut(BaseModel):
     hourly_limit: int
+    # The free kick has its own cap of series per hour.
+    free_kick_hourly_limit: int
     memory: int
     arena: int
     saboteur: int

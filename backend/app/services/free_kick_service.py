@@ -1,5 +1,6 @@
 import math
 import random
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -12,12 +13,31 @@ from app.models.card import UserCard
 from app.models.enums import GameSessionStatus, GameType, TransactionType
 from app.models.game import GameSession
 from app.models.user import User
-from app.schemas.game import FreeKickClaimOut, FreeKickKickOut, FreeKickNextKickOut, FreeKickStartOut
+from app.schemas.game import (
+    FreeKick3DKickOut,
+    FreeKick3DShotOut,
+    FreeKick3DShotRequest,
+    FreeKick3DStartOut,
+    FreeKickClaimOut,
+    FreeKickKickOut,
+    FreeKickNextKickOut,
+    FreeKickStartOut,
+)
+from app.services import free_kick_3d_engine as engine
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
 from app.services.club_pass_service import extra_rewarded_attempts
 
 TOTAL_KICKS = 3
+MODE_3D = "3d"
+# A swipe needs a human moment: a kick answered faster than this after the
+# position was issued is refused (a bot replying instantly gains nothing).
+MIN_3D_KICK_MS = 350
+# Where a 3D goal counts as «в угол» (the corner/top bins), metres.
+CORNER_X = engine.GOAL_HALF_WIDTH - 1.1
+CORNER_Y = engine.GOAL_HEIGHT - 0.6
+# Side spin (rad/s) from which a goal counts as curled.
+CURL_SPIN = 20
 CENTER = 50.0
 ELAPSED_MS_TOLERANCE = 300
 
@@ -82,32 +102,40 @@ async def _ensure_hourly_reset(db: AsyncSession, user: User) -> None:
         db.add(user)
 
 
-async def start_session(db: AsyncSession, user: User, user_card_id: int) -> FreeKickStartOut:
-    config = await get_config(db)
-    locked_user = await lock_user_for_update(db, user.id)
-    await _ensure_hourly_reset(db, locked_user)
-    if locked_user.free_kick_hourly_attempts >= config.hourly_game_limit:
-        remaining = timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(locked_user.free_kick_hour_started_at))
+async def _take_hourly_attempt(db: AsyncSession, user: User, limit: int) -> None:
+    await _ensure_hourly_reset(db, user)
+    if user.free_kick_hourly_attempts >= limit:
+        remaining = timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(user.free_kick_hour_started_at))
         raise ConflictError(
             "Hourly play limit reached for this game",
             details={
-                "hourly_limit": config.hourly_game_limit,
+                "hourly_limit": limit,
                 "retry_after_seconds": max(0, int(remaining.total_seconds())),
             },
         )
-    locked_user.free_kick_hourly_attempts += 1
-    db.add(locked_user)
+    user.free_kick_hourly_attempts += 1
+    db.add(user)
 
-    await _ensure_daily_reset(db, locked_user)
 
+async def _own_card(db: AsyncSession, user: User, user_card_id: int) -> UserCard:
     result = await db.execute(
         select(UserCard).where(UserCard.id == user_card_id).options(joinedload(UserCard.player))
     )
     card = result.unique().scalar_one_or_none()
     if not card:
         raise NotFoundError("Card not found")
-    if card.owner_id != locked_user.id:
+    if card.owner_id != user.id:
         raise ForbiddenError("You can only use your own cards")
+    return card
+
+
+async def start_session(db: AsyncSession, user: User, user_card_id: int) -> FreeKickStartOut:
+    config = await get_config(db)
+    locked_user = await lock_user_for_update(db, user.id)
+    await _take_hourly_attempt(db, locked_user, config.hourly_game_limit)
+
+    await _ensure_daily_reset(db, locked_user)
+    card = await _own_card(db, locked_user, user_card_id)
 
     half_width = half_width_for_rating(card.player.rating)
     first_kick = _roll_kick(config, half_width)
@@ -142,6 +170,8 @@ async def resolve_kick(db: AsyncSession, user: User, session_id: int, elapsed_ms
         raise ConflictError("This game session has already finished")
 
     state = dict(session.server_state)
+    if state.get("mode") == MODE_3D:
+        raise ConflictError("This is a 3D free kick session")
     kicks = list(state["kicks"])
     index = state["current_kick_index"]
     kick = dict(kicks[index])
@@ -221,3 +251,118 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> FreeKic
     await db.refresh(locked_user)
 
     return FreeKickClaimOut(reward_coins=reward, new_balance=locked_user.balance)
+
+
+# ---------------------------------------------------------------------------
+# «Штрафной 3D» — the free kick mode now. A series of `free_kick_3d_kicks`
+# positions (server-random seeds); each swipe is replayed here with the
+# Python port of the client's engine, so the outcome and the coins are the
+# server's alone. Same counters as the classic mode (its own hourly cap of
+# series, the shared daily cap of rewarded series) and the same claim.
+# ---------------------------------------------------------------------------
+
+def _new_3d_kick() -> dict:
+    return {
+        "seed": secrets.randbelow(2**31 - 1) + 1,
+        "issued_at": datetime.now(timezone.utc).isoformat(),
+        "outcome": None,
+        "coins": None,
+    }
+
+
+def score_3d_shot(config, result: engine.ShotResult) -> tuple[int, list[str]]:
+    """Coins and bonus tags for one replayed shot."""
+    if result.outcome == "goal":
+        x, y, _ = result.end_position
+        bonuses = []
+        if abs(x) >= CORNER_X or y >= CORNER_Y:
+            bonuses.append("corner")
+        if abs(result.spin[1]) >= CURL_SPIN:
+            bonuses.append("curl")
+        coins = config.free_kick_3d_goal_coins
+        coins += config.free_kick_3d_corner_bonus if "corner" in bonuses else 0
+        coins += config.free_kick_3d_curl_bonus if "curl" in bonuses else 0
+        return coins, bonuses
+    if result.outcome == "save" or "post" in result.events:
+        return config.free_kick_3d_near_coins, []
+    return 0, []
+
+
+async def start_3d(db: AsyncSession, user: User, user_card_id: int) -> FreeKick3DStartOut:
+    config = await get_config(db)
+    locked_user = await lock_user_for_update(db, user.id)
+    await _take_hourly_attempt(db, locked_user, config.free_kick_hourly_limit)
+    await _ensure_daily_reset(db, locked_user)
+    card = await _own_card(db, locked_user, user_card_id)
+
+    first = _new_3d_kick()
+    total = max(1, config.free_kick_3d_kicks)
+    session = GameSession(
+        user_id=locked_user.id, game_type=GameType.free_kick, status=GameSessionStatus.in_progress,
+        server_state={
+            "mode": MODE_3D, "player_rating": card.player.rating, "total_kicks": total,
+            "kicks": [first], "current_kick_index": 0, "total_coins": 0,
+        },
+    )
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return FreeKick3DStartOut(
+        session_id=session.id, rating=card.player.rating, total_kicks=total,
+        kick=FreeKick3DKickOut(kick_index=0, seed=first["seed"]),
+    )
+
+
+async def shoot_3d(db: AsyncSession, user: User, session_id: int, swipe: FreeKick3DShotRequest) -> FreeKick3DShotOut:
+    config = await get_config(db)
+    session = await _get_session(db, user.id, session_id)
+    # Two concurrent swipes on one kick: the second waits here and sees it taken.
+    await db.refresh(session, with_for_update=True)
+    if session.status != GameSessionStatus.in_progress:
+        raise ConflictError("This game session has already finished")
+    state = dict(session.server_state)
+    if state.get("mode") != MODE_3D:
+        raise ConflictError("Not a 3D free kick session")
+
+    kicks = list(state["kicks"])
+    index = state["current_kick_index"]
+    kick = dict(kicks[index])
+    if kick["outcome"] is not None:
+        raise ConflictError("This kick has already been taken")
+    issued = ensure_aware(datetime.fromisoformat(kick["issued_at"]))
+    if (datetime.now(timezone.utc) - issued).total_seconds() * 1000 < MIN_3D_KICK_MS:
+        raise ConflictError("Too fast — take your time to aim")
+
+    result = engine.simulate_shot(
+        engine.create_setup(kick["seed"], state["player_rating"]),
+        engine.Swipe(swipe.dx, swipe.dy, swipe.curve, swipe.duration_ms),
+    )
+    coins, bonuses = score_3d_shot(config, result)
+    kick.update(
+        outcome=result.outcome, coins=coins, bonuses=bonuses,
+        swipe={"dx": swipe.dx, "dy": swipe.dy, "curve": swipe.curve, "duration_ms": swipe.duration_ms},
+    )
+    kicks[index] = kick
+    state["total_coins"] += coins
+
+    next_out = None
+    if index + 1 < state["total_kicks"]:
+        nxt = _new_3d_kick()
+        kicks.append(nxt)
+        state["current_kick_index"] = index + 1
+        next_out = FreeKick3DKickOut(kick_index=index + 1, seed=nxt["seed"])
+        is_finished = False
+    else:
+        is_finished = True
+        session.status = GameSessionStatus.won
+        session.finished_at = datetime.now(timezone.utc)
+        session.reward_coins = state["total_coins"]
+
+    state["kicks"] = kicks
+    session.server_state = state
+    db.add(session)
+    await db.commit()
+    return FreeKick3DShotOut(
+        outcome=result.outcome, bonuses=bonuses, coins_this_kick=coins, total_coins=state["total_coins"],
+        is_finished=is_finished, next_kick=next_out,
+    )

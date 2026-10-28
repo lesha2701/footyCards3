@@ -865,6 +865,8 @@ export interface FeatureFlags {
 
 export interface GameLimits {
   hourly_limit: number;
+  /** The free kick's own cap of series per hour. */
+  free_kick_hourly_limit?: number;
   memory: number;
   arena: number;
   saboteur: number;
@@ -1609,6 +1611,29 @@ export interface FreeKickKickResult {
   total_coins: number;
   is_finished: boolean;
   next_kick: FreeKickNextKick | null;
+}
+
+/** One position of a 3D free kick series: the scene is
+ * `createSetup(seed, rating)`, exactly what the server replays. */
+export interface FreeKick3DKick {
+  kick_index: number;
+  seed: number;
+}
+
+export interface FreeKick3DStartResult {
+  session_id: number;
+  rating: number;
+  total_kicks: number;
+  kick: FreeKick3DKick;
+}
+
+export interface FreeKick3DShotResult {
+  outcome: "goal" | "save" | "miss" | "wall";
+  bonuses: ("corner" | "curl")[];
+  coins_this_kick: number;
+  total_coins: number;
+  is_finished: boolean;
+  next_kick: FreeKick3DKick | null;
 }
 
 export interface FreeKickClaimResult {

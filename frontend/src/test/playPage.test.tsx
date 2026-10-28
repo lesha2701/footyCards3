@@ -9,7 +9,7 @@ vi.mock("@/api/matches", () => ({ fetchArenaStats: vi.fn(async () => ({ arena_ra
 vi.mock("@/api/games", () => ({
   fetchPenaltyStats: vi.fn(async () => ({ penalty_rating: 0 })),
   fetchGameLimits: vi.fn(async () => ({
-    hourly_limit: 5, memory: 5, arena: 3, saboteur: 5, penalty: 0, free_kick: 5, hangman: 5, tactico: 5, pairs: 5, stratego: 5, magnate: 5, mordoboi: 5,
+    hourly_limit: 5, free_kick_hourly_limit: 1, memory: 5, arena: 3, saboteur: 5, penalty: 0, free_kick: 5, hangman: 5, tactico: 5, pairs: 5, stratego: 5, magnate: 5, mordoboi: 5,
   })),
 }));
 vi.mock("@/api/tactico", () => ({

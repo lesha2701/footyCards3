@@ -12,14 +12,15 @@ export type Hype = MutableRefObject<number>;
 
 /** Art generated for the prototype (public/free-kick-3d, webp). */
 const ASSETS = {
-  stadium: "/free-kick-3d/stadium.webp",
+  stands: "/free-kick-3d/stands.webp",
   fans: "/free-kick-3d/fans.webp",
   grass: "/free-kick-3d/grass.webp",
   led: "/free-kick-3d/led.webp",
 };
 
-/** The stadium: sky, pitch, a painted backdrop of the stands, a close fan
- * section that celebrates, LED boards. Images load lazily; until they do,
+/** The stadium: sky, pitch, a crowd panorama for the stands, a few close
+ * rows of live fans that celebrate (the hybrid: the panorama gives the
+ * density, the sprites the reaction), LED boards. Images load lazily; until they do,
  * a plain pitch and the sky stand in. */
 export function Stadium({ quality, hype }: { quality: Quality; hype: Hype }) {
   return (
@@ -83,24 +84,29 @@ function Pitch({ quality }: { quality: Quality }) {
   );
 }
 
-/** The painted stands: an arc of a cylinder around the goal end, seen from
- * the inside. The picture's bottom edge sits on the pitch. */
+/** The stands: an arc of a cylinder around the goal end, seen from the
+ * inside, papered with the crowd panorama. Stretched once over the arc the
+ * people would come out three times life size, so the picture is laid
+ * three times, mirrored at the seams (invisible in a crowd). Its dark
+ * board line at the bottom sits just below the pitch. */
 const BACKDROP_RADIUS = 82;
 const BACKDROP_ARC = (150 / 180) * Math.PI;
 const BACKDROP_CENTER_Z = 18;
+const BACKDROP_TILES = 3;
 
 function Backdrop() {
-  const tex = useTexture(ASSETS.stadium, (t) => {
+  const tex = useTexture(ASSETS.stands, (t) => {
     const tex = t as THREE.Texture;
     // Seen from inside the cylinder the u axis runs right → left: mirror it.
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.repeat.x = -1;
+    tex.wrapS = THREE.MirroredRepeatWrapping;
+    tex.repeat.x = -BACKDROP_TILES;
+    tex.anisotropy = 4;
     tex.colorSpace = THREE.SRGBColorSpace;
   });
   const image = tex.image as { width: number; height: number };
-  const height = (BACKDROP_RADIUS * BACKDROP_ARC * image.height) / image.width;
+  const height = (BACKDROP_RADIUS * BACKDROP_ARC * image.height) / (image.width * BACKDROP_TILES);
   return (
-    <mesh position={[0, height / 2 - 4, BACKDROP_CENTER_Z]}>
+    <mesh position={[0, height / 2 - 1.5, BACKDROP_CENTER_Z]}>
       <cylinderGeometry
         args={[BACKDROP_RADIUS, BACKDROP_RADIUS, height, 48, 1, true, Math.PI - BACKDROP_ARC / 2, BACKDROP_ARC]}
       />
@@ -117,7 +123,8 @@ function FanSection({ quality, hype }: { quality: Quality; hype: Hype }) {
     (t as THREE.Texture).colorSpace = THREE.SRGBColorSpace;
   });
   const mesh = useRef<THREE.InstancedMesh>(null);
-  const rows = quality === "high" ? 6 : 3;
+  // Just the front rows: the panorama behind is the rest of the crowd.
+  const rows = quality === "high" ? 3 : 2;
   const fans = useMemo(() => {
     const out: { x: number; y: number; z: number; cell: number; scale: number }[] = [];
     let seed = 11;
