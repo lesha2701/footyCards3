@@ -64,7 +64,8 @@ NUMBERS = {
 }
 
 MENTALITY_SHIFT = {"PARK_THE_BUS": -8.0, "DEFENSIVE": -4.0, "BALANCED": 0.0, "ATTACKING": 4.0}
-BLOCK_SHIFT = {"high": 8.0, "mid": 0.0, "low": -9.0}
+BLOCK_SHIFT = {"high": 6.0, "mid": 0.0, "low": -8.0}
+BLOCK_MAX_LINE = {"high": 55.0, "mid": 45.0, "low": 35.0}   # back line height without the ball
 DIRECTION_WIDTH = {"wings": 1.2, "mixed": 1.08, "center": 0.92}
 
 
@@ -87,6 +88,7 @@ class Slot:
     code: str           # formation slot code
     category: str       # GK / DEF / MID / FWD
     base: tuple         # (u, v) own coordinates: u across from own left, v from own goal
+    row: float = 0.0    # 0 = back line ... 1 = front line (formation rows)
 
 
 @dataclass
@@ -95,6 +97,11 @@ class SideInfo:
     mentality: str
     tactic: dict
     slots: list         # 11 Slot
+
+
+def _rows_of(formation: str) -> dict[str, float]:
+    rows = ROWS.get(formation) or ROWS[DEFAULT_FORMATION]
+    return {code: i / max(1, len(rows) - 1) for i, row in enumerate(rows) for code in row}
 
 
 def _base_shape(formation: str) -> dict[str, tuple[float, float]]:
@@ -113,10 +120,12 @@ def _side_info(side: str, lineup: Optional[dict]) -> SideInfo:
     lineup = lineup or {}
     formation = lineup.get("formation") if lineup.get("formation") in CLUB_FORMATIONS else DEFAULT_FORMATION
     shape = _base_shape(formation)
+    rows = _rows_of(formation)
     offset = 0 if side == "a" else 11
     slots = []
     for i, fs in enumerate(CLUB_FORMATIONS[formation]):
-        slots.append(Slot(offset + i, side, fs.code, fs.category, shape.get(fs.code, (WIDTH / 2, 30.0))))
+        slots.append(Slot(offset + i, side, fs.code, fs.category, shape.get(fs.code, (WIDTH / 2, 30.0)),
+                          rows.get(fs.code, 0.5)))
     return SideInfo(formation, lineup.get("mentality") or "BALANCED", dict(lineup.get("tactic") or {}), slots)
 
 
@@ -231,33 +240,41 @@ class Director:
         return self.at(s.side, u, v)
 
     def shape_target(self, s: Slot) -> tuple[float, float]:
+        """Where a player stands in the team shape: the back line's height
+        follows the ball (and the block / mentality), the other lines keep
+        fixed gaps to it — compact without the ball, stretched with it."""
         info = self.sides[s.side]
         bu, bv = to_own(s.side, *self.ball)
-        u0, v0 = s.base
+        u0, _ = s.base
         attacking = self.phase == s.side
         defending = self.phase is not None and not attacking
         tactic = info.tactic
-        if s.category == "GK":
-            v = 5.0 + (_clamp((bv - 40) * 0.2, 0, 10) if attacking else 0.0) - (2.0 if bv < 22 else 0.0)
-            return self.at(s.side, WIDTH / 2 + (bu - WIDTH / 2) * 0.22, v)
+        mentality = MENTALITY_SHIFT.get(info.mentality, 0.0)
         if attacking:
-            shift = _clamp((bv - 40) * 0.55, -10, 32) + 6
+            line = _clamp(bv * 0.55 + 5 + mentality, 18, 52)
+            span = _clamp(bv * 0.45, 26, 38)          # back line → strikers
             width = DIRECTION_WIDTH.get(tactic.get("direction", "mixed"), 1.08)
-            pull, depth_scale = 0.18, 1.08
+            pull = 0.18
         elif defending:
-            shift = _clamp((bv - 52) * 0.5, -18, 22) + BLOCK_SHIFT.get(tactic.get("block", "mid"), 0.0)
-            width, pull, depth_scale = 0.78, 0.32, 0.82
+            block = tactic.get("block", "mid")
+            line = _clamp(bv * 0.6 + 2 + BLOCK_SHIFT.get(block, 0.0) + mentality, 6, BLOCK_MAX_LINE.get(block, 45))
+            line = min(line, max(bv - 3.0, 5.0))       # the back line stays goal-side of the ball
+            span = 22.0 if block == "low" else 25.0
+            width, pull = 0.74, 0.34
         else:
-            shift, width, pull, depth_scale = (bv - 52) * 0.35, 0.95, 0.2, 1.0
-        shift += MENTALITY_SHIFT.get(info.mentality, 0.0)
-        v = v0 * depth_scale + shift
-        if defending and s.category == "DEF":
-            v = min(v, max(bv - 4.0, 7.0))       # stay goal-side of the ball
+            line = _clamp(bv * 0.5 + 6 + mentality, 16, 42)
+            span, width, pull = 30.0, 0.95, 0.2
+        if s.category == "GK":
+            v = 3.0 + _clamp((line - 12) * 0.35, 0, 14)  # sweeps behind a high line, on the line when deep
+            return self.at(s.side, WIDTH / 2 + (bu - WIDTH / 2) * 0.22, v)
+        v = line + span * s.row
+        if attacking and s.category == "DEF" and abs(u0 - WIDTH / 2) > 20:
+            v += 9.0 + (6.0 if tactic.get("direction") == "wings" else 0.0)   # full-backs overlap
         u = WIDTH / 2 + (u0 - WIDTH / 2) * width + (bu - WIDTH / 2) * pull
         ph1, ph2, w = self.wobble[s.index]
-        u += 0.9 * math.sin(self.t * w + ph1)
-        v += 0.9 * math.sin(self.t * w * 0.8 + ph2)
-        return self.at(s.side, u, _clamp(v, 3.0, 99.0))
+        u += 0.7 * math.sin(self.t * w + ph1)
+        v += 0.7 * math.sin(self.t * w * 0.8 + ph2)
+        return self.at(s.side, u, _clamp(v, 4.0, 96.0))
 
     # --- frame loop -----------------------------------------------------------------------
 

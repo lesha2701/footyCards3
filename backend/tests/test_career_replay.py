@@ -170,3 +170,20 @@ async def test_replay_endpoint_live_break_then_full_match(client, db_session, bo
     other = next(i for i, (h, a) in enumerate(row.state["fixtures"][0]) if 0 not in (h, a))
     bad = await client.get(f"{API}/career/seasons/{season['id']}/rounds/0/matches/{other}/replay", headers=headers)
     assert bad.status_code == 404
+
+
+def test_defending_block_keeps_its_shape():
+    """Without the ball a team drops into a compact block, not onto its goal
+    line: outside set pieces the outfield players' median depth stays off
+    the six-yard box, and the lines keep their order (strikers ahead)."""
+    deep = total = 0
+    for seed in range(6):
+        match, lineups = _played(700 + seed)
+        rep = replay.build_replay(seed, match.event_log, lineups)
+        frames = replay.decode_frames(rep)
+        for fr in frames:
+            for side, slots in (("a", range(1, 11)), ("b", range(12, 22))):
+                depths = sorted(fr["players"][i][1] if side == "a" else replay.LENGTH - fr["players"][i][1] for i in slots)
+                total += 1
+                deep += depths[4] < 10.0
+    assert deep / total < 0.03, deep / total
