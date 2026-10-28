@@ -10,9 +10,11 @@ import GameHero from "@/components/common/GameHero";
 import { IconCoin } from "@/components/icons";
 import FreeKickScene3D, { type LiveShot } from "@/components/freeKick3d/FreeKickScene3D";
 import { formatGameError } from "@/lib/errors";
-import { playFreeKickSfx, preloadFreeKickSfx } from "@/lib/freeKick3d/sfx";
+import { crowdChant, crowdTension, playFreeKickSfx, startCrowd } from "@/lib/freeKick3d/sfx";
 import { swipeFromPoints, type SwipePoint } from "@/lib/freeKick3d/swipe";
 import {
+  GOAL_HALF_WIDTH,
+  GOAL_HEIGHT,
   createSetup,
   quantizeSwipe,
   simulateShot,
@@ -20,6 +22,7 @@ import {
   type QuantizedSwipe,
   type ShotOutcome,
 } from "@/lib/freeKick3d/trajectory";
+import { audio } from "@/lib/sound";
 import { haptic, hapticNotify, showConfirm } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { FreeKick3DKick, FreeKick3DShotResult, FreeKick3DStartResult, UserCard } from "@/types";
@@ -207,15 +210,21 @@ function SeriesKick({
   // The replay and the server agree (same engine); the server's word is final.
   const outcome: ShotOutcome | null = shown && verdict ? verdict.outcome : null;
 
+  // The crowd: humming all series long, a chant at each new position.
+  useEffect(() => startCrowd(), []);
+  useEffect(() => {
+    if (ready) crowdChant();
+  }, [ready, kick.seed]);
+
+  const endBall = shot?.trajectory.end.position;
   useEffect(() => {
     if (!outcome) return;
+    crowdTension(false);
     hapticNotify(outcome === "goal" ? "success" : outcome === "save" ? "warning" : "error");
-    playFreeKickSfx(outcome === "goal" ? "roar" : "groan");
-  }, [outcome]);
-
-  useEffect(() => {
-    void preloadFreeKickSfx();
-  }, []);
+    // Into the stands: the crowd laughs rather than groans.
+    const wild = !!endBall && (Math.abs(endBall.x) > GOAL_HALF_WIDTH + 4 || endBall.y > GOAL_HEIGHT + 3);
+    playFreeKickSfx(outcome === "goal" ? "roar" : wild ? "laugh" : "groan");
+  }, [outcome, endBall]);
 
   const onDecided = useCallback(() => setShown(true), []);
   const aiming = ready && shot === null;
@@ -245,6 +254,8 @@ function SeriesKick({
     if (!q || q.dy >= 0) return;
     const k = swipeToKick(setup, q);
     haptic("medium");
+    audio(); // resume the audio context inside the gesture (mobile autoplay rules)
+    crowdTension(true);
     setErrorMsg(null);
     setShot({ id: kick.kick_index + 1, kick: k, trajectory: simulateShot(setup, k) });
     shoot.mutate(q);

@@ -1,25 +1,39 @@
-/** Free kick 3D sounds: synthesized with Web Audio like the rest of the
- * app, except the crowd's goal roar, a recording (public/free-kick-3d/sfx,
- * loaded once the scene opens). Muted by the same «Звуки» switch. */
+/** Free kick 3D sounds. The crowd is recorded (public/free-kick-3d/sfx,
+ * loaded once the scene opens): a looping hum that swells while the ball
+ * flies, chants between kicks, the goal roar, groans and laughter. The
+ * strikes (kick, post, wall) are synthesized with Web Audio like the rest
+ * of the app, and so is every crowd sound until its file is in. All muted
+ * by the same «Звуки» switch. */
 import { audio, soundEnabled } from "@/lib/sound";
 
-export type FreeKickSfx = "kick" | "post" | "wall" | "net" | "roar" | "groan";
+export type FreeKickSfx = "kick" | "post" | "wall" | "net" | "roar" | "groan" | "laugh";
 
-const RECORDINGS = { roar: "/free-kick-3d/sfx/goal-roar.mp3" } as const;
-const recorded: Partial<Record<keyof typeof RECORDINGS, AudioBuffer>> = {};
+const BASE = "/free-kick-3d/sfx/";
+const RECORDINGS = {
+  roar: "goal-roar.mp3",
+  net: "net.mp3",
+  groan: "groan.mp3",
+  laugh: "laugh.mp3",
+  ambience: "ambience.mp3",
+  chantHey: "chant-hey.mp3",
+  chantSong: "chant-song.mp3",
+} as const;
+type Recording = keyof typeof RECORDINGS;
+
+const recorded: Partial<Record<Recording, AudioBuffer>> = {};
 let preloading: Promise<void> | null = null;
 
 /** Fetch and decode the recordings (once); until they're in, the
- * synthesized versions play. */
+ * synthesized versions play and the crowd is silent. */
 export function preloadFreeKickSfx(): Promise<void> {
   preloading ??= (async () => {
     const ac = audio();
     if (!ac) return;
     await Promise.all(
-      Object.entries(RECORDINGS).map(async ([name, url]) => {
+      Object.entries(RECORDINGS).map(async ([name, file]) => {
         try {
-          const data = await (await fetch(url)).arrayBuffer();
-          recorded[name as keyof typeof RECORDINGS] = await ac.decodeAudioData(data);
+          const data = await (await fetch(BASE + file)).arrayBuffer();
+          recorded[name as Recording] = await ac.decodeAudioData(data);
         } catch {
           // Missing or undecodable: the synthesized sound stays.
         }
@@ -29,14 +43,85 @@ export function preloadFreeKickSfx(): Promise<void> {
   return preloading;
 }
 
-function playRecording(ac: AudioContext, buffer: AudioBuffer, volume: number) {
+function playRecording(ac: AudioContext, buffer: AudioBuffer, volume: number, when = 0) {
   const src = ac.createBufferSource();
   src.buffer = buffer;
   const gain = ac.createGain();
   gain.gain.value = volume;
   src.connect(gain).connect(ac.destination);
-  src.start();
+  src.start(ac.currentTime + when);
 }
+
+// ---------------------------------------------------------------------------
+// The crowd: one looping hum for the whole scene plus chants on top.
+// ---------------------------------------------------------------------------
+
+const CALM = 0.32;
+const TENSE = 0.6;
+let crowd: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+let chantTurn = 0;
+
+/** Start the crowd hum (no-op if sound is off or it's already on);
+ * returns the stop function. Waits for the recordings to load. */
+export function startCrowd(): () => void {
+  let stopped = false;
+  void preloadFreeKickSfx().then(() => {
+    const ac = audio();
+    const buffer = recorded.ambience;
+    if (stopped || crowd || !ac || !buffer || !soundEnabled()) return;
+    const src = ac.createBufferSource();
+    src.buffer = buffer;
+    src.loop = true;
+    // Skip the mp3 codec's padding at both ends, so the loop doesn't tick.
+    src.loopStart = 0.05;
+    src.loopEnd = buffer.duration - 0.05;
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0.0001, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(CALM, ac.currentTime + 1.5);
+    src.connect(gain).connect(ac.destination);
+    src.start(ac.currentTime, 0.05);
+    crowd = { src, gain };
+  });
+  return () => {
+    stopped = true;
+    if (!crowd) return;
+    const { src, gain } = crowd;
+    crowd = null;
+    try {
+      const now = audio()?.currentTime ?? 0;
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setTargetAtTime(0.0001, now, 0.2);
+      src.stop(now + 1);
+    } catch {
+      // Already stopped.
+    }
+  };
+}
+
+/** The hum rises while the ball is in the air and settles afterwards. */
+export function crowdTension(tense: boolean): void {
+  const ac = audio();
+  if (!crowd || !ac) return;
+  crowd.gain.gain.cancelScheduledValues(ac.currentTime);
+  crowd.gain.gain.setTargetAtTime(tense ? TENSE : CALM, ac.currentTime, tense ? 0.25 : 1.2);
+}
+
+/** The crowd gets behind the kicker: the chants take turns. */
+export function crowdChant(): void {
+  if (!soundEnabled()) return;
+  try {
+    const ac = audio();
+    const chants = [recorded.chantHey, recorded.chantSong].filter((b): b is AudioBuffer => !!b);
+    if (!ac || chants.length === 0) return;
+    playRecording(ac, chants[chantTurn++ % chants.length], 0.45, 0.4);
+  } catch {
+    // Audio is a nicety.
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Synthesized strikes (and the fallbacks for the crowd).
+// ---------------------------------------------------------------------------
 
 let noiseBuffer: AudioBuffer | null = null;
 
@@ -121,7 +206,8 @@ export function playFreeKickSfx(name: FreeKickSfx): void {
         burst(ac, { freq: 600, q: 1, attack: 0.005, hold: 0.02, release: 0.12, volume: 0.15 });
         break;
       case "net":
-        burst(ac, { freq: 3200, q: 0.6, attack: 0.01, hold: 0.05, release: 0.35, volume: 0.18, sweepTo: 1200 });
+        if (recorded.net) playRecording(ac, recorded.net, 0.8);
+        else burst(ac, { freq: 3200, q: 0.6, attack: 0.01, hold: 0.05, release: 0.35, volume: 0.18, sweepTo: 1200 });
         break;
       case "roar":
         if (recorded.roar) {
@@ -131,8 +217,13 @@ export function playFreeKickSfx(name: FreeKickSfx): void {
         burst(ac, { freq: 700, q: 0.5, attack: 0.25, hold: 1.2, release: 1.4, volume: 0.22 });
         burst(ac, { freq: 1800, q: 0.7, attack: 0.3, hold: 1, release: 1.2, volume: 0.08 });
         break;
+      case "laugh":
+        if (recorded.laugh) playRecording(ac, recorded.laugh, 0.6);
+        else burst(ac, { freq: 520, q: 1.2, attack: 0.15, hold: 0.5, release: 0.9, volume: 0.16, sweepTo: 260 });
+        break;
       case "groan":
-        burst(ac, { freq: 520, q: 1.2, attack: 0.15, hold: 0.5, release: 0.9, volume: 0.16, sweepTo: 260 });
+        if (recorded.groan) playRecording(ac, recorded.groan, 0.75);
+        else burst(ac, { freq: 520, q: 1.2, attack: 0.15, hold: 0.5, release: 0.9, volume: 0.16, sweepTo: 260 });
         break;
     }
   } catch {
