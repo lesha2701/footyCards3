@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import ErrorBoundary from "@/components/common/ErrorBoundary";
@@ -40,6 +40,7 @@ export default function FreeKick3DPage() {
   const points = useRef<SwipePoint[]>([]);
   const shotCounter = useRef(0);
   const fpsRef = useRef<HTMLSpanElement | null>(null);
+  const crashLog = useCrashLog();
 
   const reset = useCallback((nextSeed?: number) => {
     setShot(null);
@@ -98,7 +99,7 @@ export default function FreeKick3DPage() {
   return (
     <div className="fixed inset-0 select-none overflow-hidden bg-bg-base text-ink-chalk">
       {/* A 3D failure (WebGL, physics) restarts the scene, not the app. */}
-      <ErrorBoundary fallback={(error, retry) => <SceneCrash error={error} retry={retry} />}>
+      <ErrorBoundary fallback={(error, retry) => <SceneCrash error={error} retry={retry} log={crashLog.current} />}>
         <FreeKickScene3D setup={setup} shot={shot} onDecided={onDecided} onReady={onReady} fpsRef={fpsRef} />
       </ErrorBoundary>
 
@@ -170,16 +171,49 @@ export default function FreeKick3DPage() {
   );
 }
 
-/** Prototype diagnostics: the scene failed — show what threw (the stack's
- * first lines, so a phone screenshot is enough to find it) and restart. */
-function SceneCrash({ error, retry }: { error: Error; retry: () => void }) {
-  const stack = (error.stack ?? "").split("\n").slice(0, 6).join("\n");
+/** An error's message plus the top of its stack. */
+function describe(err: Error) {
+  return [err.message, ...(err.stack ?? "").split("\n").slice(1, 4)].join("\n");
+}
+
+/** Prototype diagnostics: every error while the page is open, in order —
+ * when the scene crashes, the first one is the cause (later ones are often
+ * fallout from tearing the 3D scene down). */
+function useCrashLog() {
+  const log = useRef<string[]>([]);
+  useEffect(() => {
+    const push = (e: unknown) => {
+      const err = e instanceof Error ? e : null;
+      const text = err ? describe(err) : String(e);
+      if (log.current.length < 8) log.current.push(text);
+    };
+    const onError = (e: ErrorEvent) => push(e.error ?? e.message);
+    const onRejection = (e: PromiseRejectionEvent) => push(e.reason);
+    const original = console.error;
+    console.error = (...args: unknown[]) => {
+      push(args.find((a) => a instanceof Error) ?? args.map(String).join(" "));
+      original(...args);
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      console.error = original;
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
+  }, []);
+  return log;
+}
+
+/** The scene failed: what threw (all logged errors, first first — a phone
+ * screenshot is enough to find it) and a restart. */
+function SceneCrash({ error, retry, log }: { error: Error; retry: () => void; log: string[] }) {
+  const entries = log.length ? log : [describe(error)];
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-base p-6 text-center">
       <div className="font-display text-lg">Сцена упала</div>
-      <div className="text-sm text-ink-mist">{error.message}</div>
-      <pre className="max-h-48 w-full overflow-auto whitespace-pre-wrap break-all rounded-lg bg-bg-surface p-3 text-left text-micro text-ink-mist">
-        {stack}
+      <pre className="max-h-[55vh] w-full overflow-auto whitespace-pre-wrap break-all rounded-lg bg-bg-surface p-3 text-left text-micro text-ink-mist">
+        {entries.map((e, i) => `${i + 1}. ${e}`).join("\n\n")}
       </pre>
       <button type="button" onClick={retry} className="rounded-xl bg-accent px-5 py-3 font-semibold text-black">
         Перезапустить сцену
