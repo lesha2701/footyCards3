@@ -147,23 +147,26 @@ export function KeeperModel({
   const { model, mixer, actions, clips } = useFootballer(KITS.keeper, KEEPER_LOOK, castShadow);
   const group = useRef<THREE.Group>(null);
   const state = useRef<{ clip: Clip | null }>({ clip: null });
-  // Time of the widest point of each dive (hips furthest sideways).
-  const peaks = useMemo(() => {
-    const out: Partial<Record<Clip, number>> = {};
+  // Per clip: when the hips start moving sideways (the dives open with
+  // half a second of swaying — skipped) and when they're at 85 % of their
+  // widest, which is when the arms are out at the ball (the widest point
+  // itself is him already lying on the grass).
+  const timing = useMemo(() => {
+    const out: Partial<Record<Clip, { start: number; reach: number }>> = {};
     for (const clip of clips) {
       const track = clip.tracks.find((tr) => tr.name.endsWith("Hips.position"));
       if (!track) continue;
-      let best = 0;
-      let at = 0;
       const first = track.values[0];
-      for (let i = 0; i < track.times.length; i++) {
-        const dx = Math.abs(track.values[i * 3] - first);
-        if (dx > best) {
-          best = dx;
-          at = track.times[i];
-        }
+      const dx = (i: number) => Math.abs(track.values[i * 3] - first);
+      let best = 0;
+      for (let i = 0; i < track.times.length; i++) best = Math.max(best, dx(i));
+      let start = 0;
+      let reach = clip.duration;
+      for (let i = track.times.length - 1; i >= 0; i--) {
+        if (dx(i) >= best * 0.85) reach = track.times[i];
+        if (dx(i) >= best * 0.12) start = track.times[i];
       }
-      out[clip.name as Clip] = at;
+      out[clip.name as Clip] = { start: Math.min(start, reach), reach };
     }
     return out;
   }, [clips]);
@@ -183,12 +186,13 @@ export function KeeperModel({
       const dx = targetX - setup.keeper.x;
       // The keeper faces +z: his left is world +x.
       const clip: keyof typeof DIVE_REACH = Math.abs(dx) < 1.3 ? "gk_catch" : dx > 0 ? "gk_dive_left" : "gk_dive_right";
-      const peak = peaks[clip] ?? 1;
-      const window = Math.max(0.2, arrival - setup.keeper.reaction);
-      const speed = THREE.MathUtils.clamp(peak / window, 0.8, 3.5);
-      const action = play(state.current, actions, clip, { once: true, speed, fade: 0.08 });
-      // Nudge the body so the hands meet the computed point at the peak.
-      const progress = THREE.MathUtils.clamp(action.time / peak, 0, 1);
+      const { start, reach } = timing[clip] ?? { start: 0, reach: 1 };
+      // Arms out exactly when the ball gets there.
+      const window = Math.max(0.15, arrival - setup.keeper.reaction);
+      const speed = THREE.MathUtils.clamp((reach - start) / window, 0.7, 4.5);
+      const action = play(state.current, actions, clip, { once: true, speed, fade: 0.06, at: start });
+      // Nudge the body so the hands meet the computed point at the reach.
+      const progress = THREE.MathUtils.clamp((action.time - start) / (reach - start || 1), 0, 1);
       // Bounded: a bigger correction would read as sliding, not diving.
       const extra = THREE.MathUtils.clamp(Math.abs(dx) - DIVE_REACH[clip], -1.2, 1.2) * Math.sign(dx || 1);
       g.position.x = setup.keeper.x + extra * THREE.MathUtils.smoothstep(progress, 0, 1);
