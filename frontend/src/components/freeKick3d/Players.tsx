@@ -7,11 +7,14 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 
+import type { KickStyle } from "@/lib/freeKick3d/fx";
 import { KEEPER_LINE_Z, type ShotSetup } from "@/lib/freeKick3d/trajectory";
+
+import { KICK_STYLES } from "./kickStyles";
 
 export const FOOTBALLER_URL = "/free-kick-3d/footballer.glb";
 
-export type Clip = "idle" | "wall_jump" | "kick" | "gk_idle" | "gk_dive_left" | "gk_dive_right" | "gk_catch" | "gk_fallen";
+export type Clip = "idle" | "wall_jump" | "kick" | "strike" | "gk_idle" | "gk_dive_left" | "gk_dive_right" | "gk_catch" | "gk_fallen";
 
 export type Kit = { shirt: string; shorts: string; socks: string };
 
@@ -21,11 +24,6 @@ export const KITS = {
   keeper: { shirt: "#facc15", shorts: "#111827", socks: "#facc15" },
 } satisfies Record<string, Kit>;
 
-/** In `kick`, the frame the right foot meets the ball (30 fps) and where
- * the toe is then, in the character's own frame (it faces +z, +x is its
- * left). Measured in Blender when the GLB was built. */
-export const KICK_CONTACT_T = 22 / 30;
-const KICK_TOE = new THREE.Vector3(-1.0, 0, 2.14);
 
 /** Where the hips get to sideways in the dives (m) — the keeper's group is
  * nudged by the difference so the hands meet the computed save point. */
@@ -160,14 +158,15 @@ export function KeeperModel({
     } else {
       const dx = targetX - setup.keeper.x;
       // The keeper faces +z: his left is world +x.
-      const clip: keyof typeof DIVE_REACH = Math.abs(dx) < 0.7 ? "gk_catch" : dx > 0 ? "gk_dive_left" : "gk_dive_right";
+      const clip: keyof typeof DIVE_REACH = Math.abs(dx) < 1.3 ? "gk_catch" : dx > 0 ? "gk_dive_left" : "gk_dive_right";
       const peak = peaks[clip] ?? 1;
       const window = Math.max(0.2, arrival - setup.keeper.reaction);
       const speed = THREE.MathUtils.clamp(peak / window, 0.8, 3.5);
       const action = play(state.current, actions, clip, { once: true, speed, fade: 0.08 });
       // Nudge the body so the hands meet the computed point at the peak.
       const progress = THREE.MathUtils.clamp(action.time / peak, 0, 1);
-      const extra = (Math.abs(dx) - DIVE_REACH[clip]) * Math.sign(dx || 1);
+      // Bounded: a bigger correction would read as sliding, not diving.
+      const extra = THREE.MathUtils.clamp(Math.abs(dx) - DIVE_REACH[clip], -1.2, 1.2) * Math.sign(dx || 1);
       g.position.x = setup.keeper.x + extra * THREE.MathUtils.smoothstep(progress, 0, 1);
       if (clip !== "gk_catch" && action.time >= action.getClip().duration - 0.05) {
         play(state.current, actions, "gk_fallen", { fade: 0.4 });
@@ -183,39 +182,63 @@ export function KeeperModel({
   );
 }
 
-/** The kicker: waits beside the ball, then runs in on the swipe; the ball
- * leaves at the clip's contact frame (shot time 0). */
-export function KickerModel({ setup, clock, kicking, castShadow }: { setup: ShotSetup; clock: PlayerClock; kicking: boolean; castShadow: boolean }) {
-  const { model, mixer, actions } = useFootballer(KITS.home, castShadow);
-  const state = useRef<{ clip: Clip | null }>({ clip: null });
-  const placement = useMemo(() => {
-    const len = Math.hypot(setup.ball.x, setup.ball.z);
-    const yaw = Math.atan2(-setup.ball.x / len, -setup.ball.z / len);
-    // Origin such that the toe (plus half a ball ahead) is at the ball at contact.
-    const toe = KICK_TOE.clone().add(new THREE.Vector3(0, 0, 0.12)).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-    return { yaw, x: setup.ball.x - toe.x, z: setup.ball.z - toe.z };
-  }, [setup]);
+/** Where the kicker's origin goes for a style so the toe (plus half a ball
+ * ahead) is at the ball at contact; facing along `yaw`. */
+function kickOrigin(setup: ShotSetup, style: KickStyle, yaw: number) {
+  const toe = KICK_STYLES[style].toe.clone().add(new THREE.Vector3(0, 0, 0.12)).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+  return new THREE.Vector3(setup.ball.x - toe.x, 0, setup.ball.z - toe.z);
+}
 
-  useEffect(() => {
-    state.current.clip = null;
-    play(state.current, actions, "kick", { once: true, at: 0, speed: 0 });
-  }, [actions, setup]);
+/** The kicker: waits at the curler's run-up mark, then runs in with the
+ * kick the swipe chose (sliding over to the drive's line if needed while
+ * he accelerates); the ball leaves at the clip's contact frame (shot time 0). */
+export function KickerModel({
+  setup,
+  clock,
+  style,
+  castShadow,
+}: {
+  setup: ShotSetup;
+  clock: PlayerClock;
+  /** The kick being taken, null while waiting. */
+  style: KickStyle | null;
+  castShadow: boolean;
+}) {
+  const { model, mixer, actions } = useFootballer(KITS.home, castShadow);
+  const group = useRef<THREE.Group>(null);
+  const yaw = useMemo(() => {
+    const len = Math.hypot(setup.ball.x, setup.ball.z);
+    return Math.atan2(-setup.ball.x / len, -setup.ball.z / len);
+  }, [setup]);
+  const marks = useMemo(
+    () => ({ kick: kickOrigin(setup, "kick", yaw), strike: kickOrigin(setup, "strike", yaw) }),
+    [setup, yaw],
+  );
 
   useFrame(() => {
-    if (kicking) {
-      const action = actions.kick;
-      action.timeScale = 1;
-      // Keep the clip locked to the shot clock (slow motion included).
-      action.time = Math.min(action.getClip().duration, KICK_CONTACT_T + clock.t());
-      mixer.update(0);
-    } else {
-      actions.kick.time = 0;
-      mixer.update(0);
+    const g = group.current;
+    if (!g) return;
+    const current: KickStyle = style ?? "kick";
+    const other: KickStyle = current === "kick" ? "strike" : "kick";
+    const action = actions[current];
+    actions[other].stop();
+    if (!action.isRunning()) {
+      action.reset();
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
+      action.play();
     }
+    const cfg = KICK_STYLES[current];
+    const t = style ? clock.t() : -Infinity;
+    // Locked to the shot clock (slow motion included); frame 0 while waiting.
+    action.time = style ? THREE.MathUtils.clamp(cfg.contact + t, 0, action.getClip().duration) : 0;
+    const k = style ? THREE.MathUtils.smoothstep((t + cfg.lead) / cfg.lead, 0, 1) : 0;
+    g.position.lerpVectors(marks.kick, marks[current], k);
+    mixer.update(0);
   });
 
   return (
-    <group position={[placement.x, 0, placement.z]} rotation-y={placement.yaw}>
+    <group ref={group} position={marks.kick} rotation-y={yaw}>
       <primitive object={model} />
     </group>
   );

@@ -100,7 +100,12 @@ const MAX_TIME = 4;
 
 const MIN_SPEED = 12;
 const MAX_SPEED = 34;
-const MAX_SPIN = 60;
+const MAX_SPIN = 75;
+/** Side spin per unit of swipe bow (rad/s): a 0.1 bow is a clear curler. */
+const CURL_GAIN = 260;
+/** Lofted shots get topspin so they dip back under the bar. */
+const DIP_GAIN = 220;
+const MAX_DIP = 40;
 
 // ---------------------------------------------------------------------------
 // Seeded randomness (setup only — the flight itself has no randomness).
@@ -180,7 +185,8 @@ export function quantizeSwipe(s: SwipeInput): QuantizedSwipe {
 /** Swipe → initial velocity and spin. Direction is built from slopes (no
  * trig): yaw from the swipe's horizontal lean, elevation from how far up
  * it went, power from its speed, side spin from how much it bowed (a path
- * bowing right curls the ball right). */
+ * bowing right curls the ball right), and topspin growing with the loft so
+ * a shot over the wall dips back under the bar. */
 export function swipeToKick(setup: ShotSetup, q: QuantizedSwipe): KickParams {
   const dx = q.dx / 1000;
   const up = Math.max(0.02, -q.dy / 1000);
@@ -198,14 +204,17 @@ export function swipeToKick(setup: ShotSetup, q: QuantizedSwipe): KickParams {
   const rz = fx;
 
   const yaw = clamp(dx / up, -0.8, 0.8) * 0.35;
-  const lift = clamp(0.13 + (up - 0.25) * 0.6, 0.02, 0.6);
+  const lift = clamp(0.16 + (up - 0.22) * 0.75, 0.02, 0.65);
 
   const dirX = fx + rx * yaw;
   const dirZ = fz + rz * yaw;
   const n = Math.sqrt(dirX * dirX + lift * lift + dirZ * dirZ);
   const velocity: Vec3 = { x: (dirX / n) * speed, y: (lift / n) * speed, z: (dirZ / n) * speed };
   // Spin about the vertical axis: ω_y < 0 bends a ball flying to −z to +x.
-  const spin: Vec3 = { x: 0, y: -curve * 2 * MAX_SPIN, z: 0 };
+  // Topspin is ω about the ball's "right" axis, pointing down the Magnus way.
+  const side = clamp(-curve * CURL_GAIN, -MAX_SPIN, MAX_SPIN);
+  const dip = clamp((lift - 0.17) * DIP_GAIN, 0, MAX_DIP);
+  const spin: Vec3 = { x: -rx * dip, y: side, z: -rz * dip };
   return { velocity, spin };
 }
 

@@ -1,4 +1,4 @@
-import { netBulge, netImpact, replayTimeScale } from "./fx";
+import { chooseKickStyle, keeperGoesFor, netBulge, netImpact, replayTimeScale } from "./fx";
 import type { ShotTrajectory } from "./trajectory";
 
 const traj = (outcome: ShotTrajectory["outcome"], end: Partial<ShotTrajectory["end"]> = {}): ShotTrajectory => ({
@@ -44,5 +44,21 @@ describe("free kick 3D effects", () => {
     expect(Math.abs(netBulge(0, 0, 0))).toBeGreaterThan(Math.abs(netBulge(1, 0, 0)));
     expect(netBulge(0, 0, 2)).toBe(0);
     expect(netBulge(0, 0, -0.1)).toBe(0);
+  });
+
+  it("picks the curling run-up for bent shots and the drive otherwise", () => {
+    const kick = (spinY: number) => ({ velocity: { x: 0, y: 5, z: -25 }, spin: { x: 0, y: spinY, z: 0 } });
+    expect(chooseKickStyle(kick(40))).toBe("kick");
+    expect(chooseKickStyle(kick(-40))).toBe("kick");
+    expect(chooseKickStyle(kick(5))).toBe("strike");
+  });
+
+  it("the keeper ignores wall hits and balls flying well wide or over", () => {
+    expect(keeperGoesFor(traj("goal"))).toBe(true);
+    expect(keeperGoesFor(traj("save"))).toBe(true);
+    expect(keeperGoesFor(traj("wall"))).toBe(false);
+    expect(keeperGoesFor(traj("miss", { position: { x: 4, y: 1, z: -0.12 } }))).toBe(true);
+    expect(keeperGoesFor(traj("miss", { position: { x: 8, y: 1, z: -0.12 } }))).toBe(false);
+    expect(keeperGoesFor(traj("miss", { position: { x: 0, y: 4, z: -0.12 } }))).toBe(false);
   });
 });

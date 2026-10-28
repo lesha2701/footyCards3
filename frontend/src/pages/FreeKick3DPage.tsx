@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useRef, useState, type PointerEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 import FreeKickScene3D, { type LiveShot } from "@/components/freeKick3d/FreeKickScene3D";
+import { chooseKickStyle } from "@/lib/freeKick3d/fx";
 import { playFreeKickSfx } from "@/lib/freeKick3d/sfx";
 import { swipeFromPoints, type SwipePoint } from "@/lib/freeKick3d/swipe";
 import {
@@ -88,7 +90,7 @@ export default function FreeKick3DPage() {
     const kick = swipeToKick(setup, quantizeSwipe(swipe));
     shotCounter.current += 1;
     haptic("medium");
-    setShot({ id: shotCounter.current, kick, trajectory: simulateShot(setup, kick) });
+    setShot({ id: shotCounter.current, kick, trajectory: simulateShot(setup, kick), style: chooseKickStyle(kick) });
   };
 
   const speedKmh = shot ? Math.round(Math.hypot(shot.kick.velocity.x, shot.kick.velocity.y, shot.kick.velocity.z) * 3.6) : 0;
@@ -96,7 +98,10 @@ export default function FreeKick3DPage() {
 
   return (
     <div className="fixed inset-0 select-none overflow-hidden bg-bg-base text-ink-chalk">
-      <FreeKickScene3D setup={setup} shot={shot} onDecided={onDecided} onReady={onReady} fpsRef={fpsRef} />
+      {/* A 3D failure (WebGL, physics) restarts the scene, not the app. */}
+      <ErrorBoundary>
+        <FreeKickScene3D setup={setup} shot={shot} onDecided={onDecided} onReady={onReady} fpsRef={fpsRef} />
+      </ErrorBoundary>
 
       {/* Swipe surface over the canvas. */}
       <div
