@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject }
 import * as THREE from "three";
 
 import { aftermathAt, simulateAftermath } from "@/lib/freeKick3d/aftermath";
-import { NET_DEPTH, keeperGoesFor, netBulge, netImpact, replayTimeScale } from "@/lib/freeKick3d/fx";
+import { NET_DEPTH, keeperGoesFor, netBulge, netImpact, reactionTime, replayTimeScale } from "@/lib/freeKick3d/fx";
 import { playFreeKickSfx } from "@/lib/freeKick3d/sfx";
 import {
   BALL_RADIUS,
@@ -34,7 +34,8 @@ export type LiveShot = { id: number; kick: KickParams; trajectory: ShotTrajector
 type Props = {
   setup: ShotSetup;
   shot: LiveShot | null;
-  /** Fired once per shot, when the replay reaches the decided outcome. */
+  /** Fired once per shot, when the replay reaches the outcome — the
+   * decision, or the woodwork for a miss off it (`reactionTime`). */
   onDecided: (shotId: number) => void;
   /** The shot world is mounted (swipes are accepted from then on). */
   onReady: () => void;
@@ -44,7 +45,7 @@ type Props = {
 
 /** Shot time runs on its own clock so the replay can slow down near the
  * goal (−1 = waiting for a kick). */
-type ShotClock = { shotId: number; t: number; decided: boolean; decidedAt: number };
+type ShotClock = { shotId: number; t: number; decided: boolean; decidedAt: number; announced: boolean };
 
 /** Everything the presentation layer shares across components per frame. */
 type Stage = {
@@ -134,7 +135,7 @@ function ShotWorld({
   hype,
 }: Omit<Props, "fpsRef"> & { quality: Quality; hype: Hype }) {
   const stage = useRef<Stage>({
-    clock: { shotId: -1, t: -1, decided: false, decidedAt: 0 },
+    clock: { shotId: -1, t: -1, decided: false, decidedAt: 0, announced: false },
     dt: 0,
     ball: new THREE.Vector3(setup.ball.x, setup.ball.y, setup.ball.z),
     shake: 0,
@@ -145,7 +146,7 @@ function ShotWorld({
   useEffect(() => {
     // A shot starts with the kicker's run-up: the ball leaves at t = 0.
     // The kick clip is cued so its contact frame lands on shot time 0.
-    stage.current.clock = { shotId: shot?.id ?? -1, t: shot ? -KICK.lead : -1, decided: false, decidedAt: 0 };
+    stage.current.clock = { shotId: shot?.id ?? -1, t: shot ? -KICK.lead : -1, decided: false, decidedAt: 0, announced: false };
     stage.current.ripple = null;
   }, [shot]);
   useEffect(onReady, [onReady]);
@@ -192,6 +193,9 @@ function ShotWorld({
         setConfetti((n) => n + 1);
         setTimeout(() => playFreeKickSfx("net"), travel * 1000);
       }
+    }
+    if (!c.announced && c.t >= reactionTime(traj)) {
+      c.announced = true;
       onDecided(shot.id);
     }
   }, -1);

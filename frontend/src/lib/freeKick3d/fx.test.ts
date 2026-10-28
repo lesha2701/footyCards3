@@ -1,4 +1,4 @@
-import { keeperGoesFor, netBulge, netImpact, replayTimeScale } from "./fx";
+import { keeperGoesFor, netBulge, netImpact, reactionTime, replayTimeScale } from "./fx";
 import type { ShotTrajectory } from "./trajectory";
 
 const traj = (outcome: ShotTrajectory["outcome"], end: Partial<ShotTrajectory["end"]> = {}): ShotTrajectory => ({
@@ -44,6 +44,16 @@ describe("free kick 3D effects", () => {
     expect(Math.abs(netBulge(0, 0, 0))).toBeGreaterThan(Math.abs(netBulge(1, 0, 0)));
     expect(netBulge(0, 0, 2)).toBe(0);
     expect(netBulge(0, 0, -0.1)).toBe(0);
+  });
+
+  it("a miss off the woodwork is reacted to when it rings, not when the ball stops", () => {
+    const offBar = { ...traj("miss", { t: 2.4 }), events: [{ t: 0.9, type: "post" as const }, { t: 2.4, type: "miss" as const }] };
+    expect(reactionTime(offBar)).toBe(0.9);
+    expect(reactionTime(traj("miss"))).toBe(1);
+    expect(reactionTime(traj("goal"))).toBe(1);
+    // In off the post: the goal is the moment.
+    const inOffPost = { ...traj("goal"), events: [{ t: 0.8, type: "post" as const }, { t: 1, type: "goal" as const }] };
+    expect(reactionTime(inOffPost)).toBe(1);
   });
 
   it("the keeper ignores wall hits and balls flying well wide or over", () => {

@@ -51,7 +51,7 @@ def test_scoring_goal_bonuses_and_consolation():
     assert score_3d_shot(cfg, _result("wall")) == (0, [])
 
 
-async def test_one_series_an_hour(client, db_session, bot_token):
+async def test_one_series_of_six_an_hour(client, db_session, bot_token):
     user = await _register(client, db_session, 850001, bot_token)
     card = await _grant_card(db_session, user.id, rating=88)
     headers = telegram_headers(850001, bot_token)
@@ -60,7 +60,7 @@ async def test_one_series_an_hour(client, db_session, bot_token):
     assert start.status_code == 200
     body = start.json()
     assert body["rating"] == 88
-    assert body["total_kicks"] == 5
+    assert body["total_kicks"] == 6
     assert body["kick"]["kick_index"] == 0
     assert 1 <= body["kick"]["seed"] < 2**31
 
@@ -103,7 +103,7 @@ async def test_full_series_is_replayed_on_the_server_and_paid_once(client, db_se
     session_id = start["session_id"]
 
     expected_total = 0
-    for i in range(5):
+    for i in range(6):
         kick = await _age_current_kick(db_session, session_id)
         resp = await client.post(f"/api/v1/games/free-kick-3d/{session_id}/shot", headers=headers, json=SWIPE)
         assert resp.status_code == 200, resp.text
@@ -118,8 +118,8 @@ async def test_full_series_is_replayed_on_the_server_and_paid_once(client, db_se
         assert body["bonuses"] == bonuses
         expected_total += coins
         assert body["total_coins"] == expected_total
-        assert body["is_finished"] is (i == 4)
-        assert (body["next_kick"] is None) is (i == 4)
+        assert body["is_finished"] is (i == 5)
+        assert (body["next_kick"] is None) is (i == 5)
 
     late = await client.post(f"/api/v1/games/free-kick-3d/{session_id}/shot", headers=headers, json=SWIPE)
     assert late.status_code == 409

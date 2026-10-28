@@ -39,6 +39,18 @@ export function netBulge(dx: number, dy: number, age: number): number {
   return 0.55 * falloff * Math.exp(-age * 3.2) * Math.cos(age * 14);
 }
 
+/** When the crowd (and the result banner) react, in shot time: at the
+ * decision, except a miss off the post or the bar — that one is plain the
+ * moment it rings, while the ball may fly on for a long while before the
+ * shot is formally over. */
+export function reactionTime(traj: ShotTrajectory): number {
+  if (traj.outcome === "miss") {
+    const post = traj.events.find((e) => e.type === "post");
+    if (post) return Math.min(post.t, traj.end.t);
+  }
+  return traj.end.t;
+}
+
 /** Should the keeper move at all? Not for a shot the wall stops, nor for
  * one flying clearly wide or over — he just watches it go. */
 export function keeperGoesFor(traj: ShotTrajectory): boolean {

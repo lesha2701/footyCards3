@@ -216,15 +216,21 @@ function SeriesKick({
     if (ready) crowdChant();
   }, [ready, kick.seed]);
 
+  // The crowd reacts the instant the ball decides it — on the local replay,
+  // which is the server's own computation; no waiting for its answer.
+  const replayed: ShotOutcome | null = shown && shot ? shot.trajectory.outcome : null;
   const endBall = shot?.trajectory.end.position;
+  const offWoodwork = !!shot?.trajectory.events.some((e) => e.type === "post");
   useEffect(() => {
-    if (!outcome) return;
+    if (!replayed) return;
     crowdTension(false);
-    hapticNotify(outcome === "goal" ? "success" : outcome === "save" ? "warning" : "error");
-    // Into the stands: the crowd laughs rather than groans.
-    const wild = !!endBall && (Math.abs(endBall.x) > GOAL_HALF_WIDTH + 4 || endBall.y > GOAL_HEIGHT + 3);
-    playFreeKickSfx(outcome === "goal" ? "roar" : wild ? "laugh" : "groan");
-  }, [outcome, endBall]);
+    hapticNotify(replayed === "goal" ? "success" : replayed === "save" ? "warning" : "error");
+    // Into the stands: the crowd laughs rather than groans (but off the
+    // woodwork it's a near thing, whatever the ball does afterwards).
+    const wild =
+      !offWoodwork && !!endBall && (Math.abs(endBall.x) > GOAL_HALF_WIDTH + 4 || endBall.y > GOAL_HEIGHT + 3);
+    playFreeKickSfx(replayed === "goal" ? "roar" : wild ? "laugh" : "groan");
+  }, [replayed, endBall, offWoodwork]);
 
   const onDecided = useCallback(() => setShown(true), []);
   const aiming = ready && shot === null;

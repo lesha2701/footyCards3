@@ -17,7 +17,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 COLUMNS = {
     "free_kick_hourly_limit": 1,
-    "free_kick_3d_kicks": 5,
+    "free_kick_3d_kicks": 6,
     "free_kick_3d_goal_coins": 20,
     "free_kick_3d_corner_bonus": 10,
     "free_kick_3d_curl_bonus": 5,
