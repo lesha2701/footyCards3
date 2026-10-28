@@ -21,7 +21,8 @@ export function setSoundEnabled(on: boolean): void {
   }
 }
 
-function audio(): AudioContext | null {
+/** The shared Web Audio context (resumed), or null where unsupported. */
+export function audio(): AudioContext | null {
   if (typeof window === "undefined") return null;
   const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) return null;

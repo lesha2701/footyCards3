@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState, type PointerEvent } from "react
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import FreeKickScene3D, { type LiveShot } from "@/components/freeKick3d/FreeKickScene3D";
+import { playFreeKickSfx } from "@/lib/freeKick3d/sfx";
 import { swipeFromPoints, type SwipePoint } from "@/lib/freeKick3d/swipe";
 import {
   createSetup,
@@ -53,6 +54,7 @@ export default function FreeKick3DPage() {
       setResult(outcome);
       setTrail([]);
       hapticNotify(outcome === "goal" ? "success" : outcome === "save" ? "warning" : "error");
+      playFreeKickSfx(outcome === "goal" ? "roar" : "groan");
     },
     [shot],
   );
@@ -86,6 +88,7 @@ export default function FreeKick3DPage() {
     const kick = swipeToKick(setup, quantizeSwipe(swipe));
     shotCounter.current += 1;
     haptic("medium");
+    playFreeKickSfx("kick");
     setShot({ id: shotCounter.current, kick, trajectory: simulateShot(setup, kick) });
   };
 
