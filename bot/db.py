@@ -105,7 +105,7 @@ async def fetch_claimed_premium_channel_tasks() -> list[asyncpg.Record]:
     pool = await get_pool()
     return await pool.fetch(
         """SELECT ut.id AS user_task_id, ut.user_id, ut.reward_coins_granted,
-                  u.telegram_id, td.channel_chat_id, td.channel_username
+                  u.telegram_id, td.channel_chat_id, td.channel_username, td.is_required
            FROM user_tasks ut
            JOIN task_definitions td ON td.id = ut.task_definition_id
            JOIN users u ON u.id = ut.user_id
@@ -126,6 +126,24 @@ async def reset_task_for_reclaim(user_task_id: int) -> None:
         "WHERE id = $1",
         user_task_id,
     )
+
+
+async def revoke_task_required_badge(user_id: int) -> bool:
+    """Takes «Свой в клубе» (game_config.task_required_badge_id) back after a
+    required subscription was left — unequipped too. True if it was owned."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            badge_id = await conn.fetchval("SELECT task_required_badge_id FROM game_config WHERE id = 1")
+            if badge_id is None:
+                return False
+            status = await conn.execute(
+                "DELETE FROM user_badges WHERE user_id = $1 AND badge_id = $2", user_id, badge_id
+            )
+            await conn.execute(
+                "UPDATE users SET active_badge_id = NULL WHERE id = $1 AND active_badge_id = $2", user_id, badge_id
+            )
+            return status != "DELETE 0"
 
 
 async def find_player_by_name(name: str) -> Optional[asyncpg.Record]:

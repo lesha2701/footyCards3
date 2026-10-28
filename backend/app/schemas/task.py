@@ -1,8 +1,11 @@
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import TaskCategory, TaskConditionType
+from app.schemas.badge import BadgeOut
+from app.schemas.monetization import GrantedRewardsOut
 from app.schemas.pack import PackOpenResult
 
 
@@ -27,6 +30,10 @@ class TaskDefinitionOut(BaseModel):
     invite_link: Optional[str]
     is_active: bool
     sort_order: int
+    period: str = "daily"
+    points: int = 20
+    route: Optional[str] = None
+    is_required: bool = False
 
 
 class TaskDefinitionStatsOut(TaskDefinitionOut):
@@ -57,6 +64,10 @@ class TaskDefinitionCreate(BaseModel):
     invite_link: Optional[str] = None
     is_active: bool = True
     sort_order: int = 0
+    period: str = Field(default="daily", pattern="^(daily|weekly)$")
+    points: int = Field(default=20, ge=0, le=1000)
+    route: Optional[str] = Field(default=None, max_length=64)
+    is_required: bool = False
 
 
 class TaskDefinitionUpdate(BaseModel):
@@ -76,6 +87,10 @@ class TaskDefinitionUpdate(BaseModel):
     invite_link: Optional[str] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
+    period: Optional[str] = Field(default=None, pattern="^(daily|weekly)$")
+    points: Optional[int] = Field(default=None, ge=0, le=1000)
+    route: Optional[str] = Field(default=None, max_length=64)
+    is_required: Optional[bool] = None
 
 
 class TaskOut(BaseModel):
@@ -94,11 +109,41 @@ class TaskOut(BaseModel):
     target_value: int
     is_completed: bool
     is_claimed: bool
+    period: str = "daily"
+    points: int = 0
+    # Where «Играть →» leads (a Mini App path), None = nowhere to go.
+    route: Optional[str] = None
+    is_required: bool = False
+
+
+class TaskChestOut(BaseModel):
+    index: int
+    points: int
+    coins: int = 0
+    card_rarity: Optional[str] = None
+    pack_id: Optional[int] = None
+    is_claimed: bool
+    is_available: bool
+
+
+class TaskTrackOut(BaseModel):
+    period_key: str
+    points: int
+    max_points: int
+    chests: list[TaskChestOut]
+    resets_at: datetime
 
 
 class TaskListOut(BaseModel):
+    # `regular` = today's set (kept under its old name for older clients).
     regular: list[TaskOut]
+    weekly: list[TaskOut] = []
     premium: list[TaskOut]
+    daily_track: Optional[TaskTrackOut] = None
+    weekly_track: Optional[TaskTrackOut] = None
+    rerolls_left: int = 0
+    # The badge every required subscription earns (shown on the «Обязательно» banner).
+    required_badge: Optional[BadgeOut] = None
 
 
 class PremiumCoinsBackfillOut(BaseModel):
@@ -117,3 +162,16 @@ class TaskClaimOut(BaseModel):
     granted_skill_tokens: Optional[GrantedSkillTokensOut] = None
     granted_pack: Optional[PackOpenResult] = None
     refilled_task: Optional[TaskOut] = None
+    points_added: int = 0
+    # «Свой в клубе», when this claim completed the last required subscription.
+    granted_badge: Optional[BadgeOut] = None
+
+
+class TaskChestClaimOut(BaseModel):
+    rewards: GrantedRewardsOut
+    new_balance: int
+
+
+class TaskRerollOut(BaseModel):
+    task: TaskOut
+    rerolls_left: int

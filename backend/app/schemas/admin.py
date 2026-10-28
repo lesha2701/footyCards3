@@ -510,6 +510,12 @@ class GameConfigOut(BaseModel):
     manager_style_edge_pct: int = 4
     ptour_style_edge_pct: int = 4
     ptour_formation_effect_pct: int = 100
+    task_daily_slots: int = 5
+    task_weekly_slots: int = 3
+    task_free_rerolls: int = 1
+    task_required_badge_id: Optional[int] = None
+    task_daily_chests: list[dict] = []
+    task_weekly_chests: list[dict] = []
     manager_formation_effect_pct: int = 100
     manager_wage_pct: int = 10
     manager_loan_fee_pct: int = 20
@@ -927,6 +933,15 @@ class NewbieTaskIn(BaseModel):
     pack_id: Optional[int] = None
 
 
+class TaskChestConfigIn(BaseModel):
+    """One activity chest of «Задания»: opens at `points` of the day / week."""
+
+    points: int = Field(ge=1, le=10_000)
+    coins: int = Field(default=0, ge=0, le=1_000_000)
+    card_rarity: Optional[str] = Field(default=None, pattern=r"^(common|rare|epic|legendary)$")
+    pack_id: Optional[int] = None
+
+
 class GameConfigUpdate(BaseModel):
     club_creation_cost_coins: Optional[int] = Field(default=None, ge=0)
     club_daily_reward_coins: Optional[int] = Field(default=None, ge=0)
@@ -1250,6 +1265,12 @@ class GameConfigUpdate(BaseModel):
     manager_style_edge_pct: Optional[int] = Field(default=None, ge=0, le=50)
     ptour_style_edge_pct: Optional[int] = Field(default=None, ge=0, le=50)
     ptour_formation_effect_pct: Optional[int] = Field(default=None, ge=0, le=300)
+    task_daily_slots: Optional[int] = Field(default=None, ge=0, le=10)
+    task_weekly_slots: Optional[int] = Field(default=None, ge=0, le=10)
+    task_free_rerolls: Optional[int] = Field(default=None, ge=0, le=10)
+    task_required_badge_id: Optional[int] = None
+    task_daily_chests: Optional[list[TaskChestConfigIn]] = Field(default=None, max_length=8)
+    task_weekly_chests: Optional[list[TaskChestConfigIn]] = Field(default=None, max_length=8)
     manager_formation_effect_pct: Optional[int] = Field(default=None, ge=0, le=300)
     manager_wage_pct: Optional[int] = Field(default=None, ge=0, le=100)
     manager_loan_fee_pct: Optional[int] = Field(default=None, ge=0, le=100)

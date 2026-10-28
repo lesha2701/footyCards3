@@ -481,6 +481,12 @@ export interface GameConfig {
   manager_style_edge_pct: number;
   ptour_style_edge_pct: number;
   ptour_formation_effect_pct: number;
+  task_daily_slots: number;
+  task_weekly_slots: number;
+  task_free_rerolls: number;
+  task_required_badge_id: number | null;
+  task_daily_chests: TaskChestConfig[];
+  task_weekly_chests: TaskChestConfig[];
   manager_formation_effect_pct: number;
   manager_wage_pct: number;
   manager_loan_fee_pct: number;
@@ -965,6 +971,10 @@ export interface TaskDefinition {
   invite_link: string | null;
   is_active: boolean;
   sort_order: number;
+  period?: "daily" | "weekly";
+  points?: number;
+  route?: string | null;
+  is_required?: boolean;
   completed_count: number;
   claimed_count: number;
 }
@@ -1323,4 +1333,11 @@ export interface AdminUserSummary {
   stars_purchases: number;
   recent_stars: { completed_at: string; stars: number; product: string }[];
   admin_actions: { created_at: string; action: string; admin_id: number | null }[];
+}
+
+export interface TaskChestConfig {
+  points: number;
+  coins: number;
+  card_rarity?: "common" | "rare" | "epic" | "legendary" | null;
+  pack_id?: number | null;
 }

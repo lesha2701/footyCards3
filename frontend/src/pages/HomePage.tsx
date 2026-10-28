@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
-import { fetchCurrentBingo } from "@/api/bingo";
 import { fetchFeatureFlags } from "@/api/featureFlags";
 import { fetchLeagueStatus } from "@/api/leagues";
 import { fetchMyProfile } from "@/api/profile";
@@ -10,18 +9,9 @@ import HomeHero from "@/components/home/HomeHero";
 import ModesGrid from "@/components/home/ModesGrid";
 import ShowcaseCard from "@/components/home/ShowcaseCard";
 import TodayCard from "@/components/home/TodayCard";
-import WeeklyEventStrip from "@/components/home/WeeklyEventStrip";
 import NewbieCard from "@/components/newbie/NewbieCard";
 import { StarterOfferBanner, StarterOfferModal } from "@/components/shop/StarterOffer";
-import {
-  IconChat,
-  IconChevronRight,
-  IconHandshake,
-  type IconProps,
-} from "@/components/icons";
-import { haptic, openTelegramLink } from "@/lib/telegram";
-
-const CHAT_INVITE_LINK = "https://t.me/+42EZisiOi8w1ZmMy";
+import { IconChevronRight, IconHandshake, type IconProps } from "@/components/icons";
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -30,7 +20,6 @@ export default function HomePage() {
   const { data: wheelStatus } = useQuery({ queryKey: ["wheel-status"], queryFn: fetchWheelStatus });
   const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags, refetchInterval: 30000 });
   const { data: leagueStatus } = useQuery({ queryKey: ["league-status"], queryFn: fetchLeagueStatus });
-  const { data: bingo } = useQuery({ queryKey: ["bingo-current"], queryFn: fetchCurrentBingo });
 
   return (
     <div className="flex flex-col gap-5">
@@ -51,48 +40,10 @@ export default function HomePage() {
 
       <TodayCard wheel={flags?.wheel_enabled !== false ? wheelStatus : null} />
 
-      <WeeklyEventStrip bingo={bingo} />
-
       <ModesGrid />
 
       <ShowcaseCard />
-
-      <div className="flex flex-col gap-2">
-        <SlimBanner
-          Icon={IconChat}
-          tint="bg-sky-400/15 text-sky-300"
-          title="Чат VICTOR FC"
-          subtitle="Обмены, дропы и паки по слову «вкарта»"
-          onClick={() => {
-            haptic("light");
-            openTelegramLink(CHAT_INVITE_LINK);
-          }}
-        />
-      </div>
     </div>
-  );
-}
-
-function SlimBanner({
-  Icon, tint, title, subtitle, onClick,
-}: {
-  Icon: (props: IconProps) => JSX.Element;
-  tint: string;
-  title: string;
-  subtitle: string;
-  onClick: () => void;
-}) {
-  return (
-    <button onClick={onClick} className="flex items-center gap-3 rounded-2xl bg-bg-surface px-3 py-2.5 text-left active:scale-[0.98]">
-      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${tint}`}>
-        <Icon size={16} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block font-display text-sm font-bold text-ink-chalk">{title}</span>
-        <span className="block truncate text-xs text-ink-mist">{subtitle}</span>
-      </span>
-      <IconChevronRight size={16} className="shrink-0 text-ink-mist-dim" />
-    </button>
   );
 }
 

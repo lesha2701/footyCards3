@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import RewardModal, { RewardCard, RewardCoins, RewardPack } from "@/components/common/RewardModal";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconCoin, IconCollection, IconPack, IconStar } from "@/components/icons";
@@ -66,11 +68,13 @@ function grantedItems(granted: GrantedRewards, keyPrefix: string): JSX.Element[]
 
 /** The shared "you got it" modal for every reward of these features. */
 export function GrantedRewardModal({
-  title, subtitle, granted, bonus, onClose,
+  title, subtitle, granted, bonus, hero, onClose,
 }: {
   title: string;
   subtitle?: string;
   granted: GrantedRewards;
+  /** A bigger picture in place of the confetti icon (e.g. the opened chest). */
+  hero?: ReactNode;
   /** Optional second reward (e.g. the month-completion bonus). */
   bonus?: GrantedRewards | null;
   onClose: () => void;
@@ -84,5 +88,5 @@ export function GrantedRewardModal({
   const best = cards.reduce<Rarity | null>(
     (acc, c) => (acc === null || RARITY_RANK[c.player.rarity] > RARITY_RANK[acc] ? c.player.rarity : acc), null,
   );
-  return <RewardModal title={title} subtitle={subtitle} rarity={best} items={items} onClose={onClose} />;
+  return <RewardModal title={title} subtitle={subtitle} hero={hero} rarity={best} items={items} onClose={onClose} />;
 }
