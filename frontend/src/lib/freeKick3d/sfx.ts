@@ -1,6 +1,7 @@
 /** Free kick 3D sounds. The crowd is recorded (public/free-kick-3d/sfx,
  * loaded once the scene opens): a looping hum that swells while the ball
- * flies, a song between kicks, the goal roar, groans and laughter. The
+ * flies, chants while the kicker lines up (they fade the moment the shot
+ * is decided), the goal roar, groans and laughter. The
  * strikes (kick, post, wall) are synthesized with Web Audio like the rest
  * of the app, and so is every crowd sound until its file is in. All muted
  * by the same «Звуки» switch. */
@@ -16,6 +17,7 @@ const RECORDINGS = {
   laugh: "laugh.mp3",
   ambience: "ambience.mp3",
   chantSong: "chant-song.mp3",
+  chantHey: "chant-hey.mp3",
 } as const;
 type Recording = keyof typeof RECORDINGS;
 
@@ -49,15 +51,19 @@ function playRecording(ac: AudioContext, buffer: AudioBuffer, volume: number, wh
   gain.gain.value = volume;
   src.connect(gain).connect(ac.destination);
   src.start(ac.currentTime + when);
+  return { src, gain };
 }
 
 // ---------------------------------------------------------------------------
-// The crowd: one looping hum for the whole scene plus a song on top.
+// The crowd: one looping hum for the whole scene plus chants on top.
 // ---------------------------------------------------------------------------
 
 const CALM = 0.32;
 const TENSE = 0.6;
 let crowd: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+/** Chants still sounding (faded out by `crowdHush`). */
+const chanting = new Set<{ src: AudioBufferSourceNode; gain: GainNode }>();
+let chantTurn = 0;
 
 /** Start the crowd hum (no-op if sound is off or it's already on);
  * returns the stop function. Waits for the recordings to load. */
@@ -104,20 +110,39 @@ export function crowdTension(tense: boolean): void {
   crowd.gain.gain.setTargetAtTime(tense ? TENSE : CALM, ac.currentTime, tense ? 0.25 : 1.2);
 }
 
-/** The crowd gets behind the kicker with a song (no clapping chants: right
- * after a goal they'd read as applause). Waits for the recordings, so the
- * first position isn't silent. */
+/** The crowd gets behind the kicker: the song and «hey hey hey» take
+ * turns. Waits for the recordings, so the first position isn't silent. */
 export function crowdChant(): void {
   void preloadFreeKickSfx().then(() => {
     if (!soundEnabled()) return;
     try {
       const ac = audio();
-      if (!ac || !recorded.chantSong) return;
-      playRecording(ac, recorded.chantSong, 0.75, 0.4);
+      const chants = [recorded.chantSong, recorded.chantHey].filter((b): b is AudioBuffer => !!b);
+      if (!ac || chants.length === 0) return;
+      const node = playRecording(ac, chants[chantTurn++ % chants.length], 0.75, 0.4);
+      chanting.add(node);
+      node.src.onended = () => chanting.delete(node);
     } catch {
       // Audio is a nicety.
     }
   });
+}
+
+/** The shot is decided: whatever the crowd was chanting dies away, so the
+ * roar or the groan has the stage (and no chant reads as applause). */
+export function crowdHush(): void {
+  const ac = audio();
+  if (!ac) return;
+  for (const node of chanting) {
+    try {
+      node.gain.gain.cancelScheduledValues(ac.currentTime);
+      node.gain.gain.setTargetAtTime(0.0001, ac.currentTime, 0.15);
+      node.src.stop(ac.currentTime + 0.8);
+    } catch {
+      // Already over.
+    }
+  }
+  chanting.clear();
 }
 
 // ---------------------------------------------------------------------------

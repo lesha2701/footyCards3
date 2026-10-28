@@ -10,7 +10,7 @@ import GameHero from "@/components/common/GameHero";
 import { IconCoin } from "@/components/icons";
 import FreeKickScene3D, { type LiveShot } from "@/components/freeKick3d/FreeKickScene3D";
 import { formatGameError } from "@/lib/errors";
-import { crowdChant, crowdTension, playFreeKickSfx, startCrowd } from "@/lib/freeKick3d/sfx";
+import { crowdChant, crowdHush, crowdTension, playFreeKickSfx, startCrowd } from "@/lib/freeKick3d/sfx";
 import { swipeFromPoints, type SwipePoint } from "@/lib/freeKick3d/swipe";
 import {
   GOAL_HALF_WIDTH,
@@ -223,6 +223,7 @@ function SeriesKick({
   const offWoodwork = !!shot?.trajectory.events.some((e) => e.type === "post");
   useEffect(() => {
     if (!replayed) return;
+    crowdHush();
     crowdTension(false);
     hapticNotify(replayed === "goal" ? "success" : replayed === "save" ? "warning" : "error");
     // Into the stands: the crowd laughs rather than groans (but off the
