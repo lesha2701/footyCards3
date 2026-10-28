@@ -53,6 +53,15 @@ EDGE_SPEED = 2
 EDGE_CURL = 0.1
 EDGE_KEEPER = 0.08
 
+PENALTY_DISTANCE = 11
+PENALTY_MIN_SPEED = 12
+PENALTY_CHIP_LOFT = 0.35
+CHIP_SPEED = 17
+PENALTY_LIFT_SCALE = 1.4
+PENALTY_AIM_SCALE = 1.5
+PENALTY_MIN_REACTION = 0.18
+PLAYER_KEEPER_SPEED = 7.2
+
 _U32 = 0xFFFFFFFF
 
 
@@ -109,6 +118,13 @@ class Setup:
     keeper_x: float
     keeper_reaction: float
     keeper_speed: float
+    # Penalty knobs (a free kick keeps these defaults — see trajectory.ts).
+    min_speed: float = MIN_SPEED
+    lift_scale: float = 1
+    aim_scale: float = 1
+    chip_loft: float = 0
+    keeper_guess: tuple[float, float] | None = None
+    keeper_reads_drop: bool = False
 
 
 def create_setup(seed: int, rating: int = 75) -> Setup:
@@ -141,6 +157,89 @@ def create_setup(seed: int, rating: int = 75) -> Setup:
     return Setup(seed, edge, (bx, by, bz), wall, wall_jump_at, keeper_x, keeper_reaction, keeper_speed)
 
 
+def _same_side(guess_x: float, ball_x: float) -> bool:
+    return ball_x * guess_x > 0 and abs(ball_x) > 0.5
+
+
+# ---------------------------------------------------------------------------
+# Penalties (mirrors createPenaltySetup / playerKeeperSetup / penaltyBotShot)
+# ---------------------------------------------------------------------------
+
+def create_penalty_setup(seed: int, rating: int = 75) -> Setup:
+    rnd = mulberry32(seed)
+    edge = rating_edge(rating)
+    commits = rnd() < 0.6
+    side = -1 if rnd() < 0.5 else 1
+    guess_x = side * _lerp(1.8, 3.2, rnd())
+    guess_y = _lerp(0.35, 1.9, rnd())
+    early = _lerp(0, 0.06, rnd())
+    read = _lerp(0.12, 0.18, rnd())
+    speed = _lerp(4.9, 5.6, rnd()) * (1 - EDGE_KEEPER * edge)
+    return Setup(
+        seed, edge, (0, BALL_RADIUS, PENALTY_DISTANCE), [], 99, 0, early if commits else read, speed,
+        min_speed=PENALTY_MIN_SPEED, lift_scale=PENALTY_LIFT_SCALE, aim_scale=PENALTY_AIM_SCALE,
+        chip_loft=PENALTY_CHIP_LOFT, keeper_guess=(guess_x, guess_y) if commits else None, keeper_reads_drop=True,
+    )
+
+
+@dataclass
+class Dive:
+    """The player's dive as the client quantized it: where (mm) and when
+    (ms from the strike, negative during the run-up)."""
+
+    x: int
+    y: int
+    reaction_ms: int
+
+
+def player_keeper_setup(seed: int, dive: "Dive | None") -> Setup:
+    base = create_penalty_setup(seed)
+    if dive is None:
+        reaction, guess = 99, None
+    else:
+        reaction = 0 if dive.reaction_ms < 0 else max(PENALTY_MIN_REACTION, dive.reaction_ms / 1000)
+        guess = (_clamp(dive.x / 1000, -GOAL_HALF_WIDTH, GOAL_HALF_WIDTH), _clamp(dive.y / 1000, 0.25, KEEPER_MAX_HAND_Y))
+    return Setup(
+        base.seed, 0, base.ball, [], base.wall_jump_at, 0, reaction, PLAYER_KEEPER_SPEED,
+        min_speed=base.min_speed, lift_scale=base.lift_scale, aim_scale=base.aim_scale, chip_loft=base.chip_loft,
+        keeper_guess=guess, keeper_reads_drop=True,
+    )
+
+
+BOT_KINDS = [
+    ("low_corner", 28), ("side", 20), ("top_corner", 20), ("power", 12), ("chip", 7), ("wide", 8), ("over", 5),
+]
+_BOT_RANGES = {
+    "low_corner": ((42, 55), (100, 120), (150, 180)),
+    "side": ((50, 70), (150, 175), (160, 190)),
+    "top_corner": ((85, 105), (220, 238), (140, 160)),
+    "power": ((0, 12), (170, 215), (115, 140)),
+    "chip": ((0, 6), (250, 270), (800, 1000)),
+    "wide": ((120, 160), (140, 200), (140, 170)),
+    "over": ((0, 60), (290, 320), (130, 160)),
+}
+
+
+def penalty_bot_shot(seed: int, dive: "Dive | None" = None) -> tuple[str, "Swipe"]:
+    rnd = mulberry32(_u32(seed ^ 0x5BD1E995))
+    pick = rnd() * 100
+    side = -1 if rnd() < 0.5 else 1
+    a, b, c = rnd(), rnd(), rnd()
+    acc = 0
+    kind = "low_corner"
+    for k, w in BOT_KINDS:
+        acc += w
+        if pick < acc:
+            kind = k
+            break
+    (dx0, dx1), (dy0, dy1), (ms0, ms1) = _BOT_RANGES[kind]
+    whole = lambda v: math.floor(v + 0.5)  # noqa: E731
+    dx, dy, ms = _lerp(dx0, dx1, a), _lerp(dy0, dy1, b), _lerp(ms0, ms1, c)
+    aimed = kind in ("low_corner", "side", "top_corner")
+    direction = -side if aimed and dive is not None and dive.reaction_ms < 0 and dive.x * side > 0 else side
+    return kind, Swipe(direction * whole(dx), -whole(dy), 0, whole(ms))
+
+
 @dataclass
 class Swipe:
     """The swipe as the client quantized it: integer thousandths of the
@@ -163,7 +262,7 @@ def swipe_to_kick(setup: Setup, q: Swipe) -> tuple[tuple[float, float, float], t
     curve = _clamp(q.curve / 1000, -0.5, 0.5)
     length = math.sqrt(dx * dx + up * up)
     swipe_speed = math.sqrt(length * 0.4) / (q.duration_ms / 1000)
-    speed = _clamp(MIN_SPEED + swipe_speed * 7, MIN_SPEED, MAX_SPEED + EDGE_SPEED * setup.edge)
+    speed = _clamp(setup.min_speed + swipe_speed * 7, setup.min_speed, MAX_SPEED + EDGE_SPEED * setup.edge)
 
     bx, _, bz = setup.ball
     ln = math.sqrt(bx * bx + bz * bz)
@@ -172,8 +271,9 @@ def swipe_to_kick(setup: Setup, q: Swipe) -> tuple[tuple[float, float, float], t
     rx = -fz
     rz = fx
 
-    aim = _clamp(dx / up, -0.8, 0.8) * 0.35
-    lift = _clamp(0.2 - (0.2 - up) * 1.6 if up < 0.2 else 0.2 + (up - 0.2) * 0.8, 0.02, 0.7)
+    aim = _clamp(dx / up, -0.8, 0.8) * 0.35 * setup.aim_scale
+    chip = _clamp((CHIP_SPEED - speed) / 3, 0, 1) * setup.chip_loft
+    lift = _clamp((0.2 - (0.2 - up) * 1.6 if up < 0.2 else 0.2 + (up - 0.2) * 0.8) * setup.lift_scale + chip, 0.02, 0.7)
     side = _clamp(curve * CURL_GAIN * (1 + EDGE_CURL * setup.edge), -MAX_SPIN, MAX_SPIN)
     yaw = aim + (MAGNUS_K * side * ln) / (2 * speed)
 
@@ -296,14 +396,20 @@ def simulate_shot(setup: Setup, q: Swipe) -> ShotResult:
 
         if not decided and t >= setup.keeper_reaction:
             decided = True
-            if vz >= -0.1:
+            guess = setup.keeper_guess
+            if guess and (vz >= -0.1 or not _same_side(guess[0], px + vx * ((KEEPER_LINE_Z - pz) / vz))):
+                # Committed, and the ball isn't going his way.
+                target_x = _clamp(guess[0], -GOAL_HALF_WIDTH - 0.3, GOAL_HALF_WIDTH + 0.3)
+                target_y = _clamp(guess[1], 0.25, KEEPER_MAX_HAND_Y)
+            elif vz >= -0.1:
                 target_x, target_y = setup.keeper_x, KEEPER_STAND_HAND_Y
             else:
                 tt = (KEEPER_LINE_Z - pz) / vz
                 min_x = setup.keeper_x - KEEPER_MAX_REACH
                 max_x = setup.keeper_x + KEEPER_MAX_REACH
                 target_x = _clamp(px + vx * tt, max(min_x, -GOAL_HALF_WIDTH - 0.3), min(max_x, GOAL_HALF_WIDTH + 0.3))
-                target_y = _clamp(py + vy * tt, 0.25, KEEPER_MAX_HAND_Y)
+                drop = 0.5 * GRAVITY * tt * tt if setup.keeper_reads_drop else 0
+                target_y = _clamp(py + vy * tt - drop, 0.25, KEEPER_MAX_HAND_Y)
         if decided:
             ex = target_x - hand_x
             ey = target_y - hand_y

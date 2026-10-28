@@ -8,7 +8,17 @@
  * then copy the file to backend/tests/fixtures/ (the test below compares
  * the copies when the backend is checked out next to the frontend).
  */
-import { playShot, type QuantizedSwipe } from "./trajectory";
+import {
+  createPenaltySetup,
+  penaltyBotShot,
+  playShot,
+  playerKeeperSetup,
+  simulateShot,
+  swipeToKick,
+  type QuantizedDive,
+  type QuantizedSwipe,
+  type ShotTrajectory,
+} from "./trajectory";
 
 // The app's tsconfig has no Node types; the test runs in Node all the same.
 type Fs = {
@@ -44,11 +54,42 @@ function cases(): Case[] {
   return out;
 }
 
+const summary = (t: ShotTrajectory) => ({ outcome: t.outcome, end: t.end, events: t.events.map((e) => e.type) });
+
 function compute() {
-  return cases().map(({ seed, rating, swipe }) => {
-    const t = playShot(seed, swipe, true, rating);
-    return { seed, rating, swipe, outcome: t.outcome, end: t.end, events: t.events.map((e) => e.type) };
-  });
+  const freeKicks = cases().map(({ seed, rating, swipe }) => ({ mode: "free_kick", seed, rating, swipe, ...summary(playShot(seed, swipe, true, rating)) }));
+  // Penalties: the player's kick against the bot keeper…
+  const kicks = [3, 17, 4242, 99991, 2147483000].flatMap((seed, i) =>
+    [
+      { dx: 50, dy: -110, curve: 0, durationMs: 160 },
+      { dx: -60, dy: -160, curve: 30, durationMs: 170 },
+      { dx: 95, dy: -230, curve: 0, durationMs: 150 },
+      { dx: 0, dy: -150, curve: 0, durationMs: 160 },
+      { dx: 0, dy: -260, curve: 0, durationMs: 900 },
+      { dx: 140, dy: -120, curve: 0, durationMs: 170 },
+    ].map((swipe, j) => {
+      const rating = [55, 75, 90, 99][(i + j) % 4];
+      const setup = createPenaltySetup(seed, rating);
+      return { mode: "penalty_kick", seed, rating, swipe, ...summary(simulateShot(setup, swipeToKick(setup, swipe))) };
+    }),
+  );
+  // …and the bot's kick against the player's dive (none, early, on time, late).
+  const dives: (QuantizedDive | null)[] = [
+    null,
+    { x: 2200, y: 900, reactionMs: -150 },
+    { x: -2200, y: 600, reactionMs: 120 },
+    { x: 2000, y: 1400, reactionMs: 240 },
+    { x: 0, y: 1900, reactionMs: 200 },
+    { x: -1800, y: 300, reactionMs: 420 },
+  ];
+  const saves = [1, 2, 5, 12, 77, 345576453].flatMap((seed) =>
+    dives.map((dive) => {
+      const setup = playerKeeperSetup(seed, dive);
+      const { kind, swipe } = penaltyBotShot(seed, dive);
+      return { mode: "penalty_save", seed, dive, kind, swipe, ...summary(simulateShot(setup, swipeToKick(setup, swipe))) };
+    }),
+  );
+  return [...freeKicks, ...kicks, ...saves];
 }
 
 describe("free kick 3D engine fixture (shared with the backend)", () => {
@@ -61,6 +102,10 @@ describe("free kick 3D engine fixture (shared with the backend)", () => {
     // A spread of outcomes, so the fixture really exercises the engine.
     const outcomes = new Set(now.map((c) => c.outcome));
     for (const o of ["goal", "save", "wall", "miss"]) expect(outcomes).toContain(o);
+    for (const mode of ["penalty_kick", "penalty_save"]) {
+      const penalty = new Set(now.filter((c) => c.mode === mode).map((c) => c.outcome));
+      for (const o of ["goal", "save"]) expect(penalty).toContain(o);
+    }
   });
 
   it("the backend's copy is the same file", async () => {
