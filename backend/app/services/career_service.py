@@ -32,6 +32,7 @@ from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.user import User
 from app.services import career_achievements_service as achievements
 from app.services import career_league_service as league_service
+from app.services import career_replay_service as career_replay
 from app.services import career_tactics_service as tactics
 from app.services import chemistry_service
 from app.services import club_base_service, my_player_service, path_match_service, tournament_match_engine, wallet_service
@@ -1213,7 +1214,8 @@ def _live_out(season: CareerSeason, me: CareerParticipant, by_id: dict, config) 
     """My match in the live match centre (first half played, break running)."""
     state = season.state or {}
     live = state.get("live") or {}
-    rec = next((m for m in (live.get("matches") or {}).values() if me.team_index in (m["home"], m["away"])), None)
+    match_index, rec = next(((int(k), m) for k, m in (live.get("matches") or {}).items()
+                             if me.team_index in (m["home"], m["away"])), (None, None))
     if rec is None:
         return None
     teams = state.get("teams") or []
@@ -1226,7 +1228,7 @@ def _live_out(season: CareerSeason, me: CareerParticipant, by_id: dict, config) 
                 "rating": _effective(card) if card else None}
 
     return {
-        "round": live["round"], "second_half_at": live["second_half_at"],
+        "round": live["round"], "match_index": match_index, "second_half_at": live["second_half_at"],
         "home": rec["home"], "away": rec["away"],
         "home_name": teams[rec["home"]]["name"], "away_name": teams[rec["away"]]["name"],
         "hs": rec["hs"], "as": rec["as"], "events": rec["events"],
@@ -1692,13 +1694,16 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                         if teams[bot_index].get("user_id") is None and teams[away if bot is run_h else home].get("user_id"):
                             bot.marking = _bot_marking(bot, human)
                 tracker: dict = {}
+                # Starting XIs for the 2D replay (career_replay_service);
+                # taken before kick-off, substitutions come from the events.
+                lineups = {"a": career_replay.lineup_record(run_h), "b": career_replay.lineup_record(run_a)}
                 with _seeded(_match_seed(season.id, round_index, match_index)):
                     match = tournament_match_engine.simulate_match_controlled(
                         tactics.CareerMatchController(run_h, run_a), config, teams[home]["name"], teams[away]["name"],
                         tracker=tracker,
                     )
                 if live:
-                    live_matches[str(match_index)] = _live_record(match, run_h, run_a, home, away)
+                    live_matches[str(match_index)] = {**_live_record(match, run_h, run_a, home, away), "lineups": lineups}
                     continue
                 hs, as_ = match.score_a, match.score_b
                 extra["tactics"] = {}
@@ -1713,6 +1718,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                         played[index] = {cid for cid, mins in minutes_by_team[index].items() if mins > 0}
                 if with_human:
                     events = match.event_log
+                    extra["lineups"] = lineups
                     extra["analysis"] = {
                         str(index): tactics.build_analysis(match.event_log, tracker, label, runner, other)
                         for index, label, runner, other in ((home, "a", run_h, run_a), (away, "b", run_a, run_h))
@@ -2722,6 +2728,43 @@ async def match_events(db: AsyncSession, user: User, season_id: int, round_index
         # Only the viewer's own analysis (their plan/instructions stay private).
         "analysis": (m.get("analysis") or {}).get(str(me.team_index)) if my_side else None,
         "my_side": my_side,
+    }
+
+
+async def match_replay(db: AsyncSession, user: User, season_id: int, round_index: int, match_index: int) -> dict:
+    """2D replay of a league match with a human (career_replay_service):
+    the whole match once played; during the live break only the first half
+    (the second one is built after the coach's half-time orders)."""
+    season = await db.get(CareerSeason, season_id)
+    if season is None or not any(p.user_id == user.id for p in season.participants):
+        raise NotFoundError("Матч не найден")
+    state = season.state or {}
+    teams = state.get("teams") or []
+    me = next(p for p in season.participants if p.user_id == user.id)
+    results = state.get("results") or []
+    live = state.get("live") or {}
+    if round_index < len(results) and match_index < len(results[round_index]):
+        m = results[round_index][match_index]
+        events, lineups, halves, hs, as_ = m.get("events"), m.get("lineups"), 2, m["hs"], m["as"]
+        if lineups is None and m.get("tactics"):  # played before lineups were stored
+            lineups = {side: {"formation": (m["tactics"].get(str(m[team])) or {}).get("formation"),
+                              "tactic": (m["tactics"].get(str(m[team])) or {}).get("tactic")}
+                       for side, team in (("a", "home"), ("b", "away"))}
+        second_half_at = None
+    elif live.get("round") == round_index and str(match_index) in (live.get("matches") or {}):
+        m = live["matches"][str(match_index)]
+        events, lineups, halves, hs, as_ = m["events"], m.get("lineups"), 1, m["hs"], m["as"]
+        second_half_at = live["second_half_at"]
+    else:
+        raise NotFoundError("Матч ещё не сыгран")
+    if not events:
+        raise NotFoundError("Для этого матча нет записи")
+    my_side = "a" if m["home"] == me.team_index else "b" if m["away"] == me.team_index else None
+    return {
+        "home_name": teams[m["home"]]["name"], "away_name": teams[m["away"]]["name"],
+        "home_score": hs, "away_score": as_, "events": events, "my_side": my_side,
+        "live": halves == 1, "second_half_at": second_half_at,
+        "replay": career_replay.build_replay(_match_seed(season.id, round_index, match_index), events, lineups, halves),
     }
 
 

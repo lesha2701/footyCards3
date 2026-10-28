@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 
 import { fetchCareer, fetchCareerCupMatch, fetchCareerFriendly, fetchCareerMatch } from "@/api/career";
 import CareerMatchAnalysis from "@/components/career/CareerMatchAnalysis";
+import { CareerMatchViewer } from "@/components/career/MatchViewer";
 import { TournamentMatchReplay } from "@/components/clubs/TournamentMatchReplay";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
@@ -34,13 +35,21 @@ export default function CareerMatchPage() {
       <h1 className="font-display text-xl font-bold text-ink-chalk">
         {isFriendly ? "Товарищеский матч" : isCup ? `Кубок · ${["1/8 финала", "1/4 финала", "1/2 финала", "Финал"][Number(cupRound)] ?? ""}` : `Карьера · тур ${Number(round) + 1}`}
       </h1>
-      <TournamentMatchReplay
-        events={data.events}
-        clubAName={data.home_name}
-        clubBName={data.away_name}
-        scoreA={data.home_score}
-        scoreB={data.away_score}
-      />
+      {(() => {
+        const text = (
+          <TournamentMatchReplay
+            events={data.events}
+            clubAName={data.home_name}
+            clubBName={data.away_name}
+            scoreA={data.home_score}
+            scoreB={data.away_score}
+          />
+        );
+        // League matches have a 2D replay; cup ties and friendlies keep the text one.
+        return isCup || isFriendly ? text : (
+          <CareerMatchViewer seasonId={Number(seasonId)} round={Number(round)} match={Number(match)} fallback={text} />
+        );
+      })()}
       {data.pens && (
         <section className="rounded-3xl bg-bg-surface p-4">
           <p className="font-display text-base font-bold text-ink-chalk">Серия пенальти {data.pens[0]}:{data.pens[1]}</p>

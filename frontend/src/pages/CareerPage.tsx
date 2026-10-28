@@ -295,7 +295,7 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
 
   return (
     <>
-      {season.live && <LiveMatchCenter live={season.live} catalog={catalog} onView={onView} onError={onError} />}
+      {season.live && <LiveMatchCenter live={season.live} catalog={catalog} seasonId={season.id} onView={onView} onError={onError} />}
       <section className="rounded-3xl bg-bg-surface p-4">
         <div className="flex items-center justify-between text-xs text-ink-mist">
           <span>{season.division?.name ?? season.difficulty_label} · тур {Math.min(season.rounds_played + 1, season.total_rounds)} из {season.total_rounds}</span>

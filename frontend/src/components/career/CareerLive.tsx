@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   setCareerHalftime,
@@ -10,6 +10,7 @@ import {
   type TacticsCatalog,
 } from "@/api/career";
 import { Segmented } from "@/components/career/CareerTactics";
+import { CareerMatchViewer } from "@/components/career/MatchViewer";
 import { TournamentMatchReplay } from "@/components/clubs/TournamentMatchReplay";
 import { MENTALITIES } from "@/lib/clubTactics";
 import { haptic } from "@/lib/telegram";
@@ -57,8 +58,10 @@ function PlayerRow({ p, selected, onClick, disabled }: {
 /** Live match centre: the first half of my match is played at kick-off;
  * during the break (until second_half_at) the coach can change mentality,
  * tactical axes and make substitutions for the second half. */
-export function LiveMatchCenter({ live, catalog, onView, onError }: {
+export function LiveMatchCenter({ live, catalog, seasonId, onView, onError }: {
   live: CareerLive; catalog: TacticsCatalog | null;
+  /** With it (and live.match_index) the first half plays on the 2D pitch. */
+  seasonId?: number;
 } & Handlers) {
   const queryClient = useQueryClient();
   const left = useCountdown(live.second_half_at);
@@ -72,6 +75,10 @@ export function LiveMatchCenter({ live, catalog, onView, onError }: {
   const [tactic, setTactic] = useState<Tactic>({ ...(live.tactic ?? {}), ...(saved?.tactic ?? {}) });
   const [subs, setSubs] = useState<{ out: number; in: number }[]>(saved?.subs ?? []);
   const [pickOut, setPickOut] = useState<number | null>(null);
+  const ordersRef = useRef<HTMLDivElement | null>(null);
+  const subsRef = useRef<HTMLDivElement | null>(null);
+  const withViewer = seasonId !== undefined && live.match_index !== undefined;
+  const scrollTo = (el: HTMLElement | null) => el?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const send = useMutation({
     mutationFn: () => {
@@ -111,28 +118,45 @@ export function LiveMatchCenter({ live, catalog, onView, onError }: {
           {over ? "Второй тайм начался" : `2-й тайм через ${mm}:${String(ss).padStart(2, "0")}`}
         </span>
       </div>
-      <div className="flex items-center justify-center gap-3 text-center">
-        <p className="min-w-0 flex-1 truncate text-right text-sm font-semibold text-ink-chalk">{live.home_name}</p>
-        <p className="font-mono text-2xl font-bold text-ink-chalk">{live.hs}:{live.as}</p>
-        <p className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-ink-chalk">{live.away_name}</p>
-      </div>
-      <div className="grid grid-cols-3 gap-1 text-center text-caption text-ink-mist">
-        <span className="font-mono text-ink-chalk">{stats[0].shots}</span><span>удары</span><span className="font-mono text-ink-chalk">{stats[1].shots}</span>
-        <span className="font-mono text-ink-chalk">{stats[0].tackles}</span><span>отборы</span><span className="font-mono text-ink-chalk">{stats[1].tackles}</span>
-      </div>
+      {/* The 2D viewer has its own scoreboard. */}
+      {!withViewer && (
+        <>
+          <div className="flex items-center justify-center gap-3 text-center">
+            <p className="min-w-0 flex-1 truncate text-right text-sm font-semibold text-ink-chalk">{live.home_name}</p>
+            <p className="font-mono text-2xl font-bold text-ink-chalk">{live.hs}:{live.as}</p>
+            <p className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-ink-chalk">{live.away_name}</p>
+          </div>
+          <div className="grid grid-cols-3 gap-1 text-center text-caption text-ink-mist">
+            <span className="font-mono text-ink-chalk">{stats[0].shots}</span><span>удары</span><span className="font-mono text-ink-chalk">{stats[1].shots}</span>
+            <span className="font-mono text-ink-chalk">{stats[0].tackles}</span><span>отборы</span><span className="font-mono text-ink-chalk">{stats[1].tackles}</span>
+          </div>
+        </>
+      )}
 
-      <TournamentMatchReplay
-        events={live.events as unknown as MatchEvent[]}
-        clubAName={live.home_name}
-        clubBName={live.away_name}
-        scoreA={live.hs}
-        scoreB={live.as}
-        finishedLabel="Перерыв"
-        scoreLabel="После первого тайма"
-      />
+      {(() => {
+        const text = (
+          <TournamentMatchReplay
+            events={live.events as unknown as MatchEvent[]}
+            clubAName={live.home_name}
+            clubBName={live.away_name}
+            scoreA={live.hs}
+            scoreB={live.as}
+            finishedLabel="Перерыв"
+            scoreLabel="После первого тайма"
+          />
+        );
+        if (seasonId === undefined || live.match_index === undefined) return text;
+        return (
+          <CareerMatchViewer
+            seasonId={seasonId} round={live.round} match={live.match_index} fallback={text}
+            onTactics={over ? undefined : () => scrollTo(ordersRef.current)}
+            onSubs={over ? undefined : () => scrollTo(subsRef.current)}
+          />
+        );
+      })()}
 
       {!over && (
-        <div className="flex flex-col gap-3 rounded-2xl bg-bg-base/40 p-3">
+        <div ref={ordersRef} className="flex flex-col gap-3 rounded-2xl bg-bg-base/40 p-3">
           <p className="font-display text-sm font-bold text-ink-chalk">
             Указания на второй тайм{ownScore < oppScore ? " — нужно отыгрываться" : ownScore > oppScore ? " — удержать счёт" : ""}
           </p>
@@ -150,7 +174,7 @@ export function LiveMatchCenter({ live, catalog, onView, onError }: {
             </div>
           ))}
 
-          <div className="flex flex-col gap-1.5">
+          <div ref={subsRef} className="flex flex-col gap-1.5">
             <p className="text-caption text-ink-mist">Замены · осталось {Math.max(0, live.subs_left - subs.length)} из {live.subs_left}</p>
             {subs.map((s) => (
               <div key={s.out} className="flex items-center gap-2 rounded-xl bg-bg-raised px-2 py-1.5 text-xs text-ink-chalk">

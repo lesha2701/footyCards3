@@ -10,6 +10,7 @@ from app.schemas.career import (
     CareerInviteResponseIn,
     CareerLineupIn,
     CareerMatchEventsOut,
+    CareerReplayOut,
     CareerPlanIn,
     CareerRolesIn,
     CareerMarkingIn,
@@ -190,3 +191,13 @@ async def match_events(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await career_service.match_events(db, user, season_id, round_index, match_index)
+
+
+@router.get("/seasons/{season_id}/rounds/{round_index}/matches/{match_index}/replay", response_model=CareerReplayOut)
+async def match_replay(
+    season_id: int, round_index: int, match_index: int,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """Key frames of the 2D match view (positions drawn over the engine's
+    result); during the live break only the first half."""
+    return await career_service.match_replay(db, user, season_id, round_index, match_index)

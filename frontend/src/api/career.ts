@@ -392,6 +392,8 @@ export interface CareerHalftimeOrders {
 
 export interface CareerLive {
   round: number;
+  /** Fixture index of my match in the round (2D replay URL). */
+  match_index?: number;
   second_half_at: string;
   home: number;
   away: number;
@@ -631,5 +633,47 @@ export interface CareerAnalysis {
 
 export async function fetchCareerMatch(seasonId: number, round: number, match: number): Promise<CareerMatchEvents> {
   const { data } = await api.get<CareerMatchEvents>(`/career/seasons/${seasonId}/rounds/${round}/matches/${match}`);
+  return data;
+}
+
+/** 2D replay key frames (backend career_replay_service.build_replay). */
+export interface CareerReplay {
+  v: number;
+  step: number;
+  halves: 1 | 2;
+  frame_size: number;
+  pitch: [number, number];
+  count: number;
+  formations: { a: string; b: string };
+  players: { s: "a" | "b"; n: number; name: string | null; slot: string; id: number | null }[];
+  /** Pitch slot (0-10 home, 11-21 away) -> index in `players` at kick-off. */
+  roster: number[];
+  /** [frame, pitch slot, player index]: substitutions. */
+  swaps: [number, number, number][];
+  /** [kind, first frame, frames, clock from (s), clock to (s), ms per frame at x1]. */
+  segments: [string, number, number, number, number, number][];
+  /** [frame, event index]: when each event of the log happens on screen. */
+  marks: [number, number][];
+  /** [from frame, to frame, passer slot, receiver slot]. */
+  passes: [number, number, number, number][];
+  /** base64: per frame ball x, ball y, holder slot (255 = none), then x, y of 22 slots (0-255). */
+  frames: string;
+}
+
+export interface CareerReplayResponse {
+  home_name: string;
+  away_name: string;
+  home_score: number;
+  away_score: number;
+  events: MatchEvent[];
+  my_side: "a" | "b" | null;
+  /** Only the first half exists yet: the half-time break is running. */
+  live: boolean;
+  second_half_at: string | null;
+  replay: CareerReplay;
+}
+
+export async function fetchCareerReplay(seasonId: number, round: number, match: number): Promise<CareerReplayResponse> {
+  const { data } = await api.get<CareerReplayResponse>(`/career/seasons/${seasonId}/rounds/${round}/matches/${match}/replay`);
   return data;
 }

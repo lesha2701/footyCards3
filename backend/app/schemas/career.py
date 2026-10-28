@@ -342,6 +342,21 @@ class CareerMatchEventsOut(BaseModel):
     kicks: Optional[list[dict]] = None
 
 
+class CareerReplayOut(BaseModel):
+    """2D replay of a career match (career_replay_service.build_replay):
+    key frames for the compressed show plus the events they illustrate.
+    live = only the first half exists yet (the break is running)."""
+    home_name: str
+    away_name: str
+    home_score: int
+    away_score: int
+    events: list[dict]
+    my_side: Optional[str] = None
+    live: bool = False
+    second_half_at: Optional[str] = None
+    replay: dict
+
+
 # --- friends ---------------------------------------------------------------------
 
 class FriendOut(BaseModel):
