@@ -87,7 +87,8 @@ function Pitch({ quality }: { quality: Quality }) {
 /** The stands: an arc of a cylinder around the goal end, seen from the
  * inside, papered with the crowd panorama. Stretched once over the arc the
  * people would come out three times life size, so the picture is laid
- * three times, mirrored at the seams (invisible in a crowd). Its dark
+ * three times (stands.webp is cut to tile seamlessly: the flags at its
+ * edges trimmed, the ends crossfaded). Its dark
  * board line at the bottom sits just below the pitch. */
 const BACKDROP_RADIUS = 82;
 const BACKDROP_ARC = (150 / 180) * Math.PI;
@@ -98,7 +99,7 @@ function Backdrop() {
   const tex = useTexture(ASSETS.stands, (t) => {
     const tex = t as THREE.Texture;
     // Seen from inside the cylinder the u axis runs right → left: mirror it.
-    tex.wrapS = THREE.MirroredRepeatWrapping;
+    tex.wrapS = THREE.RepeatWrapping;
     tex.repeat.x = -BACKDROP_TILES;
     tex.anisotropy = 4;
     tex.colorSpace = THREE.SRGBColorSpace;
