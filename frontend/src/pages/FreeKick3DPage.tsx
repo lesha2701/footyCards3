@@ -10,7 +10,7 @@ import GameHero from "@/components/common/GameHero";
 import { IconCoin } from "@/components/icons";
 import FreeKickScene3D, { type LiveShot } from "@/components/freeKick3d/FreeKickScene3D";
 import { formatGameError } from "@/lib/errors";
-import { playFreeKickSfx } from "@/lib/freeKick3d/sfx";
+import { playFreeKickSfx, preloadFreeKickSfx } from "@/lib/freeKick3d/sfx";
 import { swipeFromPoints, type SwipePoint } from "@/lib/freeKick3d/swipe";
 import {
   createSetup,
@@ -212,6 +212,10 @@ function SeriesKick({
     hapticNotify(outcome === "goal" ? "success" : outcome === "save" ? "warning" : "error");
     playFreeKickSfx(outcome === "goal" ? "roar" : "groan");
   }, [outcome]);
+
+  useEffect(() => {
+    void preloadFreeKickSfx();
+  }, []);
 
   const onDecided = useCallback(() => setShown(true), []);
   const aiming = ready && shot === null;

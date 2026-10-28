@@ -1,8 +1,42 @@
-/** Free kick 3D sounds, synthesized with Web Audio like the rest of the app
- * (no files) and muted by the same «Звуки» switch. */
+/** Free kick 3D sounds: synthesized with Web Audio like the rest of the
+ * app, except the crowd's goal roar, a recording (public/free-kick-3d/sfx,
+ * loaded once the scene opens). Muted by the same «Звуки» switch. */
 import { audio, soundEnabled } from "@/lib/sound";
 
 export type FreeKickSfx = "kick" | "post" | "wall" | "net" | "roar" | "groan";
+
+const RECORDINGS = { roar: "/free-kick-3d/sfx/goal-roar.mp3" } as const;
+const recorded: Partial<Record<keyof typeof RECORDINGS, AudioBuffer>> = {};
+let preloading: Promise<void> | null = null;
+
+/** Fetch and decode the recordings (once); until they're in, the
+ * synthesized versions play. */
+export function preloadFreeKickSfx(): Promise<void> {
+  preloading ??= (async () => {
+    const ac = audio();
+    if (!ac) return;
+    await Promise.all(
+      Object.entries(RECORDINGS).map(async ([name, url]) => {
+        try {
+          const data = await (await fetch(url)).arrayBuffer();
+          recorded[name as keyof typeof RECORDINGS] = await ac.decodeAudioData(data);
+        } catch {
+          // Missing or undecodable: the synthesized sound stays.
+        }
+      }),
+    );
+  })();
+  return preloading;
+}
+
+function playRecording(ac: AudioContext, buffer: AudioBuffer, volume: number) {
+  const src = ac.createBufferSource();
+  src.buffer = buffer;
+  const gain = ac.createGain();
+  gain.gain.value = volume;
+  src.connect(gain).connect(ac.destination);
+  src.start();
+}
 
 let noiseBuffer: AudioBuffer | null = null;
 
@@ -90,6 +124,10 @@ export function playFreeKickSfx(name: FreeKickSfx): void {
         burst(ac, { freq: 3200, q: 0.6, attack: 0.01, hold: 0.05, release: 0.35, volume: 0.18, sweepTo: 1200 });
         break;
       case "roar":
+        if (recorded.roar) {
+          playRecording(ac, recorded.roar, 0.9);
+          break;
+        }
         burst(ac, { freq: 700, q: 0.5, attack: 0.25, hold: 1.2, release: 1.4, volume: 0.22 });
         burst(ac, { freq: 1800, q: 0.7, attack: 0.3, hold: 1, release: 1.2, volume: 0.08 });
         break;
