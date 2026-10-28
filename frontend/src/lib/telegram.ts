@@ -50,6 +50,10 @@ interface TelegramWebApp {
     stop: (callback?: (stopped: boolean) => void) => void;
   };
   isVersionAtLeast?: (version: string) => boolean;
+  /** Bot API 8.0+: full-screen Mini App (events "fullscreenChanged"). */
+  requestFullscreen?: () => void;
+  exitFullscreen?: () => void;
+  isFullscreen?: boolean;
   openTelegramLink?: (url: string) => void;
   /** Bot API 8.0+: lets the user pick a chat for a message the bot prepared. */
   shareMessage?: (msgId: string, callback?: (sent: boolean) => void) => void;

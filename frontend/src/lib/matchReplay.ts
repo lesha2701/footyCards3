@@ -12,6 +12,13 @@ const NO_HOLDER = 255;
 
 export interface Point { x: number; y: number }
 
+/** Kits of both viewers: the viewer's side in lime, the other in red;
+ * keepers stand out. */
+export const REPLAY_KITS = {
+  mine: { fill: "#c6e63a", text: "#0b1a12", gk: "#22d3c4", shorts: "#14301f" },
+  theirs: { fill: "#f87171", text: "#ffffff", gk: "#fb923c", shorts: "#f3f4f6" },
+};
+
 export interface Timeline {
   count: number;
   /** Playback time (ms at x1) at which each frame is shown. */

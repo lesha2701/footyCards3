@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { CareerReplay, CareerReplayResponse } from "@/api/career";
 import { ReplayPlayer } from "@/components/career/MatchViewer";
@@ -20,6 +20,16 @@ import {
   rosterAt,
   secondHalfFrame,
 } from "@/lib/matchReplay";
+
+// The 3D viewer is a lazy three.js chunk; jsdom has no WebGL.
+vi.mock("@/components/career/goal3d/GoalReplay3D", () => ({
+  default: ({ initial, onClose }: { initial: number; onClose: () => void }) => (
+    <div role="dialog" aria-label="3D-повтор гола">
+      повтор {initial}
+      <button type="button" onClick={onClose}>Закрыть 3D-повтор</button>
+    </div>
+  ),
+}));
 
 const SIZE = 47;
 
@@ -170,5 +180,18 @@ describe("ReplayPlayer", () => {
     expect([tactics, subs]).toEqual([1, 1]);
     fireEvent.click(screen.getByLabelText("Пауза"));
     expect(screen.getByLabelText("Смотреть")).toBeInTheDocument();
+  });
+
+  it("a goal opens its 3D replay from the commentary and from the timeline", async () => {
+    render(<ReplayPlayer data={data} />);
+    fireEvent.change(screen.getByLabelText("Перемотка"), { target: { value: String(buildTimeline(replay).total) } });
+    fireEvent.click(screen.getByText("3D-повтор"));
+    expect(await screen.findByRole("dialog", { name: "3D-повтор гола" })).toHaveTextContent("повтор 0");
+    // The 2D view pauses underneath.
+    expect(screen.getByLabelText("Смотреть")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Закрыть 3D-повтор"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByLabelText("3D-повтор гола 11'"));
+    expect(await screen.findByRole("dialog", { name: "3D-повтор гола" })).toBeInTheDocument();
   });
 });

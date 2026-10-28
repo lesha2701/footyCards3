@@ -1,12 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { fetchCareerReplay, type CareerReplayResponse } from "@/api/career";
 import { Segmented } from "@/components/career/CareerTactics";
 import { IconSwap, IconTactics } from "@/components/icons";
+import { goalEpisodes } from "@/lib/goalReplay3d";
 import {
   PITCH_L,
   PITCH_W,
+  REPLAY_KITS,
   SLOTS,
   activePass,
   boardStats,
@@ -25,12 +27,10 @@ import {
   type Moment,
   type Point,
 } from "@/lib/matchReplay";
+import { enterImmersive } from "@/lib/immersive";
 
-// Kits: the viewer's side in lime, the other in red; keepers stand out.
-const KITS = {
-  mine: { fill: "#c6e63a", text: "#0b1a12", gk: "#22d3c4" },
-  theirs: { fill: "#f87171", text: "#ffffff", gk: "#fb923c" },
-};
+// three.js is a lazy chunk: it loads only when a 3D replay is opened.
+const GoalReplay3D = lazy(() => import("@/components/career/goal3d/GoalReplay3D"));
 const SPEEDS = ["1", "2", "4"];
 const MOMENT_STYLE: Record<Moment["kind"], string> = {
   goal: "⚽", yellow: "🟨", red: "🟥", sub: "🔁", chance: "",
@@ -54,7 +54,13 @@ export function ReplayPlayer({ data, onTactics, onSubs, footer }: {
   const half2 = useMemo(() => secondHalfFrame(replay), [replay]);
   const marks = useMemo(() => moments(tl, replay, events), [tl, replay, events]);
   const flip = data.my_side === "b";
-  const kitOf = (side: "a" | "b") => (side === (data.my_side ?? "a") ? KITS.mine : KITS.theirs);
+  const kitOf = (side: "a" | "b") => (side === (data.my_side ?? "a") ? REPLAY_KITS.mine : REPLAY_KITS.theirs);
+  const episodes = useMemo(() => goalEpisodes(tl, replay, events), [tl, replay, events]);
+  // Index in `episodes` of the open 3D replay.
+  const [replay3d, setReplay3d] = useState<number | null>(null);
+  const replay3dRef = useRef(false);
+  replay3dRef.current = replay3d !== null;
+  const leaveImmersive = useRef<(() => void) | null>(null);
 
   const timeRef = useRef(0);
   const [frame, setFrame] = useState(0);
@@ -118,7 +124,8 @@ export function ReplayPlayer({ data, onTactics, onSubs, footer }: {
         timeRef.current = Math.min(tl.total, timeRef.current + dt * speedRef.current);
         if (timeRef.current >= tl.total) setPlaying(false);
       }
-      draw(timeRef.current);
+      // The 2D pitch is hidden under the 3D replay: don't draw it meanwhile.
+      if (!replay3dRef.current) draw(timeRef.current);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -129,6 +136,21 @@ export function ReplayPlayer({ data, onTactics, onSubs, footer }: {
     timeRef.current = Math.max(0, Math.min(tl.total, ms));
     draw(timeRef.current);
   };
+  const open3d = (event: number) => {
+    const k = episodes.findIndex((ep) => ep.event === event);
+    if (k < 0) return;
+    setPlaying(false);
+    leaveImmersive.current = enterImmersive();
+    setReplay3d(k);
+  };
+  const close3d = useCallback(() => {
+    leaveImmersive.current?.();
+    leaveImmersive.current = null;
+    setReplay3d(null);
+  }, []);
+  useEffect(() => () => leaveImmersive.current?.(), []);
+  const has3d = useMemo(() => new Set(episodes.map((ep) => ep.event)), [episodes]);
+
   const toggle = () => {
     if (!playing && timeRef.current >= tl.total) seek(0);
     setPlaying(!playing);
@@ -222,10 +244,15 @@ export function ReplayPlayer({ data, onTactics, onSubs, footer }: {
             <button
               key={`${m.event}`}
               type="button"
-              onClick={() => seek(m.ms - 4000)}
+              onClick={() => {
+                seek(m.ms - 4000);
+                if (m.kind === "goal" && has3d.has(m.event)) open3d(m.event);
+              }}
               className="pointer-events-auto absolute -translate-x-1/2 text-[10px] leading-none"
               style={{ left: `${tl.total ? (m.ms / tl.total) * 100 : 0}%` }}
-              aria-label={`Перейти к моменту ${events[m.event]?.minute ?? ""}'`}
+              aria-label={m.kind === "goal" && has3d.has(m.event)
+                ? `3D-повтор гола ${events[m.event]?.minute ?? ""}'`
+                : `Перейти к моменту ${events[m.event]?.minute ?? ""}'`}
             >
               {MOMENT_STYLE[m.kind]}
             </button>
@@ -280,14 +307,25 @@ export function ReplayPlayer({ data, onTactics, onSubs, footer }: {
         </div>
       )}
 
-      <Commentary events={events} shown={shown} home={data.home_name} away={data.away_name} />
+      <Commentary events={events} shown={shown} home={data.home_name} away={data.away_name} replayable={has3d} onReplay={open3d} />
       {footer}
+      {replay3d !== null && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#0b1424] text-caption text-white/80" role="status">
+            Загружаем 3D-повтор…
+          </div>
+        }>
+          <GoalReplay3D data={data} tl={tl} episodes={episodes} initial={replay3d} onClose={close3d} />
+        </Suspense>
+      )}
     </section>
   );
 }
 
-const Commentary = memo(function Commentary({ events, shown, home, away }: {
+const Commentary = memo(function Commentary({ events, shown, home, away, replayable, onReplay }: {
   events: CareerReplayResponse["events"]; shown: number[]; home: string; away: string;
+  /** Goals (event indices) that have a 3D replay. */
+  replayable: Set<number>; onReplay: (event: number) => void;
 }) {
   const items = shown.slice(-40).reverse();
   return (
@@ -301,6 +339,15 @@ const Commentary = memo(function Commentary({ events, shown, home, away }: {
           <li key={idx} className={`flex gap-2 text-caption ${goal ? "font-semibold text-accent-lime" : "text-ink-chalk"}`}>
             <span className="w-7 shrink-0 text-right font-mono text-ink-mist">{e.minute}'</span>
             <span className="min-w-0 flex-1">{e.description || (e.team === "a" ? home : away)}</span>
+            {goal && replayable.has(idx) && (
+              <button
+                type="button"
+                onClick={() => onReplay(idx)}
+                className="shrink-0 self-start rounded-full bg-accent-lime/15 px-2 py-0.5 text-micro font-semibold text-accent-lime active:bg-accent-lime/25"
+              >
+                3D-повтор
+              </button>
+            )}
           </li>
         );
       })}
