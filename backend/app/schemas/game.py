@@ -189,6 +189,21 @@ class FreeKick3DShotOut(BaseModel):
     next_kick: Optional[FreeKick3DKickOut] = None
 
 
+class FreeKick3DRefillOut(BaseModel):
+    """Whether the player may buy another series now, and for what: the
+    day's first refill costs coins, the following ones Telegram Stars."""
+    can_refill: bool
+    # The hourly series is used up (a banked one counts as available).
+    on_cooldown: bool
+    bonus_series: int
+    refills_today: int
+    daily_limit: int
+    price_coins: Optional[int] = None
+    price_stars: Optional[int] = None
+    retry_after_seconds: int = 0
+    new_balance: Optional[int] = None
+
+
 # --- Football Hangman ---
 
 class HangmanStartOut(BaseModel):

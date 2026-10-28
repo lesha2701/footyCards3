@@ -1,7 +1,10 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+import pytest
 from sqlalchemy.orm.attributes import flag_modified
+
+import app.core.rate_limit as rate_limit_module
 
 from app.models.game import GameSession
 from app.services import free_kick_3d_engine as engine
@@ -12,6 +15,15 @@ from tests.test_free_kick import _grant_card, _register
 from tests.utils import telegram_headers
 
 SWIPE = {"dx": 50, "dy": -300, "curve": 40, "duration_ms": 180}
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    # The limiter is in-process and user ids repeat across tests: a series of
+    # starts in one test must not 429 the next one.
+    rate_limit_module._hits.clear()
+    yield
+    rate_limit_module._hits.clear()
 
 
 async def _age_current_kick(db_session, session_id: int, seconds: float = 2) -> dict:
@@ -152,3 +164,124 @@ async def test_cannot_play_with_someone_elses_card(client, db_session, bot_token
         "/api/v1/games/free-kick-3d/start", headers=telegram_headers(850007, bot_token), json={"user_card_id": card.id},
     )
     assert resp.status_code == 403
+
+
+# --- Paid refills of the series -------------------------------------------------
+
+from app.config import get_settings  # noqa: E402
+from app.services import stars_payment_service  # noqa: E402
+
+INTERNAL_HEADERS = {"X-Internal-Secret": get_settings().internal_api_secret}
+
+
+async def _fake_invoice_link(payload_token, title, description, stars_amount, subscription_period=None):
+    return f"https://t.me/invoice/{payload_token}"
+
+
+async def _buy_with_stars(client, headers, telegram_id: int, charge: str):
+    invoice = await client.post("/api/v1/games/free-kick-3d/refill/stars-invoice", headers=headers)
+    assert invoice.status_code == 200, invoice.text
+    body = invoice.json()
+    pre = await client.post(
+        "/api/v1/internal/stars-payments/pre-checkout",
+        json={"payload_token": body["payload_token"], "total_amount": body["stars_amount"]}, headers=INTERNAL_HEADERS,
+    )
+    assert pre.json()["ok"] is True, pre.json()
+    deliver = {
+        "payload_token": body["payload_token"], "telegram_user_id": telegram_id,
+        "telegram_payment_charge_id": charge, "total_amount": body["stars_amount"],
+    }
+    first = await client.post("/api/v1/internal/stars-payments/deliver", json=deliver, headers=INTERNAL_HEADERS)
+    assert first.status_code == 200, first.text
+    # Telegram may redeliver: still one series.
+    again = await client.post("/api/v1/internal/stars-payments/deliver", json=deliver, headers=INTERNAL_HEADERS)
+    assert again.status_code == 200
+    return body
+
+
+async def _start(client, headers, card_id):
+    return await client.post("/api/v1/games/free-kick-3d/start", headers=headers, json={"user_card_id": card_id})
+
+
+async def test_refills_first_for_coins_then_stars_up_to_the_daily_cap(client, db_session, bot_token, monkeypatch):
+    monkeypatch.setattr(stars_payment_service, "_request_telegram_invoice_link", _fake_invoice_link)
+    user = await _register(client, db_session, 850010, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(850010, bot_token)
+
+    # The hour's series is free: nothing to refill.
+    status = (await client.get("/api/v1/games/free-kick-3d/refill", headers=headers)).json()
+    assert status["can_refill"] is False and status["on_cooldown"] is False
+    assert (await client.post("/api/v1/games/free-kick-3d/refill", headers=headers)).status_code == 409
+
+    assert (await _start(client, headers, card.id)).status_code == 200
+    status = (await client.get("/api/v1/games/free-kick-3d/refill", headers=headers)).json()
+    assert status["can_refill"] is True and status["on_cooldown"] is True
+    assert status["price_coins"] == 200 and status["price_stars"] is None
+    assert status["retry_after_seconds"] > 0
+
+    # The day's first: 200 coins, a banked series, playable at once.
+    before = (await get_user_by_telegram_id(db_session, 850010)).balance
+    refill = await client.post("/api/v1/games/free-kick-3d/refill", headers=headers)
+    assert refill.status_code == 200, refill.text
+    assert refill.json()["new_balance"] == before - 200
+    assert refill.json()["bonus_series"] == 1 and refill.json()["can_refill"] is False
+    limits = (await client.get("/api/v1/games/limits", headers=headers)).json()
+    assert limits["free_kick"] == 1 and "free_kick" not in limits["resets_at"]
+    assert (await _start(client, headers, card.id)).status_code == 200
+
+    # Then Stars only, 2 each, while on cooldown with nothing banked.
+    status = (await client.get("/api/v1/games/free-kick-3d/refill", headers=headers)).json()
+    assert status["price_coins"] is None and status["price_stars"] == 2 and status["refills_today"] == 1
+    assert (await client.post("/api/v1/games/free-kick-3d/refill", headers=headers)).status_code == 409
+    for i in range(4):
+        await _buy_with_stars(client, headers, 850010, f"fk-refill-{i}")
+        assert (await _start(client, headers, card.id)).status_code == 200
+
+    # Five today: the cap.
+    status = (await client.get("/api/v1/games/free-kick-3d/refill", headers=headers)).json()
+    assert status["refills_today"] == 5 and status["can_refill"] is False
+    assert (await client.post("/api/v1/games/free-kick-3d/refill/stars-invoice", headers=headers)).status_code == 409
+    assert (await _start(client, headers, card.id)).status_code == 409
+    # Stars never touched the coin balance: only the one coin refill did.
+    fresh = await get_user_by_telegram_id(db_session, 850010)
+    await db_session.refresh(fresh)
+    assert fresh.balance == before - 200
+
+
+async def test_refill_needs_the_coins(client, db_session, bot_token):
+    user = await _register(client, db_session, 850011, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(850011, bot_token)
+    assert (await _start(client, headers, card.id)).status_code == 200
+    user = await get_user_by_telegram_id(db_session, 850011)
+    user.balance = 50
+    db_session.add(user)
+    await db_session.commit()
+
+    resp = await client.post("/api/v1/games/free-kick-3d/refill", headers=headers)
+    assert resp.status_code in (400, 402, 409)
+    await db_session.refresh(user)
+    assert user.balance == 50 and user.free_kick_bonus_series == 0
+
+
+async def test_stars_refill_pre_checkout_refuses_past_the_cap(client, db_session, bot_token, monkeypatch):
+    monkeypatch.setattr(stars_payment_service, "_request_telegram_invoice_link", _fake_invoice_link)
+    user = await _register(client, db_session, 850012, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(850012, bot_token)
+    assert (await _start(client, headers, card.id)).status_code == 200
+    assert (await client.post("/api/v1/games/free-kick-3d/refill", headers=headers)).status_code == 200
+    assert (await _start(client, headers, card.id)).status_code == 200
+
+    # An invoice opened while allowed, paid only after the cap was reached elsewhere.
+    invoice = (await client.post("/api/v1/games/free-kick-3d/refill/stars-invoice", headers=headers)).json()
+    user = await get_user_by_telegram_id(db_session, 850012)
+    user.free_kick_refills_today = 5
+    db_session.add(user)
+    await db_session.commit()
+    pre = await client.post(
+        "/api/v1/internal/stars-payments/pre-checkout",
+        json={"payload_token": invoice["payload_token"], "total_amount": invoice["stars_amount"]}, headers=INTERNAL_HEADERS,
+    )
+    assert pre.json()["ok"] is False

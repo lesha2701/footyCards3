@@ -1680,6 +1680,21 @@ export interface FreeKick3DShotResult {
   next_kick: FreeKick3DKick | null;
 }
 
+/** Buying another series without waiting for the hour: the day's first
+ * refill costs coins, the following ones Telegram Stars. */
+export interface FreeKick3DRefill {
+  can_refill: boolean;
+  /** The hourly series is used up and nothing is banked. */
+  on_cooldown: boolean;
+  bonus_series: number;
+  refills_today: number;
+  daily_limit: number;
+  price_coins: number | null;
+  price_stars: number | null;
+  retry_after_seconds: number;
+  new_balance?: number | null;
+}
+
 export interface FreeKickClaimResult {
   reward_coins: number;
   new_balance: number;

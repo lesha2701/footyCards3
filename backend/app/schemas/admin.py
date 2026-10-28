@@ -339,6 +339,9 @@ class GameConfigOut(BaseModel):
     free_kick_3d_corner_bonus: int
     free_kick_3d_curl_bonus: int
     free_kick_3d_near_coins: int
+    free_kick_refill_daily_limit: int
+    free_kick_refill_coins: int
+    free_kick_refill_stars: int
     hourly_game_limit: int
     matchmaking_enabled: bool
     wheel_enabled: bool
@@ -1090,6 +1093,9 @@ class GameConfigUpdate(BaseModel):
     free_kick_3d_corner_bonus: Optional[int] = Field(default=None, ge=0)
     free_kick_3d_curl_bonus: Optional[int] = Field(default=None, ge=0)
     free_kick_3d_near_coins: Optional[int] = Field(default=None, ge=0)
+    free_kick_refill_daily_limit: Optional[int] = Field(default=None, ge=0, le=50)
+    free_kick_refill_coins: Optional[int] = Field(default=None, ge=0)
+    free_kick_refill_stars: Optional[int] = Field(default=None, ge=0)
     hourly_game_limit: Optional[int] = Field(default=None, ge=1)
     matchmaking_enabled: Optional[bool] = None
     wheel_enabled: Optional[bool] = None

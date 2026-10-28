@@ -1251,6 +1251,9 @@ export default function AdminGamesPage() {
           {field("free_kick_3d_corner_bonus", "Бонус «в угол»")}
           {field("free_kick_3d_curl_bonus", "Бонус «с закруткой»")}
           {field("free_kick_3d_near_coins", "За сейв или штангу")}
+          {field("free_kick_refill_daily_limit", "Платных обновлений серии в день")}
+          {field("free_kick_refill_coins", "Первое обновление за день, монет")}
+          {field("free_kick_refill_stars", "Следующие обновления, звёзд")}
         </div>
         <p className="mb-2 mt-4 text-xs text-slate-500">Классическая версия (шкала) — сохранена, в меню не показывается</p>
         <div className="grid grid-cols-2 gap-3">

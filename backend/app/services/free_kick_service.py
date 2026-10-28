@@ -15,6 +15,7 @@ from app.models.game import GameSession
 from app.models.user import User
 from app.schemas.game import (
     FreeKick3DKickOut,
+    FreeKick3DRefillOut,
     FreeKick3DShotOut,
     FreeKick3DShotRequest,
     FreeKick3DStartOut,
@@ -25,7 +26,7 @@ from app.schemas.game import (
 )
 from app.services import free_kick_3d_engine as engine
 from app.services.game_config_service import get_config
-from app.services.wallet_service import credit_coins, lock_user_for_update
+from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 from app.services.club_pass_service import extra_rewarded_attempts
 
 TOTAL_KICKS = 3
@@ -291,7 +292,13 @@ def score_3d_shot(config, result: engine.ShotResult) -> tuple[int, list[str]]:
 async def start_3d(db: AsyncSession, user: User, user_card_id: int) -> FreeKick3DStartOut:
     config = await get_config(db)
     locked_user = await lock_user_for_update(db, user.id)
-    await _take_hourly_attempt(db, locked_user, config.free_kick_hourly_limit)
+    await _ensure_hourly_reset(db, locked_user)
+    if locked_user.free_kick_hourly_attempts >= config.free_kick_hourly_limit and locked_user.free_kick_bonus_series > 0:
+        # The hour's series is used up: a bought refill plays instead.
+        locked_user.free_kick_bonus_series -= 1
+        db.add(locked_user)
+    else:
+        await _take_hourly_attempt(db, locked_user, config.free_kick_hourly_limit)
     await _ensure_daily_reset(db, locked_user)
     card = await _own_card(db, locked_user, user_card_id)
 
@@ -366,3 +373,112 @@ async def shoot_3d(db: AsyncSession, user: User, session_id: int, swipe: FreeKic
         outcome=result.outcome, bonuses=bonuses, coins_this_kick=coins, total_coins=state["total_coins"],
         is_finished=is_finished, next_kick=next_out,
     )
+
+
+# ---------------------------------------------------------------------------
+# Paid refills of the series: up to `free_kick_refill_daily_limit` a day;
+# the day's first costs `free_kick_refill_coins`, the rest
+# `free_kick_refill_stars` Telegram Stars (shop_product "free_kick_refill:
+# <local date>", delivered by stars_payment_service). A refill banks one
+# series, which a start spends once the hourly cap is reached — so a bought
+# series is never lost to a cooldown that ended meanwhile. Offered only
+# while the player can't start (cap reached, nothing banked).
+# ---------------------------------------------------------------------------
+
+def _refills_today(user: User) -> int:
+    reset = user.free_kick_refills_reset_at
+    if reset is None or local_today(reset) != local_today():
+        return 0
+    return user.free_kick_refills_today
+
+
+def _count_refill(user: User) -> None:
+    user.free_kick_refills_today = _refills_today(user) + 1
+    user.free_kick_refills_reset_at = datetime.now(timezone.utc)
+    user.free_kick_bonus_series += 1
+
+
+def _hourly_left(user: User, limit: int) -> tuple[int, int]:
+    """Series left this hour and seconds until the cap frees up."""
+    started = user.free_kick_hour_started_at
+    now = datetime.now(timezone.utc)
+    if started is None or now - ensure_aware(started) >= timedelta(hours=1):
+        return limit, 0
+    left = max(0, limit - user.free_kick_hourly_attempts)
+    wait = timedelta(hours=1) - (now - ensure_aware(started))
+    return left, 0 if left else max(0, int(wait.total_seconds()))
+
+
+def _refill_out(config, user: User, new_balance: int | None = None) -> FreeKick3DRefillOut:
+    left, wait = _hourly_left(user, config.free_kick_hourly_limit)
+    done = _refills_today(user)
+    on_cooldown = left == 0 and user.free_kick_bonus_series == 0
+    under_cap = done < config.free_kick_refill_daily_limit
+    price_coins = config.free_kick_refill_coins if done == 0 else None
+    price_stars = config.free_kick_refill_stars if done > 0 and config.free_kick_refill_stars > 0 else None
+    return FreeKick3DRefillOut(
+        can_refill=on_cooldown and under_cap and (price_coins is not None or price_stars is not None),
+        on_cooldown=on_cooldown, bonus_series=user.free_kick_bonus_series, refills_today=done,
+        daily_limit=config.free_kick_refill_daily_limit, price_coins=price_coins, price_stars=price_stars,
+        retry_after_seconds=wait, new_balance=new_balance,
+    )
+
+
+async def refill_status(db: AsyncSession, user: User) -> FreeKick3DRefillOut:
+    return _refill_out(await get_config(db), user)
+
+
+async def refill_with_coins(db: AsyncSession, user: User) -> FreeKick3DRefillOut:
+    """The day's first refill, for coins."""
+    config = await get_config(db)
+    locked = await lock_user_for_update(db, user.id)
+    status = _refill_out(config, locked)
+    if not status.can_refill:
+        raise ConflictError("Сейчас обновить серию нельзя")
+    if status.price_coins is None:
+        raise ConflictError("Следующие серии сегодня — за звёзды")
+    await debit_coins(db, locked, status.price_coins, TransactionType.free_kick_refill, "Штрафной удар: ещё серия")
+    _count_refill(locked)
+    db.add(locked)
+    await db.commit()
+    await db.refresh(locked)
+    return _refill_out(config, locked, new_balance=locked.balance)
+
+
+async def refill_stars_order(db: AsyncSession, user: User) -> tuple[str, int, str, str]:
+    """(product, stars, title, description) for shop_product_service.create_invoice."""
+    config = await get_config(db)
+    status = _refill_out(config, user)
+    if not status.can_refill or status.price_stars is None:
+        raise ConflictError("Сейчас обновить серию за звёзды нельзя")
+    return (
+        f"free_kick_refill:{local_today().isoformat()}", status.price_stars, "Штрафной: ещё серия",
+        "«Штрафной удар»: ещё одна серия ударов сразу, без ожидания часа.",
+    )
+
+
+async def validate_refill_stars(db: AsyncSession, user_id: int, day: str, stars_amount: int) -> tuple[bool, str]:
+    """Pre-checkout: the day's cap and the price (delivery never refuses)."""
+    config = await get_config(db)
+    user = await db.get(User, user_id)
+    if user is None:
+        return False, "Игрок не найден"
+    if day != local_today().isoformat():
+        return False, "День сменился — открой покупку заново"
+    done = _refills_today(user)
+    if done == 0:
+        return False, "Первая серия за день — за монеты"
+    if done >= config.free_kick_refill_daily_limit:
+        return False, "На сегодня обновления закончились"
+    if config.free_kick_refill_stars <= 0 or config.free_kick_refill_stars != stars_amount:
+        return False, "Цена изменилась — открой покупку заново"
+    return True, ""
+
+
+async def deliver_refill_stars(db: AsyncSession, user: User) -> dict:
+    """Already paid: banks one series (once per invoice — the caller holds the
+    invoice's row lock and marks it delivered). The caller commits."""
+    locked = await lock_user_for_update(db, user.id)
+    _count_refill(locked)
+    db.add(locked)
+    return {"kind": "free_kick_refill", "bonus_series": locked.free_kick_bonus_series}

@@ -25,6 +25,8 @@ def _resets_at(user: User, limit: int, free_kick_limit: int) -> dict[str, dateti
     for field, column in _COLUMNS.items():
         started = getattr(user, f"{column}_hour_started_at")
         cap = free_kick_limit if field == "free_kick" else limit
+        if field == "free_kick" and user.free_kick_bonus_series > 0:
+            continue  # a bought series is waiting: playable now
         if started is not None and _remaining(getattr(user, f"{column}_hourly_attempts"), started, cap) == 0:
             resets[field] = ensure_aware(started) + timedelta(hours=1)
     return resets
@@ -41,7 +43,8 @@ def get_remaining_plays(user: User, config: GameConfig) -> GameLimitsOut:
         arena=_remaining(user.match_hourly_attempts, user.match_hour_started_at, limit),
         saboteur=_remaining(user.saboteur_hourly_attempts, user.saboteur_hour_started_at, limit),
         penalty=_remaining(user.penalty_hourly_attempts, user.penalty_hour_started_at, limit),
-        free_kick=_remaining(user.free_kick_hourly_attempts, user.free_kick_hour_started_at, free_kick_limit),
+        free_kick=_remaining(user.free_kick_hourly_attempts, user.free_kick_hour_started_at, free_kick_limit)
+        + user.free_kick_bonus_series,
         hangman=_remaining(user.hangman_hourly_attempts, user.hangman_hour_started_at, limit),
         tactico=_remaining(user.tactico_hourly_attempts, user.tactico_hour_started_at, limit),
         pairs=_remaining(user.pairs_hourly_attempts, user.pairs_hour_started_at, limit),

@@ -311,6 +311,9 @@ export interface GameConfig {
   free_kick_3d_corner_bonus: number;
   free_kick_3d_curl_bonus: number;
   free_kick_3d_near_coins: number;
+  free_kick_refill_daily_limit: number;
+  free_kick_refill_coins: number;
+  free_kick_refill_stars: number;
   hourly_game_limit: number;
   matchmaking_enabled: boolean;
   wheel_enabled: boolean;

@@ -3,7 +3,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } 
 import { useNavigate } from "react-router-dom";
 
 import { fetchCollection } from "@/api/collection";
-import { claimFreeKickReward, shootFreeKick3D, startFreeKick3D } from "@/api/games";
+import {
+  claimFreeKickReward,
+  createFreeKickRefillInvoice,
+  fetchFreeKickRefill,
+  refillFreeKickWithCoins,
+  shootFreeKick3D,
+  startFreeKick3D,
+} from "@/api/games";
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
 import GameHero from "@/components/common/GameHero";
@@ -22,6 +29,7 @@ import {
   type QuantizedSwipe,
   type ShotOutcome,
 } from "@/lib/freeKick3d/trajectory";
+import { payShopWithStars } from "@/lib/shopStars";
 import { audio } from "@/lib/sound";
 import { haptic, hapticNotify, showConfirm } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -71,6 +79,7 @@ export default function FreeKick3DPage() {
       setFinished(false);
       setErrorMsg(null);
       void queryClient.invalidateQueries({ queryKey: ["game-limits"] });
+      void queryClient.invalidateQueries({ queryKey: ["free-kick-refill"] });
     },
     onError: (err) => setErrorMsg(formatGameError(err, "Не удалось начать серию")),
   });
@@ -83,6 +92,14 @@ export default function FreeKick3DPage() {
     },
   });
 
+  // On cooldown the card picker waits: the screen offers a refill instead.
+  const { data: refill, isPending: refillLoading } = useQuery({
+    queryKey: ["free-kick-refill"],
+    queryFn: fetchFreeKickRefill,
+    enabled: !series || finished,
+    refetchInterval: 30_000,
+  });
+
   if (!series || !kick) {
     return (
       <div className="flex flex-col gap-5">
@@ -91,9 +108,19 @@ export default function FreeKick3DPage() {
           Серия штрафных с разных позиций. Свайпни от мяча к воротам: быстрее — сильнее, длиннее — выше, дугой —
           закрутка. Чем выше рейтинг игрока, тем чуть сильнее удар и закрутка.
         </p>
-        {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
+        {errorMsg && !refill?.on_cooldown && (
+          <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>
+        )}
+        {refill?.on_cooldown && (
+          <>
+            <NextSeries onPlay={() => setErrorMsg(null)} />
+            <button onClick={() => navigate("/play")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
+              К играм
+            </button>
+          </>
+        )}
         <CardPickerModal
-          open={!start.isPending}
+          open={!start.isPending && !refillLoading && !refill?.on_cooldown}
           title="Кто бьёт?"
           cards={collection?.items ?? []}
           onSelect={(card) => start.mutate(card)}
@@ -142,8 +169,14 @@ export default function FreeKick3DPage() {
             {formatGameError(claim.error, "Не удалось начислить награду")}
           </p>
         ) : null}
+        <NextSeries onPlay={() => start.mutate(series.card)} starting={start.isPending} />
+        {start.isError && (
+          <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            {formatGameError(start.error, "Не удалось начать серию")}
+          </p>
+        )}
         <button onClick={() => navigate("/play")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
-          К играм
+          Вернуться к играм
         </button>
       </div>
     );
@@ -166,6 +199,85 @@ export default function FreeKick3DPage() {
         }
       }}
     />
+  );
+}
+
+/** What's next after a series (and on the start screen while on cooldown):
+ * play again when a series is available, otherwise buy one now — the day's
+ * first for coins, the rest for Telegram Stars, up to the daily cap. */
+function NextSeries({ onPlay, starting = false }: { onPlay: () => void; starting?: boolean }) {
+  const queryClient = useQueryClient();
+  const updateBalance = useAuthStore((s) => s.updateBalance);
+  const [error, setError] = useState<string | null>(null);
+  const { data: refill } = useQuery({ queryKey: ["free-kick-refill"], queryFn: fetchFreeKickRefill, refetchInterval: 30_000 });
+  const refreshed = async () => {
+    hapticNotify("success");
+    setError(null);
+    await queryClient.invalidateQueries({ queryKey: ["free-kick-refill"] });
+    void queryClient.invalidateQueries({ queryKey: ["game-limits"] });
+    onPlay();
+  };
+  const coins = useMutation({
+    mutationFn: refillFreeKickWithCoins,
+    onSuccess: async (data) => {
+      if (data.new_balance != null) updateBalance(data.new_balance);
+      await refreshed();
+    },
+    onError: (err) => setError(formatGameError(err, "Не получилось обновить серию")),
+  });
+  const stars = useMutation({
+    mutationFn: () => payShopWithStars(createFreeKickRefillInvoice),
+    onSuccess: async (result) => {
+      if (result === "paid") await refreshed();
+    },
+    onError: (err) => setError(formatGameError(err, "Оплата не прошла")),
+  });
+
+  if (!refill) return null;
+  if (!refill.on_cooldown) {
+    return (
+      <button
+        onClick={onPlay}
+        disabled={starting}
+        className="rounded-2xl bg-accent px-6 py-3 font-semibold text-black disabled:opacity-50"
+      >
+        {starting ? "Начинаем…" : "Сыграть ещё серию"}
+      </button>
+    );
+  }
+  const minutes = Math.max(1, Math.ceil(refill.retry_after_seconds / 60));
+  const left = refill.daily_limit - refill.refills_today;
+  const busy = coins.isPending || stars.isPending;
+  return (
+    <div className="flex w-full max-w-xs flex-col items-center gap-2 rounded-2xl bg-bg-surface p-4">
+      <p className="text-sm text-ink-mist">Следующая серия через {minutes} мин</p>
+      {refill.can_refill ? (
+        <>
+          <button
+            onClick={() => (refill.price_coins != null ? coins.mutate() : stars.mutate())}
+            disabled={busy}
+            className="flex items-center gap-1.5 rounded-2xl bg-accent px-5 py-3 font-semibold text-black disabled:opacity-50"
+          >
+            {busy ? (
+              "Обновляем…"
+            ) : refill.price_coins != null ? (
+              <>
+                Ещё серия сразу — {refill.price_coins}
+                <IconCoin size={15} />
+              </>
+            ) : (
+              <>Ещё серия сразу — ⭐ {refill.price_stars}</>
+            )}
+          </button>
+          <p className="text-caption text-ink-mist">
+            Обновлений сегодня: осталось {left} из {refill.daily_limit}
+          </p>
+        </>
+      ) : (
+        <p className="text-caption text-ink-mist">Обновления серии на сегодня закончились</p>
+      )}
+      {error && <p className="text-caption text-red-400">{error}</p>}
+    </div>
   );
 }
 

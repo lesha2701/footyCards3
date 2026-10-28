@@ -6,6 +6,7 @@ from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.user import User
 from app.schemas.game import (
+    FreeKick3DRefillOut,
     FreeKick3DShotOut,
     FreeKick3DShotRequest,
     FreeKick3DStartOut,
@@ -57,6 +58,7 @@ from app.schemas.fut_draft import (
     FutDraftSwapSlotsRequest,
     FutDraftTacticoChoiceRequest,
 )
+from app.schemas.stars import StarsInvoiceCreateOut
 from app.services import (
     free_kick_service,
     fut_draft_service,
@@ -66,6 +68,7 @@ from app.services import (
     pairs_service,
     penalty_service,
     saboteur_service,
+    shop_product_service,
 )
 from app.services.game_config_service import get_config
 
@@ -193,6 +196,23 @@ async def free_kick_3d_start(payload: FreeKickStartRequest, db: AsyncSession = D
 async def free_kick_3d_shot(session_id: int, payload: FreeKick3DShotRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"free_kick_3d_shot:{user.id}", max_calls=30, window_seconds=60)
     return await free_kick_service.shoot_3d(db, user, session_id, payload)
+
+
+@router.get("/free-kick-3d/refill", response_model=FreeKick3DRefillOut)
+async def free_kick_3d_refill_status(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await free_kick_service.refill_status(db, user)
+
+
+@router.post("/free-kick-3d/refill", response_model=FreeKick3DRefillOut)
+async def free_kick_3d_refill_coins(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"free_kick_refill:{user.id}", max_calls=10, window_seconds=60)
+    return await free_kick_service.refill_with_coins(db, user)
+
+
+@router.post("/free-kick-3d/refill/stars-invoice", response_model=StarsInvoiceCreateOut)
+async def free_kick_3d_refill_stars(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"free_kick_refill:{user.id}", max_calls=10, window_seconds=60)
+    return await shop_product_service.create_invoice(db, user, *await free_kick_service.refill_stars_order(db, user))
 
 
 # --- Football Hangman ---

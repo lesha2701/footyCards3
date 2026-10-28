@@ -267,6 +267,11 @@ class GameConfig(TimestampMixin, Base):
     free_kick_3d_corner_bonus: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     free_kick_3d_curl_bonus: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     free_kick_3d_near_coins: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Paid refills of the hourly series (no waiting for the cooldown): at most
+    # this many a day; the day's first costs coins, the rest Telegram Stars.
+    free_kick_refill_daily_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    free_kick_refill_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    free_kick_refill_stars: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
 
     hourly_game_limit: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
 

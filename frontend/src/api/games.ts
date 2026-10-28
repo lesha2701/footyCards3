@@ -1,6 +1,8 @@
 import { api } from "@/lib/api";
 import type { QuantizedSwipe } from "@/lib/freeKick3d/trajectory";
 import type {
+  FreeKick3DRefill,
+  StarsInvoiceCreate,
   FreeKick3DShotResult,
   FreeKick3DStartResult,
   FreeKickClaimResult,
@@ -141,6 +143,23 @@ export async function shootFreeKick3D(sessionId: number, swipe: QuantizedSwipe):
     curve: swipe.curve,
     duration_ms: swipe.durationMs,
   });
+  return data;
+}
+
+export async function fetchFreeKickRefill(): Promise<FreeKick3DRefill> {
+  const { data } = await api.get<FreeKick3DRefill>("/games/free-kick-3d/refill");
+  return data;
+}
+
+/** The day's first refill, paid in coins. */
+export async function refillFreeKickWithCoins(): Promise<FreeKick3DRefill> {
+  const { data } = await api.post<FreeKick3DRefill>("/games/free-kick-3d/refill");
+  return data;
+}
+
+/** The following refills: a Telegram Stars invoice (pay via payShopWithStars). */
+export async function createFreeKickRefillInvoice(): Promise<StarsInvoiceCreate> {
+  const { data } = await api.post<StarsInvoiceCreate>("/games/free-kick-3d/refill/stars-invoice");
   return data;
 }
 
