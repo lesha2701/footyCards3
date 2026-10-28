@@ -10,6 +10,7 @@ import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js
 import { KEEPER_LINE_Z, type ShotSetup } from "@/lib/freeKick3d/trajectory";
 
 import { KICK } from "./kickStyles";
+import { KEEPER_LOOK, KICKER_LOOK, type Look } from "./looks";
 
 export const FOOTBALLER_URL = "/free-kick-3d/footballer.glb";
 
@@ -34,16 +35,28 @@ const DIVE_REACH: Record<"gk_dive_left" | "gk_dive_right" | "gk_catch", number> 
 
 /** One animated copy of the footballer in a kit: its own skeleton, mixer
  * and tinted materials (the model's kit is white, so tinting = recolouring). */
-function useFootballer(kit: Kit, castShadow: boolean) {
+function useFootballer(kit: Kit, look: Look, castShadow: boolean) {
   const gltf = useGLTF(FOOTBALLER_URL);
   const model = useMemo(() => {
     const root = cloneSkinned(gltf.scene);
+    root.scale.multiply(new THREE.Vector3(look.width, look.height, look.width));
     root.traverse((o) => {
       const mesh = o as THREE.SkinnedMesh;
       if (!mesh.isMesh) return;
       mesh.frustumCulled = false;
       mesh.castShadow = castShadow;
-      const tint = /Shirt/i.test(mesh.name) ? kit.shirt : /Shorts/i.test(mesh.name) ? kit.shorts : /Socks/i.test(mesh.name) ? kit.socks : null;
+      if (/Hair/i.test(mesh.name) && look.hair === null) mesh.visible = false;
+      const tint = /Shirt/i.test(mesh.name)
+        ? kit.shirt
+        : /Shorts/i.test(mesh.name)
+          ? kit.shorts
+          : /Socks/i.test(mesh.name)
+            ? kit.socks
+            : /Body/i.test(mesh.name)
+              ? look.skin
+              : /Hair/i.test(mesh.name)
+                ? look.hair
+                : null;
       if (tint) {
         const mat = (mesh.material as THREE.MeshStandardMaterial).clone();
         mat.color.set(tint);
@@ -51,7 +64,7 @@ function useFootballer(kit: Kit, castShadow: boolean) {
       }
     });
     return root;
-  }, [gltf.scene, kit, castShadow]);
+  }, [gltf.scene, kit, look, castShadow]);
   const mixer = useMemo(() => new THREE.AnimationMixer(model), [model]);
   const actions = useMemo(() => {
     const out = {} as Record<Clip, THREE.AnimationAction>;
@@ -85,8 +98,20 @@ export type PlayerClock = { t: () => number; dt: () => number };
 
 /** A wall player: idles, then jumps (the group height itself is the
  * deterministic `wallLift`, set by the parent). Faces the ball. */
-export function WallPlayerModel({ jumpAt, phase, clock, castShadow }: { jumpAt: number; phase: number; clock: PlayerClock; castShadow: boolean }) {
-  const { model, mixer, actions } = useFootballer(KITS.away, castShadow);
+export function WallPlayerModel({
+  jumpAt,
+  phase,
+  look,
+  clock,
+  castShadow,
+}: {
+  jumpAt: number;
+  phase: number;
+  look: Look;
+  clock: PlayerClock;
+  castShadow: boolean;
+}) {
+  const { model, mixer, actions } = useFootballer(KITS.away, look, castShadow);
   const state = useRef<{ clip: Clip | null }>({ clip: null });
   useEffect(() => {
     play(state.current, actions, "idle", { at: phase });
@@ -119,7 +144,7 @@ export function KeeperModel({
   clock: PlayerClock;
   castShadow: boolean;
 }) {
-  const { model, mixer, actions, clips } = useFootballer(KITS.keeper, castShadow);
+  const { model, mixer, actions, clips } = useFootballer(KITS.keeper, KEEPER_LOOK, castShadow);
   const group = useRef<THREE.Group>(null);
   const state = useRef<{ clip: Clip | null }>({ clip: null });
   // Time of the widest point of each dive (hips furthest sideways).
@@ -184,7 +209,7 @@ export function KeeperModel({
 /** The kicker: waits at his run-up mark, runs in on the swipe; the ball
  * leaves at the clip's contact frame (shot time 0). */
 export function KickerModel({ setup, clock, kicking, castShadow }: { setup: ShotSetup; clock: PlayerClock; kicking: boolean; castShadow: boolean }) {
-  const { model, mixer, actions } = useFootballer(KITS.home, castShadow);
+  const { model, mixer, actions } = useFootballer(KITS.home, KICKER_LOOK, castShadow);
   const placement = useMemo(() => {
     const len = Math.hypot(setup.ball.x, setup.ball.z);
     const yaw = Math.atan2(-setup.ball.x / len, -setup.ball.z / len);

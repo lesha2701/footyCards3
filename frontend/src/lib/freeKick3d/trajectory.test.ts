@@ -73,17 +73,33 @@ describe("free kick 3D trajectory", () => {
     expect(m.x * spin.x + m.y * spin.y + m.z * spin.z).toBeCloseTo(0, 9);
   });
 
-  it("a swipe bowing right curls the ball right, bowing left curls it left", () => {
+  it("the ball copies the swipe's bow: out to that side, then back onto the aim", () => {
     const setup = createSetup(3);
     // Let the ball fly without the wall/keeper in the way.
     const open = { ...setup, wall: [], keeper: { ...setup.keeper, reaction: 99 } };
-    const xAtLine = (curve: number) => {
-      const traj = simulateShot(open, swipeToKick(open, quantizeSwipe(swipe(0, -0.4, curve))));
-      return traj.end.position.x;
+    const fly = (curve: number) => simulateShot(open, swipeToKick(open, quantizeSwipe(swipe(0, -0.4, curve))));
+    // Sideways offset from the straight line ball → goal centre, mid-flight.
+    const bowAtMid = (curve: number) => {
+      const traj = fly(curve);
+      const mid = sampleAt(traj, traj.end.t / 2).ball;
+      const straight = sampleAt(fly(0), traj.end.t / 2).ball;
+      return mid.x - straight.x;
     };
-    const straight = xAtLine(0);
-    expect(xAtLine(0.25)).toBeGreaterThan(straight + 0.5);
-    expect(xAtLine(-0.25)).toBeLessThan(straight - 0.5);
+    expect(bowAtMid(0.25)).toBeGreaterThan(0.5);
+    expect(bowAtMid(-0.25)).toBeLessThan(-0.5);
+    // …and it still arrives roughly where the swipe pointed.
+    const straightEnd = fly(0).end.position.x;
+    expect(Math.abs(fly(0.25).end.position.x - straightEnd)).toBeLessThan(1.2);
+    expect(Math.abs(fly(-0.25).end.position.x - straightEnd)).toBeLessThan(1.2);
+  });
+
+  it("a low driven shot keeps its pace", () => {
+    const setup = createSetup(1);
+    const open = { ...setup, wall: [], keeper: { ...setup.keeper, reaction: 99 } };
+    const traj = simulateShot(open, swipeToKick(open, quantizeSwipe(swipe(0, -0.12, 0, 160))));
+    expect(traj.outcome).not.toBe("wall");
+    expect(traj.end.position.z).toBeLessThanOrEqual(-BALL_RADIUS);
+    expect(Math.hypot(traj.end.velocity.x, traj.end.velocity.z)).toBeGreaterThan(12);
   });
 
   it("a faster swipe hits harder", () => {

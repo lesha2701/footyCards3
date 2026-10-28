@@ -92,13 +92,15 @@ const DRAG_K = 0.0135;
 const MAGNUS_K = 0.006;
 const SPIN_DECAY_PER_S = 0.08;
 const GROUND_RESTITUTION = 0.5;
-const GROUND_FRICTION = 0.82;
+const GROUND_FRICTION = 0.9;
+/** A rolling ball loses this share of its speed per second. */
+const ROLL_DECAY_PER_S = 0.08;
 const POST_RESTITUTION = 0.65;
 
 export const SIM_DT = 1 / 240;
 const MAX_TIME = 4;
 
-const MIN_SPEED = 14;
+const MIN_SPEED = 16;
 const MAX_SPEED = 34;
 const MAX_SPIN = 75;
 /** Side spin per unit of swipe bow (rad/s): a 0.1 bow is a clear curler. */
@@ -183,16 +185,21 @@ export function quantizeSwipe(s: SwipeInput): QuantizedSwipe {
 }
 
 /** Swipe → initial velocity and spin. Direction is built from slopes (no
- * trig): yaw from the swipe's horizontal lean, elevation from how far up
- * it went, power from its speed, side spin from how much it bowed (a path
- * bowing right curls the ball right), and topspin growing with the loft so
- * a shot over the wall dips back under the bar. */
+ * trig): aim from the swipe's horizontal lean, elevation from how far up
+ * it went, power from its speed, and topspin growing with the loft so a
+ * shot over the wall dips back under the bar. The ball's path copies the
+ * swipe's shape: the chord is the aim, a bow to the right sends the ball
+ * out to the right first and spins it back left onto the aim (a banana
+ * around the wall), and vice versa. */
 export function swipeToKick(setup: ShotSetup, q: QuantizedSwipe): KickParams {
   const dx = q.dx / 1000;
   const up = Math.max(0.02, -q.dy / 1000);
   const curve = clamp(q.curve / 1000, -0.5, 0.5);
   const length = Math.sqrt(dx * dx + up * up);
-  const swipeSpeed = length / (q.durationMs / 1000); // viewport heights per second
+  // Viewport heights per second, softened for short swipes (a low shot is a
+  // short swipe and must not come out weak): sqrt(length · 0.4) equals the
+  // length for a full 0.4 swipe and is larger below it.
+  const swipeSpeed = Math.sqrt(length * 0.4) / (q.durationMs / 1000);
   const speed = clamp(MIN_SPEED + swipeSpeed * 7, MIN_SPEED, MAX_SPEED);
 
   // Aim relative to the line ball → goal centre.
@@ -203,16 +210,21 @@ export function swipeToKick(setup: ShotSetup, q: QuantizedSwipe): KickParams {
   const rx = -fz;
   const rz = fx;
 
-  const yaw = clamp(dx / up, -0.8, 0.8) * 0.35;
-  const lift = clamp(0.2 + (up - 0.2) * 0.8, 0.02, 0.7);
+  const aim = clamp(dx / up, -0.8, 0.8) * 0.35;
+  // Below a 0.2 swipe the shot flattens out fast: a short swipe is a drive.
+  const lift = clamp(up < 0.2 ? 0.2 - (0.2 - up) * 1.6 : 0.2 + (up - 0.2) * 0.8, 0.02, 0.7);
+  // Spin about the vertical axis: ω_y > 0 bends a ball flying to −z to −x
+  // (left), so a bow to the right (curve > 0) gets ω_y > 0.
+  const side = clamp(curve * CURL_GAIN, -MAX_SPIN, MAX_SPIN);
+  // Launch off the aim towards the bow by the angle a constant sideways
+  // Magnus pull (K·ω·v) takes back over the distance: θ = K·ω·D / (2·v).
+  const yaw = aim + (MAGNUS_K * side * len) / (2 * speed);
 
   const dirX = fx + rx * yaw;
   const dirZ = fz + rz * yaw;
   const n = Math.sqrt(dirX * dirX + lift * lift + dirZ * dirZ);
   const velocity: Vec3 = { x: (dirX / n) * speed, y: (lift / n) * speed, z: (dirZ / n) * speed };
-  // Spin about the vertical axis: ω_y < 0 bends a ball flying to −z to +x.
   // Topspin is ω about the ball's "right" axis, pointing down the Magnus way.
-  const side = clamp(-curve * CURL_GAIN, -MAX_SPIN, MAX_SPIN);
   const dip = clamp((lift - 0.22) * DIP_GAIN, 0, MAX_DIP);
   const spin: Vec3 = { x: -rx * dip, y: side, z: -rz * dip };
   return { velocity, spin };
@@ -402,8 +414,15 @@ export function simulateShot(setup: ShotSetup, kick: KickParams, sampleEvery = 2
     // Ground.
     if (p.y < BALL_RADIUS) {
       p.y = BALL_RADIUS;
-      if (v.y < -0.5) events.push({ t, type: "bounce" });
-      v = { x: v.x * GROUND_FRICTION, y: v.y < 0 ? -v.y * GROUND_RESTITUTION : v.y, z: v.z * GROUND_FRICTION };
+      if (v.y < -0.5) {
+        // A bounce: loses some pace on impact.
+        events.push({ t, type: "bounce" });
+        v = { x: v.x * GROUND_FRICTION, y: -v.y * GROUND_RESTITUTION, z: v.z * GROUND_FRICTION };
+      } else {
+        // Rolling: only a little friction per step.
+        const roll = 1 - ROLL_DECAY_PER_S * SIM_DT;
+        v = { x: v.x * roll, y: 0, z: v.z * roll };
+      }
     }
 
     // Wall.

@@ -34,6 +34,7 @@ import {
 
 import Confetti from "./Confetti";
 import { KICK } from "./kickStyles";
+import { LOOKS } from "./looks";
 import { KeeperModel, KickerModel, WallPlayerModel, type PlayerClock } from "./Players";
 import { Stadium, type Hype, type Quality } from "./Stadium";
 import { ballGeometry, netTexture } from "./textures";
@@ -380,7 +381,12 @@ function Wall({ setup, shot, stage, quality }: StageProps & { quality: Quality }
             >
               {/* The model stands on its feet; the body is centred. */}
               <group position-y={-WALL_PLAYER_HEIGHT / 2}>
-                <WallPlayerModel jumpAt={setup.wallJumpAt} phase={i * 1.3} clock={playerClock(stage, shot)} castShadow={quality === "high"} />
+                <WallPlayerModel
+                  jumpAt={setup.wallJumpAt}
+                  phase={i * 1.3}
+                  // A different line-up of faces for each position.
+                  look={LOOKS[(setup.seed + i * 3) % LOOKS.length]}
+                  clock={playerClock(stage, shot)} castShadow={quality === "high"} />
               </group>
             </Suspense>
           </RigidBody>
