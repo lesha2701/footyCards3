@@ -1,6 +1,6 @@
 /** Free kick 3D sounds. The crowd is recorded (public/free-kick-3d/sfx,
  * loaded once the scene opens): a looping hum that swells while the ball
- * flies, chants between kicks, the goal roar, groans and laughter. The
+ * flies, a song between kicks, the goal roar, groans and laughter. The
  * strikes (kick, post, wall) are synthesized with Web Audio like the rest
  * of the app, and so is every crowd sound until its file is in. All muted
  * by the same «Звуки» switch. */
@@ -15,7 +15,6 @@ const RECORDINGS = {
   groan: "groan.mp3",
   laugh: "laugh.mp3",
   ambience: "ambience.mp3",
-  chantHey: "chant-hey.mp3",
   chantSong: "chant-song.mp3",
 } as const;
 type Recording = keyof typeof RECORDINGS;
@@ -53,13 +52,12 @@ function playRecording(ac: AudioContext, buffer: AudioBuffer, volume: number, wh
 }
 
 // ---------------------------------------------------------------------------
-// The crowd: one looping hum for the whole scene plus chants on top.
+// The crowd: one looping hum for the whole scene plus a song on top.
 // ---------------------------------------------------------------------------
 
 const CALM = 0.32;
 const TENSE = 0.6;
 let crowd: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
-let chantTurn = 0;
 
 /** Start the crowd hum (no-op if sound is off or it's already on);
  * returns the stop function. Waits for the recordings to load. */
@@ -106,17 +104,20 @@ export function crowdTension(tense: boolean): void {
   crowd.gain.gain.setTargetAtTime(tense ? TENSE : CALM, ac.currentTime, tense ? 0.25 : 1.2);
 }
 
-/** The crowd gets behind the kicker: the chants take turns. */
+/** The crowd gets behind the kicker with a song (no clapping chants: right
+ * after a goal they'd read as applause). Waits for the recordings, so the
+ * first position isn't silent. */
 export function crowdChant(): void {
-  if (!soundEnabled()) return;
-  try {
-    const ac = audio();
-    const chants = [recorded.chantHey, recorded.chantSong].filter((b): b is AudioBuffer => !!b);
-    if (!ac || chants.length === 0) return;
-    playRecording(ac, chants[chantTurn++ % chants.length], 0.45, 0.4);
-  } catch {
-    // Audio is a nicety.
-  }
+  void preloadFreeKickSfx().then(() => {
+    if (!soundEnabled()) return;
+    try {
+      const ac = audio();
+      if (!ac || !recorded.chantSong) return;
+      playRecording(ac, recorded.chantSong, 0.75, 0.4);
+    } catch {
+      // Audio is a nicety.
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
