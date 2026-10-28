@@ -33,6 +33,7 @@ import {
 } from "@/lib/freeKick3d/trajectory";
 
 import Confetti from "./Confetti";
+import { KeeperModel, KickerModel, KICK_CONTACT_T, WallPlayerModel, type PlayerClock } from "./Players";
 import { Stadium, type Hype, type Quality } from "./Stadium";
 import { ballGeometry, netTexture } from "./textures";
 
@@ -56,6 +57,9 @@ type ShotClock = { shotId: number; t: number; decided: boolean; decidedAt: numbe
 /** Everything the presentation layer shares across components per frame. */
 type Stage = {
   clock: ShotClock;
+  /** Animation step this frame: real time while waiting, shot time (slow
+   * motion included) during a shot. */
+  dt: number;
   ball: THREE.Vector3;
   shake: number;
   /** Back-net impact (x, y) and when it lands, in scene seconds. */
@@ -144,6 +148,7 @@ function ShotWorld({
 }: Omit<Props, "fpsRef"> & { quality: Quality; hype: Hype }) {
   const stage = useRef<Stage>({
     clock: { shotId: -1, t: -1, decided: false, decidedAt: 0 },
+    dt: 0,
     ball: new THREE.Vector3(setup.ball.x, setup.ball.y, setup.ball.z),
     shake: 0,
     ripple: null,
@@ -151,7 +156,8 @@ function ShotWorld({
   const [confetti, setConfetti] = useState(0);
 
   useEffect(() => {
-    stage.current.clock = { shotId: shot?.id ?? -1, t: shot ? 0 : -1, decided: false, decidedAt: 0 };
+    // A shot starts with the kicker's run-up: the ball leaves at t = 0.
+    stage.current.clock = { shotId: shot?.id ?? -1, t: shot ? -KICK_LEAD : -1, decided: false, decidedAt: 0 };
     stage.current.ripple = null;
   }, [shot]);
   useEffect(onReady, [onReady]);
@@ -164,12 +170,15 @@ function ShotWorld({
     const now = state.clock.getElapsedTime();
     hype.current = Math.max(0, hype.current - delta * 0.22);
     s.shake = Math.max(0, s.shake - delta * 2.5);
-    if (!shot || c.shotId !== shot.id || c.t < 0) return;
+    const dt = Math.min(delta, 0.05);
+    s.dt = dt;
+    if (!shot || c.shotId !== shot.id) return;
 
     const traj = shot.trajectory;
-    const dt = Math.min(delta, 0.05);
     const prev = c.t;
-    c.t += dt * (c.decided ? 1 : replayTimeScale(traj, c.t));
+    c.t += dt * (c.decided || c.t < 0 ? 1 : replayTimeScale(traj, c.t));
+    s.dt = c.t - prev;
+    if (prev < 0 && c.t >= 0) playFreeKickSfx("kick");
     for (const e of traj.events) {
       if (e.t <= prev || e.t > c.t) continue;
       if (e.type === "post") {
@@ -203,7 +212,12 @@ function ShotWorld({
     <>
       <GoalFrame stage={stage} />
       <Wall setup={setup} shot={shot} stage={stage} quality={quality} />
-      <Keeper setup={setup} shot={shot} stage={stage} />
+      <Suspense fallback={<Keeper setup={setup} shot={shot} stage={stage} />}>
+        <AnimatedKeeper setup={setup} shot={shot} stage={stage} quality={quality} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <KickerModel setup={setup} clock={playerClock(stage, shot)} kicking={shot !== null} castShadow={quality === "high"} />
+      </Suspense>
       <Ball setup={setup} shot={shot} stage={stage} quality={quality} />
       <CameraRig setup={setup} shot={shot} stage={stage} />
       <Confetti burstId={confetti} />
@@ -216,6 +230,15 @@ function ShotWorld({
 }
 
 type StageProps = { setup: ShotSetup; shot: LiveShot | null; stage: MutableRefObject<Stage> };
+
+/** Run-up before the ball leaves (s): the kick clip is cued so its contact
+ * frame lands on shot time 0. */
+const KICK_LEAD = Math.min(0.55, KICK_CONTACT_T);
+
+/** The animated players read the shot clock through this. */
+function playerClock(stage: MutableRefObject<Stage>, shot: LiveShot | null): PlayerClock {
+  return { t: () => shotTime(stage.current, shot), dt: () => stage.current.dt };
+}
 
 function shotTime(stage: Stage, shot: LiveShot | null) {
   return shot && stage.clock.shotId === shot.id ? stage.clock.t : -1;
@@ -352,7 +375,16 @@ function Wall({ setup, shot, stage, quality }: StageProps & { quality: Quality }
             rotation={[0, yaw, 0]}
           >
             <CapsuleCollider args={[half, WALL_PLAYER_RADIUS]} restitution={0.3} />
-            <Footballer radius={WALL_PLAYER_RADIUS} half={half} kit="#c0392b" trim="#f8fafc" shorts="#f8fafc" socks="#c0392b" hair={WALL_HAIR[i % WALL_HAIR.length]} handsFront />
+            <Suspense
+              fallback={
+                <Footballer radius={WALL_PLAYER_RADIUS} half={half} kit="#c0392b" trim="#f8fafc" shorts="#f8fafc" socks="#c0392b" hair={WALL_HAIR[i % WALL_HAIR.length]} handsFront />
+              }
+            >
+              {/* The model stands on its feet; the body is centred. */}
+              <group position-y={-WALL_PLAYER_HEIGHT / 2}>
+                <WallPlayerModel jumpAt={setup.wallJumpAt} phase={i * 1.3} clock={playerClock(stage, shot)} castShadow={quality === "high"} />
+              </group>
+            </Suspense>
           </RigidBody>
           {quality === "low" && (
             <mesh position={[w.x, 0.012, w.z]} rotation-x={-Math.PI / 2}>
@@ -403,6 +435,23 @@ function Keeper({ setup, shot, stage }: StageProps) {
         ))}
       </group>
     </>
+  );
+}
+
+/** The keeper, animated: where his hands end up comes from the trajectory
+ * (nothing for a shot the wall stops — he never has to move). */
+function AnimatedKeeper({ setup, shot, stage, quality }: StageProps & { quality: Quality }) {
+  const traj = shot?.trajectory;
+  const last = traj?.samples[traj.samples.length - 1];
+  const targetX = traj && last && traj.outcome !== "wall" ? last.keeperHand.x : null;
+  return (
+    <KeeperModel
+      setup={setup}
+      targetX={targetX}
+      arrival={traj?.end.t ?? 1}
+      clock={playerClock(stage, shot)}
+      castShadow={quality === "high"}
+    />
   );
 }
 
@@ -578,7 +627,9 @@ function CameraRig({ setup, shot, stage }: StageProps) {
   const frame = useMemo(() => {
     const len = Math.hypot(setup.ball.x, setup.ball.z);
     const f = new THREE.Vector3(-setup.ball.x / len, 0, -setup.ball.z / len);
-    const home = new THREE.Vector3(setup.ball.x, 1.7, setup.ball.z).addScaledVector(f, -3.4);
+    // Behind the ball and a little to the left: over the kicker's shoulder.
+    const left = new THREE.Vector3(f.z, 0, -f.x);
+    const home = new THREE.Vector3(setup.ball.x, 2.0, setup.ball.z).addScaledVector(f, -4.9).addScaledVector(left, 0.8);
     return { f, home, goal: new THREE.Vector3(0, 1.1, 0) };
   }, [setup]);
 

@@ -88,7 +88,6 @@ export default function FreeKick3DPage() {
     const kick = swipeToKick(setup, quantizeSwipe(swipe));
     shotCounter.current += 1;
     haptic("medium");
-    playFreeKickSfx("kick");
     setShot({ id: shotCounter.current, kick, trajectory: simulateShot(setup, kick) });
   };
 
