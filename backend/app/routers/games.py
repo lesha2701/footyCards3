@@ -6,6 +6,9 @@ from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.user import User
 from app.schemas.game import (
+    Penalty3DResultOut,
+    Penalty3DSaveRequest,
+    Penalty3DStartOut,
     FreeKick3DRefillOut,
     FreeKick3DShotOut,
     FreeKick3DShotRequest,
@@ -153,6 +156,27 @@ async def penalty_start(payload: PenaltyStartRequest, db: AsyncSession = Depends
 @router.post("/penalty/{session_id}/kick", response_model=PenaltyKickOut)
 async def penalty_kick(session_id: int, payload: PenaltyKickRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await penalty_service.resolve_kick(db, user, session_id, payload.direction)
+
+
+# The 3D bot shootout (the menu's «Пенальти»); claimed and forfeited with the
+# classic /penalty/{session_id}/claim and /forfeit.
+
+@router.post("/penalty-3d/start", response_model=Penalty3DStartOut)
+async def penalty_3d_start(payload: PenaltyStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"penalty_start:{user.id}", max_calls=20, window_seconds=60)
+    return await penalty_service.start_3d(db, user, payload.user_card_id)
+
+
+@router.post("/penalty-3d/{session_id}/shot", response_model=Penalty3DResultOut)
+async def penalty_3d_shot(session_id: int, payload: FreeKick3DShotRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"penalty_3d_kick:{user.id}", max_calls=40, window_seconds=60)
+    return await penalty_service.shoot_3d(db, user, session_id, payload)
+
+
+@router.post("/penalty-3d/{session_id}/save", response_model=Penalty3DResultOut)
+async def penalty_3d_save(session_id: int, payload: Penalty3DSaveRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"penalty_3d_kick:{user.id}", max_calls=40, window_seconds=60)
+    return await penalty_service.save_3d(db, user, session_id, payload.dive)
 
 
 @router.post("/penalty/{session_id}/claim", response_model=PenaltyClaimOut)

@@ -120,6 +120,47 @@ class PenaltyStatsOut(BaseModel):
     penalty_rank: Optional[int] = None
 
 
+# --- Penalty 3D (the bot shootout; PvP stays on the classic endpoints) ---
+
+class Penalty3DKickOut(BaseModel):
+    """The next kick of the shootout. «player» shoots: the scene is
+    createPenaltySetup(seed, rating) and the bot keeps goal; «bot» shoots:
+    penaltyBotShot(seed, dive) against the player's dive."""
+    kick_index: int
+    kicker: str  # player | bot
+    seed: int
+
+
+class Penalty3DStartOut(BaseModel):
+    session_id: int
+    rating: int
+    kick: Penalty3DKickOut
+
+
+class Penalty3DDive(BaseModel):
+    """The player's dive: where (mm on the goal plane) and when (ms from the
+    strike; negative = during the run-up)."""
+    x: int = Field(ge=-4000, le=4000)
+    y: int = Field(ge=0, le=3000)
+    reaction_ms: int = Field(ge=-2000, le=3000)
+
+
+class Penalty3DSaveRequest(BaseModel):
+    dive: Optional[Penalty3DDive] = None
+
+
+class Penalty3DResultOut(BaseModel):
+    kicker: str
+    outcome: str  # goal | save | miss
+    bot_kind: Optional[str] = None
+    player_score: int
+    bot_score: int
+    is_finished: bool
+    result: Optional[str] = None
+    rating_delta: Optional[int] = None
+    next_kick: Optional[Penalty3DKickOut] = None
+
+
 # --- Free Kick ---
 
 class FreeKickStartRequest(BaseModel):

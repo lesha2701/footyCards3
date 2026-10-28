@@ -1,4 +1,5 @@
 import random
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -11,8 +12,20 @@ from app.models.card import UserCard
 from app.models.enums import GameSessionStatus, GameType, TransactionType
 from app.models.game import GameSession
 from app.models.user import User
-from app.schemas.game import PenaltyClaimOut, PenaltyForfeitOut, PenaltyKickOut, PenaltyStartOut, PenaltyStatsOut
+from app.schemas.game import (
+    FreeKick3DShotRequest,
+    Penalty3DDive,
+    Penalty3DKickOut,
+    Penalty3DResultOut,
+    Penalty3DStartOut,
+    PenaltyClaimOut,
+    PenaltyForfeitOut,
+    PenaltyKickOut,
+    PenaltyStartOut,
+    PenaltyStatsOut,
+)
 from app.schemas.ranking import RankingMetric
+from app.services import free_kick_3d_engine as engine
 from app.services import league_service, ranking_service, task_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
@@ -22,6 +35,10 @@ from app.services.club_pass_service import extra_rewarded_attempts
 # (top/bottom) the shot/dive targets. Shared with PvP (see penalty_match_service.py).
 PENALTY_ZONES = ("top_left", "top_center", "top_right", "bottom_left", "bottom_center", "bottom_right")
 REGULATION_KICKS = 10  # 5 rounds x 2 kicks
+MODE_3D = "3d"
+# A kick answered faster than this after it was issued is refused: a swipe
+# (or a bot's run-up, then a dive) takes a human moment.
+MIN_3D_ACTION_MS = 350
 
 
 def player_miss_chance(rating: int) -> float:
@@ -149,6 +166,8 @@ async def resolve_kick(db: AsyncSession, user: User, session_id: int, direction:
         raise ConflictError("This game session has already finished")
 
     state = dict(session.server_state)
+    if state.get("mode") == MODE_3D:
+        raise ConflictError("This is a 3D penalty session")
     kicker = _current_kicker(state)
 
     if kicker == "player":
@@ -266,3 +285,142 @@ async def get_stats(db: AsyncSession, user: User) -> PenaltyStatsOut:
         penalty_rating=user.penalty_rating,
         penalty_rank=ranking.me.rank if ranking.me else None,
     )
+
+
+# ---------------------------------------------------------------------------
+# «Пенальти» in 3D — the bot shootout. Same rules, counters, rating, reward
+# and forfeit as the classic one (_apply_finish, claim_reward,
+# forfeit_session); each kick is a seed the server picks, and the outcome is
+# the server's own replay with free_kick_3d_engine: the player's swipe
+# against the bot keeper, or the bot's strike against the player's dive.
+# ---------------------------------------------------------------------------
+
+def _new_3d_kick(index: int) -> dict:
+    return {
+        "kicker": "player" if index % 2 == 0 else "bot",
+        "seed": secrets.randbelow(2**31 - 1) + 1,
+        "issued_at": datetime.now(timezone.utc).isoformat(),
+        "outcome": None,
+    }
+
+
+def _kick_out(index: int, kick: dict) -> Penalty3DKickOut:
+    return Penalty3DKickOut(kick_index=index, kicker=kick["kicker"], seed=kick["seed"])
+
+
+async def start_3d(db: AsyncSession, user: User, user_card_id: int) -> Penalty3DStartOut:
+    config = await get_config(db)
+    locked_user = await lock_user_for_update(db, user.id)
+    await _ensure_hourly_reset(db, locked_user)
+    if locked_user.penalty_hourly_attempts >= config.hourly_game_limit:
+        remaining = timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(locked_user.penalty_hour_started_at))
+        raise ConflictError(
+            "Hourly play limit reached for this game",
+            details={"hourly_limit": config.hourly_game_limit, "retry_after_seconds": max(0, int(remaining.total_seconds()))},
+        )
+    locked_user.penalty_hourly_attempts += 1
+    db.add(locked_user)
+    await _ensure_daily_reset(db, locked_user)
+
+    card = (await db.execute(
+        select(UserCard).where(UserCard.id == user_card_id).options(joinedload(UserCard.player))
+    )).unique().scalar_one_or_none()
+    if not card:
+        raise NotFoundError("Card not found")
+    if card.owner_id != locked_user.id:
+        raise ForbiddenError("You can only use your own cards")
+
+    first = _new_3d_kick(0)
+    session = GameSession(
+        user_id=locked_user.id, game_type=GameType.penalty, status=GameSessionStatus.in_progress,
+        server_state={
+            "mode": MODE_3D, "selected_card_id": card.id, "player_rating": card.player.rating,
+            "kicks": [first], "rounds": [], "player_score": 0, "bot_score": 0, "kicks_taken": 0, "sudden_death": False,
+        },
+    )
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return Penalty3DStartOut(session_id=session.id, rating=card.player.rating, kick=_kick_out(0, first))
+
+
+async def _lock_3d_kick(db: AsyncSession, user: User, session_id: int, kicker: str) -> tuple[GameSession, dict, dict]:
+    session = await _get_session(db, user.id, session_id)
+    # Two concurrent answers to one kick: the second waits here and sees it taken.
+    await db.refresh(session, with_for_update=True)
+    if session.status != GameSessionStatus.in_progress:
+        raise ConflictError("This game session has already finished")
+    state = dict(session.server_state)
+    if state.get("mode") != MODE_3D:
+        raise ConflictError("Not a 3D penalty session")
+    kick = dict(state["kicks"][state["kicks_taken"]])
+    if kick["kicker"] != kicker:
+        raise ConflictError("It's not this side's kick")
+    if kick["outcome"] is not None:
+        raise ConflictError("This kick has already been taken")
+    issued = ensure_aware(datetime.fromisoformat(kick["issued_at"]))
+    if (datetime.now(timezone.utc) - issued).total_seconds() * 1000 < MIN_3D_ACTION_MS:
+        raise ConflictError("Too fast — take your time")
+    return session, state, kick
+
+
+async def _settle_3d(
+    db: AsyncSession, user: User, session: GameSession, state: dict, kick: dict, outcome: str, bot_kind: str | None,
+) -> Penalty3DResultOut:
+    config = await get_config(db)
+    index = state["kicks_taken"]
+    kicks = list(state["kicks"])
+    kicks[index] = {**kick, "outcome": outcome}
+    if outcome == "goal":
+        state["player_score" if kick["kicker"] == "player" else "bot_score"] += 1
+    state["rounds"] = list(state["rounds"]) + [{"kicker": kick["kicker"], "outcome": outcome}]
+    state["kicks_taken"] = index + 1
+
+    is_finished = False
+    if state["kicks_taken"] >= REGULATION_KICKS and state["kicks_taken"] % 2 == 0:
+        if state["player_score"] != state["bot_score"]:
+            is_finished = True
+        else:
+            state["sudden_death"] = True
+
+    result = None
+    rating_delta = None
+    next_out = None
+    if is_finished:
+        state["kicks"] = kicks
+        result = "win" if state["player_score"] > state["bot_score"] else "loss"
+        rating_delta = await _apply_finish(db, user, session, state, result, config)
+    else:
+        nxt = _new_3d_kick(state["kicks_taken"])
+        kicks.append(nxt)
+        state["kicks"] = kicks
+        next_out = _kick_out(state["kicks_taken"], nxt)
+        session.server_state = state
+    db.add(session)
+    await db.commit()
+    return Penalty3DResultOut(
+        kicker=kick["kicker"], outcome=outcome, bot_kind=bot_kind,
+        player_score=state["player_score"], bot_score=state["bot_score"],
+        is_finished=is_finished, result=result, rating_delta=rating_delta, next_kick=next_out,
+    )
+
+
+async def shoot_3d(db: AsyncSession, user: User, session_id: int, swipe: FreeKick3DShotRequest) -> Penalty3DResultOut:
+    """The player's penalty: their swipe against the bot keeper."""
+    session, state, kick = await _lock_3d_kick(db, user, session_id, "player")
+    shot = engine.simulate_shot(
+        engine.create_penalty_setup(kick["seed"], state["player_rating"]),
+        engine.Swipe(swipe.dx, swipe.dy, swipe.curve, swipe.duration_ms),
+    )
+    outcome = "save" if shot.outcome == "save" else "goal" if shot.outcome == "goal" else "miss"
+    return await _settle_3d(db, user, session, state, kick, outcome, None)
+
+
+async def save_3d(db: AsyncSession, user: User, session_id: int, dive: Penalty3DDive | None) -> Penalty3DResultOut:
+    """The bot's penalty: its strike against the player's dive (or none)."""
+    session, state, kick = await _lock_3d_kick(db, user, session_id, "bot")
+    d = engine.Dive(dive.x, dive.y, dive.reaction_ms) if dive else None
+    kind, bot_swipe = engine.penalty_bot_shot(kick["seed"], d)
+    shot = engine.simulate_shot(engine.player_keeper_setup(kick["seed"], d), bot_swipe)
+    outcome = "save" if shot.outcome == "save" else "goal" if shot.outcome == "goal" else "miss"
+    return await _settle_3d(db, user, session, state, kick, outcome, kind)
