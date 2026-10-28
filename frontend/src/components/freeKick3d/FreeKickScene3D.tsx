@@ -95,7 +95,9 @@ export default function FreeKickScene3D({ setup, shot, onDecided, onReady, fpsRe
       <Stadium quality={quality} hype={hype} />
       {/* Rapier's WASM loads asynchronously: the stadium shows meanwhile. */}
       <Suspense fallback={null}>
-        <Physics gravity={[0, -9.81, 0]} timeStep={1 / 60}>
+        {/* 120 Hz instead of CCD (CCD has panicked inside Rapier on phones):
+            a 30 m/s ball moves 0.25 m a step, less than the net's thickness. */}
+        <Physics gravity={[0, -9.81, 0]} timeStep={1 / 120}>
           <ShotWorld setup={setup} shot={shot} onDecided={onDecided} onReady={onReady} quality={quality} hype={hype} />
         </Physics>
       </Suspense>
@@ -250,7 +252,13 @@ function shotTime(stage: Stage, shot: LiveShot | null) {
 // purely cosmetic, the outcome is already set.
 // ---------------------------------------------------------------------------
 
-type Released = { shotId: number; position: Vec3; velocity: Vec3; spin: Vec3 };
+/** `gone`: the ball left the stadium — its body is removed instead of
+ * falling forever through the world. */
+type Released = { shotId: number; position: Vec3; velocity: Vec3; spin: Vec3; gone?: boolean };
+
+const finite = (v: Vec3) => Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+/** Leaving the pitch's floor collider (see ShotWorld) or sinking below it. */
+const outOfStadium = (p: { x: number; y: number; z: number }) => Math.abs(p.x) > 55 || p.z < -35 || p.z > 75 || p.y < -1;
 
 function Ball({ setup, shot, stage, quality }: StageProps & { quality: Quality }) {
   const flight = useRef<THREE.Mesh>(null);
@@ -277,15 +285,22 @@ function Ball({ setup, shot, stage, quality }: StageProps & { quality: Quality }
       mesh.rotation.x -= delta * 18;
       if (s.clock.decided) {
         const v = traj.end.velocity;
+        const spin = { x: -v.z / BALL_RADIUS / 4, y: shot.kick.spin.y, z: 0 };
+        const position = traj.end.position;
         setReleased({
           shotId: shot.id,
-          position: traj.end.position,
+          position,
           velocity: v,
-          spin: { x: -v.z / BALL_RADIUS / 4, y: shot.kick.spin.y, z: 0 },
+          spin,
+          // Never hand Rapier a body it can't simulate (it panics, not throws).
+          gone: !finite(position) || !finite(v) || !finite(spin) || outOfStadium(position),
         });
       }
     }
+    // Gone: the camera keeps looking where the ball left.
+    if (live?.gone) return;
     const p = live && body.current ? body.current.translation() : mesh.position;
+    if (live && body.current && outOfStadium(p)) setReleased({ ...live, gone: true });
     s.ball.set(p.x, p.y, p.z);
     if (shadow.current) {
       shadow.current.position.set(p.x, 0.012, p.z);
@@ -306,7 +321,7 @@ function Ball({ setup, shot, stage, quality }: StageProps & { quality: Quality }
       {flying && (
         <Trail key={shot.id} target={flight as MutableRefObject<THREE.Object3D>} width={0.9} length={5} color="#c6e63a" attenuation={(w) => w * w} decay={1.2} />
       )}
-      {live && (
+      {live && !live.gone && (
         <RigidBody
           key={live.shotId}
           ref={body}
@@ -314,7 +329,6 @@ function Ball({ setup, shot, stage, quality }: StageProps & { quality: Quality }
           position={[live.position.x, live.position.y, live.position.z]}
           linearVelocity={[live.velocity.x, live.velocity.y, live.velocity.z]}
           angularVelocity={[live.spin.x, live.spin.y, live.spin.z]}
-          ccd
           linearDamping={0.3}
           angularDamping={0.6}
         >
@@ -326,7 +340,7 @@ function Ball({ setup, shot, stage, quality }: StageProps & { quality: Quality }
       )}
       {/* Contact shadow: soft blob under the ball (the real shadow is too
           small to read on a phone). */}
-      <mesh ref={shadow} rotation-x={-Math.PI / 2}>
+      <mesh ref={shadow} rotation-x={-Math.PI / 2} visible={!live?.gone}>
         <circleGeometry args={[BALL_RADIUS * 1.3, 16]} />
         <meshBasicMaterial color="#000" transparent opacity={quality === "high" ? 0.25 : 0.4} depthWrite={false} />
       </mesh>
@@ -581,10 +595,11 @@ function GoalFrame({ stage }: { stage: MutableRefObject<Stage> }) {
         ))}
         <CylinderCollider args={[GOAL_HALF_WIDTH, POST_RADIUS]} position={[0, GOAL_HEIGHT, 0]} rotation={[0, 0, Math.PI / 2]} restitution={0.65} />
         {/* Net: back, sides and roof — dead (Min combine), so the ball drops into it. */}
-        <CuboidCollider args={[GOAL_HALF_WIDTH, GOAL_HEIGHT / 2, 0.05]} position={[0, GOAL_HEIGHT / 2, -NET_DEPTH]} {...NET} />
-        <CuboidCollider args={[0.05, GOAL_HEIGHT / 2, NET_DEPTH / 2]} position={[-GOAL_HALF_WIDTH - 0.05, GOAL_HEIGHT / 2, -NET_DEPTH / 2]} {...NET} />
-        <CuboidCollider args={[0.05, GOAL_HEIGHT / 2, NET_DEPTH / 2]} position={[GOAL_HALF_WIDTH + 0.05, GOAL_HEIGHT / 2, -NET_DEPTH / 2]} {...NET} />
-        <CuboidCollider args={[GOAL_HALF_WIDTH, 0.05, NET_DEPTH / 2]} position={[0, GOAL_HEIGHT + 0.05, -NET_DEPTH / 2]} {...NET} />
+        {/* Thick (0.4 m), growing outwards from the net's plane, so a fast ball can't step through. */}
+        <CuboidCollider args={[GOAL_HALF_WIDTH + 0.4, GOAL_HEIGHT / 2 + 0.2, 0.2]} position={[0, GOAL_HEIGHT / 2, -NET_DEPTH - 0.2]} {...NET} />
+        <CuboidCollider args={[0.2, GOAL_HEIGHT / 2, NET_DEPTH / 2]} position={[-GOAL_HALF_WIDTH - 0.2, GOAL_HEIGHT / 2, -NET_DEPTH / 2]} {...NET} />
+        <CuboidCollider args={[0.2, GOAL_HEIGHT / 2, NET_DEPTH / 2]} position={[GOAL_HALF_WIDTH + 0.2, GOAL_HEIGHT / 2, -NET_DEPTH / 2]} {...NET} />
+        <CuboidCollider args={[GOAL_HALF_WIDTH + 0.4, 0.2, NET_DEPTH / 2]} position={[0, GOAL_HEIGHT + 0.2, -NET_DEPTH / 2]} {...NET} />
       </RigidBody>
 
       {[-GOAL_HALF_WIDTH, GOAL_HALF_WIDTH].map((x) => (
