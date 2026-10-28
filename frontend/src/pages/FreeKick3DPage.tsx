@@ -149,7 +149,7 @@ export default function FreeKick3DPage() {
         <div className="pointer-events-none absolute inset-x-0 top-16 px-6 text-center text-sm text-ink-chalk/90 drop-shadow">
           {ready
             ? "Свайпните от мяча к воротам. Быстрее — сильнее, длиннее — выше, дугой — закрутка."
-            : "Загружаем физику…"}
+            : "Загружаем…"}
         </div>
       )}
 
