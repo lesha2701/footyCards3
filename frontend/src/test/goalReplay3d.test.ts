@@ -7,6 +7,7 @@ import {
   CROSSBAR,
   GOAL_HALF,
   HEAD_H,
+  VOLLEY_H,
   MAX_LEAD_FRAMES,
   SLOW_RATE,
   advance,
@@ -16,6 +17,7 @@ import {
   episodeRate,
   finishKind,
   goalEpisodes,
+  isCross,
   toWorld,
   type GoalEpisode,
 } from "@/lib/goalReplay3d";
@@ -51,7 +53,7 @@ describe("goal episodes: frames", () => {
     const goals = events.map((e, i) => (e.event_type === "goal" ? i : -1)).filter((i) => i >= 0);
     expect(episodes.map((ep) => ep.event)).toEqual(goals);
     expect(episodes.map((ep) => ep.finish)).toEqual(
-      ["header", "long_range", "header", "free_kick", "penalty", "shot", "shot", "empty_net"],
+      ["header", "long_range", "header", "free_kick", "penalty", "shot", "shot", "volley", "empty_net"],
     );
   });
 
@@ -180,11 +182,31 @@ describe("goal episodes: the ball in 3D", () => {
     expect(ballState(tl, pen, pen.shot).h).toBe(BALL_R);
   });
 
+  it("a cross is in the air from the passer's foot to the scorer's head or foot", () => {
+    const crosses = episodes.filter((ep) => isCross(events[ep.event]) || ep.finish === "header");
+    expect(crosses.length).toBeGreaterThanOrEqual(3);
+    for (const ep of crosses.filter((c) => c.finish === "header" || c.finish === "volley")) {
+      const last = [...replay.passes].reverse().find(([p0, p1, , to]) => p0 >= ep.f0 && p1 <= ep.shot && to === ep.scorer)!;
+      const flight = ep.flights.find((fl) => fl.f1 === ep.shot)!;
+      // Leaves the grass the moment the pass is played, no run along the ground first.
+      expect(flight.f0).toBe(last[0]);
+      expect(flight.from.h).toBe(BALL_R);
+      expect(flight.to.h).toBe(ep.finish === "header" ? HEAD_H : VOLLEY_H);
+      expect(ballState(tl, ep, (flight.f0 + flight.f1) / 2).h).toBeGreaterThan(2.5);
+    }
+  });
+
   it("finish kind from the event payload", () => {
     expect(finishKind({ minute: 1, event_type: "goal", payload: { is_penalty: true, set_piece: "penalty" } })).toBe("penalty");
     expect(finishKind({ minute: 1, event_type: "goal", payload: { set_piece: "corner", action: "header" } })).toBe("header");
     expect(finishKind({ minute: 1, event_type: "goal", payload: { shot_type: "in_box", aerial_duel: {} } })).toBe("header");
     expect(finishKind({ minute: 1, event_type: "goal", payload: { shot_type: "in_box" } })).toBe("shot");
+    // A cross from the wing is finished in the air: headed or volleyed, by event.
+    const cross = { minute: 1, event_type: "goal", payload: { shot_type: "in_box", zone: "wing_attack", assist: "X" } };
+    const kinds = new Set(Array.from({ length: 30 }, (_, i) => finishKind(cross, i)));
+    expect(kinds).toEqual(new Set(["header", "volley"]));
+    expect(finishKind(cross, 4)).toBe(finishKind(cross, 4));
+    expect(finishKind({ ...cross, payload: { shot_type: "in_box", zone: "central_attack", assist: "X" } }, 4)).toBe("shot");
     expect(finishKind({ minute: 1, event_type: "goal" })).toBe("shot");
   });
 });

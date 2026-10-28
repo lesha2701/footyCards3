@@ -22,6 +22,8 @@ import {
 
 export const BALL_R = 0.11;
 export const HEAD_H = 2.05;
+/** A cross met on the volley: knee to waist height. */
+export const VOLLEY_H = 0.85;
 export const GOAL_HALF = 3.66;
 export const CROSSBAR = 2.44;
 export const NET_DEPTH = 1.8;
@@ -36,7 +38,7 @@ const NET_REST = 1.3;
 /** Playback slows down around the shot (fraction of real time). */
 export const SLOW_RATE = 0.4;
 
-export type FinishKind = "shot" | "long_range" | "header" | "free_kick" | "penalty" | "empty_net";
+export type FinishKind = "shot" | "long_range" | "header" | "volley" | "free_kick" | "penalty" | "empty_net";
 
 export interface BallPos { x: number; y: number; h: number }
 
@@ -76,13 +78,24 @@ export function unit(...keys: number[]): number {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-export function finishKind(e: MatchEventLite | undefined): FinishKind {
+/** A ball played in from the wing to a man in the box (the engine's
+ * "is_cross": zone wing_attack + shot in the box, set up by a pass). */
+export function isCross(e: MatchEventLite | undefined): boolean {
+  const p = (e?.payload ?? {}) as Record<string, unknown>;
+  return p.zone === "wing_attack" && p.shot_type === "in_box" && Boolean(p.assist || p.action === "pass");
+}
+
+/** How the goal is finished. A cross is headed in when the log says so
+ * (corner, aerial duel), otherwise headed or volleyed — picked from the
+ * event index, the same every time. */
+export function finishKind(e: MatchEventLite | undefined, event = 0): FinishKind {
   const p = (e?.payload ?? {}) as Record<string, unknown>;
   if (p.is_penalty || p.set_piece === "penalty") return "penalty";
   if (p.set_piece === "free_kick") return "free_kick";
   if (p.action === "header" || p.set_piece === "corner" || p.aerial_duel) return "header";
   if (p.shot_type === "empty_net") return "empty_net";
   if (p.shot_type === "long_range") return "long_range";
+  if (isCross(e)) return unit(event, 3) < 0.6 ? "header" : "volley";
   return "shot";
 }
 
@@ -94,6 +107,7 @@ export function shotProfile(finish: FinishKind, event: number): { h0: number; h1
     case "penalty": return { h0: BALL_R, h1: lerp(0.25, 1.7, r), lift: 0.1 };
     case "free_kick": return { h0: BALL_R, h1: lerp(1.3, 2.15, r), lift: 2.3 };
     case "header": return { h0: HEAD_H, h1: lerp(0.3, 1.4, r), lift: 0 };
+    case "volley": return { h0: VOLLEY_H, h1: lerp(0.3, 1.9, r), lift: 0.1 };
     case "long_range": return { h0: BALL_R, h1: lerp(0.8, 2.15, r), lift: 0.9 };
     case "empty_net": return { h0: BALL_R, h1: BALL_R, lift: 0 };
     default: return { h0: BALL_R, h1: lerp(0.15, 1.5, r), lift: 0.25 };
@@ -107,9 +121,12 @@ function buildFlights(tl: Timeline, replay: CareerReplay, ep: Omit<GoalEpisode, 
   const flights: Flight[] = [];
   const { shot, goal, f0, f1, scorer, finish, event } = ep;
   const passes = replay.passes.filter(([p0, p1]) => p0 >= f0 && p1 <= shot);
-  // A header: the last ball to the scorer is a cross that meets his head
-  // when he strikes it (it absorbs the frames he "holds" it in 2D).
-  const cross = finish === "header" && scorer !== null
+  // A header or a volley: the last ball to the scorer is a cross in the
+  // air that meets his head / foot when he strikes it (it absorbs the
+  // frames he "holds" it in 2D), so it never runs along the grass first.
+  const aerial = finish === "header" || finish === "volley";
+  const meet = finish === "header" ? HEAD_H : VOLLEY_H;
+  const cross = aerial && scorer !== null
     ? [...passes].reverse().find(([, , , to]) => to === scorer) ?? null
     : null;
   for (const pass of passes) {
@@ -117,7 +134,7 @@ function buildFlights(tl: Timeline, replay: CareerReplay, ep: Omit<GoalEpisode, 
     const a = groundBall(tl, p0);
     if (pass === cross) {
       const b = groundBall(tl, shot);
-      flights.push({ f0: p0, f1: shot, from: ground(a), to: ground(b, HEAD_H), lift: clamp(dist(a, b) * 0.13, 2.5, 6) });
+      flights.push({ f0: p0, f1: shot, from: ground(a), to: ground(b, meet), lift: clamp(dist(a, b) * 0.13, 2.5, 6) });
       continue;
     }
     const b = groundBall(tl, p1);
@@ -128,7 +145,7 @@ function buildFlights(tl: Timeline, replay: CareerReplay, ep: Omit<GoalEpisode, 
   }
   // The shot itself, then the ball settles in the net.
   const prof = shotProfile(finish, event);
-  if (finish === "header" && cross === null) prof.h0 = BALL_R; // no cross drawn: a volley off the grass
+  if (aerial && cross === null) prof.h0 = BALL_R; // no cross drawn: struck off the grass
   const s = groundBall(tl, shot);
   const g = ballAt(tl, goal);
   flights.push({ f0: shot, f1: goal, from: ground(s, prof.h0), to: ground(g, prof.h1), lift: prof.lift });
@@ -165,7 +182,7 @@ export function goalEpisodes(tl: Timeline, replay: CareerReplay, events: MatchEv
     const shot = Math.max(f0, goal - 2);
     const base = {
       event, side: e.team, minute: e.minute, f0, f1, shot, goal,
-      scorer: holderAt(tl, shot), finish: finishKind(e), msPerFrame: ms || 500,
+      scorer: holderAt(tl, shot), finish: finishKind(e, event), msPerFrame: ms || 500,
     } as const;
     out.push({ ...base, flights: buildFlights(tl, replay, base) });
   });

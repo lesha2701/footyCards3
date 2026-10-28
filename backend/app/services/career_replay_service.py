@@ -438,15 +438,37 @@ def _goal_mouth(d: Director, side: str, wide: bool = False) -> tuple[float, floa
     return to_pitch(side, u, LENGTH)
 
 
-def _shoot_spot(d: Director, side: str, shot_type: str) -> tuple[float, float]:
+def _shoot_spot(d: Director, side: str, shot_type: str, cross: bool = False) -> tuple[float, float]:
+    """Where the finisher strikes from: 23-29 m out for a long-range shot,
+    6-11 m in front of goal after a cross, otherwise 7-18 m inside the box."""
     if shot_type == "long_range":
         return d.at(side, d.rng.uniform(22, 46), d.rng.uniform(76, 82))
-    return d.at(side, d.rng.uniform(25, 43), d.rng.uniform(88, 95))
+    if cross:
+        return d.at(side, d.rng.uniform(28, 40), d.rng.uniform(94, 99))
+    return d.at(side, d.rng.uniform(24, 44), d.rng.uniform(87, 98))
+
+
+def _own_v(d: Director, slot: int) -> float:
+    return to_own(d.slots[slot].side, *d.pos[slot])[1]
+
+
+def _arrive(d: Director, slot: int, spot: Optional[tuple]) -> None:
+    """The holder carries the ball on to `spot` at a run: the shot is struck
+    where the scene says, not wherever he got to."""
+    if spot is None:
+        d.hold(slot, 1)
+        return
+    for k in range(12):
+        if k >= 1 and math.hypot(d.pos[slot][0] - spot[0], d.pos[slot][1] - spot[1]) < 1.5:
+            break
+        d.hold(slot, 1, run_to=spot, speed=8.0)
 
 
 def _build_up(d: Director, side: str, e: dict, detail: int) -> tuple[int, Optional[int]]:
     """Moves the ball from midfield to the finisher. Returns (finisher slot,
-    final passer slot or None)."""
+    final passer slot or None). The finisher starts his run into the box at
+    once and strikes only once he gets to his spot; passes go forwards or
+    square, never back to a man behind the ball for no reason."""
     p = _payload(e)
     etype = e.get("event_type")
     counter = p.get("origin") == "counter" or p.get("shot_type") == "empty_net"
@@ -461,6 +483,10 @@ def _build_up(d: Director, side: str, e: dict, detail: int) -> tuple[int, Option
         if p.get("assist") or p.get("action") == "pass":
             passer = d.find(side, p.get("assist"), p.get("assist_id"), ("MID", "FWD"), exclude=(finisher,))
     used = {finisher} | ({passer} if passer is not None else set())
+    cross = wing and passer is not None and p.get("shot_type") == "in_box"
+    spot = None if etype == "pass_failed" else _shoot_spot(d, side, p.get("shot_type", "in_box"), cross)
+    if spot is not None:
+        d.ov[finisher] = (*spot, 7.0)
 
     # The first carrier wins / receives the ball deep (counter) or in midfield.
     if counter:
@@ -473,9 +499,8 @@ def _build_up(d: Director, side: str, e: dict, detail: int) -> tuple[int, Option
                   frames=3, speed=8.5)
         d.hold(target, 3, run_to=d.at(side, d.to_u(target), 84), speed=8.0)
         if target != finisher:
-            spot = _shoot_spot(d, side, p.get("shot_type", "in_box"))
             d.pass_to(target, finisher, run_to=spot, speed=8.0)
-            d.hold(finisher, 1, run_to=spot)
+        _arrive(d, finisher, spot)
         return finisher, passer
 
     mids = [i for i in d.side_slots(side, ("MID",)) if i not in used] or d.side_slots(side, ("DEF",))
@@ -484,28 +509,34 @@ def _build_up(d: Director, side: str, e: dict, detail: int) -> tuple[int, Option
     d.kick(d.pos[first], 2)
     d.hold(first, 3, run_to=d.at(side, d.to_u(first), d.rng.uniform(42, 50)))
     carrier = first
-    chain = [i for i in d.side_slots(side, ("MID", "FWD")) if i not in used and i != first]
-    d.rng.shuffle(chain)
-    for nxt in chain[:max(0, detail - 2)]:
+    pool = [i for i in d.side_slots(side, ("MID", "FWD")) if i not in used and i != first]
+    for _ in range(max(0, detail - 2)):
+        if not pool:
+            break
+        cur = _own_v(d, carrier)
+        ahead = [i for i in pool if _own_v(d, i) >= cur - 2.0]
+        nxt = d.rng.choice(ahead or pool)
+        pool.remove(nxt)
         u = flank if wing and d.rng.random() < 0.6 else d.rng.uniform(18, 50)
-        d.pass_to(carrier, nxt, run_to=d.at(side, u, d.rng.uniform(56, 68)))
-        d.hold(nxt, 2, run_to=d.at(side, u, d.rng.uniform(66, 74)))
+        v = min(74.0, cur + d.rng.uniform(6, 12))
+        d.pass_to(carrier, nxt, run_to=d.at(side, u, v))
+        d.hold(nxt, 2, run_to=d.at(side, u, min(78.0, v + d.rng.uniform(3, 7))))
         carrier = nxt
     if passer is not None:
-        cross = wing and p.get("shot_type") == "in_box"
-        spot = d.at(side, flank, d.rng.uniform(84, 92)) if cross else d.at(side, d.rng.uniform(20, 48), 76)
-        d.pass_to(carrier, passer, run_to=spot)
-        d.hold(passer, 2, run_to=spot)
+        cur = _own_v(d, carrier)
+        assist_spot = (d.at(side, flank, d.rng.uniform(84, 92)) if cross
+                       else d.at(side, d.rng.uniform(20, 48), max(74.0, min(80.0, cur + 6))))
+        d.pass_to(carrier, passer, run_to=assist_spot)
+        d.hold(passer, 2, run_to=assist_spot)
         carrier = passer
     if etype == "pass_failed":
         if carrier != finisher:
             d.pass_to(carrier, finisher, run_to=d.at(side, d.rng.uniform(20, 48), 74))
         d.hold(finisher, 2, run_to=d.at(side, d.to_u(finisher), 80))
         return finisher, None
-    spot = _shoot_spot(d, side, p.get("shot_type", "in_box"))
     if carrier != finisher:
         d.pass_to(carrier, finisher, run_to=spot, speed=8.0)
-    d.hold(finisher, 2, run_to=spot, speed=6.0)
+    _arrive(d, finisher, spot)
     return finisher, passer
 
 
@@ -851,7 +882,7 @@ def _subs_before(events: list[dict], minute: int) -> list[tuple[int, dict]]:
 
 
 def _build_half(seed: int, half: int, events: list[dict], lineups: dict, start_frame: int,
-                detail: int, bridge_frames: int) -> tuple[Director, list, list]:
+                detail: int, bridge_frames: int, moment_ms: int = EPISODE_MS) -> tuple[Director, list, list]:
     players, roster, sides = _initial_players(lineups)
     rng = random.Random(seed * 2 + half)
     d = Director(rng=rng, sides=sides, players=players, roster=roster, start_frame=start_frame)
@@ -903,7 +934,7 @@ def _build_half(seed: int, half: int, events: list[dict], lineups: dict, start_f
             d.end(seg)
             continue
         kind = "goal" if any(e.get("event_type") == "goal" for _, e in group) else "moment"
-        seg = d.begin(kind, t0)
+        seg = d.begin(kind, t0, EPISODE_MS if kind == "goal" else moment_ms)
         _episode(d, group, detail)
         d.end(seg)
     if end_clock - d.t >= 3.0:
@@ -926,24 +957,25 @@ def _real_seconds(d: Director) -> float:
     return sum(s.n * s.ms for s in d.segments) / 1000
 
 
-# Detail / bridge length variants, from the fullest show to the shortest.
-VARIANTS = ((4, 8), (4, 6), (3, 5), (2, 4), (2, 2))
-LONG_VARIANTS = ((4, 14), (4, 22))
+# Detail / bridge length / ms per frame of a moment without a goal, from the
+# fullest show to the shortest; goals always run in real time.
+VARIANTS = ((4, 8, 500), (4, 6, 500), (3, 5, 500), (2, 4, 500), (2, 2, 500), (2, 2, 400), (2, 2, 320))
+LONG_VARIANTS = ((4, 14, 500), (4, 22, 500))
 
 
 def _half(seed: int, half: int, events: list[dict], lineups: dict, start_frame: int):
     lo, hi = HALF_BUDGET_S
     best = None
-    for detail, bridges in VARIANTS:
-        built = _build_half(seed, half, events, lineups, start_frame, detail, bridges)
+    for detail, bridges, moment_ms in VARIANTS:
+        built = _build_half(seed, half, events, lineups, start_frame, detail, bridges, moment_ms)
         secs = _real_seconds(built[0])
         if best is None or abs(secs - (lo + hi) / 2) < abs(best[1] - (lo + hi) / 2):
             best = (built, secs)
         if secs <= hi:
             if secs >= lo:
                 return built
-            for detail2, bridges2 in LONG_VARIANTS:  # a quiet half: longer bridges
-                longer = _build_half(seed, half, events, lineups, start_frame, detail2, bridges2)
+            for detail2, bridges2, ms2 in LONG_VARIANTS:  # a quiet half: longer bridges
+                longer = _build_half(seed, half, events, lineups, start_frame, detail2, bridges2, ms2)
                 if _real_seconds(longer[0]) <= hi:
                     built = longer
             return built

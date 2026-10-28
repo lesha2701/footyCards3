@@ -20,6 +20,7 @@ events = [
   {"minute": 52, "event_type": "goal", "team": "b", "payload": {"action": "penalty", "is_penalty": True, "set_piece": "penalty", "shooter": B("FWD2")}},
   {"minute": 70, "event_type": "goal", "team": "a", "payload": {"shot_type": "in_box", "action": "shoot", "shooter": A("FWD1"), "origin": "counter"}},
   {"minute": 70, "event_type": "goal", "team": "b", "payload": {"shot_type": "in_box", "action": "shoot", "shooter": B("FWD1")}},
+  {"minute": 80, "event_type": "goal", "team": "b", "payload": {"shot_type": "in_box", "action": "pass", "shooter": B("FWD2"), "assist": B("MID1"), "zone": "wing_attack"}},
   {"minute": 89, "event_type": "goal", "team": "a", "payload": {"shot_type": "empty_net", "shooter": A("FWD3")}},
 ]
 for e in events:

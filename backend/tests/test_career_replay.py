@@ -237,3 +237,29 @@ def test_the_ball_reaches_a_new_holder_instead_of_jumping_to_him():
             assert ((bx - px) ** 2 + (by - py) ** 2) ** 0.5 <= 9.0, (seed, f)
             received += 1
     assert received > 100
+
+
+def test_shots_are_struck_from_where_the_event_says():
+    """A goal from inside the box is struck inside it (the finisher makes his
+    run first), a long-range one from 20-32 m."""
+    seen = {"in_box": 0, "long_range": 0}
+    for seed in range(10):
+        match, lineups = _played(700 + seed)
+        rep = replay.build_replay(seed, match.event_log, lineups)
+        frames = replay.decode_frames(rep)
+        marks = {ev: frame for frame, ev in rep["marks"]}
+        for idx, e in enumerate(match.event_log):
+            p = e.get("payload") or {}
+            if e["event_type"] != "goal" or p.get("set_piece") or p.get("is_penalty"):
+                continue
+            kind = p.get("shot_type")
+            if kind not in seen:
+                continue
+            bx, by = frames[marks[idx] - 2]["ball"]
+            out = replay.LENGTH - by if e["team"] == "a" else by
+            if kind == "long_range":
+                assert 20.0 <= out <= 32.0, (seed, idx, out)
+            else:
+                assert out <= 20.5, (seed, idx, out)
+            seen[kind] += 1
+    assert seen["in_box"] > 3

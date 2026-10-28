@@ -18,7 +18,7 @@ const MODES: { value: CameraMode; label: string }[] = [
 ];
 
 const FINISH_LABEL: Record<GoalEpisode["finish"], string> = {
-  shot: "удар", long_range: "дальний удар", header: "головой", free_kick: "штрафной",
+  shot: "удар", long_range: "дальний удар", header: "головой", volley: "с лёта", free_kick: "штрафной",
   penalty: "пенальти", empty_net: "в пустые ворота",
 };
 
