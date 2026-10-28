@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import ErrorBoundary from "@/components/common/ErrorBoundary";
 import FreeKickScene3D, { type LiveShot } from "@/components/freeKick3d/FreeKickScene3D";
-import { chooseKickStyle } from "@/lib/freeKick3d/fx";
 import { playFreeKickSfx } from "@/lib/freeKick3d/sfx";
 import { swipeFromPoints, type SwipePoint } from "@/lib/freeKick3d/swipe";
 import {
@@ -90,7 +89,7 @@ export default function FreeKick3DPage() {
     const kick = swipeToKick(setup, quantizeSwipe(swipe));
     shotCounter.current += 1;
     haptic("medium");
-    setShot({ id: shotCounter.current, kick, trajectory: simulateShot(setup, kick), style: chooseKickStyle(kick) });
+    setShot({ id: shotCounter.current, kick, trajectory: simulateShot(setup, kick) });
   };
 
   const speedKmh = shot ? Math.round(Math.hypot(shot.kick.velocity.x, shot.kick.velocity.y, shot.kick.velocity.z) * 3.6) : 0;
@@ -99,7 +98,7 @@ export default function FreeKick3DPage() {
   return (
     <div className="fixed inset-0 select-none overflow-hidden bg-bg-base text-ink-chalk">
       {/* A 3D failure (WebGL, physics) restarts the scene, not the app. */}
-      <ErrorBoundary>
+      <ErrorBoundary fallback={(error, retry) => <SceneCrash error={error} retry={retry} />}>
         <FreeKickScene3D setup={setup} shot={shot} onDecided={onDecided} onReady={onReady} fpsRef={fpsRef} />
       </ErrorBoundary>
 
@@ -167,6 +166,24 @@ export default function FreeKick3DPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Prototype diagnostics: the scene failed — show what threw (the stack's
+ * first lines, so a phone screenshot is enough to find it) and restart. */
+function SceneCrash({ error, retry }: { error: Error; retry: () => void }) {
+  const stack = (error.stack ?? "").split("\n").slice(0, 6).join("\n");
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-base p-6 text-center">
+      <div className="font-display text-lg">Сцена упала</div>
+      <div className="text-sm text-ink-mist">{error.message}</div>
+      <pre className="max-h-48 w-full overflow-auto whitespace-pre-wrap break-all rounded-lg bg-bg-surface p-3 text-left text-micro text-ink-mist">
+        {stack}
+      </pre>
+      <button type="button" onClick={retry} className="rounded-xl bg-accent px-5 py-3 font-semibold text-black">
+        Перезапустить сцену
+      </button>
     </div>
   );
 }

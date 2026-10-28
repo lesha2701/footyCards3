@@ -7,14 +7,13 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 
-import type { KickStyle } from "@/lib/freeKick3d/fx";
 import { KEEPER_LINE_Z, type ShotSetup } from "@/lib/freeKick3d/trajectory";
 
-import { KICK_STYLES } from "./kickStyles";
+import { KICK } from "./kickStyles";
 
 export const FOOTBALLER_URL = "/free-kick-3d/footballer.glb";
 
-export type Clip = "idle" | "wall_jump" | "kick" | "strike" | "gk_idle" | "gk_dive_left" | "gk_dive_right" | "gk_catch" | "gk_fallen";
+export type Clip = "idle" | "wall_jump" | "kick" | "gk_idle" | "gk_dive_left" | "gk_dive_right" | "gk_catch" | "gk_fallen";
 
 export type Kit = { shirt: string; shorts: string; socks: string };
 
@@ -182,63 +181,35 @@ export function KeeperModel({
   );
 }
 
-/** Where the kicker's origin goes for a style so the toe (plus half a ball
- * ahead) is at the ball at contact; facing along `yaw`. */
-function kickOrigin(setup: ShotSetup, style: KickStyle, yaw: number) {
-  const toe = KICK_STYLES[style].toe.clone().add(new THREE.Vector3(0, 0, 0.12)).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-  return new THREE.Vector3(setup.ball.x - toe.x, 0, setup.ball.z - toe.z);
-}
-
-/** The kicker: waits at the curler's run-up mark, then runs in with the
- * kick the swipe chose (sliding over to the drive's line if needed while
- * he accelerates); the ball leaves at the clip's contact frame (shot time 0). */
-export function KickerModel({
-  setup,
-  clock,
-  style,
-  castShadow,
-}: {
-  setup: ShotSetup;
-  clock: PlayerClock;
-  /** The kick being taken, null while waiting. */
-  style: KickStyle | null;
-  castShadow: boolean;
-}) {
+/** The kicker: waits at his run-up mark, runs in on the swipe; the ball
+ * leaves at the clip's contact frame (shot time 0). */
+export function KickerModel({ setup, clock, kicking, castShadow }: { setup: ShotSetup; clock: PlayerClock; kicking: boolean; castShadow: boolean }) {
   const { model, mixer, actions } = useFootballer(KITS.home, castShadow);
-  const group = useRef<THREE.Group>(null);
-  const yaw = useMemo(() => {
+  const placement = useMemo(() => {
     const len = Math.hypot(setup.ball.x, setup.ball.z);
-    return Math.atan2(-setup.ball.x / len, -setup.ball.z / len);
+    const yaw = Math.atan2(-setup.ball.x / len, -setup.ball.z / len);
+    // Origin such that the toe (plus half a ball ahead) is at the ball at contact.
+    const toe = KICK.toe.clone().add(new THREE.Vector3(0, 0, 0.12)).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    return { yaw, x: setup.ball.x - toe.x, z: setup.ball.z - toe.z };
   }, [setup]);
-  const marks = useMemo(
-    () => ({ kick: kickOrigin(setup, "kick", yaw), strike: kickOrigin(setup, "strike", yaw) }),
-    [setup, yaw],
-  );
+
+  useEffect(() => {
+    const action = actions.kick;
+    action.reset();
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+    action.play();
+  }, [actions, setup]);
 
   useFrame(() => {
-    const g = group.current;
-    if (!g) return;
-    const current: KickStyle = style ?? "kick";
-    const other: KickStyle = current === "kick" ? "strike" : "kick";
-    const action = actions[current];
-    actions[other].stop();
-    if (!action.isRunning()) {
-      action.reset();
-      action.setLoop(THREE.LoopOnce, 1);
-      action.clampWhenFinished = true;
-      action.play();
-    }
-    const cfg = KICK_STYLES[current];
-    const t = style ? clock.t() : -Infinity;
+    const action = actions.kick;
     // Locked to the shot clock (slow motion included); frame 0 while waiting.
-    action.time = style ? THREE.MathUtils.clamp(cfg.contact + t, 0, action.getClip().duration) : 0;
-    const k = style ? THREE.MathUtils.smoothstep((t + cfg.lead) / cfg.lead, 0, 1) : 0;
-    g.position.lerpVectors(marks.kick, marks[current], k);
+    action.time = kicking ? THREE.MathUtils.clamp(KICK.contact + clock.t(), 0, action.getClip().duration) : 0;
     mixer.update(0);
   });
 
   return (
-    <group ref={group} position={marks.kick} rotation-y={yaw}>
+    <group position={[placement.x, 0, placement.z]} rotation-y={placement.yaw}>
       <primitive object={model} />
     </group>
   );

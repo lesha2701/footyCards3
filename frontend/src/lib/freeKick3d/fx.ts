@@ -1,7 +1,7 @@
 /** Presentation-only helpers for the 3D free kick: slow motion and where the
  * ball hits the net. They read a finished trajectory and never feed back
  * into it, so the outcome stays the pure function's alone. */
-import { BALL_RADIUS, GOAL_HALF_WIDTH, GOAL_HEIGHT, type KickParams, type ShotTrajectory } from "./trajectory";
+import { BALL_RADIUS, GOAL_HALF_WIDTH, GOAL_HEIGHT, type ShotTrajectory } from "./trajectory";
 
 export const NET_DEPTH = 2;
 
@@ -37,18 +37,6 @@ export function netBulge(dx: number, dy: number, age: number): number {
   if (age < 0 || age > 1.6) return 0;
   const falloff = Math.exp(-(dx * dx + dy * dy) / 0.35);
   return 0.55 * falloff * Math.exp(-age * 3.2) * Math.cos(age * 14);
-}
-
-export type KickStyle = "kick" | "strike";
-
-/** Side spin (rad/s) from which the kicker takes the curling run-up. */
-const CURL_STYLE_SPIN = 22;
-
-/** Which kick the kicker plays: a bent shot gets the angled run-up and an
- * instep curler (`kick`), anything straighter the straight-on drive
- * (`strike`). Presentation only — the ball's flight is already set. */
-export function chooseKickStyle(kick: KickParams): KickStyle {
-  return Math.abs(kick.spin.y) >= CURL_STYLE_SPIN ? "kick" : "strike";
 }
 
 /** Should the keeper move at all? Not for a shot the wall stops, nor for

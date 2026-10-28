@@ -13,7 +13,7 @@ import {
 import { Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import * as THREE from "three";
 
-import { NET_DEPTH, keeperGoesFor, netBulge, netImpact, replayTimeScale, type KickStyle } from "@/lib/freeKick3d/fx";
+import { NET_DEPTH, keeperGoesFor, netBulge, netImpact, replayTimeScale } from "@/lib/freeKick3d/fx";
 import { playFreeKickSfx } from "@/lib/freeKick3d/sfx";
 import {
   BALL_RADIUS,
@@ -33,12 +33,12 @@ import {
 } from "@/lib/freeKick3d/trajectory";
 
 import Confetti from "./Confetti";
-import { KICK_STYLES } from "./kickStyles";
+import { KICK } from "./kickStyles";
 import { KeeperModel, KickerModel, WallPlayerModel, type PlayerClock } from "./Players";
 import { Stadium, type Hype, type Quality } from "./Stadium";
 import { ballGeometry, netTexture } from "./textures";
 
-export type LiveShot = { id: number; kick: KickParams; trajectory: ShotTrajectory; style: KickStyle };
+export type LiveShot = { id: number; kick: KickParams; trajectory: ShotTrajectory };
 
 type Props = {
   setup: ShotSetup;
@@ -159,7 +159,7 @@ function ShotWorld({
   useEffect(() => {
     // A shot starts with the kicker's run-up: the ball leaves at t = 0.
     // The kick clip is cued so its contact frame lands on shot time 0.
-    stage.current.clock = { shotId: shot?.id ?? -1, t: shot ? -KICK_STYLES[shot.style].lead : -1, decided: false, decidedAt: 0 };
+    stage.current.clock = { shotId: shot?.id ?? -1, t: shot ? -KICK.lead : -1, decided: false, decidedAt: 0 };
     stage.current.ripple = null;
   }, [shot]);
   useEffect(onReady, [onReady]);
@@ -218,7 +218,7 @@ function ShotWorld({
         <AnimatedKeeper setup={setup} shot={shot} stage={stage} quality={quality} />
       </Suspense>
       <Suspense fallback={null}>
-        <KickerModel setup={setup} clock={playerClock(stage, shot)} style={shot?.style ?? null} castShadow={quality === "high"} />
+        <KickerModel setup={setup} clock={playerClock(stage, shot)} kicking={shot !== null} castShadow={quality === "high"} />
       </Suspense>
       <Ball setup={setup} shot={shot} stage={stage} quality={quality} />
       <CameraRig setup={setup} shot={shot} stage={stage} />

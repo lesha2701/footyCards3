@@ -76,7 +76,7 @@ export const POST_RADIUS = 0.06;
 export const WALL_DISTANCE = 9.15;
 export const WALL_PLAYER_RADIUS = 0.24;
 export const WALL_PLAYER_HEIGHT = 1.85;
-export const WALL_JUMP_HEIGHT = 0.32;
+export const WALL_JUMP_HEIGHT = 0.22;
 export const WALL_JUMP_DURATION = 0.5;
 export const KEEPER_LINE_Z = -0.4;
 export const KEEPER_HAND_RADIUS = 0.32;
@@ -98,13 +98,13 @@ const POST_RESTITUTION = 0.65;
 export const SIM_DT = 1 / 240;
 const MAX_TIME = 4;
 
-const MIN_SPEED = 12;
+const MIN_SPEED = 14;
 const MAX_SPEED = 34;
 const MAX_SPIN = 75;
 /** Side spin per unit of swipe bow (rad/s): a 0.1 bow is a clear curler. */
 const CURL_GAIN = 260;
 /** Lofted shots get topspin so they dip back under the bar. */
-const DIP_GAIN = 220;
+const DIP_GAIN = 180;
 const MAX_DIP = 40;
 
 // ---------------------------------------------------------------------------
@@ -193,7 +193,7 @@ export function swipeToKick(setup: ShotSetup, q: QuantizedSwipe): KickParams {
   const curve = clamp(q.curve / 1000, -0.5, 0.5);
   const length = Math.sqrt(dx * dx + up * up);
   const swipeSpeed = length / (q.durationMs / 1000); // viewport heights per second
-  const speed = clamp(MIN_SPEED + swipeSpeed * 6, MIN_SPEED, MAX_SPEED);
+  const speed = clamp(MIN_SPEED + swipeSpeed * 7, MIN_SPEED, MAX_SPEED);
 
   // Aim relative to the line ball → goal centre.
   const len = Math.sqrt(setup.ball.x * setup.ball.x + setup.ball.z * setup.ball.z);
@@ -204,7 +204,7 @@ export function swipeToKick(setup: ShotSetup, q: QuantizedSwipe): KickParams {
   const rz = fx;
 
   const yaw = clamp(dx / up, -0.8, 0.8) * 0.35;
-  const lift = clamp(0.16 + (up - 0.22) * 0.75, 0.02, 0.65);
+  const lift = clamp(0.2 + (up - 0.2) * 0.8, 0.02, 0.7);
 
   const dirX = fx + rx * yaw;
   const dirZ = fz + rz * yaw;
@@ -213,7 +213,7 @@ export function swipeToKick(setup: ShotSetup, q: QuantizedSwipe): KickParams {
   // Spin about the vertical axis: ω_y < 0 bends a ball flying to −z to +x.
   // Topspin is ω about the ball's "right" axis, pointing down the Magnus way.
   const side = clamp(-curve * CURL_GAIN, -MAX_SPIN, MAX_SPIN);
-  const dip = clamp((lift - 0.17) * DIP_GAIN, 0, MAX_DIP);
+  const dip = clamp((lift - 0.22) * DIP_GAIN, 0, MAX_DIP);
   const spin: Vec3 = { x: -rx * dip, y: side, z: -rz * dip };
   return { velocity, spin };
 }

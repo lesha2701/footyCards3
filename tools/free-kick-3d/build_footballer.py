@@ -56,7 +56,6 @@ CLIPS={
  'idle':'offensive idle',
  'wall_jump':'header soccerball',
  'kick':'soccer penalty kick',
- 'strike':'strike foward jog',
 }
 arm.animation_data_create()
 for clip,fname in CLIPS.items():
