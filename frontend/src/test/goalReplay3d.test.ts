@@ -9,17 +9,20 @@ import {
   HEAD_H,
   MAX_LEAD_FRAMES,
   SLOW_RATE,
+  FOOT,
   advance,
   ballState,
   cameraPose,
   episodeDuration,
   episodeRate,
   finishKind,
+  footBall,
   goalEpisodes,
+  groundBall,
   toWorld,
   type GoalEpisode,
 } from "@/lib/goalReplay3d";
-import { PITCH_L, PITCH_W, buildTimeline, holderAt, rosterAt, type MatchEventLite } from "@/lib/matchReplay";
+import { PITCH_L, PITCH_W, buildTimeline, holderAt, interpolatePlayer, rosterAt, type MatchEventLite } from "@/lib/matchReplay";
 
 import fixture from "./__fixtures__/career_goal_replay.json";
 
@@ -96,9 +99,10 @@ describe("goal episodes: the ball in 3D", () => {
     }
   });
 
-  it("matches the 2D key frames wherever the ball is on the ground", () => {
+  it("a loose ball on the grass is exactly where the 2D key frames have it", () => {
     for (const ep of episodes) {
       for (let f = ep.f0; f <= ep.goal; f++) {
+        if (holderAt(tl, f) !== null) continue;
         if (ep.flights.some((fl) => fl.f0 < f && f < fl.f1)) continue;
         const b = ballState(tl, ep, f);
         const raw = { x: (tl.bytes[f * tl.size] / 255) * PITCH_W, y: (tl.bytes[f * tl.size + 1] / 255) * PITCH_L };
@@ -106,6 +110,34 @@ describe("goal episodes: the ball in 3D", () => {
         expect(b.y).toBeCloseTo(raw.y, 5);
       }
     }
+  });
+
+  it("a held ball stays at the holder's feet between key frames; a pass arrives at the receiver's foot", () => {
+    let held = 0;
+    let received = 0;
+    for (const ep of episodes) {
+      for (let f = ep.f0; f < ep.shot; f++) {
+        const h = holderAt(tl, f);
+        if (h === null) continue;
+        const next = holderAt(tl, f + 1);
+        for (const frac of next === h ? [0, 0.25, 0.5, 0.75] : [0]) {
+          const p = interpolatePlayer(tl, f, frac, h);
+          const b = groundBall(tl, f + frac);
+          expect(Math.hypot(b.x - p.x, b.y - p.y)).toBeLessThanOrEqual(FOOT + 1e-6);
+          held += 1;
+        }
+        // The first frame a player has the ball: it is at his foot, not 0.9 m off.
+        const prev = holderAt(tl, f - 1);
+        if (prev !== h) {
+          const before = groundBall(tl, f - 0.001);
+          const at = footBall(tl, h, f);
+          expect(Math.hypot(before.x - at.x, before.y - at.y)).toBeLessThan(0.2);
+          received += 1;
+        }
+      }
+    }
+    expect(held).toBeGreaterThan(50);
+    expect(received).toBeGreaterThan(5);
   });
 
   it("moves continuously — no teleports at flight boundaries", () => {
