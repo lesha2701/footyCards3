@@ -1,8 +1,8 @@
 """«Штрафной 3D» replaces the old free kick: its own hourly cap of series,
 the series length and the coins per kick on game_config.
 
-Revision ID: 0211
-Revises: 0210
+Revision ID: 0212
+Revises: 0211
 Create Date: 2026-10-28
 """
 from typing import Sequence, Union
@@ -10,8 +10,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0211"
-down_revision: Union[str, None] = "0210"
+revision: str = "0212"
+down_revision: Union[str, None] = "0211"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
