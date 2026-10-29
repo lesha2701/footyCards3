@@ -52,6 +52,64 @@ export function pitchOverlayTexture() {
   return tex;
 }
 
+/** Across-the-line alpha for the pitch markings: the line fills the middle
+ * half of the strip, soft at its edges. With mipmaps a far-off line fades
+ * thinner instead of breaking into dashes (the canvas has no antialiasing,
+ * and a 12 cm line at a grazing angle is under a pixel). */
+export function lineProfileTexture() {
+  const [c, ctx] = canvas(64, 4);
+  const img = ctx.createImageData(c.width, c.height);
+  for (let x = 0; x < c.width; x++) {
+    const d = Math.abs((x + 0.5) / c.width - 0.5); // 0 centre … 0.5 strip edge
+    const a = Math.min(1, Math.max(0, (0.25 - d) / 0.04 + 0.5));
+    for (let y = 0; y < c.height; y++) {
+      const i = (y * c.width + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = Math.round(255 * a);
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 16;
+  return tex;
+}
+
+/** Flat strips on the ground (y = 0) along each polyline of world (x, z)
+ * points, `width` wide, each segment run on by width/2 so corners close.
+ * UV u goes across the strip (0..1), v along it in metres. */
+export function groundStripsGeometry(polylines: [number, number][][], width: number) {
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  for (const line of polylines) {
+    let along = 0;
+    for (let k = 0; k + 1 < line.length; k++) {
+      const [ax, az] = line[k];
+      const [bx, bz] = line[k + 1];
+      const len = Math.hypot(bx - ax, bz - az);
+      const dx = (bx - ax) / len;
+      const dz = (bz - az) / len;
+      const run = width / 4;
+      const [sx, sz, ex, ez] = [ax - dx * run, az - dz * run, bx + dx * run, bz + dz * run];
+      const nx = -dz * (width / 2);
+      const nz = dx * (width / 2);
+      const base = pos.length / 3;
+      pos.push(sx - nx, 0, sz - nz, sx + nx, 0, sz + nz, ex + nx, 0, ez + nz, ex - nx, 0, ez - nz);
+      uv.push(0, along, 1, along, 1, along + len, 0, along + len);
+      // Wound to face up (+y).
+      idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      along += len;
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return geo;
+}
+
 /** Metres of net one copy of `netTexture` covers (so every net surface can
  * repeat it to the same cell size). */
 export const NET_TILE = { w: 3.2, h: 1.6 };

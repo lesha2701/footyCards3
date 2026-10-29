@@ -1,9 +1,9 @@
 import { useTexture } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { Suspense, useLayoutEffect, useMemo, useRef, type MutableRefObject } from "react";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 
-import { PITCH_DEPTH, PITCH_WIDTH, PITCH_Z0, ledTexture, pitchOverlayTexture, skyTexture } from "./textures";
+import { PITCH_DEPTH, PITCH_WIDTH, PITCH_Z0, groundStripsGeometry, ledTexture, lineProfileTexture, pitchOverlayTexture, skyTexture } from "./textures";
 
 export type Quality = "high" | "low";
 
@@ -74,8 +74,8 @@ function Pitch({ quality }: { quality: Quality }) {
     <>
       <mesh rotation-x={-Math.PI / 2} position={PITCH_CENTER} receiveShadow={shadows}>
         <planeGeometry args={[PITCH_WIDTH, PITCH_DEPTH]} />
-        {/* Toned down a little: it's a night match under floodlights. */}
-        <meshLambertMaterial map={grass} color="#b8d8b4" />
+        {/* The tile is already a muted night green: only a touch of warmth off. */}
+        <meshLambertMaterial map={grass} color="#eafbe4" />
       </mesh>
       <mesh rotation-x={-Math.PI / 2} position={[PITCH_CENTER[0], 0.004, PITCH_CENTER[2]]} receiveShadow={shadows}>
         <planeGeometry args={[PITCH_WIDTH, PITCH_DEPTH]} />
@@ -93,37 +93,43 @@ const LINE_Y = 0.008;
 const PENALTY_ARC_ANGLE = Math.asin((16.5 - 11) / 9.15);
 
 function PitchLines({ quality }: { quality: Quality }) {
-  // [x, z, width along x, depth along z] of each straight line.
-  const strips: [number, number, number, number][] = [
-    [0, 0, PITCH_WIDTH, LINE_W],
-    ...[-20.16, 20.16].map((x): [number, number, number, number] => [x, 16.5 / 2, LINE_W, 16.5]),
-    [0, 16.5, 40.32 + LINE_W, LINE_W],
-    ...[-9.16, 9.16].map((x): [number, number, number, number] => [x, 5.5 / 2, LINE_W, 5.5]),
-    [0, 5.5, 18.32 + LINE_W, LINE_W],
-  ];
-  const material = (
-    <meshLambertMaterial color="#eef2ee" depthWrite={false} polygonOffset polygonOffsetFactor={-2} />
-  );
+  const profile = useMemo(lineProfileTexture, []);
+  const geometry = useMemo(() => {
+    const box = (hw: number, depth: number): [number, number][] => [
+      [-hw, 0],
+      [-hw, depth],
+      [hw, depth],
+      [hw, 0],
+    ];
+    // The D: the part of the 9.15 m circle round the spot outside the box.
+    const arc: [number, number][] = [];
+    for (let i = 0; i <= 48; i++) {
+      const a = PENALTY_ARC_ANGLE + (i / 48) * (Math.PI - 2 * PENALTY_ARC_ANGLE);
+      arc.push([9.15 * Math.cos(a), 11 + 9.15 * Math.sin(a)]);
+    }
+    // The strip is twice the line's width: the line is its middle half.
+    return groundStripsGeometry(
+      [[[-PITCH_WIDTH / 2, 0], [PITCH_WIDTH / 2, 0]], box(20.16, 16.5), box(9.16, 5.5), arc],
+      LINE_W * 2,
+    );
+  }, []);
+  useEffect(() => () => geometry.dispose(), [geometry]);
   const shadows = quality === "high";
   return (
-    <group>
-      {strips.map(([x, z, w, d]) => (
-        <mesh key={`${x},${z}`} rotation-x={-Math.PI / 2} position={[x, LINE_Y, z]} receiveShadow={shadows}>
-          <planeGeometry args={[w, d]} />
-          {material}
-        </mesh>
-      ))}
-      {/* The D: the part of the 9.15 m circle round the spot outside the box.
-          Rotated −90° about x, the ring's local −y is world +z. */}
-      <mesh rotation-x={-Math.PI / 2} position={[0, LINE_Y, 11]} receiveShadow={shadows}>
-        <ringGeometry
-          args={[9.15 - LINE_W / 2, 9.15 + LINE_W / 2, 64, 1, Math.PI + PENALTY_ARC_ANGLE, Math.PI - 2 * PENALTY_ARC_ANGLE]}
+    <group position-y={LINE_Y}>
+      <mesh geometry={geometry} receiveShadow={shadows}>
+        <meshLambertMaterial
+          color="#eef2ee"
+          alphaMap={profile}
+          transparent
+          depthWrite={false}
+          polygonOffset
+          polygonOffsetFactor={-2}
         />
-        {material}
       </mesh>
-      <mesh rotation-x={-Math.PI / 2} position={[0, LINE_Y, 11]} receiveShadow={shadows}>
+      <mesh rotation-x={-Math.PI / 2} position-z={11} receiveShadow={shadows}>
         <circleGeometry args={[0.15, 24]} />
-        {material}
+        <meshLambertMaterial color="#eef2ee" depthWrite={false} polygonOffset polygonOffsetFactor={-2} />
       </mesh>
     </group>
   );
