@@ -429,12 +429,21 @@ def _payload(e: dict) -> dict:
     return e.get("payload") or {}
 
 
-def _goal_mouth(d: Director, side: str, wide: bool = False) -> tuple[float, float]:
-    """Where a shot of `side` ends: inside the posts (± 3.66 m) or wide."""
+def _goal_mouth(d: Director, side: str, wide: bool = False, keeper: Optional[int] = None) -> tuple[float, float]:
+    """Where a shot of `side` ends: inside the posts (± 3.66 m) or wide. A
+    goal past a keeper (`keeper` = his slot) goes at least 1.5 m to one side
+    of him — a ball struck at the man would be his to catch."""
     if wide:
         u = WIDTH / 2 + d.rng.choice((-1, 1)) * d.rng.uniform(4.6, 8.5)
-    else:
+    elif keeper is None:
         u = WIDTH / 2 + d.rng.uniform(-2.9, 2.9)
+    else:
+        ku = to_own(side, *d.pos[keeper])[0]
+        lo, hi = WIDTH / 2 - 3.2, WIDTH / 2 + 3.2
+        sides = [(lo, ku - 1.5), (ku + 1.5, hi)]
+        sides = [(a, b) for a, b in sides if b - a > 0.3] or [(lo, hi)]
+        a, b = d.rng.choice(sides)
+        u = d.rng.uniform(a, b)
     return to_pitch(side, u, LENGTH)
 
 
@@ -575,7 +584,7 @@ def _finish_shot(d: Director, side: str, shooter: int, e: dict, idx: int) -> Non
     defending = _other(side)
     keeper = d.keeper(defending)
     if etype == "goal":
-        d.kick(_goal_mouth(d, side), 2)
+        d.kick(_goal_mouth(d, side, keeper=keeper), 2)
         d.mark(idx)
         _celebrate(d, side, shooter)
     elif etype == "save":
@@ -731,7 +740,7 @@ def _finish_set_piece_shot(d: Director, side: str, shooter: int, e: dict, idx: i
     d.holder = shooter
     d.tick()
     if e["event_type"] == "goal":
-        d.kick(_goal_mouth(d, side), 2)
+        d.kick(_goal_mouth(d, side, keeper=keeper), 2)
         d.mark(idx)
         d.ov.clear()
         d.limit = None

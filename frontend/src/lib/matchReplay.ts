@@ -133,8 +133,8 @@ export function interpolateBall(tl: Timeline, frame: number, frac: number): Poin
   return { x: lerp(a.x, b.x, frac), y: lerp(a.y, b.y, frac) };
 }
 
-/** How far in front of a player the ball he has sits (metres; backend DRIBBLE). */
-export const FOOT = 0.6;
+/** How far in front of a player the ball he has sits (metres): at his feet. */
+export const FOOT = 0.4;
 
 function playerPos(tl: Timeline, slot: number, t: number): Point {
   const f = Math.floor(t);

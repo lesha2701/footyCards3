@@ -234,7 +234,7 @@ export function toWorld(p: Point, flip: boolean): { x: number; z: number } {
     : { x: p.y - PITCH_L / 2, z: p.x - PITCH_W / 2 };
 }
 
-export type CameraMode = "tv" | "goal" | "top";
+export type CameraMode = "tv" | "goal" | "top" | "player";
 
 export interface CameraPose { pos: [number, number, number]; look: [number, number, number] }
 
@@ -244,6 +244,10 @@ export function cameraPose(mode: CameraMode, fx: number, fz: number, goalX: numb
   const dir = Math.sign(goalX) || 1;
   if (mode === "goal") {
     return { pos: [goalX + dir * 5, portrait ? 6 : 4.5, fz * 0.3], look: [fx, 0.8, fz] };
+  }
+  if (mode === "player") {
+    // Close on the scorer, from behind his shoulder towards the goal.
+    return { pos: [fx - dir * 8, portrait ? 4.5 : 3.2, fz + 5.5], look: [fx + dir * 2, 1, fz] };
   }
   if (mode === "top") {
     return { pos: [fx - dir * 6, portrait ? 62 : 44, fz + 14], look: [fx, 0, fz] };

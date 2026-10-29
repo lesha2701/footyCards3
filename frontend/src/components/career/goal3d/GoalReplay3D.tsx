@@ -15,6 +15,7 @@ const MODES: { value: CameraMode; label: string }[] = [
   { value: "tv", label: "ТВ" },
   { value: "goal", label: "За воротами" },
   { value: "top", label: "Сверху" },
+  { value: "player", label: "Автор" },
 ];
 
 const FINISH_LABEL: Record<GoalEpisode["finish"], string> = {
@@ -53,7 +54,9 @@ export default function GoalReplay3D({ data, tl, episodes, initial, onClose }: {
   const clock = useRef<ReplayClock>({ t: ep.f0, playing: true, ended: false });
   const barRef = useRef<HTMLDivElement | null>(null);
   const fpsRef = useRef<HTMLSpanElement | null>(null);
-  const showFps = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("fps");
+  const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const showFps = Boolean(params?.has("fps"));
+  const figuresParam = params?.get("figures") === "simple" ? "simple" : "skinned";
   const { replay, events } = data;
   const flip = data.my_side === "b";
 
@@ -119,6 +122,8 @@ export default function GoalReplay3D({ data, tl, episodes, initial, onClose }: {
         <GoalScene
           key={ep.event}
           tl={tl}
+          replay={replay}
+          figures={figuresParam}
           ep={ep}
           flip={flip}
           looks={looks}

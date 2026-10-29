@@ -4,7 +4,7 @@
  * episode's key frames (lib/goalReplay3d) once per rendered frame; React
  * never re-renders during playback. */
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
+import { Component, Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import * as THREE from "three";
 
 import {
@@ -19,8 +19,10 @@ import {
   type CameraMode,
   type GoalEpisode,
 } from "@/lib/goalReplay3d";
+import type { CareerReplay } from "@/api/career";
 import { PITCH_L, PITCH_W, SLOTS, interpolatePlayer, type Timeline } from "@/lib/matchReplay";
 
+import { SkinnedPlayers } from "./SkinnedPlayers";
 import { crowdTexture, netTexture, numberTexture, pitchTexture } from "./textures";
 
 export interface ReplayClock { t: number; playing: boolean; ended: boolean }
@@ -33,11 +35,16 @@ export interface SlotLook { kit: Kit; n: number; keeper: boolean }
 const STEP_S = 0.5;
 const HIP_Y = 0.9;
 const SHOULDER_Y = 1.47;
-const BALL_DRAW_R = BALL_R * 1.9; // bigger than life: readable on a phone screen
+const BALL_DRAW_R = BALL_R * 1.2; // a touch bigger than life, next to life-size players
 const SKIN = ["#f1c7a1", "#c98e62", "#8a5a3b"];
+
+/** "skinned": animated Mixamo footballers; "simple": the instanced low-poly
+ * figures (while the model loads, if it can't, or on a slow phone). */
+export type Figures = "skinned" | "simple";
 
 export interface SceneProps {
   tl: Timeline;
+  replay: CareerReplay;
   ep: GoalEpisode;
   flip: boolean;
   looks: SlotLook[];
@@ -47,10 +54,28 @@ export interface SceneProps {
   onProgress: (u: number) => void;
   onEnded: () => void;
   fpsRef?: MutableRefObject<HTMLSpanElement | null>;
+  /** Start with these figures (?figures=simple to compare). */
+  figures?: Figures;
+}
+
+/** Falls back to the simple figures if the model can't load or build. */
+class FigureBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: Error) {
+    console.warn("3D footballer model failed, simple figures instead:", error);
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
 }
 
 export function GoalScene(props: SceneProps) {
-  const { tl, ep, flip, looks, mode, clock, onProgress, onEnded, fpsRef } = props;
+  const { tl, replay, ep, flip, looks, mode, clock, onProgress, onEnded, fpsRef } = props;
+  const [figures, setFigures] = useState<Figures>(props.figures ?? "skinned");
+  const simple = <Players tl={tl} ep={ep} flip={flip} looks={looks} clock={clock} />;
   const goalX = toWorld({ x: PITCH_W / 2, y: ep.side === "a" ? PITCH_L : 0 }, flip).x;
   return (
     <>
@@ -62,10 +87,16 @@ export function GoalScene(props: SceneProps) {
       <Stadium />
       <Goal x={PITCH_L / 2} ep={ep} clock={clock} scored={goalX > 0} />
       <Goal x={-PITCH_L / 2} ep={ep} clock={clock} scored={goalX < 0} />
-      <Players tl={tl} ep={ep} flip={flip} looks={looks} clock={clock} />
+      {figures === "skinned" ? (
+        <FigureBoundary fallback={simple}>
+          <Suspense fallback={simple}>
+            <SkinnedPlayers tl={tl} replay={replay} ep={ep} flip={flip} looks={looks} clock={clock} />
+          </Suspense>
+        </FigureBoundary>
+      ) : simple}
       <Ball tl={tl} ep={ep} flip={flip} clock={clock} />
       <CameraRig tl={tl} ep={ep} flip={flip} mode={mode} clock={clock} goalX={goalX} />
-      <AdaptiveDpr fpsRef={fpsRef} />
+      <AdaptiveDpr fpsRef={fpsRef} onSlow={() => setFigures("simple")} />
     </>
   );
 }
@@ -86,10 +117,12 @@ function ClockDriver({ ep, clock, onProgress, onEnded }: Pick<SceneProps, "ep" |
   return null;
 }
 
-/** Halves the pixel ratio for good if the phone can't hold ~50 fps. */
-function AdaptiveDpr({ fpsRef }: { fpsRef?: MutableRefObject<HTMLSpanElement | null> }) {
+/** On a phone that can't hold ~50 fps: first the pixel ratio goes down to
+ * 1, then (below ~40 fps still) the animated models give way to the simple
+ * figures — for good, no flip-flopping. */
+function AdaptiveDpr({ fpsRef, onSlow }: { fpsRef?: MutableRefObject<HTMLSpanElement | null>; onSlow: () => void }) {
   const setDpr = useThree((s) => s.setDpr);
-  const acc = useRef({ n: 0, sum: 0, lowered: false });
+  const acc = useRef({ n: 0, sum: 0, lowered: false, slow: false, checks: 0 });
   useFrame((state, dt) => {
     const a = acc.current;
     a.n += 1;
@@ -97,10 +130,15 @@ function AdaptiveDpr({ fpsRef }: { fpsRef?: MutableRefObject<HTMLSpanElement | n
     if (a.n < 60) return;
     const fps = a.n / a.sum;
     if (fpsRef?.current) fpsRef.current.textContent = `${Math.round(fps)} fps`;
+    a.checks += 1;
     if (!a.lowered && fps < 50 && state.viewport.dpr > 1) {
       a.lowered = true;
       setDpr(1);
+    } else if (!a.slow && a.checks > 2 && fps < 40) {
+      a.slow = true;
+      onSlow();
     }
+    if (fpsRef?.current) fpsRef.current.dataset.fps = String(Math.round(fps));
     a.n = 0;
     a.sum = 0;
   });
@@ -422,7 +460,7 @@ function Ball({ tl, ep, flip, clock }: Pick<SceneProps, "tl" | "ep" | "flip" | "
 
 // --- camera -------------------------------------------------------------------------------
 
-const FOV: Record<CameraMode, [number, number]> = { tv: [30, 52], goal: [46, 66], top: [42, 56] };
+const FOV: Record<CameraMode, [number, number]> = { tv: [30, 52], goal: [46, 66], top: [42, 56], player: [38, 58] };
 
 function CameraRig({ tl, ep, flip, mode, clock, goalX }: Pick<SceneProps, "tl" | "ep" | "flip" | "mode" | "clock"> & { goalX: number }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
@@ -436,7 +474,7 @@ function CameraRig({ tl, ep, flip, mode, clock, goalX }: Pick<SceneProps, "tl" |
     const t = clock.current.t;
     const portrait = size.height > size.width;
     let target = toWorld(ballState(tl, ep, t), flip);
-    if (t > ep.goal + 1 && ep.scorer !== null) {
+    if (ep.scorer !== null && (mode === "player" || t > ep.goal + 1)) {
       const f = Math.floor(t);
       target = toWorld(interpolatePlayer(tl, f, t - f, ep.scorer), flip);
     }

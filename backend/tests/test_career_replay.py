@@ -263,3 +263,23 @@ def test_shots_are_struck_from_where_the_event_says():
                 assert out <= 20.5, (seed, idx, out)
             seen[kind] += 1
     assert seen["in_box"] > 3
+
+
+def test_goals_go_past_the_keeper_not_at_him():
+    """A goal crosses the line at least ~1.5 m to one side of the keeper."""
+    seen = 0
+    for seed in range(8):
+        match, lineups = _played(800 + seed)
+        rep = replay.build_replay(seed, match.event_log, lineups)
+        frames = replay.decode_frames(rep)
+        marks = {ev: frame for frame, ev in rep["marks"]}
+        for idx, e in enumerate(match.event_log):
+            if e["event_type"] != "goal" or (e.get("payload") or {}).get("shot_type") == "empty_net":
+                continue
+            frame = marks[idx]
+            keeper = 11 if e["team"] == "a" else 0
+            bx, _ = frames[frame]["ball"]
+            kx, _ = frames[frame - 2]["players"][keeper]
+            assert abs(bx - kx) >= 1.5 - replay.WIDTH / 255 - 0.6, (seed, idx, bx, kx)
+            seen += 1
+    assert seen > 5
