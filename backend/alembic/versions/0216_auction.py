@@ -2,8 +2,8 @@
 agents list lots), GameConfig settings, auction transaction and
 notification types.
 
-Revision ID: 0215
-Revises: 0214
+Revision ID: 0216
+Revises: 0215
 Create Date: 2026-10-29
 
 """
@@ -12,8 +12,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0215"
-down_revision: Union[str, None] = "0214"
+revision: str = "0216"
+down_revision: Union[str, None] = "0215"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

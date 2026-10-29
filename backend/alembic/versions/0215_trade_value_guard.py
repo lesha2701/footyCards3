@@ -11,8 +11,8 @@
 - GameConfig: «Проверенный аккаунт» bar for giving valuable cards, the
   equal-value rule and the card value table.
 
-Revision ID: 0214
-Revises: 0213
+Revision ID: 0215
+Revises: 0214
 Create Date: 2026-10-29
 """
 from typing import Sequence, Union
@@ -20,8 +20,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0214"
-down_revision: Union[str, None] = "0213"
+revision: str = "0215"
+down_revision: Union[str, None] = "0214"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
