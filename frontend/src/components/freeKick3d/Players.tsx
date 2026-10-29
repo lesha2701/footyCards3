@@ -10,7 +10,7 @@ import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js
 import { KEEPER_LINE_Z, type ShotSetup } from "@/lib/freeKick3d/trajectory";
 
 import { KICK } from "./kickStyles";
-import { KEEPER_LOOK, KICKER_LOOK, type Look } from "./looks";
+import { KEEPER_LOOK, KICKER_LOOK, LOOKS, type Look } from "./looks";
 
 export const FOOTBALLER_URL = "/free-kick-3d/footballer.glb";
 
@@ -212,8 +212,20 @@ export function KeeperModel({
 
 /** The kicker: waits at his run-up mark, runs in on the swipe; the ball
  * leaves at the clip's contact frame (shot time 0). */
-export function KickerModel({ setup, clock, kicking, castShadow }: { setup: ShotSetup; clock: PlayerClock; kicking: boolean; castShadow: boolean }) {
-  const { model, mixer, actions } = useFootballer(KITS.home, KICKER_LOOK, castShadow);
+export function KickerModel({
+  setup,
+  clock,
+  kicking,
+  kit = "home",
+  castShadow,
+}: {
+  setup: ShotSetup;
+  clock: PlayerClock;
+  kicking: boolean;
+  kit?: "home" | "away";
+  castShadow: boolean;
+}) {
+  const { model, mixer, actions } = useFootballer(kit === "away" ? KITS.away : KITS.home, kit === "away" ? LOOKS[3] : KICKER_LOOK, castShadow);
   const placement = useMemo(() => {
     const len = Math.hypot(setup.ball.x, setup.ball.z);
     const yaw = Math.atan2(-setup.ball.x / len, -setup.ball.z / len);

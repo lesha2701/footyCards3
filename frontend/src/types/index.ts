@@ -1695,6 +1695,33 @@ export interface FreeKick3DRefill {
   new_balance?: number | null;
 }
 
+/** A kick of the 3D penalty shootout: «player» shoots against the bot
+ * keeper (createPenaltySetup), «bot» shoots against the player's dive
+ * (penaltyBotShot + playerKeeperSetup) — exactly what the server replays. */
+export interface Penalty3DKick {
+  kick_index: number;
+  kicker: "player" | "bot";
+  seed: number;
+}
+
+export interface Penalty3DStartResult {
+  session_id: number;
+  rating: number;
+  kick: Penalty3DKick;
+}
+
+export interface Penalty3DResult {
+  kicker: "player" | "bot";
+  outcome: "goal" | "save" | "miss";
+  bot_kind: string | null;
+  player_score: number;
+  bot_score: number;
+  is_finished: boolean;
+  result: "win" | "loss" | null;
+  rating_delta: number | null;
+  next_kick: Penalty3DKick | null;
+}
+
 export interface FreeKickClaimResult {
   reward_coins: number;
   new_balance: number;

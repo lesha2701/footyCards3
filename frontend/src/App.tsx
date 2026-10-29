@@ -96,6 +96,7 @@ const MagnateRoomPage = lazy(() => import("@/pages/MagnateRoomPage"));
 const StrategoOpenChallengePage = lazy(() => import("@/pages/StrategoOpenChallengePage"));
 const SaboteurGamePage = lazy(() => import("@/pages/SaboteurGamePage"));
 const PenaltyGamePage = lazy(() => import("@/pages/PenaltyGamePage"));
+const Penalty3DPage = lazy(() => import("@/pages/Penalty3DPage"));
 const PenaltyMatchesPage = lazy(() => import("@/pages/PenaltyMatchesPage"));
 const PenaltyMatchPage = lazy(() => import("@/pages/PenaltyMatchPage"));
 const PenaltyOpenChallengePage = lazy(() => import("@/pages/PenaltyOpenChallengePage"));
@@ -316,6 +317,8 @@ export default function App() {
         <Route path="/play/stratego/open/:matchId" element={<StrategoOpenChallengePage />} />
         <Route path="/play/saboteur" element={<SaboteurGamePage />} />
         <Route path="/play/penalty" element={<PenaltyGamePage />} />
+        {/* The bot shootout in 3D (PvP stays on the classic pages). */}
+        <Route path="/play/penalty/3d" element={<Penalty3DPage />} />
         <Route path="/play/penalty/matches" element={<PenaltyMatchesPage />} />
         <Route path="/play/penalty/matches/search" element={<PenaltySearchRoute />} />
         <Route path="/play/penalty/matches/:matchId" element={<PenaltyMatchPage />} />

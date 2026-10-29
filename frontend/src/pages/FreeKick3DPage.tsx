@@ -16,7 +16,9 @@ import ErrorBoundary from "@/components/common/ErrorBoundary";
 import GameHero from "@/components/common/GameHero";
 import { IconCoin } from "@/components/icons";
 import FreeKickScene3D, { type LiveShot } from "@/components/freeKick3d/FreeKickScene3D";
+import SceneCrash from "@/components/freeKick3d/SceneCrash";
 import { formatGameError } from "@/lib/errors";
+import { useCrashLog } from "@/lib/freeKick3d/crashLog";
 import { crowdChant, crowdHush, crowdTension, playFreeKickSfx, startCrowd } from "@/lib/freeKick3d/sfx";
 import { swipeFromPoints, type SwipePoint } from "@/lib/freeKick3d/swipe";
 import {
@@ -477,56 +479,6 @@ function SeriesKick({
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-/** An error's message plus the top of its stack. */
-function describe(err: Error) {
-  return [err.message, ...(err.stack ?? "").split("\n").slice(1, 4)].join("\n");
-}
-
-/** Diagnostics: every error while the scene is open, in order — when it
- * crashes, the first one is the cause (later ones are often fallout from
- * tearing the 3D scene down). */
-function useCrashLog() {
-  const log = useRef<string[]>([]);
-  useEffect(() => {
-    const push = (e: unknown) => {
-      const err = e instanceof Error ? e : null;
-      const text = err ? describe(err) : String(e);
-      if (log.current.length < 8) log.current.push(text);
-    };
-    const onError = (e: ErrorEvent) => push(e.error ?? e.message);
-    const onRejection = (e: PromiseRejectionEvent) => push(e.reason);
-    const original = console.error;
-    console.error = (...args: unknown[]) => {
-      push(args.find((a) => a instanceof Error) ?? args.map(String).join(" "));
-      original(...args);
-    };
-    window.addEventListener("error", onError);
-    window.addEventListener("unhandledrejection", onRejection);
-    return () => {
-      console.error = original;
-      window.removeEventListener("error", onError);
-      window.removeEventListener("unhandledrejection", onRejection);
-    };
-  }, []);
-  return log;
-}
-
-/** The scene failed: what threw (all logged errors, first first) and a restart. */
-function SceneCrash({ error, retry, log }: { error: Error; retry: () => void; log: string[] }) {
-  const entries = log.length ? log : [describe(error)];
-  return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-base p-6 text-center">
-      <div className="font-display text-lg">Сцена упала</div>
-      <pre className="max-h-[55vh] w-full overflow-auto whitespace-pre-wrap break-all rounded-lg bg-bg-surface p-3 text-left text-micro text-ink-mist">
-        {entries.map((e, i) => `${i + 1}. ${e}`).join("\n\n")}
-      </pre>
-      <button type="button" onClick={retry} className="rounded-xl bg-accent px-5 py-3 font-semibold text-black">
-        Перезапустить сцену
-      </button>
     </div>
   );
 }

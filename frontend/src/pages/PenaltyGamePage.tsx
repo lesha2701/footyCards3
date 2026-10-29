@@ -182,7 +182,7 @@ export default function PenaltyGamePage() {
         )}
         <div className="flex gap-2">
           <button
-            onClick={() => setChoosingBot(true)}
+            onClick={() => navigate("/play/penalty/3d")}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95"
           >
             <IconPlay size={14} />
