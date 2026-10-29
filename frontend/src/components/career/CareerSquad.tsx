@@ -81,15 +81,17 @@ function energyText(energy: number): string {
   return energy < 30 ? "text-red-300" : energy < 60 ? "text-amber-300" : "text-accent-lime";
 }
 
-/** Energy bar under a card; `withValue` adds the % (bench, picker). */
-function EnergyBar({ entry, withValue = false }: { entry: CareerSquadCard; withValue?: boolean }) {
+/** Energy as a battery with its % under every card: the fill and the
+ * colour show the charge, the number says exactly how much is left. */
+function EnergyBar({ entry }: { entry: CareerSquadCard }) {
   const energy = energyOf(entry);
   return (
-    <span className="flex w-full items-center gap-0.5" title={`Энергия ${energy}%`}>
-      <span className="block h-[4px] flex-1 overflow-hidden rounded-full bg-white/10">
-        <span className={`block h-full rounded-full ${energyTone(energy)}`} style={{ width: `${energy}%` }} />
+    <span className="flex items-center justify-center gap-[3px]" title={`Энергия ${energy}%`} aria-label={`Энергия ${energy}%`}>
+      <span className="relative flex h-[9px] w-[17px] items-center rounded-[2.5px] border border-white/45 p-[1px]">
+        <span className={`block h-full rounded-[1px] ${energyTone(energy)}`} style={{ width: `${Math.max(8, energy)}%` }} />
+        <span className="absolute -right-[3px] top-1/2 h-[4px] w-[2px] -translate-y-1/2 rounded-r-sm bg-white/45" />
       </span>
-      {withValue && <span className={`font-mono text-[9px] font-bold leading-none ${energyText(energy)}`}>{energy}</span>}
+      <span className={`font-mono text-[10px] font-bold leading-none ${energyText(energy)}`}>{energy}%</span>
     </span>
   );
 }
@@ -193,7 +195,7 @@ function BenchCard({ entry, onClick, gain, selected, onPitch = false }: {
         </span>
       )}
       <CardFace info={info} entry={entry} width="w-full" compact position={info.position}>
-        <EnergyBar entry={entry} withValue />
+        <EnergyBar entry={entry} />
         {gain != null && gain !== 0 && (
           <span className={`font-mono text-micro font-bold leading-tight ${gain > 0 ? "text-accent-green" : "text-red-400"}`}>
             {gain > 0 ? `+${gain}` : gain} хим.
@@ -220,7 +222,7 @@ function BenchTile({ entry, onClick, selected }: { entry: CareerSquadCard; onCli
       }`}
     >
       <CardFace info={info} entry={entry} width="w-full" compact position={info.position}>
-        <EnergyBar entry={entry} withValue />
+        <EnergyBar entry={entry} />
       </CardFace>
     </button>
   );
@@ -232,13 +234,13 @@ function EnergyLegend() {
   return (
     <button onClick={() => setOpen((v) => !v)} className="-mt-1 flex flex-col gap-1 rounded-xl bg-white/5 px-3 py-2 text-left">
       <span className="flex items-center justify-between gap-2 text-micro">
-        <span className="font-semibold text-ink-chalk">⚡ Полоска под карточкой — энергия игрока</span>
+        <span className="font-semibold text-ink-chalk">🔋 Батарейка под карточкой — энергия игрока</span>
         <span className="text-ink-mist-dim">{open ? "▲" : "что это?"}</span>
       </span>
       <span className="flex items-center gap-3 text-micro text-ink-mist">
-        <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-accent-lime" />свежий</span>
-        <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-amber-400" />устал</span>
-        <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-red-400" />выжат</span>
+        <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-accent-lime" />60–100% свежий</span>
+        <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-amber-400" />30–59% устал</span>
+        <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-red-400" />&lt;30% выжат</span>
       </span>
       {open && (
         <span className="text-micro leading-snug text-ink-mist">
@@ -446,7 +448,7 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
             <button onClick={() => setBenchPick(null)} className="font-semibold text-ink-mist">Отмена</button>
           </p>
         ) : (
-          <p className="text-micro text-ink-mist-dim">Нажми на игрока запаса, потом на позицию на поле · цифра — энергия</p>
+          <p className="text-micro text-ink-mist-dim">Нажми на игрока запаса, потом на позицию на поле · 🔋 — энергия</p>
         )}
         <div className="-mx-1 flex snap-x gap-1.5 overflow-x-auto px-1 pb-1">
           {benchShown.map((entry) => (
