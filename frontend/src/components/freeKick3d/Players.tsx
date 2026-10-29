@@ -183,7 +183,10 @@ export function KeeperModel({
     const t = clock.t();
     const g = group.current;
     if (!g) return;
-    if (targetX === null || t < setup.keeper.reaction) {
+    // A dive that would only start as the ball arrives isn't played: he'd be
+    // flying about after the goal. He's beaten where he stands.
+    const tooLate = arrival - setup.keeper.reaction < 0.2;
+    if (targetX === null || tooLate || t < setup.keeper.reaction) {
       if (t < 0) play(state.current, actions, "gk_idle", { fade: 0.3 });
       g.position.x = setup.keeper.x;
     } else {
