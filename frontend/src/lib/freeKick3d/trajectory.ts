@@ -232,7 +232,7 @@ const PENALTY_AIM_SCALE = 1.5;
 /** A human can't start a dive sooner than this after the strike (s). */
 export const PENALTY_MIN_REACTION = 0.18;
 /** The player's own keeper: how fast the hands travel (m/s). */
-const PLAYER_KEEPER_SPEED = 7.2;
+const PLAYER_KEEPER_SPEED = 9;
 /** The player's keeper with no swipe stays in the middle and still goes for
  * a ball within his reach — a strike down the middle is saved by standing. */
 const PLAYER_KEEPER_STAND_REACTION = 0.25;
@@ -294,7 +294,7 @@ const BOT_KINDS: [BotShotKind, number][] = [
   ["low_corner", 28], ["side", 20], ["top_corner", 20], ["power", 12], ["chip", 7], ["wide", 8], ["over", 5],
 ];
 
-export function penaltyBotShot(seed: number, dive: QuantizedDive | null = null): { kind: BotShotKind; swipe: QuantizedSwipe } {
+export function penaltyBotShot(seed: number): { kind: BotShotKind; swipe: QuantizedSwipe } {
   const rnd = mulberry32((seed ^ 0x5bd1e995) >>> 0);
   const pick = rnd() * 100;
   const side = rnd() < 0.5 ? -1 : 1;
@@ -320,12 +320,10 @@ export function penaltyBotShot(seed: number, dive: QuantizedDive | null = null):
     wide: [lerp(120, 160, a), lerp(140, 200, b), lerp(140, 170, c)],
     over: [lerp(0, 60, a), lerp(290, 320, b), lerp(130, 160, c)],
   }[kind];
-  // A keeper who goes before the strike gets punished: the kicker sees him
-  // move and places it the other way.
-  const aimed = kind === "low_corner" || kind === "side" || kind === "top_corner";
-  const dir = aimed && dive && dive.reactionMs < 0 && dive.x * side > 0 ? -side : side;
-  // `|| 0`: a dead-centre strike is 0, not −0 (integers, as the server has them).
-  return { kind, swipe: { dx: dir * whole(dx) || 0, dy: -whole(dy), curve: 0, durationMs: whole(ms) } };
+  // The kicker has made up his mind: a keeper who goes early wins or loses
+  // his guess. `|| 0`: a dead-centre strike is 0, not −0 (integers, as the
+  // server has them).
+  return { kind, swipe: { dx: side * whole(dx) || 0, dy: -whole(dy), curve: 0, durationMs: whole(ms) } };
 }
 
 // ---------------------------------------------------------------------------

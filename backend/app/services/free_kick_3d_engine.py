@@ -60,7 +60,7 @@ CHIP_SPEED = 17
 PENALTY_LIFT_SCALE = 1.4
 PENALTY_AIM_SCALE = 1.5
 PENALTY_MIN_REACTION = 0.18
-PLAYER_KEEPER_SPEED = 7.2
+PLAYER_KEEPER_SPEED = 9
 PLAYER_KEEPER_STAND_REACTION = 0.25
 PLAYER_KEEPER_STAND_REACH = 1.0
 
@@ -225,7 +225,7 @@ _BOT_RANGES = {
 }
 
 
-def penalty_bot_shot(seed: int, dive: "Dive | None" = None) -> tuple[str, "Swipe"]:
+def penalty_bot_shot(seed: int) -> tuple[str, "Swipe"]:
     rnd = mulberry32(_u32(seed ^ 0x5BD1E995))
     pick = rnd() * 100
     side = -1 if rnd() < 0.5 else 1
@@ -240,9 +240,8 @@ def penalty_bot_shot(seed: int, dive: "Dive | None" = None) -> tuple[str, "Swipe
     (dx0, dx1), (dy0, dy1), (ms0, ms1) = _BOT_RANGES[kind]
     whole = lambda v: math.floor(v + 0.5)  # noqa: E731
     dx, dy, ms = _lerp(dx0, dx1, a), _lerp(dy0, dy1, b), _lerp(ms0, ms1, c)
-    aimed = kind in ("low_corner", "side", "top_corner")
-    direction = -side if aimed and dive is not None and dive.reaction_ms < 0 and dive.x * side > 0 else side
-    return kind, Swipe(direction * whole(dx), -whole(dy), 0, whole(ms))
+    # The kicker has made up his mind: an early keeper wins or loses his guess.
+    return kind, Swipe(side * whole(dx), -whole(dy), 0, whole(ms))
 
 
 @dataclass

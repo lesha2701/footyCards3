@@ -85,7 +85,7 @@ function compute() {
   const saves = [1, 2, 5, 12, 77, 345576453].flatMap((seed) =>
     dives.map((dive) => {
       const setup = playerKeeperSetup(seed, dive);
-      const { kind, swipe } = penaltyBotShot(seed, dive);
+      const { kind, swipe } = penaltyBotShot(seed);
       return { mode: "penalty_save", seed, dive, kind, swipe, ...summary(simulateShot(setup, swipeToKick(setup, swipe))) };
     }),
   );

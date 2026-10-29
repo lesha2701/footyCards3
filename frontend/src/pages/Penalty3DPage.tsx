@@ -44,6 +44,9 @@ const VERDICT: Record<Penalty3DKick["kicker"], Record<Penalty3DResult["outcome"]
 
 /** A swipe this long (px) is a dive; its direction is where the keeper goes. */
 const DIVE_SWIPE_PX = 28;
+/** The dive counts from when the finger started moving this far (px): the
+ * rest of the swipe is only telling which way. */
+const DIVE_START_PX = 6;
 /** Wait in goal before the bot runs up (ms). */
 const BOT_RUNUP_DELAY_MS = 1300;
 
@@ -95,8 +98,8 @@ export default function Penalty3DPage() {
         <GameHero game="penalty" title="Пенальти" />
         <p className="text-sm text-ink-mist">
           Серия пенальти с ботом: по пять ударов, потом до первого промаха. Бьёшь свайпом от мяча к воротам, а на
-          воротах свайпаешь, куда прыгать, в момент удара — раньше нельзя, бьющий увидит. Не трогаешь — вратарь стоит в
-          центре.
+          воротах свайпаешь, куда прыгать: после удара — реагируешь на мяч, раньше — угадываешь угол. Не трогаешь — вратарь
+          стоит в центре.
         </p>
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
         <CardPickerModal
@@ -258,6 +261,8 @@ function ShootoutKick({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const onReady = useCallback(() => setReady(true), []);
   const points = useRef<SwipePoint[]>([]);
+  // Shot time when the keeping finger started moving (null until it does).
+  const diveFrom = useRef<number | null>(null);
   const fpsRef = useRef<HTMLSpanElement | null>(null);
   const shotClock = useRef(-1);
   const crashLog = useCrashLog();
@@ -295,7 +300,7 @@ function ShootoutKick({
     if (!keeping || !ready || paused) return;
     const timer = window.setTimeout(() => {
       const s0 = playerKeeperSetup(kick.seed, null);
-      const bot = penaltyBotShot(kick.seed, null);
+      const bot = penaltyBotShot(kick.seed);
       const k = swipeToKick(s0, bot.swipe);
       setShot({ id: shotId, kick: k, trajectory: simulateShot(s0, k) });
       setShotKicker("bot");
@@ -354,6 +359,7 @@ function ShootoutKick({
       // Not every WebView lets a pointer be captured; the swipe still works.
     }
     points.current = [{ x: e.clientX, y: e.clientY, t: e.timeStamp }];
+    diveFrom.current = null;
     if (aiming) setTrail(points.current);
   };
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
@@ -362,17 +368,19 @@ function ShootoutKick({
       const p0 = points.current[0];
       const dx = e.clientX - p0.x;
       const dy = e.clientY - p0.y;
-      if (Math.hypot(dx, dy) < DIVE_SWIPE_PX) return;
-      // The dive starts the moment the swipe's direction is clear.
+      const moved = Math.hypot(dx, dy);
+      if (diveFrom.current === null && moved >= DIVE_START_PX) diveFrom.current = shotClock.current;
+      if (moved < DIVE_SWIPE_PX) return;
+      // The dive goes once the swipe's direction is clear, timed from when
+      // the finger set off.
       points.current = [];
-      const d = { ...diveTarget(dx, dy), reactionMs: Math.round(shotClock.current * 1000) };
+      const d = { ...diveTarget(dx, dy), reactionMs: Math.round((diveFrom.current ?? shotClock.current) * 1000) };
       haptic("medium");
       setDive(d);
       const s1 = playerKeeperSetup(kick.seed, d);
-      const bot = penaltyBotShot(kick.seed, d);
+      const bot = penaltyBotShot(kick.seed);
       const k = swipeToKick(s1, bot.swipe);
-      // Same shot id: the clock keeps running, only the keeper (and, for an
-      // early dive, the kicker's aim) changes.
+      // Same shot id: the clock keeps running, only the keeper changes.
       setShot({ id: shotId, kick: k, trajectory: simulateShot(s1, k) });
       return;
     }
@@ -481,7 +489,7 @@ function ShootoutKick({
       {ready && !paused && !outcome && (aiming || (keeping && !shot) || diving) && (
         <div className="pointer-events-none absolute inset-x-0 top-28 px-6 text-center text-sm text-ink-chalk/90 drop-shadow">
           {keeping
-            ? "Ты на воротах. В момент удара свайпни, куда прыгать. Не трогаешь — вратарь стоит в центре."
+            ? "Ты на воротах. Свайпни, куда прыгать: в момент удара — или заранее, угадав угол. Не трогаешь — стоишь в центре."
             : `Твой удар (${series.card.player.display_name}). Свайпни от мяча к воротам: в угол — надёжнее, длиннее — выше.`}
           {errorMsg && <div className="mt-2 text-red-300">{errorMsg}</div>}
         </div>

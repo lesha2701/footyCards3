@@ -422,7 +422,7 @@ async def save_3d(db: AsyncSession, user: User, session_id: int, dive: Penalty3D
     """The bot's penalty: its strike against the player's dive (or none)."""
     session, state, kick = await _lock_3d_kick(db, user, session_id, "bot")
     d = engine.Dive(dive.x, dive.y, dive.reaction_ms) if dive else None
-    kind, bot_swipe = engine.penalty_bot_shot(kick["seed"], d)
+    kind, bot_swipe = engine.penalty_bot_shot(kick["seed"])
     shot = engine.simulate_shot(engine.player_keeper_setup(kick["seed"], d), bot_swipe)
     outcome = "save" if shot.outcome == "save" else "goal" if shot.outcome == "goal" else "miss"
     return await _settle_3d(db, user, session, state, kick, outcome, kind)

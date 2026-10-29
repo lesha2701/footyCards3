@@ -67,7 +67,7 @@ async def test_a_shootout_is_replayed_kick_by_kick_and_paid(client, db_session, 
             dive = DIVE if i % 4 == 1 else None
             resp = await client.post(f"/api/v1/games/penalty-3d/{sid}/save", headers=headers, json={"dive": dive})
             d = engine.Dive(dive["x"], dive["y"], dive["reaction_ms"]) if dive else None
-            kind, bot_swipe = engine.penalty_bot_shot(kick["seed"], d)
+            kind, bot_swipe = engine.penalty_bot_shot(kick["seed"])
             shot = engine.simulate_shot(engine.player_keeper_setup(kick["seed"], d), bot_swipe)
             assert resp.json()["bot_kind"] == kind
         assert resp.status_code == 200, resp.text

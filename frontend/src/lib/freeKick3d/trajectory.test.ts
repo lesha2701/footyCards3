@@ -166,7 +166,7 @@ describe("the player's own keeper", () => {
   it("with no swipe stays in the middle: saves a strike down the middle, not a corner", () => {
     const seen = new Set<string>();
     for (let seed = 1; seed < 400; seed++) {
-      const { kind, swipe: q } = penaltyBotShot(seed, null);
+      const { kind, swipe: q } = penaltyBotShot(seed);
       if (kind !== "power" && kind !== "low_corner") continue;
       const setup = playerKeeperSetup(seed, null);
       expect(simulateShot(setup, swipeToKick(setup, q)).outcome).toBe(kind === "power" ? "save" : "goal");

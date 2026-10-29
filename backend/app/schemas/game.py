@@ -125,7 +125,7 @@ class PenaltyStatsOut(BaseModel):
 class Penalty3DKickOut(BaseModel):
     """The next kick of the shootout. «player» shoots: the scene is
     createPenaltySetup(seed, rating) and the bot keeps goal; «bot» shoots:
-    penaltyBotShot(seed, dive) against the player's dive."""
+    penaltyBotShot(seed) against the player's dive."""
     kick_index: int
     kicker: str  # player | bot
     seed: int

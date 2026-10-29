@@ -34,7 +34,7 @@ def _replay(case: dict):
         return simulate_shot(create_penalty_setup(case["seed"], case["rating"]), _swipe(case["swipe"]))
     d = case["dive"]
     dive = Dive(d["x"], d["y"], d["reactionMs"]) if d else None
-    kind, swipe = penalty_bot_shot(case["seed"], dive)
+    kind, swipe = penalty_bot_shot(case["seed"])
     assert kind == case["kind"]
     assert (swipe.dx, swipe.dy, swipe.curve, swipe.duration_ms) == tuple(case["swipe"].values())
     return simulate_shot(player_keeper_setup(case["seed"], dive), swipe)
@@ -70,16 +70,20 @@ def test_higher_rating_slows_the_keeper_a_little():
     assert create_setup(7, 75).wall == create_setup(7, 95).wall
 
 
-def test_a_dive_before_the_strike_is_punished():
-    # The kicker sees an early keeper go and places it the other way.
-    for seed in range(1, 200):
+def test_an_early_guess_into_the_right_corner_saves_it():
+    # The kicker has made up his mind: a keeper who goes early to the side
+    # it's going is there in time; the other side, he's beaten.
+    seen = 0
+    for seed in range(1, 300):
         kind, swipe = penalty_bot_shot(seed)
-        if kind not in ("low_corner", "side", "top_corner"):
+        if kind != "low_corner":
             continue
         side = 1 if swipe.dx > 0 else -1
-        _, early = penalty_bot_shot(seed, Dive(side * 2000, 800, -100))
-        _, on_time = penalty_bot_shot(seed, Dive(side * 2000, 800, 150))
-        assert early.dx == -swipe.dx and on_time.dx == swipe.dx
+        right = simulate_shot(player_keeper_setup(seed, Dive(side * 2600, 500, -150)), swipe).outcome
+        wrong = simulate_shot(player_keeper_setup(seed, Dive(-side * 2600, 500, -150)), swipe).outcome
+        assert (right, wrong) == ("save", "goal"), seed
+        seen += 1
+    assert seen > 10
 
 
 def test_a_keeper_who_stays_saves_down_the_middle_but_not_the_corners():
