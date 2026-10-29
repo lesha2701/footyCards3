@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { Suspense, useLayoutEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 
-import { PITCH_DEPTH, PITCH_WIDTH, PITCH_Z0, edgeFadeTexture, ledTexture, skyTexture } from "./textures";
+import { PITCH_DEPTH, PITCH_WIDTH, PITCH_Z0, ledTexture, pitchOverlayTexture, skyTexture } from "./textures";
 
 export type Quality = "high" | "low";
 
@@ -15,7 +15,6 @@ const ASSETS = {
   stands: "/free-kick-3d/stands.webp",
   fans: "/free-kick-3d/fans.webp",
   grass: "/free-kick-3d/grass.webp",
-  goalArea: "/free-kick-3d/goal-area.webp",
   led: "/free-kick-3d/led.webp",
 };
 
@@ -29,6 +28,7 @@ export function Stadium({ quality, hype }: { quality: Quality; hype: Hype }) {
       <Sky />
       <Suspense fallback={<PlainPitch quality={quality} />}>
         <Pitch quality={quality} />
+        <PitchLines quality={quality} />
         <Backdrop />
         <FanSection quality={quality} hype={hype} />
         <LedBoards hype={hype} />
@@ -58,16 +58,8 @@ function PlainPitch({ quality }: { quality: Quality }) {
   );
 }
 
-/** The painted goal end (goal-area.webp, a top-down picture: mowing stripes,
- * the six-yard box, the penalty area, the spot and the D) laid on the
- * ground at its real scale — 19.8 px a metre, the goal line 40 px from its
- * top edge, so the spot sits 11 m out — its edges fading into the tiled
- * grass that covers the rest of the pitch. */
-const GOAL_AREA_PX_PER_M = 19.8;
-const GOAL_AREA_SIZE = 1254 / GOAL_AREA_PX_PER_M;
-const GOAL_AREA_LINE_FROM_TOP = 40 / GOAL_AREA_PX_PER_M;
-
-/** Tiled grass photo for the whole pitch, with the painted goal end on top. */
+/** Tiled grass photo, plus a transparent layer on top with the mowing
+ * stripes and the markings (crisp at any distance, independent of the tile). */
 function Pitch({ quality }: { quality: Quality }) {
   const grass = useTexture(ASSETS.grass, (t) => {
     const tex = t as THREE.Texture;
@@ -76,12 +68,7 @@ function Pitch({ quality }: { quality: Quality }) {
     tex.anisotropy = 8;
     tex.colorSpace = THREE.SRGBColorSpace;
   });
-  const area = useTexture(ASSETS.goalArea, (t) => {
-    const tex = t as THREE.Texture;
-    tex.anisotropy = 8;
-    tex.colorSpace = THREE.SRGBColorSpace;
-  });
-  const fade = useMemo(edgeFadeTexture, []);
+  const overlay = useMemo(pitchOverlayTexture, []);
   const shadows = quality === "high";
   return (
     <>
@@ -90,23 +77,55 @@ function Pitch({ quality }: { quality: Quality }) {
         {/* Toned down a little: it's a night match under floodlights. */}
         <meshLambertMaterial map={grass} color="#b8d8b4" />
       </mesh>
-      <mesh
-        rotation-x={-Math.PI / 2}
-        position={[0, 0.004, -GOAL_AREA_LINE_FROM_TOP + GOAL_AREA_SIZE / 2]}
-        receiveShadow={shadows}
-      >
-        <planeGeometry args={[GOAL_AREA_SIZE, GOAL_AREA_SIZE]} />
-        <meshLambertMaterial
-          map={area}
-          alphaMap={fade}
-          color="#c4d8c0"
-          transparent
-          depthWrite={false}
-          polygonOffset
-          polygonOffsetFactor={-1}
-        />
+      <mesh rotation-x={-Math.PI / 2} position={[PITCH_CENTER[0], 0.004, PITCH_CENTER[2]]} receiveShadow={shadows}>
+        <planeGeometry args={[PITCH_WIDTH, PITCH_DEPTH]} />
+        <meshLambertMaterial map={overlay} transparent depthWrite={false} polygonOffset polygonOffsetFactor={-1} />
       </mesh>
     </>
+  );
+}
+
+/** The markings as flat geometry just above the grass: sharp at any
+ * distance (as a texture across the pitch they'd blur near the camera).
+ * The goal line runs along z = 0; the box opens towards +z (the kicker). */
+const LINE_W = 0.12;
+const LINE_Y = 0.008;
+const PENALTY_ARC_ANGLE = Math.asin((16.5 - 11) / 9.15);
+
+function PitchLines({ quality }: { quality: Quality }) {
+  // [x, z, width along x, depth along z] of each straight line.
+  const strips: [number, number, number, number][] = [
+    [0, 0, PITCH_WIDTH, LINE_W],
+    ...[-20.16, 20.16].map((x): [number, number, number, number] => [x, 16.5 / 2, LINE_W, 16.5]),
+    [0, 16.5, 40.32 + LINE_W, LINE_W],
+    ...[-9.16, 9.16].map((x): [number, number, number, number] => [x, 5.5 / 2, LINE_W, 5.5]),
+    [0, 5.5, 18.32 + LINE_W, LINE_W],
+  ];
+  const material = (
+    <meshLambertMaterial color="#eef2ee" depthWrite={false} polygonOffset polygonOffsetFactor={-2} />
+  );
+  const shadows = quality === "high";
+  return (
+    <group>
+      {strips.map(([x, z, w, d]) => (
+        <mesh key={`${x},${z}`} rotation-x={-Math.PI / 2} position={[x, LINE_Y, z]} receiveShadow={shadows}>
+          <planeGeometry args={[w, d]} />
+          {material}
+        </mesh>
+      ))}
+      {/* The D: the part of the 9.15 m circle round the spot outside the box.
+          Rotated −90° about x, the ring's local −y is world +z. */}
+      <mesh rotation-x={-Math.PI / 2} position={[0, LINE_Y, 11]} receiveShadow={shadows}>
+        <ringGeometry
+          args={[9.15 - LINE_W / 2, 9.15 + LINE_W / 2, 64, 1, Math.PI + PENALTY_ARC_ANGLE, Math.PI - 2 * PENALTY_ARC_ANGLE]}
+        />
+        {material}
+      </mesh>
+      <mesh rotation-x={-Math.PI / 2} position={[0, LINE_Y, 11]} receiveShadow={shadows}>
+        <circleGeometry args={[0.15, 24]} />
+        {material}
+      </mesh>
+    </group>
   );
 }
 
