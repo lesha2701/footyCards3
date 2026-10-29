@@ -3,7 +3,6 @@ import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useRef, useState
 
 import { fetchCareerReplay, type CareerReplayResponse } from "@/api/career";
 import { Segmented } from "@/components/career/CareerTactics";
-import { IconSwap, IconTactics } from "@/components/icons";
 import { goalEpisodes } from "@/lib/goalReplay3d";
 import {
   PITCH_L,
@@ -43,11 +42,20 @@ const MOMENT_STYLE: Record<Moment["kind"], string> = {
  * commentary. Positions come from the backend's key frames; this only
  * interpolates them (requestAnimationFrame, attributes set directly so
  * React does not re-render 60 times a second). */
-export function ReplayPlayer({ data, onTactics, onSubs, footer }: {
+/** An extra tab under the pitch (the live break's substitutions and
+ * tactics); `badge` marks it, e.g. tired players waiting for a change. */
+export interface ReplayTab { key: string; label: string; badge?: string; content: ReactNode }
+
+const BASE_TABS: { key: string; label: string; badge?: string }[] = [
+  { key: "feed", label: "Лента" },
+  { key: "stats", label: "Статистика" },
+  { key: "lineups", label: "Составы" },
+];
+
+export function ReplayPlayer({ data, extraTabs, footer }: {
   data: CareerReplayResponse;
-  /** Live break: open the half-time orders (shown only when given). */
-  onTactics?: () => void;
-  onSubs?: () => void;
+  /** Tabs after the built-in ones (feed, stats, line-ups). */
+  extraTabs?: ReplayTab[];
   footer?: ReactNode;
 }) {
   const { replay, events } = data;
@@ -65,6 +73,7 @@ export function ReplayPlayer({ data, onTactics, onSubs, footer }: {
 
   const timeRef = useRef(0);
   const [frame, setFrame] = useState(0);
+  const [tab, setTab] = useState("feed");
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState("1");
   const playingRef = useRef(playing);
@@ -166,6 +175,7 @@ export function ReplayPlayer({ data, onTactics, onSubs, footer }: {
   const halfLabel = ended ? (replay.halves === 1 ? "Перерыв" : "Матч окончен") : half2 !== null && frame >= half2 ? "2-й тайм" : "1-й тайм";
   const homeKit = kitOf("a");
   const awayKit = kitOf("b");
+  const allTabs = [...BASE_TABS, ...(extraTabs ?? [])];
 
   return (
     <section className="flex flex-col gap-2 rounded-3xl bg-bg-surface p-3" aria-label="Матч в 2D">
@@ -294,24 +304,35 @@ export function ReplayPlayer({ data, onTactics, onSubs, footer }: {
           <Segmented label="Скорость" value={speed} options={SPEEDS.map((s) => ({ value: s, label: `x${s}` }))} onChange={setSpeed} />
         </div>
       </div>
-      {(onTactics || onSubs) && (
-        <div className="grid grid-cols-2 gap-2">
-          {onTactics && (
-            <button type="button" onClick={onTactics}
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-bg-raised px-2.5 py-2 text-caption font-semibold text-ink-chalk active:bg-white/5">
-              <IconTactics size={16} /> Тактика
-            </button>
-          )}
-          {onSubs && (
-            <button type="button" onClick={onSubs}
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-bg-raised px-2.5 py-2 text-caption font-semibold text-ink-chalk active:bg-white/5">
-              <IconSwap size={16} /> Замена
-            </button>
-          )}
-        </div>
-      )}
-
-      <Commentary events={events} shown={shown} home={data.home_name} away={data.away_name} replayable={has3d} onReplay={open3d} />
+      {/* Tabs instead of a long page: the feed, stats, line-ups (and the
+          live break's orders) under the pitch. */}
+      <div className="flex gap-1 overflow-x-auto rounded-2xl bg-bg-base/40 p-1" role="tablist" aria-label="Разделы матча">
+        {allTabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+            className={`min-w-fit flex-1 whitespace-nowrap rounded-xl px-1 py-1.5 text-micro font-semibold transition-colors min-[400px]:text-caption ${
+              tab === t.key ? "bg-bg-raised text-ink-chalk" : "text-ink-mist active:bg-white/5"}`}
+          >
+            {t.label}
+            {t.badge && <span className="ml-1 rounded-full bg-amber-300 px-1.5 text-micro font-bold text-bg-base">{t.badge}</span>}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" aria-label={allTabs.find((t) => t.key === tab)?.label}>
+        {tab === "feed" && (
+          <Commentary events={events} shown={shown} home={data.home_name} away={data.away_name} replayable={has3d} onReplay={open3d} />
+        )}
+        {tab === "stats" && (
+          <MatchStats events={events} shown={shown} possession={stats.possession} home={data.home_name} away={data.away_name}
+            homeKit={homeKit.fill} awayKit={awayKit.fill} />
+        )}
+        {tab === "lineups" && <Lineups data={data} roster={roster} home={homeKit.fill} away={awayKit.fill} />}
+        {extraTabs?.find((t) => t.key === tab)?.content}
+      </div>
       {footer}
       {replay3d !== null && (
         <Suspense fallback={
@@ -323,6 +344,97 @@ export function ReplayPlayer({ data, onTactics, onSubs, footer }: {
         </Suspense>
       )}
     </section>
+  );
+}
+
+type ReplayEvent = CareerReplayResponse["events"][number];
+
+/** Team stats of what has been shown so far. */
+function MatchStats({ events, shown, possession, home, away, homeKit, awayKit }: {
+  events: ReplayEvent[]; shown: number[]; possession: [number, number];
+  home: string; away: string; homeKit: string; awayKit: string;
+}) {
+  const count = (test: (e: ReplayEvent) => boolean): [number, number] => {
+    const out: [number, number] = [0, 0];
+    for (const idx of shown) {
+      const e = events[idx];
+      if (!e || (e.team !== "a" && e.team !== "b") || !test(e)) continue;
+      out[e.team === "a" ? 0 : 1] += 1;
+    }
+    return out;
+  };
+  const payload = (e: ReplayEvent) => (e.payload ?? {}) as Record<string, unknown>;
+  const rows: [string, [number, number]][] = [
+    ["Голы", count((e) => e.event_type === "goal")],
+    ["Удары", count((e) => ["goal", "shot", "save", "blocked"].includes(String(e.event_type)))],
+    ["В створ", count((e) => e.event_type === "goal" || e.event_type === "save")],
+    ["Угловые", count((e) => payload(e).set_piece === "corner")],
+    ["Отборы", count((e) => e.event_type === "tackle_won")],
+    ["Фолы", count((e) => e.event_type === "foul_stopped")],
+    ["Жёлтые", count((e) => payload(e).card === "yellow")],
+    ["Красные", count((e) => payload(e).card === "red")],
+  ];
+  return (
+    <div className="flex flex-col gap-1.5 rounded-2xl bg-bg-base/40 p-3 text-caption" aria-label="Статистика матча">
+      <div className="flex justify-between gap-2 text-micro text-ink-mist">
+        <span className="flex min-w-0 items-center gap-1 truncate"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: homeKit }} />{home}</span>
+        <span className="flex min-w-0 items-center gap-1 truncate">{away}<span className="h-2 w-2 shrink-0 rounded-full" style={{ background: awayKit }} /></span>
+      </div>
+      <StatRow label="Владение" a={possession[0]} b={possession[1]} suffix="%" homeKit={homeKit} awayKit={awayKit} />
+      {rows.map(([label, [a, b]]) => <StatRow key={label} label={label} a={a} b={b} homeKit={homeKit} awayKit={awayKit} />)}
+    </div>
+  );
+}
+
+function StatRow({ label, a, b, suffix = "", homeKit, awayKit }: {
+  label: string; a: number; b: number; suffix?: string; homeKit: string; awayKit: string;
+}) {
+  const total = a + b;
+  const share = total > 0 ? (a / total) * 100 : 50;
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex justify-between">
+        <span className="font-mono text-ink-chalk">{a}{suffix}</span>
+        <span className="text-ink-mist">{label}</span>
+        <span className="font-mono text-ink-chalk">{b}{suffix}</span>
+      </div>
+      <div className="flex h-1 overflow-hidden rounded-full bg-white/10">
+        <span className="h-full" style={{ width: `${share}%`, background: total ? homeKit : "transparent" }} />
+        <span className="h-full flex-1" style={{ background: total ? awayKit : "transparent" }} />
+      </div>
+    </div>
+  );
+}
+
+/** Who is on the pitch now (substitutes marked), both sides. */
+function Lineups({ data, roster, home, away }: {
+  data: CareerReplayResponse; roster: number[]; home: string; away: string;
+}) {
+  const { replay } = data;
+  const starters = new Set(replay.roster);
+  const side = (from: number, kit: string, name: string, formation: string) => (
+    <div className="flex min-w-0 flex-col gap-1">
+      <p className="flex items-center gap-1 truncate text-micro font-semibold text-ink-mist">
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: kit }} />
+        <span className="truncate">{name} · {formation}</span>
+      </p>
+      {roster.slice(from, from + 11).map((pi, k) => {
+        const p = replay.players[pi];
+        return (
+          <p key={k} className="flex items-center gap-1.5 text-caption text-ink-chalk">
+            <span className="w-5 shrink-0 text-right font-mono text-ink-mist">{p?.n ?? ""}</span>
+            <span className="min-w-0 flex-1 truncate">{p?.name ?? "—"}</span>
+            {!starters.has(pi) && <span className="text-accent-lime" title="Вышел на замену">↑</span>}
+          </p>
+        );
+      })}
+    </div>
+  );
+  return (
+    <div className="grid grid-cols-2 gap-3 rounded-2xl bg-bg-base/40 p-3" aria-label="Составы команд">
+      {side(0, home, data.home_name, replay.formations.a)}
+      {side(11, away, data.away_name, replay.formations.b)}
+    </div>
   );
 }
 
@@ -395,9 +507,10 @@ const Pitch = memo(function Pitch() {
 
 /** Fetches the replay of a league match and plays it; `fallback` (the old
  * text replay) renders when the match has no 2D record. */
-export function CareerMatchViewer({ seasonId, round, match, onTactics, onSubs, fallback, footer }: {
+export function CareerMatchViewer({ seasonId, round, match, extraTabs, fallback, footer }: {
   seasonId: number; round: number; match: number;
-  onTactics?: () => void; onSubs?: () => void;
+  /** Extra tabs (the live break's orders) — shown only while it's live. */
+  extraTabs?: ReplayTab[];
   fallback?: ReactNode; footer?: ReactNode;
 }) {
   const { data, isLoading, isError } = useQuery({
@@ -412,8 +525,7 @@ export function CareerMatchViewer({ seasonId, round, match, onTactics, onSubs, f
     <ReplayPlayer
       key={`${data.replay.count}-${data.live}`}
       data={data}
-      onTactics={data.live ? onTactics : undefined}
-      onSubs={data.live ? onSubs : undefined}
+      extraTabs={data.live ? extraTabs : undefined}
       footer={footer}
     />
   );

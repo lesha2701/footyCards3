@@ -31,6 +31,7 @@ import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconChevronRight, IconClock, IconCoin, IconTrophy, IconUsers } from "@/components/icons";
 import GameHero from "@/components/common/GameHero";
+import { EnergyBar } from "@/components/career/EnergyBar";
 import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
 import { formatGameError } from "@/lib/errors";
 import { CATEGORY_POSITIONS } from "@/lib/formation";
@@ -475,15 +476,6 @@ function RoundReport({ report }: { report: CareerRoundReport }) {
   );
 }
 
-function FatigueBar({ value }: { value: number }) {
-  const color = value > 70 ? "bg-red-400" : value > 40 ? "bg-amber-400" : "bg-accent-lime";
-  return (
-    <span className="block h-1 w-12 overflow-hidden rounded-full bg-white/10" title={`Усталость ${value}%`}>
-      <span className={`block h-full ${color}`} style={{ width: `${value}%` }} />
-    </span>
-  );
-}
-
 function LineupEditor({ season, onView, onError }: { season: CareerSeason } & Handlers) {
   const [slots, setSlots] = useState<Record<string, number>>(season.lineup);
   const [mentality, setMentality] = useState(season.mentality);
@@ -624,7 +616,7 @@ function SquadRow({ label, entry, onClick }: { label: string; entry?: CareerSqua
           травма · {entry.injured_rounds} т.
         </span>
       ) : entry ? (
-        <FatigueBar value={entry.fatigue} />
+        <EnergyBar fatigue={entry.fatigue} />
       ) : null}
     </button>
   );

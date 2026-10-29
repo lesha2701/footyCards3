@@ -5,6 +5,7 @@ import { setCareerLineup, type CareerSeason, type CareerSlot, type CareerSquadCa
 import { ChemistryDiamonds, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
 import { SquadBuilder } from "@/components/career/Offseason";
 import PitchBackground from "@/components/squad/PitchBackground";
+import { EnergyBar } from "@/components/career/EnergyBar";
 import { staticUrl } from "@/lib/api";
 import { chemistryGain, computeChemistry } from "@/lib/chemistry";
 import { CATEGORY_POSITIONS, onIdealPosition } from "@/lib/formation";
@@ -62,10 +63,6 @@ function infoOf(entry: CareerSquadCard | undefined): Info | null {
 
 function lineOf(position: string): "GK" | "DEF" | "MID" | "FWD" {
   return (Object.keys(CATEGORY_POSITIONS) as ("GK" | "DEF" | "MID" | "FWD")[]).find((c) => CATEGORY_POSITIONS[c].includes(position)) ?? "MID";
-}
-
-function fatigueTone(value: number): string {
-  return value > 70 ? "bg-red-400" : value > 40 ? "bg-amber-400" : "bg-accent-lime";
 }
 
 function isOut(entry: CareerSquadCard): boolean {
@@ -138,9 +135,7 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, 
         <CardFace info={info} entry={entry} width="w-[54px] min-[400px]:w-[60px]" compact position={info.position} offPosition={!!off}>
           {chemPoints && <ChemistryDiamonds points={chemPoints.points} max={chemMax} onPosition={chemPoints.on_position} />}
           {entry && (
-            <span className="block h-[3px] w-full overflow-hidden rounded-full bg-white/10" title={`Усталость ${entry.fatigue}%`}>
-              <span className={`block h-full ${fatigueTone(entry.fatigue)}`} style={{ width: `${entry.fatigue}%` }} />
-            </span>
+            <EnergyBar fatigue={entry.fatigue} thin />
           )}
         </CardFace>
       ) : (
@@ -162,9 +157,7 @@ function BenchCard({ entry, onClick, gain, selected }: { entry: CareerSquadCard;
       className={`relative flex min-w-0 flex-col items-center ${out ? "opacity-45 grayscale" : "active:scale-95"} ${selected ? "rounded-[12px] ring-2 ring-accent-lime" : ""}`}
     >
       <CardFace info={info} entry={entry} width="w-full" compact position={info.position}>
-        <span className="block h-[3px] w-full overflow-hidden rounded-full bg-white/10">
-          <span className={`block h-full ${fatigueTone(entry.fatigue)}`} style={{ width: `${entry.fatigue}%` }} />
-        </span>
+        <EnergyBar fatigue={entry.fatigue} thin />
         {gain != null && gain !== 0 && (
           <span className={`font-mono text-micro font-bold leading-tight ${gain > 0 ? "text-accent-green" : "text-red-400"}`}>
             {gain > 0 ? `+${gain}` : gain} хим.
@@ -191,9 +184,7 @@ function BenchTile({ entry, onClick, selected }: { entry: CareerSquadCard; onCli
       }`}
     >
       <CardFace info={info} entry={entry} width="w-full" compact position={info.position}>
-        <span className="block h-[3px] w-full overflow-hidden rounded-full bg-white/10">
-          <span className={`block h-full ${fatigueTone(entry.fatigue)}`} style={{ width: `${entry.fatigue}%` }} />
-        </span>
+        <EnergyBar fatigue={entry.fatigue} thin />
       </CardFace>
     </button>
   );

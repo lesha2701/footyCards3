@@ -179,13 +179,19 @@ describe("ReplayPlayer", () => {
     expect(screen.getByText(/Матч окончен/)).toBeInTheDocument();
   });
 
-  it("live break: tactics and substitution buttons open the half-time orders", () => {
-    let tactics = 0;
-    let subs = 0;
-    render(<ReplayPlayer data={{ ...data, live: true }} onTactics={() => { tactics += 1; }} onSubs={() => { subs += 1; }} />);
-    fireEvent.click(screen.getByText("Тактика"));
-    fireEvent.click(screen.getByText("Замена"));
-    expect([tactics, subs]).toEqual([1, 1]);
+  it("tabs under the pitch: feed, stats, line-ups and the live break's own tabs", () => {
+    render(<ReplayPlayer data={{ ...data, live: true }} extraTabs={[
+      { key: "subs", label: "Замены", badge: "2", content: <p>Панель замен</p> },
+    ]} />);
+    expect(screen.getByRole("tab", { name: "Лента" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("Комментарии")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Статистика" }));
+    expect(screen.getByLabelText("Статистика матча")).toHaveTextContent("Владение");
+    expect(screen.queryByLabelText("Комментарии")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Составы" }));
+    expect(screen.getByLabelText("Составы команд")).toHaveTextContent("P0");
+    fireEvent.click(screen.getByRole("tab", { name: /Замены/ }));
+    expect(screen.getByText("Панель замен")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Пауза"));
     expect(screen.getByLabelText("Смотреть")).toBeInTheDocument();
   });

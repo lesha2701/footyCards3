@@ -74,6 +74,25 @@ describe("LiveMatchCenter", () => {
     });
   });
 
+  it("one tap plans substitutions for the tired: the best-fitting fresh bench player", async () => {
+    setCareerHalftime.mockResolvedValue({});
+    wrap(<LiveMatchCenter live={{ ...live, bench: [player(51, "Кузнецов", "CM", 0), player(50, "Сидоров", "ST", 5)] }} catalog={catalog} {...handlers} />);
+    fireEvent.click(screen.getByRole("button", { name: /Заменить уставших \(1\)/ }));
+    expect(screen.getByText("↓ Иванов")).toBeInTheDocument();
+    expect(screen.getByText("↑ Сидоров")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Отдать указания" }));
+    await vi.waitFor(() => expect(setCareerHalftime).toHaveBeenCalled());
+    expect(setCareerHalftime.mock.calls[0][0].subs).toEqual([{ out: 1, in: 50 }]);
+  });
+
+  it("the bench opens under the player tapped, the same position first", () => {
+    wrap(<LiveMatchCenter live={{ ...live, bench: [player(51, "Кузнецов", "CM", 0), player(50, "Сидоров", "ST", 5)] }} catalog={catalog} {...handlers} />);
+    fireEvent.click(screen.getByRole("button", { name: /Петров/ }));
+    const options = within(screen.getByLabelText("Замена для Петров")).getAllByRole("button");
+    expect(options[0]).toHaveTextContent("Кузнецов");
+    expect(options[1]).toHaveTextContent("Сидоров");
+  });
+
   it("confirms saved orders", () => {
     wrap(<LiveMatchCenter live={{ ...live, orders: { mentality: null, tactic: {}, subs: [{ out: 1, in: 50 }] } }} catalog={catalog} {...handlers} />);
     expect(screen.getByText(/Указания приняты/)).toBeInTheDocument();
