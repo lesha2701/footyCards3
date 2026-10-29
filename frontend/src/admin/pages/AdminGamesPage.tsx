@@ -171,7 +171,6 @@ export default function AdminGamesPage() {
       | "trades_enabled"
       | "trade_coins_enabled"
       | "trade_cards_both_sides"
-      | "trade_verified_require_stars"
       | "club_war_enabled"
       | "blackjack_enabled"
       | "mordoboi_enabled"
@@ -959,9 +958,7 @@ export default function AdminGamesPage() {
         </p>
         <div className="mb-3 flex flex-col gap-2">
           {toggle("trade_coins_enabled", "Монеты в обменах (выкл — только «карточка на карточку»)")}
-          {toggle("trade_cards_both_sides", "Карточки обязательны с обеих сторон (без подарков в одну сторону)")}
-          {toggle("trade_verified_require_stars", "«Проверенный аккаунт»: нужна хотя бы одна покупка за ⭐")}
-        </div>
+          {toggle("trade_cards_both_sides", "Карточки обязательны с обеих сторон (без подарков в одну сторону)")}        </div>
         <div className="grid grid-cols-2 gap-3">
           {field("trade_send_min_account_age_days", "Мин. возраст аккаунта, дней")}
           {field("trade_send_min_active_days", "Мин. дней активности")}
@@ -995,14 +992,15 @@ export default function AdminGamesPage() {
         <p className="mb-3 text-xs text-slate-500">
           Ценные — легендарки, алмазы, «Академия» и лимитки (не выпадают из паков, тираж не больше limited_max_copies).
           Полученные бесплатно (награды, бесплатные паки, колесо, подарки) привязаны к аккаунту и в обмен не идут.
-          Отдавать остальные может только «Проверенный аккаунт» (возраст, дни активности и покупка за ⭐ — переключатель
-          выше). Равноценность: если дорогая сторона стоит не меньше порога, дешёвая должна стоить не меньше указанного
+          Отдавать остальные может только «Проверенный аккаунт»: возраст аккаунта и сумма покупок за ⭐ (дни
+          активности — по желанию: бот их просто выжидает, а покупки стоят ферме денег за каждый аккаунт). Равноценность: если дорогая сторона стоит не меньше порога, дешёвая должна стоить не меньше указанного
           процента от неё (0 — правило выключено). Ценность в монетах — по таблице ниже (у остальных карточек — цена
           продажи системе × sell_multiplier). Задания и бинго засчитывают не больше N обменов в день с одним игроком.
         </p>
         <div className="grid grid-cols-2 gap-3">
           {field("trade_verified_min_age_days", "Проверенный: возраст аккаунта, дней")}
-          {field("trade_verified_min_active_days", "Проверенный: дней активности")}
+          {field("trade_verified_min_active_days", "Проверенный: дней активности (0 — не нужно)")}
+          {field("trade_verified_min_stars", "Проверенный: потрачено ⭐ всего (0 — не нужно)")}
           {field("trade_min_value_ratio_pct", "Равноценность: мин. %")}
           {field("trade_value_check_min", "Равноценность: проверять от ценности")}
           {field("trade_progress_pair_daily", "Обменов с одним игроком в день для заданий")}

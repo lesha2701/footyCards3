@@ -870,9 +870,9 @@ class GameConfigOut(BaseModel):
     stake_max_coins: int = 500
     stake_pair_daily_limit: int = 2
     stake_daily_profit_cap: int = 2000
-    trade_verified_min_age_days: int = 14
-    trade_verified_min_active_days: int = 7
-    trade_verified_require_stars: bool = True
+    trade_verified_min_age_days: int = 3
+    trade_verified_min_active_days: int = 0
+    trade_verified_min_stars: int = 49
     trade_min_value_ratio_pct: int = 50
     trade_value_check_min: int = 2000
     trade_progress_pair_daily: int = 1
@@ -1547,7 +1547,7 @@ class GameConfigUpdate(BaseModel):
     stake_daily_profit_cap: Optional[int] = Field(default=None, ge=0)
     trade_verified_min_age_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_verified_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
-    trade_verified_require_stars: Optional[bool] = None
+    trade_verified_min_stars: Optional[int] = Field(default=None, ge=0, le=100_000)
     trade_min_value_ratio_pct: Optional[int] = Field(default=None, ge=0, le=100)
     trade_value_check_min: Optional[int] = Field(default=None, ge=0)
     trade_progress_pair_daily: Optional[int] = Field(default=None, ge=0, le=100)

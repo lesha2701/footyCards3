@@ -137,7 +137,7 @@ async def test_unverified_account_cannot_give_a_legendary(client, db_session, bo
     resp = await _offer(client, headers, main, [legend], [other])
     assert resp.status_code == 403
     assert resp.json()["error"]["details"]["rule"] == "trade_not_verified"
-    assert "покупка за ⭐" in resp.json()["error"]["message"]
+    assert "на 49⭐ всего (сейчас 0⭐)" in resp.json()["error"]["message"]
 
     rules = (await client.get(f"{API}/rules", headers=headers)).json()
     assert rules["verified"] is False and "Проверенный" in rules["verified_block_reason"]

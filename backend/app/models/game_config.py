@@ -1098,11 +1098,12 @@ class GameConfig(TimestampMixin, Base):
     stake_daily_profit_cap: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
     # Valuable cards (legendary, diamond, «Академия», limited —
     # card_value_service) may be given in a trade only by a «проверенный
-    # аккаунт»: this old, active on this many days, and (if required) at
-    # least one completed Stars purchase. 0 = no requirement.
-    trade_verified_min_age_days: Mapped[int] = mapped_column(Integer, default=14, nullable=False)
-    trade_verified_min_active_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
-    trade_verified_require_stars: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # аккаунт»: this old, active on this many days, and with at least this
+    # many Stars spent in total — the bar that costs a farm per account
+    # (age / activity a bot just waits out). 0 = no requirement.
+    trade_verified_min_age_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    trade_verified_min_active_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    trade_verified_min_stars: Mapped[int] = mapped_column(Integer, default=49, nullable=False)
     # Equal-value rule: once the dearer side is worth at least
     # trade_value_check_min, the cheaper side must be worth at least
     # trade_min_value_ratio_pct % of it (0 = rule off).

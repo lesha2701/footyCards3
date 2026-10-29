@@ -790,7 +790,7 @@ export interface GameConfig {
   stake_daily_profit_cap: number;
   trade_verified_min_age_days: number;
   trade_verified_min_active_days: number;
-  trade_verified_require_stars: boolean;
+  trade_verified_min_stars: number;
   trade_min_value_ratio_pct: number;
   trade_value_check_min: number;
   trade_progress_pair_daily: number;

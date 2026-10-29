@@ -30,8 +30,9 @@ BOUND_SOURCES = (
     "card_upgrade", "collection_reward", "chat_pack", "gift", "wheel", "league_reward", "club_reward",
 )
 INT_COLUMNS = (
-    ("trade_verified_min_age_days", "14"),
-    ("trade_verified_min_active_days", "7"),
+    ("trade_verified_min_age_days", "3"),
+    ("trade_verified_min_active_days", "0"),
+    ("trade_verified_min_stars", "49"),
     ("trade_min_value_ratio_pct", "50"),
     ("trade_value_check_min", "2000"),
     ("trade_progress_pair_daily", "1"),
@@ -61,13 +62,11 @@ def upgrade() -> None:
 
     for column, default in INT_COLUMNS:
         op.add_column("game_config", sa.Column(column, sa.Integer(), nullable=False, server_default=default))
-    op.add_column("game_config", sa.Column("trade_verified_require_stars", sa.Boolean(), nullable=False, server_default=sa.true()))
     op.add_column("game_config", sa.Column("card_values", sa.JSON(), nullable=False, server_default=sa.text(f"'{CARD_VALUES}'::json")))
 
 
 def downgrade() -> None:
     op.drop_column("game_config", "card_values")
-    op.drop_column("game_config", "trade_verified_require_stars")
     for column, _default in reversed(INT_COLUMNS):
         op.drop_column("game_config", column)
     op.drop_column("packs", "pity_enabled")

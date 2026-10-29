@@ -14,8 +14,8 @@ and is meant for market minimum prices:
 Valuable = legendary, diamond, «Академия» or limited. A valuable card may
 leave an account (trade, later the market) only if it didn't come from a free
 source (UserCard.from_free_source) and its owner is a «проверенный аккаунт»:
-old and active enough and — if required — has paid us in Stars at least
-once. Multi-accounts farming free rewards can then pass on nothing of value.
+old enough (activity optional) and has spent at least
+trade_verified_min_stars in our shop. Multi-accounts farming free rewards can then pass on nothing of value.
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -129,12 +129,15 @@ async def verified_block_reason(db: AsyncSession, user: User, config: GameConfig
         )).scalar_one())
         if have < active:
             missing.append(f"не меньше {active} дн. в игре (сейчас {have})")
-    if config.trade_verified_require_stars:
-        paid = (await db.execute(
-            select(StarsInvoice.id).where(StarsInvoice.user_id == user.id, StarsInvoice.completed_at.is_not(None)).limit(1)
-        )).scalar_one_or_none()
-        if paid is None:
-            missing.append("хотя бы одна покупка за ⭐ в магазине")
+    stars = config.trade_verified_min_stars
+    if stars > 0:
+        spent = int((await db.execute(
+            select(func.coalesce(func.sum(StarsInvoice.stars_amount), 0)).where(
+                StarsInvoice.user_id == user.id, StarsInvoice.completed_at.is_not(None),
+            )
+        )).scalar_one())
+        if spent < stars:
+            missing.append(f"покупки в магазине за ⭐ на {stars}⭐ всего (сейчас {spent}⭐)")
     if not missing:
         return None
     return "Нужен «Проверенный аккаунт»: " + "; ".join(missing) + "."
