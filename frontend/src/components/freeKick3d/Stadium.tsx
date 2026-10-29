@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { Suspense, useLayoutEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 
-import { PITCH_DEPTH, PITCH_WIDTH, PITCH_Z0, ledTexture, pitchOverlayTexture, skyTexture } from "./textures";
+import { PITCH_DEPTH, PITCH_WIDTH, PITCH_Z0, edgeFadeTexture, ledTexture, skyTexture } from "./textures";
 
 export type Quality = "high" | "low";
 
@@ -15,6 +15,7 @@ const ASSETS = {
   stands: "/free-kick-3d/stands.webp",
   fans: "/free-kick-3d/fans.webp",
   grass: "/free-kick-3d/grass.webp",
+  goalArea: "/free-kick-3d/goal-area.webp",
   led: "/free-kick-3d/led.webp",
 };
 
@@ -57,8 +58,16 @@ function PlainPitch({ quality }: { quality: Quality }) {
   );
 }
 
-/** Tiled grass photo, plus a transparent layer on top with the mowing
- * stripes and the markings (crisp at any distance, independent of the tile). */
+/** The painted goal end (goal-area.webp, a top-down picture: mowing stripes,
+ * the six-yard box, the penalty area, the spot and the D) laid on the
+ * ground at its real scale — 19.8 px a metre, the goal line 40 px from its
+ * top edge, so the spot sits 11 m out — its edges fading into the tiled
+ * grass that covers the rest of the pitch. */
+const GOAL_AREA_PX_PER_M = 19.8;
+const GOAL_AREA_SIZE = 1254 / GOAL_AREA_PX_PER_M;
+const GOAL_AREA_LINE_FROM_TOP = 40 / GOAL_AREA_PX_PER_M;
+
+/** Tiled grass photo for the whole pitch, with the painted goal end on top. */
 function Pitch({ quality }: { quality: Quality }) {
   const grass = useTexture(ASSETS.grass, (t) => {
     const tex = t as THREE.Texture;
@@ -67,7 +76,12 @@ function Pitch({ quality }: { quality: Quality }) {
     tex.anisotropy = 8;
     tex.colorSpace = THREE.SRGBColorSpace;
   });
-  const overlay = useMemo(pitchOverlayTexture, []);
+  const area = useTexture(ASSETS.goalArea, (t) => {
+    const tex = t as THREE.Texture;
+    tex.anisotropy = 8;
+    tex.colorSpace = THREE.SRGBColorSpace;
+  });
+  const fade = useMemo(edgeFadeTexture, []);
   const shadows = quality === "high";
   return (
     <>
@@ -76,9 +90,21 @@ function Pitch({ quality }: { quality: Quality }) {
         {/* Toned down a little: it's a night match under floodlights. */}
         <meshLambertMaterial map={grass} color="#b8d8b4" />
       </mesh>
-      <mesh rotation-x={-Math.PI / 2} position={[PITCH_CENTER[0], 0.004, PITCH_CENTER[2]]} receiveShadow={shadows}>
-        <planeGeometry args={[PITCH_WIDTH, PITCH_DEPTH]} />
-        <meshLambertMaterial map={overlay} transparent depthWrite={false} polygonOffset polygonOffsetFactor={-1} />
+      <mesh
+        rotation-x={-Math.PI / 2}
+        position={[0, 0.004, -GOAL_AREA_LINE_FROM_TOP + GOAL_AREA_SIZE / 2]}
+        receiveShadow={shadows}
+      >
+        <planeGeometry args={[GOAL_AREA_SIZE, GOAL_AREA_SIZE]} />
+        <meshLambertMaterial
+          map={area}
+          alphaMap={fade}
+          color="#c4d8c0"
+          transparent
+          depthWrite={false}
+          polygonOffset
+          polygonOffsetFactor={-1}
+        />
       </mesh>
     </>
   );

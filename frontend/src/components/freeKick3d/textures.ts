@@ -8,7 +8,6 @@ import { BALL_RADIUS } from "@/lib/freeKick3d/trajectory";
 export const PITCH_WIDTH = 96;
 export const PITCH_DEPTH = 72;
 export const PITCH_Z0 = -14;
-const PX_PER_M = 14;
 
 function canvas(w: number, h: number) {
   const c = document.createElement("canvas");
@@ -22,49 +21,26 @@ function srgb(tex: THREE.Texture) {
   return tex;
 }
 
-/** Transparent layer over the grass photo: mowing stripes (both ways, a
- * light check), the markings and the darker advert track behind the line. */
-export function pitchOverlayTexture() {
-  const [c, ctx] = canvas(PITCH_WIDTH * PX_PER_M, PITCH_DEPTH * PX_PER_M);
-  // World (x, z) → canvas px: the plane is rotated −90° about x, so with the
-  // default flipY the canvas's top row lands on the far (−z) edge.
-  const X = (x: number) => (x + PITCH_WIDTH / 2) * PX_PER_M;
-  const Z = (z: number) => (z - PITCH_Z0) * PX_PER_M;
-
-  const stripe = 5.5 * PX_PER_M;
-  for (let i = 0; i * stripe < c.height; i += 2) {
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
-    ctx.fillRect(0, i * stripe, c.width, stripe);
+/** An alpha map, opaque in the middle and fading out along every edge (a
+ * picture laid on the grass blends into what's around it). */
+export function edgeFadeTexture() {
+  const [c, ctx] = canvas(256, 256);
+  const img = ctx.createImageData(c.width, c.height);
+  const edge = (u: number) => Math.min(1, Math.max(0, u / 0.12));
+  for (let y = 0; y < c.height; y++) {
+    for (let x = 0; x < c.width; x++) {
+      const u = x / (c.width - 1);
+      const v = y / (c.height - 1);
+      // The top edge (behind the goal line) fades over less: the line stays.
+      const top = Math.min(1, Math.max(0, v / 0.025));
+      const a = Math.min(edge(u), edge(1 - u), edge(1 - v), top);
+      const i = (y * c.width + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = Math.round(255 * a * a * (3 - 2 * a));
+      img.data[i + 3] = 255;
+    }
   }
-  for (let i = 0; i * stripe < c.width; i += 2) {
-    ctx.fillStyle = "rgba(0,0,0,0.05)";
-    ctx.fillRect(i * stripe, 0, stripe, c.height);
-  }
-
-  ctx.strokeStyle = "rgba(255,255,255,0.92)";
-  ctx.lineWidth = 0.12 * PX_PER_M;
-  ctx.beginPath();
-  ctx.moveTo(0, Z(0));
-  ctx.lineTo(c.width, Z(0));
-  ctx.rect(X(-20.16), Z(0), 40.32 * PX_PER_M, 16.5 * PX_PER_M);
-  ctx.rect(X(-9.16), Z(0), 18.32 * PX_PER_M, 5.5 * PX_PER_M);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(X(0), Z(11), 9.15 * PX_PER_M, 0.2 * Math.PI, 0.8 * Math.PI);
-  ctx.stroke();
-  ctx.fillStyle = "#fff";
-  ctx.beginPath();
-  ctx.arc(X(0), Z(11), 0.15 * PX_PER_M, 0, Math.PI * 2);
-  ctx.fill();
-  const grd = ctx.createLinearGradient(0, Z(-3), 0, 0);
-  grd.addColorStop(0, "rgba(0,0,0,0)");
-  grd.addColorStop(1, "rgba(0,0,0,0.6)");
-  ctx.fillStyle = grd;
-  ctx.fillRect(0, 0, c.width, Z(-3));
-
-  const tex = srgb(new THREE.CanvasTexture(c));
-  tex.anisotropy = 8;
-  return tex;
+  ctx.putImageData(img, 0, 0);
+  return new THREE.CanvasTexture(c);
 }
 
 /** Metres of net one copy of `netTexture` covers (so every net surface can
