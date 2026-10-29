@@ -199,22 +199,17 @@ export function KeeperModel({
       const speed = THREE.MathUtils.clamp((reach - start) / window, 0.7, 4.5);
       const action = play(state.current, actions, clip, { once: true, speed, fade: 0.06, at: start });
       if (saved && clip !== "gk_catch") {
-        // The ball's in his hands: hold the stretch, then down on the spot.
-        if (action.time >= reach) action.timeScale = 0;
-        if (t >= arrival + 0.7) {
-          play(state.current, actions, "gk_fallen", { fade: 0.35 });
-          mixer.update(clock.dt());
-          return;
-        }
+        // The ball's in his hands: hold the stretch a moment, then the dive
+        // plays out to its landing.
+        action.timeScale = action.time >= reach && t < arrival + 0.3 ? 0 : 1;
       }
       // Nudge the body so the hands meet the computed point at the reach.
       const progress = THREE.MathUtils.clamp((action.time - start) / (reach - start || 1), 0, 1);
       // Bounded: a bigger correction would read as sliding, not diving.
       const extra = THREE.MathUtils.clamp(Math.abs(dx) - DIVE_REACH[clip], -1.2, 1.2) * Math.sign(dx || 1);
       g.position.x = setup.keeper.x + extra * THREE.MathUtils.smoothstep(progress, 0, 1);
-      if (clip !== "gk_catch" && action.time >= action.getClip().duration - 0.05) {
-        play(state.current, actions, "gk_fallen", { fade: 0.4 });
-      }
+      // The dive ends with him on the grass and stays there (the clip clamps
+      // on its last frame) — no second fall from a standing start.
     }
     mixer.update(clock.dt());
   });
