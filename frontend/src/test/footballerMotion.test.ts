@@ -9,7 +9,9 @@ import {
   keeperMove,
   keeperSlot,
   motionAt,
+  placeForStrike,
   playerAction,
+  strikeWeight,
   strikes,
 } from "@/lib/footballerMotion";
 import { goalEpisodes } from "@/lib/goalReplay3d";
@@ -29,7 +31,7 @@ describe("footballer motion in a goal replay", () => {
       if (ep.finish === "header") {
         expect(act).toEqual({ clip: "wall_jump", time: T.jumpApex, speed: 1 });
       } else {
-        expect(act).toEqual({ clip: "kick", time: T.kickContact, speed: 1 });
+        expect(act).toEqual({ clip: "kick", time: T.kickContact, speed: 1, strike: ep.shot });
         // The run-up is shown before, the follow-through after.
         expect(playerAction(tl, replay, ep, ep.scorer!, ep.shot - 1, false).time).toBeCloseTo(T.kickContact - 0.5);
       }
@@ -92,6 +94,31 @@ describe("footballer motion in a goal replay", () => {
       expect(["run", "wall_jump"]).toContain(party.clip);
     }
     expect(runs).toBeGreaterThan(20);
+  });
+
+  it("a pass is struck the moment the ball leaves the passer's foot", () => {
+    for (const ep of episodes) {
+      for (const k of strikes(replay, ep).filter((x) => !x.shot)) {
+        const pass = replay.passes.find(([p0, , from]) => p0 - 1 === k.frame && from === k.slot);
+        expect(pass).toBeDefined();
+      }
+    }
+  });
+
+  it("at the contact the striking toe is on the ball, wherever the body was", () => {
+    expect(strikeWeight(T.kickContact, T.kickContact)).toBe(1);
+    expect(strikeWeight(T.kickContact - 1, T.kickContact)).toBe(0);
+    expect(strikeWeight(T.kickContact + 1, T.kickContact)).toBe(0);
+    const toe = { x: 0.2, z: 0.5 };
+    const ball = { x: 10, z: -3 };
+    for (const heading of [0, 0.7, -2, Math.PI]) {
+      const body = placeForStrike({ x: 7, z: 1 }, heading, ball, toe, 1);
+      const tx = toe.x * Math.cos(heading) + toe.z * Math.sin(heading);
+      const tz = -toe.x * Math.sin(heading) + toe.z * Math.cos(heading);
+      expect(body.x + tx).toBeCloseTo(ball.x);
+      expect(body.z + tz).toBeCloseTo(ball.z);
+      expect(placeForStrike({ x: 7, z: 1 }, heading, ball, toe, 0)).toEqual({ x: 7, z: 1 });
+    }
   });
 
   it("is deterministic", () => {

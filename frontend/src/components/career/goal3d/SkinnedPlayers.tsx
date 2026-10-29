@@ -11,7 +11,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 
 import type { CareerReplay } from "@/api/career";
-import { DIVE_REACH, STEP_S, keeperMove, keeperSlot, motionAt, playerAction, strikes } from "@/lib/footballerMotion";
+import { DIVE_REACH, STEP_S, keeperMove, keeperSlot, motionAt, placeForStrike, playerAction, strikeWeight, strikes } from "@/lib/footballerMotion";
 import { ballState, toWorld, type GoalEpisode } from "@/lib/goalReplay3d";
 import { SLOTS, type Timeline } from "@/lib/matchReplay";
 
@@ -103,6 +103,12 @@ export function SkinnedPlayers({ tl, replay, ep, flip, looks, clock, onReady }: 
       if (act.clip.startsWith("gk_") && i === keeperSlot(ep) && t >= ep.goal - 1.2) target = keeper.heading;
       s.heading[i] = jump ? target : s.heading[i] + wrapAngle(target - s.heading[i]) * turn;
       p.root.position.set(m.x, 0, m.z);
+      if (act.clip === "kick" && act.time !== null && act.strike !== undefined) {
+        // Step into the ball: at the contact the striking toe is on it.
+        const at = toWorld(ballState(tl, ep, act.strike), flip);
+        const placed = placeForStrike(m, s.heading[i], at, asset.kickToe, strikeWeight(act.time, asset.timing.kickContact));
+        p.root.position.set(placed.x, 0, placed.z);
+      }
       if (i === keeperSlot(ep) && act.time !== null && act.clip.startsWith("gk_dive")) {
         // Nudge the dive so his hands meet the ball, not his reach (bounded:
         // more would read as sliding).

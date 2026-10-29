@@ -16,6 +16,24 @@ export interface FootballerAsset {
   gltf: GLTF;
   clips: Record<ClipName, THREE.AnimationClip>;
   timing: ClipTiming;
+  /** The striking (right) toe at the kick's contact, in the model's own
+   * frame on the ground (it faces +z): where the ball must be then. */
+  kickToe: { x: number; z: number };
+}
+
+/** Poses a copy of the model at the kick's contact and reads where the
+ * right toe is (in place, so relative to the body). */
+function kickToe(gltf: GLTF, kick: THREE.AnimationClip, contact: number): { x: number; z: number } {
+  const model = cloneSkinned(gltf.scene);
+  const mixer = new THREE.AnimationMixer(model);
+  mixer.clipAction(kick).play();
+  mixer.setTime(contact);
+  model.updateMatrixWorld(true);
+  const bones = bonesOf(model);
+  const toe = bones.RightToeBase ?? bones.RightFoot;
+  const p = toe ? toe.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(0.15, 0, 0.45);
+  mixer.stopAllAction();
+  return { x: p.x, z: p.z };
 }
 
 const HIPS = /Hips\.position$/;
@@ -195,7 +213,8 @@ export function prepareFootballer(gltf: GLTF): FootballerAsset {
     gk_catch: inPlace(byName.gk_catch, up),
     run: runClip(gltf, inPlace(byName.idle, up), up),
   } as Record<ClipName, THREE.AnimationClip>;
-  return { gltf, clips, timing: timingOf(byName, up) };
+  const timing = timingOf(byName, up);
+  return { gltf, clips, timing, kickToe: kickToe(gltf, clips.kick, timing.kickContact) };
 }
 
 export interface PlayerLook { shirt: string; shorts: string; socks: string; skin: string; hair: string | null }

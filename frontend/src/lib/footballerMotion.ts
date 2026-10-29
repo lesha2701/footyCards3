@@ -46,7 +46,13 @@ export const DIVE_MAX = 3.8;
 
 /** `time` is the clip time to show for a one-off move, null for a loop
  * (the mixer plays it); `speed` is the loop's time scale. */
-export interface PlayerAction { clip: ClipName; time: number | null; speed: number }
+export interface PlayerAction {
+  clip: ClipName;
+  time: number | null;
+  speed: number;
+  /** A kick: the frame the foot meets the ball. */
+  strike?: number;
+}
 
 export interface Motion { x: number; z: number; vx: number; vz: number; speed: number }
 
@@ -64,11 +70,12 @@ export function motionAt(tl: Timeline, slot: number, t: number, flip: boolean): 
 }
 
 /** Moments a player strikes the ball in the episode: the passes of the
- * build-up (by the passer, when it leaves him) and the shot. */
+ * build-up (by the passer, the frame before the key frames have the ball
+ * loose — when it leaves his foot, matchReplay.groundBall) and the shot. */
 export function strikes(replay: CareerReplay, ep: GoalEpisode): { frame: number; slot: number; shot: boolean }[] {
   const out = replay.passes
-    .filter(([p0, , from]) => p0 >= ep.f0 && p0 < ep.shot && from !== null)
-    .map(([p0, , from]) => ({ frame: p0, slot: from, shot: false }));
+    .filter(([p0, , from]) => p0 - 1 >= ep.f0 && p0 < ep.shot && from !== null)
+    .map(([p0, , from]) => ({ frame: p0 - 1, slot: from, shot: false }));
   if (ep.scorer !== null) out.push({ frame: ep.shot, slot: ep.scorer, shot: true });
   return out;
 }
@@ -145,7 +152,7 @@ export function playerAction(
     const time = timing.kickContact + (t - k.frame) * STEP_S * swing;
     // A pass shows only the strike itself, not the clip's run-up.
     const from = k.shot ? 0 : timing.kickContact - 0.35;
-    if (time >= from && time <= timing.kickDuration) return { clip: "kick", time, speed: 1 };
+    if (time >= from && time <= timing.kickDuration) return { clip: "kick", time, speed: 1, strike: k.frame };
   }
 
   // After the goal the scorer's side celebrates: running to the corner,
@@ -157,4 +164,29 @@ export function playerAction(
     return { clip: "wall_jump", time, speed: 1 };
   }
   return loop();
+}
+
+/** How much of a kick the body is placed by the ball rather than by the
+ * key frames: eased in over the last 0.35 s of the swing, held through the
+ * contact, eased out over the follow-through. */
+export function strikeWeight(time: number, contact: number): number {
+  const ease = (a: number, b: number, v: number) => {
+    const u = clampTo((v - a) / (b - a), 0, 1);
+    return u * u * (3 - 2 * u);
+  };
+  return ease(contact - 0.35, contact, time) * (1 - ease(contact + 0.15, contact + 0.45, time));
+}
+
+/** Where the kicker's body goes so that his striking toe — `toe`, in the
+ * model's own frame (it faces +z) at the contact — is on the ball. */
+export function placeForStrike(
+  body: { x: number; z: number }, heading: number, ball: { x: number; z: number },
+  toe: { x: number; z: number }, weight: number,
+): { x: number; z: number } {
+  const c = Math.cos(heading);
+  const s = Math.sin(heading);
+  // Rotation about the vertical axis: local +z → (sin h, cos h), +x → (cos h, -sin h).
+  const tx = toe.x * c + toe.z * s;
+  const tz = -toe.x * s + toe.z * c;
+  return { x: body.x + (ball.x - tx - body.x) * weight, z: body.z + (ball.z - tz - body.z) * weight };
 }
