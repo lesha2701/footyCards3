@@ -1713,6 +1713,8 @@ export interface Penalty3DStartResult {
   session_id: number;
   rating: number;
   kick: Penalty3DKick;
+  /** The player's «Мой игрок» goal celebration (cosmetic code), if worn. */
+  celebration?: string | null;
 }
 
 export interface Penalty3DResult {

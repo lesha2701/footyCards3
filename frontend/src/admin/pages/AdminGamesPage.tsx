@@ -31,6 +31,7 @@ const MY_PLAYER_COSMETICS: [string, string][] = [
   ["cel_plane", "Празднование «Самолётик»"],
   ["cel_heart", "Празднование «Сердечко»"],
   ["cel_dance", "Празднование «Танец у флажка»"],
+  ["cel_silly", "Празднование «Смешной танец»"],
 ];
 
 const WEEKLY_TOP_METRICS: [string, string][] = [

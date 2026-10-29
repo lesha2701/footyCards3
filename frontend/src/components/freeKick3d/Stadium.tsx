@@ -139,12 +139,14 @@ function PitchLines({ quality }: { quality: Quality }) {
  * inside, papered with the crowd panorama. Stretched once over the arc the
  * people would come out three times life size, so the picture is laid
  * three times (stands.webp is cut to tile seamlessly: the flags at its
- * edges trimmed, the ends crossfaded). Its dark
- * board line at the bottom sits just below the pitch. */
+ * edges trimmed, the ends crossfaded). Its grey board line at the bottom
+ * is cut off: it showed between the live fans as a grey patch. */
 const BACKDROP_RADIUS = 82;
 const BACKDROP_ARC = (150 / 180) * Math.PI;
 const BACKDROP_CENTER_Z = 18;
 const BACKDROP_TILES = 3;
+/** The share of stands.webp's height taken by that board line. */
+const BACKDROP_BOARD = 0.07;
 
 function Backdrop() {
   const tex = useTexture(ASSETS.stands, (t) => {
@@ -152,11 +154,13 @@ function Backdrop() {
     // Seen from inside the cylinder the u axis runs right → left: mirror it.
     tex.wrapS = THREE.RepeatWrapping;
     tex.repeat.x = -BACKDROP_TILES;
+    tex.offset.y = BACKDROP_BOARD;
+    tex.repeat.y = 1 - BACKDROP_BOARD;
     tex.anisotropy = 4;
     tex.colorSpace = THREE.SRGBColorSpace;
   });
   const image = tex.image as { width: number; height: number };
-  const height = (BACKDROP_RADIUS * BACKDROP_ARC * image.height) / (image.width * BACKDROP_TILES);
+  const height = (BACKDROP_RADIUS * BACKDROP_ARC * image.height * (1 - BACKDROP_BOARD)) / (image.width * BACKDROP_TILES);
   return (
     <mesh position={[0, height / 2 - 1.5, BACKDROP_CENTER_Z]}>
       <cylinderGeometry
@@ -247,7 +251,15 @@ function FanSection({ quality, hype }: { quality: Quality; hype: Hype }) {
   });
 
   return (
-    <instancedMesh key={fans.length} ref={mesh} args={[geometry, material, fans.length]} frustumCulled={false} />
+    <>
+      <instancedMesh key={fans.length} ref={mesh} args={[geometry, material, fans.length]} frustumCulled={false} />
+      {/* Their terrace: dark steps behind them, so an empty seat or the gap
+          under the panorama shows the stand, not whatever is far behind. */}
+      <mesh position={[0, 0.85, -6.6 - rows * 0.85]}>
+        <planeGeometry args={[60, 1.7]} />
+        <meshBasicMaterial color="#0b120e" fog={false} />
+      </mesh>
+    </>
   );
 }
 

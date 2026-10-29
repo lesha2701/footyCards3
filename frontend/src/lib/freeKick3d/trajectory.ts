@@ -62,6 +62,8 @@ export type ShotSetup = {
     /** Reads the ball's drop too (a penalty keeper reacting at the strike);
      * a free-kick keeper reads it straight, so dipping shots beat him. */
     readsDrop: boolean;
+    /** How far sideways his hands go when reading the ball (m). */
+    reach: number;
   };
 };
 
@@ -208,6 +210,7 @@ export function createSetup(seed: number, rating = 75): ShotSetup {
       speed: lerp(4.6, 5.6, rnd()) * (1 - EDGE_KEEPER * edge),
       guess: null,
       readsDrop: false,
+      reach: KEEPER_MAX_REACH,
     },
   };
 }
@@ -229,7 +232,11 @@ const PENALTY_AIM_SCALE = 1.5;
 /** A human can't start a dive sooner than this after the strike (s). */
 export const PENALTY_MIN_REACTION = 0.18;
 /** The player's own keeper: how fast the hands travel (m/s). */
-const PLAYER_KEEPER_SPEED = 7.2;
+const PLAYER_KEEPER_SPEED = 9;
+/** The player's keeper with no swipe stays in the middle and still goes for
+ * a ball within his reach — a strike down the middle is saved by standing. */
+const PLAYER_KEEPER_STAND_REACTION = 0.25;
+const PLAYER_KEEPER_STAND_REACH = 1.0;
 
 export function createPenaltySetup(seed: number, rating = 75): ShotSetup {
   const rnd = mulberry32(seed);
@@ -254,6 +261,7 @@ export function createPenaltySetup(seed: number, rating = 75): ShotSetup {
     chipLoft: PENALTY_CHIP_LOFT,
     keeper: {
       x: 0, reaction: commits ? early : read, speed, guess: commits ? { x: guessX, y: guessY } : null, readsDrop: true,
+      reach: KEEPER_MAX_REACH,
     },
   };
 }
@@ -261,17 +269,19 @@ export function createPenaltySetup(seed: number, rating = 75): ShotSetup {
 /** The player keeping goal: the dive goes where they swiped, starting when
  * they swiped — after the strike never sooner than a human can
  * (`PENALTY_MIN_REACTION`); before it, at once (and the kicker sees him go:
- * `penaltyBotShot`). No swipe, no dive. Integer inputs (mm, and ms from the
+ * `penaltyBotShot`). No swipe: he stays in the middle and only goes for
+ * a ball within `PLAYER_KEEPER_STAND_REACH`. Integer inputs (mm, and ms from the
  * strike — negative during the run-up), as the server gets them. */
 export type QuantizedDive = { x: number; y: number; reactionMs: number };
 
 export function playerKeeperSetup(seed: number, dive: QuantizedDive | null): ShotSetup {
   const setup = createPenaltySetup(seed);
-  const reaction = !dive ? 99 : dive.reactionMs < 0 ? 0 : Math.max(PENALTY_MIN_REACTION, dive.reactionMs / 1000);
+  const reaction = !dive ? PLAYER_KEEPER_STAND_REACTION : dive.reactionMs < 0 ? 0 : Math.max(PENALTY_MIN_REACTION, dive.reactionMs / 1000);
   const guess = dive
     ? { x: clamp(dive.x / 1000, -GOAL_HALF_WIDTH, GOAL_HALF_WIDTH), y: clamp(dive.y / 1000, 0.25, KEEPER_MAX_HAND_Y) }
     : null;
-  return { ...setup, edge: 0, keeper: { x: 0, reaction, speed: PLAYER_KEEPER_SPEED, guess, readsDrop: true } };
+  const reach = dive ? KEEPER_MAX_REACH : PLAYER_KEEPER_STAND_REACH;
+  return { ...setup, edge: 0, keeper: { x: 0, reaction, speed: PLAYER_KEEPER_SPEED, guess, readsDrop: true, reach } };
 }
 
 export type BotShotKind = "low_corner" | "side" | "top_corner" | "power" | "chip" | "wide" | "over";
@@ -284,7 +294,7 @@ const BOT_KINDS: [BotShotKind, number][] = [
   ["low_corner", 28], ["side", 20], ["top_corner", 20], ["power", 12], ["chip", 7], ["wide", 8], ["over", 5],
 ];
 
-export function penaltyBotShot(seed: number, dive: QuantizedDive | null = null): { kind: BotShotKind; swipe: QuantizedSwipe } {
+export function penaltyBotShot(seed: number): { kind: BotShotKind; swipe: QuantizedSwipe } {
   const rnd = mulberry32((seed ^ 0x5bd1e995) >>> 0);
   const pick = rnd() * 100;
   const side = rnd() < 0.5 ? -1 : 1;
@@ -310,12 +320,10 @@ export function penaltyBotShot(seed: number, dive: QuantizedDive | null = null):
     wide: [lerp(120, 160, a), lerp(140, 200, b), lerp(140, 170, c)],
     over: [lerp(0, 60, a), lerp(290, 320, b), lerp(130, 160, c)],
   }[kind];
-  // A keeper who goes before the strike gets punished: the kicker sees him
-  // move and places it the other way.
-  const aimed = kind === "low_corner" || kind === "side" || kind === "top_corner";
-  const dir = aimed && dive && dive.reactionMs < 0 && dive.x * side > 0 ? -side : side;
-  // `|| 0`: a dead-centre strike is 0, not −0 (integers, as the server has them).
-  return { kind, swipe: { dx: dir * whole(dx) || 0, dy: -whole(dy), curve: 0, durationMs: whole(ms) } };
+  // The kicker has made up his mind: a keeper who goes early wins or loses
+  // his guess. `|| 0`: a dead-centre strike is 0, not −0 (integers, as the
+  // server has them).
+  return { kind, swipe: { dx: side * whole(dx) || 0, dy: -whole(dy), curve: 0, durationMs: whole(ms) } };
 }
 
 // ---------------------------------------------------------------------------
@@ -432,8 +440,8 @@ function keeperDecide(state: KeeperState, setup: ShotSetup, p: Vec3, v: Vec3) {
     return;
   }
   const tt = (KEEPER_LINE_Z - p.z) / v.z;
-  const minX = setup.keeper.x - KEEPER_MAX_REACH;
-  const maxX = setup.keeper.x + KEEPER_MAX_REACH;
+  const minX = setup.keeper.x - setup.keeper.reach;
+  const maxX = setup.keeper.x + setup.keeper.reach;
   state.targetX = clamp(p.x + v.x * tt, Math.max(minX, -GOAL_HALF_WIDTH - 0.3), Math.min(maxX, GOAL_HALF_WIDTH + 0.3));
   const drop = setup.keeper.readsDrop ? 0.5 * GRAVITY * tt * tt : 0;
   state.targetY = clamp(p.y + v.y * tt - drop, 0.25, KEEPER_MAX_HAND_Y);

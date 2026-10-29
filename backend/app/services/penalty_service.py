@@ -26,7 +26,7 @@ from app.schemas.game import (
 )
 from app.schemas.ranking import RankingMetric
 from app.services import free_kick_3d_engine as engine
-from app.services import league_service, ranking_service, task_service
+from app.services import league_service, my_player_service, ranking_service, task_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
 from app.services.club_pass_service import extra_rewarded_attempts
@@ -341,7 +341,9 @@ async def start_3d(db: AsyncSession, user: User, user_card_id: int) -> Penalty3D
     db.add(session)
     await db.commit()
     await db.refresh(session)
-    return Penalty3DStartOut(session_id=session.id, rating=card.player.rating, kick=_kick_out(0, first))
+    mp = await my_player_service.get_my_player(db, locked_user.id)
+    celebration = my_player_service.cosmetics_of(mp)["celebration"] if mp else None
+    return Penalty3DStartOut(session_id=session.id, rating=card.player.rating, kick=_kick_out(0, first), celebration=celebration)
 
 
 async def _lock_3d_kick(db: AsyncSession, user: User, session_id: int, kicker: str) -> tuple[GameSession, dict, dict]:
@@ -420,7 +422,7 @@ async def save_3d(db: AsyncSession, user: User, session_id: int, dive: Penalty3D
     """The bot's penalty: its strike against the player's dive (or none)."""
     session, state, kick = await _lock_3d_kick(db, user, session_id, "bot")
     d = engine.Dive(dive.x, dive.y, dive.reaction_ms) if dive else None
-    kind, bot_swipe = engine.penalty_bot_shot(kick["seed"], d)
+    kind, bot_swipe = engine.penalty_bot_shot(kick["seed"])
     shot = engine.simulate_shot(engine.player_keeper_setup(kick["seed"], d), bot_swipe)
     outcome = "save" if shot.outcome == "save" else "goal" if shot.outcome == "goal" else "miss"
     return await _settle_3d(db, user, session, state, kick, outcome, kind)

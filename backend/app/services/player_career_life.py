@@ -186,7 +186,7 @@ def maybe_new_event(state: dict, round_index: int, config, rng: random.Random) -
 
 # --- headlines --------------------------------------------------------------------------
 
-CELEBRATIONS = {"cel_siu": "фирменным «Сиу!»", "cel_plane": "«самолётиком»", "cel_heart": "сердечком для фанатов", "cel_dance": "танцем у флажка"}
+CELEBRATIONS = {"cel_siu": "фирменным «Сиу!»", "cel_plane": "«самолётиком»", "cel_heart": "сердечком для фанатов", "cel_dance": "танцем у флажка", "cel_silly": "смешным танцем"}
 
 
 def headline(name: str, club: str, opponent: str, own: int, opp: int, me: dict, celebration: Optional[str]) -> str:
