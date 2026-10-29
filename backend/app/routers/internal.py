@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import verify_internal_secret
 from app.database import get_db
+from app.schemas.auction import AuctionSweepResult
 from app.schemas.chat_pack import ChatPackOpenIn
 from app.schemas.club_league import ClubLeagueSettleResult
 from app.schemas.club_war import ClubWarSweepResult
@@ -18,6 +19,7 @@ from app.schemas.player_tournament import PlayerTournamentReminderResult
 from app.schemas.tournament import LineupReminderResult, SimulateRoundResult
 from app.services import (
     match_day_auto,
+    auction_service,
     career_service,
     chat_pack_service,
     club_league_service,
@@ -194,3 +196,10 @@ async def match_day_sync(db: AsyncSession = Depends(get_db)):
     results of the bot's matches and a new one when none is open
     (match_day_auto; nothing happens while it is switched off)."""
     return await match_day_auto.sync(db)
+@router.post("/auction/sweep", response_model=AuctionSweepResult)
+async def auction_sweep(db: AsyncSession = Depends(get_db)):
+    """Called by the bot every few seconds: settles «Трансферный рынок» lots
+    whose time ran out (sale to the leader or card back to the seller).
+    Safe alongside the lazy sweep on reads — each lot is taken with SKIP
+    LOCKED and its status/ends_at re-checked under the lock."""
+    return AuctionSweepResult(closed=await auction_service.sweep_due(db))

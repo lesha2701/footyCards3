@@ -68,6 +68,11 @@ Main features:
   The style shop / merchandise / «Менеджер Pro» are cosmetics and
   convenience only (Stars via my_player_service, key "manager:<code>");
 - player-to-player card exchanges;
+- «Трансферный рынок» — player-to-player auction of specific card copies
+  (`auction_service.py`): bids are escrowed off the balance and refunded
+  when outbid, the market fee is burnt, the listed card is held with
+  `is_locked_in_trade`; expired lots close lazily on reads and via the bot
+  (`POST /internal/auction/sweep`, SKIP LOCKED like «Футбольный магнат»);
 - tasks/achievements, referrals, leaderboards and profile;
 - Telegram bot (notifications/reminders) and a React-based administrative panel.
 

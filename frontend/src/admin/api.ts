@@ -1,3 +1,4 @@
+import type { AuctionLot } from "@/api/auction";
 import { api } from "@/lib/api";
 import type {
   Announcement,
@@ -1464,5 +1465,14 @@ export async function uploadAdminMuseImage(kind: AdminMuseKind, id: number, file
 }
 export async function grantAdminMuse(museId: number, userId: number): Promise<{ user_muse_id: number; copies: number }> {
   const { data } = await api.post(`/admin/muses/muses/${museId}/grant`, { user_id: userId });
+
+// --- «Трансферный рынок» (backend: routers/admin_auction.py; settings live on GameConfig) ---
+export async function fetchAdminAuctionLots(status?: string, username?: string): Promise<AuctionLot[]> {
+  const { data } = await api.get<AuctionLot[]>("/admin/auction/lots", { params: { status, username: username || undefined } });
+  return data;
+}
+
+export async function removeAdminAuctionLot(id: number, reason: string): Promise<AuctionLot> {
+  const { data } = await api.post<AuctionLot>(`/admin/auction/lots/${id}/remove`, { reason });
   return data;
 }

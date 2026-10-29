@@ -950,6 +950,20 @@ class TaskChestConfigIn(BaseModel):
     coins: int = Field(default=0, ge=0, le=1_000_000)
     card_rarity: Optional[str] = Field(default=None, pattern=r"^(common|rare|epic|legendary)$")
     pack_id: Optional[int] = None
+    auction_enabled: bool = False
+    auction_durations_hours: list[int] = [1, 6, 24]
+    auction_fee_pct: int = 10
+    auction_min_increment_pct: int = 5
+    auction_min_increment_coins: int = 10
+    auction_min_price: int = 10
+    auction_min_price_quick_sell_pct: int = 100
+    auction_max_active_lots: int = 5
+    auction_snipe_window_seconds: int = 120
+    auction_snipe_extend_seconds: int = 120
+    auction_min_account_age_days: int = 3
+    auction_max_wins_per_seller_daily: int = 3
+    auction_premium_min_price: int = 50000
+    auction_premium_rating: int = 95
 
 
 class GameConfigUpdate(BaseModel):
@@ -1679,6 +1693,22 @@ class GameConfigUpdate(BaseModel):
     club_raid_reward_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
     club_raid_reward_pack_id: Optional[int] = Field(default=None, ge=0)
     club_raid_reward_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
+    auction_enabled: Optional[bool] = None
+    auction_durations_hours: Optional[list[Annotated[int, Field(ge=1, le=168)]]] = Field(
+        default=None, min_length=1, max_length=6,
+    )
+    auction_fee_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    auction_min_increment_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    auction_min_increment_coins: Optional[int] = Field(default=None, ge=1)
+    auction_min_price: Optional[int] = Field(default=None, ge=1)
+    auction_min_price_quick_sell_pct: Optional[int] = Field(default=None, ge=0, le=10000)
+    auction_max_active_lots: Optional[int] = Field(default=None, ge=1, le=100)
+    auction_snipe_window_seconds: Optional[int] = Field(default=None, ge=0, le=3600)
+    auction_snipe_extend_seconds: Optional[int] = Field(default=None, ge=0, le=3600)
+    auction_min_account_age_days: Optional[int] = Field(default=None, ge=0, le=365)
+    auction_max_wins_per_seller_daily: Optional[int] = Field(default=None, ge=0, le=1000)
+    auction_premium_min_price: Optional[int] = Field(default=None, ge=1)
+    auction_premium_rating: Optional[int] = Field(default=None, ge=1, le=99)
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod

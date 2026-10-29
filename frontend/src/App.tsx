@@ -34,6 +34,7 @@ const AdminTournamentsPage = lazy(() => import("@/admin/pages/AdminTournamentsPa
 const AdminCardCollectionsPage = lazy(() => import("@/admin/pages/AdminCardCollectionsPage"));
 const AdminTasksPage = lazy(() => import("@/admin/pages/AdminTasksPage"));
 const AdminTradesPage = lazy(() => import("@/admin/pages/AdminTradesPage"));
+const AdminAuctionPage = lazy(() => import("@/admin/pages/AdminAuctionPage"));
 const AdminTrophiesPage = lazy(() => import("@/admin/pages/AdminTrophiesPage"));
 const AdminLeaguesPage = lazy(() => import("@/admin/pages/AdminLeaguesPage"));
 const AdminGiftsPage = lazy(() => import("@/admin/pages/AdminGiftsPage"));
@@ -137,6 +138,9 @@ const TradesPage = lazy(() => import("@/pages/TradesPage"));
 const NewTradePage = lazy(() => import("@/pages/NewTradePage"));
 const TradeFinderPage = lazy(() => import("@/pages/TradeFinderPage"));
 const TradeDetailPage = lazy(() => import("@/pages/TradeDetailPage"));
+const MarketPage = lazy(() => import("@/pages/MarketPage"));
+const NewAuctionLotPage = lazy(() => import("@/pages/NewAuctionLotPage"));
+const AuctionLotPage = lazy(() => import("@/pages/AuctionLotPage"));
 const TasksPage = lazy(() => import("@/pages/TasksPage"));
 const UpgradePage = lazy(() => import("@/pages/UpgradePage"));
 const BingoPage = lazy(() => import("@/pages/BingoPage"));
@@ -250,6 +254,7 @@ export default function App() {
         <Route path="card-collections" element={<AdminCardCollectionsPage />} />
         <Route path="tasks" element={<AdminTasksPage />} />
         <Route path="trades" element={<AdminTradesPage />} />
+        <Route path="auction" element={<AdminAuctionPage />} />
         <Route path="trophies" element={<AdminTrophiesPage />} />
         <Route path="leagues" element={<AdminLeaguesPage />} />
         <Route path="gifts" element={<AdminGiftsPage />} />
@@ -335,6 +340,9 @@ export default function App() {
         <Route path="/trades/new" element={<NewTradePage />} />
         <Route path="/trades/finder" element={<TradeFinderPage />} />
         <Route path="/trades/:id" element={<TradeDetailPage />} />
+        <Route path="/market" element={<MarketPage />} />
+        <Route path="/market/new" element={<NewAuctionLotPage />} />
+        <Route path="/market/:id" element={<AuctionLotPage />} />
         <Route path="/clubs" element={<ClubsPage />} />
         <Route path="/clubs/create" element={<ClubCreatePage />} />
         <Route path="/clubs/squad" element={<ClubSquadPage />} />

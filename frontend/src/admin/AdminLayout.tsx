@@ -54,6 +54,7 @@ const SECTIONS: Section[] = [
   { group: "Карточки", to: "/admin/card-collections", label: "Коллекции", Icon: IconCollection },
   { group: "Игры и события", to: "/admin/tasks", label: "Задания", Icon: IconTarget },
   { group: "Игроки", to: "/admin/trades", label: "Обмены", Icon: IconSwap },
+  { group: "Игроки", to: "/admin/auction", label: "Рынок", Icon: IconTag },
   { group: "Игры и события", to: "/admin/trophies", label: "Трофеи", Icon: IconStar },
   { group: "Игры и события", to: "/admin/leagues", label: "Лиги", Icon: IconFlagCheckered },
   { group: "Паки и магазин", to: "/admin/gifts", label: "Подарки", Icon: IconGift },

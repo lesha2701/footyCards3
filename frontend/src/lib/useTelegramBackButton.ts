@@ -11,7 +11,7 @@ const isRoot = (pathname: string) => ROOTS.has(pathname) || pathname.startsWith(
 /** Fallback when the screen was opened directly (deep link / reload) and
  * there is no in-app history to go back to: the section it belongs to. */
 function parentOf(pathname: string): string {
-  if (pathname.startsWith("/trades") || pathname.startsWith("/upgrade")) return "/collection";
+  if (pathname.startsWith("/trades") || pathname.startsWith("/upgrade") || pathname.startsWith("/market")) return "/collection";
   if (pathname.startsWith("/play") || pathname.startsWith("/player-tournament")) return "/play";
   if (pathname.startsWith("/packs")) return "/packs";
   if (pathname.startsWith("/friends") || pathname.startsWith("/gifts") || pathname.startsWith("/my-player")) return "/profile";
