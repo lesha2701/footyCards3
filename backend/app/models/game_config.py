@@ -1096,6 +1096,31 @@ class GameConfig(TimestampMixin, Base):
     stake_max_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
     stake_pair_daily_limit: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     stake_daily_profit_cap: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
+    # Valuable cards (legendary, diamond, «Академия», limited —
+    # card_value_service) may be given in a trade only by a «проверенный
+    # аккаунт»: this old, active on this many days, and (if required) at
+    # least one completed Stars purchase. 0 = no requirement.
+    trade_verified_min_age_days: Mapped[int] = mapped_column(Integer, default=14, nullable=False)
+    trade_verified_min_active_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
+    trade_verified_require_stars: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Equal-value rule: once the dearer side is worth at least
+    # trade_value_check_min, the cheaper side must be worth at least
+    # trade_min_value_ratio_pct % of it (0 = rule off).
+    trade_min_value_ratio_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    trade_value_check_min: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
+    # Trades with the same partner counted for tasks / bingo per day (0 = all).
+    trade_progress_pair_daily: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Card value table in coins (card_value_service.card_value): the floor of
+    # what a card is worth — the trade equal-value rule and market minimums.
+    card_values: Mapped[dict] = mapped_column(
+        JSON, nullable=False,
+        default=lambda: {
+            "legendary": 6000, "legendary_top": 12000, "legendary_top_rating": 93,
+            "limited_legendary": 30000, "limited_legendary_scarce": 60000, "limited_epic": 10000,
+            "limited_rare": 5000, "limited_max_copies": 50, "limited_scarce_copies": 15,
+            "diamond": 60000, "academy": [40000, 40000, 60000, 60000, 100000], "sell_multiplier": 2,
+        },
+    )
     # Shop sales boosters (migration 0183), 0 = off:
     # - pity_packs: a paid coin pack with a legendary chance that comes after
     #   this many such packs without a legendary turns one card legendary

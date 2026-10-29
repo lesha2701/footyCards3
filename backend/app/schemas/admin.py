@@ -870,6 +870,13 @@ class GameConfigOut(BaseModel):
     stake_max_coins: int = 500
     stake_pair_daily_limit: int = 2
     stake_daily_profit_cap: int = 2000
+    trade_verified_min_age_days: int = 14
+    trade_verified_min_active_days: int = 7
+    trade_verified_require_stars: bool = True
+    trade_min_value_ratio_pct: int = 50
+    trade_value_check_min: int = 2000
+    trade_progress_pair_daily: int = 1
+    card_values: dict = {}
     equipment_enabled: bool = False
     equipment_max_rating: int = 3
     equipment_max_pp: int = 8
@@ -1538,6 +1545,13 @@ class GameConfigUpdate(BaseModel):
     stake_max_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
     stake_pair_daily_limit: Optional[int] = Field(default=None, ge=0, le=100)
     stake_daily_profit_cap: Optional[int] = Field(default=None, ge=0)
+    trade_verified_min_age_days: Optional[int] = Field(default=None, ge=0, le=365)
+    trade_verified_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
+    trade_verified_require_stars: Optional[bool] = None
+    trade_min_value_ratio_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    trade_value_check_min: Optional[int] = Field(default=None, ge=0)
+    trade_progress_pair_daily: Optional[int] = Field(default=None, ge=0, le=100)
+    card_values: Optional[dict] = None
     pity_packs: Optional[int] = Field(default=None, ge=0, le=1000)
     bulk10_discount_pct: Optional[int] = Field(default=None, ge=0, le=50)
     first_coin_purchase_bonus_pct: Optional[int] = Field(default=None, ge=0, le=300)

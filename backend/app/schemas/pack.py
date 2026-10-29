@@ -44,6 +44,7 @@ class PackOut(BaseModel):
     muse_drop_chance: float = 0.0
     # "default" | "path" — see Pack.player_pool.
     player_pool: str = "default"
+    pity_enabled: bool = True
     user_purchase_count: int = 0
     # Bought today (only counted for a pack with daily_limit_per_user).
     user_today_count: int = 0
@@ -87,6 +88,7 @@ class PackCreate(BaseModel):
     skill_token_drop_chance: float = Field(default=0.0, ge=0, le=1)
     muse_drop_chance: float = Field(default=0.0, ge=0, le=1)
     player_pool: Literal["default", "path"] = "default"
+    pity_enabled: bool = True
 
 
 class PackUpdate(BaseModel):
@@ -110,6 +112,7 @@ class PackUpdate(BaseModel):
     skill_token_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
     muse_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
     player_pool: Optional[Literal["default", "path"]] = None
+    pity_enabled: Optional[bool] = None
 
 
 class UserCoachCardOut(BaseModel):

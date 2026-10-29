@@ -72,6 +72,11 @@ class UserCard(Base):
     # owner's bonus at once.
     artifact_rating_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     artifact_bonus_owner_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Came from a free source (calendar, tasks, bingo, wheel, gifts, free /
+    # bonus packs, …): a valuable copy (card_value_service.is_valuable) then
+    # never leaves the account — multi-accounts can't funnel what they farm.
+    # Set once at creation (card_creation.create_user_card).
+    from_free_source: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # «Экипировка» (services/equipment_service.py): what the things this copy
     # wears add, summed (and capped) whenever they change — rating like the
     # bonuses above, chemistry points when on position, and the tournament

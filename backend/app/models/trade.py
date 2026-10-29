@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.enums import TradeCardSide, TradeStatus
@@ -23,6 +23,9 @@ class TradeOffer(TimestampMixin, Base):
     message: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Counts for tasks / bingo «trades completed» (at most
+    # GameConfig.trade_progress_pair_daily per pair per day), set on accept.
+    counts_for_progress: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     cards: Mapped[list["TradeOfferCard"]] = relationship(back_populates="offer", cascade="all, delete-orphan")
 

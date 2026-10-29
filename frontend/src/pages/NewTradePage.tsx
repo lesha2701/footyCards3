@@ -10,7 +10,7 @@ import NumberInput from "@/components/common/NumberInput";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import PlayerCard from "@/components/cards/PlayerCard";
 import { fetchCollection, fetchUserCollection } from "@/api/collection";
-import { createTradeOffer, fetchTradeRules } from "@/api/trades";
+import { createTradeOffer, fetchTradeRules, previewTrade } from "@/api/trades";
 import { fetchPublicProfile, searchUsers } from "@/api/profile";
 import { ApiRequestError } from "@/lib/api";
 import type { UserPublic } from "@/types";
@@ -71,12 +71,16 @@ export default function NewTradePage() {
   // trades — except «Академия» cards, whose path progress moves with the
   // card) at accept time anyway, so showing them as pickable here just sets
   // the offer up to fail later.
+  // A legendary / diamond / «Академия» copy from a free source never leaves
+  // its account (limited cards are left to the server check / preview).
   const isTradeable = (c: {
     is_locked_by_admin: boolean; is_locked_in_trade: boolean; is_in_lineup: boolean; is_in_tactico_squad: boolean;
+    from_free_source?: boolean;
     player: { rarity: string; path_talent_code?: string | null };
   }) =>
     !c.is_locked_by_admin && !c.is_locked_in_trade && !c.is_in_lineup && !c.is_in_tactico_squad &&
-    (c.player.rarity !== "diamond" || !!c.player.path_talent_code);
+    (c.player.rarity !== "diamond" || !!c.player.path_talent_code) &&
+    !(c.from_free_source && (c.player.rarity === "legendary" || c.player.rarity === "diamond" || !!c.player.path_talent_code));
 
   const createMutation = useMutation({
     mutationFn: createTradeOffer,
@@ -100,9 +104,18 @@ export default function NewTradePage() {
 
   const coinsEnabled = rules?.coins_enabled ?? true;
   const coins = coinsEnabled ? senderCoins : 0;
-  const canSubmit = rules?.cards_both_sides
+  // Values of both sides and the server's verdict, so an unequal or not
+  // allowed trade is explained before it is sent.
+  const { data: preview } = useQuery({
+    queryKey: ["trade-preview", target?.id, offeredIds, requestedIds, coins],
+    queryFn: () => previewTrade({
+      receiver_id: target!.id, offered_card_ids: offeredIds, requested_card_ids: requestedIds, sender_coins: coins,
+    }),
+    enabled: !!target && (offeredIds.length > 0 || requestedIds.length > 0),
+  });
+  const canSubmit = (rules?.cards_both_sides
     ? offeredIds.length > 0 && requestedIds.length > 0
-    : offeredIds.length > 0 || requestedIds.length > 0 || coins > 0;
+    : offeredIds.length > 0 || requestedIds.length > 0 || coins > 0) && preview?.ok !== false;
 
   const submit = () => {
     if (!target) return;
@@ -162,6 +175,14 @@ export default function NewTradePage() {
               {rules.give_block_reason} Пока можно только получать карточки и монеты от других игроков.
             </p>
           )}
+          {rules && !rules.verified && rules.verified_block_reason && (
+            <p className="rounded-xl bg-white/5 px-3 py-2 text-xs text-ink-mist">
+              🔒 Легендарки, алмазы, «Академию» и лимитки отдавать в обмене пока нельзя. {rules.verified_block_reason}
+            </p>
+          )}
+          <p className="text-caption text-ink-mist-dim">
+            Ценные карточки, полученные бесплатно (награды, бесплатные паки, колесо), привязаны к аккаунту и в обмене не показываются.
+          </p>
 
           <section>
             <p className="mb-2 text-sm font-semibold text-ink-mist">Твои карточки ({offeredIds.length}/{MAX_TRADE_CARDS_PER_SIDE})</p>
@@ -250,6 +271,16 @@ export default function NewTradePage() {
               className="w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk outline-none"
             />
           </div>
+
+          {preview && (
+            <div className={`rounded-xl px-3 py-2 text-xs ${preview.ok ? "bg-white/5 text-ink-mist" : "bg-red-500/10 text-red-400"}`}>
+              <p>
+                Ценность: ты отдаёшь <b>{preview.give_value.toLocaleString("ru-RU")}</b> · получаешь{" "}
+                <b>{preview.get_value.toLocaleString("ru-RU")}</b> монет
+              </p>
+              {preview.problem && <p className="mt-1">{preview.problem}</p>}
+            </div>
+          )}
 
           <StickyActionBar>
             <button

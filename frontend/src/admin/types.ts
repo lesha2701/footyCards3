@@ -788,6 +788,13 @@ export interface GameConfig {
   first_coin_purchase_bonus_pct: number;
   stake_pair_daily_limit: number;
   stake_daily_profit_cap: number;
+  trade_verified_min_age_days: number;
+  trade_verified_min_active_days: number;
+  trade_verified_require_stars: boolean;
+  trade_min_value_ratio_pct: number;
+  trade_value_check_min: number;
+  trade_progress_pair_daily: number;
+  card_values: Record<string, number | number[]>;
 }
 
 export interface AdminPathTalent {

@@ -392,7 +392,7 @@ async def _duplicate_stadium_counts_snapshot(db: AsyncSession, user_id: int) -> 
 def pity_eligible(pack: Pack) -> bool:
     """The legendary pity counts only coin packs that can drop a legendary
     at all — a starter pack without one never forces it."""
-    return pack.stars_price is None and any(
+    return getattr(pack, "pity_enabled", True) and pack.stars_price is None and any(
         rp.rarity == Rarity.legendary and float(rp.probability) > 0 for rp in pack.rarity_probabilities
     )
 

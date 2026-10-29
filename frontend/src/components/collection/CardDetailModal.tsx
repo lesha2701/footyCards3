@@ -271,6 +271,12 @@ export default function CardDetailModal({
                       className="h-5 w-5 shrink-0 accent-accent-lime"
                     />
                   </label>
+                  {card.from_free_source && (player.rarity === "legendary" || player.rarity === "diamond" || !!player.path_talent_code) && (
+                    <p className="rounded-xl bg-black/20 px-3 py-2 text-xs text-ink-mist">
+                      🔒 Привязана к аккаунту: получена бесплатно (награда, бесплатный пак, колесо), поэтому её нельзя обменять.
+                      Играть ею, улучшать и продавать системе можно.
+                    </p>
+                  )}
                   {(player.rarity === "legendary" || player.rarity === "diamond") && (
                     <ShareButton kind="card" id={card.id} label="Похвастаться в Telegram" />
                   )}

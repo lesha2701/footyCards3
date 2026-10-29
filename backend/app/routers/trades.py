@@ -9,12 +9,18 @@ from app.database import get_db
 from app.models.enums import TradeStatus
 from app.models.user import User
 from app.schemas.trade import (
-    TradeAcceptOut, TradeCreateRequest, TradeMatchOut, TradeOfferOut, TradeRulesOut, TradeWishesOut, TradeWishRequest,
+    TradeAcceptOut, TradeCreateRequest, TradeMatchOut, TradeOfferOut, TradePreviewOut, TradePreviewRequest, TradeRulesOut, TradeWishesOut, TradeWishRequest,
 )
 from app.services import trade_finder_service, trade_guard_service, trade_service
 from app.services.game_config_service import get_config
 
 router = APIRouter(prefix="/trades", tags=["trades"])
+
+
+@router.post("/preview", response_model=TradePreviewOut)
+async def preview_trade(payload: TradePreviewRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"trade_preview:{user.id}", max_calls=60, window_seconds=60)
+    return await trade_service.preview(db, user, payload)
 
 
 @router.get("/rules", response_model=TradeRulesOut)
