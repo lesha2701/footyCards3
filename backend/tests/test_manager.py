@@ -6,6 +6,7 @@ own player and academy card, the weekly season (preseason → automatic
 signings → 15 rounds with daily digests → promotion / relegation of the
 ×2 pyramid), the style shop, fans' merchandise, «Менеджер Pro» and the
 share cards."""
+import copy
 import io
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -479,3 +480,39 @@ async def test_emblem_rim_and_effect_are_bought_then_worn(client, db_session, bo
     assert (await client.post(f"{API}/manager/shop/rim_bronze", headers=a_headers)).status_code == 200
     look = (await client.patch(f"{API}/manager/look", headers=a_headers, json={"rim": "bronze", "fx": "none"})).json()["club"]["look"]
     assert look["rim"] == "bronze" and look["fx"] == "none"
+
+
+def test_pick_xi_tolerates_academy_kids_without_a_key():
+    """Regression: academy kids frozen into season state had no "key", and
+    pick_xi sorted by x["key"] — a KeyError that 500'd GET /manager for the
+    whole league (rounds are played lazily on that read)."""
+    kids = [{"slot": "GK", "kind": "kid", "ref": None, "name": "Kid", "position": "GK", "rating": 50},
+            {"slot": "ST", "kind": "kid", "ref": None, "name": "Kid 2", "position": "ST", "rating": 50}]
+    xi, _bench = manager_service.pick_xi(kids, "Совы", 50)
+    assert len(xi) == 11
+    assert sum(1 for p in xi if p.get("key", "").startswith("kid:")) == 9  # fresh fillers carry one now
+
+
+async def test_round_plays_for_a_club_with_an_empty_roster(client, db_session, bot_token):
+    config = await get_config(db_session)
+    target = config.manager_division_rating[config.manager_divisions - 1]
+    for position in (Position.GK, Position.CB, Position.CB, Position.LB, Position.RB, Position.CM, Position.CDM, Position.CAM,
+                     Position.LW, Position.RW, Position.ST):
+        await create_player(db_session, rating=target, position=position)
+    _a_id, a_headers = await _player(client, db_session, bot_token, 894071)
+    _b_id, b_headers = await _player(client, db_session, bot_token, 894072)
+    await _club(client, a_headers, "Совы")
+    await _club(client, b_headers, "Ястребы")
+    start = _next_season_start(config)
+    assert await manager_service.ensure_season(db_session, start) is True
+    club = (await db_session.execute(select(ManagerClub).order_by(ManagerClub.id))).scalars().first()
+    league = await db_session.get(ManagerLeague, club.league_id)
+    state = copy.deepcopy(league.state)  # a new object, or the JSON change isn't saved
+    team = next(t for t in state["teams"] if t["club_id"] == club.id)
+    # Nobody but academy kids, frozen the old way (no "key").
+    team["roster"] = []
+    team["xi"] = [{k: v for k, v in p.items() if k != "key"} | {"kind": "kid"} for p in team["xi"]]
+    league.state = state
+    await db_session.commit()
+
+    assert await manager_service.resolve_league(db_session, league.id, now=start + timedelta(days=7)) == manager_service.rounds_of(config)
